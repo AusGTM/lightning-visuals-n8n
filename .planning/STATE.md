@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
-current_phase: 8
-current_phase_name: Contact Enrichment & Net-New Create
+current_phase: 10
+current_phase_name: n8n Template & Local Server Replica
 status: complete
-stopped_at: Completed phase-8/PLAN.md — contacts wired through build_merge_result; gated dry-run create_record + email-recheck guard; 69 tests green offline (64 baseline + 5 new), zero network
-last_updated: "2026-07-07T22:26:20.799Z"
+stopped_at: Completed phase-10/PLAN.md — FastAPI decision service (/health /ingest /sweep wrapping run_contact_ingest + dedupe_sweep) + two n8n v2.4.4 workflow templates + scripted local-Docker-n8n replica proof; 83 tests green offline (78 baseline + 5 new), replica script PASS exit 0, zero live HubSpot writes
+last_updated: "2026-07-08T00:00:00.000Z"
 last_activity: 2026-07-08
-last_activity_desc: "Phase 8 executed: gated dry-run create_record, src/ingest.py (row->csv candidate + email-recheck guard + batch runner), main.py --ingest entrypoint, and an offline functional proof of both email directions (manual_protected on enrich, identity on create). 69 tests green, zero network, company demo intact."
+last_activity_desc: "Phase 10 executed (Milestone 2 FINAL): thin FastAPI decision service reusing ingest+sweep with hard dry_run + stubbed HubSpot + allow_create off; two importable n8n workflows (upload-ingest manualTrigger, weekly sweep schedule+manual); scripts/n8n_replica_test.sh imports+executes both on the running Docker n8n producing dry-run PATCH (ingest) and duplicate/mangled findings (sweep). 83 tests green offline."
 progress:
   total_phases: 10
-  completed_phases: 9
-  total_plans: 9
-  completed_plans: 9
-  percent: 90
+  completed_phases: 10
+  total_plans: 10
+  completed_plans: 10
+  percent: 100
 ---
 
 # Project State
@@ -28,12 +28,12 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 
 ## Current Position
 
-Phase: 8 of 10 (Contact Enrichment & Net-New Create) — COMPLETE
-Plan: 1 of 1 (phase-8-01) — COMPLETE
-Status: Milestone-2 contact pipeline wired end to end in dry-run; next is Phase 9 (ingestion matrix + dedupe sweep)
-Last activity: 2026-07-08 — Phase 8 executed: gated dry-run create_record, src/ingest.py (row->csv candidate + email-recheck guard + batch runner), main.py --ingest entrypoint, and an offline functional proof of both email directions (manual_protected on enrich, identity on create). 69 tests green, zero network, company demo intact.
+Phase: 10 of 10 (n8n Template & Local Server Replica) — COMPLETE
+Plan: 1 of 1 (phase-10-01) — COMPLETE
+Status: Milestone 2 COMPLETE — contact ingestion + dedupe sweep now run as an n8n workflow on the local Docker n8n replica via a thin FastAPI decision service, all dry-run
+Last activity: 2026-07-08 — Phase 10 executed: FastAPI /health /ingest /sweep wrapping run_contact_ingest + dedupe_sweep; two n8n v2.4.4 workflow templates; scripts/n8n_replica_test.sh proves import+execute on the running n8n container (ingest dry-run PATCH, sweep duplicate/mangled). 83 tests green offline, replica PASS exit 0, zero live writes.
 
-Progress: [████████░░] 80%
+Progress: [██████████] 100%
 
 ## Performance Metrics
 
@@ -57,6 +57,7 @@ Progress: [████████░░] 80%
 *Updated after each plan completion*
 | Phase phase-5 P01 | 5m | 4 tasks | 8 files |
 | Phase 9 P01 | ~15m | 3 tasks | 6 files |
+| Phase 10 P01 | ~35m | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -68,6 +69,7 @@ Decisions are logged in PROJECT.md Key Decisions table. SPEC-level architectural
 - MVP canonical writes limited to `lv_icp_*`; firmographics staged, manual fields never touched.
 - LLM cascade Haiku → Sonnet 5 → human; non-clobber merge with field-ownership classes.
 - [Phase ?]: Phase 9: dedupe_sweep compares NORMALIZED keys (normalize-before-compare); SweepReport findings are plain JSON dicts for Phase-10 transport
+- Phase 10: n8n replica uses a THIN FastAPI wrapper (no JS logic dup); dry_run hard-True + stubbed HubSpot + allow_create off = structurally no live write. `n8n execute --id` (v2.4.4) rejects schedule-only workflows (needs a manual/execute-workflow start node) and needs a non-colliding task-broker port (5699) when run inside the container.
 
 ### Pending Todos
 
@@ -92,6 +94,6 @@ Items carried forward to later milestones:
 
 ## Session Continuity
 
-Last session: 2026-07-07T22:26:12.496Z
-Stopped at: Completed phase-8/PLAN.md — contact ingest pipeline (create_record + run_contact_ingest + --ingest CLI); 69 tests green offline, zero network
+Last session: 2026-07-08T00:00:00.000Z
+Stopped at: Completed phase-10/PLAN.md — n8n local replica (FastAPI decision service + 2 workflow templates + replica proof script); 83 tests green offline, replica PASS exit 0, zero live writes. Milestone 2 COMPLETE.
 Resume file: None

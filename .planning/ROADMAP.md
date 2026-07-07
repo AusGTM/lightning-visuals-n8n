@@ -125,7 +125,7 @@ replicate the production n8n Cloud environment.
 - [ ] **Phase 7: Identity / Dedupe Resolver** - Match a row to existing HubSpot contact vs net-new vs ambiguous; conservative (auto only on email/LinkedIn), no-email never auto-creates
 - [ ] **Phase 8: Contact Enrichment & Net-New Create** - object_type=contacts wired through main.py; upload row as a candidate source; gated dry-run create with re-check-by-email guard
 - [ ] **Phase 9: Functional + E2E Tests & Dedupe Sweep** - Full ingestion matrix (match+enrich, create, ambiguous, conflict→review, no-clobber) + weekly dedupe/mangled-contact sweep function
-- [ ] **Phase 10: n8n Template & Local Server Replica** - n8n workflow (upload-ingest + scheduled weekly sweep) calling the decision service, imported and executed on a local Docker n8n
+- [x] **Phase 10: n8n Template & Local Server Replica** - n8n workflow (upload-ingest + scheduled weekly sweep) calling the decision service, imported and executed on a local Docker n8n (completed 2026-07-08)
 
 ## Phase Details
 
@@ -210,6 +210,10 @@ replicate the production n8n Cloud environment.
   2. An n8n workflow template (upload-ingest trigger + scheduled weekly dedupe sweep) is importable JSON; a local Dockerized n8n instance imports and executes it end to end producing dry-run PATCH/create output.
   3. The local run demonstrates the production-shaped path (trigger → fetch/parse → decision service → dry-run writeback) with all safety gates honored (DRY_RUN, ALLOW_CONTACT_CREATE off by default).
 
+**Plans**: 1 plan
+
+- [x] phase-10/PLAN.md — FastAPI decision service (/ingest /sweep /health reusing run_contact_ingest + dedupe_sweep) + two n8n v2.4.4 workflow templates + scripted local-Docker-n8n import/execute replica proof
+
 ## Milestone 2 Progress
 
 | Phase | Plans Complete | Status | Completed |
@@ -219,4 +223,4 @@ replicate the production n8n Cloud environment.
 | 7. Identity / Dedupe Resolver | 0/1 | Planned | - |
 | 8. Contact Enrichment & Net-New Create | 0/1 | Planned | - |
 | 9. Functional + E2E Tests & Dedupe Sweep | 0/1 | Planned | - |
-| 10. n8n Template & Local Server Replica | 0/TBD | Not started | - |
+| 10. n8n Template & Local Server Replica | 1/1 | Complete | 2026-07-08 |
