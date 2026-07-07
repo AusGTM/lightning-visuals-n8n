@@ -23,7 +23,7 @@ HubSpot is on the Pro tier.
 - [ ] **Phase 1: Foundation & Configuration** - Config YAMLs, pydantic schemas, and test fixtures that everything else builds on
 - [ ] **Phase 2: ICP Scoring Engine** - Config-driven score, tier, anti-ICP vetoes, and graduated deductions with unit tests
 - [ ] **Phase 3: Enrichment Pipeline & Non-Clobber Merge** - Mock providers/research + Haiku/Sonnet cascade feeding a non-clobber merge with source attribution
-- [ ] **Phase 4: Dry-Run PATCH Output & Safety Gates** - End-to-end MVP run printing the exact HubSpot PATCH under env-flag safety gates
+- [x] **Phase 4: Dry-Run PATCH Output & Safety Gates** - End-to-end MVP run printing the exact HubSpot PATCH under env-flag safety gates
 
 ## Phase Details
 
@@ -47,7 +47,8 @@ HubSpot is on the Pro tier.
   2. Non-ANZ, no-content, or hardware-vendor inputs force Tier D with `lv_anti_icp_flag = true` and a populated anti-ICP reason.
   3. Gambling operator (−20) and >$500M revenue decay (−5 / −15 / −30 / −50) reduce the score without ever setting the anti-ICP flag.
   4. Missing org_type or produces_content yields Needs Review / Unscored (not a false score), and every result emits a breakdown JSON stamped with the scoring version.
-**Plans**: TBD
+**Plans**: 1 plan
+- [ ] phase-2-01-PLAN.md — Transcribe the §12.7 ICP scoring engine (with the produces_content fix) + 16-case scoring unit-test proof
 
 ### Phase 3: Enrichment Pipeline & Non-Clobber Merge
 **Goal**: Mock providers and Claude research produce normalized candidate signals that flow through the Haiku/Sonnet cascade and a non-clobber merge into promote/stage/reject/review decisions, all with source attribution.
@@ -58,7 +59,8 @@ HubSpot is on the Pro tier.
   2. Conflicting provider values (e.g. Apollo 5–50M vs ZoomInfo 50–500M revenue) normalize into candidates and resolve via the deterministic gate, escalating to the Haiku classifier / Sonnet stub only when policy requires.
   3. Field-ownership governance is enforced: manual_protected and fill_blank_only fields are staged (never clobbered); system_owned / score_output fields promote when confidence passes.
   4. Every promoted or staged field carries source, confidence, evidence URL + summary, verified_at, verified_by_model, and validation_status.
-**Plans**: TBD
+**Plans**: 1 plan
+- [ ] phase-3-01-PLAN.md — Mock providers/web research + normalizer + Haiku/Sonnet cascade + non-clobber merge, proven offline by tests/test_merge_policy.py
 
 ### Phase 4: Dry-Run PATCH Output & Safety Gates
 **Goal**: The end-to-end MVP run prints the exact HubSpot PATCH it would send, writing only ICP outputs canonically while staging firmographics, under env-flag safety gates.
@@ -68,7 +70,8 @@ HubSpot is on the Pro tier.
   1. `python main.py` runs the full pipeline on the fixture company and prints provider results, field decisions, the ICP score, and the exact PATCH payload.
   2. In dry-run mode no HubSpot write occurs; the payload promotes only `lv_icp_*` outputs to canonical and stages firmographic provider fields (never domain, annualrevenue, or manual fields).
   3. Safety-gate env flags (DRY_RUN, ALLOW_CANONICAL_WRITES, ALLOW_ICP_SCORE_WRITES, ALLOW_STAGING_WRITES, ALLOW_SONNET_ESCALATION) change the emitted payload as documented.
-**Plans**: TBD
+**Plans**: 1 plan
+- [x] phase-4/PLAN.md — hubspot_client + main.py end-to-end dry-run runner + offline SC1/SC2/SC3 proof (with non-gating live smoke)
 
 ## Progress
 
@@ -78,6 +81,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation & Configuration | 1/1 | Complete | 2026-07-07 |
-| 2. ICP Scoring Engine | 0/TBD | Not started | - |
-| 3. Enrichment Pipeline & Non-Clobber Merge | 0/TBD | Not started | - |
-| 4. Dry-Run PATCH Output & Safety Gates | 0/TBD | Not started | - |
+| 2. ICP Scoring Engine | 0/1 | Not started | - |
+| 3. Enrichment Pipeline & Non-Clobber Merge | 0/1 | Not started | - |
+| 4. Dry-Run PATCH Output & Safety Gates | 0/1 | Not started | - |
