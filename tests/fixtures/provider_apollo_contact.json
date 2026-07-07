@@ -1,0 +1,18 @@
+{
+  "provider": "apollo",
+  "object_type": "contacts",
+  "matched": true,
+  "confidence": 74,
+  "data": {
+    "jobtitle": "VP of Sales",
+    "seniority": "vp",
+    "phone": "+61 2 5550 1234",
+    "email": "bob.smith@example.com",
+    "linkedin_url": "https://linkedin.com/in/bobsmith"
+  },
+  "evidence": {
+    "last_seen": "2026-06-15",
+    "match_basis": ["email", "company_name"],
+    "evidence_urls": []
+  }
+}

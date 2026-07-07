@@ -1,0 +1,13 @@
+{
+  "object_type": "contacts",
+  "id": "123",
+  "properties": {
+    "email": "bob.smith@example.com",
+    "firstname": "Bob",
+    "lastname": "Smith",
+    "jobtitle": "Sales Manager",
+    "phone": "",
+    "enrichment_requested": "true",
+    "enrichment_status": "queued"
+  }
+}

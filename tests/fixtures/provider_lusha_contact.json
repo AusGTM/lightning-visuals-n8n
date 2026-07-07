@@ -1,0 +1,16 @@
+{
+  "provider": "lusha",
+  "object_type": "contacts",
+  "matched": true,
+  "confidence": 80,
+  "data": {
+    "mobilephone": "+61 400 999 888",
+    "phone": "+61 2 5550 9999",
+    "email": "b.smith@example.com"
+  },
+  "evidence": {
+    "last_seen": "2026-06-18",
+    "match_basis": ["phone", "email"],
+    "evidence_urls": []
+  }
+}

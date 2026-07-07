@@ -1,0 +1,17 @@
+{
+  "provider": "zoominfo",
+  "object_type": "contacts",
+  "matched": true,
+  "confidence": 83,
+  "data": {
+    "jobtitle": "Director of Sales",
+    "seniority": "director",
+    "phone": "0412 345 678",
+    "mobilephone": "0400 111 222"
+  },
+  "evidence": {
+    "last_seen": "2026-06-20",
+    "match_basis": ["name", "company_domain"],
+    "evidence_urls": []
+  }
+}
