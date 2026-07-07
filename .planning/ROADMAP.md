@@ -121,10 +121,10 @@ replicate the production n8n Cloud environment.
 ## Phases
 
 - [x] **Phase 5: Contact Foundation** - Contact normalizer (phone→E.164, email validate/lowercase, title/seniority), contact fixtures, CSV/upload source registered (completed 2026-07-07)
-- [ ] **Phase 6: File Loader & Column Mapper** - CSV/XLSX/JSON → rows; arbitrary columns → HubSpot properties via mapping config; malformed rows rejected with per-row report
-- [ ] **Phase 7: Identity / Dedupe Resolver** - Match a row to existing HubSpot contact vs net-new vs ambiguous; conservative (auto only on email/LinkedIn), no-email never auto-creates
-- [ ] **Phase 8: Contact Enrichment & Net-New Create** - object_type=contacts wired through main.py; upload row as a candidate source; gated dry-run create with re-check-by-email guard
-- [ ] **Phase 9: Functional + E2E Tests & Dedupe Sweep** - Full ingestion matrix (match+enrich, create, ambiguous, conflict→review, no-clobber) + weekly dedupe/mangled-contact sweep function
+- [x] **Phase 6: File Loader & Column Mapper** - CSV/XLSX/JSON → rows; arbitrary columns → HubSpot properties via mapping config; malformed rows rejected with per-row report
+- [x] **Phase 7: Identity / Dedupe Resolver** - Match a row to existing HubSpot contact vs net-new vs ambiguous; conservative (auto only on email/LinkedIn), no-email never auto-creates
+- [x] **Phase 8: Contact Enrichment & Net-New Create** - object_type=contacts wired through main.py; upload row as a candidate source; gated dry-run create with re-check-by-email guard
+- [x] **Phase 9: Functional + E2E Tests & Dedupe Sweep** - Full ingestion matrix (match+enrich, create, ambiguous, conflict→review, no-clobber) + weekly dedupe/mangled-contact sweep function
 - [x] **Phase 10: n8n Template & Local Server Replica** - n8n workflow (upload-ingest + scheduled weekly sweep) calling the decision service, imported and executed on a local Docker n8n (completed 2026-07-08)
 
 ## Phase Details
@@ -219,8 +219,8 @@ replicate the production n8n Cloud environment.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 5. Contact Foundation | 1/1 | Complete   | 2026-07-07 |
-| 6. File Loader & Column Mapper | 0/1 | Planned | - |
-| 7. Identity / Dedupe Resolver | 0/1 | Planned | - |
-| 8. Contact Enrichment & Net-New Create | 0/1 | Planned | - |
-| 9. Functional + E2E Tests & Dedupe Sweep | 0/1 | Planned | - |
+| 6. File Loader & Column Mapper | 1/1 | Complete | 2026-07-08 |
+| 7. Identity / Dedupe Resolver | 1/1 | Complete | 2026-07-08 |
+| 8. Contact Enrichment & Net-New Create | 1/1 | Complete | 2026-07-08 |
+| 9. Functional + E2E Tests & Dedupe Sweep | 1/1 | Complete | 2026-07-08 |
 | 10. n8n Template & Local Server Replica | 1/1 | Complete | 2026-07-08 |
