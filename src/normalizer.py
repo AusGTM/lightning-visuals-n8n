@@ -2,7 +2,12 @@
 #
 # Candidate normalization. Transcribed from CLAUDE.md §12.4.
 # Band boundaries match the Phase 2 ICP rubric bands.
+import re
 from typing import Any, List
+
+import phonenumbers
+from email_validator import validate_email, EmailNotValidError
+
 from .schemas import ProviderResult, CandidateValue
 
 
@@ -83,6 +88,62 @@ def normalize_country_region(value: Any):
     return "Other"
 
 
+def normalize_phone(value: Any, region: str = "AU"):
+    # region="AU" per the ANZ ICP; a leading '+' makes phonenumbers ignore region
+    # (international passthrough). Malformed input -> None, never raises.
+    if not value:
+        return None
+    try:
+        parsed = phonenumbers.parse(str(value), region)
+    except phonenumbers.NumberParseException:
+        return None
+    if not phonenumbers.is_valid_number(parsed):
+        return None
+    return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
+
+
+def normalize_email(value: Any):
+    # check_deliverability=False -> no DNS/network, stays offline. Invalid -> None.
+    if not value:
+        return None
+    try:
+        result = validate_email(str(value).strip(), check_deliverability=False)
+    except EmailNotValidError:
+        return None
+    # .normalized lowercases the domain; explicit .lower() also lowercases the local part.
+    return result.normalized.lower()
+
+
+# Ordered keyword scan -> canonical seniority set. Order matters: vp before the
+# c_suite 'president' check (so 'vice president' != 'president'), 'head' -> manager
+# (not director) per spec. `phrases` match as substrings; `tokens` match only as
+# whole words -- critical because short abbreviations like 'cto' are substrings of
+# 'director', so 'Director of Ops' must not read as c_suite. No ML, no external calls.
+_SENIORITY_KEYWORDS = [
+    ("vp", ["vice president"], ["vp"]),
+    ("c_suite", ["chief", "president", "founder", "owner", "c-suite"],
+     ["ceo", "cfo", "coo", "cto", "cro", "cmo"]),
+    ("director", ["director"], []),
+    ("manager", ["manager", "head of", "supervisor"], ["head", "lead"]),
+    ("individual", ["account executive", "executive", "analyst", "associate",
+                    "specialist", "coordinator", "representative", "engineer",
+                    "consultant"], []),
+]
+
+
+def normalize_seniority(value: Any):
+    if not value:
+        return "unknown"
+    v = str(value).strip().lower()
+    if not v:
+        return "unknown"
+    tokens = set(re.split(r"[^a-z]+", v))
+    for canonical, phrases, abbrevs in _SENIORITY_KEYWORDS:
+        if any(p in v for p in phrases) or (tokens & set(abbrevs)):
+            return canonical
+    return "unknown"
+
+
 def normalize_field(field: str, value: Any) -> Any:
     if field in [
         "lv_produces_content",
@@ -103,6 +164,18 @@ def normalize_field(field: str, value: Any) -> Any:
     if field in ["country", "lv_country_region_normalized"]:
         return normalize_country_region(value)
 
+    if field in ["phone", "mobilephone"]:
+        return normalize_phone(value)
+
+    if field == "email":
+        return normalize_email(value)
+
+    if field == "seniority":
+        return normalize_seniority(value)
+
+    # jobtitle intentionally has no branch: normalize_text (the fallback) already
+    # trims and collapses whitespace, which is exactly the required jobtitle
+    # normalization. Do not add a redundant normalize_jobtitle.
     return normalize_text(value)
 
 
