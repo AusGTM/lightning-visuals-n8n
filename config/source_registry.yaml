@@ -1,0 +1,83 @@
+# config/source_registry.yaml
+
+sources:
+  hubspot:
+    type: crm
+    trust_rank: 90
+    can_promote_directly: true
+    notes: Existing CRM data; manual values usually protected.
+
+  zoominfo:
+    type: provider
+    trust_rank: 85
+    can_promote_directly: false
+    supported_signals:
+      - revenue
+      - employees
+      - company_domain
+      - industry
+      - contact_title
+      - seniority
+      - phone
+      - intent
+
+  apollo:
+    type: provider
+    trust_rank: 75
+    can_promote_directly: false
+    supported_signals:
+      - company_domain
+      - employee_count
+      - revenue
+      - linkedin
+      - contact_title
+      - email
+      - phone
+
+  lusha:
+    type: provider
+    trust_rank: 80
+    can_promote_directly: false
+    supported_signals:
+      - phone
+      - mobilephone
+      - email
+      - contact_identity
+
+  claude_web:
+    type: research
+    trust_rank: 78
+    can_promote_directly: false
+    supported_signals:
+      - org_type
+      - content_output
+      - sports_media_fit
+      - sponsorship_reliance
+      - gambling_operator
+      - hardware_vendor
+      - evidence_url
+
+  haiku:
+    type: model_classifier
+    trust_rank: 70
+    can_promote_directly: false
+    supported_signals:
+      - structured_extraction
+      - cheap_classification
+      - normalization
+      - first_pass_scoring
+
+  sonnet_5:
+    type: model_validator
+    trust_rank: 88
+    can_promote_directly: false
+    supported_signals:
+      - conflict_resolution
+      - evidence_reasoning
+      - high_risk_validation
+      - anti_icp_reasoning
+
+  human:
+    type: reviewer
+    trust_rank: 100
+    can_promote_directly: true

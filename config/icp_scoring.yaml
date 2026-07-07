@@ -1,0 +1,84 @@
+# config/icp_scoring.yaml
+
+version: "lv-icp-v0.1"
+
+base_score:
+  org_type:
+    governing_body_league: 40
+    content_producer: 20
+    broadcaster: 20
+    individual_club_team: 5
+    regulator: 5
+    gambling_operator: 0
+    hardware_vendor: 0
+    other: 0
+    unknown: 0
+
+  produces_content:
+    true: 20
+    false: 0
+    unknown: 0
+
+  geography:
+    ANZ: 10
+    AU: 10
+    NZ: 10
+    non_anz: 0
+    unknown: 0
+
+  revenue_band:
+    "<1M": 0
+    "1-5M": 0
+    "5-50M": 10
+    "50-500M": 10
+    "500-750M": -5
+    "750M-1B": -15
+    "1B-1.2B": -30
+    "1.2B+": -50
+    unknown: 0
+
+graduated_deductions:
+  gambling_operator: -20
+
+hard_vetoes:
+  non_anz:
+    enabled: true
+    reason: "Non-ANZ geography"
+
+  no_content:
+    enabled: true
+    reason: "No broadcast or streaming content"
+
+  hardware_vendor:
+    enabled: true
+    reason: "Hardware/AV/LED vendor, not sports-media buyer"
+
+tier_rules:
+  A:
+    min_score: 70
+    max_score: 999
+    requires_no_hard_veto: true
+
+  B:
+    min_score: 40
+    max_score: 69
+    requires_no_hard_veto: true
+
+  C:
+    min_score: 15
+    max_score: 39
+    requires_no_hard_veto: true
+
+  D:
+    hard_veto: true
+
+  Unscored:
+    missing_required_inputs: true
+
+recommended_motion:
+  A: work_direct
+  B: work_direct
+  C: nurture_or_work_via_league
+  D: disqualify
+  Needs Review: research_more
+  Unscored: research_more

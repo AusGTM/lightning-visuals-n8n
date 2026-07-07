@@ -1,0 +1,147 @@
+# config/field_policy.yaml
+
+companies:
+  domain:
+    class: manual_protected
+    promote_to_canonical: false
+    stage_only: true
+    min_confidence: 95
+
+  industry:
+    class: stale_refreshable
+    promote_to_canonical: true
+    min_confidence: 75
+    stale_after_days: 365
+
+  numberofemployees:
+    class: stale_refreshable
+    promote_to_canonical: true
+    min_confidence: 70
+    stale_after_days: 180
+
+  annualrevenue:
+    class: review_required
+    promote_to_canonical: false
+    stage_only: true
+    min_confidence: 85
+
+  lv_revenue_band:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 75
+    allow_sonnet_escalation: true
+
+  lv_employee_band:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 70
+
+  lv_org_type:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 80
+    allow_web_research: true
+    allow_sonnet_escalation: true
+    require_evidence_url_for:
+      - governing_body_league
+      - content_producer
+      - hardware_vendor
+      - gambling_operator
+
+  lv_produces_content:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 85
+    allow_web_research: true
+    allow_sonnet_escalation: true
+    require_evidence_url: true
+
+  lv_content_type:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 75
+    allow_web_research: true
+
+  lv_sponsorship_reliant:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 70
+    allow_web_research: true
+    allow_sonnet_escalation: true
+
+  lv_is_hardware_vendor:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 85
+    allow_web_research: true
+    allow_sonnet_escalation: true
+
+  lv_is_gambling_operator:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 85
+    allow_web_research: true
+    allow_sonnet_escalation: true
+
+  lv_icp_fit_score:
+    class: score_output
+    promote_to_canonical: true
+    recompute_always: true
+
+  lv_icp_tier:
+    class: score_output
+    promote_to_canonical: true
+    recompute_always: true
+
+  lv_anti_icp_flag:
+    class: veto_output
+    promote_to_canonical: true
+    recompute_always: true
+
+  lv_anti_icp_reason:
+    class: veto_output
+    promote_to_canonical: true
+    recompute_always: true
+
+contacts:
+  email:
+    class: manual_protected
+    promote_to_canonical: false
+    stage_only: true
+    min_confidence: 95
+
+  phone:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 80
+    protect_if_current_present: true
+
+  mobilephone:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 85
+    protect_if_current_present: true
+
+  jobtitle:
+    class: stale_refreshable
+    promote_to_canonical: true
+    min_confidence: 75
+    stale_after_days: 180
+    protect_if_current_present: false
+    allow_sonnet_escalation: true
+
+  linkedin_url:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 85
+    protect_if_current_present: true
+
+  seniority:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 75
+
+  persona_group:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 75

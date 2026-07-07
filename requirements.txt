@@ -1,0 +1,8 @@
+anthropic>=0.34.0
+requests>=2.32.0
+pydantic>=2.8.0
+python-dotenv>=1.0.1
+PyYAML>=6.0.2
+phonenumbers>=8.13.40
+email-validator>=2.2.0
+pytest>=8.2.0

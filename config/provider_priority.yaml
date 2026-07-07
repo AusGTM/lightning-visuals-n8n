@@ -1,0 +1,29 @@
+# config/provider_priority.yaml
+#
+# Ordered provider preference per field, consumed by the non-clobber merge policy
+# (CLAUDE.md §12.8 build_merge_result). Order is [zoominfo, apollo, lusha, claude_web]
+# for every field: zoominfo-first reflects the highest firmographic trust_rank in
+# the source registry (§6.3), and this order matches the merge_policy fallback so
+# the file never contradicts the consuming code.
+
+companies:
+  industry: [zoominfo, apollo, lusha, claude_web]
+  numberofemployees: [zoominfo, apollo, lusha, claude_web]
+  annualrevenue: [zoominfo, apollo, lusha, claude_web]
+  lv_revenue_band: [zoominfo, apollo, lusha, claude_web]
+  lv_employee_band: [zoominfo, apollo, lusha, claude_web]
+  lv_org_type: [zoominfo, apollo, lusha, claude_web]
+  lv_produces_content: [zoominfo, apollo, lusha, claude_web]
+  lv_content_type: [zoominfo, apollo, lusha, claude_web]
+  lv_sponsorship_reliant: [zoominfo, apollo, lusha, claude_web]
+  lv_is_hardware_vendor: [zoominfo, apollo, lusha, claude_web]
+  lv_is_gambling_operator: [zoominfo, apollo, lusha, claude_web]
+
+contacts:
+  jobtitle: [zoominfo, apollo, lusha, claude_web]
+  phone: [zoominfo, apollo, lusha, claude_web]
+  mobilephone: [zoominfo, apollo, lusha, claude_web]
+  email: [zoominfo, apollo, lusha, claude_web]
+  linkedin_url: [zoominfo, apollo, lusha, claude_web]
+  seniority: [zoominfo, apollo, lusha, claude_web]
+  persona_group: [zoominfo, apollo, lusha, claude_web]

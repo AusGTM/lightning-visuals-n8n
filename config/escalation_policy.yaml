@@ -1,0 +1,42 @@
+# config/escalation_policy.yaml
+
+haiku_default:
+  use_for:
+    - normalization
+    - simple field classification
+    - persona grouping
+    - seniority extraction
+    - evidence summarization
+    - first_pass_icp_scoring
+  max_risk: medium
+
+sonnet_5:
+  use_when:
+    - field_conflict: true
+    - hard_veto_possible: true
+    - anti_icp_flag_would_change: true
+    - lv_org_type_conflict: true
+    - lv_produces_content_conflict: true
+    - gambling_operator_detected: true
+    - hardware_vendor_detected: true
+    - canonical_overwrite_requested: true
+    # Illustrative range: escalate to Sonnet when confidence falls in this band.
+    # (SPEC §15.1 rendered this as a corrupted `[2][3]` markdown footnote artifact.)
+    - confidence_between: [70, 85]
+    - multiple_sources_disagree: true
+  output_required:
+    - decision
+    - chosen_value
+    - confidence
+    - evidence_url
+    - evidence_summary
+    - validation_status
+    - reason
+
+human_review:
+  use_when:
+    - sonnet_confidence_below: 80
+    - no_evidence_url_for_required_field: true
+    - hard_veto_uncertain: true
+    - provider_and_web_research_conflict: true
+    - canonical_manual_value_conflict: true
