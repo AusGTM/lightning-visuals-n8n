@@ -1,0 +1,26 @@
+{
+  "object_type": "companies",
+  "id": "789",
+  "properties": {
+    "name": "Example Racing League",
+    "domain": "exampleracing.example",
+    "website": "https://exampleracing.example",
+    "country": "Australia",
+    "industry": "Sports",
+    "annualrevenue": "",
+    "numberofemployees": "",
+    "lv_org_type": "",
+    "lv_produces_content": "",
+    "lv_content_type": "",
+    "lv_revenue_band": "",
+    "lv_sponsorship_reliant": "",
+    "lv_is_hardware_vendor": "",
+    "lv_is_gambling_operator": "",
+    "lv_icp_fit_score": "",
+    "lv_icp_tier": "",
+    "lv_anti_icp_flag": "",
+    "enrichment_requested": "true",
+    "enrichment_mode": "icp_score",
+    "enrichment_status": "queued"
+  }
+}

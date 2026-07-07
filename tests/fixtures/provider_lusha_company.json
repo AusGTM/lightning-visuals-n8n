@@ -1,0 +1,12 @@
+{
+  "provider": "lusha",
+  "object_type": "companies",
+  "matched": false,
+  "confidence": 0,
+  "data": {},
+  "evidence": {
+    "last_seen": null,
+    "match_basis": [],
+    "evidence_urls": []
+  }
+}

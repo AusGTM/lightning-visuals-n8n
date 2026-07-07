@@ -1,0 +1,19 @@
+{
+  "provider": "apollo",
+  "object_type": "companies",
+  "matched": true,
+  "confidence": 74,
+  "data": {
+    "domain": "exampleracing.example",
+    "industry": "Sports",
+    "numberofemployees": 80,
+    "annualrevenue": 12000000,
+    "lv_revenue_band": "5-50M",
+    "lv_employee_band": "51-200"
+  },
+  "evidence": {
+    "last_seen": "2026-06-15",
+    "match_basis": ["domain", "company_name"],
+    "evidence_urls": []
+  }
+}

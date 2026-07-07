@@ -1,0 +1,19 @@
+{
+  "provider": "zoominfo",
+  "object_type": "companies",
+  "matched": true,
+  "confidence": 83,
+  "data": {
+    "domain": "exampleracing.example",
+    "industry": "Sports & Entertainment",
+    "numberofemployees": 220,
+    "annualrevenue": 65000000,
+    "lv_revenue_band": "50-500M",
+    "lv_employee_band": "201-500"
+  },
+  "evidence": {
+    "last_seen": "2026-06-20",
+    "match_basis": ["domain", "firmographic_database"],
+    "evidence_urls": []
+  }
+}

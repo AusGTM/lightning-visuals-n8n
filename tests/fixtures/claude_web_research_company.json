@@ -1,0 +1,31 @@
+{
+  "provider": "claude_web",
+  "object_type": "companies",
+  "matched": true,
+  "confidence": 88,
+  "data": {
+    "lv_org_type": "governing_body_league",
+    "lv_produces_content": true,
+    "lv_content_type": ["live_broadcast", "streaming"],
+    "lv_sponsorship_reliant": true,
+    "lv_is_hardware_vendor": false,
+    "lv_is_gambling_operator": false,
+    "lv_country_region_normalized": "AU",
+    "lv_has_sports_media_fit": true,
+    "lv_has_broadcast_or_streaming_signals": true
+  },
+  "evidence": {
+    "last_seen": "2026-07-06",
+    "match_basis": ["website", "about_page", "broadcast_page"],
+    "evidence_urls": [
+      "https://exampleracing.example/about",
+      "https://exampleracing.example/watch-live"
+    ],
+    "evidence_summary": "The organisation appears to govern racing events and publishes live or near-live video content."
+  },
+  "model_trace": {
+    "research_model": "claude-web",
+    "classifier_model": "haiku",
+    "validator_model": null
+  }
+}
