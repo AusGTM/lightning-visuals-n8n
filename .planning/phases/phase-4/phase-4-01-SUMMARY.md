@@ -100,3 +100,19 @@ Since Proof B produced no payload, this is the emitted PATCH from the offline pi
 
 - Files exist: `src/hubspot_client.py`, `main.py`, `tests/test_main.py` — all present.
 - Commits exist: `047c0c5`, `745c68e`, `ae86b37` — all in `git log`.
+
+---
+
+## Proof B — RESOLVED (live smoke now passes)
+
+Follow-up after the initial 404: two root causes fixed by the orchestrator.
+
+1. **Stale model ids in `.env`** — `claude-3-5-haiku-latest` / `claude-sonnet-5-latest` return 404 for this key. Probed the key: reachable models are `claude-haiku-4-5` and `claude-sonnet-5`. Updated `.env` (gitignored) accordingly.
+2. **Live-path SPEC defect (4th fix)** — §12.5/§12.6 call `json.loads(msg.content.text)`, but the Anthropic SDK returns `content` as a **list of blocks**. Fixed to `msg.content[0].text` in both `classifier_haiku.py` and `validator_sonnet.py`, plus a shared `_parse_json()` that tolerates prose/```json-fenced output. Regression test: `tests/test_classifier_parse.py` (4 cases). Committed `8f50ff6`.
+
+**Live result** (`main.py`, real Haiku+Sonnet, mock providers, `DRY_RUN=true`, `ALLOW_CANONICAL_WRITES=false`):
+- Real Haiku promoted the Claude-web signals: `lv_org_type=governing_body_league` (conf 88), `lv_produces_content=true`, `lv_country_region_normalized=AU`, etc.
+- Sonnet-escalation path fired on the conflicting firmographic fields (domain/industry/revenue/employees) → `needs_review` (correct: `ALLOW_SONNET_ESCALATION=false` on disk → conservative).
+- **ICP score: 70 → Tier A, `lv_anti_icp_flag=false`, `lv_recommended_motion=work_direct`** (revenue `unknown` because the revenue conflict correctly did NOT promote).
+- **Zero HubSpot writes** — dry-run PATCH printed only; `patch_record` never called `requests.patch`.
+- Full offline gate still green: **42 passed** (added 4 parser regression tests).

@@ -23,7 +23,7 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 Phase: 4 of 4 (Dry-Run PATCH Output & Safety Gates) — COMPLETE
 Plan: 1 of 1 (phase-4-01) — COMPLETE
 Status: MVP milestone complete; next is HubSpot property setup / n8n production wiring (future milestone)
-Last activity: 2026-07-07 — Phase 4 executed: hubspot_client + main.py dry-run runner + offline SC1/SC2/SC3 suite (38 tests green)
+Last activity: 2026-07-07 — Phase 4 executed: hubspot_client + main.py dry-run runner + offline suite (42 tests green). Live E2E smoke passed with real Haiku+Sonnet (fixture → Tier A/70, zero HubSpot writes) after fixing 4th SPEC defect (SDK content[0].text parsing). Integration capstone: PASS-WITH-NOTES.
 
 Progress: [██████████] 100%
 

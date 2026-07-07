@@ -20,9 +20,9 @@ HubSpot is on the Pro tier.
 - Integer phases (1, 2, 3): Planned milestone work
 - Decimal phases (2.1, 2.2): Urgent insertions (marked INSERTED)
 
-- [ ] **Phase 1: Foundation & Configuration** - Config YAMLs, pydantic schemas, and test fixtures that everything else builds on
-- [ ] **Phase 2: ICP Scoring Engine** - Config-driven score, tier, anti-ICP vetoes, and graduated deductions with unit tests
-- [ ] **Phase 3: Enrichment Pipeline & Non-Clobber Merge** - Mock providers/research + Haiku/Sonnet cascade feeding a non-clobber merge with source attribution
+- [x] **Phase 1: Foundation & Configuration** - Config YAMLs, pydantic schemas, and test fixtures that everything else builds on
+- [x] **Phase 2: ICP Scoring Engine** - Config-driven score, tier, anti-ICP vetoes, and graduated deductions with unit tests
+- [x] **Phase 3: Enrichment Pipeline & Non-Clobber Merge** - Mock providers/research + Haiku/Sonnet cascade feeding a non-clobber merge with source attribution
 - [x] **Phase 4: Dry-Run PATCH Output & Safety Gates** - End-to-end MVP run printing the exact HubSpot PATCH under env-flag safety gates
 
 ## Phase Details
@@ -81,6 +81,6 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundation & Configuration | 1/1 | Complete | 2026-07-07 |
-| 2. ICP Scoring Engine | 0/1 | Not started | - |
-| 3. Enrichment Pipeline & Non-Clobber Merge | 0/1 | Not started | - |
-| 4. Dry-Run PATCH Output & Safety Gates | 0/1 | Not started | - |
+| 2. ICP Scoring Engine | 1/1 | Complete | 2026-07-07 |
+| 3. Enrichment Pipeline & Non-Clobber Merge | 1/1 | Complete | 2026-07-07 |
+| 4. Dry-Run PATCH Output & Safety Gates | 1/1 | Complete | 2026-07-07 |
