@@ -70,3 +70,13 @@ class MergeResult(BaseModel):
     metadata_patch: Dict[str, Any]
     status_patch: Dict[str, Any]
     full_patch: Dict[str, Any]
+
+# Phase 6: file ingestion (parse + map + reject-malformed).
+class RejectedRow(BaseModel):
+    row_index: int
+    reason: str
+    raw: Dict[str, Any] = Field(default_factory=dict)
+
+class IngestBatch(BaseModel):
+    rows: List[Dict[str, Any]] = Field(default_factory=list)
+    rejects: List[RejectedRow] = Field(default_factory=list)

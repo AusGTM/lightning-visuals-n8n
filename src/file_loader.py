@@ -8,6 +8,13 @@ import json
 from pathlib import Path
 from typing import Any, Dict, List
 
+import yaml
+
+from src.column_mapper import map_row
+from src.schemas import IngestBatch, RejectedRow
+
+_MAPPING_PATH = "config/column_mapping.yaml"
+
 
 def load_rows(path: str) -> List[Dict[str, Any]]:
     """Auto-detect format by file extension and return a list of raw dicts.
@@ -70,3 +77,43 @@ def _load_xlsx(path: str) -> List[Dict[str, Any]]:
         return out
     finally:
         wb.close()
+
+
+def _has_identity(mapped: Dict[str, Any], required: Dict[str, Any]) -> bool:
+    # True when, for some group in required["any_of"], every key is present and non-empty.
+    for group in required.get("any_of", []):
+        if all(mapped.get(key) not in (None, "") for key in group):
+            return True
+    return False
+
+
+def ingest_file(path: str) -> IngestBatch:
+    """load -> map -> split into accepted canonical rows and structured rejects.
+
+    Per-row try/except so one bad row can never crash the batch. A row yielding
+    no identity key lands in rejects with row_index + reason 'no identity key'.
+    """
+    with open(_MAPPING_PATH, encoding="utf-8") as f:
+        mapping = yaml.safe_load(f)
+    required = mapping.get("required_identity", {})
+
+    accepted: List[Dict[str, Any]] = []
+    rejects: List[RejectedRow] = []
+
+    for i, raw in enumerate(load_rows(path)):
+        try:
+            if not isinstance(raw, dict):
+                rejects.append(
+                    RejectedRow(row_index=i, reason="row is not an object", raw={"value": repr(raw)})
+                )
+                continue
+            mapped = map_row(raw, mapping)
+            if not _has_identity(mapped, required):
+                rejects.append(RejectedRow(row_index=i, reason="no identity key", raw=raw))
+                continue
+            accepted.append(mapped)
+        except Exception as e:  # one bad row must never crash the batch
+            safe_raw = raw if isinstance(raw, dict) else {"value": repr(raw)}
+            rejects.append(RejectedRow(row_index=i, reason=f"parse error: {e}", raw=safe_raw))
+
+    return IngestBatch(rows=accepted, rejects=rejects)
