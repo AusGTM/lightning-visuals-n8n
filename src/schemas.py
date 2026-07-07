@@ -80,3 +80,11 @@ class RejectedRow(BaseModel):
 class IngestBatch(BaseModel):
     rows: List[Dict[str, Any]] = Field(default_factory=list)
     rejects: List[RejectedRow] = Field(default_factory=list)
+
+# Phase 7: identity/dedupe classification (classify-only; no create/PATCH).
+class IdentityResult(BaseModel):
+    outcome: Literal["match", "net_new", "ambiguous"]
+    contact_id: Optional[str] = None          # set ONLY on a confident single match
+    match_key: Optional[str] = None           # email | linkedin_url | phone_lastname | name_company | None
+    candidate_ids: List[str] = Field(default_factory=list)  # all ids seen for this row
+    reason: str
