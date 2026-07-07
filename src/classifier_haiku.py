@@ -5,7 +5,20 @@
 # no network call; the live Anthropic branch is transcribed but not exercised here.
 import json
 import os
+import re
 from anthropic import Anthropic
+
+
+def _parse_json(text):
+    # Models occasionally wrap JSON in prose or ```json fences; extract the object.
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        m = re.search(r"\{.*\}", text, re.DOTALL)
+        if m:
+            return json.loads(m.group(0))
+        raise
+
 
 SYSTEM_PROMPT = """
 You are a deterministic CRM and ICP data classifier.
@@ -66,4 +79,5 @@ def classify_field_with_haiku(record, field, current_value, candidates, policy):
         messages=[{"role": "user", "content": json.dumps(payload)}]
     )
 
-    return json.loads(msg.content.text)
+    # SPEC-defect fix (§12.5): SDK returns content as a list of blocks, not `.text`.
+    return _parse_json(msg.content[0].text)
