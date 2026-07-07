@@ -79,6 +79,10 @@ Full detail and traceability live in `.planning/REQUIREMENTS.md`.
 | Per-field source/evidence attribution | Auditable enrichment; supports human review and rollback | — Pending |
 | Safety gates + MVP canonical writes limited to `lv_icp_*` | Prove scoring with zero clobbering risk before enabling firmographic promotion | — Pending |
 | Config-driven rubric with illustrative weights (`icp_scoring.yaml` v lv-icp-v0.1) | Weights change after JTBD 2 sign-off without code changes | ⚠️ Revisit (pending sign-off) |
+| **(M2)** File upload is a merge *source*, not a new engine — reuse Milestone 1 non-clobber merge | The field-level "don't clobber" is already solved; a CSV row is just another candidate source | — Pending |
+| **(M2)** Identity match: auto only on email/LinkedIn; no-email never auto-creates; ambiguous → review | Matching is the real risk; conservative default prevents duplicate-contact explosion in HubSpot | — Pending |
+| **(M2)** Net-new + valid email → auto-create, gated (`ALLOW_CONTACT_CREATE`, dry-run first, re-check-by-email guard) | User-chosen; safe because create is flag-gated, dry-run-default, and dedupe-guarded | — Pending |
+| **(M2)** Weekly n8n scheduler sweep flags duplicate/mangled contacts as needs_review | Catches dupes and bad data that slipped past ingestion; matches CLAUDE.md §13.4 Workflow D | — Pending |
 
 ## Risks & Open Items
 

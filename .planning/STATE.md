@@ -16,7 +16,7 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-07)
 
 **Core value:** The ICP scoring engine turns firmographic + enrichment signals into trustworthy, auditable A/B/C/D prioritization (with hard vetoes) and never clobbers HubSpot data — proven in dry-run locally.
-**Current focus:** Local-first MVP complete — all 4 phases shipped.
+**Current focus:** Milestone 2 — contact ingestion (HubSpot + file uploads), identity/dedupe resolution, gated net-new create, and an n8n local-server replica. Phases 5–10.
 
 ## Current Position
 
