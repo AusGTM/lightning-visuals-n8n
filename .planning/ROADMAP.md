@@ -35,7 +35,8 @@ HubSpot is on the Pro tier.
   1. Loading the scaffold parses `config/icp_scoring.yaml` (version lv-icp-v0.1) and the four other config YAMLs (field_policy, provider_priority, source_registry, escalation_policy) without error.
   2. Pydantic schemas (HubSpotRecord, ProviderResult, CandidateValue, FieldDecision, ICPScoreResult, MergeResult) validate the provided test fixtures.
   3. Fixtures exist for a current company plus conflicting Apollo/ZoomInfo/Lusha provider results and a Claude web-research result, and each parses into its schema.
-**Plans**: TBD
+**Plans**: 1 plan
+- [x] phase-1-01-PLAN.md — Config YAMLs, pydantic schemas, fixtures + runnable scaffold proof
 
 ### Phase 2: ICP Scoring Engine
 **Goal**: Given firmographic + enrichment signals, the engine computes an ICP fit score, tier, and anti-ICP flag that match the agreed rubric.
@@ -76,7 +77,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundation & Configuration | 0/TBD | Not started | - |
+| 1. Foundation & Configuration | 1/1 | Complete | 2026-07-07 |
 | 2. ICP Scoring Engine | 0/TBD | Not started | - |
 | 3. Enrichment Pipeline & Non-Clobber Merge | 0/TBD | Not started | - |
 | 4. Dry-Run PATCH Output & Safety Gates | 0/TBD | Not started | - |
