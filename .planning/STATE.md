@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v0.1
 milestone_name: milestone
-current_phase: 4
-current_phase_name: Dry-Run PATCH Output & Safety Gates
+current_phase: 8
+current_phase_name: Contact Enrichment & Net-New Create
 status: complete
-stopped_at: Completed phase-4/PLAN.md — dry-run PATCH runner + safety gates; Proof A green (38 tests), Proof B non-gating (Haiku model 404, no HubSpot write)
-last_updated: "2026-07-07T21:23:18.578Z"
-last_activity: 2026-07-07
-last_activity_desc: "Phase 4 executed: hubspot_client + main.py dry-run runner + offline suite (42 tests green). Live E2E smoke passed with real Haiku+Sonnet (fixture → Tier A/70, zero HubSpot writes) after fixing 4th SPEC defect (SDK content[0].text parsing). Integration capstone: PASS-WITH-NOTES."
+stopped_at: Completed phase-8/PLAN.md — contacts wired through build_merge_result; gated dry-run create_record + email-recheck guard; 69 tests green offline (64 baseline + 5 new), zero network
+last_updated: "2026-07-08T08:08:00.000Z"
+last_activity: 2026-07-08
+last_activity_desc: "Phase 8 executed: create_record (gated dry-run), src/ingest.py (row->csv candidate, precreate_email_recheck, run_contact_ingest), main.py --ingest entrypoint, and offline functional proof of email manual_protected-on-enrich vs written-on-create. 69 tests green, company demo intact."
 progress:
   total_phases: 10
-  completed_phases: 5
-  total_plans: 5
-  completed_plans: 5
-  percent: 50
+  completed_phases: 8
+  total_plans: 8
+  completed_plans: 8
+  percent: 80
 ---
 
 # Project State
@@ -28,12 +28,12 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 
 ## Current Position
 
-Phase: 4 of 4 (Dry-Run PATCH Output & Safety Gates) — COMPLETE
-Plan: 1 of 1 (phase-4-01) — COMPLETE
-Status: MVP milestone complete; next is HubSpot property setup / n8n production wiring (future milestone)
-Last activity: 2026-07-07 — Phase 4 executed: hubspot_client + main.py dry-run runner + offline suite (42 tests green). Live E2E smoke passed with real Haiku+Sonnet (fixture → Tier A/70, zero HubSpot writes) after fixing 4th SPEC defect (SDK content[0].text parsing). Integration capstone: PASS-WITH-NOTES.
+Phase: 8 of 10 (Contact Enrichment & Net-New Create) — COMPLETE
+Plan: 1 of 1 (phase-8-01) — COMPLETE
+Status: Milestone-2 contact pipeline wired end to end in dry-run; next is Phase 9 (ingestion matrix + dedupe sweep)
+Last activity: 2026-07-08 — Phase 8 executed: gated dry-run create_record, src/ingest.py (row->csv candidate + email-recheck guard + batch runner), main.py --ingest entrypoint, and an offline functional proof of both email directions (manual_protected on enrich, identity on create). 69 tests green, zero network, company demo intact.
 
-Progress: [██████████] 100%
+Progress: [████████░░] 80%
 
 ## Performance Metrics
 
@@ -90,6 +90,6 @@ Items carried forward to later milestones:
 
 ## Session Continuity
 
-Last session: 2026-07-07T21:23:18.572Z
-Stopped at: Completed phase-4/PLAN.md — dry-run PATCH runner + safety gates; Proof A green (38 tests), Proof B non-gating (Haiku model 404, no HubSpot write)
+Last session: 2026-07-08T08:08:00.000Z
+Stopped at: Completed phase-8/PLAN.md — contact ingest pipeline (create_record + run_contact_ingest + --ingest CLI); 69 tests green offline, zero network
 Resume file: None
