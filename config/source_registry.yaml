@@ -77,6 +77,24 @@ sources:
       - high_risk_validation
       - anti_icp_reasoning
 
+  csv:
+    type: upload
+    trust_rank: 60
+    can_promote_directly: false
+    notes: >-
+      Value comes from an uploaded file (CSV/XLSX/JSON). Per-upload trust is
+      DECLARABLE: a trusted internal export can be raised, an unknown scrape
+      lowered. Always merges through field-ownership governance rather than
+      promoting canonical directly.
+    supported_signals:
+      - email
+      - firstname
+      - lastname
+      - jobtitle
+      - phone
+      - company
+      - linkedin_url
+
   human:
     type: reviewer
     trust_rank: 100

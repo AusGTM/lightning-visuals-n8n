@@ -1,10 +1,12 @@
 # config/provider_priority.yaml
 #
 # Ordered provider preference per field, consumed by the non-clobber merge policy
-# (CLAUDE.md §12.8 build_merge_result). Order is [zoominfo, apollo, lusha, claude_web]
-# for every field: zoominfo-first reflects the highest firmographic trust_rank in
-# the source registry (§6.3), and this order matches the merge_policy fallback so
-# the file never contradicts the consuming code.
+# (CLAUDE.md §12.8 build_merge_result). Default order is [zoominfo, apollo, lusha,
+# claude_web]: zoominfo-first reflects the highest firmographic trust_rank in the
+# source registry (§6.3), and this order matches the merge_policy fallback so the
+# file never contradicts the consuming code.
+# EXCEPTION: contact-identity fields phone/mobilephone/email lead with lusha, the
+# direct-dial / mobile / email specialist per source_registry §6.3 supported_signals.
 
 companies:
   industry: [zoominfo, apollo, lusha, claude_web]
@@ -21,9 +23,9 @@ companies:
 
 contacts:
   jobtitle: [zoominfo, apollo, lusha, claude_web]
-  phone: [zoominfo, apollo, lusha, claude_web]
-  mobilephone: [zoominfo, apollo, lusha, claude_web]
-  email: [zoominfo, apollo, lusha, claude_web]
+  phone: [lusha, zoominfo, apollo, claude_web]
+  mobilephone: [lusha, zoominfo, apollo, claude_web]
+  email: [lusha, apollo, zoominfo, claude_web]
   linkedin_url: [zoominfo, apollo, lusha, claude_web]
   seniority: [zoominfo, apollo, lusha, claude_web]
   persona_group: [zoominfo, apollo, lusha, claude_web]
