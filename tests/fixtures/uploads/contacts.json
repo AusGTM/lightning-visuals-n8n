@@ -1,0 +1,29 @@
+[
+  {
+    "email": "alice@example.com",
+    "firstname": "Alice",
+    "lastname": "Anderson",
+    "jobtitle": "Sales Manager",
+    "phone": "0412 345 678",
+    "company": "Example Racing League",
+    "linkedin_url": "https://linkedin.com/in/alice"
+  },
+  {
+    "email": "",
+    "firstname": "Bob",
+    "lastname": "Baker",
+    "jobtitle": "Analyst",
+    "phone": "0400 111 222",
+    "company": "Example Media Co",
+    "linkedin_url": "https://linkedin.com/in/bob"
+  },
+  {
+    "email": "",
+    "firstname": "",
+    "lastname": "",
+    "jobtitle": "Coordinator",
+    "phone": "0400 222 333",
+    "company": "",
+    "linkedin_url": ""
+  }
+]
