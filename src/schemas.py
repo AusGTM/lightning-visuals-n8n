@@ -88,3 +88,16 @@ class IdentityResult(BaseModel):
     match_key: Optional[str] = None           # email | linkedin_url | phone_lastname | name_company | None
     candidate_ids: List[str] = Field(default_factory=list)  # all ids seen for this row
     reason: str
+
+# Phase 9: dedupe/mangled maintenance sweep (CLAUDE.md §13.4 Workflow D). Classify-only:
+# flags records to needs_review, never writes. Findings are plain JSON-serializable dicts
+# (same style as ingest.py's report) so the Phase-10 decision service can transport them
+# without per-finding sub-models.
+class SweepReport(BaseModel):
+    duplicates: List[Dict[str, Any]] = Field(default_factory=list)  # {key_type, key_value, ids}
+    mangled: List[Dict[str, Any]] = Field(default_factory=list)     # {id, field, raw, reason}
+    duplicate_count: int = 0
+    mangled_count: int = 0
+    # sorted-unique LIST with set semantics: a real set is neither ordered nor
+    # JSON-serializable, so a sorted list gives determinism + Phase-10 transport.
+    to_review_ids: List[str] = Field(default_factory=list)
