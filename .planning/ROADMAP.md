@@ -119,6 +119,8 @@ replicate the production n8n Cloud environment.
   1. Contact normalizer coerces phone→E.164 (via phonenumbers, region-aware AU default), validates+lowercases email (email-validator), and normalizes jobtitle/seniority; malformed phone/email yield a null + flag, never a crash.
   2. A contact_current fixture plus contact provider fixtures (Apollo/Lusha/ZoomInfo) parse into the existing schemas; provider_priority covers email/linkedin_url/seniority/persona_group; source_registry includes `csv`/`upload` with can_promote_directly:false and a declarable trust level.
   3. Unit tests prove each normalizer branch (valid, malformed, empty) deterministically.
+**Plans**: 1 plan
+- [ ] phase-5-01-PLAN.md — Contact normalizers (phone/email/seniority) + upload source + contact fixtures + offline test proof
 
 ### Phase 6: File Loader & Column Mapper
 **Goal**: Any CSV/XLSX/JSON upload becomes normalized candidate rows mapped to HubSpot properties.
@@ -164,7 +166,7 @@ replicate the production n8n Cloud environment.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 5. Contact Foundation | 0/TBD | Not started | - |
+| 5. Contact Foundation | 0/1 | Planned | - |
 | 6. File Loader & Column Mapper | 0/TBD | Not started | - |
 | 7. Identity / Dedupe Resolver | 0/TBD | Not started | - |
 | 8. Contact Enrichment & Net-New Create | 0/TBD | Not started | - |
