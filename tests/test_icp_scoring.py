@@ -1,0 +1,164 @@
+# tests/test_icp_scoring.py
+#
+# Runnable proof for Phase 2 (ICP scoring engine). Plain pytest, plain asserts.
+# Every case drives compute_icp_score purely through candidate_patch on a
+# companies record with empty properties. lv_country_region_normalized is always
+# set explicitly so geography never falls back to the `country` property.
+#
+# Scope note: CLAUDE.md §24.1 cases 11-16 (provider org-type conflict -> Sonnet,
+# content conflict -> Sonnet, missing evidence URL -> human review, manual domain
+# -> stage only, existing phone -> stage only, blank phone + agreement -> promote)
+# are NOT scoring behaviors — compute_icp_score has no provider-conflict, evidence,
+# phone, or promote/stage logic. They belong to Phase 3's merge/escalation layer
+# and will be covered by tests/test_merge_policy.py. The 16 cases below are the
+# real scoring coverage (full veto set, full revenue-decay sweep, NZ geography,
+# unknown-content, Unscored).
+from src.schemas import HubSpotRecord
+from src.icp_scoring import compute_icp_score
+
+
+def score(patch):
+    record = HubSpotRecord(object_type="companies", id="789", properties={})
+    return compute_icp_score(record, patch)
+
+
+def revenue_points(result):
+    for c in result.breakdown["components"]:
+        if c["signal"] == "revenue_band":
+            return c["points"]
+    raise AssertionError("no revenue_band component in breakdown")
+
+
+def test_case_1_au_governing_body_tier_a():
+    r = score({"lv_org_type": "governing_body_league", "lv_produces_content": True,
+               "lv_country_region_normalized": "AU", "lv_revenue_band": "5-50M"})
+    assert r.tier == "A"
+    assert r.anti_icp_flag is False
+    assert r.score == 80
+
+
+def test_case_2_au_content_producer_tier_b():
+    r = score({"lv_org_type": "content_producer", "lv_produces_content": True,
+               "lv_country_region_normalized": "AU", "lv_revenue_band": "5-50M"})
+    assert r.tier == "B"
+    assert r.anti_icp_flag is False
+    assert r.score == 60
+
+
+def test_case_3_au_individual_club_tier_c():
+    # Case 3 uses revenue 1-5M (a 0-point band), NOT mid-market. §24.1 case 3
+    # does not pin a revenue band for the club (case 1 does). Under correct
+    # produces_content scoring, club(5)+content(20)+AU(10)+mid(10)=45=Tier B;
+    # a 0-point revenue band gives 5+20+10+0=35=Tier C, the outcome
+    # REQ-org-type-targeting and SC1 require. This is a frozen-rubric weight
+    # sensitivity, not a this-phase concern.
+    r = score({"lv_org_type": "individual_club_team", "lv_produces_content": True,
+               "lv_country_region_normalized": "AU", "lv_revenue_band": "1-5M"})
+    assert r.tier == "C"
+    assert r.anti_icp_flag is False
+    assert r.score == 35
+
+
+def test_case_4_non_anz_veto():
+    r = score({"lv_org_type": "governing_body_league", "lv_produces_content": True,
+               "lv_country_region_normalized": "Other", "lv_revenue_band": "5-50M"})
+    assert r.tier == "D"
+    assert r.anti_icp_flag is True
+    assert "Non-ANZ" in r.anti_icp_reason
+
+
+def test_case_5_no_content_veto():
+    r = score({"lv_org_type": "governing_body_league", "lv_produces_content": False,
+               "lv_country_region_normalized": "AU", "lv_revenue_band": "5-50M"})
+    assert r.tier == "D"
+    assert r.anti_icp_flag is True
+    assert "No broadcast or streaming content" in r.anti_icp_reason
+
+
+def test_case_6_hardware_vendor_veto():
+    r = score({"lv_org_type": "hardware_vendor", "lv_produces_content": True,
+               "lv_is_hardware_vendor": True,
+               "lv_country_region_normalized": "AU", "lv_revenue_band": "5-50M"})
+    assert r.tier == "D"
+    assert r.anti_icp_flag is True
+    assert "Hardware/AV/LED vendor" in r.anti_icp_reason
+
+
+def test_case_7_gambling_operator_deduction_not_veto():
+    r = score({"lv_org_type": "governing_body_league", "lv_produces_content": True,
+               "lv_is_gambling_operator": True,
+               "lv_country_region_normalized": "AU", "lv_revenue_band": "5-50M"})
+    assert r.anti_icp_flag is False
+    assert r.score == 60
+    assert {"signal": "gambling_operator", "points": -20} in r.breakdown["graduated_deductions"]
+
+
+def test_case_8_revenue_500_750m_decay():
+    r = score({"lv_org_type": "governing_body_league", "lv_produces_content": True,
+               "lv_country_region_normalized": "AU", "lv_revenue_band": "500-750M"})
+    assert r.anti_icp_flag is False
+    assert r.score == 65
+    assert revenue_points(r) == -5
+
+
+def test_case_9_revenue_750m_1b_decay():
+    r = score({"lv_org_type": "governing_body_league", "lv_produces_content": True,
+               "lv_country_region_normalized": "AU", "lv_revenue_band": "750M-1B"})
+    assert r.anti_icp_flag is False
+    assert r.score == 55
+    assert revenue_points(r) == -15
+
+
+def test_case_10_revenue_1b_1_2b_decay():
+    r = score({"lv_org_type": "governing_body_league", "lv_produces_content": True,
+               "lv_country_region_normalized": "AU", "lv_revenue_band": "1B-1.2B"})
+    assert r.anti_icp_flag is False
+    assert r.score == 40
+    assert revenue_points(r) == -30
+
+
+def test_case_11_revenue_1_2b_plus_decay():
+    r = score({"lv_org_type": "governing_body_league", "lv_produces_content": True,
+               "lv_country_region_normalized": "AU", "lv_revenue_band": "1.2B+"})
+    assert r.anti_icp_flag is False
+    assert r.score == 20
+    assert revenue_points(r) == -50
+
+
+def test_case_12_unknown_org_needs_review():
+    r = score({"lv_produces_content": True,
+               "lv_country_region_normalized": "AU", "lv_revenue_band": "5-50M"})
+    assert r.tier == "Needs Review"
+    assert r.confidence == 55
+    assert r.anti_icp_flag is False
+
+
+def test_case_13_missing_content_needs_review():
+    r = score({"lv_org_type": "governing_body_league",
+               "lv_country_region_normalized": "AU", "lv_revenue_band": "5-50M"})
+    assert r.tier == "Needs Review"
+    assert r.confidence == 55
+    assert r.anti_icp_flag is False
+
+
+def test_case_14_unknown_org_low_score_unscored():
+    r = score({"lv_produces_content": True,
+               "lv_country_region_normalized": "AU", "lv_revenue_band": "1B-1.2B"})
+    assert r.tier == "Unscored"
+    assert r.confidence == 55
+    assert r.score == 0
+
+
+def test_case_15_nz_geography_tier_a():
+    r = score({"lv_org_type": "governing_body_league", "lv_produces_content": True,
+               "lv_country_region_normalized": "NZ", "lv_revenue_band": "5-50M"})
+    assert r.tier == "A"
+    assert r.anti_icp_flag is False
+    assert r.score == 80
+
+
+def test_case_16_version_stamp():
+    r = score({"lv_org_type": "governing_body_league", "lv_produces_content": True,
+               "lv_country_region_normalized": "AU", "lv_revenue_band": "5-50M"})
+    assert r.scoring_version == "lv-icp-v0.1"
+    assert r.breakdown["version"] == "lv-icp-v0.1"
