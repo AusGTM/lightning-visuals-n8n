@@ -12,7 +12,12 @@
 # off (allow_create=False) — so ZERO HubSpot writes occur. The anthropic SDK uses httpx,
 # not the requests client, so the pipeline's requests-based HubSpot client is untouched.
 # Wrapped in try/except: prints exactly one PASS or SKIPPED/ERROR line and ALWAYS exits 0.
+import os
 import sys
+
+# Run directly (`python tests/live_smoke_contact.py`) puts tests/ on sys.path, not the
+# project root — so bootstrap the root before importing src.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from dotenv import load_dotenv
 
