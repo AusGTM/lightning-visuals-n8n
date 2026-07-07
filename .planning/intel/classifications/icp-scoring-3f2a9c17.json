@@ -1,0 +1,13 @@
+{
+  "source_path": "/Users/robertli/Desktop/consulting/lightning-visuals/lv-n8n-poc/icp-scoring.md",
+  "type": "PRD",
+  "confidence": "medium",
+  "manifest_override": false,
+  "title": "Lightning Visuals — ICP / Anti-ICP Validation",
+  "summary": "Validates Lightning Visuals' ICP assumptions against 92 closed HubSpot deals and proposes an ICP/anti-ICP scoring rubric, tiers, and enrichment plan for sign-off.",
+  "scope": ["ICP scoring", "anti-ICP vetoes", "HubSpot custom properties", "org-type/content enrichment", "lead/account tiering", "sales prioritization"],
+  "cross_refs": ["Market-Research"],
+  "locked": false,
+  "precedence": null,
+  "notes": "Requirements/analysis doc driving a scoring rubric; competes with SPEC due to scoring point tables and property mappings, but has no API/schema contracts and is framed as product requirements pending sign-off, so classified PRD."
+}

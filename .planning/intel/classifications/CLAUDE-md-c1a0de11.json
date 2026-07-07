@@ -1,0 +1,13 @@
+{
+  "source_path": "/Users/robertli/Desktop/consulting/lightning-visuals/lv-n8n-poc/CLAUDE.md",
+  "type": "SPEC",
+  "confidence": "medium",
+  "manifest_override": false,
+  "title": "HubSpot Sales Hub Pro to n8n Cloud Waterfall Enrichment + ICP Scoring System",
+  "summary": "Technical implementation spec for a HubSpot-to-n8n enrichment pipeline with provider waterfall, LLM classification, non-clobber merge, and ICP scoring.",
+  "scope": ["HubSpot Sales Hub Pro", "n8n Cloud workflows", "ICP scoring engine", "provider waterfall (ZoomInfo/Apollo/Lusha)", "Claude web research adapter", "Haiku/Sonnet LLM classification", "non-clobber merge policy", "HubSpot custom property data model", "source attribution/audit"],
+  "cross_refs": ["RTK.md"],
+  "locked": false,
+  "precedence": null,
+  "notes": "Competes between SPEC and DOC. Chose SPEC: dominated by concrete data models (HubSpot property tables), config schemas (field_policy.yaml, icp_scoring.yaml, source_registry.yaml), adapter/API contracts, PATCH payloads, and n8n node contracts — implementation contracts the system must honor. Also carries PRD-like phases/rollout and DOC-like prose, but highest-value signal is technical contracts. No ADR decision/consequences structure and no frontmatter type. Note: source_hash suffix is a deterministic placeholder (no Bash/SHA-256 available in this environment)."
+}
