@@ -95,6 +95,31 @@ def run_local_mvp():
     return patch
 
 
+def run_ingest_cli(path):
+    # Phase 8: --ingest entrypoint. Reads the same env gates the pipeline honors and
+    # prints the per-row report. dry_run defaults True and ALLOW_CONTACT_CREATE off, so
+    # a bare run never writes or creates.
+    from src.ingest import run_contact_ingest
+    from collections import Counter
+
+    allow_create = os.getenv("ALLOW_CONTACT_CREATE", "false").lower() == "true"
+    dry_run = os.getenv("DRY_RUN", "true").lower() == "true"
+    report = run_contact_ingest(path, allow_create=allow_create, dry_run=dry_run)
+
+    print("\n=== Contact Ingest Report ===")
+    print(json.dumps(report, indent=2, default=str))
+    counts = Counter(entry["action"] for entry in report)
+    print("\n=== Action Summary ===")
+    print(", ".join(f"{action}={n}" for action, n in sorted(counts.items())))
+    return report
+
+
 if __name__ == "__main__":
+    import sys
+
     load_dotenv()
-    run_local_mvp()
+    if "--ingest" in sys.argv:
+        path = sys.argv[sys.argv.index("--ingest") + 1]
+        run_ingest_cli(path)
+    else:
+        run_local_mvp()
