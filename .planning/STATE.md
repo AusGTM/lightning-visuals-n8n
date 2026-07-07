@@ -6,15 +6,15 @@ current_phase: 8
 current_phase_name: Contact Enrichment & Net-New Create
 status: complete
 stopped_at: Completed phase-8/PLAN.md — contacts wired through build_merge_result; gated dry-run create_record + email-recheck guard; 69 tests green offline (64 baseline + 5 new), zero network
-last_updated: "2026-07-08T08:08:00.000Z"
+last_updated: "2026-07-07T22:26:20.799Z"
 last_activity: 2026-07-08
-last_activity_desc: "Phase 8 executed: create_record (gated dry-run), src/ingest.py (row->csv candidate, precreate_email_recheck, run_contact_ingest), main.py --ingest entrypoint, and offline functional proof of email manual_protected-on-enrich vs written-on-create. 69 tests green, company demo intact."
+last_activity_desc: "Phase 8 executed: gated dry-run create_record, src/ingest.py (row->csv candidate + email-recheck guard + batch runner), main.py --ingest entrypoint, and an offline functional proof of both email directions (manual_protected on enrich, identity on create). 69 tests green, zero network, company demo intact."
 progress:
   total_phases: 10
-  completed_phases: 8
-  total_plans: 8
-  completed_plans: 8
-  percent: 80
+  completed_phases: 9
+  total_plans: 9
+  completed_plans: 9
+  percent: 90
 ---
 
 # Project State
@@ -56,6 +56,7 @@ Progress: [████████░░] 80%
 
 *Updated after each plan completion*
 | Phase phase-5 P01 | 5m | 4 tasks | 8 files |
+| Phase 9 P01 | ~15m | 3 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -66,6 +67,7 @@ Decisions are logged in PROJECT.md Key Decisions table. SPEC-level architectural
 - Config-driven rubric (`icp_scoring.yaml` v lv-icp-v0.1) with illustrative weights — changeable after JTBD 2 sign-off without code changes (⚠️ pending sign-off).
 - MVP canonical writes limited to `lv_icp_*`; firmographics staged, manual fields never touched.
 - LLM cascade Haiku → Sonnet 5 → human; non-clobber merge with field-ownership classes.
+- [Phase ?]: Phase 9: dedupe_sweep compares NORMALIZED keys (normalize-before-compare); SweepReport findings are plain JSON dicts for Phase-10 transport
 
 ### Pending Todos
 
@@ -90,6 +92,6 @@ Items carried forward to later milestones:
 
 ## Session Continuity
 
-Last session: 2026-07-08T08:08:00.000Z
+Last session: 2026-07-07T22:26:12.496Z
 Stopped at: Completed phase-8/PLAN.md — contact ingest pipeline (create_record + run_contact_ingest + --ingest CLI); 69 tests green offline, zero network
 Resume file: None

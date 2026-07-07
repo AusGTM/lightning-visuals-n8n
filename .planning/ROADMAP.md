@@ -154,6 +154,10 @@ replicate the production n8n Cloud environment.
   2. A column-mapping config maps arbitrary source headers → canonical HubSpot properties (email, firstname, lastname, phone, jobtitle, company, linkedin_url); unmapped columns are ignored, required-key-missing rows are rejected.
   3. Malformed/rejected rows are collected into a structured per-row error report (row index + reason), never silently dropped.
 
+**Plans**: 1 plan
+
+- [ ] phase-6-01-PLAN.md — File loader (csv/tsv/json/xlsx behind load_rows) + column mapper + ingest_file→IngestBatch (accepted rows + per-row rejects) + offline fixtures/tests
+
 ### Phase 7: Identity / Dedupe Resolver
 
 **Goal**: Each uploaded row is confidently classified existing / net-new / ambiguous before any write.
@@ -163,6 +167,10 @@ replicate the production n8n Cloud environment.
   1. Resolution tries email → linkedin_url → phone+lastname → name+company in order; a hit on email or linkedin_url is a confident match, weaker keys alone are ambiguous.
   2. Rows with no email are NEVER classified net-new-create (route to ambiguous/review); confident-match returns the HubSpot contact id via search_records (mockable, offline in tests).
   3. Multiple candidate matches → ambiguous (needs_review); zero matches + valid email → net-new. All outcomes unit-tested with a mocked HubSpot search.
+
+**Plans**: 1 plan
+
+- [ ] phase-7-01-PLAN.md — IdentityResult schema + src/identity.py (ordered email→linkedin→phone+lastname→name+company resolver, injected/mockable search, no-email-never-net-new hard rule) + tests/test_identity.py offline proof of every outcome
 
 ### Phase 8: Contact Enrichment & Net-New Create
 
@@ -174,6 +182,10 @@ replicate the production n8n Cloud environment.
   2. hubspot_client gains a gated create_record (dry_run + ALLOW_CONTACT_CREATE); net-new create re-checks HubSpot by email immediately before create (guard against dup) and is a no-op when the flag is off.
   3. main.py exposes an ingest-file entrypoint; a functional test drives a CSV through to the emitted dry-run PATCH (existing) and create (net-new) payloads with zero live writes.
 
+**Plans**: 1 plan
+
+- [ ] phase-8/PLAN.md — create_record (gated dry-run) + src/ingest.py (row->csv candidate, recheck guard, run_contact_ingest) + main.py --ingest + offline functional test proving enrich-PATCH vs net-new-create (email both ways)
+
 ### Phase 9: Functional + E2E Tests & Dedupe Sweep
 
 **Goal**: The whole ingestion behavior is proven on realistic multi-row files, plus a maintenance sweep.
@@ -183,6 +195,10 @@ replicate the production n8n Cloud environment.
   1. An E2E test runs a multi-row file covering every path: confident-match+enrich, net-new create, ambiguous→review, field conflict→needs_review, manual_protected/present-fill_blank_only never clobbered, no-email→never create.
   2. A dedupe/cleanup sweep function flags duplicate email/phone/linkedin and mangled contacts (invalid email, unparseable phone) as needs_review, returning a structured report (CLAUDE.md §13.4 Workflow D).
   3. Full suite (Milestone 1 + 2) green offline with no network; a live smoke (real Anthropic, mock providers, DRY_RUN) enriches at least one matched contact.
+
+**Plans**: 1 plan
+
+- [ ] phase-9/PLAN.md — dedupe/mangled sweep (src/sweep.py + SweepReport) + multi-row E2E ingestion matrix (test_e2e_ingest.py) + non-gating live-Haiku smoke, all offline
 
 ### Phase 10: n8n Template & Local Server Replica
 
@@ -199,8 +215,8 @@ replicate the production n8n Cloud environment.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 5. Contact Foundation | 1/1 | Complete   | 2026-07-07 |
-| 6. File Loader & Column Mapper | 0/TBD | Not started | - |
-| 7. Identity / Dedupe Resolver | 0/TBD | Not started | - |
-| 8. Contact Enrichment & Net-New Create | 0/TBD | Not started | - |
-| 9. Functional + E2E Tests & Dedupe Sweep | 0/TBD | Not started | - |
+| 6. File Loader & Column Mapper | 0/1 | Planned | - |
+| 7. Identity / Dedupe Resolver | 0/1 | Planned | - |
+| 8. Contact Enrichment & Net-New Create | 0/1 | Planned | - |
+| 9. Functional + E2E Tests & Dedupe Sweep | 0/1 | Planned | - |
 | 10. n8n Template & Local Server Replica | 0/TBD | Not started | - |
