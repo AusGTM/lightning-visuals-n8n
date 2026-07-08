@@ -1,0 +1,292 @@
+{
+  "id": "LVcontactIngest01",
+  "name": "LV Contact Ingest (local replica)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "t00020000-0000-4000-8000-000000000000",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        260,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Emit Fixture Rows (mock parsed file) \u2014 LOCAL variant.\n// Represents the output of a parsed CSV upload. CLOUD instead uses\n// Webhook-upload -> Extract-from-File to produce these same raw rows.\n// Headers are deliberately messy (aliases) to exercise columnMap.\nconst rows = [\n  { \"Email Address\": \"bob.smith@example.com\", \"First Name\": \"Bob\", \"Last Name\": \"Smith\", \"Job Title\": \"New Title From Upload\", \"Phone\": \"0412 345 678\", \"Company\": \"Example Co\", \"LinkedIn\": \"https://linkedin.com/in/bob-upload\" },\n  { \"Email Address\": \"alice@example.com\", \"First Name\": \"Alice\", \"Last Name\": \"Anderson\", \"Job Title\": \"Analyst\", \"Phone\": \"0400 111 222\", \"Company\": \"Example Media\", \"LinkedIn\": \"\" },\n  { \"Email Address\": \"\", \"First Name\": \"Carol\", \"Last Name\": \"Jones\", \"Job Title\": \"Coordinator\", \"Phone\": \"0400 222 333\", \"Company\": \"Some Company\", \"LinkedIn\": \"\" },\n  { \"Email Address\": \"\", \"First Name\": \"Dave\", \"Last Name\": \"Nguyen\", \"Job Title\": \"Manager\", \"Phone\": \"\", \"Company\": \"Another Company\", \"LinkedIn\": \"\" },\n  { \"Email Address\": \"\", \"First Name\": \"\", \"Last Name\": \"\", \"Job Title\": \"Just A Title\", \"Phone\": \"0400 999 888\", \"Company\": \"\", \"LinkedIn\": \"\" }\n];\nconst allow_create = false;  // create gated OFF in the local proof\nreturn rows.map((r) => ({ json: { ...r, allow_create } }));\n"
+      },
+      "id": "c00030000-0000-4000-8000-000000000000",
+      "name": "Emit Fixture Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// columnMap.js \u2014 pure-JS header remap for n8n Code nodes.\n//\n// Mirrors src/column_mapper.py + config/column_mapping.yaml: arbitrary source\n// headers -> canonical HubSpot contact props via case-insensitive / whitespace-\n// collapsed aliases; unmapped columns are dropped. requiredIdentity mirrors the\n// column_mapping required_identity reject rule (email OR firstname+lastname+company).\n\n// Embedded alias table (source of truth: config/column_mapping.yaml). Keys are\n// already lowercased/whitespace-collapsed, matching _normHeader.\nconst ALIASES = {\n  // email\n  \"email\": \"email\",\n  \"email address\": \"email\",\n  \"e-mail\": \"email\",\n  // firstname\n  \"firstname\": \"firstname\",\n  \"first name\": \"firstname\",\n  \"fname\": \"firstname\",\n  \"given name\": \"firstname\",\n  // lastname\n  \"lastname\": \"lastname\",\n  \"last name\": \"lastname\",\n  \"surname\": \"lastname\",\n  // jobtitle\n  \"jobtitle\": \"jobtitle\",\n  \"job title\": \"jobtitle\",\n  \"title\": \"jobtitle\",\n  \"position\": \"jobtitle\",\n  // linkedin_url\n  \"linkedin_url\": \"linkedin_url\",\n  \"linkedin\": \"linkedin_url\",\n  \"linkedin url\": \"linkedin_url\",\n  \"li\": \"linkedin_url\",\n  // phone\n  \"phone\": \"phone\",\n  \"mobile\": \"phone\",\n  \"tel\": \"phone\",\n  // company\n  \"company\": \"company\",\n  \"organization\": \"company\",\n  \"organisation\": \"company\",\n  \"account\": \"company\",\n};\n\nfunction _normHeader(header) {\n  // Trim, collapse internal whitespace, lowercase \u2014 matches column_mapper._norm_header.\n  return String(header).split(/\\s+/).filter(Boolean).join(\" \").toLowerCase();\n}\n\n// mapRow(rawRow, mapping?) \u2014 mapping optional; defaults to embedded ALIASES.\n// Accepts either a full column_mapping object ({aliases:{...}}) or a bare alias map.\nfunction mapRow(rawRow, mapping) {\n  let aliases = ALIASES;\n  if (mapping) aliases = mapping.aliases || mapping;\n  const out = {};\n  for (const key of Object.keys(rawRow || {})) {\n    if (typeof key !== \"string\") continue; // malformed header -> skip, never throw\n    const canonical = aliases[_normHeader(key)];\n    if (canonical) out[canonical] = rawRow[key];\n  }\n  return out;\n}\n\nfunction _present(v) {\n  return v !== null && v !== undefined && String(v).trim() !== \"\";\n}\n\n// requiredIdentity(row) \u2014 email OR (firstname AND lastname AND company).\nfunction requiredIdentity(row) {\n  if (!row) return false;\n  if (_present(row.email)) return true;\n  return _present(row.firstname) && _present(row.lastname) && _present(row.company);\n}\n\n// --- n8n wrapper: map arbitrary upload headers -> canonical props ---\nconst rows = $input.all();\nconst out = [];\nfor (const it of rows) {\n  const raw = it.json;\n  const mapped = mapRow(raw);\n  const ok = requiredIdentity(mapped);\n  out.push({ json: {\n    ...mapped,\n    allow_create: raw.allow_create === true,\n    reject: !ok,\n    ...(ok ? {} : {\n      outcome: \"rejected\",\n      reject_reason: \"missing required identity (need email OR firstname+lastname+company)\"\n    })\n  }});\n}\nreturn out;\n"
+      },
+      "id": "c00040000-0000-4000-8000-000000000000",
+      "name": "Map Columns",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// normalizePhone.js \u2014 pure-JS AU phone normalizer for n8n Code nodes.\n//\n// DISCLAIMER: This is an AU-ONLY heuristic, NOT libphonenumber. It cannot import\n// npm (n8n Code nodes run pure JS with no requires), so it recognises only the AU\n// formats the ingestion pipeline actually sees. Any number that is non-AU or\n// ambiguous returns null \u2014 the caller must route null to review, never silently\n// drop or guess. A leading '+' is trusted as already-E.164 and passed through\n// (separators stripped) WITHOUT a validity check, so an invalid '+...' string is\n// kept as-is here where the Python oracle (phonenumbers.is_valid_number) would\n// reject it. Swap this for a phone-validation API for global fidelity later.\n//\n// Mirrors src/normalizer.py normalize_phone for the AU cases the parity test pins.\n\nfunction normalizePhoneAU(raw) {\n  if (raw === null || raw === undefined || raw === \"\") return null;\n  // Strip spaces, dashes, parens, dots \u2014 everything that is pure separator.\n  const s = String(raw).replace(/[\\s\\-().]/g, \"\");\n  if (s === \"\") return null;\n\n  // Already international: trust the '+', keep the digits after it.\n  if (s.startsWith(\"+\")) {\n    const digits = s.slice(1);\n    if (!/^\\d+$/.test(digits)) return null; // \"+garbage\" -> review\n    return \"+\" + digits;\n  }\n\n  if (!/^\\d+$/.test(s)) return null; // any non-digit leftover -> not AU/ambiguous\n\n  // 0XXXXXXXXX \u2014 10-digit AU national (mobile 04.. or landline 0[2378]..).\n  if (s.length === 10 && s[0] === \"0\") {\n    return \"+61\" + s.slice(1);\n  }\n\n  // 61XXXXXXXXX \u2014 AU country code without the '+'.\n  if (s.length === 11 && s.startsWith(\"61\")) {\n    return \"+\" + s;\n  }\n\n  return null; // anything else is non-AU or ambiguous -> review\n}\n\n// --- n8n wrapper: AU-heuristic phone -> E.164 (null => review) ---\nreturn $input.all().map((it) => {\n  const row = it.json;\n  return { json: { ...row, phone_normalized: normalizePhoneAU(row.phone) } };\n});\n"
+      },
+      "id": "c00050000-0000-4000-8000-000000000000",
+      "name": "Normalize Phone",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        920,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// normalizeEmail.js \u2014 pure-JS email normalization for n8n Code nodes.\n//\n// normalizeEmailBasic does a BASIC syntactic check + trim/lowercase only. The\n// authoritative validation is the external rapid-email-verifier API downstream;\n// applyEmailVerification maps that verifier's response onto the row. This mirrors\n// src/normalizer.py normalize_email closely enough for identity/dedupe parity:\n// obviously-malformed -> null, otherwise trimmed+lowercased.\n\nfunction normalizeEmailBasic(raw) {\n  if (raw === null || raw === undefined) return null;\n  const s = String(raw).trim().toLowerCase();\n  if (s === \"\") return null;\n  // Basic shape: local@domain.tld, no spaces, one @, a dotted domain.\n  // Deliberately conservative \u2014 the verifier API is the real authority.\n  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(s)) return null;\n  return s;\n}\n\n// Map a rapid-email-verifier result onto the row. `verifierResult` shape:\n//   { status: \"VALID\"|\"PROBABLY_VALID\"|\"INVALID_FORMAT\"|\"INVALID_DOMAIN\"|\"DISPOSABLE\",\n//     aliasOf?: \"canonical@example.com\" }\n// Returns the fields to merge onto the row.\nfunction applyEmailVerification(row, verifierResult) {\n  const status = (verifierResult && verifierResult.status) || \"INVALID_FORMAT\";\n  const alias = verifierResult && verifierResult.aliasOf;\n  const raw = row ? row.email : undefined;\n\n  // aliasOf is the canonical address when the verifier resolved one.\n  const canonical = alias\n    ? normalizeEmailBasic(alias)\n    : normalizeEmailBasic(raw);\n\n  const valid = status === \"VALID\" || status === \"PROBABLY_VALID\";\n\n  return {\n    email_normalized: valid ? canonical : normalizeEmailBasic(raw),\n    email_valid: valid,\n    email_status: status,\n    needs_review_reason: valid ? null : `email verifier: ${status}`,\n  };\n}\n\n// --- n8n wrapper: collapse rows -> ONE item {emails:[...]} for the batch API ---\nconst rows = $input.all();\nconst emails = [];\nconst seen = new Set();\nfor (const it of rows) {\n  const e = normalizeEmailBasic(it.json.email);\n  if (e && !seen.has(e)) { seen.add(e); emails.push(e); }\n}\nreturn [{ json: { emails } }];\n"
+      },
+      "id": "c00060000-0000-4000-8000-000000000000",
+      "name": "Build Verify Batch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1140,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://rapid-email-verifier.fly.dev/api/validate/batch",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={ \"emails\": {{ JSON.stringify($json.emails) }} }",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "h00010000-0000-4000-8000-000000000000",
+      "name": "Verify Emails (batch)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1360,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// normalizeEmail.js \u2014 pure-JS email normalization for n8n Code nodes.\n//\n// normalizeEmailBasic does a BASIC syntactic check + trim/lowercase only. The\n// authoritative validation is the external rapid-email-verifier API downstream;\n// applyEmailVerification maps that verifier's response onto the row. This mirrors\n// src/normalizer.py normalize_email closely enough for identity/dedupe parity:\n// obviously-malformed -> null, otherwise trimmed+lowercased.\n\nfunction normalizeEmailBasic(raw) {\n  if (raw === null || raw === undefined) return null;\n  const s = String(raw).trim().toLowerCase();\n  if (s === \"\") return null;\n  // Basic shape: local@domain.tld, no spaces, one @, a dotted domain.\n  // Deliberately conservative \u2014 the verifier API is the real authority.\n  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(s)) return null;\n  return s;\n}\n\n// Map a rapid-email-verifier result onto the row. `verifierResult` shape:\n//   { status: \"VALID\"|\"PROBABLY_VALID\"|\"INVALID_FORMAT\"|\"INVALID_DOMAIN\"|\"DISPOSABLE\",\n//     aliasOf?: \"canonical@example.com\" }\n// Returns the fields to merge onto the row.\nfunction applyEmailVerification(row, verifierResult) {\n  const status = (verifierResult && verifierResult.status) || \"INVALID_FORMAT\";\n  const alias = verifierResult && verifierResult.aliasOf;\n  const raw = row ? row.email : undefined;\n\n  // aliasOf is the canonical address when the verifier resolved one.\n  const canonical = alias\n    ? normalizeEmailBasic(alias)\n    : normalizeEmailBasic(raw);\n\n  const valid = status === \"VALID\" || status === \"PROBABLY_VALID\";\n\n  return {\n    email_normalized: valid ? canonical : normalizeEmailBasic(raw),\n    email_valid: valid,\n    email_status: status,\n    needs_review_reason: valid ? null : `email verifier: ${status}`,\n  };\n}\n\n// --- n8n wrapper: merge the batch verifier response back onto every row ---\n// Rebuilds N rows from the pre-batch node (Normalize Phone) and matches each\n// row's email to the verifier result by address. If the verifier is\n// unreachable / dropped an entry, fall NON-GATING to PROBABLY_VALID + review.\nconst rows = $('Normalize Phone').all();\nlet results = [];\ntry { results = ($('Verify Emails (batch)').first().json.results) || []; } catch (e) { results = []; }\nconst byEmail = {};\nfor (const r of results) { if (r && r.email) byEmail[String(r.email).toLowerCase()] = r; }\n\nreturn rows.map((it) => {\n  const row = it.json;\n  const e = normalizeEmailBasic(row.email);\n  let vres;\n  if (!e) {\n    vres = { status: \"NO_EMAIL\" };\n  } else if (byEmail[e]) {\n    vres = { status: byEmail[e].status };\n  } else {\n    vres = { status: \"PROBABLY_VALID\", _fallback: true };  // verifier unreachable -> non-gating\n  }\n  const applied = applyEmailVerification(row, vres);\n  return { json: {\n    ...row,\n    ...applied,\n    email_status: vres.status,\n    email_verify_fallback: vres._fallback === true\n  }};\n});\n"
+      },
+      "id": "c00070000-0000-4000-8000-000000000000",
+      "name": "Apply Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1580,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// HubSpot Search (MOCK) \u2014 LOCAL variant only.\n// Cloud uses a real n8n-nodes-base.hubspot search node; here we return canned\n// results so resolveIdentity exercises match / net_new / ambiguous:\n//   bob.smith@example.com -> email hit contact \"200\"  => match\n//   alice@example.com     -> 0 hits                    => net_new\n//   Carol Jones/Some Company (no email) -> name_company hit \"300\" => ambiguous (weak key)\n//   Dave Nguyen (no email, no weak hit) -> hard-safety  => ambiguous\nreturn $input.all().map((it) => {\n  const row = it.json;\n  const email = String(row.email_normalized || row.email || \"\").toLowerCase().trim();\n  const srk = {};\n  if (email === \"bob.smith@example.com\") srk.email = [\"200\"];\n  const nameKey = [\n    String(row.firstname || \"\").toLowerCase().trim(),\n    String(row.lastname || \"\").toLowerCase().trim(),\n    String(row.company || \"\").toLowerCase().trim(),\n  ].join(\"|\");\n  if (nameKey === \"carol|jones|some company\") srk.name_company = [\"300\"];\n  return { json: { ...row, searchResultsByKey: srk } };\n});\n"
+      },
+      "id": "c00080000-0000-4000-8000-000000000000",
+      "name": "HubSpot Search (MOCK)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// normalizeEmail.js \u2014 pure-JS email normalization for n8n Code nodes.\n//\n// normalizeEmailBasic does a BASIC syntactic check + trim/lowercase only. The\n// authoritative validation is the external rapid-email-verifier API downstream;\n// applyEmailVerification maps that verifier's response onto the row. This mirrors\n// src/normalizer.py normalize_email closely enough for identity/dedupe parity:\n// obviously-malformed -> null, otherwise trimmed+lowercased.\n\nfunction normalizeEmailBasic(raw) {\n  if (raw === null || raw === undefined) return null;\n  const s = String(raw).trim().toLowerCase();\n  if (s === \"\") return null;\n  // Basic shape: local@domain.tld, no spaces, one @, a dotted domain.\n  // Deliberately conservative \u2014 the verifier API is the real authority.\n  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(s)) return null;\n  return s;\n}\n\n// Map a rapid-email-verifier result onto the row. `verifierResult` shape:\n//   { status: \"VALID\"|\"PROBABLY_VALID\"|\"INVALID_FORMAT\"|\"INVALID_DOMAIN\"|\"DISPOSABLE\",\n//     aliasOf?: \"canonical@example.com\" }\n// Returns the fields to merge onto the row.\nfunction applyEmailVerification(row, verifierResult) {\n  const status = (verifierResult && verifierResult.status) || \"INVALID_FORMAT\";\n  const alias = verifierResult && verifierResult.aliasOf;\n  const raw = row ? row.email : undefined;\n\n  // aliasOf is the canonical address when the verifier resolved one.\n  const canonical = alias\n    ? normalizeEmailBasic(alias)\n    : normalizeEmailBasic(raw);\n\n  const valid = status === \"VALID\" || status === \"PROBABLY_VALID\";\n\n  return {\n    email_normalized: valid ? canonical : normalizeEmailBasic(raw),\n    email_valid: valid,\n    email_status: status,\n    needs_review_reason: valid ? null : `email verifier: ${status}`,\n  };\n}\n\n// normalizePhone.js \u2014 pure-JS AU phone normalizer for n8n Code nodes.\n//\n// DISCLAIMER: This is an AU-ONLY heuristic, NOT libphonenumber. It cannot import\n// npm (n8n Code nodes run pure JS with no requires), so it recognises only the AU\n// formats the ingestion pipeline actually sees. Any number that is non-AU or\n// ambiguous returns null \u2014 the caller must route null to review, never silently\n// drop or guess. A leading '+' is trusted as already-E.164 and passed through\n// (separators stripped) WITHOUT a validity check, so an invalid '+...' string is\n// kept as-is here where the Python oracle (phonenumbers.is_valid_number) would\n// reject it. Swap this for a phone-validation API for global fidelity later.\n//\n// Mirrors src/normalizer.py normalize_phone for the AU cases the parity test pins.\n\nfunction normalizePhoneAU(raw) {\n  if (raw === null || raw === undefined || raw === \"\") return null;\n  // Strip spaces, dashes, parens, dots \u2014 everything that is pure separator.\n  const s = String(raw).replace(/[\\s\\-().]/g, \"\");\n  if (s === \"\") return null;\n\n  // Already international: trust the '+', keep the digits after it.\n  if (s.startsWith(\"+\")) {\n    const digits = s.slice(1);\n    if (!/^\\d+$/.test(digits)) return null; // \"+garbage\" -> review\n    return \"+\" + digits;\n  }\n\n  if (!/^\\d+$/.test(s)) return null; // any non-digit leftover -> not AU/ambiguous\n\n  // 0XXXXXXXXX \u2014 10-digit AU national (mobile 04.. or landline 0[2378]..).\n  if (s.length === 10 && s[0] === \"0\") {\n    return \"+61\" + s.slice(1);\n  }\n\n  // 61XXXXXXXXX \u2014 AU country code without the '+'.\n  if (s.length === 11 && s.startsWith(\"61\")) {\n    return \"+\" + s;\n  }\n\n  return null; // anything else is non-AU or ambiguous -> review\n}\n\n// resolveIdentity.js \u2014 pure-JS contact identity resolver for n8n Code nodes.\n//\n// Mirrors src/identity.py resolve_identity EXACTLY, including the core safety rule:\n// a row with no valid email can NEVER be net_new. Auto-match only on STRONG keys\n// (email / linkedin_url); every weak-key hit routes to ambiguous (needs_review).\n//\n// PURE: the actual HubSpot searches happen upstream in an n8n HubSpot node. This\n// function receives their results pre-fetched as `searchResultsByKey`, a map keyed\n// by the search/match name -> array of candidate ids:\n//   { email:[ids], linkedin_url:[ids], phone_lastname:[ids], name_company:[ids] }\n// A missing key is treated as zero hits.\n\n\n// Deterministic LinkedIn key \u2014 mirrors identity.canonicalize_linkedin.\nfunction canonicalizeLinkedin(url) {\n  if (!url) return null;\n  let s = String(url).trim();\n  if (s === \"\") return null;\n  if (!s.includes(\"//\")) s = \"https://\" + s;\n  let scheme = \"\", rest = s;\n  const schemeIdx = s.indexOf(\"//\");\n  if (schemeIdx > 0) {\n    scheme = s.slice(0, schemeIdx - 1); // drop the ':' before '//'\n    rest = s.slice(schemeIdx + 2);\n  } else {\n    rest = s.slice(schemeIdx + 2);\n  }\n  // rest = host[/path][?query][#frag]\n  let host = rest, path = \"\";\n  const slash = rest.indexOf(\"/\");\n  if (slash >= 0) {\n    host = rest.slice(0, slash);\n    path = rest.slice(slash);\n  }\n  // drop query/fragment\n  path = path.split(\"?\")[0].split(\"#\")[0];\n  if (path.endsWith(\"/\")) path = path.slice(0, -1);\n  return scheme.toLowerCase() + \"://\" + host.toLowerCase() + path;\n}\n\nfunction _ids(searchResultsByKey, key) {\n  const v = searchResultsByKey && searchResultsByKey[key];\n  return Array.isArray(v) ? v.map(String) : [];\n}\n\nfunction resolveIdentity(row, searchResultsByKey) {\n  row = row || {};\n  searchResultsByKey = searchResultsByKey || {};\n\n  const email = normalizeEmailBasic(row.email); // null if absent OR malformed\n  const linkedin = canonicalizeLinkedin(row.linkedin_url);\n  const phone = normalizePhoneAU(row.phone);\n  const firstname = String(row.firstname || \"\").trim();\n  const lastname = String(row.lastname || \"\").trim();\n  const company = String(row.company || \"\").trim();\n\n  // 1. Email (STRONG). A valid email is the ONLY route to net_new.\n  if (email) {\n    const ids = _ids(searchResultsByKey, \"email\");\n    if (ids.length === 1) {\n      return { outcome: \"match\", contact_id: ids[0], match_key: \"email\",\n               candidate_ids: ids, reason: \"single email match\" };\n    }\n    if (ids.length > 1) {\n      return { outcome: \"ambiguous\", contact_id: null, match_key: \"email\",\n               candidate_ids: ids, reason: \"multiple email matches\" };\n    }\n    return { outcome: \"net_new\", contact_id: null, match_key: null,\n             candidate_ids: [], reason: \"valid email, no existing match\" };\n  }\n\n  // 2. No valid email past here. LinkedIn (STRONG).\n  if (linkedin) {\n    const ids = _ids(searchResultsByKey, \"linkedin_url\");\n    if (ids.length === 1) {\n      return { outcome: \"match\", contact_id: ids[0], match_key: \"linkedin_url\",\n               candidate_ids: ids, reason: \"single linkedin match\" };\n    }\n    if (ids.length > 1) {\n      return { outcome: \"ambiguous\", contact_id: null, match_key: \"linkedin_url\",\n               candidate_ids: ids, reason: \"multiple linkedin matches\" };\n    }\n    // 0 hits -> fall through to weak keys.\n  }\n\n  // 3. Weak keys: a hit here is NEVER confident -> only ever ambiguous (review).\n  if (phone && lastname) {\n    const ids = _ids(searchResultsByKey, \"phone_lastname\");\n    if (ids.length) {\n      return { outcome: \"ambiguous\", contact_id: null, match_key: \"phone_lastname\",\n               candidate_ids: ids, reason: \"weak-key match requires review\" };\n    }\n  }\n\n  if (firstname && lastname && company) {\n    const ids = _ids(searchResultsByKey, \"name_company\");\n    if (ids.length) {\n      return { outcome: \"ambiguous\", contact_id: null, match_key: \"name_company\",\n               candidate_ids: ids, reason: \"weak-key match requires review\" };\n    }\n  }\n\n  // 4. HARD SAFETY RULE: no valid email AND no confident match AND no weak-key\n  // candidate -> ambiguous, NEVER net_new.\n  return { outcome: \"ambiguous\", contact_id: null, match_key: null,\n           candidate_ids: [], reason: \"no email, insufficient identity\" };\n}\n\n// --- n8n wrapper: strong-key auto-match, weak keys -> review, no-email never net_new ---\nreturn $input.all().map((it) => {\n  const row = it.json;\n  if (row.reject) {\n    return { json: { ...row, identity: { outcome: \"rejected\", contact_id: null,\n      match_key: null, candidate_ids: [], reason: row.reject_reason || \"missing identity\" } } };\n  }\n  const identity = resolveIdentity(row, row.searchResultsByKey || {});\n  return { json: { ...row, identity } };\n});\n"
+      },
+      "id": "c00090000-0000-4000-8000-000000000000",
+      "name": "Resolve Identity",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2020,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// mergeContacts.js \u2014 pure-JS DETERMINISTIC non-clobber merge for n8n Code nodes.\n//\n// Mirrors the DETERMINISTIC parts of src/merge_policy.py (deterministic_gate +\n// source_metadata + staging_property) for a single upload candidate per field.\n// NO Haiku / NO Sonnet \u2014 the LLM classification/validation stages that merge_policy\n// runs after the gate are intentionally omitted here (n8n Code nodes cannot call\n// them; escalation happens in a downstream node). So the decision IS the gate's\n// decision. Source = \"csv\" @ confidence 80 (matches src/ingest.py row_to_provider_result).\n//\n// Email can NEVER land in canonicalPatch on this enrich path (belt-and-braces: the\n// manual_protected class + the 95 threshold already prevent it, and an explicit\n// guard enforces it regardless of policy edits).\n\n// Default contacts field policy (source of truth: config/field_policy.yaml `contacts`).\nconst DEFAULT_CONTACT_POLICY = {\n  email:        { class: \"manual_protected\",  min_confidence: 95 },\n  phone:        { class: \"fill_blank_only\",   min_confidence: 80 },\n  mobilephone:  { class: \"fill_blank_only\",   min_confidence: 85 },\n  jobtitle:     { class: \"stale_refreshable\", min_confidence: 75 },\n  linkedin_url: { class: \"fill_blank_only\",   min_confidence: 85 },\n  seniority:    { class: \"system_owned\",      min_confidence: 75 },\n  persona_group:{ class: \"system_owned\",      min_confidence: 75 },\n};\n\nfunction _isBlank(v) {\n  return v === null || v === undefined || v === \"\" ||\n         (Array.isArray(v) && v.length === 0);\n}\n\nfunction stagingProperty(provider, field) {\n  return `${provider}_${field}`;\n}\n\nfunction _nowIso() {\n  return new Date().toISOString();\n}\n\n// Deterministic gate \u2014 single candidate, mirrors merge_policy.deterministic_gate.\n// has_conflict is always false with one candidate, so the conflict branch is dropped.\nfunction _gate(field, currentValue, confidence, policy) {\n  const fieldClass = (policy && policy.class) || \"fill_blank_only\";\n  const minConfidence = (policy && policy.min_confidence != null) ? policy.min_confidence : 80;\n\n  if (confidence < minConfidence) {\n    return { decision: \"needs_review\",\n             reason: `Best confidence ${confidence} below threshold ${minConfidence}.` };\n  }\n  if (fieldClass === \"manual_protected\") {\n    return { decision: \"stage_only\", reason: \"Field is manual_protected.\" };\n  }\n  if (fieldClass === \"review_required\") {\n    return { decision: \"needs_review\", reason: \"Field requires review.\" };\n  }\n  if (fieldClass === \"system_owned\" || fieldClass === \"score_output\" || fieldClass === \"veto_output\") {\n    return { decision: \"promote\", reason: \"System-owned field passed confidence threshold.\" };\n  }\n  if (fieldClass === \"fill_blank_only\") {\n    if (_isBlank(currentValue)) {\n      return { decision: \"promote\", reason: \"Current value blank and candidate passed threshold.\" };\n    }\n    return { decision: \"stage_only\", reason: \"Current value exists and field is fill_blank_only.\" };\n  }\n  if (fieldClass === \"stale_refreshable\") {\n    if (_isBlank(currentValue)) {\n      return { decision: \"promote\", reason: \"Current value blank and candidate passed threshold.\" };\n    }\n    return { decision: \"needs_review\", reason: \"Refresh candidate requires review in MVP.\" };\n  }\n  return { decision: \"stage_only\", reason: \"Default conservative behavior.\" };\n}\n\nfunction _statusFor(decision) {\n  // Deterministic (no LLM) validation_status from source_registry vocabulary.\n  return decision === \"needs_review\" ? \"human_review_required\" : \"provider_only\";\n}\n\n// mergeContacts(existingProps, candidateRow, fieldPolicy?, opts?)\n//   existingProps: current HubSpot contact properties (the record being enriched)\n//   candidateRow:  canonical-keyed upload row (post column-map + normalization)\n//   fieldPolicy:   contacts policy block; defaults to DEFAULT_CONTACT_POLICY\n//   opts:          { source=\"csv\", confidence=80 }\nfunction mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {\n  existingProps = existingProps || {};\n  candidateRow = candidateRow || {};\n  const policy = fieldPolicy || DEFAULT_CONTACT_POLICY;\n  const source = (opts && opts.source) || \"csv\";\n  const confidence = (opts && opts.confidence != null) ? opts.confidence : 80;\n  const verifiedAt = _nowIso();\n\n  const canonicalPatch = {};\n  const stagingPatch = {};\n  const metadataPatch = {};\n  const decisions = [];\n\n  for (const field of Object.keys(candidateRow)) {\n    const value = candidateRow[field];\n    if (_isBlank(value)) continue; // nothing to merge\n\n    const currentValue = existingProps[field];\n    const fieldPol = policy[field] || { class: \"fill_blank_only\", min_confidence: 80 };\n\n    // Always stage the raw candidate under its provider-namespaced key.\n    stagingPatch[stagingProperty(source, field)] = value;\n\n    const gate = _gate(field, currentValue, confidence, fieldPol);\n    let decision = gate.decision;\n\n    // HARD GUARD: email never promotes to canonical on the enrich path.\n    if (field === \"email\" && decision === \"promote\") decision = \"stage_only\";\n\n    const validationStatus = _statusFor(decision);\n\n    // Stamp source metadata for every field with a chosen candidate.\n    const meta = {\n      [`${field}_source`]: source,\n      [`${field}_confidence`]: confidence,\n      [`${field}_verified_at`]: verifiedAt,\n      [`${field}_validation_status`]: validationStatus,\n    };\n    Object.assign(metadataPatch, meta);\n\n    if (decision === \"promote\") {\n      canonicalPatch[field] = value;\n    }\n\n    decisions.push({\n      field,\n      current_value: currentValue === undefined ? null : currentValue,\n      chosen_value: value,\n      source_provider: source,\n      decision,\n      confidence,\n      reason: gate.reason,\n      validation_status: validationStatus,\n      verified_at: verifiedAt,\n    });\n  }\n\n  return { canonicalPatch, stagingPatch, metadataPatch, decisions };\n}\n\n// --- n8n wrapper: deterministic non-clobber merge (email never promotes) ---\nreturn $input.all().map((it) => {\n  const row = it.json;\n  const candidate = {};\n  for (const f of [\"email\", \"firstname\", \"lastname\", \"jobtitle\", \"linkedin_url\", \"company\"]) {\n    if (row[f] != null && String(row[f]).trim() !== \"\") candidate[f] = row[f];\n  }\n  if (row.phone_normalized) candidate.phone = row.phone_normalized;\n  // LOCAL/template: no existing HubSpot props fetched here => {} (blanks promote per policy).\n  const merged = mergeContacts({}, candidate, undefined, { source: \"csv\", confidence: 80 });\n  return { json: { ...row, merge: merged } };\n});\n"
+      },
+      "id": "c00100000-0000-4000-8000-000000000000",
+      "name": "Merge Contacts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Decide Action (dry-run echo) \u2014 LOCAL variant.\n// Replaces the HubSpot update/create write nodes: ECHOES the would-be payload,\n// performs NO real write. `create` stays gated behind allow_create (default false).\nreturn $input.all().map((it) => {\n  const row = it.json;\n  const id = row.identity || {};\n  const outcome = id.outcome || \"rejected\";\n  const allow_create = row.allow_create === true;\n  const patch = row.merge\n    ? { ...row.merge.canonicalPatch, ...row.merge.stagingPatch, ...row.merge.metadataPatch }\n    : {};\n  let action, hubspot_op = null;\n  if (outcome === \"match\") {\n    action = \"update\";\n    hubspot_op = { method: \"PATCH\", endpoint: \"/crm/v3/objects/contacts/\" + id.contact_id, properties: patch };\n  } else if (outcome === \"net_new\") {\n    if (allow_create) {\n      action = \"create\";\n      hubspot_op = { method: \"POST\", endpoint: \"/crm/v3/objects/contacts\", properties: patch };\n    } else {\n      action = \"review\";  // create gated off => route to review queue\n    }\n  } else if (outcome === \"ambiguous\") {\n    action = \"review\";\n  } else {\n    action = \"skip\";      // rejected: failed required-identity gate\n  }\n  return { json: {\n    email: row.email || null,\n    name: [row.firstname, row.lastname].filter(Boolean).join(\" \") || null,\n    outcome,\n    action,\n    match_key: id.match_key || null,\n    candidate_ids: id.candidate_ids || [],\n    reason: id.reason || row.reject_reason || null,\n    email_status: row.email_status || null,\n    email_valid: row.email_valid === true,\n    email_verify_fallback: row.email_verify_fallback === true,\n    allow_create,\n    dry_run: true,\n    hubspot_op\n  }};\n});\n"
+      },
+      "id": "c00110000-0000-4000-8000-000000000000",
+      "name": "Decide Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2460,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## LV Contact Ingest \u2014 LOCAL (headless-executable)\nSame Wave-A JS as the Cloud template, inlined into Code nodes.\n**Mocked for local run:** file input -> Emit Fixture Rows; HubSpot search/update/create -> Code mocks (dry-run echo, NO real writes).\n**REAL:** the email verifier HTTP node calls the live free API.\nAU-phone normalizer is a heuristic; non-AU/ambiguous -> null -> review.",
+        "height": 260,
+        "width": 420
+      },
+      "id": "s00120000-0000-4000-8000-000000000000",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        260,
+        520
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Emit Fixture Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Emit Fixture Rows": {
+      "main": [
+        [
+          {
+            "node": "Map Columns",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map Columns": {
+      "main": [
+        [
+          {
+            "node": "Normalize Phone",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Phone": {
+      "main": [
+        [
+          {
+            "node": "Build Verify Batch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Verify Batch": {
+      "main": [
+        [
+          {
+            "node": "Verify Emails (batch)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Emails (batch)": {
+      "main": [
+        [
+          {
+            "node": "Apply Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apply Email": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Search (MOCK)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Search (MOCK)": {
+      "main": [
+        [
+          {
+            "node": "Resolve Identity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Identity": {
+      "main": [
+        [
+          {
+            "node": "Merge Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Contacts": {
+      "main": [
+        [
+          {
+            "node": "Decide Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {}
+}

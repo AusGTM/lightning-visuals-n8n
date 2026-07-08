@@ -1,0 +1,569 @@
+#!/usr/bin/env python3
+# scripts/build_cloud_workflows.py
+#
+# Milestone 3 Wave B build step. n8n Cloud Code nodes CANNOT require() sibling
+# files or npm, so each Code node must carry a FULLY SELF-CONTAINED copy of the
+# Wave-A module functions it needs. This script is the single source of truth:
+# it reads n8n/code/*.js, strips the `require(...)`/`module.exports` lines, and
+# inlines the needed functions into each Code node body, then emits both:
+#   - n8n/wf_contact_ingest_cloud.json  (production-shaped, REAL HubSpot/HTTP nodes)
+#   - n8n/wf_contact_ingest_local.json  (locally-executable, HubSpot mocked)
+#
+# Re-run after editing any n8n/code/*.js module to regenerate the workflows.
+#
+# ponytail: generating JSON from Python (json.dump handles all escaping) beats
+# hand-transcribing JS into JSON string literals — no drift, no escape bugs.
+
+import json
+import re
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+CODE = ROOT / "n8n" / "code"
+
+# ---- module inliner ---------------------------------------------------------
+
+_REQUIRE_RE = re.compile(r"^\s*const\s*\{[^}]*\}\s*=\s*require\(")
+_EXPORTS_RE = re.compile(r"^\s*module\.exports")
+
+
+def strip_module(name: str) -> str:
+    """Load a Wave-A module, drop its require()/module.exports lines."""
+    src = (CODE / name).read_text()
+    kept = [ln for ln in src.splitlines()
+            if not _REQUIRE_RE.match(ln) and not _EXPORTS_RE.match(ln)]
+    return "\n".join(kept).strip()
+
+
+def inline(*modules: str) -> str:
+    """Concatenate stripped modules (dependency order matters for the reader)."""
+    return "\n\n".join(strip_module(m) for m in modules)
+
+
+# ---- Code-node bodies (inlined module + n8n I/O wrapper) --------------------
+# Every wrapper runs "Once for All Items": read $input.all() (or reference a
+# prior node by name to preserve rows across the collapse→HTTP→expand hop),
+# return [{json:...}].
+
+MAP_COLUMNS = inline("columnMap.js") + r"""
+
+// --- n8n wrapper: map arbitrary upload headers -> canonical props ---
+const rows = $input.all();
+const out = [];
+for (const it of rows) {
+  const raw = it.json;
+  const mapped = mapRow(raw);
+  const ok = requiredIdentity(mapped);
+  out.push({ json: {
+    ...mapped,
+    allow_create: raw.allow_create === true,
+    reject: !ok,
+    ...(ok ? {} : {
+      outcome: "rejected",
+      reject_reason: "missing required identity (need email OR firstname+lastname+company)"
+    })
+  }});
+}
+return out;
+"""
+
+NORMALIZE_PHONE = inline("normalizePhone.js") + r"""
+
+// --- n8n wrapper: AU-heuristic phone -> E.164 (null => review) ---
+return $input.all().map((it) => {
+  const row = it.json;
+  return { json: { ...row, phone_normalized: normalizePhoneAU(row.phone) } };
+});
+"""
+
+BUILD_VERIFY_BATCH = inline("normalizeEmail.js") + r"""
+
+// --- n8n wrapper: collapse rows -> ONE item {emails:[...]} for the batch API ---
+const rows = $input.all();
+const emails = [];
+const seen = new Set();
+for (const it of rows) {
+  const e = normalizeEmailBasic(it.json.email);
+  if (e && !seen.has(e)) { seen.add(e); emails.push(e); }
+}
+return [{ json: { emails } }];
+"""
+
+APPLY_EMAIL = inline("normalizeEmail.js") + r"""
+
+// --- n8n wrapper: merge the batch verifier response back onto every row ---
+// Rebuilds N rows from the pre-batch node (Normalize Phone) and matches each
+// row's email to the verifier result by address. If the verifier is
+// unreachable / dropped an entry, fall NON-GATING to PROBABLY_VALID + review.
+const rows = $('Normalize Phone').all();
+let results = [];
+try { results = ($('Verify Emails (batch)').first().json.results) || []; } catch (e) { results = []; }
+const byEmail = {};
+for (const r of results) { if (r && r.email) byEmail[String(r.email).toLowerCase()] = r; }
+
+return rows.map((it) => {
+  const row = it.json;
+  const e = normalizeEmailBasic(row.email);
+  let vres;
+  if (!e) {
+    vres = { status: "NO_EMAIL" };
+  } else if (byEmail[e]) {
+    vres = { status: byEmail[e].status };
+  } else {
+    vres = { status: "PROBABLY_VALID", _fallback: true };  // verifier unreachable -> non-gating
+  }
+  const applied = applyEmailVerification(row, vres);
+  return { json: {
+    ...row,
+    ...applied,
+    email_status: vres.status,
+    email_verify_fallback: vres._fallback === true
+  }};
+});
+"""
+
+# LOCAL ONLY: canned HubSpot search results so resolveIdentity exercises every path.
+HUBSPOT_SEARCH_MOCK = r"""// HubSpot Search (MOCK) — LOCAL variant only.
+// Cloud uses a real n8n-nodes-base.hubspot search node; here we return canned
+// results so resolveIdentity exercises match / net_new / ambiguous:
+//   bob.smith@example.com -> email hit contact "200"  => match
+//   alice@example.com     -> 0 hits                    => net_new
+//   Carol Jones/Some Company (no email) -> name_company hit "300" => ambiguous (weak key)
+//   Dave Nguyen (no email, no weak hit) -> hard-safety  => ambiguous
+return $input.all().map((it) => {
+  const row = it.json;
+  const email = String(row.email_normalized || row.email || "").toLowerCase().trim();
+  const srk = {};
+  if (email === "bob.smith@example.com") srk.email = ["200"];
+  const nameKey = [
+    String(row.firstname || "").toLowerCase().trim(),
+    String(row.lastname || "").toLowerCase().trim(),
+    String(row.company || "").toLowerCase().trim(),
+  ].join("|");
+  if (nameKey === "carol|jones|some company") srk.name_company = ["300"];
+  return { json: { ...row, searchResultsByKey: srk } };
+});
+"""
+
+# CLOUD ONLY: adapt the real HubSpot search node's output into searchResultsByKey.
+ADAPT_SEARCH_RESULTS = r"""// Adapt Search Results — CLOUD variant.
+// Maps the real HubSpot "Search by Email" node output (per row, same order)
+// into the searchResultsByKey shape resolveIdentity expects. A HubSpot search
+// with 0 results yields an empty id list => net_new/ambiguous downstream.
+const rows = $('Normalize Phone').all();
+const search = $('HubSpot Search by Email').all();
+return rows.map((it, i) => {
+  const row = it.json;
+  const hits = [];
+  const res = search[i] && search[i].json;
+  if (res && res.id) hits.push(String(res.id));            // single-object result
+  if (res && Array.isArray(res.results)) {                 // search list result
+    for (const c of res.results) if (c && c.id) hits.push(String(c.id));
+  }
+  const srk = {};
+  if (normalizeEmailBasicSafe(row.email) && hits.length) srk.email = hits;
+  return { json: { ...row, searchResultsByKey: srk } };
+});
+
+function normalizeEmailBasicSafe(raw) {
+  if (raw === null || raw === undefined) return null;
+  const s = String(raw).trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) ? s : null;
+}
+"""
+
+RESOLVE_IDENTITY = inline("normalizeEmail.js", "normalizePhone.js", "resolveIdentity.js") + r"""
+
+// --- n8n wrapper: strong-key auto-match, weak keys -> review, no-email never net_new ---
+return $input.all().map((it) => {
+  const row = it.json;
+  if (row.reject) {
+    return { json: { ...row, identity: { outcome: "rejected", contact_id: null,
+      match_key: null, candidate_ids: [], reason: row.reject_reason || "missing identity" } } };
+  }
+  const identity = resolveIdentity(row, row.searchResultsByKey || {});
+  return { json: { ...row, identity } };
+});
+"""
+
+MERGE_CONTACTS = inline("mergeContacts.js") + r"""
+
+// --- n8n wrapper: deterministic non-clobber merge (email never promotes) ---
+return $input.all().map((it) => {
+  const row = it.json;
+  const candidate = {};
+  for (const f of ["email", "firstname", "lastname", "jobtitle", "linkedin_url", "company"]) {
+    if (row[f] != null && String(row[f]).trim() !== "") candidate[f] = row[f];
+  }
+  if (row.phone_normalized) candidate.phone = row.phone_normalized;
+  // LOCAL/template: no existing HubSpot props fetched here => {} (blanks promote per policy).
+  const merged = mergeContacts({}, candidate, undefined, { source: "csv", confidence: 80 });
+  return { json: { ...row, merge: merged } };
+});
+"""
+
+DECIDE_LOCAL = r"""// Decide Action (dry-run echo) — LOCAL variant.
+// Replaces the HubSpot update/create write nodes: ECHOES the would-be payload,
+// performs NO real write. `create` stays gated behind allow_create (default false).
+return $input.all().map((it) => {
+  const row = it.json;
+  const id = row.identity || {};
+  const outcome = id.outcome || "rejected";
+  const allow_create = row.allow_create === true;
+  const patch = row.merge
+    ? { ...row.merge.canonicalPatch, ...row.merge.stagingPatch, ...row.merge.metadataPatch }
+    : {};
+  let action, hubspot_op = null;
+  if (outcome === "match") {
+    action = "update";
+    hubspot_op = { method: "PATCH", endpoint: "/crm/v3/objects/contacts/" + id.contact_id, properties: patch };
+  } else if (outcome === "net_new") {
+    if (allow_create) {
+      action = "create";
+      hubspot_op = { method: "POST", endpoint: "/crm/v3/objects/contacts", properties: patch };
+    } else {
+      action = "review";  // create gated off => route to review queue
+    }
+  } else if (outcome === "ambiguous") {
+    action = "review";
+  } else {
+    action = "skip";      // rejected: failed required-identity gate
+  }
+  return { json: {
+    email: row.email || null,
+    name: [row.firstname, row.lastname].filter(Boolean).join(" ") || null,
+    outcome,
+    action,
+    match_key: id.match_key || null,
+    candidate_ids: id.candidate_ids || [],
+    reason: id.reason || row.reject_reason || null,
+    email_status: row.email_status || null,
+    email_valid: row.email_valid === true,
+    email_verify_fallback: row.email_verify_fallback === true,
+    allow_create,
+    dry_run: true,
+    hubspot_op
+  }};
+});
+"""
+
+DECIDE_CLOUD = r"""// Decide Action — CLOUD variant.
+// Computes action + the HubSpot property patch, then the IF nodes route to the
+// real HubSpot update/create (gated) / Set review nodes.
+return $input.all().map((it) => {
+  const row = it.json;
+  const id = row.identity || {};
+  const outcome = id.outcome || "rejected";
+  const allow_create = row.allow_create === true;
+  const properties = row.merge
+    ? { ...row.merge.canonicalPatch, ...row.merge.stagingPatch, ...row.merge.metadataPatch }
+    : {};
+  let action;
+  if (outcome === "match") action = "update";
+  else if (outcome === "net_new") action = allow_create ? "create" : "review";
+  else if (outcome === "ambiguous") action = "review";
+  else action = "skip";
+  return { json: {
+    action,
+    outcome,
+    contact_id: id.contact_id || null,
+    reason: id.reason || row.reject_reason || null,
+    email_status: row.email_status || null,
+    properties
+  }};
+});
+"""
+
+# ---- workflow assembly helpers ---------------------------------------------
+
+_idc = [0]
+
+
+def nid(prefix="n"):
+    _idc[0] += 1
+    return f"{prefix}{_idc[0]:04d}0000-0000-4000-8000-000000000000"
+
+
+def code_node(name, js, x, y):
+    return {
+        "parameters": {"mode": "runOnceForAllItems", "jsCode": js},
+        "id": nid("c"), "name": name,
+        "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [x, y],
+    }
+
+
+def chain(names):
+    """Linear main-connection between consecutive node names."""
+    conns = {}
+    for a, b in zip(names, names[1:]):
+        conns[a] = {"main": [[{"node": b, "type": "main", "index": 0}]]}
+    return conns
+
+
+# ---- LOCAL workflow ---------------------------------------------------------
+
+FIXTURE_EMIT = r"""// Emit Fixture Rows (mock parsed file) — LOCAL variant.
+// Represents the output of a parsed CSV upload. CLOUD instead uses
+// Webhook-upload -> Extract-from-File to produce these same raw rows.
+// Headers are deliberately messy (aliases) to exercise columnMap.
+const rows = [
+  { "Email Address": "bob.smith@example.com", "First Name": "Bob", "Last Name": "Smith", "Job Title": "New Title From Upload", "Phone": "0412 345 678", "Company": "Example Co", "LinkedIn": "https://linkedin.com/in/bob-upload" },
+  { "Email Address": "alice@example.com", "First Name": "Alice", "Last Name": "Anderson", "Job Title": "Analyst", "Phone": "0400 111 222", "Company": "Example Media", "LinkedIn": "" },
+  { "Email Address": "", "First Name": "Carol", "Last Name": "Jones", "Job Title": "Coordinator", "Phone": "0400 222 333", "Company": "Some Company", "LinkedIn": "" },
+  { "Email Address": "", "First Name": "Dave", "Last Name": "Nguyen", "Job Title": "Manager", "Phone": "", "Company": "Another Company", "LinkedIn": "" },
+  { "Email Address": "", "First Name": "", "Last Name": "", "Job Title": "Just A Title", "Phone": "0400 999 888", "Company": "", "LinkedIn": "" }
+];
+const allow_create = false;  // create gated OFF in the local proof
+return rows.map((r) => ({ json: { ...r, allow_create } }));
+"""
+
+HTTP_VERIFY = {
+    "parameters": {
+        "method": "POST",
+        "url": "https://rapid-email-verifier.fly.dev/api/validate/batch",
+        "sendBody": True,
+        "specifyBody": "json",
+        "jsonBody": '={ "emails": {{ JSON.stringify($json.emails) }} }',
+        "options": {"timeout": 20000},
+    },
+    "id": nid("h"),
+    "name": "Verify Emails (batch)",
+    "type": "n8n-nodes-base.httpRequest",
+    "typeVersion": 4.2,
+    "position": [0, 0],
+    # non-gating: if the verifier is unreachable, keep going (Apply Email falls back).
+    "onError": "continueRegularOutput",
+}
+
+
+def build_local():
+    nodes = []
+    y = 300
+    x = 260
+    manual = {"parameters": {}, "id": nid("t"), "name": "Manual Trigger",
+              "type": "n8n-nodes-base.manualTrigger", "typeVersion": 1, "position": [x, y]}
+    nodes.append(manual)
+
+    seq = [
+        ("Emit Fixture Rows", FIXTURE_EMIT),
+        ("Map Columns", MAP_COLUMNS),
+        ("Normalize Phone", NORMALIZE_PHONE),
+        ("Build Verify Batch", BUILD_VERIFY_BATCH),
+    ]
+    for name, js in seq:
+        x += 220
+        nodes.append(code_node(name, js, x, y))
+
+    x += 220
+    http = dict(HTTP_VERIFY)
+    http["position"] = [x, y]
+    nodes.append(http)
+
+    tail = [
+        ("Apply Email", APPLY_EMAIL),
+        ("HubSpot Search (MOCK)", HUBSPOT_SEARCH_MOCK),
+        ("Resolve Identity", RESOLVE_IDENTITY),
+        ("Merge Contacts", MERGE_CONTACTS),
+        ("Decide Action", DECIDE_LOCAL),
+    ]
+    for name, js in tail:
+        x += 220
+        nodes.append(code_node(name, js, x, y))
+
+    order = ["Manual Trigger", "Emit Fixture Rows", "Map Columns", "Normalize Phone",
+             "Build Verify Batch", "Verify Emails (batch)", "Apply Email",
+             "HubSpot Search (MOCK)", "Resolve Identity", "Merge Contacts", "Decide Action"]
+
+    note = {
+        "parameters": {"content": (
+            "## LV Contact Ingest — LOCAL (headless-executable)\n"
+            "Same Wave-A JS as the Cloud template, inlined into Code nodes.\n"
+            "**Mocked for local run:** file input -> Emit Fixture Rows; HubSpot "
+            "search/update/create -> Code mocks (dry-run echo, NO real writes).\n"
+            "**REAL:** the email verifier HTTP node calls the live free API.\n"
+            "AU-phone normalizer is a heuristic; non-AU/ambiguous -> null -> review."
+        ), "height": 260, "width": 420},
+        "id": nid("s"), "name": "Sticky Note",
+        "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [260, 520],
+    }
+    nodes.append(note)
+
+    return {
+        "id": "LVcontactIngest01",
+        "name": "LV Contact Ingest (local replica)",
+        "nodes": nodes,
+        "connections": chain(order),
+        "settings": {},
+    }
+
+
+# ---- CLOUD workflow ---------------------------------------------------------
+
+def build_cloud():
+    nodes = []
+    y = 300
+    x = 220
+
+    webhook = {
+        "parameters": {"httpMethod": "POST", "path": "hubspot/contact-upload",
+                       "responseMode": "lastNode", "options": {}},
+        "id": nid("w"), "name": "Webhook Trigger",
+        "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [x, y],
+    }
+    nodes.append(webhook)
+
+    x += 220
+    set_cfg = {
+        "parameters": {"assignments": {"assignments": [
+            {"id": nid("a"), "name": "allow_create", "value": False, "type": "boolean"}
+        ]}, "options": {}},
+        "id": nid("g"), "name": "Set Config",
+        "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [x, y],
+    }
+    nodes.append(set_cfg)
+
+    x += 220
+    extract = {
+        "parameters": {"operation": "csv", "binaryPropertyName": "data", "options": {}},
+        "id": nid("e"), "name": "Extract From File",
+        "type": "n8n-nodes-base.extractFromFile", "typeVersion": 1, "position": [x, y],
+    }
+    nodes.append(extract)
+
+    for name, js in [("Map Columns", MAP_COLUMNS), ("Normalize Phone", NORMALIZE_PHONE),
+                     ("Build Verify Batch", BUILD_VERIFY_BATCH)]:
+        x += 220
+        nodes.append(code_node(name, js, x, y))
+
+    x += 220
+    http = dict(HTTP_VERIFY)
+    http["id"] = nid("h")
+    http["position"] = [x, y]
+    nodes.append(http)
+
+    x += 220
+    nodes.append(code_node("Apply Email", APPLY_EMAIL, x, y))
+
+    x += 220
+    hs_search = {
+        "parameters": {"resource": "contact", "operation": "search",
+                       "filterGroupsUi": {"filterGroupsValues": []}, "additionalFields": {}},
+        "id": nid("hs"), "name": "HubSpot Search by Email",
+        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [x, y],
+        "onError": "continueRegularOutput",
+    }
+    nodes.append(hs_search)
+
+    for name, js in [("Adapt Search Results", ADAPT_SEARCH_RESULTS),
+                     ("Resolve Identity", RESOLVE_IDENTITY),
+                     ("Merge Contacts", MERGE_CONTACTS),
+                     ("Decide Action", DECIDE_CLOUD)]:
+        x += 220
+        nodes.append(code_node(name, js, x, y))
+
+    # IF Update -> HubSpot Update ; else IF Create -> HubSpot Create ; else Set Review
+    x += 220
+    if_update = _if_node("IF Update", "update", x, y)
+    nodes.append(if_update)
+    hs_update = {
+        "parameters": {"resource": "contact", "operation": "update",
+                       "contactId": "={{ $json.contact_id }}", "updateFields": {}},
+        "id": nid("hu"), "name": "HubSpot Update",
+        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [x + 220, y - 120],
+    }
+    nodes.append(hs_update)
+
+    if_create = _if_node("IF Create", "create", x + 220, y + 60)
+    nodes.append(if_create)
+    hs_create = {
+        "parameters": {"resource": "contact", "operation": "create",
+                       "email": "={{ $json.properties.email }}", "additionalFields": {}},
+        "id": nid("hc"), "name": "HubSpot Create",
+        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [x + 440, y - 20],
+    }
+    nodes.append(hs_create)
+
+    set_review = {
+        "parameters": {"assignments": {"assignments": [
+            {"id": nid("a"), "name": "queue", "value": "needs_review", "type": "string"}
+        ]}, "options": {}},
+        "id": nid("r"), "name": "Set Review",
+        "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [x + 440, y + 140],
+    }
+    nodes.append(set_review)
+
+    conns = chain([
+        "Webhook Trigger", "Set Config", "Extract From File", "Map Columns",
+        "Normalize Phone", "Build Verify Batch", "Verify Emails (batch)", "Apply Email",
+        "HubSpot Search by Email", "Adapt Search Results", "Resolve Identity",
+        "Merge Contacts", "Decide Action", "IF Update",
+    ])
+    # IF branches
+    conns["IF Update"] = {"main": [
+        [{"node": "HubSpot Update", "type": "main", "index": 0}],   # true
+        [{"node": "IF Create", "type": "main", "index": 0}],        # false
+    ]}
+    conns["IF Create"] = {"main": [
+        [{"node": "HubSpot Create", "type": "main", "index": 0}],   # true (gated)
+        [{"node": "Set Review", "type": "main", "index": 0}],       # false
+    ]}
+
+    note = {
+        "parameters": {"content": (
+            "## LV Contact Ingest — CLOUD template\n"
+            "Import to n8n Cloud, then add **HubSpot credentials** on the three "
+            "HubSpot nodes (search / update / create).\n\n"
+            "**Flow:** Webhook upload -> Extract-from-File -> inlined Code nodes "
+            "(map/normalize/resolve/merge) -> IF(action) -> HubSpot update / "
+            "create (GATED, off by default) / Set review.\n\n"
+            "**Email verify:** real HTTP node -> rapid-email-verifier batch API "
+            "(up to 100/call); non-gating fallback if unreachable.\n\n"
+            "**AU-phone DISCLAIMER:** the inline JS is an AU-only heuristic (no "
+            "libphonenumber in Code nodes). Non-AU / ambiguous numbers -> null -> "
+            "review. Swap in a phone-validation API for global coverage."
+        ), "height": 360, "width": 460},
+        "id": nid("s"), "name": "Sticky Note",
+        "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [220, 500],
+    }
+    nodes.append(note)
+
+    return {
+        "id": "LVcontactIngestCloud01",
+        "name": "LV Contact Ingest (Cloud template)",
+        "nodes": nodes,
+        "connections": conns,
+        "settings": {},
+    }
+
+
+def _if_node(name, action_value, x, y):
+    return {
+        "parameters": {"options": {}, "conditions": {
+            "options": {"caseSensitive": True, "typeValidation": "strict"},
+            "combinator": "and",
+            "conditions": [{
+                "id": nid("i"),
+                "leftValue": "={{ $json.action }}",
+                "rightValue": action_value,
+                "operator": {"type": "string", "operation": "equals"},
+            }],
+        }},
+        "id": nid("if"), "name": name,
+        "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [x, y],
+    }
+
+
+# ---- write ------------------------------------------------------------------
+
+def main():
+    out_local = ROOT / "n8n" / "wf_contact_ingest_local.json"
+    out_cloud = ROOT / "n8n" / "wf_contact_ingest_cloud.json"
+    out_local.write_text(json.dumps(build_local(), indent=2) + "\n")
+    _idc[0] = 0
+    out_cloud.write_text(json.dumps(build_cloud(), indent=2) + "\n")
+    print(f"wrote {out_local.relative_to(ROOT)}")
+    print(f"wrote {out_cloud.relative_to(ROOT)}")
+
+
+if __name__ == "__main__":
+    main()
