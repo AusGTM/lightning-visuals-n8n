@@ -107,3 +107,117 @@ nodes can't import npm. It recognises `0XXXXXXXXX` (10-digit national) and
 anything non-AU or ambiguous**. Callers route `null` to review — never guess,
 never silently drop. For global coverage, swap the phone node for a
 phone-validation API.
+
+---
+
+# Enrichment workflow (quality-scored waterfall)
+
+The second pipeline (`ENRICHMENT-WORKFLOW-PLAN.md`). It checks HubSpot first,
+decides **create / enrich / skip**, then — instead of FIFO stop-on-first-match —
+**scores every source per field**, cross-checks, and pushes the best value per
+field into the same non-clobber merge. Same two-artifact pattern, same inliner
+(`scripts/build_cloud_workflows.py`), same no-`require` constraint.
+
+| File | Purpose |
+| ---- | ------- |
+| `wf_enrichment_cloud.json` | Production-shaped template. Webhook + real HubSpot + 3 provider HTTP nodes + Switch/IF routing. Add credentials on import. |
+| `wf_enrichment_local.json` | Headless-executable. Trigger emits 3 sample identities; HubSpot search + provider waterfall + writes are Code mocks; the scoring/gate/merge logic is real. |
+
+## Pipeline
+
+```
+Trigger → Code:buildIdentity → HubSpot:search
+  → Code:enrichmentGate (decideAction → create | enrich | skip)
+  → Switch(action):
+       create+enrich → HTTP:Lusha → HTTP:Apollo → HTTP:ZoomInfo
+                     → Code:normalize+score (best-per-field, provenance)
+                     → Code:mergeContacts (non-clobber)
+                     → IF create → HubSpot:Create ; IF enrich → HubSpot:Update
+       skip          → Set (NoOp)
+  → Set: data-quality label + gap-flag (all sources empty → flag manual)
+```
+
+Gate branches (`ENRICHMENT-WORKFLOW-PLAN.md §3`):
+
+| Action | When | Write |
+| ------ | ---- | ----- |
+| `create` | identity not in HubSpot | `POST` contact (gated) |
+| `enrich` | found but a required field is missing / stale (`> stale_after_days`) / invalid | `PATCH` contact (gated) |
+| `skip` | all required fields present, fresh, valid | none, no credits spent |
+
+## Scoring model (best-of-breed, not FIFO)
+
+Each **candidate value** (a field from a source) scores
+`value_score = wA·A + wR·R + wG·G + wT·T`, and the pipeline picks `argmax`
+**per field** — best email from one source, best phone from another.
+
+| Term | Meaning | Source |
+| ---- | ------- | ------ |
+| `A` accuracy | provider's per-field quality signal | Apollo `email_status`, Lusha `A+/A`, ZoomInfo `contactAccuracyScore`, phone `valid_number`/type |
+| `R` recency | `1 − min(age/stale_ceiling, 1)` | ZoomInfo `validDate`, Lusha `updateDate`, Apollo `updated_at` (no date → neutral 0.5) |
+| `G` agreement | fraction of *other* sources whose **normalized** value matches (cross-check) | E.164 phone, lowercased email, revenue band, NAICS |
+| `T` trust | source base rank (tiebreaker) | zoominfo .85, lusha .80, apollo .75 |
+
+Default weights `wA=0.45, wR=0.20, wG=0.25, wT=0.10` (tunable). Default mode
+`scored_all` calls every source for full cross-check; `scored_cost_aware` (in
+`scoreEnrichment.js`) can early-exit once required fields clear a quality bar.
+Each winner carries provenance `{value, source, score, components, agreedBy[]}`.
+
+## Import to n8n Cloud
+
+1. **Workflows → Import from File** → `wf_enrichment_cloud.json`.
+2. Add credentials: **HubSpot** on Search/Create/Update, and **provider API
+   keys** on the three HTTP nodes (Lusha / Apollo / ZoomInfo).
+3. Trigger is a **Webhook** (`POST /webhook/hubspot/enrichment/event`) — point
+   your HubSpot private-app webhook subscription at it.
+4. Writes are **GATED** — review the dry-run behaviour before enabling.
+
+**`lv_*` property dependency (awaited):** the merge writes company/contact
+`lv_*` properties (org type, revenue band, source/evidence metadata) **by name**.
+Create them in the HubSpot portal first (see `CLAUDE.md §4–8`); until then the
+Cloud writes target properties that don't exist. The local replica mocks the
+write, so it needs none.
+
+**Apollo phone is async:** Apollo returns phone numbers via a **webhook
+callback**, not inline. Production needs a second Webhook node + a Merge to join
+the phone payload back. The template does the inline person/org match only.
+
+## Run the local replica
+
+```bash
+bash scripts/n8n_enrichment_replica.sh
+```
+
+Imports `wf_enrichment_local.json` into the running `n8n` container, executes it
+headless, and asserts all three gate branches fired, the scored waterfall
+produced best-per-field winners **with provenance**, and **no** HubSpot write
+occurred. Actual output:
+
+```
+  jamie.rivera@exampleracing.example       action=create   gap_flag=False
+      email          -> apollo    score 0.84  agreedBy[lusha]
+      mobilephone    -> apollo    score 0.96  agreedBy[lusha,zoominfo]
+      jobtitle       -> zoominfo  score 0.7   agreedBy[-]
+  alex.taylor@exampleco.example            action=enrich   gap_flag=False
+      email          -> apollo    score 0.84  agreedBy[lusha]
+      mobilephone    -> apollo    score 0.96  agreedBy[lusha,zoominfo]
+      jobtitle       -> zoominfo  score 0.7   agreedBy[-]
+  sam.fresh@examplemedia.example           action=skip     gap_flag=False
+```
+
+`email → apollo 0.84` beats Lusha's equally-accurate A+ address on **recency**
+(Apollo's `updated_at` is newer), and both agree (`agreedBy[lusha]`) so ZoomInfo's
+lone `j.rivera` variant loses. The `skip` identity spends no provider calls.
+
+## Cloud vs local differences
+
+Only the edges differ; the inlined Gate / Normalize+Score / Merge Code nodes are
+identical.
+
+| Concern | Cloud template | Local replica |
+| ------- | -------------- | ------------- |
+| Trigger | **Webhook** (event payload) | **Emit Sample Identities** Code node (3 identities) |
+| HubSpot search | real **HubSpot** node → **Adapt Search** | **HubSpot Search (MOCK)** Code node (canned create/enrich/skip records) |
+| Providers | 3 real **HTTP** nodes (Lusha/Apollo/ZoomInfo) | **Provider Waterfall (MOCK)** Code node (fixture shapes) |
+| Routing | **Switch** + **IF** nodes | per-item `action` field; `Decide Action` echoes the dry-run payload |
+| Writes | HubSpot **Create/Update** (gated) | **Decide Action** ECHOES PATCH/POST; no write |
