@@ -28,10 +28,17 @@ _EXPORTS_RE = re.compile(r"^\s*module\.exports")
 
 
 def strip_module(name: str) -> str:
-    """Load a Wave-A module, drop its require()/module.exports lines."""
+    """Load a Wave-A module, drop require() lines and everything from the first
+    `module.exports` onward (exports are always the module's trailing statement,
+    and may span multiple lines — truncating avoids orphaning the export body)."""
     src = (CODE / name).read_text()
-    kept = [ln for ln in src.splitlines()
-            if not _REQUIRE_RE.match(ln) and not _EXPORTS_RE.match(ln)]
+    kept = []
+    for ln in src.splitlines():
+        if _EXPORTS_RE.match(ln):
+            break
+        if _REQUIRE_RE.match(ln):
+            continue
+        kept.append(ln)
     return "\n".join(kept).strip()
 
 
@@ -553,6 +560,517 @@ def _if_node(name, action_value, x, y):
     }
 
 
+# =============================================================================
+# ENRICHMENT workflow (ENRICHMENT-WORKFLOW-PLAN.md §4 + §5 Wave B)
+# =============================================================================
+# Idempotent, quality-scored waterfall: HubSpot-first -> create/enrich/skip ->
+# score ALL sources per field (not FIFO) -> non-clobber merge. Reuses the Wave-A
+# engine (enrichmentGate / normalizeProviders / scoreEnrichment) + M3 mergeContacts,
+# all inlined into Code nodes (same no-require constraint as the contact workflow).
+
+FIX_ENRICH = ROOT / "tests" / "fixtures" / "enrichment"
+
+
+def _fixture(name: str):
+    return json.loads((FIX_ENRICH / name).read_text())
+
+
+# ---- shared inlined Code-node bodies (Cloud + local both use these) ----------
+
+# Build identity search keys from the trigger payload (email/domain/linkedin).
+ENRICH_BUILD_IDENTITY = inline("normalizeEmail.js") + r"""
+
+// --- n8n wrapper: normalise the incoming identity into HubSpot search keys ---
+return $input.all().map((it) => {
+  const row = it.json;
+  const email = normalizeEmailBasic(row.email);
+  return { json: { ...row,
+    object_type: row.object_type || "contacts",
+    identity_keys: {
+      email,
+      domain: row.domain || (email ? email.split("@")[1] : null),
+      linkedin_url: row.linkedin_url || null,
+    },
+  }};
+});
+"""
+
+# Required-field set + policy for the staleness gate (contacts working set from
+# ENRICHMENT-WORKFLOW-PLAN.md §3 + CLAUDE.md field_policy).
+ENRICH_GATE = inline("normalizeEmail.js", "normalizePhone.js", "enrichmentGate.js") + r"""
+
+// --- n8n wrapper: decideAction(existingRecord) -> create | enrich | skip ---
+const REQUIRED = ["email", "jobtitle", "mobilephone"];
+const POLICY = { jobtitle: { stale_after_days: 180 }, mobilephone: { stale_after_days: 180 } };
+const NOW = new Date().toISOString();
+return $input.all().map((it) => {
+  const row = it.json;
+  const gate = decideAction(row.existingRecord || {}, REQUIRED, POLICY, NOW);
+  return { json: { ...row, gate, action: gate.action } };
+});
+"""
+
+# Normalize the 3 provider responses -> candidates, score best-per-field with
+# provenance. `providers` carries {lusha,apollo,zoominfo} raw responses (null on skip).
+ENRICH_NORMALIZE_SCORE = inline(
+    "normalizePhone.js", "normalizeEmail.js", "normalizeProviders.js", "scoreEnrichment.js"
+) + r"""
+
+// --- n8n wrapper: toCandidates(all 3) -> scoreCandidates -> best-per-field ---
+return $input.all().map((it) => {
+  const row = it.json;
+  const p = row.providers;
+  if (!p) return { json: { ...row, scored: null, gap_flag: false } };  // skip branch
+  const ot = row.object_type || "contacts";
+  const cands = [
+    ...toCandidates("lusha", p.lusha, ot),
+    ...toCandidates("apollo", p.apollo, ot),
+    ...toCandidates("zoominfo", p.zoominfo, ot),
+  ];
+  const gap_flag = cands.length === 0;  // ALL sources returned nothing -> flag manual
+  const { best, winners } = scoreCandidates(cands, { now: new Date().toISOString() });
+  return { json: { ...row, scored: { best, winners }, gap_flag } };
+});
+"""
+
+# Hand scored winners to the non-clobber merge (email never promotes to canonical).
+ENRICH_MERGE = inline("mergeContacts.js") + r"""
+
+// --- n8n wrapper: mergeContacts(existingRecord, winners) non-clobber ---
+return $input.all().map((it) => {
+  const row = it.json;
+  if (!row.scored) return { json: { ...row, merge: null } };  // skip branch
+  const winners = row.scored.winners || {};
+  const candidate = {};
+  for (const f of ["email", "mobilephone", "phone", "jobtitle", "seniority", "linkedin_url"]) {
+    if (winners[f] != null && String(winners[f]).trim() !== "") candidate[f] = winners[f];
+  }
+  const merged = mergeContacts(row.existingRecord || {}, candidate, undefined,
+                               { source: "waterfall", confidence: 85 });
+  return { json: { ...row, merge: merged } };
+});
+"""
+
+# LOCAL: canned HubSpot existing records so the gate exercises create/enrich/skip.
+ENRICH_HUBSPOT_SEARCH_MOCK = r"""// HubSpot Search (MOCK) — LOCAL variant only.
+// Cloud uses a real HubSpot search node; here we return canned existing records so
+// enrichmentGate exercises every branch:
+//   jamie.rivera@... -> {} (no record)              => CREATE
+//   alex.taylor@...  -> stale jobtitle + no mobile   => ENRICH
+//   sam.fresh@...    -> fresh + complete + valid     => SKIP
+const CANNED = {
+  "jamie.rivera@exampleracing.example": {},
+  "alex.taylor@exampleco.example": {
+    email: "alex.taylor@exampleco.example",
+    jobtitle: "Analyst",
+    jobtitle_verified_at: "2025-01-01T00:00:00Z",
+    mobilephone: ""
+  },
+  "sam.fresh@examplemedia.example": {
+    email: "sam.fresh@examplemedia.example",
+    jobtitle: "Producer",
+    jobtitle_verified_at: "2026-07-01T00:00:00Z",
+    mobilephone: "+61412000000",
+    mobilephone_verified_at: "2026-07-01T00:00:00Z"
+  }
+};
+return $input.all().map((it) => {
+  const row = it.json;
+  const email = (row.identity_keys && row.identity_keys.email) || null;
+  const existingRecord = CANNED[email] || {};
+  return { json: { ...row, existingRecord } };
+});
+"""
+
+# CLOUD: adapt the real HubSpot search node output into an existingRecord.
+ENRICH_ADAPT_SEARCH = r"""// Adapt Search -> existingRecord — CLOUD variant.
+// Maps the real HubSpot search node output (per row, same order) into the
+// existingRecord shape enrichmentGate expects. 0 results => {} => CREATE.
+const rows = $('Build Identity').all();
+const search = $('HubSpot Search').all();
+return rows.map((it, i) => {
+  const row = it.json;
+  const res = search[i] && search[i].json;
+  let existingRecord = {};
+  if (res) {
+    if (res.properties) existingRecord = res.properties;                 // single object
+    else if (Array.isArray(res.results) && res.results[0]) {             // search list
+      existingRecord = res.results[0].properties || res.results[0] || {};
+    } else if (res.id) existingRecord = res;
+  }
+  return { json: { ...row, existingRecord } };
+});
+"""
+
+# LOCAL: provider waterfall MOCK — returns fixture-shaped raw responses.
+ENRICH_PROVIDER_MOCK = (
+    "// Provider Waterfall (MOCK) — LOCAL variant only.\n"
+    "// Cloud replaces this with 3 real HTTP nodes (Lusha/Apollo/ZoomInfo). Here we\n"
+    "// return the tests/fixtures/enrichment/*.json contact shapes so normalizeProviders\n"
+    "// + scoreEnrichment run for real on realistic data. SKIP identities get no call.\n"
+    "const LUSHA = " + json.dumps(_fixture("lusha_contact.json")) + ";\n"
+    "const APOLLO = " + json.dumps(_fixture("apollo_contact.json")) + ";\n"
+    "const ZOOMINFO = " + json.dumps(_fixture("zoominfo_contact.json")) + ";\n"
+    "return $input.all().map((it) => {\n"
+    "  const row = it.json;\n"
+    "  if (row.action === 'skip') return { json: { ...row, providers: null } };\n"
+    "  return { json: { ...row, providers: { lusha: LUSHA, apollo: APOLLO, zoominfo: ZOOMINFO } } };\n"
+    "});\n"
+)
+
+# LOCAL: dry-run echo — replaces HubSpot create/update writes. NO real write.
+ENRICH_DECIDE_LOCAL = r"""// Decide Action (dry-run echo) — LOCAL variant.
+// Replaces the HubSpot create/update write nodes: ECHOES the would-be payload,
+// performs NO real write. Surfaces the per-identity action + scored winners w/ provenance.
+return $input.all().map((it) => {
+  const row = it.json;
+  const action = row.action;
+  const id = row.identity_keys || {};
+  const scored = row.scored;
+  const winners_sample = [];
+  if (scored && scored.best) {
+    for (const f of Object.keys(scored.best)) {
+      const b = scored.best[f];
+      winners_sample.push({ field: f, value: b.value, source: b.source,
+        score: Math.round(b.score * 100) / 100, agreedBy: b.agreedBy });
+    }
+  }
+  const patch = row.merge
+    ? { ...row.merge.canonicalPatch, ...row.merge.stagingPatch, ...row.merge.metadataPatch }
+    : {};
+  let hubspot_op = null;
+  if (action === "create") {
+    hubspot_op = { method: "POST", endpoint: "/crm/v3/objects/contacts", properties: patch };
+  } else if (action === "enrich") {
+    hubspot_op = { method: "PATCH", endpoint: "/crm/v3/objects/contacts/{id}", properties: patch };
+  } // skip -> no op
+  return { json: {
+    email: id.email || row.email || null,
+    action,
+    gate_reason: row.gate ? row.gate.reason : null,
+    gap_flag: row.gap_flag === true,
+    winners_sample,
+    dry_run: true,
+    hubspot_op
+  }};
+});
+"""
+
+# CLOUD: compute action + property patch; IF nodes route to real HubSpot write.
+ENRICH_DECIDE_CLOUD = r"""// Decide Action — CLOUD variant.
+// Computes action + the HubSpot property patch from the scored+merged winners.
+// The IF nodes route create -> HubSpot Create, enrich -> HubSpot Update (GATED).
+return $input.all().map((it) => {
+  const row = it.json;
+  const action = row.action;
+  const properties = row.merge
+    ? { ...row.merge.canonicalPatch, ...row.merge.stagingPatch, ...row.merge.metadataPatch }
+    : {};
+  return { json: {
+    action,
+    object_type: row.object_type || "contacts",
+    contact_id: (row.existingRecord && row.existingRecord.hs_object_id) || null,
+    gap_flag: row.gap_flag === true,
+    properties
+  }};
+});
+"""
+
+# CLOUD: NORMALIZE+SCORE reads the 3 provider HTTP nodes by name and re-attaches
+# the carried identity/gate context from the Gate node (HTTP nodes replace $json).
+ENRICH_NORMALIZE_SCORE_CLOUD = inline(
+    "normalizePhone.js", "normalizeEmail.js", "normalizeProviders.js", "scoreEnrichment.js"
+) + r"""
+
+// --- n8n wrapper (CLOUD): pull provider responses by node name, score best-per-field ---
+function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
+const rows = $('Enrichment Gate').all().filter((it) => it.json.action !== "skip");
+const lusha = nodeAll('Lusha Enrich');
+const apollo = nodeAll('Apollo Match');
+const zoominfo = nodeAll('ZoomInfo Enrich');
+return rows.map((it, i) => {
+  const row = it.json;
+  const ot = row.object_type || "contacts";
+  const p = {
+    lusha: lusha[i] && lusha[i].json,
+    apollo: apollo[i] && apollo[i].json,
+    zoominfo: zoominfo[i] && zoominfo[i].json,
+  };
+  const cands = [
+    ...toCandidates("lusha", p.lusha, ot),
+    ...toCandidates("apollo", p.apollo, ot),
+    ...toCandidates("zoominfo", p.zoominfo, ot),
+  ];
+  const gap_flag = cands.length === 0;
+  const { best, winners } = scoreCandidates(cands, { now: new Date().toISOString() });
+  return { json: { ...row, providers: p, scored: { best, winners }, gap_flag } };
+});
+"""
+
+
+# ---- LOCAL enrichment workflow ----------------------------------------------
+
+ENRICH_EMIT_IDENTITIES = r"""// Emit Sample Identities (mock trigger payload) — LOCAL variant.
+// Cloud instead receives these from a Webhook (POST body). Three identities that
+// exercise every gate branch: create (not in HubSpot), enrich (stale), skip (fresh).
+const rows = [
+  { email: "jamie.rivera@exampleracing.example", object_type: "contacts" },  // CREATE
+  { email: "alex.taylor@exampleco.example", object_type: "contacts" },       // ENRICH
+  { email: "sam.fresh@examplemedia.example", object_type: "contacts" }       // SKIP
+];
+return rows.map((r) => ({ json: r }));
+"""
+
+
+def build_enrichment_local():
+    nodes = []
+    y = 300
+    x = 240
+    manual = {"parameters": {}, "id": nid("t"), "name": "Manual Trigger",
+              "type": "n8n-nodes-base.manualTrigger", "typeVersion": 1, "position": [x, y]}
+    nodes.append(manual)
+
+    seq = [
+        ("Emit Sample Identities", ENRICH_EMIT_IDENTITIES),
+        ("Build Identity", ENRICH_BUILD_IDENTITY),
+        ("HubSpot Search (MOCK)", ENRICH_HUBSPOT_SEARCH_MOCK),
+        ("Enrichment Gate", ENRICH_GATE),
+        ("Provider Waterfall (MOCK)", ENRICH_PROVIDER_MOCK),
+        ("Normalize + Score", ENRICH_NORMALIZE_SCORE),
+        ("Merge Winners", ENRICH_MERGE),
+        ("Decide Action", ENRICH_DECIDE_LOCAL),
+    ]
+    for name, js in seq:
+        x += 230
+        nodes.append(code_node(name, js, x, y))
+
+    order = ["Manual Trigger", "Emit Sample Identities", "Build Identity",
+             "HubSpot Search (MOCK)", "Enrichment Gate", "Provider Waterfall (MOCK)",
+             "Normalize + Score", "Merge Winners", "Decide Action"]
+
+    note = {
+        "parameters": {"content": (
+            "## LV Enrichment — LOCAL (headless-executable)\n"
+            "Same Wave-A/M3 JS as the Cloud template, inlined into Code nodes.\n\n"
+            "**Mocked for local run:** trigger -> Emit Sample Identities; HubSpot "
+            "search -> canned records; provider waterfall -> fixture shapes; "
+            "HubSpot create/update -> Decide Action dry-run echo (NO real writes).\n\n"
+            "**REAL:** enrichmentGate, normalizeProviders, scoreEnrichment (best-"
+            "per-field w/ provenance), mergeContacts (non-clobber).\n\n"
+            "Three identities exercise every gate branch: **create / enrich / skip**."
+        ), "height": 300, "width": 440},
+        "id": nid("s"), "name": "Sticky Note",
+        "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [240, 540],
+    }
+    nodes.append(note)
+
+    return {
+        "id": "LVenrichment01",
+        "name": "LV Enrichment (local replica)",
+        "nodes": nodes,
+        "connections": chain(order),
+        "settings": {},
+    }
+
+
+# ---- CLOUD enrichment workflow ----------------------------------------------
+
+def _http_node(name, url, x, y):
+    return {
+        "parameters": {"method": "POST", "url": url, "sendBody": True,
+                       "specifyBody": "json", "jsonBody": "={{ JSON.stringify($json.identity_keys) }}",
+                       "options": {"timeout": 20000}},
+        "id": nid("h"), "name": name,
+        "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [x, y],
+        "onError": "continueRegularOutput",
+    }
+
+
+def build_enrichment_cloud():
+    nodes = []
+    y = 300
+    x = 220
+
+    webhook = {
+        "parameters": {"httpMethod": "POST", "path": "hubspot/enrichment/event",
+                       "responseMode": "lastNode", "options": {}},
+        "id": nid("w"), "name": "Webhook Trigger",
+        "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [x, y],
+    }
+    nodes.append(webhook)
+
+    x += 220
+    nodes.append(code_node("Build Identity", ENRICH_BUILD_IDENTITY, x, y))
+
+    x += 220
+    hs_search = {
+        "parameters": {"resource": "contact", "operation": "search",
+                       "filterGroupsUi": {"filterGroupsValues": []}, "additionalFields": {}},
+        "id": nid("hs"), "name": "HubSpot Search",
+        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [x, y],
+        "onError": "continueRegularOutput",
+    }
+    nodes.append(hs_search)
+
+    x += 220
+    nodes.append(code_node("Adapt Search", ENRICH_ADAPT_SEARCH, x, y))
+    x += 220
+    nodes.append(code_node("Enrichment Gate", ENRICH_GATE, x, y))
+
+    # Switch: create / enrich / skip
+    x += 220
+    switch = {
+        "parameters": {"mode": "rules", "rules": {"values": [
+            {"conditions": {"options": {"caseSensitive": True, "typeValidation": "strict"},
+                            "combinator": "and", "conditions": [{
+                                "id": nid("i"), "leftValue": "={{ $json.action }}",
+                                "rightValue": "create",
+                                "operator": {"type": "string", "operation": "equals"}}]},
+             "outputKey": "create"},
+            {"conditions": {"options": {"caseSensitive": True, "typeValidation": "strict"},
+                            "combinator": "and", "conditions": [{
+                                "id": nid("i"), "leftValue": "={{ $json.action }}",
+                                "rightValue": "enrich",
+                                "operator": {"type": "string", "operation": "equals"}}]},
+             "outputKey": "enrich"},
+            {"conditions": {"options": {"caseSensitive": True, "typeValidation": "strict"},
+                            "combinator": "and", "conditions": [{
+                                "id": nid("i"), "leftValue": "={{ $json.action }}",
+                                "rightValue": "skip",
+                                "operator": {"type": "string", "operation": "equals"}}]},
+             "outputKey": "skip"},
+        ]}, "options": {}},
+        "id": nid("sw"), "name": "Route Action",
+        "type": "n8n-nodes-base.switch", "typeVersion": 3, "position": [x, y],
+    }
+    nodes.append(switch)
+
+    # Provider waterfall (create+enrich share it). Apollo phone is async (webhook) in prod.
+    px = x + 220
+    lusha = _http_node("Lusha Enrich", "https://api.lusha.com/v2/person", px, y - 80)
+    nodes.append(lusha)
+    apollo = _http_node("Apollo Match", "https://api.apollo.io/v1/people/match", px + 220, y - 80)
+    nodes.append(apollo)
+    zoom = _http_node("ZoomInfo Enrich", "https://api.zoominfo.com/enrich/contact", px + 440, y - 80)
+    nodes.append(zoom)
+
+    sx = px + 660
+    nodes.append(code_node("Normalize + Score", ENRICH_NORMALIZE_SCORE_CLOUD, sx, y - 80))
+    sx += 220
+    nodes.append(code_node("Merge Winners", ENRICH_MERGE, sx, y - 80))
+    sx += 220
+    set_dq = {
+        "parameters": {"assignments": {"assignments": [
+            {"id": nid("a"), "name": "data_quality", "value": "scored_waterfall", "type": "string"},
+            {"id": nid("a"), "name": "gap_flag", "value": "={{ $json.gap_flag }}", "type": "boolean"},
+        ]}, "options": {}},
+        "id": nid("g"), "name": "Set Data Quality + Gap Flag",
+        "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [sx, y - 80],
+    }
+    nodes.append(set_dq)
+    sx += 220
+    nodes.append(code_node("Decide Action", ENRICH_DECIDE_CLOUD, sx, y - 80))
+
+    # IF create -> HubSpot Create ; else IF enrich -> HubSpot Update (both GATED writes).
+    sx += 220
+    if_create = _if_node("IF Create", "create", sx, y - 80)
+    nodes.append(if_create)
+    hs_create = {
+        "parameters": {"resource": "contact", "operation": "create",
+                       "email": "={{ $json.properties.email }}", "additionalFields": {}},
+        "id": nid("hc"), "name": "HubSpot Create",
+        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [sx + 220, y - 200]}
+    nodes.append(hs_create)
+    if_enrich = _if_node("IF Enrich", "enrich", sx + 220, y - 20)
+    nodes.append(if_enrich)
+    hs_update = {
+        "parameters": {"resource": "contact", "operation": "update",
+                       "contactId": "={{ $json.contact_id }}", "updateFields": {}},
+        "id": nid("hu"), "name": "HubSpot Update",
+        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [sx + 440, y - 20]}
+    nodes.append(hs_update)
+
+    # skip branch -> NoOp Set (do nothing)
+    set_skip = {
+        "parameters": {"assignments": {"assignments": [
+            {"id": nid("a"), "name": "action", "value": "skip", "type": "string"}
+        ]}, "options": {}},
+        "id": nid("r"), "name": "Skip (NoOp)",
+        "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [px, y + 160]}
+    nodes.append(set_skip)
+
+    conns = chain(["Webhook Trigger", "Build Identity", "HubSpot Search",
+                   "Adapt Search", "Enrichment Gate", "Route Action"])
+    # Switch outputs: 0=create, 1=enrich, 2=skip. create+enrich -> shared waterfall.
+    conns["Route Action"] = {"main": [
+        [{"node": "Lusha Enrich", "type": "main", "index": 0}],   # create
+        [{"node": "Lusha Enrich", "type": "main", "index": 0}],   # enrich
+        [{"node": "Skip (NoOp)", "type": "main", "index": 0}],    # skip
+    ]}
+    conns.update(chain(["Lusha Enrich", "Apollo Match", "ZoomInfo Enrich",
+                        "Normalize + Score", "Merge Winners",
+                        "Set Data Quality + Gap Flag", "Decide Action", "IF Create"]))
+    conns["IF Create"] = {"main": [
+        [{"node": "HubSpot Create", "type": "main", "index": 0}],  # true
+        [{"node": "IF Enrich", "type": "main", "index": 0}],       # false
+    ]}
+    conns["IF Enrich"] = {"main": [
+        [{"node": "HubSpot Update", "type": "main", "index": 0}],  # true
+        [],                                                        # false -> end
+    ]}
+
+    notes = [
+        {"content": (
+            "## LV Enrichment — CLOUD template\n"
+            "Import to n8n Cloud, then add **credentials**: HubSpot (search/create/"
+            "update) + provider API keys (Lusha/Apollo/ZoomInfo HTTP nodes).\n\n"
+            "**Flow:** Webhook -> Build Identity -> HubSpot Search -> Gate "
+            "(create/enrich/skip) -> Switch. create+enrich share the scored "
+            "waterfall; skip does nothing. Writes are GATED."
+        ), "x": 220, "y": 480, "h": 300, "w": 460},
+        {"content": (
+            "### Scored waterfall (not FIFO)\n"
+            "`value_score = wA·A + wR·R + wG·G + wT·T`\n"
+            "wA=0.45 (accuracy), wR=0.20 (recency), wG=0.25 (agreement/"
+            "cross-check), wT=0.10 (source trust). Default mode `scored_all`: "
+            "call all sources, score every candidate, pick argmax **per field** "
+            "with provenance {source, score, agreedBy}. Best email from one "
+            "source, best phone from another."
+        ), "x": 900, "y": 480, "h": 300, "w": 460},
+        {"content": (
+            "### Apollo phone is ASYNC\n"
+            "Apollo returns phone numbers via a **webhook callback**, not inline. "
+            "In production add a second Webhook node to receive the phone payload "
+            "and a Merge node to join it back. This template does the inline "
+            "person/org match only."
+        ), "x": 1360, "y": 60, "h": 200, "w": 380},
+        {"content": (
+            "### Dependencies (awaited)\n"
+            "**`lv_*` HubSpot properties** are not yet created — the merge writes "
+            "them by name; create them in the portal first. **Provider keys** are "
+            "empty — POC mocks the responses (see the local workflow). Swap in real "
+            "keys + properties to go live.\n\n"
+            "**AU-phone:** normalizePhone is an AU-only heuristic (no libphonenumber "
+            "in Code nodes); non-AU/ambiguous -> null -> review."
+        ), "x": 1360, "y": 480, "h": 280, "w": 420},
+    ]
+    for n in notes:
+        nodes.append({
+            "parameters": {"content": n["content"], "height": n["h"], "width": n["w"]},
+            "id": nid("s"), "name": "Sticky Note",
+            "type": "n8n-nodes-base.stickyNote", "typeVersion": 1,
+            "position": [n["x"], n["y"]],
+        })
+
+    return {
+        "id": "LVenrichmentCloud01",
+        "name": "LV Enrichment (Cloud template)",
+        "nodes": nodes,
+        "connections": conns,
+        "settings": {},
+    }
+
+
 # ---- write ------------------------------------------------------------------
 
 def main():
@@ -563,6 +1081,15 @@ def main():
     out_cloud.write_text(json.dumps(build_cloud(), indent=2) + "\n")
     print(f"wrote {out_local.relative_to(ROOT)}")
     print(f"wrote {out_cloud.relative_to(ROOT)}")
+
+    _idc[0] = 0
+    er_local = ROOT / "n8n" / "wf_enrichment_local.json"
+    er_local.write_text(json.dumps(build_enrichment_local(), indent=2) + "\n")
+    _idc[0] = 0
+    er_cloud = ROOT / "n8n" / "wf_enrichment_cloud.json"
+    er_cloud.write_text(json.dumps(build_enrichment_cloud(), indent=2) + "\n")
+    print(f"wrote {er_local.relative_to(ROOT)}")
+    print(f"wrote {er_cloud.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":
