@@ -1,0 +1,13 @@
+{
+  "email": "jamie.rivera@exampleracing.example",
+  "email_status": "verified",
+  "extrapolated_email_confidence": null,
+  "email_domain_catchall": false,
+  "phone_numbers": [
+    { "sanitized_number": "+61412345678", "type": "mobile", "status": "valid_number" }
+  ],
+  "title": "Head of Broadcast",
+  "seniority": "director",
+  "departments": ["media_and_communication"],
+  "updated_at": "2026-06-20"
+}

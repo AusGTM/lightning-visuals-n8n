@@ -1,0 +1,12 @@
+{
+  "revenue": 65000000,
+  "revenueRange": "50M-100M",
+  "employeeCount": 210,
+  "employeeRange": "201-500",
+  "primaryIndustry": "Spectator Sports",
+  "naicsCodes": ["711211"],
+  "matchStatus": "FULL_MATCH",
+  "contactAccuracyScore": 90,
+  "validDate": "2026-06-28",
+  "lastUpdatedDate": "2026-06-28"
+}
