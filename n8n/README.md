@@ -129,7 +129,7 @@ field into the same non-clobber merge. Same two-artifact pattern, same inliner
 Trigger → Code:buildIdentity → HubSpot:search
   → Code:enrichmentGate (decideAction → create | enrich | skip)
   → Switch(action):
-       create+enrich → HTTP:Lusha → HTTP:Apollo → HTTP:ZoomInfo
+       create+enrich → HTTP:Lusha → HTTP:Apollo → Code:ZoomInfo (cached-token enrich)
                      → Code:normalize+score (best-per-field, provenance)
                      → Code:mergeContacts (non-clobber)
                      → IF create → HubSpot:Create ; IF enrich → HubSpot:Update
@@ -167,7 +167,15 @@ Each winner carries provenance `{value, source, score, components, agreedBy[]}`.
 
 1. **Workflows → Import from File** → `wf_enrichment_cloud.json`.
 2. Add credentials: **HubSpot** on Search/Create/Update, and **provider API
-   keys** on the three HTTP nodes (Lusha / Apollo / ZoomInfo).
+   keys** on the Lusha / Apollo HTTP nodes (generic Header Auth, single static
+   key). **ZoomInfo is autonomous** — instead of a static key set
+   `ZOOMINFO_CLIENT_ID` / `ZOOMINFO_CLIENT_SECRET` in **n8n Variables**
+   (`$vars`). The **ZoomInfo Enrich** Code node mints its own short-lived bearer,
+   caches it in workflow **static data** across runs, re-mints only when the
+   token is missing or near-expiry, and on a **401** clears the cache, re-mints
+   once, and retries — so a stored/static token is never needed. Rotate the
+   client secret ~quarterly (ZoomInfo Admin Portal → Integrations → API &
+   Webhooks); everything else is unattended.
 3. Trigger is a **Webhook** (`POST /webhook/hubspot/enrichment/event`) — point
    your HubSpot private-app webhook subscription at it.
 4. Writes are **GATED** — review the dry-run behaviour before enabling.
