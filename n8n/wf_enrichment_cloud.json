@@ -455,7 +455,7 @@
     },
     {
       "parameters": {
-        "content": "### ZoomInfo = autonomous OAuth2 (cached)\nZoomInfo tokens are short-lived, so the **ZoomInfo Enrich** Code node mints its own: it caches the bearer in workflow **static data**, re-mints only when missing/near-expiry, and on a **401** clears the cache, re-mints once, and retries. Secrets are long-lived `client_id`/`client_secret` in **n8n Variables** ($vars) \u2014 never a stored token. Rotate the secret ~quarterly; everything else is unattended. (Get client_secret from ZoomInfo Admin Portal \u2192 Integrations \u2192 API & Webhooks.)",
+        "content": "### ZoomInfo = autonomous OAuth2 (cached) \u2014 VERIFIED\nThe **ZoomInfo Enrich** Code node mints its own Okta token: caches the bearer in workflow **static data**, re-mints when missing/near-expiry, and on a **401** clears the cache, re-mints once, retries.\nConfirmed working: `POST api.zoominfo.com/gtm/oauth/v1/token`, Basic auth (client_id:client_secret), body `grant_type=client_credentials` ONLY \u2014 **do NOT send a `scope`** (any scope => 400 invalid_scope). Token ~24h; GTM API (`gtm/data/v1/...`) accepts it.\nCreds = long-lived `client_id`/`client_secret` in **n8n Variables** ($vars) \u2014 never a stored token. Get them from the **ZoomInfo DevPortal** (create app \u2192 click the app link to reveal Client ID + Client Secret; enable the **client-credentials** grant). Rotate the secret ~quarterly; everything else is unattended.",
         "height": 300,
         "width": 420
       },

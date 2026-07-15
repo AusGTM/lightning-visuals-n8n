@@ -1135,15 +1135,19 @@ def build_enrichment_cloud():
             "person/org match only."
         ), "x": 1580, "y": 60, "h": 200, "w": 380},
         {"content": (
-            "### ZoomInfo = autonomous OAuth2 (cached)\n"
-            "ZoomInfo tokens are short-lived, so the **ZoomInfo Enrich** Code node "
-            "mints its own: it caches the bearer in workflow **static data**, "
-            "re-mints only when missing/near-expiry, and on a **401** clears the "
-            "cache, re-mints once, and retries. Secrets are long-lived "
-            "`client_id`/`client_secret` in **n8n Variables** ($vars) — never a "
-            "stored token. Rotate the secret ~quarterly; everything else is "
-            "unattended. (Get client_secret from ZoomInfo Admin Portal → "
-            "Integrations → API & Webhooks.)"
+            "### ZoomInfo = autonomous OAuth2 (cached) — VERIFIED\n"
+            "The **ZoomInfo Enrich** Code node mints its own Okta token: caches the "
+            "bearer in workflow **static data**, re-mints when missing/near-expiry, "
+            "and on a **401** clears the cache, re-mints once, retries.\n"
+            "Confirmed working: `POST api.zoominfo.com/gtm/oauth/v1/token`, Basic "
+            "auth (client_id:client_secret), body `grant_type=client_credentials` "
+            "ONLY — **do NOT send a `scope`** (any scope => 400 invalid_scope). "
+            "Token ~24h; GTM API (`gtm/data/v1/...`) accepts it.\n"
+            "Creds = long-lived `client_id`/`client_secret` in **n8n Variables** "
+            "($vars) — never a stored token. Get them from the **ZoomInfo DevPortal** "
+            "(create app → click the app link to reveal Client ID + Client Secret; "
+            "enable the **client-credentials** grant). Rotate the secret ~quarterly; "
+            "everything else is unattended."
         ), "x": 1140, "y": 60, "h": 300, "w": 420},
         {"content": (
             "### Dependencies (awaited)\n"
