@@ -143,31 +143,54 @@ function lushaCandidates(raw, objectType) {
 function apolloCandidates(raw, objectType) {
   const out = [];
   const src = "apollo";
+  // Live people/match nests the record under `person`; flat fixtures don't. Read
+  // through `person` so both shapes work (mirrors the org fallback below).
+  const person = raw.person || raw;
+  const updated = person.updated_at || raw.updated_at;
   if (objectType === "contacts") {
-    _push(out, "email", src, raw.email, normalizeEmailBasic(raw.email), apolloEmailAccuracy(raw), raw.updated_at);
-    for (const p of raw.phone_numbers || []) {
+    _push(out, "email", src, person.email, normalizeEmailBasic(person.email), apolloEmailAccuracy(person), updated);
+    for (const p of person.phone_numbers || []) {
       if (p.dnc_status || p.doNotCall) continue; // suppress
       const status = p.status || p.status_cd;
       const acc = status === "valid_number" ? 1.0 : 0.5;
       const t = String(p.type || "").toLowerCase();
       const field = t === "mobile" ? "mobilephone" : "phone";
-      _push(out, field, src, p.sanitized_number, normalizePhoneAU(p.sanitized_number), acc, raw.updated_at);
+      _push(out, field, src, p.sanitized_number, normalizePhoneAU(p.sanitized_number), acc, updated);
     }
-    _push(out, "jobtitle", src, raw.title, _norm(raw.title), 0.6, raw.updated_at);
-    _push(out, "seniority", src, raw.seniority, _norm(raw.seniority), 0.6, raw.updated_at);
+    _push(out, "jobtitle", src, person.title, _norm(person.title), 0.6, updated);
+    _push(out, "seniority", src, person.seniority, _norm(person.seniority), 0.6, updated);
   } else {
-    const org = raw.organization || raw.org || raw;
-    _push(out, "lv_revenue_band", src, org.annual_revenue, normalizeRevenueBand(org.annual_revenue), 0.6, raw.updated_at);
-    _push(out, "lv_employee_band", src, org.estimated_num_employees, normalizeEmployeeBand(org.estimated_num_employees), 0.6, raw.updated_at);
+    const org = (raw.person && raw.person.organization) || raw.organization || raw.org || raw;
+    // Live org revenue is `organization_revenue` (number); flat fixtures use `annual_revenue`.
+    const revenue = org.annual_revenue != null ? org.annual_revenue : org.organization_revenue;
+    _push(out, "lv_revenue_band", src, revenue, normalizeRevenueBand(revenue), 0.6, updated);
+    _push(out, "lv_employee_band", src, org.estimated_num_employees, normalizeEmployeeBand(org.estimated_num_employees), 0.6, updated);
     // Apollo org industry is free-text (no NAICS in this contract) -> lowercase text key.
-    _push(out, "industry", src, org.industry, _norm(org.industry), 0.6, raw.updated_at);
+    _push(out, "industry", src, org.industry, _norm(org.industry), 0.6, updated);
   }
   return out;
 }
 
-function zoominfoCandidates(raw, objectType) {
+// Unwrap the GTM enrich response envelope to the first contact/company record.
+// ponytail: envelope paths inferred from the ZoomInfo GTM enrich contract, NOT yet
+// confirmed against a live 200 (the dry-run 400'd on request shape). If a real enrich
+// response nests differently, adjust here — flat objects (fixtures) pass straight through.
+function _zoomRecord(raw) {
+  if (!raw || typeof raw !== "object") return raw;
+  const r = raw.data != null ? raw.data : raw;
+  if (Array.isArray(r)) return r[0] || {};
+  if (r && Array.isArray(r.result)) {
+    const first = r.result[0];
+    if (first && Array.isArray(first.data)) return first.data[0] || {};
+    return first || {};
+  }
+  return r;
+}
+
+function zoominfoCandidates(rawResponse, objectType) {
   const out = [];
   const src = "zoominfo";
+  const raw = _zoomRecord(rawResponse) || {};
   const recency = raw.validDate || raw.lastUpdatedDate;
   if (objectType === "contacts") {
     const fullMatch = raw.matchStatus === "FULL_MATCH" || raw.matchStatus === undefined;

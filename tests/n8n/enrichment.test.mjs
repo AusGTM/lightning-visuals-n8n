@@ -26,6 +26,7 @@ const zoomC = load("zoominfo_contact.json");
 const lushaCo = load("lusha_company.json");
 const apolloCo = load("apollo_company.json");
 const zoomCo = load("zoominfo_company.json");
+const apolloLive = load("apollo_live_match.json"); // real people/match: nested under `person`
 
 function find(cands, field, source) {
   return cands.find((c) => c.field === field && c.source === source);
@@ -49,6 +50,31 @@ test("toCandidates: Apollo bounced -> 0; catchall verified -> 0.6", () => {
   const guessed = toCandidates("apollo",
     { email: "x@y.com", email_status: "guessed", extrapolated_email_confidence: 0.8 }, "contacts");
   assert.equal(Math.round(find(guessed, "email", "apollo").accuracy * 100), 40); // 0.5*0.8
+});
+
+test("toCandidates: Apollo live people/match (nested `person`) maps contact + company fields", () => {
+  const contacts = toCandidates("apollo", apolloLive, "contacts");
+  const email = find(contacts, "email", "apollo");
+  assert.ok(email, "email candidate present from nested person");
+  assert.equal(email.accuracy, 1.0); // verified
+  assert.equal(email.normalizedValue, "gillon.mclachlan@tabcorp.com.au");
+  assert.equal(find(contacts, "jobtitle", "apollo").normalizedValue, "chief executive officer");
+  assert.equal(find(contacts, "mobilephone", "apollo").normalizedValue, "+61400000001");
+
+  const co = toCandidates("apollo", apolloLive, "companies");
+  // organization_revenue 1.7B -> 1.2B+ band; not annual_revenue (absent in live shape)
+  assert.equal(find(co, "lv_revenue_band", "apollo").normalizedValue, "1.2B+");
+  assert.equal(find(co, "lv_employee_band", "apollo").normalizedValue, "1001+");
+  assert.equal(find(co, "industry", "apollo").normalizedValue, "entertainment");
+});
+
+test("toCandidates: ZoomInfo GTM enrich envelope (data.result[].data[]) unwraps to record", () => {
+  const enveloped = { data: { result: [{ data: [zoomC] }] } };
+  const c = toCandidates("zoominfo", enveloped, "contacts");
+  assert.equal(find(c, "email", "zoominfo").accuracy, 0.95); // same as flat fixture
+  // simpler { data: [record] } envelope also unwraps
+  const c2 = toCandidates("zoominfo", { data: [zoomC] }, "contacts");
+  assert.ok(find(c2, "email", "zoominfo"));
 });
 
 test("toCandidates: Lusha A+ email -> 1.0; mobile phone -> mobilephone/0.8; doNotCall suppressed", () => {

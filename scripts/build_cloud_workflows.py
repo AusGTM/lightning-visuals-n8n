@@ -848,10 +848,30 @@ async function enrich(token, payload) {
   });
 }
 
+// GTM enrich contract: { matchPersonInput: [ {emailAddress, ...} ], outputFields: [...] }.
+// The input KEY is `emailAddress` (not `email`); `domain`/`linkedin_url` are NOT valid
+// matchPersonInput fields — sending the bare identity_keys 400s (PFAPI0005, /matchPersonInput).
+// outputFields must name every field the normalizer reads (see normalizeProviders.zoominfoCandidates).
+const ZOOM_OUTPUT_FIELDS = [
+  "id", "firstName", "lastName", "email", "phone", "mobilePhone", "jobTitle",
+  "managementLevel", "contactAccuracyScore", "matchStatus", "validDate", "lastUpdatedDate",
+];
+function toMatchPersonInput(id) {
+  const m = {};
+  if (id && id.email) m.emailAddress = id.email;   // rename email -> emailAddress
+  if (id && id.companyName) m.companyName = id.companyName;
+  return m;
+}
+
 const out = [];
 for (const item of $input.all()) {
-  // TODO(live): map identity_keys -> ZoomInfo matchPersonInput/outputFields shape.
-  const payload = item.json.identity_keys || {};
+  const id = item.json.identity_keys || {};
+  const person = toMatchPersonInput(id);
+  // No usable match key -> skip the call (empty matchPersonInput is itself a 400).
+  const payload = person.emailAddress
+    ? { matchPersonInput: [person], outputFields: ZOOM_OUTPUT_FIELDS }
+    : null;
+  if (!payload) { out.push({ json: { skipped: "no zoominfo match key" } }); continue; }
   let token = await getToken.call(this);
   let res;
   try {
@@ -939,18 +959,19 @@ def build_enrichment_local():
 
 # ---- CLOUD enrichment workflow ----------------------------------------------
 
-def _http_node(name, url, x, y, auth=None, headers=None, form_body=None):
+def _http_node(name, url, x, y, auth=None, headers=None, form_body=None, json_body=None):
     """auth: None | 'header' (generic Header Auth credential) | 'basic' (generic Basic Auth).
     headers: list of {name, value} sent as extra HTTP headers (e.g. a dynamic Bearer).
-    form_body: list of {name, value} sent as application/x-www-form-urlencoded (OAuth token calls);
-               when None the node POSTs the JSON identity_keys body."""
+    form_body: list of {name, value} sent as application/x-www-form-urlencoded (OAuth token calls).
+    json_body: n8n expression string for the JSON body; when None (and no form_body) the node
+               POSTs the bare JSON identity_keys body."""
     params = {"method": "POST", "url": url, "options": {"timeout": 20000}}
     if form_body is not None:
         params.update({"sendBody": True, "contentType": "form-urlencoded",
                        "bodyParameters": {"parameters": form_body}})
     else:
         params.update({"sendBody": True, "specifyBody": "json",
-                       "jsonBody": "={{ JSON.stringify($json.identity_keys) }}"})
+                       "jsonBody": json_body or "={{ JSON.stringify($json.identity_keys) }}"})
     if auth == "header":
         params.update({"authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth"})
     elif auth == "basic":
@@ -1032,8 +1053,12 @@ def build_enrichment_cloud():
     lusha = _http_node("Lusha Enrich", "https://api.lusha.com/v2/person", px, y - 80,
                        auth="header")  # credential header, e.g. api_key: <LUSHA_API_KEY>
     nodes.append(lusha)
+    # reveal_personal_emails=true forces Apollo to return the contactable email (a bare
+    # people/match returns identity only). Phone is async: reveal_phone_number needs a
+    # webhook_url and arrives via callback — wired separately, not in this synchronous node.
     apollo = _http_node("Apollo Match", "https://api.apollo.io/v1/people/match", px + 220, y - 80,
-                        auth="header")  # credential header, e.g. X-Api-Key: <APOLLO_API_KEY>
+                        auth="header",  # credential header, e.g. X-Api-Key: <APOLLO_API_KEY>
+                        json_body="={{ JSON.stringify({ ...$json.identity_keys, reveal_personal_emails: true }) }}")
     nodes.append(apollo)
     # ZoomInfo: autonomous cached-token enrich. The Code node caches the bearer in workflow
     # static data, re-mints only when missing/near-expiry, and re-mints once + retries on 401.

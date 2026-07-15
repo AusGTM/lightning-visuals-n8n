@@ -1,0 +1,21 @@
+{
+  "person": {
+    "id": "6a571f6b746a3e000c64720e",
+    "first_name": "Gillon",
+    "last_name": "McLachlan",
+    "title": "Chief Executive Officer",
+    "seniority": "c_suite",
+    "email": "gillon.mclachlan@tabcorp.com.au",
+    "email_status": "verified",
+    "phone_numbers": [
+      { "sanitized_number": "+61400000001", "type": "mobile", "status": "valid_number" }
+    ],
+    "organization": {
+      "name": "Tabcorp",
+      "industry": "entertainment",
+      "estimated_num_employees": 5100,
+      "organization_revenue": 1709324000,
+      "organization_revenue_printed": "1.7B"
+    }
+  }
+}
