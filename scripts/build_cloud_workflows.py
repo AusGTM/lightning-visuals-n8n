@@ -807,6 +807,70 @@ return rows.map((it, i) => {
 });
 """
 
+# CLOUD: ZoomInfo enrich with AUTONOMOUS token caching + refresh-on-401. Replaces the
+# separate Auth + Enrich HTTP nodes: mints its own bearer, caches it in workflow static
+# data, re-mints only when missing/near-expiry, and re-mints once + retries on a 401.
+ENRICH_ZOOMINFO_CACHED = inline("zoominfoToken.js") + r"""
+// n8n Code node: cached ZoomInfo bearer (autonomous). Reads a cross-run token cache
+// from workflow static data, mints only when missing/near-expiry, enriches with the
+// Bearer, and on a 401 clears the cache, re-mints ONCE, and retries. Secrets come from
+// n8n Variables ($vars.ZOOMINFO_CLIENT_ID / $vars.ZOOMINFO_CLIENT_SECRET) so no static
+// token is ever stored. (Self-hosted may use $env; or bind a Basic Auth credential to a
+// dedicated mint HTTP node instead.)
+const TOKEN_URL = "https://api.zoominfo.com/gtm/oauth/v1/token";
+const ENRICH_URL = "https://api.zoominfo.com/gtm/data/v1/contacts/enrich";
+const sd = $getWorkflowStaticData("global");
+
+async function mint() {
+  const cid = $vars.ZOOMINFO_CLIENT_ID;
+  const csec = $vars.ZOOMINFO_CLIENT_SECRET;
+  const basic = Buffer.from(cid + ":" + csec).toString("base64");
+  const resp = await this.helpers.httpRequest({
+    method: "POST", url: TOKEN_URL,
+    headers: { Authorization: "Basic " + basic, "Content-Type": "application/x-www-form-urlencoded" },
+    body: "grant_type=client_credentials",
+  });
+  const parsed = parseTokenResponse(resp, Date.now());
+  sd.zoominfo = parsed;              // cache across executions
+  return parsed.access_token;
+}
+
+async function getToken() {
+  if (needsMint(sd.zoominfo, Date.now())) return await mint.call(this);
+  return sd.zoominfo.access_token;
+}
+
+async function enrich(token, payload) {
+  return await this.helpers.httpRequest({
+    method: "POST", url: ENRICH_URL,
+    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    body: JSON.stringify(payload || {}),
+  });
+}
+
+const out = [];
+for (const item of $input.all()) {
+  // TODO(live): map identity_keys -> ZoomInfo matchPersonInput/outputFields shape.
+  const payload = item.json.identity_keys || {};
+  let token = await getToken.call(this);
+  let res;
+  try {
+    res = await enrich.call(this, token, payload);
+  } catch (e) {
+    if (isAuthError(e.statusCode || e.httpCode || (e.response && e.response.statusCode))) {
+      delete sd.zoominfo;                     // token rejected -> re-mint once + retry
+      token = await mint.call(this);
+      try { res = await enrich.call(this, token, payload); }
+      catch (e2) { res = { error: String((e2 && e2.message) || e2) }; }
+    } else {
+      res = { error: String((e && e.message) || e) };  // non-auth error -> continue
+    }
+  }
+  out.push({ json: res });
+}
+return out;
+"""
+
 
 # ---- LOCAL enrichment workflow ----------------------------------------------
 
@@ -962,8 +1026,8 @@ def build_enrichment_cloud():
 
     # Provider waterfall (create+enrich share it). Apollo phone is async (webhook) in prod.
     # Auth differs per provider: Lusha + Apollo = single static header key (generic Header
-    # Auth credential); ZoomInfo = OAuth2 client-credentials -> short-lived Bearer, so it
-    # needs a preceding token-exchange node (docs.zoominfo.com/docs/client-credentials-flow).
+    # Auth credential); ZoomInfo = autonomous OAuth2 — the ZoomInfo Enrich Code node mints
+    # and caches its own short-lived Bearer (no static token, no separate Auth node).
     px = x + 220
     lusha = _http_node("Lusha Enrich", "https://api.lusha.com/v2/person", px, y - 80,
                        auth="header")  # credential header, e.g. api_key: <LUSHA_API_KEY>
@@ -971,17 +1035,9 @@ def build_enrichment_cloud():
     apollo = _http_node("Apollo Match", "https://api.apollo.io/v1/people/match", px + 220, y - 80,
                         auth="header")  # credential header, e.g. X-Api-Key: <APOLLO_API_KEY>
     nodes.append(apollo)
-    # ZoomInfo step 1: OAuth2 client-credentials token exchange (Basic auth = client_id:client_secret).
-    zoom_auth = _http_node(
-        "ZoomInfo Auth", "https://api.zoominfo.com/gtm/oauth/v1/token", px + 440, y - 200,
-        auth="basic", form_body=[{"name": "grant_type", "value": "client_credentials"}])
-    nodes.append(zoom_auth)
-    # ZoomInfo step 2: enrich (GTM v1) with the Bearer token from step 1. Token ~expires_in seconds,
-    # no refresh token -> re-auth per run (or cache in workflow static data + refresh on 401).
-    zoom = _http_node(
-        "ZoomInfo Enrich", "https://api.zoominfo.com/gtm/data/v1/contacts/enrich", px + 440, y - 80,
-        headers=[{"name": "Authorization",
-                  "value": "={{ 'Bearer ' + $('ZoomInfo Auth').item.json.access_token }}"}])
+    # ZoomInfo: autonomous cached-token enrich. The Code node caches the bearer in workflow
+    # static data, re-mints only when missing/near-expiry, and re-mints once + retries on 401.
+    zoom = code_node("ZoomInfo Enrich", ENRICH_ZOOMINFO_CACHED, px + 440, y - 80)
     nodes.append(zoom)
 
     sx = px + 660
@@ -1037,8 +1093,8 @@ def build_enrichment_cloud():
         [{"node": "Lusha Enrich", "type": "main", "index": 0}],   # enrich
         [{"node": "Skip (NoOp)", "type": "main", "index": 0}],    # skip
     ]}
-    # Lusha -> Apollo -> ZoomInfo Auth (token) -> ZoomInfo Enrich (Bearer) -> Normalize...
-    conns.update(chain(["Lusha Enrich", "Apollo Match", "ZoomInfo Auth", "ZoomInfo Enrich",
+    # Lusha -> Apollo -> ZoomInfo Enrich (autonomous cached token) -> Normalize...
+    conns.update(chain(["Lusha Enrich", "Apollo Match", "ZoomInfo Enrich",
                         "Normalize + Score", "Merge Winners",
                         "Set Data Quality + Gap Flag", "Decide Action", "IF Create"]))
     conns["IF Create"] = {"main": [
@@ -1055,8 +1111,9 @@ def build_enrichment_cloud():
             "## LV Enrichment — CLOUD template\n"
             "Import to n8n Cloud, then add **credentials**: HubSpot (search/create/"
             "update); **Lusha** + **Apollo** = generic Header Auth (single static key, "
-            "e.g. `api_key` / `X-Api-Key`); **ZoomInfo** = generic Basic Auth on the "
-            "*ZoomInfo Auth* node (client_id:client_secret) — see the ZoomInfo OAuth note.\n\n"
+            "e.g. `api_key` / `X-Api-Key`); **ZoomInfo** = autonomous — set "
+            "`ZOOMINFO_CLIENT_ID`/`ZOOMINFO_CLIENT_SECRET` in n8n Variables ($vars); "
+            "the ZoomInfo Enrich node mints + caches its own token — see the ZoomInfo note.\n\n"
             "**Flow:** Webhook -> Build Identity -> HubSpot Search -> Gate "
             "(create/enrich/skip) -> Switch. create+enrich share the scored "
             "waterfall; skip does nothing. Writes are GATED."
@@ -1078,16 +1135,15 @@ def build_enrichment_cloud():
             "person/org match only."
         ), "x": 1580, "y": 60, "h": 200, "w": 380},
         {"content": (
-            "### ZoomInfo = OAuth2, not a static key\n"
-            "Unlike Lusha/Apollo (single header key), ZoomInfo needs a **token "
-            "exchange** first (docs.zoominfo.com/docs/client-credentials-flow):\n"
-            "1. **ZoomInfo Auth** node: POST `gtm/oauth/v1/token`, Basic auth = "
-            "`client_id:client_secret`, body `grant_type=client_credentials` -> "
-            "returns `access_token` (+ `expires_in`, ~seconds, **no refresh token**).\n"
-            "2. **ZoomInfo Enrich** node: `Authorization: Bearer {{access_token}}` "
-            "against the GTM v1 API.\n"
-            "Token is short-lived — re-auth per run, or cache in workflow static "
-            "data and refresh on 401."
+            "### ZoomInfo = autonomous OAuth2 (cached)\n"
+            "ZoomInfo tokens are short-lived, so the **ZoomInfo Enrich** Code node "
+            "mints its own: it caches the bearer in workflow **static data**, "
+            "re-mints only when missing/near-expiry, and on a **401** clears the "
+            "cache, re-mints once, and retries. Secrets are long-lived "
+            "`client_id`/`client_secret` in **n8n Variables** ($vars) — never a "
+            "stored token. Rotate the secret ~quarterly; everything else is "
+            "unattended. (Get client_secret from ZoomInfo Admin Portal → "
+            "Integrations → API & Webhooks.)"
         ), "x": 1140, "y": 60, "h": 300, "w": 420},
         {"content": (
             "### Dependencies (awaited)\n"
