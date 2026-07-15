@@ -25,6 +25,7 @@ Real keys live in a gitignored `.env` (HubSpot + Anthropic set; provider keys em
 Expect: **83 passed**, no network. This is the gate. If it's green, the logic is proven at unit + functional + E2E level.
 
 Per-area breakdown if you want to run pieces:
+
 ```bash
 .venv/bin/python -m pytest tests/test_icp_scoring.py -q        # 16 scoring cases
 .venv/bin/python -m pytest tests/test_merge_policy.py -q       # non-clobber merge
@@ -44,6 +45,7 @@ set -a; . ./.env; set +a
 ```
 
 What to check in the output:
+
 - Prints provider results, field decisions, ICP score, and the exact HubSpot PATCH.
 - `lv_icp_tier: A`, `lv_icp_fit_score: 70`, `lv_recommended_motion: work_direct` (fixture is an AU racing league; live Haiku promotes org_type/produces_content).
 - `"dry_run": true` at the bottom → **no HubSpot write**.
@@ -60,13 +62,14 @@ Offline variant (no key needed) — scoring degrades to `Unscored` because nothi
 ```
 
 The 5-row fixture exercises every path. Expected per-row outcomes:
-| Row | Outcome → Action |
-|-----|------------------|
-| has email, HubSpot hit | `match` → `patch` (dry-run) |
-| valid email, 0 hits | `net_new` → `create` if `ALLOW_CONTACT_CREATE=true`, else `review` |
-| no email, weak-key hit | `ambiguous` → `review` |
-| no email, no hits | `ambiguous` → `review` (**hard rule: never auto-create**) |
-| missing identity key | `rejected` → `skip` (never reaches resolution) |
+
+| Row                    | Outcome → Action                                                           |
+| ---------------------- | --------------------------------------------------------------------------- |
+| has email, HubSpot hit | `match` → `patch` (dry-run)                                            |
+| valid email, 0 hits    | `net_new` → `create` if `ALLOW_CONTACT_CREATE=true`, else `review` |
+| no email, weak-key hit | `ambiguous` → `review`                                                 |
+| no email, no hits      | `ambiguous` → `review` (**hard rule: never auto-create**)        |
+| missing identity key   | `rejected` → `skip` (never reaches resolution)                         |
 
 Note: with real HubSpot fns this hits the live CRM search; the tests inject mocked search/get so review stays offline and write-free.
 
@@ -81,6 +84,7 @@ bash scripts/n8n_replica_test.sh
 ```
 
 Expect: **PASS**. It starts the FastAPI decision service, imports both workflow templates into the container, executes them headless (`n8n execute --rawOutput`), and asserts:
+
 - ingest workflow → dry-run `patch`/`review` actions, **no `create` leaked** (create gated off);
 - sweep workflow → `duplicate_count: 1`, `mangled_count: 1`.
 
@@ -91,6 +95,7 @@ This replicates the production n8n Cloud shape: **trigger → parse → HTTP cal
 ## 5. What to actually scrutinize
 
 ### Decisions to challenge (not code — judgment calls)
+
 - **Auto-create net-new on valid email** (gated, dry-run). Reasonable? The guard: create only fires when `ALLOW_CONTACT_CREATE=true` AND a pre-create email re-check still returns 0 hits. Everything ambiguous → review. See `src/ingest.py` `precreate_email_recheck` + `run_contact_ingest`.
 - **Match keys**: auto-confident only on `email`/`linkedin_url`; `phone+lastname` and `name+company` are always `ambiguous`. Too conservative? Too loose? `src/identity.py`.
 - **Email asymmetry**: `manual_protected` on enrich (never overwrites an existing contact's email) but written on create (new record identity). Correct? `config/field_policy.yaml` contacts block + `src/ingest.py`.
@@ -98,12 +103,14 @@ This replicates the production n8n Cloud shape: **trigger → parse → HTTP cal
 - **ICP weights are illustrative** pending JTBD-2 sign-off — config-driven in `config/icp_scoring.yaml`, changeable without code.
 
 ### 4 SPEC defects found + fixed (worth a look — the spec's own code shipped these)
+
 1. `produces_content` bool-key lookup → flagship Tier A scored as B. `src/icp_scoring.py`.
 2. `choose_best` returned a list, callers deref'd one element → crash. `src/merge_policy.py`.
 3. `evidence_url` list assigned to `Optional[str]` schema field → crash. `src/merge_policy.py`.
 4. `msg.content.text` vs SDK's `content[0].text` → live crash. `src/classifier_haiku.py`, `src/validator_sonnet.py`.
 
 ### Safety guarantees to verify yourself
+
 - Nothing writes to HubSpot: grep for `requests.post`/`requests.patch` — they're only reached when `dry_run=False`, and `DRY_RUN`/`ALLOW_CANONICAL_WRITES`/`ALLOW_CONTACT_CREATE` all default safe. The decision service hard-codes `dry_run=True`.
 - `.env` is gitignored (`git check-ignore .env`). No tokens in the repo.
 
@@ -117,6 +124,7 @@ This replicates the production n8n Cloud shape: **trigger → parse → HTTP cal
 - Source spec: `CLAUDE.md` (technical) + `icp-scoring.md` (business rationale).
 
 ## 7. Known caveats (already documented)
+
 - n8n schedule-trigger workflow got a `manualTrigger` added so it runs headless (schedule triggers can't be CLI-started in v2.4.4); the schedule node is retained for production shape.
 - Decision service uses safe HubSpot stubs — the replica never touches real HubSpot by design. Live writeback path exists in `main.py`/`hubspot_client.py`, behind the same gates, for a future milestone (needs HubSpot Pro).
 - Staged-but-not-promoted signals don't feed the scorer (only promoted ones do) — defensible, noted in the M1 integration report.

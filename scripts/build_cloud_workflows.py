@@ -875,11 +875,26 @@ def build_enrichment_local():
 
 # ---- CLOUD enrichment workflow ----------------------------------------------
 
-def _http_node(name, url, x, y):
+def _http_node(name, url, x, y, auth=None, headers=None, form_body=None):
+    """auth: None | 'header' (generic Header Auth credential) | 'basic' (generic Basic Auth).
+    headers: list of {name, value} sent as extra HTTP headers (e.g. a dynamic Bearer).
+    form_body: list of {name, value} sent as application/x-www-form-urlencoded (OAuth token calls);
+               when None the node POSTs the JSON identity_keys body."""
+    params = {"method": "POST", "url": url, "options": {"timeout": 20000}}
+    if form_body is not None:
+        params.update({"sendBody": True, "contentType": "form-urlencoded",
+                       "bodyParameters": {"parameters": form_body}})
+    else:
+        params.update({"sendBody": True, "specifyBody": "json",
+                       "jsonBody": "={{ JSON.stringify($json.identity_keys) }}"})
+    if auth == "header":
+        params.update({"authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth"})
+    elif auth == "basic":
+        params.update({"authentication": "genericCredentialType", "genericAuthType": "httpBasicAuth"})
+    if headers:
+        params.update({"sendHeaders": True, "headerParameters": {"parameters": headers}})
     return {
-        "parameters": {"method": "POST", "url": url, "sendBody": True,
-                       "specifyBody": "json", "jsonBody": "={{ JSON.stringify($json.identity_keys) }}",
-                       "options": {"timeout": 20000}},
+        "parameters": params,
         "id": nid("h"), "name": name,
         "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [x, y],
         "onError": "continueRegularOutput",
@@ -946,12 +961,27 @@ def build_enrichment_cloud():
     nodes.append(switch)
 
     # Provider waterfall (create+enrich share it). Apollo phone is async (webhook) in prod.
+    # Auth differs per provider: Lusha + Apollo = single static header key (generic Header
+    # Auth credential); ZoomInfo = OAuth2 client-credentials -> short-lived Bearer, so it
+    # needs a preceding token-exchange node (docs.zoominfo.com/docs/client-credentials-flow).
     px = x + 220
-    lusha = _http_node("Lusha Enrich", "https://api.lusha.com/v2/person", px, y - 80)
+    lusha = _http_node("Lusha Enrich", "https://api.lusha.com/v2/person", px, y - 80,
+                       auth="header")  # credential header, e.g. api_key: <LUSHA_API_KEY>
     nodes.append(lusha)
-    apollo = _http_node("Apollo Match", "https://api.apollo.io/v1/people/match", px + 220, y - 80)
+    apollo = _http_node("Apollo Match", "https://api.apollo.io/v1/people/match", px + 220, y - 80,
+                        auth="header")  # credential header, e.g. X-Api-Key: <APOLLO_API_KEY>
     nodes.append(apollo)
-    zoom = _http_node("ZoomInfo Enrich", "https://api.zoominfo.com/enrich/contact", px + 440, y - 80)
+    # ZoomInfo step 1: OAuth2 client-credentials token exchange (Basic auth = client_id:client_secret).
+    zoom_auth = _http_node(
+        "ZoomInfo Auth", "https://api.zoominfo.com/gtm/oauth/v1/token", px + 440, y - 200,
+        auth="basic", form_body=[{"name": "grant_type", "value": "client_credentials"}])
+    nodes.append(zoom_auth)
+    # ZoomInfo step 2: enrich (GTM v1) with the Bearer token from step 1. Token ~expires_in seconds,
+    # no refresh token -> re-auth per run (or cache in workflow static data + refresh on 401).
+    zoom = _http_node(
+        "ZoomInfo Enrich", "https://api.zoominfo.com/gtm/data/v1/contacts/enrich", px + 440, y - 80,
+        headers=[{"name": "Authorization",
+                  "value": "={{ 'Bearer ' + $('ZoomInfo Auth').item.json.access_token }}"}])
     nodes.append(zoom)
 
     sx = px + 660
@@ -1007,7 +1037,8 @@ def build_enrichment_cloud():
         [{"node": "Lusha Enrich", "type": "main", "index": 0}],   # enrich
         [{"node": "Skip (NoOp)", "type": "main", "index": 0}],    # skip
     ]}
-    conns.update(chain(["Lusha Enrich", "Apollo Match", "ZoomInfo Enrich",
+    # Lusha -> Apollo -> ZoomInfo Auth (token) -> ZoomInfo Enrich (Bearer) -> Normalize...
+    conns.update(chain(["Lusha Enrich", "Apollo Match", "ZoomInfo Auth", "ZoomInfo Enrich",
                         "Normalize + Score", "Merge Winners",
                         "Set Data Quality + Gap Flag", "Decide Action", "IF Create"]))
     conns["IF Create"] = {"main": [
@@ -1023,7 +1054,9 @@ def build_enrichment_cloud():
         {"content": (
             "## LV Enrichment — CLOUD template\n"
             "Import to n8n Cloud, then add **credentials**: HubSpot (search/create/"
-            "update) + provider API keys (Lusha/Apollo/ZoomInfo HTTP nodes).\n\n"
+            "update); **Lusha** + **Apollo** = generic Header Auth (single static key, "
+            "e.g. `api_key` / `X-Api-Key`); **ZoomInfo** = generic Basic Auth on the "
+            "*ZoomInfo Auth* node (client_id:client_secret) — see the ZoomInfo OAuth note.\n\n"
             "**Flow:** Webhook -> Build Identity -> HubSpot Search -> Gate "
             "(create/enrich/skip) -> Switch. create+enrich share the scored "
             "waterfall; skip does nothing. Writes are GATED."
@@ -1043,7 +1076,19 @@ def build_enrichment_cloud():
             "In production add a second Webhook node to receive the phone payload "
             "and a Merge node to join it back. This template does the inline "
             "person/org match only."
-        ), "x": 1360, "y": 60, "h": 200, "w": 380},
+        ), "x": 1580, "y": 60, "h": 200, "w": 380},
+        {"content": (
+            "### ZoomInfo = OAuth2, not a static key\n"
+            "Unlike Lusha/Apollo (single header key), ZoomInfo needs a **token "
+            "exchange** first (docs.zoominfo.com/docs/client-credentials-flow):\n"
+            "1. **ZoomInfo Auth** node: POST `gtm/oauth/v1/token`, Basic auth = "
+            "`client_id:client_secret`, body `grant_type=client_credentials` -> "
+            "returns `access_token` (+ `expires_in`, ~seconds, **no refresh token**).\n"
+            "2. **ZoomInfo Enrich** node: `Authorization: Bearer {{access_token}}` "
+            "against the GTM v1 API.\n"
+            "Token is short-lived — re-auth per run, or cache in workflow static "
+            "data and refresh on 401."
+        ), "x": 1140, "y": 60, "h": 300, "w": 420},
         {"content": (
             "### Dependencies (awaited)\n"
             "**`lv_*` HubSpot properties** are not yet created — the merge writes "
