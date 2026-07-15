@@ -121,7 +121,7 @@ This replicates the production n8n Cloud shape: **trigger → parse → HTTP cal
 - `.planning/ROADMAP.md` — both milestones, phase-by-phase goals + success criteria.
 - `.planning/phases/phase-*/PLAN.md` + `*-SUMMARY.md` — per-phase plan, what shipped, deviations.
 - `.planning/PROJECT.md` — decisions + risks. `.planning/INGEST-CONFLICTS.md` — source-doc reconciliation.
-- Source spec: `CLAUDE.md` (technical) + `icp-scoring.md` (business rationale).
+- Source spec: [`CLAUDE.md`](../../CLAUDE.md) (technical) + [`icp-scoring.md`](../business/icp-scoring.md) (business rationale).
 
 ## 7. Known caveats (already documented)
 

@@ -40,7 +40,7 @@ Per-row outcome → action:
    `wf_contact_ingest_cloud.json`.
 2. Add **HubSpot credentials** (a HubSpot private-app token) on the three
    HubSpot nodes: **HubSpot Search by Email**, **HubSpot Update**,
-   **HubSpot Create**. The scopes are the CLAUDE.md minimum
+   **HubSpot Create**. The scopes are the ../CLAUDE.md minimum
    (`crm.objects.contacts.read` / `.write`).
 3. The trigger is a **Webhook** (`POST /webhook/hubspot/contact-upload`) whose
    body carries the uploaded file; **Extract From File** parses CSV → rows.
@@ -112,7 +112,7 @@ phone-validation API.
 
 # Enrichment workflow (quality-scored waterfall)
 
-The second pipeline (`ENRICHMENT-WORKFLOW-PLAN.md`). It checks HubSpot first,
+The second pipeline (`../docs/architecture/ENRICHMENT-WORKFLOW-PLAN.md`). It checks HubSpot first,
 decides **create / enrich / skip**, then — instead of FIFO stop-on-first-match —
 **scores every source per field**, cross-checks, and pushes the best value per
 field into the same non-clobber merge. Same two-artifact pattern, same inliner
@@ -182,7 +182,7 @@ Each winner carries provenance `{value, source, score, components, agreedBy[]}`.
 
 **`lv_*` property dependency (awaited):** the merge writes company/contact
 `lv_*` properties (org type, revenue band, source/evidence metadata) **by name**.
-Create them in the HubSpot portal first (see `CLAUDE.md §4–8`); until then the
+Create them in the HubSpot portal first (see `../CLAUDE.md §4–8`); until then the
 Cloud writes target properties that don't exist. The local replica mocks the
 write, so it needs none.
 
