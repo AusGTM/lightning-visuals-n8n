@@ -893,10 +893,9 @@ HUBSPOT_PORTAL_ID=00000000
 ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxx
 ANTHROPIC_HAIKU_MODEL=claude-3-5-haiku-latest
 ANTHROPIC_SONNET_MODEL=claude-sonnet-5-latest
-
-# Optional Claude web research service
-CLAUDE_WEB_RESEARCH_ENDPOINT=
-CLAUDE_WEB_RESEARCH_API_KEY=
+# Claude web research uses the NATIVE web_search tool on the standard Messages API
+# (authenticated by ANTHROPIC_API_KEY above) — no separate endpoint or key needed.
+WEB_RESEARCH_MAX_SEARCHES=5
 
 # Providers
 ZOOMINFO_API_KEY=
@@ -1199,58 +1198,71 @@ def get_mock_provider_waterfall() -> List[ProviderAdapter]:
 ```python
 import json
 import os
+import re
 from pathlib import Path
-import requests
 from .schemas import HubSpotRecord, ProviderResult
 
 FIXTURE_DIR = Path("tests/fixtures")
 
+REQUIRED_FIELDS = [
+    "lv_org_type", "lv_produces_content", "lv_content_type", "lv_sponsorship_reliant",
+    "lv_is_hardware_vendor", "lv_is_gambling_operator", "lv_country_region_normalized",
+    "lv_has_sports_media_fit", "lv_has_broadcast_or_streaming_signals",
+]
+
+RESEARCH_SYSTEM = (
+    "You are an ICP research analyst. Use web search to research the company, then return "
+    "ONLY a single JSON object (no prose, no fences) matching the ProviderResult schema "
+    "(provider=claude_web, object_type, matched, confidence 0-100, data{required fields}, "
+    "evidence{last_seen,match_basis,evidence_urls,evidence_summary}, model_trace). "
+    "Prefer unknown/null over guessing; include evidence_urls for org_type and content output."
+)
+
 def mock_claude_web_research(record: HubSpotRecord) -> ProviderResult:
     return ProviderResult(**json.loads((FIXTURE_DIR / "claude_web_research_company.json").read_text()))
+
+def _extract_json(text: str) -> dict:
+    t = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.MULTILINE).strip()
+    try:
+        return json.loads(t)
+    except json.JSONDecodeError:
+        m = re.search(r"\{.*\}", t, re.DOTALL)
+        if not m:
+            raise
+        return json.loads(m.group(0))
 
 def claude_web_research(record: HubSpotRecord) -> ProviderResult:
     if os.getenv("USE_MOCK_WEB_RESEARCH", "true").lower() == "true":
         return mock_claude_web_research(record)
 
-    endpoint = os.getenv("CLAUDE_WEB_RESEARCH_ENDPOINT")
-    api_key = os.getenv("CLAUDE_WEB_RESEARCH_API_KEY")
+    # Native web search: standard Messages API + the web_search server tool. Uses the
+    # ambient ANTHROPIC_API_KEY (no dedicated research endpoint or key).
+    from anthropic import Anthropic
 
-    if not endpoint:
-        raise RuntimeError("CLAUDE_WEB_RESEARCH_ENDPOINT is not configured")
-
-    payload = {
+    client = Anthropic()
+    model = os.getenv("ANTHROPIC_SONNET_MODEL", "claude-sonnet-5")
+    max_uses = int(os.getenv("WEB_RESEARCH_MAX_SEARCHES", "5"))
+    props = record.properties
+    user_payload = {
         "task": "company_icp_research",
-        "record": {
-            "id": record.id,
-            "object_type": record.object_type,
-            "name": record.properties.get("name"),
-            "domain": record.properties.get("domain"),
-            "website": record.properties.get("website"),
-            "country": record.properties.get("country"),
-            "industry": record.properties.get("industry")
-        },
-        "required_fields": [
-            "lv_org_type",
-            "lv_produces_content",
-            "lv_content_type",
-            "lv_sponsorship_reliant",
-            "lv_is_hardware_vendor",
-            "lv_is_gambling_operator",
-            "lv_country_region_normalized",
-            "lv_has_sports_media_fit",
-            "lv_has_broadcast_or_streaming_signals"
-        ],
-        "return_evidence_urls": True,
-        "return_only_json": True
+        "company": {k: props.get(k) for k in ("name", "domain", "website", "country", "industry")},
+        "required_fields": REQUIRED_FIELDS,
+        "return_only_json": True,
     }
 
-    headers = {"Content-Type": "application/json"}
-    if api_key:
-        headers["Authorization"] = f"Bearer {api_key}"
+    msg = client.messages.create(
+        model=model,
+        max_tokens=2000,
+        system=RESEARCH_SYSTEM,
+        tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": max_uses}],
+        messages=[{"role": "user", "content": json.dumps(user_payload)}],
+    )
 
-    r = requests.post(endpoint, headers=headers, json=payload, timeout=90)
-    r.raise_for_status()
-    return ProviderResult(**r.json())
+    text = "".join(b.text for b in msg.content if getattr(b, "type", None) == "text")
+    data = _extract_json(text)
+    data.setdefault("provider", "claude_web")
+    data.setdefault("object_type", record.object_type)
+    return ProviderResult(**data)
 ```
 
 ## 12.4 `src/normalizer.py`
