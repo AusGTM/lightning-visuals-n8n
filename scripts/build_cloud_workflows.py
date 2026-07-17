@@ -827,8 +827,9 @@ const ENRICH_URL = "https://api.zoominfo.com/gtm/data/v1/contacts/enrich";
 const sd = $getWorkflowStaticData("global");
 
 async function mint() {
-  const cid = $vars.ZOOMINFO_CLIENT_ID;
-  const csec = $vars.ZOOMINFO_CLIENT_SECRET;
+  // Cloud: n8n Variables ($vars). Self-hosted/headless: process env ($env). Prefer $vars.
+  const cid = ($vars && $vars.ZOOMINFO_CLIENT_ID) || $env.ZOOMINFO_CLIENT_ID;
+  const csec = ($vars && $vars.ZOOMINFO_CLIENT_SECRET) || $env.ZOOMINFO_CLIENT_SECRET;
   const basic = Buffer.from(cid + ":" + csec).toString("base64");
   const resp = await this.helpers.httpRequest({
     method: "POST", url: TOKEN_URL,
@@ -878,9 +879,14 @@ function hasZoomKey(m) {
   return !!(m.emailAddress || (m.firstName && m.lastName && m.companyName));
 }
 
+// identity_keys lives on the Enrichment Gate rows; $input here is the Apollo HTTP
+// response (which has replaced $json), so pull identity by paired index from the Gate.
+const gateRows = (function () { try { return $('Enrichment Gate').all(); } catch (e) { return []; } })();
+const items = $input.all();
 const out = [];
-for (const item of $input.all()) {
-  const id = item.json.identity_keys || {};
+for (let i = 0; i < items.length; i++) {
+  const item = items[i];
+  const id = (gateRows[i] && gateRows[i].json && gateRows[i].json.identity_keys) || item.json.identity_keys || {};
   const person = toMatchPersonInput(id);
   // No usable match key -> skip the call (empty/keyless matchPersonInput is itself a 400).
   const payload = hasZoomKey(person)
@@ -966,6 +972,144 @@ def build_enrichment_local():
     return {
         "id": "LVenrichment01",
         "name": "LV Enrichment (local replica)",
+        "nodes": nodes,
+        "connections": chain(order),
+        "settings": {},
+    }
+
+
+# ---- LOCAL-LIVE enrichment workflow (real providers, headless) --------------
+# Same graph as the cloud template but headless-executable: Manual Trigger instead of
+# Webhook, provider HTTP nodes + HubSpot search read their secrets from $env (docker exec
+# -e ...) instead of the credential store, and there are NO write nodes (Decide Action
+# echoes the would-be payload). Read-only: live provider calls + HubSpot SEARCH only.
+
+ENRICH_EMIT_LIVE = r"""// Emit Live Identities — LOCAL-LIVE variant.
+// Real prospects (name+company+domain, no email in hand) that the live providers match.
+// Same set as the batch dry-run harness; all route create/enrich (none skip) so provider
+// outputs align 1:1 with the gate rows for the scored waterfall.
+const rows = [
+  { firstname: "Gerry",  lastname: "Harvey",     company: "Harvey Norman",         domain: "harveynorman.com.au",       object_type: "contacts" },
+  { firstname: "Kyle",   lastname: "Bettler",    company: "Racing NSW",            domain: "racingnsw.com.au",          object_type: "contacts" },
+  { firstname: "Kieran", lastname: "Granger",    company: "Melbourne Racing Club", domain: "mrc.net.au",                object_type: "contacts" },
+  { firstname: "Mick",   lastname: "James",      company: "Australian Turf Club",  domain: "australianturfclub.com.au", object_type: "contacts" },
+  { firstname: "David",  lastname: "Preschlack", company: "FanDuel",               domain: "fanduel.com",               object_type: "contacts" }
+];
+return rows.map((r) => ({ json: r }));
+"""
+
+ENRICH_BUILD_REQUESTS = r"""// Build Live Provider Requests — LOCAL-LIVE variant.
+// Turns identity_keys into the concrete per-provider request shapes the LIVE HTTP nodes
+// reference by name (HTTP nodes replace $json with their response, so downstream nodes read
+// requests via $('Build Requests').item). Lusha v2 = GET querystring; Apollo people/match =
+// JSON body with reveal_personal_emails. ZoomInfo builds its own body from the Gate identity.
+return $input.all().map((it) => {
+  const row = it.json;
+  const id = row.identity_keys || {};
+  const enc = encodeURIComponent;
+  const q = [];
+  const add = (k, v) => { if (v) q.push(enc(k) + "=" + enc(v)); };
+  add("firstName", id.firstName); add("lastName", id.lastName);
+  add("companyName", id.companyName); add("companyDomain", id.domain);
+  add("email", id.email); add("linkedinUrl", id.linkedin_url);
+  const lusha_url = "https://api.lusha.com/v2/person?" + q.join("&");
+  const apollo_body = { reveal_personal_emails: true };
+  if (id.email) apollo_body.email = id.email;
+  if (id.domain) apollo_body.domain = id.domain;
+  if (id.firstName) apollo_body.first_name = id.firstName;
+  if (id.lastName) apollo_body.last_name = id.lastName;
+  if (id.companyName) apollo_body.organization_name = id.companyName;
+  return { json: { ...row, lusha_url, apollo_body } };
+});
+"""
+
+# HubSpot read-only search body (existence check): by email if present, else first+last name.
+HS_SEARCH_BODY_EXPR = (
+    '={{ JSON.stringify({ filterGroups: [ { filters: '
+    '($json.identity_keys.email ? [ { propertyName: "email", operator: "EQ", value: $json.identity_keys.email } ] '
+    ': [ { propertyName: "firstname", operator: "EQ", value: $json.identity_keys.firstName }, '
+    '{ propertyName: "lastname", operator: "EQ", value: $json.identity_keys.lastName } ]) } ], '
+    'properties: ["email","firstname","lastname","jobtitle","phone","mobilephone",'
+    '"jobtitle_verified_at","mobilephone_verified_at"], limit: 5 }) }}'
+)
+
+
+def _live_http(name, x, y, method, url, headers, json_body=None):
+    """HTTP Request node whose auth/secrets come from $env expressions in headers
+    (no credential store), for headless `n8n execute` with docker exec -e."""
+    params = {"method": method, "url": url, "options": {"timeout": 20000}}
+    if json_body is not None:
+        params.update({"sendBody": True, "specifyBody": "json", "jsonBody": json_body})
+    if headers:
+        params.update({"sendHeaders": True, "headerParameters": {"parameters": headers}})
+    return {"parameters": params, "id": nid("h"), "name": name,
+            "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2,
+            "position": [x, y], "onError": "continueRegularOutput"}
+
+
+def build_enrichment_local_live():
+    nodes = []
+    y = 300
+    x = 240
+    nodes.append({"parameters": {}, "id": nid("t"), "name": "Manual Trigger",
+                  "type": "n8n-nodes-base.manualTrigger", "typeVersion": 1, "position": [x, y]})
+    x += 230
+    nodes.append(code_node("Emit Live Identities", ENRICH_EMIT_LIVE, x, y))
+    x += 230
+    nodes.append(code_node("Build Identity", ENRICH_BUILD_IDENTITY, x, y))
+    x += 230
+    nodes.append(_live_http(
+        "HubSpot Search", x, y, "POST",
+        "https://api.hubapi.com/crm/v3/objects/contacts/search",
+        [{"name": "Authorization", "value": "=Bearer {{ $env.HUBSPOT_PRIVATE_APP_TOKEN }}"},
+         {"name": "Content-Type", "value": "application/json"}],
+        json_body=HS_SEARCH_BODY_EXPR))
+    x += 230
+    nodes.append(code_node("Adapt Search", ENRICH_ADAPT_SEARCH, x, y))
+    x += 230
+    nodes.append(code_node("Enrichment Gate", ENRICH_GATE, x, y))
+    x += 230
+    nodes.append(code_node("Build Requests", ENRICH_BUILD_REQUESTS, x, y))
+    x += 230
+    nodes.append(_live_http(
+        "Lusha Enrich", x, y, "GET",
+        "={{ $('Build Requests').item.json.lusha_url }}",
+        [{"name": "api_key", "value": "={{ $env.LUSHA_API_KEY }}"}]))
+    x += 230
+    nodes.append(_live_http(
+        "Apollo Match", x, y, "POST", "https://api.apollo.io/v1/people/match",
+        [{"name": "X-Api-Key", "value": "={{ $env.APOLLO_API_KEY }}"},
+         {"name": "Content-Type", "value": "application/json"},
+         {"name": "Cache-Control", "value": "no-cache"}],
+        json_body="={{ JSON.stringify($('Build Requests').item.json.apollo_body) }}"))
+    x += 230
+    nodes.append(code_node("ZoomInfo Enrich", ENRICH_ZOOMINFO_CACHED, x, y))
+    x += 230
+    nodes.append(code_node("Normalize + Score", ENRICH_NORMALIZE_SCORE_CLOUD, x, y))
+    x += 230
+    nodes.append(code_node("Merge Winners", ENRICH_MERGE, x, y))
+    x += 230
+    nodes.append(code_node("Decide Action", ENRICH_DECIDE_LOCAL, x, y))
+
+    order = ["Manual Trigger", "Emit Live Identities", "Build Identity", "HubSpot Search",
+             "Adapt Search", "Enrichment Gate", "Build Requests", "Lusha Enrich", "Apollo Match",
+             "ZoomInfo Enrich", "Normalize + Score", "Merge Winners", "Decide Action"]
+
+    nodes.append({
+        "parameters": {"content": (
+            "## LV Enrichment — LOCAL LIVE (headless, real providers)\n"
+            "Real Lusha (GET v2) + Apollo (people/match, reveal) + ZoomInfo (cached GTM "
+            "token) + HubSpot SEARCH — all keyed off `$env` (pass via `docker exec -e`). "
+            "Run: `scripts/n8n_enrichment_live_replica.sh`.\n\n"
+            "**Read-only:** live provider calls + HubSpot search only. NO write nodes — "
+            "Decide Action echoes the would-be payload. Real ICP prospects; none skip."
+        ), "height": 260, "width": 460},
+        "id": nid("s"), "name": "Sticky Note",
+        "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [240, 540]})
+
+    return {
+        "id": "LVenrichmentLive01",
+        "name": "LV Enrichment (local LIVE)",
         "nodes": nodes,
         "connections": chain(order),
         "settings": {},
@@ -1239,8 +1383,12 @@ def main():
     _idc[0] = 0
     er_cloud = ROOT / "n8n" / "wf_enrichment_cloud.json"
     er_cloud.write_text(json.dumps(build_enrichment_cloud(), indent=2) + "\n")
+    _idc[0] = 0
+    er_live = ROOT / "n8n" / "wf_enrichment_local_live.json"
+    er_live.write_text(json.dumps(build_enrichment_local_live(), indent=2) + "\n")
     print(f"wrote {er_local.relative_to(ROOT)}")
     print(f"wrote {er_cloud.relative_to(ROOT)}")
+    print(f"wrote {er_live.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":
