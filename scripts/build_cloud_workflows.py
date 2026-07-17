@@ -590,6 +590,11 @@ return $input.all().map((it) => {
       email,
       domain: row.domain || (email ? email.split("@")[1] : null),
       linkedin_url: row.linkedin_url || null,
+      // Name+company let the providers match when no email is in hand (the common
+      // pre-enrichment case). ZoomInfo/Apollo accept firstName+lastName+companyName.
+      firstName: row.firstname || row.first_name || null,
+      lastName: row.lastname || row.last_name || null,
+      companyName: row.company || row.companyName || null,
     },
   }};
 });
@@ -841,35 +846,45 @@ async function getToken() {
 }
 
 async function enrich(token, payload) {
+  // GTM data API is JSON:API — content-type/accept MUST be application/vnd.api+json.
   return await this.helpers.httpRequest({
     method: "POST", url: ENRICH_URL,
-    headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
+    headers: { Authorization: "Bearer " + token,
+               "Content-Type": "application/vnd.api+json", Accept: "application/vnd.api+json" },
     body: JSON.stringify(payload || {}),
   });
 }
 
-// GTM enrich contract: { matchPersonInput: [ {emailAddress, ...} ], outputFields: [...] }.
-// The input KEY is `emailAddress` (not `email`); `domain`/`linkedin_url` are NOT valid
-// matchPersonInput fields — sending the bare identity_keys 400s (PFAPI0005, /matchPersonInput).
-// outputFields must name every field the normalizer reads (see normalizeProviders.zoominfoCandidates).
+// GTM enrich contract (LIVE-confirmed 200): JSON:API envelope
+//   { data: { type: "ContactEnrich", attributes: { matchPersonInput:[{emailAddress|firstName|lastName|companyName}], outputFields:[...] } } }
+// with Content-Type application/vnd.api+json. Input KEY is `emailAddress` (not `email`);
+// `domain`/`linkedin_url` are NOT valid matchPersonInput fields. Response: { data:[{ attributes:{...},
+// meta:{matchStatus} }] } — matchStatus is in meta (NOT a valid outputField), so it's omitted below.
+// Every outputField here is verified valid for the account (directPhone/hasEmail/hasDirectPhone 400).
 const ZOOM_OUTPUT_FIELDS = [
   "id", "firstName", "lastName", "email", "phone", "mobilePhone", "jobTitle",
-  "managementLevel", "contactAccuracyScore", "matchStatus", "validDate", "lastUpdatedDate",
+  "managementLevel", "contactAccuracyScore", "validDate", "lastUpdatedDate",
 ];
 function toMatchPersonInput(id) {
   const m = {};
   if (id && id.email) m.emailAddress = id.email;   // rename email -> emailAddress
+  if (id && id.firstName) m.firstName = id.firstName;
+  if (id && id.lastName) m.lastName = id.lastName;
   if (id && id.companyName) m.companyName = id.companyName;
   return m;
+}
+// ZoomInfo needs a usable match key: an email, OR first+last name with a company.
+function hasZoomKey(m) {
+  return !!(m.emailAddress || (m.firstName && m.lastName && m.companyName));
 }
 
 const out = [];
 for (const item of $input.all()) {
   const id = item.json.identity_keys || {};
   const person = toMatchPersonInput(id);
-  // No usable match key -> skip the call (empty matchPersonInput is itself a 400).
-  const payload = person.emailAddress
-    ? { matchPersonInput: [person], outputFields: ZOOM_OUTPUT_FIELDS }
+  // No usable match key -> skip the call (empty/keyless matchPersonInput is itself a 400).
+  const payload = hasZoomKey(person)
+    ? { data: { type: "ContactEnrich", attributes: { matchPersonInput: [person], outputFields: ZOOM_OUTPUT_FIELDS } } }
     : null;
   if (!payload) { out.push({ json: { skipped: "no zoominfo match key" } }); continue; }
   let token = await getToken.call(this);
@@ -1058,7 +1073,13 @@ def build_enrichment_cloud():
     # webhook_url and arrives via callback — wired separately, not in this synchronous node.
     apollo = _http_node("Apollo Match", "https://api.apollo.io/v1/people/match", px + 220, y - 80,
                         auth="header",  # credential header, e.g. X-Api-Key: <APOLLO_API_KEY>
-                        json_body="={{ JSON.stringify({ ...$json.identity_keys, reveal_personal_emails: true }) }}")
+                        json_body=("={{ JSON.stringify({ "
+                                   "email: $json.identity_keys.email, "
+                                   "domain: $json.identity_keys.domain, "
+                                   "first_name: $json.identity_keys.firstName, "
+                                   "last_name: $json.identity_keys.lastName, "
+                                   "organization_name: $json.identity_keys.companyName, "
+                                   "reveal_personal_emails: true }) }}"))
     nodes.append(apollo)
     # ZoomInfo: autonomous cached-token enrich. The Code node caches the bearer in workflow
     # static data, re-mints only when missing/near-expiry, and re-mints once + retries on 401.

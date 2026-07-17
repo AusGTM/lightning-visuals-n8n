@@ -15,6 +15,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const { toCandidates } = require(path.join(ROOT, "n8n/code/normalizeProviders.js"));
 const { scoreCandidates } = require(path.join(ROOT, "n8n/code/scoreEnrichment.js"));
 const { decideAction } = require(path.join(ROOT, "n8n/code/enrichmentGate.js"));
+const { normalizePhone } = require(path.join(ROOT, "n8n/code/normalizePhone.js"));
 
 const FIX = path.join(ROOT, "tests/fixtures/enrichment");
 const load = (name) => JSON.parse(fs.readFileSync(path.join(FIX, name), "utf8"));
@@ -27,6 +28,8 @@ const lushaCo = load("lusha_company.json");
 const apolloCo = load("apollo_company.json");
 const zoomCo = load("zoominfo_company.json");
 const apolloLive = load("apollo_live_match.json"); // real people/match: nested under `person`
+const lushaLive = load("lusha_live_person.json"); // real v2 person: nested under contact.data
+const zoomLive = load("zoominfo_live_enrich.json"); // real GTM enrich: data[].attributes + meta.matchStatus
 
 function find(cands, field, source) {
   return cands.find((c) => c.field === field && c.source === source);
@@ -68,13 +71,72 @@ test("toCandidates: Apollo live people/match (nested `person`) maps contact + co
   assert.equal(find(co, "industry", "apollo").normalizedValue, "entertainment");
 });
 
-test("toCandidates: ZoomInfo GTM enrich envelope (data.result[].data[]) unwraps to record", () => {
+test("normalizePhone: region-aware (keyed off provider country)", () => {
+  // Known region -> correct calling code; national trunk/leading-1 handled.
+  assert.equal(normalizePhone("(475) 450-4590", "US"), "+14754504590");
+  assert.equal(normalizePhone("0412 345 678", "AU"), "+61412345678");
+  assert.equal(normalizePhone("020 7946 0018", "GB"), "+442079460018");
+  assert.equal(normalizePhone("021 123 4567", "NZ"), "+64211234567");
+  // Country name (Apollo-style) resolves via ISO2 too (US already carries a 1).
+  assert.equal(normalizePhone("1 (203) 260-8401", "US"), "+12032608401");
+  // E.164 passthrough regardless of region.
+  assert.equal(normalizePhone("+12032608401", "AU"), "+12032608401");
+  // Unknown/absent region -> AU heuristic; non-AU national -> null (caller drops it).
+  assert.equal(normalizePhone("(475) 450-4590", null), null);
+  assert.equal(normalizePhone("0412 345 678", null), "+61412345678");
+  // Length sanity gate rejects garbage.
+  assert.equal(normalizePhone("12345", "US"), null);
+});
+
+test("toCandidates: Lusha US contact -> +1 E.164 via country_iso2; region-less non-AU dropped", () => {
+  const usContact = { contact: { data: {
+    location: { country_iso2: "US" },
+    phoneNumbers: [{ number: "(475) 450-4590", phoneType: "mobile", doNotCall: false }],
+    updateDate: "2026-06-01",
+  } } };
+  const mob = find(toCandidates("lusha", usContact, "contacts"), "mobilephone", "lusha");
+  assert.ok(mob, "US number parsed with country_iso2=US");
+  assert.equal(mob.normalizedValue, "+14754504590");
+  // Same US number but NO country signal -> AU heuristic returns null -> null-drop (no candidate).
+  const noGeo = { contact: { data: {
+    phoneNumbers: [{ number: "(475) 450-4590", phoneType: "mobile", doNotCall: false }],
+  } } };
+  assert.equal(toCandidates("lusha", noGeo, "contacts").filter((c) => c.field === "mobilephone").length, 0);
+});
+
+test("toCandidates: Lusha live v2 (contact.data + emailAddresses/phoneNumbers) maps fields", () => {
+  const c = toCandidates("lusha", lushaLive, "contacts");
+  const email = find(c, "email", "lusha");
+  assert.ok(email, "email candidate present from contact.data.emailAddresses");
+  assert.equal(email.accuracy, 1.0); // A+ work
+  assert.equal(email.normalizedValue, "mjames@australianturfclub.com.au");
+  const mob = find(c, "mobilephone", "lusha");
+  assert.ok(mob, "mobilephone from phoneNumbers[].phoneType=mobile");
+  assert.equal(mob.normalizedValue, "+61412867770");
+  assert.equal(find(c, "jobtitle", "lusha").normalizedValue, "general manager of broadcast");
+
+  const co = toCandidates("lusha", lushaLive, "companies");
+  assert.equal(find(co, "lv_revenue_band", "lusha").normalizedValue, "50-500M"); // 250M lower bound
+  assert.equal(find(co, "lv_employee_band", "lusha").normalizedValue, "201-500");
+  assert.equal(find(co, "lv_country_region_normalized", "lusha").normalizedValue, "AU");
+});
+
+test("toCandidates: ZoomInfo live GTM enrich (data[].attributes + meta.matchStatus)", () => {
+  const c = toCandidates("zoominfo", zoomLive, "contacts");
+  const title = find(c, "jobtitle", "zoominfo");
+  assert.ok(title, "jobtitle from attributes");
+  assert.equal(title.normalizedValue, "general manager, av broadcast");
+  assert.equal(title.accuracy, 0.91); // contactAccuracyScore "91.0" (string) -> 0.91
+  // managementLevel is an array ["Director"] -> first element
+  assert.equal(find(c, "seniority", "zoominfo").normalizedValue, "director");
+  // matchStatus lives in meta; FULL_MATCH must NOT drop fields
+  assert.ok(c.length >= 2);
+});
+
+test("toCandidates: ZoomInfo legacy/flat envelopes still unwrap (back-compat)", () => {
   const enveloped = { data: { result: [{ data: [zoomC] }] } };
-  const c = toCandidates("zoominfo", enveloped, "contacts");
-  assert.equal(find(c, "email", "zoominfo").accuracy, 0.95); // same as flat fixture
-  // simpler { data: [record] } envelope also unwraps
-  const c2 = toCandidates("zoominfo", { data: [zoomC] }, "contacts");
-  assert.ok(find(c2, "email", "zoominfo"));
+  assert.equal(find(toCandidates("zoominfo", enveloped, "contacts"), "email", "zoominfo").accuracy, 0.95);
+  assert.ok(find(toCandidates("zoominfo", { data: [zoomC] }, "contacts"), "email", "zoominfo"));
 });
 
 test("toCandidates: Lusha A+ email -> 1.0; mobile phone -> mobilephone/0.8; doNotCall suppressed", () => {

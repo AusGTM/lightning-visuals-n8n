@@ -13,8 +13,22 @@
 // employee band normalizers are local (mirror src/normalizer.py) — small enough to
 // keep here rather than import a fourth module.
 
-const { normalizePhoneAU } = require("./normalizePhone");
+const { normalizePhoneAU, normalizePhone } = require("./normalizePhone");
 const { normalizeEmailBasic } = require("./normalizeEmail");
+
+// Country NAME -> ISO2 (Apollo returns names like "United States"; Lusha gives country_iso2
+// directly). Unmapped -> undefined, so normalizePhone falls back to its AU heuristic.
+const _COUNTRY_ISO2 = {
+  australia: "AU", "new zealand": "NZ", "united states": "US", "united states of america": "US",
+  canada: "CA", "united kingdom": "GB", "great britain": "GB", england: "GB", ireland: "IE",
+  india: "IN", singapore: "SG",
+};
+function _iso2(nameOrCode) {
+  if (!nameOrCode) return undefined;
+  const v = String(nameOrCode).trim();
+  if (/^[A-Za-z]{2}$/.test(v)) return v.toUpperCase();  // already ISO2
+  return _COUNTRY_ISO2[v.toLowerCase()];
+}
 
 // ---- local value normalizers (mirror src/normalizer.py band logic) ----------
 // Parse a revenue value (number OR range string like "10M-25M") to lower-bound
@@ -98,9 +112,12 @@ function apolloEmailAccuracy(raw) {
 
 const LUSHA_EMAIL_CONF = { "A+": 1.0, A: 0.8 };
 function lushaEmailAccuracy(e) {
-  let a = LUSHA_EMAIL_CONF[e.confidence];
+  // Live v2 email item uses emailConfidence/emailType; flat fixtures use confidence/type.
+  const conf = e.confidence != null ? e.confidence : e.emailConfidence;
+  const type = e.type != null ? e.type : e.emailType;
+  let a = LUSHA_EMAIL_CONF[conf];
   if (a === null || a === undefined) a = 0.4; // null/unknown grade
-  if (e.type && String(e.type).toLowerCase() !== "work") a *= 0.8; // private/personal
+  if (type && String(type).toLowerCase() !== "work") a *= 0.8; // private/personal
   return _clamp01(a);
 }
 
@@ -110,32 +127,45 @@ function _push(out, field, source, value, normalizedValue, accuracy, recencyDate
   out.push({ field, source, value, normalizedValue, accuracy: _clamp01(accuracy), recencyDate: recencyDate || null });
 }
 
-function lushaCandidates(raw, objectType) {
+function lushaCandidates(rawResponse, objectType) {
   const out = [];
   const src = "lusha";
+  // Live v2 person nests the record under contact.data; flat fixtures pass through.
+  const raw = (rawResponse && rawResponse.contact && rawResponse.contact.data) || rawResponse || {};
+  const updated = raw.updateDate;
+  const region = raw.location && (raw.location.country_iso2 || raw.location.country); // ISO2 or name
   if (objectType === "contacts") {
-    for (const e of raw.emails || []) {
-      _push(out, "email", src, e.email, normalizeEmailBasic(e.email), lushaEmailAccuracy(e), e.updateDate);
+    // Live: emailAddresses/phoneNumbers with emailType/phoneType; fixtures: emails/phones with type.
+    for (const e of raw.emailAddresses || raw.emails || []) {
+      _push(out, "email", src, e.email, normalizeEmailBasic(e.email), lushaEmailAccuracy(e), e.updateDate || updated);
     }
-    for (const p of raw.phones || []) {
+    for (const p of raw.phoneNumbers || raw.phones || []) {
       if (p.doNotCall) continue; // suppress (not just downscore) per §2
-      const t = String(p.type || "").toLowerCase();
+      const norm = normalizePhone(p.number, _iso2(region));
+      if (!norm) continue; // null-drop: un-normalizable phone never reaches HubSpot
+      const t = String(p.phoneType || p.type || "").toLowerCase();
       const acc = t === "mobile" || t === "direct" ? 0.8 : 0.5;
       const field = t === "mobile" ? "mobilephone" : "phone";
-      _push(out, field, src, p.number, normalizePhoneAU(p.number), acc, p.updateDate);
+      _push(out, field, src, p.number, norm, acc, p.updateDate || updated);
     }
     if (raw.jobTitle) {
       // No per-field grade for Lusha title -> ungraded base 0.6.
-      _push(out, "jobtitle", src, raw.jobTitle.title, _norm(raw.jobTitle.title), 0.6, raw.updateDate);
-      _push(out, "seniority", src, raw.jobTitle.seniority, _norm(raw.jobTitle.seniority), 0.6, raw.updateDate);
+      _push(out, "jobtitle", src, raw.jobTitle.title, _norm(raw.jobTitle.title), 0.6, updated);
+      _push(out, "seniority", src, raw.jobTitle.seniority, _norm(raw.jobTitle.seniority), 0.6, updated);
     }
   } else {
-    // company firmographics — no per-field grade -> base 0.6.
-    _push(out, "lv_revenue_band", src, raw.revenueRange, normalizeRevenueBand(raw.revenueRange), 0.6, raw.updateDate);
-    _push(out, "lv_employee_band", src, raw.employeeCount, normalizeEmployeeBand(raw.employeeCount), 0.6, raw.updateDate);
-    const naics = (raw.naicsCodes || [])[0];
-    _push(out, "industry", src, naics, naics ? String(naics) : null, 0.6, raw.updateDate);
-    _push(out, "lv_country_region_normalized", src, raw.countryIso2, normalizeCountryRegion(raw.countryIso2), 0.6, raw.updateDate);
+    // company firmographics — no per-field grade -> base 0.6. Live nests under `company`
+    // with array revenueRange/companySize [lo,hi] and location.countryIso2; fixtures are flat.
+    const co = raw.company || raw;
+    const rev = Array.isArray(co.revenueRange) ? co.revenueRange[0] : co.revenueRange;
+    _push(out, "lv_revenue_band", src, rev, normalizeRevenueBand(rev), 0.6, updated);
+    const emp = Array.isArray(co.companySize)
+      ? co.companySize[co.companySize.length - 1] : (co.companySize != null ? co.companySize : co.employeeCount);
+    _push(out, "lv_employee_band", src, emp, normalizeEmployeeBand(emp), 0.6, updated);
+    const naics = (co.naicsCodes || [])[0];
+    _push(out, "industry", src, naics || co.mainIndustry, naics ? String(naics) : _norm(co.mainIndustry), 0.6, updated);
+    const country = (co.location && co.location.countryIso2) || co.countryIso2;
+    _push(out, "lv_country_region_normalized", src, country, normalizeCountryRegion(country), 0.6, updated);
   }
   return out;
 }
@@ -149,13 +179,16 @@ function apolloCandidates(raw, objectType) {
   const updated = person.updated_at || raw.updated_at;
   if (objectType === "contacts") {
     _push(out, "email", src, person.email, normalizeEmailBasic(person.email), apolloEmailAccuracy(person), updated);
+    const region = _iso2(person.country || (person.organization && person.organization.country));
     for (const p of person.phone_numbers || []) {
       if (p.dnc_status || p.doNotCall) continue; // suppress
+      const norm = normalizePhone(p.sanitized_number, region);
+      if (!norm) continue; // null-drop: un-normalizable phone never reaches HubSpot
       const status = p.status || p.status_cd;
       const acc = status === "valid_number" ? 1.0 : 0.5;
       const t = String(p.type || "").toLowerCase();
       const field = t === "mobile" ? "mobilephone" : "phone";
-      _push(out, field, src, p.sanitized_number, normalizePhoneAU(p.sanitized_number), acc, updated);
+      _push(out, field, src, p.sanitized_number, norm, acc, updated);
     }
     _push(out, "jobtitle", src, person.title, _norm(person.title), 0.6, updated);
     _push(out, "seniority", src, person.seniority, _norm(person.seniority), 0.6, updated);
@@ -171,12 +204,19 @@ function apolloCandidates(raw, objectType) {
   return out;
 }
 
-// Unwrap the GTM enrich response envelope to the first contact/company record.
-// ponytail: envelope paths inferred from the ZoomInfo GTM enrich contract, NOT yet
-// confirmed against a live 200 (the dry-run 400'd on request shape). If a real enrich
-// response nests differently, adjust here — flat objects (fixtures) pass straight through.
+// Unwrap the GTM enrich response envelope to a flat contact record.
+// Live GTM (confirmed 200): { data: [ { attributes:{...fields}, meta:{matchStatus}, id } ] }
+// (JSON:API). We flatten attributes and lift matchStatus/id up. Older/flat fixture
+// envelopes ({data:[rec]}, {data:{result:[{data:[rec]}]}}, flat) still pass through.
 function _zoomRecord(raw) {
-  if (!raw || typeof raw !== "object") return raw;
+  if (!raw || typeof raw !== "object") return raw || {};
+  let rec = raw;
+  if (Array.isArray(raw.data)) rec = raw.data[0] || {};
+  else if (raw.data && typeof raw.data === "object" && raw.data.attributes) rec = raw.data;
+  if (rec && rec.attributes) {
+    return { ...rec.attributes, id: rec.id,
+      matchStatus: (rec.meta && rec.meta.matchStatus) || rec.attributes.matchStatus };
+  }
   const r = raw.data != null ? raw.data : raw;
   if (Array.isArray(r)) return r[0] || {};
   if (r && Array.isArray(r.result)) {
@@ -196,13 +236,24 @@ function zoominfoCandidates(rawResponse, objectType) {
     const fullMatch = raw.matchStatus === "FULL_MATCH" || raw.matchStatus === undefined;
     // matchStatus != FULL_MATCH drops person fields entirely (§2).
     if (!fullMatch) return out;
-    const acc = typeof raw.contactAccuracyScore === "number" ? raw.contactAccuracyScore / 100 : 0.6;
+    // Live contactAccuracyScore is a STRING ("91.0"); coerce before the /100.
+    const scoreNum = Number(raw.contactAccuracyScore);
+    const acc = Number.isFinite(scoreNum) && raw.contactAccuracyScore !== "" && raw.contactAccuracyScore != null
+      ? scoreNum / 100 : 0.6;
     _push(out, "email", src, raw.email, normalizeEmailBasic(raw.email), acc, recency);
     // Phones: structural 0.8 (no per-field grade) per §2 "mobilePhone present=0.8".
-    _push(out, "phone", src, raw.phone, normalizePhoneAU(raw.phone), 0.8, recency);
-    _push(out, "mobilephone", src, raw.mobilePhone, normalizePhoneAU(raw.mobilePhone), 0.8, recency);
+    // ZoomInfo GTM enrich returns no country field, so region falls back to the AU
+    // heuristic; E.164 numbers pass through, non-AU national is null-dropped (safe).
+    // (Add a verified `country` outputField later to parse non-AU ZoomInfo nationals.)
+    const region = _iso2(raw.country);
+    const phone = normalizePhone(raw.phone, region);
+    if (phone) _push(out, "phone", src, raw.phone, phone, 0.8, recency);
+    const mobile = normalizePhone(raw.mobilePhone, region);
+    if (mobile) _push(out, "mobilephone", src, raw.mobilePhone, mobile, 0.8, recency);
     _push(out, "jobtitle", src, raw.jobTitle, _norm(raw.jobTitle), acc, recency);
-    _push(out, "seniority", src, raw.managementLevel, _norm(raw.managementLevel), acc, recency);
+    // managementLevel is an array (["Director"]) in the live GTM response; take the first.
+    const ml = Array.isArray(raw.managementLevel) ? raw.managementLevel[0] : raw.managementLevel;
+    _push(out, "seniority", src, ml, _norm(ml), acc, recency);
   } else {
     _push(out, "lv_revenue_band", src, raw.revenue != null ? raw.revenue : raw.revenueRange,
       normalizeRevenueBand(raw.revenue != null ? raw.revenue : raw.revenueRange), 0.6, recency);

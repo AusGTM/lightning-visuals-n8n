@@ -1,0 +1,24 @@
+{
+  "data": [
+    {
+      "attributes": {
+        "company": { "id": 345601557 },
+        "contactAccuracyScore": "91.0",
+        "directPhoneDoNotCall": false,
+        "firstName": "Michael",
+        "jobTitle": "General Manager, AV Broadcast",
+        "lastName": "James",
+        "lastUpdatedDate": "2026-05-01T12:04:00Z",
+        "managementLevel": ["Director"],
+        "mobilePhoneDoNotCall": false,
+        "validDate": "2026-04-29T12:59:00Z"
+      },
+      "id": "9703587928",
+      "meta": {
+        "input": { "emailAddress": "mjames@australianturfclub.com.au" },
+        "matchStatus": "FULL_MATCH"
+      },
+      "type": "Contact"
+    }
+  ]
+}
