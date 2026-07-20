@@ -92,7 +92,10 @@ string literal would make it unreadable and undiffable for zero safety gain.
   (constraint 5). `taxonomy.yaml`'s `score:` field mirrors them for the TX-1 assertion; it
   is not a second source.
 
-The one thing missing is a guard that the *generated* file is current — added in Task 2.
+Two distinct residual risks, closed separately: drift between `taxonomy.yaml` and the
+hand-written `icp_scoring.yaml` / `field_policy.yaml` is closed by the pre-existing
+TX-1/TX-2/TX-3 conformance tests; staleness of the *generated* JS artifact is closed by
+the new currency test in Task 2.
 
 ### D4 — Only the NM-* xfail markers come off
 
@@ -218,7 +221,7 @@ is the one artifact proven current by test.
 - Running the generator twice is a no-op (deterministic ordering; no timestamps in the
   output — a timestamp would make the currency test fail on every run).
 - Adding a temporary org_type to `config/taxonomy.yaml` makes the currency test FAIL until
-  regeneration. Prove this manually, then revert.
+  regeneration (scripted below — the guard is worthless if never seen to fail).
 - `python scripts/build_cloud_workflows.py` regenerates the JS before inlining.
 
 **Verify:**
@@ -227,6 +230,26 @@ is the one artifact proven current by test.
 .venv/bin/python scripts/gen_taxonomy_js.py && node --check n8n/code/taxonomy.generated.js
 .venv/bin/pytest tests/test_taxonomy_conformance.py -q
 git diff --exit-code n8n/code/taxonomy.generated.js   # regeneration is a no-op
+
+# TX-3 parity: the generated gated set is exactly what field_policy gates
+node -e 'const t=require("./n8n/code/taxonomy.generated.js");
+const got=[...t.EVIDENCE_GATED_ORG_TYPES].sort().join(",");
+const want=["content_producer","gambling_operator","governing_body_league","hardware_vendor"].join(",");
+if(got!==want){console.error("EVIDENCE_GATED_ORG_TYPES mismatch\n got: "+got+"\nwant: "+want);process.exit(1)}
+console.log("EVIDENCE_GATED_ORG_TYPES OK")'
+
+# Currency guard actually fires. Backup/restore by file copy, NOT git checkout --,
+# so this is safe regardless of working-tree state and can never discard real edits.
+cp config/taxonomy.yaml /tmp/taxonomy.bak
+trap 'cp /tmp/taxonomy.bak config/taxonomy.yaml' EXIT
+printf '\n  esports_organiser:\n    score: 0\n    requires_evidence: false\n    synonyms: []\n' \
+  >> config/taxonomy.yaml
+if .venv/bin/pytest tests/test_taxonomy_conformance.py -q -k currency 2>/dev/null; then
+  echo "FAIL: currency test passed with a stale generated file" >&2; exit 1
+fi
+echo "currency guard fires as expected"
+cp /tmp/taxonomy.bak config/taxonomy.yaml; trap - EXIT
+git diff --exit-code config/taxonomy.yaml   # proves the revert landed
 ```
 
 ---
@@ -282,6 +305,9 @@ contacts-branch node must be byte-identical.
 ```bash
 .venv/bin/python scripts/build_cloud_workflows.py
 .venv/bin/pytest tests/test_taxonomy_conformance.py -q
+# no literal org_type values may remain in the module
+test "$(grep -c 'governing_body_league' n8n/code/mergeCompanies.js)" -eq 0 \
+  || { echo "FAIL: hand-typed org_type literal still present" >&2; exit 1; }
 node --test tests/n8n/
 
 .venv/bin/python - <<'PY'
@@ -350,7 +376,8 @@ every case.
 
 - `node --test tests/n8n/parity.test.mjs` passes, including the new NM-6 test.
 - Deliberately breaking parity (e.g. changing the JS regex to `\W`) makes the NM-6 test
-  fail, naming the divergent case. Prove this manually, then revert.
+  fail, naming the divergent case (scripted in Verify — a parity guard never seen to
+  fail is not a guard).
 - The parity fixture is read by both sides; no case list is duplicated in either language.
 - `node --check n8n/code/taxonomy.js` passes.
 
@@ -359,6 +386,17 @@ every case.
 ```bash
 node --check n8n/code/taxonomy.js
 node --test tests/n8n/
+
+# NM-6 parity guard actually fires. File-copy backup/restore, never git checkout --.
+cp n8n/code/taxonomy.js /tmp/taxonomy_js.bak
+trap 'cp /tmp/taxonomy_js.bak n8n/code/taxonomy.js' EXIT
+sed -i '' 's/\[^a-z0-9\]+/\\W+/' n8n/code/taxonomy.js   # break the normalization regex
+if node --test tests/n8n/taxonomyParity.test.mjs 2>/dev/null; then
+  echo "FAIL: parity test passed with a deliberately divergent JS normalizer" >&2; exit 1
+fi
+echo "NM-6 parity guard fires as expected"
+cp /tmp/taxonomy_js.bak n8n/code/taxonomy.js; trap - EXIT
+git diff --exit-code n8n/code/taxonomy.js 2>/dev/null || true   # untracked until committed
 ```
 
 ---
@@ -374,6 +412,12 @@ for f in n8n/code/*.js; do node --check "$f" || exit 1; done
 ```
 
 ## Success criteria (ROADMAP Phase 12)
+
+> **Deferral note.** ROADMAP criterion 1 lists the **research prompt** among the artifacts
+> deriving from the taxonomy. That clause is NOT met by this phase and is not a gap: the
+> research prompt does not exist until Phase 13, which consumes `ALLOWED_ORG_TYPES` from
+> `src/taxonomy.py` built here. Recorded so a later audit does not read criterion 1 as
+> silently unmet.
 
 1. `config/taxonomy.yaml` is the only hand-edited vocabulary — Tasks 1–4; scoring config
    and field policy remain hand-written but drift-guarded by TX-1/2/3 per D3, and the one
