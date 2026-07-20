@@ -21,6 +21,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CODE = ROOT / "n8n" / "code"
 
+# Regenerate the taxonomy data module FIRST — before any inline() call below reads
+# n8n/code/taxonomy.generated.js — so this builder can never emit a workflow carrying
+# a stale vocabulary (spec TX-4/AR-4). gen_taxonomy_js.py is a sibling script; running
+# this file directly (`python scripts/build_cloud_workflows.py`) puts scripts/ on
+# sys.path[0], so the plain import resolves.
+import gen_taxonomy_js  # noqa: E402
+
+(CODE / "taxonomy.generated.js").write_text(gen_taxonomy_js.render())
+
 # ---- module inliner ---------------------------------------------------------
 
 _REQUIRE_RE = re.compile(r"^\s*const\s*\{[^}]*\}\s*=\s*require\(")

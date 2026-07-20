@@ -6,12 +6,14 @@ which is the failure mode that otherwise shows up as a silent 0 score (`.get(org
 or a HubSpot 400 at the very end of the pipeline.
 """
 import re
+import sys
 from pathlib import Path
 
 import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "scripts"))
 
 
 def _load(name):
@@ -82,6 +84,22 @@ def test_tx4_mergecompanies_has_no_handmaintained_enum():
     assert not hand_typed, (
         "mergeCompanies.js contains a hand-maintained require_evidence_url_for list. "
         "Generate it from config/taxonomy.yaml at build time (spec TX-4)."
+    )
+
+
+# --- TX-4 companion: generated JS artifact currency --------------------------
+def test_taxonomy_generated_js_currency():
+    """The Code-node vocabulary literal (n8n cannot read config/taxonomy.yaml at
+    runtime, spec AR-4) must be exactly what the generator would emit right now.
+    A stale checked-in file after a taxonomy.yaml edit is the drift TX-4 exists to
+    catch; this is what proves the generated artifact -- the one representation
+    that can't self-verify at runtime -- is never silently out of date."""
+    import gen_taxonomy_js
+
+    checked_in = (ROOT / "n8n" / "code" / "taxonomy.generated.js").read_text()
+    assert gen_taxonomy_js.render() == checked_in, (
+        "n8n/code/taxonomy.generated.js is stale. Regenerate with: "
+        ".venv/bin/python scripts/gen_taxonomy_js.py"
     )
 
 
