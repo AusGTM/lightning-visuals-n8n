@@ -32,6 +32,39 @@ Web research fills this gap and does double duty on entity resolution (§5).
 
 ---
 
+## 0.5. Runtime & deployment constraint
+
+**The deliverable is n8n workflow JSON, deployed to n8n Cloud. No custom middleware is
+deployed to an IaaS.** This was understood but unwritten; recording it because several
+requirements below name Python modules and could otherwise be read as implying a deployed
+Python service.
+
+**AR-1.** Every runtime code path MUST execute inside n8n — Code nodes, HTTP Request nodes,
+and native n8n nodes. No workflow may depend on a service this project deploys and hosts.
+
+**AR-2.** Outbound HTTP from a workflow is limited to third-party APIs we consume:
+HubSpot, Lusha, Apollo, ZoomInfo, Anthropic, and the email verifier. Any other host is
+middleware creep and fails the AR-2 guard test.
+
+**AR-3.** `src/*.py` is a **development oracle**, not a deployment artifact. It exists to
+(a) run the local dry-run harness, (b) hold the reference implementation that the JS in
+Code nodes is proven equal to (NM-6 parity), and (c) generate node content at build time.
+None of it runs in production.
+
+**AR-4.** n8n Code nodes cannot read files (no `fs`, no `require` of project paths at
+runtime). Anything a node needs MUST be inlined at build time by
+`scripts/build_cloud_workflows.py`. This is why the taxonomy is generated into a JS literal
+rather than read from YAML — see §2.
+
+> **Known deviation (2026-07-20).** Two Milestone-2 workflows still encode the superseded
+> middleware pattern: `n8n/wf_upload_ingest.json` and `n8n/wf_weekly_sweep.json` consist
+> only of a trigger plus `POST http://host.docker.internal:8088/{ingest,sweep}` against the
+> FastAPI service in `src/service.py`. They are superseded by `wf_contact_ingest_*.json`,
+> which are fully n8n-native. They are excluded from the AR-2 guard by name and MUST NOT be
+> deployed to n8n Cloud. Retire or delete them before production rollout.
+
+---
+
 ## 1. Resolution order
 
 Established over the preceding design discussion. Each stage only runs when the prior
