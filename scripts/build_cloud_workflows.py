@@ -1290,7 +1290,7 @@ return rows.map((it, i) => {
 });
 """
 
-ENRICH_MERGE_CO = inline("mergeCompanies.js") + r"""
+ENRICH_MERGE_CO = inline("taxonomy.generated.js", "mergeCompanies.js") + r"""
 
 // --- n8n wrapper: mergeCompanies(existingRecord, winners) non-clobber ---
 // lv_org_type / lv_produces_content are NOT in this candidate set: providers do not carry

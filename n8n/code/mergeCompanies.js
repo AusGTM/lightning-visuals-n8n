@@ -15,7 +15,13 @@
 // HubSpot is the write gate's call (ALLOW_CANONICAL_WRITES, CLAUDE.md §18.5/§29) — that
 // is deliberately NOT duplicated here.
 
+const { EVIDENCE_GATED_ORG_TYPES } = require("./taxonomy.generated");
+
 // Default companies field policy (source of truth: config/field_policy.yaml `companies`).
+// lv_org_type's gated set is NOT hand-typed here (spec TX-4) — it derives from
+// config/taxonomy.yaml org_types.*.requires_evidence via the generated taxonomy module,
+// so adding/removing an evidence-gated org_type is a taxonomy.yaml + rebuild, not a
+// second hand edit here.
 const DEFAULT_COMPANY_POLICY = {
   domain:                  { class: "manual_protected",  min_confidence: 95 },
   industry:                { class: "stale_refreshable", min_confidence: 75 },
@@ -24,8 +30,7 @@ const DEFAULT_COMPANY_POLICY = {
   lv_revenue_band:         { class: "system_owned",      min_confidence: 75 },
   lv_employee_band:        { class: "system_owned",      min_confidence: 70 },
   lv_org_type:             { class: "system_owned",      min_confidence: 80,
-                             require_evidence_url_for: ["governing_body_league", "content_producer",
-                                                        "hardware_vendor", "gambling_operator"] },
+                             require_evidence_url_for: EVIDENCE_GATED_ORG_TYPES },
   lv_produces_content:     { class: "system_owned",      min_confidence: 85,
                              require_evidence_url: true },
   lv_content_type:         { class: "system_owned",      min_confidence: 75 },
