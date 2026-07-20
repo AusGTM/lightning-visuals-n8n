@@ -1,20 +1,20 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.1
-milestone_name: milestone
-current_phase: 10
-current_phase_name: n8n Template & Local Server Replica
-status: complete
-stopped_at: Completed phase-10/PLAN.md — FastAPI decision service (/health /ingest /sweep wrapping run_contact_ingest + dedupe_sweep) + two n8n v2.4.4 workflow templates + scripted local-Docker-n8n replica proof; 83 tests green offline (78 baseline + 5 new), replica script PASS exit 0, zero live HubSpot writes
-last_updated: "2026-07-08T00:00:00.000Z"
-last_activity: 2026-07-08
-last_activity_desc: "Phase 10 executed (Milestone 2 FINAL): thin FastAPI decision service reusing ingest+sweep with hard dry_run + stubbed HubSpot + allow_create off; two importable n8n workflows (upload-ingest manualTrigger, weekly sweep schedule+manual); scripts/n8n_replica_test.sh imports+executes both on the running Docker n8n producing dry-run PATCH (ingest) and duplicate/mangled findings (sweep). 83 tests green offline."
+milestone: v0.3
+milestone_name: Company Enrichment & ICP Research
+current_phase: 12
+current_phase_name: Taxonomy Single-Source
+status: planning
+stopped_at: "Milestone 3 opened. Phase 11 (Company Branch & Provider Contract Hardening) recorded retroactively as COMPLETE — executed outside GSD 2026-07-08..2026-07-20. Next: /gsd-plan-phase 12."
+last_updated: "2026-07-20T00:00:00.000Z"
+last_activity: 2026-07-20
+last_activity_desc: "Milestone 3 opened and .planning/ reconciled after 12 days of untracked work. Phase 11 shipped: company enrichment sibling branch in n8n (read-only, 3 live providers), mergeCompanies.js non-clobber merge with domain hard-guard + evidence-URL gate, ZoomInfo GTM companies contract probed live (27 valid outputFields; companyType 400), three live-shape/unit defects fixed incl. a 1000x revenue-band error that inverted the ICP signal, cross-provider size-conflict detector, config/taxonomy.yaml + docs/WEB-RESEARCH-SPEC.md (30 numbered requirements) + two test suites. 45 JS + 100 Python green, 20 xfailed, 1 intentional red (TX-4)."
 progress:
-  total_phases: 10
-  completed_phases: 10
-  total_plans: 10
-  completed_plans: 10
-  percent: 100
+  total_phases: 15
+  completed_phases: 11
+  total_plans: 11
+  completed_plans: 11
+  percent: 73
 ---
 
 # Project State
@@ -24,16 +24,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-07)
 
 **Core value:** The ICP scoring engine turns firmographic + enrichment signals into trustworthy, auditable A/B/C/D prioritization (with hard vetoes) and never clobbers HubSpot data — proven in dry-run locally.
-**Current focus:** Milestone 2 — contact ingestion (HubSpot + file uploads), identity/dedupe resolution, gated net-new create, and an n8n local-server replica. Phases 5–10.
+**Current focus:** Milestone 3 — company enrichment via live provider waterfall, plus the web-research retrieval layer that resolves the two ICP fields providers cannot supply. Phases 11–15.
 
 ## Current Position
 
-Phase: 10 of 10 (n8n Template & Local Server Replica) — COMPLETE
-Plan: 1 of 1 (phase-10-01) — COMPLETE
-Status: Milestone 2 COMPLETE — contact ingestion + dedupe sweep now run as an n8n workflow on the local Docker n8n replica via a thin FastAPI decision service, all dry-run
+Phase: 12 of 15 (Taxonomy Single-Source) — NOT STARTED
+Plan: none yet — run `/gsd-plan-phase 12`
+Status: Milestone 3 in progress — Phase 11 complete (company enrichment branch + provider contract hardening + web-research spec)
 Last activity: 2026-07-08 — Phase 10 executed: FastAPI /health /ingest /sweep wrapping run_contact_ingest + dedupe_sweep; two n8n v2.4.4 workflow templates; scripts/n8n_replica_test.sh proves import+execute on the running n8n container (ingest dry-run PATCH, sweep duplicate/mangled). 83 tests green offline, replica PASS exit 0, zero live writes.
 
-Progress: [██████████] 100%
+Progress: [███████▒▒▒] 73% (11/15 phases)
 
 ## Performance Metrics
 
@@ -69,13 +69,20 @@ Decisions are logged in PROJECT.md Key Decisions table. SPEC-level architectural
 - MVP canonical writes limited to `lv_icp_*`; firmographics staged, manual fields never touched.
 - LLM cascade Haiku → Sonnet 5 → human; non-clobber merge with field-ownership classes.
 - [Phase ?]: Phase 9: dedupe_sweep compares NORMALIZED keys (normalize-before-compare); SweepReport findings are plain JSON dicts for Phase-10 transport
+- Phase 11: companies is a SIBLING branch, not nested under contacts (ICP fields are per-domain; nesting re-pays per contact). `mergeCompanies.js` kept separate from `mergeContacts.js` for zero regression risk. NO entity-resolution/hierarchy modelling — granularity only corrupts SIZE signals; provider disagreement already detects it. Name-mismatch detection evaluated and REJECTED (blind to the identical-name case). Resolution order is deterministic → retrieval → judgement; a judge without retrieval is least reliable exactly where the ICP lives.
 - Phase 10: n8n replica uses a THIN FastAPI wrapper (no JS logic dup); dry_run hard-True + stubbed HubSpot + allow_create off = structurally no live write. `n8n execute --id` (v2.4.4) rejects schedule-only workflows (needs a manual/execute-workflow start node) and needs a non-colliding task-broker port (5699) when run inside the container.
 
 ### Pending Todos
 
-None yet.
+- **TX-4 red (intentional)**: `mergeCompanies.js:27` holds a hand-typed evidence-gated org_type list. Drift guard catches it. Phase 12 retires it.
 
 ### Blockers/Concerns
+
+- **`lv_icp_fit_score` is `calculated: true` / `readOnlyValue: true`** in portal 22617666 — the pipeline CANNOT write it, contradicting CLAUDE.md §29. Needs a product decision: is the HubSpot formula the source of truth, or does the property convert (destroying the formula)?
+- **`lv_icp_tier` options are `A,B,C,D` only**, but the scorer also emits `Unscored` and `Needs Review` — writing those fails today. Live bug, predates Milestone 3.
+- **`lv_org_type` is `string/text`, not an enumeration** — no CRM-level guard; the normalizer is the only barrier against a hallucinated value.
+- **RT-5 blocked**: research caching needs `*_verified_at` / `lv_icp_scored_at`; ZERO metadata properties exist in the portal. Until Phase 15, every run re-researches every company.
+- **12 days of untracked work (2026-07-08 → 2026-07-20)** happened outside GSD. Phase 11 reconciles it; not retrofitted as synthetic phases.
 
 - **REQ-signoff-gate**: point weights are illustrative pending Alex's JTBD 2 sign-off. Does not block Milestone 1 (config-driven), but gates the production weighted rubric.
 - **HubSpot on Starter** ($35); Pro tier required before any writeback/n8n milestone.
@@ -94,6 +101,7 @@ Items carried forward to later milestones:
 
 ## Session Continuity
 
-Last session: 2026-07-08T00:00:00.000Z
-Stopped at: Completed phase-10/PLAN.md — n8n local replica (FastAPI decision service + 2 workflow templates + replica proof script); 83 tests green offline, replica PASS exit 0, zero live writes. Milestone 2 COMPLETE.
+Last session: 2026-07-20T00:00:00.000Z
+Stopped at: Milestone 3 opened; Phase 11 recorded retroactively as COMPLETE. Uncommitted working tree holds the Phase 11 code (6 new files, 8 modified) — review and commit before Phase 12.
 Resume file: None
+Next command: `/gsd-plan-phase 12`

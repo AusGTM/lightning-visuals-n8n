@@ -30,7 +30,15 @@ Full detail and traceability live in `.planning/REQUIREMENTS.md`.
 
 (None yet — ship Milestone 1 to validate.)
 
-### Active (Milestone 1 — Local-First MVP)
+### Active (Milestone 3 — Company Enrichment & ICP Research)
+
+- [x] Company enrichment as a sibling n8n branch, live provider waterfall, read-only (REQ-company-branch, REQ-company-merge, REQ-provider-contracts, REQ-conflict-withhold)
+- [ ] Taxonomy single-source so org/content types extend without drift (REQ-taxonomy-single-source, REQ-enum-normalization)
+- [ ] Web-research retrieval for the two provider-unresolvable ICP fields (REQ-web-retrieval, REQ-evidence-by-field, REQ-tristate-content)
+- [ ] Evidence-before-judgement escalation (REQ-evidence-before-judgement)
+- [ ] HubSpot metadata property migration, checkpointed (REQ-property-migration)
+
+### Shipped (Milestone 1 — Local-First MVP)
 
 - [ ] Config-driven ICP scoring: score, tier (A/B/C/D), anti-ICP vetoes, graduated deductions (REQ-icp-scoring-model, REQ-anti-icp-vetoes, REQ-graduated-deductions, REQ-tiering)
 - [ ] Governing-body-first targeting encoded in the rubric and demonstrated by tests (REQ-org-type-targeting)
@@ -83,13 +91,22 @@ Full detail and traceability live in `.planning/REQUIREMENTS.md`.
 | **(M2)** Identity match: auto only on email/LinkedIn; no-email never auto-creates; ambiguous → review | Matching is the real risk; conservative default prevents duplicate-contact explosion in HubSpot | — Pending |
 | **(M2)** Net-new + valid email → auto-create, gated (`ALLOW_CONTACT_CREATE`, dry-run first, re-check-by-email guard) | User-chosen; safe because create is flag-gated, dry-run-default, and dedupe-guarded | — Pending |
 | **(M2)** Weekly n8n scheduler sweep flags duplicate/mangled contacts as needs_review | Catches dupes and bad data that slipped past ingestion; matches CLAUDE.md §13.4 Workflow D | — Pending |
+| **(M3)** Companies is a SIBLING branch, not nested under contacts | ICP fields are per-domain and expensive; nesting re-pays for every contact at the same company, and the two gates have different REQUIRED sets, TTLs and triggers | ✅ Shipped 2026-07-20 |
+| **(M3)** No entity-resolution / corporate-hierarchy modelling | Wrong granularity only corrupts SIZE signals — org_type, produces_content, hardware/gambling and geography are brand-level and inherit down. Cross-provider size disagreement already detects it, free | ✅ Shipped 2026-07-20 |
+| **(M3)** Name-mismatch detection rejected | Blind to the identical-name case that actually costs (ZoomInfo returns "Harvey Norman" for a store); its only true positive is already caught by the conflict detector | ✅ Evaluated + rejected |
+| **(M3)** Resolution order: deterministic → retrieval → judgement | An LLM judging from parametric recall is least reliable exactly where the ICP lives — it knows Harvey Norman and FanDuel (already vetoed) and confabulates on obscure ANZ clubs (where it matters) | — Pending |
+| **(M3)** `lv_produces_content` tri-state; `false` only on positive evidence of absence | `false` fires a hard veto and permanently disqualifies. A failed search is not evidence of absence, and thin-web-presence ANZ clubs are the ICP core. No blanket human gate — the queue self-targets by score | — Pending |
+| **(M3)** `config/taxonomy.yaml` as single source; node literals generated at build time | n8n Code nodes cannot read files, so values must be literals — but generated ones. Hand-editing a node yields a silent 0-score and a HubSpot 400 | — Pending |
 
 ## Risks & Open Items
 
 - **Point weights are illustrative pending JTBD 2 sign-off** (REQ-signoff-gate). Alex must approve best-fit (governing-bodies-first) and anti-ICP (clubs-direct / non-AU / no-content) before the weighted production rubric is built. The MVP is deliberately config-driven so this can happen without code changes.
 - **Pixel intent scoring** (REQ-intent-scoring) is in the PRD but not in the SPEC's `icp_scoring.yaml` — carry as an open item for the JTBD 2 rubric build, not a Milestone-1 deliverable.
 - **HubSpot is on Starter ($35) today; Pro tier is required** for production scoring/workflows. Blocks the writeback and n8n milestones, not Milestone 1.
+- **(M3) `lv_icp_fit_score` is a HubSpot calculated property** (`readOnlyValue: true`) — the pipeline cannot write it, contradicting CLAUDE.md §29. Product decision needed: is the HubSpot formula the source of truth, or does the property convert (destroying the formula)?
+- **(M3) `lv_icp_tier` accepts only `A,B,C,D`** but the scorer also emits `Unscored` / `Needs Review` — those writes fail today.
+- **(M3) Research caching is blocked** until metadata properties exist; every run currently re-researches every company.
 - **Enrich-first reality**: org type verified for only 66 of 712 CRM companies; `closed_lost_reason` is 0% filled. Anti-ICP is currently inferred from firmographics; discovery calls now supply real reasons (price #1, cloud-fear #2).
 
 ---
-*Last updated: 2026-07-07 after ingest-driven project initialization*
+*Last updated: 2026-07-20 — Milestone 3 opened; .planning/ reconciled after 12 days of untracked work*

@@ -88,3 +88,55 @@ Explicitly excluded from the current roadmap.
 ---
 *Requirements defined: 2026-07-07*
 *Last updated: 2026-07-07 after ingest-driven project initialization*
+
+---
+
+## v3 Requirements (Milestone 3 — Company Enrichment & ICP Research)
+
+**Defined:** 2026-07-20
+Source: `docs/WEB-RESEARCH-SPEC.md` (30 numbered requirements, cited by ID in the test suites).
+These REQ-IDs group that spec into phase-mappable units; the spec IDs are the testable contract.
+
+### Company Enrichment
+
+- [x] **REQ-company-branch**: Companies enrich via a sibling n8n branch off the same trigger — NOT nested under contacts. The ICP fields are per-domain and expensive; nesting re-pays for every contact at the same company. Read-only, no write nodes. (Phase 11)
+- [x] **REQ-company-merge**: Company non-clobber merge with a `domain` hard guard and an evidence-URL gate that runs before the ownership-class branches, so an unevidenced ICP claim cannot promote. (Phase 11)
+- [x] **REQ-provider-contracts**: Every provider contract confirmed against the live API before wiring, with units verified. ZoomInfo GTM `revenue` is THOUSANDS; treating it as dollars banded every company 1000x low and inverted the ICP signal. (Phase 11)
+- [x] **REQ-conflict-withhold**: Cross-provider disagreement on entity-specific signals (size) withholds promotion and routes to review rather than silently selecting one candidate. This is also the franchise/subsidiary detector — no hierarchy modelling required. (Phase 11)
+
+### Taxonomy & Extensibility
+
+- [ ] **REQ-taxonomy-single-source**: `config/taxonomy.yaml` is the only hand-edited vocabulary for `lv_org_type` and `lv_content_type`. Scoring config, field policy, n8n node literals, research prompt and normalizers all derive from it. Adding a value is a one-file edit; drift is a test failure, not a silent 0-score. (Spec TX-1…TX-9; Phase 12)
+- [ ] **REQ-enum-normalization**: Normalizers never emit an off-vocabulary value. `lv_org_type` is free text in HubSpot, so there is no CRM-level guard — the normalizer is the only barrier. Python and JS agree on every shared case. (Spec NM-1…NM-6; Phase 12)
+
+### Research & Judgement
+
+- [ ] **REQ-web-retrieval**: `lv_produces_content` and `lv_org_type` resolve from citable first-party sources via native web search, within existing cost kill-switches. Measured: providers resolve org_type for 3/5 accounts and produces_content for 0/5. (Spec RT-1…RT-5; Phase 13)
+- [ ] **REQ-evidence-by-field**: Research output carries per-field evidence URLs — the shape the merge gate already requires. A flat URL array does not satisfy it. (Spec OC-1; Phase 13)
+- [ ] **REQ-tristate-content**: `lv_produces_content` honors true/false/null as distinct. `false` fires a hard veto; thin or absent evidence MUST yield `null`. A failed search is not evidence of absence, and thin-web-presence ANZ clubs are the ICP core. (Spec TS-1…TS-5; Phase 13)
+- [ ] **REQ-evidence-before-judgement**: Judgement never runs without retrieval. Size conflicts never trigger a model call alone — revenue band drives only graduated deductions, never a veto. (Spec RO-1, RO-2, JG-1…JG-3; Phase 14)
+
+### CRM Migration
+
+- [ ] **REQ-property-migration**: Missing metadata properties created via a dry-run-by-default sync emitting an undo manifest. Two known irreversible mutations require explicit sign-off and are NOT bundled: `lv_org_type` text→enumeration, and `lv_icp_fit_score` calculated→writable (destroys its formula). (Spec RT-5; Phase 15)
+
+### v3 Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| REQ-company-branch | Phase 11 | Complete |
+| REQ-company-merge | Phase 11 | Complete |
+| REQ-provider-contracts | Phase 11 | Complete |
+| REQ-conflict-withhold | Phase 11 | Complete |
+| REQ-taxonomy-single-source | Phase 12 | Pending |
+| REQ-enum-normalization | Phase 12 | Pending |
+| REQ-web-retrieval | Phase 13 | Pending |
+| REQ-evidence-by-field | Phase 13 | Pending |
+| REQ-tristate-content | Phase 13 | Pending |
+| REQ-evidence-before-judgement | Phase 14 | Pending |
+| REQ-property-migration | Phase 15 | Pending |
+
+**Coverage:** v3 requirements: 11 total — mapped to phases: 11 — unmapped: 0 ✓
+
+---
+*v3 requirements defined: 2026-07-20*

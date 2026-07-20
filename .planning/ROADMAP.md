@@ -224,3 +224,116 @@ replicate the production n8n Cloud environment.
 | 8. Contact Enrichment & Net-New Create | 1/1 | Complete | 2026-07-08 |
 | 9. Functional + E2E Tests & Dedupe Sweep | 1/1 | Complete | 2026-07-08 |
 | 10. n8n Template & Local Server Replica | 1/1 | Complete | 2026-07-08 |
+
+---
+
+# Milestone 3 — Company Enrichment & ICP Research
+
+## Overview
+
+Milestones 1–2 proved company scoring locally and moved contact ingestion into n8n. Milestone 3
+closes the loop on **companies**: a live provider waterfall for company objects, and the retrieval
+layer that resolves the two ICP fields providers cannot supply.
+
+The driving finding, measured against five live prospect accounts on 2026-07-20: `lv_org_type` is
+resolvable from provider descriptions for **3 of 5** accounts, but `lv_produces_content` is
+resolvable for **0 of 5** — no provider description mentions broadcast or streaming. Since
+`lv_produces_content: false` fires a hard veto, retrieval is not an optimisation; it is the only
+way to score the field at all.
+
+Two structural decisions are locked. **Companies is a sibling branch, not nested under contacts** —
+the ICP fields are per-domain and expensive, so nesting would re-pay for every contact at the same
+company. **Resolution is ordered deterministic → retrieval → judgement** — an LLM judging from
+parametric recall is least reliable exactly where the ICP lives (it knows Harvey Norman; it
+confabulates on obscure ANZ clubs).
+
+Phase 11 was executed outside GSD between 2026-07-08 and 2026-07-20 and is recorded here
+retroactively; its artifacts and tests are in the tree.
+
+## Phases
+
+- [x] **Phase 11: Company Branch & Provider Contract Hardening** - Company sibling branch in n8n, mergeCompanies non-clobber merge, ZoomInfo GTM companies contract probed live, three live-shape bugs fixed, cross-provider conflict detector, taxonomy + web-research spec (completed 2026-07-20, outside GSD)
+- [ ] **Phase 12: Taxonomy Single-Source** - config/taxonomy.yaml becomes the only edit point; node literals generated at build time; retires the known-red TX-4 drift guard
+- [ ] **Phase 13: Web Research Retrieval & Validation** - Native web_search retrieval, output validation, enum normalization, tri-state coercion
+- [ ] **Phase 14: Judge Wiring** - Haiku classify → Sonnet escalate per CLAUDE.md §15, pointed at identity/classification not numeric plausibility
+- [ ] **Phase 15: HubSpot Property Migration** - Create missing metadata properties; unblocks research caching. IRREVERSIBLE — checkpointed, dry-run first
+
+## Phase Details
+
+### Phase 11: Company Branch & Provider Contract Hardening
+
+**Goal**: Companies enrich from live providers with correct units and no silent wrong-entity data.
+**Depends on**: Phase 10
+**Status**: COMPLETE 2026-07-20 (executed outside GSD; recorded retroactively)
+**Success Criteria**:
+
+  1. Company branch runs as a sibling off the same trigger, read-only, with all three providers.
+  2. ZoomInfo GTM `companies/enrich` + `companies/search` contract confirmed live, valid outputFields enumerated.
+  3. Provider unit and live-shape defects fixed with regression tests.
+  4. Cross-provider size conflicts withhold promotion rather than silently picking one.
+  5. A numbered, testable spec exists for the retrieval work that follows.
+
+**Plans**: 1 plan
+
+- [x] phase-11/PLAN.md — see phase-11-01-SUMMARY.md (retroactive)
+
+### Phase 12: Taxonomy Single-Source
+
+**Goal**: Adding an org_type or content_type is a one-file edit that cannot silently drift.
+**Depends on**: Phase 11
+**Success Criteria**:
+
+  1. `config/taxonomy.yaml` is the only hand-edited vocabulary; icp_scoring, field_policy, node literals, research prompt and normalizers all derive from it.
+  2. `src/taxonomy.py` provides `normalize_org_type` / `normalize_content_types` satisfying spec NM-1…NM-6.
+  3. The builder generates the JS literal into n8n Code nodes; TX-4 goes green with no hand-maintained list in `mergeCompanies.js`.
+  4. Python and JS normalizers agree on every shared case (NM-6 parity test).
+
+**Plans**: TBD — run `/gsd-plan-phase 12`
+
+### Phase 13: Web Research Retrieval & Validation
+
+**Goal**: The two provider-unresolvable ICP fields resolve from citable sources, or not at all.
+**Depends on**: Phase 12
+**Success Criteria**:
+
+  1. Retrieval satisfies spec RT-1…RT-4 within existing cost kill-switches.
+  2. Output carries `evidence_by_field` keyed per field — the shape `mergeCompanies`' evidence gate already requires (OC-1).
+  3. Tri-state honored: thin or absent evidence yields `null`, never `false` (TS-1, TS-2).
+  4. Off-vocabulary model output normalizes to `unknown` + needs_review, never reaches HubSpot (AT-2).
+  5. The `xfail(strict=True)` acceptance tests in `tests/test_web_research_spec.py` flip to passing and their markers are removed.
+
+**Plans**: TBD
+
+### Phase 14: Judge Wiring
+
+**Goal**: Conflicts and high-risk classifications get adjudicated on evidence, not recall.
+**Depends on**: Phase 13
+**Success Criteria**:
+
+  1. Escalation triggers match CLAUDE.md §15 / spec JG-1.
+  2. Judge never runs without retrieval output (RO-1); size conflicts never trigger a model call alone (RO-2).
+  3. Judge confidence below 80 routes to needs_review, never promotes (JG-3).
+
+**Plans**: TBD
+
+### Phase 15: HubSpot Property Migration
+
+**Goal**: The metadata properties the pipeline needs exist, created safely.
+**Depends on**: Phase 14
+**Success Criteria**:
+
+  1. Missing metadata properties created; sync script dry-runs by default and emits an undo manifest.
+  2. Research caching by domain with 180-day TTL becomes possible (unblocks RT-5).
+  3. Two known irreversible mutations are NOT performed without explicit sign-off: `lv_org_type` text→enumeration, and `lv_icp_fit_score` calculated→writable (destroys its formula).
+
+**Plans**: TBD
+
+## Milestone 3 Progress
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 11. Company Branch & Provider Contract Hardening | 1/1 | Complete | 2026-07-20 |
+| 12. Taxonomy Single-Source | 0/? | Not started | — |
+| 13. Web Research Retrieval & Validation | 0/? | Not started | — |
+| 14. Judge Wiring | 0/? | Not started | — |
+| 15. HubSpot Property Migration | 0/? | Not started | — |
