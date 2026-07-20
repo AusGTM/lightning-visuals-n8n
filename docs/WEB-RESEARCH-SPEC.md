@@ -65,6 +65,53 @@ rather than read from YAML — see §2.
 
 ---
 
+## 0.6. Property naming convention
+
+**Every custom property this workflow creates MUST be prefixed `lv_`.** The prefix is
+ownership signalling: it marks the property as created by Lightning Visuals' team, and
+distinguishes ours from HubSpot-native fields and from third-party integration properties
+(`xero_*`, `zoom_webinar_*`) already in the portal.
+
+**PN-1.** Any property this project creates is named `lv_<name>`.
+
+**PN-2.** HubSpot-native properties are NEVER renamed or prefixed. Verified native in
+portal 22617666 (`hubspotDefined: true`): `email`, `firstname`, `lastname`, `jobtitle`,
+`phone`, `mobilephone`, `seniority`, `company`, `domain`, `industry`, `annualrevenue`,
+`numberofemployees`, `name`, `website`, `country`. The pipeline reads and writes these
+under their native names.
+
+**PN-3.** Provider staging properties compose as `lv_<provider>_<field>` with any leading
+`lv_` stripped from the field first, so the prefix appears exactly once:
+
+| Canonical field | Staging property |
+|---|---|
+| `jobtitle` (native) | `lv_apollo_jobtitle` |
+| `lv_revenue_band` | `lv_zoominfo_revenue_band` — NOT `lv_zoominfo_lv_revenue_band` |
+| `lv_org_type` | `lv_claude_web_org_type` |
+
+**PN-4.** Source-metadata properties compose the same way: `lv_<field>_source`,
+`lv_<field>_confidence`, `lv_<field>_evidence_url`, `lv_<field>_verified_at`,
+`lv_<field>_validation_status` — again with a leading `lv_` stripped from `<field>` first.
+So `lv_org_type` yields `lv_org_type_source` (unchanged), and native `jobtitle` yields
+`lv_jobtitle_verified_at`.
+
+**PN-5.** Control properties take the prefix: `lv_enrichment_requested`,
+`lv_enrichment_status`, `lv_enrichment_needs_review`, `lv_last_enriched_at`, etc. This
+supersedes the unprefixed names in CLAUDE.md §4, §6, §7, §8 and §22.
+
+> **Timing (portal audit, 2026-07-20).** Adopting this now costs nothing. All 5 existing
+> custom company properties already comply (`lv_anti_icp_flag`, `lv_icp_fit_score`,
+> `lv_icp_tier`, `lv_org_type`, `lv_produces_content`). The ~40 control/staging/metadata
+> properties do not exist yet, so there is nothing to migrate. Raised after Phase 15 this
+> would have been a rename migration across live data.
+>
+> The 11 custom contact properties (`xero_*`, `zoom_webinar_*`,
+> `initial_zoom_webinar_attendance_average_duration`) are third-party integration fields,
+> not ours — correctly excluded by the convention. `organisation__short_name_` is
+> ambiguous; confirm ownership before assuming it is out of scope.
+
+---
+
 ## 1. Resolution order
 
 Established over the preceding design discussion. Each stage only runs when the prior
