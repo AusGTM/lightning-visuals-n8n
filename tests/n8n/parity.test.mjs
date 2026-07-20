@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import fs from "node:fs";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
@@ -24,6 +25,9 @@ const { resolveIdentity } = require(path.join(ROOT, "n8n/code/resolveIdentity.js
 const { mergeContacts } = require(path.join(ROOT, "n8n/code/mergeContacts.js"));
 const { mergeCompanies } = require(path.join(ROOT, "n8n/code/mergeCompanies.js"));
 const { dedupeSweep } = require(path.join(ROOT, "n8n/code/dedupeSweep.js"));
+const {
+  normalizeOrgType, normalizeOrgTypeResult, normalizeContentTypes,
+} = require(path.join(ROOT, "n8n/code/taxonomy.js"));
 
 // --- Python oracle helpers ----------------------------------------------------
 const PY = path.join(ROOT, ".venv/bin/python");
@@ -32,6 +36,24 @@ function pyPhone(raw) {
   const out = execFileSync(PY, ["-c",
     "import sys,json;from src.normalizer import normalize_phone;print(json.dumps(normalize_phone(json.loads(sys.argv[1]))))",
     JSON.stringify(raw)], { cwd: ROOT }).toString().trim();
+  return JSON.parse(out);
+}
+
+// NM-6 oracle: one subprocess call runs the whole shared fixture table through
+// src.taxonomy and returns all three normalizers' outputs per case.
+function pyTaxonomy(fixtureRelPath) {
+  const script = `
+import json, sys
+from src.taxonomy import normalize_org_type, normalize_org_type_result, normalize_content_types
+with open(sys.argv[1]) as f:
+    cases = json.load(f)
+print(json.dumps({
+    "org_type": [normalize_org_type(c) for c in cases["org_type_cases"]],
+    "org_type_result": [normalize_org_type_result(c) for c in cases["org_type_cases"]],
+    "content_types": [normalize_content_types(c) for c in cases["content_type_list_cases"]],
+}))
+`;
+  const out = execFileSync(PY, ["-c", script, fixtureRelPath], { cwd: ROOT }).toString().trim();
   return JSON.parse(out);
 }
 
@@ -269,4 +291,19 @@ test("dedupeSweep: cross-format phone dup collapses; garbage -> mangled", () => 
   assert.deepEqual(r.to_review_ids, ["1", "2", "3", "4", "5"]);
   assert.equal(r.counts.duplicates, r.duplicate_count);
   assert.ok(!r.to_review_ids.includes("6")); // blank phone is not a finding
+});
+
+// --- taxonomy: NM-6 Python/JS parity -------------------------------------------
+test("taxonomy: NM-6 GENUINE parity vs Python src.taxonomy across the shared fixture", () => {
+  const fixturePath = path.join(ROOT, "tests/fixtures/taxonomy_parity_cases.json");
+  const fixture = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
+  const py = pyTaxonomy("tests/fixtures/taxonomy_parity_cases.json");
+
+  const jsOrgType = fixture.org_type_cases.map((c) => normalizeOrgType(c));
+  const jsOrgTypeResult = fixture.org_type_cases.map((c) => normalizeOrgTypeResult(c));
+  const jsContentTypes = fixture.content_type_list_cases.map((c) => normalizeContentTypes(c));
+
+  assert.deepStrictEqual(jsOrgType, py.org_type, "normalize_org_type parity");
+  assert.deepStrictEqual(jsOrgTypeResult, py.org_type_result, "normalize_org_type_result parity");
+  assert.deepStrictEqual(jsContentTypes, py.content_types, "normalize_content_types parity");
 });
