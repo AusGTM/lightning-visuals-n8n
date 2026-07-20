@@ -22,6 +22,7 @@ const { normalizeEmailBasic } = require(path.join(ROOT, "n8n/code/normalizeEmail
 const { mapRow, requiredIdentity } = require(path.join(ROOT, "n8n/code/columnMap.js"));
 const { resolveIdentity } = require(path.join(ROOT, "n8n/code/resolveIdentity.js"));
 const { mergeContacts } = require(path.join(ROOT, "n8n/code/mergeContacts.js"));
+const { mergeCompanies } = require(path.join(ROOT, "n8n/code/mergeCompanies.js"));
 const { dedupeSweep } = require(path.join(ROOT, "n8n/code/dedupeSweep.js"));
 
 // --- Python oracle helpers ----------------------------------------------------
@@ -180,6 +181,65 @@ test("mergeContacts: email not canonical, blank phone filled, jobtitle conflict 
     assert.ok(metadataPatch[`${f}_verified_at`], `${f} verified_at stamped`);
     assert.ok(metadataPatch[`${f}_validation_status`], `${f} validation_status stamped`);
   }
+});
+
+// --- mergeCompanies -----------------------------------------------------------
+test("mergeCompanies: domain never canonical, ICP fields promote, present industry -> review", () => {
+  const existing = { domain: "racingnsw.com.au", industry: "Sports", lv_org_type: "" };
+  const candidate = {
+    domain: "racingnsw.com.au",
+    industry: "Sports & Entertainment",
+    lv_org_type: "governing_body_league",
+    lv_revenue_band: "50-500M",
+  };
+  const opts = { source: "zoominfo", confidence: 85,
+                 evidence: { lv_org_type: "https://racingnsw.com.au/about" } };
+  const { canonicalPatch, stagingPatch, metadataPatch, decisions } =
+    mergeCompanies(existing, candidate, undefined, opts);
+
+  // domain (manual_protected, min_conf 95 > 85) -> never canonical
+  assert.ok(!("domain" in canonicalPatch), "domain must not be canonical");
+  // lv_org_type (system_owned, 85>=80) + evidence URL supplied -> promote
+  assert.equal(canonicalPatch.lv_org_type, "governing_body_league");
+  // lv_revenue_band (system_owned, 85>=75) -> promote
+  assert.equal(canonicalPatch.lv_revenue_band, "50-500M");
+  // present industry (stale_refreshable) -> needs_review, not promoted
+  assert.ok(!("industry" in canonicalPatch));
+  assert.equal(decisions.find((d) => d.field === "industry").decision, "needs_review");
+
+  // every candidate field is staged and carries source metadata
+  for (const f of ["domain", "industry", "lv_org_type", "lv_revenue_band"]) {
+    assert.ok((`zoominfo_${f}`) in stagingPatch, `staged zoominfo_${f}`);
+    assert.equal(metadataPatch[`${f}_source`], "zoominfo");
+    assert.equal(metadataPatch[`${f}_confidence`], 85);
+    assert.ok(metadataPatch[`${f}_verified_at`], `${f} verified_at stamped`);
+    assert.ok(metadataPatch[`${f}_validation_status`], `${f} validation_status stamped`);
+  }
+  assert.equal(metadataPatch.lv_org_type_evidence_url, "https://racingnsw.com.au/about");
+});
+
+test("mergeCompanies: unevidenced ICP claims -> needs_review, never canonical", () => {
+  const candidate = {
+    lv_org_type: "hardware_vendor",  // in require_evidence_url_for -> gated
+    lv_produces_content: true,       // require_evidence_url: true -> always gated
+  };
+  const { canonicalPatch, decisions } =
+    mergeCompanies({}, candidate, undefined, { source: "apollo", confidence: 90 });
+
+  for (const f of ["lv_org_type", "lv_produces_content"]) {
+    assert.ok(!(f in canonicalPatch), `${f} must not promote without evidence`);
+    const d = decisions.find((x) => x.field === f);
+    assert.equal(d.decision, "needs_review");
+    assert.equal(d.validation_status, "human_review_required");
+    assert.equal(d.evidence_url, null);
+  }
+});
+
+test("mergeCompanies: require_evidence_url_for gates only the listed values", () => {
+  // "other" is NOT in lv_org_type.require_evidence_url_for -> promotes unevidenced
+  const { canonicalPatch } =
+    mergeCompanies({}, { lv_org_type: "other" }, undefined, { confidence: 90 });
+  assert.equal(canonicalPatch.lv_org_type, "other");
 });
 
 // --- dedupeSweep --------------------------------------------------------------

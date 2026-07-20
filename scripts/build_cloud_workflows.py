@@ -307,6 +307,21 @@ def chain(names):
     return conns
 
 
+def fan(*chains):
+    """Merge linear chains that share nodes, fanning out on collision instead of
+    overwriting. Used where one trigger feeds several sibling branches."""
+    conns = {}
+    for c in chains:
+        for node, spec in c.items():
+            if node not in conns:
+                conns[node] = {"main": [list(spec["main"][0])]}
+                continue
+            for target in spec["main"][0]:
+                if target not in conns[node]["main"][0]:
+                    conns[node]["main"][0].append(target)
+    return conns
+
+
 # ---- LOCAL workflow ---------------------------------------------------------
 
 FIXTURE_EMIT = r"""// Emit Fixture Rows (mock parsed file) — LOCAL variant.
@@ -815,7 +830,14 @@ return rows.map((it, i) => {
 # CLOUD: ZoomInfo enrich with AUTONOMOUS token caching + refresh-on-401. Replaces the
 # separate Auth + Enrich HTTP nodes: mints its own bearer, caches it in workflow static
 # data, re-mints only when missing/near-expiry, and re-mints once + retries on a 401.
-ENRICH_ZOOMINFO_CACHED = inline("zoominfoToken.js") + r"""
+# Shared ZoomInfo preamble: cached bearer + JSON:API enrich helper. Parameterised by the
+# GTM enrich URL so the contacts and companies nodes share ONE token-cache implementation
+# (same $getWorkflowStaticData key -> one mint serves both branches).
+def _zoom_preamble(enrich_url):
+    return inline("zoominfoToken.js") + ZOOM_PREAMBLE_JS.replace("__ENRICH_URL__", enrich_url)
+
+
+ZOOM_PREAMBLE_JS = r"""
 // n8n Code node: cached ZoomInfo bearer (autonomous). Reads a cross-run token cache
 // from workflow static data, mints only when missing/near-expiry, enriches with the
 // Bearer, and on a 401 clears the cache, re-mints ONCE, and retries. Secrets come from
@@ -823,7 +845,7 @@ ENRICH_ZOOMINFO_CACHED = inline("zoominfoToken.js") + r"""
 // token is ever stored. (Self-hosted may use $env; or bind a Basic Auth credential to a
 // dedicated mint HTTP node instead.)
 const TOKEN_URL = "https://api.zoominfo.com/gtm/oauth/v1/token";
-const ENRICH_URL = "https://api.zoominfo.com/gtm/data/v1/contacts/enrich";
+const ENRICH_URL = "__ENRICH_URL__";
 const sd = $getWorkflowStaticData("global");
 
 async function mint() {
@@ -855,7 +877,11 @@ async function enrich(token, payload) {
     body: JSON.stringify(payload || {}),
   });
 }
+"""
 
+
+ENRICH_ZOOMINFO_CACHED = _zoom_preamble(
+    "https://api.zoominfo.com/gtm/data/v1/contacts/enrich") + r"""
 // GTM enrich contract (LIVE-confirmed 200): JSON:API envelope
 //   { data: { type: "ContactEnrich", attributes: { matchPersonInput:[{emailAddress|firstName|lastName|companyName}], outputFields:[...] } } }
 // with Content-Type application/vnd.api+json. Input KEY is `emailAddress` (not `email`);
@@ -1033,6 +1059,320 @@ HS_SEARCH_BODY_EXPR = (
     '"jobtitle_verified_at","mobilephone_verified_at"], limit: 5 }) }}'
 )
 
+# ---- COMPANIES branch -------------------------------------------------------
+# Sibling of the contacts chain, NOT nested under it: the ICP fields it resolves
+# (lv_org_type / lv_produces_content) are per-DOMAIN and expensive, so running them
+# once per contact would re-pay for every contact at the same company. Company
+# targets are deduped by domain here; contacts join back on domain downstream.
+#
+# Read-only, like the contacts branch: HubSpot SEARCH only, no write nodes.
+#
+# ZoomInfo is deliberately absent — its GTM /companies/enrich contract is not yet
+# verified live (the contacts one took a full probe session). Lusha /v2/company and
+# Apollo /v1/organizations/enrich are both confirmed 200 against racingnsw.com.au.
+
+# ZoomInfo GTM companies/enrich — contract probed live 2026-07-20 (all 200):
+#   POST /gtm/data/v1/companies/enrich   type "CompanyEnrich", matchCompanyInput[]
+#   POST /gtm/data/v1/companies/search   type "CompanySearch"   (not used here)
+# Limits: 1-25 companies and max 25 outputFields per request. Scope api:data:company
+# is present on the existing client-credentials token — no separate credential needed.
+ENRICH_ZOOMINFO_CO_CACHED = _zoom_preamble(
+    "https://api.zoominfo.com/gtm/data/v1/companies/enrich") + r"""
+// Companies enrich contract (LIVE-confirmed 200 against racingnsw.com.au):
+//   { data: { type: "CompanyEnrich", attributes: { matchCompanyInput:[{companyWebsite|companyName}],
+//     outputFields:[...] } } }
+// Response: { data:[{ id, type:"Company"|"NoMatch", attributes:{...}, meta:{matchStatus} }] }.
+//
+// Every outputField below returned 200 when probed individually. `companyType` is NOT
+// valid/entitled (400 PFAPI0009) — do not re-add it without re-probing.
+//
+// UNITS WARNING: `revenue` is in THOUSANDS. `revenueRange` ("$250 mil. - $500 mil.") is
+// requested alongside it because normalizeProviders prefers the unambiguous string.
+const ZOOM_CO_OUTPUT_FIELDS = [
+  "id", "name", "website", "revenue", "revenueRange", "employeeCount", "employeeRange",
+  "country", "primaryIndustry", "naicsCodes", "descriptionList", "foundedYear",
+];
+function toMatchCompanyInput(id) {
+  const m = {};
+  if (id && id.domain) m.companyWebsite = id.domain;
+  if (id && id.companyName) m.companyName = id.companyName;
+  return m;
+}
+// A domain OR a company name is enough; a keyless matchCompanyInput is itself a 400.
+function hasZoomCoKey(m) { return !!(m.companyWebsite || m.companyName); }
+
+// identity_keys lives on the Company Gate rows; $input here is the Apollo Org HTTP
+// response (which has replaced $json), so pull identity by paired index from the Gate.
+const gateRows = (function () { try { return $('Company Gate').all(); } catch (e) { return []; } })();
+const items = $input.all();
+const out = [];
+for (let i = 0; i < items.length; i++) {
+  const item = items[i];
+  const id = (gateRows[i] && gateRows[i].json && gateRows[i].json.identity_keys) || item.json.identity_keys || {};
+  const co = toMatchCompanyInput(id);
+  const payload = hasZoomCoKey(co)
+    ? { data: { type: "CompanyEnrich", attributes: { matchCompanyInput: [co], outputFields: ZOOM_CO_OUTPUT_FIELDS } } }
+    : null;
+  if (!payload) { out.push({ json: { skipped: "no zoominfo company match key" } }); continue; }
+  let token = await getToken.call(this);
+  let res;
+  try {
+    res = await enrich.call(this, token, payload);
+  } catch (e) {
+    if (isAuthError(e.statusCode || e.httpCode || (e.response && e.response.statusCode))) {
+      delete sd.zoominfo;                     // token rejected -> re-mint once + retry
+      token = await mint.call(this);
+      try { res = await enrich.call(this, token, payload); }
+      catch (e2) { res = { error: String((e2 && e2.message) || e2) }; }
+    } else {
+      res = { error: String((e && e.message) || e) };  // non-auth error -> continue
+    }
+  }
+  out.push({ json: res });
+}
+return out;
+"""
+
+ENRICH_EMIT_COMPANIES = r"""// Emit Company Targets — LOCAL-LIVE companies branch.
+// Same real ICP accounts as the contacts branch, deduped by domain: one row per company
+// no matter how many contacts share it. That dedupe is the whole reason this branch is a
+// sibling of the contacts chain rather than nested inside it.
+const rows = [
+  { company: "Harvey Norman",         domain: "harveynorman.com.au" },
+  { company: "Racing NSW",            domain: "racingnsw.com.au" },
+  { company: "Melbourne Racing Club", domain: "mrc.net.au" },
+  { company: "Australian Turf Club",  domain: "australianturfclub.com.au" },
+  { company: "FanDuel",               domain: "fanduel.com" }
+];
+const seen = new Set();
+return rows.filter((r) => {
+  const d = (r.domain || "").trim().toLowerCase();
+  if (!d || seen.has(d)) return false;
+  seen.add(d);
+  return true;
+}).map((r) => ({ json: { ...r, object_type: "companies" } }));
+"""
+
+ENRICH_BUILD_CO_IDENTITY = r"""// Build Company Identity — companies branch.
+// Domain is the identity anchor for companies (email is for contacts). Lowercased +
+// stripped of scheme/www so it matches HubSpot's stored `domain` form.
+function cleanDomain(raw) {
+  if (!raw) return null;
+  let d = String(raw).trim().toLowerCase();
+  d = d.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0];
+  return d || null;
+}
+return $input.all().map((it) => {
+  const row = it.json;
+  const domain = cleanDomain(row.domain || row.website);
+  return { json: { ...row,
+    object_type: "companies",
+    identity_keys: { domain, companyName: row.company || row.name || null },
+  }};
+});
+"""
+
+# Company existence check: by domain (the identity anchor). Property list is the 5 lv_*
+# props that ACTUALLY exist in portal 22617666 plus the core firmographics — HubSpot
+# silently drops unknown names from `properties` and still returns 200, so asking for
+# not-yet-created props would read back as undefined and be indistinguishable from empty.
+HS_CO_SEARCH_BODY_EXPR = (
+    '={{ JSON.stringify({ filterGroups: [ { filters: '
+    '[ { propertyName: "domain", operator: "EQ", value: $json.identity_keys.domain } ] } ], '
+    'properties: ["name","domain","industry","annualrevenue","numberofemployees",'
+    '"lv_org_type","lv_produces_content","lv_icp_tier","lv_icp_fit_score","lv_anti_icp_flag"], '
+    'limit: 5 }) }}'
+)
+
+ENRICH_ADAPT_CO_SEARCH = r"""// Adapt Company Search -> existingRecord — companies branch.
+// Same contract as the contacts Adapt Search: per-row, same order, 0 results => {} => CREATE.
+const rows = $('Build Company Identity').all();
+const search = $('HubSpot Company Search').all();
+return rows.map((it, i) => {
+  const row = it.json;
+  const res = search[i] && search[i].json;
+  let existingRecord = {};
+  if (res) {
+    if (res.properties) existingRecord = res.properties;                 // single object
+    else if (Array.isArray(res.results) && res.results.length) {
+      existingRecord = res.results[0].properties || {};                  // search envelope
+    }
+  }
+  return { json: { ...row, existingRecord } };
+});
+"""
+
+# Company staleness gate. Different REQUIRED + TTL anchor from contacts — this is exactly
+# why the branches are siblings and not one shared gate node.
+#
+# NOTE: lv_*_verified_at / lv_icp_scored_at do not exist in the portal yet, so every
+# present-but-unstamped ICP field reads as stale (enrichmentGate: unknown freshness ==
+# needs validation). That is the conservative direction; it stops being noisy once the
+# metadata props are created.
+ENRICH_CO_GATE = inline("normalizeEmail.js", "normalizePhone.js", "enrichmentGate.js") + r"""
+
+// --- n8n wrapper: decideAction(existingRecord) -> create | enrich | skip ---
+const REQUIRED = ["lv_org_type", "lv_produces_content"];
+const POLICY = {
+  lv_org_type: { stale_after_days: 180 },
+  lv_produces_content: { stale_after_days: 180 },
+};
+const NOW = new Date().toISOString();
+return $input.all().map((it) => {
+  const row = it.json;
+  const gate = decideAction(row.existingRecord || {}, REQUIRED, POLICY, NOW);
+  return { json: { ...row, gate, action: gate.action } };
+});
+"""
+
+ENRICH_BUILD_CO_REQUESTS = r"""// Build Company Provider Requests — companies branch.
+// Both contracts confirmed 200 live against racingnsw.com.au:
+//   Lusha  GET  /v2/company?domain=            -> { data:{...}, meta:{} }
+//   Apollo POST /v1/organizations/enrich?domain= -> { organization:{...} }
+return $input.all().map((it) => {
+  const row = it.json;
+  const id = row.identity_keys || {};
+  const enc = encodeURIComponent;
+  const q = [];
+  const add = (k, v) => { if (v) q.push(enc(k) + "=" + enc(v)); };
+  add("domain", id.domain);
+  add("companyName", id.companyName);
+  const lusha_company_url = "https://api.lusha.com/v2/company?" + q.join("&");
+  const apollo_org_url =
+    "https://api.apollo.io/v1/organizations/enrich?domain=" + enc(id.domain || "");
+  return { json: { ...row, lusha_company_url, apollo_org_url } };
+});
+"""
+
+ENRICH_NORMALIZE_SCORE_CO = inline(
+    "normalizePhone.js", "normalizeEmail.js", "normalizeProviders.js", "scoreEnrichment.js"
+) + r"""
+
+// --- n8n wrapper (companies): score best-per-field from the company provider responses ---
+// object_type is pinned to "companies" so toCandidates takes its companies branch — the
+// one that emits lv_revenue_band / lv_employee_band / lv_country_region_normalized.
+function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
+const rows = $('Company Gate').all().filter((it) => it.json.action !== "skip");
+const lusha = nodeAll('Lusha Company');
+const apollo = nodeAll('Apollo Org');
+const zoominfo = nodeAll('ZoomInfo Company');
+return rows.map((it, i) => {
+  const row = it.json;
+  const p = {
+    lusha: lusha[i] && lusha[i].json,
+    apollo: apollo[i] && apollo[i].json,
+    zoominfo: zoominfo[i] && zoominfo[i].json,
+  };
+  const cands = [
+    ...toCandidates("lusha", p.lusha, "companies"),
+    ...toCandidates("apollo", p.apollo, "companies"),
+    ...toCandidates("zoominfo", p.zoominfo, "companies"),
+  ];
+  const gap_flag = cands.length === 0;
+  const { best, winners } = scoreCandidates(cands, { now: new Date().toISOString() });
+  // Per-field {source, value} list — lets the merge node report WHICH providers disagreed
+  // rather than just that they did.
+  const sourcesByField = {};
+  for (const c of cands) {
+    (sourcesByField[c.field] || (sourcesByField[c.field] = []))
+      .push({ source: c.source, value: c.normalizedValue });
+  }
+  return { json: { ...row, providers: p, scored: { best, winners, sourcesByField }, gap_flag } };
+});
+"""
+
+ENRICH_MERGE_CO = inline("mergeCompanies.js") + r"""
+
+// --- n8n wrapper: mergeCompanies(existingRecord, winners) non-clobber ---
+// lv_org_type / lv_produces_content are NOT in this candidate set: providers do not carry
+// them (CLAUDE.md §14 — they come from Claude web research, which this read-only branch
+// does not call yet). When that node lands it supplies both the value and the evidence
+// URL that mergeCompanies' evidence gate requires before either may promote.
+//
+// TWO company-specific traps, both confirmed live against harveynorman.com.au:
+//
+// 1. scoreCandidates returns `winners[f] = top.value` — the RAW provider value, not the
+//    normalized one. Contacts get away with it (Apollo's sanitized_number is already
+//    E.164); companies do not. lv_revenue_band would have been written as
+//    "$1 mil. - $5 mil." instead of the "1-5M" enum. Read `best[f].normalizedValue`.
+//    scoreEnrichment is deliberately NOT changed — `winners` raw-ness is load-bearing for
+//    contacts (jobtitle casing would be lowercased for every promoted contact).
+//
+// 2. Providers disagree wildly on company SIZE when the domain is a franchisor or a
+//    holding company. harveynorman.com.au returned: ZoomInfo "Harvey Norman" $1-5m/34
+//    staff, Apollo "Harvey Norman Seconds World" $33.6m/28, Lusha "Harvey Norman"
+//    $1-10bn/10001-100000. Banded: 1-5M vs 5-50M vs 1B-1.2B — a 40-point ICP swing, and
+//    the scorer silently picked one. Size is the ONLY entity-specific ICP signal (org_type,
+//    produces_content, hardware/gambling, geography are all brand-level and inherit down to
+//    any branch), so a size disagreement IS the franchise/subsidiary detector. Conflicted
+//    fields never promote — CLAUDE.md §17.2 "NEEDS_REVIEW if providers materially conflict".
+const CONFLICT_WATCH = ["lv_revenue_band", "lv_employee_band"];
+
+return $input.all().map((it) => {
+  const row = it.json;
+  if (!row.scored) return { json: { ...row, merge: null, conflicts: [] } };  // skip branch
+  const best = row.scored.best || {};
+
+  // Distinct normalized values per field, across distinct sources.
+  const conflicts = [];
+  for (const f of CONFLICT_WATCH) {
+    const b = best[f];
+    if (!b) continue;
+    const others = (b.agreedBy || []).length;
+    const sources = row.scored.sourcesByField && row.scored.sourcesByField[f];
+    if (sources && sources.length > 1 && others === 0) {
+      conflicts.push({ field: f, chosen: b.normalizedValue, chosen_source: b.source,
+                       candidates: sources });
+    }
+  }
+  const conflicted = new Set(conflicts.map((c) => c.field));
+
+  const candidate = {};
+  for (const f of ["domain", "industry", "lv_revenue_band", "lv_employee_band",
+                   "lv_country_region_normalized"]) {
+    if (conflicted.has(f)) continue;                  // materially conflicting -> review
+    const b = best[f];
+    const v = b && b.normalizedValue;                 // NORMALIZED, not raw
+    if (v != null && String(v).trim() !== "") candidate[f] = v;
+  }
+  const merged = mergeCompanies(row.existingRecord || {}, candidate, undefined,
+                                { source: "waterfall", confidence: 85 });
+  return { json: { ...row, merge: merged, conflicts } };
+});
+"""
+
+ENRICH_DECIDE_CO_LOCAL = r"""// Decide Company Action (dry-run echo) — companies branch.
+// NO write nodes: echoes the would-be payload only. Mirrors the contacts Decide Action.
+return $input.all().map((it) => {
+  const row = it.json;
+  const id = row.identity_keys || {};
+  const scored = row.scored;
+  const winners_sample = [];
+  if (scored && scored.best) {
+    for (const f of Object.keys(scored.best)) {
+      const b = scored.best[f];
+      winners_sample.push({ field: f, value: b.value, source: b.source, score: b.score });
+    }
+  }
+  return { json: {
+    object_type: "companies",
+    domain: id.domain,
+    company: id.companyName,
+    action: row.action,
+    gate_reason: row.gate && row.gate.reason,
+    gap_flag: row.gap_flag === true,
+    conflicts: row.conflicts || [],
+    needs_review: (row.conflicts || []).length > 0,
+    winners: winners_sample,
+    would_patch: row.merge ? {
+      canonical: row.merge.canonicalPatch,
+      staging: row.merge.stagingPatch,
+      metadata: row.merge.metadataPatch,
+    } : null,
+  }};
+});
+"""
+
 
 def _live_http(name, x, y, method, url, headers, json_body=None):
     """HTTP Request node whose auth/secrets come from $env expressions in headers
@@ -1095,6 +1435,51 @@ def build_enrichment_local_live():
              "Adapt Search", "Enrichment Gate", "Build Requests", "Lusha Enrich", "Apollo Match",
              "ZoomInfo Enrich", "Normalize + Score", "Merge Winners", "Decide Action"]
 
+    # --- COMPANIES branch: sibling off the same Manual Trigger, own row (y+380) ---
+    cy = y + 380
+    cx = 240 + 230
+    nodes.append(code_node("Emit Company Targets", ENRICH_EMIT_COMPANIES, cx, cy))
+    cx += 230
+    nodes.append(code_node("Build Company Identity", ENRICH_BUILD_CO_IDENTITY, cx, cy))
+    cx += 230
+    nodes.append(_live_http(
+        "HubSpot Company Search", cx, cy, "POST",
+        "https://api.hubapi.com/crm/v3/objects/companies/search",
+        [{"name": "Authorization", "value": "=Bearer {{ $env.HUBSPOT_PRIVATE_APP_TOKEN }}"},
+         {"name": "Content-Type", "value": "application/json"}],
+        json_body=HS_CO_SEARCH_BODY_EXPR))
+    cx += 230
+    nodes.append(code_node("Adapt Company Search", ENRICH_ADAPT_CO_SEARCH, cx, cy))
+    cx += 230
+    nodes.append(code_node("Company Gate", ENRICH_CO_GATE, cx, cy))
+    cx += 230
+    nodes.append(code_node("Build Company Requests", ENRICH_BUILD_CO_REQUESTS, cx, cy))
+    cx += 230
+    nodes.append(_live_http(
+        "Lusha Company", cx, cy, "GET",
+        "={{ $('Build Company Requests').item.json.lusha_company_url }}",
+        [{"name": "api_key", "value": "={{ $env.LUSHA_API_KEY }}"}]))
+    cx += 230
+    nodes.append(_live_http(
+        "Apollo Org", cx, cy, "POST",
+        "={{ $('Build Company Requests').item.json.apollo_org_url }}",
+        [{"name": "X-Api-Key", "value": "={{ $env.APOLLO_API_KEY }}"},
+         {"name": "Content-Type", "value": "application/json"},
+         {"name": "Cache-Control", "value": "no-cache"}]))
+    cx += 230
+    nodes.append(code_node("ZoomInfo Company", ENRICH_ZOOMINFO_CO_CACHED, cx, cy))
+    cx += 230
+    nodes.append(code_node("Normalize + Score Company", ENRICH_NORMALIZE_SCORE_CO, cx, cy))
+    cx += 230
+    nodes.append(code_node("Merge Company", ENRICH_MERGE_CO, cx, cy))
+    cx += 230
+    nodes.append(code_node("Decide Company Action", ENRICH_DECIDE_CO_LOCAL, cx, cy))
+
+    co_order = ["Manual Trigger", "Emit Company Targets", "Build Company Identity",
+                "HubSpot Company Search", "Adapt Company Search", "Company Gate",
+                "Build Company Requests", "Lusha Company", "Apollo Org", "ZoomInfo Company",
+                "Normalize + Score Company", "Merge Company", "Decide Company Action"]
+
     nodes.append({
         "parameters": {"content": (
             "## LV Enrichment — LOCAL LIVE (headless, real providers)\n"
@@ -1102,8 +1487,14 @@ def build_enrichment_local_live():
             "token) + HubSpot SEARCH — all keyed off `$env` (pass via `docker exec -e`). "
             "Run: `scripts/n8n_enrichment_live_replica.sh`.\n\n"
             "**Read-only:** live provider calls + HubSpot search only. NO write nodes — "
-            "Decide Action echoes the would-be payload. Real ICP prospects; none skip."
-        ), "height": 260, "width": 460},
+            "Decide Action echoes the would-be payload. Real ICP prospects; none skip.\n\n"
+            "**Two sibling branches off one trigger** (companies is NOT nested under "
+            "contacts): the ICP fields are per-DOMAIN and expensive, so nesting would "
+            "re-pay for every contact at the same company. Companies dedupes by domain; "
+            "contacts join back on domain. Company branch = Lusha `/v2/company` + Apollo "
+            "`/v1/organizations/enrich` + ZoomInfo GTM `/companies/enrich` — all three "
+            "confirmed 200 live (2026-07-20)."
+        ), "height": 380, "width": 460},
         "id": nid("s"), "name": "Sticky Note",
         "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [240, 540]})
 
@@ -1111,7 +1502,7 @@ def build_enrichment_local_live():
         "id": "LVenrichmentLive01",
         "name": "LV Enrichment (local LIVE)",
         "nodes": nodes,
-        "connections": chain(order),
+        "connections": fan(chain(order), chain(co_order)),
         "settings": {},
     }
 
