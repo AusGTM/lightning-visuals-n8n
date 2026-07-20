@@ -247,6 +247,15 @@ company. **Resolution is ordered deterministic → retrieval → judgement** —
 parametric recall is least reliable exactly where the ICP lives (it knows Harvey Norman; it
 confabulates on obscure ANZ clubs).
 
+**Scope fence (decided 2026-07-20).** The pipeline writes ICP **inputs** only. The derived
+outputs — `lv_icp_fit_score`, `lv_icp_tier`, `lv_anti_icp_flag`, `lv_anti_icp_reason`,
+`lv_recommended_motion` — are computed in HubSpot programmatically and are **downstream
+work, out of scope for this milestone**. Both score and tier are placeholders today
+(`calculationFormula` is literally `1 + 1`). `src/icp_scoring.py` keeps computing score and
+tier internally to drive in-pipeline routing and the audit breakdown, but is no longer a
+write path. Milestone 3 succeeds by making the inputs trustworthy; encoding a HubSpot
+formula against fields the pipeline cannot yet populate would be premature.
+
 Phase 11 was executed outside GSD between 2026-07-08 and 2026-07-20 and is recorded here
 retroactively; its artifacts and tests are in the tree.
 
@@ -324,7 +333,8 @@ retroactively; its artifacts and tests are in the tree.
 
   1. Missing metadata properties created; sync script dry-runs by default and emits an undo manifest.
   2. Research caching by domain with 180-day TTL becomes possible (unblocks RT-5).
-  3. Two known irreversible mutations are NOT performed without explicit sign-off: `lv_org_type` text→enumeration, and `lv_icp_fit_score` calculated→writable (destroys its formula).
+  3. `lv_org_type` text→enumeration is NOT performed without explicit sign-off (irreversible type change).
+  4. `lv_icp_fit_score` and `lv_icp_tier` are left AS calculated/placeholder — per the milestone scope fence, HubSpot owns them. Retire the pipeline's write paths to those fields (`src/merge_policy.py:303`, `main.py:60`, `config/field_policy.yaml:86`, `n8n/code/mergeCompanies.js:35`, and two inverted test assertions).
 
 **Plans**: TBD
 

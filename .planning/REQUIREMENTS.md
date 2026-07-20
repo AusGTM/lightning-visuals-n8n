@@ -116,6 +116,10 @@ These REQ-IDs group that spec into phase-mappable units; the spec IDs are the te
 - [ ] **REQ-tristate-content**: `lv_produces_content` honors true/false/null as distinct. `false` fires a hard veto; thin or absent evidence MUST yield `null`. A failed search is not evidence of absence, and thin-web-presence ANZ clubs are the ICP core. (Spec TS-1…TS-5; Phase 13)
 - [ ] **REQ-evidence-before-judgement**: Judgement never runs without retrieval. Size conflicts never trigger a model call alone — revenue band drives only graduated deductions, never a veto. (Spec RO-1, RO-2, JG-1…JG-3; Phase 14)
 
+### Scoring Ownership
+
+- [ ] **REQ-inputs-only-writeback**: The pipeline writes ICP **inputs** and their source metadata, never the derived outputs. `lv_icp_fit_score`, `lv_icp_tier`, `lv_anti_icp_flag`, `lv_anti_icp_reason` and `lv_recommended_motion` are computed in HubSpot. `src/icp_scoring.py` still computes score/tier internally for routing and audit, but its results do not reach a PATCH. Supersedes CLAUDE.md §29. (Phase 15)
+
 ### CRM Migration
 
 - [ ] **REQ-property-migration**: Missing metadata properties created via a dry-run-by-default sync emitting an undo manifest. Two known irreversible mutations require explicit sign-off and are NOT bundled: `lv_org_type` text→enumeration, and `lv_icp_fit_score` calculated→writable (destroys its formula). (Spec RT-5; Phase 15)
@@ -134,9 +138,12 @@ These REQ-IDs group that spec into phase-mappable units; the spec IDs are the te
 | REQ-evidence-by-field | Phase 13 | Pending |
 | REQ-tristate-content | Phase 13 | Pending |
 | REQ-evidence-before-judgement | Phase 14 | Pending |
+| REQ-inputs-only-writeback | Phase 15 | Pending |
 | REQ-property-migration | Phase 15 | Pending |
 
-**Coverage:** v3 requirements: 11 total — mapped to phases: 11 — unmapped: 0 ✓
+**Coverage:** v3 requirements: 12 total — mapped to phases: 12 — unmapped: 0 ✓
+
+**Deferred beyond Milestone 3:** authoring the HubSpot-side calculation for score/tier/veto/motion (downstream; the rubric must be re-expressed in HubSpot calculation syntax against the `lv_*` inputs).
 
 ---
 *v3 requirements defined: 2026-07-20*
