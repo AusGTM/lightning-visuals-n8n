@@ -28,7 +28,6 @@ def _norm_mod():
 
 
 # --- §3 Normalization --------------------------------------------------------
-@unbuilt
 @pytest.mark.parametrize(
     "raw,expected",
     [
@@ -49,7 +48,6 @@ def test_nm1_nm3_org_type_normalization(raw, expected):
     assert _norm_mod().normalize_org_type(raw) == expected
 
 
-@unbuilt
 def test_nm1_never_returns_off_vocabulary():
     """NM-1: HubSpot rejects unknown enum values — this is correctness, not hygiene."""
     norm = _norm_mod().normalize_org_type
@@ -57,7 +55,6 @@ def test_nm1_never_returns_off_vocabulary():
         assert norm(junk) in ORG_TYPES
 
 
-@unbuilt
 def test_nm4_default_sets_needs_review():
     """NM-4: falling back to the default flags the record for review."""
     result = _norm_mod().normalize_org_type_result("something unmappable")
@@ -65,7 +62,6 @@ def test_nm4_default_sets_needs_review():
     assert result["needs_review"] is True
 
 
-@unbuilt
 def test_nm5_content_types_drop_unknown_and_dedupe():
     """NM-5: unrecognised entries are dropped, not passed through; result deduped."""
     out = _norm_mod().normalize_content_types(
