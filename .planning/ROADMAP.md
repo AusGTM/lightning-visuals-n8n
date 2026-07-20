@@ -266,6 +266,7 @@ retroactively; its artifacts and tests are in the tree.
 - [ ] **Phase 13: Web Research Retrieval & Validation** - Native web_search retrieval, output validation, enum normalization, tri-state coercion
 - [ ] **Phase 14: Judge Wiring** - Haiku classify → Sonnet escalate per CLAUDE.md §15, pointed at identity/classification not numeric plausibility
 - [ ] **Phase 15: HubSpot Property Migration** - Create missing metadata properties; unblocks research caching. IRREVERSIBLE — checkpointed, dry-run first
+- [ ] **Phase 16: Scheduled Workflows & Review Surface** - Schedule-triggered n8n workflows (SJ-1..SJ-3 predicates), dedupeSweep wiring, §22.2 review loop on the 9 missing review properties
 
 ## Phase Details
 
@@ -335,6 +336,21 @@ retroactively; its artifacts and tests are in the tree.
   2. Research caching by domain with 180-day TTL becomes possible (unblocks RT-5).
   3. `lv_org_type` text→enumeration is NOT performed without explicit sign-off (irreversible type change).
   4. `lv_icp_fit_score` and `lv_icp_tier` are left AS calculated/placeholder — per the milestone scope fence, HubSpot owns them. Retire the pipeline's write paths to those fields (`src/merge_policy.py:303`, `main.py:60`, `config/field_policy.yaml:86`, `n8n/code/mergeCompanies.js:35`, and two inverted test assertions).
+  5. PN-1..PN-5 naming convention applied to code-generated property names: metadata stampers emit `lv_`-prefixed names (`n8n/code/mergeCompanies.js:154`, `n8n/code/mergeContacts.js:115`, `src/merge_policy.py:44`), `n8n/code/enrichmentGate.js:76` reads them, and `scripts/build_cloud_workflows.py` hardcoded names updated (`:686`, `:692`, `:694`, `:1059`).
+  6. Four missing contact properties created alongside the metadata migration: `lv_linkedin_url`, `lv_persona_group`, `lv_jobtitle_verified_at`, `lv_mobilephone_verified_at`. Until created, HubSpot silently drops the search-list names and staleness checks return undefined for every contact.
+
+**Plans**: TBD
+
+### Phase 16: Scheduled Workflows & Review Surface
+
+**Goal**: The background reconciliation layer runs on schedule, and needs-review records reach a human who can approve them.
+**Depends on**: Phase 15
+**Success Criteria**:
+
+  1. Schedule-triggered n8n workflows exist for the three SJ predicates (spec §0.7): SJ-1 hourly input-gap scan, SJ-2 monthly stale refresh, SJ-3 15-minute requested poller. Predicates key on pipeline-owned inputs only — never `lv_icp_tier` / `lv_icp_scored_at` (Approach C).
+  2. `build_cloud_workflows.py` emits scheduleTrigger nodes; `dedupeSweep.js` is wired into an active scheduled workflow (CLAUDE.md §13.4).
+  3. The §22.2 review loop closes: flag → decision JSON → RevOps approve → apply → clear, on the 9 review properties (created in Phase 15 or here, `lv_`-prefixed per PN-5).
+  4. SJ-1..SJ-3 acceptance tests authored with this phase's plan (spec §0.7 defers them here).
 
 **Plans**: TBD
 
@@ -347,3 +363,4 @@ retroactively; its artifacts and tests are in the tree.
 | 13. Web Research Retrieval & Validation | 0/? | Not started | — |
 | 14. Judge Wiring | 0/? | Not started | — |
 | 15. HubSpot Property Migration | 0/? | Not started | — |
+| 16. Scheduled Workflows & Review Surface | 0/? | Not started | — |

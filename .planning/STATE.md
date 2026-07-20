@@ -4,17 +4,17 @@ milestone: v0.3
 milestone_name: Company Enrichment & ICP Research
 current_phase: 12
 current_phase_name: Taxonomy Single-Source
-status: planning
-stopped_at: "Milestone 3 opened. Phase 11 (Company Branch & Provider Contract Hardening) recorded retroactively as COMPLETE — executed outside GSD 2026-07-08..2026-07-20. Next: /gsd-plan-phase 12."
-last_updated: "2026-07-20T00:00:00.000Z"
+status: planned
+stopped_at: "Phase 12 planned and committed (plan-checker PASS WITH CONCERNS). PN-1..PN-5 naming convention adopted after portal audit; SJ-1..SJ-3 scheduled predicates corrected for Approach C (spec §0.7); Phase 16 (Scheduled Workflows & Review Surface) added to roadmap; PN-4 code sites + 4 missing contact properties folded into Phase 15 criteria. Next: /gsd-execute-phase 12."
+last_updated: "2026-07-20T05:20:00.000Z"
 last_activity: 2026-07-20
-last_activity_desc: "Milestone 3 opened and .planning/ reconciled after 12 days of untracked work. Phase 11 shipped: company enrichment sibling branch in n8n (read-only, 3 live providers), mergeCompanies.js non-clobber merge with domain hard-guard + evidence-URL gate, ZoomInfo GTM companies contract probed live (27 valid outputFields; companyType 400), three live-shape/unit defects fixed incl. a 1000x revenue-band error that inverted the ICP signal, cross-provider size-conflict detector, config/taxonomy.yaml + docs/WEB-RESEARCH-SPEC.md (30 numbered requirements) + two test suites. 45 JS + 100 Python green, 20 xfailed, 1 intentional red (TX-4)."
+last_activity_desc: "Phase 12 planned. Portal 22617666 audited: lv_ naming convention (PN-1..PN-5) written into spec §0.6; scheduled-job predicates rewritten for Approach C as SJ-1..SJ-3 in spec §0.7 (input-keyed, never lv_icp_tier/lv_icp_scored_at); Phase 16 registered on roadmap; Phase 15 criteria extended with PN-4 code changes and 4 missing contact properties (lv_linkedin_url, lv_persona_group, lv_jobtitle_verified_at, lv_mobilephone_verified_at)."
 progress:
-  total_phases: 15
+  total_phases: 16
   completed_phases: 11
-  total_plans: 11
+  total_plans: 12
   completed_plans: 11
-  percent: 73
+  percent: 69
 ---
 
 # Project State
@@ -28,12 +28,12 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 
 ## Current Position
 
-Phase: 12 of 15 (Taxonomy Single-Source) — NOT STARTED
-Plan: none yet — run `/gsd-plan-phase 12`
-Status: Milestone 3 in progress — Phase 11 complete (company enrichment branch + provider contract hardening + web-research spec)
+Phase: 12 of 16 (Taxonomy Single-Source) — PLANNED, not executed
+Plan: phases/12-taxonomy-single-source/PLAN.md (committed b143959) — run `/gsd-execute-phase 12`
+Status: Milestone 3 in progress — Phase 11 complete; Phase 16 (Scheduled Workflows & Review Surface) added 2026-07-20
 Last activity: 2026-07-08 — Phase 10 executed: FastAPI /health /ingest /sweep wrapping run_contact_ingest + dedupe_sweep; two n8n v2.4.4 workflow templates; scripts/n8n_replica_test.sh proves import+execute on the running n8n container (ingest dry-run PATCH, sweep duplicate/mangled). 83 tests green offline, replica PASS exit 0, zero live writes.
 
-Progress: [███████▒▒▒] 73% (11/15 phases)
+Progress: [██████▉▒▒▒] 69% (11/16 phases)
 
 ## Performance Metrics
 
@@ -106,7 +106,7 @@ Items carried forward to later milestones:
 
 ## Session Continuity
 
-Last session: 2026-07-20T00:00:00.000Z
-Stopped at: Milestone 3 opened; Phase 11 recorded retroactively as COMPLETE. Uncommitted working tree holds the Phase 11 code (6 new files, 8 modified) — review and commit before Phase 12.
+Last session: 2026-07-20T05:20:00.000Z
+Stopped at: Roadmap extended to 16 phases; spec §0.6 (PN-1..PN-5) and §0.7 (SJ-1..SJ-3) written; Phase 15 criteria carry PN-4 code sites + 4 missing contact properties. Tree clean at commit time.
 Resume file: None
-Next command: `/gsd-plan-phase 12`
+Next command: `/gsd-execute-phase 12`

@@ -112,6 +112,30 @@ supersedes the unprefixed names in CLAUDE.md §4, §6, §7, §8 and §22.
 
 ---
 
+## 0.7. Scheduled-job predicates under Approach C
+
+CLAUDE.md §19.2 and §19.5 queue scheduled work off **derived** fields (`lv_icp_tier`,
+`lv_icp_scored_at`). Under Approach C the pipeline writes only ICP **inputs**; HubSpot
+owns the derived outputs, and `lv_icp_tier` / `lv_icp_fit_score` are today placeholder
+calculations (every company scores 2). Derived fields are therefore unusable as queue
+signals. This section supersedes the §19.2 / §19.5 predicates. Scope: Phase 16; the
+acceptance tests land with that phase's plan.
+
+**SJ-1 (input-gap scan, hourly — replaces §19.2 "unscored scan").** Queue a company for
+enrichment when any pipeline-owned input is unresolved:
+`lv_org_type` empty or `unknown`, OR `lv_produces_content` empty. MUST NOT reference
+`lv_icp_tier` or any derived output.
+
+**SJ-2 (stale refresh, monthly — replaces §19.5).** Queue when
+`lv_org_type_verified_at` OR `lv_produces_content_verified_at` is older than 180 days.
+MUST NOT reference `lv_icp_scored_at` — the pipeline never writes it.
+
+**SJ-3 (requested poller, every 15 min — §19.1 carried forward).** Predicate unchanged
+in substance, property names per PN-5: `lv_enrichment_requested = true AND
+lv_enrichment_status ≠ running`.
+
+---
+
 ## 1. Resolution order
 
 Established over the preceding design discussion. Each stage only runs when the prior
@@ -216,10 +240,11 @@ unscored company.
 
 **RT-4.** Gated by `ALLOW_WEB_RESEARCH` and `MAX_WEB_RESEARCH_PER_RUN`.
 
-**RT-5.** Results cached by **domain** (not record ID), TTL 180 days per §19.5.
-*Blocked:* requires `lv_org_type_verified_at` / `lv_icp_scored_at`, which do not exist in
-portal 22617666. Until created, every run re-researches. Property creation is a
-prerequisite for cost control, not a follow-up.
+**RT-5.** Results cached by **domain** (not record ID), TTL 180 days per SJ-2.
+*Blocked:* requires `lv_org_type_verified_at` / `lv_produces_content_verified_at`, which
+do not exist in portal 22617666. (`lv_icp_scored_at` is NOT a cache key — Approach C, see
+§0.7.) Until created, every run re-researches. Property creation is a prerequisite for
+cost control, not a follow-up.
 
 ---
 
