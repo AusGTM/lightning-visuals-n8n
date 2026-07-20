@@ -64,8 +64,12 @@ function normalizeRevenueBand(value) {
 
 function normalizeEmployeeBand(value) {
   if (value === null || value === undefined || value === "") return null;
-  // Already a band string (e.g. ZoomInfo employeeRange "201-500") -> pass through.
-  if (typeof value === "string" && !/^\d+$/.test(value.trim())) return value.trim();
+  // Already a band string (e.g. ZoomInfo employeeRange "201-500") -> pass through, with
+  // whitespace around the hyphen collapsed: live Lusha returns "51 - 200", and the spaced
+  // form is NOT an lv_employee_band enum value ("51-200" is).
+  if (typeof value === "string" && !/^\d+$/.test(value.trim())) {
+    return value.trim().replace(/\s*-\s*/g, "-");
+  }
   const v = parseInt(value, 10);
   if (Number.isNaN(v)) return null;
   if (v <= 9) return "1-9";
@@ -156,11 +160,18 @@ function lushaCandidates(rawResponse, objectType) {
   } else {
     // company firmographics — no per-field grade -> base 0.6. Live nests under `company`
     // with array revenueRange/companySize [lo,hi] and location.countryIso2; fixtures are flat.
-    const co = raw.company || raw;
+    // Live /v2/company wraps the record in `data`; the person endpoint uses `company`;
+    // fixtures are flat. Without the `data` unwrap the live company response yielded
+    // ZERO candidates (every lookup hit the envelope, not the record).
+    const co = raw.company || raw.data || raw;
     const rev = Array.isArray(co.revenueRange) ? co.revenueRange[0] : co.revenueRange;
     _push(out, "lv_revenue_band", src, rev, normalizeRevenueBand(rev), 0.6, updated);
+    // Live /v2/company returns the headcount as `employees` ("51 - 200", a spaced range
+    // string); companySize/employeeCount are null there and only appear in the fixtures.
     const emp = Array.isArray(co.companySize)
-      ? co.companySize[co.companySize.length - 1] : (co.companySize != null ? co.companySize : co.employeeCount);
+      ? co.companySize[co.companySize.length - 1]
+      : (co.companySize != null ? co.companySize
+        : (co.employeeCount != null ? co.employeeCount : co.employees));
     _push(out, "lv_employee_band", src, emp, normalizeEmployeeBand(emp), 0.6, updated);
     const naics = (co.naicsCodes || [])[0];
     _push(out, "industry", src, naics || co.mainIndustry, naics ? String(naics) : _norm(co.mainIndustry), 0.6, updated);
@@ -255,12 +266,31 @@ function zoominfoCandidates(rawResponse, objectType) {
     const ml = Array.isArray(raw.managementLevel) ? raw.managementLevel[0] : raw.managementLevel;
     _push(out, "seniority", src, ml, _norm(ml), acc, recency);
   } else {
-    _push(out, "lv_revenue_band", src, raw.revenue != null ? raw.revenue : raw.revenueRange,
-      normalizeRevenueBand(raw.revenue != null ? raw.revenue : raw.revenueRange), 0.6, recency);
+    // UNITS: GTM `revenue` is in THOUSANDS, not dollars — confirmed live against three
+    // records (Racing NSW 268163 + revenueRange "$250 mil. - $500 mil."; ZoomInfo 1254000
+    // + "$1 bil. - $5 bil."; FanDuel 14050000 + "Over $5 bil."), and Apollo independently
+    // reports Racing NSW annual_revenue 268000000 dollars. Feeding the raw number to
+    // normalizeRevenueBand (which expects dollars) banded every company 1000x low —
+    // FanDuel's $14b read as "5-50M". Prefer the unambiguous `revenueRange` string;
+    // fall back to revenue*1000.
+    const ziRev = raw.revenueRange != null && raw.revenueRange !== ""
+      ? raw.revenueRange
+      : (typeof raw.revenue === "number" ? raw.revenue * 1000 : null);
+    _push(out, "lv_revenue_band", src, ziRev, normalizeRevenueBand(ziRev), 0.6, recency);
+    // employeeCount is an exact integer; employeeRange ("100 - 250") is NOT an
+    // lv_employee_band enum value, so it is only a last resort.
     _push(out, "lv_employee_band", src, raw.employeeCount != null ? raw.employeeCount : raw.employeeRange,
       normalizeEmployeeBand(raw.employeeCount != null ? raw.employeeCount : raw.employeeRange), 0.6, recency);
-    const naics = (raw.naicsCodes || [])[0];
-    _push(out, "industry", src, naics || raw.primaryIndustry, naics ? String(naics) : _norm(raw.primaryIndustry), 0.6, recency);
+    const ziCountry = _iso2(raw.country);
+    _push(out, "lv_country_region_normalized", src, raw.country,
+      normalizeCountryRegion(ziCountry || raw.country), 0.6, recency);
+    // Live GTM naicsCodes are OBJECTS ({id,name}, most-general first); the flat fixtures
+    // are bare code strings. String(obj) would have staged "[object Object]" as industry.
+    const naics0 = (raw.naicsCodes || [])[0];
+    const naics = naics0 && typeof naics0 === "object" ? naics0.id : naics0;
+    // primaryIndustry is an array in the live response (["Hospitality", "Sports Teams ..."]).
+    const pi = Array.isArray(raw.primaryIndustry) ? raw.primaryIndustry[0] : raw.primaryIndustry;
+    _push(out, "industry", src, naics || pi, naics ? String(naics) : _norm(pi), 0.6, recency);
   }
   return out;
 }

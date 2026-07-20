@@ -279,3 +279,47 @@ test("gate: present staleable field with no verified_at is treated as stale", ()
   assert.equal(r.action, "enrich");
   assert.deepEqual(r.staleFields, ["jobtitle"]);
 });
+
+// --- companies branch: live-shape normalization (probed 2026-07-20) -----------
+const zoomLiveCo = load("zoominfo_live_company.json"); // real GTM companies/enrich
+
+test("toCandidates: ZoomInfo company revenue is THOUSANDS, not dollars", () => {
+  // Racing NSW: revenue 268163 (thousands) == $268m, revenueRange "$250 mil. - $500 mil.".
+  // Reading the raw number as dollars banded it "<1M" — a 1000x error.
+  const c = toCandidates("zoominfo", zoomLiveCo, "companies");
+  assert.equal(find(c, "lv_revenue_band", "zoominfo").normalizedValue, "50-500M");
+});
+
+test("toCandidates: ZoomInfo revenue falls back to revenue*1000 with no revenueRange", () => {
+  const mk = (attrs) => ({ data: [{ id: "1", type: "Company", attributes: attrs,
+                                    meta: { matchStatus: "FULL_MATCH" } }] });
+  const c = toCandidates("zoominfo", mk({ name: "X", revenue: 268163 }), "companies");
+  assert.equal(find(c, "lv_revenue_band", "zoominfo").normalizedValue, "50-500M");
+
+  // FanDuel: 14050000 thousands == $14.05b -> top band (was "5-50M" before the fix).
+  const fd = toCandidates("zoominfo", mk({ name: "FanDuel", revenue: 14050000,
+                                           country: "United States" }), "companies");
+  assert.equal(find(fd, "lv_revenue_band", "zoominfo").normalizedValue, "1.2B+");
+  // non-ANZ -> hard veto input
+  assert.equal(find(fd, "lv_country_region_normalized", "zoominfo").normalizedValue, "Other");
+});
+
+test("toCandidates: ZoomInfo live naicsCodes are objects, not code strings", () => {
+  // String({id,name}) would have staged "[object Object]" as the industry.
+  const c = toCandidates("zoominfo", zoomLiveCo, "companies");
+  assert.equal(find(c, "industry", "zoominfo").normalizedValue, "71");
+});
+
+test("toCandidates: Lusha live company unwraps `data` and reads `employees`", () => {
+  // Live /v2/company wraps in `data` and returns headcount as a spaced range string;
+  // without the unwrap this response produced ZERO candidates.
+  const raw = { data: { name: "Racing NSW", revenueRange: [10000000, 50000000],
+                        employees: "51 - 200", mainIndustry: "Entertainment",
+                        location: { countryIso2: "AU" } }, meta: {} };
+  const c = toCandidates("lusha", raw, "companies");
+  assert.ok(c.length > 0, "live company response must yield candidates");
+  assert.equal(find(c, "lv_revenue_band", "lusha").normalizedValue, "5-50M");
+  // spaced range collapses onto the lv_employee_band enum value
+  assert.equal(find(c, "lv_employee_band", "lusha").normalizedValue, "51-200");
+  assert.equal(find(c, "lv_country_region_normalized", "lusha").normalizedValue, "AU");
+});
