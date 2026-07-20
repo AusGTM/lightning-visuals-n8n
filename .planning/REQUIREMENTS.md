@@ -106,8 +106,8 @@ These REQ-IDs group that spec into phase-mappable units; the spec IDs are the te
 
 ### Taxonomy & Extensibility
 
-- [ ] **REQ-taxonomy-single-source**: `config/taxonomy.yaml` is the only hand-edited vocabulary for `lv_org_type` and `lv_content_type`. Scoring config, field policy, n8n node literals, research prompt and normalizers all derive from it. Adding a value is a one-file edit; drift is a test failure, not a silent 0-score. (Spec TX-1…TX-9; Phase 12)
-- [ ] **REQ-enum-normalization**: Normalizers never emit an off-vocabulary value. `lv_org_type` is free text in HubSpot, so there is no CRM-level guard — the normalizer is the only barrier. Python and JS agree on every shared case. (Spec NM-1…NM-6; Phase 12)
+- [x] **REQ-taxonomy-single-source**: `config/taxonomy.yaml` is the only hand-edited vocabulary for `lv_org_type` and `lv_content_type`. Scoring config, field policy, n8n node literals, research prompt and normalizers all derive from it. Adding a value is a one-file edit; drift is a test failure, not a silent 0-score. (Spec TX-1…TX-9; Phase 12)
+- [x] **REQ-enum-normalization**: Normalizers never emit an off-vocabulary value. `lv_org_type` is free text in HubSpot, so there is no CRM-level guard — the normalizer is the only barrier. Python and JS agree on every shared case. (Spec NM-1…NM-6; Phase 12)
 
 ### Research & Judgement
 
@@ -132,8 +132,8 @@ These REQ-IDs group that spec into phase-mappable units; the spec IDs are the te
 | REQ-company-merge | Phase 11 | Complete |
 | REQ-provider-contracts | Phase 11 | Complete |
 | REQ-conflict-withhold | Phase 11 | Complete |
-| REQ-taxonomy-single-source | Phase 12 | Pending |
-| REQ-enum-normalization | Phase 12 | Pending |
+| REQ-taxonomy-single-source | Phase 12 | Complete |
+| REQ-enum-normalization | Phase 12 | Complete |
 | REQ-web-retrieval | Phase 13 | Pending |
 | REQ-evidence-by-field | Phase 13 | Pending |
 | REQ-tristate-content | Phase 13 | Pending |

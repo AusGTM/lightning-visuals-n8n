@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: Company Enrichment & ICP Research
-current_phase: 12
-current_phase_name: Taxonomy Single-Source
-status: planned
-stopped_at: "Phase 12 planned and committed (plan-checker PASS WITH CONCERNS). PN-1..PN-5 naming convention adopted after portal audit; SJ-1..SJ-3 scheduled predicates corrected for Approach C (spec §0.7); Phase 16 (Scheduled Workflows & Review Surface) added to roadmap; PN-4 code sites + 4 missing contact properties folded into Phase 15 criteria. Next: /gsd-execute-phase 12."
-last_updated: "2026-07-20T05:20:00.000Z"
+current_phase: 13
+current_phase_name: Web Research Retrieval & Validation
+status: executed
+stopped_at: "Phase 12 (Taxonomy Single-Source) executed: config/taxonomy.yaml is now the only hand-edited org_type/content_type vocabulary; scripts/gen_taxonomy_js.py generates n8n/code/taxonomy.generated.js, mergeCompanies.js consumes it (TX-4 retired), n8n/code/taxonomy.js is parity-proven against src/taxonomy.py (NM-6). Next: /gsd-plan-phase 13 or /gsd-execute-phase 13."
+last_updated: "2026-07-20T06:39:00.000Z"
 last_activity: 2026-07-20
-last_activity_desc: "Phase 12 planned. Portal 22617666 audited: lv_ naming convention (PN-1..PN-5) written into spec §0.6; scheduled-job predicates rewritten for Approach C as SJ-1..SJ-3 in spec §0.7 (input-keyed, never lv_icp_tier/lv_icp_scored_at); Phase 16 registered on roadmap; Phase 15 criteria extended with PN-4 code changes and 4 missing contact properties (lv_linkedin_url, lv_persona_group, lv_jobtitle_verified_at, lv_mobilephone_verified_at)."
+last_activity_desc: "Phase 12 executed (4 tasks, 4 commits): src/taxonomy.py NM-1..NM-5 normalizers; scripts/gen_taxonomy_js.py + n8n/code/taxonomy.generated.js + currency drift guard; mergeCompanies.js require()s the generated evidence-gated list (TX-4 green, no hand-typed enum); n8n/code/taxonomy.js + NM-6 Python/JS parity test on a shared fixture table. 132 pytest passed / 7 xfailed / 0 failed / 0 xpassed; 46 node tests passed. Rebuild of all 5 workflow JSONs is a byte-for-byte no-op."
 progress:
   total_phases: 16
-  completed_phases: 11
+  completed_phases: 12
   total_plans: 12
-  completed_plans: 11
-  percent: 69
+  completed_plans: 12
+  percent: 75
 ---
 
 # Project State
@@ -28,12 +28,12 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 
 ## Current Position
 
-Phase: 12 of 16 (Taxonomy Single-Source) — PLANNED, not executed
-Plan: phases/12-taxonomy-single-source/PLAN.md (committed b143959) — run `/gsd-execute-phase 12`
-Status: Milestone 3 in progress — Phase 11 complete; Phase 16 (Scheduled Workflows & Review Surface) added 2026-07-20
-Last activity: 2026-07-08 — Phase 10 executed: FastAPI /health /ingest /sweep wrapping run_contact_ingest + dedupe_sweep; two n8n v2.4.4 workflow templates; scripts/n8n_replica_test.sh proves import+execute on the running n8n container (ingest dry-run PATCH, sweep duplicate/mangled). 83 tests green offline, replica PASS exit 0, zero live writes.
+Phase: 12 of 16 (Taxonomy Single-Source) — COMPLETE
+Plan: phases/12-taxonomy-single-source/PLAN.md — see 12-01-SUMMARY.md
+Status: Milestone 3 in progress — Phase 12 complete; next up Phase 13 (Web Research Retrieval & Validation)
+Last activity: 2026-07-20 — Phase 12 executed: taxonomy single-source (see last_activity_desc above)
 
-Progress: [██████▉▒▒▒] 69% (11/16 phases)
+Progress: [███████▌░░] 75% (12/16 phases)
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ Progress: [██████▉▒▒▒] 69% (11/16 phases)
 | Phase phase-5 P01 | 5m | 4 tasks | 8 files |
 | Phase 9 P01 | ~15m | 3 tasks | 6 files |
 | Phase 10 P01 | ~35m | 3 tasks | 6 files |
+| Phase 12 P01 | ~30m | 4 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -71,10 +72,11 @@ Decisions are logged in PROJECT.md Key Decisions table. SPEC-level architectural
 - [Phase ?]: Phase 9: dedupe_sweep compares NORMALIZED keys (normalize-before-compare); SweepReport findings are plain JSON dicts for Phase-10 transport
 - Phase 11: companies is a SIBLING branch, not nested under contacts (ICP fields are per-domain; nesting re-pays per contact). `mergeCompanies.js` kept separate from `mergeContacts.js` for zero regression risk. NO entity-resolution/hierarchy modelling — granularity only corrupts SIZE signals; provider disagreement already detects it. Name-mismatch detection evaluated and REJECTED (blind to the identical-name case). Resolution order is deterministic → retrieval → judgement; a judge without retrieval is least reliable exactly where the ICP lives.
 - Phase 10: n8n replica uses a THIN FastAPI wrapper (no JS logic dup); dry_run hard-True + stubbed HubSpot + allow_create off = structurally no live write. `n8n execute --id` (v2.4.4) rejects schedule-only workflows (needs a manual/execute-workflow start node) and needs a non-colliding task-broker port (5699) when run inside the container.
+- Phase 12: taxonomy vocabulary is generated-data / hand-written-logic split (spec D2) — `n8n/code/taxonomy.generated.js` carries only vocabulary (regenerated by `scripts/gen_taxonomy_js.py`, called at the top of `build_cloud_workflows.py` before any `inline()`), `n8n/code/taxonomy.js` carries the ~30 lines of normalizer logic and builds its own canonical+synonym lookup at require-time (mirrors `src/taxonomy.py`'s `_build_synonym_map`). `icp_scoring.yaml`/`field_policy.yaml` stay hand-written, drift-guarded by the pre-existing TX-1/2/3 tests rather than generated — codegen is reserved for the one consumer that physically cannot read a file at runtime (n8n Code nodes, spec AR-4).
 
 ### Pending Todos
 
-- **TX-4 red (intentional)**: `mergeCompanies.js:27` holds a hand-typed evidence-gated org_type list. Drift guard catches it. Phase 12 retires it.
+- **RESOLVED 2026-07-20 (Phase 12)**: TX-4 red retired. `mergeCompanies.js` now `require()`s `EVIDENCE_GATED_ORG_TYPES` from the generated taxonomy module instead of hand-typing the array; `test_tx4_mergecompanies_has_no_handmaintained_enum` passes.
 
 ### Blockers/Concerns
 
@@ -106,7 +108,7 @@ Items carried forward to later milestones:
 
 ## Session Continuity
 
-Last session: 2026-07-20T05:20:00.000Z
-Stopped at: Roadmap extended to 16 phases; spec §0.6 (PN-1..PN-5) and §0.7 (SJ-1..SJ-3) written; Phase 15 criteria carry PN-4 code sites + 4 missing contact properties. Tree clean at commit time.
+Last session: 2026-07-20T06:39:00.000Z
+Stopped at: Phase 12 (Taxonomy Single-Source) executed and committed — 4 tasks, 4 commits, SUMMARY written. Tree clean at commit time (pending this docs commit).
 Resume file: None
-Next command: `/gsd-execute-phase 12`
+Next command: `/gsd-plan-phase 13`

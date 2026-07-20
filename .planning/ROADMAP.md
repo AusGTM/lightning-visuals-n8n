@@ -262,7 +262,7 @@ retroactively; its artifacts and tests are in the tree.
 ## Phases
 
 - [x] **Phase 11: Company Branch & Provider Contract Hardening** - Company sibling branch in n8n, mergeCompanies non-clobber merge, ZoomInfo GTM companies contract probed live, three live-shape bugs fixed, cross-provider conflict detector, taxonomy + web-research spec (completed 2026-07-20, outside GSD)
-- [ ] **Phase 12: Taxonomy Single-Source** - config/taxonomy.yaml becomes the only edit point; node literals generated at build time; retires the known-red TX-4 drift guard
+- [x] **Phase 12: Taxonomy Single-Source** - config/taxonomy.yaml becomes the only edit point; node literals generated at build time; retires the known-red TX-4 drift guard (completed 2026-07-20)
 - [ ] **Phase 13: Web Research Retrieval & Validation** - Native web_search retrieval, output validation, enum normalization, tri-state coercion
 - [ ] **Phase 14: Judge Wiring** - Haiku classify → Sonnet escalate per CLAUDE.md §15, pointed at identity/classification not numeric plausibility
 - [ ] **Phase 15: HubSpot Property Migration** - Create missing metadata properties; unblocks research caching. IRREVERSIBLE — checkpointed, dry-run first
@@ -291,14 +291,17 @@ retroactively; its artifacts and tests are in the tree.
 
 **Goal**: Adding an org_type or content_type is a one-file edit that cannot silently drift.
 **Depends on**: Phase 11
+**Status**: COMPLETE 2026-07-20
 **Success Criteria**:
 
-  1. `config/taxonomy.yaml` is the only hand-edited vocabulary; icp_scoring, field_policy, node literals, research prompt and normalizers all derive from it.
-  2. `src/taxonomy.py` provides `normalize_org_type` / `normalize_content_types` satisfying spec NM-1…NM-6.
-  3. The builder generates the JS literal into n8n Code nodes; TX-4 goes green with no hand-maintained list in `mergeCompanies.js`.
-  4. Python and JS normalizers agree on every shared case (NM-6 parity test).
+  1. [x] `config/taxonomy.yaml` is the only hand-edited vocabulary; icp_scoring and field_policy stay hand-written but drift-guarded by TX-1/2/3 (per plan decision D3 — codegen is reserved for the node literal, the one artifact that cannot be read at runtime); node literals and normalizers derive from it. Research prompt deferred to Phase 13 by design (documented in PLAN.md's deferral note).
+  2. [x] `src/taxonomy.py` provides `normalize_org_type` / `normalize_org_type_result` / `normalize_content_types` satisfying spec NM-1…NM-5 (NM-6 in criterion 4).
+  3. [x] The builder generates the JS literal into n8n Code nodes; TX-4 goes green with no hand-maintained list in `mergeCompanies.js`.
+  4. [x] Python and JS normalizers agree on every shared case (NM-6 parity test, tests/n8n/parity.test.mjs).
 
-**Plans**: TBD — run `/gsd-plan-phase 12`
+**Plans**: 1 plan
+
+- [x] phase-12/PLAN.md — see 12-01-SUMMARY.md
 
 ### Phase 13: Web Research Retrieval & Validation
 
