@@ -126,10 +126,19 @@ def main(argv=None) -> int:
         domain = props.get("domain") or "(no domain)"
         pc = validated["data"].get("lv_produces_content")
         evidence_url = validated["evidence_by_field"].get("lv_produces_content") or "-"
+        # org_type + the two veto flags make a surprising produces_content row
+        # self-explanatory (a hardware vendor reading true is a different problem than a
+        # racing club reading false).
+        org_type = validated["data"].get("lv_org_type") or "unknown"
+        flags = ",".join(
+            f for f, k in (("hardware", "lv_is_hardware_vendor"),
+                           ("gambling", "lv_is_gambling_operator"))
+            if validated["data"].get(k) is True
+        ) or "-"
 
         if not validated["matched"]:
             counts["unmatched"] += 1
-            print(f"{name} | {domain} | lv_produces_content=UNMATCHED | evidence={evidence_url}")
+            print(f"{name} | {domain} | lv_produces_content=UNMATCHED | org_type={org_type} | flags={flags} | evidence={evidence_url}")
             continue
 
         if pc is True:
@@ -139,7 +148,7 @@ def main(argv=None) -> int:
             evidenced_false.append((name, domain, evidence_url))  # unevidenced false can't occur post-TS-2
         else:
             counts["null"] += 1
-        print(f"{name} | {domain} | lv_produces_content={pc} | evidence={evidence_url}")
+        print(f"{name} | {domain} | lv_produces_content={pc} | org_type={org_type} | flags={flags} | evidence={evidence_url}")
 
     print(f"\nSummary: true={counts['true']} null={counts['null']} false={counts['false']} "
           f"unmatched={counts['unmatched']} (of {len(companies)} {args.dealstage} companies)")

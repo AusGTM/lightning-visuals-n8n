@@ -96,3 +96,76 @@ companies. Exit 2 (one evidenced-FALSE red flag — by design, see below).
   the hard veto fires on a real customer. Recorded here for that review; not auto-resolved.
 - **Exit code 2** is the script's intentional RED FLAG path (an evidenced `false` on a
   closed-won company), not a script failure.
+- **QRIC adjudicated 2026-07-21 (user):** a regulatory body is fairly out of ICP. The veto
+  is correct; no taxonomy change needed.
+
+---
+
+# Closed-LOST Control Run — 2026-07-21
+
+**Run:** `scripts/smoke_closed_won_research.py --dealstage closedlost --limit 10`, live,
+read-only. Exit 0 (the exit-2 red flag is closedwon-only by design).
+
+**Premise being tested:** if `lv_produces_content` discriminates, closed-lost should show a
+materially lower `true` rate than closed-won's 9/10.
+
+| Company | Domain | lv_produces_content | evidence URL |
+|---|---|---|---|
+| The Creek Agency | thecreek.com.au | true | https://www.thecreek.com.au/ |
+| Scone Race Club | www.sconeraceclub.com.au | true | https://www.youtube.com/channel/UC1AqN0yBcRhDo_Mgr4CMPTg |
+| Racing NSW | www.racingnsw.com.au | true | https://www.racingnsw.com.au/ |
+| Supertech Electronics | www.supertech-electronics.com.au | true | https://myausweb.net.au/automotive/supertech-electronics/ |
+| Cairns Jockey Club | www.cairnsjockeyclub.com.au | true | https://www.cairnsjockeyclub.com.au/news/ |
+| Victoria Racing Club | flemington.com.au | true | https://www.vrc.com.au/ |
+| Bunbury Trotting Club | www.bunburytrottingclub.com.au | true | https://visitbunburygeographe.com.au/business/bunbury-trotting-club/ |
+| Sunshine Coast Turf Club | sctc.com.au | true | https://www.sctc.com.au/race-fields-footage/ |
+| Harness Racing ACT | www.capitaltrots.com.au | true | https://capitaltrots.com.au/ |
+| Thoroughbred Park | www.thoroughbredpark.com.au | true | https://thoroughbredpark.com.au/racing-information/ |
+
+**Summary: true=10 null=0 false=0 unmatched=0** (of 10 closedlost companies)
+
+## Reading — the hypothesis did NOT hold, and that is informative
+
+The predicted inversion did not appear: closed-lost scored **10/10 true** vs closed-won's
+9/10. Three separate conclusions, kept apart deliberately:
+
+1. **Not a defect — the population is the same ICP.** 8 of these 10 are racing clubs or
+   governing bodies: exactly the target profile. They were lost on price, timing, incumbency
+   or budget, not on fit. `lv_produces_content` is a **qualifier, not a predictor** — by
+   design it is +20 and a hard veto (does this org belong in the market at all), never a
+   win-probability signal. A won/lost split was the wrong thing to expect from it. Tier
+   separation is supposed to come from `lv_org_type`, geography and revenue band.
+2. **A real limitation is now measured, not assumed.** This field cannot help prioritise
+   *within* the racing vertical — nearly every racing body passes it. Its value is
+   excluding non-content orgs (QRIC in the won set), and that is all it should be credited
+   with. Anyone reading tier A/B/C separation as content-driven would be wrong.
+3. **A genuine finding: evidence-quality inflation.** The model now always returns a URL
+   (the Phase-13 fix worked), but several citations do not actually evidence broadcast or
+   streaming output:
+   - **Supertech Electronics** — an electronics firm, cited via a third-party business
+     directory (`myausweb.net.au/automotive/...`). Probable **false positive**, and probable
+     `lv_is_hardware_vendor` (itself a hard veto). The most suspicious row here.
+   - **Bunbury Trotting Club** — cited via a tourism directory (`visitbunburygeographe.com.au`),
+     not first-party.
+   - **Racing NSW, VRC, Harness Racing ACT, The Creek Agency** — bare homepages, which prove
+     the org exists, not that it produces content.
+   Only **Scone (YouTube channel)**, **Sunshine Coast (race-fields-footage)**, **Cairns
+   (news)** and **Thoroughbred Park (racing-information)** cite pages that actually
+   substantiate the claim.
+
+   Spec RT-2 already prefers first-party domains, but nothing today *enforces* that the
+   cited page substantiates the specific claim. The evidence gate checks presence, not
+   probative value. That is the gap the judge (Phase 14) exists to close — and this run is
+   the concrete evidence set to point it at.
+
+## Actions
+
+- **No taxonomy or rubric change from this run.** The field behaves as specified.
+- **Carry to Phase 14 (judge):** evidence *sufficiency* — reject homepage-only and
+  third-party-directory citations for `lv_produces_content`; a citation must plausibly show
+  the content. Supertech Electronics is the worked counter-example to plan against.
+- **Carry to Phase 14 / anti-ICP:** verify `lv_is_hardware_vendor` fires on Supertech
+  Electronics. If it does, the hard veto catches the false positive regardless of the
+  content field — worth confirming rather than assuming.
+- **Script gap:** the smoke prints only `lv_produces_content`; `lv_org_type` and the vendor
+  flags would have made rows 4 and 7 self-explanatory. Add before the next run.
