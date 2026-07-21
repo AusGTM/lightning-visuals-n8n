@@ -315,7 +315,9 @@ retroactively; its artifacts and tests are in the tree.
   4. Off-vocabulary model output normalizes to `unknown` + needs_review, never reaches HubSpot (AT-2).
   5. The `xfail(strict=True)` acceptance tests in `tests/test_web_research_spec.py` flip to passing and their markers are removed.
 
-**Plans**: TBD
+**Plans**: 1 plan
+
+- [ ] 13-01-PLAN.md — Python output-contract (validate_research_output/to_provider_result, evidence_by_field, tri-state, AT-2/ER-1; 7 xfails flip) + JS twin webResearch.js + parity + n8n web_search retrieval/validation wired into wf_enrichment_local_live.json
 
 ### Phase 14: Judge Wiring
 
