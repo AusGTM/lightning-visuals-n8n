@@ -4,7 +4,7 @@ milestone: v0.3
 milestone_name: Company Enrichment & ICP Research
 current_phase: 14
 current_phase_name: Judge Wiring
-status: awaiting_plan
+status: planned
 stopped_at: "Phase 13 executed and committed (4 tasks, 5 commits incl. one small rebuild fixup). SUMMARY written. Next: /gsd-plan-phase 14."
 last_updated: "2026-07-21T03:50:37.000Z"
 last_activity: 2026-07-21
