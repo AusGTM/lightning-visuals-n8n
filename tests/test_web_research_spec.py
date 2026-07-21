@@ -74,7 +74,6 @@ def test_nm5_content_types_drop_unknown_and_dedupe():
 
 
 # --- §6 Output contract ------------------------------------------------------
-@unbuilt
 def test_oc1_evidence_is_keyed_per_field():
     """OC-1: mergeCompanies takes {field: url}; a flat list does not satisfy the gate."""
     from src.web_research import claude_web_research  # noqa: F401
@@ -92,7 +91,6 @@ def test_oc1_evidence_is_keyed_per_field():
     assert result.evidence_by_field["lv_produces_content"].startswith("http")
 
 
-@unbuilt
 def test_oc2_oc3_output_values_are_canonical():
     """OC-2/OC-3: emitted org_type and content_type are post-normalization."""
     out = _norm_mod().validate_research_output(
@@ -112,7 +110,6 @@ def test_oc2_oc3_output_values_are_canonical():
     assert set(out["data"]["lv_content_type"]) <= CONTENT_TYPES
 
 
-@unbuilt
 def test_oc4_malformed_output_does_not_raise():
     """OC-4: unparseable model output -> matched: False, never an exception."""
     out = _norm_mod().validate_research_output("not json at all")
@@ -120,7 +117,6 @@ def test_oc4_malformed_output_does_not_raise():
 
 
 # --- §7 Tri-state ------------------------------------------------------------
-@unbuilt
 def test_ts1_ts2_thin_evidence_yields_null_not_false():
     """TS-1/TS-2: a failed search is NOT evidence of absence.
 
@@ -139,7 +135,6 @@ def test_ts1_ts2_thin_evidence_yields_null_not_false():
     )
 
 
-@unbuilt
 def test_ts3_false_requires_evidence_url():
     """TS-3: an evidenced False is allowed through."""
     out = _norm_mod().validate_research_output(
@@ -199,7 +194,6 @@ def test_ts1_null_and_false_are_not_interchangeable():
 
 
 # --- §9 Acceptance / golden set ---------------------------------------------
-@unbuilt
 def test_at2_off_vocabulary_from_model_becomes_unknown():
     """AT-2: the model ignoring the enum must not reach HubSpot."""
     out = _norm_mod().validate_research_output(
@@ -213,7 +207,6 @@ def test_at2_off_vocabulary_from_model_becomes_unknown():
     assert out["needs_review"] is True
 
 
-@unbuilt
 def test_er1_entity_resolution_present():
     """ER-1: represents is constrained to the documented set."""
     allowed = {"group", "subsidiary", "franchise_outlet", "single_entity", "unknown"}

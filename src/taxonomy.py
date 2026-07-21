@@ -100,6 +100,74 @@ def normalize_content_types(raw) -> list:
     return out
 
 
+# Phase 13 (OC-1..4, TS-1..3, AT-2, ER-1): validate_research_output / to_provider_result —
+# the output contract for Claude web-research results. Built on the normalizers above so
+# the vocabulary gate is reused by construction, not re-implemented.
+ALLOWED_REPRESENTS = {"group", "subsidiary", "franchise_outlet", "single_entity", "unknown"}
+
+
+def validate_research_output(raw) -> dict:
+    """OC-2/OC-3/OC-4, TS-1/TS-2/TS-3, AT-2, ER-1. Never raises."""
+    if not isinstance(raw, dict):
+        return {
+            "matched": False,
+            "data": {},
+            "evidence_by_field": {},
+            "entity_resolution": {
+                "represents": "unknown",
+                "likely_revenue_band": None,
+                "notes": "",
+            },
+            "needs_review": True,
+        }
+
+    data = dict(raw.get("data") or {})
+    evidence_by_field = dict(raw.get("evidence_by_field") or {})
+
+    org_result = normalize_org_type_result(data.get("lv_org_type"))
+    data["lv_org_type"] = org_result["value"]
+    data["lv_content_type"] = normalize_content_types(data.get("lv_content_type"))
+
+    produces_content = data.get("lv_produces_content")
+    if produces_content is False and not evidence_by_field.get("lv_produces_content"):
+        produces_content = None  # TS-2: unevidenced False is not evidence of absence
+    data["lv_produces_content"] = produces_content
+
+    er = dict(raw.get("entity_resolution") or {})
+    represents = er.get("represents")
+    if represents not in ALLOWED_REPRESENTS:
+        represents = "unknown"
+
+    return {
+        "matched": bool(raw.get("matched", True)),
+        "data": data,
+        "evidence_by_field": evidence_by_field,
+        "entity_resolution": {
+            "represents": represents,
+            "likely_revenue_band": er.get("likely_revenue_band"),
+            "notes": er.get("notes", ""),
+        },
+        "needs_review": org_result["needs_review"],
+    }
+
+
+def to_provider_result(raw):
+    """OC-1: builds the evidence_by_field-carrying ProviderResult candidate."""
+    from .schemas import ProviderEvidence, ProviderResult  # local import: avoid import cycle
+
+    validated = validate_research_output(raw)
+    src = raw if isinstance(raw, dict) else {}
+    return ProviderResult(
+        provider=src.get("provider", "claude_web"),
+        object_type=src.get("object_type", "companies"),
+        matched=validated["matched"],
+        confidence=int(src.get("confidence", 0)),
+        data=validated["data"],
+        evidence=ProviderEvidence(evidence_urls=list(validated["evidence_by_field"].values())),
+        evidence_by_field=validated["evidence_by_field"],
+    )
+
+
 if __name__ == "__main__":
     # ponytail: smallest runnable self-check for non-trivial branching logic (the
     # synonym lookup + default fallback), no pytest/fixtures required.

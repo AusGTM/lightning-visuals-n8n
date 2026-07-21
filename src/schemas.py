@@ -23,6 +23,9 @@ class ProviderResult(BaseModel):
     data: Dict[str, Any]
     evidence: ProviderEvidence
     model_trace: Dict[str, Any] = Field(default_factory=dict)
+    # Phase 13 (OC-1): per-field evidence URL, the exact shape mergeCompanies' evidence
+    # gate consumes. Additive — no existing field removed/changed.
+    evidence_by_field: Dict[str, str] = Field(default_factory=dict)
 
 class CandidateValue(BaseModel):
     canonical_field: str
