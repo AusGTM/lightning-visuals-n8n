@@ -28,6 +28,9 @@ const { dedupeSweep } = require(path.join(ROOT, "n8n/code/dedupeSweep.js"));
 const {
   normalizeOrgType, normalizeOrgTypeResult, normalizeContentTypes,
 } = require(path.join(ROOT, "n8n/code/taxonomy.js"));
+const {
+  validateResearchOutput, toProviderResult,
+} = require(path.join(ROOT, "n8n/code/webResearch.js"));
 
 // --- Python oracle helpers ----------------------------------------------------
 const PY = path.join(ROOT, ".venv/bin/python");
@@ -51,6 +54,27 @@ print(json.dumps({
     "org_type": [normalize_org_type(c) for c in cases["org_type_cases"]],
     "org_type_result": [normalize_org_type_result(c) for c in cases["org_type_cases"]],
     "content_types": [normalize_content_types(c) for c in cases["content_type_list_cases"]],
+}))
+`;
+  const out = execFileSync(PY, ["-c", script, fixtureRelPath], { cwd: ROOT }).toString().trim();
+  return JSON.parse(out);
+}
+
+// Phase 13 oracle: one subprocess call runs the whole shared research-cases fixture
+// through src.taxonomy's validate_research_output/to_provider_result and returns, per
+// case, the validate dict and the to_provider_result projected to a JSON-safe shape.
+function pyResearch(fixtureRelPath) {
+  const script = `
+import json, sys
+from src.taxonomy import validate_research_output, to_provider_result
+with open(sys.argv[1]) as f:
+    cases = json.load(f)["research_cases"]
+def project(r):
+    return {"provider": r.provider, "object_type": r.object_type, "matched": r.matched,
+            "confidence": r.confidence, "data": r.data, "evidence_by_field": r.evidence_by_field}
+print(json.dumps({
+    "validate": [validate_research_output(c) for c in cases],
+    "provider_result": [project(to_provider_result(c)) for c in cases],
 }))
 `;
   const out = execFileSync(PY, ["-c", script, fixtureRelPath], { cwd: ROOT }).toString().trim();
@@ -306,4 +330,22 @@ test("taxonomy: NM-6 GENUINE parity vs Python src.taxonomy across the shared fix
   assert.deepStrictEqual(jsOrgType, py.org_type, "normalize_org_type parity");
   assert.deepStrictEqual(jsOrgTypeResult, py.org_type_result, "normalize_org_type_result parity");
   assert.deepStrictEqual(jsContentTypes, py.content_types, "normalize_content_types parity");
+});
+
+// --- webResearch: JS/Python parity (Phase 13) ----------------------------------
+test("webResearch: GENUINE parity vs Python src.taxonomy validate_research_output/to_provider_result", () => {
+  const fixturePath = path.join(ROOT, "tests/fixtures/research_validation_cases.json");
+  const fixture = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
+  const cases = fixture.research_cases;
+  const py = pyResearch("tests/fixtures/research_validation_cases.json");
+
+  const jsValidate = cases.map((c) => validateResearchOutput(c));
+  const jsProviderResult = cases.map((c) => {
+    const r = toProviderResult(c);
+    return { provider: r.provider, object_type: r.object_type, matched: r.matched,
+             confidence: r.confidence, data: r.data, evidence_by_field: r.evidence_by_field };
+  });
+
+  assert.deepStrictEqual(jsValidate, py.validate, "validateResearchOutput parity");
+  assert.deepStrictEqual(jsProviderResult, py.provider_result, "toProviderResult parity");
 });
