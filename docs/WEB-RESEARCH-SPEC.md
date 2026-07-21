@@ -244,10 +244,21 @@ unscored company.
 **RT-4.** Gated by `ALLOW_WEB_RESEARCH` and `MAX_WEB_RESEARCH_PER_RUN`.
 
 **RT-5.** Results cached by **domain** (not record ID), TTL 180 days per SJ-2.
-*Blocked:* requires `lv_org_type_verified_at` / `lv_produces_content_verified_at`, which
-do not exist in portal 22617666. (`lv_icp_scored_at` is NOT a cache key — Approach C, see
-§0.7.) Until created, every run re-researches. Property creation is a prerequisite for
-cost control, not a follow-up.
+**UNBLOCKED (Phase 15).** `lv_org_type_verified_at` / `lv_produces_content_verified_at`
+are in `config/hubspot_properties.yaml`'s manifest — Phase 15 builds and offline-proves
+the tooling to create them; the operator runbook in `15-01-SUMMARY.md` runs the actual
+live creation. (`lv_icp_scored_at` is NOT a cache key — Approach C, see §0.7.) Once the
+operator has run the live migration, SJ-2's monthly stale-refresh predicate (Phase 16)
+can key on these two properties as designed.
+
+**Provenance storage model (Phase 15).** Per-field enrichment metadata is stored as ONE
+JSON text property per object (`lv_enrichment_provenance` / `lv_contact_enrichment_provenance`)
+rather than PN-4's flat `lv_<field>_source`/`_confidence`/`_evidence_url`/`_validation_status`
+suffix properties — HubSpot cannot filter inside a JSON text property, so the 4
+`_verified_at` cache-key datetimes above are the sole carve-out that stays top-level and
+queryable. PN-3 staging properties (`lv_<provider>_<field>`) are correspondingly **NOT**
+created — staging folds into the same provenance blob (the `value` key per field entry).
+`config/source_registry.yaml` stays documentation-only, unaffected by this decision.
 
 ---
 

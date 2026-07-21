@@ -265,7 +265,7 @@ retroactively; its artifacts and tests are in the tree.
 - [x] **Phase 12: Taxonomy Single-Source** - config/taxonomy.yaml becomes the only edit point; node literals generated at build time; retires the known-red TX-4 drift guard (completed 2026-07-20)
 - [x] **Phase 13: Web Research Retrieval & Validation** - Native web_search retrieval, output validation, enum normalization, tri-state coercion (completed 2026-07-21)
 - [x] **Phase 14: Judge Wiring** - Haiku classify → Sonnet escalate per CLAUDE.md §15, pointed at identity/classification not numeric plausibility (completed 2026-07-21)
-- [ ] **Phase 15: HubSpot Property Migration** - Create missing metadata properties; unblocks research caching. IRREVERSIBLE — checkpointed, dry-run first
+- [x] **Phase 15: HubSpot Property Migration** - Create missing metadata properties; unblocks research caching. Fully reversible (archive + recreate-by-name within 90 days), dry-run first (completed 2026-07-22; tooling offline-proven, live operator runbook pending)
 - [ ] **Phase 16: Scheduled Workflows & Review Surface** - Schedule-triggered n8n workflows (SJ-1..SJ-3 predicates), dedupeSweep wiring, §22.2 review loop on the 9 missing review properties
 
 ## Phase Details
@@ -342,18 +342,19 @@ retroactively; its artifacts and tests are in the tree.
 
 **Goal**: The metadata properties the pipeline needs exist, created safely.
 **Depends on**: Phase 14
+**Status**: EXECUTED 2026-07-22 — tooling built + fully offline-proven (199 pytest / 77 node); live property creation, baseline snapshot, and canary proof are OPERATOR RUNBOOK steps (15-01-SUMMARY.md), not yet run. Portal 22617666 untouched.
 **Success Criteria**:
 
-  1. Missing metadata properties created; sync script dry-runs by default and emits an undo manifest.
-  2. Research caching by domain with 180-day TTL becomes possible (unblocks RT-5).
-  3. `lv_org_type` text→enumeration is NOT performed without explicit sign-off (irreversible type change).
-  4. `lv_icp_fit_score` and `lv_icp_tier` are left AS calculated/placeholder — per the milestone scope fence, HubSpot owns them. Retire the pipeline's write paths to those fields (`src/merge_policy.py:303`, `main.py:60`, `config/field_policy.yaml:86`, `n8n/code/mergeCompanies.js:35`, and two inverted test assertions).
-  5. PN-1..PN-5 naming convention applied to code-generated property names: metadata stampers emit `lv_`-prefixed names (`n8n/code/mergeCompanies.js:154`, `n8n/code/mergeContacts.js:115`, `src/merge_policy.py:44`), `n8n/code/enrichmentGate.js:76` reads them, and `scripts/build_cloud_workflows.py` hardcoded names updated (`:686`, `:692`, `:694`, `:1059`).
-  6. Four missing contact properties created alongside the metadata migration: `lv_linkedin_url`, `lv_persona_group`, `lv_jobtitle_verified_at`, `lv_mobilephone_verified_at`. Until created, HubSpot silently drops the search-list names and staleness checks return undefined for every contact.
+  1. [x] Missing metadata properties created; sync script dry-runs by default and emits an undo manifest. `config/hubspot_properties.yaml` (33 properties/2 groups) + `scripts/sync_hubspot_properties.py` built and offline-proven; live creation is the operator's step.
+  2. [x] Research caching by domain with 180-day TTL becomes possible (unblocks RT-5) — the 4 cache-key datetimes are in the manifest.
+  3. [x] `lv_org_type` text→enumeration is NOT performed without explicit sign-off (irreversible type change) — not scheduled anywhere in this phase.
+  4. [x] `lv_icp_fit_score` and `lv_icp_tier` are left AS calculated/placeholder — per the milestone scope fence, HubSpot owns them. Pipeline write paths retired (`src/merge_policy.py`, `main.py`, `config/field_policy.yaml`, `n8n/code/mergeCompanies.js`), 3 inverted test assertions now assert absence.
+  5. [x] PN-1..PN-5 naming convention applied to code-generated property names, under the PROVENANCE MODEL (coordinator decision, supersedes flat-suffix design): metadata/staging collapse into ONE `lv_enrichment_provenance`/`lv_contact_enrichment_provenance` JSON blob per object (Python `src/merge_policy.py` serialize_provenance / JS `mergeCompanies.js`+`mergeContacts.js` stableStringify, byte-identical, parity-tested incl. non-ASCII), `n8n/code/enrichmentGate.js` reads the real cache-key properties, and `scripts/build_cloud_workflows.py`'s decide/echo nodes are the single serialization point.
+  6. [x] Four missing contact properties manifested + create-if-missing-scripted alongside the metadata migration: `lv_linkedin_url`, `lv_persona_group`, `lv_jobtitle_verified_at`, `lv_mobilephone_verified_at` — canonical field rename landed in code (PN-1 architecture guard proves it); live creation is the operator's step.
 
-**Plans**: 1 plan
+**Plans**: 1/1 plans complete
 
-- [ ] 15-01-PLAN.md — Reversibility-first HubSpot property migration: baseline snapshot + dry-run/undo-manifest sync + provenance-JSON stamper model (1 blob + 4 cache keys) + ICP write-path retirement + PN-1..PN-5 renames + rollback script/canary + operator runbook
+- [x] 15-01-PLAN.md — Reversibility-first HubSpot property migration: baseline snapshot + dry-run/undo-manifest sync + provenance-JSON stamper model (1 blob + 4 cache keys) + ICP write-path retirement + PN-1..PN-5 renames + rollback script/canary + operator runbook (completed 2026-07-22; see 15-01-SUMMARY.md)
 
 ### Phase 16: Scheduled Workflows & Review Surface
 
@@ -376,5 +377,5 @@ retroactively; its artifacts and tests are in the tree.
 | 12. Taxonomy Single-Source | 1/1 | Complete | 2026-07-20 |
 | 13. Web Research Retrieval & Validation | 1/1 | Complete | 2026-07-21 |
 | 14. Judge Wiring | 1/1 | Complete | 2026-07-21 |
-| 15. HubSpot Property Migration | 0/? | Not started | — |
+| 15. HubSpot Property Migration | 1/1 | Complete | 2026-07-22 |
 | 16. Scheduled Workflows & Review Surface | 0/? | Not started | — |

@@ -119,11 +119,11 @@ These REQ-IDs group that spec into phase-mappable units; the spec IDs are the te
 
 ### Scoring Ownership
 
-- [ ] **REQ-inputs-only-writeback**: The pipeline writes ICP **inputs** and their source metadata, never the derived outputs. `lv_icp_fit_score`, `lv_icp_tier`, `lv_anti_icp_flag`, `lv_anti_icp_reason` and `lv_recommended_motion` are computed in HubSpot. `src/icp_scoring.py` still computes score/tier internally for routing and audit, but its results do not reach a PATCH. Supersedes CLAUDE.md §29. (Phase 15)
+- [x] **REQ-inputs-only-writeback**: The pipeline writes ICP **inputs** and their source metadata, never the derived outputs. `lv_icp_fit_score`, `lv_icp_tier`, `lv_anti_icp_flag`, `lv_anti_icp_reason` and `lv_recommended_motion` are computed in HubSpot. `src/icp_scoring.py` still computes score/tier internally for routing and audit, but its results do not reach a PATCH. Supersedes CLAUDE.md §29. (Phase 15)
 
 ### CRM Migration
 
-- [ ] **REQ-property-migration**: Missing metadata properties created via a dry-run-by-default sync emitting an undo manifest. Two known irreversible mutations require explicit sign-off and are NOT bundled: `lv_org_type` text→enumeration, and `lv_icp_fit_score` calculated→writable (destroys its formula). (Spec RT-5; Phase 15)
+- [x] **REQ-property-migration**: Missing metadata properties created via a dry-run-by-default sync emitting an undo manifest. Two known irreversible mutations require explicit sign-off and are NOT bundled: `lv_org_type` text→enumeration, and `lv_icp_fit_score` calculated→writable (destroys its formula). Tooling built + offline-proven (33-property/2-group manifest, sync/rollback/canary scripts); live property creation is an OPERATOR RUNBOOK step (15-01-SUMMARY.md), not yet run against portal 22617666. (Spec RT-5, PN-1..PN-5; Phase 15)
 
 ### v3 Traceability
 
@@ -139,8 +139,8 @@ These REQ-IDs group that spec into phase-mappable units; the spec IDs are the te
 | REQ-evidence-by-field | Phase 13 | Complete |
 | REQ-tristate-content | Phase 13 | Complete |
 | REQ-evidence-before-judgement | Phase 14 | Complete |
-| REQ-inputs-only-writeback | Phase 15 | Pending |
-| REQ-property-migration | Phase 15 | Pending |
+| REQ-inputs-only-writeback | Phase 15 | Complete |
+| REQ-property-migration | Phase 15 | Complete (tooling; live operator runbook pending) |
 
 **Coverage:** v3 requirements: 12 total — mapped to phases: 12 — unmapped: 0 ✓
 
