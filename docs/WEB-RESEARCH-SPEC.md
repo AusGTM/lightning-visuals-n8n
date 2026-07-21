@@ -56,8 +56,11 @@ runtime). Anything a node needs MUST be inlined at build time by
 `scripts/build_cloud_workflows.py`. This is why the taxonomy is generated into a JS literal
 rather than read from YAML — see §2.
 
-> **Known deviation (2026-07-20).** Two Milestone-2 workflows still encode the superseded
-> middleware pattern: `n8n/wf_upload_ingest.json` and `n8n/wf_weekly_sweep.json` consist
+> **Known deviation (2026-07-20; quarantined 2026-07-21).** Two Milestone-2 workflows still
+> encode the superseded middleware pattern. They now live in `n8n/deprecated/` so that
+> `n8n/*.json` IS the deploy manifest — "import every workflow in `n8n/`" is a safe
+> instruction, enforced by `test_top_level_is_exactly_the_deployable_set`.
+> `n8n/deprecated/wf_upload_ingest.json` and `n8n/deprecated/wf_weekly_sweep.json` consist
 > only of a trigger plus `POST http://host.docker.internal:8088/{ingest,sweep}` against the
 > FastAPI service in `src/service.py`. They are superseded by `wf_contact_ingest_*.json`,
 > which are fully n8n-native. They are excluded from the AR-2 guard by name and MUST NOT be

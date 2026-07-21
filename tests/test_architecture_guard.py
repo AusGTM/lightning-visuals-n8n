@@ -26,8 +26,10 @@ ACTIVE = [
 
 # Superseded Milestone-2 workflows. These are ONLY a trigger + a POST to the FastAPI
 # service in src/service.py — i.e. exactly the middleware pattern AR-1 forbids. They are
-# replaced by wf_contact_ingest_*.json and must not reach n8n Cloud. Excluded by name so
-# the exemption is explicit and greppable rather than silent.
+# replaced by wf_contact_ingest_*.json and must not reach n8n Cloud. Quarantined in
+# n8n/deprecated/ (2026-07-21) so the deployable set is the top-level directory itself —
+# see test_top_level_is_exactly_the_deployable_set.
+DEPRECATED_DIR = N8N / "deprecated"
 DEPRECATED_SERVICE_DEPENDENT = [
     "wf_upload_ingest.json",
     "wf_weekly_sweep.json",
@@ -101,13 +103,31 @@ def test_deprecated_workflows_are_still_the_only_service_callers(name):
     them n8n-natively the exemption gets removed rather than lingering, and if someone
     copies the pattern into an active workflow the AR-1 test above catches it.
     """
-    path = N8N / name
+    path = DEPRECATED_DIR / name
     if not path.exists():
         pytest.skip(f"{name} already retired — remove it from the exemption list")
     hosts = _hosts_in(path)
     assert any(h.startswith("host.docker.internal") for h in hosts), (
         f"{name} no longer calls the decision service. If it was ported to be "
         "n8n-native, move it into ACTIVE and drop it from DEPRECATED_SERVICE_DEPENDENT."
+    )
+
+
+def test_top_level_is_exactly_the_deployable_set():
+    """n8n/*.json IS the deploy manifest — AR-1's practical form.
+
+    The deployable artifact is workflow JSON imported into n8n Cloud; nothing else in the
+    repo ships. Keeping the top level equal to ACTIVE means "deploy every wf_*.json in
+    n8n/" is a safe instruction, and a service-dependent workflow cannot be deployed by
+    being dropped in the same directory as the good ones (the 2026-07-21 near-miss).
+    """
+    present = sorted(p.name for p in N8N.glob("wf_*.json"))
+    assert present == sorted(ACTIVE), (
+        f"n8n/ top level must equal the deployable set.\n"
+        f"  unexpected: {sorted(set(present) - set(ACTIVE))}\n"
+        f"  missing:    {sorted(set(ACTIVE) - set(present))}\n"
+        "Quarantine non-deployable workflows in n8n/deprecated/, or add a genuinely "
+        "n8n-native workflow to ACTIVE."
     )
 
 
