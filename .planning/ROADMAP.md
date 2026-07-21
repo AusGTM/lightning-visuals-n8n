@@ -264,7 +264,7 @@ retroactively; its artifacts and tests are in the tree.
 - [x] **Phase 11: Company Branch & Provider Contract Hardening** - Company sibling branch in n8n, mergeCompanies non-clobber merge, ZoomInfo GTM companies contract probed live, three live-shape bugs fixed, cross-provider conflict detector, taxonomy + web-research spec (completed 2026-07-20, outside GSD)
 - [x] **Phase 12: Taxonomy Single-Source** - config/taxonomy.yaml becomes the only edit point; node literals generated at build time; retires the known-red TX-4 drift guard (completed 2026-07-20)
 - [x] **Phase 13: Web Research Retrieval & Validation** - Native web_search retrieval, output validation, enum normalization, tri-state coercion (completed 2026-07-21)
-- [ ] **Phase 14: Judge Wiring** - Haiku classify → Sonnet escalate per CLAUDE.md §15, pointed at identity/classification not numeric plausibility
+- [x] **Phase 14: Judge Wiring** - Haiku classify → Sonnet escalate per CLAUDE.md §15, pointed at identity/classification not numeric plausibility (completed 2026-07-21)
 - [ ] **Phase 15: HubSpot Property Migration** - Create missing metadata properties; unblocks research caching. IRREVERSIBLE — checkpointed, dry-run first
 - [ ] **Phase 16: Scheduled Workflows & Review Surface** - Schedule-triggered n8n workflows (SJ-1..SJ-3 predicates), dedupeSweep wiring, §22.2 review loop on the 9 missing review properties
 
@@ -325,17 +325,18 @@ retroactively; its artifacts and tests are in the tree.
 
 **Goal**: Conflicts and high-risk classifications get adjudicated on evidence, not recall.
 **Depends on**: Phase 13
+**Status**: COMPLETE 2026-07-21
 **Success Criteria**:
 
-  1. Escalation triggers match CLAUDE.md §15 / spec JG-1.
-  2. Judge never runs without retrieval output (RO-1); size conflicts never trigger a model call alone (RO-2).
-  3. Judge confidence below 80 routes to needs_review, never promotes (JG-3).
-  4. Evidence sufficiency enforced (JG-4): a citation that does not substantiate the claim — third-party directory, tourism listing, bare homepage — demotes `lv_produces_content` to `null` + needs_review, never to `false`. Case set from the Phase-13 closed-lost smoke.
-  5. (JG-5, scope-corrected 2026-07-21 after research) The Supertech Electronics false positive is caught by the hardware-vendor path independently of JG-4. Under Approach C the pipeline does NOT compute the veto — HubSpot does — so the deliverable is: the research prompt requests `lv_is_hardware_vendor` / `lv_is_gambling_operator` (it does not today) AND the merge fold stops dropping them (hard-coded 3-field whitelist today), so the INPUT reaches HubSpot; the veto itself is proven offline against `src/icp_scoring.py`, not computed in production JS.
+  1. [x] Escalation triggers match CLAUDE.md §15 / spec JG-1.
+  2. [x] Judge never runs without retrieval output (RO-1); size conflicts never trigger a model call alone (RO-2) — proven structurally: the judge chain runs upstream of the node that computes the size-disagreement array (D1), asserted by jsCode-absence + graph-ancestry BFS.
+  3. [x] Judge confidence below 80 routes to needs_review, never promotes (JG-3).
+  4. [x] Evidence sufficiency enforced (JG-4): a citation that does not substantiate the claim — third-party directory, tourism listing, bare homepage — demotes `lv_produces_content` to `null` + needs_review, never to `false`. Case set from the Phase-13 closed-lost smoke (20 real rows, 19/20 exact, 1 documented accepted false-negative).
+  5. [x] (JG-5, scope-corrected 2026-07-21 after research) The Supertech Electronics false positive is caught by the hardware-vendor path independently of JG-4. Under Approach C the pipeline does NOT compute the veto — HubSpot does — so the deliverable is: the research prompt requests `lv_is_hardware_vendor` / `lv_is_gambling_operator` AND the merge fold stops dropping them, so the INPUT reaches HubSpot; the veto itself is proven offline against `src/icp_scoring.py`, not computed in production JS. **Note:** this offline proof surfaced a pre-existing, documented gap in `icp_scoring.py`'s tier-downgrade precedence (unrelated to this phase's scope, not fixed here — see 14-01-SUMMARY.md Deviations); the veto SIGNAL itself is confirmed independent, which is what Approach C's routing relies on.
 
 **Plans**: 1 plan
 
-- [ ] 14-01-PLAN.md — escalation policy single-source + JG-4 sufficiency (20 real smoke rows, Python twin) + JG-1/RO-1/RO-2 triggers + JG-2/JG-3 judge call + n8n wiring and vendor-flag inputs
+- [x] 14-01-PLAN.md — see 14-01-SUMMARY.md
 
 ### Phase 15: HubSpot Property Migration
 
@@ -372,6 +373,6 @@ retroactively; its artifacts and tests are in the tree.
 | 11. Company Branch & Provider Contract Hardening | 1/1 | Complete | 2026-07-20 |
 | 12. Taxonomy Single-Source | 1/1 | Complete | 2026-07-20 |
 | 13. Web Research Retrieval & Validation | 1/1 | Complete | 2026-07-21 |
-| 14. Judge Wiring | 0/? | Not started | — |
+| 14. Judge Wiring | 1/1 | Complete | 2026-07-21 |
 | 15. HubSpot Property Migration | 0/? | Not started | — |
 | 16. Scheduled Workflows & Review Surface | 0/? | Not started | — |
