@@ -331,7 +331,7 @@ retroactively; its artifacts and tests are in the tree.
   2. Judge never runs without retrieval output (RO-1); size conflicts never trigger a model call alone (RO-2).
   3. Judge confidence below 80 routes to needs_review, never promotes (JG-3).
   4. Evidence sufficiency enforced (JG-4): a citation that does not substantiate the claim — third-party directory, tourism listing, bare homepage — demotes `lv_produces_content` to `null` + needs_review, never to `false`. Case set from the Phase-13 closed-lost smoke.
-  5. The Supertech Electronics false positive is disqualified by the hardware-vendor veto independently of JG-4 (JG-5), verified not assumed.
+  5. (JG-5, scope-corrected 2026-07-21 after research) The Supertech Electronics false positive is caught by the hardware-vendor path independently of JG-4. Under Approach C the pipeline does NOT compute the veto — HubSpot does — so the deliverable is: the research prompt requests `lv_is_hardware_vendor` / `lv_is_gambling_operator` (it does not today) AND the merge fold stops dropping them (hard-coded 3-field whitelist today), so the INPUT reaches HubSpot; the veto itself is proven offline against `src/icp_scoring.py`, not computed in production JS.
 
 **Plans**: TBD
 
