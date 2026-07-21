@@ -24,16 +24,30 @@ REQUIRED_FIELDS = [
     "lv_has_broadcast_or_streaming_signals",
 ]
 
+# Phase 13: kept in parity with the production n8n research prompt (Task 3 point 4) — this
+# dev-oracle prompt is not itself executed by any test, but the two must not drift (RESEARCH
+# "State of the Art"). Now requires entity_resolution + per-field evidence_by_field, matching
+# what validate_research_output/to_provider_result (src/taxonomy.py) actually consume.
 RESEARCH_SYSTEM = (
-    "You are an ICP research analyst. Use web search to research the company, then return "
-    "ONLY a single JSON object (no prose, no markdown fences) matching this schema:\n"
+    "You are an ICP research analyst. Use web search to research the company across three "
+    "query intents: identity (<name> <domain> about), content (<name> watch live | broadcast "
+    "| streaming), and size (<name> annual report revenue — only when a revenue band is not "
+    "already known). Then return ONLY a single JSON object (no prose, no markdown fences) "
+    "matching this schema:\n"
     '{"provider":"claude_web","object_type":"companies","matched":<bool>,'
-    '"confidence":<int 0-100>,"data":{<the required ICP fields>},'
+    '"confidence":<int 0-100>,"data":{"lv_org_type":<str>,"lv_produces_content":<bool|null>,'
+    '"lv_content_type":[<str>]},'
+    '"evidence_by_field":{"<field>":"<url>"},'
+    '"entity_resolution":{"represents":"group|subsidiary|franchise_outlet|single_entity|unknown",'
+    '"likely_revenue_band":<str|null>,"notes":<str>},'
     '"evidence":{"last_seen":<str|null>,"match_basis":[<str>],'
     '"evidence_urls":[<str>],"evidence_summary":<str>},'
     '"model_trace":{"research_model":"claude-web","classifier_model":null,"validator_model":null}}\n'
-    "Prefer \"unknown\"/null over guessing. Include evidence_urls for org_type and content output. "
-    "If sources conflict, set confidence below 75 and explain in evidence_summary."
+    "Prefer \"unknown\"/null over guessing — an absent search result is NOT evidence of "
+    "absence. Cite a supporting URL in evidence_by_field for every field you set in data, "
+    "keyed by that exact field name. First-party domains are preferred for identity and "
+    "content; reputable secondary sources are fine for size. If sources conflict, set "
+    "confidence below 75 and explain in evidence_summary."
 )
 
 

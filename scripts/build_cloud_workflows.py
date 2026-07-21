@@ -33,19 +33,30 @@ import gen_taxonomy_js  # noqa: E402
 # ---- module inliner ---------------------------------------------------------
 
 _REQUIRE_RE = re.compile(r"^\s*const\s*\{[^}]*\}\s*=\s*require\(")
+_REQUIRE_OPEN_RE = re.compile(r"^\s*const\s*\{\s*$")  # multi-line destructuring require, opening line
 _EXPORTS_RE = re.compile(r"^\s*module\.exports")
 
 
 def strip_module(name: str) -> str:
-    """Load a Wave-A module, drop require() lines and everything from the first
-    `module.exports` onward (exports are always the module's trailing statement,
-    and may span multiple lines — truncating avoids orphaning the export body)."""
+    """Load a Wave-A module, drop require() lines (single- or multi-line destructuring —
+    Phase 13: n8n/code/taxonomy.js's `require` spans 4 lines, which _REQUIRE_RE alone
+    does not match per-line) and everything from the first `module.exports` onward
+    (exports are always the module's trailing statement, and may span multiple lines —
+    truncating avoids orphaning the export body)."""
     src = (CODE / name).read_text()
     kept = []
+    skipping_multiline_require = False
     for ln in src.splitlines():
         if _EXPORTS_RE.match(ln):
             break
+        if skipping_multiline_require:
+            if "require(" in ln:
+                skipping_multiline_require = False
+            continue
         if _REQUIRE_RE.match(ln):
+            continue
+        if _REQUIRE_OPEN_RE.match(ln):
+            skipping_multiline_require = True
             continue
         kept.append(ln)
     return "\n".join(kept).strip()
@@ -1290,13 +1301,125 @@ return rows.map((it, i) => {
 });
 """
 
+# --- Phase 13: web research retrieval + validation (companies branch only, D4) --------
+# lv_org_type / lv_produces_content ARE now resolvable — not from the firmographic
+# providers above (Lusha/Apollo/ZoomInfo do not carry them, CLAUDE.md Section 14), but
+# from Claude web research, gated (RT-3/RT-4) and validated (OC-1..4/TS-1..3/AT-2/ER-1)
+# before mergeCompanies ever sees them (D2/D6).
+
+# Research Trigger Gate — RT-3/RT-4. Runs immediately after Normalize + Score Company,
+# BEFORE the (expensive) HTTP call, per RESEARCH Pitfall 4: the per-run cost cap MUST be
+# enforced upstream of the HTTP node, not per-item after it.
+ENRICH_RESEARCH_GATE = inline("taxonomy.generated.js") + r"""
+
+// --- n8n wrapper (companies): Research Trigger Gate ---
+const ALLOW_WEB_RESEARCH = ($vars && $vars.ALLOW_WEB_RESEARCH) || $env.ALLOW_WEB_RESEARCH;
+const MAX_PER_RUN = parseInt(
+  (($vars && $vars.MAX_WEB_RESEARCH_PER_RUN) || $env.MAX_WEB_RESEARCH_PER_RUN || "10"), 10);
+
+// RT-3: fires when lv_org_type is unresolved/evidence-gated, OR lv_produces_content blank.
+function needsResearch(existingRecord) {
+  const rec = existingRecord || {};
+  const orgType = rec.lv_org_type;
+  const orgUnresolved = !orgType || orgType === "" || orgType === "unknown" ||
+                        EVIDENCE_GATED_ORG_TYPES.indexOf(orgType) !== -1;
+  const pc = rec.lv_produces_content;
+  const contentBlank = pc === undefined || pc === null || pc === "";
+  return orgUnresolved || contentBlank;
+}
+
+const allowOn = String(ALLOW_WEB_RESEARCH).toLowerCase() === "true";
+let remaining = MAX_PER_RUN;
+return $input.all().map((it) => {
+  const row = it.json;
+  if (!allowOn) {
+    return { json: { ...row, research_needed: false, research_skip_reason: "ALLOW_WEB_RESEARCH=false" } };
+  }
+  const need = needsResearch(row.existingRecord);
+  if (need && remaining > 0) {
+    remaining -= 1;
+    return { json: { ...row, research_needed: true } };
+  }
+  return { json: { ...row, research_needed: false,
+                   research_skip_reason: need ? "MAX_WEB_RESEARCH_PER_RUN reached" : "already resolved" } };
+});
+"""
+
+# Build Research Request — RT-1/RT-2. D3: prompted free-text JSON, NOT a forced tool_use
+# schema (mixing a client tool with the web_search server tool in one turn defers the
+# search to a second round trip, breaking the single-HTTP-call n8n pattern).
+ENRICH_BUILD_RESEARCH_REQUEST = inline("taxonomy.generated.js") + r"""
+
+// --- n8n wrapper (companies): Build Research Request ---
+function researchSystemPrompt() {
+  return [
+    "You are an ICP research analyst for a sports-media/broadcast tech vendor.",
+    "Research the company across three query intents: identity (<name> <domain> about),",
+    "content (<name> watch live | broadcast | streaming), and size (<name> annual report",
+    "revenue - only when a revenue band is not already known). First-party domains are",
+    "preferred for identity and content; reputable secondary sources are fine for size.",
+    "allowed_org_types: " + JSON.stringify(ORG_TYPES) + ".",
+    "allowed_content_types: " + JSON.stringify(CONTENT_TYPES) + ".",
+    "Prefer \"unknown\"/null over guessing - an absent search result is NOT evidence of",
+    "absence. For every field you set in `data`, cite a supporting URL in",
+    "`evidence_by_field` keyed by that exact field name (e.g. evidence_by_field.lv_org_type,",
+    "evidence_by_field.lv_produces_content). Also return `entity_resolution`:",
+    "{ represents: one of group|subsidiary|franchise_outlet|single_entity|unknown,",
+    "likely_revenue_band: string|null, notes: string }.",
+    "Return ONLY one JSON object, no prose, no markdown fences, matching:",
+    '{"data":{"lv_org_type":<str>,"lv_produces_content":<bool|null>,"lv_content_type":[<str>]},',
+    '"evidence_by_field":{"<field>":"<url>"},"entity_resolution":{...},',
+    '"matched":<bool>,"confidence":<int 0-100>}',
+  ].join(" ");
+}
+
+return $input.all().map((it) => {
+  const row = it.json;
+  if (!row.research_needed) return { json: { ...row, research_request_body: null } };
+  const id = row.identity_keys || {};
+  const model = ($vars && $vars.ANTHROPIC_SONNET_MODEL) || $env.ANTHROPIC_SONNET_MODEL || "claude-sonnet-5";
+  const maxUses = parseInt(
+    (($vars && $vars.WEB_RESEARCH_MAX_SEARCHES) || $env.WEB_RESEARCH_MAX_SEARCHES || "5"), 10);
+  const body = {
+    model,
+    max_tokens: 2000,
+    system: researchSystemPrompt(),
+    messages: [{ role: "user", content: JSON.stringify({
+      task: "company_icp_research",
+      company: {
+        name: id.companyName || row.company || null,
+        domain: id.domain || row.domain || null,
+      },
+      known_revenue_band: (row.existingRecord && row.existingRecord.lv_revenue_band) || null,
+      required_fields: ["lv_org_type", "lv_produces_content", "lv_content_type"],
+      return_only_json: true,
+    }) }],
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: maxUses }],
+  };
+  return { json: { ...row, research_request_body: body } };
+});
+"""
+
+# Validate Research Output — OC-1..4/TS-1..3/AT-2/ER-1. The whole validation contract lives
+# in webResearch.js's researchCandidateFromHttpItem (never throws) — this wrapper just calls
+# it per item, so a malformed/errored/empty HTTP response can never fail the node (D5/D6).
+ENRICH_VALIDATE_RESEARCH = inline("taxonomy.generated.js", "taxonomy.js", "webResearch.js") + r"""
+
+// --- n8n wrapper (companies): Validate Research Output ---
+return $input.all().map((it) => {
+  const row = it.json;
+  const research_candidate = researchCandidateFromHttpItem(row);
+  return { json: { ...row, research_candidate } };
+});
+"""
+
 ENRICH_MERGE_CO = inline("taxonomy.generated.js", "mergeCompanies.js") + r"""
 
 // --- n8n wrapper: mergeCompanies(existingRecord, winners) non-clobber ---
-// lv_org_type / lv_produces_content are NOT in this candidate set: providers do not carry
-// them (CLAUDE.md §14 — they come from Claude web research, which this read-only branch
-// does not call yet). When that node lands it supplies both the value and the evidence
-// URL that mergeCompanies' evidence gate requires before either may promote.
+// lv_org_type / lv_produces_content resolve via Claude web research (see the Research
+// Trigger Gate / Build Research Request / Validate Research Output nodes above) — a
+// SECOND mergeCompanies call, folded in below (D6), supplies both the value and the
+// evidence URL that mergeCompanies' own evidence gate requires before either may promote.
 //
 // TWO company-specific traps, both confirmed live against harveynorman.com.au:
 //
@@ -1346,7 +1469,35 @@ return $input.all().map((it) => {
   }
   const merged = mergeCompanies(row.existingRecord || {}, candidate, undefined,
                                 { source: "waterfall", confidence: 85 });
-  return { json: { ...row, merge: merged, conflicts } };
+
+  // Phase 13 (D6): fold the Claude web-research candidate in as a SECOND mergeCompanies
+  // call — mergeCompanies.js itself stays byte-identical. Research fields (lv_org_type,
+  // lv_produces_content, lv_content_type) never collide with the firmographic candidate's
+  // keys above, so a shallow merge of each patch (+ concatenated decisions) is safe.
+  let finalMerge = merged;
+  const rc = row.research_candidate;
+  if (rc && rc.matched) {
+    const researchData = {};
+    for (const f of ["lv_org_type", "lv_produces_content", "lv_content_type"]) {
+      const v = rc.data && rc.data[f];
+      // tri-state null (TS-2 coercion) / blank -> skip, so mergeCompanies' own _isBlank
+      // check has nothing to write; an evidenced false is NOT blank and flows through.
+      if (v === null || v === undefined || v === "" || (Array.isArray(v) && v.length === 0)) continue;
+      researchData[f] = v;
+    }
+    if (Object.keys(researchData).length > 0) {
+      const researchMerged = mergeCompanies(row.existingRecord || {}, researchData, undefined,
+        { source: "claude_web", confidence: rc.confidence || 80, evidence: rc.evidence_by_field || {} });
+      finalMerge = {
+        canonicalPatch: { ...merged.canonicalPatch, ...researchMerged.canonicalPatch },
+        stagingPatch: { ...merged.stagingPatch, ...researchMerged.stagingPatch },
+        metadataPatch: { ...merged.metadataPatch, ...researchMerged.metadataPatch },
+        decisions: [...merged.decisions, ...researchMerged.decisions],
+      };
+    }
+  }
+
+  return { json: { ...row, merge: finalMerge, conflicts } };
 });
 """
 
@@ -1383,10 +1534,13 @@ return $input.all().map((it) => {
 """
 
 
-def _live_http(name, x, y, method, url, headers, json_body=None):
+def _live_http(name, x, y, method, url, headers, json_body=None, timeout=20000):
     """HTTP Request node whose auth/secrets come from $env expressions in headers
-    (no credential store), for headless `n8n execute` with docker exec -e."""
-    params = {"method": method, "url": url, "options": {"timeout": 20000}}
+    (no credential store), for headless `n8n execute` with docker exec -e.
+    NOTE: no retryOnFail here or on any call site — RESEARCH Pitfall 3: retryOnFail is
+    silently ignored whenever onError is a "Continue" option, so a failed call is a SKIP,
+    not a retry (Task 4 proves this for the research node offline)."""
+    params = {"method": method, "url": url, "options": {"timeout": timeout}}
     if json_body is not None:
         params.update({"sendBody": True, "specifyBody": "json", "jsonBody": json_body})
     if headers:
@@ -1394,6 +1548,24 @@ def _live_http(name, x, y, method, url, headers, json_body=None):
     return {"parameters": params, "id": nid("h"), "name": name,
             "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2,
             "position": [x, y], "onError": "continueRegularOutput"}
+
+
+def _if_bool_node(name, field, x, y):
+    """IF node testing a boolean field for `true` (Phase 13: IF Research Needed)."""
+    return {
+        "parameters": {"options": {}, "conditions": {
+            "options": {"caseSensitive": True, "typeValidation": "strict"},
+            "combinator": "and",
+            "conditions": [{
+                "id": nid("i"),
+                "leftValue": "={{ $json." + field + " }}",
+                "rightValue": True,
+                "operator": {"type": "boolean", "operation": "equals"},
+            }],
+        }},
+        "id": nid("if"), "name": name,
+        "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [x, y],
+    }
 
 
 def build_enrichment_local_live():
@@ -1479,6 +1651,29 @@ def build_enrichment_local_live():
     nodes.append(code_node("ZoomInfo Company", ENRICH_ZOOMINFO_CO_CACHED, cx, cy))
     cx += 230
     nodes.append(code_node("Normalize + Score Company", ENRICH_NORMALIZE_SCORE_CO, cx, cy))
+
+    # Phase 13 (D5): Research Trigger Gate -> IF Research Needed. True lane -> Build
+    # Research Request -> Claude Web Research (HTTP) -> Validate Research Output ->
+    # Merge Company. False lane -> straight to Merge Company (fan-in, both lanes carry the
+    # full pass-through row; only the true lane additionally attaches research_candidate).
+    cx += 230
+    nodes.append(code_node("Research Trigger Gate", ENRICH_RESEARCH_GATE, cx, cy))
+    cx += 230
+    nodes.append(_if_bool_node("IF Research Needed", "research_needed", cx, cy))
+    cx += 230
+    nodes.append(code_node("Build Research Request", ENRICH_BUILD_RESEARCH_REQUEST, cx, cy - 100))
+    cx += 230
+    nodes.append(_live_http(
+        "Claude Web Research", cx, cy - 100, "POST",
+        "https://api.anthropic.com/v1/messages",
+        [{"name": "x-api-key", "value": "={{ $vars.ANTHROPIC_API_KEY || $env.ANTHROPIC_API_KEY }}"},
+         {"name": "anthropic-version", "value": "2023-06-01"},
+         {"name": "content-type", "value": "application/json"}],
+        json_body="={{ JSON.stringify($json.research_request_body) }}",
+        timeout=60000))
+    cx += 230
+    nodes.append(code_node("Validate Research Output", ENRICH_VALIDATE_RESEARCH, cx, cy - 100))
+
     cx += 230
     nodes.append(code_node("Merge Company", ENRICH_MERGE_CO, cx, cy))
     cx += 230
@@ -1487,7 +1682,7 @@ def build_enrichment_local_live():
     co_order = ["Manual Trigger", "Emit Company Targets", "Build Company Identity",
                 "HubSpot Company Search", "Adapt Company Search", "Company Gate",
                 "Build Company Requests", "Lusha Company", "Apollo Org", "ZoomInfo Company",
-                "Normalize + Score Company", "Merge Company", "Decide Company Action"]
+                "Normalize + Score Company", "Research Trigger Gate"]
 
     nodes.append({
         "parameters": {"content": (
@@ -1507,11 +1702,26 @@ def build_enrichment_local_live():
         "id": nid("s"), "name": "Sticky Note",
         "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [240, 540]})
 
+    # Phase 13 (D5): explicit connections for the IF node's two outputs + the fan-in onto
+    # Merge Company. co_order's chain() ends at "Research Trigger Gate" (no outgoing edge
+    # yet), so none of these keys collide with fan(chain(order), chain(co_order))'s output.
+    research_conns = {
+        "Research Trigger Gate": {"main": [[{"node": "IF Research Needed", "type": "main", "index": 0}]]},
+        "IF Research Needed": {"main": [
+            [{"node": "Build Research Request", "type": "main", "index": 0}],  # true: needs research
+            [{"node": "Merge Company", "type": "main", "index": 0}],           # false: fan straight in
+        ]},
+        "Build Research Request": {"main": [[{"node": "Claude Web Research", "type": "main", "index": 0}]]},
+        "Claude Web Research": {"main": [[{"node": "Validate Research Output", "type": "main", "index": 0}]]},
+        "Validate Research Output": {"main": [[{"node": "Merge Company", "type": "main", "index": 0}]]},
+        "Merge Company": {"main": [[{"node": "Decide Company Action", "type": "main", "index": 0}]]},
+    }
+
     return {
         "id": "LVenrichmentLive01",
         "name": "LV Enrichment (local LIVE)",
         "nodes": nodes,
-        "connections": fan(chain(order), chain(co_order)),
+        "connections": {**fan(chain(order), chain(co_order)), **research_conns},
         "settings": {},
     }
 
@@ -1545,6 +1755,11 @@ def _http_node(name, url, x, y, auth=None, headers=None, form_body=None, json_bo
     }
 
 
+# NOTE (Phase 13, D4): this Cloud webhook template's chain is contacts-only — it has no
+# companies branch (unlike build_enrichment_local_live()). The Claude web-research nodes
+# (Research Trigger Gate / Build Research Request / Claude Web Research / Validate
+# Research Output) therefore do NOT land here yet; they land here when this function
+# grows a companies branch (Phase 16 scope).
 def build_enrichment_cloud():
     nodes = []
     y = 300

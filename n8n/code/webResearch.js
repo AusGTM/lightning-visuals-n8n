@@ -62,4 +62,50 @@ function toProviderResult(raw) {
   };
 }
 
-module.exports = { validateResearchOutput, toProviderResult };
+// extractFinalJson — Pattern 1 (RESEARCH reference): pull the JSON object out of the
+// model's final text content blocks, tolerating ```fences``` / stray prose. Mirrors
+// src/web_research.py:_extract_json byte-for-byte (same regex, same fallback order).
+function extractFinalJson(content) {
+  const text = (Array.isArray(content) ? content : [])
+    .filter((b) => b && b.type === "text")
+    .map((b) => b.text)
+    .join("");
+  const stripped = text.trim().replace(/^```(?:json)?\s*|\s*```$/gm, "").trim();
+  try {
+    return JSON.parse(stripped);
+  } catch (e) {
+    const m = stripped.match(/\{[\s\S]*\}/);
+    if (!m) throw e;
+    return JSON.parse(m[0]);
+  }
+}
+
+// researchCandidateFromHttpItem — the "Validate Research Output" Code node's whole job:
+// turn whatever item the Claude Web Research HTTP node produced under
+// onError:"continueRegularOutput" into a research candidate, WITHOUT EVER THROWING
+// (OC-4). Three failure shapes this must survive (Phase 13 Task 4): an n8n execution-
+// error item (`{error: ...}`, no usable body), an Anthropic HTTP-level error body
+// (`{"type":"error","error":{...}}` — has no `content` array), and an empty/missing
+// `content` (no text blocks). Any of these — or a genuinely malformed text payload —
+// resolves to toProviderResult({}) (matched:false, needs_review:true via the OC-4 path),
+// so the company continues through Merge Company exactly as it would with
+// ALLOW_WEB_RESEARCH=false (skip-not-retry, CLAUDE.md Section 26.2).
+function researchCandidateFromHttpItem(item) {
+  // NOTE: toProviderResult({}) would NOT give matched:false — an empty object is still a
+  // dict, so validateResearchOutput takes its "else" branch where `matched` defaults to
+  // true (OC-4's matched:false path is keyed on non-dict input only). Pass matched:false
+  // explicitly so every failure path here is unambiguously unusable downstream.
+  try {
+    if (!item || item.error || !Array.isArray(item.content)) {
+      return toProviderResult({ matched: false });
+    }
+    const parsed = extractFinalJson(item.content);
+    return toProviderResult(parsed);
+  } catch (e) {
+    return toProviderResult({ matched: false });
+  }
+}
+
+module.exports = {
+  validateResearchOutput, toProviderResult, extractFinalJson, researchCandidateFromHttpItem,
+};
