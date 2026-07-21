@@ -37,8 +37,10 @@ const DEFAULT_COMPANY_POLICY = {
   lv_sponsorship_reliant:  { class: "system_owned",      min_confidence: 70 },
   lv_is_hardware_vendor:   { class: "system_owned",      min_confidence: 85 },
   lv_is_gambling_operator: { class: "system_owned",      min_confidence: 85 },
-  lv_icp_fit_score:        { class: "score_output",      min_confidence: 0 },
-  lv_icp_tier:             { class: "score_output",      min_confidence: 0 },
+  // lv_icp_fit_score / lv_icp_tier: Approach C (Phase 15 criterion 4) — HubSpot owns
+  // these derived outputs. Removed from policy so either falls to the default
+  // non-promoting policy (fill_blank_only) if it ever appears in a candidate, never
+  // "score_output".
   lv_anti_icp_flag:        { class: "veto_output",       min_confidence: 0 },
   lv_anti_icp_reason:      { class: "veto_output",       min_confidence: 0 },
 };

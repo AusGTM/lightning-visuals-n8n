@@ -83,15 +83,9 @@ companies:
     allow_web_research: true
     allow_sonnet_escalation: true
 
-  lv_icp_fit_score:
-    class: score_output
-    promote_to_canonical: true
-    recompute_always: true
-
-  lv_icp_tier:
-    class: score_output
-    promote_to_canonical: true
-    recompute_always: true
+  # lv_icp_fit_score / lv_icp_tier: Approach C (Phase 15 criterion 4) — HubSpot owns
+  # these derived outputs; the pipeline never writes them. Policy entries removed so
+  # nothing classifies them as promotable if they ever appear in a candidate set.
 
   lv_anti_icp_flag:
     class: veto_output

@@ -191,10 +191,14 @@ def test_sc4_full_source_attribution(monkeypatch):
 # --- integ: end-to-end wiring incl. Phase 2 scorer, offline, no monkeypatch ---
 
 def test_integ_wires_icp_scorer():
+    # Approach C (Phase 15 criterion 4): the write path to lv_icp_fit_score/lv_icp_tier is
+    # retired — HubSpot owns the derived outputs. These assertions prove the write path is
+    # GONE; reintroducing it turns them red. The engine still computes icp_score internally
+    # (mr.icp_score is not None) for in-pipeline routing and the audit breakdown.
     record = load_record()
     mr = build_merge_result(record, build_all_candidates(record))
-    assert "lv_icp_fit_score" in mr.canonical_patch
-    assert "lv_icp_tier" in mr.canonical_patch
+    assert "lv_icp_fit_score" not in mr.canonical_patch
+    assert "lv_icp_tier" not in mr.canonical_patch
     assert mr.status_patch["enrichment_status"] in ("complete", "needs_review")
     assert mr.icp_score is not None
 

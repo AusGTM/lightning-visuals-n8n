@@ -292,25 +292,19 @@ def build_merge_result(record: HubSpotRecord, candidates: List[CandidateValue]) 
         if final_decision == "promote" and chosen:
             canonical_patch[field] = chosen.normalized_value
 
+    # Approach C (STATE.md Blockers; Phase 15 criterion 4 retires the write path):
+    # HubSpot owns the derived ICP outputs (lv_icp_fit_score, lv_icp_tier,
+    # lv_anti_icp_flag, lv_anti_icp_reason, lv_icp_score_breakdown, lv_icp_scored_at,
+    # lv_icp_scoring_version, lv_icp_confidence, lv_icp_needs_review,
+    # lv_recommended_motion). The engine still computes icp_score for in-pipeline
+    # routing (needs_review below) and the audit breakdown — only the canonical WRITE
+    # is removed; `MergeResult.icp_score` stays populated.
     icp_score = None
     if record.object_type == "companies":
         score_input_patch = {}
         score_input_patch.update(canonical_patch)
         score_input_patch.update(staging_patch)
         icp_score = compute_icp_score(record, score_input_patch)
-
-        canonical_patch.update({
-            "lv_icp_fit_score": icp_score.score,
-            "lv_icp_tier": icp_score.tier,
-            "lv_anti_icp_flag": icp_score.anti_icp_flag,
-            "lv_anti_icp_reason": icp_score.anti_icp_reason,
-            "lv_icp_score_breakdown": json.dumps(icp_score.breakdown)[:60000],
-            "lv_icp_scored_at": now_iso(),
-            "lv_icp_scoring_version": icp_score.scoring_version,
-            "lv_icp_confidence": icp_score.confidence,
-            "lv_icp_needs_review": icp_score.tier in ["Needs Review", "Unscored"],
-            "lv_recommended_motion": icp_score.recommended_motion
-        })
 
     needs_review = any(d.decision == "needs_review" for d in decisions)
     if icp_score and icp_score.tier in ["Needs Review", "Unscored"]:

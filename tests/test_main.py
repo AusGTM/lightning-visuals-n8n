@@ -56,9 +56,10 @@ def test_sc2_promotes_only_icp_stages_firmographics(monkeypatch):
 
     patch = run_local_mvp()
 
-    # ICP outputs promoted to canonical
-    assert "lv_icp_fit_score" in patch
-    assert "lv_icp_tier" in patch
+    # Approach C (Phase 15 criterion 4): ICP outputs are NEVER written by the pipeline —
+    # HubSpot owns them. These assertions prove the write path is GONE.
+    assert "lv_icp_fit_score" not in patch
+    assert "lv_icp_tier" not in patch
     # firmographics staged, not promoted
     assert any(k.startswith("zoominfo_") for k in patch)
     # never a bare manual/firmographic canonical key
@@ -81,8 +82,8 @@ def test_sc3_staging_flag_toggles(monkeypatch):
     # metadata_patch source keys are {field}_source; exclude the always-present
     # status key enrichment_primary_source (part of status_patch, not staging).
     assert [k for k in patch if k.endswith("_source") and k != "enrichment_primary_source"] == []
-    # status + ICP outputs survive regardless of staging flag
-    assert "lv_icp_tier" in patch
+    # status survives regardless of staging flag; ICP outputs are never written (Approach C)
+    assert "lv_icp_tier" not in patch
     assert "enrichment_status" in patch
 
     monkeypatch.setenv("ALLOW_STAGING_WRITES", "true")
