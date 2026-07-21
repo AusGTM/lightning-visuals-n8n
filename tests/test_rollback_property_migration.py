@@ -9,6 +9,7 @@ import pytest
 import requests
 
 import scripts.rollback_property_migration as rollback
+import scripts.rollback_canary_proof as canary
 
 
 def raise_http(*args, **kwargs):
@@ -178,3 +179,35 @@ def test_hubspot_defined_property_in_manifest_is_hard_refused_even_under_live(mo
     ])
     assert rc == 0
     assert "REFUSED to archive" in capsys.readouterr().out
+
+
+# --- Task 8: canary proof — offline-only; the live run is the operator's proof --------
+
+def test_canary_manifest_is_a_single_property_named_lv_rollback_canary():
+    manifest = canary.build_canary_manifest("20260722T000000Z")
+    assert len(manifest) == 1
+    assert manifest[0]["kind"] == "property"
+    assert manifest[0]["object_type"] == "companies"
+    assert manifest[0]["name"] == "lv_rollback_canary_20260722T000000Z"
+
+
+def test_canary_is_archived_reads_a_fixture_get_response():
+    assert canary.is_archived({"archived": True}) is True
+    assert canary.is_archived({"archived": False}) is False  # present, not archived -> FAIL
+    assert canary.is_archived(None) is True  # 404 / absent from default listing -> PASS
+
+
+def test_canary_no_credentials_skips_cleanly(capsys):
+    rc = canary.main([])
+    assert rc == 0
+    assert "skipped (no credentials)" in capsys.readouterr().out
+
+
+def test_canary_two_key_gate_holds_even_with_credentials(monkeypatch, capsys):
+    # Credentials + matching portal present, but DRY_RUN stays default "true" -> the
+    # two-key gate must skip before any live call (requests.post/get/delete would raise).
+    monkeypatch.setenv("HUBSPOT_PRIVATE_APP_TOKEN", "fake-token")
+    monkeypatch.setenv("HUBSPOT_PORTAL_ID", canary.EXPECTED_PORTAL_ID)
+    rc = canary.main([])
+    assert rc == 0
+    assert "skipped" in capsys.readouterr().out
