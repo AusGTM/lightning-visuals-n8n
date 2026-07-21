@@ -96,7 +96,11 @@ def claude_web_research(record: HubSpotRecord) -> ProviderResult:
 
     msg = client.messages.create(
         model=model,
-        max_tokens=2000,
+        # ponytail: 2000 truncated live responses (stop_reason=max_tokens) before
+        # evidence_by_field ever got written — claude-sonnet-5's extended thinking alone
+        # eats ~1000-1300 tokens on this prompt. 4096 leaves ~45% headroom over the
+        # largest observed complete response (2829 total). Bump further if it recurs.
+        max_tokens=4096,
         system=RESEARCH_SYSTEM,
         tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": max_uses}],
         messages=[{"role": "user", "content": json.dumps(user_payload)}],

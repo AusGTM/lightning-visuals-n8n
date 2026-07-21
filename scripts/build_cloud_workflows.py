@@ -1382,7 +1382,11 @@ return $input.all().map((it) => {
     (($vars && $vars.WEB_RESEARCH_MAX_SEARCHES) || $env.WEB_RESEARCH_MAX_SEARCHES || "5"), 10);
   const body = {
     model,
-    max_tokens: 2000,
+    // ponytail: 2000 truncated live responses (stop_reason=max_tokens) before
+    // evidence_by_field was written — extended thinking alone eats ~1000-1300 tokens.
+    // 4096 leaves ~45% headroom over the largest observed complete response (2829).
+    // Keep in parity with src/web_research.py's max_tokens (Phase 13 D-decision).
+    max_tokens: 4096,
     system: researchSystemPrompt(),
     messages: [{ role: "user", content: JSON.stringify({
       task: "company_icp_research",
