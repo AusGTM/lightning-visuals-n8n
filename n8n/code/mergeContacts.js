@@ -19,14 +19,16 @@
 // surfaces on `cacheKeys` for jobtitle / mobilephone.
 
 // Default contacts field policy (source of truth: config/field_policy.yaml `contacts`).
+// PN-1: linkedin_url/persona_group are NOT HubSpot-native (absent from the verified-
+// native list) -> lv_-prefixed canonical field keys.
 const DEFAULT_CONTACT_POLICY = {
-  email:        { class: "manual_protected",  min_confidence: 95 },
-  phone:        { class: "fill_blank_only",   min_confidence: 80 },
-  mobilephone:  { class: "fill_blank_only",   min_confidence: 85 },
-  jobtitle:     { class: "stale_refreshable", min_confidence: 75 },
-  linkedin_url: { class: "fill_blank_only",   min_confidence: 85 },
-  seniority:    { class: "system_owned",      min_confidence: 75 },
-  persona_group:{ class: "system_owned",      min_confidence: 75 },
+  email:           { class: "manual_protected",  min_confidence: 95 },
+  phone:           { class: "fill_blank_only",   min_confidence: 80 },
+  mobilephone:     { class: "fill_blank_only",   min_confidence: 85 },
+  jobtitle:        { class: "stale_refreshable", min_confidence: 75 },
+  lv_linkedin_url: { class: "fill_blank_only",   min_confidence: 85 },
+  seniority:       { class: "system_owned",      min_confidence: 75 },
+  lv_persona_group:{ class: "system_owned",      min_confidence: 75 },
 };
 
 function _isBlank(v) {

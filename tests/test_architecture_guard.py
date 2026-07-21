@@ -11,6 +11,7 @@ import re
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 N8N = ROOT / "n8n"
@@ -174,3 +175,111 @@ def test_ar3_no_runtime_escape_from_n8n(name):
     assert not offenders, (
         f"{name} escapes the n8n sandbox at runtime: {offenders} (spec AR-3)."
     )
+
+
+# --- Phase 15: PN-1 canonical-field rename + provenance-blob collapse guards ----------
+#
+# linkedin_url/persona_group are NOT HubSpot-native (absent from the PN-2 verified-native
+# list) -> the canonical MERGE field key must be lv_-prefixed everywhere it round-trips to
+# a HubSpot property. DELIBERATE-BREAK: re-introducing a bare `linkedin_url` HubSpot
+# property key in any of the 3 checks below turns the corresponding test red.
+#
+# Scope note: these guards are DELIBERATELY narrower than "grep all of src/*.py" — several
+# files (src/identity.py, src/ingest.py, src/sweep.py, config/column_mapping.yaml,
+# n8n/code/columnMap.js, n8n/code/resolveIdentity.js) legitimately use bare `linkedin_url`
+# as an IDENTITY/DEDUPE search key or raw upload-column name, never as a canonical
+# enrichment-merge field that round-trips through mergeContacts()/build_merge_result() to
+# a HubSpot property. That usage predates this migration, is out of RESEARCH.md's rename
+# scope, and a blanket scan would either need a large, fragile exclusion list or produce
+# false positives. These guards instead target the ACTUAL rename surface: the merge
+# policy configs, the JS default policy, the build-script candidate arrays, and the two
+# renamed contact cache-key names in every built (ACTIVE) workflow.
+
+CONTACT_POLICY_CONFIGS = [
+    ROOT / "config" / "field_policy.yaml",
+    ROOT / "config" / "provider_priority.yaml",
+]
+
+
+def test_pn1_contact_policy_configs_use_lv_prefixed_keys():
+    """field_policy.yaml / provider_priority.yaml's `contacts` block must key on
+    lv_linkedin_url / lv_persona_group, never the bare pre-migration name."""
+    for path in CONTACT_POLICY_CONFIGS:
+        cfg = yaml.safe_load(path.read_text())
+        contacts = cfg.get("contacts", {})
+        assert "linkedin_url" not in contacts, f"{path.name}: bare linkedin_url must be lv_linkedin_url"
+        assert "persona_group" not in contacts, f"{path.name}: bare persona_group must be lv_persona_group"
+        assert "lv_linkedin_url" in contacts, f"{path.name}: missing lv_linkedin_url"
+        assert "lv_persona_group" in contacts, f"{path.name}: missing lv_persona_group"
+
+
+# Negative lookbehind for `lv_` so `lv_linkedin_url:` never false-positives as a bare key.
+_BARE_FIELD_KEY_RE = re.compile(r"(?<!lv_)\b(linkedin_url|persona_group)\s*:")
+
+
+def test_pn1_merge_contacts_default_policy_has_no_bare_keys():
+    """n8n/code/mergeContacts.js's DEFAULT_CONTACT_POLICY object literal must key on
+    lv_linkedin_url/lv_persona_group, never the bare pre-migration name."""
+    src = (N8N / "code" / "mergeContacts.js").read_text()
+    start = src.index("const DEFAULT_CONTACT_POLICY")
+    end = src.index("};", start)
+    block = src[start:end]
+    assert not _BARE_FIELD_KEY_RE.search(block), (
+        "DEFAULT_CONTACT_POLICY still has a bare linkedin_url/persona_group key")
+    assert "lv_linkedin_url" in block
+    assert "lv_persona_group" in block
+
+
+def test_pn1_build_script_never_writes_a_bare_linkedin_or_persona_property_key():
+    """scripts/build_cloud_workflows.py must never carry a bare quoted `"linkedin_url"` /
+    `"persona_group"` string literal — that would be a canonical field key fed into
+    mergeContacts()/mergeCompanies(), which round-trips to a HubSpot property.
+
+    ALLOWED (excluded by construction, not by regex): `row.linkedin_url` /
+    `winners.linkedin_url` (attribute access, reading the RAW upload/scored-winner value
+    on its way INTO the lv_-prefixed candidate key — never itself a quoted string) and
+    `id.linkedin_url` / `linkedinUrl` (the provider-lookup request shape, which never
+    round-trips to a HubSpot property, RESEARCH.md §7.2).
+    """
+    text = (ROOT / "scripts" / "build_cloud_workflows.py").read_text()
+    offenders = re.findall(r'"(linkedin_url|persona_group)"', text)
+    assert not offenders, f"bare quoted canonical field key(s) found: {offenders}"
+
+
+# Negative lookbehind for `lv_` so `"lv_jobtitle_verified_at"` never false-positives.
+_BARE_CACHE_KEY_RE = re.compile(r'(?<!lv_)"(jobtitle_verified_at|mobilephone_verified_at)"')
+
+
+def test_pn4_build_script_never_requests_a_bare_contact_cache_key():
+    """scripts/build_cloud_workflows.py's HubSpot search property list / LOCAL mock
+    fixture must request/read the lv_-prefixed contact cache-key names, never the bare
+    pre-migration `jobtitle_verified_at`/`mobilephone_verified_at`."""
+    text = (ROOT / "scripts" / "build_cloud_workflows.py").read_text()
+    assert not _BARE_CACHE_KEY_RE.search(text), (
+        "bare (unprefixed) contact cache-key name found in build_cloud_workflows.py")
+
+
+@pytest.mark.parametrize("name", ACTIVE)
+def test_pn4_no_bare_contact_cache_key_survives_in_built_workflows(name):
+    """Same guard as above, applied to the BUILT workflow JSON — the string literal
+    reaches n8n Cloud through inlined Code-node bodies, so this is the artifact that
+    actually matters for the live search request."""
+    text = (N8N / name).read_text()
+    assert not _BARE_CACHE_KEY_RE.search(text), (
+        f"{name} still references a bare (unprefixed) contact cache-key name")
+
+
+_FLAT_METADATA_TEMPLATE_RE = re.compile(
+    r"\$\{f(?:ield)?\}_(?:source|confidence|verified_at|validation_status|evidence_url)")
+
+
+@pytest.mark.parametrize("name", ACTIVE)
+def test_no_flat_per_field_metadata_template_survives_in_built_workflows(name):
+    """Phase 15's provenance collapse removed every `${field}_source` / `${field}_
+    confidence` / ... template-literal stamp (the mechanism that used to build flat
+    per-field metadata properties). Re-introducing one anywhere in the inlined Code-node
+    bodies would resurrect a flat metadata property outside the provenance blob."""
+    text = (N8N / name).read_text()
+    assert not _FLAT_METADATA_TEMPLATE_RE.search(text), (
+        f"{name} contains a flat per-field metadata template literal — provenance "
+        "collapse regressed")

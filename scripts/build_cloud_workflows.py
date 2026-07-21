@@ -218,11 +218,18 @@ return $input.all().map((it) => {
 MERGE_CONTACTS = inline("mergeContacts.js") + r"""
 
 // --- n8n wrapper: deterministic non-clobber merge (email never promotes) ---
+// PN-1: linkedin_url is NOT HubSpot-native (absent from the verified-native list) -> the
+// MERGE CANDIDATE / canonical field key is lv_linkedin_url. `row.linkedin_url` (the raw
+// mapped-column name from columnMap.js) stays unprefixed on the READ side — only the
+// write-side candidate key renames.
 return $input.all().map((it) => {
   const row = it.json;
   const candidate = {};
-  for (const f of ["email", "firstname", "lastname", "jobtitle", "linkedin_url", "company"]) {
+  for (const f of ["email", "firstname", "lastname", "jobtitle", "company"]) {
     if (row[f] != null && String(row[f]).trim() !== "") candidate[f] = row[f];
+  }
+  if (row.linkedin_url != null && String(row.linkedin_url).trim() !== "") {
+    candidate.lv_linkedin_url = row.linkedin_url;
   }
   if (row.phone_normalized) candidate.phone = row.phone_normalized;
   // LOCAL/template: no existing HubSpot props fetched here => {} (blanks promote per policy).
@@ -717,13 +724,19 @@ return $input.all().map((it) => {
 ENRICH_MERGE = inline("mergeContacts.js") + r"""
 
 // --- n8n wrapper: mergeContacts(existingRecord, winners) non-clobber ---
+// PN-1: linkedin_url is NOT HubSpot-native -> the merge candidate/canonical key is
+// lv_linkedin_url. `winners.linkedin_url` (the scoreCandidates winner key, if a provider
+// mapper ever populates it) stays unprefixed on the READ side, unrelated to this rename.
 return $input.all().map((it) => {
   const row = it.json;
   if (!row.scored) return { json: { ...row, merge: null } };  // skip branch
   const winners = row.scored.winners || {};
   const candidate = {};
-  for (const f of ["email", "mobilephone", "phone", "jobtitle", "seniority", "linkedin_url"]) {
+  for (const f of ["email", "mobilephone", "phone", "jobtitle", "seniority"]) {
     if (winners[f] != null && String(winners[f]).trim() !== "") candidate[f] = winners[f];
+  }
+  if (winners.linkedin_url != null && String(winners.linkedin_url).trim() !== "") {
+    candidate.lv_linkedin_url = winners.linkedin_url;
   }
   const merged = mergeContacts(row.existingRecord || {}, candidate, undefined,
                                { source: "waterfall", confidence: 85 });
@@ -1154,7 +1167,7 @@ HS_SEARCH_BODY_EXPR = (
     ': [ { propertyName: "firstname", operator: "EQ", value: $json.identity_keys.firstName }, '
     '{ propertyName: "lastname", operator: "EQ", value: $json.identity_keys.lastName } ]) } ], '
     'properties: ["email","firstname","lastname","jobtitle","phone","mobilephone",'
-    '"jobtitle_verified_at","mobilephone_verified_at"], limit: 5 }) }}'
+    '"lv_jobtitle_verified_at","lv_mobilephone_verified_at"], limit: 5 }) }}'
 )
 
 # ---- COMPANIES branch -------------------------------------------------------
