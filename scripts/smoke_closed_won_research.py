@@ -50,7 +50,11 @@ def main(argv=None) -> int:
               "must both be set to run this live smoke.")
         return 0
 
-    os.environ.setdefault("USE_MOCK_WEB_RESEARCH", "false")  # live research, not the fixture
+    # ponytail: setdefault() is a no-op here — the documented run command sources .env
+    # first (USE_MOCK_WEB_RESEARCH=true), which already occupies the key. Must assign
+    # directly to actually force live mode; setdefault silently left every "live" run
+    # hitting the mock fixture (identical data, no evidence_by_field) for every company.
+    os.environ["USE_MOCK_WEB_RESEARCH"] = "false"  # live research, not the fixture
 
     from src import hubspot_client as hs
     from src.web_research import claude_web_research
