@@ -16,6 +16,8 @@ files_modified:
   - tests/n8n/parity.test.mjs
   - scripts/build_cloud_workflows.py
   - n8n/wf_enrichment_local_live.json
+  - tests/n8n/webResearchFailure.test.mjs
+  - scripts/smoke_closed_won_research.py
 
 must_haves:
   truths:
@@ -25,6 +27,7 @@ must_haves:
     - An off-vocabulary model org_type becomes "unknown" with needs_review=true and never reaches the candidate (AT-2); malformed/non-dict output yields matched=false and never raises (OC-4).
     - n8n/code/webResearch.js returns results identical to the Python validate_research_output / to_provider_result across the shared fixture table (JS/Python parity, NM-6 pattern).
     - Rebuilding wf_enrichment_local_live.json is deterministic; the retrieval + validation nodes feed evidence_by_field into Merge Company and api.anthropic.com stays the only research host (already allowlisted, AR-2 green).
+    - A failed/empty/error-shaped research HTTP response never throws in the Validate Research Output path — the company continues through Merge Company with research skipped and needs_review set (skip-not-retry proven offline, CLAUDE.md §26.2).
   artifacts:
     - src/taxonomy.py
     - src/schemas.py
@@ -33,6 +36,8 @@ must_haves:
     - tests/n8n/parity.test.mjs
     - scripts/build_cloud_workflows.py
     - n8n/wf_enrichment_local_live.json
+    - tests/n8n/webResearchFailure.test.mjs
+    - scripts/smoke_closed_won_research.py
   key_links:
     - config/taxonomy.yaml -> src/taxonomy.py normalizers -> validate_research_output -> to_provider_result -> ProviderResult.evidence_by_field
     - n8n/code/taxonomy.js -> n8n/code/webResearch.js -> "Validate Research Output" node -> ENRICH_MERGE_CO research merge call -> mergeCompanies.js (unchanged)
@@ -412,14 +417,84 @@ PY
 
 ---
 
+### Task 4 — deliberate-failure skip proof + closed-won live smoke
+
+**Files:** `tests/n8n/webResearchFailure.test.mjs` (new, offline, gating),
+`scripts/smoke_closed_won_research.py` (new, live, non-gating)
+
+**Why:** user-requested pre-execution additions (2026-07-21). (a) The repo's HTTP-node
+pattern (`onError: Continue`) silently ignores `retryOnFail`, so a failed research call is a
+SKIP, not a retry — that skip path must be proven offline, not assumed. (b) Closed-won
+HubSpot accounts are ground truth for `lv_produces_content=true` (they bought the product);
+any researched `false` on a closed-won company is a detected false-negative on the one field
+that fires the hard veto.
+
+**Steps:**
+
+1. `tests/n8n/webResearchFailure.test.mjs` — exercise the "Validate Research Output" node
+   body (same extract-the-node-code harness the existing `tests/n8n/*.test.mjs` files use)
+   with the item shapes n8n produces when the research HTTP node fails under
+   `onError: Continue`:
+   - an item carrying an `error` key and no usable body,
+   - an empty/missing `json.content` (no text blocks),
+   - an HTTP-level error body (`{"type":"error","error":{...}}` per Anthropic error shape).
+   Assert for each: no throw; the emitted item continues downstream with research marked
+   not-usable (`matched=false` / no research candidate), `needs_review` set, and the
+   firmographic provider data untouched — i.e. the company reaches Merge Company exactly as
+   it would with `ALLOW_WEB_RESEARCH=off`. This is the executable proof of CLAUDE.md §26.2
+   "Timeout → continue with provider-only" and the plan's skip-not-retry stance (Pitfall:
+   `retryOnFail` ignored under Continue).
+
+2. `scripts/smoke_closed_won_research.py` — non-gating, env-gated, read-only live smoke:
+   - Requires `HUBSPOT_PRIVATE_APP_TOKEN` + `ANTHROPIC_API_KEY`; exits 0 with a clear
+     "skipped (no credentials)" message when absent. NEVER imported by pytest.
+   - Searches deals with `dealstage = closedwon` (HubSpot CRM search API), follows deal→company
+     associations, dedupes to companies with a usable `domain`.
+   - Caps the batch via `--limit` (default 10) and honors `MAX_WEB_RESEARCH_PER_RUN` /
+     `WEB_RESEARCH_MAX_SEARCHES` — no caching exists until Phase 15, every company is a real
+     spend.
+   - Runs `src.web_research.claude_web_research` (the dev oracle, `USE_MOCK_WEB_RESEARCH=false`)
+     + `validate_research_output` per company and prints a per-company line
+     (name, domain, `lv_produces_content`, evidence URL or "—") plus a summary split:
+     `true / null / false / unmatched` counts.
+   - Exit code: 0 normally; 2 when any company returns an EVIDENCED `false` (the red-flag
+     false-negative signal worth a human look — an unevidenced false cannot occur post-TS-2).
+   - Zero HubSpot writes anywhere in the script (GET/search only).
+
+**Do NOT:** wire either file into the n8n workflows; import the smoke script from any test;
+add retry logic to the HTTP node (skip-not-retry stands until a dedicated decision).
+
+**Acceptance criteria:**
+
+- `node --test tests/n8n/webResearchFailure.test.mjs` green offline, and the full
+  `node --test tests/n8n/*.test.mjs` stays green with it included.
+- Deliberate-break proof: temporarily make the Validate node body rethrow on the `error`-key
+  shape → the failure test fails naming the case; restore byte-identical.
+- `.venv/bin/python scripts/smoke_closed_won_research.py` with no credentials exits 0 and
+  prints the skip message (proven offline); with credentials it is NOT run by the executor —
+  it is an operator tool for the pilot.
+- `.venv/bin/pytest -q` unchanged by this task (script never imported).
+
+**Verify:**
+
+```bash
+node --test tests/n8n/webResearchFailure.test.mjs
+node --test tests/n8n/*.test.mjs
+env -u HUBSPOT_PRIVATE_APP_TOKEN -u ANTHROPIC_API_KEY .venv/bin/python scripts/smoke_closed_won_research.py   # expect: skip message, exit 0
+.venv/bin/pytest -q
+```
+
+---
+
 ## Phase verification
 
 ```bash
 .venv/bin/pytest -q                 # expect: ~139 passed, 0 xfailed, 0 xpassed, 0 failed
-node --test tests/n8n/*.test.mjs     # expect: all pass (46 baseline + new webResearch parity)
+node --test tests/n8n/*.test.mjs     # expect: all pass (46 baseline + webResearch parity + failure-path tests)
 .venv/bin/python scripts/build_cloud_workflows.py
 git diff --exit-code n8n/            # rebuild after a clean build is a no-op
 for f in n8n/code/*.js; do node --check "$f" || exit 1; done
+env -u HUBSPOT_PRIVATE_APP_TOKEN -u ANTHROPIC_API_KEY .venv/bin/python scripts/smoke_closed_won_research.py  # skip message, exit 0
 ```
 
 ## Security (spec V5 Input Validation)
@@ -448,6 +523,9 @@ gates enforced in the Research Trigger Gate node, physically upstream of the HTT
    Task 1, proven by `test_at2`.
 5. The 7 `xfail(strict=True)` acceptance tests flip to passing and their markers are removed —
    Task 1.
+6. (User additions 2026-07-21) Research-failure skip path proven offline — Task 4a
+   (`webResearchFailure.test.mjs`); closed-won ground-truth smoke available as an operator
+   tool for the pilot — Task 4b (`smoke_closed_won_research.py`, non-gating).
 
 ## Out of scope (later phases)
 
