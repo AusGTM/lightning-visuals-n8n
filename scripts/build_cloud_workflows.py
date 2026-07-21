@@ -27,8 +27,10 @@ CODE = ROOT / "n8n" / "code"
 # this file directly (`python scripts/build_cloud_workflows.py`) puts scripts/ on
 # sys.path[0], so the plain import resolves.
 import gen_taxonomy_js  # noqa: E402
+import gen_escalation_js  # noqa: E402
 
 (CODE / "taxonomy.generated.js").write_text(gen_taxonomy_js.render())
+(CODE / "escalation.generated.js").write_text(gen_escalation_js.render())
 
 # ---- module inliner ---------------------------------------------------------
 
