@@ -1,0 +1,145 @@
+{
+  "evidence_cases": [
+    {
+      "company": "Australian Turf Club",
+      "domain": "australianturfclub.com.au",
+      "citation_url": "https://www.youtube.com/user/AtcracesTV?cbrd=1",
+      "claim": true,
+      "expected": "sufficient"
+    },
+    {
+      "company": "Redcliffe Harness RC",
+      "domain": "redcliffehrc.com.au",
+      "citation_url": "https://redcliffehrc.com.au/",
+      "claim": true,
+      "expected": "insufficient"
+    },
+    {
+      "company": "Rockhampton Jockey Club",
+      "domain": "callaghanpark.com.au",
+      "citation_url": "https://www.youtube.com/@rockhamptonjockeyclub6459",
+      "claim": true,
+      "expected": "sufficient"
+    },
+    {
+      "company": "Wyong",
+      "domain": "www.wyongraceclub.com.au",
+      "citation_url": "https://www.bets.com.au/horse-racing/race-courses/wyong-races-live-stream-20210406-0030/",
+      "claim": true,
+      "expected": "insufficient"
+    },
+    {
+      "company": "Melbourne Racing Club",
+      "domain": "mrc.racing.com",
+      "citation_url": "https://www.troa.com.au/content/racingdotcom",
+      "claim": true,
+      "expected": "insufficient"
+    },
+    {
+      "company": "Panasonic Studio Productions",
+      "domain": "www.pspvideo.com.au",
+      "citation_url": "https://pspvideo.com.au/",
+      "claim": true,
+      "expected": "insufficient"
+    },
+    {
+      "company": "Brisbane Racing Club",
+      "domain": "brc.com.au",
+      "citation_url": "https://www.youtube.com/@brisbaneracingclub427",
+      "claim": true,
+      "expected": "sufficient"
+    },
+    {
+      "company": "Racing and Wagering WA",
+      "domain": "rwwa.com.au",
+      "citation_url": "https://racingwa.com.au/tv",
+      "claim": true,
+      "expected": "insufficient",
+      "note": "Accepted alias-domain false negative (RESEARCH A3) — racingwa.com.au is RWWA's own content domain but does not string-match the HubSpot domain rwwa.com.au. Fails safe to needs_review, never to a wrong false or a wrong veto. Do not 'fix' this into a bug; v1 is exact-string domain match only, no registrable-domain-family fuzzing."
+    },
+    {
+      "company": "Queensland Racing Integrity Commission",
+      "domain": "www.qric.qld.gov.au",
+      "citation_url": "https://qric.qld.gov.au/about-us/functions-powers/",
+      "claim": false,
+      "expected": "judge_only"
+    },
+    {
+      "company": "GRAVITY MEDIA",
+      "domain": "www.gravitymedia.com",
+      "citation_url": "https://www.gravitymedia.com/us/what-we-do/production-content/",
+      "claim": true,
+      "expected": "sufficient"
+    },
+    {
+      "company": "The Creek Agency",
+      "domain": "thecreek.com.au",
+      "citation_url": "https://www.thecreek.com.au/",
+      "claim": true,
+      "expected": "insufficient"
+    },
+    {
+      "company": "Scone Race Club",
+      "domain": "www.sconeraceclub.com.au",
+      "citation_url": "https://www.youtube.com/channel/UC1AqN0yBcRhDo_Mgr4CMPTg",
+      "claim": true,
+      "expected": "sufficient"
+    },
+    {
+      "company": "Racing NSW",
+      "domain": "www.racingnsw.com.au",
+      "citation_url": "https://www.racingnsw.com.au/",
+      "claim": true,
+      "expected": "insufficient"
+    },
+    {
+      "company": "Supertech Electronics",
+      "domain": "www.supertech-electronics.com.au",
+      "citation_url": "https://myausweb.net.au/automotive/supertech-electronics/",
+      "claim": true,
+      "expected": "insufficient"
+    },
+    {
+      "company": "Cairns Jockey Club",
+      "domain": "www.cairnsjockeyclub.com.au",
+      "citation_url": "https://www.cairnsjockeyclub.com.au/news/",
+      "claim": true,
+      "expected": "sufficient"
+    },
+    {
+      "company": "Victoria Racing Club",
+      "domain": "flemington.com.au",
+      "citation_url": "https://www.vrc.com.au/",
+      "claim": true,
+      "expected": "insufficient"
+    },
+    {
+      "company": "Bunbury Trotting Club",
+      "domain": "www.bunburytrottingclub.com.au",
+      "citation_url": "https://visitbunburygeographe.com.au/business/bunbury-trotting-club/",
+      "claim": true,
+      "expected": "insufficient"
+    },
+    {
+      "company": "Sunshine Coast Turf Club",
+      "domain": "sctc.com.au",
+      "citation_url": "https://www.sctc.com.au/race-fields-footage/",
+      "claim": true,
+      "expected": "sufficient"
+    },
+    {
+      "company": "Harness Racing ACT",
+      "domain": "www.capitaltrots.com.au",
+      "citation_url": "https://capitaltrots.com.au/",
+      "claim": true,
+      "expected": "insufficient"
+    },
+    {
+      "company": "Thoroughbred Park",
+      "domain": "www.thoroughbredpark.com.au",
+      "citation_url": "https://thoroughbredpark.com.au/racing-information/",
+      "claim": true,
+      "expected": "sufficient"
+    }
+  ]
+}

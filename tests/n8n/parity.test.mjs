@@ -31,6 +31,7 @@ const {
 const {
   validateResearchOutput, toProviderResult,
 } = require(path.join(ROOT, "n8n/code/webResearch.js"));
+const { isCitationSufficient } = require(path.join(ROOT, "n8n/code/judge.js"));
 
 // --- Python oracle helpers ----------------------------------------------------
 const PY = path.join(ROOT, ".venv/bin/python");
@@ -348,4 +349,26 @@ test("webResearch: GENUINE parity vs Python src.taxonomy validate_research_outpu
 
   assert.deepStrictEqual(jsValidate, py.validate, "validateResearchOutput parity");
   assert.deepStrictEqual(jsProviderResult, py.provider_result, "toProviderResult parity");
+});
+
+// --- judge: JG-4 GENUINE parity vs Python src.judge.is_citation_sufficient ----------
+// Name carries "judge" + "parity" so --test-name-pattern="judge.*parity" targets it.
+function pyJudgeSufficiency(fixtureRelPath) {
+  const script = `
+import json, sys
+from src.judge import is_citation_sufficient
+with open(sys.argv[1]) as f:
+    cases = json.load(f)["evidence_cases"]
+print(json.dumps([is_citation_sufficient(c["citation_url"], c["domain"]) for c in cases]))
+`;
+  const out = execFileSync(PY, ["-c", script, fixtureRelPath], { cwd: ROOT }).toString().trim();
+  return JSON.parse(out);
+}
+
+test("judge: JG-4 GENUINE parity vs Python src.judge.is_citation_sufficient over the 20-row fixture", () => {
+  const fixturePath = path.join(ROOT, "tests/fixtures/evidence_sufficiency_cases.json");
+  const { evidence_cases: cases } = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
+  const py = pyJudgeSufficiency("tests/fixtures/evidence_sufficiency_cases.json");
+  const js = cases.map((c) => isCitationSufficient(c.citation_url, c.domain));
+  assert.deepStrictEqual(js, py, "isCitationSufficient parity (JS vs Python) over all 20 rows");
 });
