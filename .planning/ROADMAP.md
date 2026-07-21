@@ -351,7 +351,9 @@ retroactively; its artifacts and tests are in the tree.
   5. PN-1..PN-5 naming convention applied to code-generated property names: metadata stampers emit `lv_`-prefixed names (`n8n/code/mergeCompanies.js:154`, `n8n/code/mergeContacts.js:115`, `src/merge_policy.py:44`), `n8n/code/enrichmentGate.js:76` reads them, and `scripts/build_cloud_workflows.py` hardcoded names updated (`:686`, `:692`, `:694`, `:1059`).
   6. Four missing contact properties created alongside the metadata migration: `lv_linkedin_url`, `lv_persona_group`, `lv_jobtitle_verified_at`, `lv_mobilephone_verified_at`. Until created, HubSpot silently drops the search-list names and staleness checks return undefined for every contact.
 
-**Plans**: TBD
+**Plans**: 1 plan
+
+- [ ] 15-01-PLAN.md — Reversibility-first HubSpot property migration: baseline snapshot + dry-run/undo-manifest sync + provenance-JSON stamper model (1 blob + 4 cache keys) + ICP write-path retirement + PN-1..PN-5 renames + rollback script/canary + operator runbook
 
 ### Phase 16: Scheduled Workflows & Review Surface
 
