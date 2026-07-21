@@ -1,7 +1,7 @@
 // mergeContacts.js — pure-JS DETERMINISTIC non-clobber merge for n8n Code nodes.
 //
 // Mirrors the DETERMINISTIC parts of src/merge_policy.py (deterministic_gate +
-// source_metadata + staging_property) for a single upload candidate per field.
+// source_metadata) for a single upload candidate per field.
 // NO Haiku / NO Sonnet — the LLM classification/validation stages that merge_policy
 // runs after the gate are intentionally omitted here (n8n Code nodes cannot call
 // them; escalation happens in a downstream node). So the decision IS the gate's
@@ -10,6 +10,13 @@
 // Email can NEVER land in canonicalPatch on this enrich path (belt-and-braces: the
 // manual_protected class + the 95 threshold already prevent it, and an explicit
 // guard enforces it regardless of policy edits).
+//
+// PROVENANCE MODEL (Phase 15): per-field metadata/staging is ONE provenance object keyed
+// by field ({source, confidence, verified_at, validation_status, value}), not flat
+// `{field}_source`/`{provider}_{field}` properties. The caller (the
+// build_cloud_workflows.py wrapper) serializes it ONCE via stableStringify() into
+// `lv_contact_enrichment_provenance`, alongside the 2 cache-key datetimes this module
+// surfaces on `cacheKeys` for jobtitle / mobilephone.
 
 // Default contacts field policy (source of truth: config/field_policy.yaml `contacts`).
 const DEFAULT_CONTACT_POLICY = {
@@ -27,13 +34,34 @@ function _isBlank(v) {
          (Array.isArray(v) && v.length === 0);
 }
 
-function stagingProperty(provider, field) {
-  return `${provider}_${field}`;
-}
-
 function _nowIso() {
   return new Date().toISOString();
 }
+
+// Recursively sort object keys before JSON.stringify — see mergeCompanies.js's
+// stableStringify() (identical implementation, duplicated per the existing
+// self-contained-per-Code-node pattern this repo already uses for _isBlank/_nowIso/etc.)
+// for the full parity-with-Python rationale.
+function _sortedForStringify(value) {
+  if (Array.isArray(value)) return value.map(_sortedForStringify);
+  if (value !== null && typeof value === "object") {
+    const out = {};
+    for (const k of Object.keys(value).sort()) out[k] = _sortedForStringify(value[k]);
+    return out;
+  }
+  return value;
+}
+
+function stableStringify(value) {
+  return JSON.stringify(_sortedForStringify(value));
+}
+
+// The 2 contact cache-key fields (queryable datetimes) — everything else rides in the
+// provenance blob.
+const CONTACT_CACHE_KEY_FIELDS = {
+  jobtitle: "lv_jobtitle_verified_at",
+  mobilephone: "lv_mobilephone_verified_at",
+};
 
 // Deterministic gate — single candidate, mirrors merge_policy.deterministic_gate.
 // has_conflict is always false with one candidate, so the conflict branch is dropped.
@@ -88,8 +116,8 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
   const verifiedAt = _nowIso();
 
   const canonicalPatch = {};
-  const stagingPatch = {};
-  const metadataPatch = {};
+  const provenance = {};
+  const cacheKeys = {};
   const decisions = [];
 
   for (const field of Object.keys(candidateRow)) {
@@ -99,9 +127,6 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
     const currentValue = existingProps[field];
     const fieldPol = policy[field] || { class: "fill_blank_only", min_confidence: 80 };
 
-    // Always stage the raw candidate under its provider-namespaced key.
-    stagingPatch[stagingProperty(source, field)] = value;
-
     const gate = _gate(field, currentValue, confidence, fieldPol);
     let decision = gate.decision;
 
@@ -110,14 +135,13 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
 
     const validationStatus = _statusFor(decision);
 
-    // Stamp source metadata for every field with a chosen candidate.
-    const meta = {
-      [`${field}_source`]: source,
-      [`${field}_confidence`]: confidence,
-      [`${field}_verified_at`]: verifiedAt,
-      [`${field}_validation_status`]: validationStatus,
-    };
-    Object.assign(metadataPatch, meta);
+    // ONE provenance entry per field — replaces the old flat metadataPatch/stagingPatch.
+    provenance[field] = { source, confidence, verified_at: verifiedAt,
+                          validation_status: validationStatus, value };
+
+    if (CONTACT_CACHE_KEY_FIELDS[field]) {
+      cacheKeys[CONTACT_CACHE_KEY_FIELDS[field]] = verifiedAt;
+    }
 
     if (decision === "promote") {
       canonicalPatch[field] = value;
@@ -136,7 +160,7 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
     });
   }
 
-  return { canonicalPatch, stagingPatch, metadataPatch, decisions };
+  return { canonicalPatch, provenance, cacheKeys, decisions };
 }
 
-module.exports = { mergeContacts, stagingProperty, DEFAULT_CONTACT_POLICY };
+module.exports = { mergeContacts, stableStringify, DEFAULT_CONTACT_POLICY };

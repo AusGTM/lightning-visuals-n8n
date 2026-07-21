@@ -234,14 +234,33 @@ return $input.all().map((it) => {
 DECIDE_LOCAL = r"""// Decide Action (dry-run echo) — LOCAL variant.
 // Replaces the HubSpot update/create write nodes: ECHOES the would-be payload,
 // performs NO real write. `create` stays gated behind allow_create (default false).
+// Phase 15: this is the SINGLE serialization point for the provenance blob — the
+// stamper (mergeContacts.js) returns the parsed provenance object, never a string.
+function _sortedForStringify(v) {
+  if (Array.isArray(v)) return v.map(_sortedForStringify);
+  if (v !== null && typeof v === "object") {
+    const out = {};
+    for (const k of Object.keys(v).sort()) out[k] = _sortedForStringify(v[k]);
+    return out;
+  }
+  return v;
+}
+function _stableStringify(v) { return JSON.stringify(_sortedForStringify(v)); }
+function _buildContactPatch(merge) {
+  if (!merge) return {};
+  const patch = { ...merge.canonicalPatch, ...(merge.cacheKeys || {}) };
+  if (merge.provenance && Object.keys(merge.provenance).length) {
+    patch.lv_contact_enrichment_provenance = _stableStringify(merge.provenance).slice(0, 60000);
+  }
+  return patch;
+}
+
 return $input.all().map((it) => {
   const row = it.json;
   const id = row.identity || {};
   const outcome = id.outcome || "rejected";
   const allow_create = row.allow_create === true;
-  const patch = row.merge
-    ? { ...row.merge.canonicalPatch, ...row.merge.stagingPatch, ...row.merge.metadataPatch }
-    : {};
+  const patch = _buildContactPatch(row.merge);
   let action, hubspot_op = null;
   if (outcome === "match") {
     action = "update";
@@ -279,14 +298,33 @@ return $input.all().map((it) => {
 DECIDE_CLOUD = r"""// Decide Action — CLOUD variant.
 // Computes action + the HubSpot property patch, then the IF nodes route to the
 // real HubSpot update/create (gated) / Set review nodes.
+// Phase 15: this is the SINGLE serialization point for the provenance blob — the
+// stamper (mergeContacts.js) returns the parsed provenance object, never a string.
+function _sortedForStringify(v) {
+  if (Array.isArray(v)) return v.map(_sortedForStringify);
+  if (v !== null && typeof v === "object") {
+    const out = {};
+    for (const k of Object.keys(v).sort()) out[k] = _sortedForStringify(v[k]);
+    return out;
+  }
+  return v;
+}
+function _stableStringify(v) { return JSON.stringify(_sortedForStringify(v)); }
+function _buildContactPatch(merge) {
+  if (!merge) return {};
+  const patch = { ...merge.canonicalPatch, ...(merge.cacheKeys || {}) };
+  if (merge.provenance && Object.keys(merge.provenance).length) {
+    patch.lv_contact_enrichment_provenance = _stableStringify(merge.provenance).slice(0, 60000);
+  }
+  return patch;
+}
+
 return $input.all().map((it) => {
   const row = it.json;
   const id = row.identity || {};
   const outcome = id.outcome || "rejected";
   const allow_create = row.allow_create === true;
-  const properties = row.merge
-    ? { ...row.merge.canonicalPatch, ...row.merge.stagingPatch, ...row.merge.metadataPatch }
-    : {};
+  const properties = _buildContactPatch(row.merge);
   let action;
   if (outcome === "match") action = "update";
   else if (outcome === "net_new") action = allow_create ? "create" : "review";
@@ -705,15 +743,15 @@ const CANNED = {
   "alex.taylor@exampleco.example": {
     email: "alex.taylor@exampleco.example",
     jobtitle: "Analyst",
-    jobtitle_verified_at: "2025-01-01T00:00:00Z",
+    lv_jobtitle_verified_at: "2025-01-01T00:00:00Z",
     mobilephone: ""
   },
   "sam.fresh@examplemedia.example": {
     email: "sam.fresh@examplemedia.example",
     jobtitle: "Producer",
-    jobtitle_verified_at: "2026-07-01T00:00:00Z",
+    lv_jobtitle_verified_at: "2026-07-01T00:00:00Z",
     mobilephone: "+61412000000",
-    mobilephone_verified_at: "2026-07-01T00:00:00Z"
+    lv_mobilephone_verified_at: "2026-07-01T00:00:00Z"
   }
 };
 return $input.all().map((it) => {
@@ -764,6 +802,27 @@ ENRICH_PROVIDER_MOCK = (
 ENRICH_DECIDE_LOCAL = r"""// Decide Action (dry-run echo) — LOCAL variant.
 // Replaces the HubSpot create/update write nodes: ECHOES the would-be payload,
 // performs NO real write. Surfaces the per-identity action + scored winners w/ provenance.
+// Phase 15: this is the SINGLE serialization point for the provenance blob — the
+// stamper (mergeContacts.js) returns the parsed provenance object, never a string.
+function _sortedForStringify(v) {
+  if (Array.isArray(v)) return v.map(_sortedForStringify);
+  if (v !== null && typeof v === "object") {
+    const out = {};
+    for (const k of Object.keys(v).sort()) out[k] = _sortedForStringify(v[k]);
+    return out;
+  }
+  return v;
+}
+function _stableStringify(v) { return JSON.stringify(_sortedForStringify(v)); }
+function _buildContactPatch(merge) {
+  if (!merge) return {};
+  const patch = { ...merge.canonicalPatch, ...(merge.cacheKeys || {}) };
+  if (merge.provenance && Object.keys(merge.provenance).length) {
+    patch.lv_contact_enrichment_provenance = _stableStringify(merge.provenance).slice(0, 60000);
+  }
+  return patch;
+}
+
 return $input.all().map((it) => {
   const row = it.json;
   const action = row.action;
@@ -777,9 +836,7 @@ return $input.all().map((it) => {
         score: Math.round(b.score * 100) / 100, agreedBy: b.agreedBy });
     }
   }
-  const patch = row.merge
-    ? { ...row.merge.canonicalPatch, ...row.merge.stagingPatch, ...row.merge.metadataPatch }
-    : {};
+  const patch = _buildContactPatch(row.merge);
   let hubspot_op = null;
   if (action === "create") {
     hubspot_op = { method: "POST", endpoint: "/crm/v3/objects/contacts", properties: patch };
@@ -802,12 +859,31 @@ return $input.all().map((it) => {
 ENRICH_DECIDE_CLOUD = r"""// Decide Action — CLOUD variant.
 // Computes action + the HubSpot property patch from the scored+merged winners.
 // The IF nodes route create -> HubSpot Create, enrich -> HubSpot Update (GATED).
+// Phase 15: this is the SINGLE serialization point for the provenance blob — the
+// stamper (mergeContacts.js) returns the parsed provenance object, never a string.
+function _sortedForStringify(v) {
+  if (Array.isArray(v)) return v.map(_sortedForStringify);
+  if (v !== null && typeof v === "object") {
+    const out = {};
+    for (const k of Object.keys(v).sort()) out[k] = _sortedForStringify(v[k]);
+    return out;
+  }
+  return v;
+}
+function _stableStringify(v) { return JSON.stringify(_sortedForStringify(v)); }
+function _buildContactPatch(merge) {
+  if (!merge) return {};
+  const patch = { ...merge.canonicalPatch, ...(merge.cacheKeys || {}) };
+  if (merge.provenance && Object.keys(merge.provenance).length) {
+    patch.lv_contact_enrichment_provenance = _stableStringify(merge.provenance).slice(0, 60000);
+  }
+  return patch;
+}
+
 return $input.all().map((it) => {
   const row = it.json;
   const action = row.action;
-  const properties = row.merge
-    ? { ...row.merge.canonicalPatch, ...row.merge.stagingPatch, ...row.merge.metadataPatch }
-    : {};
+  const properties = _buildContactPatch(row.merge);
   return { json: {
     action,
     object_type: row.object_type || "contacts",
@@ -1195,14 +1271,17 @@ return $input.all().map((it) => {
 """
 
 # Company existence check: by domain (the identity anchor). Property list is the 5 lv_*
-# props that ACTUALLY exist in portal 22617666 plus the core firmographics — HubSpot
+# props that ACTUALLY exist in portal 22617666 plus the core firmographics, PLUS (Phase 15)
+# the 2 company cache-key datetimes ENRICH_CO_GATE's staleness check reads — HubSpot
 # silently drops unknown names from `properties` and still returns 200, so asking for
-# not-yet-created props would read back as undefined and be indistinguishable from empty.
+# not-yet-created props would read back as undefined and be indistinguishable from empty
+# (harmless pre-migration; becomes meaningful once scripts/sync_hubspot_properties.py runs).
 HS_CO_SEARCH_BODY_EXPR = (
     '={{ JSON.stringify({ filterGroups: [ { filters: '
     '[ { propertyName: "domain", operator: "EQ", value: $json.identity_keys.domain } ] } ], '
     'properties: ["name","domain","industry","annualrevenue","numberofemployees",'
-    '"lv_org_type","lv_produces_content","lv_icp_tier","lv_icp_fit_score","lv_anti_icp_flag"], '
+    '"lv_org_type","lv_produces_content","lv_icp_tier","lv_icp_fit_score","lv_anti_icp_flag",'
+    '"lv_org_type_verified_at","lv_produces_content_verified_at"], '
     'limit: 5 }) }}'
 )
 
@@ -1579,10 +1658,14 @@ return $input.all().map((it) => {
     if (Object.keys(researchData).length > 0) {
       const researchMerged = mergeCompanies(row.existingRecord || {}, researchData, undefined,
         { source: "claude_web", confidence: rc.confidence || 80, evidence: rc.evidence_by_field || {} });
+      // Phase 15: the two mergeCompanies calls handle DISJOINT field sets (waterfall:
+      // domain/industry/revenue_band/employee_band/country; claude_web: org_type/
+      // produces_content/content_type/hardware/gambling), so a shallow merge of each
+      // provenance object + cacheKeys object is safe — no key collision.
       finalMerge = {
         canonicalPatch: { ...merged.canonicalPatch, ...researchMerged.canonicalPatch },
-        stagingPatch: { ...merged.stagingPatch, ...researchMerged.stagingPatch },
-        metadataPatch: { ...merged.metadataPatch, ...researchMerged.metadataPatch },
+        provenance: { ...merged.provenance, ...researchMerged.provenance },
+        cacheKeys: { ...merged.cacheKeys, ...researchMerged.cacheKeys },
         decisions: [...merged.decisions, ...researchMerged.decisions],
       };
     }
@@ -1594,6 +1677,19 @@ return $input.all().map((it) => {
 
 ENRICH_DECIDE_CO_LOCAL = r"""// Decide Company Action (dry-run echo) — companies branch.
 // NO write nodes: echoes the would-be payload only. Mirrors the contacts Decide Action.
+// Phase 15: this is the SINGLE serialization point for the provenance blob — the
+// stamper (mergeCompanies.js) returns the parsed provenance object, never a string.
+function _sortedForStringify(v) {
+  if (Array.isArray(v)) return v.map(_sortedForStringify);
+  if (v !== null && typeof v === "object") {
+    const out = {};
+    for (const k of Object.keys(v).sort()) out[k] = _sortedForStringify(v[k]);
+    return out;
+  }
+  return v;
+}
+function _stableStringify(v) { return JSON.stringify(_sortedForStringify(v)); }
+
 return $input.all().map((it) => {
   const row = it.json;
   const id = row.identity_keys || {};
@@ -1619,8 +1715,8 @@ return $input.all().map((it) => {
     winners: winners_sample,
     would_patch: row.merge ? {
       canonical: row.merge.canonicalPatch,
-      staging: row.merge.stagingPatch,
-      metadata: row.merge.metadataPatch,
+      provenance: _stableStringify(row.merge.provenance || {}),
+      cache_keys: row.merge.cacheKeys || {},
     } : null,
   }};
 });

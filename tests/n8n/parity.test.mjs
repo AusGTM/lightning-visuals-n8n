@@ -23,7 +23,7 @@ const { normalizeEmailBasic } = require(path.join(ROOT, "n8n/code/normalizeEmail
 const { mapRow, requiredIdentity } = require(path.join(ROOT, "n8n/code/columnMap.js"));
 const { resolveIdentity } = require(path.join(ROOT, "n8n/code/resolveIdentity.js"));
 const { mergeContacts } = require(path.join(ROOT, "n8n/code/mergeContacts.js"));
-const { mergeCompanies } = require(path.join(ROOT, "n8n/code/mergeCompanies.js"));
+const { mergeCompanies, stableStringify } = require(path.join(ROOT, "n8n/code/mergeCompanies.js"));
 const { dedupeSweep } = require(path.join(ROOT, "n8n/code/dedupeSweep.js"));
 const {
   normalizeOrgType, normalizeOrgTypeResult, normalizeContentTypes,
@@ -209,7 +209,7 @@ test("columnMap: requiredIdentity — email OR firstname+lastname+company", () =
 test("mergeContacts: email not canonical, blank phone filled, jobtitle conflict -> review", () => {
   const existing = { jobtitle: "Analyst", phone: "", email: "old@corp.com" };
   const candidate = { email: "new@corp.com", phone: "+61412345678", jobtitle: "Engineer" };
-  const { canonicalPatch, stagingPatch, metadataPatch, decisions } = mergeContacts(existing, candidate);
+  const { canonicalPatch, provenance, decisions } = mergeContacts(existing, candidate);
 
   // email (manual_protected, min_conf 95 > csv 80) -> never canonical
   assert.ok(!("email" in canonicalPatch), "email must not be canonical");
@@ -220,13 +220,15 @@ test("mergeContacts: email not canonical, blank phone filled, jobtitle conflict 
   const jt = decisions.find((d) => d.field === "jobtitle");
   assert.equal(jt.decision, "needs_review");
 
-  // every candidate field is staged and carries source metadata
+  // Phase 15: every candidate field has ONE provenance entry (no flat staging/metadata
+  // keys) — {source, confidence, verified_at, validation_status, value}.
   for (const f of ["email", "phone", "jobtitle"]) {
-    assert.ok((`csv_${f}`) in stagingPatch, `staged csv_${f}`);
-    assert.equal(metadataPatch[`${f}_source`], "csv");
-    assert.equal(metadataPatch[`${f}_confidence`], 80);
-    assert.ok(metadataPatch[`${f}_verified_at`], `${f} verified_at stamped`);
-    assert.ok(metadataPatch[`${f}_validation_status`], `${f} validation_status stamped`);
+    assert.ok(provenance[f], `provenance entry for ${f}`);
+    assert.equal(provenance[f].source, "csv");
+    assert.equal(provenance[f].confidence, 80);
+    assert.ok(provenance[f].verified_at, `${f} verified_at stamped`);
+    assert.ok(provenance[f].validation_status, `${f} validation_status stamped`);
+    assert.equal(provenance[f].value, candidate[f]);
   }
 });
 
@@ -241,7 +243,7 @@ test("mergeCompanies: domain never canonical, ICP fields promote, present indust
   };
   const opts = { source: "zoominfo", confidence: 85,
                  evidence: { lv_org_type: "https://racingnsw.com.au/about" } };
-  const { canonicalPatch, stagingPatch, metadataPatch, decisions } =
+  const { canonicalPatch, provenance, cacheKeys, decisions } =
     mergeCompanies(existing, candidate, undefined, opts);
 
   // domain (manual_protected, min_conf 95 > 85) -> never canonical
@@ -254,15 +256,22 @@ test("mergeCompanies: domain never canonical, ICP fields promote, present indust
   assert.ok(!("industry" in canonicalPatch));
   assert.equal(decisions.find((d) => d.field === "industry").decision, "needs_review");
 
-  // every candidate field is staged and carries source metadata
+  // Phase 15: every candidate field has ONE provenance entry (no flat staging/metadata
+  // keys) — {source, confidence, verified_at, validation_status, value}.
   for (const f of ["domain", "industry", "lv_org_type", "lv_revenue_band"]) {
-    assert.ok((`zoominfo_${f}`) in stagingPatch, `staged zoominfo_${f}`);
-    assert.equal(metadataPatch[`${f}_source`], "zoominfo");
-    assert.equal(metadataPatch[`${f}_confidence`], 85);
-    assert.ok(metadataPatch[`${f}_verified_at`], `${f} verified_at stamped`);
-    assert.ok(metadataPatch[`${f}_validation_status`], `${f} validation_status stamped`);
+    assert.ok(provenance[f], `provenance entry for ${f}`);
+    assert.equal(provenance[f].source, "zoominfo");
+    assert.equal(provenance[f].confidence, 85);
+    assert.ok(provenance[f].verified_at, `${f} verified_at stamped`);
+    assert.ok(provenance[f].validation_status, `${f} validation_status stamped`);
+    assert.equal(provenance[f].value, candidate[f]);
   }
-  assert.equal(metadataPatch.lv_org_type_evidence_url, "https://racingnsw.com.au/about");
+  assert.equal(provenance.lv_org_type.evidence_url, "https://racingnsw.com.au/about");
+
+  // Cache key: lv_org_type's verified_at mirrors to the top-level queryable property;
+  // lv_produces_content has no candidate this call, so its cache key is absent.
+  assert.equal(cacheKeys.lv_org_type_verified_at, provenance.lv_org_type.verified_at);
+  assert.ok(!("lv_produces_content_verified_at" in cacheKeys));
 });
 
 test("mergeCompanies: unevidenced ICP claims -> needs_review, never canonical", () => {
@@ -371,4 +380,71 @@ test("judge: JG-4 GENUINE parity vs Python src.judge.is_citation_sufficient over
   const py = pyJudgeSufficiency("tests/fixtures/evidence_sufficiency_cases.json");
   const js = cases.map((c) => isCitationSufficient(c.citation_url, c.domain));
   assert.deepStrictEqual(js, py, "isCitationSufficient parity (JS vs Python) over all 20 rows");
+});
+
+// --- provenance blob: Python json.dumps(sort_keys=True, separators=(",",":"),
+// ensure_ascii=False) vs JS stableStringify MUST be byte-identical (Phase 15 Task 5).
+function pySerializeProvenance(entries) {
+  const script = `
+import json, sys
+from src.merge_policy import serialize_provenance
+print(serialize_provenance(json.loads(sys.argv[1])))
+`;
+  const out = execFileSync(PY, ["-c", script, JSON.stringify(entries)], { cwd: ROOT }).toString();
+  // print() adds exactly one trailing newline; serialize_provenance() itself returns none —
+  // strip exactly one for a fair byte comparison.
+  return out.replace(/\n$/, "");
+}
+
+const PROVENANCE_FIXTURE = {
+  lv_org_type: { source: "zoominfo", confidence: 85, verified_at: "2026-07-22T00:00:00Z",
+                 validation_status: "provider_only", value: "governing_body_league" },
+  lv_produces_content: { source: "claude_web", confidence: 88, verified_at: "2026-07-22T00:00:00Z",
+                          validation_status: "llm_classified", value: true,
+                          evidence_url: ["https://example.org/watch-live"] },
+  // Non-ASCII fixture row — RESEARCH.md/PLAN.md Task 5: ensure_ascii=False is
+  // load-bearing, not cosmetic. A macron in a plausible AU/NZ club name/evidence string.
+  lv_content_type: { source: "claude_web", confidence: 80, verified_at: "2026-07-22T00:00:00Z",
+                      validation_status: "llm_classified",
+                      value: "Ngā Puna Wai Sports Hub live_broadcast" },
+};
+
+test("provenance blob: Python and JS produce byte-identical serialization (incl. non-ASCII row)", () => {
+  const js = stableStringify(PROVENANCE_FIXTURE);
+  const py = pySerializeProvenance(PROVENANCE_FIXTURE);
+  assert.equal(js, py, "provenance blob byte-parity (Python json.dumps vs JS stableStringify)");
+  assert.ok(js.includes("Ngā"), "non-ASCII characters must survive unescaped in the JS serialization");
+  assert.ok(py.includes("Ngā"), "non-ASCII characters must survive unescaped in the Python "
+    + "serialization (ensure_ascii=False) — without this the byte-identical claim is unproven");
+});
+
+test("provenance blob DELIBERATE-BREAK 1: changing one candidate value changes the blob, Python==JS still holds", () => {
+  const changed = JSON.parse(JSON.stringify(PROVENANCE_FIXTURE));
+  changed.lv_org_type.value = "content_producer";  // deliberately different from the base fixture
+  const jsBase = stableStringify(PROVENANCE_FIXTURE);
+  const jsChanged = stableStringify(changed);
+  assert.notEqual(jsChanged, jsBase, "changing a candidate value must change the serialized blob");
+  const pyChanged = pySerializeProvenance(changed);
+  assert.equal(jsChanged, pyChanged, "Python/JS parity must still hold after the value change");
+});
+
+test("provenance blob DELIBERATE-BREAK 2: dropping ensure_ascii=False breaks parity on the non-ASCII row", () => {
+  // Simulates dropping `ensure_ascii=False` from src/merge_policy.py's
+  // serialize_provenance() WITHOUT touching the real source file: Python's json.dumps
+  // defaults to ensure_ascii=True, which \uXXXX-escapes every non-ASCII character;
+  // JSON.stringify never does. This proves the flag is load-bearing, not cosmetic — see
+  // the SUMMARY for the companion one-time proof performed directly against the source.
+  const brokenScript = `
+import json, sys
+entries = json.loads(sys.argv[1])
+print(json.dumps(entries, sort_keys=True, separators=(",", ":")))
+`;
+  const broken = execFileSync(PY, ["-c", brokenScript, JSON.stringify(PROVENANCE_FIXTURE)],
+    { cwd: ROOT }).toString().replace(/\n$/, "");
+  const js = stableStringify(PROVENANCE_FIXTURE);
+  assert.notEqual(broken, js,
+    "dropping ensure_ascii=False must break byte-parity on the non-ASCII row (lv_content_type) — "
+    + "proves the flag is load-bearing, not cosmetic");
+  assert.ok(broken.includes("\\u"), "the broken (ensure_ascii default True) variant must \\u-escape the macron");
+  assert.ok(js.includes("Ngā"), "the correct JS serialization keeps the raw UTF-8 characters");
 });

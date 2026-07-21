@@ -10,6 +10,8 @@
 #   * ENRICH (match): email is manual_protected -> NEVER promoted to canonical from csv.
 #   * CREATE (net_new): email IS written as the new record's identity (create bypasses
 #     the merge policy — nothing to protect on a record that does not exist yet).
+import json
+
 import pytest
 
 from src.ingest import run_contact_ingest
@@ -82,8 +84,9 @@ def test_matched_row_patches_without_canonical_email():
     patch = [e for e in report if e["action"] == "patch"]
     assert len(patch) == 1
     m = patch[0]
-    # csv value is STAGED under a provider-namespaced key ...
-    assert "csv_email" in m["payload"]
+    # Phase 15: csv value is staged INSIDE the provenance blob (no flat staging keys) ...
+    provenance = json.loads(m["payload"]["lv_contact_enrichment_provenance"])
+    assert provenance["email"]["source"] == "csv"
     # ... but email is manual_protected: NEVER a bare canonical email write.
     assert "email" not in m["canonical_patch"]
     assert "email" not in m["payload"]

@@ -1,11 +1,17 @@
 // mergeCompanies.js — pure-JS DETERMINISTIC non-clobber merge for COMPANY records.
 //
-// Companies sibling of mergeContacts.js. Same deterministic gate + source_metadata +
-// staging_property shape (src/merge_policy.py), different field policy and two rules
-// contacts do not have:
+// Companies sibling of mergeContacts.js. Same deterministic gate + provenance-blob shape
+// (src/merge_policy.py), different field policy and two rules contacts do not have:
 //   - `domain` hard guard (mirrors the contacts `email` guard)
 //   - evidence-URL requirement on the ICP fields (field_policy.yaml
 //     lv_produces_content.require_evidence_url / lv_org_type.require_evidence_url_for)
+//
+// PROVENANCE MODEL (Phase 15): per-field metadata/staging is ONE provenance object keyed
+// by field ({source, confidence, verified_at, evidence_url?, validation_status, value}),
+// not flat `{field}_source`/`{provider}_{field}` properties. The caller (the
+// build_cloud_workflows.py wrapper) serializes it ONCE via stableStringify() into
+// `lv_enrichment_provenance`, alongside the 2 cache-key datetimes this module surfaces on
+// `cacheKeys` for lv_org_type / lv_produces_content.
 //
 // NO Haiku / NO Sonnet — the LLM stages merge_policy runs after the gate are omitted
 // (n8n Code nodes cannot call them; escalation happens downstream). The decision IS the
@@ -50,13 +56,36 @@ function _isBlank(v) {
          (Array.isArray(v) && v.length === 0);
 }
 
-function stagingProperty(provider, field) {
-  return `${provider}_${field}`;
-}
-
 function _nowIso() {
   return new Date().toISOString();
 }
+
+// Recursively sort object keys before JSON.stringify — the JS half of the shared
+// byte-identical serialization contract with src/merge_policy.py's serialize_provenance()
+// (Python: json.dumps(obj, sort_keys=True, separators=(",", ":"), ensure_ascii=False)).
+// JSON.stringify already emits compact ("," / ":") separators and raw (non-escaped)
+// UTF-8 by default, matching Python's ensure_ascii=False — the only remaining gap is key
+// ORDER, which this closes.
+function _sortedForStringify(value) {
+  if (Array.isArray(value)) return value.map(_sortedForStringify);
+  if (value !== null && typeof value === "object") {
+    const out = {};
+    for (const k of Object.keys(value).sort()) out[k] = _sortedForStringify(value[k]);
+    return out;
+  }
+  return value;
+}
+
+function stableStringify(value) {
+  return JSON.stringify(_sortedForStringify(value));
+}
+
+// The 2 company cache-key fields (RT-5/SJ-2's queryable datetimes) — everything else
+// rides in the provenance blob.
+const COMPANY_CACHE_KEY_FIELDS = {
+  lv_org_type: "lv_org_type_verified_at",
+  lv_produces_content: "lv_produces_content_verified_at",
+};
 
 // Does this field+value need an evidence URL before it may promote?
 // require_evidence_url: always. require_evidence_url_for: only for the listed values
@@ -131,8 +160,8 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
   const verifiedAt = _nowIso();
 
   const canonicalPatch = {};
-  const stagingPatch = {};
-  const metadataPatch = {};
+  const provenance = {};
+  const cacheKeys = {};
   const decisions = [];
 
   for (const field of Object.keys(candidateRow)) {
@@ -142,9 +171,6 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
     const currentValue = existingProps[field];
     const fieldPol = policy[field] || { class: "fill_blank_only", min_confidence: 80 };
     const evidenceUrl = evidence[field];
-
-    // Always stage the raw candidate under its provider-namespaced key.
-    stagingPatch[stagingProperty(source, field)] = value;
 
     const gate = _gate(field, currentValue, confidence, fieldPol, evidenceUrl, value);
     let decision = gate.decision;
@@ -156,15 +182,15 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
 
     const validationStatus = _statusFor(decision);
 
-    // Stamp source metadata for every field with a chosen candidate.
-    const meta = {
-      [`${field}_source`]: source,
-      [`${field}_confidence`]: confidence,
-      [`${field}_verified_at`]: verifiedAt,
-      [`${field}_validation_status`]: validationStatus,
-    };
-    if (!_isBlank(evidenceUrl)) meta[`${field}_evidence_url`] = evidenceUrl;
-    Object.assign(metadataPatch, meta);
+    // ONE provenance entry per field — replaces the old flat metadataPatch/stagingPatch.
+    const entry = { source, confidence, verified_at: verifiedAt,
+                    validation_status: validationStatus, value };
+    if (!_isBlank(evidenceUrl)) entry.evidence_url = evidenceUrl;
+    provenance[field] = entry;
+
+    if (COMPANY_CACHE_KEY_FIELDS[field]) {
+      cacheKeys[COMPANY_CACHE_KEY_FIELDS[field]] = verifiedAt;
+    }
 
     if (decision === "promote") {
       canonicalPatch[field] = value;
@@ -184,7 +210,7 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
     });
   }
 
-  return { canonicalPatch, stagingPatch, metadataPatch, decisions };
+  return { canonicalPatch, provenance, cacheKeys, decisions };
 }
 
-module.exports = { mergeCompanies, stagingProperty, DEFAULT_COMPANY_POLICY };
+module.exports = { mergeCompanies, stableStringify, DEFAULT_COMPANY_POLICY };

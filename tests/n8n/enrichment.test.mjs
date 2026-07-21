@@ -246,8 +246,12 @@ test("gate: null record -> create", () => {
 });
 
 test("gate: verified_at past TTL -> enrich(stale)", () => {
+  // Phase 15: staleness reads the REAL cache-key property (lv_<field>_verified_at), never
+  // a bare `<field>_verified_at` — this fixture uses the cache-key name so the TTL/age
+  // arithmetic branch is actually exercised (a stale bare-named key would ALSO read as
+  // stale via the "no verified_at" branch, silently testing the wrong code path).
   const r = decideAction(
-    { jobtitle: "Analyst", jobtitle_verified_at: "2025-01-01T00:00:00Z" },
+    { jobtitle: "Analyst", lv_jobtitle_verified_at: "2025-01-01T00:00:00Z" },
     ["jobtitle"], POLICY, NOW);
   assert.equal(r.action, "enrich");
   assert.deepEqual(r.staleFields, ["jobtitle"]);
@@ -255,7 +259,7 @@ test("gate: verified_at past TTL -> enrich(stale)", () => {
 
 test("gate: fresh + complete + valid -> skip", () => {
   const r = decideAction(
-    { email: "a@b.com", jobtitle: "Analyst", jobtitle_verified_at: "2026-07-01T00:00:00Z" },
+    { email: "a@b.com", jobtitle: "Analyst", lv_jobtitle_verified_at: "2026-07-01T00:00:00Z" },
     ["email", "jobtitle"], POLICY, NOW);
   assert.equal(r.action, "skip");
 });

@@ -4,6 +4,8 @@
 # copied verbatim from tests/test_e2e_ingest.py: no HUBSPOT token, no ANTHROPIC key,
 # classify_field_with_haiku monkeypatched, and requests.get/post/patch sentinels that
 # raise if any live call leaks. Reaching the assertions proves ZERO network.
+import json
+
 from fastapi.testclient import TestClient
 
 import pytest
@@ -52,7 +54,10 @@ def test_ingest_dry_run_patch_and_create_gate_honored():
     match = next(e for e in report if e["outcome"] == "match")
     assert match["action"] == "patch"
     assert isinstance(match["payload"], dict) and match["payload"]
-    assert "csv_email" in match["payload"]  # staged, never a bare canonical email write
+    # Phase 15: staged inside the provenance blob (no flat staging keys), never a bare
+    # canonical email write.
+    provenance = json.loads(match["payload"]["lv_contact_enrichment_provenance"])
+    assert provenance["email"]["source"] == "csv"
 
     # SC3 gate: allow_create False => NO create action anywhere in the report.
     assert not any(e["action"] == "create" for e in report)

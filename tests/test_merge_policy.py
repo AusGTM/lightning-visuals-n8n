@@ -159,8 +159,11 @@ def test_sc3_e2e_promote_forced_still_protects_manual(monkeypatch):
 
     # manual_protected domain never reaches canonical even with promote-forced classifier
     assert "domain" not in mr.canonical_patch
-    assert "zoominfo_domain" in mr.staging_patch
-    assert "apollo_domain" in mr.staging_patch
+    # Phase 15: staging folds into the provenance blob — no flat zoominfo_/apollo_ staging
+    # properties; staging_patch itself stays empty.
+    assert mr.staging_patch == {}
+    provenance = json.loads(mr.metadata_patch["lv_enrichment_provenance"])
+    assert provenance["domain"]["source"] in ("zoominfo", "apollo", "lusha")
 
     # system_owned lv_org_type promotes
     assert mr.canonical_patch.get("lv_org_type") == "governing_body_league"
@@ -171,21 +174,24 @@ def test_sc4_full_source_attribution(monkeypatch):
     record = load_record()
     mr = build_merge_result(record, build_all_candidates(record))
 
-    for key in [
-        "lv_org_type_source",
-        "lv_org_type_confidence",
-        "lv_org_type_evidence_url",
-        "lv_org_type_evidence_summary",
-        "lv_org_type_verified_at",
-        "lv_org_type_verified_by_model",
-        "lv_org_type_validation_status",
-    ]:
-        assert key in mr.metadata_patch
+    # Phase 15: per-field metadata rides in ONE provenance blob, not flat {field}_* keys.
+    assert "lv_enrichment_provenance" in mr.metadata_patch
+    provenance = json.loads(mr.metadata_patch["lv_enrichment_provenance"])
+    entry = provenance["lv_org_type"]
+    for key in ["source", "confidence", "verified_at", "validation_status", "value"]:
+        assert key in entry, f"provenance[lv_org_type] missing {key}"
 
-    # by design {field}_evidence_url in metadata_patch is the LIST (Phase 4 serializes)
+    # by design entry["evidence_url"] is the LIST (Phase 4 serializes; Phase 15 keeps it)
     org_cand = next(c for c in build_all_candidates(record) if c.canonical_field == "lv_org_type")
-    assert mr.metadata_patch["lv_org_type_evidence_url"] == org_cand.evidence.evidence_urls
-    assert isinstance(mr.metadata_patch["lv_org_type_evidence_url"], list)
+    assert entry["evidence_url"] == org_cand.evidence.evidence_urls
+    assert isinstance(entry["evidence_url"], list)
+
+    # the 2 company cache-key datetimes are real top-level properties (RT-5/SJ-2)
+    assert "lv_org_type_verified_at" in mr.metadata_patch
+    assert mr.metadata_patch["lv_org_type_verified_at"] == entry["verified_at"]
+    if "lv_produces_content" in provenance:
+        assert "lv_produces_content_verified_at" in mr.metadata_patch
+        assert mr.metadata_patch["lv_produces_content_verified_at"] == provenance["lv_produces_content"]["verified_at"]
 
 
 # --- integ: end-to-end wiring incl. Phase 2 scorer, offline, no monkeypatch ---

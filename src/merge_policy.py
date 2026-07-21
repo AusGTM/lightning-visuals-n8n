@@ -31,30 +31,53 @@ def is_blank(value):
     return value is None or value == "" or value == []
 
 
-def staging_property(provider: str, field: str) -> str:
-    return f"{provider}_{field}"
+# Phase 15 (provenance model): per-field metadata rides in ONE JSON blob per object
+# (lv_enrichment_provenance / lv_contact_enrichment_provenance) instead of ~7 flat
+# `{field}_*` suffix properties, plus 4 carve-out `_verified_at` cache-key datetimes that
+# stay top-level and queryable (HubSpot cannot filter inside a JSON text property; RT-5/
+# SJ-2 need "verified_at older than 180 days"). Staging folds into the blob too — no
+# `lv_waterfall_*`/`lv_claude_web_*` properties exist; `staging_patch` stays empty.
+COMPANY_PROVENANCE_KEY = "lv_enrichment_provenance"
+CONTACT_PROVENANCE_KEY = "lv_contact_enrichment_provenance"
+COMPANY_CACHE_KEY_FIELDS = {"lv_org_type": "lv_org_type_verified_at",
+                            "lv_produces_content": "lv_produces_content_verified_at"}
+CONTACT_CACHE_KEY_FIELDS = {"jobtitle": "lv_jobtitle_verified_at",
+                            "mobilephone": "lv_mobilephone_verified_at"}
 
 
-def source_metadata(field: str, candidate, validation_path: str, status: str, model: str | None = None) -> dict:
-    url = None
-    if candidate.evidence.evidence_urls:
-        url = candidate.evidence.evidence_urls
+def serialize_provenance(entries: dict) -> str:
+    """The ONE serialization rule shared (in spec, not in code — Python and JS each
+    implement it) with n8n/code/mergeCompanies.js's / mergeContacts.js's
+    `stableStringify()`: stable sorted-key JSON so the blob is byte-identical across
+    languages for identical input.
 
-    return {
-        f"{field}_source": candidate.provider,
-        f"{field}_source_detail": json.dumps({
-            "provider": candidate.provider,
-            "match_basis": candidate.evidence.match_basis,
-            "evidence_urls": candidate.evidence.evidence_urls,
-            "model_trace": candidate.model_trace
-        })[:60000],
-        f"{field}_confidence": candidate.confidence,
-        f"{field}_evidence_url": url,
-        f"{field}_evidence_summary": candidate.evidence.evidence_summary,
-        f"{field}_verified_at": now_iso(),
-        f"{field}_verified_by_model": model,
-        f"{field}_validation_status": status
+    `ensure_ascii=False` is LOAD-BEARING, not cosmetic: Python defaults to
+    `ensure_ascii=True` and emits `\\uXXXX` escapes for any non-ASCII character, while
+    `JSON.stringify` always emits raw UTF-8 — so a single macron/accent in a value (e.g. a
+    Māori place name) would make the two blobs differ despite matching on ASCII-only
+    input. See tests/n8n/parity.test.mjs's non-ASCII fixture row + deliberate-break proof.
+    """
+    return json.dumps(entries, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def source_metadata(field: str, candidate, status: str, verified_at: str) -> dict:
+    """Returns `{field: entry}` — the ONE provenance ENTRY for `field` under the Phase 15
+    blob model (source, confidence, verified_at, evidence_url [omitted when blank],
+    validation_status, value = the staged raw candidate). `verified_at` is threaded in
+    (not computed here) so every field's entry within one build_merge_result() call
+    shares the SAME timestamp — this is what makes the blob byte-comparable to the JS
+    stamper, which computes ONE verifiedAt per mergeCompanies()/mergeContacts() call, not
+    one per field."""
+    entry = {
+        "source": candidate.provider,
+        "confidence": candidate.confidence,
+        "verified_at": verified_at,
+        "validation_status": status,
+        "value": candidate.normalized_value,
     }
+    if candidate.evidence.evidence_urls:
+        entry["evidence_url"] = candidate.evidence.evidence_urls
+    return {field: entry}
 
 
 def group_candidates(candidates: List[CandidateValue]) -> Dict[str, List[CandidateValue]]:
@@ -188,17 +211,22 @@ def build_merge_result(record: HubSpotRecord, candidates: List[CandidateValue]) 
     grouped = group_candidates(candidates)
     decisions = []
 
+    # staging_patch stays EMPTY (Phase 15): staging folds into the provenance blob below,
+    # not into `{provider}_{field}` properties. Kept as a MergeResult field for schema
+    # stability — nothing populates it any more.
     staging_patch = {}
     canonical_patch = {}
-    metadata_patch = {}
+    provenance = {}
+
+    # ONE timestamp shared across every field this call touches — parity with the JS
+    # stamper, which computes a single verifiedAt per mergeCompanies()/mergeContacts() call
+    # rather than one per field (see source_metadata()'s docstring).
+    verified_at = now_iso()
 
     for field, field_candidates in grouped.items():
         current_value = record.properties.get(field)
         policy = object_policy.get(field, {"class": "fill_blank_only", "min_confidence": 80})
         priority = object_priority.get(field, ["zoominfo", "apollo", "lusha", "claude_web"])
-
-        for c in field_candidates:
-            staging_patch[staging_property(c.provider, field)] = c.normalized_value
 
         gate = deterministic_gate(
             record=record,
@@ -249,13 +277,12 @@ def build_merge_result(record: HubSpotRecord, candidates: List[CandidateValue]) 
             final_decision = gate["decision"]
 
         if chosen:
-            metadata_patch.update(
+            provenance.update(
                 source_metadata(
                     field=field,
                     candidate=chosen,
-                    validation_path=validation_path,
                     status=validation_status,
-                    model=verified_by_model
+                    verified_at=verified_at,
                 )
             )
 
@@ -271,26 +298,35 @@ def build_merge_result(record: HubSpotRecord, candidates: List[CandidateValue]) 
             # evidence_urls LIST to FieldDecision.evidence_url, but the frozen Phase 1
             # schema types that field Optional[str] — pydantic v2 rejects a list and
             # build_merge_result crashes before returning. Schemas are out of scope, so
-            # narrow to the first URL (scalar). source_metadata's {field}_evidence_url
+            # narrow to the first URL (scalar). The provenance entry's evidence_url
             # stays the full list (plain dict, no validation) as the tests assert.
             evidence_url=chosen.evidence.evidence_urls[0] if chosen and chosen.evidence.evidence_urls else None,
             evidence_summary=chosen.evidence.evidence_summary if chosen else None,
             validation_path=validation_path,
             verified_by_model=verified_by_model,
-            staging_updates={
-                staging_property(c.provider, field): c.normalized_value
-                for c in field_candidates
-            },
+            staging_updates={},  # Phase 15: staging folds into the provenance blob, not here
             canonical_update={
                 field: chosen.normalized_value
             } if final_decision == "promote" and chosen else {},
-            metadata_updates=source_metadata(field, chosen, validation_path, validation_status, verified_by_model) if chosen else {}
+            metadata_updates=source_metadata(field, chosen, validation_status, verified_at) if chosen else {}
         )
 
         decisions.append(field_decision)
 
         if final_decision == "promote" and chosen:
             canonical_patch[field] = chosen.normalized_value
+
+    # Serialize the provenance blob ONCE (not per field) + emit the carve-out cache-key
+    # datetimes as real top-level properties (Phase 15 provenance model).
+    provenance_key = COMPANY_PROVENANCE_KEY if record.object_type == "companies" else CONTACT_PROVENANCE_KEY
+    cache_key_fields = COMPANY_CACHE_KEY_FIELDS if record.object_type == "companies" else CONTACT_CACHE_KEY_FIELDS
+
+    metadata_patch = {}
+    if provenance:
+        metadata_patch[provenance_key] = serialize_provenance(provenance)[:60000]
+    for field, cache_prop in cache_key_fields.items():
+        if field in provenance:
+            metadata_patch[cache_prop] = provenance[field]["verified_at"]
 
     # Approach C (STATE.md Blockers; Phase 15 criterion 4 retires the write path):
     # HubSpot owns the derived ICP outputs (lv_icp_fit_score, lv_icp_tier,
@@ -301,10 +337,11 @@ def build_merge_result(record: HubSpotRecord, candidates: List[CandidateValue]) 
     # is removed; `MergeResult.icp_score` stays populated.
     icp_score = None
     if record.object_type == "companies":
-        score_input_patch = {}
-        score_input_patch.update(canonical_patch)
-        score_input_patch.update(staging_patch)
-        icp_score = compute_icp_score(record, score_input_patch)
+        # staging_patch is always empty now (Phase 15) — canonical_patch alone is the
+        # scoring input; the prior `.update(staging_patch)` call was already inert (
+        # compute_icp_score's get_signal() only ever looked up bare canonical keys, never
+        # the provider-prefixed staging ones).
+        icp_score = compute_icp_score(record, dict(canonical_patch))
 
     needs_review = any(d.decision == "needs_review" for d in decisions)
     if icp_score and icp_score.tier in ["Needs Review", "Unscored"]:
