@@ -12,10 +12,16 @@ NOT imported by any pytest test. NOT run with credentials by the executor — on
 no-credentials skip path (exit 0) is exercised automatically; a human runs this with real
 keys as an operator tool for the pilot.
 
+The inverse check: `--dealstage closedlost` samples lost deals, where a much lower
+`true` rate is the EXPECTED signal (no-content is a real loss reason —
+config/icp_scoring.yaml hard_vetoes.no_content, CLAUDE.md lv_closed_lost_reason
+`no_broadcast_streaming_content`). An evidenced `false` there is a correct veto, not a
+red flag, so the exit-2 path applies to closedwon only.
+
 Zero HubSpot writes: GET/search only.
 
 Usage:
-    python scripts/smoke_closed_won_research.py [--limit N]
+    python scripts/smoke_closed_won_research.py [--limit N] [--dealstage closedwon|closedlost]
 """
 import argparse
 import os
@@ -43,6 +49,11 @@ def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--limit", type=int, default=10,
                          help="Max companies to research this run (default 10).")
+    parser.add_argument("--dealstage", default="closedwon",
+                         help="HubSpot dealstage to sample (default closedwon). With "
+                              "closedlost the expectation inverts: evidenced false is the "
+                              "expected signal, so the exit-2 red flag only applies to "
+                              "closedwon.")
     args = parser.parse_args(argv)
 
     if not _has_credentials():
@@ -69,7 +80,7 @@ def main(argv=None) -> int:
 
     deals = hs.search_records(
         "deals",
-        [{"propertyName": "dealstage", "operator": "EQ", "value": "closedwon"}],
+        [{"propertyName": "dealstage", "operator": "EQ", "value": args.dealstage}],
         ["dealname", "dealstage"],
         limit=100,
     )
@@ -94,7 +105,7 @@ def main(argv=None) -> int:
             break
 
     if not companies:
-        print("No closed-won companies with a usable domain found.")
+        print(f"No {args.dealstage} companies with a usable domain found.")
         return 0
 
     counts = {"true": 0, "null": 0, "false": 0, "unmatched": 0}
@@ -131,9 +142,9 @@ def main(argv=None) -> int:
         print(f"{name} | {domain} | lv_produces_content={pc} | evidence={evidence_url}")
 
     print(f"\nSummary: true={counts['true']} null={counts['null']} false={counts['false']} "
-          f"unmatched={counts['unmatched']} (of {len(companies)} closed-won companies)")
+          f"unmatched={counts['unmatched']} (of {len(companies)} {args.dealstage} companies)")
 
-    if evidenced_false:
+    if evidenced_false and args.dealstage == "closedwon":
         print("\nRED FLAG: evidenced FALSE on a closed-won company (fires the hard veto) — human look:")
         for name, domain, url in evidenced_false:
             print(f"  {name} ({domain}) -> {url}")
