@@ -4,8 +4,8 @@ milestone: v0.3
 milestone_name: Company Enrichment & ICP Research
 current_phase: 13
 current_phase_name: Web Research Retrieval & Validation
-status: executed
-stopped_at: "Phase 12 (Taxonomy Single-Source) executed: config/taxonomy.yaml is now the only hand-edited org_type/content_type vocabulary; scripts/gen_taxonomy_js.py generates n8n/code/taxonomy.generated.js, mergeCompanies.js consumes it (TX-4 retired), n8n/code/taxonomy.js is parity-proven against src/taxonomy.py (NM-6). Next: /gsd-plan-phase 13 or /gsd-execute-phase 13."
+status: planned
+stopped_at: "Phase 13 planned and committed (plan-checker PASS WITH CONCERNS; one verify-script blocker fixed pre-commit). RESEARCH.md + PLAN.md in phases/13-web-research-retrieval-validation/. Next: /gsd-execute-phase 13."
 last_updated: "2026-07-20T06:39:00.000Z"
 last_activity: 2026-07-20
 last_activity_desc: "Phase 12 executed (4 tasks, 4 commits): src/taxonomy.py NM-1..NM-5 normalizers; scripts/gen_taxonomy_js.py + n8n/code/taxonomy.generated.js + currency drift guard; mergeCompanies.js require()s the generated evidence-gated list (TX-4 green, no hand-typed enum); n8n/code/taxonomy.js + NM-6 Python/JS parity test on a shared fixture table. 132 pytest passed / 7 xfailed / 0 failed / 0 xpassed; 46 node tests passed. Rebuild of all 5 workflow JSONs is a byte-for-byte no-op."
@@ -28,9 +28,9 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 
 ## Current Position
 
-Phase: 12 of 16 (Taxonomy Single-Source) — COMPLETE
-Plan: phases/12-taxonomy-single-source/PLAN.md — see 12-01-SUMMARY.md
-Status: Milestone 3 in progress — Phase 12 complete; next up Phase 13 (Web Research Retrieval & Validation)
+Phase: 13 of 16 (Web Research Retrieval & Validation) — PLANNED, not executed
+Plan: phases/13-web-research-retrieval-validation/PLAN.md — run `/gsd-execute-phase 13`
+Status: Milestone 3 in progress — Phase 12 complete + verified; Phase 13 planned
 Last activity: 2026-07-20 — Phase 12 executed: taxonomy single-source (see last_activity_desc above)
 
 Progress: [███████▌░░] 75% (12/16 phases)
