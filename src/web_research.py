@@ -36,7 +36,8 @@ RESEARCH_SYSTEM = (
     "matching this schema:\n"
     '{"provider":"claude_web","object_type":"companies","matched":<bool>,'
     '"confidence":<int 0-100>,"data":{"lv_org_type":<str>,"lv_produces_content":<bool|null>,'
-    '"lv_content_type":[<str>]},'
+    '"lv_content_type":[<str>],"lv_is_hardware_vendor":<bool|null>,'
+    '"lv_is_gambling_operator":<bool|null>},'
     '"evidence_by_field":{"<field>":"<url>"},'
     '"entity_resolution":{"represents":"group|subsidiary|franchise_outlet|single_entity|unknown",'
     '"likely_revenue_band":<str|null>,"notes":<str>},'
@@ -47,7 +48,9 @@ RESEARCH_SYSTEM = (
     "absence. Cite a supporting URL in evidence_by_field for every field you set in data, "
     "keyed by that exact field name. First-party domains are preferred for identity and "
     "content; reputable secondary sources are fine for size. If sources conflict, set "
-    "confidence below 75 and explain in evidence_summary."
+    "confidence below 75 and explain in evidence_summary. lv_is_hardware_vendor and "
+    "lv_is_gambling_operator are hard-veto inputs — answer null unless a cited source "
+    "directly supports the classification."
 )
 
 

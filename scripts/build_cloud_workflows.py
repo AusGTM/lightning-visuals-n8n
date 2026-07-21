@@ -1368,8 +1368,11 @@ function researchSystemPrompt() {
     "evidence_by_field.lv_produces_content). Also return `entity_resolution`:",
     "{ represents: one of group|subsidiary|franchise_outlet|single_entity|unknown,",
     "likely_revenue_band: string|null, notes: string }.",
+    "lv_is_hardware_vendor and lv_is_gambling_operator are hard-veto inputs - answer null",
+    "unless a cited source directly supports the classification.",
     "Return ONLY one JSON object, no prose, no markdown fences, matching:",
-    '{"data":{"lv_org_type":<str>,"lv_produces_content":<bool|null>,"lv_content_type":[<str>]},',
+    '{"data":{"lv_org_type":<str>,"lv_produces_content":<bool|null>,"lv_content_type":[<str>],',
+    '"lv_is_hardware_vendor":<bool|null>,"lv_is_gambling_operator":<bool|null>},',
     '"evidence_by_field":{"<field>":"<url>"},"entity_resolution":{...},',
     '"matched":<bool>,"confidence":<int 0-100>}',
   ].join(" ");
@@ -1397,7 +1400,8 @@ return $input.all().map((it) => {
         domain: id.domain || row.domain || null,
       },
       known_revenue_band: (row.existingRecord && row.existingRecord.lv_revenue_band) || null,
-      required_fields: ["lv_org_type", "lv_produces_content", "lv_content_type"],
+      required_fields: ["lv_org_type", "lv_produces_content", "lv_content_type",
+                        "lv_is_hardware_vendor", "lv_is_gambling_operator"],
       return_only_json: true,
     }) }],
     tools: [{ type: "web_search_20250305", name: "web_search", max_uses: maxUses }],
@@ -1416,6 +1420,82 @@ return $input.all().map((it) => {
   const row = it.json;
   const research_candidate = researchCandidateFromHttpItem(row);
   return { json: { ...row, research_candidate } };
+});
+"""
+
+# --- Phase 14: judge wiring (companies branch only). Runs on the research-true lane,
+# UPSTREAM of Merge Company (D1) — the size-disagreement array/watch-list constant are
+# computed INSIDE ENRICH_MERGE_CO below, so a node that runs before it structurally
+# cannot reference them (RO-2 is proven by placement, not by comment; tests/test_judge_
+# spec.py's test_ro2_judge_gate_cannot_see_size_conflicts asserts both the jsCode
+# absence and the graph ancestry).
+
+# Judge Gate — JG-4 (always, D6) + JG-1/RO-1/RO-2 escalation trigger + the D5 kill
+# switches (ALLOW_SONNET_ESCALATION, MAX_SONNET_VALIDATIONS_PER_RUN, enforced HERE,
+# physically upstream of the HTTP node — Pitfall 4 precedent).
+ENRICH_JUDGE_GATE = inline("escalation.generated.js", "judge.js") + r"""
+
+// --- n8n wrapper (companies): Judge Gate ---
+// RO-2: size-band disagreement is detected downstream inside Merge Company and is
+// deliberately invisible here — this gate runs before that node, so no model call can
+// ever be triggered by a size disagreement alone.
+const ALLOW_SONNET_ESCALATION = ($vars && $vars.ALLOW_SONNET_ESCALATION) || $env.ALLOW_SONNET_ESCALATION;
+const allowOn = String(ALLOW_SONNET_ESCALATION).toLowerCase() === "true";
+const MAX_PER_RUN = parseInt(
+  (($vars && $vars.MAX_SONNET_VALIDATIONS_PER_RUN) || $env.MAX_SONNET_VALIDATIONS_PER_RUN || "10"), 10);
+
+let remaining = MAX_PER_RUN;
+return $input.all().map((it) => {
+  const row = it.json;
+  const domain = (row.identity_keys && row.identity_keys.domain) ||
+                 (row.existingRecord && row.existingRecord.domain) || null;
+
+  // JG-4 (D6): deterministic and free — runs on every researched company regardless of
+  // ALLOW_SONNET_ESCALATION.
+  let researchCandidate = applyEvidenceSufficiency(row.research_candidate, domain);
+
+  const { needsJudge, reasons } = computeEscalation(researchCandidate, row.existingRecord || {});
+
+  if (!needsJudge) {
+    return { json: { ...row, research_candidate: researchCandidate, needs_judge: false, judge_reasons: reasons } };
+  }
+
+  if (!allowOn || remaining <= 0) {
+    // A trigger fired but the judge will not run (kill switch off / cap exhausted) —
+    // apply the D5 fail-safe now, so an unadjudicated hard-veto input never reaches
+    // Merge Company.
+    researchCandidate = applyUnadjudicated(researchCandidate, reasons);
+    return { json: { ...row, research_candidate: researchCandidate, needs_judge: false, judge_reasons: reasons } };
+  }
+
+  remaining -= 1;
+  return { json: { ...row, research_candidate: researchCandidate, needs_judge: true, judge_reasons: reasons } };
+});
+"""
+
+# Build Judge Request — JG-2 payload (identity + classification only, no size fields,
+# no tools key).
+ENRICH_BUILD_JUDGE_REQUEST = inline("escalation.generated.js", "judge.js") + r"""
+
+// --- n8n wrapper (companies): Build Judge Request ---
+return $input.all().map((it) => {
+  const row = it.json;
+  if (!row.needs_judge) return { json: { ...row, judge_request_body: null } };
+  const model = ($vars && $vars.ANTHROPIC_SONNET_MODEL) || $env.ANTHROPIC_SONNET_MODEL || "claude-sonnet-5";
+  const judge_request_body = buildJudgeRequestBody(row, model, 4096);
+  return { json: { ...row, judge_request_body } };
+});
+"""
+
+# Apply Judge Verdict — JG-3 never-throws verdict handling + the promote/demote decision.
+ENRICH_APPLY_JUDGE_VERDICT = inline("escalation.generated.js", "judge.js") + r"""
+
+// --- n8n wrapper (companies): Apply Judge Verdict ---
+return $input.all().map((it) => {
+  const row = it.json;
+  const judge_verdict = judgeVerdictFromHttpItem(row);
+  const research_candidate = applyJudgeVerdict(row.research_candidate, judge_verdict, row.judge_reasons);
+  return { json: { ...row, research_candidate, judge_verdict } };
 });
 """
 
@@ -1478,13 +1558,18 @@ return $input.all().map((it) => {
 
   // Phase 13 (D6): fold the Claude web-research candidate in as a SECOND mergeCompanies
   // call — mergeCompanies.js itself stays byte-identical. Research fields (lv_org_type,
-  // lv_produces_content, lv_content_type) never collide with the firmographic candidate's
-  // keys above, so a shallow merge of each patch (+ concatenated decisions) is safe.
+  // lv_produces_content, lv_content_type, lv_is_hardware_vendor, lv_is_gambling_operator —
+  // widened in Phase 14 so the hard-veto INPUT flags finally reach HubSpot, D1/D2) never
+  // collide with the firmographic candidate's keys above, so a shallow merge of each patch
+  // (+ concatenated decisions) is safe. By the time this node runs, the Judge Gate chain
+  // upstream has already demoted any UNADJUDICATED vendor-flag `true` to `null`
+  // (Pitfall 6) — this fold only ever sees an already-safe value.
   let finalMerge = merged;
   const rc = row.research_candidate;
   if (rc && rc.matched) {
     const researchData = {};
-    for (const f of ["lv_org_type", "lv_produces_content", "lv_content_type"]) {
+    for (const f of ["lv_org_type", "lv_produces_content", "lv_content_type",
+                     "lv_is_hardware_vendor", "lv_is_gambling_operator"]) {
       const v = rc.data && rc.data[f];
       // tri-state null (TS-2 coercion) / blank -> skip, so mergeCompanies' own _isBlank
       // check has nothing to write; an evidenced false is NOT blank and flows through.
@@ -1528,7 +1613,9 @@ return $input.all().map((it) => {
     gate_reason: row.gate && row.gate.reason,
     gap_flag: row.gap_flag === true,
     conflicts: row.conflicts || [],
-    needs_review: (row.conflicts || []).length > 0,
+    needs_review: (row.conflicts || []).length > 0 || !!(row.research_candidate && row.research_candidate.judge_flags),
+    judge_reasons: row.judge_reasons || [],
+    judge_verdict: row.judge_verdict || null,
     winners: winners_sample,
     would_patch: row.merge ? {
       canonical: row.merge.canonicalPatch,
@@ -1680,6 +1767,30 @@ def build_enrichment_local_live():
     cx += 230
     nodes.append(code_node("Validate Research Output", ENRICH_VALIDATE_RESEARCH, cx, cy - 100))
 
+    # Phase 14 (D1): the judge chain sits BEFORE Merge Company, on the research-true lane.
+    # Validate Research Output's existing connection to Merge Company moves to Judge Gate
+    # (research_conns below). The IF Research Needed FALSE lane keeps going straight to
+    # Merge Company untouched — an unresearched company never reaches the judge (RO-1 by
+    # topology). Judge Gate / IF Needs Judge sit on the cy-100 research lane; the three
+    # judge-call nodes sit on cy-200 — positions are cosmetic.
+    cx += 230
+    nodes.append(code_node("Judge Gate", ENRICH_JUDGE_GATE, cx, cy - 100))
+    cx += 230
+    nodes.append(_if_bool_node("IF Needs Judge", "needs_judge", cx, cy - 100))
+    cx += 230
+    nodes.append(code_node("Build Judge Request", ENRICH_BUILD_JUDGE_REQUEST, cx, cy - 200))
+    cx += 230
+    nodes.append(_live_http(
+        "Judge Call", cx, cy - 200, "POST",
+        "https://api.anthropic.com/v1/messages",
+        [{"name": "x-api-key", "value": "={{ $vars.ANTHROPIC_API_KEY || $env.ANTHROPIC_API_KEY }}"},
+         {"name": "anthropic-version", "value": "2023-06-01"},
+         {"name": "content-type", "value": "application/json"}],
+        json_body="={{ JSON.stringify($json.judge_request_body) }}",
+        timeout=60000))
+    cx += 230
+    nodes.append(code_node("Apply Judge Verdict", ENRICH_APPLY_JUDGE_VERDICT, cx, cy - 200))
+
     cx += 230
     nodes.append(code_node("Merge Company", ENRICH_MERGE_CO, cx, cy))
     cx += 230
@@ -1719,7 +1830,17 @@ def build_enrichment_local_live():
         ]},
         "Build Research Request": {"main": [[{"node": "Claude Web Research", "type": "main", "index": 0}]]},
         "Claude Web Research": {"main": [[{"node": "Validate Research Output", "type": "main", "index": 0}]]},
-        "Validate Research Output": {"main": [[{"node": "Merge Company", "type": "main", "index": 0}]]},
+        # Phase 14 (D1): Validate Research Output's connection moves to Judge Gate — the
+        # judge chain runs BEFORE Merge Company, on the research-true lane only.
+        "Validate Research Output": {"main": [[{"node": "Judge Gate", "type": "main", "index": 0}]]},
+        "Judge Gate": {"main": [[{"node": "IF Needs Judge", "type": "main", "index": 0}]]},
+        "IF Needs Judge": {"main": [
+            [{"node": "Build Judge Request", "type": "main", "index": 0}],  # true: adjudicate
+            [{"node": "Merge Company", "type": "main", "index": 0}],        # false: fan straight in
+        ]},
+        "Build Judge Request": {"main": [[{"node": "Judge Call", "type": "main", "index": 0}]]},
+        "Judge Call": {"main": [[{"node": "Apply Judge Verdict", "type": "main", "index": 0}]]},
+        "Apply Judge Verdict": {"main": [[{"node": "Merge Company", "type": "main", "index": 0}]]},
         "Merge Company": {"main": [[{"node": "Decide Company Action", "type": "main", "index": 0}]]},
     }
 

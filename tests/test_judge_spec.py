@@ -3,11 +3,40 @@
 Spec-first: each test cites a requirement ID by name in its name/docstring, following
 tests/test_web_research_spec.py's convention.
 """
+import json
+import re
 import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
+
+
+def _load_workflow(name: str) -> dict:
+    return json.loads((ROOT / "n8n" / name).read_text())
+
+
+def _node_by_name(doc: dict, name: str) -> dict:
+    for n in doc["nodes"]:
+        if n["name"] == name:
+            return n
+    raise AssertionError(f"node {name!r} not found in workflow")
+
+
+def _reachable(doc: dict, start_name: str) -> set:
+    """BFS over the connections map: node names reachable from start_name (exclusive)."""
+    conns = doc.get("connections", {})
+    seen = set()
+    frontier = [start_name]
+    while frontier:
+        cur = frontier.pop()
+        for output in (conns.get(cur, {}).get("main") or []):
+            for edge in output:
+                nxt = edge["node"]
+                if nxt not in seen:
+                    seen.add(nxt)
+                    frontier.append(nxt)
+    return seen
 
 
 def test_jg1_confidence_band_matches_spec():
@@ -35,6 +64,35 @@ def test_escalation_generated_js_is_current():
         "n8n/code/escalation.generated.js is stale. Regenerate with: "
         ".venv/bin/python scripts/gen_escalation_js.py"
     )
+
+
+def _block(text: str, start_marker: str, end_marker: str) -> str:
+    start = text.index(start_marker)
+    end = text.index(end_marker, start)
+    return text[start:end]
+
+
+def test_prompt_parity_vendor_flags():
+    """Criterion 5 drift check (did not exist before this phase): the production
+    research prompt (scripts/build_cloud_workflows.py's ENRICH_BUILD_RESEARCH_REQUEST)
+    and the dev-oracle prompt (src/web_research.py's RESEARCH_SYSTEM) are independently
+    hand-written and must not drift (Pitfall 4) — both must request
+    lv_is_hardware_vendor / lv_is_gambling_operator."""
+    web_research_src = (ROOT / "src" / "web_research.py").read_text()
+    research_system_block = _block(web_research_src, "RESEARCH_SYSTEM = (", "\ndef mock_claude_web_research")
+
+    builder_src = (ROOT / "scripts" / "build_cloud_workflows.py").read_text()
+    build_request_block = _block(
+        builder_src, "ENRICH_BUILD_RESEARCH_REQUEST = inline", "\nENRICH_VALIDATE_RESEARCH ="
+    )
+
+    for field in ("lv_is_hardware_vendor", "lv_is_gambling_operator"):
+        assert field in research_system_block, (
+            f"{field} missing from src/web_research.py's RESEARCH_SYSTEM"
+        )
+        assert field in build_request_block, (
+            f"{field} missing from scripts/build_cloud_workflows.py's ENRICH_BUILD_RESEARCH_REQUEST"
+        )
 
 
 def test_jg5_supertech_hardware_veto_independent_of_jg4():
@@ -98,3 +156,51 @@ def test_jg5_supertech_hardware_veto_independent_of_jg4():
             assert result.tier in ("Needs Review", "Unscored"), (
                 f"expected the documented pre-existing tier-downgrade gap, got {result.tier!r}"
             )
+
+
+def test_ro2_judge_gate_cannot_see_size_conflicts():
+    """RO-2 (structural, not documentary): the Judge Gate node's jsCode must contain
+    neither the size-disagreement array identifier nor the watch-list constant name, AND
+    the Judge Gate node must be a graph ancestor of Merge Company (never the reverse) —
+    the size array is computed INSIDE Merge Company's own wrapper, downstream of where
+    this gate runs, so a node upstream of it structurally cannot reference it."""
+    doc = _load_workflow("wf_enrichment_local_live.json")
+    judge_gate = _node_by_name(doc, "Judge Gate")
+    js_code = judge_gate["parameters"]["jsCode"]
+
+    assert not re.search(r"row\.conflicts", js_code), (
+        "RO-2: Judge Gate must not reference the downstream size-disagreement array "
+        "(row.conflicts is computed inside Merge Company, not here)"
+    )
+    assert "CONFLICT_WATCH" not in js_code, (
+        "RO-2: Judge Gate must not reference the downstream size watch-list constant"
+    )
+
+    downstream_of_judge_gate = _reachable(doc, "Judge Gate")
+    assert "Merge Company" in downstream_of_judge_gate, (
+        "RO-2: Judge Gate must be a graph ancestor of Merge Company"
+    )
+    downstream_of_merge_company = _reachable(doc, "Merge Company")
+    assert "Judge Gate" not in downstream_of_merge_company, (
+        "RO-2: Merge Company must never be able to reach back to Judge Gate"
+    )
+
+
+def test_jg2_judge_call_declares_no_search_tool():
+    """JG-2/Pitfall 5: the judge reasons over evidence already retrieved — it must never
+    declare the web_search tool (that would re-research inside the judge, doubling cost
+    and contradicting RO-1's spirit)."""
+    doc = _load_workflow("wf_enrichment_local_live.json")
+    build_judge_request = _node_by_name(doc, "Build Judge Request")
+    js_code = build_judge_request["parameters"]["jsCode"]
+    assert "web_search" not in js_code
+
+
+def test_ar2_judge_call_host():
+    """AR-2: the Judge Call node's host must be the already-allowlisted api.anthropic.com
+    (tests/test_architecture_guard.py covers this generically; asserted here too so a
+    host typo in this phase's own new node fails loudly in this phase's own test file)."""
+    doc = _load_workflow("wf_enrichment_local_live.json")
+    judge_call = _node_by_name(doc, "Judge Call")
+    url = judge_call["parameters"]["url"]
+    assert "api.anthropic.com" in url
