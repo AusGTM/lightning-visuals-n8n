@@ -87,8 +87,8 @@ function extractFinalJson(content) {
 // error item (`{error: ...}`, no usable body), an Anthropic HTTP-level error body
 // (`{"type":"error","error":{...}}` — has no `content` array), and an empty/missing
 // `content` (no text blocks). Any of these — or a genuinely malformed text payload —
-// resolves to toProviderResult({}) (matched:false, needs_review:true via the OC-4 path),
-// so the company continues through Merge Company exactly as it would with
+// resolves to toProviderResult({matched:false}) (needs_review:true via the OC-4 default-
+// org-type path), so the company continues through Merge Company exactly as it would with
 // ALLOW_WEB_RESEARCH=false (skip-not-retry, CLAUDE.md Section 26.2).
 function researchCandidateFromHttpItem(item) {
   // NOTE: toProviderResult({}) would NOT give matched:false — an empty object is still a
