@@ -333,7 +333,9 @@ retroactively; its artifacts and tests are in the tree.
   4. Evidence sufficiency enforced (JG-4): a citation that does not substantiate the claim — third-party directory, tourism listing, bare homepage — demotes `lv_produces_content` to `null` + needs_review, never to `false`. Case set from the Phase-13 closed-lost smoke.
   5. (JG-5, scope-corrected 2026-07-21 after research) The Supertech Electronics false positive is caught by the hardware-vendor path independently of JG-4. Under Approach C the pipeline does NOT compute the veto — HubSpot does — so the deliverable is: the research prompt requests `lv_is_hardware_vendor` / `lv_is_gambling_operator` (it does not today) AND the merge fold stops dropping them (hard-coded 3-field whitelist today), so the INPUT reaches HubSpot; the veto itself is proven offline against `src/icp_scoring.py`, not computed in production JS.
 
-**Plans**: TBD
+**Plans**: 1 plan
+
+- [ ] 14-01-PLAN.md — escalation policy single-source + JG-4 sufficiency (20 real smoke rows, Python twin) + JG-1/RO-1/RO-2 triggers + JG-2/JG-3 judge call + n8n wiring and vendor-flag inputs
 
 ### Phase 15: HubSpot Property Migration
 
