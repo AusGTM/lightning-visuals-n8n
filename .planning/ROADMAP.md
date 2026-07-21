@@ -263,7 +263,7 @@ retroactively; its artifacts and tests are in the tree.
 
 - [x] **Phase 11: Company Branch & Provider Contract Hardening** - Company sibling branch in n8n, mergeCompanies non-clobber merge, ZoomInfo GTM companies contract probed live, three live-shape bugs fixed, cross-provider conflict detector, taxonomy + web-research spec (completed 2026-07-20, outside GSD)
 - [x] **Phase 12: Taxonomy Single-Source** - config/taxonomy.yaml becomes the only edit point; node literals generated at build time; retires the known-red TX-4 drift guard (completed 2026-07-20)
-- [ ] **Phase 13: Web Research Retrieval & Validation** - Native web_search retrieval, output validation, enum normalization, tri-state coercion
+- [x] **Phase 13: Web Research Retrieval & Validation** - Native web_search retrieval, output validation, enum normalization, tri-state coercion (completed 2026-07-21)
 - [ ] **Phase 14: Judge Wiring** - Haiku classify → Sonnet escalate per CLAUDE.md §15, pointed at identity/classification not numeric plausibility
 - [ ] **Phase 15: HubSpot Property Migration** - Create missing metadata properties; unblocks research caching. IRREVERSIBLE — checkpointed, dry-run first
 - [ ] **Phase 16: Scheduled Workflows & Review Surface** - Schedule-triggered n8n workflows (SJ-1..SJ-3 predicates), dedupeSweep wiring, §22.2 review loop on the 9 missing review properties
@@ -307,17 +307,19 @@ retroactively; its artifacts and tests are in the tree.
 
 **Goal**: The two provider-unresolvable ICP fields resolve from citable sources, or not at all.
 **Depends on**: Phase 12
+**Status**: COMPLETE 2026-07-21
 **Success Criteria**:
 
-  1. Retrieval satisfies spec RT-1…RT-4 within existing cost kill-switches.
-  2. Output carries `evidence_by_field` keyed per field — the shape `mergeCompanies`' evidence gate already requires (OC-1).
-  3. Tri-state honored: thin or absent evidence yields `null`, never `false` (TS-1, TS-2).
-  4. Off-vocabulary model output normalizes to `unknown` + needs_review, never reaches HubSpot (AT-2).
-  5. The `xfail(strict=True)` acceptance tests in `tests/test_web_research_spec.py` flip to passing and their markers are removed.
+  1. [x] Retrieval satisfies spec RT-1…RT-4 within existing cost kill-switches.
+  2. [x] Output carries `evidence_by_field` keyed per field — the shape `mergeCompanies`' evidence gate already requires (OC-1).
+  3. [x] Tri-state honored: thin or absent evidence yields `null`, never `false` (TS-1, TS-2).
+  4. [x] Off-vocabulary model output normalizes to `unknown` + needs_review, never reaches HubSpot (AT-2).
+  5. [x] The `xfail(strict=True)` acceptance tests in `tests/test_web_research_spec.py` flip to passing and their markers are removed.
+  6. [x] (User addition 2026-07-21) Research-failure skip path proven offline; closed-won ground-truth smoke available as a non-gating operator tool.
 
 **Plans**: 1 plan
 
-- [ ] 13-01-PLAN.md — Python output-contract (validate_research_output/to_provider_result, evidence_by_field, tri-state, AT-2/ER-1; 7 xfails flip) + JS twin webResearch.js + parity + n8n web_search retrieval/validation wired into wf_enrichment_local_live.json
+- [x] 13-01-PLAN.md — see 13-01-SUMMARY.md
 
 ### Phase 14: Judge Wiring
 
@@ -364,8 +366,8 @@ retroactively; its artifacts and tests are in the tree.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 11. Company Branch & Provider Contract Hardening | 1/1 | Complete | 2026-07-20 |
-| 12. Taxonomy Single-Source | 0/? | Not started | — |
-| 13. Web Research Retrieval & Validation | 0/? | Not started | — |
+| 12. Taxonomy Single-Source | 1/1 | Complete | 2026-07-20 |
+| 13. Web Research Retrieval & Validation | 1/1 | Complete | 2026-07-21 |
 | 14. Judge Wiring | 0/? | Not started | — |
 | 15. HubSpot Property Migration | 0/? | Not started | — |
 | 16. Scheduled Workflows & Review Surface | 0/? | Not started | — |

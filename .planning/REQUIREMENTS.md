@@ -111,9 +111,9 @@ These REQ-IDs group that spec into phase-mappable units; the spec IDs are the te
 
 ### Research & Judgement
 
-- [ ] **REQ-web-retrieval**: `lv_produces_content` and `lv_org_type` resolve from citable first-party sources via native web search, within existing cost kill-switches. Measured: providers resolve org_type for 3/5 accounts and produces_content for 0/5. (Spec RT-1…RT-5; Phase 13)
-- [ ] **REQ-evidence-by-field**: Research output carries per-field evidence URLs — the shape the merge gate already requires. A flat URL array does not satisfy it. (Spec OC-1; Phase 13)
-- [ ] **REQ-tristate-content**: `lv_produces_content` honors true/false/null as distinct. `false` fires a hard veto; thin or absent evidence MUST yield `null`. A failed search is not evidence of absence, and thin-web-presence ANZ clubs are the ICP core. (Spec TS-1…TS-5; Phase 13)
+- [x] **REQ-web-retrieval**: `lv_produces_content` and `lv_org_type` resolve from citable first-party sources via native web search, within existing cost kill-switches. Measured: providers resolve org_type for 3/5 accounts and produces_content for 0/5. (Spec RT-1…RT-5; Phase 13)
+- [x] **REQ-evidence-by-field**: Research output carries per-field evidence URLs — the shape the merge gate already requires. A flat URL array does not satisfy it. (Spec OC-1; Phase 13)
+- [x] **REQ-tristate-content**: `lv_produces_content` honors true/false/null as distinct. `false` fires a hard veto; thin or absent evidence MUST yield `null`. A failed search is not evidence of absence, and thin-web-presence ANZ clubs are the ICP core. (Spec TS-1…TS-5; Phase 13)
 - [ ] **REQ-evidence-before-judgement**: Judgement never runs without retrieval. Size conflicts never trigger a model call alone — revenue band drives only graduated deductions, never a veto. (Spec RO-1, RO-2, JG-1…JG-3; Phase 14)
 
 ### Scoring Ownership
@@ -134,9 +134,9 @@ These REQ-IDs group that spec into phase-mappable units; the spec IDs are the te
 | REQ-conflict-withhold | Phase 11 | Complete |
 | REQ-taxonomy-single-source | Phase 12 | Complete |
 | REQ-enum-normalization | Phase 12 | Complete |
-| REQ-web-retrieval | Phase 13 | Pending |
-| REQ-evidence-by-field | Phase 13 | Pending |
-| REQ-tristate-content | Phase 13 | Pending |
+| REQ-web-retrieval | Phase 13 | Complete |
+| REQ-evidence-by-field | Phase 13 | Complete |
+| REQ-tristate-content | Phase 13 | Complete |
 | REQ-evidence-before-judgement | Phase 14 | Pending |
 | REQ-inputs-only-writeback | Phase 15 | Pending |
 | REQ-property-migration | Phase 15 | Pending |
