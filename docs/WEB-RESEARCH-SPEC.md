@@ -355,6 +355,29 @@ body?" and poorly calibrated on "is $1–5M plausible for this company?".
 
 **JG-3.** Judge output below confidence 80 → `needs_review`, never promote.
 
+**JG-4 (added 2026-07-21 from the closed-lost smoke).** The judge MUST assess whether a
+cited URL **substantiates the specific claim**, not merely that a URL is present. The
+Phase-13 evidence gate checks presence only; the closed-lost control run
+(`.planning/phases/13-web-research-retrieval-validation/13-SMOKE-CLOSED-WON.md`) showed the
+model satisfying that gate with citations that do not evidence content output:
+
+| Citation class | Example from the run | Verdict |
+|---|---|---|
+| Third-party business directory | `myausweb.net.au/automotive/supertech-electronics/` | INSUFFICIENT |
+| Tourism / listing directory | `visitbunburygeographe.com.au/business/...` | INSUFFICIENT |
+| Bare first-party homepage | `racingnsw.com.au/`, `vrc.com.au/` | INSUFFICIENT for `lv_produces_content` |
+| First-party content page | `sctc.com.au/race-fields-footage/`, `.../news/` | SUFFICIENT |
+| Owned video channel | `youtube.com/@brisbaneracingclub427` | SUFFICIENT |
+
+Insufficient evidence for `lv_produces_content` demotes the value to `null` (never to
+`false` — absence of proof is not proof of absence, TS-1) and sets `needs_review`.
+
+**JG-5.** The `lv_produces_content=true` false positive and the `lv_is_hardware_vendor`
+veto are independent paths and MUST both be exercised. Worked case: **Supertech
+Electronics** (`supertech-electronics.com.au`) read `true` off a directory listing. Whether
+or not JG-4 demotes it, the hardware-vendor veto should independently disqualify it —
+verify, do not assume.
+
 ---
 
 ## 9. Acceptance tests
