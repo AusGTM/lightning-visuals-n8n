@@ -1536,32 +1536,33 @@ const allowOn = String(ALLOW_SONNET_ESCALATION).toLowerCase() === "true";
 const MAX_PER_RUN = parseInt(
   (($vars && $vars.MAX_SONNET_VALIDATIONS_PER_RUN) || $env.MAX_SONNET_VALIDATIONS_PER_RUN || "10"), 10);
 
-let remaining = MAX_PER_RUN;
-return $input.all().map((it) => {
+// Pass 1: per row, evidence sufficiency (JG-4/D6, always) + escalation trigger detection
+// (JG-1/RO-1/RO-2). Does not decide the cap or the fail-safe yet — applyCostCap (TA-7)
+// needs the full needs_judge set up front so the kill switch and the budget share one
+// code path (pass 0 when off, MAX_PER_RUN when on), rather than a duplicated branch.
+const gated = $input.all().map((it) => {
   const row = it.json;
   const domain = (row.identity_keys && row.identity_keys.domain) ||
                  (row.existingRecord && row.existingRecord.domain) || null;
-
-  // JG-4 (D6): deterministic and free — runs on every researched company regardless of
-  // ALLOW_SONNET_ESCALATION.
-  let researchCandidate = applyEvidenceSufficiency(row.research_candidate, domain);
-
+  const researchCandidate = applyEvidenceSufficiency(row.research_candidate, domain);
   const { needsJudge, reasons } = computeEscalation(researchCandidate, row.existingRecord || {});
+  return { ...row, research_candidate: researchCandidate, needs_judge: needsJudge, judge_reasons: reasons };
+});
 
-  if (!needsJudge) {
-    return { json: { ...row, research_candidate: researchCandidate, needs_judge: false, judge_reasons: reasons } };
+// Pass 2: applyCostCap enforces the kill switch AND the per-run budget through the same
+// path — 0 when escalation is off (caps every row), MAX_PER_RUN when it is on.
+const capped = applyCostCap(gated, allowOn ? MAX_PER_RUN : 0);
+
+// Pass 3: any row that had a trigger fire (judge_reasons non-empty) but ends up here
+// with needs_judge false — whether from the kill switch or the cap — runs the D5
+// fail-safe, so an unadjudicated hard-veto input never reaches Merge Company. Rows that
+// never had a trigger (judge_reasons empty) are already needs_judge:false and untouched.
+return capped.map((row) => {
+  if ((row.judge_reasons || []).length > 0 && !row.needs_judge) {
+    const researchCandidate = applyUnadjudicated(row.research_candidate, row.judge_reasons);
+    return { json: { ...row, research_candidate: researchCandidate } };
   }
-
-  if (!allowOn || remaining <= 0) {
-    // A trigger fired but the judge will not run (kill switch off / cap exhausted) —
-    // apply the D5 fail-safe now, so an unadjudicated hard-veto input never reaches
-    // Merge Company.
-    researchCandidate = applyUnadjudicated(researchCandidate, reasons);
-    return { json: { ...row, research_candidate: researchCandidate, needs_judge: false, judge_reasons: reasons } };
-  }
-
-  remaining -= 1;
-  return { json: { ...row, research_candidate: researchCandidate, needs_judge: true, judge_reasons: reasons } };
+  return { json: row };
 });
 """
 

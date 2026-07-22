@@ -13,7 +13,7 @@ const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const {
   isCitationSufficient, applyEvidenceSufficiency,
-  normalizeVendorFlag, computeEscalation, applyUnadjudicated,
+  normalizeVendorFlag, computeEscalation, applyUnadjudicated, applyCostCap,
 } = require(path.join(ROOT, "n8n/code/judge.js"));
 
 const fixturePath = path.join(ROOT, "tests/fixtures/evidence_sufficiency_cases.json");
@@ -158,6 +158,65 @@ test("normalizeVendorFlag: strict true/false/null, unrecognised -> null never fa
   assert.equal(normalizeVendorFlag("bogus"), null);
   assert.equal(normalizeVendorFlag(undefined), null);
   assert.notEqual(normalizeVendorFlag("bogus"), false);
+});
+
+// --- applyCostCap: TA-7 -------------------------------------------------------------
+
+test("applyCostCap: 15 needs_judge rows into a budget of 10 -> exactly 10 survive, exactly 5 capped, input order determines which", () => {
+  const rows = Array.from({ length: 15 }, (_, i) => ({ id: i, needs_judge: true }));
+  const result = applyCostCap(rows, 10);
+  const survived = result.filter((r) => r.needs_judge === true);
+  const capped = result.filter((r) => r.judge_capped === true);
+  assert.equal(survived.length, 10, "exactly 10 must survive");
+  assert.equal(capped.length, 5, "exactly 5 must be capped");
+  assert.deepEqual(survived.map((r) => r.id), [0, 1, 2, 3, 4, 5, 6, 7, 8, 9], "input order determines which survive");
+  assert.deepEqual(capped.map((r) => r.id), [10, 11, 12, 13, 14], "input order determines which are capped");
+  for (const r of capped) assert.notEqual(r.needs_judge, true, "capped rows must not carry needs_judge:true");
+});
+
+test("applyCostCap: budget 0 caps all 15", () => {
+  const rows = Array.from({ length: 15 }, (_, i) => ({ id: i, needs_judge: true }));
+  const result = applyCostCap(rows, 0);
+  assert.equal(result.filter((r) => r.needs_judge === true).length, 0);
+  assert.equal(result.filter((r) => r.judge_capped === true).length, 15);
+});
+
+test("applyCostCap: rows with needs_judge false are returned unchanged and never consume budget", () => {
+  const rows = [
+    { id: 0, needs_judge: false },
+    { id: 1, needs_judge: true },
+    { id: 2, needs_judge: false },
+  ];
+  const result = applyCostCap(rows, 1);
+  assert.equal(result[0], rows[0], "untouched row is the SAME reference");
+  assert.equal(result[1].needs_judge, true, "the one needs_judge row still fits in the budget");
+  assert.equal(result[2], rows[2], "untouched row is the SAME reference");
+});
+
+test("applyCostCap: a non-finite maxPerRun caps everything (same path as budget 0)", () => {
+  const rows = [{ id: 0, needs_judge: true }];
+  assert.equal(applyCostCap(rows, NaN)[0].judge_capped, true);
+  assert.equal(applyCostCap(rows, undefined)[0].judge_capped, true);
+});
+
+test("applyCostCap: does not mutate its input array or the input row objects", () => {
+  const rows = [{ id: 0, needs_judge: true }, { id: 1, needs_judge: true }];
+  const snapshot = JSON.parse(JSON.stringify(rows));
+  applyCostCap(rows, 1);
+  assert.deepEqual(rows, snapshot, "input rows must be untouched after the call");
+});
+
+test("applyCostCap composition: a capped row carrying a hardware-vendor true, put through the existing unadjudicated fail-safe, comes back null (never false)", () => {
+  const rows = [
+    { id: 0, needs_judge: true, judge_reasons: ["hardware_vendor_detected"],
+      research_candidate: { data: { lv_is_hardware_vendor: true }, evidence_by_field: { lv_is_hardware_vendor: "https://x/about" } } },
+    { id: 1, needs_judge: true, judge_reasons: [] },
+  ];
+  const capped = applyCostCap(rows, 0); // both capped
+  const demoted = applyUnadjudicated(capped[0].research_candidate, capped[0].judge_reasons);
+  assert.equal(demoted.data.lv_is_hardware_vendor, null);
+  assert.notEqual(demoted.data.lv_is_hardware_vendor, false);
+  assert.ok(!("lv_is_hardware_vendor" in demoted.evidence_by_field), "evidence key dropped");
 });
 
 test("Fail-safe: applyUnadjudicated demotes a hardware-vendor candidate to null (never false), leaves evidenced false content untouched", () => {

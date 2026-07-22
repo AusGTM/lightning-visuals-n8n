@@ -176,6 +176,14 @@ def test_ro2_judge_gate_cannot_see_size_conflicts():
         "RO-2: Judge Gate must not reference the downstream size watch-list constant"
     )
 
+    # TA-7 (Phase 15.5 Task 2): the extracted cost-cap function must live in this SAME
+    # node, proving the per-run judge-invocation cap is structurally upstream of the
+    # Judge Call HTTP node (RO-2's existing graph-ancestry assertions below), not merely
+    # upstream by convention.
+    assert "applyCostCap" in js_code, (
+        "TA-7: the Judge Gate node must host the extracted cost-cap function"
+    )
+
     downstream_of_judge_gate = _reachable(doc, "Judge Gate")
     assert "Merge Company" in downstream_of_judge_gate, (
         "RO-2: Judge Gate must be a graph ancestor of Merge Company"

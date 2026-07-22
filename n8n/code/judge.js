@@ -171,6 +171,26 @@ function applyUnadjudicated(researchCandidate, reasons) {
   };
 }
 
+// applyCostCap(rows, maxPerRun) -> a NEW array (TA-7). Walks rows in input order,
+// decrementing a budget only for rows whose needs_judge is true; a row that wants the
+// judge but has no budget left comes back as a NEW object with needs_judge false and a
+// judge_capped true marker (never mutates the caller's row). Rows that never wanted the
+// judge pass through untouched. maxPerRun of 0 or non-finite caps everything — this is
+// what lets the ALLOW_SONNET_ESCALATION kill switch and the per-run budget share one
+// code path in the wrapper (pass 0 when off, MAX_PER_RUN when on).
+function applyCostCap(rows, maxPerRun) {
+  const budget = Number.isFinite(maxPerRun) ? maxPerRun : 0;
+  let remaining = budget;
+  return (rows || []).map((row) => {
+    if (!row || !row.needs_judge) return row;
+    if (remaining <= 0) {
+      return { ...row, needs_judge: false, judge_capped: true };
+    }
+    remaining -= 1;
+    return row;
+  });
+}
+
 // buildJudgeRequestBody(row, model, maxTokens) -> the Anthropic Messages body. JG-2:
 // identity + classification ONLY — no lv_revenue_band/lv_employee_band/annualrevenue/
 // numberofemployees anywhere in the serialized body, and NO tools key at all (Pitfall 5
@@ -317,6 +337,6 @@ function applyJudgeVerdict(researchCandidate, verdict, reasons) {
 
 module.exports = {
   isCitationSufficient, applyEvidenceSufficiency,
-  normalizeVendorFlag, computeEscalation, applyUnadjudicated,
+  normalizeVendorFlag, computeEscalation, applyUnadjudicated, applyCostCap,
   buildJudgeRequestBody, judgeVerdictFromHttpItem, applyJudgeVerdict,
 };
