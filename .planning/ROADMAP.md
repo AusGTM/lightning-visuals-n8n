@@ -266,6 +266,7 @@ retroactively; its artifacts and tests are in the tree.
 - [x] **Phase 13: Web Research Retrieval & Validation** - Native web_search retrieval, output validation, enum normalization, tri-state coercion (completed 2026-07-21)
 - [x] **Phase 14: Judge Wiring** - Haiku classify → Sonnet escalate per CLAUDE.md §15, pointed at identity/classification not numeric plausibility (completed 2026-07-21)
 - [x] **Phase 15: HubSpot Property Migration** - Create missing metadata properties; unblocks research caching. Fully reversible (archive + recreate-by-name within 90 days), dry-run first (completed 2026-07-22; tooling offline-proven, live operator runbook pending)
+- [ ] **Phase 15.5: Tiered Candidate Adjudication** (INSERTED 2026-07-22) - Candidates stay parallel + scored through to the judge instead of collapsing to an argmax winner; judge grounds in web search AND the A/R/G/T scoring components. Tiered: deterministic collapse for size/firmographics (JG-2 — LLMs are poorly calibrated on numeric plausibility, RO-2 intent preserved), judge adjudicates ICP-semantic fields (org_type, produces_content, vendor flags) where a wrong answer moves tier or fires a veto. Research candidates gain a recencyDate so recency acts as ordering bias (neutral when unknown), at parity with the provider branch.
 - [ ] **Phase 16: Scheduled Workflows & Review Surface** - Schedule-triggered n8n workflows (SJ-1..SJ-3 predicates), dedupeSweep wiring, §22.2 review loop on the 9 missing review properties
 
 ## Phase Details
@@ -356,6 +357,22 @@ retroactively; its artifacts and tests are in the tree.
 
 - [x] 15-01-PLAN.md — Reversibility-first HubSpot property migration: baseline snapshot + dry-run/undo-manifest sync + provenance-JSON stamper model (1 blob + 4 cache keys) + ICP write-path retirement + PN-1..PN-5 renames + rollback script/canary + operator runbook (completed 2026-07-22; see 15-01-SUMMARY.md)
 
+### Phase 15.5: Tiered Candidate Adjudication (INSERTED)
+
+**Goal**: When enrichment sources conflict, the winning value is chosen with the most information available — not by a premature argmax that discards it.
+**Depends on**: Phase 15
+**Why inserted**: Validation before Phase 16 found the judge decides ICP-critical fields while blind to the provider evidence. `scoreCandidates` computes A/R/G/T then immediately collapses to `winners[field] = top.value`; `best[field]` (components, agreedBy) is retained but never read downstream. The judge sees only the research candidate. Separately, the research branch bypasses `scoreCandidates` entirely, so `lv_org_type`/`lv_produces_content` carry no recency signal at all — evidenced live by Wyong's 2021 stream listing passing the sufficiency gate as current proof. Judge logic must be locked before deployment.
+**Success Criteria**:
+
+  1. Scoring ranks but does not decide: candidates stay parallel with their A/R/G/T components through to the adjudication point; no information is discarded before the judge.
+  2. Tiered routing is explicit and tested: size/firmographic conflicts resolve deterministically (never a model call — RO-2 intent, JG-2 rationale); ICP-semantic fields (`lv_org_type`, `lv_produces_content`, vendor flags) route to the judge when JG-1 triggers fire.
+  3. The judge receives the full ranked candidate set + scoring components + web-search grounding, and its verdict cites which it relied on.
+  4. Research candidates carry a `recencyDate`; recency is ordering bias only — unknown age stays neutral 0.5, never a penalty, never a veto (a decades-stable fact is not wrong for being old).
+  5. TS-1 holds throughout: no recency or scoring path can turn a value `false`; insufficient/aged evidence demotes toward `null` + needs_review.
+  6. Cost is bounded and proven: judge invocation count per run is capped and asserted, and no size-only disagreement can trigger a model call (structural, as Phase 14 proved for RO-2).
+
+**Plans**: TBD
+
 ### Phase 16: Scheduled Workflows & Review Surface
 
 **Goal**: The background reconciliation layer runs on schedule, and needs-review records reach a human who can approve them.
@@ -378,4 +395,5 @@ retroactively; its artifacts and tests are in the tree.
 | 13. Web Research Retrieval & Validation | 1/1 | Complete | 2026-07-21 |
 | 14. Judge Wiring | 1/1 | Complete | 2026-07-21 |
 | 15. HubSpot Property Migration | 1/1 | Complete | 2026-07-22 |
+| 15.5. Tiered Candidate Adjudication (INSERTED) | 0/? | Not started | — |
 | 16. Scheduled Workflows & Review Surface | 0/? | Not started | — |
