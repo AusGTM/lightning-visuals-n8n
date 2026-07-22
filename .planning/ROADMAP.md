@@ -371,7 +371,9 @@ retroactively; its artifacts and tests are in the tree.
   5. TS-1 holds throughout: no recency or scoring path can turn a value `false`; insufficient/aged evidence demotes toward `null` + needs_review.
   6. Cost is bounded and proven: judge invocation count per run is capped and asserted, and no size-only disagreement can trigger a model call (structural, as Phase 14 proved for RO-2).
 
-**Plans**: TBD
+**Plans**: 1 plan
+
+- [ ] 15.5-tiered-candidate-adjudication/PLAN.md — score research candidates with the existing A/R/G/T engine against a prior on file (self-confirmation-guarded), source recencyDate from Anthropic `page_age`, ground the judge in the full ranked set, and cap + assert judge invocations
 
 ### Phase 16: Scheduled Workflows & Review Surface
 
