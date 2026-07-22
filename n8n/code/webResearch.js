@@ -62,6 +62,62 @@ function toProviderResult(raw) {
   };
 }
 
+// normalizeUrlForMatch — tolerant URL matching (TA-3): the model's cited url in
+// evidence_by_field and the search result's own url are two independently-generated
+// strings that usually — not always — match exactly. Mirrors the same www.-stripping
+// shape isCitationSufficient (judge.js) already uses so the two normalizations cannot
+// drift in opposite directions: lowercase, strip protocol (via URL parsing), strip a
+// leading www., drop query/fragment (URL.pathname already excludes both), drop a single
+// trailing slash. Returns null (never throws) on an unparseable url.
+function normalizeUrlForMatch(url) {
+  try {
+    const parsed = new URL(String(url));
+    const host = String(parsed.hostname || "").toLowerCase().replace(/^www\./, "");
+    let pathname = parsed.pathname || "";
+    if (pathname.length > 1 && pathname.endsWith("/")) pathname = pathname.slice(0, -1);
+    return host + pathname;
+  } catch (e) {
+    return null;
+  }
+}
+
+// extractPageAgeByField(content, evidenceByField) -> {field: page_age string|null} (TA-3).
+// Anthropic's web_search_tool_result content blocks carry, per result, url/title/page_age
+// ("when the site was last updated", free text) — researchCandidateFromHttpItem reads
+// this exact `content` array today and discards every page_age. Recover them, matched by
+// normalized url against each judge-eligible field's cited evidence url.
+//
+// V5/ASVS: never throws on any malformed/adversarial content shape — a Code node
+// exception fails the whole n8n item and breaks the continue-on-error contract every
+// node in this chain relies on. Deliberately NOT guarded by an Array.isArray(block.content)
+// check at every level (see tests/n8n/webResearchFailure.test.mjs's DELIBERATE-BREAK,
+// content:null) — a content:null block relies on THIS wrapping try/catch, not a
+// per-level guard, to prove the catch itself is load-bearing rather than merely
+// redundant with narrower checks.
+function extractPageAgeByField(content, evidenceByField) {
+  const byUrl = {};
+  try {
+    const blocks = Array.isArray(content) ? content : [];
+    for (const block of blocks) {
+      if (!block || block.type !== "web_search_tool_result") continue;
+      for (const result of block.content) {
+        if (!result || typeof result !== "object" || !result.url) continue;
+        const key = normalizeUrlForMatch(result.url);
+        if (key !== null) byUrl[key] = result.page_age || null;
+      }
+    }
+  } catch (e) {
+    return {};
+  }
+
+  const out = {};
+  for (const [field, url] of Object.entries(evidenceByField || {})) {
+    const key = url ? normalizeUrlForMatch(url) : null;
+    out[field] = (key !== null ? byUrl[key] : null) || null;
+  }
+  return out;
+}
+
 // extractFinalJson — Pattern 1 (RESEARCH reference): pull the JSON object out of the
 // model's final text content blocks, tolerating ```fences``` / stray prose. Mirrors
 // src/web_research.py:_extract_json byte-for-byte (same regex, same fallback order).
@@ -90,22 +146,39 @@ function extractFinalJson(content) {
 // resolves to toProviderResult({matched:false}) (needs_review:true via the OC-4 default-
 // org-type path), so the company continues through Merge Company exactly as it would with
 // ALLOW_WEB_RESEARCH=false (skip-not-retry, CLAUDE.md Section 26.2).
-function researchCandidateFromHttpItem(item) {
+// Task 3 (TA-3): every failure path attaches EMPTY recency objects (not merely absent
+// keys) — a silently-always-null recency looks identical to "the world has no page
+// ages"; recency_source_by_field makes the match rate observable in a future smoke run.
+function _unmatchedCandidate() {
   // NOTE: toProviderResult({}) would NOT give matched:false — an empty object is still a
   // dict, so validateResearchOutput takes its "else" branch where `matched` defaults to
   // true (OC-4's matched:false path is keyed on non-dict input only). Pass matched:false
   // explicitly so every failure path here is unambiguously unusable downstream.
+  return { ...toProviderResult({ matched: false }), recency_by_field: {}, recency_source_by_field: {} };
+}
+
+function researchCandidateFromHttpItem(item) {
   try {
     if (!item || item.error || !Array.isArray(item.content)) {
-      return toProviderResult({ matched: false });
+      return _unmatchedCandidate();
     }
     const parsed = extractFinalJson(item.content);
-    return toProviderResult(parsed);
+    const candidate = toProviderResult(parsed);
+    const pageAgeByField = extractPageAgeByField(item.content, candidate.evidence_by_field);
+    const recency_by_field = {};
+    const recency_source_by_field = {};
+    for (const field of Object.keys(candidate.evidence_by_field || {})) {
+      const age = pageAgeByField[field];
+      recency_by_field[field] = age || null;
+      recency_source_by_field[field] = age ? "page_age" : "unmatched";
+    }
+    return { ...candidate, recency_by_field, recency_source_by_field };
   } catch (e) {
-    return toProviderResult({ matched: false });
+    return _unmatchedCandidate();
   }
 }
 
 module.exports = {
   validateResearchOutput, toProviderResult, extractFinalJson, researchCandidateFromHttpItem,
+  normalizeUrlForMatch, extractPageAgeByField,
 };

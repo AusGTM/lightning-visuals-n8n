@@ -1,0 +1,212 @@
+{
+  "_note": "SYNTHETIC page_age and prior_on_file fields layered onto the 20 REAL Phase-13 smoke rows (same companies/domains/citation urls as tests/fixtures/evidence_sufficiency_cases.json). The 20 live research runs predate page_age extraction and did not log what was already on the HubSpot record at the time, so those two fields cannot be reconstructed from history and MUST NOT be read as historical — they exist solely to exercise Phase 15.5's scoring/recency/self-confirmation-guard mechanism against real evidence-URL shapes.",
+  "cases": [
+    {
+      "company": "Australian Turf Club",
+      "domain": "australianturfclub.com.au",
+      "citation_url": "https://www.youtube.com/user/AtcracesTV?cbrd=1",
+      "claim": true,
+      "expected": "sufficient",
+      "page_age": "May 12, 2026",
+      "prior_on_file": {
+        "field": "lv_org_type", "value": "governing_body_league",
+        "source": "claude_web", "verified_at": "2025-06-01T00:00:00Z"
+      }
+    },
+    {
+      "company": "Redcliffe Harness RC",
+      "domain": "redcliffehrc.com.au",
+      "citation_url": "https://redcliffehrc.com.au/",
+      "claim": true,
+      "expected": "insufficient",
+      "page_age": "March 3, 2026",
+      "prior_on_file": null
+    },
+    {
+      "company": "Rockhampton Jockey Club",
+      "domain": "callaghanpark.com.au",
+      "citation_url": "https://www.youtube.com/@rockhamptonjockeyclub6459",
+      "claim": true,
+      "expected": "sufficient",
+      "page_age": "April 20, 2026",
+      "prior_on_file": {
+        "field": "lv_org_type", "value": "individual_club_team",
+        "source": "human", "verified_at": "2024-01-01T00:00:00Z"
+      }
+    },
+    {
+      "company": "Wyong",
+      "domain": "www.wyongraceclub.com.au",
+      "citation_url": "https://www.bets.com.au/horse-racing/race-courses/wyong-races-live-stream-20210406-0030/",
+      "claim": true,
+      "expected": "insufficient",
+      "page_age": "April 6, 2021",
+      "prior_on_file": null
+    },
+    {
+      "company": "Melbourne Racing Club",
+      "domain": "mrc.racing.com",
+      "citation_url": "https://www.troa.com.au/content/racingdotcom",
+      "claim": true,
+      "expected": "insufficient",
+      "page_age": "January 9, 2026",
+      "prior_on_file": {
+        "field": "lv_org_type", "value": "governing_body_league",
+        "source": "waterfall", "verified_at": "2025-03-01T00:00:00Z"
+      }
+    },
+    {
+      "company": "Panasonic Studio Productions",
+      "domain": "www.pspvideo.com.au",
+      "citation_url": "https://pspvideo.com.au/",
+      "claim": true,
+      "expected": "insufficient",
+      "page_age": "February 14, 2026",
+      "prior_on_file": {
+        "field": "lv_is_hardware_vendor", "value": true,
+        "source": "legacy_import", "verified_at": "2023-01-01T00:00:00Z"
+      }
+    },
+    {
+      "company": "Brisbane Racing Club",
+      "domain": "brc.com.au",
+      "citation_url": "https://www.youtube.com/@brisbaneracingclub427",
+      "claim": true,
+      "expected": "sufficient",
+      "page_age": "June 2, 2026",
+      "prior_on_file": null
+    },
+    {
+      "company": "Racing and Wagering WA",
+      "domain": "rwwa.com.au",
+      "citation_url": "https://racingwa.com.au/tv",
+      "claim": true,
+      "expected": "insufficient",
+      "page_age": "May 30, 2026",
+      "prior_on_file": null
+    },
+    {
+      "company": "Queensland Racing Integrity Commission",
+      "domain": "www.qric.qld.gov.au",
+      "citation_url": "https://qric.qld.gov.au/about-us/functions-powers/",
+      "claim": false,
+      "expected": "judge_only",
+      "page_age": "November 11, 2025",
+      "prior_on_file": {
+        "field": "lv_org_type", "value": "regulator",
+        "source": "manual", "verified_at": "2024-06-01T00:00:00Z"
+      }
+    },
+    {
+      "company": "GRAVITY MEDIA",
+      "domain": "www.gravitymedia.com",
+      "citation_url": "https://www.gravitymedia.com/us/what-we-do/production-content/",
+      "claim": true,
+      "expected": "sufficient",
+      "page_age": "May 1, 2026",
+      "prior_on_file": {
+        "field": "lv_org_type", "value": "content_producer",
+        "source": "claude_web", "verified_at": "2025-05-01T00:00:00Z"
+      }
+    },
+    {
+      "company": "The Creek Agency",
+      "domain": "thecreek.com.au",
+      "citation_url": "https://www.thecreek.com.au/",
+      "claim": true,
+      "expected": "insufficient",
+      "page_age": "March 20, 2026",
+      "prior_on_file": null
+    },
+    {
+      "company": "Scone Race Club",
+      "domain": "www.sconeraceclub.com.au",
+      "citation_url": "https://www.youtube.com/channel/UC1AqN0yBcRhDo_Mgr4CMPTg",
+      "claim": true,
+      "expected": "sufficient",
+      "page_age": "April 4, 2026",
+      "prior_on_file": null
+    },
+    {
+      "company": "Racing NSW",
+      "domain": "www.racingnsw.com.au",
+      "citation_url": "https://www.racingnsw.com.au/",
+      "claim": true,
+      "expected": "insufficient",
+      "page_age": "February 2, 2026",
+      "prior_on_file": {
+        "field": "lv_org_type", "value": "governing_body_league",
+        "source": "waterfall", "verified_at": "2025-02-01T00:00:00Z"
+      }
+    },
+    {
+      "company": "Supertech Electronics",
+      "domain": "www.supertech-electronics.com.au",
+      "citation_url": "https://myausweb.net.au/automotive/supertech-electronics/",
+      "claim": true,
+      "expected": "insufficient",
+      "page_age": "January 15, 2026",
+      "prior_on_file": null
+    },
+    {
+      "company": "Cairns Jockey Club",
+      "domain": "www.cairnsjockeyclub.com.au",
+      "citation_url": "https://www.cairnsjockeyclub.com.au/news/",
+      "claim": true,
+      "expected": "sufficient",
+      "page_age": "June 10, 2026",
+      "prior_on_file": null
+    },
+    {
+      "company": "Victoria Racing Club",
+      "domain": "flemington.com.au",
+      "citation_url": "https://www.vrc.com.au/",
+      "claim": true,
+      "expected": "insufficient",
+      "page_age": "May 22, 2026",
+      "prior_on_file": {
+        "field": "lv_org_type", "value": "governing_body_league",
+        "source": "human", "verified_at": "2024-11-01T00:00:00Z"
+      }
+    },
+    {
+      "company": "Bunbury Trotting Club",
+      "domain": "www.bunburytrottingclub.com.au",
+      "citation_url": "https://visitbunburygeographe.com.au/business/bunbury-trotting-club/",
+      "claim": true,
+      "expected": "insufficient",
+      "page_age": "April 28, 2026",
+      "prior_on_file": null
+    },
+    {
+      "company": "Sunshine Coast Turf Club",
+      "domain": "sctc.com.au",
+      "citation_url": "https://www.sctc.com.au/race-fields-footage/",
+      "claim": true,
+      "expected": "sufficient",
+      "page_age": "March 9, 2026",
+      "prior_on_file": {
+        "field": "lv_produces_content", "value": true,
+        "source": "claude_web", "verified_at": "2025-04-01T00:00:00Z"
+      }
+    },
+    {
+      "company": "Harness Racing ACT",
+      "domain": "www.capitaltrots.com.au",
+      "citation_url": "https://capitaltrots.com.au/",
+      "claim": true,
+      "expected": "insufficient",
+      "page_age": "February 27, 2026",
+      "prior_on_file": null
+    },
+    {
+      "company": "Thoroughbred Park",
+      "domain": "www.thoroughbredpark.com.au",
+      "citation_url": "https://thoroughbredpark.com.au/racing-information/",
+      "claim": true,
+      "expected": "sufficient",
+      "page_age": "June 5, 2026",
+      "prior_on_file": null
+    }
+  ]
+}

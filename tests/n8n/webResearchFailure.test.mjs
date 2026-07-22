@@ -18,7 +18,9 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const { researchCandidateFromHttpItem } = require(path.join(ROOT, "n8n/code/webResearch.js"));
+const {
+  researchCandidateFromHttpItem, extractPageAgeByField, normalizeUrlForMatch,
+} = require(path.join(ROOT, "n8n/code/webResearch.js"));
 const { mergeCompanies } = require(path.join(ROOT, "n8n/code/mergeCompanies.js"));
 
 // The three failure shapes n8n's HTTP Request node can produce under onError:Continue.
@@ -50,6 +52,96 @@ test("researchCandidateFromHttpItem: a good response still matches (control case
   }) }] };
   const candidate = researchCandidateFromHttpItem(goodItem);
   assert.equal(candidate.matched, true);
+});
+
+// --- extractPageAgeByField / normalizeUrlForMatch: TA-3 -----------------------------
+
+function searchResultBlock(results) {
+  return { type: "web_search_tool_result", content: results };
+}
+
+test("extractPageAgeByField: page_age extracted for an exactly-matching url", () => {
+  const content = [searchResultBlock([
+    { type: "web_search_result", url: "https://example.org/about", title: "About", page_age: "April 30, 2025" },
+  ])];
+  const out = extractPageAgeByField(content, { lv_org_type: "https://example.org/about" });
+  assert.equal(out.lv_org_type, "April 30, 2025");
+});
+
+test("extractPageAgeByField: extracted for a url differing only by protocol / www. / trailing slash / query string", () => {
+  const content = [searchResultBlock([
+    { type: "web_search_result", url: "https://www.example.org/about/", title: "About", page_age: "May 1, 2026" },
+  ])];
+  const variants = {
+    lv_org_type: "http://example.org/about",
+    lv_produces_content: "https://example.org/about?utm_source=x",
+    lv_content_type: "https://www.example.org/about",
+  };
+  const out = extractPageAgeByField(content, variants);
+  assert.equal(out.lv_org_type, "May 1, 2026", "protocol difference tolerated");
+  assert.equal(out.lv_produces_content, "May 1, 2026", "query string difference tolerated");
+  assert.equal(out.lv_content_type, "May 1, 2026", "www./trailing-slash difference tolerated");
+});
+
+test("extractPageAgeByField: null for a genuinely different url (not extracted via researchCandidateFromHttpItem, so no source key here)", () => {
+  const content = [searchResultBlock([
+    { type: "web_search_result", url: "https://example.org/about", title: "About", page_age: "April 30, 2025" },
+  ])];
+  const out = extractPageAgeByField(content, { lv_org_type: "https://totallydifferent.example/x" });
+  assert.equal(out.lv_org_type, null);
+});
+
+test("extractPageAgeByField: never throws, returns {} for each malformed shape this file already exercises", () => {
+  const evidenceByField = { lv_org_type: "https://example.org/about" };
+  // execution-error-shaped item content (not applicable at this level, but a non-array top content)
+  assert.deepEqual(extractPageAgeByField(undefined, evidenceByField), { lv_org_type: null });
+  assert.deepEqual(extractPageAgeByField(null, evidenceByField), { lv_org_type: null });
+  // Anthropic HTTP-level error body: no content array at all -> caller passes undefined/[] here
+  assert.deepEqual(extractPageAgeByField([], evidenceByField), { lv_org_type: null });
+  // search-result block whose inner content is a STRING instead of an array
+  const stringContentBlock = [{ type: "web_search_tool_result", content: "not an array" }];
+  assert.deepEqual(extractPageAgeByField(stringContentBlock, evidenceByField), { lv_org_type: null });
+  // a result entry with no url
+  const noUrlBlock = [searchResultBlock([{ type: "web_search_result", title: "no url", page_age: "June 1, 2026" }])];
+  assert.deepEqual(extractPageAgeByField(noUrlBlock, evidenceByField), { lv_org_type: null });
+});
+
+test("extractPageAgeByField DELIBERATE-BREAK: a search-result block whose content is null hits the un-guarded path (no per-level Array.isArray(block.content) check) and relies on the wrapping try/catch to return {} rather than throw", () => {
+  const content = [{ type: "web_search_tool_result", content: null }];
+  assert.doesNotThrow(() => extractPageAgeByField(content, { lv_org_type: "https://example.org/about" }));
+  // The wrapping try/catch (not a per-level guard) is what saves this shape — it returns
+  // the empty object literally, not a per-field null map (that would require the `out`
+  // loop below the catch to have run, which it never does once the catch fires).
+  assert.deepEqual(extractPageAgeByField(content, { lv_org_type: "https://example.org/about" }), {});
+});
+
+test("normalizeUrlForMatch: unparseable url returns null rather than throwing", () => {
+  assert.equal(normalizeUrlForMatch("not a url at all"), null);
+});
+
+test("researchCandidateFromHttpItem: wires recency_by_field + recency_source_by_field (matched + unmatched)", () => {
+  const goodItem = {
+    content: [
+      { type: "text", text: JSON.stringify({
+        data: { lv_org_type: "governing_body_league" },
+        evidence_by_field: { lv_org_type: "https://example.org/about" },
+      }) },
+      searchResultBlock([
+        { type: "web_search_result", url: "https://example.org/about", title: "About", page_age: "April 30, 2025" },
+      ]),
+    ],
+  };
+  const candidate = researchCandidateFromHttpItem(goodItem);
+  assert.equal(candidate.recency_by_field.lv_org_type, "April 30, 2025");
+  assert.equal(candidate.recency_source_by_field.lv_org_type, "page_age");
+});
+
+test("researchCandidateFromHttpItem: every failure shape attaches EMPTY recency objects (never absent, never null-the-whole-key)", () => {
+  for (const item of [{ error: "ETIMEDOUT" }, {}, { content: [] }]) {
+    const candidate = researchCandidateFromHttpItem(item);
+    assert.deepEqual(candidate.recency_by_field, {});
+    assert.deepEqual(candidate.recency_source_by_field, {});
+  }
 });
 
 // The skip-not-retry proof: with a failed research candidate, Merge Company (mirroring
