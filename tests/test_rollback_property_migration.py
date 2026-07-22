@@ -188,7 +188,17 @@ def test_canary_manifest_is_a_single_property_named_lv_rollback_canary():
     assert len(manifest) == 1
     assert manifest[0]["kind"] == "property"
     assert manifest[0]["object_type"] == "companies"
-    assert manifest[0]["name"] == "lv_rollback_canary_20260722T000000Z"
+    # Lowercased: HubSpot rejects any uppercase in an internal property name, and the UTC
+    # stamp carries a literal T and Z. Caught live 2026-07-22 — the original assertion
+    # encoded the bug ("...20260722T000000Z" 400s with "Property name must be lowercase").
+    assert manifest[0]["name"] == "lv_rollback_canary_20260722t000000z"
+
+
+def test_canary_property_name_is_lowercase_for_any_timestamp():
+    """Regression guard for the live 400. Offline tests never hit the API, so nothing
+    caught the uppercase stamp until the operator ran the migration."""
+    spec = canary.build_canary_property_spec("20261231T235959Z")
+    assert spec["name"] == spec["name"].lower(), spec["name"]
 
 
 def test_canary_is_archived_reads_a_fixture_get_response():

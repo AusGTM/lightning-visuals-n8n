@@ -1,0 +1,245 @@
+[
+  {
+    "group_name": "lv_enrichment",
+    "kind": "property",
+    "name": "lv_is_hardware_vendor",
+    "object_type": "companies",
+    "request_body": {
+      "fieldType": "booleancheckbox",
+      "groupName": "lv_enrichment",
+      "label": "LV Is Hardware Vendor",
+      "name": "lv_is_hardware_vendor",
+      "options": [
+        {
+          "displayOrder": 0,
+          "hidden": false,
+          "label": "Yes",
+          "value": "true"
+        },
+        {
+          "displayOrder": 1,
+          "hidden": false,
+          "label": "No",
+          "value": "false"
+        }
+      ],
+      "type": "bool"
+    }
+  },
+  {
+    "group_name": "lv_enrichment",
+    "kind": "property",
+    "name": "lv_is_gambling_operator",
+    "object_type": "companies",
+    "request_body": {
+      "fieldType": "booleancheckbox",
+      "groupName": "lv_enrichment",
+      "label": "LV Is Gambling Operator",
+      "name": "lv_is_gambling_operator",
+      "options": [
+        {
+          "displayOrder": 0,
+          "hidden": false,
+          "label": "Yes",
+          "value": "true"
+        },
+        {
+          "displayOrder": 1,
+          "hidden": false,
+          "label": "No",
+          "value": "false"
+        }
+      ],
+      "type": "bool"
+    }
+  },
+  {
+    "group_name": "lv_enrichment",
+    "kind": "property",
+    "name": "lv_sponsorship_reliant",
+    "object_type": "companies",
+    "request_body": {
+      "fieldType": "booleancheckbox",
+      "groupName": "lv_enrichment",
+      "label": "LV Sponsorship Reliant",
+      "name": "lv_sponsorship_reliant",
+      "options": [
+        {
+          "displayOrder": 0,
+          "hidden": false,
+          "label": "Yes",
+          "value": "true"
+        },
+        {
+          "displayOrder": 1,
+          "hidden": false,
+          "label": "No",
+          "value": "false"
+        }
+      ],
+      "type": "bool"
+    }
+  },
+  {
+    "group_name": "lv_enrichment",
+    "kind": "property",
+    "name": "lv_enrichment_needs_review",
+    "object_type": "companies",
+    "request_body": {
+      "fieldType": "booleancheckbox",
+      "groupName": "lv_enrichment",
+      "label": "LV Enrichment Needs Review",
+      "name": "lv_enrichment_needs_review",
+      "options": [
+        {
+          "displayOrder": 0,
+          "hidden": false,
+          "label": "Yes",
+          "value": "true"
+        },
+        {
+          "displayOrder": 1,
+          "hidden": false,
+          "label": "No",
+          "value": "false"
+        }
+      ],
+      "type": "bool"
+    }
+  },
+  {
+    "group_name": "lv_enrichment",
+    "kind": "property",
+    "name": "lv_enrichment_review_approved",
+    "object_type": "companies",
+    "request_body": {
+      "fieldType": "booleancheckbox",
+      "groupName": "lv_enrichment",
+      "label": "LV Enrichment Review Approved",
+      "name": "lv_enrichment_review_approved",
+      "options": [
+        {
+          "displayOrder": 0,
+          "hidden": false,
+          "label": "Yes",
+          "value": "true"
+        },
+        {
+          "displayOrder": 1,
+          "hidden": false,
+          "label": "No",
+          "value": "false"
+        }
+      ],
+      "type": "bool"
+    }
+  },
+  {
+    "group_name": "lv_enrichment",
+    "kind": "property",
+    "name": "lv_icp_needs_review",
+    "object_type": "companies",
+    "request_body": {
+      "fieldType": "booleancheckbox",
+      "groupName": "lv_enrichment",
+      "label": "LV ICP Needs Review",
+      "name": "lv_icp_needs_review",
+      "options": [
+        {
+          "displayOrder": 0,
+          "hidden": false,
+          "label": "Yes",
+          "value": "true"
+        },
+        {
+          "displayOrder": 1,
+          "hidden": false,
+          "label": "No",
+          "value": "false"
+        }
+      ],
+      "type": "bool"
+    }
+  },
+  {
+    "group_name": "lv_enrichment_contacts",
+    "kind": "property",
+    "name": "lv_enrichment_needs_review",
+    "object_type": "contacts",
+    "request_body": {
+      "fieldType": "booleancheckbox",
+      "groupName": "lv_enrichment_contacts",
+      "label": "LV Enrichment Needs Review",
+      "name": "lv_enrichment_needs_review",
+      "options": [
+        {
+          "displayOrder": 0,
+          "hidden": false,
+          "label": "Yes",
+          "value": "true"
+        },
+        {
+          "displayOrder": 1,
+          "hidden": false,
+          "label": "No",
+          "value": "false"
+        }
+      ],
+      "type": "bool"
+    }
+  },
+  {
+    "group_name": "lv_enrichment_contacts",
+    "kind": "property",
+    "name": "lv_enrichment_review_approved",
+    "object_type": "contacts",
+    "request_body": {
+      "fieldType": "booleancheckbox",
+      "groupName": "lv_enrichment_contacts",
+      "label": "LV Enrichment Review Approved",
+      "name": "lv_enrichment_review_approved",
+      "options": [
+        {
+          "displayOrder": 0,
+          "hidden": false,
+          "label": "Yes",
+          "value": "true"
+        },
+        {
+          "displayOrder": 1,
+          "hidden": false,
+          "label": "No",
+          "value": "false"
+        }
+      ],
+      "type": "bool"
+    }
+  },
+  {
+    "group_name": "lv_enrichment_contacts",
+    "kind": "property",
+    "name": "lv_icp_needs_review",
+    "object_type": "contacts",
+    "request_body": {
+      "fieldType": "booleancheckbox",
+      "groupName": "lv_enrichment_contacts",
+      "label": "LV ICP Needs Review",
+      "name": "lv_icp_needs_review",
+      "options": [
+        {
+          "displayOrder": 0,
+          "hidden": false,
+          "label": "Yes",
+          "value": "true"
+        },
+        {
+          "displayOrder": 1,
+          "hidden": false,
+          "label": "No",
+          "value": "false"
+        }
+      ],
+      "type": "bool"
+    }
+  }
+]

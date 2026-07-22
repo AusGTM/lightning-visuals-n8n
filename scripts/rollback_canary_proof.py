@@ -54,7 +54,10 @@ def _writes_allowed() -> bool:
 
 
 def build_canary_property_spec(ts: str) -> dict:
-    name = f"lv_rollback_canary_{ts}"
+    # HubSpot rejects any uppercase in an internal property name ("Property name must be
+    # lowercase, but given: ..."), and the UTC stamp carries a literal T and Z. Lowercase
+    # the NAME only — the label is display text and keeps the readable stamp.
+    name = f"lv_rollback_canary_{ts}".lower()
     return {"name": name, "label": f"LV Rollback Canary {ts}", "type": "string",
             "fieldType": "text", "groupName": "lv_enrichment", "options": []}
 

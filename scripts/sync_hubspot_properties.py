@@ -173,6 +173,7 @@ def sync_object_type(object_type: str, desired: dict, run_id: str, live_writes: 
 
     manifest_entries = []
 
+    failures = []
     for group in group_create:
         status, body = _create_group_live(object_type, group)
         if status == 201:
@@ -180,6 +181,7 @@ def sync_object_type(object_type: str, desired: dict, run_id: str, live_writes: 
                                       "name": group["name"], "request_body": body})
             print(f"created group {object_type}/{group['name']} (201)")
         else:
+            failures.append(("group", f"{object_type}/{group['name']}", status))
             print(f"FAILED to create group {object_type}/{group['name']} ({status}) — "
                   "not recorded in undo manifest")
 
@@ -191,6 +193,7 @@ def sync_object_type(object_type: str, desired: dict, run_id: str, live_writes: 
                                       "request_body": body})
             print(f"created property {object_type}/{prop['name']} (201)")
         else:
+            failures.append(("property", f"{object_type}/{prop['name']}", status))
             print(f"FAILED to create property {object_type}/{prop['name']} ({status}) — "
                   "not recorded in undo manifest")
 
@@ -206,6 +209,8 @@ def sync_object_type(object_type: str, desired: dict, run_id: str, live_writes: 
             assert entry["name"] in fresh_props, f"post-write confirmation FAILED for {entry['name']}"
         else:
             assert entry["name"] in fresh_groups, f"post-write confirmation FAILED for group {entry['name']}"
+
+    return failures
 
 
 def main(argv=None) -> int:
@@ -228,8 +233,19 @@ def main(argv=None) -> int:
               "ALLOW_HUBSPOT_PROPERTY_WRITES=true to create.")
 
     run_id = str(uuid.uuid4())
+    all_failures = []
     for object_type in ("companies", "contacts"):
-        sync_object_type(object_type, desired[object_type], run_id, live_writes)
+        all_failures.extend(sync_object_type(object_type, desired[object_type], run_id, live_writes) or [])
+
+    # A partial migration MUST NOT look like success. Exiting 0 here once let a run that
+    # created 24/33 properties report clean (2026-07-22: 9 bools rejected for missing
+    # true/false options), which an unattended caller would have taken as done.
+    if all_failures:
+        print(f"\nPARTIAL FAILURE — {len(all_failures)} item(s) not created:")
+        for kind, name, status in all_failures:
+            print(f"  {kind} {name} (HTTP {status})")
+        print("Re-run after fixing; creation is create-if-missing so successes are not repeated.")
+        return 1
 
     return 0
 
