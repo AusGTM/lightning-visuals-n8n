@@ -1,0 +1,150 @@
+{
+  "id": "LVscheduledMaintenanceCloud01",
+  "name": "LV Scheduled Maintenance (Cloud)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 15
+            }
+          ]
+        }
+      },
+      "id": "st00010000-0000-4000-8000-000000000000",
+      "name": "SJ-3 Trigger (15 min)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "company",
+        "operation": "search",
+        "filterGroupsUi": {
+          "filterGroupsValues": [
+            {
+              "filtersUi": {
+                "filterValues": [
+                  {
+                    "propertyName": "lv_enrichment_requested",
+                    "operator": "EQ",
+                    "value": "true"
+                  },
+                  {
+                    "propertyName": "lv_enrichment_status",
+                    "operator": "NEQ",
+                    "value": "running"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "properties": "hs_object_id,lv_enrichment_requested,lv_enrichment_status"
+        }
+      },
+      "id": "hs00020000-0000-4000-8000-000000000000",
+      "name": "SJ-3 Search (requested poller)",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2.1,
+      "position": [
+        440,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Extract Search Rows \u2014 HubSpot search envelope -> one row per matched record.\n// Shared by the SJ-1/SJ-3/dedupe/review scheduled branches (Phase 16-02) \u2014 none of them\n// need enrichmentGate's existingRecord shape (that is SJ-2 + Company Gate's job, via a\n// dedicated Adapt step mirroring ENRICH_ADAPT_CO_SEARCH's contract).\nconst item = $input.first();\nconst res = (item && item.json) || {};\nconst rows = Array.isArray(res.results) ? res.results : (res.properties ? [res] : []);\nreturn rows.map((r) => ({ json: { ...(r.properties || {}), hs_object_id: r.id } }));\n"
+      },
+      "id": "c00030000-0000-4000-8000-000000000000",
+      "name": "SJ-3 Extract Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "source": "database",
+        "workflowId": {
+          "__rl": true,
+          "value": "LVenrichmentCloud01",
+          "mode": "list",
+          "cachedResultName": "LV Enrichment (Cloud template)"
+        },
+        "mode": "each",
+        "options": {}
+      },
+      "id": "ew00040000-0000-4000-8000-000000000000",
+      "name": "SJ-3 Dispatch To Enrichment",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## LV Scheduled Maintenance \u2014 CLOUD\nBackground reconciliation + human-review layer (SYSTEM-CONTRACT). Runs alongside \"LV Enrichment (Cloud template)\" \u2014 this workflow only ever DISCOVERS/DISPATCHES/CLASSIFIES; the actual provider waterfall + merge lives in that sibling workflow's companies branch.\n\n**SJ-3 (15 min):** `lv_enrichment_requested=true AND lv_enrichment_status != running` -> Execute Workflow into the companies branch of \"LV Enrichment (Cloud template)\". Re-bind `workflowId` after deploy (n8n Cloud assigns its own id on import \u2014 this constant is the byte-identical build-time id, the deploy script re-binds credentials/references the same way it already does for the 6 provider credentials, `scripts/deploy_n8n_workflows.py`).",
+        "height": 260,
+        "width": 480
+      },
+      "id": "s00050000-0000-4000-8000-000000000000",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        220,
+        480
+      ]
+    }
+  ],
+  "connections": {
+    "SJ-3 Trigger (15 min)": {
+      "main": [
+        [
+          {
+            "node": "SJ-3 Search (requested poller)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SJ-3 Search (requested poller)": {
+      "main": [
+        [
+          {
+            "node": "SJ-3 Extract Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SJ-3 Extract Rows": {
+      "main": [
+        [
+          {
+            "node": "SJ-3 Dispatch To Enrichment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {}
+}

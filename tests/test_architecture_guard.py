@@ -23,6 +23,7 @@ ACTIVE = [
     "wf_enrichment_cloud.json",
     "wf_enrichment_local.json",
     "wf_enrichment_local_live.json",
+    "wf_scheduled_maintenance_cloud.json",
 ]
 
 # Superseded Milestone-2 workflows. These are ONLY a trigger + a POST to the FastAPI

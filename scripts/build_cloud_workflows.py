@@ -2986,6 +2986,184 @@ def build_enrichment_cloud():
     }
 
 
+# =============================================================================
+# SCHEDULED MAINTENANCE workflow (Phase 16-02) — SJ-1/2/3 + dedupe sweep + review loop.
+# Companion to "LV Enrichment (Cloud template)" (build_enrichment_cloud): that workflow
+# reacts to a webhook event; this one is the background reconciliation + human-review
+# layer SYSTEM-CONTRACT commits to. Predicates key on pipeline-owned INPUTS only
+# (Approach C, spec §0.7) — never a derived ICP output (score/tier/scored-at).
+# =============================================================================
+
+ENRICH_EXTRACT_SEARCH_ROWS = r"""// Extract Search Rows — HubSpot search envelope -> one row per matched record.
+// Shared by the SJ-1/SJ-3/dedupe/review scheduled branches (Phase 16-02) — none of them
+// need enrichmentGate's existingRecord shape (that is SJ-2 + Company Gate's job, via a
+// dedicated Adapt step mirroring ENRICH_ADAPT_CO_SEARCH's contract).
+const item = $input.first();
+const res = (item && item.json) || {};
+const rows = Array.isArray(res.results) ? res.results : (res.properties ? [res] : []);
+return rows.map((r) => ({ json: { ...(r.properties || {}), hs_object_id: r.id } }));
+"""
+
+ENRICH_SJ2_EPOCH_CUTOFF = r"""// SJ-2 epoch-ms cutoff — HubSpot's LT operator on a datetime property expects epoch
+// MILLISECONDS, not an ISO date string (16-RESEARCH.md Deliverable 5).
+return [{ json: { cutoff_ms: Date.now() - 180 * 86400000 } }];
+"""
+
+# Same CONTRACT as ENRICH_ADAPT_CO_SEARCH (0 results => {} => create) but for a BATCH
+# staleness search, not a per-row identity lookup: each matched company's own properties/id
+# from the SJ-2 Search ARE the existingRecord Company Gate needs to confirm staleness
+# (RT-5/SJ-2) — no pairing with an upstream identity list required.
+ENRICH_ADAPT_SJ2_SEARCH = r"""// Adapt SJ-2 Search -> existingRecord (ENRICH_ADAPT_CO_SEARCH shape).
+const item = $input.first();
+const res = (item && item.json) || {};
+const rows = Array.isArray(res.results) ? res.results : (res.properties ? [res] : []);
+return rows.map((r) => {
+  const existingRecord = { ...(r.properties || {}), hs_object_id: r.id };
+  return { json: { existingRecord, lookup_failed: false } };
+});
+"""
+
+# CLASSIFY ONLY (dedupeSweep.js's own header comment) — this node never writes HubSpot;
+# the review-flag write is a separate downstream node. dedupeSweep.js is FROZEN and reads
+# contact-shaped properties.{email,phone,linkedin_url}; the canonical HubSpot property is
+# lv_linkedin_url (PN-1 rename), so the wrapper maps it here rather than touch the module.
+ENRICH_DEDUPE_SWEEP = inline(
+    "normalizeEmail.js", "normalizePhone.js", "resolveIdentity.js", "dedupeSweep.js") + r"""
+
+// --- n8n wrapper: Dedupe Sweep (CLASSIFY ONLY) ---
+const rows = $input.all().map((it) => it.json);
+const records = rows.map((r) => ({
+  id: r.hs_object_id,
+  properties: { email: r.email, phone: r.phone, linkedin_url: r.lv_linkedin_url },
+}));
+const report = dedupeSweep(records);
+return report.to_review_ids.map((id) => ({ json: { hs_object_id: id, to_review_reason: "dedupe_sweep" } }));
+"""
+
+# reviewApply.js's consumer contract is documented on the module itself — see its header.
+ENRICH_APPLY_REVIEW = inline("taxonomy.generated.js", "mergeCompanies.js", "reviewApply.js") + r"""
+
+// --- n8n wrapper: Apply Review — Extract Search Rows already flattened id + properties,
+// so the row itself IS the freshly-refetched compare-and-set baseline. ---
+return $input.all().map((it) => {
+  const row = it.json;
+  const candidateJson = row.lv_enrichment_review_candidate_json || "[]";
+  const result = reviewApply(candidateJson, row);
+  return { json: { hs_object_id: row.hs_object_id, ...result } };
+});
+"""
+
+
+def _schedule_trigger(name, x, y, field, interval_value):
+    return {
+        "parameters": {"rule": {"interval": [{"field": field, f"{field}Interval": interval_value}]}},
+        "id": nid("st"), "name": name,
+        "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.2, "position": [x, y],
+    }
+
+
+def _hs_search_node(name, resource, x, y, filter_groups, properties_csv):
+    """Native n8n-nodes-base.hubspot search node. filter_groups is a list of groups; each
+    group is a list of filter dicts {propertyName, operator, value?} — groups OR, filters
+    within a group AND (mirrors HS_CO_SEARCH_BODY_EXPR's envelope, RESEARCH Pitfall 3)."""
+    return {
+        "parameters": {"resource": resource, "operation": "search",
+                       "filterGroupsUi": {"filterGroupsValues": [
+                           {"filtersUi": {"filterValues": group}} for group in filter_groups
+                       ]},
+                       "additionalFields": {"properties": properties_csv}},
+        "id": nid("hs"), "name": name,
+        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [x, y],
+        "onError": "continueRegularOutput",
+    }
+
+
+def _hs_update_set_property(name, resource, x, y, property_name, value_literal="true"):
+    """Terminal dispatch write (SJ-1/SJ-2): sets ONE known custom boolean property to a
+    static value on the matched record's id (review consensus #5 — a search that only
+    matches rows never triggers enrichment on its own)."""
+    id_key = "contactId" if resource == "contact" else "companyId"
+    return {
+        "parameters": {"resource": resource, "operation": "update",
+                       id_key: "={{ $json.hs_object_id }}",
+                       "updateFields": {"customPropertiesUi": {"customPropertiesValues": [
+                           {"property": property_name, "value": value_literal},
+                       ]}}},
+        "id": nid("hu"), "name": name,
+        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [x, y],
+    }
+
+
+def _execute_workflow_node(name, x, y, workflow_id, workflow_name):
+    return {
+        "parameters": {"source": "database",
+                       "workflowId": {"__rl": True, "value": workflow_id, "mode": "list",
+                                      "cachedResultName": workflow_name},
+                       "mode": "each", "options": {}},
+        "id": nid("ew"), "name": name,
+        "type": "n8n-nodes-base.executeWorkflow", "typeVersion": 1.2, "position": [x, y],
+    }
+
+
+def build_scheduled_maintenance_cloud():
+    nodes = []
+    conns = {}
+
+    # --- SJ-3: 15-min requested poller (Task 1 tracer — end-to-end thin slice) ---------
+    x, y = 220, 300
+    sj3_trigger = _schedule_trigger("SJ-3 Trigger (15 min)", x, y, "minutes", 15)
+    nodes.append(sj3_trigger)
+    x += 220
+    sj3_search = _hs_search_node(
+        "SJ-3 Search (requested poller)", "company", x, y,
+        filter_groups=[[
+            {"propertyName": "lv_enrichment_requested", "operator": "EQ", "value": "true"},
+            {"propertyName": "lv_enrichment_status", "operator": "NEQ", "value": "running"},
+        ]],
+        properties_csv="hs_object_id,lv_enrichment_requested,lv_enrichment_status")
+    nodes.append(sj3_search)
+    x += 220
+    nodes.append(code_node("SJ-3 Extract Rows", ENRICH_EXTRACT_SEARCH_ROWS, x, y))
+    x += 220
+    sj3_dispatch = _execute_workflow_node(
+        "SJ-3 Dispatch To Enrichment", x, y, "LVenrichmentCloud01", "LV Enrichment (Cloud template)")
+    nodes.append(sj3_dispatch)
+
+    conns.update(chain([sj3_trigger["name"], sj3_search["name"], "SJ-3 Extract Rows",
+                        sj3_dispatch["name"]]))
+
+    notes = [
+        {"content": (
+            "## LV Scheduled Maintenance — CLOUD\n"
+            "Background reconciliation + human-review layer (SYSTEM-CONTRACT). Runs "
+            "alongside \"LV Enrichment (Cloud template)\" — this workflow only ever "
+            "DISCOVERS/DISPATCHES/CLASSIFIES; the actual provider waterfall + merge lives "
+            "in that sibling workflow's companies branch.\n\n"
+            "**SJ-3 (15 min):** `lv_enrichment_requested=true AND lv_enrichment_status != "
+            "running` -> Execute Workflow into the companies branch of \"LV Enrichment "
+            "(Cloud template)\". Re-bind `workflowId` after deploy (n8n Cloud assigns its "
+            "own id on import — this constant is the byte-identical build-time id, the "
+            "deploy script re-binds credentials/references the same way it already does "
+            "for the 6 provider credentials, `scripts/deploy_n8n_workflows.py`)."
+        ), "x": 220, "y": 480, "h": 260, "w": 480},
+    ]
+    for n in notes:
+        nodes.append({
+            "parameters": {"content": n["content"], "height": n["h"], "width": n["w"]},
+            "id": nid("s"), "name": "Sticky Note",
+            "type": "n8n-nodes-base.stickyNote", "typeVersion": 1,
+            "position": [n["x"], n["y"]],
+        })
+
+    return {
+        "id": "LVscheduledMaintenanceCloud01",
+        "name": "LV Scheduled Maintenance (Cloud)",
+        "nodes": nodes,
+        "connections": conns,
+        "settings": {},
+    }
+
+
 # ---- write ------------------------------------------------------------------
 
 def main():
@@ -3009,6 +3187,11 @@ def main():
     print(f"wrote {er_local.relative_to(ROOT)}")
     print(f"wrote {er_cloud.relative_to(ROOT)}")
     print(f"wrote {er_live.relative_to(ROOT)}")
+
+    _idc[0] = 0
+    sched_cloud = ROOT / "n8n" / "wf_scheduled_maintenance_cloud.json"
+    sched_cloud.write_text(json.dumps(build_scheduled_maintenance_cloud(), indent=2) + "\n")
+    print(f"wrote {sched_cloud.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":
