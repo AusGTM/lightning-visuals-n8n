@@ -3232,6 +3232,63 @@ def build_scheduled_maintenance_cloud():
     conns.update(chain([dedupe_trigger["name"], dedupe_search["name"], "Dedupe Extract Rows",
                         dedupe_node["name"], dedupe_flag_write["name"]]))
 
+    # --- Review Loop: §22.2 approve -> apply -> clear (Task 4) -------------------------
+    # Shares SJ-3's 15-min cadence in spirit (own trigger node, same interval). The search
+    # requests hs_object_id + every DEFAULT_COMPANY_POLICY-adjacent candidate field's
+    # CURRENT value (the refetch reviewApply compares against) + the candidate JSON + the
+    # 4 review flags reviewApply's clearPatch zeroes.
+    x, y4 = 220, 1840
+    review_trigger = _schedule_trigger("Review Trigger (15 min)", x, y4, "minutes", 15)
+    nodes.append(review_trigger)
+    x4 = x + 220
+    review_search = _hs_search_node(
+        "Review Search (approved=true)", "company", x4, y4,
+        filter_groups=[[
+            {"propertyName": "lv_enrichment_review_approved", "operator": "EQ", "value": "true"},
+        ]],
+        properties_csv="hs_object_id,lv_org_type,lv_produces_content,lv_revenue_band,"
+                       "lv_employee_band,lv_content_type,lv_sponsorship_reliant,"
+                       "lv_is_hardware_vendor,lv_is_gambling_operator,"
+                       "lv_enrichment_review_candidate_json,lv_enrichment_needs_review,"
+                       "lv_enrichment_review_approved,lv_enrichment_review_reason")
+    nodes.append(review_search)
+    x4 += 220
+    nodes.append(code_node("Review Extract Rows", ENRICH_EXTRACT_SEARCH_ROWS, x4, y4))
+    x4 += 220
+    apply_review = code_node("Apply Review", ENRICH_APPLY_REVIEW, x4, y4)
+    nodes.append(apply_review)
+    x4 += 220
+    if_stale = _if_bool_node("Review IF Stale", "stale", x4, y4)
+    nodes.append(if_stale)
+    x4 += 220
+    # A stale row (compare-and-set mismatch) skips BOTH the patch and the clear — nothing
+    # is written, the record stays queued for re-review (reviewApply's own comment).
+    review_stale_noop = {
+        "parameters": {"assignments": {"assignments": [
+            {"id": nid("a"), "name": "review_outcome", "value": "stale_skipped", "type": "string"}
+        ]}, "options": {}},
+        "id": nid("r"), "name": "Review Stale (NoOp)",
+        "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [x4, y4 - 100]}
+    nodes.append(review_stale_noop)
+    # Applies canonicalPatch + clearPatch. Property values are dynamic per-record
+    # (reviewApply's output), so this node is a documented-equivalent placeholder — the
+    # same convention this file already uses for "HubSpot Update"/"HubSpot Company
+    # Update" in the webhook branch (updateFields populated at deploy/operator-config
+    # time, not baked by this builder).
+    review_apply_update = {
+        "parameters": {"resource": "company", "operation": "update",
+                       "companyId": "={{ $json.hs_object_id }}", "updateFields": {}},
+        "id": nid("hu"), "name": "Review Apply Update",
+        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [x4, y4 + 100]}
+    nodes.append(review_apply_update)
+
+    conns.update(chain([review_trigger["name"], review_search["name"], "Review Extract Rows",
+                        apply_review["name"], if_stale["name"]]))
+    conns[if_stale["name"]] = {"main": [
+        [{"node": "Review Stale (NoOp)", "type": "main", "index": 0}],       # true: stale -> skip
+        [{"node": "Review Apply Update", "type": "main", "index": 0}],       # false: clean -> apply + clear
+    ]}
+
     notes = [
         {"content": (
             "## LV Scheduled Maintenance — CLOUD\n"
@@ -3254,6 +3311,23 @@ def build_scheduled_maintenance_cloud():
             "`lv_icp_scored_at` (Approach C, spec §0.7) — HubSpot derives those, the "
             "pipeline only ever queues off its own INPUTS."
         ), "x": 220, "y": 1080, "h": 340, "w": 520},
+        {"content": (
+            "### §22.2 Review loop (approve -> apply -> clear)\n"
+            "RevOps opens a HubSpot view: `lv_enrichment_needs_review=true OR "
+            "lv_icp_needs_review=true`. Evidence lives INSIDE "
+            "`lv_enrichment_review_candidate_json`/`lv_enrichment_provenance`, not a flat "
+            "column. Approving sets `lv_enrichment_review_approved=true` (+ "
+            "`lv_enrichment_reviewed_by`, convention not enforced by any property).\n\n"
+            "**Apply Review** (`n8n/code/reviewApply.js`) re-applies exactly the HELD "
+            "needs_review candidates `ENRICH_DECIDE_CO_CLOUD` wrote — a refetch "
+            "compare-and-set (a candidate whose `current_value` no longer matches the "
+            "live value is dropped, `stale=true`, record stays queued) and fail-closed "
+            "malformed-JSON handling. `Review Apply Update`'s `updateFields` is a "
+            "documented-equivalent placeholder (dynamic per-record patch, mirrors this "
+            "file's existing minimal-Update convention) — production wiring maps "
+            "`{...canonicalPatch, ...clearPatch}` onto the node's custom-properties UI at "
+            "deploy time."
+        ), "x": 800, "y": 1080, "h": 340, "w": 480},
     ]
     for n in notes:
         nodes.append({
