@@ -376,18 +376,33 @@ retroactively; its artifacts and tests are in the tree.
 
 - [x] 15.5-tiered-candidate-adjudication/PLAN.md — score research candidates with the existing A/R/G/T engine against a prior on file (self-confirmation-guarded), source recencyDate from Anthropic `page_age`, ground the judge in the full ranked set, and cap + assert judge invocations (completed 2026-07-23; see 15.5-01-SUMMARY.md)
 
-### Phase 16: Scheduled Workflows & Review Surface
+### Phase 16: n8n Cloud Deployment, Scheduled Workflows & Review Surface
 
-**Goal**: The background reconciliation layer runs on schedule, and needs-review records reach a human who can approve them.
-**Depends on**: Phase 15
-**Success Criteria**:
+**Goal**: The pipeline runs live on n8n Cloud, the background reconciliation layer runs on schedule, and needs-review records reach a human who can approve them — held to `docs/SYSTEM-CONTRACT.md`.
+**Depends on**: Phase 15.5
+**SCOPE EXPANDED 2026-07-23** after the n8n Cloud investigation this session. The original entry (criteria 1–4 below) covered only schedules + review surface. The deployment prerequisites discovered this session (criteria 5–9) are what actually gate going live, and this phase is **large — the planner should split it into "make it deployable" (5–8) and "make it complete" (1–4, 9), likely as separate plans/waves or even a Phase 16 / Phase 17 split.**
+
+**Deployment findings to build on (this session, verified live):**
+- n8n Cloud **Public API works** (`X-N8N-API-KEY`, `GET/POST /api/v1/workflows`, `/credentials`) — scripted deploy + credential creation are available. The MCP server (`create_workflow_from_code`, `publish_workflow`, `list_credentials`, version history/restore) is authoring-only (SDK code, not our JSON) — useful for activation/test/rollback, NOT import.
+- **`$env` is BLOCKED on Cloud** (`N8N_BLOCK_ENV_ACCESS_IN_NODE` defaults true) and **`$vars` is NOT licensed** (403 `feat:variables`). The 6 secrets (`ANTHROPIC_API_KEY`, `APOLLO_API_KEY`, `LUSHA_API_KEY`, `ZOOMINFO_CLIENT_ID/SECRET`, `HUBSPOT_PRIVATE_APP_TOKEN`) MUST become n8n **credentials** referenced by ID; the 6 config flags (`ALLOW_WEB_RESEARCH`, `ALLOW_SONNET_ESCALATION`, `MAX_WEB_RESEARCH_PER_RUN`, `MAX_SONNET_VALIDATIONS_PER_RUN`, `WEB_RESEARCH_MAX_SEARCHES`, `ANTHROPIC_SONNET_MODEL`) MUST become build-time inlined constants (AR-4 pattern). Enumerated live from the built workflow JSONs.
+- The instance is **empty** (0 workflows, 0 credentials) — clean deploy, but credentials must be provisioned first.
+- HubSpot side is fully migrated (33 properties live incl. the 9 review-surface on both objects; `_verified_at` cache keys exist → RT-5 unblocked).
+
+**Success Criteria:**
 
   1. Schedule-triggered n8n workflows exist for the three SJ predicates (spec §0.7): SJ-1 hourly input-gap scan, SJ-2 monthly stale refresh, SJ-3 15-minute requested poller. Predicates key on pipeline-owned inputs only — never `lv_icp_tier` / `lv_icp_scored_at` (Approach C).
   2. `build_cloud_workflows.py` emits scheduleTrigger nodes; `dedupeSweep.js` is wired into an active scheduled workflow (CLAUDE.md §13.4).
-  3. The §22.2 review loop closes: flag → decision JSON → RevOps approve → apply → clear, on the 9 review properties (created in Phase 15 or here, `lv_`-prefixed per PN-5).
+  3. The §22.2 review loop closes: flag → decision JSON → RevOps approve → apply → clear, on the 9 review properties (live on both objects from Phase 15).
   4. SJ-1..SJ-3 acceptance tests authored with this phase's plan (spec §0.7 defers them here).
+  5. **`$env` → credentials + build-time constants (critical path).** The 6 secrets become n8n credential references; the 6 config flags become inlined constants with the currency drift-guard pattern; local-replica (`$env` via docker) and Cloud (credentials) must not diverge without a parity story.
+  6. **Credential-provisioning script** — creates the n8n credentials via the Public API, two-key gated, same idiom as `sync_hubspot_properties.py`, no-creds skip path, never in the offline suite.
+  7. **Deploy script** over the guarded deployable set (`test_top_level_is_exactly_the_deployable_set`) — dry-run diff (create-vs-update), `X-N8N-API-KEY`, idempotent.
+  8. **Cloud-template companies-branch port** — `build_enrichment_cloud()` has no companies branch today (Phase 13 D4 deferred it here); the webhook production template gains the full ICP pipeline.
+  9. **RT-5 research caching** by domain, 180-day TTL keyed on the `_verified_at` properties — freshness-without-churn per SYSTEM-CONTRACT commitment 5.
 
-**Plans**: TBD
+**Evaluated against `docs/SYSTEM-CONTRACT.md`** — especially: non-clobber absolute *under live writes* (this is the first phase writing real record data), right-sized compute (no capable model on a cheap path), freshness-without-churn (criterion 9), and the closed-won red-flag as a live regression signal.
+
+**Plans**: TBD — large; planner should split deployable (5–8) from complete (1–4, 9).
 
 ## Milestone 3 Progress
 
