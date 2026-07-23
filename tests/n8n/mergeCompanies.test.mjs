@@ -165,19 +165,34 @@ test("mergeCompanies: recorded confidence matches deciding confidence for an ove
   assert.equal(decisions.find((d) => d.field === "lv_org_type").confidence, 90);
 });
 
-test("TA-4/TS-1/criterion-5: fresh vs stale page_age (recency) produce IDENTICAL canonicalPatch — recency changes ranking, changes nothing else", () => {
-  const wyong = findScoringCase("Wyong");
-  const candidate = { lv_org_type: "broadcaster" }; // ungated -> no evidence url required
+test("TA-4/TS-1/criterion-5: fresh vs stale page_age move the composite score but produce IDENTICAL canonicalPatch — recency changes ranking, changes nothing else", () => {
+  // Vary recency where it is ACTUALLY consumed (scoreResearchCandidates), not at the merge
+  // boundary where it never arrives. Two runs differ ONLY in page_age: fresh vs Wyong's
+  // 2021-stale date. `now` is injected so the age math is deterministic.
+  const now = "2026-07-23T00:00:00Z";
+  const rc = (verifiedAt) => ({
+    confidence: 90,
+    data: { lv_org_type: "broadcaster" },
+    recency_by_field: { lv_org_type: verifiedAt },
+    recency_source_by_field: { lv_org_type: "page_age" },
+  });
+  const fresh = scoreResearchCandidates(rc("2026-06-01"), {}, {}, { now });
+  const stale = scoreResearchCandidates(rc("2021-04-06"), {}, {}, { now }); // Wyong's real stale listing
 
-  const freshMerge = mergeCompanies({}, candidate, undefined, { source: "claude_web", confidence: 90 });
-  const staleMerge = mergeCompanies({}, candidate, undefined, { source: "claude_web", confidence: 90 });
-  // By construction, recency/page_age never reaches mergeCompanies at all today — this
-  // is exactly D2/D3's "the composite never touches the promotion gate" boundary,
-  // verified rather than merely asserted: prove it stays true regardless of whichever
-  // page_age (fresh vs Wyong's 2021-stale) the surrounding scoring layer computed.
-  void wyong; // (documents which fixture row's page_age motivates this test; see DELIBERATE-BREAK below)
+  // 1. Recency genuinely moves the score — the ordering-bias half is real, not inert.
+  const freshR = fresh.lv_org_type.research.components.R;
+  const staleR = stale.lv_org_type.research.components.R;
+  assert.ok(freshR > staleR, `fresh recency (${freshR}) must exceed stale (${staleR})`);
+  assert.notEqual(fresh.lv_org_type.research.score, stale.lv_org_type.research.score);
+
+  // 2. ...yet the PROMOTED value is identical, and both promote (TS-1: recency never gates
+  //    a value out, never flips it to false — it only reorders). Same value in both merges.
   const strip = (r) => JSON.parse(JSON.stringify(r).replace(/"verified_at":"[^"]*"/g, '"verified_at":"_"'));
-  assert.deepEqual(strip(freshMerge.canonicalPatch), strip(staleMerge.canonicalPatch));
+  const merge = (score) => mergeCompanies({}, { lv_org_type: score.lv_org_type.research.value },
+    undefined, { source: "claude_web", confidence: 90 }).canonicalPatch;
+  assert.equal(fresh.lv_org_type.research.value, stale.lv_org_type.research.value);
+  assert.deepEqual(strip(merge(fresh)), strip(merge(stale)));
+  assert.equal(merge(stale).lv_org_type, "broadcaster", "stale evidence still promotes — recency is bias, not a gate");
 });
 
 test("TA-4/TS-1: across every case in the fixture, no field anywhere in canonicalPatch or provenance is boolean false as a result of scoring or recency", () => {
