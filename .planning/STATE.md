@@ -5,15 +5,15 @@ milestone_name: Company Enrichment & ICP Research
 current_phase: 16
 current_phase_name: scheduled-workflows-review-surface
 status: executing
-stopped_at: "Phase 16-01 'Deployable' EXECUTED + COMMITTED (Tasks 1,3,4,5,6 — Task 2 decision resolved split-code-node). Criteria 5-8 + SJ-3 prerequisite all proven offline: deploy_n8n_workflows.py/provision_n8n_credentials.py (two-key-gated), ZoomInfo split-code-node (credential-bound Mint HTTP + secret-free cache/gate/enrich), CONFIG_FLAG_DEFAULTS/SECRET_ENV_NAMES parity infra (6 flags/6 secrets, tests/test_builder_flag_parity.py), full companies ICP branch ported into build_enrichment_cloud() with ENRICH_DECIDE_CO_CLOUD review-loop producer, and Cloud webhook write-path hardening (native Header Auth, event parser + object-type router, fail-closed lookup, WRITE_SAFETY_DEFAULTS gate). Full offline suite: 261 pytest / 123 node, 0 regressions. See 16-01-SUMMARY.md. NEXT: run /gsd-execute-phase 16 to continue with 16-02 'Complete' (criteria 1-4,9)."
-last_updated: "2026-07-23T05:54:11.592Z"
+stopped_at: "Phase 16-02 'Complete' EXECUTED + COMMITTED (Tasks 1-4, all criteria 1-4,9). SJ-1 (hourly input-gap, 3 OR'd groups) + SJ-2 (monthly stale refresh, epoch-ms Code node + Adapt step feeding the reused, unmodified Company Gate) + SJ-3 (15-min requested poller, Execute Workflow dispatch) all keyed on pipeline-owned inputs only (Approach C); dedupeSweep.js wired classify-only into a weekly contacts branch; §22.2 review loop closed via n8n/code/reviewApply.js (structural Approach-C field guard, fail-closed malformed JSON, all-or-nothing non-clobber compare-and-set); enrichmentGate.js's first direct RT-5 unit test. Full offline suite: 266 pytest / 147 node, 0 regressions. Builder rebuild deterministic. See 16-02-SUMMARY.md. Phase 16 (both plans) COMPLETE. NEXT: phase 16 was the last phase of Milestone 3 (v0.3) — proceed to milestone completion / ship review, or run /gsd-progress to confirm."
+last_updated: "2026-07-23T06:20:08.803Z"
 last_activity: 2026-07-23
-last_activity_desc: Phase 16-01 executed and committed
+last_activity_desc: Phase 16-02 executed and committed
 progress:
   total_phases: 17
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 18
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Project State
@@ -27,17 +27,19 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 
 ## Current Position
 
-Phase: 16 (scheduled-workflows-review-surface) — EXECUTING
-Plan: 16-01 COMPLETE (Tasks 1,3,4,5,6 committed); 16-02 not yet started
-Status: 16-01 verified (261 pytest / 123 node, 0 regressions) — ready to execute 16-02
-Last activity: 2026-07-23 — Phase 16-01 executed and committed
+Phase: 16 (scheduled-workflows-review-surface) — COMPLETE
+Plan: 16-01 COMPLETE (Tasks 1,3,4,5,6 committed); 16-02 COMPLETE (Tasks 1-4 committed)
+Status: 16-02 verified (266 pytest / 147 node, 0 regressions) — Phase 16 complete, Milestone 3 (v0.3) fully executed
+Last activity: 2026-07-23 — Phase 16-02 executed and committed
 
-Progress: [███████████░] 94% (16/17 phases)
+Progress: [██████████] 100% (17/17 phases)
 
 *(NOTE: `gsd state.update-progress` mis-derives this bar from `completed_plans/total_plans`
 across concatenated milestones — see MEMORY.md "gsd state.update-progress unsafe here".
-The 94% (16/17 phases) figure is hand-maintained per that note; do not trust an
-auto-recalculated value here without cross-checking ROADMAP.md.)*
+The 100% (17/17 phases) figure is hand-maintained per that note; do not trust an
+auto-recalculated value here without cross-checking ROADMAP.md. Cross-checked: ROADMAP.md's
+Milestone 3 Progress table now shows every phase 11-16 as Complete, and Phase 16's own
+checkbox is [x].)*
 
 ## Performance Metrics
 
@@ -73,6 +75,7 @@ auto-recalculated value here without cross-checking ROADMAP.md.)*
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 16 P01 | 110m | 6 tasks | 14 files |
+| Phase 16 P02 | 25min | 4 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -92,6 +95,7 @@ Decisions are logged in PROJECT.md Key Decisions table. SPEC-level architectural
 - Phase 15.5: RESEARCH.md's premises were corrected on read, not taken at face value — "only `winners` is consumed downstream" is FALSE for companies (`ENRICH_MERGE_CO` already reads `best[f].normalizedValue`; true only for contacts, out of scope by design), and "the judge is blind to the provider evidence" is directionally right but the mechanism is not a collapse — no provider ever emits a candidate for any judge-eligible field, so the second candidate scored is the PRIOR ON FILE, not a fourth provider. D1 (self-confirmation guard): a prior with no provenance entry (legacy/pre-pipeline) is independent; a prior whose provenance `source` is `human`/`manual` is independent; EVERYTHING ELSE — including every source this pipeline itself writes — is NOT independent, and unrecognized sources fail CLOSED. Without this, re-researching a company would let it agree with its own earlier (possibly wrong) guess and manufacture confidence invisibly. D2 (locked, REJECTS RESEARCH.md's literal TA-8): the A/R/G/T composite (0-1) NEVER feeds `mergeCompanies`' promotion gate (0-100, calibrated against model self-reported confidence) — with the common single-candidate case (G=0, A=0.88, R=1.0, T=0.78) the composite is 0.674→67, below both `lv_org_type`'s 80 and `lv_produces_content`'s 85 thresholds; shipping RESEARCH's literal recommendation would have silently stopped nearly every research promotion. `opts.confidenceByField` instead carries the JUDGE VERDICT's own per-field confidence (correct scale, currently-discarded, per-field by construction). D3: `scoreResearchCandidates` folds into the EXISTING Judge Gate node (zero new nodes/connections/HTTP calls; RO-2's graph-ancestry test covers the fold unchanged). D4: `scoreCandidates` gains ONE additive return key, `ranked` — every scored candidate (not just the argmax), since a prior on file can win the argmax while the judge still needs the researched value's own components. **Carried forward (out of scope, explicitly deferred):** n8n Cloud deployment / `$env`→credentials (Phase 16); SJ-1..SJ-3 schedule wiring + §22.2 review-surface wiring (Phase 16); RT-5 live TTL cache-hit skip logic (Phase 16); the HubSpot-side `lv_icp_fit_score`/`lv_icp_tier` formula (downstream, Approach C); the contacts branch (`mergeContacts`' raw-`winners` consumption is intentional, untouched); the dead `evidence.last_seen` field in `src/web_research.py`/`src/schemas.py` (not load-bearing for any of the six criteria); persisting the A/R/G/T composite into `lv_enrichment_provenance` (no criterion requires it); re-running the 20-row smoke live to capture real `page_age` values (tests are offline-only; the fixture layers synthetic page_age/prior_on_file onto the real recorded rows instead).
 - Phase 16-01: ZoomInfo credential architecture (Task 2 checkpoint, resolved): split-code-node — a credential-bound Mint HTTP node (generic Basic Auth) is the ONLY place client_id/client_secret are ever read; three secret-free Code nodes (Token Gate / Cache Token / Enrich) handle caching and the enrich call using nothing but the short-lived bearer token. Applied to both the contacts and companies ZoomInfo paths. Tradeoff vs the LOCAL-LIVE single-node body: a 401 during Enrich clears the cache so the NEXT run re-mints, but this run does not retry inline (an inline retry would need the secret, which the Enrich node deliberately never touches). `CONFIG_FLAG_DEFAULTS`/`SECRET_ENV_NAMES` are the single source both `build_enrichment_local_live()` and `build_enrichment_cloud()` read for the 6 research/judge flags and 6 provider secrets — 4 shared JS-body constants became `cloud: bool`-parameterized functions so a flag/secret cannot diverge between builders undetected (`tests/test_builder_flag_parity.py`). The Cloud webhook's shared-secret gate (CLAUDE.md §18.1) uses n8n's NATIVE Webhook Header Auth (credential-bound), not a Code node — a Code node would need to read the secret value via `$env`/`$vars`, which Criterion 5's zero-env-var guard forbids anywhere in the built workflow, or a baked literal, which would commit the secret value to source (explicitly prohibited). `WRITE_SAFETY_DEFAULTS` (Cloud-only, `ALLOW_HUBSPOT_RECORD_WRITES` default false + a create switch + a test-record allowlist) is deliberately kept OUT of the parity-guarded `CONFIG_FLAG_DEFAULTS` set since LOCAL/LOCAL-LIVE never write HubSpot. Adapt Search/Adapt Company Search now distinguish confirmed-absent (200+0 results) from lookup-FAILED (non-200/malformed), tagging `lookup_failed=true`; the Gate wrapper (not the frozen `enrichmentGate.js`) overrides `action` create->skip whenever that flag is set, so a transient search failure never creates a duplicate record. `ENRICH_DECIDE_CO_CLOUD` is the review-loop PRODUCER 16-02 depends on: on any `needs_review` decision it writes `lv_enrichment_needs_review`/`lv_enrichment_status`/`lv_enrichment_review_reason`/`lv_enrichment_review_candidate_json` (the held candidates), reusing `mergeCompanies`' own `stableStringify`. Full offline suite after 16-01: 261 pytest / 123 node, 0 regressions. See `16-01-SUMMARY.md`.
 - Phase 15: provenance model (coordinator decision, supersedes RESEARCH's 121-145 flat-suffix design) — per-field enrichment metadata rides in ONE JSON text property per object (`lv_enrichment_provenance`/`lv_contact_enrichment_provenance`), not ~63 flat `lv_<field>_source/_confidence/...` properties; the 4 `_verified_at` cache-key datetimes are the sole carve-out that stays top-level/queryable (RT-5/SJ-2). Staging folds into the same blob (the `value` key per entry) — no `lv_waterfall_*`/`lv_claude_web_*` properties exist; `source_registry.yaml` stays documentation-only. Byte-identical serialization is load-bearing: Python `json.dumps(sort_keys=True, separators=(",",":"), ensure_ascii=False)` vs JS `stableStringify()` (recursive sorted-key stringify) — proven with a non-ASCII fixture row and two deliberate-breaks, one of which (`ensure_ascii=False` removal) was performed once against the real source file and restored via file copy. ICP write paths retired (Approach C, criterion 4): `src/merge_policy.py`/`main.py`/`field_policy.yaml`/`mergeCompanies.js` no longer write `lv_icp_fit_score`/`lv_icp_tier`; the scoring engine still computes them internally for routing. PN-1 renamed `linkedin_url`/`persona_group` → `lv_linkedin_url`/`lv_persona_group` everywhere they round-trip to a HubSpot property, decoupled from the raw upload/scored-winner READ-side field name (which stays unprefixed — it is not itself a property). Sync/rollback/canary tooling chose per-property individual creates over HubSpot's `batch/create` endpoint (its partial-failure semantics are undocumented; the undo manifest's correctness is safety-critical). **Portal untouched this phase** — every live script's no-credentials skip path is what ran; the live property creation, baseline snapshot, and canary proof are OPERATOR RUNBOOK steps (15-01-SUMMARY.md).
+- [Phase ?]: Phase 16-02: reviewApply's Approach-C guard is structural (imports mergeCompanies' own DEFAULT_COMPANY_POLICY as the field allowlist) rather than a hardcoded blocklist; non-clobber compare-and-set is all-or-nothing per record (not per-field) to avoid a partial-apply/re-check loop against the un-cleared candidate JSON.
 
 ### Pending Todos
 
@@ -138,7 +142,7 @@ Items carried forward to later milestones:
 
 ## Session Continuity
 
-Last session: 2026-07-23T05:54:11.586Z
-Stopped at: Phase 16-01 "Deployable" executed and committed as a continuation agent — Tasks 3, 4, 5, 6 (Task 1 tracer + Task 2 ZoomInfo-architecture decision predate this continuation). 5 commits total for the plan (34e6dcf, d87b8bb, a444fc7, a8c4d5a, 601c787). Full offline suite green: 261 pytest / 123 node, 0 regressions. Builder rebuild confirmed byte-identical. Frozen Code files (mergeCompanies.js, judge.js, enrichmentGate.js, webResearch.js) untouched. Zero live network calls, zero HubSpot writes, zero n8n Cloud calls — the two-key deploy/provision gates never fired. See 16-01-SUMMARY.md for full deviation log (test_builder_flag_parity.py commit-boundary deferral, native webhook Header Auth in place of a Verify-Secret Code node, documented direct-field shim on Build Identity).
+Last session: 2026-07-23T06:20:00.000Z
+Stopped at: Phase 16-02 "Complete" executed and committed — Tasks 1-4, all 4 commits (1b436e1, 48212ce, 9a7fd4a, 595026b). SJ-1/SJ-2/SJ-3 scheduled-maintenance workflow built (build_scheduled_maintenance_cloud() -> n8n/wf_scheduled_maintenance_cloud.json, added to the ACTIVE deployable set); dedupeSweep.js wired classify-only into a weekly contacts branch; §22.2 review loop closed via n8n/code/reviewApply.js (structural Approach-C guard via mergeCompanies' own DEFAULT_COMPANY_POLICY allowlist, fail-closed malformed-JSON handling, all-or-nothing refetch compare-and-set); enrichmentGate.js's first-ever direct unit test proves RT-5's fresh/stale/never-verified behavior. Full offline suite green: 266 pytest / 147 node, 0 regressions. Builder rebuild confirmed deterministic (only wf_scheduled_maintenance_cloud.json changed on rebuild). Frozen Code files (mergeCompanies.js, dedupeSweep.js, enrichmentGate.js, judge.js, webResearch.js) untouched. Zero live network calls, zero HubSpot writes, zero n8n Cloud calls. One self-caught deviation (Rule 1): reviewApply.js's own doc comment initially named the two Approach-C-excluded fields in prose, tripping its own acceptance-check grep — reworded before commit. See 16-02-SUMMARY.md for full detail.
 Resume file: None
-Next command: `/gsd-execute-phase 16` to continue with 16-02 "Complete" (criteria 1-4,9 — SJ-1/SJ-2/SJ-3 scheduled workflows, §22.2 review-surface wiring, RT-5 direct unit test). 16-02 depends_on 16-01, which is now satisfied.
+Next command: Phase 16 (both plans) is complete — this was the last phase of Milestone 3 (v0.3, "Company Enrichment & ICP Research"). Run `/gsd-progress` or the milestone-completion workflow to confirm milestone status and decide next steps (live operator runbook for 16-01+16-02, or a new milestone). The live operator runbook (n8n Cloud deploy/credential provisioning, live HubSpot property creation, live activation + review walkthrough) remains outstanding and non-gating, per both plans' own Manual-Only sections.

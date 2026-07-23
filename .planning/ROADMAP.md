@@ -267,7 +267,7 @@ retroactively; its artifacts and tests are in the tree.
 - [x] **Phase 14: Judge Wiring** - Haiku classify → Sonnet escalate per CLAUDE.md §15, pointed at identity/classification not numeric plausibility (completed 2026-07-21)
 - [x] **Phase 15: HubSpot Property Migration** - Create missing metadata properties; unblocks research caching. Fully reversible (archive + recreate-by-name within 90 days), dry-run first (completed 2026-07-22; tooling offline-proven, live operator runbook pending)
 - [x] **Phase 15.5: Tiered Candidate Adjudication** (INSERTED 2026-07-22) - Candidates stay parallel + scored through to the judge instead of collapsing to an argmax winner; judge grounds in web search AND the A/R/G/T scoring components. Tiered: deterministic collapse for size/firmographics (JG-2 — LLMs are poorly calibrated on numeric plausibility, RO-2 intent preserved), judge adjudicates ICP-semantic fields (org_type, produces_content, vendor flags) where a wrong answer moves tier or fires a veto. Research candidates gain a recencyDate so recency acts as ordering bias (neutral when unknown), at parity with the provider branch. Completed 2026-07-23.
-- [ ] **Phase 16: Scheduled Workflows & Review Surface** - Schedule-triggered n8n workflows (SJ-1..SJ-3 predicates), dedupeSweep wiring, §22.2 review loop on the 9 missing review properties
+- [x] **Phase 16: Scheduled Workflows & Review Surface** - Schedule-triggered n8n workflows (SJ-1..SJ-3 predicates), dedupeSweep wiring, §22.2 review loop on the 9 missing review properties (completed 2026-07-23; tooling offline-proven, live operator runbook pending)
 
 ## Phase Details
 
@@ -403,14 +403,14 @@ retroactively; its artifacts and tests are in the tree.
 
 **Evaluated against `docs/SYSTEM-CONTRACT.md`** — especially: non-clobber absolute *under live writes* (this is the first phase writing real record data), right-sized compute (no capable model on a cheap path), freshness-without-churn (criterion 9), and the closed-won red-flag as a live regression signal.
 
-**Plans**: 1/2 plans executed
+**Plans**: 2/2 plans executed
 **Wave 1**
 
 - [x] 16-01-PLAN.md — Deployable (Criteria 5–8 + SJ-3 property prerequisite): env→credentials + build-time constants, ZoomInfo credential decision, companies-branch port, deploy + credential-provisioning scripts [wave 1]
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 16-02-PLAN.md — Complete (Criteria 1–4, 9): SJ-1/2/3 schedule workflows, dedupeSweep wiring, §22.2 review loop, RT-5 caching test [wave 2, depends_on 16-01]
+- [x] 16-02-PLAN.md — Complete (Criteria 1–4, 9): SJ-1/2/3 schedule workflows, dedupeSweep wiring, §22.2 review loop, RT-5 caching test [wave 2, depends_on 16-01]
 
 ## Milestone 3 Progress
 
@@ -422,4 +422,4 @@ retroactively; its artifacts and tests are in the tree.
 | 14. Judge Wiring | 1/1 | Complete | 2026-07-21 |
 | 15. HubSpot Property Migration | 1/1 | Complete | 2026-07-22 |
 | 15.5. Tiered Candidate Adjudication (INSERTED) | 1/1 | Complete | 2026-07-23 |
-| 16. Scheduled Workflows & Review Surface | 0/2 | Planned | — |
+| 16. Scheduled Workflows & Review Surface | 2/2 | Complete | 2026-07-23 |
