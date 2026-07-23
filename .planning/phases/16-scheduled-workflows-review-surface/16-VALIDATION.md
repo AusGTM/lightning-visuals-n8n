@@ -43,8 +43,10 @@ Baseline before this phase: 201 pytest / 123 node passing (Phase 15.5). New test
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 16-01-XX | 01 | 1 | Criteria 5–8 | T-16-01 / — | secrets never inlined into workflow JSON; deploy/creds scripts skip without two keys; local-replica & Cloud builders share one flag/secret source (parity) | unit | `python -m pytest -q` (incl. `tests/test_builder_flag_parity.py`) | ❌ W0 | ⬜ pending |
-| 16-02-XX | 02 | 2 | Criteria 1–4, 9 | — | SJ predicates key on inputs only, never lv_icp_tier | unit | `python -m pytest -q && node --test tests/n8n/` | ❌ W0 | ⬜ pending |
+| 16-01-XX | 01 | 1 | Criteria 5–8 | T-16-01 / — | secrets never inlined into workflow JSON; deploy/creds scripts skip without two keys (no fail-open instance guard); local-replica & Cloud builders share one flag/secret source (parity); credentials bound per-node by name→id map (fail-closed on unresolvable id) | unit | `python -m pytest -q` (incl. `tests/test_builder_flag_parity.py`) | ❌ W0 | ⬜ pending |
+| 16-01-06 | 01 | 1 | Reviews #7/#8/#9 | T-16-01-07/08/09 | Cloud webhook authenticated + HubSpot-event-parsed; lookup failure fails closed (never create); record writes gated by ALLOW_HUBSPOT_RECORD_WRITES (default false); no fixture emitter | unit | `python -m pytest tests/test_cloud_write_path.py -q` | ❌ W0 | ⬜ pending |
+| 16-02-XX | 02 | 2 | Criteria 1–4, 9 | — | SJ predicates key on inputs only, never lv_icp_tier; each SJ branch has a terminal dispatch; SJ-2 Adapt step feeds Company Gate | unit | `python -m pytest -q && node --test tests/n8n/` | ❌ W0 | ⬜ pending |
+| 16-02-04 | 02 | 2 | Criterion 3 / Reviews #2/#3 | T-16-02-02/06/07 | reviewApply consumes the exact producer candidate-JSON shape; refetch compare-and-set (no clobber of newer manual edit); malformed JSON fails closed | unit | `node --test tests/n8n/reviewLoop.test.mjs` | ❌ W0 | ⬜ pending |
 
 *Filled concretely by the planner per task. Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -55,7 +57,9 @@ Baseline before this phase: 201 pytest / 123 node passing (Phase 15.5). New test
 - [ ] Acceptance-test stubs for SJ-1/SJ-2/SJ-3 schedule predicates (spec §0.7 defers them to this phase)
 - [ ] `test_top_level_is_exactly_the_deployable_set` guard for the deploy script's deployable set
 - [ ] Parity test (`tests/test_builder_flag_parity.py`, 16-01 Task 4): both enrichment builders source the 6 flags + 6 secrets from one shared constant (`CONFIG_FLAG_DEFAULTS`/`SECRET_ENV_NAMES`), so local-replica ($env via docker) and Cloud (credentials/AR-4 constants) cannot diverge silently
-- [ ] Non-clobber-under-live-writes property test (first phase with real record writes)
+- [ ] Credential-binding + no-fail-open instance guard test (`tests/test_deploy_n8n_workflows.py`, 16-01 Task 1): `bind_credentials` attaches per-node ids from the name→id map and fails closed on an unresolvable id; `_instance_ok()` refuses a non-`.n8n.cloud` host when N8N_EXPECTED_URL is unset (reviews #1/#4)
+- [ ] Cloud write-path safety test (`tests/test_cloud_write_path.py`, 16-01 Task 6): webhook auth + event parser present, real HubSpot filters + hs_object_id, lookup-failure fails closed (never create), write-safety gate default-off, no fixture emitter (reviews #6/#7/#8/#9)
+- [ ] Non-clobber-under-live-writes property test (first phase with real record writes) — realized as `tests/test_cloud_write_path.py` (fail-closed lookup + write gate) + `tests/n8n/reviewLoop.test.mjs` (approval-time refetch compare-and-set + malformed-JSON fail-closed, reviews #2/#3)
 
 *Planner authors the exact file paths in each plan.*
 
