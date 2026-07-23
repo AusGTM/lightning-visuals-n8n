@@ -92,8 +92,8 @@ def test_every_groupname_is_a_declared_group():
 
 def test_exact_counts_guard_against_manifest_drift():
     cfg = load_config()
-    assert len(cfg["companies"]["properties"]) == 19
-    assert len(cfg["contacts"]["properties"]) == 14
+    assert len(cfg["companies"]["properties"]) == 21
+    assert len(cfg["contacts"]["properties"]) == 16
     assert len(cfg["companies"]["groups"]) == 1
     assert len(cfg["contacts"]["groups"]) == 1
 
@@ -105,3 +105,31 @@ def test_lv_org_type_and_lv_produces_content_not_listed_for_creation():
     company_names = {p["name"] for p in cfg["companies"]["properties"]}
     assert "lv_org_type" not in company_names
     assert "lv_produces_content" not in company_names
+
+
+def test_sj3_control_properties_exist_on_both_objects():
+    # Phase 16 Task 3 — SJ-3 predicate prerequisite (CLAUDE.md §4.1).
+    cfg = load_config()
+    for object_type in ("companies", "contacts"):
+        names = {p["name"] for p in cfg[object_type]["properties"]}
+        assert "lv_enrichment_requested" in names, f"{object_type} missing lv_enrichment_requested"
+        assert "lv_enrichment_status" in names, f"{object_type} missing lv_enrichment_status"
+
+
+def test_lv_enrichment_requested_has_explicit_true_false_options():
+    cfg = load_config()
+    for object_type in ("companies", "contacts"):
+        prop = next(p for p in cfg[object_type]["properties"] if p["name"] == "lv_enrichment_requested")
+        assert prop["type"] == "bool"
+        values = {opt["value"] for opt in prop["options"]}
+        assert values == {"true", "false"}
+
+
+def test_lv_enrichment_status_has_exactly_six_status_values():
+    expected = {"queued", "running", "complete", "failed", "needs_review", "skipped"}
+    cfg = load_config()
+    for object_type in ("companies", "contacts"):
+        prop = next(p for p in cfg[object_type]["properties"] if p["name"] == "lv_enrichment_status")
+        assert prop["type"] == "enumeration"
+        values = {opt["value"] for opt in prop["options"]}
+        assert values == expected

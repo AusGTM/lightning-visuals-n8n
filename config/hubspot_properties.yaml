@@ -285,6 +285,50 @@ companies:
     fieldType: textarea
     groupName: lv_enrichment
     options: []
+  - name: lv_enrichment_requested
+    label: LV Enrichment Requested
+    type: bool
+    fieldType: booleancheckbox
+    groupName: lv_enrichment
+    options:
+    - label: 'Yes'
+      value: 'true'
+      displayOrder: 0
+      hidden: false
+    - label: 'No'
+      value: 'false'
+      displayOrder: 1
+      hidden: false
+  - name: lv_enrichment_status
+    label: LV Enrichment Status
+    type: enumeration
+    fieldType: select
+    groupName: lv_enrichment
+    options:
+    - label: Queued
+      value: queued
+      displayOrder: 0
+      hidden: false
+    - label: Running
+      value: running
+      displayOrder: 1
+      hidden: false
+    - label: Complete
+      value: complete
+      displayOrder: 2
+      hidden: false
+    - label: Failed
+      value: failed
+      displayOrder: 3
+      hidden: false
+    - label: Needs Review
+      value: needs_review
+      displayOrder: 4
+      hidden: false
+    - label: Skipped
+      value: skipped
+      displayOrder: 5
+      hidden: false
 contacts:
   groups:
   - name: lv_enrichment_contacts
@@ -398,3 +442,47 @@ contacts:
     fieldType: textarea
     groupName: lv_enrichment_contacts
     options: []
+  - name: lv_enrichment_requested
+    label: LV Enrichment Requested
+    type: bool
+    fieldType: booleancheckbox
+    groupName: lv_enrichment_contacts
+    options:
+    - label: 'Yes'
+      value: 'true'
+      displayOrder: 0
+      hidden: false
+    - label: 'No'
+      value: 'false'
+      displayOrder: 1
+      hidden: false
+  - name: lv_enrichment_status
+    label: LV Enrichment Status
+    type: enumeration
+    fieldType: select
+    groupName: lv_enrichment_contacts
+    options:
+    - label: Queued
+      value: queued
+      displayOrder: 0
+      hidden: false
+    - label: Running
+      value: running
+      displayOrder: 1
+      hidden: false
+    - label: Complete
+      value: complete
+      displayOrder: 2
+      hidden: false
+    - label: Failed
+      value: failed
+      displayOrder: 3
+      hidden: false
+    - label: Needs Review
+      value: needs_review
+      displayOrder: 4
+      hidden: false
+    - label: Skipped
+      value: skipped
+      displayOrder: 5
+      hidden: false
