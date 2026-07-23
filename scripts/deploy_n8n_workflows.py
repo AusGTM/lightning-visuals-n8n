@@ -42,6 +42,9 @@ CRED_ID_MAP_PATH = ROOT / ".n8n_credential_ids.json"
 # Lusha/Apollo/Anthropic all share the httpHeaderAuth generic credential TYPE but are three
 # DIFFERENT credential objects — disambiguated here by node name, not by type (review #1).
 NODE_CREDENTIAL_MAP = {
+    # Task 6: the shared-secret webhook gate (CLAUDE.md §18.1) is the Webhook Trigger
+    # node's OWN native Header Auth, bound to this credential — never a Code node.
+    "Webhook Trigger": {"cred_type": "httpHeaderAuth", "cred_name": "LV Enrichment Webhook"},
     "HubSpot Search": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot Create": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot Update": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},

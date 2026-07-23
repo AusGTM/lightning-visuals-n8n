@@ -718,6 +718,51 @@ def _env_secret_expr(name: str) -> str:
     return "{{ ($vars && $vars." + name + ") || $env." + name + " }}"
 
 
+# ---- Cloud-only write-safety gate (Phase 16 Task 6, review #9) --------------
+# SEPARATE from CONFIG_FLAG_DEFAULTS (parity-guarded, tests/test_builder_flag_parity.py
+# asserts exactly 6 flags) — these are Cloud-write-only; LOCAL/LOCAL-LIVE never write a
+# HubSpot record (Decide Action there is a dry-run echo), so they must NOT enter the
+# parity set. Baked into ENRICH_DECIDE_CLOUD/ENRICH_DECIDE_CO_CLOUD the same AR-4 way as
+# CONFIG_FLAG_DEFAULTS: an activated-but-not-write-enabled Cloud workflow performs zero
+# record writes (ALLOW_HUBSPOT_RECORD_WRITES defaults false), and even once enabled, a
+# create additionally requires ALLOW_HUBSPOT_CREATE, and every write requires the target
+# record's domain or hs_object_id to be on the TEST_RECORD_* allowlist (an empty
+# allowlist denies everything — no accidental "allow all" via an unset env var).
+WRITE_SAFETY_DEFAULTS = {
+    "ALLOW_HUBSPOT_RECORD_WRITES": "false",
+    "ALLOW_HUBSPOT_CREATE": "false",
+    "TEST_RECORD_DOMAINS": "",
+    "TEST_RECORD_IDS": "",
+}
+
+
+def _write_safety_const(name: str) -> str:
+    """Always-baked Cloud build-time constant — no $env/$vars form exists (unlike
+    _flag_const) because there is no local-live counterpart to keep in parity with."""
+    assert name in WRITE_SAFETY_DEFAULTS, f"unknown write-safety constant: {name}"
+    return f"const {name} = {json.dumps(WRITE_SAFETY_DEFAULTS[name])};"
+
+
+# Shared write-safety gate function, embedded verbatim into both ENRICH_DECIDE_CLOUD and
+# ENRICH_DECIDE_CO_CLOUD (Code nodes cannot require() each other — same no-shared-runtime
+# constraint that governs every other inlined module in this file).
+WRITE_SAFETY_GATE_JS = (
+    "\n".join(_write_safety_const(k) for k in WRITE_SAFETY_DEFAULTS)
+    + r"""
+function _writeSafetyAllows(action, hsObjectId, domain) {
+  if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== "true") return false;
+  if (action === "create" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== "true") return false;
+  const allowedDomains = String(TEST_RECORD_DOMAINS).split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+  const allowedIds = String(TEST_RECORD_IDS).split(",").map((s) => s.trim()).filter(Boolean);
+  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything
+  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;
+  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;
+  return false;
+}
+"""
+)
+
+
 # ---- shared inlined Code-node bodies (Cloud + local both use these) ----------
 
 # Build identity search keys from the trigger payload (email/domain/linkedin).
@@ -754,7 +799,15 @@ const NOW = new Date().toISOString();
 return $input.all().map((it) => {
   const row = it.json;
   const gate = decideAction(row.existingRecord || {}, REQUIRED, POLICY, NOW);
-  return { json: { ...row, gate, action: gate.action } };
+  let action = gate.action;
+  // Fail-closed (Task 6, review #8): a HubSpot lookup FAILURE (non-200/malformed) is
+  // tagged lookup_failed=true by the Adapt step and MUST NOT be treated as confirmed-
+  // absent — decideAction({}) returns "create" (enrichmentGate.js:61, frozen), which
+  // would create a DUPLICATE record on every transient search failure. This override
+  // lives in the wrapper, never in the frozen module. row.lookup_failed is undefined
+  // for LOCAL/LOCAL-LIVE (their Adapt Search never sets it) — a no-op there.
+  if (row.lookup_failed === true && action === "create") action = "skip";
+  return { json: { ...row, gate, action } };
 });
 """
 
@@ -836,7 +889,17 @@ return $input.all().map((it) => {
 });
 """
 
-# CLOUD: adapt the real HubSpot search node output into an existingRecord.
+# CLOUD (also used by LOCAL-LIVE, same onError:continueRegularOutput HTTP shape): adapt
+# the real HubSpot search node output into an existingRecord. Task 6 hardening (review
+# #8): distinguishes confirmed-absent (200 + zero results -> {} -> correct CREATE) from
+# lookup-FAILED (missing/errored item -> {} would be INDISTINGUISHABLE from confirmed-
+# absent to enrichmentGate.js's _isEmpty({}) check, which returns "create" — a duplicate-
+# record risk on every transient failure). A failed lookup is tagged lookup_failed=true;
+# ENRICH_GATE's wrapper (companies: ENRICH_CO_GATE) overrides "create" -> "skip" whenever
+# that flag is set, so a failure never reaches a write. hs_object_id is preserved from
+# the result's top-level `id` (HubSpot's v3 API always returns it, independent of the
+# requested `properties` list) so HubSpot Update has a real target instead of the
+# previously-hardcoded, never-set contact_id.
 ENRICH_ADAPT_SEARCH = r"""// Adapt Search -> existingRecord — CLOUD variant.
 // Maps the real HubSpot search node output (per row, same order) into the
 // existingRecord shape enrichmentGate expects. 0 results => {} => CREATE.
@@ -844,15 +907,24 @@ const rows = $('Build Identity').all();
 const search = $('HubSpot Search').all();
 return rows.map((it, i) => {
   const row = it.json;
-  const res = search[i] && search[i].json;
-  let existingRecord = {};
-  if (res) {
-    if (res.properties) existingRecord = res.properties;                 // single object
-    else if (Array.isArray(res.results) && res.results[0]) {             // search list
-      existingRecord = res.results[0].properties || res.results[0] || {};
-    } else if (res.id) existingRecord = res;
+  const item = search[i];
+  const failed = !item || item.error || (item.json && item.json.error);
+  if (failed) {
+    return { json: { ...row, existingRecord: {}, lookup_failed: true } };
   }
-  return { json: { ...row, existingRecord } };
+  const res = item.json || {};
+  let existingRecord = {};
+  if (Array.isArray(res.results)) {                                     // search list
+    if (res.results.length) {
+      const first = res.results[0];
+      existingRecord = { ...(first.properties || {}), hs_object_id: first.id };
+    }
+  } else if (res.properties) {                                          // single object
+    existingRecord = { ...res.properties, hs_object_id: res.id };
+  } else if (res.id) {
+    existingRecord = res;
+  }
+  return { json: { ...row, existingRecord, lookup_failed: false } };
 });
 """
 
@@ -932,7 +1004,9 @@ return $input.all().map((it) => {
 # CLOUD: compute action + property patch; IF nodes route to real HubSpot write.
 ENRICH_DECIDE_CLOUD = r"""// Decide Action — CLOUD variant.
 // Computes action + the HubSpot property patch from the scored+merged winners.
-// The IF nodes route create -> HubSpot Create, enrich -> HubSpot Update (GATED).
+// The IF nodes route create -> HubSpot Create, enrich -> HubSpot Update — GATED by the
+// write-safety check below (Task 6, review #9): an activated-but-not-write-enabled
+// workflow always returns action "write_blocked", which neither IF node matches.
 // Phase 15: this is the SINGLE serialization point for the provenance blob — the
 // stamper (mergeContacts.js) returns the parsed provenance object, never a string.
 function _sortedForStringify(v) {
@@ -953,15 +1027,21 @@ function _buildContactPatch(merge) {
   }
   return patch;
 }
-
+""" + WRITE_SAFETY_GATE_JS + r"""
 return $input.all().map((it) => {
   const row = it.json;
-  const action = row.action;
   const properties = _buildContactPatch(row.merge);
+  const hs_object_id = (row.existingRecord && row.existingRecord.hs_object_id) || null;
+  const domain = row.identity_keys && row.identity_keys.domain;
+  let action = row.action;
+  if ((action === "create" || action === "enrich") &&
+      !_writeSafetyAllows(action, hs_object_id, domain)) {
+    action = "write_blocked";
+  }
   return { json: {
     action,
     object_type: row.object_type || "contacts",
-    contact_id: (row.existingRecord && row.existingRecord.hs_object_id) || null,
+    hs_object_id,
     gap_flag: row.gap_flag === true,
     properties
   }};
@@ -1361,21 +1441,30 @@ HS_CO_SEARCH_BODY_EXPR = (
     'limit: 5 }) }}'
 )
 
+# Task 6 hardening (review #8) — same contract as ENRICH_ADAPT_SEARCH's fail-closed
+# lookup_failed tagging + hs_object_id preservation; see that constant's comment.
 ENRICH_ADAPT_CO_SEARCH = r"""// Adapt Company Search -> existingRecord — companies branch.
 // Same contract as the contacts Adapt Search: per-row, same order, 0 results => {} => CREATE.
 const rows = $('Build Company Identity').all();
 const search = $('HubSpot Company Search').all();
 return rows.map((it, i) => {
   const row = it.json;
-  const res = search[i] && search[i].json;
-  let existingRecord = {};
-  if (res) {
-    if (res.properties) existingRecord = res.properties;                 // single object
-    else if (Array.isArray(res.results) && res.results.length) {
-      existingRecord = res.results[0].properties || {};                  // search envelope
-    }
+  const item = search[i];
+  const failed = !item || item.error || (item.json && item.json.error);
+  if (failed) {
+    return { json: { ...row, existingRecord: {}, lookup_failed: true } };
   }
-  return { json: { ...row, existingRecord } };
+  const res = item.json || {};
+  let existingRecord = {};
+  if (Array.isArray(res.results)) {
+    if (res.results.length) {
+      const first = res.results[0];
+      existingRecord = { ...(first.properties || {}), hs_object_id: first.id };  // search envelope
+    }
+  } else if (res.properties) {
+    existingRecord = { ...res.properties, hs_object_id: res.id };                // single object
+  }
+  return { json: { ...row, existingRecord, lookup_failed: false } };
 });
 """
 
@@ -1398,7 +1487,10 @@ const NOW = new Date().toISOString();
 return $input.all().map((it) => {
   const row = it.json;
   const gate = decideAction(row.existingRecord || {}, REQUIRED, POLICY, NOW);
-  return { json: { ...row, gate, action: gate.action } };
+  let action = gate.action;
+  // Fail-closed (Task 6, review #8) — see ENRICH_GATE's identical comment (contacts).
+  if (row.lookup_failed === true && action === "create") action = "skip";
+  return { json: { ...row, gate, action } };
 });
 """
 
@@ -1885,9 +1977,9 @@ return $input.all().map((it) => {
 ENRICH_DECIDE_CO_CLOUD = inline("taxonomy.generated.js", "mergeCompanies.js") + r"""
 
 // --- n8n wrapper (companies): Decide Company Action — CLOUD variant ---
+""" + WRITE_SAFETY_GATE_JS + r"""
 return $input.all().map((it) => {
   const row = it.json;
-  const action = row.action;
   const merge = row.merge;
   const decisions = (merge && merge.decisions) || [];
   const needsReview = decisions.filter((d) => d.decision === "needs_review");
@@ -1910,10 +2002,18 @@ return $input.all().map((it) => {
     properties.lv_enrichment_status = "complete";
   }
 
+  const hs_object_id = (row.existingRecord && row.existingRecord.hs_object_id) || null;
+  const domain = row.identity_keys && row.identity_keys.domain;
+  let action = row.action;
+  if ((action === "create" || action === "enrich") &&
+      !_writeSafetyAllows(action, hs_object_id, domain)) {
+    action = "write_blocked";
+  }
+
   return { json: {
     action,
     object_type: "companies",
-    hs_object_id: (row.existingRecord && row.existingRecord.hs_object_id) || null,
+    hs_object_id,
     gap_flag: row.gap_flag === true,
     needs_review: needsReview.length > 0,
     properties,
@@ -2421,6 +2521,43 @@ def _route_action_switch(name, x, y):
     }
 
 
+# Parse HubSpot Event — CLOUD only (Task 6, CLAUDE.md §18.2/§18.3). Normalizes the
+# inbound webhook body (a HubSpot private-app event array, or a single event object) and
+# maps HubSpot's raw objectType strings onto this workflow's two branch names. The
+# shared-secret check (CLAUDE.md §18.1) is done by the Webhook Trigger node's OWN native
+# Header Auth (authentication="headerAuth", credential-bound — never a Code node reading
+# the secret value, and never $env/$vars, matching Criterion 5's zero-env-var guard).
+ENRICH_PARSE_EVENT_CLOUD = r"""// Parse HubSpot Event — CLOUD variant.
+function normalizeObjectType(input) {
+  const v = String(input || "").toLowerCase();
+  if (["contact", "contacts", "0-1"].includes(v)) return "contacts";
+  if (["company", "companies", "0-2"].includes(v)) return "companies";
+  return "unknown";
+}
+const body = $json.body ?? $json;
+const events = Array.isArray(body) ? body : [body];
+return events.map((event) => {
+  const object_type = normalizeObjectType(event.objectType || event.objectTypeId);
+  return { json: {
+    event_id: `${event.subscriptionId || "sub"}:${event.objectId}:${event.eventId || event.occurredAt}`,
+    object_id: event.objectId != null ? String(event.objectId) : null,
+    object_type,
+    property_name: event.propertyName || null,
+    event_type: event.subscriptionType || event.eventType || null,
+    occurred_at: event.occurredAt || new Date().toISOString(),
+    // MINIMUM-scope shim (Task 6, documented per the plan's own budget carve-out):
+    // Build Identity/Build Company Identity still read direct body fields (email/
+    // domain/...) rather than fetching the record fresh by object_id — restructuring
+    // them to fetch-by-id is a larger port than this task's budget. Spreading the raw
+    // event here keeps that shim working for a direct-field test payload; a genuine
+    // HubSpot event carries none of these fields, so on the real path Build Identity
+    // sees only object_id/object_type until a follow-up phase adds the fetch-by-id.
+    ...event,
+  }};
+});
+"""
+
+
 # NOTE (Phase 13/16): this Cloud webhook template's companies branch is ported by Task 5
 # (Phase 16). Until then, and unlike build_enrichment_local_live(), the Claude web-research
 # nodes (Research Trigger Gate / Build Research Request / Claude Web Research / Validate
@@ -2430,21 +2567,57 @@ def build_enrichment_cloud():
     y = 300
     x = 220
 
+    # Task 6 (review #7, CLAUDE.md §18.1): native Header Auth — n8n rejects the request
+    # before any node runs if X-Enrichment-Secret doesn't match the bound credential's
+    # value. No Code node ever reads the secret value, and no $env/$vars expression is
+    # used (Criterion 5's zero-env-var guard covers the whole built workflow).
     webhook = {
         "parameters": {"httpMethod": "POST", "path": "hubspot/enrichment/event",
-                       "responseMode": "lastNode", "options": {}},
+                       "responseMode": "lastNode", "authentication": "headerAuth", "options": {}},
         "id": nid("w"), "name": "Webhook Trigger",
         "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [x, y],
     }
     nodes.append(webhook)
 
     x += 220
+    nodes.append(code_node("Parse HubSpot Event", ENRICH_PARSE_EVENT_CLOUD, x, y))
+
+    x += 220
+    route_by_type = {
+        "parameters": {"options": {}, "conditions": {
+            "options": {"caseSensitive": True, "typeValidation": "strict"},
+            "combinator": "and",
+            "conditions": [{
+                "id": nid("i"),
+                "leftValue": "={{ $json.object_type }}",
+                "rightValue": "companies",
+                "operator": {"type": "string", "operation": "equals"},
+            }],
+        }},
+        "id": nid("if"), "name": "Route By Object Type",
+        "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [x, y],
+    }
+    nodes.append(route_by_type)
+
+    x += 220
     nodes.append(code_node("Build Identity", ENRICH_BUILD_IDENTITY, x, y))
 
+    # Task 6 (review #8): real filterGroups (email EQ) + hs_object_id in the property
+    # list — was an empty filterGroupsUi placeholder that matched no filter at all.
     x += 220
     hs_search = {
         "parameters": {"resource": "contact", "operation": "search",
-                       "filterGroupsUi": {"filterGroupsValues": []}, "additionalFields": {}},
+                       "filterGroupsUi": {"filterGroupsValues": [
+                           {"filtersUi": {"filterValues": [
+                               {"propertyName": "email", "operator": "EQ",
+                                "value": "={{ $json.identity_keys.email }}"},
+                           ]}},
+                       ]},
+                       "additionalFields": {
+                           "properties": "email,firstname,lastname,jobtitle,phone,"
+                                         "mobilephone,hs_object_id,lv_jobtitle_verified_at,"
+                                         "lv_mobilephone_verified_at",
+                       }},
         "id": nid("hs"), "name": "HubSpot Search",
         "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [x, y],
         "onError": "continueRegularOutput",
@@ -2518,8 +2691,10 @@ def build_enrichment_cloud():
     if_enrich = _if_node("IF Enrich", "enrich", sx + 220, y - 20)
     nodes.append(if_enrich)
     hs_update = {
+        # Task 6 (review #8): targets the REAL id preserved by Adapt Search, not the
+        # previously-hardcoded, never-set contact_id field.
         "parameters": {"resource": "contact", "operation": "update",
-                       "contactId": "={{ $json.contact_id }}", "updateFields": {}},
+                       "contactId": "={{ $json.hs_object_id }}", "updateFields": {}},
         "id": nid("hu"), "name": "HubSpot Update",
         "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [sx + 440, y - 20]}
     nodes.append(hs_update)
@@ -2545,10 +2720,26 @@ def build_enrichment_cloud():
     cy = y + 420
     cx = x
     nodes.append(code_node("Build Company Identity", ENRICH_BUILD_CO_IDENTITY, cx, cy))
+    # Task 6 (review #8): real filterGroups (domain EQ, reusing the same envelope shape
+    # HS_CO_SEARCH_BODY_EXPR already proves for the raw-HTTP local-live variant) +
+    # hs_object_id in the property list.
     cx += 220
     hs_co_search = {
         "parameters": {"resource": "company", "operation": "search",
-                       "filterGroupsUi": {"filterGroupsValues": []}, "additionalFields": {}},
+                       "filterGroupsUi": {"filterGroupsValues": [
+                           {"filtersUi": {"filterValues": [
+                               {"propertyName": "domain", "operator": "EQ",
+                                "value": "={{ $json.identity_keys.domain }}"},
+                           ]}},
+                       ]},
+                       "additionalFields": {
+                           "properties": "name,domain,industry,annualrevenue,"
+                                         "numberofemployees,hs_object_id,lv_org_type,"
+                                         "lv_produces_content,lv_content_type,"
+                                         "lv_is_hardware_vendor,lv_is_gambling_operator,"
+                                         "lv_enrichment_provenance,lv_org_type_verified_at,"
+                                         "lv_produces_content_verified_at",
+                       }},
         "id": nid("hs"), "name": "HubSpot Company Search",
         "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [cx, cy],
         "onError": "continueRegularOutput",
@@ -2637,8 +2828,15 @@ def build_enrichment_cloud():
         "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [csx + 440, cy - 20]}
     nodes.append(hs_co_update)
 
-    conns = chain(["Webhook Trigger", "Build Identity", "HubSpot Search",
-                   "Adapt Search", "Enrichment Gate", "Route Action"])
+    conns = chain(["Webhook Trigger", "Parse HubSpot Event", "Route By Object Type"])
+    # Route By Object Type: true (companies) -> Build Company Identity, false (contacts/
+    # unknown, fail-safe default) -> Build Identity.
+    conns["Route By Object Type"] = {"main": [
+        [{"node": "Build Company Identity", "type": "main", "index": 0}],  # true
+        [{"node": "Build Identity", "type": "main", "index": 0}],          # false
+    ]}
+    conns.update(chain(["Build Identity", "HubSpot Search",
+                        "Adapt Search", "Enrichment Gate", "Route Action"]))
     # Switch outputs: 0=create, 1=enrich, 2=skip. create+enrich -> shared waterfall.
     conns["Route Action"] = {"main": [
         [{"node": "Lusha Enrich", "type": "main", "index": 0}],   # create
@@ -2661,14 +2859,8 @@ def build_enrichment_cloud():
         [],                                                        # false -> end
     ]}
 
-    # --- COMPANIES branch connections: sibling off Webhook Trigger ---------------------
-    # NOTE: fan() assumes single-output "main":[[...]] specs (it only inspects branch
-    # index 0) — safe for chain()-only merges, but conns already holds multi-output IF/
-    # Switch nodes (Route Action, IF Create, IF Enrich), so running the WHOLE conns dict
-    # back through fan() would silently drop their non-zero branches. Add the second
-    # Webhook Trigger target by hand instead (it has exactly one target today).
-    conns["Webhook Trigger"]["main"][0].append(
-        {"node": "Build Company Identity", "type": "main", "index": 0})
+    # --- COMPANIES branch connections: Route By Object Type's true branch already points
+    # here (Task 6) — no separate Webhook Trigger fan-out needed.
     conns.update(chain([
         "Build Company Identity", "HubSpot Company Search",
         "Adapt Company Search", "Company Gate", "Build Company Requests",
@@ -2711,19 +2903,28 @@ def build_enrichment_cloud():
             "## LV Enrichment — CLOUD template\n"
             "Run `python scripts/provision_n8n_credentials.py` then "
             "`python scripts/deploy_n8n_workflows.py` (both env-gated, dry-run by "
-            "default — see their docstrings) to create the 5 credentials and deploy "
-            "this workflow with every node bound: **HubSpot** (search/create/update, "
-            "`hubspotAppToken`); **Lusha** + **Apollo** = generic Header Auth (one "
-            "static key each, e.g. `api_key` / `X-Api-Key`); **ZoomInfo** = a "
-            "credential-bound Mint HTTP node (generic Basic Auth holding "
-            "client_id:client_secret) — see the ZoomInfo note. Every one of the 6 "
-            "config flags (research/judge cost caps + model knobs) is a baked "
+            "default — see their docstrings) to create the 6 credentials and deploy "
+            "this workflow with every node bound: **Webhook Trigger** = generic Header "
+            "Auth holding the shared `X-Enrichment-Secret` value (CLAUDE.md §18.1 — "
+            "n8n rejects an unauthenticated request before any node runs); **HubSpot** "
+            "(search/create/update, `hubspotAppToken`); **Lusha** + **Apollo** = generic "
+            "Header Auth (one static key each, e.g. `api_key` / `X-Api-Key`); "
+            "**ZoomInfo** = a credential-bound Mint HTTP node (generic Basic Auth "
+            "holding client_id:client_secret) — see the ZoomInfo note. Every one of the "
+            "6 config flags (research/judge cost caps + model knobs) is a baked "
             "build-time constant, not a runtime environment lookup — none survives "
             "in this JSON (Criterion 5).\n\n"
-            "**Flow:** Webhook -> Build Identity -> HubSpot Search -> Gate "
-            "(create/enrich/skip) -> Switch. create+enrich share the scored "
-            "waterfall; skip does nothing. Writes are GATED."
-        ), "x": 220, "y": 480, "h": 320, "w": 460},
+            "**Flow:** Webhook -> Parse HubSpot Event -> Route By Object Type -> "
+            "Build (Company) Identity -> HubSpot Search -> Gate (create/enrich/skip) "
+            "-> Switch. create+enrich share the scored waterfall; skip does nothing.\n\n"
+            "**Write safety (Task 6, review #9):** Decide Action / Decide Company "
+            "Action bake a `WRITE_SAFETY_DEFAULTS` build-time constant — "
+            "`ALLOW_HUBSPOT_RECORD_WRITES` default **false**, a create switch "
+            "(`ALLOW_HUBSPOT_CREATE`), and a `TEST_RECORD_DOMAINS`/`TEST_RECORD_IDS` "
+            "allowlist (empty allowlist denies everything). An activated-but-not-"
+            "enabled workflow performs ZERO record writes; even once enabled, only an "
+            "allowlisted domain/id may write."
+        ), "x": 220, "y": 480, "h": 420, "w": 480},
         {"content": (
             "### Scored waterfall (not FIFO)\n"
             "`value_score = wA·A + wR·R + wG·G + wT·T`\n"

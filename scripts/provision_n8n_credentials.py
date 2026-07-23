@@ -12,11 +12,12 @@ CREATE-IF-MISSING ONLY (never update-in-place): n8n never returns a credential's
 back on GET, so there is nothing to diff against — rotating a secret is a manual
 delete+recreate operator action, not something this script attempts.
 
-Six secrets map to five credential objects (ZoomInfo holds both client id + secret in
-one credential). For each, the schema at `GET /api/v1/credentials/schema/{type}` is
-introspected once and the field names this script is about to send are checked against
-it before POSTing — a differing type name / 400 / 404 aborts that one credential with a
-clean banner, not a stack trace.
+Six provider/CRM secrets map to five credential objects (ZoomInfo holds both client id +
+secret in one credential), plus a 7th credential (Task 6) for the Cloud webhook's shared-
+secret gate — six credential objects total. For each, the schema at
+`GET /api/v1/credentials/schema/{type}` is introspected once and the field names this
+script is about to send are checked against it before POSTing — a differing type name /
+400 / 404 aborts that one credential with a clean banner, not a stack trace.
 
 NEVER prints a secret value — only credential names and HTTP status codes.
 
@@ -106,12 +107,21 @@ def _zoominfo_data() -> dict:
     }
 
 
+def _webhook_secret_data() -> dict:
+    # Task 6 (review #7, CLAUDE.md §18.1) — a 7th secret, separate from the 6 provider/
+    # CRM secrets above: the Cloud webhook's shared-secret gate. Bound to the Webhook
+    # Trigger node's native Header Auth (n8n-nodes-base.webhook, authentication=
+    # "headerAuth") — never read by a Code node, never $env/$vars.
+    return {"name": "X-Enrichment-Secret", "value": os.getenv("N8N_ENRICHMENT_WEBHOOK_SECRET")}
+
+
 CREDENTIAL_MANIFEST = [
     {"name": "LV HubSpot", "type": "hubspotAppToken", "data_fn": _hubspot_data},
     {"name": "LV Lusha", "type": "httpHeaderAuth", "data_fn": _lusha_data},
     {"name": "LV Apollo", "type": "httpHeaderAuth", "data_fn": _apollo_data},
     {"name": "LV Anthropic", "type": "httpHeaderAuth", "data_fn": _anthropic_data},
     {"name": "LV ZoomInfo", "type": ZOOMINFO_CREDENTIAL_TYPE, "data_fn": _zoominfo_data},
+    {"name": "LV Enrichment Webhook", "type": "httpHeaderAuth", "data_fn": _webhook_secret_data},
 ]
 
 
