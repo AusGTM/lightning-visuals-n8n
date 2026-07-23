@@ -383,6 +383,7 @@ retroactively; its artifacts and tests are in the tree.
 **SCOPE EXPANDED 2026-07-23** after the n8n Cloud investigation this session. The original entry (criteria 1–4 below) covered only schedules + review surface. The deployment prerequisites discovered this session (criteria 5–9) are what actually gate going live, and this phase is **large — the planner should split it into "make it deployable" (5–8) and "make it complete" (1–4, 9), likely as separate plans/waves or even a Phase 16 / Phase 17 split.**
 
 **Deployment findings to build on (this session, verified live):**
+
 - n8n Cloud **Public API works** (`X-N8N-API-KEY`, `GET/POST /api/v1/workflows`, `/credentials`) — scripted deploy + credential creation are available. The MCP server (`create_workflow_from_code`, `publish_workflow`, `list_credentials`, version history/restore) is authoring-only (SDK code, not our JSON) — useful for activation/test/rollback, NOT import.
 - **`$env` is BLOCKED on Cloud** (`N8N_BLOCK_ENV_ACCESS_IN_NODE` defaults true) and **`$vars` is NOT licensed** (403 `feat:variables`). The 6 secrets (`ANTHROPIC_API_KEY`, `APOLLO_API_KEY`, `LUSHA_API_KEY`, `ZOOMINFO_CLIENT_ID/SECRET`, `HUBSPOT_PRIVATE_APP_TOKEN`) MUST become n8n **credentials** referenced by ID; the 6 config flags (`ALLOW_WEB_RESEARCH`, `ALLOW_SONNET_ESCALATION`, `MAX_WEB_RESEARCH_PER_RUN`, `MAX_SONNET_VALIDATIONS_PER_RUN`, `WEB_RESEARCH_MAX_SEARCHES`, `ANTHROPIC_SONNET_MODEL`) MUST become build-time inlined constants (AR-4 pattern). Enumerated live from the built workflow JSONs.
 - The instance is **empty** (0 workflows, 0 credentials) — clean deploy, but credentials must be provisioned first.
@@ -403,8 +404,12 @@ retroactively; its artifacts and tests are in the tree.
 **Evaluated against `docs/SYSTEM-CONTRACT.md`** — especially: non-clobber absolute *under live writes* (this is the first phase writing real record data), right-sized compute (no capable model on a cheap path), freshness-without-churn (criterion 9), and the closed-won red-flag as a live regression signal.
 
 **Plans**: 2 plans (two sequential waves within Phase 16; no formal 16/17 split)
+**Wave 1**
 
 - [ ] 16-01-PLAN.md — Deployable (Criteria 5–8 + SJ-3 property prerequisite): env→credentials + build-time constants, ZoomInfo credential decision, companies-branch port, deploy + credential-provisioning scripts [wave 1]
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 16-02-PLAN.md — Complete (Criteria 1–4, 9): SJ-1/2/3 schedule workflows, dedupeSweep wiring, §22.2 review loop, RT-5 caching test [wave 2, depends_on 16-01]
 
 ## Milestone 3 Progress
