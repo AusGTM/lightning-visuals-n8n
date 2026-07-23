@@ -147,15 +147,25 @@ function _statusFor(decision) {
 //   existingProps: current HubSpot company properties (the record being enriched)
 //   candidateRow:  canonical-keyed candidate values (post normalizeProviders + score)
 //   fieldPolicy:   companies policy block; defaults to DEFAULT_COMPANY_POLICY
-//   opts:          { source="provider", confidence=80, evidence={field: url} }
+//   opts:          { source="provider", confidence=80, evidence={field: url},
+//                    confidenceByField={field: number} }
 //                  `evidence` mirrors enrichmentGate's opts.validity: an upstream-supplied
 //                  per-field map, absent = no evidence.
+//                  `confidenceByField` (Phase 15.5 TA-8, additive) — a per-field override
+//                  of the flat `confidence`; when a field has an entry here it wins,
+//                  otherwise the flat value (and its 80 default) applies exactly as
+//                  before. Every current caller omits this key and is therefore
+//                  byte-identical. READ D2 (docs/... §8.5 / RESEARCH.md) before ever
+//                  wiring an A/R/G/T composite score in here: this map must only ever
+//                  carry a 0-100 confidence on the SAME scale as `confidence`
+//                  (the judge verdict's per-field confidence), never the composite.
 function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
   existingProps = existingProps || {};
   candidateRow = candidateRow || {};
   const policy = fieldPolicy || DEFAULT_COMPANY_POLICY;
   const source = (opts && opts.source) || "provider";
-  const confidence = (opts && opts.confidence != null) ? opts.confidence : 80;
+  const flatConfidence = (opts && opts.confidence != null) ? opts.confidence : 80;
+  const confidenceByField = (opts && opts.confidenceByField) || {};
   const evidence = (opts && opts.evidence) || {};
   const verifiedAt = _nowIso();
 
@@ -171,6 +181,10 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
     const currentValue = existingProps[field];
     const fieldPol = policy[field] || { class: "fill_blank_only", min_confidence: 80 };
     const evidenceUrl = evidence[field];
+    // The resolved per-field value is used EVERYWHERE the flat one used to be — the gate
+    // threshold, the provenance entry, and the decision record — so the recorded
+    // confidence and the confidence that made the decision can never disagree.
+    const confidence = confidenceByField[field] != null ? confidenceByField[field] : flatConfidence;
 
     const gate = _gate(field, currentValue, confidence, fieldPol, evidenceUrl, value);
     let decision = gate.decision;

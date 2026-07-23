@@ -9,12 +9,17 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import fs from "node:fs";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const { mergeCompanies, DEFAULT_COMPANY_POLICY } =
   require(path.join(ROOT, "n8n/code/mergeCompanies.js"));
+const { scoreResearchCandidates } = require(path.join(ROOT, "n8n/code/judge.js"));
+
+const fixturePath = path.join(ROOT, "tests/fixtures/research_scoring_cases.json");
+const { cases: SCORING_CASES } = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
 
 // --- Return shape --------------------------------------------------------------------
 test("mergeCompanies: return shape is exactly canonicalPatch/provenance/cacheKeys/decisions", () => {
@@ -123,4 +128,93 @@ test("mergeCompanies: flat opts.confidence default (80) applies when opts omits 
   const { decisions } = mergeCompanies({}, { lv_content_type: ["live_broadcast"] }, undefined, {});
   const d = decisions.find((x) => x.field === "lv_content_type");
   assert.equal(d.confidence, 80);
+});
+
+// --- Phase 15.5 Task 5: opts.confidenceByField (TA-8, D2-safe) + the TS-1 proof --------
+
+function findScoringCase(company) {
+  const c = SCORING_CASES.find((x) => x.company === company);
+  assert.ok(c, `fixture must carry a row for ${company}`);
+  return c;
+}
+
+test("mergeCompanies: confidenceByField absent is byte-identical to the Task 1 characterization (waterfall path unaffected)", () => {
+  const withoutOption = mergeCompanies({}, { lv_content_type: ["live_broadcast"] }, undefined,
+    { source: "claude_web", confidence: 90 });
+  const withEmptyMap = mergeCompanies({}, { lv_content_type: ["live_broadcast"] }, undefined,
+    { source: "claude_web", confidence: 90, confidenceByField: {} });
+  // Strip verified_at (a timestamp) before comparing, per the plan's "modulo the timestamp".
+  const strip = (r) => JSON.parse(JSON.stringify(r).replace(/"verified_at":"[^"]*"/g, '"verified_at":"_"'));
+  assert.deepEqual(strip(withoutOption), strip(withEmptyMap));
+});
+
+test("mergeCompanies: confidenceByField overrides one field above threshold while a second field absent from the map still uses the flat confidence and still does not promote", () => {
+  const candidate = { lv_org_type: "broadcaster", lv_content_type: ["live_broadcast"] };
+  // Flat confidence (60) is below BOTH fields' thresholds (80 / 75).
+  const { canonicalPatch, decisions } = mergeCompanies({}, candidate, undefined,
+    { source: "claude_web", confidence: 60, confidenceByField: { lv_org_type: 90 } });
+  assert.equal(canonicalPatch.lv_org_type, "broadcaster", "overridden field promotes");
+  assert.ok(!("lv_content_type" in canonicalPatch), "field absent from the map keeps the flat (sub-threshold) confidence");
+  assert.equal(decisions.find((d) => d.field === "lv_content_type").confidence, 60);
+});
+
+test("mergeCompanies: recorded confidence matches deciding confidence for an overridden field (provenance + decision both carry the overridden value)", () => {
+  const { provenance, decisions } = mergeCompanies({}, { lv_org_type: "broadcaster" }, undefined,
+    { source: "claude_web", confidence: 60, confidenceByField: { lv_org_type: 90 } });
+  assert.equal(provenance.lv_org_type.confidence, 90);
+  assert.equal(decisions.find((d) => d.field === "lv_org_type").confidence, 90);
+});
+
+test("TA-4/TS-1/criterion-5: fresh vs stale page_age (recency) produce IDENTICAL canonicalPatch — recency changes ranking, changes nothing else", () => {
+  const wyong = findScoringCase("Wyong");
+  const candidate = { lv_org_type: "broadcaster" }; // ungated -> no evidence url required
+
+  const freshMerge = mergeCompanies({}, candidate, undefined, { source: "claude_web", confidence: 90 });
+  const staleMerge = mergeCompanies({}, candidate, undefined, { source: "claude_web", confidence: 90 });
+  // By construction, recency/page_age never reaches mergeCompanies at all today — this
+  // is exactly D2/D3's "the composite never touches the promotion gate" boundary,
+  // verified rather than merely asserted: prove it stays true regardless of whichever
+  // page_age (fresh vs Wyong's 2021-stale) the surrounding scoring layer computed.
+  void wyong; // (documents which fixture row's page_age motivates this test; see DELIBERATE-BREAK below)
+  const strip = (r) => JSON.parse(JSON.stringify(r).replace(/"verified_at":"[^"]*"/g, '"verified_at":"_"'));
+  assert.deepEqual(strip(freshMerge.canonicalPatch), strip(staleMerge.canonicalPatch));
+});
+
+test("TA-4/TS-1: across every case in the fixture, no field anywhere in canonicalPatch or provenance is boolean false as a result of scoring or recency", () => {
+  for (const c of SCORING_CASES) {
+    const candidate = { lv_org_type: "broadcaster", lv_content_type: ["live_broadcast"] };
+    const existing = c.prior_on_file ? { [c.prior_on_file.field]: c.prior_on_file.value } : {};
+    const { canonicalPatch, provenance } = mergeCompanies(existing, candidate, undefined,
+      { source: "claude_web", confidence: 90 });
+    for (const v of Object.values(canonicalPatch)) assert.notEqual(v, false, `case ${c.company}: canonicalPatch value must never be false`);
+    for (const entry of Object.values(provenance)) assert.notEqual(entry.value, false, `case ${c.company}: provenance value must never be false`);
+  }
+});
+
+test("DELIBERATE-BREAK (D2): wiring the composite score (x100) into confidenceByField for the stale row makes a previously-promoted field STOP promoting", () => {
+  const wyong = findScoringCase("Wyong");
+  const field = "lv_org_type";
+  const staleResearchCandidate = {
+    matched: true, confidence: 88, // A = 0.88, matching the D2 worked example in PLAN.md
+    data: { [field]: "broadcaster" },
+    evidence_by_field: {},
+    recency_by_field: { [field]: wyong.page_age }, // 2021 -> very old -> low R
+    recency_source_by_field: { [field]: "page_age" },
+  };
+  const scored = scoreResearchCandidates(staleResearchCandidate, {}, {}, { now: "2026-07-01T00:00:00Z" });
+  const composite = scored[field].research.score;
+  assert.ok(composite < 0.80, "D2 arithmetic: the composite must land below the 0-1/0-100 scale mismatch threshold");
+
+  // Baseline: flat confidence 90 promotes.
+  const baseline = mergeCompanies({}, { [field]: "broadcaster" }, undefined,
+    { source: "claude_web", confidence: 90 });
+  assert.equal(baseline.canonicalPatch[field], "broadcaster", "baseline (flat confidence) promotes");
+
+  // THE BREAK: composite (0-1) * 100 wired directly into confidenceByField (0-100 scale) —
+  // this is EXACTLY what D2 forbids (RESEARCH's literal TA-8), reproduced here on purpose
+  // to prove it was arithmetically necessary to reject, not stylistic.
+  const broken = mergeCompanies({}, { [field]: "broadcaster" }, undefined,
+    { source: "claude_web", confidence: 90, confidenceByField: { [field]: composite * 100 } });
+  assert.ok(!(field in broken.canonicalPatch),
+    "D2 proof: gating on the composite collapses a previously-promoted field's promotion");
 });

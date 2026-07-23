@@ -1620,7 +1620,21 @@ return $input.all().map((it) => {
   const row = it.json;
   const judge_verdict = judgeVerdictFromHttpItem(row);
   const research_candidate = applyJudgeVerdict(row.research_candidate, judge_verdict, row.judge_reasons);
-  return { json: { ...row, research_candidate, judge_verdict } };
+
+  // TA-8 (D2-safe): when the verdict actually promoted/confirmed a field (judge_flags.
+  // adjudicated is only set on that path), carry the VERDICT's own confidence — 0-100,
+  // the same scale mergeCompanies' flat confidence already uses — forward for Merge
+  // Company to apply as a per-field override. Never the A/R/G/T composite (D2): that
+  // scale mismatch would silently stop nearly every research promotion.
+  let judge_confidence_by_field = row.judge_confidence_by_field || {};
+  const adjudicated = research_candidate && research_candidate.judge_flags &&
+    research_candidate.judge_flags.adjudicated === true;
+  if (adjudicated && judge_verdict && judge_verdict.chosen_field) {
+    judge_confidence_by_field = { ...judge_confidence_by_field,
+      [judge_verdict.chosen_field]: judge_verdict.confidence };
+  }
+
+  return { json: { ...row, research_candidate, judge_verdict, judge_confidence_by_field } };
 });
 """
 
@@ -1702,8 +1716,12 @@ return $input.all().map((it) => {
       researchData[f] = v;
     }
     if (Object.keys(researchData).length > 0) {
+      // TA-8: confidenceByField carries the judge VERDICT's per-field confidence (only
+      // ever set for the ONE field the judge actually adjudicated, Apply Judge Verdict
+      // above) — everything else keeps the flat retrieval confidence, exactly as before.
       const researchMerged = mergeCompanies(row.existingRecord || {}, researchData, undefined,
-        { source: "claude_web", confidence: rc.confidence || 80, evidence: rc.evidence_by_field || {} });
+        { source: "claude_web", confidence: rc.confidence || 80, evidence: rc.evidence_by_field || {},
+          confidenceByField: row.judge_confidence_by_field || {} });
       // Phase 15: the two mergeCompanies calls handle DISJOINT field sets (waterfall:
       // domain/industry/revenue_band/employee_band/country; claude_web: org_type/
       // produces_content/content_type/hardware/gambling), so a shallow merge of each

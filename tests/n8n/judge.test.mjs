@@ -14,6 +14,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", ".
 const {
   isCitationSufficient, applyEvidenceSufficiency,
   normalizeVendorFlag, computeEscalation, applyUnadjudicated, applyCostCap,
+  buildJudgeRequestBody,
 } = require(path.join(ROOT, "n8n/code/judge.js"));
 
 const fixturePath = path.join(ROOT, "tests/fixtures/evidence_sufficiency_cases.json");
@@ -230,4 +231,65 @@ test("Fail-safe: applyUnadjudicated demotes a hardware-vendor candidate to null 
   assert.notEqual(result.data.lv_is_hardware_vendor, false);
   assert.equal(result.data.lv_produces_content, false, "TS-3: evidenced false content is left untouched (D5 table)");
   assert.equal(result.judge_flags.unadjudicated, true);
+});
+
+// --- buildJudgeRequestBody: TA-5/TA-6 payload grounding ------------------------------
+
+function scoringRow(extra) {
+  return {
+    identity_keys: { companyName: "Example Racing", domain: "example.com.au" },
+    existingRecord: { lv_org_type: "governing_body_league", lv_revenue_band: "50-500M", numberofemployees: 200 },
+    research_candidate: {
+      data: { lv_org_type: "content_producer", lv_produces_content: true },
+      evidence_by_field: { lv_org_type: "https://example.com.au/about" },
+    },
+    judge_reasons: ["org_type_conflict"],
+    research_scoring: {
+      lv_org_type: { field: "lv_org_type", ranked: [], research: { score: 0.7, components: { A: 0.7, R: 0.5, G: 0, T: 0.78 } },
+        recency_source: "page_age", prior_on_file: { value: "governing_body_league", independent: false } },
+      lv_produces_content: { field: "lv_produces_content", ranked: [], research: { score: 0.8 }, recency_source: "unmatched", prior_on_file: null },
+      ...extra,
+    },
+  };
+}
+
+test("buildJudgeRequestBody: TA-5 — the scoring key appears in the serialized body, restricted to judge-eligible fields", () => {
+  const row = scoringRow();
+  const body = buildJudgeRequestBody(row, "claude-sonnet-5", 4096);
+  assert.ok(body.messages[0].content.includes("\"scoring\""), "scoring key must appear in the serialized body");
+  const parsed = JSON.parse(body.messages[0].content);
+  assert.deepEqual(Object.keys(parsed.company.scoring).sort(), ["lv_org_type", "lv_produces_content"]);
+});
+
+test("buildJudgeRequestBody: TA-5 — an extra non-judge-eligible field on row.research_scoring is dropped from the payload", () => {
+  const row = scoringRow({ lv_revenue_band: { field: "lv_revenue_band", research: { score: 0.9 } } });
+  const body = buildJudgeRequestBody(row, "claude-sonnet-5", 4096);
+  const parsed = JSON.parse(body.messages[0].content);
+  assert.ok(!("lv_revenue_band" in parsed.company.scoring), "non-judge-eligible field must be restricted out");
+});
+
+test("buildJudgeRequestBody: JG-2 holds with the new scoring key — no size-band/numeric firmographic name anywhere in the FULL serialized body", () => {
+  const row = scoringRow({ lv_revenue_band: { field: "lv_revenue_band", research: { score: 0.9 } } });
+  const body = buildJudgeRequestBody(row, "claude-sonnet-5", 4096);
+  const serialized = JSON.stringify(body);
+  assert.ok(!/revenue/i.test(serialized), "no revenue field anywhere in the serialized body");
+  assert.ok(!/employee/i.test(serialized), "no employee field anywhere in the serialized body");
+  assert.ok(!("tools" in body), "still no tools key");
+});
+
+test("buildJudgeRequestBody: TA-6 — the prompt names the prior-on-file label and says agreement with it is not evidence", () => {
+  const row = scoringRow();
+  const body = buildJudgeRequestBody(row, "claude-sonnet-5", 4096);
+  assert.ok(body.system.includes("prior_on_file"), "prompt must name the prior_on_file label");
+  assert.ok(/not.*independent corroborating source/i.test(body.system));
+  assert.ok(/not evidence/i.test(body.system));
+});
+
+test("buildJudgeRequestBody: a row with no research_scoring at all still produces a valid body", () => {
+  const row = scoringRow();
+  delete row.research_scoring;
+  const body = buildJudgeRequestBody(row, "claude-sonnet-5", 4096);
+  const parsed = JSON.parse(body.messages[0].content);
+  assert.deepEqual(parsed.company.scoring, {});
+  assert.equal(body.max_tokens, 4096);
 });

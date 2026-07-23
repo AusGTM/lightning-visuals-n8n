@@ -337,10 +337,13 @@ function buildJudgeRequestBody(row, model, maxTokens) {
   const existing = (row && row.existingRecord) || {};
   const rc = (row && row.research_candidate) || {};
   const data = rc.data || {};
+  const scoring = (row && row.research_scoring) || {};
 
   const restrictedData = {};
+  const restrictedScoring = {};
   for (const f of _JUDGE_DATA_FIELDS) {
     if (f in data) restrictedData[f] = data[f];
+    if (f in scoring) restrictedScoring[f] = scoring[f];
   }
 
   const company = {
@@ -351,6 +354,11 @@ function buildJudgeRequestBody(row, model, maxTokens) {
       data: restrictedData,
       evidence_by_field: rc.evidence_by_field || {},
     },
+    // TA-5: grounding for the judge — every judge-eligible field's A/R/G/T composite,
+    // restricted to the SAME field list restrictedData already uses, so JG-2 holds by
+    // construction: no numeric firmographic value can ever appear here because no such
+    // field is ever in the list.
+    scoring: restrictedScoring,
     escalation_reasons: (row && row.judge_reasons) || [],
   };
 
@@ -361,6 +369,14 @@ function buildJudgeRequestBody(row, model, maxTokens) {
     "evidence_by_field supports. If there is no evidence for a claim, the decision MUST",
     "be needs_review with a null chosen value, NEVER false - a missing citation is never",
     "evidence of absence (TS-1).",
+    // TA-6: label the prior honestly — it is not independent corroboration.
+    "The scoring object shows how the research candidate compares to the value already",
+    "on file (prior_on_file), including a recency-derived ordering term (higher means",
+    "fresher evidence) - recency is ordering information ONLY and is never a reason to",
+    "reject a claim, because a fact can be stable for decades without being wrong for",
+    "being old. prior_on_file is NOT an independent corroborating source - it is what is",
+    "already recorded, which may itself derive from an earlier unverified research pass,",
+    "so agreement with it is not evidence; ground the decision in the cited URLs only.",
     "Return ONLY one JSON object (no prose, no markdown fences) with exactly these keys: " +
       JSON.stringify([...JUDGE_OUTPUT_REQUIRED, "chosen_field"]) + ".",
   ].join(" ");
