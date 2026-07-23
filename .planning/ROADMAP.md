@@ -266,7 +266,7 @@ retroactively; its artifacts and tests are in the tree.
 - [x] **Phase 13: Web Research Retrieval & Validation** - Native web_search retrieval, output validation, enum normalization, tri-state coercion (completed 2026-07-21)
 - [x] **Phase 14: Judge Wiring** - Haiku classify → Sonnet escalate per CLAUDE.md §15, pointed at identity/classification not numeric plausibility (completed 2026-07-21)
 - [x] **Phase 15: HubSpot Property Migration** - Create missing metadata properties; unblocks research caching. Fully reversible (archive + recreate-by-name within 90 days), dry-run first (completed 2026-07-22; tooling offline-proven, live operator runbook pending)
-- [ ] **Phase 15.5: Tiered Candidate Adjudication** (INSERTED 2026-07-22) - Candidates stay parallel + scored through to the judge instead of collapsing to an argmax winner; judge grounds in web search AND the A/R/G/T scoring components. Tiered: deterministic collapse for size/firmographics (JG-2 — LLMs are poorly calibrated on numeric plausibility, RO-2 intent preserved), judge adjudicates ICP-semantic fields (org_type, produces_content, vendor flags) where a wrong answer moves tier or fires a veto. Research candidates gain a recencyDate so recency acts as ordering bias (neutral when unknown), at parity with the provider branch.
+- [x] **Phase 15.5: Tiered Candidate Adjudication** (INSERTED 2026-07-22) - Candidates stay parallel + scored through to the judge instead of collapsing to an argmax winner; judge grounds in web search AND the A/R/G/T scoring components. Tiered: deterministic collapse for size/firmographics (JG-2 — LLMs are poorly calibrated on numeric plausibility, RO-2 intent preserved), judge adjudicates ICP-semantic fields (org_type, produces_content, vendor flags) where a wrong answer moves tier or fires a veto. Research candidates gain a recencyDate so recency acts as ordering bias (neutral when unknown), at parity with the provider branch. Completed 2026-07-23.
 - [ ] **Phase 16: Scheduled Workflows & Review Surface** - Schedule-triggered n8n workflows (SJ-1..SJ-3 predicates), dedupeSweep wiring, §22.2 review loop on the 9 missing review properties
 
 ## Phase Details
@@ -362,18 +362,19 @@ retroactively; its artifacts and tests are in the tree.
 **Goal**: When enrichment sources conflict, the winning value is chosen with the most information available — not by a premature argmax that discards it.
 **Depends on**: Phase 15
 **Why inserted**: Validation before Phase 16 found the judge decides ICP-critical fields while blind to the provider evidence. `scoreCandidates` computes A/R/G/T then immediately collapses to `winners[field] = top.value`; `best[field]` (components, agreedBy) is retained but never read downstream. The judge sees only the research candidate. Separately, the research branch bypasses `scoreCandidates` entirely, so `lv_org_type`/`lv_produces_content` carry no recency signal at all — evidenced live by Wyong's 2021 stream listing passing the sufficiency gate as current proof. Judge logic must be locked before deployment.
+**Status**: EXECUTED 2026-07-23 — 6 tasks, 6 commits, fully offline-proven (201 pytest / 123 node, baseline 200/77 + new, 0 regressions). No live network calls; no HubSpot writes.
 **Success Criteria**:
 
-  1. Scoring ranks but does not decide: candidates stay parallel with their A/R/G/T components through to the adjudication point; no information is discarded before the judge.
-  2. Tiered routing is explicit and tested: size/firmographic conflicts resolve deterministically (never a model call — RO-2 intent, JG-2 rationale); ICP-semantic fields (`lv_org_type`, `lv_produces_content`, vendor flags) route to the judge when JG-1 triggers fire.
-  3. The judge receives the full ranked candidate set + scoring components + web-search grounding, and its verdict cites which it relied on.
-  4. Research candidates carry a `recencyDate`; recency is ordering bias only — unknown age stays neutral 0.5, never a penalty, never a veto (a decades-stable fact is not wrong for being old).
-  5. TS-1 holds throughout: no recency or scoring path can turn a value `false`; insufficient/aged evidence demotes toward `null` + needs_review.
-  6. Cost is bounded and proven: judge invocation count per run is capped and asserted, and no size-only disagreement can trigger a model call (structural, as Phase 14 proved for RO-2).
+  1. [x] Scoring ranks but does not decide: candidates stay parallel with their A/R/G/T components through to the adjudication point; no information is discarded before the judge. `scoreResearchCandidates` (judge.js) attaches `research_scoring` to every researched row via the unmodified `scoreCandidates` engine, escalated or not.
+  2. [x] Tiered routing is explicit and tested: size/firmographic conflicts resolve deterministically (never a model call — RO-2 intent, JG-2 rationale); ICP-semantic fields (`lv_org_type`, `lv_produces_content`, vendor flags) route to the judge when JG-1 triggers fire. `test_ta2_judge_eligible_and_deterministic_fields_are_disjoint` asserts disjointness from the real sources (judge.js + built Merge Company node).
+  3. [x] The judge receives the full ranked candidate set + scoring components + web-search grounding, and its verdict cites which it relied on. `buildJudgeRequestBody` gained a `scoring` key restricted to judge-eligible fields (JG-2 preserved); the prompt labels `prior_on_file` as non-independent.
+  4. [x] Research candidates carry a `recencyDate`; recency is ordering bias only — unknown age stays neutral 0.5, never a penalty, never a veto (a decades-stable fact is not wrong for being old). Sourced from Anthropic's `page_age` via `extractPageAgeByField` (tolerant URL matching), never a model self-report or URL-slug guess.
+  5. [x] TS-1 holds throughout: no recency or scoring path can turn a value `false`; insufficient/aged evidence demotes toward `null` + needs_review. Proven by an identical-canonicalPatch assertion (fresh vs stale page_age) plus a DELIBERATE-BREAK that wires the composite into the promotion gate and shows promotions collapse (D2's arithmetic proof: composite ~67 < both thresholds).
+  6. [x] Cost is bounded and proven: judge invocation count per run is capped and asserted, and no size-only disagreement can trigger a model call (structural, as Phase 14 proved for RO-2). `applyCostCap` extracted + unit-tested at 15-into-10 and zero-budget; RO-2's existing structural test extended with a cap-location assertion.
 
-**Plans**: 1 plan
+**Plans**: 1/1 plans complete
 
-- [ ] 15.5-tiered-candidate-adjudication/PLAN.md — score research candidates with the existing A/R/G/T engine against a prior on file (self-confirmation-guarded), source recencyDate from Anthropic `page_age`, ground the judge in the full ranked set, and cap + assert judge invocations
+- [x] 15.5-tiered-candidate-adjudication/PLAN.md — score research candidates with the existing A/R/G/T engine against a prior on file (self-confirmation-guarded), source recencyDate from Anthropic `page_age`, ground the judge in the full ranked set, and cap + assert judge invocations (completed 2026-07-23; see 15.5-01-SUMMARY.md)
 
 ### Phase 16: Scheduled Workflows & Review Surface
 
@@ -397,5 +398,5 @@ retroactively; its artifacts and tests are in the tree.
 | 13. Web Research Retrieval & Validation | 1/1 | Complete | 2026-07-21 |
 | 14. Judge Wiring | 1/1 | Complete | 2026-07-21 |
 | 15. HubSpot Property Migration | 1/1 | Complete | 2026-07-22 |
-| 15.5. Tiered Candidate Adjudication (INSERTED) | 0/? | Not started | — |
+| 15.5. Tiered Candidate Adjudication (INSERTED) | 1/1 | Complete | 2026-07-23 |
 | 16. Scheduled Workflows & Review Surface | 0/? | Not started | — |

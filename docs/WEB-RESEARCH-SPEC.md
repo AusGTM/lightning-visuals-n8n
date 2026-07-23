@@ -394,6 +394,86 @@ verify, do not assume.
 
 ---
 
+## 8.5 Tiered adjudication
+
+Phase 15.5. Extends JG-1..JG-5: today the research branch merges `rc.data` directly with
+one flat confidence and zero A/R/G/T grounding; the judge decides identity/classification
+conflicts on evidence alone with no scoring context. These eight requirements make the
+adjudication point see everything it should (scoring, recency, the prior on file) and
+nothing it shouldn't (size/firmographic fields, ever).
+
+**TA-1.** Every research candidate for a judge-eligible field MUST be scored by the
+existing A/R/G/T engine (`scoreCandidates`, unmodified) before any merge or judge
+decision, and its components MUST be attached to the row even when no escalation trigger
+fires. Scoring ranks candidates; it never decides promotion or escalation.
+
+**TA-2.** The size/firmographic set MUST NEVER be scored against or routed to the judge;
+the judge-eligible set is exactly the five classification fields (`lv_org_type`,
+`lv_produces_content`, `lv_content_type`, `lv_is_hardware_vendor`,
+`lv_is_gambling_operator`). The two sets MUST be disjoint, asserted by a static
+conformance test that reads both lists from their real homes (judge.js's source text and
+the built Merge Company node's `jsCode`) rather than a hand-typed copy.
+
+**TA-3.** `recencyDate` MUST come from the Anthropic search result's `page_age` for the
+matching evidence URL — never the model's free-text self-report, never parsed out of the
+URL string. Absent or unparseable yields `null` and inherits the existing neutral
+recency rule; no new penalty path.
+
+**TA-4.** Recency is an ordering input to the composite score ONLY (extends TS-1). No
+code path may use recency, page age, or staleness to set a field `false`, to fire the
+anti-ICP flag, or to move the confidence-based promotion gate. Normative rationale: the
+composite is 0-1 and the promotion thresholds are 0-100 calibrated against model
+self-reported confidence, so the two MUST NOT be mixed — with `G=0` (the common
+single-candidate case), `A=0.88`, `R=1.0`, `T=0.78`, the composite is `0.674` → 67,
+below both `lv_org_type`'s 80 and `lv_produces_content`'s 85 threshold. Wiring the
+composite into the promotion gate would silently stop nearly every research promotion.
+
+**TA-5.** The judge payload MUST include the scored components and composite for every
+judge-eligible field the escalation carries, restricted to that field set (extends JG-2
+to the new `scoring` key — built by iterating the same judge-eligible list the existing
+`data` key already uses, so no numeric firmographic value can ever appear in it).
+
+**TA-6.** The synthetic prior on file (`prior_on_file`) is NOT an independent
+corroborating source. It MUST be labeled distinctly in the payload and the prompt, the
+prompt MUST instruct the judge not to treat agreement with it as evidence, and a prior
+written by this pipeline MUST NOT contribute to the agreement component at all.
+Independence is determined by the provenance `source`: no provenance entry at all
+(legacy/pre-pipeline value) is independent; a `source` of `human` or `manual` is
+independent; every other source — including every source this pipeline itself writes —
+is NOT independent, and an unrecognized source string fails CLOSED (non-independent).
+
+**TA-7.** Judge invocations per run MUST be capped, and the cap logic MUST be a
+unit-testable pure function (`applyCostCap`) rather than inline code inside a
+build-script string, asserted by a test that exceeds the cap and checks the exact
+overflow count falls through the existing unadjudicated fail-safe. The cap MUST be
+enforced in the same node RO-2's graph-ancestry proof already pins upstream of Merge
+Company.
+
+**TA-8.** `mergeCompanies` MUST accept an additive per-field confidence map
+(`opts.confidenceByField`), used to carry an adjudicated per-field confidence on the
+correct 0-100 scale (the judge verdict's own confidence for the one field it
+adjudicated) — never the A/R/G/T composite (TA-4). The flat whole-candidate confidence
+remains the default; the waterfall call path is byte-identical when the map is absent.
+
+### Requirements → Test map
+
+| Req ID | Test file | Test name |
+|---|---|---|
+| TA-1 | `tests/n8n/researchScoring.test.mjs` | `TA-1: a researched field with no prior on file scores on accuracy/recency/trust alone, agreement 0, components present regardless of escalation` |
+| TA-2 | `tests/test_judge_spec.py` | `test_ta2_judge_eligible_and_deterministic_fields_are_disjoint` |
+| TA-2 | `tests/n8n/researchScoring.test.mjs` | `TA-2: _JUDGE_DATA_FIELDS is exactly the 5 expected classification fields` |
+| TA-3 | `tests/n8n/webResearchFailure.test.mjs` | `extractPageAgeByField: page_age extracted for an exactly-matching url` (+ tolerant-match, unmatched, malformed-shape, and DELIBERATE-BREAK cases in the same file) |
+| TA-4 | `tests/n8n/mergeCompanies.test.mjs` | `TA-4/TS-1/criterion-5: fresh vs stale page_age (recency) produce IDENTICAL canonicalPatch — recency changes ranking, changes nothing else` |
+| TA-4 | `tests/n8n/mergeCompanies.test.mjs` | `DELIBERATE-BREAK (D2): wiring the composite score (x100) into confidenceByField for the stale row makes a previously-promoted field STOP promoting` |
+| TA-5 | `tests/n8n/judge.test.mjs` | `buildJudgeRequestBody: TA-5 — the scoring key appears in the serialized body, restricted to judge-eligible fields` |
+| TA-6 | `tests/n8n/researchScoring.test.mjs` | `THE GUARD, positive case: a prior EQUAL to the research value whose provenance source is one of our own pipeline sources yields agreement 0 and prior_on_file.independent false` (+ negative-control, fail-closed, and DELIBERATE-BREAK cases in the same file) |
+| TA-6 | `tests/n8n/judge.test.mjs` | `buildJudgeRequestBody: TA-6 — the prompt names the prior-on-file label and says agreement with it is not evidence` |
+| TA-7 | `tests/n8n/judge.test.mjs` | `applyCostCap: 15 needs_judge rows into a budget of 10 -> exactly 10 survive, exactly 5 capped, input order determines which` |
+| TA-7 | `tests/test_judge_spec.py` | `test_ro2_judge_gate_cannot_see_size_conflicts` (extended with the cap-location assertion) |
+| TA-8 | `tests/n8n/mergeCompanies.test.mjs` | `mergeCompanies: confidenceByField overrides one field above threshold while a second field absent from the map still uses the flat confidence and still does not promote` |
+
+---
+
 ## 9. Acceptance tests
 
 Golden set = the five live prospect accounts, which between them cover every branch:
