@@ -60,3 +60,77 @@ test("no SJ filter block anywhere in the built workflow references a derived ICP
   assert.ok(!DERIVED_ICP_OUTPUT_RE.test(blob),
     "SJ predicates must key on pipeline-owned inputs only (Approach C, spec §0.7)");
 });
+
+// --- SJ-1: hourly input-gap scan ------------------------------------------------------
+
+test("SJ-1: three separate single-filter OR'd groups on lv_org_type/lv_produces_content only", () => {
+  const wf = loadWorkflow();
+  const node = findNode(wf, "SJ-1 Search (input-gap scan)");
+  const groups = filterGroups(node);
+  assert.equal(groups.length, 3, "SJ-1 predicate is three OR'd groups, not one AND'd group (Pitfall 3)");
+  for (const g of groups) {
+    assert.equal(g.length, 1, "each SJ-1 group has exactly one filter");
+    assert.ok(["lv_org_type", "lv_produces_content"].includes(g[0].propertyName));
+  }
+  const notHasOrgType = groups.find((g) => g[0].propertyName === "lv_org_type" && g[0].operator === "NOT_HAS_PROPERTY");
+  const eqUnknownOrgType = groups.find((g) => g[0].propertyName === "lv_org_type" && g[0].operator === "EQ" && g[0].value === "unknown");
+  const notHasContent = groups.find((g) => g[0].propertyName === "lv_produces_content" && g[0].operator === "NOT_HAS_PROPERTY");
+  assert.ok(notHasOrgType, "must include lv_org_type NOT_HAS_PROPERTY");
+  assert.ok(eqUnknownOrgType, "must include lv_org_type EQ unknown");
+  assert.ok(notHasContent, "must include lv_produces_content NOT_HAS_PROPERTY");
+});
+
+test("SJ-1: terminates in a HubSpot Update that sets lv_enrichment_requested=true", () => {
+  const wf = loadWorkflow();
+  const node = findNode(wf, "SJ-1 Set Requested");
+  assert.equal(node.type, "n8n-nodes-base.hubspot");
+  assert.equal(node.parameters.operation, "update");
+  const props = node.parameters.updateFields.customPropertiesUi.customPropertiesValues;
+  const set = props.find((p) => p.property === "lv_enrichment_requested");
+  assert.ok(set && set.value === "true");
+});
+
+// --- SJ-2: monthly stale refresh + RT-5 -------------------------------------------------
+
+test("SJ-2: epoch-ms cutoff Code node feeds a two-LT-filter search on the two verified-at cache keys", () => {
+  const wf = loadWorkflow();
+  const epochNode = findNode(wf, "SJ-2 Epoch Cutoff (180d)");
+  assert.match(epochNode.parameters.jsCode, /Date\.now\(\)\s*-\s*180\s*\*\s*86400000/,
+    "cutoff must be a Code-node-computed epoch-ms value, not a date string");
+
+  const node = findNode(wf, "SJ-2 Search (stale refresh)");
+  const groups = filterGroups(node);
+  assert.equal(groups.length, 2, "SJ-2 predicate is two OR'd groups");
+  for (const g of groups) {
+    assert.equal(g.length, 1);
+    assert.equal(g[0].operator, "LT");
+    assert.match(g[0].value, /cutoff_ms/);
+  }
+  const props = groups.map((g) => g[0].propertyName).sort();
+  assert.deepEqual(props, ["lv_org_type_verified_at", "lv_produces_content_verified_at"]);
+});
+
+test("SJ-2: an Adapt step of the ENRICH_ADAPT_CO_SEARCH shape feeds Company Gate with a populated existingRecord, not raw rows", () => {
+  const wf = loadWorkflow();
+  const adapt = findNode(wf, "SJ-2 Adapt Search");
+  assert.match(adapt.parameters.jsCode, /existingRecord/);
+  assert.match(adapt.parameters.jsCode, /lookup_failed/);
+  const gate = findNode(wf, "SJ-2 Company Gate");
+  assert.match(gate.parameters.jsCode, /decideAction\(row\.existingRecord/,
+    "Company Gate must read row.existingRecord (populated by the Adapt step), never a raw search row");
+});
+
+test("SJ-2: terminates in a HubSpot Update that sets lv_enrichment_requested=true, gated behind the Company Gate's skip decision", () => {
+  const wf = loadWorkflow();
+  const node = findNode(wf, "SJ-2 Set Requested");
+  assert.equal(node.type, "n8n-nodes-base.hubspot");
+  const props = node.parameters.updateFields.customPropertiesUi.customPropertiesValues;
+  const set = props.find((p) => p.property === "lv_enrichment_requested");
+  assert.ok(set && set.value === "true");
+
+  const ifNode = findNode(wf, "SJ-2 IF Skip");
+  const wf_conns = wf.connections[ifNode.name];
+  assert.ok(wf_conns, "SJ-2 IF Skip must have outgoing connections");
+  const falseBranch = wf_conns.main[1].map((c) => c.node);
+  assert.ok(falseBranch.includes("SJ-2 Set Requested"), "the non-skip branch dispatches to the terminal Update");
+});

@@ -97,17 +97,314 @@
     },
     {
       "parameters": {
-        "content": "## LV Scheduled Maintenance \u2014 CLOUD\nBackground reconciliation + human-review layer (SYSTEM-CONTRACT). Runs alongside \"LV Enrichment (Cloud template)\" \u2014 this workflow only ever DISCOVERS/DISPATCHES/CLASSIFIES; the actual provider waterfall + merge lives in that sibling workflow's companies branch.\n\n**SJ-3 (15 min):** `lv_enrichment_requested=true AND lv_enrichment_status != running` -> Execute Workflow into the companies branch of \"LV Enrichment (Cloud template)\". Re-bind `workflowId` after deploy (n8n Cloud assigns its own id on import \u2014 this constant is the byte-identical build-time id, the deploy script re-binds credentials/references the same way it already does for the 6 provider credentials, `scripts/deploy_n8n_workflows.py`).",
-        "height": 260,
-        "width": 480
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
       },
-      "id": "s00050000-0000-4000-8000-000000000000",
+      "id": "st00050000-0000-4000-8000-000000000000",
+      "name": "SJ-1 Trigger (hourly)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "company",
+        "operation": "search",
+        "filterGroupsUi": {
+          "filterGroupsValues": [
+            {
+              "filtersUi": {
+                "filterValues": [
+                  {
+                    "propertyName": "lv_org_type",
+                    "operator": "NOT_HAS_PROPERTY"
+                  }
+                ]
+              }
+            },
+            {
+              "filtersUi": {
+                "filterValues": [
+                  {
+                    "propertyName": "lv_org_type",
+                    "operator": "EQ",
+                    "value": "unknown"
+                  }
+                ]
+              }
+            },
+            {
+              "filtersUi": {
+                "filterValues": [
+                  {
+                    "propertyName": "lv_produces_content",
+                    "operator": "NOT_HAS_PROPERTY"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "properties": "hs_object_id,lv_org_type,lv_produces_content"
+        }
+      },
+      "id": "hs00060000-0000-4000-8000-000000000000",
+      "name": "SJ-1 Search (input-gap scan)",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2.1,
+      "position": [
+        440,
+        620
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Extract Search Rows \u2014 HubSpot search envelope -> one row per matched record.\n// Shared by the SJ-1/SJ-3/dedupe/review scheduled branches (Phase 16-02) \u2014 none of them\n// need enrichmentGate's existingRecord shape (that is SJ-2 + Company Gate's job, via a\n// dedicated Adapt step mirroring ENRICH_ADAPT_CO_SEARCH's contract).\nconst item = $input.first();\nconst res = (item && item.json) || {};\nconst rows = Array.isArray(res.results) ? res.results : (res.properties ? [res] : []);\nreturn rows.map((r) => ({ json: { ...(r.properties || {}), hs_object_id: r.id } }));\n"
+      },
+      "id": "c00070000-0000-4000-8000-000000000000",
+      "name": "SJ-1 Extract Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "company",
+        "operation": "update",
+        "companyId": "={{ $json.hs_object_id }}",
+        "updateFields": {
+          "customPropertiesUi": {
+            "customPropertiesValues": [
+              {
+                "property": "lv_enrichment_requested",
+                "value": "true"
+              }
+            ]
+          }
+        }
+      },
+      "id": "hu00080000-0000-4000-8000-000000000000",
+      "name": "SJ-1 Set Requested",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2.1,
+      "position": [
+        880,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "months",
+              "monthsInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "st00090000-0000-4000-8000-000000000000",
+      "name": "SJ-2 Trigger (monthly)",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        220,
+        940
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// SJ-2 epoch-ms cutoff \u2014 HubSpot's LT operator on a datetime property expects epoch\n// MILLISECONDS, not an ISO date string (16-RESEARCH.md Deliverable 5).\nreturn [{ json: { cutoff_ms: Date.now() - 180 * 86400000 } }];\n"
+      },
+      "id": "c00100000-0000-4000-8000-000000000000",
+      "name": "SJ-2 Epoch Cutoff (180d)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        940
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "company",
+        "operation": "search",
+        "filterGroupsUi": {
+          "filterGroupsValues": [
+            {
+              "filtersUi": {
+                "filterValues": [
+                  {
+                    "propertyName": "lv_org_type_verified_at",
+                    "operator": "LT",
+                    "value": "={{ $json.cutoff_ms }}"
+                  }
+                ]
+              }
+            },
+            {
+              "filtersUi": {
+                "filterValues": [
+                  {
+                    "propertyName": "lv_produces_content_verified_at",
+                    "operator": "LT",
+                    "value": "={{ $json.cutoff_ms }}"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "additionalFields": {
+          "properties": "hs_object_id,lv_org_type,lv_produces_content,lv_org_type_verified_at,lv_produces_content_verified_at"
+        }
+      },
+      "id": "hs00110000-0000-4000-8000-000000000000",
+      "name": "SJ-2 Search (stale refresh)",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2.1,
+      "position": [
+        660,
+        940
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Adapt SJ-2 Search -> existingRecord (ENRICH_ADAPT_CO_SEARCH shape).\nconst item = $input.first();\nconst res = (item && item.json) || {};\nconst rows = Array.isArray(res.results) ? res.results : (res.properties ? [res] : []);\nreturn rows.map((r) => {\n  const existingRecord = { ...(r.properties || {}), hs_object_id: r.id };\n  return { json: { existingRecord, lookup_failed: false } };\n});\n"
+      },
+      "id": "c00120000-0000-4000-8000-000000000000",
+      "name": "SJ-2 Adapt Search",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        940
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// normalizeEmail.js \u2014 pure-JS email normalization for n8n Code nodes.\n//\n// normalizeEmailBasic does a BASIC syntactic check + trim/lowercase only. The\n// authoritative validation is the external rapid-email-verifier API downstream;\n// applyEmailVerification maps that verifier's response onto the row. This mirrors\n// src/normalizer.py normalize_email closely enough for identity/dedupe parity:\n// obviously-malformed -> null, otherwise trimmed+lowercased.\n\nfunction normalizeEmailBasic(raw) {\n  if (raw === null || raw === undefined) return null;\n  const s = String(raw).trim().toLowerCase();\n  if (s === \"\") return null;\n  // Basic shape: local@domain.tld, no spaces, one @, a dotted domain.\n  // Deliberately conservative \u2014 the verifier API is the real authority.\n  if (!/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(s)) return null;\n  return s;\n}\n\n// Map a rapid-email-verifier result onto the row. `verifierResult` shape:\n//   { status: \"VALID\"|\"PROBABLY_VALID\"|\"INVALID_FORMAT\"|\"INVALID_DOMAIN\"|\"DISPOSABLE\",\n//     aliasOf?: \"canonical@example.com\" }\n// Returns the fields to merge onto the row.\nfunction applyEmailVerification(row, verifierResult) {\n  const status = (verifierResult && verifierResult.status) || \"INVALID_FORMAT\";\n  const alias = verifierResult && verifierResult.aliasOf;\n  const raw = row ? row.email : undefined;\n\n  // aliasOf is the canonical address when the verifier resolved one.\n  const canonical = alias\n    ? normalizeEmailBasic(alias)\n    : normalizeEmailBasic(raw);\n\n  const valid = status === \"VALID\" || status === \"PROBABLY_VALID\";\n\n  return {\n    email_normalized: valid ? canonical : normalizeEmailBasic(raw),\n    email_valid: valid,\n    email_status: status,\n    needs_review_reason: valid ? null : `email verifier: ${status}`,\n  };\n}\n\n// normalizePhone.js \u2014 pure-JS AU phone normalizer for n8n Code nodes.\n//\n// DISCLAIMER: This is an AU-ONLY heuristic, NOT libphonenumber. It cannot import\n// npm (n8n Code nodes run pure JS with no requires), so it recognises only the AU\n// formats the ingestion pipeline actually sees. Any number that is non-AU or\n// ambiguous returns null \u2014 the caller must route null to review, never silently\n// drop or guess. A leading '+' is trusted as already-E.164 and passed through\n// (separators stripped) WITHOUT a validity check, so an invalid '+...' string is\n// kept as-is here where the Python oracle (phonenumbers.is_valid_number) would\n// reject it. Swap this for a phone-validation API for global fidelity later.\n//\n// Mirrors src/normalizer.py normalize_phone for the AU cases the parity test pins.\n\nfunction normalizePhoneAU(raw) {\n  if (raw === null || raw === undefined || raw === \"\") return null;\n  // Strip spaces, dashes, parens, dots \u2014 everything that is pure separator.\n  const s = String(raw).replace(/[\\s\\-().]/g, \"\");\n  if (s === \"\") return null;\n\n  // Already international: trust the '+', keep the digits after it.\n  if (s.startsWith(\"+\")) {\n    const digits = s.slice(1);\n    if (!/^\\d+$/.test(digits)) return null; // \"+garbage\" -> review\n    return \"+\" + digits;\n  }\n\n  if (!/^\\d+$/.test(s)) return null; // any non-digit leftover -> not AU/ambiguous\n\n  // 0XXXXXXXXX \u2014 10-digit AU national (mobile 04.. or landline 0[2378]..).\n  if (s.length === 10 && s[0] === \"0\") {\n    return \"+61\" + s.slice(1);\n  }\n\n  // 61XXXXXXXXX \u2014 AU country code without the '+'.\n  if (s.length === 11 && s.startsWith(\"61\")) {\n    return \"+\" + s;\n  }\n\n  return null; // anything else is non-AU or ambiguous -> review\n}\n\n// normalizePhone(raw, region) \u2014 region-aware E.164 normalizer.\n//\n// Still NOT libphonenumber (n8n Code nodes can't require npm), but deterministic and\n// keyed off the ISO2 country the PROVIDERS already return (Lusha location.country_iso2,\n// Apollo person country, etc.) instead of guessing. Rules, in order:\n//   1. Already `+E.164` -> trust and keep (digits 6-15).\n//   2. Known region -> prepend that country's calling code (stripping a trunk 0 for\n//      AU/NZ/GB/IE, a leading 1 for US/CA), gated by a per-country NSN-length sanity check.\n//   3. Unknown/absent region -> fall back to normalizePhoneAU (AU heuristic). A non-AU\n//      national number then returns null -> the caller drops it (never a bad write).\n// The NSN-length gate is a sanity filter, not full validation; swap for a phone API when\n// global precision matters (same external-call pattern as the email verifier).\nconst CALLING_CODE = { AU: \"61\", NZ: \"64\", US: \"1\", CA: \"1\", GB: \"44\", IE: \"353\", IN: \"91\", SG: \"65\" };\nconst NSN_LEN = { \"61\": [9], \"64\": [8, 9], \"1\": [10], \"44\": [9, 10], \"353\": [9], \"91\": [10], \"65\": [8] };\nconst TRUNK_REGIONS = /^(AU|NZ|GB|IE)$/;\n\nfunction _nsnOk(cc, nsn) {\n  const lens = NSN_LEN[cc];\n  return lens ? lens.includes(nsn.length) : (nsn.length >= 6 && nsn.length <= 14);\n}\n\nfunction normalizePhone(raw, region) {\n  if (raw === null || raw === undefined || raw === \"\") return null;\n  const s = String(raw).replace(/[\\s\\-().]/g, \"\");\n  if (s === \"\") return null;\n  if (s.startsWith(\"+\")) {\n    const d = s.slice(1);\n    return /^\\d{6,15}$/.test(d) ? \"+\" + d : null;\n  }\n  if (!/^\\d+$/.test(s)) return null;\n  const r = String(region || \"\").toUpperCase();\n  const cc = CALLING_CODE[r];\n  if (!cc) return normalizePhoneAU(s); // unknown region -> AU heuristic (non-AU -> null)\n  if (s.startsWith(cc) && _nsnOk(cc, s.slice(cc.length))) return \"+\" + s; // already has CC\n  let nsn = s;\n  if (TRUNK_REGIONS.test(r) && nsn.startsWith(\"0\")) nsn = nsn.slice(1);          // trunk 0\n  if (cc === \"1\" && nsn.length === 11 && nsn.startsWith(\"1\")) nsn = nsn.slice(1); // US/CA leading 1\n  return _nsnOk(cc, nsn) ? \"+\" + cc + nsn : null;\n}\n\n// enrichmentGate.js \u2014 pure-JS create/enrich/skip idempotency gate for n8n Code nodes.\n//\n// decideAction(existingRecord, requiredFields, policy, nowIso, opts)\n//   \u2192 { action: 'create'|'enrich'|'skip', staleFields, missingFields, invalidFields, reason }\n//\n// Mirrors ENRICHMENT-WORKFLOW-PLAN.md \u00a73:\n//   - null/empty existingRecord ............... CREATE\n//   - a required field is missing/blank ....... enrich (missing)\n//   - stale: now - <field>_verified_at > policy.stale_after_days ... enrich (stale)\n//       (a staleable field present but with NO _verified_at is treated as stale \u2014\n//        unknown freshness == needs validation)\n//   - invalid: email fails a passed-in validity map (or basic syntax) / phone not E.164\n//   - none of the above ....................... SKIP\n//\n// PURE + DETERMINISTIC: `nowIso` injected (no Date.now here). `opts.validity` is an\n// optional { fieldName: boolean } map from an upstream verifier; when absent, email\n// falls back to basic syntax and phone to normalizePhoneAU (E.164) checks.\n\n\nfunction _isBlank(v) {\n  return v === null || v === undefined || v === \"\" ||\n         (Array.isArray(v) && v.length === 0);\n}\n\nfunction _isEmpty(record) {\n  if (!record) return true;\n  return Object.keys(record).every((k) => _isBlank(record[k]));\n}\n\nfunction _staleAfterDays(policy, field) {\n  const p = policy && policy[field];\n  return p && p.stale_after_days != null ? p.stale_after_days : null;\n}\n\n// Phase 15: staleness reads the REAL cache-key property, never the provenance blob\n// (HubSpot cannot filter/read inside a JSON text property). Any leading `lv_` on `field`\n// is stripped and re-prefixed exactly once, so `lv_org_type` -> `lv_org_type_verified_at`\n// and `jobtitle` -> `lv_jobtitle_verified_at` (mirrors PN-4 composition).\nfunction _cacheKeyName(field) {\n  const base = String(field).replace(/^lv_/, \"\");\n  return `lv_${base}_verified_at`;\n}\n\nfunction _fieldValid(field, value, validity) {\n  if (validity && Object.prototype.hasOwnProperty.call(validity, field)) {\n    return validity[field] === true;\n  }\n  if (field === \"email\") return normalizeEmailBasic(value) !== null;\n  if (field === \"phone\" || field === \"mobilephone\") return normalizePhoneAU(value) !== null;\n  return true; // no validation rule for this field\n}\n\nfunction decideAction(existingRecord, requiredFields, policy, nowIso, opts) {\n  opts = opts || {};\n  const validity = opts.validity || null;\n  requiredFields = requiredFields || [];\n  policy = policy || {};\n\n  if (_isEmpty(existingRecord)) {\n    return { action: \"create\", staleFields: [], missingFields: [], invalidFields: [],\n             reason: \"no existing record\" };\n  }\n\n  const missingFields = [];\n  const staleFields = [];\n  const invalidFields = [];\n  const now = Date.parse(nowIso);\n\n  for (const field of requiredFields) {\n    const value = existingRecord[field];\n\n    if (_isBlank(value)) {\n      missingFields.push(field);\n      continue; // missing dominates \u2014 nothing else to check\n    }\n\n    if (!_fieldValid(field, value, validity)) {\n      invalidFields.push(field);\n    }\n\n    const ttl = _staleAfterDays(policy, field);\n    if (ttl != null) {\n      const verifiedAt = existingRecord[_cacheKeyName(field)];\n      if (_isBlank(verifiedAt)) {\n        staleFields.push(field); // present value, unknown freshness -> validate\n      } else {\n        const then = Date.parse(verifiedAt);\n        const ageDays = Number.isNaN(then) || Number.isNaN(now) ? Infinity : (now - then) / 86400000;\n        if (ageDays > ttl) staleFields.push(field);\n      }\n    }\n  }\n\n  const needs = missingFields.length || staleFields.length || invalidFields.length;\n  if (needs) {\n    const parts = [];\n    if (missingFields.length) parts.push(`missing: ${missingFields.join(\",\")}`);\n    if (staleFields.length) parts.push(`stale: ${staleFields.join(\",\")}`);\n    if (invalidFields.length) parts.push(`invalid: ${invalidFields.join(\",\")}`);\n    return { action: \"enrich\", staleFields, missingFields, invalidFields, reason: parts.join(\"; \") };\n  }\n\n  return { action: \"skip\", staleFields: [], missingFields: [], invalidFields: [],\n           reason: \"all required fields present, fresh and valid\" };\n}\n\n// --- n8n wrapper: decideAction(existingRecord) -> create | enrich | skip ---\nconst REQUIRED = [\"lv_org_type\", \"lv_produces_content\"];\nconst POLICY = {\n  lv_org_type: { stale_after_days: 180 },\n  lv_produces_content: { stale_after_days: 180 },\n};\nconst NOW = new Date().toISOString();\nreturn $input.all().map((it) => {\n  const row = it.json;\n  const gate = decideAction(row.existingRecord || {}, REQUIRED, POLICY, NOW);\n  let action = gate.action;\n  // Fail-closed (Task 6, review #8) \u2014 see ENRICH_GATE's identical comment (contacts).\n  if (row.lookup_failed === true && action === \"create\") action = \"skip\";\n  return { json: { ...row, gate, action } };\n});\n"
+      },
+      "id": "c00130000-0000-4000-8000-000000000000",
+      "name": "SJ-2 Company Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        940
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i00140000-0000-4000-8000-000000000000",
+              "leftValue": "={{ $json.action }}",
+              "rightValue": "skip",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if00150000-0000-4000-8000-000000000000",
+      "name": "SJ-2 IF Skip",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        940
+      ]
+    },
+    {
+      "parameters": {
+        "resource": "company",
+        "operation": "update",
+        "companyId": "={{ $json.hs_object_id }}",
+        "updateFields": {
+          "customPropertiesUi": {
+            "customPropertiesValues": [
+              {
+                "property": "lv_enrichment_requested",
+                "value": "true"
+              }
+            ]
+          }
+        }
+      },
+      "id": "hu00160000-0000-4000-8000-000000000000",
+      "name": "SJ-2 Set Requested",
+      "type": "n8n-nodes-base.hubspot",
+      "typeVersion": 2.1,
+      "position": [
+        1540,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "a00170000-0000-4000-8000-000000000000",
+              "name": "action",
+              "value": "skip",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "r00180000-0000-4000-8000-000000000000",
+      "name": "SJ-2 Skip (NoOp)",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1540,
+        840
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## LV Scheduled Maintenance \u2014 CLOUD\nBackground reconciliation + human-review layer (SYSTEM-CONTRACT). Runs alongside \"LV Enrichment (Cloud template)\" \u2014 this workflow only ever DISCOVERS/DISPATCHES/CLASSIFIES; the actual provider waterfall + merge lives in that sibling workflow's companies branch.\n\n**SJ-1 (hourly):** any pipeline-owned input unresolved (`lv_org_type` blank/unknown OR `lv_produces_content` blank) -> `lv_enrichment_requested=true`.\n\n**SJ-2 (monthly):** either verified-at cache key older than 180 days -> reused Company Gate CONFIRMS staleness (RT-5) -> `lv_enrichment_requested=true`.\n\n**SJ-3 (15 min):** `lv_enrichment_requested=true AND lv_enrichment_status != running` -> Execute Workflow into the companies branch of \"LV Enrichment (Cloud template)\". Re-bind `workflowId` after deploy (n8n Cloud assigns its own id on import \u2014 this constant is the byte-identical build-time id, the deploy script re-binds credentials/references the same way it already does for the 6 provider credentials, `scripts/deploy_n8n_workflows.py`).\n\nNone of SJ-1/2/3's predicates ever reference `lv_icp_tier`/`lv_icp_fit_score`/`lv_icp_scored_at` (Approach C, spec \u00a70.7) \u2014 HubSpot derives those, the pipeline only ever queues off its own INPUTS.",
+        "height": 340,
+        "width": 520
+      },
+      "id": "s00190000-0000-4000-8000-000000000000",
       "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         220,
-        480
+        1080
       ]
     }
   ],
@@ -139,6 +436,112 @@
         [
           {
             "node": "SJ-3 Dispatch To Enrichment",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SJ-1 Trigger (hourly)": {
+      "main": [
+        [
+          {
+            "node": "SJ-1 Search (input-gap scan)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SJ-1 Search (input-gap scan)": {
+      "main": [
+        [
+          {
+            "node": "SJ-1 Extract Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SJ-1 Extract Rows": {
+      "main": [
+        [
+          {
+            "node": "SJ-1 Set Requested",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SJ-2 Trigger (monthly)": {
+      "main": [
+        [
+          {
+            "node": "SJ-2 Epoch Cutoff (180d)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SJ-2 Epoch Cutoff (180d)": {
+      "main": [
+        [
+          {
+            "node": "SJ-2 Search (stale refresh)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SJ-2 Search (stale refresh)": {
+      "main": [
+        [
+          {
+            "node": "SJ-2 Adapt Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SJ-2 Adapt Search": {
+      "main": [
+        [
+          {
+            "node": "SJ-2 Company Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SJ-2 Company Gate": {
+      "main": [
+        [
+          {
+            "node": "SJ-2 IF Skip",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SJ-2 IF Skip": {
+      "main": [
+        [
+          {
+            "node": "SJ-2 Skip (NoOp)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SJ-2 Set Requested",
             "type": "main",
             "index": 0
           }

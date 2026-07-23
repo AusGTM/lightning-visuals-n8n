@@ -3132,6 +3132,80 @@ def build_scheduled_maintenance_cloud():
     conns.update(chain([sj3_trigger["name"], sj3_search["name"], "SJ-3 Extract Rows",
                         sj3_dispatch["name"]]))
 
+    # --- SJ-1: hourly input-gap scan (Task 2) ------------------------------------------
+    # Three single-filter OR'd groups (Pitfall 3) — "any input unresolved", never AND.
+    x, y1 = 220, 620
+    sj1_trigger = _schedule_trigger("SJ-1 Trigger (hourly)", x, y1, "hours", 1)
+    nodes.append(sj1_trigger)
+    x1 = x + 220
+    sj1_search = _hs_search_node(
+        "SJ-1 Search (input-gap scan)", "company", x1, y1,
+        filter_groups=[
+            [{"propertyName": "lv_org_type", "operator": "NOT_HAS_PROPERTY"}],
+            [{"propertyName": "lv_org_type", "operator": "EQ", "value": "unknown"}],
+            [{"propertyName": "lv_produces_content", "operator": "NOT_HAS_PROPERTY"}],
+        ],
+        properties_csv="hs_object_id,lv_org_type,lv_produces_content")
+    nodes.append(sj1_search)
+    x1 += 220
+    nodes.append(code_node("SJ-1 Extract Rows", ENRICH_EXTRACT_SEARCH_ROWS, x1, y1))
+    x1 += 220
+    sj1_dispatch = _hs_update_set_property(
+        "SJ-1 Set Requested", "company", x1, y1, "lv_enrichment_requested", "true")
+    nodes.append(sj1_dispatch)
+
+    conns.update(chain([sj1_trigger["name"], sj1_search["name"], "SJ-1 Extract Rows",
+                        sj1_dispatch["name"]]))
+
+    # --- SJ-2: monthly stale refresh + RT-5 confirmation (Task 2) ----------------------
+    # Two OR'd groups, LT on the two verified-at cache keys against a Code-node-computed
+    # epoch-ms cutoff. An Adapt step (ENRICH_ADAPT_CO_SEARCH shape) feeds the reused,
+    # UNMODIFIED Company Gate so decideAction actually confirms staleness (RT-5) before
+    # the terminal dispatch — a skip (still fresh, or re-verified since the scan started)
+    # never re-queues.
+    x, y2 = 220, 940
+    sj2_trigger = _schedule_trigger("SJ-2 Trigger (monthly)", x, y2, "months", 1)
+    nodes.append(sj2_trigger)
+    x2 = x + 220
+    nodes.append(code_node("SJ-2 Epoch Cutoff (180d)", ENRICH_SJ2_EPOCH_CUTOFF, x2, y2))
+    x2 += 220
+    sj2_search = _hs_search_node(
+        "SJ-2 Search (stale refresh)", "company", x2, y2,
+        filter_groups=[
+            [{"propertyName": "lv_org_type_verified_at", "operator": "LT",
+              "value": "={{ $json.cutoff_ms }}"}],
+            [{"propertyName": "lv_produces_content_verified_at", "operator": "LT",
+              "value": "={{ $json.cutoff_ms }}"}],
+        ],
+        properties_csv="hs_object_id,lv_org_type,lv_produces_content,"
+                       "lv_org_type_verified_at,lv_produces_content_verified_at")
+    nodes.append(sj2_search)
+    x2 += 220
+    nodes.append(code_node("SJ-2 Adapt Search", ENRICH_ADAPT_SJ2_SEARCH, x2, y2))
+    x2 += 220
+    nodes.append(code_node("SJ-2 Company Gate", ENRICH_CO_GATE, x2, y2))
+    x2 += 220
+    sj2_if_not_skip = _if_node("SJ-2 IF Skip", "skip", x2, y2)
+    nodes.append(sj2_if_not_skip)
+    x2 += 220
+    sj2_dispatch = _hs_update_set_property(
+        "SJ-2 Set Requested", "company", x2, y2 + 100, "lv_enrichment_requested", "true")
+    nodes.append(sj2_dispatch)
+    sj2_noop = {
+        "parameters": {"assignments": {"assignments": [
+            {"id": nid("a"), "name": "action", "value": "skip", "type": "string"}
+        ]}, "options": {}},
+        "id": nid("r"), "name": "SJ-2 Skip (NoOp)",
+        "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [x2, y2 - 100]}
+    nodes.append(sj2_noop)
+
+    conns.update(chain([sj2_trigger["name"], "SJ-2 Epoch Cutoff (180d)", sj2_search["name"],
+                        "SJ-2 Adapt Search", "SJ-2 Company Gate", sj2_if_not_skip["name"]]))
+    conns[sj2_if_not_skip["name"]] = {"main": [
+        [{"node": "SJ-2 Skip (NoOp)", "type": "main", "index": 0}],   # true: still stale-gate says skip
+        [{"node": sj2_dispatch["name"], "type": "main", "index": 0}],  # false: confirmed stale -> dispatch
+    ]}
+
     notes = [
         {"content": (
             "## LV Scheduled Maintenance — CLOUD\n"
@@ -3139,13 +3213,21 @@ def build_scheduled_maintenance_cloud():
             "alongside \"LV Enrichment (Cloud template)\" — this workflow only ever "
             "DISCOVERS/DISPATCHES/CLASSIFIES; the actual provider waterfall + merge lives "
             "in that sibling workflow's companies branch.\n\n"
+            "**SJ-1 (hourly):** any pipeline-owned input unresolved "
+            "(`lv_org_type` blank/unknown OR `lv_produces_content` blank) -> "
+            "`lv_enrichment_requested=true`.\n\n"
+            "**SJ-2 (monthly):** either verified-at cache key older than 180 days -> "
+            "reused Company Gate CONFIRMS staleness (RT-5) -> `lv_enrichment_requested=true`.\n\n"
             "**SJ-3 (15 min):** `lv_enrichment_requested=true AND lv_enrichment_status != "
             "running` -> Execute Workflow into the companies branch of \"LV Enrichment "
             "(Cloud template)\". Re-bind `workflowId` after deploy (n8n Cloud assigns its "
             "own id on import — this constant is the byte-identical build-time id, the "
             "deploy script re-binds credentials/references the same way it already does "
-            "for the 6 provider credentials, `scripts/deploy_n8n_workflows.py`)."
-        ), "x": 220, "y": 480, "h": 260, "w": 480},
+            "for the 6 provider credentials, `scripts/deploy_n8n_workflows.py`).\n\n"
+            "None of SJ-1/2/3's predicates ever reference `lv_icp_tier`/`lv_icp_fit_score`/"
+            "`lv_icp_scored_at` (Approach C, spec §0.7) — HubSpot derives those, the "
+            "pipeline only ever queues off its own INPUTS."
+        ), "x": 220, "y": 1080, "h": 340, "w": 520},
     ]
     for n in notes:
         nodes.append({
