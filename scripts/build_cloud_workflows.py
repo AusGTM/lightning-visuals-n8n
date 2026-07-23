@@ -3206,6 +3206,32 @@ def build_scheduled_maintenance_cloud():
         [{"node": sj2_dispatch["name"], "type": "main", "index": 0}],  # false: confirmed stale -> dispatch
     ]}
 
+    # --- Dedupe Sweep: weekly, CONTACTS (Task 3) — CLASSIFY ONLY, never writes itself ---
+    # dedupeSweep.js reads contact-shaped properties.{email,phone,linkedin_url}; the
+    # wrapper (ENRICH_DEDUPE_SWEEP) maps lv_linkedin_url -> linkedin_url so the frozen
+    # module never needs to change (CLAUDE.md §13.4 Workflow D).
+    x, y3 = 220, 1520
+    dedupe_trigger = _schedule_trigger("Dedupe Trigger (weekly)", x, y3, "weeks", 1)
+    nodes.append(dedupe_trigger)
+    x3 = x + 220
+    dedupe_search = _hs_search_node(
+        "Dedupe Search (candidate contacts)", "contact", x3, y3,
+        filter_groups=[[{"propertyName": "email", "operator": "HAS_PROPERTY"}]],
+        properties_csv="hs_object_id,email,phone,lv_linkedin_url")
+    nodes.append(dedupe_search)
+    x3 += 220
+    nodes.append(code_node("Dedupe Extract Rows", ENRICH_EXTRACT_SEARCH_ROWS, x3, y3))
+    x3 += 220
+    dedupe_node = code_node("Dedupe Sweep", ENRICH_DEDUPE_SWEEP, x3, y3)
+    nodes.append(dedupe_node)
+    x3 += 220
+    dedupe_flag_write = _hs_update_set_property(
+        "Dedupe Set Needs Review", "contact", x3, y3, "lv_enrichment_needs_review", "true")
+    nodes.append(dedupe_flag_write)
+
+    conns.update(chain([dedupe_trigger["name"], dedupe_search["name"], "Dedupe Extract Rows",
+                        dedupe_node["name"], dedupe_flag_write["name"]]))
+
     notes = [
         {"content": (
             "## LV Scheduled Maintenance — CLOUD\n"
