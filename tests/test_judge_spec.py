@@ -74,16 +74,17 @@ def _block(text: str, start_marker: str, end_marker: str) -> str:
 
 def test_prompt_parity_vendor_flags():
     """Criterion 5 drift check (did not exist before this phase): the production
-    research prompt (scripts/build_cloud_workflows.py's ENRICH_BUILD_RESEARCH_REQUEST)
-    and the dev-oracle prompt (src/web_research.py's RESEARCH_SYSTEM) are independently
-    hand-written and must not drift (Pitfall 4) — both must request
-    lv_is_hardware_vendor / lv_is_gambling_operator."""
+    research prompt (scripts/build_cloud_workflows.py's _enrich_build_research_request_js,
+    Phase 16 Task 4 — was a bare ENRICH_BUILD_RESEARCH_REQUEST constant, now a
+    cloud-aware function) and the dev-oracle prompt (src/web_research.py's
+    RESEARCH_SYSTEM) are independently hand-written and must not drift (Pitfall 4) —
+    both must request lv_is_hardware_vendor / lv_is_gambling_operator."""
     web_research_src = (ROOT / "src" / "web_research.py").read_text()
     research_system_block = _block(web_research_src, "RESEARCH_SYSTEM = (", "\ndef mock_claude_web_research")
 
     builder_src = (ROOT / "scripts" / "build_cloud_workflows.py").read_text()
     build_request_block = _block(
-        builder_src, "ENRICH_BUILD_RESEARCH_REQUEST = inline", "\nENRICH_VALIDATE_RESEARCH ="
+        builder_src, "def _enrich_build_research_request_js", "\n# Validate Research Output"
     )
 
     for field in ("lv_is_hardware_vendor", "lv_is_gambling_operator"):
@@ -91,7 +92,7 @@ def test_prompt_parity_vendor_flags():
             f"{field} missing from src/web_research.py's RESEARCH_SYSTEM"
         )
         assert field in build_request_block, (
-            f"{field} missing from scripts/build_cloud_workflows.py's ENRICH_BUILD_RESEARCH_REQUEST"
+            f"{field} missing from scripts/build_cloud_workflows.py's _enrich_build_research_request_js"
         )
 
 

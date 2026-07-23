@@ -273,6 +273,29 @@ _FLAT_METADATA_TEMPLATE_RE = re.compile(
     r"\$\{f(?:ield)?\}_(?:source|confidence|verified_at|validation_status|evidence_url)")
 
 
+# --- Phase 16 Task 4: Criterion 5 — zero env-var expression in the Cloud workflow -----
+#
+# Word-boundary regex (`\$env\b|\$vars\b`), NOT the dot form (`\$env\.|\$vars\.`) — the
+# dot form is evadable via bracket access ($env[...] / $vars[...]) and review kimi/sol
+# flagged it LOW. Only wf_enrichment_cloud.json is checked: wf_contact_ingest_cloud.json
+# predates this criterion (Milestone 2 scope) and the local/local-live variants
+# legitimately keep $env/$vars (docker-replica secret/flag reads).
+_ENV_OR_VARS_RE = re.compile(r"\$env\b|\$vars\b")
+
+
+def test_no_env_or_vars_in_cloud_workflows():
+    """Criterion 5: every secret is credential-bound and every config flag is a baked
+    build-time constant in the Cloud enrichment workflow — zero $env/$vars expressions
+    survive anywhere in the built JSON (node parameters, jsCode, sticky notes)."""
+    text = (N8N / "wf_enrichment_cloud.json").read_text()
+    matches = _ENV_OR_VARS_RE.findall(text)
+    assert not matches, (
+        f"wf_enrichment_cloud.json still contains {len(matches)} $env/$vars expression(s) "
+        "— every secret must be credential-bound and every config flag a baked build-time "
+        "constant (Criterion 5)."
+    )
+
+
 @pytest.mark.parametrize("name", ACTIVE)
 def test_no_flat_per_field_metadata_template_survives_in_built_workflows(name):
     """Phase 15's provenance collapse removed every `${field}_source` / `${field}_

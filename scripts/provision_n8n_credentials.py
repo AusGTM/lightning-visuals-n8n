@@ -71,11 +71,13 @@ def _n8n_headers() -> dict:
 
 # --- the 6 secrets across ~5 credential objects ------------------------------------
 #
-# ZoomInfo's credential `type` is a placeholder — Task 2's live spike decides whether
-# ZoomInfo is a native n8n OAuth2 Client-Credentials credential or a credential-bound
-# HTTP mint node's Basic-Auth credential. This is the ONE constant Task 4 fills in once
-# that decision lands; everything else in this manifest is final.
-ZOOMINFO_CREDENTIAL_TYPE = None  # set by Task 2 (e.g. "oAuth2Api" or "httpBasicAuth")
+# ZoomInfo's credential `type` — Task 2 decision: split-code-node (credential-bound HTTP
+# Mint node + secret-free cache/gate/enrich Code nodes), NOT native OAuth2. The Mint node
+# (scripts/build_cloud_workflows.py::_zoom_mint_node) is bound to a generic Basic Auth
+# credential holding client_id (user) : client_secret (password) — n8n injects the Basic
+# auth header from this credential; the ZoomInfo token endpoint accepts it directly
+# (no separate Authorization header literal anywhere in the built workflow).
+ZOOMINFO_CREDENTIAL_TYPE = "httpBasicAuth"
 
 
 def _hubspot_data() -> dict:
@@ -95,9 +97,12 @@ def _anthropic_data() -> dict:
 
 
 def _zoominfo_data() -> dict:
+    # n8n's generic httpBasicAuth credential schema is {user, password} — the Mint HTTP
+    # node's Basic auth header is built FROM this credential (client_id:client_secret
+    # base64), never inlined as a header literal.
     return {
-        "client_id": os.getenv("ZOOMINFO_CLIENT_ID"),
-        "client_secret": os.getenv("ZOOMINFO_CLIENT_SECRET"),
+        "user": os.getenv("ZOOMINFO_CLIENT_ID"),
+        "password": os.getenv("ZOOMINFO_CLIENT_SECRET"),
     }
 
 

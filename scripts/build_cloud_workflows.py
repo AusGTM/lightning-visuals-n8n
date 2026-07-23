@@ -657,6 +657,67 @@ def _fixture(name: str):
     return json.loads((FIX_ENRICH / name).read_text())
 
 
+# ---- Criterion 5 parity single-source (Phase 16 Task 4) ---------------------
+# The 6 config flags (research/judge cost caps + model knobs) and 6 secrets both
+# enrichment builders (local-live docker replica + Cloud webhook) consume. ONE dict/list
+# each — every call site below reads THESE, never a builder-local literal, so a flag or
+# secret added/dropped/renamed in one builder but not the other is structurally
+# impossible (tests/test_builder_flag_parity.py proves it once the Cloud companies
+# branch lands, Task 5).
+CONFIG_FLAG_DEFAULTS = {
+    "ALLOW_WEB_RESEARCH": "false",
+    "MAX_WEB_RESEARCH_PER_RUN": "10",
+    "ANTHROPIC_SONNET_MODEL": "claude-sonnet-5",
+    "WEB_RESEARCH_MAX_SEARCHES": "5",
+    "ALLOW_SONNET_ESCALATION": "false",
+    "MAX_SONNET_VALIDATIONS_PER_RUN": "10",
+}
+
+SECRET_ENV_NAMES = [
+    "HUBSPOT_PRIVATE_APP_TOKEN",
+    "LUSHA_API_KEY",
+    "APOLLO_API_KEY",
+    "ANTHROPIC_API_KEY",
+    "ZOOMINFO_CLIENT_ID",
+    "ZOOMINFO_CLIENT_SECRET",
+]
+
+
+def _flag_const(name: str, cloud: bool) -> str:
+    """One JS `const NAME = ...;` declaration for a CONFIG_FLAG_DEFAULTS entry.
+
+    cloud=True bakes the literal default value at build time (AR-4: nothing not already
+    in the JSON exists at n8n Cloud runtime) — zero $env/$vars survives.
+    cloud=False (LOCAL-LIVE docker replica) reads $vars/$env at runtime, falling back to
+    the SAME default so an unset `docker exec -e` still behaves like Cloud.
+    """
+    assert name in CONFIG_FLAG_DEFAULTS, f"unknown config flag: {name}"
+    default = CONFIG_FLAG_DEFAULTS[name]
+    if cloud:
+        # Bake as the most literal JS type the value represents — a bare number for a
+        # digit-string, a bare boolean for "true"/"false", a quoted string otherwise
+        # (e.g. the model name) — never a runtime lookup expression.
+        if default.isdigit():
+            literal = default
+        elif default in ("true", "false"):
+            literal = default
+        else:
+            literal = json.dumps(default)
+        return f"const {name} = {literal};"
+    return f"const {name} = ($vars && $vars.{name}) || $env.{name} || {json.dumps(default)};"
+
+
+def _env_secret_expr(name: str) -> str:
+    """n8n expression reading a secret from $vars (Cloud Variables) or $env (docker -e) —
+    the LOCAL-LIVE docker-replica secret-reading idiom. Cloud never calls this: secrets
+    there are credential-bound (auth='header'/'basic', or the native HubSpot node), so
+    this exists ONLY for local-live header/body call sites, and only for a name present
+    in SECRET_ENV_NAMES — the single source both builders' secret handling is scoped to.
+    """
+    assert name in SECRET_ENV_NAMES, f"unknown secret: {name}"
+    return "{{ ($vars && $vars." + name + ") || $env." + name + " }}"
+
+
 # ---- shared inlined Code-node bodies (Cloud + local both use these) ----------
 
 # Build identity search keys from the trigger payload (email/domain/linkedin).
@@ -1406,12 +1467,16 @@ return rows.map((it, i) => {
 # Research Trigger Gate — RT-3/RT-4. Runs immediately after Normalize + Score Company,
 # BEFORE the (expensive) HTTP call, per RESEARCH Pitfall 4: the per-run cost cap MUST be
 # enforced upstream of the HTTP node, not per-item after it.
-ENRICH_RESEARCH_GATE = inline("taxonomy.generated.js") + r"""
+#
+# cloud=False (LOCAL-LIVE): reads ALLOW_WEB_RESEARCH/MAX_WEB_RESEARCH_PER_RUN from
+# $vars/$env at runtime. cloud=True (CLOUD): both are baked build-time literals from
+# CONFIG_FLAG_DEFAULTS — zero $env/$vars survives (AR-4, Criterion 5).
+def _enrich_research_gate_js(cloud=False):
+    return inline("taxonomy.generated.js") + r"""
 
 // --- n8n wrapper (companies): Research Trigger Gate ---
-const ALLOW_WEB_RESEARCH = ($vars && $vars.ALLOW_WEB_RESEARCH) || $env.ALLOW_WEB_RESEARCH;
-const MAX_PER_RUN = parseInt(
-  (($vars && $vars.MAX_WEB_RESEARCH_PER_RUN) || $env.MAX_WEB_RESEARCH_PER_RUN || "10"), 10);
+""" + _flag_const("ALLOW_WEB_RESEARCH", cloud) + "\n" + _flag_const("MAX_WEB_RESEARCH_PER_RUN", cloud) + r"""
+const MAX_PER_RUN = parseInt(String(MAX_WEB_RESEARCH_PER_RUN), 10);
 
 // RT-3: fires when lv_org_type is unresolved/evidence-gated, OR lv_produces_content blank.
 function needsResearch(existingRecord) {
@@ -1444,7 +1509,11 @@ return $input.all().map((it) => {
 # Build Research Request — RT-1/RT-2. D3: prompted free-text JSON, NOT a forced tool_use
 # schema (mixing a client tool with the web_search server tool in one turn defers the
 # search to a second round trip, breaking the single-HTTP-call n8n pattern).
-ENRICH_BUILD_RESEARCH_REQUEST = inline("taxonomy.generated.js") + r"""
+#
+# cloud=False (LOCAL-LIVE): ANTHROPIC_SONNET_MODEL/WEB_RESEARCH_MAX_SEARCHES read from
+# $vars/$env. cloud=True (CLOUD): both baked build-time literals (AR-4, Criterion 5).
+def _enrich_build_research_request_js(cloud=False):
+    return inline("taxonomy.generated.js") + r"""
 
 // --- n8n wrapper (companies): Build Research Request ---
 function researchSystemPrompt() {
@@ -1472,13 +1541,14 @@ function researchSystemPrompt() {
   ].join(" ");
 }
 
+""" + _flag_const("ANTHROPIC_SONNET_MODEL", cloud) + "\n" + _flag_const("WEB_RESEARCH_MAX_SEARCHES", cloud) + r"""
+
 return $input.all().map((it) => {
   const row = it.json;
   if (!row.research_needed) return { json: { ...row, research_request_body: null } };
   const id = row.identity_keys || {};
-  const model = ($vars && $vars.ANTHROPIC_SONNET_MODEL) || $env.ANTHROPIC_SONNET_MODEL || "claude-sonnet-5";
-  const maxUses = parseInt(
-    (($vars && $vars.WEB_RESEARCH_MAX_SEARCHES) || $env.WEB_RESEARCH_MAX_SEARCHES || "5"), 10);
+  const model = ANTHROPIC_SONNET_MODEL;
+  const maxUses = parseInt(String(WEB_RESEARCH_MAX_SEARCHES), 10);
   const body = {
     model,
     // ponytail: 2000 truncated live responses (stop_reason=max_tokens) before
@@ -1527,16 +1597,19 @@ return $input.all().map((it) => {
 # Judge Gate — JG-4 (always, D6) + JG-1/RO-1/RO-2 escalation trigger + the D5 kill
 # switches (ALLOW_SONNET_ESCALATION, MAX_SONNET_VALIDATIONS_PER_RUN, enforced HERE,
 # physically upstream of the HTTP node — Pitfall 4 precedent).
-ENRICH_JUDGE_GATE = inline("escalation.generated.js", "scoreEnrichment.js", "judge.js") + r"""
+#
+# cloud=False (LOCAL-LIVE): both flags read from $vars/$env. cloud=True (CLOUD): both
+# baked build-time literals (AR-4, Criterion 5).
+def _enrich_judge_gate_js(cloud=False):
+    return inline("escalation.generated.js", "scoreEnrichment.js", "judge.js") + r"""
 
 // --- n8n wrapper (companies): Judge Gate ---
 // RO-2: size-band disagreement is detected downstream inside Merge Company and is
 // deliberately invisible here — this gate runs before that node, so no model call can
 // ever be triggered by a size disagreement alone.
-const ALLOW_SONNET_ESCALATION = ($vars && $vars.ALLOW_SONNET_ESCALATION) || $env.ALLOW_SONNET_ESCALATION;
+""" + _flag_const("ALLOW_SONNET_ESCALATION", cloud) + "\n" + _flag_const("MAX_SONNET_VALIDATIONS_PER_RUN", cloud) + r"""
 const allowOn = String(ALLOW_SONNET_ESCALATION).toLowerCase() === "true";
-const MAX_PER_RUN = parseInt(
-  (($vars && $vars.MAX_SONNET_VALIDATIONS_PER_RUN) || $env.MAX_SONNET_VALIDATIONS_PER_RUN || "10"), 10);
+const MAX_PER_RUN = parseInt(String(MAX_SONNET_VALIDATIONS_PER_RUN), 10);
 const NOW = new Date().toISOString();
 
 // Phase-15 provenance blob is a JSON string property that may be absent, empty, or
@@ -1600,13 +1673,18 @@ return capped.map((row) => {
 
 # Build Judge Request — JG-2 payload (identity + classification only, no size fields,
 # no tools key).
-ENRICH_BUILD_JUDGE_REQUEST = inline("escalation.generated.js", "judge.js") + r"""
+#
+# cloud=False (LOCAL-LIVE): ANTHROPIC_SONNET_MODEL read from $vars/$env. cloud=True
+# (CLOUD): baked build-time literal (AR-4, Criterion 5).
+def _enrich_build_judge_request_js(cloud=False):
+    return inline("escalation.generated.js", "judge.js") + r"""
 
 // --- n8n wrapper (companies): Build Judge Request ---
+""" + _flag_const("ANTHROPIC_SONNET_MODEL", cloud) + r"""
 return $input.all().map((it) => {
   const row = it.json;
   if (!row.needs_judge) return { json: { ...row, judge_request_body: null } };
-  const model = ($vars && $vars.ANTHROPIC_SONNET_MODEL) || $env.ANTHROPIC_SONNET_MODEL || "claude-sonnet-5";
+  const model = ANTHROPIC_SONNET_MODEL;
   const judge_request_body = buildJudgeRequestBody(row, model, 4096);
   return { json: { ...row, judge_request_body } };
 });
@@ -1835,7 +1913,7 @@ def build_enrichment_local_live():
     nodes.append(_live_http(
         "HubSpot Search", x, y, "POST",
         "https://api.hubapi.com/crm/v3/objects/contacts/search",
-        [{"name": "Authorization", "value": "=Bearer {{ $env.HUBSPOT_PRIVATE_APP_TOKEN }}"},
+        [{"name": "Authorization", "value": "=Bearer " + _env_secret_expr("HUBSPOT_PRIVATE_APP_TOKEN")},
          {"name": "Content-Type", "value": "application/json"}],
         json_body=HS_SEARCH_BODY_EXPR))
     x += 230
@@ -1848,11 +1926,11 @@ def build_enrichment_local_live():
     nodes.append(_live_http(
         "Lusha Enrich", x, y, "GET",
         "={{ $('Build Requests').item.json.lusha_url }}",
-        [{"name": "api_key", "value": "={{ $env.LUSHA_API_KEY }}"}]))
+        [{"name": "api_key", "value": "=" + _env_secret_expr("LUSHA_API_KEY")}]))
     x += 230
     nodes.append(_live_http(
         "Apollo Match", x, y, "POST", "https://api.apollo.io/v1/people/match",
-        [{"name": "X-Api-Key", "value": "={{ $env.APOLLO_API_KEY }}"},
+        [{"name": "X-Api-Key", "value": "=" + _env_secret_expr("APOLLO_API_KEY")},
          {"name": "Content-Type", "value": "application/json"},
          {"name": "Cache-Control", "value": "no-cache"}],
         json_body="={{ JSON.stringify($('Build Requests').item.json.apollo_body) }}"))
@@ -1879,7 +1957,7 @@ def build_enrichment_local_live():
     nodes.append(_live_http(
         "HubSpot Company Search", cx, cy, "POST",
         "https://api.hubapi.com/crm/v3/objects/companies/search",
-        [{"name": "Authorization", "value": "=Bearer {{ $env.HUBSPOT_PRIVATE_APP_TOKEN }}"},
+        [{"name": "Authorization", "value": "=Bearer " + _env_secret_expr("HUBSPOT_PRIVATE_APP_TOKEN")},
          {"name": "Content-Type", "value": "application/json"}],
         json_body=HS_CO_SEARCH_BODY_EXPR))
     cx += 230
@@ -1892,12 +1970,12 @@ def build_enrichment_local_live():
     nodes.append(_live_http(
         "Lusha Company", cx, cy, "GET",
         "={{ $('Build Company Requests').item.json.lusha_company_url }}",
-        [{"name": "api_key", "value": "={{ $env.LUSHA_API_KEY }}"}]))
+        [{"name": "api_key", "value": "=" + _env_secret_expr("LUSHA_API_KEY")}]))
     cx += 230
     nodes.append(_live_http(
         "Apollo Org", cx, cy, "POST",
         "={{ $('Build Company Requests').item.json.apollo_org_url }}",
-        [{"name": "X-Api-Key", "value": "={{ $env.APOLLO_API_KEY }}"},
+        [{"name": "X-Api-Key", "value": "=" + _env_secret_expr("APOLLO_API_KEY")},
          {"name": "Content-Type", "value": "application/json"},
          {"name": "Cache-Control", "value": "no-cache"}]))
     cx += 230
@@ -1910,16 +1988,16 @@ def build_enrichment_local_live():
     # Merge Company. False lane -> straight to Merge Company (fan-in, both lanes carry the
     # full pass-through row; only the true lane additionally attaches research_candidate).
     cx += 230
-    nodes.append(code_node("Research Trigger Gate", ENRICH_RESEARCH_GATE, cx, cy))
+    nodes.append(code_node("Research Trigger Gate", _enrich_research_gate_js(cloud=False), cx, cy))
     cx += 230
     nodes.append(_if_bool_node("IF Research Needed", "research_needed", cx, cy))
     cx += 230
-    nodes.append(code_node("Build Research Request", ENRICH_BUILD_RESEARCH_REQUEST, cx, cy - 100))
+    nodes.append(code_node("Build Research Request", _enrich_build_research_request_js(cloud=False), cx, cy - 100))
     cx += 230
     nodes.append(_live_http(
         "Claude Web Research", cx, cy - 100, "POST",
         "https://api.anthropic.com/v1/messages",
-        [{"name": "x-api-key", "value": "={{ $vars.ANTHROPIC_API_KEY || $env.ANTHROPIC_API_KEY }}"},
+        [{"name": "x-api-key", "value": "=" + _env_secret_expr("ANTHROPIC_API_KEY")},
          {"name": "anthropic-version", "value": "2023-06-01"},
          {"name": "content-type", "value": "application/json"}],
         json_body="={{ JSON.stringify($json.research_request_body) }}",
@@ -1934,16 +2012,16 @@ def build_enrichment_local_live():
     # topology). Judge Gate / IF Needs Judge sit on the cy-100 research lane; the three
     # judge-call nodes sit on cy-200 — positions are cosmetic.
     cx += 230
-    nodes.append(code_node("Judge Gate", ENRICH_JUDGE_GATE, cx, cy - 100))
+    nodes.append(code_node("Judge Gate", _enrich_judge_gate_js(cloud=False), cx, cy - 100))
     cx += 230
     nodes.append(_if_bool_node("IF Needs Judge", "needs_judge", cx, cy - 100))
     cx += 230
-    nodes.append(code_node("Build Judge Request", ENRICH_BUILD_JUDGE_REQUEST, cx, cy - 200))
+    nodes.append(code_node("Build Judge Request", _enrich_build_judge_request_js(cloud=False), cx, cy - 200))
     cx += 230
     nodes.append(_live_http(
         "Judge Call", cx, cy - 200, "POST",
         "https://api.anthropic.com/v1/messages",
-        [{"name": "x-api-key", "value": "={{ $vars.ANTHROPIC_API_KEY || $env.ANTHROPIC_API_KEY }}"},
+        [{"name": "x-api-key", "value": "=" + _env_secret_expr("ANTHROPIC_API_KEY")},
          {"name": "anthropic-version", "value": "2023-06-01"},
          {"name": "content-type", "value": "application/json"}],
         json_body="={{ JSON.stringify($json.judge_request_body) }}",
@@ -2042,11 +2120,254 @@ def _http_node(name, url, x, y, auth=None, headers=None, form_body=None, json_bo
     }
 
 
-# NOTE (Phase 13, D4): this Cloud webhook template's chain is contacts-only — it has no
-# companies branch (unlike build_enrichment_local_live()). The Claude web-research nodes
-# (Research Trigger Gate / Build Research Request / Claude Web Research / Validate
-# Research Output) therefore do NOT land here yet; they land here when this function
-# grows a companies branch (Phase 16 scope).
+# ---- ZoomInfo CLOUD credential path (Task 2 decision: split-code-node) ------
+# zoominfoToken.js's needsMint/computeExpiry/parseTokenResponse/isAuthError are pure
+# functions with NO compliant secret source on Cloud when called from a single Code node
+# (the original ENRICH_ZOOMINFO_CACHED reads $vars.ZOOMINFO_CLIENT_ID/_SECRET directly —
+# fine headless/local-live, not available on Cloud). The chosen fallback splits the one
+# node into a credential-bound HTTP "Mint" node (the ONLY place client_id/client_secret
+# are read, via its bound httpBasicAuth credential) plus secret-free Code nodes that
+# cache/gate/enrich using nothing but the short-lived bearer token the Mint node returns.
+#
+# Topology (5 nodes, matches the Task 2 "3-4 more nodes + an IF branch" estimate):
+#   <upstream> -> Token Gate (Code, secret-free: cache check) -> IF Needs Mint
+#     true  -> Mint (HTTP, credential-bound Basic Auth) -> Cache Token (Code, secret-free)
+#     false -> \_______________________________________________________/  -> Enrich (Code, secret-free)
+#
+# Tradeoff vs the single-node LOCAL-LIVE body: a 401 during Enrich clears the cache so the
+# NEXT run re-mints, but this run does not retry inline — an inline retry would require
+# the client secret, which the Enrich node deliberately never touches (see 16-01-SUMMARY.md).
+def _zoom_split_gate_js(gate_source_node):
+    """Secret-free. $input here is the prior HTTP node's response (Apollo/Apollo Org),
+    which replaced $json — identity_keys is recovered by paired index from
+    `gate_source_node`, same lookup pattern the single-node cached body already used."""
+    return inline("zoominfoToken.js") + f"""
+
+// --- n8n wrapper: ZoomInfo token cache gate (CLOUD split-code-node, secret-free) ---
+// Never reads client_id/client_secret — only the credential-bound "ZoomInfo Mint" HTTP
+// node touches those (Task 2 decision).
+const sd = $getWorkflowStaticData("global");
+const gateRows = (function () {{ try {{ return $('{gate_source_node}').all(); }} catch (e) {{ return []; }} }})();
+const items = $input.all();
+return items.map((item, i) => {{
+  const row = (gateRows[i] && gateRows[i].json) || item.json || {{}};
+  const cached = sd.zoominfo;
+  const needs_mint = needsMint(cached, Date.now());
+  return {{ json: {{ ...row, zoom_needs_mint: needs_mint,
+                   zoom_token: needs_mint ? null : cached.access_token }} }};
+}});
+"""
+
+
+def _zoom_split_cache_js(token_gate_name):
+    """Secret-free. Parses the Mint HTTP node's token response (never client_id/secret),
+    caches it in workflow static data, and re-attaches the original row read back from
+    the Token Gate node by paired index (the Mint response has replaced $json)."""
+    return inline("zoominfoToken.js") + f"""
+
+// --- n8n wrapper: cache the freshly-minted ZoomInfo token (CLOUD split-code-node) ---
+const sd = $getWorkflowStaticData("global");
+const gateRows = (function () {{ try {{ return $('{token_gate_name}').all(); }} catch (e) {{ return []; }} }})();
+const items = $input.all();
+return items.map((item, i) => {{
+  const row = (gateRows[i] && gateRows[i].json) || {{}};
+  let zoom_token = null;
+  try {{
+    const parsed = parseTokenResponse(item.json, Date.now());
+    sd.zoominfo = parsed;
+    zoom_token = parsed.access_token;
+  }} catch (e) {{
+    zoom_token = null;   // mint response malformed -> Enrich below sees no usable token
+  }}
+  return {{ json: {{ ...row, zoom_token }} }};
+}});
+"""
+
+
+def _zoom_split_enrich_contacts_js():
+    """Secret-free. Consumes only the short-lived bearer token attached upstream by the
+    Gate/Cache nodes — mirrors ENRICH_ZOOMINFO_CACHED's contacts enrich logic exactly,
+    minus the mint (that lives in the credential-bound Mint HTTP node instead)."""
+    return inline("zoominfoToken.js") + r"""
+
+// --- n8n wrapper: ZoomInfo contacts enrich via Bearer token (CLOUD split-code-node) ---
+const ENRICH_URL = "https://api.zoominfo.com/gtm/data/v1/contacts/enrich";
+const sd = $getWorkflowStaticData("global");
+const ZOOM_OUTPUT_FIELDS = [
+  "id", "firstName", "lastName", "email", "phone", "mobilePhone", "jobTitle",
+  "managementLevel", "contactAccuracyScore", "validDate", "lastUpdatedDate",
+];
+function toMatchPersonInput(id) {
+  const m = {};
+  if (id && id.email) m.emailAddress = id.email;
+  if (id && id.firstName) m.firstName = id.firstName;
+  if (id && id.lastName) m.lastName = id.lastName;
+  if (id && id.companyName) m.companyName = id.companyName;
+  return m;
+}
+function hasZoomKey(m) { return !!(m.emailAddress || (m.firstName && m.lastName && m.companyName)); }
+
+const items = $input.all();
+const out = [];
+for (const item of items) {
+  const row = item.json;
+  const id = row.identity_keys || {};
+  const person = toMatchPersonInput(id);
+  if (!hasZoomKey(person)) { out.push({ json: { skipped: "no zoominfo match key" } }); continue; }
+  const token = row.zoom_token;
+  if (!token) { out.push({ json: { error: "no zoominfo token available (mint failed or missing)" } }); continue; }
+  const payload = { data: { type: "ContactEnrich",
+    attributes: { matchPersonInput: [person], outputFields: ZOOM_OUTPUT_FIELDS } } };
+  let res;
+  try {
+    res = await this.helpers.httpRequest({
+      method: "POST", url: ENRICH_URL,
+      headers: { Authorization: "Bearer " + token,
+                 "Content-Type": "application/vnd.api+json", Accept: "application/vnd.api+json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (e) {
+    if (isAuthError(e.statusCode || e.httpCode || (e.response && e.response.statusCode))) {
+      delete sd.zoominfo;  // token rejected -> clear cache so the NEXT run re-mints
+    }
+    res = { error: String((e && e.message) || e) };
+  }
+  out.push({ json: res });
+}
+return out;
+"""
+
+
+def _zoom_split_enrich_companies_js():
+    """Secret-free. Company-branch counterpart of _zoom_split_enrich_contacts_js —
+    mirrors ENRICH_ZOOMINFO_CO_CACHED's enrich logic exactly, minus the mint."""
+    return inline("zoominfoToken.js") + r"""
+
+// --- n8n wrapper: ZoomInfo companies enrich via Bearer token (CLOUD split-code-node) ---
+const ENRICH_URL = "https://api.zoominfo.com/gtm/data/v1/companies/enrich";
+const sd = $getWorkflowStaticData("global");
+const ZOOM_CO_OUTPUT_FIELDS = [
+  "id", "name", "website", "revenue", "revenueRange", "employeeCount", "employeeRange",
+  "country", "primaryIndustry", "naicsCodes", "descriptionList", "foundedYear",
+];
+function toMatchCompanyInput(id) {
+  const m = {};
+  if (id && id.domain) m.companyWebsite = id.domain;
+  if (id && id.companyName) m.companyName = id.companyName;
+  return m;
+}
+function hasZoomCoKey(m) { return !!(m.companyWebsite || m.companyName); }
+
+const items = $input.all();
+const out = [];
+for (const item of items) {
+  const row = item.json;
+  const id = row.identity_keys || {};
+  const co = toMatchCompanyInput(id);
+  if (!hasZoomCoKey(co)) { out.push({ json: { skipped: "no zoominfo company match key" } }); continue; }
+  const token = row.zoom_token;
+  if (!token) { out.push({ json: { error: "no zoominfo token available (mint failed or missing)" } }); continue; }
+  const payload = { data: { type: "CompanyEnrich",
+    attributes: { matchCompanyInput: [co], outputFields: ZOOM_CO_OUTPUT_FIELDS } } };
+  let res;
+  try {
+    res = await this.helpers.httpRequest({
+      method: "POST", url: ENRICH_URL,
+      headers: { Authorization: "Bearer " + token,
+                 "Content-Type": "application/vnd.api+json", Accept: "application/vnd.api+json" },
+      body: JSON.stringify(payload),
+    });
+  } catch (e) {
+    if (isAuthError(e.statusCode || e.httpCode || (e.response && e.response.statusCode))) {
+      delete sd.zoominfo;
+    }
+    res = { error: String((e && e.message) || e) };
+  }
+  out.push({ json: res });
+}
+return out;
+"""
+
+
+def _zoom_mint_node(name, x, y):
+    """Credential-bound HTTP node — the ONLY place ZoomInfo client_id/client_secret are
+    read, via its bound httpBasicAuth credential ("LV ZoomInfo", NODE_CREDENTIAL_MAP in
+    deploy_n8n_workflows.py). Body is the bare grant_type; Basic auth comes from the
+    credential, never a header literal."""
+    return _http_node(name, "https://api.zoominfo.com/gtm/oauth/v1/token", x, y,
+                       auth="basic", form_body=[{"name": "grant_type", "value": "client_credentials"}])
+
+
+def _zoom_split_contacts_subgraph(gate_source_node, x, y):
+    """5-node ZoomInfo split-code-node subgraph for the CONTACTS branch. Final node name
+    stays "ZoomInfo Enrich" so downstream ($('ZoomInfo Enrich').all()) is unchanged.
+    Returns (nodes, connections, entry_node_name, exit_node_name)."""
+    nodes = [
+        code_node("ZoomInfo Token Gate", _zoom_split_gate_js(gate_source_node), x, y),
+        _if_bool_node("IF ZoomInfo Needs Mint", "zoom_needs_mint", x + 220, y),
+        _zoom_mint_node("ZoomInfo Mint", x + 440, y - 120),
+        code_node("ZoomInfo Cache Token", _zoom_split_cache_js("ZoomInfo Token Gate"), x + 660, y - 120),
+        code_node("ZoomInfo Enrich", _zoom_split_enrich_contacts_js(), x + 880, y),
+    ]
+    conns = {
+        "ZoomInfo Token Gate": {"main": [[{"node": "IF ZoomInfo Needs Mint", "type": "main", "index": 0}]]},
+        "IF ZoomInfo Needs Mint": {"main": [
+            [{"node": "ZoomInfo Mint", "type": "main", "index": 0}],    # true: mint
+            [{"node": "ZoomInfo Enrich", "type": "main", "index": 0}],  # false: use cached
+        ]},
+        "ZoomInfo Mint": {"main": [[{"node": "ZoomInfo Cache Token", "type": "main", "index": 0}]]},
+        "ZoomInfo Cache Token": {"main": [[{"node": "ZoomInfo Enrich", "type": "main", "index": 0}]]},
+    }
+    return nodes, conns, "ZoomInfo Token Gate", "ZoomInfo Enrich"
+
+
+def _zoom_split_company_subgraph(gate_source_node, x, y):
+    """Company-branch counterpart of _zoom_split_contacts_subgraph — node names carry a
+    " Company" suffix (ZoomInfo Mint Company, etc.) so NODE_CREDENTIAL_MAP can bind both
+    variants to the same "LV ZoomInfo" credential without a name collision. Final node
+    name stays "ZoomInfo Company" (unchanged downstream reference, Task 5)."""
+    nodes = [
+        code_node("ZoomInfo Company Token Gate", _zoom_split_gate_js(gate_source_node), x, y),
+        _if_bool_node("IF ZoomInfo Company Needs Mint", "zoom_needs_mint", x + 220, y),
+        _zoom_mint_node("ZoomInfo Mint Company", x + 440, y - 120),
+        code_node("ZoomInfo Company Cache Token", _zoom_split_cache_js("ZoomInfo Company Token Gate"),
+                  x + 660, y - 120),
+        code_node("ZoomInfo Company", _zoom_split_enrich_companies_js(), x + 880, y),
+    ]
+    conns = {
+        "ZoomInfo Company Token Gate": {"main": [[{"node": "IF ZoomInfo Company Needs Mint", "type": "main", "index": 0}]]},
+        "IF ZoomInfo Company Needs Mint": {"main": [
+            [{"node": "ZoomInfo Mint Company", "type": "main", "index": 0}],  # true: mint
+            [{"node": "ZoomInfo Company", "type": "main", "index": 0}],       # false: use cached
+        ]},
+        "ZoomInfo Mint Company": {"main": [[{"node": "ZoomInfo Company Cache Token", "type": "main", "index": 0}]]},
+        "ZoomInfo Company Cache Token": {"main": [[{"node": "ZoomInfo Company", "type": "main", "index": 0}]]},
+    }
+    return nodes, conns, "ZoomInfo Company Token Gate", "ZoomInfo Company"
+
+
+def _route_action_switch(name, x, y):
+    """Switch node routing $json.action -> create/enrich/skip. Shared by the contacts and
+    companies Cloud branches (previously duplicated inline for contacts only)."""
+    def _eq(value):
+        return {"conditions": {"options": {"caseSensitive": True, "typeValidation": "strict"},
+                                "combinator": "and", "conditions": [{
+                                    "id": nid("i"), "leftValue": "={{ $json.action }}",
+                                    "rightValue": value,
+                                    "operator": {"type": "string", "operation": "equals"}}]},
+                "outputKey": value}
+    return {
+        "parameters": {"mode": "rules", "rules": {"values": [_eq("create"), _eq("enrich"), _eq("skip")]},
+                       "options": {}},
+        "id": nid("sw"), "name": name,
+        "type": "n8n-nodes-base.switch", "typeVersion": 3, "position": [x, y],
+    }
+
+
+# NOTE (Phase 13/16): this Cloud webhook template's companies branch is ported by Task 5
+# (Phase 16). Until then, and unlike build_enrichment_local_live(), the Claude web-research
+# nodes (Research Trigger Gate / Build Research Request / Claude Web Research / Validate
+# Research Output) do NOT land here.
 def build_enrichment_cloud():
     nodes = []
     y = 300
@@ -2080,31 +2401,7 @@ def build_enrichment_cloud():
 
     # Switch: create / enrich / skip
     x += 220
-    switch = {
-        "parameters": {"mode": "rules", "rules": {"values": [
-            {"conditions": {"options": {"caseSensitive": True, "typeValidation": "strict"},
-                            "combinator": "and", "conditions": [{
-                                "id": nid("i"), "leftValue": "={{ $json.action }}",
-                                "rightValue": "create",
-                                "operator": {"type": "string", "operation": "equals"}}]},
-             "outputKey": "create"},
-            {"conditions": {"options": {"caseSensitive": True, "typeValidation": "strict"},
-                            "combinator": "and", "conditions": [{
-                                "id": nid("i"), "leftValue": "={{ $json.action }}",
-                                "rightValue": "enrich",
-                                "operator": {"type": "string", "operation": "equals"}}]},
-             "outputKey": "enrich"},
-            {"conditions": {"options": {"caseSensitive": True, "typeValidation": "strict"},
-                            "combinator": "and", "conditions": [{
-                                "id": nid("i"), "leftValue": "={{ $json.action }}",
-                                "rightValue": "skip",
-                                "operator": {"type": "string", "operation": "equals"}}]},
-             "outputKey": "skip"},
-        ]}, "options": {}},
-        "id": nid("sw"), "name": "Route Action",
-        "type": "n8n-nodes-base.switch", "typeVersion": 3, "position": [x, y],
-    }
-    nodes.append(switch)
+    nodes.append(_route_action_switch("Route Action", x, y))
 
     # Provider waterfall (create+enrich share it). Apollo phone is async (webhook) in prod.
     # Auth differs per provider: Lusha + Apollo = single static header key (generic Header
@@ -2127,12 +2424,14 @@ def build_enrichment_cloud():
                                    "organization_name: $json.identity_keys.companyName, "
                                    "reveal_personal_emails: true }) }}"))
     nodes.append(apollo)
-    # ZoomInfo: autonomous cached-token enrich. The Code node caches the bearer in workflow
-    # static data, re-mints only when missing/near-expiry, and re-mints once + retries on 401.
-    zoom = code_node("ZoomInfo Enrich", ENRICH_ZOOMINFO_CACHED, px + 440, y - 80)
-    nodes.append(zoom)
+    # ZoomInfo: split-code-node (Task 2 decision). The credential-bound "ZoomInfo Mint"
+    # HTTP node is the ONLY place client_id/client_secret are read; the Token Gate/Cache
+    # Token/Enrich Code nodes are secret-free, consuming only the short-lived bearer.
+    zoom_nodes, zoom_conns, zoom_entry, zoom_exit = _zoom_split_contacts_subgraph(
+        "Enrichment Gate", px + 440, y - 80)
+    nodes.extend(zoom_nodes)
 
-    sx = px + 660
+    sx = px + 660 + 440
     nodes.append(code_node("Normalize + Score", ENRICH_NORMALIZE_SCORE_CLOUD, sx, y - 80))
     sx += 220
     nodes.append(code_node("Merge Winners", ENRICH_MERGE, sx, y - 80))
@@ -2185,9 +2484,12 @@ def build_enrichment_cloud():
         [{"node": "Lusha Enrich", "type": "main", "index": 0}],   # enrich
         [{"node": "Skip (NoOp)", "type": "main", "index": 0}],    # skip
     ]}
-    # Lusha -> Apollo -> ZoomInfo Enrich (autonomous cached token) -> Normalize...
-    conns.update(chain(["Lusha Enrich", "Apollo Match", "ZoomInfo Enrich",
-                        "Normalize + Score", "Merge Winners",
+    # Lusha -> Apollo -> ZoomInfo split subgraph (credential-bound Mint + secret-free
+    # Gate/Cache/Enrich, Task 2 decision) -> Normalize...
+    conns.update(chain(["Lusha Enrich", "Apollo Match"]))
+    conns["Apollo Match"] = {"main": [[{"node": zoom_entry, "type": "main", "index": 0}]]}
+    conns.update(zoom_conns)
+    conns.update(chain([zoom_exit, "Normalize + Score", "Merge Winners",
                         "Set Data Quality + Gap Flag", "Decide Action", "IF Create"]))
     conns["IF Create"] = {"main": [
         [{"node": "HubSpot Create", "type": "main", "index": 0}],  # true
@@ -2201,15 +2503,21 @@ def build_enrichment_cloud():
     notes = [
         {"content": (
             "## LV Enrichment — CLOUD template\n"
-            "Import to n8n Cloud, then add **credentials**: HubSpot (search/create/"
-            "update); **Lusha** + **Apollo** = generic Header Auth (single static key, "
-            "e.g. `api_key` / `X-Api-Key`); **ZoomInfo** = autonomous — set "
-            "`ZOOMINFO_CLIENT_ID`/`ZOOMINFO_CLIENT_SECRET` in n8n Variables ($vars); "
-            "the ZoomInfo Enrich node mints + caches its own token — see the ZoomInfo note.\n\n"
+            "Run `python scripts/provision_n8n_credentials.py` then "
+            "`python scripts/deploy_n8n_workflows.py` (both env-gated, dry-run by "
+            "default — see their docstrings) to create the 5 credentials and deploy "
+            "this workflow with every node bound: **HubSpot** (search/create/update, "
+            "`hubspotAppToken`); **Lusha** + **Apollo** = generic Header Auth (one "
+            "static key each, e.g. `api_key` / `X-Api-Key`); **ZoomInfo** = a "
+            "credential-bound Mint HTTP node (generic Basic Auth holding "
+            "client_id:client_secret) — see the ZoomInfo note. Every one of the 6 "
+            "config flags (research/judge cost caps + model knobs) is a baked "
+            "build-time constant, not a runtime environment lookup — none survives "
+            "in this JSON (Criterion 5).\n\n"
             "**Flow:** Webhook -> Build Identity -> HubSpot Search -> Gate "
             "(create/enrich/skip) -> Switch. create+enrich share the scored "
             "waterfall; skip does nothing. Writes are GATED."
-        ), "x": 220, "y": 480, "h": 300, "w": 460},
+        ), "x": 220, "y": 480, "h": 320, "w": 460},
         {"content": (
             "### Scored waterfall (not FIFO)\n"
             "`value_score = wA·A + wR·R + wG·G + wT·T`\n"
@@ -2227,26 +2535,29 @@ def build_enrichment_cloud():
             "person/org match only."
         ), "x": 1580, "y": 60, "h": 200, "w": 380},
         {"content": (
-            "### ZoomInfo = autonomous OAuth2 (cached) — VERIFIED\n"
-            "The **ZoomInfo Enrich** Code node mints its own Okta token: caches the "
-            "bearer in workflow **static data**, re-mints when missing/near-expiry, "
-            "and on a **401** clears the cache, re-mints once, retries.\n"
-            "Confirmed working: `POST api.zoominfo.com/gtm/oauth/v1/token`, Basic "
-            "auth (client_id:client_secret), body `grant_type=client_credentials` "
-            "ONLY — **do NOT send a `scope`** (any scope => 400 invalid_scope). "
-            "Token ~24h; GTM API (`gtm/data/v1/...`) accepts it.\n"
-            "Creds = long-lived `client_id`/`client_secret` in **n8n Variables** "
-            "($vars) — never a stored token. Get them from the **ZoomInfo DevPortal** "
-            "(create app → click the app link to reveal Client ID + Client Secret; "
-            "enable the **client-credentials** grant). Rotate the secret ~quarterly; "
-            "everything else is unattended."
-        ), "x": 1140, "y": 60, "h": 300, "w": 420},
+            "### ZoomInfo = split-code-node (credential-bound Mint) — Task 2 decision\n"
+            "**ZoomInfo Token Gate** (secret-free) checks the cached bearer in workflow "
+            "static data -> **IF Needs Mint** -> true: **ZoomInfo Mint** (HTTP, "
+            "credential-bound generic Basic Auth — the ONLY node that ever touches "
+            "client_id/client_secret) -> **ZoomInfo Cache Token** (secret-free, parses + "
+            "caches) -> **ZoomInfo Enrich** (secret-free, calls the GTM enrich endpoint "
+            "with the bearer only). False lane skips straight to Enrich with the cached "
+            "token.\n"
+            "`POST api.zoominfo.com/gtm/oauth/v1/token`, Basic auth, body "
+            "`grant_type=client_credentials` ONLY — **no `scope`** (400 invalid_scope). "
+            "Token ~24h. A 401 during Enrich clears the cache so the NEXT run re-mints "
+            "(no inline retry — that would need the secret this node never touches).\n"
+            "Create the credential via `provision_n8n_credentials.py` (name **LV "
+            "ZoomInfo**, type `httpBasicAuth`) from the **ZoomInfo DevPortal** "
+            "client_id/client_secret (client-credentials grant enabled); rotate the "
+            "secret ~quarterly."
+        ), "x": 1140, "y": 60, "h": 340, "w": 420},
         {"content": (
-            "### Dependencies (awaited)\n"
-            "**`lv_*` HubSpot properties** are not yet created — the merge writes "
-            "them by name; create them in the portal first. **Provider keys** are "
-            "empty — POC mocks the responses (see the local workflow). Swap in real "
-            "keys + properties to go live.\n\n"
+            "### Properties + writes\n"
+            "The `lv_*` HubSpot properties this workflow writes must exist in the "
+            "portal first (`scripts/sync_hubspot_properties.py`). Provider credentials "
+            "are real (no mocked responses) once provisioned via "
+            "`provision_n8n_credentials.py`.\n\n"
             "**AU-phone:** normalizePhone is an AU-only heuristic (no libphonenumber "
             "in Code nodes); non-AU/ambiguous -> null -> review."
         ), "x": 1360, "y": 480, "h": 280, "w": 420},

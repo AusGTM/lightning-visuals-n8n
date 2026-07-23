@@ -241,13 +241,34 @@ def test_provision_create_if_missing_never_updates_existing(monkeypatch):
     assert failures == []
 
 
-def test_provision_zoominfo_placeholder_is_skipped_not_a_failure(monkeypatch, capsys):
+def test_provision_zoominfo_dry_run_is_skipped_not_a_failure(monkeypatch, capsys):
+    # Dry-run (live_writes=False): nothing is created for ANY manifest entry, ZoomInfo
+    # included — this is a skip, not a failure.
     monkeypatch.setenv("N8N_URL", "https://foo.n8n.cloud")
     monkeypatch.setenv("N8N_API_KEY", "fake-key")
     monkeypatch.setattr(provision, "_get_live_credentials", lambda: [])
     id_map, failures = provision.provision(provision.CREDENTIAL_MANIFEST, live_writes=False)
     assert "LV ZoomInfo" not in id_map
-    assert failures == []  # pending-decision is a skip, not a failure
+    assert failures == []
+
+
+def test_provision_zoominfo_credential_type_resolved_by_task2_decision():
+    # Task 2 decision (split-code-node): ZoomInfo is a generic Basic Auth credential,
+    # never a native OAuth2 credential — the placeholder from Task 1 is filled.
+    entry = next(e for e in provision.CREDENTIAL_MANIFEST if e["name"] == "LV ZoomInfo")
+    assert entry["type"] == "httpBasicAuth"
+    assert provision.ZOOMINFO_CREDENTIAL_TYPE == "httpBasicAuth"
+
+
+def test_provision_zoominfo_data_shape_matches_basic_auth_schema(monkeypatch):
+    # httpBasicAuth's schema is {user, password} — client_id maps to user, client_secret
+    # to password (never client_id/client_secret keys, which httpBasicAuth doesn't have).
+    monkeypatch.setenv("ZOOMINFO_CLIENT_ID", "fake-id")
+    monkeypatch.setenv("ZOOMINFO_CLIENT_SECRET", "fake-secret")
+    data = provision._zoominfo_data()
+    assert set(data.keys()) == {"user", "password"}
+    assert data["user"] == "fake-id"
+    assert data["password"] == "fake-secret"
 
 
 def test_provision_id_map_written_carries_only_names_and_ids(tmp_path):

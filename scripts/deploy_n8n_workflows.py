@@ -54,8 +54,11 @@ NODE_CREDENTIAL_MAP = {
     "Apollo Org": {"cred_type": "httpHeaderAuth", "cred_name": "LV Apollo"},
     "Claude Web Research": {"cred_type": "httpHeaderAuth", "cred_name": "LV Anthropic"},
     "Judge Call": {"cred_type": "httpHeaderAuth", "cred_name": "LV Anthropic"},
-    # ZoomInfo nodes are added here once Task 2 decides the credential architecture
-    # (native OAuth2 vs. split mint-node) and Task 4 converts the ZoomInfo Code nodes.
+    # ZoomInfo (Task 2 decision: split-code-node) — the Mint HTTP node is the ONLY node
+    # that ever touches client_id/client_secret, via this generic Basic Auth credential.
+    # The Token Gate/Cache Token/Enrich Code nodes are secret-free and need no binding.
+    "ZoomInfo Mint": {"cred_type": "httpBasicAuth", "cred_name": "LV ZoomInfo"},
+    "ZoomInfo Mint Company": {"cred_type": "httpBasicAuth", "cred_name": "LV ZoomInfo"},
 }
 
 
