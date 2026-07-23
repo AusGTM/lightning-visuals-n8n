@@ -43,7 +43,7 @@ Baseline before this phase: 201 pytest / 123 node passing (Phase 15.5). New test
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 16-01-XX | 01 | 1 | Criteria 5–8 | T-16-01 / — | secrets never inlined into workflow JSON; deploy/creds scripts skip without two keys | unit | `python -m pytest -q` | ❌ W0 | ⬜ pending |
+| 16-01-XX | 01 | 1 | Criteria 5–8 | T-16-01 / — | secrets never inlined into workflow JSON; deploy/creds scripts skip without two keys; local-replica & Cloud builders share one flag/secret source (parity) | unit | `python -m pytest -q` (incl. `tests/test_builder_flag_parity.py`) | ❌ W0 | ⬜ pending |
 | 16-02-XX | 02 | 2 | Criteria 1–4, 9 | — | SJ predicates key on inputs only, never lv_icp_tier | unit | `python -m pytest -q && node --test tests/n8n/` | ❌ W0 | ⬜ pending |
 
 *Filled concretely by the planner per task. Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
@@ -54,7 +54,7 @@ Baseline before this phase: 201 pytest / 123 node passing (Phase 15.5). New test
 
 - [ ] Acceptance-test stubs for SJ-1/SJ-2/SJ-3 schedule predicates (spec §0.7 defers them to this phase)
 - [ ] `test_top_level_is_exactly_the_deployable_set` guard for the deploy script's deployable set
-- [ ] Parity test: local-replica ($env) vs Cloud (credentials/AR-4 constants) must not diverge silently
+- [ ] Parity test (`tests/test_builder_flag_parity.py`, 16-01 Task 4): both enrichment builders source the 6 flags + 6 secrets from one shared constant (`CONFIG_FLAG_DEFAULTS`/`SECRET_ENV_NAMES`), so local-replica ($env via docker) and Cloud (credentials/AR-4 constants) cannot diverge silently
 - [ ] Non-clobber-under-live-writes property test (first phase with real record writes)
 
 *Planner authors the exact file paths in each plan.*
