@@ -1,5 +1,7 @@
 # Gap Analysis — n8n Use vs Phase-2 Proposal
 
+> **⚠ SUPERSEDED (2026-07-23).** Point-in-time snapshot from proposal week 3. The gaps it flags as *Not built* — the Lusha→Apollo→ZoomInfo enrichment waterfall (D2), ICP scoring as an n8n node (D5), and live `lv_*` properties (D6) — were all **delivered** by Phases 11–16 (enrichment + companies branch, `n8n/code/scoreEnrichment.js` + judge wiring, and the live Phase-15 property migration). Retained for historical audit; read against current `README.md` / `n8n/README.md`.
+
 **Scope:** POC's n8n implementation vs the n8n-related deliverables in *Detailed Lightning_Visuals_GTM_Engineering_Proposal.md* (Phase 2, Weeks 4–11).
 **Date:** 2026-07-14 (proposal week 3).
 **Verdict:** The POC delivers the **Orchestration & Tier Cutover workflow POC** (proposal item 4, *IN PROGRESS*) and de-risks the n8n plumbing + safe HubSpot write-back. It does **not** yet deliver the core Phase-2 n8n deliverable — the **Lusha→Apollo→ZoomInfo enrichment waterfall** — which the proposal itself marks *NOT STARTED*. The POC's n8n effort went into an **adjacent** contact-ingestion/hygiene pipeline, not the enrichment waterfall.

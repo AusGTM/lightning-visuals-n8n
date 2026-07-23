@@ -2635,8 +2635,9 @@ def build_enrichment_cloud():
 
     # Provider waterfall (create+enrich share it). Apollo phone is async (webhook) in prod.
     # Auth differs per provider: Lusha + Apollo = single static header key (generic Header
-    # Auth credential); ZoomInfo = autonomous OAuth2 — the ZoomInfo Enrich Code node mints
-    # and caches its own short-lived Bearer (no static token, no separate Auth node).
+    # Auth credential); ZoomInfo = split-code-node (Phase 16) — a credential-bound Basic-auth
+    # "ZoomInfo Mint" HTTP node does the mint; the Token Gate/Cache Code nodes are secret-free.
+    # (n8n Cloud blocks $env/$vars and Code nodes cannot read credentials — see below.)
     px = x + 220
     lusha = _http_node("Lusha Enrich", "https://api.lusha.com/v2/person", px, y - 80,
                        auth="header")  # credential header, e.g. api_key: <LUSHA_API_KEY>

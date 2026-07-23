@@ -2,7 +2,7 @@
 
 **Goal:** An idempotent, quality-scored enrichment workflow that checks HubSpot first, then **creates / enriches / skips**, and — instead of FIFO stop-on-first-match — **scores all sources for accuracy + richness, cross-checks, and pushes the best value per field** into the contact-ingestion (non-clobber) merge.
 
-**Status:** Plan (build follows). Provider keys are empty → build against **mock provider responses** shaped to the real API fields (below). `lv_*` HubSpot properties are **awaited** → build against the defined schema, mock the HubSpot read/write. Both swap to live nodes when keys + properties land.
+**Status:** Built and superseded (Phases 11–16). This document is the original POC design rationale; the shipped enrichment workflow — contacts **and** companies branches, web research, judge, non-clobber merge — lives in `build_enrichment_cloud()` / `n8n/wf_enrichment_cloud.json` (see `n8n/README.md` for the as-built node graph). `lv_*` HubSpot properties are **live** (Phase 15); provider nodes are credential-bound (Phase 16). Retained for design history.
 
 ---
 
@@ -120,8 +120,8 @@ All logic in inline **Code nodes** (no npm), HTTP nodes for providers, native Hu
 
 ---
 
-## 6. Dependencies / awaiting
-- **`lv_*` HubSpot properties** — not yet created. Workflow reads/writes them by name; mocked until the property-creation step lands. (Separate task: script their creation in the portal.)
+## 6. Dependencies / awaiting (resolved)
+- **`lv_*` HubSpot properties** — ✅ **created live (Phase 15)** via `scripts/sync_hubspot_properties.py` (`config/hubspot_properties.yaml`); no longer mocked in the Cloud template.
 - **Provider API keys** (Lusha/Apollo/ZoomInfo) + **HubSpot credentials** — empty; POC mocks provider responses. Apollo phone is **async (webhook)** in production — the Cloud template includes a Webhook-return node for it.
 - **Minimum-data definition** (Phase 1) — drives the required-field set for the staleness gate; using the CLAUDE.md/field_policy set as the working definition until Phase-1 confirms.
 

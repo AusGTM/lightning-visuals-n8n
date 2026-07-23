@@ -5,8 +5,11 @@
 // re-mint when it expires or is rejected (401) — never store a static token.
 //
 // These are PURE functions (no n8n, no network) so they unit-test against Node.
-// The n8n Code node wraps them around $getWorkflowStaticData (cross-run cache),
-// this.helpers.httpRequest (mint + enrich), and Date.now().
+// In the local replica the Code node wraps them around $getWorkflowStaticData (cross-run
+// cache), this.helpers.httpRequest, and Date.now(). In the n8n Cloud deploy (Phase 16
+// split-code-node) the mint is done by a credential-bound "ZoomInfo Mint" HTTP node —
+// these helpers run in the SECRET-FREE Token Gate/Cache Code nodes (cache + expiry +
+// re-mint-on-401 decisioning only; no client_id/client_secret ever in a Code node).
 //
 // Cache shape stored in workflow static data: { access_token, exp, token_type }
 //   exp = absolute expiry in epoch MILLISECONDS.

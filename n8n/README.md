@@ -120,8 +120,81 @@ field into the same non-clobber merge. Same two-artifact pattern, same inliner
 
 | File | Purpose |
 | ---- | ------- |
-| `wf_enrichment_cloud.json` | Production-shaped template. Webhook + real HubSpot + 3 provider HTTP nodes + Switch/IF routing. Add credentials on import. |
+| `wf_enrichment_cloud.json` | Production-shaped template (58 nodes). Auth-gated Webhook + object-type router → **contacts branch** and **full companies ICP branch** (waterfall → web research → judge → merge). Credentials bound per node by `scripts/deploy_n8n_workflows.py`. |
 | `wf_enrichment_local.json` | Headless-executable. Trigger emits 3 sample identities; HubSpot search + provider waterfall + writes are Code mocks; the scoring/gate/merge logic is real. |
+| `wf_enrichment_local_live.json` | Local replica wired for **live** provider/HTTP calls (the reference build carrying the full company branch + research + judge). |
+| `wf_scheduled_maintenance_cloud.json` | The background reconciliation layer (30 nodes): SJ-1/2/3 schedules + weekly dedupe + the §22.2 review loop. See its diagram below. |
+
+## Workflow graph — enrichment (`wf_enrichment_cloud.json`, as-built)
+
+Trigger point = the auth-gated webhook. `Route By Object Type` splits to the contacts branch or the full companies ICP branch. Every HubSpot Create/Update is governed by the `WRITE_SAFETY_DEFAULTS` gate (`ALLOW_HUBSPOT_RECORD_WRITES` default **false** + test-record allowlist), disjoint from the parity-guarded `CONFIG_FLAG_DEFAULTS`.
+
+```mermaid
+flowchart TD
+  WH["Webhook Trigger — webhook<br/>POST /webhook/hubspot/enrichment/event<br/>authentication: headerAuth (X-Enrichment-Secret)"]
+  PE["Parse HubSpot Event — code"]
+  RT{"Route By Object Type — if"}
+  WH --> PE --> RT
+
+  subgraph C["Contact branch"]
+    direction TB
+    CB["Build Identity — code"] --> CS["HubSpot Search — hubspot · cred LV HubSpot"] --> CA["Adapt Search — code"] --> CG["Enrichment Gate — code · decideAction → create/enrich/skip"] --> CR{"Route Action — switch"}
+    CR -->|create/enrich| LU["Lusha Enrich — httpRequest<br/>api.lusha.com/v2/person · cred LV Lusha (Header)"] --> AP["Apollo Match — httpRequest<br/>api.apollo.io/v1/people/match · cred LV Apollo (Header)"] --> ZTG["ZoomInfo Token Gate — code"] --> ZIF{"IF Needs Mint"}
+    ZIF -->|mint| ZM["ZoomInfo Mint — httpRequest<br/>gtm/oauth/v1/token · cred LV ZoomInfo (Basic)"] --> ZC["ZoomInfo Cache Token — code · secret-free static cache"] --> ZE["ZoomInfo Enrich — code"]
+    ZIF -->|cached| ZE
+    ZE --> CN["Normalize + Score — code · best-per-field + provenance"] --> CM["Merge Winners — code · non-clobber"] --> CDQ["Set Data Quality + Gap Flag — set"] --> CD["Decide Action — code"]
+    CD --> C1{"IF Create"} -->|yes| CC["HubSpot Create — hubspot"]
+    CD --> C2{"IF Enrich"} -->|yes| CU["HubSpot Update — hubspot"]
+    CR -->|skip| CK["Skip — set (NoOp)"]
+  end
+
+  subgraph K["Company branch — full ICP pipeline"]
+    direction TB
+    KB["Build Company Identity — code"] --> KS["HubSpot Company Search — hubspot · cred LV HubSpot"] --> KA["Adapt Company Search — code · preserves hs_object_id + lookup_failed"] --> KG["Company Gate — code · decideAction"] --> KREQ["Build Company Requests — code"]
+    KREQ --> KLU["Lusha Company — httpRequest · /v2/company · cred LV Lusha"] --> KAP["Apollo Org — httpRequest · /v1/organizations/enrich · cred LV Apollo"] --> KZTG["ZoomInfo Company Token Gate — code"] --> KZIF{"IF Company Needs Mint"}
+    KZIF -->|mint| KZM["ZoomInfo Mint Company — httpRequest · Basic · cred LV ZoomInfo"] --> KZC["ZoomInfo Company Cache Token — code"] --> KZE["ZoomInfo Company — code"]
+    KZIF -->|cached| KZE
+    KZE --> KNS["Normalize + Score Company — code"] --> KRG["Research Trigger Gate — code · RT-5 180d TTL"] --> KRIF{"IF Research Needed"}
+    KRIF -->|yes| KRR["Build Research Request — code"] --> KCW["Claude Web Research — httpRequest<br/>api.anthropic.com/v1/messages · cred LV Anthropic"] --> KVR["Validate Research Output — code · tri-state, evidence-gated"] --> KJG["Judge Gate — code · scores every row (RO-2, upstream of merge)"]
+    KRIF -->|no| KJG
+    KJG --> KJIF{"IF Needs Judge"}
+    KJIF -->|yes| KJR["Build Judge Request — code · restricted field list"] --> KJC["Judge Call — httpRequest · anthropic messages · cred LV Anthropic"] --> KJV["Apply Judge Verdict — code"] --> KM["Merge Company — code · non-clobber + judge confidence"]
+    KJIF -->|no| KM
+    KM --> KD["Decide Company Action — code<br/>writes lv_enrichment_needs_review/_review_reason/_review_candidate_json;<br/>holds canonical on needs_review"]
+    KD --> K1{"IF Company Create"} -->|yes| KC["HubSpot Company Create — hubspot"]
+    KD --> K2{"IF Company Enrich"} -->|yes| KU["HubSpot Company Update — hubspot"]
+  end
+
+  RT -->|contact| CB
+  RT -->|company| KB
+```
+
+## Workflow graph — scheduled maintenance (`wf_scheduled_maintenance_cloud.json`, as-built)
+
+Five `scheduleTrigger` entry points. SJ predicates key on **pipeline-owned inputs only** (Approach C — never `lv_icp_tier`/`lv_icp_scored_at`). SJ-1/SJ-2 flag records; SJ-3 dispatches flagged records into the enrichment workflow; the review poller closes the §22.2 loop.
+
+```mermaid
+flowchart TD
+  subgraph S1["SJ-1 · input-gap scan"]
+    A1["scheduleTrigger · every 1 h"] --> B1["HubSpot Search · org_type/produces_content missing|unknown (3 OR groups)"] --> C1["Extract Rows · code"] --> D1["HubSpot Update · lv_enrichment_requested=true"]
+  end
+  subgraph S3["SJ-3 · requested poller"]
+    A3["scheduleTrigger · every 15 min"] --> B3["HubSpot Search · lv_enrichment_requested=true AND status≠running"] --> C3["Extract Rows · code"] --> D3["Execute Workflow → LV Enrichment (Cloud template)"]
+  end
+  subgraph S2["SJ-2 · stale refresh"]
+    A2["scheduleTrigger · every 1 month"] --> E2["Epoch Cutoff 180d · code"] --> B2["HubSpot Search · _verified_at &lt; cutoff"] --> F2["Adapt Search · code"] --> G2["Company Gate · code"] --> H2{"IF Skip"}
+    H2 -->|no| D2["HubSpot Update · lv_enrichment_requested=true"]
+    H2 -->|yes| I2["Skip · NoOp"]
+  end
+  subgraph SD["Dedupe · weekly (classify-only)"]
+    AD["scheduleTrigger · every 1 week"] --> BD["HubSpot Search · candidate contacts"] --> CD2["Extract Rows · code"] --> DD["Dedupe Sweep · code · dedupeSweep.js"] --> ED["HubSpot Update · lv_enrichment_needs_review"]
+  end
+  subgraph SR["§22.2 review loop · every 15 min"]
+    AR["scheduleTrigger · every 15 min"] --> BR["HubSpot Search · lv_enrichment_review_approved=true"] --> CR2["Extract Rows · code"] --> DR["Apply Review · code · reviewApply.js<br/>refetch + compare-and-set + fail-closed JSON"] --> ER{"IF Stale"}
+    ER -->|fresh| FR["Review Apply Update — hubspot<br/>updateFields:{} placeholder → operator wires the patch"]
+    ER -->|stale| GR["Stale · NoOp (keep queued)"]
+  end
+```
 
 ## Pipeline
 
@@ -165,26 +238,34 @@ Each winner carries provenance `{value, source, score, components, agreedBy[]}`.
 
 ## Import to n8n Cloud
 
-1. **Workflows → Import from File** → `wf_enrichment_cloud.json`.
-2. Add credentials: **HubSpot** on Search/Create/Update, and **provider API
-   keys** on the Lusha / Apollo HTTP nodes (generic Header Auth, single static
-   key). **ZoomInfo is autonomous** — instead of a static key set
-   `ZOOMINFO_CLIENT_ID` / `ZOOMINFO_CLIENT_SECRET` in **n8n Variables**
-   (`$vars`). The **ZoomInfo Enrich** Code node mints its own short-lived bearer,
-   caches it in workflow **static data** across runs, re-mints only when the
-   token is missing or near-expiry, and on a **401** clears the cache, re-mints
-   once, and retries — so a stored/static token is never needed. Rotate the
-   client secret ~quarterly (ZoomInfo Admin Portal → Integrations → API &
-   Webhooks); everything else is unattended.
-3. Trigger is a **Webhook** (`POST /webhook/hubspot/enrichment/event`) — point
-   your HubSpot private-app webhook subscription at it.
-4. Writes are **GATED** — review the dry-run behaviour before enabling.
+**Deploy is scripted (Phase 16) — do not hand-import.** n8n Cloud blocks `$env`
+(`N8N_BLOCK_ENV_ACCESS_IN_NODE`) and doesn't license `$vars`, and Code nodes can
+**never** read credentials. So secrets became **n8n credentials referenced by ID**
+and config flags became **build-time inlined constants**. `scripts/provision_n8n_credentials.py`
+creates the 6 credential objects via the Public API; `scripts/deploy_n8n_workflows.py`
+binds them per node and pushes the workflow (see the root `README.md` → *Deploy to n8n Cloud*).
 
-**`lv_*` property dependency (awaited):** the merge writes company/contact
-`lv_*` properties (org type, revenue band, source/evidence metadata) **by name**.
-Create them in the HubSpot portal first (see `../CLAUDE.md §4–8`); until then the
-Cloud writes target properties that don't exist. The local replica mocks the
-write, so it needs none.
+1. Provision credentials (writes `.n8n_credential_ids.json`): `LV HubSpot`
+   (`hubspotAppToken`), `LV Lusha` / `LV Apollo` / `LV Anthropic` / `LV Enrichment Webhook`
+   (`httpHeaderAuth`), `LV ZoomInfo` (`httpBasicAuth`).
+2. **ZoomInfo = split-code-node** (Phase 16 decision): the **ZoomInfo Mint** HTTP
+   node is the *only* node that touches `client_id`/`client_secret`, via the
+   `LV ZoomInfo` Basic-auth credential. The **Token Gate → IF Needs Mint → Cache
+   Token → Enrich** Code nodes are **secret-free** and preserve the cached-token /
+   re-mint-on-401 behaviour (`zoominfoToken.js`) — no `$vars`/`$env`, no secret in
+   any Code node.
+3. Trigger is an **auth-gated Webhook** (`POST /webhook/hubspot/enrichment/event`,
+   Header Auth `X-Enrichment-Secret` bound to `LV Enrichment Webhook`). Point your
+   caller at it — see the root README note on caller/auth (HubSpot's native webhooks
+   send `X-HubSpot-Signature`, not this header).
+4. Writes are **GATED** by `WRITE_SAFETY_DEFAULTS` (`ALLOW_HUBSPOT_RECORD_WRITES`
+   default `false` + a test-record allowlist) — review before enabling. Activation
+   is a separate `POST /api/v1/workflows/{id}/activate` step.
+
+**`lv_*` properties (live since Phase 15):** the 33 company/contact `lv_*`
+properties + the SJ-3 control props (`lv_enrichment_requested` / `lv_enrichment_status`)
+are created in the portal (`config/hubspot_properties.yaml`, `scripts/sync_hubspot_properties.py`).
+The pipeline writes ICP **inputs** only — HubSpot derives `lv_icp_fit_score`/`lv_icp_tier` (Approach C).
 
 **Apollo phone is async:** Apollo returns phone numbers via a **webhook
 callback**, not inline. Production needs a second Webhook node + a Merge to join

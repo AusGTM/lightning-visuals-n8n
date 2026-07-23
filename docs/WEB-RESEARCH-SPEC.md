@@ -1,6 +1,6 @@
 # Web Research + Taxonomy Spec
 
-**Status:** approved for MVP, pre-implementation
+**Status:** implemented (Phases 13–16) — web research, taxonomy, judge, tiered adjudication, and the scheduled/review surface all shipped
 **Version:** `lv-taxonomy-v1`
 **Scope:** companies only. Contacts unchanged.
 
@@ -104,9 +104,9 @@ supersedes the unprefixed names in CLAUDE.md §4, §6, §7, §8 and §22.
 
 > **Timing (portal audit, 2026-07-20).** Adopting this now costs nothing. All 5 existing
 > custom company properties already comply (`lv_anti_icp_flag`, `lv_icp_fit_score`,
-> `lv_icp_tier`, `lv_org_type`, `lv_produces_content`). The ~40 control/staging/metadata
-> properties do not exist yet, so there is nothing to migrate. Raised after Phase 15 this
-> would have been a rename migration across live data.
+> `lv_icp_tier`, `lv_org_type`, `lv_produces_content`). The control/staging/metadata
+> properties did not exist at the time of this note, so adopting the convention cost nothing
+> — Phase 15 has since created them (33 + review/SJ-3 control props) already compliant.
 >
 > The 11 custom contact properties (`xero_*`, `zoom_webinar_*`,
 > `initial_zoom_webinar_attendance_average_duration`) are third-party integration fields,
@@ -119,10 +119,10 @@ supersedes the unprefixed names in CLAUDE.md §4, §6, §7, §8 and §22.
 
 CLAUDE.md §19.2 and §19.5 queue scheduled work off **derived** fields (`lv_icp_tier`,
 `lv_icp_scored_at`). Under Approach C the pipeline writes only ICP **inputs**; HubSpot
-owns the derived outputs, and `lv_icp_tier` / `lv_icp_fit_score` are today placeholder
-calculations (every company scores 2). Derived fields are therefore unusable as queue
-signals. This section supersedes the §19.2 / §19.5 predicates. Scope: Phase 16; the
-acceptance tests land with that phase's plan.
+owns the derived outputs, and `lv_icp_tier` / `lv_icp_fit_score` are currently placeholder
+calculations. Derived fields are therefore unusable as queue signals. This section supersedes
+the §19.2 / §19.5 predicates. Implemented in Phase 16 (`wf_scheduled_maintenance_cloud.json`);
+the SJ-1/2/3 acceptance tests shipped with that phase.
 
 **SJ-1 (input-gap scan, hourly — replaces §19.2 "unscored scan").** Queue a company for
 enrichment when any pipeline-owned input is unresolved:
@@ -244,12 +244,10 @@ unscored company.
 **RT-4.** Gated by `ALLOW_WEB_RESEARCH` and `MAX_WEB_RESEARCH_PER_RUN`.
 
 **RT-5.** Results cached by **domain** (not record ID), TTL 180 days per SJ-2.
-**UNBLOCKED (Phase 15).** `lv_org_type_verified_at` / `lv_produces_content_verified_at`
-are in `config/hubspot_properties.yaml`'s manifest — Phase 15 builds and offline-proves
-the tooling to create them; the operator runbook in `15-01-SUMMARY.md` runs the actual
-live creation. (`lv_icp_scored_at` is NOT a cache key — Approach C, see §0.7.) Once the
-operator has run the live migration, SJ-2's monthly stale-refresh predicate (Phase 16)
-can key on these two properties as designed.
+**IMPLEMENTED (Phases 15–16).** `lv_org_type_verified_at` / `lv_produces_content_verified_at`
+are in `config/hubspot_properties.yaml`'s manifest and were created live in Phase 15.
+(`lv_icp_scored_at` is NOT a cache key — Approach C, see §0.7.) SJ-2's monthly stale-refresh
+predicate (Phase 16, `wf_scheduled_maintenance_cloud.json`) keys on these two properties as designed.
 
 **Provenance storage model (Phase 15).** Per-field enrichment metadata is stored as ONE
 JSON text property per object (`lv_enrichment_provenance` / `lv_contact_enrichment_provenance`)
