@@ -309,3 +309,24 @@ def test_neither_script_interpolates_a_secret_env_var_into_a_print(module_path):
                     pytest.fail(
                         f"{module_path}:{lineno}: secret env var {name!r} is interpolated "
                         f"into a print() call: {line!r}")
+
+
+def test_deploy_set_is_cloud_only_no_env_leak():
+    """Deploy set must be EXACTLY the Cloud workflows (wf_*_cloud.json) — never the
+    docker-replica fixtures (wf_enrichment_local*.json etc.) that legitimately keep
+    $env/$vars (AR-4) and would import as broken/unbound nodes on n8n Cloud.
+    Regression guard for the deploy_n8n_workflows.py glob (16-VERIFICATION follow-up)."""
+    cloud_files = sorted(p.name for p in deploy.N8N_DIR.glob("wf_*_cloud.json"))
+    all_files = sorted(p.name for p in deploy.N8N_DIR.glob("wf_*.json"))
+    local_files = [f for f in all_files if f not in cloud_files]
+    assert local_files, "expected some local (non-cloud) wf_*.json fixtures to exist"
+
+    loaded = deploy._load_local_workflows()
+    assert 0 < len(loaded) == len(cloud_files)
+
+    for wf in loaded:
+        text = json.dumps(wf)
+        assert "$env." not in text and "$vars." not in text, (
+            f"deploy set workflow {wf.get('name')!r} still references $env/$vars — "
+            "would import unbound on n8n Cloud"
+        )

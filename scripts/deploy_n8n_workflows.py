@@ -97,7 +97,10 @@ def _n8n_headers() -> dict:
 
 
 def _load_local_workflows() -> list:
-    return [json.loads(p.read_text()) for p in sorted(N8N_DIR.glob("wf_*.json"))]
+    # Deploy ONLY the Cloud-targeted workflows (wf_*_cloud.json). The other top-level
+    # wf_*.json files are docker-replica fixtures that legitimately keep $env/$vars
+    # (AR-4) and would import as broken/unbound nodes on n8n Cloud.
+    return [json.loads(p.read_text()) for p in sorted(N8N_DIR.glob("wf_*_cloud.json"))]
 
 
 def _get_live_workflows() -> list:
