@@ -402,7 +402,10 @@ retroactively; its artifacts and tests are in the tree.
 
 **Evaluated against `docs/SYSTEM-CONTRACT.md`** — especially: non-clobber absolute *under live writes* (this is the first phase writing real record data), right-sized compute (no capable model on a cheap path), freshness-without-churn (criterion 9), and the closed-won red-flag as a live regression signal.
 
-**Plans**: TBD — large; planner should split deployable (5–8) from complete (1–4, 9).
+**Plans**: 2 plans (two sequential waves within Phase 16; no formal 16/17 split)
+
+- [ ] 16-01-PLAN.md — Deployable (Criteria 5–8 + SJ-3 property prerequisite): env→credentials + build-time constants, ZoomInfo credential decision, companies-branch port, deploy + credential-provisioning scripts [wave 1]
+- [ ] 16-02-PLAN.md — Complete (Criteria 1–4, 9): SJ-1/2/3 schedule workflows, dedupeSweep wiring, §22.2 review loop, RT-5 caching test [wave 2, depends_on 16-01]
 
 ## Milestone 3 Progress
 
@@ -414,4 +417,4 @@ retroactively; its artifacts and tests are in the tree.
 | 14. Judge Wiring | 1/1 | Complete | 2026-07-21 |
 | 15. HubSpot Property Migration | 1/1 | Complete | 2026-07-22 |
 | 15.5. Tiered Candidate Adjudication (INSERTED) | 1/1 | Complete | 2026-07-23 |
-| 16. Scheduled Workflows & Review Surface | 0/? | Not started | — |
+| 16. Scheduled Workflows & Review Surface | 0/2 | Planned | — |
