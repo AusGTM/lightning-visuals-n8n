@@ -1864,6 +1864,63 @@ return $input.all().map((it) => {
 });
 """
 
+# CLOUD: compute action + the HubSpot company property patch; IF nodes route to real
+# HubSpot company Create/Update (write-safety-gated in Task 6). Companies counterpart of
+# ENRICH_DECIDE_CLOUD.
+#
+# REVIEW-LOOP PRODUCER (review consensus #2, Phase 16 Task 5 — the seam 16-02 Task 4
+# depends on). mergeCompanies' canonicalPatch (n8n/code/mergeCompanies.js:209-211,
+# VERIFIED) contains ONLY decision==="promote" fields; needs_review decisions live in the
+# `decisions` array and are otherwise dropped on the floor. When ANY decision for this row
+# is needs_review, this node writes lv_enrichment_needs_review/lv_enrichment_status/
+# lv_enrichment_review_reason/lv_enrichment_review_candidate_json (stableStringify'd, the
+# HELD candidates a human will approve) — canonicalPatch already excludes those fields'
+# values (mergeCompanies never promoted them in the first place), so nothing needs to be
+# stripped; a promote-decision field on the SAME row still writes normally.
+#
+# Approach C (Phase 15 criterion 4): canonicalPatch never carries lv_icp_fit_score/
+# lv_icp_tier/lv_anti_icp_flag/lv_recommended_motion — mergeCompanies.js's
+# DEFAULT_COMPANY_POLICY has no score_output/veto_output entries for those (they were
+# removed in Phase 15), so this node cannot emit them even if it tried.
+ENRICH_DECIDE_CO_CLOUD = inline("taxonomy.generated.js", "mergeCompanies.js") + r"""
+
+// --- n8n wrapper (companies): Decide Company Action — CLOUD variant ---
+return $input.all().map((it) => {
+  const row = it.json;
+  const action = row.action;
+  const merge = row.merge;
+  const decisions = (merge && merge.decisions) || [];
+  const needsReview = decisions.filter((d) => d.decision === "needs_review");
+
+  let properties = {};
+  if (merge) {
+    properties = { ...merge.canonicalPatch, ...(merge.cacheKeys || {}) };
+    if (merge.provenance && Object.keys(merge.provenance).length) {
+      properties.lv_enrichment_provenance = stableStringify(merge.provenance).slice(0, 60000);
+    }
+  }
+
+  if (needsReview.length > 0) {
+    properties.lv_enrichment_needs_review = true;
+    properties.lv_enrichment_status = "needs_review";
+    properties.lv_enrichment_review_reason =
+      needsReview.map((d) => `${d.field}: ${d.reason}`).join("; ").slice(0, 60000);
+    properties.lv_enrichment_review_candidate_json = stableStringify(needsReview).slice(0, 60000);
+  } else if (merge) {
+    properties.lv_enrichment_status = "complete";
+  }
+
+  return { json: {
+    action,
+    object_type: "companies",
+    hs_object_id: (row.existingRecord && row.existingRecord.hs_object_id) || null,
+    gap_flag: row.gap_flag === true,
+    needs_review: needsReview.length > 0,
+    properties,
+  }};
+});
+"""
+
 
 def _live_http(name, x, y, method, url, headers, json_body=None, timeout=20000):
     """HTTP Request node whose auth/secrets come from $env expressions in headers
@@ -2476,6 +2533,110 @@ def build_enrichment_cloud():
         "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [px, y + 160]}
     nodes.append(set_skip)
 
+    # --- COMPANIES branch: sibling off the same Webhook Trigger, own row (y+420) -----
+    # Task 5 (Phase 16): ports the companies ICP branch build_enrichment_local_live()
+    # already has, Cloud-converted (native HubSpot node, credential-bound HTTP nodes,
+    # cloud-aware flag functions — 16-PATTERNS.md Analog A/B). Emit Company Targets (the
+    # LOCAL-LIVE fixture emitter, ENRICH_EMIT_COMPANIES) is DELIBERATELY NOT ported
+    # (review #6, VERIFIED hard-codes Harvey Norman/Racing NSW/...) — on the webhook path
+    # the company identity comes from the event the caller sends, never a fixture row set.
+    # Build Company Identity reads directly off the webhook body, same un-hardened state
+    # Build Identity is in prior to Task 6's event parser + object-type router.
+    cy = y + 420
+    cx = x
+    nodes.append(code_node("Build Company Identity", ENRICH_BUILD_CO_IDENTITY, cx, cy))
+    cx += 220
+    hs_co_search = {
+        "parameters": {"resource": "company", "operation": "search",
+                       "filterGroupsUi": {"filterGroupsValues": []}, "additionalFields": {}},
+        "id": nid("hs"), "name": "HubSpot Company Search",
+        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [cx, cy],
+        "onError": "continueRegularOutput",
+    }
+    nodes.append(hs_co_search)
+    cx += 220
+    nodes.append(code_node("Adapt Company Search", ENRICH_ADAPT_CO_SEARCH, cx, cy))
+    cx += 220
+    nodes.append(code_node("Company Gate", ENRICH_CO_GATE, cx, cy))
+    cx += 220
+    nodes.append(code_node("Build Company Requests", ENRICH_BUILD_CO_REQUESTS, cx, cy))
+
+    cpx = cx + 220
+    lusha_co = _http_node("Lusha Company", "https://api.lusha.com/v2/company", cpx, cy - 80,
+                          auth="header")  # credential header, e.g. api_key: <LUSHA_API_KEY>
+    nodes.append(lusha_co)
+    apollo_org = _http_node(
+        "Apollo Org", "https://api.apollo.io/v1/organizations/enrich", cpx + 220, cy - 80,
+        auth="header",  # credential header, e.g. X-Api-Key: <APOLLO_API_KEY>
+        json_body="={{ JSON.stringify({ domain: $json.identity_keys.domain }) }}")
+    nodes.append(apollo_org)
+    # ZoomInfo Company: split-code-node, same credential-bound-Mint shape as contacts.
+    zoom_co_nodes, zoom_co_conns, zoom_co_entry, zoom_co_exit = _zoom_split_company_subgraph(
+        "Company Gate", cpx + 440, cy - 80)
+    nodes.extend(zoom_co_nodes)
+
+    csx = cpx + 660 + 440
+    nodes.append(code_node("Normalize + Score Company", ENRICH_NORMALIZE_SCORE_CO, csx, cy - 80))
+    csx += 220
+    nodes.append(code_node("Research Trigger Gate", _enrich_research_gate_js(cloud=True), csx, cy - 80))
+    csx += 220
+    nodes.append(_if_bool_node("IF Research Needed", "research_needed", csx, cy - 80))
+    csx += 220
+    nodes.append(code_node(
+        "Build Research Request", _enrich_build_research_request_js(cloud=True), csx, cy - 180))
+    csx += 220
+    nodes.append(_http_node(
+        "Claude Web Research", "https://api.anthropic.com/v1/messages", csx, cy - 180,
+        auth="header",  # credential header x-api-key: <ANTHROPIC_API_KEY>
+        headers=[{"name": "anthropic-version", "value": "2023-06-01"},
+                 {"name": "content-type", "value": "application/json"}],
+        json_body="={{ JSON.stringify($json.research_request_body) }}"))
+    csx += 220
+    nodes.append(code_node("Validate Research Output", ENRICH_VALIDATE_RESEARCH, csx, cy - 180))
+    csx += 220
+    nodes.append(code_node("Judge Gate", _enrich_judge_gate_js(cloud=True), csx, cy - 180))
+    csx += 220
+    nodes.append(_if_bool_node("IF Needs Judge", "needs_judge", csx, cy - 180))
+    csx += 220
+    nodes.append(code_node(
+        "Build Judge Request", _enrich_build_judge_request_js(cloud=True), csx, cy - 280))
+    csx += 220
+    nodes.append(_http_node(
+        "Judge Call", "https://api.anthropic.com/v1/messages", csx, cy - 280,
+        auth="header",
+        headers=[{"name": "anthropic-version", "value": "2023-06-01"},
+                 {"name": "content-type", "value": "application/json"}],
+        json_body="={{ JSON.stringify($json.judge_request_body) }}"))
+    csx += 220
+    nodes.append(code_node("Apply Judge Verdict", ENRICH_APPLY_JUDGE_VERDICT, csx, cy - 280))
+    csx += 220
+    nodes.append(code_node("Merge Company", ENRICH_MERGE_CO, csx, cy - 80))
+    csx += 220
+    nodes.append(code_node("Decide Company Action", ENRICH_DECIDE_CO_CLOUD, csx, cy - 80))
+
+    # IF company-create -> HubSpot Company Create ; else IF company-enrich -> HubSpot
+    # Company Update (both write-safety-gated in Task 6 — Task 5 wires the structure).
+    # No early skip switch (unlike the contacts branch): the LOCAL-LIVE company branch
+    # this ports runs providers unconditionally for every row (no pre-waterfall skip
+    # optimization exists there either); a "skip" action falls through both IFs to end.
+    csx += 220
+    if_co_create = _if_node("IF Company Create", "create", csx, cy - 80)
+    nodes.append(if_co_create)
+    hs_co_create = {
+        "parameters": {"resource": "company", "operation": "create",
+                       "additionalFields": {}},
+        "id": nid("hc"), "name": "HubSpot Company Create",
+        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [csx + 220, cy - 200]}
+    nodes.append(hs_co_create)
+    if_co_enrich = _if_node("IF Company Enrich", "enrich", csx + 220, cy - 20)
+    nodes.append(if_co_enrich)
+    hs_co_update = {
+        "parameters": {"resource": "company", "operation": "update",
+                       "companyId": "={{ $json.hs_object_id }}", "updateFields": {}},
+        "id": nid("hu"), "name": "HubSpot Company Update",
+        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [csx + 440, cy - 20]}
+    nodes.append(hs_co_update)
+
     conns = chain(["Webhook Trigger", "Build Identity", "HubSpot Search",
                    "Adapt Search", "Enrichment Gate", "Route Action"])
     # Switch outputs: 0=create, 1=enrich, 2=skip. create+enrich -> shared waterfall.
@@ -2499,6 +2660,51 @@ def build_enrichment_cloud():
         [{"node": "HubSpot Update", "type": "main", "index": 0}],  # true
         [],                                                        # false -> end
     ]}
+
+    # --- COMPANIES branch connections: sibling off Webhook Trigger ---------------------
+    # NOTE: fan() assumes single-output "main":[[...]] specs (it only inspects branch
+    # index 0) — safe for chain()-only merges, but conns already holds multi-output IF/
+    # Switch nodes (Route Action, IF Create, IF Enrich), so running the WHOLE conns dict
+    # back through fan() would silently drop their non-zero branches. Add the second
+    # Webhook Trigger target by hand instead (it has exactly one target today).
+    conns["Webhook Trigger"]["main"][0].append(
+        {"node": "Build Company Identity", "type": "main", "index": 0})
+    conns.update(chain([
+        "Build Company Identity", "HubSpot Company Search",
+        "Adapt Company Search", "Company Gate", "Build Company Requests",
+        "Lusha Company", "Apollo Org",
+    ]))
+    conns["Apollo Org"] = {"main": [[{"node": zoom_co_entry, "type": "main", "index": 0}]]}
+    conns.update(zoom_co_conns)
+    conns.update(chain([zoom_co_exit, "Normalize + Score Company", "Research Trigger Gate"]))
+    conns.update({
+        "Research Trigger Gate": {"main": [[{"node": "IF Research Needed", "type": "main", "index": 0}]]},
+        "IF Research Needed": {"main": [
+            [{"node": "Build Research Request", "type": "main", "index": 0}],  # true: needs research
+            [{"node": "Merge Company", "type": "main", "index": 0}],           # false: fan straight in
+        ]},
+        "Build Research Request": {"main": [[{"node": "Claude Web Research", "type": "main", "index": 0}]]},
+        "Claude Web Research": {"main": [[{"node": "Validate Research Output", "type": "main", "index": 0}]]},
+        "Validate Research Output": {"main": [[{"node": "Judge Gate", "type": "main", "index": 0}]]},
+        "Judge Gate": {"main": [[{"node": "IF Needs Judge", "type": "main", "index": 0}]]},
+        "IF Needs Judge": {"main": [
+            [{"node": "Build Judge Request", "type": "main", "index": 0}],  # true: adjudicate
+            [{"node": "Merge Company", "type": "main", "index": 0}],        # false: fan straight in
+        ]},
+        "Build Judge Request": {"main": [[{"node": "Judge Call", "type": "main", "index": 0}]]},
+        "Judge Call": {"main": [[{"node": "Apply Judge Verdict", "type": "main", "index": 0}]]},
+        "Apply Judge Verdict": {"main": [[{"node": "Merge Company", "type": "main", "index": 0}]]},
+        "Merge Company": {"main": [[{"node": "Decide Company Action", "type": "main", "index": 0}]]},
+        "Decide Company Action": {"main": [[{"node": "IF Company Create", "type": "main", "index": 0}]]},
+        "IF Company Create": {"main": [
+            [{"node": "HubSpot Company Create", "type": "main", "index": 0}],  # true
+            [{"node": "IF Company Enrich", "type": "main", "index": 0}],       # false
+        ]},
+        "IF Company Enrich": {"main": [
+            [{"node": "HubSpot Company Update", "type": "main", "index": 0}],  # true
+            [],                                                                # false -> end
+        ]},
+    })
 
     notes = [
         {"content": (
