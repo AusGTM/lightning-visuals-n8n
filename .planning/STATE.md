@@ -4,11 +4,11 @@ milestone: v0.3
 milestone_name: Company Enrichment & ICP Research
 current_phase: 16
 current_phase_name: scheduled-workflows-review-surface
-status: executing
+status: complete
 stopped_at: "Phase 16-02 'Complete' EXECUTED + COMMITTED (Tasks 1-4, all criteria 1-4,9). SJ-1 (hourly input-gap, 3 OR'd groups) + SJ-2 (monthly stale refresh, epoch-ms Code node + Adapt step feeding the reused, unmodified Company Gate) + SJ-3 (15-min requested poller, Execute Workflow dispatch) all keyed on pipeline-owned inputs only (Approach C); dedupeSweep.js wired classify-only into a weekly contacts branch; §22.2 review loop closed via n8n/code/reviewApply.js (structural Approach-C field guard, fail-closed malformed JSON, all-or-nothing non-clobber compare-and-set); enrichmentGate.js's first direct RT-5 unit test. Full offline suite: 266 pytest / 147 node, 0 regressions. Builder rebuild deterministic. See 16-02-SUMMARY.md. Phase 16 (both plans) COMPLETE. NEXT: phase 16 was the last phase of Milestone 3 (v0.3) — proceed to milestone completion / ship review, or run /gsd-progress to confirm."
 last_updated: "2026-07-23T06:20:08.803Z"
 last_activity: 2026-07-23
-last_activity_desc: Phase 16-02 executed and committed
+last_activity_desc: "Phase 16 COMPLETE (offline) + verified 9/9 criteria. gsd-verifier routed human_needed ONLY for the live operator runbook (non-gating, Phase-15 precedent) — 16-UAT.md tracks 3 live items: (1) live deploy/provision/property-creation, (2) reviewApply 'Review Apply Update' node ships updateFields:{} placeholder (operator maps the dynamic patch), (3) Build Identity fetch-by-objectId shim (16-01 Deviation 3). Pre-live-deploy fix flagged: deploy_n8n_workflows.py globs all wf_*.json incl. local-replica fixtures that keep $env/$vars — restrict to the Cloud/ACTIVE set. Suite 266 pytest / 147 node, builder deterministic, frozen files intact, all cross-AI review findings confirmed landed. Milestone 3 (v0.3) code-complete."
 progress:
   total_phases: 17
   completed_phases: 3
