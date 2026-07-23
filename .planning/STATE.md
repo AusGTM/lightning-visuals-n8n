@@ -29,9 +29,9 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 ## Current Position
 
 Phase: 16 of 17 (Scheduled Workflows & Review Surface) — PLANNED (2 plans), ready to execute
-Plan: 16-01 Deployable (wave 1) + 16-02 Complete (wave 2, depends 16-01) — run `/gsd-execute-phase 16`
-Status: Milestone 3 in progress — Phase 15.5 executed + offline-verified; Phase 16 PLANNED (research→pattern-map→plan→check passed, 1 revision for the criterion-5 parity blocker). Phase 15 operator runbook (live property creation) still pending.
-Last activity: 2026-07-23 — Phase 16 planned: 2 plans, verification passed
+Plan: 16-01 Deployable (wave 1, 6 tasks) + 16-02 Complete (wave 2, depends 16-01, 4 tasks) — run `/gsd-execute-phase 16`
+Status: Milestone 3 in progress — Phase 16 PLANNED + CROSS-AI-REVIEWED. Flow: research→pattern-map→plan→check (1 revision, parity blocker)→cross-AI review (3 OpenRouter models via opencode)→reviews-mode replan (aa1ea07)→check PASSED. 16-01 grew 5→6 tasks (new webhook-auth/real-HubSpot-nodes/write-safety hardening task) after review verified 4 real production blockers in the existing Cloud builder (hard-coded fixture companies, unauthenticated webhook, placeholder nodes discarding record IDs, no write-safety switches). Phase 15 operator runbook (live property creation) still pending.
+Last activity: 2026-07-23 — Phase 16 reviewed + replanned: all 15 review findings incorporated, verification passed
 
 Progress: [███████████░] 94% (16/17 phases)
 
