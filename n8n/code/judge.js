@@ -6,6 +6,7 @@
 const {
   KNOWN_VIDEO_HOSTS, ESCALATION_CONFIDENCE_BAND, JUDGE_MIN_CONFIDENCE, JUDGE_OUTPUT_REQUIRED,
 } = require("./escalation.generated");
+const { scoreCandidates } = require("./scoreEnrichment");
 
 // isCitationSufficient — JG-4/TS-1. Sufficiency-of-PRESENCE only: does this citation
 // actually substantiate a `lv_produces_content: true` claim, or is it a bare homepage /
@@ -84,7 +85,9 @@ function normalizeVendorFlag(v) {
 // Does this research candidate's data actually carry a classification signal (org_type
 // or produces_content), as opposed to only a firmographic guess? JG-1(confidence_band):
 // the confidence band is about classification confidence, not a size guess — a candidate
-// carrying only e.g. lv_revenue_band must not trigger this reason.
+// carrying only a revenue-band-shaped size guess must not trigger this reason (Phase
+// 15.5 Task 4 verify: Judge Gate's built jsCode must not name any size field at all, so
+// this comment is deliberately field-name-agnostic).
 function _carriesClassification(data) {
   const hasOrgType = !!(data && data.lv_org_type && data.lv_org_type !== "");
   const hasContent = !!(data && (data.lv_produces_content === true || data.lv_produces_content === false));
@@ -192,13 +195,142 @@ function applyCostCap(rows, maxPerRun) {
 }
 
 // buildJudgeRequestBody(row, model, maxTokens) -> the Anthropic Messages body. JG-2:
-// identity + classification ONLY — no lv_revenue_band/lv_employee_band/annualrevenue/
-// numberofemployees anywhere in the serialized body, and NO tools key at all (Pitfall 5
-// — the judge reasons over evidence already retrieved, it must never re-search).
+// identity + classification ONLY — no revenue/employee size-band field, no raw
+// annualrevenue/numberofemployees, anywhere in the serialized body, and NO tools key at
+// all (Pitfall 5 — the judge reasons over evidence already retrieved, it must never
+// re-search). Field-name-agnostic on purpose: this whole file gets inlined into the
+// Judge Gate node, whose built jsCode Task 4's own verify step greps for zero size-field
+// name references at all, not merely zero references inside the payload builder.
 const _JUDGE_DATA_FIELDS = [
   "lv_org_type", "lv_produces_content", "lv_content_type",
   "lv_is_hardware_vendor", "lv_is_gambling_operator",
 ];
+
+// Source trust for the two candidates scoreResearchCandidates ever constructs. Passed
+// EXPLICITLY to scoreCandidates — without this the engine's unknown-source fallback
+// would silently score both claude_web and prior_on_file at 0.6 (config/source_registry.yaml:
+// claude_web trust_rank 78, hubspot/crm trust_rank 90 — the prior IS the CRM record).
+const _RESEARCH_SCORING_TRUST = { claude_web: 0.78, prior_on_file: 0.9 };
+
+// isIndependentPrior(provenanceEntry) -> boolean (D1's self-confirmation guard). A prior
+// with NO provenance entry at all is independent (legacy / pre-pipeline / manually-typed
+// value — Phase 15's provenance blob simply predates it). A prior whose provenance
+// `source` is in the independent-origin allowlist (human, manual) is independent.
+// EVERYTHING ELSE — including every source our own pipeline writes (claude_web,
+// waterfall, apollo, zoominfo, lusha, ...) and any unrecognized/malformed source string —
+// is NOT independent. Ambiguity fails CLOSED: we cannot prove independence, and the
+// failure mode of guessing wrong is invisible confidence inflation.
+const _INDEPENDENT_PRIOR_SOURCES = new Set(["human", "manual"]);
+
+function isIndependentPrior(provenanceEntry) {
+  if (provenanceEntry === undefined || provenanceEntry === null) return true; // no entry -> legacy, independent
+  const source = provenanceEntry.source;
+  return _INDEPENDENT_PRIOR_SOURCES.has(String(source));
+}
+
+function _isBlankValue(v) {
+  return v === undefined || v === null || v === "" || (Array.isArray(v) && v.length === 0);
+}
+
+// Deterministic tie-break for a hand-merged ranked list (only needed when the prior is
+// scored in a SEPARATE call from the research candidate — see below — so the two
+// singleton `ranked[field]` arrays scoreCandidates already sorted internally must be
+// combined into one list using the exact same rule scoreEnrichment.js's `ranked` uses).
+function _sortRankedByScore(list, trust) {
+  return [...list].sort((a, b) => {
+    if (a.score !== b.score) return b.score - a.score;
+    const ta = (trust && trust[String(a.source).toLowerCase()]) || 0;
+    const tb = (trust && trust[String(b.source).toLowerCase()]) || 0;
+    if (ta !== tb) return tb - ta;
+    return String(a.source) < String(b.source) ? -1 : (String(a.source) > String(b.source) ? 1 : 0);
+  });
+}
+
+// scoreResearchCandidates(researchCandidate, existingRecord, provenance, opts) -> the
+// core of Phase 15.5 (TA-1/TA-2/TA-6). Scores each judge-eligible field's research value
+// against a "prior on file" candidate built from the existing record + its Phase-15
+// provenance blob, using the SAME unmodified scoreCandidates engine the provider
+// waterfall uses — one formula, one weight set, one place a scoring bug can live.
+//
+// THE SELF-CONFIRMATION GUARD is the primary structural decision here, not a filter
+// tacked on afterwards (D1): an INDEPENDENT prior joins the research candidate in the
+// SAME scoreCandidates call, so the agreement (G) component is real in both directions.
+// A NON-INDEPENDENT prior (written by our own pipeline) is scored in a SEPARATE call,
+// alone — a lone candidate has no other sources in its group, so the existing engine
+// gives it (and the research candidate in the other call) G=0, with no change to the
+// engine at all. This is what stops the pipeline from manufacturing confidence by
+// agreeing with its own earlier guess.
+//
+// Returns, per field carrying a non-blank research value: { field, ranked, research,
+// recency_source, prior_on_file }. `research` is the research candidate's OWN scored
+// entry — never the group argmax (the argmax may be the prior; the value being grounded
+// is always the researched one). Fields absent from the research candidate's data get
+// nothing attached (criterion 1: no information is discarded, but nothing is invented).
+function scoreResearchCandidates(researchCandidate, existingRecord, provenance, opts) {
+  const rc = researchCandidate || {};
+  const data = rc.data || {};
+  const existing = existingRecord || {};
+  const prov = provenance || {};
+  const now = opts && opts.now; // never read the clock here — scoreCandidates already
+                                // defaults nowIso when this is undefined; injectable only.
+  const trust = _RESEARCH_SCORING_TRUST;
+
+  const result = {};
+
+  for (const field of _JUDGE_DATA_FIELDS) {
+    const value = data[field];
+    if (_isBlankValue(value)) continue; // no research value for this field -> attach nothing
+
+    const researchCand = {
+      field, source: "claude_web", value, normalizedValue: value,
+      accuracy: typeof rc.confidence === "number" ? rc.confidence / 100 : 0.6,
+      recencyDate: (rc.recency_by_field && rc.recency_by_field[field]) || null,
+    };
+
+    const priorValue = existing[field];
+    let priorCand = null;
+    let independent = null;
+    if (!_isBlankValue(priorValue)) {
+      const provEntry = prov[field];
+      priorCand = {
+        field, source: "prior_on_file", value: priorValue, normalizedValue: priorValue,
+        accuracy: (provEntry && typeof provEntry.confidence === "number") ? provEntry.confidence / 100 : 0.6, // D1 default
+        recencyDate: (provEntry && provEntry.verified_at) || existing[field + "_verified_at"] || null,
+      };
+      independent = isIndependentPrior(provEntry);
+    }
+
+    let rankedList;
+    if (priorCand && independent) {
+      const scored = scoreCandidates([researchCand, priorCand], { trust, now });
+      rankedList = scored.ranked[field];
+    } else if (priorCand) {
+      const rScored = scoreCandidates([researchCand], { trust, now });
+      const pScored = scoreCandidates([priorCand], { trust, now });
+      rankedList = _sortRankedByScore([...rScored.ranked[field], ...pScored.ranked[field]], trust);
+    } else {
+      const rScored = scoreCandidates([researchCand], { trust, now });
+      rankedList = rScored.ranked[field];
+    }
+
+    const researchEntry = rankedList.find((c) => c.source === "claude_web");
+    const priorEntry = priorCand ? rankedList.find((c) => c.source === "prior_on_file") : null;
+
+    result[field] = {
+      field,
+      ranked: rankedList,
+      research: researchEntry,
+      recency_source: (rc.recency_source_by_field && rc.recency_source_by_field[field]) || "unmatched",
+      prior_on_file: priorCand ? {
+        value: priorValue,
+        components: priorEntry ? priorEntry.components : null,
+        independent,
+      } : null,
+    };
+  }
+
+  return result;
+}
 
 function buildJudgeRequestBody(row, model, maxTokens) {
   const id = (row && row.identity_keys) || {};
@@ -338,5 +470,6 @@ function applyJudgeVerdict(researchCandidate, verdict, reasons) {
 module.exports = {
   isCitationSufficient, applyEvidenceSufficiency,
   normalizeVendorFlag, computeEscalation, applyUnadjudicated, applyCostCap,
+  isIndependentPrior, scoreResearchCandidates, _JUDGE_DATA_FIELDS,
   buildJudgeRequestBody, judgeVerdictFromHttpItem, applyJudgeVerdict,
 };

@@ -1293,7 +1293,9 @@ HS_CO_SEARCH_BODY_EXPR = (
     '={{ JSON.stringify({ filterGroups: [ { filters: '
     '[ { propertyName: "domain", operator: "EQ", value: $json.identity_keys.domain } ] } ], '
     'properties: ["name","domain","industry","annualrevenue","numberofemployees",'
-    '"lv_org_type","lv_produces_content","lv_icp_tier","lv_icp_fit_score","lv_anti_icp_flag",'
+    '"lv_org_type","lv_produces_content","lv_content_type","lv_is_hardware_vendor",'
+    '"lv_is_gambling_operator","lv_icp_tier","lv_icp_fit_score","lv_anti_icp_flag",'
+    '"lv_enrichment_provenance",'
     '"lv_org_type_verified_at","lv_produces_content_verified_at"], '
     'limit: 5 }) }}'
 )
@@ -1525,7 +1527,7 @@ return $input.all().map((it) => {
 # Judge Gate — JG-4 (always, D6) + JG-1/RO-1/RO-2 escalation trigger + the D5 kill
 # switches (ALLOW_SONNET_ESCALATION, MAX_SONNET_VALIDATIONS_PER_RUN, enforced HERE,
 # physically upstream of the HTTP node — Pitfall 4 precedent).
-ENRICH_JUDGE_GATE = inline("escalation.generated.js", "judge.js") + r"""
+ENRICH_JUDGE_GATE = inline("escalation.generated.js", "scoreEnrichment.js", "judge.js") + r"""
 
 // --- n8n wrapper (companies): Judge Gate ---
 // RO-2: size-band disagreement is detected downstream inside Merge Company and is
@@ -1535,18 +1537,48 @@ const ALLOW_SONNET_ESCALATION = ($vars && $vars.ALLOW_SONNET_ESCALATION) || $env
 const allowOn = String(ALLOW_SONNET_ESCALATION).toLowerCase() === "true";
 const MAX_PER_RUN = parseInt(
   (($vars && $vars.MAX_SONNET_VALIDATIONS_PER_RUN) || $env.MAX_SONNET_VALIDATIONS_PER_RUN || "10"), 10);
+const NOW = new Date().toISOString();
 
-// Pass 1: per row, evidence sufficiency (JG-4/D6, always) + escalation trigger detection
-// (JG-1/RO-1/RO-2). Does not decide the cap or the fail-safe yet — applyCostCap (TA-7)
-// needs the full needs_judge set up front so the kill switch and the budget share one
-// code path (pass 0 when off, MAX_PER_RUN when on), rather than a duplicated branch.
+// Phase-15 provenance blob is a JSON string property that may be absent, empty, or
+// malformed (truncated at the 60000-char cap, or simply never written yet) — a parse
+// failure yields an empty object and must never throw (D1: without a parseable
+// provenance blob, the independence guard has nothing to read and would fail OPEN).
+function _parseProvenanceBlob(raw) {
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return (parsed && typeof parsed === "object" && !Array.isArray(parsed)) ? parsed : {};
+  } catch (e) {
+    return {};
+  }
+}
+
+// Pass 1: per row, evidence sufficiency (JG-4/D6, always) + TA-1 scoring (every
+// researched row, escalated or not — scoring ranks, it never decides) + escalation
+// trigger detection (JG-1/RO-1/RO-2). Does not decide the cap or the fail-safe yet —
+// applyCostCap (TA-7) needs the full needs_judge set up front so the kill switch and the
+// budget share one code path (pass 0 when off, MAX_PER_RUN when on), rather than a
+// duplicated branch.
+//
+// BOUNDARY THAT MUST HOLD (D2/D3): research_scoring is strictly additive to the judge's
+// INPUT. It must NEVER become an alternate escalation gate — a high composite score may
+// never suppress an already-fired escalation reason. computeEscalation's reasons list
+// remains the SOLE gate on whether the judge is invoked; research_scoring is never read
+// by it.
 const gated = $input.all().map((it) => {
   const row = it.json;
   const domain = (row.identity_keys && row.identity_keys.domain) ||
                  (row.existingRecord && row.existingRecord.domain) || null;
   const researchCandidate = applyEvidenceSufficiency(row.research_candidate, domain);
+
+  const provenance = _parseProvenanceBlob(
+    row.existingRecord && row.existingRecord.lv_enrichment_provenance);
+  const research_scoring = scoreResearchCandidates(
+    researchCandidate, row.existingRecord || {}, provenance, { now: NOW });
+
   const { needsJudge, reasons } = computeEscalation(researchCandidate, row.existingRecord || {});
-  return { ...row, research_candidate: researchCandidate, needs_judge: needsJudge, judge_reasons: reasons };
+  return { ...row, research_candidate: researchCandidate, research_scoring,
+           needs_judge: needsJudge, judge_reasons: reasons };
 });
 
 // Pass 2: applyCostCap enforces the kill switch AND the per-run budget through the same

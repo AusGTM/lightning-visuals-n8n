@@ -204,6 +204,46 @@ def test_jg2_judge_call_declares_no_search_tool():
     assert "web_search" not in js_code
 
 
+def _extract_string_array(text: str, marker: str) -> set:
+    """Pull a `marker = [ "a", "b", ... ];` JS array literal's string values out of a
+    source text by regex — mirrors test_prompt_parity_vendor_flags' style of reading the
+    real source rather than hand-copying a second literal (Phase 15.5 TA-2)."""
+    start = text.index(marker)
+    end = text.index("]", start)
+    body = text[start:end]
+    return set(re.findall(r'"([^"]+)"', body))
+
+
+def test_ta2_judge_eligible_and_deterministic_fields_are_disjoint():
+    """TA-2: the judge-eligible set (judge.js's _JUDGE_DATA_FIELDS, exported) and the
+    deterministic-only set (CONFLICT_WATCH's two size bands plus the remaining
+    firmographic fields that are never research-eligible, spec §8.5/RESEARCH.md's Tier
+    Boundary table) MUST be disjoint. Both are read from their REAL homes — judge.js's
+    own source text, and the BUILT Merge Company node's jsCode — never hand-retyped as a
+    second Python literal, so a future edit to either cannot drift past this test."""
+    judge_src = (ROOT / "n8n" / "code" / "judge.js").read_text()
+    judge_eligible = _extract_string_array(judge_src, "_JUDGE_DATA_FIELDS = [")
+
+    assert judge_eligible == {
+        "lv_org_type", "lv_produces_content", "lv_content_type",
+        "lv_is_hardware_vendor", "lv_is_gambling_operator",
+    }
+
+    doc = _load_workflow("wf_enrichment_local_live.json")
+    merge_company = _node_by_name(doc, "Merge Company")
+    merge_js = merge_company["parameters"]["jsCode"]
+    conflict_watch = _extract_string_array(merge_js, "CONFLICT_WATCH = [")
+    assert conflict_watch == {"lv_revenue_band", "lv_employee_band"}
+
+    deterministic_only = conflict_watch | {
+        "domain", "industry", "numberofemployees", "annualrevenue",
+        "lv_country_region_normalized",
+    }
+
+    assert judge_eligible.isdisjoint(conflict_watch)
+    assert judge_eligible.isdisjoint(deterministic_only)
+
+
 def test_ar2_judge_call_host():
     """AR-2: the Judge Call node's host must be the already-allowlisted api.anthropic.com
     (tests/test_architecture_guard.py covers this generically; asserted here too so a
