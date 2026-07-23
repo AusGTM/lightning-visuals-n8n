@@ -403,10 +403,10 @@ retroactively; its artifacts and tests are in the tree.
 
 **Evaluated against `docs/SYSTEM-CONTRACT.md`** — especially: non-clobber absolute *under live writes* (this is the first phase writing real record data), right-sized compute (no capable model on a cheap path), freshness-without-churn (criterion 9), and the closed-won red-flag as a live regression signal.
 
-**Plans**: 2 plans (two sequential waves within Phase 16; no formal 16/17 split)
+**Plans**: 1/2 plans executed
 **Wave 1**
 
-- [ ] 16-01-PLAN.md — Deployable (Criteria 5–8 + SJ-3 property prerequisite): env→credentials + build-time constants, ZoomInfo credential decision, companies-branch port, deploy + credential-provisioning scripts [wave 1]
+- [x] 16-01-PLAN.md — Deployable (Criteria 5–8 + SJ-3 property prerequisite): env→credentials + build-time constants, ZoomInfo credential decision, companies-branch port, deploy + credential-provisioning scripts [wave 1]
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
