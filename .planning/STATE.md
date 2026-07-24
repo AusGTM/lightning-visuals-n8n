@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: Company Enrichment & ICP Research
-current_phase: 16.1
-current_phase_name: provider-selection-credit-reporting-schedule-safety
-status: complete
-stopped_at: "Phase 16.1-02 EXECUTED + committed (894878b Task 1 single-item credit branch + Build Response convergence, 0284519 Task 2 check_provider_credits.py, cbd593a Task 3 deploy binding + schedules active:false). Phase 16.1 (both plans, 16.1-01 + 16.1-02) COMPLETE. Offline suite 332 pytest / 169 node, 0 regressions vs the 293/169 post-16.1-01 baseline, deterministic rebuild. NEXT: Phase 16.2 (contacts research/judge mirror, backlog) or Track B (live operator runbook)."
-last_updated: "2026-07-24T01:19:47.736Z"
+current_phase: 16.2
+current_phase_name: contacts-research-judge-mirror
+status: in_progress
+stopped_at: "Phase 16.2-01 EXECUTED + committed (c944496 Task 1 companies-byte-identity guard + target-parameterize the six research/judge factories, 28058b9 Task 2 additive mergeContacts evidence/confidenceByField port). Wave 1 of 2 complete; Wave 2 (16.2-02, contact research->judge chain wiring) depends on this plan. Offline suite 336 pytest / 179 node, 0 regressions vs the 332/170 pre-16.2 baseline, deterministic rebuild, companies jsCode byte-identical (frozen-snapshot guard green). NEXT: 16.2-02-PLAN.md (contactResearch.js/contactJudge.js siblings + wire the 10-node contact chain at the seam)."
+last_updated: "2026-07-24T03:45:03.812Z"
 last_activity: 2026-07-24
-last_activity_desc: "Phase 16.1-02 executed: single-item credit branch + honest Build Response convergence (Task 1, 894878b), scripts/check_provider_credits.py (Task 2, 0284519), deploy credential binding + scheduled-maintenance active:false (Task 3, cbd593a). Offline suite green (332 pytest / 169 node, +39 pytest new vs the 293/169 post-16.1-01 baseline), deterministic builder rebuild. Phase 16.1 fully complete."
+last_activity_desc: Phase 16.2-01 executed and committed (companies byte-identity guard + factory parameterization + additive mergeContacts port; 16.2-02 remains)
 progress:
-  total_phases: 18
-  completed_phases: 3
-  total_plans: 20
-  completed_plans: 5
+  total_phases: 19
+  completed_phases: 4
+  total_plans: 22
+  completed_plans: 8
 ---
 
 # Project State
@@ -23,22 +23,22 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-07)
 
 **Core value:** The ICP scoring engine turns firmographic + enrichment signals into trustworthy, auditable A/B/C/D prioritization (with hard vetoes) and never clobbers HubSpot data — proven in dry-run locally.
-**Current focus:** Phase 16.1 — provider-selection-credit-reporting-schedule-safety (Track A, COMPLETE — both plans executed)
+**Current focus:** Phase 16.2 — contacts-research-judge-mirror (Wave 1/2, 16.2-01 COMPLETE — reuse substrate landed; 16.2-02 wires the contact chain)
 
 ## Current Position
 
-Phase: 16.1 (provider-selection-credit-reporting-schedule-safety) — COMPLETE, 2/2 plans executed
-Plan: 16.1-01 COMPLETE (Task 1 contacts gate a12e439, Task 2 companies mirror 26d3533); 16.1-02 COMPLETE (Task 1 credit branch/response 894878b, Task 2 check_provider_credits.py 0284519, Task 3 deploy binding/schedules inactive cbd593a)
-Status: Phase 16.1 fully verified (332 pytest / 169 node, 0 regressions vs the 267/147 pre-16.1 baseline) — Milestone 3 (v0.3) Track A pre-live cost-safety work complete; Track B (live operator runbook) and Phase 16.2 (contacts research/judge mirror) remain
-Last activity: 2026-07-24 — Phase 16.1-02 executed and committed (Phase 16.1 complete)
+Phase: 16.2 (contacts-research-judge-mirror) — IN PROGRESS, 1/2 plans executed
+Plan: 16.2-01 COMPLETE (Task 1 companies-byte-identity guard + target-parameterize the six research/judge factories c944496, Task 2 additive mergeContacts evidence/confidenceByField port 28058b9); 16.2-02 NOT STARTED (depends on 16.2-01)
+Status: 16.2-01 verified (336 pytest / 179 node, 0 regressions vs the 332/170 pre-16.2 baseline) — companies research/judge Code-node jsCode proven byte-identical by a frozen-snapshot guard; CONTACTS_TARGET config + mergeContacts.js evidence/confidenceByField substrate ready for 16.2-02 to wire the actual contact chain
+Last activity: 2026-07-24 — Phase 16.2-01 executed and committed
 
-Progress: [█████████░] ~94% (17/18 phases; Phase 16.1 COMPLETE, Phase 16.2 backlog)
+Progress: [█████████░] ~[███░░░░░░░] 33% (17/18 phases; Phase 16.2 Wave 1/2 IN PROGRESS)
 
 *(NOTE: `gsd state.update-progress` mis-derives this bar from `completed_plans/total_plans`
 across concatenated milestones — see MEMORY.md "gsd state.update-progress unsafe here".
 This figure is hand-maintained per that note; do not trust an auto-recalculated value here
 without cross-checking ROADMAP.md. Cross-checked: ROADMAP.md's Milestone 3 Progress table
-now shows Phase 16.1 as 1/2 In Progress, Phase 16.2 as Backlog, everything else Complete.)*
+now shows Phase 16.1 as 2/2 Complete, Phase 16.2 as 1/2 In Progress, everything else Complete.)*
 
 ## Performance Metrics
 
@@ -77,6 +77,7 @@ now shows Phase 16.1 as 1/2 In Progress, Phase 16.2 as Backlog, everything else 
 | Phase 16 P02 | 25min | 4 tasks | 6 files |
 | Phase 16.1 P01 | ~25min | 2 tasks | 8 files |
 | Phase 16.1 P02 | ~30min | 3 tasks | 9 files |
+| Phase 16.2 P01 | ~55min | 2 tasks | 11 files |
 
 ## Accumulated Context
 
@@ -99,6 +100,7 @@ Decisions are logged in PROJECT.md Key Decisions table. SPEC-level architectural
 - [Phase ?]: Phase 16-02: reviewApply's Approach-C guard is structural (imports mergeCompanies' own DEFAULT_COMPANY_POLICY as the field allowlist) rather than a hardcoded blocklist; non-clobber compare-and-set is all-or-nothing per record (not per-field) to avoid a partial-apply/re-check loop against the un-cleared candidate JSON.
 - Phase 16.1-01: the linear provider chain (Lusha→Apollo→ZoomInfo in series) could only drop a SUFFIX of providers, never an arbitrary subset — fixed by fanning both waterfalls out behind per-provider `IF <provider> Enabled` gates with a BYPASS lane that rejoins at the next stage (mirrors the pre-existing `IF ZoomInfo Needs Mint` convergence precedent), so `Normalize + Score(+ Company)` always fires exactly once even with zero providers enabled. Both branches call the SAME new `_provider_gate_bypass_chain(...)` builder helper (CONTEXT Locked Decision 8 — the Phase 16.2 reuse seam), not two hand-rolled copies. Every gate reads `provider_enabled.<name>` by node name from `Parse HubSpot Event` (never bare `$json`, which an upstream provider's HTTP response may have replaced); every provider request body reads `identity_keys` by node name from `Enrichment Gate`/`Build Company Requests` for the same reason — this closes a latent identity-loss bug that pre-dated 16.1 (Apollo's body read `$json.identity_keys` while sitting downstream of Lusha's response). The object-type router keeps its existing 2-way `Route By Object Type` node UNCHANGED (a pre-existing test pins its exact shape) and gets a new `IF Object Type Supported` gate immediately upstream instead — an "IF + explicit unsupported check" chain, one of the two forms the plan sanctioned, rather than rewriting the existing node into a 3-way Switch. `PROVIDER_REGISTRY` lives in a NEW side-effect-free `scripts/provider_registry.py` (not inside `build_cloud_workflows.py`, which triggers taxonomy/escalation codegen writes at import) so Phase 16.1-02's read-only credit-check script can import it without rewriting repo files. `requirements.mark-complete` was skipped for this plan: its `requirements:` frontmatter lists local Success-Criteria IDs (SC-1/SC-2/SC-3/SC-8 etc.) that are phase-scoped, not global REQ-IDs from REQUIREMENTS.md, and don't exist there to mark. See `16.1-01-SUMMARY.md`.
 - [Phase ?]: Phase 16.1-02: credit checks run ONCE per webhook run via a dedicated single-item branch off Parse HubSpot Event (not the multi-row terminal flow), closing the live-observed Lusha 5 req/min 429 -> all-null failure mode (reviews C1).
+- Phase 16.2-01: the six companies research/judge/validate/apply-verdict Code-node factories in `build_cloud_workflows.py` (`_enrich_research_gate_js`, `_enrich_build_research_request_js`, `ENRICH_VALIDATE_RESEARCH`, `_enrich_judge_gate_js`, `_enrich_build_judge_request_js`, `ENRICH_APPLY_JUDGE_VERDICT`) now take a `target` config (a new `EnrichTarget` dataclass) defaulting to `COMPANIES_TARGET`, which reproduces today's exact emitted jsCode string — proven by a frozen-snapshot guard (`tests/test_companies_factory_frozen.py`) that CALLS `build_enrichment_cloud()`/`build_enrichment_local_live()` in-test rather than diffing committed JSON, so a shared-module edit with no rebuild still fails loudly. `CONTACTS_TARGET` is authored (provider-aware gap predicate reading `existingRecord`+`scored.winners`, contact role-verification research prompt, no A/R/G/T grounding in the judge pass-1 per RESEARCH Task 3.4) but genuinely UNWIRED — no call site passes it, and its `inline_modules` name `contactResearch.js`/`contactJudge.js` (Plan 02 writes these) by string only, never via an actual `inline()` call, so the build cannot fail on a missing sibling module. `mergeContacts.js` additively gained mergeCompanies' `evidence`/`confidenceByField` opts + `_needsEvidence` gate (byte-identical for the one existing provider caller) — this is the substrate Plan 02's contact research fold writes evidence URLs and per-field judge confidence into. Full offline suite 336 pytest / 179 node, 0 regressions vs the 332/170 pre-16.2 baseline; the four frozen shared JS modules (`judge.js`/`webResearch.js`/`scoreEnrichment.js`/`mergeCompanies.js`) stay git-unchanged. See `16.2-01-SUMMARY.md`.
 
 ### Pending Todos
 
@@ -145,7 +147,7 @@ Items carried forward to later milestones:
 
 ## Session Continuity
 
-Last session: 2026-07-24T01:19:47.728Z
-Stopped at: Phase 16.1-02 EXECUTED + committed (894878b, 0284519, cbd593a) -- Phase 16.1 (both plans) COMPLETE.
+Last session: 2026-07-24T03:45:03.812Z
+Stopped at: Phase 16.2-01 EXECUTED + committed (c944496, 28058b9) -- Wave 1 of 2 complete; Wave 2 (16.2-02) depends on this plan.
 Resume file: None
-Next command: Phase 16.1 (both plans, 16.1-01 + 16.1-02) is COMPLETE. Next up: Phase 16.2 (contacts research/judge mirror, backlog, depends on 16.1) via `/gsd-plan-phase 16.2`, or Track B (live operator runbook: provision → deploy → activate → live writes, plus the runtime response-ordering/0-event test and a live `check_provider_credits.py` run) as an out-of-band operator task.
+Next command: Execute 16.2-02-PLAN.md (contact research->judge chain: contactResearch.js + contactJudge.js siblings, wire the 10-node chain at the seam with row-recovery across HTTP hops, ENRICH_MERGE 2nd-merge fold, anthropic credential + deploy binding, mirrored tests) via `/gsd-execute-phase 16.2`. Track B (live operator runbook) remains available as an out-of-band operator task.

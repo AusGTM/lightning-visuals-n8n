@@ -454,15 +454,15 @@ retroactively; its artifacts and tests are in the tree.
   3. Contact research prompt + escalation reasons + verdict application are contact-appropriate (not company-ICP fields); off/none/absent providers still degrade gracefully (research-only path works).
   4. Offline tests mirror the companies research/judge coverage; full suite green; builder deterministic. No live calls in the suite.
 
-**Plans**: 2 plans
+**Plans**: 1/2 plans executed
 
 **Wave 1**
 
-- [ ] 16.2-01-PLAN.md — Parameterize the 6 research/judge factories by target (default companies, byte-identical guard) + additive mergeContacts evidence/confidenceByField port (SC-2, SC-4 partial) [wave 1]
+- [x] 16.2-01-PLAN.md — Parameterize the 6 research/judge factories by target (default companies, byte-identical guard) + additive mergeContacts evidence/confidenceByField port (SC-2, SC-4 partial) [wave 1]
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 16.2-02-PLAN.md — Contact research→judge chain: contactResearch.js + contactJudge.js siblings, wire the 10-node chain at the seam, ENRICH_MERGE 2nd-merge fold (overlap precedence), anthropic credential bookkeeping, mirrored tests (SC-1, SC-3, SC-4) [wave 2, depends_on 16.2-01]
+- [ ] 16.2-02-PLAN.md — Contact research→judge chain: contactResearch.js + contactJudge.js + mergeContacts.foldContactResearch siblings, wire the 10-node chain at the seam with row-recovery across HTTP hops (mirror bd682a2) + entry marker-strip + chosen_field allowlist, ENRICH_MERGE write-safety fold, seniority fetch, anthropic credential + deploy binding, mirrored tests incl. the item-flow row-recovery regression (SC-1, SC-3 honest-mirror, SC-4) [wave 2, depends_on 16.2-01]
 
 ## Milestone 3 Progress
 
@@ -476,4 +476,4 @@ retroactively; its artifacts and tests are in the tree.
 | 15.5. Tiered Candidate Adjudication (INSERTED) | 1/1 | Complete | 2026-07-23 |
 | 16. Scheduled Workflows & Review Surface | 2/2 | Complete | 2026-07-23 |
 | 16.1. Provider Selection, Credit Reporting & Schedule Safety (INSERTED) | 2/2 | Complete | 2026-07-24 |
-| 16.2. Contacts Research + Judge Mirror (INSERTED) | 0/2 | Planning | — |
+| 16.2. Contacts Research + Judge Mirror (INSERTED) | 1/2 | In Progress | — |
