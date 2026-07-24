@@ -16,7 +16,9 @@
 
 import json
 import re
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Sequence
 
 ROOT = Path(__file__).resolve().parent.parent
 CODE = ROOT / "n8n" / "code"
@@ -1588,14 +1590,52 @@ return rows.map((it, i) => {
 # cloud=False (LOCAL-LIVE): reads ALLOW_WEB_RESEARCH/MAX_WEB_RESEARCH_PER_RUN from
 # $vars/$env at runtime. cloud=True (CLOUD): both are baked build-time literals from
 # CONFIG_FLAG_DEFAULTS — zero $env/$vars survives (AR-4, Criterion 5).
-def _enrich_research_gate_js(cloud=False):
-    return inline("taxonomy.generated.js") + r"""
+# Phase 16.2 Task 1 (SC-2, RESEARCH SS1.3) — one `target` config parameterizes the six
+# companies research/judge/validate/apply-verdict factories below. Every factory
+# defaults to COMPANIES_TARGET, reproducing today's exact emitted string (byte-identity
+# guard: tests/test_companies_factory_frozen.py). CONTACTS_TARGET is authored here but
+# UNWIRED — no call site below passes it, and its inline_modules name sibling JS
+# modules (contactResearch.js/contactJudge.js) that Plan 02 creates; inline() is never
+# invoked with those names in THIS plan (would raise FileNotFoundError), because no
+# factory is ever called with target=CONTACTS_TARGET here.
+@dataclass(frozen=True)
+class EnrichTarget:
+    """A parameterization of the six companies research/judge factories. Field-bound JS
+    (prompts, gap predicates, escalation) is carried as opaque JS-source fragments the
+    shared factory scaffolding splices in — never as edits to the shared modules
+    (judge.js/webResearch.js/scoreEnrichment.js/mergeCompanies.js stay git-unchanged,
+    RESEARCH SS1.1)."""
 
-// --- n8n wrapper (companies): Research Trigger Gate ---
-""" + _flag_const("ALLOW_WEB_RESEARCH", cloud) + "\n" + _flag_const("MAX_WEB_RESEARCH_PER_RUN", cloud) + r"""
-const MAX_PER_RUN = parseInt(String(MAX_WEB_RESEARCH_PER_RUN), 10);
+    label: str
+    gate_inline_modules: Sequence[str]
+    gap_predicate_js: str
+    gap_predicate_call_js: str
+    research_inline_modules: Sequence[str]
+    research_system_prompt_fn_js: str
+    research_max_tokens_block_js: str
+    research_payload_body_js: str
+    validate_inline_modules: Sequence[str]
+    validate_call_fn: str
+    validate_row_recovery_comment_js: str
+    research_pre_http_node: str
+    judge_gate_inline_modules: Sequence[str]
+    judge_gate_header_comment_js: str
+    judge_pass1_block_js: str
+    judge_pass3_unadjudicated_call_js: str
+    judge_build_inline_modules: Sequence[str]
+    build_judge_fn: str
+    judge_max_tokens: int
+    judge_pre_http_node: str
+    apply_verdict_inline_modules: Sequence[str]
+    apply_verdict_row_recovery_comment_js: str
+    apply_verdict_call_js: str
+    judge_confidence_carry_comment_js: str
 
-// RT-3: fires when lv_org_type is unresolved/evidence-gated, OR lv_produces_content blank.
+
+COMPANIES_TARGET = EnrichTarget(
+    label="companies",
+    gate_inline_modules=("taxonomy.generated.js",),
+    gap_predicate_js=r"""// RT-3: fires when lv_org_type is unresolved/evidence-gated, OR lv_produces_content blank.
 function needsResearch(existingRecord) {
   const rec = existingRecord || {};
   const orgType = rec.lv_org_type;
@@ -1604,36 +1644,10 @@ function needsResearch(existingRecord) {
   const pc = rec.lv_produces_content;
   const contentBlank = pc === undefined || pc === null || pc === "";
   return orgUnresolved || contentBlank;
-}
-
-const allowOn = String(ALLOW_WEB_RESEARCH).toLowerCase() === "true";
-let remaining = MAX_PER_RUN;
-return $input.all().map((it) => {
-  const row = it.json;
-  if (!allowOn) {
-    return { json: { ...row, research_needed: false, research_skip_reason: "ALLOW_WEB_RESEARCH=false" } };
-  }
-  const need = needsResearch(row.existingRecord);
-  if (need && remaining > 0) {
-    remaining -= 1;
-    return { json: { ...row, research_needed: true } };
-  }
-  return { json: { ...row, research_needed: false,
-                   research_skip_reason: need ? "MAX_WEB_RESEARCH_PER_RUN reached" : "already resolved" } };
-});
-"""
-
-# Build Research Request — RT-1/RT-2. D3: prompted free-text JSON, NOT a forced tool_use
-# schema (mixing a client tool with the web_search server tool in one turn defers the
-# search to a second round trip, breaking the single-HTTP-call n8n pattern).
-#
-# cloud=False (LOCAL-LIVE): ANTHROPIC_SONNET_MODEL/WEB_RESEARCH_MAX_SEARCHES read from
-# $vars/$env. cloud=True (CLOUD): both baked build-time literals (AR-4, Criterion 5).
-def _enrich_build_research_request_js(cloud=False):
-    return inline("taxonomy.generated.js") + r"""
-
-// --- n8n wrapper (companies): Build Research Request ---
-function researchSystemPrompt() {
+}""",
+    gap_predicate_call_js="needsResearch(row.existingRecord)",
+    research_inline_modules=("taxonomy.generated.js",),
+    research_system_prompt_fn_js=r"""function researchSystemPrompt() {
   return [
     "You are an ICP research analyst for a sports-media/broadcast tech vendor.",
     "Research the company across three query intents: identity (<name> <domain> about),",
@@ -1656,26 +1670,13 @@ function researchSystemPrompt() {
     '"evidence_by_field":{"<field>":"<url>"},"entity_resolution":{...},',
     '"matched":<bool>,"confidence":<int 0-100>}',
   ].join(" ");
-}
-
-""" + _flag_const("ANTHROPIC_SONNET_MODEL", cloud) + "\n" + _flag_const("WEB_RESEARCH_MAX_SEARCHES", cloud) + r"""
-
-return $input.all().map((it) => {
-  const row = it.json;
-  if (!row.research_needed) return { json: { ...row, research_request_body: null } };
-  const id = row.identity_keys || {};
-  const model = ANTHROPIC_SONNET_MODEL;
-  const maxUses = parseInt(String(WEB_RESEARCH_MAX_SEARCHES), 10);
-  const body = {
-    model,
-    // ponytail: 2000 truncated live responses (stop_reason=max_tokens) before
+}""",
+    research_max_tokens_block_js=r"""    // ponytail: 2000 truncated live responses (stop_reason=max_tokens) before
     // evidence_by_field was written — extended thinking alone eats ~1000-1300 tokens.
     // 4096 leaves ~45% headroom over the largest observed complete response (2829).
     // Keep in parity with src/web_research.py's max_tokens (Phase 13 D-decision).
-    max_tokens: 4096,
-    system: researchSystemPrompt(),
-    messages: [{ role: "user", content: JSON.stringify({
-      task: "company_icp_research",
+    max_tokens: 4096,""",
+    research_payload_body_js=r"""      task: "company_icp_research",
       company: {
         name: id.companyName || row.company || null,
         domain: id.domain || row.domain || null,
@@ -1683,63 +1684,22 @@ return $input.all().map((it) => {
       known_revenue_band: (row.existingRecord && row.existingRecord.lv_revenue_band) || null,
       required_fields: ["lv_org_type", "lv_produces_content", "lv_content_type",
                         "lv_is_hardware_vendor", "lv_is_gambling_operator"],
-      return_only_json: true,
-    }) }],
-    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: maxUses }],
-  };
-  return { json: { ...row, research_request_body: body } };
-});
-"""
-
-# Validate Research Output — OC-1..4/TS-1..3/AT-2/ER-1. The whole validation contract lives
-# in webResearch.js's researchCandidateFromHttpItem (never throws) — this wrapper just calls
-# it per item, so a malformed/errored/empty HTTP response can never fail the node (D5/D6).
-ENRICH_VALIDATE_RESEARCH = inline("taxonomy.generated.js", "taxonomy.js", "webResearch.js") + r"""
-
-// --- n8n wrapper (companies): Validate Research Output ---
-// ROW-RECOVERY (bug fix): the upstream "Claude Web Research" HTTP node REPLACES $json with
+      return_only_json: true,""",
+    validate_inline_modules=("taxonomy.generated.js", "taxonomy.js", "webResearch.js"),
+    validate_call_fn="researchCandidateFromHttpItem",
+    validate_row_recovery_comment_js=r"""// ROW-RECOVERY (bug fix): the upstream "Claude Web Research" HTTP node REPLACES $json with
 // the API response, so it.json here is the HTTP response — NOT the enrichment row. The
 // research candidate is correctly extracted from that response, but the row itself
 // (existingRecord, scored, identity_keys, gap_flag) must be recovered by paired index from
 // the last pre-HTTP node ("Build Research Request"), exactly as "Normalize + Score" recovers
 // provider rows via $('Company Gate'). Without this, existingRecord/scored are lost for the
-// rest of the research→judge→merge lane and Merge Company returns merge:null.
-const preHttp = (function () {
-  try { return $("Build Research Request").all(); } catch (e) { return []; }
-})();
-return $input.all().map((it, i) => {
-  const research_candidate = researchCandidateFromHttpItem(it.json);
-  const row = (preHttp[i] && preHttp[i].json) || it.json;
-  return { json: { ...row, research_candidate } };
-});
-"""
-
-# --- Phase 14: judge wiring (companies branch only). Runs on the research-true lane,
-# UPSTREAM of Merge Company (D1) — the size-disagreement array/watch-list constant are
-# computed INSIDE ENRICH_MERGE_CO below, so a node that runs before it structurally
-# cannot reference them (RO-2 is proven by placement, not by comment; tests/test_judge_
-# spec.py's test_ro2_judge_gate_cannot_see_size_conflicts asserts both the jsCode
-# absence and the graph ancestry).
-
-# Judge Gate — JG-4 (always, D6) + JG-1/RO-1/RO-2 escalation trigger + the D5 kill
-# switches (ALLOW_SONNET_ESCALATION, MAX_SONNET_VALIDATIONS_PER_RUN, enforced HERE,
-# physically upstream of the HTTP node — Pitfall 4 precedent).
-#
-# cloud=False (LOCAL-LIVE): both flags read from $vars/$env. cloud=True (CLOUD): both
-# baked build-time literals (AR-4, Criterion 5).
-def _enrich_judge_gate_js(cloud=False):
-    return inline("escalation.generated.js", "scoreEnrichment.js", "judge.js") + r"""
-
-// --- n8n wrapper (companies): Judge Gate ---
-// RO-2: size-band disagreement is detected downstream inside Merge Company and is
+// rest of the research→judge→merge lane and Merge Company returns merge:null.""",
+    research_pre_http_node="Build Research Request",
+    judge_gate_inline_modules=("escalation.generated.js", "scoreEnrichment.js", "judge.js"),
+    judge_gate_header_comment_js=r"""// RO-2: size-band disagreement is detected downstream inside Merge Company and is
 // deliberately invisible here — this gate runs before that node, so no model call can
-// ever be triggered by a size disagreement alone.
-""" + _flag_const("ALLOW_SONNET_ESCALATION", cloud) + "\n" + _flag_const("MAX_SONNET_VALIDATIONS_PER_RUN", cloud) + r"""
-const allowOn = String(ALLOW_SONNET_ESCALATION).toLowerCase() === "true";
-const MAX_PER_RUN = parseInt(String(MAX_SONNET_VALIDATIONS_PER_RUN), 10);
-const NOW = new Date().toISOString();
-
-// Phase-15 provenance blob is a JSON string property that may be absent, empty, or
+// ever be triggered by a size disagreement alone.""",
+    judge_pass1_block_js=r"""// Phase-15 provenance blob is a JSON string property that may be absent, empty, or
 // malformed (truncated at the 60000-char cap, or simply never written yet) — a parse
 // failure yields an empty object and must never throw (D1: without a parseable
 // provenance blob, the independence guard has nothing to read and would fail OPEN).
@@ -1779,7 +1739,251 @@ const gated = $input.all().map((it) => {
   const { needsJudge, reasons } = computeEscalation(researchCandidate, row.existingRecord || {});
   return { ...row, research_candidate: researchCandidate, research_scoring,
            needs_judge: needsJudge, judge_reasons: reasons };
+});""",
+    judge_pass3_unadjudicated_call_js=r"""    const researchCandidate = applyUnadjudicated(row.research_candidate, row.judge_reasons);
+    return { json: { ...row, research_candidate: researchCandidate } };""",
+    judge_build_inline_modules=("escalation.generated.js", "judge.js"),
+    build_judge_fn="buildJudgeRequestBody",
+    judge_max_tokens=4096,
+    judge_pre_http_node="Build Judge Request",
+    apply_verdict_inline_modules=("escalation.generated.js", "judge.js"),
+    apply_verdict_row_recovery_comment_js=r"""// ROW-RECOVERY (bug fix): the upstream "Judge Call" HTTP node REPLACES $json with the API
+// response, so it.json is the verdict response — NOT the row. The verdict is extracted from
+// it.json, but the row (research_candidate, judge_reasons, judge_confidence_by_field,
+// existingRecord, scored) must be recovered by paired index from "Build Judge Request".
+// Without this, applyJudgeVerdict(undefined,...) throws / rebuilds a candidate holding only
+// chosen_field, and existingRecord/scored never reach Merge Company (merge:null).""",
+    apply_verdict_call_js=(
+        "const research_candidate = applyJudgeVerdict(row.research_candidate, "
+        "judge_verdict, row.judge_reasons);"
+    ),
+    judge_confidence_carry_comment_js=r"""  // TA-8 (D2-safe): when the verdict actually promoted/confirmed a field (judge_flags.
+  // adjudicated is only set on that path), carry the VERDICT's own confidence — 0-100,
+  // the same scale mergeCompanies' flat confidence already uses — forward for Merge
+  // Company to apply as a per-field override. Never the A/R/G/T composite (D2): that
+  // scale mismatch would silently stop nearly every research promotion.""",
+)
+
+# CONTACTS_TARGET — authored here per RESEARCH SS2/SS3, UNWIRED (Plan 02 wires the
+# contact call sites + writes contactResearch.js/contactJudge.js). Field-agnostic
+# helpers (applyCostCap, judgeVerdictFromHttpItem, extractFinalJson, scoreCandidates)
+# are reused by co-inlining, never by editing the shared modules (judge.js:97-102 2-arg
+# arity discipline on computeEscalation — CONTACTS_TARGET carries field config via this
+# module-level config object, never a 3rd arg to computeContactEscalation).
+CONTACTS_TARGET = EnrichTarget(
+    label="contacts",
+    gate_inline_modules=(),
+    gap_predicate_js=r"""// Contact analog of RT-3 — PROVIDER-AWARE (runs after Normalize + Score, so both
+// existingRecord and provider winners are visible): fires on provider_gap (a target
+// field absent from BOTH existingRecord and provider winners) OR jobtitle_stale_refresh
+// (existing jobtitle present but lv_jobtitle_verified_at older than the 180-day TTL —
+// the clock lives HERE in the gate, not in computeContactEscalation, gpt #7/LOW-7).
+// NOT a provider-vs-research comparison trigger (SC-3 honest-mirror decision) — that is
+// the judge's job, not the gate's.
+const CONTACT_RESEARCH_FIELDS = ["jobtitle", "seniority"];
+const JOBTITLE_STALE_DAYS = 180;
+function needsResearch(existingRecord, scored) {
+  const rec = existingRecord || {};
+  const winners = (scored && scored.winners) || {};
+  for (const f of CONTACT_RESEARCH_FIELDS) {
+    const existing = rec[f];
+    const won = winners[f];
+    const blank = existing === undefined || existing === null || existing === "";
+    const noWinner = won === undefined || won === null || won === "";
+    if (blank && noWinner) return true;  // provider_gap
+  }
+  if (rec.jobtitle && rec.lv_jobtitle_verified_at) {
+    const verifiedAt = new Date(rec.lv_jobtitle_verified_at);
+    if (!isNaN(verifiedAt.getTime())) {
+      const ageDays = (Date.now() - verifiedAt.getTime()) / 86400000;
+      if (ageDays > JOBTITLE_STALE_DAYS) return true;  // jobtitle_stale_refresh
+    }
+  }
+  return false;
+}""",
+    gap_predicate_call_js="needsResearch(row.existingRecord, row.scored)",
+    research_inline_modules=(),
+    research_system_prompt_fn_js=r"""function researchSystemPrompt() {
+  return [
+    "You are a B2B contact-verification analyst. Research the person's CURRENT role at",
+    "their company from public sources - prefer the company's own team/about/leadership",
+    "page and the person's public professional profile (e.g. LinkedIn). Return the",
+    "current job title and a seniority band. Prefer \"unknown\"/null over guessing - an",
+    "absent result is NOT evidence. For every field you set, cite a supporting URL in",
+    "`evidence_by_field` keyed by that exact field name (evidence_by_field.jobtitle,",
+    "evidence_by_field.seniority). Return ONLY one JSON object, no prose, no markdown",
+    "fences, matching:",
+    '{"data":{"jobtitle":<str|null>,"seniority":<str|null>},',
+    '"evidence_by_field":{"<field>":"<url>"},"matched":<bool>,"confidence":<int 0-100>}',
+  ].join(" ");
+}""",
+    research_max_tokens_block_js=r"""    // gpt #11/LOW-6: research and judge budgets stay SEPARATE from the company chain
+    // (which truncated live at 2000 before evidence_by_field, see the companies budget
+    // comment above) - a 2-field contact response needs far less headroom than the
+    // 5-field company ICP object, but 2048 still clears that floor with margin.
+    max_tokens: 2048,""",
+    research_payload_body_js=r"""      task: "contact_role_research",
+      contact: {
+        name: id.contactName || row.contactName || null,
+        company: id.companyName || row.company || null,
+        domain: id.domain || row.domain || null,
+      },
+      required_fields: ["jobtitle", "seniority"],
+      return_only_json: true,""",
+    validate_inline_modules=("webResearch.js", "contactResearch.js"),
+    validate_call_fn="contactResearchCandidateFromHttpItem",
+    validate_row_recovery_comment_js=r"""// ROW-RECOVERY (mirrors bd682a2): the upstream "Contact Web Research" HTTP node
+// REPLACES $json with the API response, so it.json here is the HTTP response — NOT the
+// enrichment row. The research candidate is correctly extracted from that response, but
+// the row itself (existingRecord, scored, identity_keys) must be recovered by paired
+// index from the last pre-HTTP node ("Build Contact Research Request"), exactly as the
+// companies branch recovers rows across this same HTTP hop (bd682a2).""",
+    research_pre_http_node="Build Contact Research Request",
+    judge_gate_inline_modules=("escalation.generated.js", "judge.js", "contactJudge.js"),
+    judge_gate_header_comment_js=r"""// Contact judge gate: no size-band/vendor grounding applies here (contacts carry no
+// firmographic candidates) — escalation is driven solely by computeContactEscalation.""",
+    judge_pass1_block_js=r"""// Contact pass-1 (RESEARCH Task 3.4): NO A/R/G/T grounding — scoreResearchCandidates is
+// company-only and field-bound (would force either a judge.js edit, a byte break, or a
+// full duplicate). The contact judge escalates on conflict/stale/miss and adjudicates
+// from the retrieved evidence + escalation_reasons alone.
+const gated = $input.all().map((it) => {
+  const row = it.json;
+  const { needsJudge, reasons } = computeContactEscalation(row.research_candidate, row.existingRecord || {});
+  return { ...row, needs_judge: needsJudge, judge_reasons: reasons };
+});""",
+    judge_pass3_unadjudicated_call_js=r"""    const researchCandidate = applyContactUnadjudicated(row.research_candidate, row.judge_reasons);
+    return { json: { ...row, research_candidate: researchCandidate } };""",
+    judge_build_inline_modules=("escalation.generated.js", "judge.js", "contactJudge.js"),
+    build_judge_fn="buildContactJudgeRequestBody",
+    judge_max_tokens=2048,
+    judge_pre_http_node="Build Contact Judge Request",
+    apply_verdict_inline_modules=("escalation.generated.js", "judge.js", "contactJudge.js"),
+    apply_verdict_row_recovery_comment_js=r"""// ROW-RECOVERY (mirrors bd682a2): the upstream "Contact Judge Call" HTTP node REPLACES
+// $json with the API response, so it.json is the verdict response — NOT the row. The
+// verdict is extracted from it.json, but the row (research_candidate, judge_reasons,
+// judge_confidence_by_field, existingRecord, scored) must be recovered by paired index
+// from "Build Contact Judge Request", exactly as the companies branch does (bd682a2).""",
+    apply_verdict_call_js=(
+        "const research_candidate = applyContactJudgeVerdict(row.research_candidate, "
+        "judge_verdict, row.judge_reasons);"
+    ),
+    judge_confidence_carry_comment_js=r"""  // TA-8 analog: when the verdict actually promoted/confirmed a field, carry the
+  // VERDICT's own confidence forward for Merge Winners to apply as a per-field override
+  // (mirrors the companies carry above; judge_confidence_by_field keys on chosen_field).""",
+)
+
+
+def _enrich_research_gate_js(cloud=False, target=None):
+    t = target or COMPANIES_TARGET
+    return inline(*t.gate_inline_modules) + r"""
+
+// --- n8n wrapper (""" + t.label + r"""): Research Trigger Gate ---
+""" + _flag_const("ALLOW_WEB_RESEARCH", cloud) + "\n" + _flag_const("MAX_WEB_RESEARCH_PER_RUN", cloud) + r"""
+const MAX_PER_RUN = parseInt(String(MAX_WEB_RESEARCH_PER_RUN), 10);
+
+""" + t.gap_predicate_js + r"""
+
+const allowOn = String(ALLOW_WEB_RESEARCH).toLowerCase() === "true";
+let remaining = MAX_PER_RUN;
+return $input.all().map((it) => {
+  const row = it.json;
+  if (!allowOn) {
+    return { json: { ...row, research_needed: false, research_skip_reason: "ALLOW_WEB_RESEARCH=false" } };
+  }
+  const need = """ + t.gap_predicate_call_js + r""";
+  if (need && remaining > 0) {
+    remaining -= 1;
+    return { json: { ...row, research_needed: true } };
+  }
+  return { json: { ...row, research_needed: false,
+                   research_skip_reason: need ? "MAX_WEB_RESEARCH_PER_RUN reached" : "already resolved" } };
 });
+"""
+
+# Build Research Request — RT-1/RT-2. D3: prompted free-text JSON, NOT a forced tool_use
+# schema (mixing a client tool with the web_search server tool in one turn defers the
+# search to a second round trip, breaking the single-HTTP-call n8n pattern).
+#
+# cloud=False (LOCAL-LIVE): ANTHROPIC_SONNET_MODEL/WEB_RESEARCH_MAX_SEARCHES read from
+# $vars/$env. cloud=True (CLOUD): both baked build-time literals (AR-4, Criterion 5).
+def _enrich_build_research_request_js(cloud=False, target=None):
+    t = target or COMPANIES_TARGET
+    return inline(*t.research_inline_modules) + r"""
+
+// --- n8n wrapper (""" + t.label + r"""): Build Research Request ---
+""" + t.research_system_prompt_fn_js + r"""
+
+""" + _flag_const("ANTHROPIC_SONNET_MODEL", cloud) + "\n" + _flag_const("WEB_RESEARCH_MAX_SEARCHES", cloud) + r"""
+
+return $input.all().map((it) => {
+  const row = it.json;
+  if (!row.research_needed) return { json: { ...row, research_request_body: null } };
+  const id = row.identity_keys || {};
+  const model = ANTHROPIC_SONNET_MODEL;
+  const maxUses = parseInt(String(WEB_RESEARCH_MAX_SEARCHES), 10);
+  const body = {
+    model,
+""" + t.research_max_tokens_block_js + r"""
+    system: researchSystemPrompt(),
+    messages: [{ role: "user", content: JSON.stringify({
+""" + t.research_payload_body_js + r"""
+    }) }],
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: maxUses }],
+  };
+  return { json: { ...row, research_request_body: body } };
+});
+"""
+
+# Validate Research Output — OC-1..4/TS-1..3/AT-2/ER-1. The whole validation contract lives
+# in webResearch.js's researchCandidateFromHttpItem (never throws) — this wrapper just calls
+# it per item, so a malformed/errored/empty HTTP response can never fail the node (D5/D6).
+def _enrich_validate_research_js(target=None):
+    t = target or COMPANIES_TARGET
+    return inline(*t.validate_inline_modules) + r"""
+
+// --- n8n wrapper (""" + t.label + r"""): Validate Research Output ---
+""" + t.validate_row_recovery_comment_js + r"""
+const preHttp = (function () {
+  try { return """ + f"$({json.dumps(t.research_pre_http_node)})" + r""".all(); } catch (e) { return []; }
+})();
+return $input.all().map((it, i) => {
+  const research_candidate = """ + t.validate_call_fn + r"""(it.json);
+  const row = (preHttp[i] && preHttp[i].json) || it.json;
+  return { json: { ...row, research_candidate } };
+});
+"""
+
+
+# Module-level const NAME preserved (importers e.g. tests/test_cloud_companies_branch.py
+# pull ENRICH_VALIDATE_RESEARCH by name) — computed by calling the parameterized
+# producer with the companies default, so the emitted string is unchanged.
+ENRICH_VALIDATE_RESEARCH = _enrich_validate_research_js()
+
+# --- Phase 14: judge wiring (companies branch only). Runs on the research-true lane,
+# UPSTREAM of Merge Company (D1) — the size-disagreement array/watch-list constant are
+# computed INSIDE ENRICH_MERGE_CO below, so a node that runs before it structurally
+# cannot reference them (RO-2 is proven by placement, not by comment; tests/test_judge_
+# spec.py's test_ro2_judge_gate_cannot_see_size_conflicts asserts both the jsCode
+# absence and the graph ancestry).
+
+# Judge Gate — JG-4 (always, D6) + JG-1/RO-1/RO-2 escalation trigger + the D5 kill
+# switches (ALLOW_SONNET_ESCALATION, MAX_SONNET_VALIDATIONS_PER_RUN, enforced HERE,
+# physically upstream of the HTTP node — Pitfall 4 precedent).
+#
+# cloud=False (LOCAL-LIVE): both flags read from $vars/$env. cloud=True (CLOUD): both
+# baked build-time literals (AR-4, Criterion 5).
+def _enrich_judge_gate_js(cloud=False, target=None):
+    t = target or COMPANIES_TARGET
+    return inline(*t.judge_gate_inline_modules) + r"""
+
+// --- n8n wrapper (""" + t.label + r"""): Judge Gate ---
+""" + t.judge_gate_header_comment_js + r"""
+""" + _flag_const("ALLOW_SONNET_ESCALATION", cloud) + "\n" + _flag_const("MAX_SONNET_VALIDATIONS_PER_RUN", cloud) + r"""
+const allowOn = String(ALLOW_SONNET_ESCALATION).toLowerCase() === "true";
+const MAX_PER_RUN = parseInt(String(MAX_SONNET_VALIDATIONS_PER_RUN), 10);
+const NOW = new Date().toISOString();
+
+""" + t.judge_pass1_block_js + r"""
 
 // Pass 2: applyCostCap enforces the kill switch AND the per-run budget through the same
 // path — 0 when escalation is off (caps every row), MAX_PER_RUN when it is on.
@@ -1791,8 +1995,7 @@ const capped = applyCostCap(gated, allowOn ? MAX_PER_RUN : 0);
 // never had a trigger (judge_reasons empty) are already needs_judge:false and untouched.
 return capped.map((row) => {
   if ((row.judge_reasons || []).length > 0 && !row.needs_judge) {
-    const researchCandidate = applyUnadjudicated(row.research_candidate, row.judge_reasons);
-    return { json: { ...row, research_candidate: researchCandidate } };
+""" + t.judge_pass3_unadjudicated_call_js + r"""
   }
   return { json: row };
 });
@@ -1803,43 +2006,37 @@ return capped.map((row) => {
 #
 # cloud=False (LOCAL-LIVE): ANTHROPIC_SONNET_MODEL read from $vars/$env. cloud=True
 # (CLOUD): baked build-time literal (AR-4, Criterion 5).
-def _enrich_build_judge_request_js(cloud=False):
-    return inline("escalation.generated.js", "judge.js") + r"""
+def _enrich_build_judge_request_js(cloud=False, target=None):
+    t = target or COMPANIES_TARGET
+    return inline(*t.judge_build_inline_modules) + r"""
 
-// --- n8n wrapper (companies): Build Judge Request ---
+// --- n8n wrapper (""" + t.label + r"""): Build Judge Request ---
 """ + _flag_const("ANTHROPIC_SONNET_MODEL", cloud) + r"""
 return $input.all().map((it) => {
   const row = it.json;
   if (!row.needs_judge) return { json: { ...row, judge_request_body: null } };
   const model = ANTHROPIC_SONNET_MODEL;
-  const judge_request_body = buildJudgeRequestBody(row, model, 4096);
+  const judge_request_body = """ + t.build_judge_fn + r"""(row, model, """ + str(t.judge_max_tokens) + r""");
   return { json: { ...row, judge_request_body } };
 });
 """
 
 # Apply Judge Verdict — JG-3 never-throws verdict handling + the promote/demote decision.
-ENRICH_APPLY_JUDGE_VERDICT = inline("escalation.generated.js", "judge.js") + r"""
+def _enrich_apply_judge_verdict_js(target=None):
+    t = target or COMPANIES_TARGET
+    return inline(*t.apply_verdict_inline_modules) + r"""
 
-// --- n8n wrapper (companies): Apply Judge Verdict ---
-// ROW-RECOVERY (bug fix): the upstream "Judge Call" HTTP node REPLACES $json with the API
-// response, so it.json is the verdict response — NOT the row. The verdict is extracted from
-// it.json, but the row (research_candidate, judge_reasons, judge_confidence_by_field,
-// existingRecord, scored) must be recovered by paired index from "Build Judge Request".
-// Without this, applyJudgeVerdict(undefined,...) throws / rebuilds a candidate holding only
-// chosen_field, and existingRecord/scored never reach Merge Company (merge:null).
+// --- n8n wrapper (""" + t.label + r"""): Apply Judge Verdict ---
+""" + t.apply_verdict_row_recovery_comment_js + r"""
 const preHttp = (function () {
-  try { return $("Build Judge Request").all(); } catch (e) { return []; }
+  try { return """ + f"$({json.dumps(t.judge_pre_http_node)})" + r""".all(); } catch (e) { return []; }
 })();
 return $input.all().map((it, i) => {
   const judge_verdict = judgeVerdictFromHttpItem(it.json);
   const row = (preHttp[i] && preHttp[i].json) || it.json;
-  const research_candidate = applyJudgeVerdict(row.research_candidate, judge_verdict, row.judge_reasons);
+  """ + t.apply_verdict_call_js + r"""
 
-  // TA-8 (D2-safe): when the verdict actually promoted/confirmed a field (judge_flags.
-  // adjudicated is only set on that path), carry the VERDICT's own confidence — 0-100,
-  // the same scale mergeCompanies' flat confidence already uses — forward for Merge
-  // Company to apply as a per-field override. Never the A/R/G/T composite (D2): that
-  // scale mismatch would silently stop nearly every research promotion.
+""" + t.judge_confidence_carry_comment_js + r"""
   let judge_confidence_by_field = row.judge_confidence_by_field || {};
   const adjudicated = research_candidate && research_candidate.judge_flags &&
     research_candidate.judge_flags.adjudicated === true;
@@ -1851,6 +2048,12 @@ return $input.all().map((it, i) => {
   return { json: { ...row, research_candidate, judge_verdict, judge_confidence_by_field } };
 });
 """
+
+
+# Module-level const NAME preserved (importers pull ENRICH_APPLY_JUDGE_VERDICT by name)
+# — computed by calling the parameterized producer with the companies default, so the
+# emitted string is unchanged.
+ENRICH_APPLY_JUDGE_VERDICT = _enrich_apply_judge_verdict_js()
 
 ENRICH_MERGE_CO = inline("taxonomy.generated.js", "mergeCompanies.js") + r"""
 

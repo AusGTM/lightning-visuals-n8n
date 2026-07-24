@@ -74,17 +74,22 @@ def _block(text: str, start_marker: str, end_marker: str) -> str:
 
 def test_prompt_parity_vendor_flags():
     """Criterion 5 drift check (did not exist before this phase): the production
-    research prompt (scripts/build_cloud_workflows.py's _enrich_build_research_request_js,
-    Phase 16 Task 4 — was a bare ENRICH_BUILD_RESEARCH_REQUEST constant, now a
-    cloud-aware function) and the dev-oracle prompt (src/web_research.py's
-    RESEARCH_SYSTEM) are independently hand-written and must not drift (Pitfall 4) —
-    both must request lv_is_hardware_vendor / lv_is_gambling_operator."""
+    research prompt and the dev-oracle prompt (src/web_research.py's RESEARCH_SYSTEM)
+    are independently hand-written and must not drift (Pitfall 4) — both must request
+    lv_is_hardware_vendor / lv_is_gambling_operator.
+
+    Phase 16.2 Task 1: the companies research prompt text moved OUT of
+    _enrich_build_research_request_js's function body and into COMPANIES_TARGET (the
+    target-parameterization config the function now defaults to, RESEARCH SS1.3) — the
+    field-bound prompt content is data (research_system_prompt_fn_js/
+    research_payload_body_js), not code, so this check now slices the COMPANIES_TARGET
+    assignment block rather than the (now-thin) factory function body."""
     web_research_src = (ROOT / "src" / "web_research.py").read_text()
     research_system_block = _block(web_research_src, "RESEARCH_SYSTEM = (", "\ndef mock_claude_web_research")
 
     builder_src = (ROOT / "scripts" / "build_cloud_workflows.py").read_text()
     build_request_block = _block(
-        builder_src, "def _enrich_build_research_request_js", "\n# Validate Research Output"
+        builder_src, "COMPANIES_TARGET = EnrichTarget(", "\n\n# CONTACTS_TARGET"
     )
 
     for field in ("lv_is_hardware_vendor", "lv_is_gambling_operator"):
