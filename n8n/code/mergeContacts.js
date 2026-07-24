@@ -65,15 +65,37 @@ const CONTACT_CACHE_KEY_FIELDS = {
   mobilephone: "lv_mobilephone_verified_at",
 };
 
+// Does this field+value need an evidence URL before it may promote? (Phase 16.2 Task 2
+// additive port of mergeCompanies.js's _needsEvidence — inert for every contact field
+// today: DEFAULT_CONTACT_POLICY declares no require_evidence_url/require_evidence_url_for
+// entries, so this only bites once Plan 02's research fold supplies a policy that does.)
+function _needsEvidence(policy, value) {
+  if (!policy) return false;
+  if (policy.require_evidence_url === true) return true;
+  const gated = policy.require_evidence_url_for;
+  if (Array.isArray(gated)) return gated.indexOf(value) !== -1;
+  return false;
+}
+
 // Deterministic gate — single candidate, mirrors merge_policy.deterministic_gate.
 // has_conflict is always false with one candidate, so the conflict branch is dropped.
-function _gate(field, currentValue, confidence, policy) {
+// Phase 16.2 Task 2 (additive): evidenceUrl/value are new trailing params, mirroring
+// mergeCompanies.js's _gate — every existing call site below still passes only the
+// first 4 args, so evidenceUrl/value are undefined and _needsEvidence(...) is false.
+function _gate(field, currentValue, confidence, policy, evidenceUrl, value) {
   const fieldClass = (policy && policy.class) || "fill_blank_only";
   const minConfidence = (policy && policy.min_confidence != null) ? policy.min_confidence : 80;
 
   if (confidence < minConfidence) {
     return { decision: "needs_review",
              reason: `Best confidence ${confidence} below threshold ${minConfidence}.` };
+  }
+  // Evidence gate runs BEFORE the class branches: an unevidenced claim is never
+  // promotable no matter how system_owned the field is (mirrors mergeCompanies.js,
+  // CLAUDE.md §21.3) — inert today since no contact policy entry requires evidence.
+  if (_needsEvidence(policy, value) && _isBlank(evidenceUrl)) {
+    return { decision: "needs_review",
+             reason: `Field ${field}=${value} requires an evidence URL; none supplied.` };
   }
   if (fieldClass === "manual_protected") {
     return { decision: "stage_only", reason: "Field is manual_protected." };
@@ -108,13 +130,23 @@ function _statusFor(decision) {
 //   existingProps: current HubSpot contact properties (the record being enriched)
 //   candidateRow:  canonical-keyed upload row (post column-map + normalization)
 //   fieldPolicy:   contacts policy block; defaults to DEFAULT_CONTACT_POLICY
-//   opts:          { source="csv", confidence=80 }
+//   opts:          { source="csv", confidence=80, evidence={field: url},
+//                    confidenceByField={field: number} }
+//                  Phase 16.2 Task 2 (additive port of mergeCompanies.js's opts,
+//                  mergeCompanies.js:150-169): `evidence` is a per-field evidence-URL
+//                  map (absent = no evidence); `confidenceByField` overrides the flat
+//                  `confidence` for one field. The ONE existing caller (ENRICH_MERGE's
+//                  provider `mergeContacts(existing, candidate, undefined, {source,
+//                  confidence})`) omits both keys and is therefore byte-identical —
+//                  proven by tests/n8n/mergeContacts.test.mjs.
 function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
   existingProps = existingProps || {};
   candidateRow = candidateRow || {};
   const policy = fieldPolicy || DEFAULT_CONTACT_POLICY;
   const source = (opts && opts.source) || "csv";
-  const confidence = (opts && opts.confidence != null) ? opts.confidence : 80;
+  const flatConfidence = (opts && opts.confidence != null) ? opts.confidence : 80;
+  const confidenceByField = (opts && opts.confidenceByField) || {};
+  const evidence = (opts && opts.evidence) || {};
   const verifiedAt = _nowIso();
 
   const canonicalPatch = {};
@@ -128,8 +160,13 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
 
     const currentValue = existingProps[field];
     const fieldPol = policy[field] || { class: "fill_blank_only", min_confidence: 80 };
+    const evidenceUrl = evidence[field];
+    // The resolved per-field value is used EVERYWHERE the flat one used to be — the gate
+    // threshold, the provenance entry, and the decision record — so the recorded
+    // confidence and the confidence that made the decision can never disagree.
+    const confidence = confidenceByField[field] != null ? confidenceByField[field] : flatConfidence;
 
-    const gate = _gate(field, currentValue, confidence, fieldPol);
+    const gate = _gate(field, currentValue, confidence, fieldPol, evidenceUrl, value);
     let decision = gate.decision;
 
     // HARD GUARD: email never promotes to canonical on the enrich path.
@@ -138,8 +175,10 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
     const validationStatus = _statusFor(decision);
 
     // ONE provenance entry per field — replaces the old flat metadataPatch/stagingPatch.
-    provenance[field] = { source, confidence, verified_at: verifiedAt,
-                          validation_status: validationStatus, value };
+    const entry = { source, confidence, verified_at: verifiedAt,
+                    validation_status: validationStatus, value };
+    if (!_isBlank(evidenceUrl)) entry.evidence_url = evidenceUrl;
+    provenance[field] = entry;
 
     if (CONTACT_CACHE_KEY_FIELDS[field]) {
       cacheKeys[CONTACT_CACHE_KEY_FIELDS[field]] = verifiedAt;
@@ -158,6 +197,7 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
       confidence,
       reason: gate.reason,
       validation_status: validationStatus,
+      evidence_url: _isBlank(evidenceUrl) ? null : evidenceUrl,
       verified_at: verifiedAt,
     });
   }
