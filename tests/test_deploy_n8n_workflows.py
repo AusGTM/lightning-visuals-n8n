@@ -4,14 +4,21 @@
 # scripts/provision_n8n_credentials.py (both new scripts' tests live here, per plan).
 # Fully deterministic: no network. Mirrors tests/test_sync_hubspot_properties.py's
 # hermetic monkeypatch pattern.
+#
+# Phase 16.1 Plan 02 Task 3 (reviews C2/A5) extends this file with: the credit-node
+# deploy-binding proof (NODE_CREDENTIAL_MAP additions from Task 1's single-item credit
+# branch) and a deploy-never-calls-/activate guard.
 import json
 import re
+from pathlib import Path
 
 import pytest
 import requests
 
 import scripts.deploy_n8n_workflows as deploy
 import scripts.provision_n8n_credentials as provision
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def raise_http(*args, **kwargs):
@@ -330,3 +337,105 @@ def test_deploy_set_is_cloud_only_no_env_leak():
             f"deploy set workflow {wf.get('name')!r} still references $env/$vars — "
             "would import unbound on n8n Cloud"
         )
+
+
+# --- Phase 16.1 Plan 02 Task 3 (reviews C2) — credit-node deploy binding -----------------
+
+CREDIT_NODE_EXPECTED_CREDENTIAL = {
+    "Lusha Usage": "LV Lusha",
+    "Apollo Usage": "LV Apollo",
+    "ZoomInfo Usage Mint": "LV ZoomInfo",
+}
+
+
+def _load_built_enrichment_workflow():
+    return json.loads((ROOT / "n8n" / "wf_enrichment_cloud.json").read_text())
+
+
+def test_every_credit_node_is_registered_in_node_credential_map():
+    """The three credit-check HTTP nodes from Plan 02 Task 1 must all be mapped — an
+    unmapped credit node would deploy UNBOUND -> 401 -> credits:null forever, invisibly
+    (reviews C2)."""
+    for node_name in CREDIT_NODE_EXPECTED_CREDENTIAL:
+        assert node_name in deploy.NODE_CREDENTIAL_MAP, (
+            f"{node_name!r} is a credit-check HTTP node but has no NODE_CREDENTIAL_MAP "
+            "entry — it would deploy unbound (reviews C2)"
+        )
+
+
+def test_bind_credentials_binds_every_credit_node_in_the_built_workflow_to_its_expected_credential():
+    wf = _load_built_enrichment_workflow()
+    node_names = {n["name"] for n in wf["nodes"]}
+    for node_name in CREDIT_NODE_EXPECTED_CREDENTIAL:
+        assert node_name in node_names, f"built workflow is missing credit node {node_name!r}"
+
+    name_to_id = {"LV Lusha": "id-lusha", "LV Apollo": "id-apollo", "LV ZoomInfo": "id-zoominfo",
+                  "LV HubSpot": "id-hubspot", "LV Anthropic": "id-anthropic",
+                  "LV Enrichment Webhook": "id-webhook-secret"}
+    bound = deploy.bind_credentials(wf, name_to_id)
+    bound_by_name = {n["name"]: n for n in bound["nodes"]}
+
+    for node_name, expected_cred_name in CREDIT_NODE_EXPECTED_CREDENTIAL.items():
+        node = bound_by_name[node_name]
+        assert "credentials" in node, f"{node_name!r} was not bound"
+        cred_block = next(iter(node["credentials"].values()))
+        assert cred_block["name"] == expected_cred_name
+        assert cred_block["id"] == name_to_id[expected_cred_name]
+
+    # ZoomInfo Usage (the secret-free Bearer-only GET) needs no binding at all.
+    zoom_usage = bound_by_name["ZoomInfo Usage"]
+    assert "credentials" not in zoom_usage
+
+
+def test_an_unmapped_credit_node_would_fail_deploy_closed():
+    """If a credit node's name were somehow removed from NODE_CREDENTIAL_MAP, bind
+    would fail closed (never silently import unbound) — proven directly on
+    bind_credentials, the same fail-closed contract as every other mapped node."""
+    workflow = {"name": "wf", "nodes": [{"name": "Lusha Usage", "type": "n8n-nodes-base.httpRequest"}]}
+    with pytest.raises(ValueError, match="LV Lusha"):
+        deploy.bind_credentials(workflow, name_to_id={})  # LV Lusha missing from the id-map
+
+
+# --- Phase 16.1 Plan 02 Task 3 (reviews A5/kimi LOW-1) — deploy never calls /activate -----
+
+def test_deploy_never_posts_to_any_activate_endpoint(monkeypatch, capsys):
+    """Functional guarantee behind SC-7's active:false marker: n8n's Public API ignores
+    `active` on create, so the real guard is that deploy issues NO POST to
+    `.../activate` for either workflow — proven by recording every POST call."""
+    monkeypatch.setenv("N8N_URL", "https://foo.n8n.cloud")
+    monkeypatch.setenv("N8N_API_KEY", "fake-key")
+    monkeypatch.setenv("DRY_RUN", "false")
+    monkeypatch.setenv("ALLOW_N8N_DEPLOY", "true")
+    monkeypatch.setattr(deploy, "_get_live_workflows", lambda: [])
+    monkeypatch.setattr(
+        deploy, "_load_local_workflows",
+        lambda: [{"name": "LV Enrichment (Cloud template)", "nodes": []},
+                  {"name": "LV Scheduled Maintenance (Cloud)", "nodes": []}])
+    monkeypatch.setattr(deploy, "_load_credential_id_map", lambda: {})
+
+    post_calls = []
+    monkeypatch.setattr(deploy, "_create_workflow_live",
+                         lambda body: (post_calls.append(("create", body.get("name"))), (201, None))[1])
+
+    rc = deploy.main()
+    assert rc == 0
+    assert post_calls == [("create", "LV Enrichment (Cloud template)"),
+                           ("create", "LV Scheduled Maintenance (Cloud)")]
+    # No call site anywhere in this run ever targets an /activate URL.
+    assert not any("activate" in str(call) for call in post_calls)
+
+
+def test_deploy_has_no_activate_function_or_call_site():
+    """Belt-and-braces static guard: the module defines no activate-named function and no
+    call site references one — activation is a deliberate separate operator-runbook step,
+    never performed by this script. (The docstring's own prose mentions "/activate" to
+    document why — that's intentional and not what this guards against.)"""
+    import ast
+    tree = ast.parse((ROOT / "scripts" / "deploy_n8n_workflows.py").read_text())
+    func_names = {n.name for n in ast.walk(tree) if isinstance(n, ast.FunctionDef)}
+    assert not any("activate" in name.lower() for name in func_names)
+    call_names = {
+        n.func.attr if isinstance(n.func, ast.Attribute) else getattr(n.func, "id", "")
+        for n in ast.walk(tree) if isinstance(n, ast.Call)
+    }
+    assert not any("activate" in name.lower() for name in call_names if name)

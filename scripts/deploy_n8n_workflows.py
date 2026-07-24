@@ -62,6 +62,13 @@ NODE_CREDENTIAL_MAP = {
     # The Token Gate/Cache Token/Enrich Code nodes are secret-free and need no binding.
     "ZoomInfo Mint": {"cred_type": "httpBasicAuth", "cred_name": "LV ZoomInfo"},
     "ZoomInfo Mint Company": {"cred_type": "httpBasicAuth", "cred_name": "LV ZoomInfo"},
+    # Phase 16.1 Plan 02 (reviews C2) — the single-item credit-reporting branch's HTTP
+    # nodes, reusing the SAME provisioned credentials above (no new credential object).
+    # "ZoomInfo Usage" (the secret-free Bearer-only GET following the mint) needs no
+    # binding, like the existing ZoomInfo Enrich/ZoomInfo Company Code nodes.
+    "Lusha Usage": {"cred_type": "httpHeaderAuth", "cred_name": "LV Lusha"},
+    "Apollo Usage": {"cred_type": "httpHeaderAuth", "cred_name": "LV Apollo"},
+    "ZoomInfo Usage Mint": {"cred_type": "httpBasicAuth", "cred_name": "LV ZoomInfo"},
 }
 
 

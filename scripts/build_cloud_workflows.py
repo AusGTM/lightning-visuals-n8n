@@ -3736,8 +3736,18 @@ def build_scheduled_maintenance_cloud():
             "for the 6 provider credentials, `scripts/deploy_n8n_workflows.py`).\n\n"
             "None of SJ-1/2/3's predicates ever reference `lv_icp_tier`/`lv_icp_fit_score`/"
             "`lv_icp_scored_at` (Approach C, spec §0.7) — HubSpot derives those, the "
-            "pipeline only ever queues off its own INPUTS."
-        ), "x": 220, "y": 1080, "h": 340, "w": 520},
+            "pipeline only ever queues off its own INPUTS.\n\n"
+            "**Ships inactive (Plan 02, SC-7/reviews A5):** `\"active\": false` is baked "
+            "into this workflow's JSON as an explicit intent marker + test hook "
+            "(`tests/test_schedules_inactive.py`). The PRECISE functional guarantee: "
+            "n8n's Public API treats `active` as read-only on create, and "
+            "`deploy_n8n_workflows.py` never POSTs to `/activate` (its create/update "
+            "payload keeps only name/nodes/connections/settings — a deploy test guards "
+            "this) — so a NEWLY-CREATED scheduled workflow stays inactive until an "
+            "operator explicitly enables it. This does NOT deactivate an already-active "
+            "workflow on a later update; that remains a manual operator checkpoint, not "
+            "automated here."
+        ), "x": 220, "y": 1080, "h": 420, "w": 520},
         {"content": (
             "### §22.2 Review loop (approve -> apply -> clear)\n"
             "RevOps opens a HubSpot view: `lv_enrichment_needs_review=true OR "
@@ -3770,6 +3780,12 @@ def build_scheduled_maintenance_cloud():
         "nodes": nodes,
         "connections": conns,
         "settings": {},
+        # Phase 16.1 Plan 02 (SC-7, reviews A5) — explicit intent marker + test hook, not
+        # itself a runtime gate (n8n's Public API ignores `active` on create). The
+        # FUNCTIONAL guarantee is deploy_n8n_workflows.py never POSTing to `/activate`
+        # (see its docstring + tests/test_deploy_n8n_workflows.py's no-activate guard) —
+        # inactive-on-create only; does NOT deactivate an already-active workflow.
+        "active": False,
     }
 
 
