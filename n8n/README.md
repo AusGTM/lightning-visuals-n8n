@@ -120,58 +120,101 @@ field into the same non-clobber merge. Same two-artifact pattern, same inliner
 
 | File | Purpose |
 | ---- | ------- |
-| `wf_enrichment_cloud.json` | Production-shaped template (58 nodes). Auth-gated Webhook + object-type router → **contacts branch** and **full companies ICP branch** (waterfall → web research → judge → merge). Credentials bound per node by `scripts/deploy_n8n_workflows.py`. |
+| `wf_enrichment_cloud.json` | Production-shaped template (88 nodes / 81 functional + 7 sticky). Auth-gated Webhook + object-type router → **symmetric contacts and companies branches**, each running per-request provider selection (waterfall → web research → judge → merge) plus a credit-reporting lane. Credentials bound per node by `scripts/deploy_n8n_workflows.py`. |
 | `wf_enrichment_local.json` | Headless-executable. Trigger emits 3 sample identities; HubSpot search + provider waterfall + writes are Code mocks; the scoring/gate/merge logic is real. |
 | `wf_enrichment_local_live.json` | Local replica wired for **live** provider/HTTP calls (the reference build carrying the full company branch + research + judge). |
-| `wf_scheduled_maintenance_cloud.json` | The background reconciliation layer (30 nodes): SJ-1/2/3 schedules + weekly dedupe + the §22.2 review loop. See its diagram below. |
+| `wf_scheduled_maintenance_cloud.json` | The background reconciliation layer (30 nodes), emitted **`active: false`** (Phase 16.1 — ships inactive; an operator enables each schedule deliberately): SJ-1/2/3 schedules + weekly dedupe + the §22.2 review loop. See its diagram below. |
 
 ## Workflow graph — enrichment (`wf_enrichment_cloud.json`, as-built)
 
 Trigger point = the auth-gated webhook. `Route By Object Type` splits to the contacts branch or the full companies ICP branch. Every HubSpot Create/Update is governed by the `WRITE_SAFETY_DEFAULTS` gate (`ALLOW_HUBSPOT_RECORD_WRITES` default **false** + test-record allowlist), disjoint from the parity-guarded `CONFIG_FLAG_DEFAULTS`.
 
+Contacts and companies are now **symmetric** pipelines: both run the provider waterfall (each provider behind an `IF <provider> Enabled` bypass gate — Phase 16.1 per-request `providers` selection), then a web-research → judge → merge chain (contacts gained theirs in Phase 16.2 via the parameterized `EnrichTarget` factories). A parallel credit-reporting lane assembles `remaining_credits` into the `Respond to Webhook` response. All terminals converge on `Build Response`.
+
 ```mermaid
 flowchart TD
   WH["Webhook Trigger — webhook<br/>POST /webhook/hubspot/enrichment/event<br/>authentication: headerAuth (X-Enrichment-Secret)"]
-  PE["Parse HubSpot Event — code"]
+  PE["Parse HubSpot Event — code<br/>providers: all | list | none | blank/absent→none"]
+  OTS{"IF Object Type Supported — if"}
+  UO["Unsupported Object Type — set"]
   RT{"Route By Object Type — if"}
-  WH --> PE --> RT
+  WH --> PE --> OTS
+  OTS -->|supported| RT
+  OTS -->|unsupported| UO --> BR
+  PE --> CRQ["Credit Request — code · one item/run"]
 
   subgraph C["Contact branch"]
     direction TB
-    CB["Build Identity — code"] --> CS["HubSpot Search — hubspot · cred LV HubSpot"] --> CA["Adapt Search — code"] --> CG["Enrichment Gate — code · decideAction → create/enrich/skip"] --> CR{"Route Action — switch"}
-    CR -->|create/enrich| LU["Lusha Enrich — httpRequest<br/>api.lusha.com/v2/person · cred LV Lusha (Header)"] --> AP["Apollo Match — httpRequest<br/>api.apollo.io/v1/people/match · cred LV Apollo (Header)"] --> ZTG["ZoomInfo Token Gate — code"] --> ZIF{"IF Needs Mint"}
-    ZIF -->|mint| ZM["ZoomInfo Mint — httpRequest<br/>gtm/oauth/v1/token · cred LV ZoomInfo (Basic)"] --> ZC["ZoomInfo Cache Token — code · secret-free static cache"] --> ZE["ZoomInfo Enrich — code"]
+    CB["Build Identity — code"] --> CS["HubSpot Search — hubspot · cred LV HubSpot"] --> CA["Adapt Search — code"] --> CG["Enrichment Gate — code · decideAction → create/enrich/skip"] --> CPP{"IF Provider Processing Needed — if · action≠skip"}
+    CPP -->|skip| CK["Skip (NoOp) — set"]
+    CPP -->|process| CLE{"IF Lusha Enabled"}
+    CLE -->|yes| LU["Lusha Enrich — httpRequest · /v2/person · cred LV Lusha"]
+    LU --> CAE{"IF Apollo Enabled"}
+    CLE -->|no bypass| CAE
+    CAE -->|yes| AP["Apollo Match — httpRequest · /v1/people/match · cred LV Apollo"]
+    AP --> CZE{"IF ZoomInfo Enabled"}
+    CAE -->|no bypass| CZE
+    CZE -->|yes| ZTG["ZoomInfo Token Gate — code"] --> ZIF{"IF Needs Mint"}
+    CZE -->|no bypass| CN
+    ZIF -->|mint| ZM["ZoomInfo Mint — httpRequest · Basic · cred LV ZoomInfo"] --> ZC["ZoomInfo Cache Token — code"] --> ZE["ZoomInfo Enrich — code"]
     ZIF -->|cached| ZE
-    ZE --> CN["Normalize + Score — code · best-per-field + provenance"] --> CM["Merge Winners — code · non-clobber"] --> CDQ["Set Data Quality + Gap Flag — set"] --> CD["Decide Action — code"]
+    ZE --> CN["Normalize + Score — code"] --> CRG["Contact Research Trigger Gate — code"] --> CRIF{"IF Contact Research Needed"}
+    CRIF -->|yes| CRR["Build Contact Research Request — code"] --> CCW["Contact Web Research — httpRequest · cred LV Anthropic"] --> CVR["Validate Contact Research — code · row-recovery"] --> CJG["Contact Judge Gate — code"] --> CJIF{"IF Contact Needs Judge"}
+    CRIF -->|no| CM
+    CJIF -->|yes| CJR["Build Contact Judge Request — code"] --> CJC["Contact Judge Call — httpRequest · cred LV Anthropic"] --> CJV["Apply Contact Judge Verdict — code · row-recovery · chosen_field allowlist"] --> CM["Merge Winners — code · foldContactResearch write-safety"]
+    CJIF -->|no| CM
+    CM --> CDQ["Set Data Quality + Gap Flag — set"] --> CD["Decide Action — code"]
     CD --> C1{"IF Create"} -->|yes| CC["HubSpot Create — hubspot"]
-    CD --> C2{"IF Enrich"} -->|yes| CU["HubSpot Update — hubspot"]
-    CR -->|skip| CK["Skip — set (NoOp)"]
+    C1 -->|no| C2{"IF Enrich"} -->|yes| CU["HubSpot Update — hubspot"]
+    C2 -->|no| BR
   end
 
   subgraph K["Company branch — full ICP pipeline"]
     direction TB
-    KB["Build Company Identity — code"] --> KS["HubSpot Company Search — hubspot · cred LV HubSpot"] --> KA["Adapt Company Search — code · preserves hs_object_id + lookup_failed"] --> KG["Company Gate — code · decideAction"] --> KREQ["Build Company Requests — code"]
-    KREQ --> KLU["Lusha Company — httpRequest · /v2/company · cred LV Lusha"] --> KAP["Apollo Org — httpRequest · /v1/organizations/enrich · cred LV Apollo"] --> KZTG["ZoomInfo Company Token Gate — code"] --> KZIF{"IF Company Needs Mint"}
-    KZIF -->|mint| KZM["ZoomInfo Mint Company — httpRequest · Basic · cred LV ZoomInfo"] --> KZC["ZoomInfo Company Cache Token — code"] --> KZE["ZoomInfo Company — code"]
-    KZIF -->|cached| KZE
-    KZE --> KNS["Normalize + Score Company — code"] --> KRG["Research Trigger Gate — code · RT-5 180d TTL"] --> KRIF{"IF Research Needed"}
-    KRIF -->|yes| KRR["Build Research Request — code"] --> KCW["Claude Web Research — httpRequest<br/>api.anthropic.com/v1/messages · cred LV Anthropic"] --> KVR["Validate Research Output — code · tri-state, evidence-gated"] --> KJG["Judge Gate — code · scores every row (RO-2, upstream of merge)"]
-    KRIF -->|no| KJG
-    KJG --> KJIF{"IF Needs Judge"}
-    KJIF -->|yes| KJR["Build Judge Request — code · restricted field list"] --> KJC["Judge Call — httpRequest · anthropic messages · cred LV Anthropic"] --> KJV["Apply Judge Verdict — code"] --> KM["Merge Company — code · non-clobber + judge confidence"]
+    KB["Build Company Identity — code"] --> KS["HubSpot Company Search — hubspot · cred LV HubSpot"] --> KA["Adapt Company Search — code · preserves hs_object_id"] --> KG["Company Gate — code · decideAction"] --> KREQ["Build Company Requests — code"] --> KLE{"IF Lusha Company Enabled"}
+    KLE -->|yes| KLU["Lusha Company — httpRequest · /v2/company · cred LV Lusha"]
+    KLU --> KAE{"IF Apollo Org Enabled"}
+    KLE -->|no bypass| KAE
+    KAE -->|yes| KAP["Apollo Org — httpRequest · /v1/organizations/enrich · cred LV Apollo"]
+    KAP --> KZE{"IF ZoomInfo Company Enabled"}
+    KAE -->|no bypass| KZE
+    KZE -->|yes| KZTG["ZoomInfo Company Token Gate — code"] --> KZIF{"IF Company Needs Mint"}
+    KZE -->|no bypass| KNS
+    KZIF -->|mint| KZM["ZoomInfo Mint Company — httpRequest · Basic · cred LV ZoomInfo"] --> KZC["ZoomInfo Company Cache Token — code"] --> KZEN["ZoomInfo Company — code"]
+    KZIF -->|cached| KZEN
+    KZEN --> KNS["Normalize + Score Company — code"] --> KRG["Research Trigger Gate — code · RT-5 180d TTL"] --> KRIF{"IF Research Needed"}
+    KRIF -->|yes| KRR["Build Research Request — code"] --> KCW["Claude Web Research — httpRequest · cred LV Anthropic"] --> KVR["Validate Research Output — code · row-recovery, tri-state, evidence-gated"] --> KJG["Judge Gate — code"] --> KJIF{"IF Needs Judge"}
+    KRIF -->|no| KM
+    KJIF -->|yes| KJR["Build Judge Request — code · restricted field list"] --> KJC["Judge Call — httpRequest · cred LV Anthropic"] --> KJV["Apply Judge Verdict — code · row-recovery"] --> KM["Merge Company — code · non-clobber + judge confidence"]
     KJIF -->|no| KM
-    KM --> KD["Decide Company Action — code<br/>writes lv_enrichment_needs_review/_review_reason/_review_candidate_json;<br/>holds canonical on needs_review"]
+    KM --> KD["Decide Company Action — code · holds canonical on needs_review"]
     KD --> K1{"IF Company Create"} -->|yes| KC["HubSpot Company Create — hubspot"]
-    KD --> K2{"IF Company Enrich"} -->|yes| KU["HubSpot Company Update — hubspot"]
+    K1 -->|no| K2{"IF Company Enrich"} -->|yes| KU["HubSpot Company Update — hubspot"]
+    K2 -->|no| BR
+  end
+
+  subgraph CR["Credit reporting — one call per requested provider"]
+    direction TB
+    CRQ --> CLC{"IF Lusha Credit Requested"} -->|yes| LUC["Lusha Usage — httpRequest"]
+    CRQ --> CAC{"IF Apollo Credit Requested"} -->|yes| APC["Apollo Usage — httpRequest"]
+    CRQ --> CZC{"IF ZoomInfo Credit Requested"} -->|yes| ZUM["ZoomInfo Usage Mint — httpRequest"] --> ZU["ZoomInfo Usage — code"]
   end
 
   RT -->|contact| CB
   RT -->|company| KB
+  CC --> BR
+  CU --> BR
+  CK --> BR
+  KC --> BR
+  KU --> BR
+  BR["Build Response — code · reads Lusha/Apollo/ZoomInfo Usage by node-name → remaining_credits"] --> RESP["Respond to Webhook — responseMode: responseNode"]
 ```
+
+> The credit `*Usage` nodes are terminal (no edge to `Build Response`); `Build Response` reads their outputs **by node name** to assemble `remaining_credits`. A provider absent from the request's `providers` list has its `IF <provider> Enabled` (and `IF <provider> Credit Requested`) evaluate false — the paid HTTP node never fires. `IF Research Needed` / `IF Contact Research Needed` false routes **directly to the merge node**, bypassing the judge chain.
 
 ## Workflow graph — scheduled maintenance (`wf_scheduled_maintenance_cloud.json`, as-built)
 
-Five `scheduleTrigger` entry points. SJ predicates key on **pipeline-owned inputs only** (Approach C — never `lv_icp_tier`/`lv_icp_scored_at`). SJ-1/SJ-2 flag records; SJ-3 dispatches flagged records into the enrichment workflow; the review poller closes the §22.2 loop.
+Five `scheduleTrigger` entry points. The workflow ships **`active: false`** (Phase 16.1) — deploy never activates it; an operator enables each schedule deliberately. SJ predicates key on **pipeline-owned inputs only** (Approach C — never `lv_icp_tier`/`lv_icp_scored_at`). SJ-1/SJ-2 flag records; SJ-3 dispatches flagged records into the enrichment workflow; the review poller closes the §22.2 loop.
 
 ```mermaid
 flowchart TD
@@ -199,16 +242,27 @@ flowchart TD
 ## Pipeline
 
 ```
-Trigger → Code:buildIdentity → HubSpot:search
+Trigger → Code:parseEvent (providers: all|list|none|blank→none)
+  → IF objectTypeSupported → Route By Object Type → Code:buildIdentity → HubSpot:search
   → Code:enrichmentGate (decideAction → create | enrich | skip)
-  → Switch(action):
-       create+enrich → HTTP:Lusha → HTTP:Apollo → Code:ZoomInfo (cached-token enrich)
-                     → Code:normalize+score (best-per-field, provenance)
-                     → Code:mergeContacts (non-clobber)
-                     → IF create → HubSpot:Create ; IF enrich → HubSpot:Update
-       skip          → Set (NoOp)
-  → Set: data-quality label + gap-flag (all sources empty → flag manual)
+  → IF providerProcessingNeeded (action≠skip):
+       process → IF Lusha Enabled  →(yes) HTTP:Lusha  →(bypass) IF Apollo Enabled
+               → IF Apollo Enabled →(yes) HTTP:Apollo →(bypass) IF ZoomInfo Enabled
+               → IF ZoomInfo Enabled →(yes) Code:ZoomInfo (cached-token enrich) →(bypass) normalize
+               → Code:normalize+score (best-per-field, provenance)
+               → Code:researchTriggerGate → IF researchNeeded →(yes) HTTP:webResearch
+                     → Code:validate (row-recovery) → judgeGate → IF needsJudge
+                     →(yes) HTTP:judgeCall → applyVerdict (chosen_field allowlist) → merge
+                     →(no, either IF) → merge
+               → Code:mergeWinners (foldContactResearch write-safety)
+               → IF create → HubSpot:Create ; IF enrich → HubSpot:Update
+       skip    → Set (NoOp)
+  → Set: data-quality label + gap-flag → Build Response → Respond to Webhook
+Credit lane (parallel off parseEvent): Credit Request → per-provider IF Credit Requested
+  → HTTP:*Usage (terminal) → Build Response reads by node-name → remaining_credits in response
 ```
+
+The companies branch mirrors this exactly (parameterized `EnrichTarget` factories keep the two in lockstep). Each disabled provider's HTTP node never fires — that is the per-request cost gate.
 
 Gate branches (`ENRICHMENT-WORKFLOW-PLAN.md §3`):
 

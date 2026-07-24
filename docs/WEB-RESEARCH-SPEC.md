@@ -2,7 +2,7 @@
 
 **Status:** implemented (Phases 13–16) — web research, taxonomy, judge, tiered adjudication, and the scheduled/review surface all shipped
 **Version:** `lv-taxonomy-v1`
-**Scope:** companies only. Contacts unchanged.
+**Scope:** originally companies only. **As of Phase 16.2 this pipeline is mirrored onto contacts** (jobtitle + seniority) via parameterized `EnrichTarget` factories (`COMPANIES_TARGET`/`CONTACTS_TARGET`) + `n8n/code/contactResearch.js` / `contactJudge.js` / `mergeContacts.foldContactResearch` — companies behaviour unchanged (byte-identical).
 
 Every requirement below has an ID. `tests/test_taxonomy_conformance.py` and
 `tests/test_web_research_spec.py` cite these IDs. A requirement with no test is a spec
@@ -493,7 +493,7 @@ Golden set = the five live prospect accounts, which between them cover every bra
 
 ## 10. Out of scope for MVP
 
-- Contacts (`lv_*` contact fields) — companies only
+- ~~Contacts (`lv_*` contact fields) — companies only~~ **DELIVERED in Phase 16.2** (contacts research→judge mirror, jobtitle + seniority)
 - Parent/child hierarchy modelling — ZoomInfo `enrichcorporatehierarchy` exists if a real
   account later demands it
 - Name-mismatch detection — evaluated and rejected: blind to the identical-name case that

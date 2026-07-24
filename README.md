@@ -49,10 +49,12 @@ flowchart LR
 | ICP scoring engine (Python reference oracle) | ✅ |
 | Contact ingestion (file → identity/dedupe → non-clobber merge) | ✅ |
 | Company enrichment branch (waterfall + web research + judge + merge) | ✅ |
+| Contact enrichment branch (waterfall + web research + judge + merge — mirrors companies) | ✅ built (Phase 16.2) |
+| Per-request provider selection + credit reporting (`providers` payload, `remaining_credits`) | ✅ built (Phase 16.1) |
 | n8n Cloud workflows (contact ingest, enrichment, scheduled maintenance) | ✅ built + offline-proven |
 | HubSpot `lv_*` properties (33 + SJ-3 control props) | ✅ migrated live (Phase 15) |
 | Provider auth (Lusha / Apollo / ZoomInfo split-code-node) | ✅ credential-bound |
-| Scheduled workflows (SJ-1/2/3 + dedupe + review) | ✅ built |
+| Scheduled workflows (SJ-1/2/3 + dedupe + review) | ✅ built (ship `active: false`) |
 | §22.2 review-surface loop (flag → approve → apply → clear) | ✅ built |
 | Cloud deploy + credential provisioning (Public API) | ✅ scripted, dry-run verified |
 | **Live deploy + activation on n8n Cloud** | ⏳ operator runbook (see `n8n/README.md`) |

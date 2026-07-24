@@ -22,7 +22,7 @@ Real keys live in a gitignored `.env` (HubSpot + Anthropic set; provider keys em
 .venv/bin/python -m pytest tests/ -q
 ```
 
-Expect the M1/M2 subset to pass, no network. This is the gate. If it's green, the logic is proven at unit + functional + E2E level. (This runbook is M1/M2-scoped and predates Milestone 3; the full current suite is **267 pytest + 147 node** via `.venv/bin/python -m pytest -q && node --test tests/n8n/*.test.mjs`.)
+Expect the M1/M2 subset to pass, no network. This is the gate. If it's green, the logic is proven at unit + functional + E2E level. (This runbook is M1/M2-scoped and predates Milestone 3; the full current suite is **346 pytest + 228 node** via `.venv/bin/python -m pytest -q && node --test tests/n8n/*.test.mjs`.)
 
 Per-area breakdown if you want to run pieces:
 
