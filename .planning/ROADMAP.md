@@ -467,5 +467,5 @@ retroactively; its artifacts and tests are in the tree.
 | 15. HubSpot Property Migration | 1/1 | Complete | 2026-07-22 |
 | 15.5. Tiered Candidate Adjudication (INSERTED) | 1/1 | Complete | 2026-07-23 |
 | 16. Scheduled Workflows & Review Surface | 2/2 | Complete | 2026-07-23 |
-| 16.1. Provider Selection, Credit Reporting & Schedule Safety (INSERTED) | 1/2 | In Progress | — |
+| 16.1. Provider Selection, Credit Reporting & Schedule Safety (INSERTED) | 2/2 | Complete | 2026-07-24 |
 | 16.2. Contacts Research + Judge Mirror (INSERTED) | 0/? | Backlog | — |
