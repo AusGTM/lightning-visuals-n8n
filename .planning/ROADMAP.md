@@ -464,6 +464,12 @@ retroactively; its artifacts and tests are in the tree.
 
 - [x] 16.2-02-PLAN.md — Contact research→judge chain: contactResearch.js + contactJudge.js + mergeContacts.foldContactResearch siblings, wire the 10-node chain at the seam with row-recovery across HTTP hops (mirror bd682a2) + entry marker-strip + chosen_field allowlist, ENRICH_MERGE write-safety fold, seniority fetch, anthropic credential + deploy binding, mirrored tests incl. the item-flow row-recovery regression (SC-1, SC-3 honest-mirror, SC-4) [wave 2, depends_on 16.2-01]
 
+**Follow-ups (Track B / deferred, not blocking 16.2):**
+- **fetch-by-objectId** — genuine HubSpot private-app events carry only `objectId`/`objectType`; both the contacts and companies chains are verified against synthetic/direct-field (caller-envelope) payloads only. A live HubSpot→n8n path needs the deferred fetch-by-id node (same 16.1 deferral). Blocks live Track B for real HubSpot events.
+- **companies stale-timestamp** — `lv_*_verified_at` refresh-on-non-promote (gpt #6) was fixed on the CONTACTS path; the companies path has the same latent issue — separate fix.
+- **E2E conflict lane** — the row-flow harness seeds a gap, so the full conflict→escalation→judge→cap-demote lane is exercised only by pure-function unit tests, never end-to-end through compiled node bodies. A live/simulated conflict-seed run would close this.
+- **X1 companies row-loss** was found + FIXED this session (bd682a2) — but neither research/judge chain has run LIVE yet; verify on the first Track B run.
+
 ## Milestone 3 Progress
 
 | Phase | Plans Complete | Status | Completed |
