@@ -1697,9 +1697,19 @@ return $input.all().map((it) => {
 ENRICH_VALIDATE_RESEARCH = inline("taxonomy.generated.js", "taxonomy.js", "webResearch.js") + r"""
 
 // --- n8n wrapper (companies): Validate Research Output ---
-return $input.all().map((it) => {
-  const row = it.json;
-  const research_candidate = researchCandidateFromHttpItem(row);
+// ROW-RECOVERY (bug fix): the upstream "Claude Web Research" HTTP node REPLACES $json with
+// the API response, so it.json here is the HTTP response — NOT the enrichment row. The
+// research candidate is correctly extracted from that response, but the row itself
+// (existingRecord, scored, identity_keys, gap_flag) must be recovered by paired index from
+// the last pre-HTTP node ("Build Research Request"), exactly as "Normalize + Score" recovers
+// provider rows via $('Company Gate'). Without this, existingRecord/scored are lost for the
+// rest of the research→judge→merge lane and Merge Company returns merge:null.
+const preHttp = (function () {
+  try { return $("Build Research Request").all(); } catch (e) { return []; }
+})();
+return $input.all().map((it, i) => {
+  const research_candidate = researchCandidateFromHttpItem(it.json);
+  const row = (preHttp[i] && preHttp[i].json) || it.json;
   return { json: { ...row, research_candidate } };
 });
 """
@@ -1811,9 +1821,18 @@ return $input.all().map((it) => {
 ENRICH_APPLY_JUDGE_VERDICT = inline("escalation.generated.js", "judge.js") + r"""
 
 // --- n8n wrapper (companies): Apply Judge Verdict ---
-return $input.all().map((it) => {
-  const row = it.json;
-  const judge_verdict = judgeVerdictFromHttpItem(row);
+// ROW-RECOVERY (bug fix): the upstream "Judge Call" HTTP node REPLACES $json with the API
+// response, so it.json is the verdict response — NOT the row. The verdict is extracted from
+// it.json, but the row (research_candidate, judge_reasons, judge_confidence_by_field,
+// existingRecord, scored) must be recovered by paired index from "Build Judge Request".
+// Without this, applyJudgeVerdict(undefined,...) throws / rebuilds a candidate holding only
+// chosen_field, and existingRecord/scored never reach Merge Company (merge:null).
+const preHttp = (function () {
+  try { return $("Build Judge Request").all(); } catch (e) { return []; }
+})();
+return $input.all().map((it, i) => {
+  const judge_verdict = judgeVerdictFromHttpItem(it.json);
+  const row = (preHttp[i] && preHttp[i].json) || it.json;
   const research_candidate = applyJudgeVerdict(row.research_candidate, judge_verdict, row.judge_reasons);
 
   // TA-8 (D2-safe): when the verdict actually promoted/confirmed a field (judge_flags.
