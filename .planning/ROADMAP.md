@@ -431,7 +431,7 @@ retroactively; its artifacts and tests are in the tree.
 
 **Evaluated against `docs/SYSTEM-CONTRACT.md`** — cost-safety (no unattended burn), extensibility (adapter registry), right-sized compute.
 
-**Plans**: 2 plans
+**Plans**: 2/2 plans executed
 
 **Wave 1**
 
@@ -439,7 +439,7 @@ retroactively; its artifacts and tests are in the tree.
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 16.1-02-PLAN.md — Credit reporting + schedule safety (SC-4/5/6/7/8): `remaining_credits` convergence response, `check_provider_credits.py`, scheduled-maintenance `active: false` [wave 2, depends_on 16.1-01]
+- [x] 16.1-02-PLAN.md — Credit reporting + schedule safety (SC-4/5/6/7/8): `remaining_credits` convergence response, `check_provider_credits.py`, scheduled-maintenance `active: false` [wave 2, depends_on 16.1-01]
 
 ### Phase 16.2: Contacts Research + Judge Mirror (INSERTED)
 

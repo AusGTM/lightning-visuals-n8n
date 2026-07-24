@@ -4,16 +4,16 @@ milestone: v0.3
 milestone_name: Company Enrichment & ICP Research
 current_phase: 16.1
 current_phase_name: provider-selection-credit-reporting-schedule-safety
-status: in_progress
-stopped_at: "Phase 16.1-01 (cost gate, SC-1/2/3) EXECUTED + committed (a12e439, 26d3533). `providers` webhook node (all/list/none/blank/absent→none) parsed via the explicit A4 envelope-vs-bare-array contract in `n8n/code/providerSelection.js`; `scripts/provider_registry.py` is the side-effect-free single-source registry (reviews A3); BOTH waterfalls (contacts + companies) fanned out via ONE shared `_provider_gate_bypass_chain()` helper — each `IF <provider> Enabled` true→provider→next / false→bypass→next, last gate's true|bypass → Normalize+Score(+Company) (fires with zero providers; identity read by node name, closes the latent identity-loss bug); a 3-way object-type outcome (IF Object Type Supported, reviews A2) terminates unsupported types before any gate; a single `action != skip` dispatch lane (reviews A1) collapses the create+enrich double-feed; documented + in-graph Phase 16.2 contacts research/judge insertion seam. Offline suite 293 pytest / 169 node, 0 regressions, deterministic rebuild, frozen Code files unchanged. 16.1-02 (SC-4/5/6/7/8: remaining_credits convergence, check_provider_credits.py, scheduled-maintenance active:false) NOT YET EXECUTED. NEXT: /gsd-execute-phase 16.1 (16.1-02)."
-last_updated: "2026-07-24T00:55:00.000Z"
+status: complete
+stopped_at: "Phase 16.1-02 EXECUTED + committed (894878b Task 1 single-item credit branch + Build Response convergence, 0284519 Task 2 check_provider_credits.py, cbd593a Task 3 deploy binding + schedules active:false). Phase 16.1 (both plans, 16.1-01 + 16.1-02) COMPLETE. Offline suite 332 pytest / 169 node, 0 regressions vs the 293/169 post-16.1-01 baseline, deterministic rebuild. NEXT: Phase 16.2 (contacts research/judge mirror, backlog) or Track B (live operator runbook)."
+last_updated: "2026-07-24T01:19:47.736Z"
 last_activity: 2026-07-24
-last_activity_desc: "Phase 16.1-01 executed: provider-selection cost gate (contacts Task 1 + companies mirror Task 2), 2 task commits, offline suite green (293 pytest / 169 node, +12 pytest/+22 node new vs the 267/147 pre-16.1 baseline), deterministic builder rebuild, zero frozen-file drift. 16.1-02 (credit reporting + schedule safety) remains to execute next."
+last_activity_desc: "Phase 16.1-02 executed: single-item credit branch + honest Build Response convergence (Task 1, 894878b), scripts/check_provider_credits.py (Task 2, 0284519), deploy credential binding + scheduled-maintenance active:false (Task 3, cbd593a). Offline suite green (332 pytest / 169 node, +39 pytest new vs the 293/169 post-16.1-01 baseline), deterministic builder rebuild. Phase 16.1 fully complete."
 progress:
   total_phases: 18
   completed_phases: 3
   total_plans: 20
-  completed_plans: 4
+  completed_plans: 5
 ---
 
 # Project State
@@ -23,16 +23,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-07)
 
 **Core value:** The ICP scoring engine turns firmographic + enrichment signals into trustworthy, auditable A/B/C/D prioritization (with hard vetoes) and never clobbers HubSpot data — proven in dry-run locally.
-**Current focus:** Phase 16.1 — provider-selection-credit-reporting-schedule-safety (Track A, PLANNED — ready to execute)
+**Current focus:** Phase 16.1 — provider-selection-credit-reporting-schedule-safety (Track A, COMPLETE — both plans executed)
 
 ## Current Position
 
-Phase: 16.1 (provider-selection-credit-reporting-schedule-safety) — IN PROGRESS, 1/2 plans executed
-Plan: 16.1-01 COMPLETE (Task 1 contacts gate a12e439, Task 2 companies mirror 26d3533); 16.1-02 NOT STARTED (credit reporting + schedule safety, SC-4/5/6/7/8)
-Status: 16.1-01 verified (293 pytest / 169 node, 0 regressions vs the 267/147 baseline) — Milestone 3 (v0.3) resumed for Track A pre-live cost-safety work
-Last activity: 2026-07-24 — Phase 16.1-01 executed and committed
+Phase: 16.1 (provider-selection-credit-reporting-schedule-safety) — COMPLETE, 2/2 plans executed
+Plan: 16.1-01 COMPLETE (Task 1 contacts gate a12e439, Task 2 companies mirror 26d3533); 16.1-02 COMPLETE (Task 1 credit branch/response 894878b, Task 2 check_provider_credits.py 0284519, Task 3 deploy binding/schedules inactive cbd593a)
+Status: Phase 16.1 fully verified (332 pytest / 169 node, 0 regressions vs the 267/147 pre-16.1 baseline) — Milestone 3 (v0.3) Track A pre-live cost-safety work complete; Track B (live operator runbook) and Phase 16.2 (contacts research/judge mirror) remain
+Last activity: 2026-07-24 — Phase 16.1-02 executed and committed (Phase 16.1 complete)
 
-Progress: [█████████░] ~94% (17/18 phases; Phase 16.1 in progress, Phase 16.2 backlog)
+Progress: [█████████░] ~94% (17/18 phases; Phase 16.1 COMPLETE, Phase 16.2 backlog)
 
 *(NOTE: `gsd state.update-progress` mis-derives this bar from `completed_plans/total_plans`
 across concatenated milestones — see MEMORY.md "gsd state.update-progress unsafe here".
@@ -76,6 +76,7 @@ now shows Phase 16.1 as 1/2 In Progress, Phase 16.2 as Backlog, everything else 
 | Phase 16 P01 | 110m | 6 tasks | 14 files |
 | Phase 16 P02 | 25min | 4 tasks | 6 files |
 | Phase 16.1 P01 | ~25min | 2 tasks | 8 files |
+| Phase 16.1 P02 | ~30min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -97,6 +98,7 @@ Decisions are logged in PROJECT.md Key Decisions table. SPEC-level architectural
 - Phase 15: provenance model (coordinator decision, supersedes RESEARCH's 121-145 flat-suffix design) — per-field enrichment metadata rides in ONE JSON text property per object (`lv_enrichment_provenance`/`lv_contact_enrichment_provenance`), not ~63 flat `lv_<field>_source/_confidence/...` properties; the 4 `_verified_at` cache-key datetimes are the sole carve-out that stays top-level/queryable (RT-5/SJ-2). Staging folds into the same blob (the `value` key per entry) — no `lv_waterfall_*`/`lv_claude_web_*` properties exist; `source_registry.yaml` stays documentation-only. Byte-identical serialization is load-bearing: Python `json.dumps(sort_keys=True, separators=(",",":"), ensure_ascii=False)` vs JS `stableStringify()` (recursive sorted-key stringify) — proven with a non-ASCII fixture row and two deliberate-breaks, one of which (`ensure_ascii=False` removal) was performed once against the real source file and restored via file copy. ICP write paths retired (Approach C, criterion 4): `src/merge_policy.py`/`main.py`/`field_policy.yaml`/`mergeCompanies.js` no longer write `lv_icp_fit_score`/`lv_icp_tier`; the scoring engine still computes them internally for routing. PN-1 renamed `linkedin_url`/`persona_group` → `lv_linkedin_url`/`lv_persona_group` everywhere they round-trip to a HubSpot property, decoupled from the raw upload/scored-winner READ-side field name (which stays unprefixed — it is not itself a property). Sync/rollback/canary tooling chose per-property individual creates over HubSpot's `batch/create` endpoint (its partial-failure semantics are undocumented; the undo manifest's correctness is safety-critical). **Portal untouched this phase** — every live script's no-credentials skip path is what ran; the live property creation, baseline snapshot, and canary proof are OPERATOR RUNBOOK steps (15-01-SUMMARY.md).
 - [Phase ?]: Phase 16-02: reviewApply's Approach-C guard is structural (imports mergeCompanies' own DEFAULT_COMPANY_POLICY as the field allowlist) rather than a hardcoded blocklist; non-clobber compare-and-set is all-or-nothing per record (not per-field) to avoid a partial-apply/re-check loop against the un-cleared candidate JSON.
 - Phase 16.1-01: the linear provider chain (Lusha→Apollo→ZoomInfo in series) could only drop a SUFFIX of providers, never an arbitrary subset — fixed by fanning both waterfalls out behind per-provider `IF <provider> Enabled` gates with a BYPASS lane that rejoins at the next stage (mirrors the pre-existing `IF ZoomInfo Needs Mint` convergence precedent), so `Normalize + Score(+ Company)` always fires exactly once even with zero providers enabled. Both branches call the SAME new `_provider_gate_bypass_chain(...)` builder helper (CONTEXT Locked Decision 8 — the Phase 16.2 reuse seam), not two hand-rolled copies. Every gate reads `provider_enabled.<name>` by node name from `Parse HubSpot Event` (never bare `$json`, which an upstream provider's HTTP response may have replaced); every provider request body reads `identity_keys` by node name from `Enrichment Gate`/`Build Company Requests` for the same reason — this closes a latent identity-loss bug that pre-dated 16.1 (Apollo's body read `$json.identity_keys` while sitting downstream of Lusha's response). The object-type router keeps its existing 2-way `Route By Object Type` node UNCHANGED (a pre-existing test pins its exact shape) and gets a new `IF Object Type Supported` gate immediately upstream instead — an "IF + explicit unsupported check" chain, one of the two forms the plan sanctioned, rather than rewriting the existing node into a 3-way Switch. `PROVIDER_REGISTRY` lives in a NEW side-effect-free `scripts/provider_registry.py` (not inside `build_cloud_workflows.py`, which triggers taxonomy/escalation codegen writes at import) so Phase 16.1-02's read-only credit-check script can import it without rewriting repo files. `requirements.mark-complete` was skipped for this plan: its `requirements:` frontmatter lists local Success-Criteria IDs (SC-1/SC-2/SC-3/SC-8 etc.) that are phase-scoped, not global REQ-IDs from REQUIREMENTS.md, and don't exist there to mark. See `16.1-01-SUMMARY.md`.
+- [Phase ?]: Phase 16.1-02: credit checks run ONCE per webhook run via a dedicated single-item branch off Parse HubSpot Event (not the multi-row terminal flow), closing the live-observed Lusha 5 req/min 429 -> all-null failure mode (reviews C1).
 
 ### Pending Todos
 
@@ -143,7 +145,7 @@ Items carried forward to later milestones:
 
 ## Session Continuity
 
-Last session: 2026-07-24T00:55:00.000Z
-Stopped at: Phase 16.1-01 "Provider-selection cost gate" executed and committed — Task 1 (contacts, a12e439) + Task 2 (companies mirror, 26d3533). `n8n/code/providerSelection.js` (resolveEnabledProviders/parseWebhookBody/extractCredits, pure + node-tested) + `scripts/provider_registry.py` (side-effect-free single-source registry) + the explicit A4 envelope-vs-bare-array Parse HubSpot Event contract + a new `IF Object Type Supported` gate ahead of the unchanged `Route By Object Type` (reviews A2, unsupported terminates before any provider gate) + a single `IF Provider Processing Needed` (`action != skip`) dispatch lane replacing the old create+enrich double-feed (reviews A1) + BOTH waterfalls gated behind `IF <provider> Enabled` / bypass-convergence via the new shared `_provider_gate_bypass_chain(...)` helper (CONTEXT Locked Decision 8) + node-name identity reads on every provider request body (closes the latent identity-loss bug) + the documented + in-graph Phase 16.2 contacts research/judge seam marker. Full offline suite green: 293 pytest / 169 node (267/147 baseline + 26 pytest/22 node new), 0 regressions. Builder rebuild confirmed deterministic. Frozen Code files (normalizeProviders.js, enrichmentGate.js, zoominfoToken.js, mergeCompanies.js, judge.js, webResearch.js) untouched. Zero live network calls, zero HubSpot writes, zero n8n Cloud calls. No deviations from plan. See 16.1-01-SUMMARY.md for full detail.
+Last session: 2026-07-24T01:19:47.728Z
+Stopped at: Phase 16.1-02 EXECUTED + committed (894878b, 0284519, cbd593a) -- Phase 16.1 (both plans) COMPLETE.
 Resume file: None
-Next command: 16.1-01 complete; 16.1-02 (credit reporting + schedule safety — SC-4/5/6/7/8: remaining_credits convergence response, scripts/check_provider_credits.py, scheduled-maintenance active:false) remains to execute. Run `/gsd-execute-phase 16.1` (or execute `16.1-02-PLAN.md` directly) to continue. Phase 16.2 (contacts research+judge mirror, backlog) depends on 16.1 completing first.
+Next command: Phase 16.1 (both plans, 16.1-01 + 16.1-02) is COMPLETE. Next up: Phase 16.2 (contacts research/judge mirror, backlog, depends on 16.1) via `/gsd-plan-phase 16.2`, or Track B (live operator runbook: provision → deploy → activate → live writes, plus the runtime response-ordering/0-event test and a live `check_provider_credits.py` run) as an out-of-band operator task.
