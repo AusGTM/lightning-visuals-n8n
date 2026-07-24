@@ -16,7 +16,7 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const { mergeContacts, DEFAULT_CONTACT_POLICY } =
+const { mergeContacts, DEFAULT_CONTACT_POLICY, foldContactResearch } =
   require(path.join(ROOT, "n8n/code/mergeContacts.js"));
 
 // A jobtitle policy override carrying an evidence requirement — DEFAULT_CONTACT_POLICY
@@ -121,4 +121,115 @@ test("mergeContacts: cache-key mapping for jobtitle is unaffected by the port", 
     undefined, { source: "claude_web", confidence: 90 });
   assert.ok(cacheKeys.lv_jobtitle_verified_at, "jobtitle has a cache-key mapping");
   assert.ok(!("seniority_verified_at" in cacheKeys), "seniority has no cache-key mapping");
+});
+
+// --- Phase 16.2 Task 1 (gpt #6): stale-timestamp fix — cache key ONLY on promote --------
+
+test("stale-timestamp fix: a needs_review (stale, unpromoted) jobtitle emits NO lv_jobtitle_verified_at", () => {
+  // stale_refreshable + a non-blank current value -> needs_review (mergeContacts.js's
+  // own _gate: "Refresh candidate requires review in MVP"), never promote.
+  const { canonicalPatch, cacheKeys, decisions } = mergeContacts(
+    { jobtitle: "Old Title" }, { jobtitle: "New Title" }, undefined,
+    { source: "claude_web", confidence: 90 });
+  assert.ok(!("jobtitle" in canonicalPatch));
+  assert.equal(decisions.find((d) => d.field === "jobtitle").decision, "needs_review");
+  assert.ok(!("lv_jobtitle_verified_at" in cacheKeys), "unpromoted stale jobtitle must not be marked fresh");
+});
+
+test("stale-timestamp fix: a promoted jobtitle DOES emit lv_jobtitle_verified_at", () => {
+  const { canonicalPatch, cacheKeys } = mergeContacts(
+    {}, { jobtitle: "New Title" }, undefined, { source: "claude_web", confidence: 90 });
+  assert.equal(canonicalPatch.jobtitle, "New Title");
+  assert.ok(cacheKeys.lv_jobtitle_verified_at, "promoted jobtitle keeps its cache-key stamp");
+});
+
+// --- Phase 16.2 Task 1 — foldContactResearch: write-SAFETY gate, NOT adjudication -------
+
+function providerMergeFixture(field, value) {
+  return mergeContacts({}, { [field]: value }, { [field]: { class: "system_owned", min_confidence: 0 } },
+    { source: "waterfall", confidence: 85 });
+}
+
+function researchMergeFixture(field, value, opts) {
+  const policy = { [field]: { class: "system_owned", min_confidence: 0 } };
+  return mergeContacts({}, { [field]: value }, policy, { source: "claude_web", confidence: 90, ...opts });
+}
+
+test("foldContactResearch: adjudicated wins — judge-promoted field takes the research value over the provider's", () => {
+  const provider = providerMergeFixture("jobtitle", "X");
+  const research = researchMergeFixture("jobtitle", "Y");
+  const result = foldContactResearch(provider, research, ["jobtitle"], {});
+  assert.equal(result.canonicalPatch.jobtitle, "Y");
+});
+
+test("foldContactResearch: unadjudicated + provider present -> provider stands, research decision rewritten (gpt #8)", () => {
+  const provider = providerMergeFixture("jobtitle", "X");
+  const research = researchMergeFixture("jobtitle", "Y");
+  const result = foldContactResearch(provider, research, [], {});
+  assert.equal(result.canonicalPatch.jobtitle, "X");
+  const researchDecision = result.decisions.find((d) => d.field === "jobtitle" && d.chosen_value === "Y");
+  assert.equal(researchDecision.decision, "stage_only");
+  assert.equal(researchDecision.reason, "withheld_by_overlap_precedence");
+});
+
+test("foldContactResearch: Path A — existing blank, provider filled X, research Y, not promoted -> X stands", () => {
+  const provider = providerMergeFixture("jobtitle", "X");
+  const research = researchMergeFixture("jobtitle", "Y");
+  const result = foldContactResearch(provider, research, [], { jobtitle: "" });
+  assert.equal(result.canonicalPatch.jobtitle, "X");
+});
+
+test("foldContactResearch: Path B — confidence_band escalation off (not promoted) -> provider X stands", () => {
+  const provider = providerMergeFixture("jobtitle", "X");
+  const research = researchMergeFixture("jobtitle", "Y", { confidence: 80 });
+  const result = foldContactResearch(provider, research, [], { jobtitle: "X" });
+  assert.equal(result.canonicalPatch.jobtitle, "X");
+});
+
+test("foldContactResearch: GAP-FILL — provider absent + existing blank -> genuine gap, research Y wins", () => {
+  // Provider merge carries NO jobtitle candidate at all (empty candidateRow).
+  const provider = mergeContacts({}, {}, undefined, { source: "waterfall", confidence: 85 });
+  const research = researchMergeFixture("jobtitle", "Y");
+  const result = foldContactResearch(provider, research, [], { jobtitle: "" });
+  assert.equal(result.canonicalPatch.jobtitle, "Y");
+});
+
+test("foldContactResearch: GAP-FILL requires existing blank (kimi HIGH-2) — provider absent but existing has a value -> existing stands, not a gap", () => {
+  const provider = mergeContacts({}, {}, undefined, { source: "waterfall", confidence: 85 });
+  const research = researchMergeFixture("jobtitle", "Y");
+  const result = foldContactResearch(provider, research, [], { jobtitle: "Old" });
+  assert.ok(!("jobtitle" in result.canonicalPatch), "existing value stands — HubSpot keeps 'Old', nothing is written");
+  const researchDecision = result.decisions.find((d) => d.field === "jobtitle");
+  assert.equal(researchDecision.decision, "stage_only");
+  assert.equal(researchDecision.reason, "withheld_by_overlap_precedence");
+});
+
+test("foldContactResearch: both-conflict, judge promotes only jobtitle — jobtitle wins research, seniority stays with provider", () => {
+  const providerJobtitle = providerMergeFixture("jobtitle", "ProviderTitle");
+  const providerSeniority = providerMergeFixture("seniority", "ProviderSeniority");
+  const provider = {
+    canonicalPatch: { ...providerJobtitle.canonicalPatch, ...providerSeniority.canonicalPatch },
+    provenance: { ...providerJobtitle.provenance, ...providerSeniority.provenance },
+    cacheKeys: { ...providerJobtitle.cacheKeys, ...providerSeniority.cacheKeys },
+    decisions: [...providerJobtitle.decisions, ...providerSeniority.decisions],
+  };
+  const researchJobtitle = researchMergeFixture("jobtitle", "ResearchTitle");
+  const researchSeniority = researchMergeFixture("seniority", "ResearchSeniority");
+  const research = {
+    canonicalPatch: { ...researchJobtitle.canonicalPatch, ...researchSeniority.canonicalPatch },
+    provenance: { ...researchJobtitle.provenance, ...researchSeniority.provenance },
+    cacheKeys: { ...researchJobtitle.cacheKeys, ...researchSeniority.cacheKeys },
+    decisions: [...researchJobtitle.decisions, ...researchSeniority.decisions],
+  };
+  const result = foldContactResearch(provider, research, ["jobtitle"], {
+    jobtitle: "ExistingTitle", seniority: "ExistingSeniority",
+  });
+  assert.equal(result.canonicalPatch.jobtitle, "ResearchTitle", "jobtitle judge-promoted -> research wins");
+  assert.equal(result.canonicalPatch.seniority, "ProviderSeniority", "seniority not promoted, not a blank gap -> provider stands");
+});
+
+test("foldContactResearch: absent providerMerge/researchMerge never throws", () => {
+  assert.doesNotThrow(() => foldContactResearch(undefined, undefined, [], {}));
+  const result = foldContactResearch(undefined, undefined, [], {});
+  assert.deepEqual(result.canonicalPatch, {});
 });

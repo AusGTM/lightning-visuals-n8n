@@ -180,12 +180,17 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
     if (!_isBlank(evidenceUrl)) entry.evidence_url = evidenceUrl;
     provenance[field] = entry;
 
-    if (CONTACT_CACHE_KEY_FIELDS[field]) {
-      cacheKeys[CONTACT_CACHE_KEY_FIELDS[field]] = verifiedAt;
-    }
-
     if (decision === "promote") {
       canonicalPatch[field] = value;
+      // STALE-TIMESTAMP FIX (Phase 16.2 gpt #6): the cache-key datetime is stamped ONLY
+      // when the field is actually ACCEPTED — moved inside this branch (was previously
+      // unconditional) so a needs_review/stale-but-unpromoted candidate is never marked
+      // fresh, which would otherwise suppress the next stale-refresh check forever.
+      // NOTE: mergeCompanies.js has the same latent issue — Track-B follow-up, not fixed
+      // here (companies byte-identity guard, Plan 01's frozen fixture).
+      if (CONTACT_CACHE_KEY_FIELDS[field]) {
+        cacheKeys[CONTACT_CACHE_KEY_FIELDS[field]] = verifiedAt;
+      }
     }
 
     decisions.push({
@@ -205,4 +210,60 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
   return { canonicalPatch, provenance, cacheKeys, decisions };
 }
 
-module.exports = { mergeContacts, stableStringify, DEFAULT_CONTACT_POLICY };
+// foldContactResearch(providerMerge, researchMerge, judgePromotedFields, existingRecord)
+// -> {canonicalPatch, provenance, cacheKeys, decisions} — Phase 16.2 (SC-3) fold of a
+// SECOND mergeContacts() result (the Claude web-research candidate, jobtitle/seniority)
+// into the provider merge's result. This is a WRITE-SAFETY GATE, NOT adjudication (the
+// judge already adjudicated any existing-record conflict upstream) — for each field the
+// research candidate carries a decision for, research wins ONLY when:
+//   (a) the judge PROMOTED it (field is in judgePromotedFields, the fresh chain-set
+//       marker derived from applyContactJudgeVerdict's judge_flags.promoted_field — NEVER
+//       the caller-injectable judge_confidence_by_field), OR
+//   (b) it fills a GENUINE gap: the provider produced no canonical value for the field
+//       AND the existing HubSpot record is also blank there (kimi HIGH-2 — provider-
+//       absent alone is not a gap when the existing record already holds a value).
+// Otherwise the provider/existing value stands, and the withheld research decision is
+// rewritten to stage_only/"withheld_by_overlap_precedence" so the audit trail
+// (decisions) agrees with the actual canonicalPatch (gpt #8).
+function foldContactResearch(providerMerge, researchMerge, judgePromotedFields, existingRecord) {
+  const provider = providerMerge || {};
+  const research = researchMerge || {};
+  const providerCanonical = provider.canonicalPatch || {};
+  const researchCanonical = research.canonicalPatch || {};
+  const researchProvenance = research.provenance || {};
+  const researchCacheKeys = research.cacheKeys || {};
+  const promoted = judgePromotedFields || [];
+  const existing = existingRecord || {};
+
+  const canonicalPatch = { ...providerCanonical };
+  const provenance = { ...(provider.provenance || {}) };
+  const cacheKeys = { ...(provider.cacheKeys || {}) };
+  const decisions = [...(provider.decisions || [])];
+
+  for (const decision of (research.decisions || [])) {
+    const field = decision.field;
+    const judgePromoted = promoted.indexOf(field) !== -1;
+    const providerHasField = Object.prototype.hasOwnProperty.call(providerCanonical, field);
+    const genuineGap = !providerHasField && _isBlank(existing[field]);
+    const researchWins = judgePromoted || genuineGap;
+
+    if (!researchWins) {
+      decisions.push({ ...decision, decision: "stage_only", reason: "withheld_by_overlap_precedence" });
+      continue;
+    }
+
+    decisions.push(decision);
+    if (decision.decision !== "promote") continue; // researchWins but its own gate withheld it
+
+    canonicalPatch[field] = researchCanonical[field];
+    provenance[field] = researchProvenance[field];
+    const cacheKeyName = CONTACT_CACHE_KEY_FIELDS[field];
+    if (cacheKeyName && cacheKeyName in researchCacheKeys) {
+      cacheKeys[cacheKeyName] = researchCacheKeys[cacheKeyName];
+    }
+  }
+
+  return { canonicalPatch, provenance, cacheKeys, decisions };
+}
+
+module.exports = { mergeContacts, stableStringify, DEFAULT_CONTACT_POLICY, foldContactResearch };
