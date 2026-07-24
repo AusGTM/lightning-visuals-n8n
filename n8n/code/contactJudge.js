@@ -7,8 +7,7 @@
 // into the contact Judge Gate / Build Contact Judge Request / Apply Contact Judge Verdict
 // Code node bodies by build_cloud_workflows.py's inline(); judge.js/escalation.generated.js
 // stay git-unchanged (companies byte-identity guard).
-const { ESCALATION_CONFIDENCE_BAND, JUDGE_MIN_CONFIDENCE, JUDGE_OUTPUT_REQUIRED } =
-  require("./escalation.generated");
+const { ESCALATION_CONFIDENCE_BAND, JUDGE_MIN_CONFIDENCE, JUDGE_OUTPUT_REQUIRED } = require("./escalation.generated");
 
 // Field config — never a 3rd arg to computeContactEscalation.
 const _CONTACT_JUDGE_FIELDS = ["jobtitle", "seniority"];

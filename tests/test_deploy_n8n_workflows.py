@@ -425,6 +425,45 @@ def test_deploy_never_posts_to_any_activate_endpoint(monkeypatch, capsys):
     assert not any("activate" in str(call) for call in post_calls)
 
 
+# --- Phase 16.2 Task 2 (gpt #9/C2 lesson) — contact anthropic-node deploy binding ------
+
+CONTACT_ANTHROPIC_NODE_EXPECTED_CREDENTIAL = {
+    "Contact Web Research": "LV Anthropic",
+    "Contact Judge Call": "LV Anthropic",
+}
+
+
+def test_contact_anthropic_nodes_are_registered_in_node_credential_map():
+    """Parity alone (test_builder_flag_parity.py) doesn't prove deploy binding — the C2
+    lesson. Both contact anthropic HTTP nodes must be in NODE_CREDENTIAL_MAP or they
+    deploy UNBOUND -> 401 -> silent contact-research failure."""
+    for node_name in CONTACT_ANTHROPIC_NODE_EXPECTED_CREDENTIAL:
+        assert node_name in deploy.NODE_CREDENTIAL_MAP, (
+            f"{node_name!r} is a contact anthropic HTTP node but has no "
+            "NODE_CREDENTIAL_MAP entry — it would deploy unbound (gpt #9)"
+        )
+
+
+def test_bind_credentials_binds_both_contact_anthropic_nodes_to_lv_anthropic():
+    wf = _load_built_enrichment_workflow()
+    node_names = {n["name"] for n in wf["nodes"]}
+    for node_name in CONTACT_ANTHROPIC_NODE_EXPECTED_CREDENTIAL:
+        assert node_name in node_names, f"built workflow is missing contact node {node_name!r}"
+
+    name_to_id = {"LV Lusha": "id-lusha", "LV Apollo": "id-apollo", "LV ZoomInfo": "id-zoominfo",
+                  "LV HubSpot": "id-hubspot", "LV Anthropic": "id-anthropic",
+                  "LV Enrichment Webhook": "id-webhook-secret"}
+    bound = deploy.bind_credentials(wf, name_to_id)
+    bound_by_name = {n["name"]: n for n in bound["nodes"]}
+
+    for node_name, expected_cred_name in CONTACT_ANTHROPIC_NODE_EXPECTED_CREDENTIAL.items():
+        node = bound_by_name[node_name]
+        assert "credentials" in node, f"{node_name!r} was not bound"
+        cred_block = next(iter(node["credentials"].values()))
+        assert cred_block["name"] == expected_cred_name
+        assert cred_block["id"] == name_to_id[expected_cred_name]
+
+
 def test_deploy_has_no_activate_function_or_call_site():
     """Belt-and-braces static guard: the module defines no activate-named function and no
     call site references one — activation is a deliberate separate operator-runbook step,

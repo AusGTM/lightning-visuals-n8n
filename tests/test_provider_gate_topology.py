@@ -216,6 +216,11 @@ def test_importing_provider_registry_writes_no_files():
 # --- Phase 16.2 seam marker -------------------------------------------------------------
 
 def test_contacts_seam_is_documented_and_no_research_judge_node_exists():
+    """Phase 16.2 Task 2 (HIGH-3): the contacts branch now HAS its own research/judge
+    chain, distinct-named from the companies one (Contact Research Trigger Gate, etc.) —
+    the COMPANIES-named forbidden set must still never leak into the contacts branch, and
+    the seam edge moved from a direct "Normalize + Score -> Merge Winners" edge to
+    "Normalize + Score -> Contact Research Trigger Gate" (the chain's entry point)."""
     doc = _load()
     node_names = {n["name"] for n in doc["nodes"]}
     forbidden = {
@@ -229,9 +234,10 @@ def test_contacts_seam_is_documented_and_no_research_judge_node_exists():
     leaked = forbidden & reachable
     assert not leaked, f"contacts branch leaked research/judge node(s): {leaked}"
 
-    # The seam edge itself exists.
+    # The seam edge now routes through the contacts research->judge chain's entry point.
     targets = [e["node"] for b in doc["connections"]["Normalize + Score"]["main"] for e in b]
-    assert "Merge Winners" in targets
+    assert "Contact Research Trigger Gate" in targets
+    assert "Merge Winners" in reachable, "Merge Winners must still be reachable, via the chain"
 
     # A builder comment documents the seam.
     src = (ROOT / "scripts" / "build_cloud_workflows.py").read_text()

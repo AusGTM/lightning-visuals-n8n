@@ -57,6 +57,12 @@ NODE_CREDENTIAL_MAP = {
     "Apollo Org": {"cred_type": "httpHeaderAuth", "cred_name": "LV Apollo"},
     "Claude Web Research": {"cred_type": "httpHeaderAuth", "cred_name": "LV Anthropic"},
     "Judge Call": {"cred_type": "httpHeaderAuth", "cred_name": "LV Anthropic"},
+    # Phase 16.2 Task 2 (gpt #9/C2 lesson) — the contacts research->judge mirror's two
+    # anthropic HTTP nodes, reusing the SAME "LV Anthropic" credential (no new credential
+    # object). An unmapped anthropic node would deploy UNBOUND -> 401 -> silent research
+    # failure, exactly the C2 lesson from the companies branch.
+    "Contact Web Research": {"cred_type": "httpHeaderAuth", "cred_name": "LV Anthropic"},
+    "Contact Judge Call": {"cred_type": "httpHeaderAuth", "cred_name": "LV Anthropic"},
     # ZoomInfo (Task 2 decision: split-code-node) — the Mint HTTP node is the ONLY node
     # that ever touches client_id/client_secret, via this generic Basic Auth credential.
     # The Token Gate/Cache Token/Enrich Code nodes are secret-free and need no binding.

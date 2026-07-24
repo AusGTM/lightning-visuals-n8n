@@ -881,7 +881,47 @@ return $input.all().map((it) => {
   }
   const merged = mergeContacts(row.existingRecord || {}, candidate, undefined,
                                { source: "waterfall", confidence: 85 });
-  return { json: { ...row, merge: merged } };
+
+  // Phase 16.2 (SC-3 honest mirror, D6 analog): fold the Claude web-research candidate
+  // (jobtitle/seniority ONLY) in as a SECOND mergeContacts() call, then reconcile any
+  // overlap with the provider merge via foldContactResearch's write-SAFETY gate (never
+  // adjudication — the judge already adjudicated any existing-record conflict upstream).
+  // A no-op for every row this module didn't add a contact research chain for (LOCAL,
+  // which never sets research_candidate) and for a companies row (rc undefined there).
+  let finalMerge = merged;
+  const rc = row.research_candidate;
+  if (rc && rc.matched) {
+    const researchData = {};
+    for (const f of ["jobtitle", "seniority"]) {
+      const v = rc.data && rc.data[f];
+      if (v === null || v === undefined || v === "" || (Array.isArray(v) && v.length === 0)) continue;
+      researchData[f] = v;
+    }
+    if (Object.keys(researchData).length > 0) {
+      // LOW-9: require_evidence_url:true on BOTH fields, belt-and-braces on top of the
+      // upstream validate-time evidence demotion (contactResearch.js) — a research value
+      // can promote only WITH evidence at every layer that touches it. jobtitle also
+      // moves to system_owned (overriding its DEFAULT_CONTACT_POLICY stale_refreshable
+      // class) so a research-sourced value is not blocked by the "existing value present
+      // -> needs_review" refresh rule that class carries for provider data.
+      const RESEARCH_POLICY = {
+        ...DEFAULT_CONTACT_POLICY,
+        jobtitle: { class: "system_owned", min_confidence: 75, require_evidence_url: true },
+        seniority: { ...DEFAULT_CONTACT_POLICY.seniority, require_evidence_url: true },
+      };
+      const researchMerged = mergeContacts(row.existingRecord || {}, researchData, RESEARCH_POLICY,
+        { source: "claude_web", confidence: rc.confidence || 80, evidence: rc.evidence_by_field || {},
+          confidenceByField: row.judge_confidence_by_field || {} });
+      // The ONLY trusted per-field adjudication signal — set fresh by the security-
+      // hardened applyContactJudgeVerdict, never the caller-injectable
+      // judge_confidence_by_field (gpt #5/#8).
+      const judgePromotedFields = (rc.judge_flags && rc.judge_flags.promoted_field)
+        ? [rc.judge_flags.promoted_field] : [];
+      finalMerge = foldContactResearch(merged, researchMerged, judgePromotedFields, row.existingRecord || {});
+    }
+  }
+
+  return { json: { ...row, merge: finalMerge } };
 });
 """
 
@@ -1335,7 +1375,8 @@ HS_SEARCH_BODY_EXPR = (
     ': [ { propertyName: "firstname", operator: "EQ", value: $json.identity_keys.firstName }, '
     '{ propertyName: "lastname", operator: "EQ", value: $json.identity_keys.lastName } ]) } ], '
     'properties: ["email","firstname","lastname","jobtitle","phone","mobilephone",'
-    '"lv_jobtitle_verified_at","lv_mobilephone_verified_at"], limit: 5 }) }}'
+    '"lv_jobtitle_verified_at","lv_mobilephone_verified_at","seniority",'
+    '"lv_contact_enrichment_provenance"], limit: 5 }) }}'
 )
 
 # ---- COMPANIES branch -------------------------------------------------------
@@ -1630,6 +1671,14 @@ class EnrichTarget:
     apply_verdict_row_recovery_comment_js: str
     apply_verdict_call_js: str
     judge_confidence_carry_comment_js: str
+    # Phase 16.2 Task 2 (gpt #5) — MARKER HYGIENE: when true, the research-gate wrapper
+    # strips caller-injectable internal markers (research_candidate/judge_verdict/
+    # judge_flags/judge_confidence_by_field/judge_promoted_fields) from every row BEFORE
+    # anything else runs, because ENRICH_PARSE_EVENT_CLOUD spreads raw event props into
+    # the row. Defaults False so COMPANIES_TARGET's emitted string is byte-identical to
+    # before this field existed (companies has no such injection path in this plan's
+    # scope — the frozen guard, tests/test_companies_factory_frozen.py, proves it).
+    entry_strip_markers: bool = False
 
 
 COMPANIES_TARGET = EnrichTarget(
@@ -1870,15 +1919,33 @@ const gated = $input.all().map((it) => {
     judge_confidence_carry_comment_js=r"""  // TA-8 analog: when the verdict actually promoted/confirmed a field, carry the
   // VERDICT's own confidence forward for Merge Winners to apply as a per-field override
   // (mirrors the companies carry above; judge_confidence_by_field keys on chosen_field).""",
+    entry_strip_markers=True,
 )
 
 
 def _enrich_research_gate_js(cloud=False, target=None):
     t = target or COMPANIES_TARGET
+    # MARKER HYGIENE (gpt #5, t.entry_strip_markers): ONLY emitted for a target that opts
+    # in (CONTACTS_TARGET) — COMPANIES_TARGET's default False keeps this block/row-read
+    # exactly as before (byte-identity, tests/test_companies_factory_frozen.py).
+    strip_fn = r"""
+// MARKER HYGIENE (gpt #5): ENRICH_PARSE_EVENT_CLOUD spreads raw event props into the row
+// (...event), so research_candidate/judge_verdict/judge_flags/judge_confidence_by_field/
+// judge_promoted_fields are caller-INJECTABLE. Strip them here, the FIRST contact chain
+// node, before anything else runs — these markers are (re)set ONLY by this chain's own
+// downstream nodes (Validate Contact Research / Apply Contact Judge Verdict), never
+// trusted from the inbound event.
+function _stripInjectableMarkers(row) {
+  const { research_candidate, judge_verdict, judge_flags, judge_confidence_by_field,
+          judge_promoted_fields, ...clean } = row;
+  return clean;
+}
+""" if t.entry_strip_markers else ""
+    row_read = "_stripInjectableMarkers(it.json)" if t.entry_strip_markers else "it.json"
     return inline(*t.gate_inline_modules) + r"""
 
 // --- n8n wrapper (""" + t.label + r"""): Research Trigger Gate ---
-""" + _flag_const("ALLOW_WEB_RESEARCH", cloud) + "\n" + _flag_const("MAX_WEB_RESEARCH_PER_RUN", cloud) + r"""
+""" + strip_fn + _flag_const("ALLOW_WEB_RESEARCH", cloud) + "\n" + _flag_const("MAX_WEB_RESEARCH_PER_RUN", cloud) + r"""
 const MAX_PER_RUN = parseInt(String(MAX_WEB_RESEARCH_PER_RUN), 10);
 
 """ + t.gap_predicate_js + r"""
@@ -1886,7 +1953,7 @@ const MAX_PER_RUN = parseInt(String(MAX_WEB_RESEARCH_PER_RUN), 10);
 const allowOn = String(ALLOW_WEB_RESEARCH).toLowerCase() === "true";
 let remaining = MAX_PER_RUN;
 return $input.all().map((it) => {
-  const row = it.json;
+  const row = """ + row_read + r""";
   if (!allowOn) {
     return { json: { ...row, research_needed: false, research_skip_reason: "ALLOW_WEB_RESEARCH=false" } };
   }
@@ -2421,14 +2488,67 @@ def build_enrichment_local_live():
     nodes.append(code_node("ZoomInfo Enrich", ENRICH_ZOOMINFO_CACHED, x, y))
     x += 230
     nodes.append(code_node("Normalize + Score", ENRICH_NORMALIZE_SCORE_CLOUD, x, y))
+
+    # Phase 16.2 (SC-1/SC-2): the contacts research->judge mirror, mirroring the companies
+    # Research Trigger Gate -> ... -> Merge Company chain below via the SAME Plan-01
+    # parameterized factories, called with target=CONTACTS_TARGET. True lane -> Build
+    # Contact Research Request -> Contact Web Research (HTTP) -> Validate Contact
+    # Research -> Contact Judge Gate -> IF Contact Needs Judge -> ... -> Apply Contact
+    # Judge Verdict -> Merge Winners. False lanes fan straight into Merge Winners.
+    x += 230
+    nodes.append(code_node(
+        "Contact Research Trigger Gate", _enrich_research_gate_js(cloud=False, target=CONTACTS_TARGET), x, y))
+    x += 230
+    nodes.append(_if_bool_node("IF Contact Research Needed", "research_needed", x, y))
+    x += 230
+    nodes.append(code_node(
+        "Build Contact Research Request",
+        _enrich_build_research_request_js(cloud=False, target=CONTACTS_TARGET), x, y - 100))
+    x += 230
+    nodes.append(_live_http(
+        "Contact Web Research", x, y - 100, "POST",
+        "https://api.anthropic.com/v1/messages",
+        [{"name": "x-api-key", "value": "=" + _env_secret_expr("ANTHROPIC_API_KEY")},
+         {"name": "anthropic-version", "value": "2023-06-01"},
+         {"name": "content-type", "value": "application/json"}],
+        json_body="={{ JSON.stringify($json.research_request_body) }}",
+        timeout=60000))
+    x += 230
+    nodes.append(code_node(
+        "Validate Contact Research", _enrich_validate_research_js(target=CONTACTS_TARGET), x, y - 100))
+    x += 230
+    nodes.append(code_node(
+        "Contact Judge Gate", _enrich_judge_gate_js(cloud=False, target=CONTACTS_TARGET), x, y - 100))
+    x += 230
+    nodes.append(_if_bool_node("IF Contact Needs Judge", "needs_judge", x, y - 100))
+    x += 230
+    nodes.append(code_node(
+        "Build Contact Judge Request",
+        _enrich_build_judge_request_js(cloud=False, target=CONTACTS_TARGET), x, y - 200))
+    x += 230
+    nodes.append(_live_http(
+        "Contact Judge Call", x, y - 200, "POST",
+        "https://api.anthropic.com/v1/messages",
+        [{"name": "x-api-key", "value": "=" + _env_secret_expr("ANTHROPIC_API_KEY")},
+         {"name": "anthropic-version", "value": "2023-06-01"},
+         {"name": "content-type", "value": "application/json"}],
+        json_body="={{ JSON.stringify($json.judge_request_body) }}",
+        timeout=60000))
+    x += 230
+    nodes.append(code_node(
+        "Apply Contact Judge Verdict", _enrich_apply_judge_verdict_js(target=CONTACTS_TARGET), x, y - 200))
+
     x += 230
     nodes.append(code_node("Merge Winners", ENRICH_MERGE, x, y))
     x += 230
     nodes.append(code_node("Decide Action", ENRICH_DECIDE_LOCAL, x, y))
 
+    # order's chain() ends at "Normalize + Score" (no outgoing edge yet) — the contact
+    # chain conns below wire Normalize + Score -> Contact Research Trigger Gate -> ... ->
+    # Merge Winners -> Decide Action explicitly, mirroring co_order's own truncation.
     order = ["Manual Trigger", "Emit Live Identities", "Build Identity", "HubSpot Search",
              "Adapt Search", "Enrichment Gate", "Build Requests", "Lusha Enrich", "Apollo Match",
-             "ZoomInfo Enrich", "Normalize + Score", "Merge Winners", "Decide Action"]
+             "ZoomInfo Enrich", "Normalize + Score"]
 
     # --- COMPANIES branch: sibling off the same Manual Trigger, own row (y+380) ---
     cy = y + 380
@@ -2565,11 +2685,36 @@ def build_enrichment_local_live():
         "Merge Company": {"main": [[{"node": "Decide Company Action", "type": "main", "index": 0}]]},
     }
 
+    # Phase 16.2 (SC-1): the contacts mirror of research_conns above — order's chain()
+    # ends at "Normalize + Score" (no outgoing edge yet), so none of these keys collide.
+    contact_conns = {
+        "Normalize + Score": {"main": [[{"node": "Contact Research Trigger Gate", "type": "main", "index": 0}]]},
+        "Contact Research Trigger Gate": {
+            "main": [[{"node": "IF Contact Research Needed", "type": "main", "index": 0}]]},
+        "IF Contact Research Needed": {"main": [
+            [{"node": "Build Contact Research Request", "type": "main", "index": 0}],  # true
+            [{"node": "Merge Winners", "type": "main", "index": 0}],                   # false: fan straight in
+        ]},
+        "Build Contact Research Request": {
+            "main": [[{"node": "Contact Web Research", "type": "main", "index": 0}]]},
+        "Contact Web Research": {"main": [[{"node": "Validate Contact Research", "type": "main", "index": 0}]]},
+        "Validate Contact Research": {"main": [[{"node": "Contact Judge Gate", "type": "main", "index": 0}]]},
+        "Contact Judge Gate": {"main": [[{"node": "IF Contact Needs Judge", "type": "main", "index": 0}]]},
+        "IF Contact Needs Judge": {"main": [
+            [{"node": "Build Contact Judge Request", "type": "main", "index": 0}],  # true
+            [{"node": "Merge Winners", "type": "main", "index": 0}],                # false: fan straight in
+        ]},
+        "Build Contact Judge Request": {"main": [[{"node": "Contact Judge Call", "type": "main", "index": 0}]]},
+        "Contact Judge Call": {"main": [[{"node": "Apply Contact Judge Verdict", "type": "main", "index": 0}]]},
+        "Apply Contact Judge Verdict": {"main": [[{"node": "Merge Winners", "type": "main", "index": 0}]]},
+        "Merge Winners": {"main": [[{"node": "Decide Action", "type": "main", "index": 0}]]},
+    }
+
     return {
         "id": "LVenrichmentLive01",
         "name": "LV Enrichment (local LIVE)",
         "nodes": nodes,
-        "connections": {**fan(chain(order), chain(co_order)), **research_conns},
+        "connections": {**fan(chain(order), chain(co_order)), **research_conns, **contact_conns},
         "settings": {},
     }
 
@@ -3068,7 +3213,8 @@ def build_enrichment_cloud():
                        "additionalFields": {
                            "properties": "email,firstname,lastname,jobtitle,phone,"
                                          "mobilephone,hs_object_id,lv_jobtitle_verified_at,"
-                                         "lv_mobilephone_verified_at",
+                                         "lv_mobilephone_verified_at,seniority,"
+                                         "lv_contact_enrichment_provenance",
                        }},
         "id": nid("hs"), "name": "HubSpot Search",
         "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [x, y],
@@ -3160,6 +3306,51 @@ def build_enrichment_cloud():
 
     sx = px + 660 + 660
     nodes.append(code_node("Normalize + Score", ENRICH_NORMALIZE_SCORE_CLOUD, sx, y - 80))
+
+    # Phase 16.2 (SC-1/SC-2): the contacts research->judge mirror at the 16.1 seam —
+    # mirrors the companies "Normalize + Score Company -> Research Trigger Gate -> ... ->
+    # Merge Company" chain below, emitted by the SAME Plan-01 parameterized factories with
+    # target=CONTACTS_TARGET (never a hand-rolled copy). Positions mirror the companies
+    # cy-80/cy-180/cy-280 lane scheme.
+    sx += 220
+    nodes.append(code_node(
+        "Contact Research Trigger Gate", _enrich_research_gate_js(cloud=True, target=CONTACTS_TARGET),
+        sx, y - 80))
+    sx += 220
+    nodes.append(_if_bool_node("IF Contact Research Needed", "research_needed", sx, y - 80))
+    sx += 220
+    nodes.append(code_node(
+        "Build Contact Research Request",
+        _enrich_build_research_request_js(cloud=True, target=CONTACTS_TARGET), sx, y - 180))
+    sx += 220
+    nodes.append(_http_node(
+        "Contact Web Research", "https://api.anthropic.com/v1/messages", sx, y - 180,
+        auth="header",  # credential header x-api-key: <ANTHROPIC_API_KEY>
+        headers=[{"name": "anthropic-version", "value": "2023-06-01"},
+                 {"name": "content-type", "value": "application/json"}],
+        json_body="={{ JSON.stringify($json.research_request_body) }}"))
+    sx += 220
+    nodes.append(code_node(
+        "Validate Contact Research", _enrich_validate_research_js(target=CONTACTS_TARGET), sx, y - 180))
+    sx += 220
+    nodes.append(code_node(
+        "Contact Judge Gate", _enrich_judge_gate_js(cloud=True, target=CONTACTS_TARGET), sx, y - 180))
+    sx += 220
+    nodes.append(_if_bool_node("IF Contact Needs Judge", "needs_judge", sx, y - 180))
+    sx += 220
+    nodes.append(code_node(
+        "Build Contact Judge Request",
+        _enrich_build_judge_request_js(cloud=True, target=CONTACTS_TARGET), sx, y - 280))
+    sx += 220
+    nodes.append(_http_node(
+        "Contact Judge Call", "https://api.anthropic.com/v1/messages", sx, y - 280,
+        auth="header",
+        headers=[{"name": "anthropic-version", "value": "2023-06-01"},
+                 {"name": "content-type", "value": "application/json"}],
+        json_body="={{ JSON.stringify($json.judge_request_body) }}"))
+    sx += 220
+    nodes.append(code_node(
+        "Apply Contact Judge Verdict", _enrich_apply_judge_verdict_js(target=CONTACTS_TARGET), sx, y - 280))
     sx += 220
     nodes.append(code_node("Merge Winners", ENRICH_MERGE, sx, y - 80))
     sx += 220
@@ -3448,13 +3639,34 @@ def build_enrichment_cloud():
     # unaffected and still comes from zoom_conns.
     conns.update(gate_conns)
     conns.update(zoom_conns)
-    # Phase 16.2 seam (CONTEXT Locked Decision 8, reviews LOW-4): this is the mirror of
-    # the companies branch's Normalize + Score Company -> Research Trigger Gate -> ... ->
-    # Merge Company chain. 16.1 intentionally builds ONLY the fan-out + this marker — no
-    # contacts research/judge runtime node exists yet; Phase 16.2 slots the mirrored
-    # research->judge chain in right here, between Normalize + Score and Merge Winners.
-    conns.update(chain(["Normalize + Score", "Merge Winners",
-                        "Set Data Quality + Gap Flag", "Decide Action", "IF Create"]))
+    # Phase 16.2 seam (CONTEXT Locked Decision 8, reviews LOW-4): the mirrored contacts
+    # research->judge chain, emitted by the SAME Plan-01 parameterized factories with
+    # target=CONTACTS_TARGET the companies branch uses below — HIGH-3: the direct
+    # "Normalize + Score -> Merge Winners" edge 16.1 built as a placeholder is now
+    # SPLICED to route through the chain instead.
+    conns.update(chain(["Normalize + Score", "Contact Research Trigger Gate"]))
+    conns.update({
+        "Contact Research Trigger Gate": {
+            "main": [[{"node": "IF Contact Research Needed", "type": "main", "index": 0}]]},
+        "IF Contact Research Needed": {"main": [
+            [{"node": "Build Contact Research Request", "type": "main", "index": 0}],  # true
+            [{"node": "Merge Winners", "type": "main", "index": 0}],                   # false: fan straight in
+        ]},
+        "Build Contact Research Request": {
+            "main": [[{"node": "Contact Web Research", "type": "main", "index": 0}]]},
+        "Contact Web Research": {"main": [[{"node": "Validate Contact Research", "type": "main", "index": 0}]]},
+        "Validate Contact Research": {"main": [[{"node": "Contact Judge Gate", "type": "main", "index": 0}]]},
+        "Contact Judge Gate": {"main": [[{"node": "IF Contact Needs Judge", "type": "main", "index": 0}]]},
+        "IF Contact Needs Judge": {"main": [
+            [{"node": "Build Contact Judge Request", "type": "main", "index": 0}],  # true
+            [{"node": "Merge Winners", "type": "main", "index": 0}],                # false: fan straight in
+        ]},
+        "Build Contact Judge Request": {"main": [[{"node": "Contact Judge Call", "type": "main", "index": 0}]]},
+        "Contact Judge Call": {"main": [[{"node": "Apply Contact Judge Verdict", "type": "main", "index": 0}]]},
+        "Apply Contact Judge Verdict": {"main": [[{"node": "Merge Winners", "type": "main", "index": 0}]]},
+        "Merge Winners": {"main": [[{"node": "Set Data Quality + Gap Flag", "type": "main", "index": 0}]]},
+    })
+    conns.update(chain(["Set Data Quality + Gap Flag", "Decide Action", "IF Create"]))
     conns["IF Create"] = {"main": [
         [{"node": "HubSpot Create", "type": "main", "index": 0}],  # true
         [{"node": "IF Enrich", "type": "main", "index": 0}],       # false
@@ -3593,13 +3805,16 @@ def build_enrichment_cloud():
             "in Code nodes); non-AU/ambiguous -> null -> review."
         ), "x": 1360, "y": 480, "h": 280, "w": 420},
         {"content": (
-            "### Phase 16.2 seam — contacts research->judge mirror insertion point\n"
-            "This is the mirror of the companies branch's `Normalize + Score Company -> "
-            "Research Trigger Gate -> ... -> Merge Company` chain. Phase 16.1 builds ONLY "
-            "the gated provider fan-out + this marker (CONTEXT Locked Decision 8) — no "
-            "contacts research/judge node exists yet. Phase 16.2 slots the mirrored "
-            "research->judge chain in HERE, between **Normalize + Score** and "
-            "**Merge Winners**, reusing 16.1's shared node factories."
+            "### Phase 16.2 seam — contacts research->judge mirror\n"
+            "The mirror of the companies branch's `Normalize + Score Company -> Research "
+            "Trigger Gate -> ... -> Merge Company` chain, WIRED here between **Normalize + "
+            "Score** and **Merge Winners** (Contact Research Trigger Gate -> IF Contact "
+            "Research Needed -> Build Contact Research Request -> Contact Web Research -> "
+            "Validate Contact Research -> Contact Judge Gate -> IF Contact Needs Judge -> "
+            "Build Contact Judge Request -> Contact Judge Call -> Apply Contact Judge "
+            "Verdict), jobtitle/seniority ONLY (CONTEXT Locked Decision 8), emitted by "
+            "16.1's shared node factories with target=CONTACTS_TARGET — never a hand-"
+            "rolled copy of the companies bodies."
         ), "x": sx - 220, "y": y + 140, "h": 260, "w": 420},
         {"content": (
             "### Credit reporting (Plan 02, reviews C1/C2/C3)\n"

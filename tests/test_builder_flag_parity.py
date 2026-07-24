@@ -117,7 +117,8 @@ SECRET_TO_CREDENTIAL_BOUND_NODES = {
                                    "HubSpot Company Update"},
     "LUSHA_API_KEY": {"Lusha Enrich", "Lusha Company"},
     "APOLLO_API_KEY": {"Apollo Match", "Apollo Org"},
-    "ANTHROPIC_API_KEY": {"Claude Web Research", "Judge Call"},
+    "ANTHROPIC_API_KEY": {"Claude Web Research", "Judge Call",
+                          "Contact Web Research", "Contact Judge Call"},
     "ZOOMINFO_CLIENT_ID": {"ZoomInfo Mint", "ZoomInfo Mint Company"},
     "ZOOMINFO_CLIENT_SECRET": {"ZoomInfo Mint", "ZoomInfo Mint Company"},
 }
@@ -139,3 +140,26 @@ def test_cloud_references_all_six_secrets_via_credential_bound_nodes():
     for secret in EXPECTED_SECRETS:
         assert f"$env.{secret}" not in serialized
         assert f"$vars.{secret}" not in serialized
+
+
+def test_every_generic_header_auth_http_node_hitting_anthropic_is_in_the_expected_set():
+    """MEDIUM-5 reverse parity (Phase 16.2 Task 2): the forward assertion above only
+    proves the EXPECTED anthropic nodes are credential-bound — it says nothing about an
+    UNLISTED anthropic-calling HTTP node that also ended up credential-bound (harmless)
+    or, worse, NOT bound (a silent 401). Assert every httpRequest node whose url targets
+    api.anthropic.com is exactly the expected set — an unlisted node fails loudly here
+    instead of deploying unbound."""
+    wf = build_enrichment_cloud()
+    anthropic_nodes = {
+        n["name"] for n in wf["nodes"]
+        if n.get("type") == "n8n-nodes-base.httpRequest"
+        and "api.anthropic.com" in n.get("parameters", {}).get("url", "")
+    }
+    assert anthropic_nodes == SECRET_TO_CREDENTIAL_BOUND_NODES["ANTHROPIC_API_KEY"], (
+        f"anthropic-calling HTTP nodes in the built workflow {anthropic_nodes} do not "
+        f"exactly match the expected credential-bound set "
+        f"{SECRET_TO_CREDENTIAL_BOUND_NODES['ANTHROPIC_API_KEY']} — an unlisted node "
+        "would deploy unbound (401) or an expected node went missing"
+    )
+    bound = _all_credential_bound_node_names(wf)
+    assert anthropic_nodes <= bound
