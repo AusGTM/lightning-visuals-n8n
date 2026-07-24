@@ -2934,20 +2934,55 @@ def build_enrichment_cloud():
     nodes.append(code_node("Build Company Requests", ENRICH_BUILD_CO_REQUESTS, cx, cy))
 
     cpx = cx + 220
+    # Phase 16.1 (Task 2 — mirrors Task 1's contacts fix): identity is read BY NODE NAME
+    # from "Build Company Requests" (never bare $json), for the same reason as the
+    # contacts Lusha/Apollo bodies — a gate positioned after another provider's HTTP
+    # response would otherwise see that response as $json, not the row.
+    #
+    # Track B flag (reviews LOW-5, NOT fixed in 16.1): this node is emitted as a POST to
+    # a static URL with the default identity_keys body, but the live-verified contract is
+    # `GET /v2/company?domain=` — and ENRICH_BUILD_CO_REQUESTS already prebuilds an unused
+    # `lusha_company_url` for exactly that GET. Rewiring the identity SOURCE here (as this
+    # task does) does not correct the URL/method mismatch; that is a live-validation item
+    # for Track B, not a 16.1 offline-scope fix.
     lusha_co = _http_node("Lusha Company", "https://api.lusha.com/v2/company", cpx, cy - 80,
-                          auth="header")  # credential header, e.g. api_key: <LUSHA_API_KEY>
+                          auth="header",  # credential header, e.g. api_key: <LUSHA_API_KEY>
+                          json_body="={{ JSON.stringify($('Build Company Requests').item.json.identity_keys) }}")
     nodes.append(lusha_co)
     apollo_org = _http_node(
         "Apollo Org", "https://api.apollo.io/v1/organizations/enrich", cpx + 220, cy - 80,
         auth="header",  # credential header, e.g. X-Api-Key: <APOLLO_API_KEY>
-        json_body="={{ JSON.stringify({ domain: $json.identity_keys.domain }) }}")
+        json_body="={{ JSON.stringify({ domain: $('Build Company Requests').item.json.identity_keys.domain }) }}")
     nodes.append(apollo_org)
-    # ZoomInfo Company: split-code-node, same credential-bound-Mint shape as contacts.
+    # ZoomInfo Company: split-code-node, same credential-bound-Mint shape as contacts, now
+    # sitting BEHIND its own IF ZoomInfo Company Enabled gate (Phase 16.1 Task 2).
     zoom_co_nodes, zoom_co_conns, zoom_co_entry, zoom_co_exit = _zoom_split_company_subgraph(
-        "Company Gate", cpx + 440, cy - 80)
+        "Company Gate", cpx + 660, cy - 80)
     nodes.extend(zoom_co_nodes)
 
-    csx = cpx + 660 + 440
+    # Phase 16.1 Task 2: the SAME shared _provider_gate_bypass_chain(...) helper Task 1
+    # introduced for contacts (CONTEXT Locked Decision 8 — the reuse seam), called
+    # identically here. Companies has no Route Action switch / skip lane (providers run
+    # unconditionally for every row today, per the LOCAL-LIVE precedent this branch
+    # ports) — the entry is "Build Company Requests" directly, no dispatch IF needed.
+    co_gate_nodes, co_gate_conns, co_first_gate_name = _provider_gate_bypass_chain(
+        providers=[
+            {"gate_name": "IF Lusha Company Enabled",
+             "enabled_expr": _provider_enabled_expr("lusha"),
+             "true_entry": "Lusha Company"},
+            {"gate_name": "IF Apollo Org Enabled",
+             "enabled_expr": _provider_enabled_expr("apollo"),
+             "true_entry": "Apollo Org"},
+            {"gate_name": "IF ZoomInfo Company Enabled",
+             "enabled_expr": _provider_enabled_expr("zoominfo"),
+             "true_entry": zoom_co_entry, "true_exit": zoom_co_exit},
+        ],
+        exit_node="Normalize + Score Company",
+        x=cpx, y=cy + 40,
+    )
+    nodes.extend(co_gate_nodes)
+
+    csx = cpx + 660 + 660
     nodes.append(code_node("Normalize + Score Company", ENRICH_NORMALIZE_SCORE_CO, csx, cy - 80))
     csx += 220
     nodes.append(code_node("Research Trigger Gate", _enrich_research_gate_js(cloud=True), csx, cy - 80))
@@ -3060,11 +3095,15 @@ def build_enrichment_cloud():
     conns.update(chain([
         "Build Company Identity", "HubSpot Company Search",
         "Adapt Company Search", "Company Gate", "Build Company Requests",
-        "Lusha Company", "Apollo Org",
     ]))
-    conns["Apollo Org"] = {"main": [[{"node": zoom_co_entry, "type": "main", "index": 0}]]}
+    # Phase 16.1 Task 2: Build Company Requests feeds the gated waterfall's first gate
+    # directly (no dispatch IF — companies has no skip lane). The gate1..gateN + rejoin
+    # wiring (up to "Normalize + Score Company") comes from the SAME shared
+    # _provider_gate_bypass_chain(...) helper Task 1 used for contacts.
+    conns["Build Company Requests"] = {"main": [[{"node": co_first_gate_name, "type": "main", "index": 0}]]}
+    conns.update(co_gate_conns)
     conns.update(zoom_co_conns)
-    conns.update(chain([zoom_co_exit, "Normalize + Score Company", "Research Trigger Gate"]))
+    conns.update(chain(["Normalize + Score Company", "Research Trigger Gate"]))
     conns.update({
         "Research Trigger Gate": {"main": [[{"node": "IF Research Needed", "type": "main", "index": 0}]]},
         "IF Research Needed": {"main": [

@@ -247,6 +247,117 @@ def test_contacts_seam_is_documented_and_no_research_judge_node_exists():
     )
 
 
+# --- COMPANIES gate topology (Task 2 — mirrors the contacts assertions above) ---------
+
+COMPANY_PROVIDER_NODES = ["Lusha Company", "Apollo Org", "ZoomInfo Company Token Gate"]
+COMPANY_GATES = ["IF Lusha Company Enabled", "IF Apollo Org Enabled", "IF ZoomInfo Company Enabled"]
+
+
+def test_each_company_provider_nodes_only_inbound_is_its_own_gate_true_output():
+    doc = _load()
+    expected_gate = dict(zip(COMPANY_PROVIDER_NODES, COMPANY_GATES))
+    for provider_node, gate_name in expected_gate.items():
+        edges = _inbound_edges(doc, provider_node)
+        assert edges == [(gate_name, 0)], (
+            f"{provider_node} must have exactly ONE inbound edge — its own {gate_name} "
+            f"TRUE (index 0) output — got {edges}"
+        )
+    # Apollo Org's only inbound is its own gate, never Lusha Company directly (the
+    # pre-16.1 linear-chain shape this task replaces).
+    assert _inbound_edges(doc, "Apollo Org") == [("IF Apollo Org Enabled", 0)]
+
+
+def test_each_company_gates_false_lane_rejoins_the_same_stage_as_its_true_lane():
+    doc = _load()
+    gate_next_stage = {
+        "IF Lusha Company Enabled": "IF Apollo Org Enabled",
+        "IF Apollo Org Enabled": "IF ZoomInfo Company Enabled",
+        "IF ZoomInfo Company Enabled": "Normalize + Score Company",
+    }
+    for gate, next_stage in gate_next_stage.items():
+        conns = doc["connections"][gate]["main"]
+        false_targets = [e["node"] for e in conns[1]]
+        assert false_targets == [next_stage], f"{gate} false lane does not bypass to {next_stage}"
+
+    exit_next_stage = {
+        "Lusha Company": "IF Apollo Org Enabled",
+        "Apollo Org": "IF ZoomInfo Company Enabled",
+        "ZoomInfo Company": "Normalize + Score Company",
+    }
+    for exit_node, next_stage in exit_next_stage.items():
+        targets = [e["node"] for b in doc["connections"][exit_node]["main"] for e in b]
+        assert targets == [next_stage], f"{exit_node} does not rejoin at {next_stage}"
+
+
+def test_company_empty_enabled_set_bypass_only_path_reaches_normalize_and_decide_company_action():
+    """SC-2 for companies: following ONLY the bypass lanes from Build Company Requests
+    still reaches Normalize + Score Company and Decide Company Action."""
+    doc = _load()
+    conns = doc["connections"]
+    node = None
+    for gate in COMPANY_GATES:
+        node = conns[gate]["main"][1][0]["node"]  # false/bypass lane only
+    assert node == "Normalize + Score Company"
+    reachable = _reachable_from(doc, "Normalize + Score Company")
+    assert "Decide Company Action" in reachable
+
+
+def test_company_provider_request_bodies_read_identity_by_node_name_not_bare_json():
+    doc = _load()
+    lusha_body = _node(doc, "Lusha Company")["parameters"]["jsonBody"]
+    apollo_body = _node(doc, "Apollo Org")["parameters"]["jsonBody"]
+    assert "$('Build Company Requests').item.json.identity_keys" in lusha_body
+    assert "$('Build Company Requests').item.json.identity_keys" in apollo_body
+    assert "$json.identity_keys" not in lusha_body
+    assert "$json.identity_keys" not in apollo_body
+
+
+def test_company_provider_gates_read_provider_enabled_by_node_name_not_bare_json():
+    doc = _load()
+    for gate in COMPANY_GATES:
+        left = _node(doc, gate)["parameters"]["conditions"]["conditions"][0]["leftValue"]
+        assert "$('Parse HubSpot Event').item.json.provider_enabled." in left
+
+
+def test_unsupported_object_type_cannot_reach_any_company_gate_either():
+    doc = _load()
+    reachable_from_unsupported = _reachable_from(doc, "Unsupported Object Type")
+    for gate in COMPANY_GATES:
+        assert gate not in reachable_from_unsupported
+
+
+# --- shared-helper structural-identity assertion (Locked Decision 8) ------------------
+
+def test_contacts_and_companies_gate_chains_are_isomorphic_modulo_provider_set_and_names():
+    """Both chains must be emitted by the ONE shared _provider_gate_bypass_chain(...)
+    helper — proven structurally: same gate count, and each gate has the identical
+    true->provider / false->bypass rejoin SHAPE (2 branches, 1 true target, 1 false
+    target), modulo the provider-specific node names themselves."""
+    doc = _load()
+    assert len(CONTACTS_GATES) == len(COMPANY_GATES)
+    for contacts_gate, company_gate in zip(CONTACTS_GATES, COMPANY_GATES):
+        c_conns = doc["connections"][contacts_gate]["main"]
+        co_conns = doc["connections"][company_gate]["main"]
+        assert len(c_conns) == len(co_conns) == 2
+        assert len(c_conns[0]) == len(co_conns[0]) == 1  # exactly one true target each
+        assert len(c_conns[1]) == len(co_conns[1]) == 1  # exactly one false/bypass target each
+        # Both gates test a provider_enabled boolean read from the SAME root node
+        # (Parse HubSpot Event), by-node-name, never bare $json.
+        c_left = _node(doc, contacts_gate)["parameters"]["conditions"]["conditions"][0]["leftValue"]
+        co_left = _node(doc, company_gate)["parameters"]["conditions"]["conditions"][0]["leftValue"]
+        assert "$('Parse HubSpot Event').item.json.provider_enabled." in c_left
+        assert "$('Parse HubSpot Event').item.json.provider_enabled." in co_left
+
+
+def test_track_b_lusha_company_url_method_mismatch_is_flagged_in_builder_source():
+    """reviews LOW-5: Lusha Company is emitted as POST to a static URL with the default
+    identity_keys body, but the live-verified contract is GET /v2/company?domain= — a
+    Track B validation item, not fixed in 16.1. Assert the flag exists in source."""
+    src = (ROOT / "scripts" / "build_cloud_workflows.py").read_text()
+    assert "Track B" in src
+    assert "lusha_company_url" in src
+
+
 # --- determinism -----------------------------------------------------------------------
 
 def test_zero_env_or_vars_expressions_in_the_new_gate_topology():
