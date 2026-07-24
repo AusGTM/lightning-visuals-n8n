@@ -435,7 +435,7 @@ retroactively; its artifacts and tests are in the tree.
 
 **Wave 1**
 
-- [ ] 16.1-01-PLAN.md — Provider-selection cost gate (SC-1/2/3): `providers` node + `providerSelection.js` + `PROVIDER_REGISTRY`, both waterfalls fanned out into per-provider `IF <provider> Enabled` gates [wave 1]
+- [x] 16.1-01-PLAN.md — Provider-selection cost gate (SC-1/2/3): `providers` node + `providerSelection.js` + `PROVIDER_REGISTRY`, both waterfalls fanned out into per-provider `IF <provider> Enabled` gates [wave 1]
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -467,5 +467,5 @@ retroactively; its artifacts and tests are in the tree.
 | 15. HubSpot Property Migration | 1/1 | Complete | 2026-07-22 |
 | 15.5. Tiered Candidate Adjudication (INSERTED) | 1/1 | Complete | 2026-07-23 |
 | 16. Scheduled Workflows & Review Surface | 2/2 | Complete | 2026-07-23 |
-| 16.1. Provider Selection, Credit Reporting & Schedule Safety (INSERTED) | 0/2 | Planned | — |
+| 16.1. Provider Selection, Credit Reporting & Schedule Safety (INSERTED) | 1/2 | In Progress | — |
 | 16.2. Contacts Research + Judge Mirror (INSERTED) | 0/? | Backlog | — |
