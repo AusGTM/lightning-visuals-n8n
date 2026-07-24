@@ -2685,6 +2685,91 @@ return parsed.events.map((event) => {
 # (Phase 16). Until then, and unlike build_enrichment_local_live(), the Claude web-research
 # nodes (Research Trigger Gate / Build Research Request / Claude Web Research / Validate
 # Research Output) do NOT land here.
+
+# Phase 16.1 Plan 02 (reviews C1) — single-item credit branch. Forks off "Parse HubSpot
+# Event" (never the multi-row terminal/enrichment flow): regardless of how many
+# rows/events this run processes, this node emits EXACTLY ONE item, so each provider's
+# credit-check HTTP node downstream fires AT MOST ONCE per run — not once per row, which
+# live-observed a Lusha 5 req/min 429 -> all credits null (the exact failure this branch
+# prevents). Deliberately does NOT read $input — its output cardinality can never track
+# the row count upstream.
+ENRICH_CREDIT_REQUEST = r"""// Credit Request — Phase 16.1 Plan 02 (reviews C1).
+const first = $('Parse HubSpot Event').first();
+const providers_requested = (first && first.json && first.json.providers_requested) || [];
+return [{ json: { providers_requested } }];
+"""
+
+# Phase 16.1 Plan 02 — secret-free, Bearer-only ZoomInfo usage/credit check. Reads ONLY
+# the bearer minted by the credential-bound "ZoomInfo Usage Mint" node (the ONLY node in
+# this branch that ever touches client_id/client_secret) and GETs the usage endpoint with
+# the vnd.api+json Accept header the live curl required (16.1-RESEARCH.md Task 1 — plain
+# application/json 406s). Degrades to { error } on ANY failure; Build Response's
+# extractCredits treats a malformed/errored body as null, never raising (SC-5).
+ENRICH_ZOOM_USAGE_CHECK = r"""// ZoomInfo Usage — Phase 16.1 Plan 02 (secret-free, Bearer only).
+const USAGE_URL = "https://api.zoominfo.com/gtm/data/v1/users/usage";
+const mint = $input.first();
+const token = mint && mint.json && mint.json.access_token;
+if (!token) return [{ json: { error: "no zoominfo token available (mint failed)" } }];
+let res;
+try {
+  res = await this.helpers.httpRequest({
+    method: "GET", url: USAGE_URL,
+    headers: { Authorization: "Bearer " + token, Accept: "application/vnd.api+json" },
+  });
+} catch (e) {
+  res = { error: String((e && e.message) || e) };
+}
+return [{ json: res }];
+"""
+
+# Phase 16.1 Plan 02 (reviews C1/C3/LOW-3) — the convergence node every enrichment
+# terminal feeds (5 real terminals + the 2 re-pointed IF-enrich-false lanes + the
+# unsupported-object-type terminal). Reads each credit-check node BY NAME via the
+# guarded nodeAll idiom (a not-requested/unexecuted node -> [] -> extractCredits(...) ->
+# null; mirrors ENRICH_NORMALIZE_SCORE_CLOUD's nodeAll) and assembles remaining_credits
+# for exactly providers_requested (none -> []). The credit branch runs off Parse HubSpot
+# Event (run START), independent of and typically well ahead of this deep convergence.
+#
+# HONEST response semantics (reviews C3): this node has MULTIPLE inbound branches, so it
+# (and the "Respond to Webhook" node it feeds) fires on whichever branch arrives FIRST —
+# parity with the prior responseMode:"lastNode" behavior, NOT a hard determinism
+# guarantee across a mixed create/update/skip batch. The true 0-event/empty-body case and
+# the exact multi-terminal arrival ordering are Track B execution-level test items, not
+# provable by this Code node or the static graph.
+ENRICH_BUILD_RESPONSE = inline("providerSelection.js") + r"""
+
+// --- n8n wrapper: Build Response (Phase 16.1 Plan 02) ---
+function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
+const first = $('Parse HubSpot Event').first();
+const providers_requested = (first && first.json && first.json.providers_requested) || [];
+const CREDIT_NODE_BY_PROVIDER = { lusha: "Lusha Usage", apollo: "Apollo Usage", zoominfo: "ZoomInfo Usage" };
+const remaining_credits = providers_requested.map((provider) => {
+  const nodeName = CREDIT_NODE_BY_PROVIDER[provider];
+  const rows = nodeName ? nodeAll(nodeName) : [];
+  const raw = rows[0] && rows[0].json;
+  return { provider, credits: extractCredits(provider, raw) };
+});
+return $input.all().map((item) => ({ json: { ...item.json, remaining_credits } }));
+"""
+
+
+def _credit_http_node(name, url, method, x, y, auth=None, extra_headers=None):
+    """Read-only provider usage/credit-check node (16.1-RESEARCH.md Task 1, live-curl-
+    validated GET/POST per provider). Credential-bound where `auth` is set; onError:
+    continueRegularOutput — a credit-check failure must NEVER fail the run (SC-5)."""
+    params = {"method": method, "url": url, "options": {"timeout": 20000}}
+    if extra_headers:
+        params.update({"sendHeaders": True, "headerParameters": {"parameters": extra_headers}})
+    if auth == "header":
+        params.update({"authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth"})
+    return {
+        "parameters": params,
+        "id": nid("h"), "name": name,
+        "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [x, y],
+        "onError": "continueRegularOutput",
+    }
+
+
 def build_enrichment_cloud():
     nodes = []
     y = 300
@@ -2694,9 +2779,12 @@ def build_enrichment_cloud():
     # before any node runs if X-Enrichment-Secret doesn't match the bound credential's
     # value. No Code node ever reads the secret value, and no $env/$vars expression is
     # used (Criterion 5's zero-env-var guard covers the whole built workflow).
+    # Phase 16.1 Plan 02 (reviews C3): responseNode + "Respond to Webhook", fed by the
+    # "Build Response" convergence (every terminal + remaining_credits, below). Per-batch
+    # FIRST-ARRIVAL semantics — not hard determinism (see Build Response's own comment).
     webhook = {
         "parameters": {"httpMethod": "POST", "path": "hubspot/enrichment/event",
-                       "responseMode": "lastNode", "authentication": "headerAuth", "options": {}},
+                       "responseMode": "responseNode", "authentication": "headerAuth", "options": {}},
         "id": nid("w"), "name": "Webhook Trigger",
         "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [x, y],
     }
@@ -3044,7 +3132,71 @@ def build_enrichment_cloud():
         "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [csx + 440, cy - 20]}
     nodes.append(hs_co_update)
 
+    # --- Phase 16.1 Plan 02 (reviews C1/C2/C3, SC-4/SC-5): single-item credit branch ---
+    # forked off "Parse HubSpot Event" (wired below, NOT off the multi-row terminal/
+    # enrichment flow) -> a single-item "Credit Request" -> per-provider "IF <provider>
+    # Credit Requested" gates -> at most ONE credit HTTP call per provider per run.
+    bx = x
+    by = cy + 420
+    lusha_credit = provider_registry.PROVIDER_REGISTRY["lusha"]["credit"]
+    apollo_credit = provider_registry.PROVIDER_REGISTRY["apollo"]["credit"]
+
+    nodes.append(code_node("Credit Request", ENRICH_CREDIT_REQUEST, bx, by))
+    bx += 220
+    nodes.append(_if_bool_expr_node(
+        "IF Lusha Credit Requested", "$json.providers_requested.includes('lusha')", bx, by - 120))
+    nodes.append(_if_bool_expr_node(
+        "IF Apollo Credit Requested", "$json.providers_requested.includes('apollo')", bx, by))
+    nodes.append(_if_bool_expr_node(
+        "IF ZoomInfo Credit Requested", "$json.providers_requested.includes('zoominfo')", bx, by + 120))
+    bx += 220
+    nodes.append(_credit_http_node(
+        "Lusha Usage", lusha_credit["url"], lusha_credit["method"], bx, by - 120, auth="header"))
+    nodes.append(_credit_http_node(
+        "Apollo Usage", apollo_credit["url"], apollo_credit["method"], bx, by, auth="header"))
+    # ZoomInfo: mint (credential-bound, "LV ZoomInfo") -> secret-free Bearer-only usage GET,
+    # same split shape as ZoomInfo Mint/ZoomInfo Mint Company but a DISTINCT node name (C2)
+    # so deploy's NODE_CREDENTIAL_MAP can bind it without colliding with the row-flow mints.
+    nodes.append(_zoom_mint_node("ZoomInfo Usage Mint", bx, by + 120))
+    bx += 220
+    nodes.append(code_node("ZoomInfo Usage", ENRICH_ZOOM_USAGE_CHECK, bx, by + 120))
+
+    credit_conns = {
+        "Credit Request": {"main": [[
+            {"node": "IF Lusha Credit Requested", "type": "main", "index": 0},
+            {"node": "IF Apollo Credit Requested", "type": "main", "index": 0},
+            {"node": "IF ZoomInfo Credit Requested", "type": "main", "index": 0},
+        ]]},
+        "IF Lusha Credit Requested": {"main": [
+            [{"node": "Lusha Usage", "type": "main", "index": 0}], [],  # false: bypass (dead-end)
+        ]},
+        "IF Apollo Credit Requested": {"main": [
+            [{"node": "Apollo Usage", "type": "main", "index": 0}], [],
+        ]},
+        "IF ZoomInfo Credit Requested": {"main": [
+            [{"node": "ZoomInfo Usage Mint", "type": "main", "index": 0}], [],
+        ]},
+        "ZoomInfo Usage Mint": {"main": [[{"node": "ZoomInfo Usage", "type": "main", "index": 0}]]},
+    }
+
+    # Build Response / Respond to Webhook — the convergence every terminal branch feeds
+    # (wired below); reads the credit nodes above BY NAME (guarded nodeAll).
+    nodes.append(code_node("Build Response", ENRICH_BUILD_RESPONSE, bx + 660, (y + cy) // 2))
+    nodes.append({
+        "parameters": {"respondWith": "allIncomingItems", "options": {}},
+        "id": nid("rw"), "name": "Respond to Webhook",
+        "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.1,
+        "position": [bx + 880, (y + cy) // 2],
+    })
+
     conns = chain(["Webhook Trigger", "Parse HubSpot Event", "IF Object Type Supported"])
+    # Phase 16.1 Plan 02 (reviews C1): Parse HubSpot Event ALSO forks to the single-item
+    # credit branch (Credit Request) — a parallel fan-out from the SAME output, not a
+    # re-point of the existing IF Object Type Supported edge.
+    conns["Parse HubSpot Event"] = {"main": [[
+        {"node": "IF Object Type Supported", "type": "main", "index": 0},
+        {"node": "Credit Request", "type": "main", "index": 0},
+    ]]}
     # Phase 16.1 (reviews A2): unsupported/unknown object_type terminates HERE, before
     # Route By Object Type ever runs — no path to any provider gate.
     conns["IF Object Type Supported"] = {"main": [
@@ -3087,8 +3239,14 @@ def build_enrichment_cloud():
     ]}
     conns["IF Enrich"] = {"main": [
         [{"node": "HubSpot Update", "type": "main", "index": 0}],  # true
-        [],                                                        # false -> end
+        [{"node": "Build Response", "type": "main", "index": 0}],  # false -> respond (Plan 02, C3)
     ]}
+    # Phase 16.1 Plan 02: every real terminal gains an outgoing edge into the "Build
+    # Response" convergence (reviews C3 — see its own jsCode comment for the honest
+    # per-batch first-arrival semantics this multi-inbound wiring implies).
+    conns["HubSpot Create"] = {"main": [[{"node": "Build Response", "type": "main", "index": 0}]]}
+    conns["HubSpot Update"] = {"main": [[{"node": "Build Response", "type": "main", "index": 0}]]}
+    conns["Skip (NoOp)"] = {"main": [[{"node": "Build Response", "type": "main", "index": 0}]]}
 
     # --- COMPANIES branch connections: Route By Object Type's true branch already points
     # here (Task 6) — no separate Webhook Trigger fan-out needed.
@@ -3129,9 +3287,14 @@ def build_enrichment_cloud():
         ]},
         "IF Company Enrich": {"main": [
             [{"node": "HubSpot Company Update", "type": "main", "index": 0}],  # true
-            [],                                                                # false -> end
+            [{"node": "Build Response", "type": "main", "index": 0}],          # false -> respond (Plan 02)
         ]},
     })
+    conns["HubSpot Company Create"] = {"main": [[{"node": "Build Response", "type": "main", "index": 0}]]}
+    conns["HubSpot Company Update"] = {"main": [[{"node": "Build Response", "type": "main", "index": 0}]]}
+    conns["Unsupported Object Type"] = {"main": [[{"node": "Build Response", "type": "main", "index": 0}]]}
+    conns.update(credit_conns)
+    conns["Build Response"] = {"main": [[{"node": "Respond to Webhook", "type": "main", "index": 0}]]}
 
     notes = [
         {"content": (
@@ -3216,6 +3379,22 @@ def build_enrichment_cloud():
             "research->judge chain in HERE, between **Normalize + Score** and "
             "**Merge Winners**, reusing 16.1's shared node factories."
         ), "x": sx - 220, "y": y + 140, "h": 260, "w": 420},
+        {"content": (
+            "### Credit reporting (Plan 02, reviews C1/C2/C3)\n"
+            "`Parse HubSpot Event` forks to a SINGLE-ITEM `Credit Request` node — one "
+            "item regardless of event count, so each provider's usage/credit check fires "
+            "AT MOST ONCE per run (not once per row — live-observed a Lusha 5 req/min 429 "
+            "otherwise). Balances are read at run START and carried in the response by "
+            "`Build Response`, which converges every terminal (5 real nodes + the 2 "
+            "re-pointed IF-enrich-false lanes + the unsupported terminal) and reads each "
+            "credit node BY NAME (a not-requested node -> null, never raises).\n\n"
+            "**Response semantics:** the webhook now uses `responseMode: responseNode` + "
+            "`Respond to Webhook`. Because Build Response has MULTIPLE inbound branches, "
+            "it fires on whichever arrives FIRST — per-batch first-arrival, parity with "
+            "the prior `lastNode` behavior, NOT hard determinism across a mixed batch. "
+            "The 0-event/empty-body case and exact arrival ordering are Track B "
+            "execution-level test items, not provable offline."
+        ), "x": bx, "y": by - 340, "h": 340, "w": 460},
     ]
     for n in notes:
         nodes.append({

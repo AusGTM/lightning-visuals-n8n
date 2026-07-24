@@ -6,7 +6,7 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "hubspot/enrichment/event",
-        "responseMode": "lastNode",
+        "responseMode": "responseNode",
         "authentication": "headerAuth",
         "options": {}
       },
@@ -1340,11 +1340,230 @@
     },
     {
       "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Credit Request \u2014 Phase 16.1 Plan 02 (reviews C1).\nconst first = $('Parse HubSpot Event').first();\nconst providers_requested = (first && first.json && first.json.providers_requested) || [];\nreturn [{ json: { providers_requested } }];\n"
+      },
+      "id": "c00830000-0000-4000-8000-000000000000",
+      "name": "Credit Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        1140
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i00840000-0000-4000-8000-000000000000",
+              "leftValue": "={{ $json.providers_requested.includes('lusha') }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if00850000-0000-4000-8000-000000000000",
+      "name": "IF Lusha Credit Requested",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        1020
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i00860000-0000-4000-8000-000000000000",
+              "leftValue": "={{ $json.providers_requested.includes('apollo') }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if00870000-0000-4000-8000-000000000000",
+      "name": "IF Apollo Credit Requested",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        1140
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i00880000-0000-4000-8000-000000000000",
+              "leftValue": "={{ $json.providers_requested.includes('zoominfo') }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if00890000-0000-4000-8000-000000000000",
+      "name": "IF ZoomInfo Credit Requested",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        1260
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.lusha.com/v3/account/usage",
+        "options": {
+          "timeout": 20000
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "h00900000-0000-4000-8000-000000000000",
+      "name": "Lusha Usage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2420,
+        1020
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/api/v1/usage_stats/api_usage_stats",
+        "options": {
+          "timeout": 20000
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "h00910000-0000-4000-8000-000000000000",
+      "name": "Apollo Usage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2420,
+        1140
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.zoominfo.com/gtm/oauth/v1/token",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "grant_type",
+              "value": "client_credentials"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth"
+      },
+      "id": "h00920000-0000-4000-8000-000000000000",
+      "name": "ZoomInfo Usage Mint",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2420,
+        1260
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// ZoomInfo Usage \u2014 Phase 16.1 Plan 02 (secret-free, Bearer only).\nconst USAGE_URL = \"https://api.zoominfo.com/gtm/data/v1/users/usage\";\nconst mint = $input.first();\nconst token = mint && mint.json && mint.json.access_token;\nif (!token) return [{ json: { error: \"no zoominfo token available (mint failed)\" } }];\nlet res;\ntry {\n  res = await this.helpers.httpRequest({\n    method: \"GET\", url: USAGE_URL,\n    headers: { Authorization: \"Bearer \" + token, Accept: \"application/vnd.api+json\" },\n  });\n} catch (e) {\n  res = { error: String((e && e.message) || e) };\n}\nreturn [{ json: res }];\n"
+      },
+      "id": "c00930000-0000-4000-8000-000000000000",
+      "name": "ZoomInfo Usage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2640,
+        1260
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// n8n/code/providerSelection.js \u2014 pure-JS provider-selection cost gate for n8n Code nodes.\n//\n// Phase 16.1: the caller-supplied `providers` webhook field is the PRIMARY burn gate\n// (CONTEXT Locked Decision 1 \u2014 no global build-time kill-switch). This module is pure,\n// deterministic, and carries NO n8n globals \u2014 mirrors enrichmentGate.js exactly, inlined\n// into Code nodes via the builder's inline() (Code nodes cannot require() siblings).\n//\n// parseWebhookBody(body)\n//   -> { events, providers }\n//   Explicit payload contract (reviews A4): a bare HubSpot event array carries no\n//   top-level `providers` slot; an envelope `{ providers, events: [...] }` object carries\n//   the caller's selection at the envelope level. A single bare event object (neither an\n//   array nor an envelope with `.events`) is treated as the one event, and its own\n//   `.providers` field (if any) IS the envelope-level providers value here \u2014 the n8n\n//   wrapper additionally falls back to `event.providers` per-event when this returns\n//   undefined (`parsed.providers ?? event.providers`), covering the same single-event case\n//   without double logic.\n//\n// resolveEnabledProviders(raw, allNames)\n//   -> { provider_enabled: { <name>: boolean, ... }, providers_requested: [...] }\n//   \"all\"                    -> every name in allNames enabled\n//   \"none\" / \"\" / null / undefined / anything else (absent/unrecognized) -> none enabled\n//   an array                 -> exactly those names (lowercased, intersected with\n//                                allNames; unknown names dropped)\n//\n// extractCredits(provider, raw)\n//   -> number | null\n//   Three null-safe per-provider credit extractors (RESEARCH.md Task 1, live-curl-\n//   validated). Forward-provisioned here for Plan 02 (16.1 does not call this at\n//   runtime); unit-tested now so Plan 02 can consume it with zero further verification.\n//   Every extractor returns null on ANY shape mismatch \u2014 never throws, never fails the run.\n\nfunction parseWebhookBody(body) {\n  const events = Array.isArray(body)\n    ? body\n    : (body && Array.isArray(body.events) ? body.events : [body]);\n  const providers = (body && !Array.isArray(body)) ? body.providers : undefined;\n  return { events, providers };\n}\n\nfunction resolveEnabledProviders(raw, allNames) {\n  const all = Array.isArray(allNames) ? allNames : [];\n  const allLower = all.map((n) => String(n).toLowerCase());\n  let enabledLower;\n\n  if (raw === \"all\") {\n    enabledLower = allLower.slice();\n  } else if (Array.isArray(raw)) {\n    const requestedLower = raw.map((n) => String(n).toLowerCase());\n    enabledLower = allLower.filter((n) => requestedLower.indexOf(n) !== -1);\n  } else {\n    // \"none\" | \"\" | null | undefined | any other unrecognized value -> nothing enabled\n    // (CONTEXT Locked Decision 2 \u2014 safe default, explicit opt-in required).\n    enabledLower = [];\n  }\n\n  const enabledSet = new Set(enabledLower);\n  const provider_enabled = {};\n  const providers_requested = [];\n  for (const name of all) {\n    const lower = String(name).toLowerCase();\n    const isEnabled = enabledSet.has(lower);\n    provider_enabled[name] = isEnabled;\n    if (isEnabled) providers_requested.push(name);\n  }\n\n  return { provider_enabled, providers_requested };\n}\n\nfunction extractCredits(provider, raw) {\n  const p = String(provider || \"\").toLowerCase();\n\n  if (p === \"lusha\") {\n    // 200 body -> { credits: { total, used, remaining } } [VERIFIED: live curl 200]\n    return (raw && raw.credits && typeof raw.credits.remaining === \"number\")\n      ? raw.credits.remaining : null;\n  }\n\n  if (p === \"apollo\") {\n    // THIS account's key 403s (non-master) [VERIFIED: live curl 403] -> raw carries no\n    // `remaining` field -> null. A master key's usage_stats body (undocumented shape for\n    // this account) is read defensively: only a top-level numeric `remaining` is trusted.\n    return (raw && typeof raw.remaining === \"number\") ? raw.remaining : null;\n  }\n\n  if (p === \"zoominfo\") {\n    // JSON:API: data[0].attributes.usage[] keyed by limitType. [VERIFIED: live curl 200]\n    // The real redeemable-records balance lives under limitType === \"uniqueIdLimit\";\n    // fall back to the first entry with a non-zero totalLimit before giving up (Open\n    // Question #1 \u2014 a different ZoomInfo plan may report its balance under another key).\n    const usage = (raw && raw.data && raw.data[0] && raw.data[0].attributes\n      && raw.data[0].attributes.usage) || [];\n    if (!Array.isArray(usage)) return null;\n    let entry = usage.find((u) => u && u.limitType === \"uniqueIdLimit\");\n    if (!entry) entry = usage.find((u) => u && typeof u.totalLimit === \"number\" && u.totalLimit > 0);\n    return (entry && typeof entry.usageRemaining === \"number\") ? entry.usageRemaining : null;\n  }\n\n  return null;\n}\n\n// --- n8n wrapper: Build Response (Phase 16.1 Plan 02) ---\nfunction nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }\nconst first = $('Parse HubSpot Event').first();\nconst providers_requested = (first && first.json && first.json.providers_requested) || [];\nconst CREDIT_NODE_BY_PROVIDER = { lusha: \"Lusha Usage\", apollo: \"Apollo Usage\", zoominfo: \"ZoomInfo Usage\" };\nconst remaining_credits = providers_requested.map((provider) => {\n  const nodeName = CREDIT_NODE_BY_PROVIDER[provider];\n  const rows = nodeName ? nodeAll(nodeName) : [];\n  const raw = rows[0] && rows[0].json;\n  return { provider, credits: extractCredits(provider, raw) };\n});\nreturn $input.all().map((item) => ({ json: { ...item.json, remaining_credits } }));\n"
+      },
+      "id": "c00940000-0000-4000-8000-000000000000",
+      "name": "Build Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3300,
+        510
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "id": "rw00950000-0000-4000-8000-000000000000",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3520,
+        510
+      ]
+    },
+    {
+      "parameters": {
         "content": "## LV Enrichment \u2014 CLOUD template\nRun `python scripts/provision_n8n_credentials.py` then `python scripts/deploy_n8n_workflows.py` (both env-gated, dry-run by default \u2014 see their docstrings) to create the 6 credentials and deploy this workflow with every node bound: **Webhook Trigger** = generic Header Auth holding the shared `X-Enrichment-Secret` value (CLAUDE.md \u00a718.1 \u2014 n8n rejects an unauthenticated request before any node runs); **HubSpot** (search/create/update, `hubspotAppToken`); **Lusha** + **Apollo** = generic Header Auth (one static key each, e.g. `api_key` / `X-Api-Key`); **ZoomInfo** = a credential-bound Mint HTTP node (generic Basic Auth holding client_id:client_secret) \u2014 see the ZoomInfo note. Every one of the 6 config flags (research/judge cost caps + model knobs) is a baked build-time constant, not a runtime environment lookup \u2014 none survives in this JSON (Criterion 5).\n\n**Flow:** Webhook -> Parse HubSpot Event (resolves the caller's `providers` node, reviews A4) -> IF Object Type Supported (reviews A2 \u2014 unsupported terminates here) -> Route By Object Type -> Build (Company) Identity -> HubSpot Search -> Gate (create/enrich/skip) -> a single `action != skip` dispatch lane (reviews A1) -> the gated provider waterfall (each provider behind its own `IF <provider> Enabled` gate with a bypass, Phase 16.1 \u2014 SC-1/SC-2). skip does nothing.\n\n**Write safety (Task 6, review #9):** Decide Action / Decide Company Action bake a `WRITE_SAFETY_DEFAULTS` build-time constant \u2014 `ALLOW_HUBSPOT_RECORD_WRITES` default **false**, a create switch (`ALLOW_HUBSPOT_CREATE`), and a `TEST_RECORD_DOMAINS`/`TEST_RECORD_IDS` allowlist (empty allowlist denies everything). An activated-but-not-enabled workflow performs ZERO record writes; even once enabled, only an allowlisted domain/id may write.",
         "height": 420,
         "width": 480
       },
-      "id": "s00830000-0000-4000-8000-000000000000",
+      "id": "s00960000-0000-4000-8000-000000000000",
       "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -1359,7 +1578,7 @@
         "height": 300,
         "width": 460
       },
-      "id": "s00840000-0000-4000-8000-000000000000",
+      "id": "s00970000-0000-4000-8000-000000000000",
       "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -1374,7 +1593,7 @@
         "height": 200,
         "width": 380
       },
-      "id": "s00850000-0000-4000-8000-000000000000",
+      "id": "s00980000-0000-4000-8000-000000000000",
       "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -1389,7 +1608,7 @@
         "height": 340,
         "width": 420
       },
-      "id": "s00860000-0000-4000-8000-000000000000",
+      "id": "s00990000-0000-4000-8000-000000000000",
       "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -1404,7 +1623,7 @@
         "height": 280,
         "width": 420
       },
-      "id": "s00870000-0000-4000-8000-000000000000",
+      "id": "s01000000-0000-4000-8000-000000000000",
       "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -1419,13 +1638,28 @@
         "height": 260,
         "width": 420
       },
-      "id": "s00880000-0000-4000-8000-000000000000",
+      "id": "s01010000-0000-4000-8000-000000000000",
       "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
         4180,
         440
+      ]
+    },
+    {
+      "parameters": {
+        "content": "### Credit reporting (Plan 02, reviews C1/C2/C3)\n`Parse HubSpot Event` forks to a SINGLE-ITEM `Credit Request` node \u2014 one item regardless of event count, so each provider's usage/credit check fires AT MOST ONCE per run (not once per row \u2014 live-observed a Lusha 5 req/min 429 otherwise). Balances are read at run START and carried in the response by `Build Response`, which converges every terminal (5 real nodes + the 2 re-pointed IF-enrich-false lanes + the unsupported terminal) and reads each credit node BY NAME (a not-requested node -> null, never raises).\n\n**Response semantics:** the webhook now uses `responseMode: responseNode` + `Respond to Webhook`. Because Build Response has MULTIPLE inbound branches, it fires on whichever arrives FIRST \u2014 per-batch first-arrival, parity with the prior `lastNode` behavior, NOT hard determinism across a mixed batch. The 0-event/empty-body case and exact arrival ordering are Track B execution-level test items, not provable offline.",
+        "height": 340,
+        "width": 460
+      },
+      "id": "s01020000-0000-4000-8000-000000000000",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2640,
+        800
       ]
     }
   ],
@@ -1446,6 +1680,11 @@
         [
           {
             "node": "IF Object Type Supported",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Credit Request",
             "type": "main",
             "index": 0
           }
@@ -1759,7 +1998,46 @@
             "index": 0
           }
         ],
-        []
+        [
+          {
+            "node": "Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Create": {
+      "main": [
+        [
+          {
+            "node": "Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Update": {
+      "main": [
+        [
+          {
+            "node": "Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Skip (NoOp)": {
+      "main": [
+        [
+          {
+            "node": "Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Build Company Identity": {
@@ -2139,7 +2417,125 @@
             "index": 0
           }
         ],
+        [
+          {
+            "node": "Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Company Create": {
+      "main": [
+        [
+          {
+            "node": "Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Company Update": {
+      "main": [
+        [
+          {
+            "node": "Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unsupported Object Type": {
+      "main": [
+        [
+          {
+            "node": "Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Credit Request": {
+      "main": [
+        [
+          {
+            "node": "IF Lusha Credit Requested",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IF Apollo Credit Requested",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "IF ZoomInfo Credit Requested",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Lusha Credit Requested": {
+      "main": [
+        [
+          {
+            "node": "Lusha Usage",
+            "type": "main",
+            "index": 0
+          }
+        ],
         []
+      ]
+    },
+    "IF Apollo Credit Requested": {
+      "main": [
+        [
+          {
+            "node": "Apollo Usage",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "IF ZoomInfo Credit Requested": {
+      "main": [
+        [
+          {
+            "node": "ZoomInfo Usage Mint",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "ZoomInfo Usage Mint": {
+      "main": [
+        [
+          {
+            "node": "ZoomInfo Usage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Response": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },
