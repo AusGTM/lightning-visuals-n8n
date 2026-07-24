@@ -412,6 +412,50 @@ retroactively; its artifacts and tests are in the tree.
 
 - [x] 16-02-PLAN.md — Complete (Criteria 1–4, 9): SJ-1/2/3 schedule workflows, dedupeSweep wiring, §22.2 review loop, RT-5 caching test [wave 2, depends_on 16-01]
 
+### Phase 16.1: Per-Request Provider Selection, Credit Reporting & Schedule Safety (INSERTED)
+
+**Goal**: The on-demand enrichment webhook is caller-controlled and cost-safe before going live — the caller chooses which provider adapters run (or none), the response reports remaining provider credits, and scheduled workflows ship disabled. Delivers the original extensibility requirement (pluggable provider adapters) and the pre-live cost-safety gate together.
+**Depends on**: Phase 16
+**INSERTED 2026-07-24** as "Track A" — the recommended pre-live cost-safety + extensibility gate before the live operator runbook (Track B). Decisions this session: per-request `providers` control is the primary burn gate (**no** global build-time kill-switch); absent/blank/`none` `providers` = enrich nothing; scheduled workflows ship inactive.
+
+**Success Criteria:**
+
+  1. The enrichment webhook payload accepts a `providers` node: an array of provider names, or `"all"`, or `"none"`/`""`/absent. `all` → every registered adapter; `none`/blank/absent → zero provider calls. Parsed in the `Parse HubSpot Event` node, threaded to every row, and honoured by BOTH the contacts and companies waterfalls.
+  2. A disabled provider's HTTP node does NOT execute — gating happens BEFORE the paid call, not by discarding the response after. `none`/blank/absent still runs the rest of the pipeline (identity, gate, scoring, research, writeback) with zero provider HTTP calls. This per-request gate is the primary pre-live burn control (no global kill-switch by decision).
+  3. Provider adapters are registered in ONE extensible place (an adapter registry) so a future provider is added by a registry entry + its nodes, not by editing parse/gate/normalize/merge individually — the original extensibility requirement (CLAUDE.md provider-adapter contract §16).
+  4. Credit-check endpoints validated against REAL provider docs AND live curl (Lusha, Apollo, ZoomInfo GTM) — verified method/URL/auth/response-field, and which of this account's keys actually authorize the call. Non-authorizing keys degrade gracefully (reported unknown, never fail the run).
+  5. The webhook response carries a `remaining_credits` node — remaining credits per provider, e.g. `[{ "provider": "zoominfo", "credits": 4156 }]` — reported POST-enrichment. A credit-check failure never fails enrichment.
+  6. `scripts/check_provider_credits.py` — read-only, `.env`-keyed provider balance check, two-key/no-creds skip path, never in the offline suite (mirrors `provision_n8n_credentials.py` idiom).
+  7. Scheduled workflows (scheduled-maintenance + SJ-1/SJ-2/SJ-3) emit `active: false`; deploy leaves them inactive; an operator enables each with one n8n toggle. Documented in the runbook.
+  8. Acceptance tests (offline, no live calls): `providers` parsing (all/none/list/absent), per-provider gate skip, `remaining_credits` response shape, and the schedules-inactive invariant. Full offline suite stays green; builder rebuild deterministic.
+
+**Evaluated against `docs/SYSTEM-CONTRACT.md`** — cost-safety (no unattended burn), extensibility (adapter registry), right-sized compute.
+
+**Plans**: 2 plans
+
+**Wave 1**
+
+- [ ] 16.1-01-PLAN.md — Provider-selection cost gate (SC-1/2/3): `providers` node + `providerSelection.js` + `PROVIDER_REGISTRY`, both waterfalls fanned out into per-provider `IF <provider> Enabled` gates [wave 1]
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 16.1-02-PLAN.md — Credit reporting + schedule safety (SC-4/5/6/7/8): `remaining_credits` convergence response, `check_provider_credits.py`, scheduled-maintenance `active: false` [wave 2, depends_on 16.1-01]
+
+### Phase 16.2: Contacts Research + Judge Mirror (INSERTED)
+
+**Goal**: The contacts enrichment path mirrors the companies path — the same web-research → judge → verdict chain runs on contacts, reusing Phase 16.1's node factories, so both object types share parameterized components (different targets, one set of building blocks). Delivers the symmetric, adapter-driven pipeline the project's extensibility requirement calls for.
+**Depends on**: Phase 16.1
+**INSERTED 2026-07-24** (decision: "16.1 symmetric, judge in 16.2"). 16.1 builds the fan-out/convergence symmetrically and leaves a documented insertion seam on the contacts branch (after `Normalize + Score`, before `Merge Winners`); this phase fills that seam. NOT free reuse — the research/judge JS is company-ICP-specific today (`computeEscalation`/`scoreResearchCandidates`/research prompt all bind company fields), so this phase must define the contact research prompt, contact-specific escalation reasons (which contact fields warrant adjudication — e.g. jobtitle/seniority conflicts), and contact verdict application, while reusing 16.1's `_if_bool_node`/Research-Trigger/Judge-Gate node factories.
+
+**Success Criteria (draft — refine at plan time):**
+
+  1. The contacts branch gains `Research Trigger Gate → IF Research Needed → Build Research Request → Claude Web Research → Validate Research Output → Judge Gate → IF Needs Judge → Build Judge Request → Judge Call → Apply Judge Verdict`, wired at the 16.1 seam, feeding `Merge Winners`.
+  2. The research/judge node factories are shared with the companies branch (parameterized by target), not duplicated — altering the chain touches one factory.
+  3. Contact research prompt + escalation reasons + verdict application are contact-appropriate (not company-ICP fields); off/none/absent providers still degrade gracefully (research-only path works).
+  4. Offline tests mirror the companies research/judge coverage; full suite green; builder deterministic. No live calls in the suite.
+
+**Plans**: Not yet planned
+
 ## Milestone 3 Progress
 
 | Phase | Plans Complete | Status | Completed |
@@ -423,3 +467,5 @@ retroactively; its artifacts and tests are in the tree.
 | 15. HubSpot Property Migration | 1/1 | Complete | 2026-07-22 |
 | 15.5. Tiered Candidate Adjudication (INSERTED) | 1/1 | Complete | 2026-07-23 |
 | 16. Scheduled Workflows & Review Surface | 2/2 | Complete | 2026-07-23 |
+| 16.1. Provider Selection, Credit Reporting & Schedule Safety (INSERTED) | 0/2 | Planned | — |
+| 16.2. Contacts Research + Judge Mirror (INSERTED) | 0/? | Backlog | — |

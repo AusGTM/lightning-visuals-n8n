@@ -2,17 +2,17 @@
 gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: Company Enrichment & ICP Research
-current_phase: 16
-current_phase_name: scheduled-workflows-review-surface
-status: complete
-stopped_at: "Phase 16-02 'Complete' EXECUTED + COMMITTED (Tasks 1-4, all criteria 1-4,9). SJ-1 (hourly input-gap, 3 OR'd groups) + SJ-2 (monthly stale refresh, epoch-ms Code node + Adapt step feeding the reused, unmodified Company Gate) + SJ-3 (15-min requested poller, Execute Workflow dispatch) all keyed on pipeline-owned inputs only (Approach C); dedupeSweep.js wired classify-only into a weekly contacts branch; §22.2 review loop closed via n8n/code/reviewApply.js (structural Approach-C field guard, fail-closed malformed JSON, all-or-nothing non-clobber compare-and-set); enrichmentGate.js's first direct RT-5 unit test. Full offline suite: 266 pytest / 147 node, 0 regressions. Builder rebuild deterministic. See 16-02-SUMMARY.md. Phase 16 (both plans) COMPLETE. NEXT: phase 16 was the last phase of Milestone 3 (v0.3) — proceed to milestone completion / ship review, or run /gsd-progress to confirm."
-last_updated: "2026-07-23T06:20:08.803Z"
-last_activity: 2026-07-23
-last_activity_desc: "Phase 16 COMPLETE (offline) + verified 9/9 criteria. gsd-verifier routed human_needed ONLY for the live operator runbook (non-gating, Phase-15 precedent) — 16-UAT.md tracks 3 live items: (1) live deploy/provision/property-creation, (2) reviewApply 'Review Apply Update' node ships updateFields:{} placeholder (operator maps the dynamic patch), (3) Build Identity fetch-by-objectId shim (16-01 Deviation 3). Pre-live-deploy fix flagged: deploy_n8n_workflows.py globs all wf_*.json incl. local-replica fixtures that keep $env/$vars — restrict to the Cloud/ACTIVE set. Suite 266 pytest / 147 node, builder deterministic, frozen files intact, all cross-AI review findings confirmed landed. Milestone 3 (v0.3) code-complete."
+current_phase: 16.1
+current_phase_name: provider-selection-credit-reporting-schedule-safety
+status: planned
+stopped_at: "Phase 16.1 (Track A: pre-live cost-safety + provider extensibility) PLANNED + plan-checker PASS (2 revisions: bypass-convergence fix + symmetry seam). 2 plans, exec-ready. 16.1-01 (cost gate, SC-1/2/3): `providers` webhook node (all/list/none/blank/absent→none) + `providerSelection.js` + `PROVIDER_REGISTRY`; BOTH waterfalls fanned out via ONE shared `_provider_gate_bypass_chain()` helper — each `IF <provider> Enabled` true→provider→next / false→bypass→next, last gate's true|bypass → Normalize+Score (fires with zero providers; identity read by node name, also fixes latent identity-loss); documented contacts research/judge insertion seam for 16.2. 16.1-02 (SC-4/5/6/7/8): `remaining_credits` deterministic convergence → Build Response → Respond node (credit checks gated to providers_requested → none=[]), `scripts/check_provider_credits.py` (live-validated: Lusha credits.remaining ok, ZoomInfo needs Accept: vnd.api+json → usageRemaining, Apollo non-master 403→null), scheduled-maintenance `active:false` + guard. NO global kill-switch (Decision 1). NEXT: /gsd-execute-phase 16.1 (16.1-01 first, then 16.1-02)."
+last_updated: "2026-07-24T09:21:00.000Z"
+last_activity: 2026-07-24
+last_activity_desc: "Phase 16.1 INSERTED as Track A (pre-live cost-safety + extensibility gate before the live runbook). Researcher live-curled the 3 provider credit endpoints (real .env keys, read-only). Planner produced 2 plans; plan-checker caught a real BLOCKER (fanned-out topology left Normalize+Score with no trigger on the none/absent path → whole pipeline dead) + 2 warnings, all fixed via bypass-convergence + gated credit checks + explicit terminal re-pointing; then a symmetry-seam revision (shared gate helper + documented contacts seam) per user decision to mirror contact/company paths (contacts research+judge deferred to new Phase 16.2). Re-verify PASS. ROADMAP: 16.1 (0/2 Planned) + 16.2 (Backlog) inserted. Suite baseline 266 pytest / 147 node. Not yet executed."
 progress:
-  total_phases: 17
+  total_phases: 18
   completed_phases: 3
-  total_plans: 18
+  total_plans: 20
   completed_plans: 4
 ---
 
@@ -23,11 +23,11 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-07)
 
 **Core value:** The ICP scoring engine turns firmographic + enrichment signals into trustworthy, auditable A/B/C/D prioritization (with hard vetoes) and never clobbers HubSpot data — proven in dry-run locally.
-**Current focus:** Phase 16 — scheduled-workflows-review-surface
+**Current focus:** Phase 16.1 — provider-selection-credit-reporting-schedule-safety (Track A, PLANNED — ready to execute)
 
 ## Current Position
 
-Phase: 16 (scheduled-workflows-review-surface) — COMPLETE
+Phase: 16.1 (provider-selection-credit-reporting-schedule-safety) — PLANNED (plan-checker PASS), 0/2 plans executed
 Plan: 16-01 COMPLETE (Tasks 1,3,4,5,6 committed); 16-02 COMPLETE (Tasks 1-4 committed)
 Status: 16-02 verified (266 pytest / 147 node, 0 regressions) — Phase 16 complete, Milestone 3 (v0.3) fully executed
 Last activity: 2026-07-23 — Phase 16-02 executed and committed
