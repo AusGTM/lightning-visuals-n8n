@@ -28,6 +28,10 @@ CODE = ROOT / "n8n" / "code"
 # sys.path[0], so the plain import resolves.
 import gen_taxonomy_js  # noqa: E402
 import gen_escalation_js  # noqa: E402
+import provider_registry  # noqa: E402 — Phase 16.1 (reviews A3): SIDE-EFFECT-FREE, no
+# codegen write happens on this import (unlike gen_taxonomy_js/gen_escalation_js above) —
+# a read-only importer (Plan 02's check_provider_credits.py) can pull PROVIDER_REGISTRY
+# without triggering the two writes below.
 
 (CODE / "taxonomy.generated.js").write_text(gen_taxonomy_js.render())
 (CODE / "escalation.generated.js").write_text(gen_escalation_js.render())
@@ -635,6 +639,27 @@ def _if_node(name, action_value, x, y):
                 "leftValue": "={{ $json.action }}",
                 "rightValue": action_value,
                 "operator": {"type": "string", "operation": "equals"},
+            }],
+        }},
+        "id": nid("if"), "name": name,
+        "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [x, y],
+    }
+
+
+def _if_not_equal_node(name, field, value, x, y):
+    """IF node testing `$json.<field> != value` (string notEquals). Phase 16.1 (reviews
+    A1/A2): used for the single `action != "skip"` provider-gate dispatch lane and the
+    object-type-supported check — the `equals` counterpart is `_if_node`/inline IF specs
+    elsewhere in this file."""
+    return {
+        "parameters": {"options": {}, "conditions": {
+            "options": {"caseSensitive": True, "typeValidation": "strict"},
+            "combinator": "and",
+            "conditions": [{
+                "id": nid("i"),
+                "leftValue": "={{ $json." + field + " }}",
+                "rightValue": value,
+                "operator": {"type": "string", "operation": "notEquals"},
             }],
         }},
         "id": nid("if"), "name": name,
@@ -2056,6 +2081,85 @@ def _if_bool_node(name, field, x, y):
     }
 
 
+def _if_bool_expr_node(name, expr, x, y):
+    """IF node testing an arbitrary boolean n8n EXPRESSION (not just a bare `$json.<field>`
+    lookup) for `true`. Phase 16.1: the per-provider `IF <provider> Enabled` gates read
+    `provider_enabled.<name>` BY NODE NAME (`$('Parse HubSpot Event').item.json...`), never
+    bare `$json`, because an upstream provider's HTTP response may already have replaced
+    `$json` by the time a LATER gate in the chain evaluates (closes the same identity-loss
+    bug class the provider request bodies also fix — see _provider_gate_bypass_chain)."""
+    return {
+        "parameters": {"options": {}, "conditions": {
+            "options": {"caseSensitive": True, "typeValidation": "strict"},
+            "combinator": "and",
+            "conditions": [{
+                "id": nid("i"),
+                "leftValue": "={{ " + expr + " }}",
+                "rightValue": True,
+                "operator": {"type": "boolean", "operation": "equals"},
+            }],
+        }},
+        "id": nid("if"), "name": name,
+        "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [x, y],
+    }
+
+
+# ---- Phase 16.1: shared provider gate+bypass-convergence helper (CONTEXT Locked ----
+# ---- Decision 8 — the reuse seam both the contacts and companies branches call) ----
+def _provider_gate_bypass_chain(providers, exit_node, x, y):
+    """Emits an ordered chain of `IF <provider> Enabled` gates with bypass-convergence —
+    the SAME topology as the existing, offline-tested
+    `IF ZoomInfo Needs Mint -> [Mint->Cache]/[bypass] -> ZoomInfo Enrich` precedent
+    (:2469-2477 pre-16.1), generalized to N providers and called IDENTICALLY by both
+    branches (not two hand-rolled copies).
+
+    `providers` is an ordered list of dicts, one per provider:
+      {gate_name, enabled_expr, true_entry, true_exit (optional, default true_entry)}
+    - gate_name:   the `IF <provider> Enabled` node's name.
+    - enabled_expr: the n8n boolean expression the gate tests (by-node-name read of
+      provider_enabled — see _if_bool_expr_node).
+    - true_entry:  the node the gate's TRUE lane feeds — a provider HTTP node, or a
+      subgraph's entry node (e.g. "ZoomInfo Token Gate").
+    - true_exit:   the node whose output REJOINS the chain — defaults to true_entry for a
+      simple single-node provider; pass the subgraph's own exit node (e.g.
+      "ZoomInfo Enrich") for a multi-node provider so the REJOIN edge starts there, not at
+      the entry.
+
+    Each gate's true+false lanes rejoin at the SAME next stage (the next provider's gate,
+    or `exit_node` for the last), so the convergence node (e.g. Normalize + Score) always
+    has an inbound edge regardless of which providers are enabled — exactly one fires per
+    row, and the empty-enabled-set path (every gate bypassed) still reaches exit_node.
+
+    Returns (nodes, conns, first_gate_name). `conns` covers gate1..gateN + the rejoin
+    edges; it does NOT include the caller's OWN entry -> first_gate_name edge (entry-node
+    shape varies — an IF true-lane for contacts, a plain Code node for companies — so the
+    caller wires that single edge itself)."""
+    nodes = []
+    conns = {}
+    n = len(providers)
+    cx = x
+    first_gate_name = providers[0]["gate_name"]
+    for idx, spec in enumerate(providers):
+        gate_name = spec["gate_name"]
+        nodes.append(_if_bool_expr_node(gate_name, spec["enabled_expr"], cx, y))
+        cx += 220
+        true_exit = spec.get("true_exit", spec["true_entry"])
+        next_stage = providers[idx + 1]["gate_name"] if idx + 1 < n else exit_node
+        conns[gate_name] = {"main": [
+            [{"node": spec["true_entry"], "type": "main", "index": 0}],  # true -> provider
+            [{"node": next_stage, "type": "main", "index": 0}],          # false -> bypass
+        ]}
+        conns[true_exit] = {"main": [[{"node": next_stage, "type": "main", "index": 0}]]}
+    return nodes, conns, first_gate_name
+
+
+def _provider_enabled_expr(name):
+    """The by-node-name provider_enabled read every gate uses — reads the ROOT
+    `Parse HubSpot Event` node (never bare $json, which an upstream provider's HTTP
+    response may have replaced by the time a later gate evaluates)."""
+    return f"$('Parse HubSpot Event').item.json.provider_enabled.{name}"
+
+
 def build_enrichment_local_live():
     nodes = []
     y = 300
@@ -2521,22 +2625,38 @@ def _route_action_switch(name, x, y):
     }
 
 
-# Parse HubSpot Event — CLOUD only (Task 6, CLAUDE.md §18.2/§18.3). Normalizes the
-# inbound webhook body (a HubSpot private-app event array, or a single event object) and
-# maps HubSpot's raw objectType strings onto this workflow's two branch names. The
-# shared-secret check (CLAUDE.md §18.1) is done by the Webhook Trigger node's OWN native
-# Header Auth (authentication="headerAuth", credential-bound — never a Code node reading
-# the secret value, and never $env/$vars, matching Criterion 5's zero-env-var guard).
-ENRICH_PARSE_EVENT_CLOUD = r"""// Parse HubSpot Event — CLOUD variant.
+# Parse HubSpot Event — CLOUD only (Task 6, CLAUDE.md §18.2/§18.3; Phase 16.1 adds the
+# provider-selection resolution, reviews A4). Normalizes the inbound webhook body (a
+# HubSpot private-app event array, or a single event object, or a caller envelope
+# {providers, events:[...]}) and maps HubSpot's raw objectType strings onto this
+# workflow's branch names. The shared-secret check (CLAUDE.md §18.1) is done by the
+# Webhook Trigger node's OWN native Header Auth (authentication="headerAuth",
+# credential-bound — never a Code node reading the secret value, and never $env/$vars,
+# matching Criterion 5's zero-env-var guard).
+#
+# Phase 16.1 (reviews A4): a bare HubSpot event array carries NO top-level `providers`
+# slot (HubSpot cannot add custom body fields) -> providers resolves absent -> enrich
+# nothing, the safe default (CONTEXT Locked Decision 2). An envelope
+# {providers, events:[...]} carries the caller's explicit selection at the envelope
+# level; a per-event `.providers` field is honoured as a fallback when the envelope
+# itself carries none (`parsed.providers ?? event.providers`).
+ENRICH_PARSE_EVENT_CLOUD = (
+    inline("providerSelection.js")
+    + r"""
+
+// --- n8n wrapper: normalize event array + resolve providers (reviews A4) ---
 function normalizeObjectType(input) {
   const v = String(input || "").toLowerCase();
   if (["contact", "contacts", "0-1"].includes(v)) return "contacts";
   if (["company", "companies", "0-2"].includes(v)) return "companies";
   return "unknown";
 }
+const PROVIDER_NAMES = __PROVIDER_NAMES__;
 const body = $json.body ?? $json;
-const events = Array.isArray(body) ? body : [body];
-return events.map((event) => {
+const parsed = parseWebhookBody(body);
+return parsed.events.map((event) => {
+  const providersRaw = parsed.providers ?? event.providers;
+  const { provider_enabled, providers_requested } = resolveEnabledProviders(providersRaw, PROVIDER_NAMES);
   const object_type = normalizeObjectType(event.objectType || event.objectTypeId);
   return { json: {
     event_id: `${event.subscriptionId || "sub"}:${event.objectId}:${event.eventId || event.occurredAt}`,
@@ -2545,6 +2665,8 @@ return events.map((event) => {
     property_name: event.propertyName || null,
     event_type: event.subscriptionType || event.eventType || null,
     occurred_at: event.occurredAt || new Date().toISOString(),
+    provider_enabled,
+    providers_requested,
     // MINIMUM-scope shim (Task 6, documented per the plan's own budget carve-out):
     // Build Identity/Build Company Identity still read direct body fields (email/
     // domain/...) rather than fetching the record fresh by object_id — restructuring
@@ -2556,6 +2678,7 @@ return events.map((event) => {
   }};
 });
 """
+).replace("__PROVIDER_NAMES__", json.dumps(provider_registry.PROVIDER_NAMES))
 
 
 # NOTE (Phase 13/16): this Cloud webhook template's companies branch is ported by Task 5
@@ -2581,6 +2704,25 @@ def build_enrichment_cloud():
 
     x += 220
     nodes.append(code_node("Parse HubSpot Event", ENRICH_PARSE_EVENT_CLOUD, x, y))
+
+    # Phase 16.1 (reviews A2): an explicit unsupported-object-type check BEFORE the
+    # existing companies/contacts router — a malformed/unknown object_type terminates in
+    # a no-op here, so it can never fall through into a provider branch and burn credits
+    # with providers:"all". "Route By Object Type" below is UNCHANGED (still the existing
+    # 2-way companies/contacts IF — tests/test_cloud_write_path.py pins its exact shape);
+    # this is the "IF + explicit unsupported check" form the plan sanctions as an
+    # alternative to a 3-way Switch.
+    x += 220
+    if_object_type_supported = _if_not_equal_node(
+        "IF Object Type Supported", "object_type", "unknown", x, y)
+    nodes.append(if_object_type_supported)
+    set_unsupported = {
+        "parameters": {"assignments": {"assignments": [
+            {"id": nid("a"), "name": "object_type", "value": "unsupported", "type": "string"}
+        ]}, "options": {}},
+        "id": nid("r"), "name": "Unsupported Object Type",
+        "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [x, y + 260]}
+    nodes.append(set_unsupported)
 
     x += 220
     route_by_type = {
@@ -2629,18 +2771,42 @@ def build_enrichment_cloud():
     x += 220
     nodes.append(code_node("Enrichment Gate", ENRICH_GATE, x, y))
 
-    # Switch: create / enrich / skip
+    # Phase 16.1 (reviews A1): a SINGLE `action != "skip"` dispatch lane feeds the
+    # provider gate chain — replaces the old Route Action switch, whose create+enrich
+    # outputs BOTH fed the waterfall entry directly, double-executing the gate chain +
+    # Normalize + Score for a mixed create/enrich batch (double credit burn). The
+    # create-vs-enrich WRITE decision is UNCHANGED and stays downstream at
+    # Decide Action -> IF Create / IF Enrich, reading each row's own `action` field
+    # (carried through every hop via `...row` spreads). `_route_action_switch` itself is
+    # left in place (a generic helper, unused here now) in case another builder needs it.
     x += 220
-    nodes.append(_route_action_switch("Route Action", x, y))
+    nodes.append(_if_not_equal_node("IF Provider Processing Needed", "action", "skip", x, y))
+    set_skip = {
+        "parameters": {"assignments": {"assignments": [
+            {"id": nid("a"), "name": "action", "value": "skip", "type": "string"}
+        ]}, "options": {}},
+        "id": nid("r"), "name": "Skip (NoOp)",
+        "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [x, y + 160]}
+    nodes.append(set_skip)
 
-    # Provider waterfall (create+enrich share it). Apollo phone is async (webhook) in prod.
-    # Auth differs per provider: Lusha + Apollo = single static header key (generic Header
-    # Auth credential); ZoomInfo = split-code-node (Phase 16) — a credential-bound Basic-auth
-    # "ZoomInfo Mint" HTTP node does the mint; the Token Gate/Cache Code nodes are secret-free.
-    # (n8n Cloud blocks $env/$vars and Code nodes cannot read credentials — see below.)
+    # Provider waterfall (Phase 16.1: gated — each provider sits behind its own
+    # `IF <provider> Enabled` gate with a bypass that rejoins the chain, emitted by the
+    # SHARED `_provider_gate_bypass_chain(...)` helper — CONTEXT Locked Decision 8, the
+    # reuse seam Task 2 calls identically for companies). A disabled provider's node never
+    # executes (SC-2); the row spine always continues through the bypass so
+    # Normalize + Score fires exactly once, even on the none/absent path. Apollo phone is
+    # async (webhook) in prod. Auth differs per provider: Lusha + Apollo = single static
+    # header key (generic Header Auth credential); ZoomInfo = split-code-node (Phase 16) —
+    # a credential-bound Basic-auth "ZoomInfo Mint" HTTP node does the mint; the Token
+    # Gate/Cache Code nodes are secret-free. (n8n Cloud blocks $env/$vars and Code nodes
+    # cannot read credentials — see below.)
     px = x + 220
+    # Phase 16.1: identity is read BY NODE NAME from "Enrichment Gate" (never bare $json),
+    # because a provider gate positioned after another provider's HTTP node sees THAT
+    # provider's response as $json, not the row — closing the latent identity-loss bug.
     lusha = _http_node("Lusha Enrich", "https://api.lusha.com/v2/person", px, y - 80,
-                       auth="header")  # credential header, e.g. api_key: <LUSHA_API_KEY>
+                       auth="header",  # credential header, e.g. api_key: <LUSHA_API_KEY>
+                       json_body="={{ JSON.stringify($('Enrichment Gate').item.json.identity_keys) }}")
     nodes.append(lusha)
     # reveal_personal_emails=true forces Apollo to return the contactable email (a bare
     # people/match returns identity only). Phone is async: reveal_phone_number needs a
@@ -2648,21 +2814,41 @@ def build_enrichment_cloud():
     apollo = _http_node("Apollo Match", "https://api.apollo.io/v1/people/match", px + 220, y - 80,
                         auth="header",  # credential header, e.g. X-Api-Key: <APOLLO_API_KEY>
                         json_body=("={{ JSON.stringify({ "
-                                   "email: $json.identity_keys.email, "
-                                   "domain: $json.identity_keys.domain, "
-                                   "first_name: $json.identity_keys.firstName, "
-                                   "last_name: $json.identity_keys.lastName, "
-                                   "organization_name: $json.identity_keys.companyName, "
+                                   "email: $('Enrichment Gate').item.json.identity_keys.email, "
+                                   "domain: $('Enrichment Gate').item.json.identity_keys.domain, "
+                                   "first_name: $('Enrichment Gate').item.json.identity_keys.firstName, "
+                                   "last_name: $('Enrichment Gate').item.json.identity_keys.lastName, "
+                                   "organization_name: $('Enrichment Gate').item.json.identity_keys.companyName, "
                                    "reveal_personal_emails: true }) }}"))
     nodes.append(apollo)
-    # ZoomInfo: split-code-node (Task 2 decision). The credential-bound "ZoomInfo Mint"
-    # HTTP node is the ONLY place client_id/client_secret are read; the Token Gate/Cache
-    # Token/Enrich Code nodes are secret-free, consuming only the short-lived bearer.
+    # ZoomInfo: split-code-node (Task 2 decision), now sitting BEHIND its own
+    # IF ZoomInfo Enabled gate (Phase 16.1). The credential-bound "ZoomInfo Mint" HTTP
+    # node is the ONLY place client_id/client_secret are read; the Token Gate/Cache
+    # Token/Enrich Code nodes are secret-free, consuming only the short-lived bearer, and
+    # keep "Enrichment Gate" as their gate_source_node (identity recovery by paired index,
+    # runs regardless of provider gating).
     zoom_nodes, zoom_conns, zoom_entry, zoom_exit = _zoom_split_contacts_subgraph(
-        "Enrichment Gate", px + 440, y - 80)
+        "Enrichment Gate", px + 660, y - 80)
     nodes.extend(zoom_nodes)
 
-    sx = px + 660 + 440
+    gate_nodes, gate_conns, first_gate_name = _provider_gate_bypass_chain(
+        providers=[
+            {"gate_name": "IF Lusha Enabled",
+             "enabled_expr": _provider_enabled_expr("lusha"),
+             "true_entry": "Lusha Enrich"},
+            {"gate_name": "IF Apollo Enabled",
+             "enabled_expr": _provider_enabled_expr("apollo"),
+             "true_entry": "Apollo Match"},
+            {"gate_name": "IF ZoomInfo Enabled",
+             "enabled_expr": _provider_enabled_expr("zoominfo"),
+             "true_entry": zoom_entry, "true_exit": zoom_exit},
+        ],
+        exit_node="Normalize + Score",
+        x=px, y=y + 40,
+    )
+    nodes.extend(gate_nodes)
+
+    sx = px + 660 + 660
     nodes.append(code_node("Normalize + Score", ENRICH_NORMALIZE_SCORE_CLOUD, sx, y - 80))
     sx += 220
     nodes.append(code_node("Merge Winners", ENRICH_MERGE, sx, y - 80))
@@ -2700,14 +2886,8 @@ def build_enrichment_cloud():
         "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [sx + 440, y - 20]}
     nodes.append(hs_update)
 
-    # skip branch -> NoOp Set (do nothing)
-    set_skip = {
-        "parameters": {"assignments": {"assignments": [
-            {"id": nid("a"), "name": "action", "value": "skip", "type": "string"}
-        ]}, "options": {}},
-        "id": nid("r"), "name": "Skip (NoOp)",
-        "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [px, y + 160]}
-    nodes.append(set_skip)
+    # (Skip (NoOp) is created earlier now — Phase 16.1 — as the single-lane dispatch's
+    # false target, right next to "IF Provider Processing Needed".)
 
     # --- COMPANIES branch: sibling off the same Webhook Trigger, own row (y+420) -----
     # Task 5 (Phase 16): ports the companies ICP branch build_enrichment_local_live()
@@ -2829,27 +3009,42 @@ def build_enrichment_cloud():
         "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [csx + 440, cy - 20]}
     nodes.append(hs_co_update)
 
-    conns = chain(["Webhook Trigger", "Parse HubSpot Event", "Route By Object Type"])
-    # Route By Object Type: true (companies) -> Build Company Identity, false (contacts/
-    # unknown, fail-safe default) -> Build Identity.
+    conns = chain(["Webhook Trigger", "Parse HubSpot Event", "IF Object Type Supported"])
+    # Phase 16.1 (reviews A2): unsupported/unknown object_type terminates HERE, before
+    # Route By Object Type ever runs — no path to any provider gate.
+    conns["IF Object Type Supported"] = {"main": [
+        [{"node": "Route By Object Type", "type": "main", "index": 0}],   # true: supported
+        [{"node": "Unsupported Object Type", "type": "main", "index": 0}],  # false: unsupported
+    ]}
+    # Route By Object Type: true (companies) -> Build Company Identity, false (contacts,
+    # the only remaining option once "unsupported" is filtered above) -> Build Identity.
     conns["Route By Object Type"] = {"main": [
         [{"node": "Build Company Identity", "type": "main", "index": 0}],  # true
         [{"node": "Build Identity", "type": "main", "index": 0}],          # false
     ]}
     conns.update(chain(["Build Identity", "HubSpot Search",
-                        "Adapt Search", "Enrichment Gate", "Route Action"]))
-    # Switch outputs: 0=create, 1=enrich, 2=skip. create+enrich -> shared waterfall.
-    conns["Route Action"] = {"main": [
-        [{"node": "Lusha Enrich", "type": "main", "index": 0}],   # create
-        [{"node": "Lusha Enrich", "type": "main", "index": 0}],   # enrich
-        [{"node": "Skip (NoOp)", "type": "main", "index": 0}],    # skip
+                        "Adapt Search", "Enrichment Gate", "IF Provider Processing Needed"]))
+    # Phase 16.1 (reviews A1): a SINGLE lane feeds the provider gate chain — the
+    # create-vs-enrich double-feed that used to run the gate chain + Normalize + Score
+    # twice for a mixed batch is gone; action=="skip" is the only branch point here.
+    conns["IF Provider Processing Needed"] = {"main": [
+        [{"node": first_gate_name, "type": "main", "index": 0}],  # true: not skipped
+        [{"node": "Skip (NoOp)", "type": "main", "index": 0}],    # false: skipped
     ]}
-    # Lusha -> Apollo -> ZoomInfo split subgraph (credential-bound Mint + secret-free
-    # Gate/Cache/Enrich, Task 2 decision) -> Normalize...
-    conns.update(chain(["Lusha Enrich", "Apollo Match"]))
-    conns["Apollo Match"] = {"main": [[{"node": zoom_entry, "type": "main", "index": 0}]]}
+    # Phase 16.1: the per-provider IF-gate + bypass-convergence wiring (gate1..gateN,
+    # each true->provider/false->bypass rejoining at the next stage, up to
+    # "Normalize + Score") comes from the SHARED _provider_gate_bypass_chain(...) helper
+    # (CONTEXT Locked Decision 8) — not hand-wired here. The ZoomInfo subgraph's OWN
+    # internal wiring (Token Gate -> IF Needs Mint -> Mint/bypass -> Cache -> Enrich) is
+    # unaffected and still comes from zoom_conns.
+    conns.update(gate_conns)
     conns.update(zoom_conns)
-    conns.update(chain([zoom_exit, "Normalize + Score", "Merge Winners",
+    # Phase 16.2 seam (CONTEXT Locked Decision 8, reviews LOW-4): this is the mirror of
+    # the companies branch's Normalize + Score Company -> Research Trigger Gate -> ... ->
+    # Merge Company chain. 16.1 intentionally builds ONLY the fan-out + this marker — no
+    # contacts research/judge runtime node exists yet; Phase 16.2 slots the mirrored
+    # research->judge chain in right here, between Normalize + Score and Merge Winners.
+    conns.update(chain(["Normalize + Score", "Merge Winners",
                         "Set Data Quality + Gap Flag", "Decide Action", "IF Create"]))
     conns["IF Create"] = {"main": [
         [{"node": "HubSpot Create", "type": "main", "index": 0}],  # true
@@ -2915,9 +3110,13 @@ def build_enrichment_cloud():
             "6 config flags (research/judge cost caps + model knobs) is a baked "
             "build-time constant, not a runtime environment lookup — none survives "
             "in this JSON (Criterion 5).\n\n"
-            "**Flow:** Webhook -> Parse HubSpot Event -> Route By Object Type -> "
-            "Build (Company) Identity -> HubSpot Search -> Gate (create/enrich/skip) "
-            "-> Switch. create+enrich share the scored waterfall; skip does nothing.\n\n"
+            "**Flow:** Webhook -> Parse HubSpot Event (resolves the caller's `providers` "
+            "node, reviews A4) -> IF Object Type Supported (reviews A2 — unsupported "
+            "terminates here) -> Route By Object Type -> Build (Company) Identity -> "
+            "HubSpot Search -> Gate (create/enrich/skip) -> a single `action != skip` "
+            "dispatch lane (reviews A1) -> the gated provider waterfall (each provider "
+            "behind its own `IF <provider> Enabled` gate with a bypass, Phase 16.1 — "
+            "SC-1/SC-2). skip does nothing.\n\n"
             "**Write safety (Task 6, review #9):** Decide Action / Decide Company "
             "Action bake a `WRITE_SAFETY_DEFAULTS` build-time constant — "
             "`ALLOW_HUBSPOT_RECORD_WRITES` default **false**, a create switch "
@@ -2969,6 +3168,15 @@ def build_enrichment_cloud():
             "**AU-phone:** normalizePhone is an AU-only heuristic (no libphonenumber "
             "in Code nodes); non-AU/ambiguous -> null -> review."
         ), "x": 1360, "y": 480, "h": 280, "w": 420},
+        {"content": (
+            "### Phase 16.2 seam — contacts research->judge mirror insertion point\n"
+            "This is the mirror of the companies branch's `Normalize + Score Company -> "
+            "Research Trigger Gate -> ... -> Merge Company` chain. Phase 16.1 builds ONLY "
+            "the gated provider fan-out + this marker (CONTEXT Locked Decision 8) — no "
+            "contacts research/judge node exists yet. Phase 16.2 slots the mirrored "
+            "research->judge chain in HERE, between **Normalize + Score** and "
+            "**Merge Winners**, reusing 16.1's shared node factories."
+        ), "x": sx - 220, "y": y + 140, "h": 260, "w": 420},
     ]
     for n in notes:
         nodes.append({
