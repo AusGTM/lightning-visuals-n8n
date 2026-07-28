@@ -3182,6 +3182,36 @@ return rows.map((it, i) => {
 });
 """
 
+# ---- Phase 16.4 Task 2: fetch-by-objectId lane (companies mirror) -----------
+#
+# Extracted verbatim from the existing "HubSpot Company Search" node (byte-identical
+# emitted string). The companies fetch-by-id list is this SAME constant VERBATIM, with no
+# additions — Build Company Identity only needs `domain` and `name`, both already here
+# (unlike contacts, which added 2 properties the existing search never needed).
+ENRICH_COMPANY_SEARCH_PROPERTIES_CSV = (
+    "name,domain,industry,annualrevenue,"
+    "numberofemployees,hs_object_id,lv_org_type,"
+    "lv_produces_content,lv_content_type,"
+    "lv_is_hardware_vendor,lv_is_gambling_operator,"
+    "lv_enrichment_provenance,lv_org_type_verified_at,"
+    "lv_produces_content_verified_at"
+)
+
+ENRICH_ADAPT_FETCH_BY_ID_COMPANY = inline("adaptFetchById.js") + r"""
+
+// --- n8n wrapper: adapt "HubSpot Company Fetch By Id" -> existingRecord + backfilled identity_keys ---
+// Same node-name-only recovery discipline as the contacts sibling — no bare current-item
+// read.
+const rows = $('Build Company Identity').all();
+const fetched = $('HubSpot Company Fetch By Id').all();
+return rows.map((it, i) => {
+  const row = it.json;
+  const { existingRecord, lookup_failed, fetch_diagnostic } = adaptFetchByIdResult(fetched[i]);
+  const identity_keys = backfillIdentityKeys("companies", existingRecord, row.identity_keys);
+  return { json: { ...row, existingRecord, lookup_failed, fetch_diagnostic, identity_keys } };
+});
+"""
+
 
 def build_enrichment_cloud():
     nodes = []
@@ -3480,11 +3510,13 @@ def build_enrichment_cloud():
     # Build Identity is in prior to Task 6's event parser + object-type router.
     cy = y + 420
     cx = x
+    build_company_identity_x = cx
     nodes.append(code_node("Build Company Identity", ENRICH_BUILD_CO_IDENTITY, cx, cy))
     # Task 6 (review #8): real filterGroups (domain EQ, reusing the same envelope shape
     # HS_CO_SEARCH_BODY_EXPR already proves for the raw-HTTP local-live variant) +
     # hs_object_id in the property list.
     cx += 220
+    hs_co_search_x = cx
     hs_co_search = {
         "parameters": {"resource": "company", "operation": "search",
                        "filterGroupsUi": {"filterGroupsValues": [
@@ -3494,12 +3526,7 @@ def build_enrichment_cloud():
                            ]}},
                        ]},
                        "additionalFields": {
-                           "properties": "name,domain,industry,annualrevenue,"
-                                         "numberofemployees,hs_object_id,lv_org_type,"
-                                         "lv_produces_content,lv_content_type,"
-                                         "lv_is_hardware_vendor,lv_is_gambling_operator,"
-                                         "lv_enrichment_provenance,lv_org_type_verified_at,"
-                                         "lv_produces_content_verified_at",
+                           "properties": ENRICH_COMPANY_SEARCH_PROPERTIES_CSV,
                        }},
         "id": nid("hs"), "name": "HubSpot Company Search",
         "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [cx, cy],
@@ -3507,11 +3534,33 @@ def build_enrichment_cloud():
     }
     nodes.append(hs_co_search)
     cx += 220
+    adapt_co_search_x = cx
     nodes.append(code_node("Adapt Company Search", ENRICH_ADAPT_CO_SEARCH, cx, cy))
     cx += 220
     nodes.append(code_node("Company Gate", ENRICH_CO_GATE, cx, cy))
     cx += 220
     nodes.append(code_node("Build Company Requests", ENRICH_BUILD_CO_REQUESTS, cx, cy))
+
+    # Phase 16.4 Task 2: fetch-by-objectId lane — mirrors Task 1's contacts lane node for
+    # node, converging back into "Company Gate". Placed on a free row below the companies
+    # main row so none of the existing companies nodes' `position` values move.
+    cfby = cy + 200
+    if_company_bare_event = _if_bool_expr_node(
+        "IF Company Bare Event",
+        "!!$('Build Company Identity').item.json.object_id && "
+        "!$('Build Company Identity').item.json.identity_keys.domain",
+        build_company_identity_x, cfby,
+    )
+    nodes.append(if_company_bare_event)
+    hs_co_fetch_by_id = _hs_search_node(
+        "HubSpot Company Fetch By Id", "company", hs_co_search_x, cfby,
+        filter_groups=[[{"propertyName": "hs_object_id", "operator": "EQ",
+                          "value": "={{ $('Build Company Identity').item.json.object_id }}"}]],
+        properties_csv=ENRICH_COMPANY_SEARCH_PROPERTIES_CSV,
+    )
+    nodes.append(hs_co_fetch_by_id)
+    nodes.append(code_node(
+        "Adapt Company Fetch By Id", ENRICH_ADAPT_FETCH_BY_ID_COMPANY, adapt_co_search_x, cfby))
 
     cpx = cx + 220
     # Phase 16.1 (Task 2 — mirrors Task 1's contacts fix): identity is read BY NODE NAME
@@ -3773,8 +3822,20 @@ def build_enrichment_cloud():
 
     # --- COMPANIES branch connections: Route By Object Type's true branch already points
     # here (Task 6) — no separate Webhook Trigger fan-out needed.
+    # Phase 16.4 Task 2: Build Company Identity now fans into "IF Company Bare Event"
+    # first — the companies mirror of Task 1's contacts split. `chain()` overwrites
+    # `conns[a]`, so this is split into calls rather than appended to the single chain
+    # HEAD~ had.
+    conns.update(chain(["Build Company Identity", "IF Company Bare Event"]))
+    conns["IF Company Bare Event"] = {"main": [
+        [{"node": "HubSpot Company Fetch By Id", "type": "main", "index": 0}],  # true
+        [{"node": "HubSpot Company Search", "type": "main", "index": 0}],       # false
+    ]}
     conns.update(chain([
-        "Build Company Identity", "HubSpot Company Search",
+        "HubSpot Company Fetch By Id", "Adapt Company Fetch By Id", "Company Gate",
+    ]))
+    conns.update(chain([
+        "HubSpot Company Search",
         "Adapt Company Search", "Company Gate", "Build Company Requests",
     ]))
     # Phase 16.1 Task 2: Build Company Requests feeds the gated waterfall's first gate

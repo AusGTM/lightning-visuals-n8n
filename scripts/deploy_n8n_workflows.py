@@ -52,6 +52,8 @@ NODE_CREDENTIAL_MAP = {
     "HubSpot Create": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot Update": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot Company Search": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    # Phase 16.4 Task 2: companies mirror of "HubSpot Fetch By Id" above.
+    "HubSpot Company Fetch By Id": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot Company Create": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot Company Update": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "Lusha Enrich": {"cred_type": "httpHeaderAuth", "cred_name": "LV Lusha"},

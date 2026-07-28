@@ -145,3 +145,81 @@ test("contacts: a bare HubSpot event drives the full compiled chain to a patch p
   assert.ok(final.properties && typeof final.properties === "object" && !Array.isArray(final.properties),
     "properties is a plain object");
 });
+
+// --- companies: a bare event carrying NO domain/name -----------------------------------
+const COMPANY_SEED_BODY = {
+  providers: ["lusha", "apollo"],
+  events: [{
+    objectId: 4567, objectType: "company",
+    subscriptionType: "company.propertyChange",
+    propertyName: "lv_enrichment_requested",
+    occurredAt: 1783316400000,
+  }],
+};
+
+// DELIBERATELY excludes the research/judge chain (Research Trigger Gate -> IF Research
+// Needed -> ... -> Merge Company): the harness runs every listed node unconditionally
+// regardless of the IF branching n8n itself evaluates, and the research/judge lane's
+// false lanes fan straight into "Merge Company" anyway — this list drives exactly that
+// lane, never the cost-cap/escalation lane the real workflow would gate behind a live
+// research call.
+const COMPANY_CHAIN = [
+  { name: "Parse HubSpot Event", http: false },
+  { name: "Build Company Identity", http: false },
+  { name: "HubSpot Company Fetch By Id", http: true },
+  { name: "Adapt Company Fetch By Id", http: false },
+  { name: "Company Gate", http: false },
+  { name: "Build Company Requests", http: false },
+  { name: "Lusha Company", http: true },
+  { name: "Apollo Org", http: true },
+  { name: "Normalize + Score Company", http: false },
+  { name: "Merge Company", http: false },
+  { name: "Decide Company Action", http: false },
+];
+
+const COMPANY_HTTP_MOCKS = {
+  // Deliberately WITHOUT lv_org_type/lv_produces_content, so decideAction sees missing
+  // REQUIRED fields and returns "enrich" rather than "skip".
+  "HubSpot Company Fetch By Id": {
+    results: [{
+      id: "4567",
+      properties: {
+        name: "Example Racing League",
+        domain: "exampleracing.example",
+      },
+    }],
+    total: 1,
+  },
+  "Lusha Company": {},
+  "Apollo Org": {},
+};
+
+test("companies: a bare HubSpot event drives the full compiled chain to a patch payload targeting the fetched record id", () => {
+  const { trace, threw, final } = runChain(WF_PATH, COMPANY_CHAIN, COMPANY_SEED_BODY, COMPANY_HTTP_MOCKS);
+  assert.equal(threw, null, `no node threw (got: ${JSON.stringify(threw)})`);
+
+  // SC-2 payoff: non-null identity_keys.domain, impossible without the fetch feeding the
+  // backfill — the seed body carries no domain anywhere.
+  const adapted = trace["Adapt Company Fetch By Id"];
+  assert.ok(adapted, "Adapt Company Fetch By Id produced output");
+  assert.notEqual(adapted.identity_keys && adapted.identity_keys.domain, null,
+    "identity_keys.domain is non-null, backfilled from the fetched record");
+  assert.equal(adapted.identity_keys.domain, "exampleracing.example");
+
+  // row survives the fetch-by-id hop.
+  assert.equal(adapted.object_id, "4567");
+  assert.equal(adapted.object_type, "companies");
+  assert.ok(adapted.provider_enabled && typeof adapted.provider_enabled === "object",
+    "provider_enabled survived the hop");
+  assert.ok(Array.isArray(adapted.providers_requested) && adapted.providers_requested.length > 0,
+    "providers_requested survived the hop and is non-empty");
+
+  // the gate sees the fetched record and correctly demands enrichment (missing
+  // lv_org_type/lv_produces_content), not skip/create.
+  assert.equal(trace["Company Gate"].action, "enrich");
+
+  // Decide Company Action's final output targets the REAL fetched record id.
+  assert.equal(final.hs_object_id, "4567");
+  assert.ok(final.properties && typeof final.properties === "object" && !Array.isArray(final.properties),
+    "properties is a plain object");
+});
