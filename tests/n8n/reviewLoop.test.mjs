@@ -121,14 +121,24 @@ test("the built workflow contains an Apply Review node reachable from a review-a
 
   const search = wf.nodes.find((n) => n.name === "Review Search (approved=true)");
   assert.ok(search, "review-approved search node must exist");
-  const filters = search.parameters.filterGroupsUi.filterGroupsValues[0].filtersUi.filterValues;
-  const approved = filters.find((f) => f.propertyName === "lv_enrichment_review_approved");
-  assert.ok(approved && approved.operator === "EQ" && approved.value === "true");
-  // `properties` is a LIST, not a CSV string (2026-07-28): n8n forwards it verbatim into
-  // the CRM v3 search body, where HubSpot requires an array and 400s on a string. This
-  // assertion previously used assert.match against the CSV, pinning the buggy shape.
-  const props = search.parameters.additionalFields.properties;
-  assert.ok(Array.isArray(props), "properties must be an array — HubSpot rejects a CSV string");
+  // BUG 10 / Phase 16.6: "Review Search (approved=true)" moved off the native
+  // n8n-nodes-base.hubspot node (no `operation: "search"` exists for resource:company —
+  // n8n's node schema only offers create/delete/get/getAll/getRecentlyCreatedUpdated/
+  // searchByDomain/update; the native node silently returned json:null live) onto a
+  // credential-bound httpRequest node whose filter + properties live inside a single
+  // `jsonBody` expression string, not filterGroupsUi/additionalFields.
+  assert.equal(search.type, "n8n-nodes-base.httpRequest");
+  assert.equal(search.parameters.authentication, "predefinedCredentialType");
+  assert.equal(search.parameters.nodeCredentialType, "hubspotAppToken");
+  const body = search.parameters.jsonBody;
+  assert.match(body, /propertyName:\s*"lv_enrichment_review_approved"/);
+  assert.match(body, /operator:\s*"EQ"/);
+  assert.match(body, /value:\s*"true"/);
+  // `properties` is a genuine JSON array literal, not a CSV string (2026-07-28 / Phase
+  // 16.6): n8n/HubSpot's search API requires an array and 400s on a CSV string.
+  const propsMatch = body.match(/properties:\s*(\[[^\]]*\])/);
+  assert.ok(propsMatch, "jsonBody must carry a `properties: [...]` array");
+  const props = JSON.parse(propsMatch[1]);
   assert.ok(props.includes("hs_object_id"));
   assert.ok(props.includes("lv_org_type"));
   assert.ok(props.includes("lv_produces_content"));

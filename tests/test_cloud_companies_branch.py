@@ -130,10 +130,16 @@ def test_decide_company_action_uses_stable_stringify_not_a_hand_rolled_serialize
 
 def test_hubspot_company_create_and_update_nodes_are_native_hubspot_nodes():
     """Task 5's port converts the raw-HTTP company HubSpot calls to the credential-bound
-    native n8n-nodes-base.hubspot node, same as the contacts branch."""
+    native n8n-nodes-base.hubspot node, same as the contacts branch. "HubSpot Company
+    Search" deliberately EXCLUDED (BUG 10 / Phase 16.6): n8n's HubSpot node has no
+    `operation: "search"` for resource:company at all (confirmed by reading
+    CompanyDescription.ts's companyOperations option list — only create/delete/get/getAll/
+    getRecentlyCreatedUpdated/searchByDomain/update exist), so the native node silently
+    returned json:null live; see test_hubspot_company_search_is_credential_bound_httprequest
+    below for its replacement shape. company:create/company:update's live behavior is
+    UNVERIFIED — BUG 10's trace only exercised operation:search."""
     doc = _load()
     for name, resource, operation in [
-        ("HubSpot Company Search", "company", "search"),
         ("HubSpot Company Create", "company", "create"),
         ("HubSpot Company Update", "company", "update"),
     ]:
@@ -141,6 +147,22 @@ def test_hubspot_company_create_and_update_nodes_are_native_hubspot_nodes():
         assert node["type"] == "n8n-nodes-base.hubspot"
         assert node["parameters"]["resource"] == resource
         assert node["parameters"]["operation"] == operation
+
+
+def test_hubspot_company_search_is_credential_bound_httprequest_via_predefined_credential_type():
+    """BUG 10 / Phase 16.6 fix: "HubSpot Company Search" moved off the native hubspot node
+    (which has no `operation: "search"` for resource:company) onto a credential-bound
+    httpRequest node hitting the real CRM v3 search endpoint directly, reusing the SAME
+    "LV HubSpot" credential via predefinedCredentialType/nodeCredentialType:hubspotAppToken
+    — never a new credential, never $env/$vars. See
+    tests/test_bug10_company_search_transport.py for the full node-shape guard."""
+    doc = _load()
+    node = next(n for n in doc["nodes"] if n["name"] == "HubSpot Company Search")
+    assert node["type"] == "n8n-nodes-base.httpRequest"
+    assert node["parameters"]["method"] == "POST"
+    assert node["parameters"]["url"] == "https://api.hubapi.com/crm/v3/objects/companies/search"
+    assert node["parameters"]["authentication"] == "predefinedCredentialType"
+    assert node["parameters"]["nodeCredentialType"] == "hubspotAppToken"
 
 
 def test_zoominfo_company_mint_node_is_credential_bound_basic_auth():

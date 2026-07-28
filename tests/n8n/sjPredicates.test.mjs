@@ -23,8 +23,38 @@ function findNode(wf, name) {
   return n;
 }
 
+// BUG 10 / Phase 16.6: SJ-1/SJ-2/SJ-3/Review Search moved off the native
+// n8n-nodes-base.hubspot node (which has no `operation: "search"` for resource:company —
+// n8n's node schema only offers create/delete/get/getAll/getRecentlyCreatedUpdated/
+// searchByDomain/update for companies; the native node silently returned json:null live)
+// onto a credential-bound httpRequest node whose filters live inside a single `jsonBody`
+// expression string, not `filterGroupsUi.filterGroupsValues`. This parses the SAME
+// (propertyName, operator, value?) facts out of that expression — it is not valid JSON on
+// its own (unquoted keys, and a dynamic filter's value is a raw JS expression like
+// `$json.cutoff_ms`, never re-quoted), so a small regex-driven extractor stands in for a
+// full JS parser, matching exactly the shape scripts/build_cloud_workflows.py's
+// _hs_search_json_body_expr() emits.
 function filterGroups(node) {
-  return node.parameters.filterGroupsUi.filterGroupsValues.map((g) => g.filtersUi.filterValues);
+  const body = node.parameters.jsonBody;
+  const groupRe = /\{\s*filters:\s*\[([^\]]*)\]\s*\}/g;
+  const filterRe = /\{\s*propertyName:\s*"([^"]*)",\s*operator:\s*"([^"]*)"(?:,\s*value:\s*("(?:[^"\\]|\\.)*"|[^,}]+))?\s*\}/g;
+  const groups = [];
+  let gm;
+  while ((gm = groupRe.exec(body)) !== null) {
+    const filters = [];
+    let fm;
+    filterRe.lastIndex = 0;
+    while ((fm = filterRe.exec(gm[1])) !== null) {
+      const filter = { propertyName: fm[1], operator: fm[2] };
+      if (fm[3] !== undefined) {
+        const raw = fm[3].trim();
+        filter.value = raw.startsWith('"') ? JSON.parse(raw) : raw;
+      }
+      filters.push(filter);
+    }
+    groups.push(filters);
+  }
+  return groups;
 }
 
 const DERIVED_ICP_OUTPUT_RE = /lv_icp_tier|lv_icp_fit_score|lv_icp_scored_at/;

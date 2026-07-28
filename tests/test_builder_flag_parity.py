@@ -61,12 +61,17 @@ def _all_jscode(workflow: dict) -> str:
 
 
 def _all_credential_bound_node_names(workflow: dict) -> set:
-    """Nodes carrying a genericCredentialType/native-HubSpot auth marker — Cloud's
-    secret-binding mechanism (no header/body literal ever holds a secret value)."""
+    """Nodes carrying a genericCredentialType/predefinedCredentialType/native-HubSpot auth
+    marker — Cloud's secret-binding mechanism (no header/body literal ever holds a secret
+    value). predefinedCredentialType (BUG 10 / Phase 16.6: the 6 company-search nodes
+    reusing the hubspotAppToken credential type via a generic httpRequest node) is the
+    third credential-bearing mode alongside deploy_n8n_workflows.py's
+    _CREDENTIAL_BEARING_HTTP_AUTH_MODES — must be recognized here too or this sweep
+    silently stops covering those nodes."""
     bound = set()
     for n in workflow["nodes"]:
         params = n.get("parameters", {})
-        if params.get("authentication") == "genericCredentialType":
+        if params.get("authentication") in ("genericCredentialType", "predefinedCredentialType"):
             bound.add(n["name"])
         elif n.get("type") == "n8n-nodes-base.hubspot":
             bound.add(n["name"])

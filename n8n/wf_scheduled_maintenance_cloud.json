@@ -24,41 +24,21 @@
     },
     {
       "parameters": {
-        "resource": "company",
-        "operation": "search",
-        "filterGroupsUi": {
-          "filterGroupsValues": [
-            {
-              "filtersUi": {
-                "filterValues": [
-                  {
-                    "propertyName": "lv_enrichment_requested",
-                    "operator": "EQ",
-                    "value": "true"
-                  },
-                  {
-                    "propertyName": "lv_enrichment_status",
-                    "operator": "NEQ",
-                    "value": "running"
-                  }
-                ]
-              }
-            }
-          ]
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/companies/search",
+        "options": {
+          "timeout": 20000
         },
-        "additionalFields": {
-          "properties": [
-            "hs_object_id",
-            "lv_enrichment_requested",
-            "lv_enrichment_status"
-          ]
-        },
-        "authentication": "appToken"
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"lv_enrichment_requested\", operator: \"EQ\", value: \"true\" }, { propertyName: \"lv_enrichment_status\", operator: \"NEQ\", value: \"running\" } ] } ], properties: [\"hs_object_id\", \"lv_enrichment_requested\", \"lv_enrichment_status\"], limit: 100 }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "hs00020000-0000-4000-8000-000000000000",
+      "id": "h00020000-0000-4000-8000-000000000000",
       "name": "SJ-3 Search (requested poller)",
-      "type": "n8n-nodes-base.hubspot",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         440,
         300
@@ -122,56 +102,21 @@
     },
     {
       "parameters": {
-        "resource": "company",
-        "operation": "search",
-        "filterGroupsUi": {
-          "filterGroupsValues": [
-            {
-              "filtersUi": {
-                "filterValues": [
-                  {
-                    "propertyName": "lv_org_type",
-                    "operator": "NOT_HAS_PROPERTY"
-                  }
-                ]
-              }
-            },
-            {
-              "filtersUi": {
-                "filterValues": [
-                  {
-                    "propertyName": "lv_org_type",
-                    "operator": "EQ",
-                    "value": "unknown"
-                  }
-                ]
-              }
-            },
-            {
-              "filtersUi": {
-                "filterValues": [
-                  {
-                    "propertyName": "lv_produces_content",
-                    "operator": "NOT_HAS_PROPERTY"
-                  }
-                ]
-              }
-            }
-          ]
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/companies/search",
+        "options": {
+          "timeout": 20000
         },
-        "additionalFields": {
-          "properties": [
-            "hs_object_id",
-            "lv_org_type",
-            "lv_produces_content"
-          ]
-        },
-        "authentication": "appToken"
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"lv_org_type\", operator: \"NOT_HAS_PROPERTY\" } ] }, { filters: [ { propertyName: \"lv_org_type\", operator: \"EQ\", value: \"unknown\" } ] }, { filters: [ { propertyName: \"lv_produces_content\", operator: \"NOT_HAS_PROPERTY\" } ] } ], properties: [\"hs_object_id\", \"lv_org_type\", \"lv_produces_content\"], limit: 100 }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "hs00060000-0000-4000-8000-000000000000",
+      "id": "h00060000-0000-4000-8000-000000000000",
       "name": "SJ-1 Search (input-gap scan)",
-      "type": "n8n-nodes-base.hubspot",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         440,
         620
@@ -254,49 +199,21 @@
     },
     {
       "parameters": {
-        "resource": "company",
-        "operation": "search",
-        "filterGroupsUi": {
-          "filterGroupsValues": [
-            {
-              "filtersUi": {
-                "filterValues": [
-                  {
-                    "propertyName": "lv_org_type_verified_at",
-                    "operator": "LT",
-                    "value": "={{ $json.cutoff_ms }}"
-                  }
-                ]
-              }
-            },
-            {
-              "filtersUi": {
-                "filterValues": [
-                  {
-                    "propertyName": "lv_produces_content_verified_at",
-                    "operator": "LT",
-                    "value": "={{ $json.cutoff_ms }}"
-                  }
-                ]
-              }
-            }
-          ]
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/companies/search",
+        "options": {
+          "timeout": 20000
         },
-        "additionalFields": {
-          "properties": [
-            "hs_object_id",
-            "lv_org_type",
-            "lv_produces_content",
-            "lv_org_type_verified_at",
-            "lv_produces_content_verified_at"
-          ]
-        },
-        "authentication": "appToken"
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"lv_org_type_verified_at\", operator: \"LT\", value: $json.cutoff_ms } ] }, { filters: [ { propertyName: \"lv_produces_content_verified_at\", operator: \"LT\", value: $json.cutoff_ms } ] } ], properties: [\"hs_object_id\", \"lv_org_type\", \"lv_produces_content\", \"lv_org_type_verified_at\", \"lv_produces_content_verified_at\"], limit: 100 }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "hs00110000-0000-4000-8000-000000000000",
+      "id": "h00110000-0000-4000-8000-000000000000",
       "name": "SJ-2 Search (stale refresh)",
-      "type": "n8n-nodes-base.hubspot",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         660,
         940
@@ -545,46 +462,21 @@
     },
     {
       "parameters": {
-        "resource": "company",
-        "operation": "search",
-        "filterGroupsUi": {
-          "filterGroupsValues": [
-            {
-              "filtersUi": {
-                "filterValues": [
-                  {
-                    "propertyName": "lv_enrichment_review_approved",
-                    "operator": "EQ",
-                    "value": "true"
-                  }
-                ]
-              }
-            }
-          ]
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/companies/search",
+        "options": {
+          "timeout": 20000
         },
-        "additionalFields": {
-          "properties": [
-            "hs_object_id",
-            "lv_org_type",
-            "lv_produces_content",
-            "lv_revenue_band",
-            "lv_employee_band",
-            "lv_content_type",
-            "lv_sponsorship_reliant",
-            "lv_is_hardware_vendor",
-            "lv_is_gambling_operator",
-            "lv_enrichment_review_candidate_json",
-            "lv_enrichment_needs_review",
-            "lv_enrichment_review_approved",
-            "lv_enrichment_review_reason"
-          ]
-        },
-        "authentication": "appToken"
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"lv_enrichment_review_approved\", operator: \"EQ\", value: \"true\" } ] } ], properties: [\"hs_object_id\", \"lv_org_type\", \"lv_produces_content\", \"lv_revenue_band\", \"lv_employee_band\", \"lv_content_type\", \"lv_sponsorship_reliant\", \"lv_is_hardware_vendor\", \"lv_is_gambling_operator\", \"lv_enrichment_review_candidate_json\", \"lv_enrichment_needs_review\", \"lv_enrichment_review_approved\", \"lv_enrichment_review_reason\"], limit: 100 }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "hs00250000-0000-4000-8000-000000000000",
+      "id": "h00250000-0000-4000-8000-000000000000",
       "name": "Review Search (approved=true)",
-      "type": "n8n-nodes-base.hubspot",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         440,
         1840

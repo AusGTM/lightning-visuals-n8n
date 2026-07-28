@@ -2722,7 +2722,10 @@ def build_enrichment_local_live():
 # ---- CLOUD enrichment workflow ----------------------------------------------
 
 def _http_node(name, url, x, y, auth=None, headers=None, form_body=None, json_body=None):
-    """auth: None | 'header' (generic Header Auth credential) | 'basic' (generic Basic Auth).
+    """auth: None | 'header' (generic Header Auth credential) | 'basic' (generic Basic Auth)
+    | 'hubspot' (predefinedCredentialType, reuses the SAME provisioned hubspotAppToken
+    credential the native n8n-nodes-base.hubspot nodes use — BUG 10's fix, see
+    _hs_http_search_node below).
     headers: list of {name, value} sent as extra HTTP headers (e.g. a dynamic Bearer).
     form_body: list of {name, value} sent as application/x-www-form-urlencoded (OAuth token calls).
     json_body: n8n expression string for the JSON body; when None (and no form_body) the node
@@ -2738,6 +2741,8 @@ def _http_node(name, url, x, y, auth=None, headers=None, form_body=None, json_bo
         params.update({"authentication": "genericCredentialType", "genericAuthType": "httpHeaderAuth"})
     elif auth == "basic":
         params.update({"authentication": "genericCredentialType", "genericAuthType": "httpBasicAuth"})
+    elif auth == "hubspot":
+        params.update({"authentication": "predefinedCredentialType", "nodeCredentialType": "hubspotAppToken"})
     if headers:
         params.update({"sendHeaders": True, "headerParameters": {"parameters": headers}})
     return {
@@ -3581,23 +3586,20 @@ def build_enrichment_cloud():
     # Task 6 (review #8): real filterGroups (domain EQ, reusing the same envelope shape
     # HS_CO_SEARCH_BODY_EXPR already proves for the raw-HTTP local-live variant) +
     # hs_object_id in the property list.
+    #
+    # BUG 10 / Phase 16.6: credential-bound httpRequest, NOT the native hubspot node —
+    # n8n's HubSpot node has no `operation: "search"` for resource:company at all (see
+    # _hs_http_search_node's docstring for the confirmed mechanism); the native node
+    # silently returned json:null live. Node NAME is unchanged so
+    # deploy_n8n_workflows.py's NODE_CREDENTIAL_MAP entry keeps binding it.
     cx += 220
     hs_co_search_x = cx
-    hs_co_search = {
-        "parameters": {"resource": "company", "operation": "search",
-                       "filterGroupsUi": {"filterGroupsValues": [
-                           {"filtersUi": {"filterValues": [
-                               {"propertyName": "domain", "operator": "EQ",
-                                "value": "={{ $json.identity_keys.domain }}"},
-                           ]}},
-                       ]},
-                       "additionalFields": {
-                           "properties": ENRICH_COMPANY_SEARCH_PROPERTIES_CSV,
-                       }},
-        "id": nid("hs"), "name": "HubSpot Company Search",
-        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [cx, cy],
-        "onError": "continueRegularOutput",
-    }
+    hs_co_search = _hs_http_search_node(
+        "HubSpot Company Search", "company", cx, cy,
+        filter_groups=[[{"propertyName": "domain", "operator": "EQ",
+                          "value": "={{ $json.identity_keys.domain }}"}]],
+        properties_csv=ENRICH_COMPANY_SEARCH_PROPERTIES_CSV,
+    )
     nodes.append(hs_co_search)
     cx += 220
     adapt_co_search_x = cx
@@ -3618,7 +3620,9 @@ def build_enrichment_cloud():
         build_company_identity_x, cfby,
     )
     nodes.append(if_company_bare_event)
-    hs_co_fetch_by_id = _hs_search_node(
+    # BUG 10 / Phase 16.6: _hs_http_search_node, not _hs_search_node — see that helper's
+    # docstring; the native node has no `operation: "search"` for resource:company.
+    hs_co_fetch_by_id = _hs_http_search_node(
         "HubSpot Company Fetch By Id", "company", hs_co_search_x, cfby,
         filter_groups=[[{"propertyName": "hs_object_id", "operator": "EQ",
                           "value": "={{ $('Build Company Identity').item.json.object_id }}"}]],
@@ -4171,7 +4175,18 @@ def _schedule_trigger(name, x, y, field, interval_value):
 def _hs_search_node(name, resource, x, y, filter_groups, properties_csv):
     """Native n8n-nodes-base.hubspot search node. filter_groups is a list of groups; each
     group is a list of filter dicts {propertyName, operator, value?} — groups OR, filters
-    within a group AND (mirrors HS_CO_SEARCH_BODY_EXPR's envelope, RESEARCH Pitfall 3)."""
+    within a group AND (mirrors HS_CO_SEARCH_BODY_EXPR's envelope, RESEARCH Pitfall 3).
+
+    CONTACTS ONLY (BUG 10, Phase 16.6): n8n's HubSpot node schema has a real
+    `operation: "search"` for resource:contact (POSTs /crm/v3/objects/contacts/search) but
+    NOT for resource:company (its schema only offers create/delete/get/getAll/
+    getRecentlyCreatedUpdated/searchByDomain/update — confirmed by reading
+    CompanyDescription.ts). execute()'s resource:company branch has no case for an
+    unrecognized operation and no default/throw, so a company node built with this helper
+    silently returns responseData:undefined -> one item, json:null, status:success, no error
+    — the exact live-confirmed defect (16.6-CONTEXT.md). Companies use
+    _hs_http_search_node below instead, which bypasses the node's operation dispatch
+    entirely."""
     return {
         "parameters": {"resource": resource, "operation": "search",
                        "filterGroupsUi": {"filterGroupsValues": [
@@ -4182,6 +4197,60 @@ def _hs_search_node(name, resource, x, y, filter_groups, properties_csv):
         "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [x, y],
         "onError": "continueRegularOutput",
     }
+
+
+def _hs_search_json_body_expr(filter_groups, properties, limit):
+    """Renders (filter_groups, properties, limit) as a single n8n `={{ JSON.stringify(...) }}`
+    expression — the same envelope _hs_search_node's filterGroupsUi/additionalFields.properties
+    produces via the native node (groups OR, filters-within-group AND — RESEARCH Pitfall 3),
+    and the same shape HS_CO_SEARCH_BODY_EXPR already proves works for the raw-HTTP
+    local-live variant. A filter value that is itself an n8n expression (`={{ ... }}`, e.g.
+    reading another node by name) is unwrapped and interpolated as a raw JS expression —
+    never re-stringified — so dynamic filters keep working inside the single top-level
+    expression block; a plain value is JSON-encoded as a JS literal."""
+    def render_value(v):
+        if isinstance(v, str) and v.startswith("={{") and v.endswith("}}"):
+            return v[3:-2].strip()
+        return json.dumps(v)
+
+    def render_filter(f):
+        parts = [f'propertyName: {json.dumps(f["propertyName"])}',
+                 f'operator: {json.dumps(f["operator"])}']
+        if "value" in f:
+            parts.append("value: " + render_value(f["value"]))
+        return "{ " + ", ".join(parts) + " }"
+
+    groups_js = ", ".join(
+        "{ filters: [ " + ", ".join(render_filter(f) for f in group) + " ] }"
+        for group in filter_groups
+    )
+    props_js = ", ".join(json.dumps(p) for p in properties)
+    return (
+        "={{ JSON.stringify({ filterGroups: [ " + groups_js + " ], "
+        "properties: [" + props_js + "], limit: " + str(limit) + " }) }}"
+    )
+
+
+def _hs_http_search_node(name, resource, x, y, filter_groups, properties_csv, limit=100):
+    """Credential-bound httpRequest replacement for _hs_search_node's `search` operation —
+    COMPANIES ONLY (BUG 10, Phase 16.6). See _hs_search_node's docstring for the confirmed
+    mechanism: n8n's HubSpot node has no `operation: "search"` for resource:company at all,
+    so a native-node company search silently returns json:null. This POSTs directly to the
+    real CRM v3 search endpoint, bypassing the node's operation dispatch entirely — same
+    credential (predefinedCredentialType/hubspotAppToken reuses "LV HubSpot", the exact
+    credential NODE_CREDENTIAL_MAP already binds these node NAMES to), same filter/property
+    contract as _hs_search_node, so callers migrate with an identical argument list.
+    resource:contact is unaffected and stays on the native node (it has a real `search`
+    operation) — this deliberately hard-fails if ever called for anything but "company" so
+    the migration cannot silently spread to the one proven-working path."""
+    if resource != "company":
+        raise ValueError(f"_hs_http_search_node is companies-only (BUG 10) — got resource={resource!r}")
+    props = [p.strip() for p in properties_csv.split(",") if p.strip()]
+    body = _hs_search_json_body_expr(filter_groups, props, limit)
+    return _http_node(
+        name, "https://api.hubapi.com/crm/v3/objects/companies/search", x, y,
+        auth="hubspot", json_body=body,
+    )
 
 
 def _hs_update_set_property(name, resource, x, y, property_name, value_literal="true"):
@@ -4220,7 +4289,10 @@ def build_scheduled_maintenance_cloud():
     sj3_trigger = _schedule_trigger("SJ-3 Trigger (15 min)", x, y, "minutes", 15)
     nodes.append(sj3_trigger)
     x += 220
-    sj3_search = _hs_search_node(
+    # BUG 10 / Phase 16.6: _hs_http_search_node for all 4 company searches below — the
+    # native node has no `operation: "search"` for resource:company (see that helper's
+    # docstring for the confirmed mechanism).
+    sj3_search = _hs_http_search_node(
         "SJ-3 Search (requested poller)", "company", x, y,
         filter_groups=[[
             {"propertyName": "lv_enrichment_requested", "operator": "EQ", "value": "true"},
@@ -4244,7 +4316,7 @@ def build_scheduled_maintenance_cloud():
     sj1_trigger = _schedule_trigger("SJ-1 Trigger (hourly)", x, y1, "hours", 1)
     nodes.append(sj1_trigger)
     x1 = x + 220
-    sj1_search = _hs_search_node(
+    sj1_search = _hs_http_search_node(
         "SJ-1 Search (input-gap scan)", "company", x1, y1,
         filter_groups=[
             [{"propertyName": "lv_org_type", "operator": "NOT_HAS_PROPERTY"}],
@@ -4275,7 +4347,7 @@ def build_scheduled_maintenance_cloud():
     x2 = x + 220
     nodes.append(code_node("SJ-2 Epoch Cutoff (180d)", ENRICH_SJ2_EPOCH_CUTOFF, x2, y2))
     x2 += 220
-    sj2_search = _hs_search_node(
+    sj2_search = _hs_http_search_node(
         "SJ-2 Search (stale refresh)", "company", x2, y2,
         filter_groups=[
             [{"propertyName": "lv_org_type_verified_at", "operator": "LT",
@@ -4347,7 +4419,7 @@ def build_scheduled_maintenance_cloud():
     review_trigger = _schedule_trigger("Review Trigger (15 min)", x, y4, "minutes", 15)
     nodes.append(review_trigger)
     x4 = x + 220
-    review_search = _hs_search_node(
+    review_search = _hs_http_search_node(
         "Review Search (approved=true)", "company", x4, y4,
         filter_groups=[[
             {"propertyName": "lv_enrichment_review_approved", "operator": "EQ", "value": "true"},

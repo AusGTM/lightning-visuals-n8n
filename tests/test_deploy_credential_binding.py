@@ -37,15 +37,21 @@ def _load_built_cloud_workflows() -> list:
 # --- 1. zero-unmapped sweep across every n8n/wf_*.json --------------------------------
 
 def test_zero_hubspot_nodes_unmapped_across_every_built_cloud_workflow():
-    """Generalizes 16.4-02's enrichment-only credential guard to all built workflows."""
+    """Generalizes 16.4-02's enrichment-only credential guard to all built workflows.
+
+    Uses deploy._node_requires_credential() itself rather than a hand-filtered
+    type=="n8n-nodes-base.hubspot" check, so this sweep automatically covers any
+    credential-bearing node regardless of transport — including the 6 BUG 10 / Phase 16.6
+    company-search nodes now on httpRequest+predefinedCredentialType, which a
+    type-filtered sweep would silently stop seeing the moment their transport changed."""
     unmapped = []
     for wf in _load_built_cloud_workflows():
         for node in wf.get("nodes", []):
-            if node.get("type") != "n8n-nodes-base.hubspot":
+            if not deploy._node_requires_credential(node):
                 continue
             if node.get("name") not in deploy.NODE_CREDENTIAL_MAP:
                 unmapped.append((wf.get("name"), node.get("name")))
-    assert unmapped == [], f"unmapped hubspot nodes (would deploy unbound): {unmapped}"
+    assert unmapped == [], f"unmapped credential-requiring nodes (would deploy unbound): {unmapped}"
 
 
 def test_bind_credentials_succeeds_on_every_built_cloud_workflow():

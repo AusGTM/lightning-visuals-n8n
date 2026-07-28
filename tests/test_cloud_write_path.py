@@ -94,17 +94,35 @@ def test_parse_hubspot_event_jscode_normalizes_object_type_per_claude_md_18_3():
 
 # --- (b) real HubSpot nodes + record-id preservation + fail-closed (review #8) -------
 
-@pytest.mark.parametrize("name", ["HubSpot Search", "HubSpot Company Search"])
-def test_hubspot_search_nodes_carry_nonempty_filtergroups_and_request_hs_object_id(name):
+def test_hubspot_search_node_carries_nonempty_filtergroups_and_requests_hs_object_id():
+    """Contacts only — "HubSpot Search" stays the native node (it has a real
+    resource:contact operation:search). "HubSpot Company Search" moved to a
+    credential-bound httpRequest node (BUG 10 / Phase 16.6: the native node has no
+    `operation: "search"` for resource:company); see
+    test_hubspot_company_search_node_carries_nonempty_filters_and_requests_hs_object_id
+    below for its equivalent."""
     doc = _load()
-    node = _node(doc, name)
+    node = _node(doc, "HubSpot Search")
     groups = node["parameters"]["filterGroupsUi"]["filterGroupsValues"]
-    assert groups, f"{name} has an empty filterGroupsUi — matches no record ever"
+    assert groups, "HubSpot Search has an empty filterGroupsUi — matches no record ever"
     filters = groups[0]["filtersUi"]["filterValues"]
-    assert filters, f"{name} filter group has no filters"
+    assert filters, "HubSpot Search filter group has no filters"
     assert "hs_object_id" in node["parameters"]["additionalFields"]["properties"], (
-        f"{name} does not request hs_object_id"
+        "HubSpot Search does not request hs_object_id"
     )
+
+
+def test_hubspot_company_search_node_carries_nonempty_filters_and_requests_hs_object_id():
+    """httpRequest-transport equivalent of the guard above, for "HubSpot Company Search"
+    (BUG 10 / Phase 16.6). Filters/properties live in the jsonBody expression, not
+    filterGroupsUi/additionalFields — parses the SAME facts out of that expression."""
+    doc = _load()
+    node = _node(doc, "HubSpot Company Search")
+    body = node["parameters"]["jsonBody"]
+    assert "filterGroups:" in body and "filters:" in body, (
+        "HubSpot Company Search jsonBody has no filterGroups/filters — matches no record ever"
+    )
+    assert '"hs_object_id"' in body, "HubSpot Company Search does not request hs_object_id"
 
 
 def test_hubspot_search_filters_use_the_correct_identity_property():
@@ -114,10 +132,9 @@ def test_hubspot_search_filters_use_the_correct_identity_property():
     assert contact_filter["propertyName"] == "email"
     assert contact_filter["operator"] == "EQ"
 
-    company_filter = _node(doc, "HubSpot Company Search")["parameters"]["filterGroupsUi"][
-        "filterGroupsValues"][0]["filtersUi"]["filterValues"][0]
-    assert company_filter["propertyName"] == "domain"
-    assert company_filter["operator"] == "EQ"
+    company_body = _node(doc, "HubSpot Company Search")["parameters"]["jsonBody"]
+    assert 'propertyName: "domain"' in company_body
+    assert 'operator: "EQ"' in company_body
 
 
 @pytest.mark.parametrize("adapt_js,label", [(ENRICH_ADAPT_SEARCH, "contacts"), (ENRICH_ADAPT_CO_SEARCH, "companies")])

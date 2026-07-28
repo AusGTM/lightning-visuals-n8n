@@ -131,10 +131,19 @@ def test_gate_sits_immediately_downstream_of_its_identity_builder(branch):
 
 
 # --- fetch node shape: type, typeVersion, resource, operation, onError, single filter --
+#
+# CONTACTS ONLY below (native n8n-nodes-base.hubspot — it has a real resource:contact
+# operation:search). COMPANIES moved to a credential-bound httpRequest node (BUG 10 /
+# Phase 16.6: n8n's HubSpot node has no `operation: "search"` for resource:company at all —
+# confirmed by reading CompanyDescription.ts's companyOperations option list, which has no
+# "search" entry, only create/delete/get/getAll/getRecentlyCreatedUpdated/searchByDomain/
+# update; the native node silently returned json:null live). See
+# test_company_fetch_node_is_credential_bound_httprequest_filtered_on_hs_object_id below
+# for the companies-shape equivalent, and tests/test_bug10_company_search_transport.py for
+# the full guard.
 
-@pytest.mark.parametrize("branch", ["contacts", "companies"])
-def test_fetch_node_is_a_native_hubspot_search_filtered_on_hs_object_id(branch):
-    cfg = BRANCHES[branch]
+def test_fetch_node_is_a_native_hubspot_search_filtered_on_hs_object_id():
+    cfg = BRANCHES["contacts"]
     doc = _load()
     node = _node(doc, cfg["fetch_node"])
     assert node["type"] == "n8n-nodes-base.hubspot"
@@ -160,6 +169,27 @@ def test_fetch_node_is_a_native_hubspot_search_filtered_on_hs_object_id(branch):
     )
 
 
+def test_company_fetch_node_is_credential_bound_httprequest_filtered_on_hs_object_id():
+    cfg = BRANCHES["companies"]
+    doc = _load()
+    node = _node(doc, cfg["fetch_node"])
+    assert node["type"] == "n8n-nodes-base.httpRequest"
+    assert node["typeVersion"] == 4.2
+    assert node["onError"] == "continueRegularOutput"
+    params = node["parameters"]
+    assert params["method"] == "POST"
+    assert params["url"] == "https://api.hubapi.com/crm/v3/objects/companies/search"
+    assert params["authentication"] == "predefinedCredentialType"
+    assert params["nodeCredentialType"] == "hubspotAppToken"
+    body = params["jsonBody"]
+    assert 'propertyName: "hs_object_id"' in body
+    assert 'operator: "EQ"' in body
+    assert cfg["identity_builder"] in body, (
+        f"{cfg['fetch_node']}'s jsonBody must name its own branch's identity builder "
+        f"({cfg['identity_builder']!r}) by node name"
+    )
+
+
 # --- property CSVs -----------------------------------------------------------------------
 
 def test_contact_fetch_by_id_properties_csv_adds_company_and_linkedin_to_the_search_csv():
@@ -181,19 +211,38 @@ def _csv_to_list(csv: str) -> list:
 # sites; the BUILT node now carries the split list, so these assertions compare against
 # `_csv_to_list(...)`. The constants themselves are unchanged.
 
+def _extract_json_body_properties(json_body: str) -> list:
+    """Companies (BUG 10 / Phase 16.6): properties live inside the single jsonBody
+    expression as a JS array literal, not a separate additionalFields.properties field.
+    Every entry is a plain double-quoted string (never a raw expression), so the
+    `properties: [...]` substring is always valid JSON on its own."""
+    m = re.search(r"properties:\s*(\[[^\]]*\])", json_body)
+    assert m, f"no `properties: [...]` array found in jsonBody: {json_body!r}"
+    return json.loads(m.group(1))
+
+
 def test_company_fetch_by_id_properties_are_identical_to_the_company_search_properties():
     doc = _load()
-    fetch_props = _node(doc, "HubSpot Company Fetch By Id")["parameters"]["additionalFields"]["properties"]
-    search_props = _node(doc, "HubSpot Company Search")["parameters"]["additionalFields"]["properties"]
+    fetch_props = _extract_json_body_properties(
+        _node(doc, "HubSpot Company Fetch By Id")["parameters"]["jsonBody"])
+    search_props = _extract_json_body_properties(
+        _node(doc, "HubSpot Company Search")["parameters"]["jsonBody"])
     assert fetch_props == search_props == _csv_to_list(ENRICH_COMPANY_SEARCH_PROPERTIES_CSV)
 
 
-@pytest.mark.parametrize("branch", ["contacts", "companies"])
-def test_fetch_node_properties_match_expected(branch):
-    cfg = BRANCHES[branch]
+def test_fetch_node_properties_match_expected():
+    cfg = BRANCHES["contacts"]
     doc = _load()
     node = _node(doc, cfg["fetch_node"])
     assert node["parameters"]["additionalFields"]["properties"] == _csv_to_list(cfg["properties_csv"])
+
+
+def test_company_fetch_node_properties_match_expected():
+    cfg = BRANCHES["companies"]
+    doc = _load()
+    node = _node(doc, cfg["fetch_node"])
+    body_props = _extract_json_body_properties(node["parameters"]["jsonBody"])
+    assert body_props == _csv_to_list(cfg["properties_csv"])
 
 
 # --- adapter convergence: both adapters' single outgoing edge targets the EXISTING gate --
@@ -271,14 +320,29 @@ def test_route_by_object_type_edges_are_unchanged_belt_and_braces():
 # carries 1 ("HubSpot Search by Email") — a PRE-EXISTING gap outside this phase's fence.
 # Widening this guard to those workflows now would go red on work this phase did not do;
 # they are recorded (not fixed) in 16.4-02-SUMMARY.md / STATE.md Blockers/Concerns instead.
+#
+# BUG 10 / Phase 16.6: also sweeps httpRequest nodes bound via predefinedCredentialType/
+# nodeCredentialType:hubspotAppToken (the 2 company-search nodes in this workflow) — a
+# type=="n8n-nodes-base.hubspot"-only filter would silently stop covering them the moment
+# their transport changed, exactly the "guard that silently stops applying" failure mode.
+
+def _hubspot_bound_node_names(doc: dict) -> set:
+    names = {n["name"] for n in doc["nodes"] if n["type"] == "n8n-nodes-base.hubspot"}
+    names |= {
+        n["name"] for n in doc["nodes"]
+        if n["type"] == "n8n-nodes-base.httpRequest"
+        and n.get("parameters", {}).get("nodeCredentialType") == "hubspotAppToken"
+    }
+    return names
+
 
 def test_every_hubspot_node_in_the_enrichment_workflow_is_registered_and_bound_to_lv_hubspot():
     doc = _load()
-    hubspot_node_names = {n["name"] for n in doc["nodes"] if n["type"] == "n8n-nodes-base.hubspot"}
-    assert hubspot_node_names, "no n8n-nodes-base.hubspot nodes found — guard would be vacuous"
+    hubspot_node_names = _hubspot_bound_node_names(doc)
+    assert hubspot_node_names, "no HubSpot-credentialed nodes found — guard would be vacuous"
     for name in hubspot_node_names:
         assert name in deploy.NODE_CREDENTIAL_MAP, (
-            f"{name!r} is a HubSpot node in wf_enrichment_cloud.json but has no "
+            f"{name!r} is a HubSpot-credentialed node in wf_enrichment_cloud.json but has no "
             "NODE_CREDENTIAL_MAP entry — it would deploy UNBOUND and 401 at runtime "
             "(T-16.4-10, the gpt #9 lesson repeated)"
         )
@@ -286,3 +350,11 @@ def test_every_hubspot_node_in_the_enrichment_workflow_is_registered_and_bound_t
         assert entry == {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"}, (
             f"{name!r} is mapped to an unexpected credential: {entry}"
         )
+
+
+def test_the_httprequest_hubspot_sweep_actually_finds_the_two_company_search_nodes():
+    """Vacuity guard for the widened sweep above: proves the httpRequest half of
+    _hubspot_bound_node_names actually fires, not just the (unchanged) native half."""
+    doc = _load()
+    names = _hubspot_bound_node_names(doc)
+    assert {"HubSpot Company Search", "HubSpot Company Fetch By Id"} <= names

@@ -15,6 +15,7 @@
 # has hit (after credential-map omissions and duplicate node names), so it gets the same
 # treatment: a generic sweep over every built workflow, not a hand-maintained node list.
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -139,3 +140,84 @@ def test_at_least_one_hubspot_node_exists_to_check():
     pass trivially."""
     total = sum(len(_hubspot_nodes(json.loads(p.read_text()))) for p in WORKFLOW_FILES)
     assert total, "no HubSpot nodes found in any built workflow — the sweep is vacuous"
+
+
+# --- BUG 10 / Phase 16.6: the httpRequest-transport equivalent of the two sweeps above ---
+#
+# 6 nodes (companies search/fetch-by-id across wf_enrichment_cloud.json and
+# wf_scheduled_maintenance_cloud.json) moved from n8n-nodes-base.hubspot to
+# n8n-nodes-base.httpRequest (n8n's HubSpot node has no `operation: "search"` for
+# resource:company — confirmed by reading CompanyDescription.ts's companyOperations
+# option list; the native node silently returned json:null live). This changes their TYPE,
+# so test_every_hubspot_node_declares_apptoken_auth /
+# test_hubspot_properties_are_a_list_not_a_csv_string above — both filtered to
+# HUBSPOT_NODE_TYPE — silently stop covering them. "A guard that silently stops applying is
+# worse than no guard" (16.6-CONTEXT.md): these two tests are that guard's httpRequest-
+# transport equivalent, over the SAME class of defect (a CSV string reaching HubSpot's
+# search API, which requires a real array).
+HTTP_NODE_TYPE = "n8n-nodes-base.httpRequest"
+
+
+def _hubspot_credentialed_http_nodes(doc: dict) -> list:
+    """httpRequest nodes authenticating AS the hubspotAppToken credential type
+    (predefinedCredentialType) — the BUG 10 replacement transport."""
+    return [
+        n for n in doc.get("nodes", [])
+        if n.get("type") == HTTP_NODE_TYPE
+        and n.get("parameters", {}).get("nodeCredentialType") == "hubspotAppToken"
+    ]
+
+
+@pytest.mark.parametrize("wf_path", WORKFLOW_FILES, ids=lambda p: p.name)
+def test_every_hubspot_credentialed_httprequest_node_uses_predefined_credential_type(wf_path: Path):
+    """Companion to test_every_hubspot_node_declares_apptoken_auth for the httpRequest
+    transport: every node claiming nodeCredentialType:hubspotAppToken must actually declare
+    authentication:predefinedCredentialType — the mode _node_requires_credential() and
+    deploy_n8n_workflows.py's _CREDENTIAL_BEARING_HTTP_AUTH_MODES require for the node to be
+    treated as credential-bearing and bound rather than deployed unbound."""
+    doc = json.loads(wf_path.read_text())
+    wrong = {
+        n["name"]: n.get("parameters", {}).get("authentication")
+        for n in _hubspot_credentialed_http_nodes(doc)
+        if n.get("parameters", {}).get("authentication") != "predefinedCredentialType"
+    }
+    assert not wrong, (
+        f"{wf_path.name}: hubspotAppToken httpRequest node(s) not set to "
+        f"authentication=predefinedCredentialType: {wrong} — would deploy unbound "
+        "(deploy_n8n_workflows.py's _node_requires_credential() would not recognize them)"
+    )
+
+
+@pytest.mark.parametrize("wf_path", WORKFLOW_FILES, ids=lambda p: p.name)
+def test_hubspot_httprequest_search_properties_are_a_real_json_array_never_a_csv_string(wf_path: Path):
+    """Companion to test_hubspot_properties_are_a_list_not_a_csv_string for the httpRequest
+    transport: the SAME defect class (HubSpot's search API rejects a CSV string with a 400
+    VALIDATION_ERROR) applies to the `properties: [...]` array embedded in this transport's
+    jsonBody expression — it must be built from genuine JSON-array-of-strings syntax
+    (`["a", "b"]`), never a single CSV-joined string literal (`"a,b"`)."""
+    doc = json.loads(wf_path.read_text())
+    bad = {}
+    for n in _hubspot_credentialed_http_nodes(doc):
+        body = n.get("parameters", {}).get("jsonBody", "")
+        m = re.search(r"properties:\s*(\[[^\]]*\]|\"[^\"]*\")", body)
+        if not m:
+            continue
+        if not m.group(1).startswith("["):
+            bad[n["name"]] = m.group(1)
+    assert not bad, (
+        f"{wf_path.name}: hubspotAppToken httpRequest node(s) pass `properties` as a "
+        f"non-array in jsonBody: {bad}. HubSpot's search API rejects a CSV string with a "
+        "400 VALIDATION_ERROR."
+    )
+
+
+def test_at_least_one_hubspot_credentialed_httprequest_node_exists_to_check():
+    """Vacuity guard: if no workflow contained a hubspotAppToken httpRequest node, the two
+    sweeps above would pass trivially."""
+    total = sum(
+        len(_hubspot_credentialed_http_nodes(json.loads(p.read_text()))) for p in WORKFLOW_FILES
+    )
+    assert total, (
+        "no hubspotAppToken-credentialed httpRequest nodes found in any built workflow — "
+        "the httpRequest-transport sweep is vacuous"
+    )

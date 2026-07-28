@@ -996,47 +996,21 @@
     },
     {
       "parameters": {
-        "resource": "company",
-        "operation": "search",
-        "filterGroupsUi": {
-          "filterGroupsValues": [
-            {
-              "filtersUi": {
-                "filterValues": [
-                  {
-                    "propertyName": "domain",
-                    "operator": "EQ",
-                    "value": "={{ $json.identity_keys.domain }}"
-                  }
-                ]
-              }
-            }
-          ]
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/companies/search",
+        "options": {
+          "timeout": 20000
         },
-        "additionalFields": {
-          "properties": [
-            "name",
-            "domain",
-            "industry",
-            "annualrevenue",
-            "numberofemployees",
-            "hs_object_id",
-            "lv_org_type",
-            "lv_produces_content",
-            "lv_content_type",
-            "lv_is_hardware_vendor",
-            "lv_is_gambling_operator",
-            "lv_enrichment_provenance",
-            "lv_org_type_verified_at",
-            "lv_produces_content_verified_at"
-          ]
-        },
-        "authentication": "appToken"
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"domain\", operator: \"EQ\", value: $json.identity_keys.domain } ] } ], properties: [\"name\", \"domain\", \"industry\", \"annualrevenue\", \"numberofemployees\", \"hs_object_id\", \"lv_org_type\", \"lv_produces_content\", \"lv_content_type\", \"lv_is_hardware_vendor\", \"lv_is_gambling_operator\", \"lv_enrichment_provenance\", \"lv_org_type_verified_at\", \"lv_produces_content_verified_at\"], limit: 100 }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "hs00600000-0000-4000-8000-000000000000",
+      "id": "h00600000-0000-4000-8000-000000000000",
       "name": "HubSpot Company Search",
-      "type": "n8n-nodes-base.hubspot",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         2200,
         720
@@ -1118,47 +1092,21 @@
     },
     {
       "parameters": {
-        "resource": "company",
-        "operation": "search",
-        "filterGroupsUi": {
-          "filterGroupsValues": [
-            {
-              "filtersUi": {
-                "filterValues": [
-                  {
-                    "propertyName": "hs_object_id",
-                    "operator": "EQ",
-                    "value": "={{ $('Build Company Identity').item.json.object_id }}"
-                  }
-                ]
-              }
-            }
-          ]
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/companies/search",
+        "options": {
+          "timeout": 20000
         },
-        "additionalFields": {
-          "properties": [
-            "name",
-            "domain",
-            "industry",
-            "annualrevenue",
-            "numberofemployees",
-            "hs_object_id",
-            "lv_org_type",
-            "lv_produces_content",
-            "lv_content_type",
-            "lv_is_hardware_vendor",
-            "lv_is_gambling_operator",
-            "lv_enrichment_provenance",
-            "lv_org_type_verified_at",
-            "lv_produces_content_verified_at"
-          ]
-        },
-        "authentication": "appToken"
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"hs_object_id\", operator: \"EQ\", value: $('Build Company Identity').item.json.object_id } ] } ], properties: [\"name\", \"domain\", \"industry\", \"annualrevenue\", \"numberofemployees\", \"hs_object_id\", \"lv_org_type\", \"lv_produces_content\", \"lv_content_type\", \"lv_is_hardware_vendor\", \"lv_is_gambling_operator\", \"lv_enrichment_provenance\", \"lv_org_type_verified_at\", \"lv_produces_content_verified_at\"], limit: 100 }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "hs00660000-0000-4000-8000-000000000000",
+      "id": "h00660000-0000-4000-8000-000000000000",
       "name": "HubSpot Company Fetch By Id",
-      "type": "n8n-nodes-base.hubspot",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         2200,
         920
