@@ -3369,9 +3369,27 @@ def build_enrichment_cloud():
     # Phase 16.1: identity is read BY NODE NAME from "Enrichment Gate" (never bare $json),
     # because a provider gate positioned after another provider's HTTP node sees THAT
     # provider's response as $json, not the row — closing the latent identity-loss bug.
+    #
+    # Live v2/person contract (confirmed 2026-07-28 against portal 22617666): the body
+    # must be {"contacts":[{...}]} — a contacts ARRAY, each element requiring a
+    # caller-chosen `contactId`. Only `email` and `linkedinUrl` are accepted identity
+    # properties inside an element; firstName/lastName/companyName/companyDomain/domain/
+    # phoneNumber/jobTitle are all REJECTED. Posting the bare identity_keys object (the
+    # old shape) 400'd live with "property email should not exist". When neither
+    # email nor linkedin_url is present the element would only ever 400, so the
+    # contacts array is left empty instead (skip-not-retry, CLAUDE.md Sec 26.1) — the
+    # row still keeps flowing to Apollo/ZoomInfo either way via the existing gate chain.
     lusha = _http_node("Lusha Enrich", "https://api.lusha.com/v2/person", px, y - 80,
                        auth="header",  # credential header, e.g. api_key: <LUSHA_API_KEY>
-                       json_body="={{ JSON.stringify($('Enrichment Gate').item.json.identity_keys) }}")
+                       json_body=(
+                           "={{ (() => { "
+                           "const id = $('Enrichment Gate').item.json.identity_keys || {}; "
+                           "const c = { contactId: \"1\" }; "
+                           "if (id.email) c.email = id.email; "
+                           "if (id.linkedin_url) c.linkedinUrl = id.linkedin_url; "
+                           "return JSON.stringify({ contacts: (c.email || c.linkedinUrl) ? [c] : [] }); "
+                           "})() }}"
+                       ))
     nodes.append(lusha)
     # reveal_personal_emails=true forces Apollo to return the contactable email (a bare
     # people/match returns identity only). Phone is async: reveal_phone_number needs a

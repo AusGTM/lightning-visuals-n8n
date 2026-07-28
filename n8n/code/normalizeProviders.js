@@ -134,8 +134,19 @@ function _push(out, field, source, value, normalizedValue, accuracy, recencyDate
 function lushaCandidates(rawResponse, objectType) {
   const out = [];
   const src = "lusha";
-  // Live v2 person nests the record under contact.data; flat fixtures pass through.
-  const raw = (rawResponse && rawResponse.contact && rawResponse.contact.data) || rawResponse || {};
+  // Live v2/person response (confirmed 2026-07-28 against portal 22617666) is a
+  // PLURAL, contactId-keyed map: {"contacts": {"<contactId>": {error, isCreditCharged,
+  // data: {...}}}}. A per-contact `error` or a missing `data` key must never throw
+  // (skip-not-retry, CLAUDE.md Sec 26.1) -- both fall through to {} (zero candidates
+  // for this row). The singular `contact.data` form below was never actually observed
+  // live -- it is kept only for the pre-existing offline fixture/back-compat shape.
+  let raw = rawResponse || {};
+  if (raw.contacts && typeof raw.contacts === "object") {
+    const entry = Object.values(raw.contacts)[0];
+    raw = (entry && !entry.error && entry.data) || {};
+  } else if (raw.contact && raw.contact.data) {
+    raw = raw.contact.data;
+  }
   const updated = raw.updateDate;
   const region = raw.location && (raw.location.country_iso2 || raw.location.country); // ISO2 or name
   if (objectType === "contacts") {
