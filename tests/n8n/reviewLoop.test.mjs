@@ -124,11 +124,15 @@ test("the built workflow contains an Apply Review node reachable from a review-a
   const filters = search.parameters.filterGroupsUi.filterGroupsValues[0].filtersUi.filterValues;
   const approved = filters.find((f) => f.propertyName === "lv_enrichment_review_approved");
   assert.ok(approved && approved.operator === "EQ" && approved.value === "true");
+  // `properties` is a LIST, not a CSV string (2026-07-28): n8n forwards it verbatim into
+  // the CRM v3 search body, where HubSpot requires an array and 400s on a string. This
+  // assertion previously used assert.match against the CSV, pinning the buggy shape.
   const props = search.parameters.additionalFields.properties;
-  assert.match(props, /hs_object_id/);
-  assert.match(props, /lv_org_type/);
-  assert.match(props, /lv_produces_content/);
-  assert.match(props, /lv_enrichment_review_candidate_json/);
+  assert.ok(Array.isArray(props), "properties must be an array — HubSpot rejects a CSV string");
+  assert.ok(props.includes("hs_object_id"));
+  assert.ok(props.includes("lv_org_type"));
+  assert.ok(props.includes("lv_produces_content"));
+  assert.ok(props.includes("lv_enrichment_review_candidate_json"));
 
   // Reachability: trigger -> search -> extract -> apply review.
   assert.ok(wf.connections["Review Trigger (15 min)"]);

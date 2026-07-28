@@ -169,19 +169,31 @@ def test_contact_fetch_by_id_properties_csv_adds_company_and_linkedin_to_the_sea
     assert "lv_linkedin_url" in added.split(",")
 
 
-def test_company_fetch_by_id_properties_csv_is_identical_to_the_company_search_csv():
+def _csv_to_list(csv: str) -> list:
+    return [p.strip() for p in csv.split(",") if p.strip()]
+
+
+# NOTE (2026-07-28): the two tests below previously asserted that the built node's
+# `properties` equalled the CSV STRING constant. That pinned a real bug: n8n forwards this
+# value verbatim into the CRM v3 search body, where HubSpot requires an ARRAY and rejects a
+# string with a 400 VALIDATION_ERROR. Confirmed live from an actual execution of
+# HubSpot Fetch By Id. The CSV constants remain the readable source of truth at the call
+# sites; the BUILT node now carries the split list, so these assertions compare against
+# `_csv_to_list(...)`. The constants themselves are unchanged.
+
+def test_company_fetch_by_id_properties_are_identical_to_the_company_search_properties():
     doc = _load()
-    fetch_csv = _node(doc, "HubSpot Company Fetch By Id")["parameters"]["additionalFields"]["properties"]
-    search_csv = _node(doc, "HubSpot Company Search")["parameters"]["additionalFields"]["properties"]
-    assert fetch_csv == search_csv == ENRICH_COMPANY_SEARCH_PROPERTIES_CSV
+    fetch_props = _node(doc, "HubSpot Company Fetch By Id")["parameters"]["additionalFields"]["properties"]
+    search_props = _node(doc, "HubSpot Company Search")["parameters"]["additionalFields"]["properties"]
+    assert fetch_props == search_props == _csv_to_list(ENRICH_COMPANY_SEARCH_PROPERTIES_CSV)
 
 
 @pytest.mark.parametrize("branch", ["contacts", "companies"])
-def test_fetch_node_properties_csv_matches_expected(branch):
+def test_fetch_node_properties_match_expected(branch):
     cfg = BRANCHES[branch]
     doc = _load()
     node = _node(doc, cfg["fetch_node"])
-    assert node["parameters"]["additionalFields"]["properties"] == cfg["properties_csv"]
+    assert node["parameters"]["additionalFields"]["properties"] == _csv_to_list(cfg["properties_csv"])
 
 
 # --- adapter convergence: both adapters' single outgoing edge targets the EXISTING gate --

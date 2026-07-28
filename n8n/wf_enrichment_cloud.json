@@ -152,7 +152,19 @@
           ]
         },
         "additionalFields": {
-          "properties": "email,firstname,lastname,jobtitle,phone,mobilephone,hs_object_id,lv_jobtitle_verified_at,lv_mobilephone_verified_at,seniority,lv_contact_enrichment_provenance"
+          "properties": [
+            "email",
+            "firstname",
+            "lastname",
+            "jobtitle",
+            "phone",
+            "mobilephone",
+            "hs_object_id",
+            "lv_jobtitle_verified_at",
+            "lv_mobilephone_verified_at",
+            "seniority",
+            "lv_contact_enrichment_provenance"
+          ]
         },
         "authentication": "appToken"
       },
@@ -245,7 +257,21 @@
           ]
         },
         "additionalFields": {
-          "properties": "email,firstname,lastname,jobtitle,phone,mobilephone,hs_object_id,lv_jobtitle_verified_at,lv_mobilephone_verified_at,seniority,lv_contact_enrichment_provenance,company,lv_linkedin_url"
+          "properties": [
+            "email",
+            "firstname",
+            "lastname",
+            "jobtitle",
+            "phone",
+            "mobilephone",
+            "hs_object_id",
+            "lv_jobtitle_verified_at",
+            "lv_mobilephone_verified_at",
+            "seniority",
+            "lv_contact_enrichment_provenance",
+            "company",
+            "lv_linkedin_url"
+          ]
         },
         "authentication": "appToken"
       },
@@ -988,7 +1014,22 @@
           ]
         },
         "additionalFields": {
-          "properties": "name,domain,industry,annualrevenue,numberofemployees,hs_object_id,lv_org_type,lv_produces_content,lv_content_type,lv_is_hardware_vendor,lv_is_gambling_operator,lv_enrichment_provenance,lv_org_type_verified_at,lv_produces_content_verified_at"
+          "properties": [
+            "name",
+            "domain",
+            "industry",
+            "annualrevenue",
+            "numberofemployees",
+            "hs_object_id",
+            "lv_org_type",
+            "lv_produces_content",
+            "lv_content_type",
+            "lv_is_hardware_vendor",
+            "lv_is_gambling_operator",
+            "lv_enrichment_provenance",
+            "lv_org_type_verified_at",
+            "lv_produces_content_verified_at"
+          ]
         },
         "authentication": "appToken"
       },
@@ -1095,7 +1136,22 @@
           ]
         },
         "additionalFields": {
-          "properties": "name,domain,industry,annualrevenue,numberofemployees,hs_object_id,lv_org_type,lv_produces_content,lv_content_type,lv_is_hardware_vendor,lv_is_gambling_operator,lv_enrichment_provenance,lv_org_type_verified_at,lv_produces_content_verified_at"
+          "properties": [
+            "name",
+            "domain",
+            "industry",
+            "annualrevenue",
+            "numberofemployees",
+            "hs_object_id",
+            "lv_org_type",
+            "lv_produces_content",
+            "lv_content_type",
+            "lv_is_hardware_vendor",
+            "lv_is_gambling_operator",
+            "lv_enrichment_provenance",
+            "lv_org_type_verified_at",
+            "lv_produces_content_verified_at"
+          ]
         },
         "authentication": "appToken"
       },

@@ -47,7 +47,11 @@
           ]
         },
         "additionalFields": {
-          "properties": "hs_object_id,lv_enrichment_requested,lv_enrichment_status"
+          "properties": [
+            "hs_object_id",
+            "lv_enrichment_requested",
+            "lv_enrichment_status"
+          ]
         },
         "authentication": "appToken"
       },
@@ -156,7 +160,11 @@
           ]
         },
         "additionalFields": {
-          "properties": "hs_object_id,lv_org_type,lv_produces_content"
+          "properties": [
+            "hs_object_id",
+            "lv_org_type",
+            "lv_produces_content"
+          ]
         },
         "authentication": "appToken"
       },
@@ -275,7 +283,13 @@
           ]
         },
         "additionalFields": {
-          "properties": "hs_object_id,lv_org_type,lv_produces_content,lv_org_type_verified_at,lv_produces_content_verified_at"
+          "properties": [
+            "hs_object_id",
+            "lv_org_type",
+            "lv_produces_content",
+            "lv_org_type_verified_at",
+            "lv_produces_content_verified_at"
+          ]
         },
         "authentication": "appToken"
       },
@@ -436,7 +450,12 @@
           ]
         },
         "additionalFields": {
-          "properties": "hs_object_id,email,phone,lv_linkedin_url"
+          "properties": [
+            "hs_object_id",
+            "email",
+            "phone",
+            "lv_linkedin_url"
+          ]
         },
         "authentication": "appToken"
       },
@@ -544,7 +563,21 @@
           ]
         },
         "additionalFields": {
-          "properties": "hs_object_id,lv_org_type,lv_produces_content,lv_revenue_band,lv_employee_band,lv_content_type,lv_sponsorship_reliant,lv_is_hardware_vendor,lv_is_gambling_operator,lv_enrichment_review_candidate_json,lv_enrichment_needs_review,lv_enrichment_review_approved,lv_enrichment_review_reason"
+          "properties": [
+            "hs_object_id",
+            "lv_org_type",
+            "lv_produces_content",
+            "lv_revenue_band",
+            "lv_employee_band",
+            "lv_content_type",
+            "lv_sponsorship_reliant",
+            "lv_is_hardware_vendor",
+            "lv_is_gambling_operator",
+            "lv_enrichment_review_candidate_json",
+            "lv_enrichment_needs_review",
+            "lv_enrichment_review_approved",
+            "lv_enrichment_review_reason"
+          ]
         },
         "authentication": "appToken"
       },

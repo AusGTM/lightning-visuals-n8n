@@ -4408,10 +4408,34 @@ HUBSPOT_AUTH_MODE = "appToken"
 
 
 def _normalize_hubspot_auth(wf: dict) -> dict:
-    """Stamp `authentication: appToken` on every HubSpot node in a built workflow."""
+    """Normalize every HubSpot node in a built workflow.
+
+    Two corrections, both of which only ever fail against the LIVE API:
+
+    1. `authentication: appToken` (see the note above).
+
+    2. `additionalFields.properties` must be a LIST, not a comma-separated string. n8n
+       forwards this value verbatim into the CRM v3 search body, where HubSpot requires
+       an array and rejects a string outright:
+
+           Invalid input JSON ... Cannot construct instance of (although at least one
+           Creator exists): no String-argument constructor/factory method to deserialize
+           from String value ('email,firstname,...')
+
+       Every `_hs_search_node()` call site passed a CSV string, so EVERY search node in
+       every workflow was broken — none had ever run live. Confirmed 2026-07-28 by
+       capturing HubSpot's own error from a live execution of `HubSpot Fetch By Id`.
+       The CSV form is kept at the call sites (it is far more readable there) and split
+       here, so a future call site cannot reintroduce the bug.
+    """
     for node in wf.get("nodes", []):
-        if node.get("type") == HUBSPOT_NODE_TYPE:
-            node.setdefault("parameters", {})["authentication"] = HUBSPOT_AUTH_MODE
+        if node.get("type") != HUBSPOT_NODE_TYPE:
+            continue
+        params = node.setdefault("parameters", {})
+        params["authentication"] = HUBSPOT_AUTH_MODE
+        add = params.get("additionalFields")
+        if isinstance(add, dict) and isinstance(add.get("properties"), str):
+            add["properties"] = [p.strip() for p in add["properties"].split(",") if p.strip()]
     return wf
 
 

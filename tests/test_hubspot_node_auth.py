@@ -94,6 +94,40 @@ def test_company_create_supplies_its_required_name_parameter():
     assert checked, "no company:create node found — this guard is vacuous"
 
 
+@pytest.mark.parametrize("wf_path", WORKFLOW_FILES, ids=lambda p: p.name)
+def test_hubspot_properties_are_a_list_not_a_csv_string(wf_path: Path):
+    """n8n forwards `additionalFields.properties` verbatim into the CRM v3 search body,
+    where HubSpot requires an ARRAY. A CSV string is rejected with a VALIDATION_ERROR
+    ("no String-argument constructor ... from String value ('email,firstname,...')") —
+    confirmed live 2026-07-28 from a real execution of HubSpot Fetch By Id. Every search
+    node in every workflow had this defect; none had ever run live."""
+    doc = json.loads(wf_path.read_text())
+    bad = {}
+    for node in _hubspot_nodes(doc):
+        add = node.get("parameters", {}).get("additionalFields")
+        if isinstance(add, dict) and "properties" in add:
+            props = add["properties"]
+            if not isinstance(props, list):
+                bad[node["name"]] = type(props).__name__
+    assert not bad, (
+        f"{wf_path.name}: HubSpot node(s) pass `properties` as a non-list: {bad}. "
+        f"HubSpot's search API rejects a CSV string with a 400 VALIDATION_ERROR."
+    )
+
+
+def test_at_least_one_node_actually_requests_properties():
+    """Vacuity guard for the check above: if no node carried a `properties` field, that
+    sweep would pass without asserting anything."""
+    total = 0
+    for wf_path in WORKFLOW_FILES:
+        doc = json.loads(wf_path.read_text())
+        for node in _hubspot_nodes(doc):
+            add = node.get("parameters", {}).get("additionalFields")
+            if isinstance(add, dict) and "properties" in add:
+                total += 1
+    assert total, "no HubSpot node requests `properties` — the list-shape sweep is vacuous"
+
+
 def test_workflow_files_were_actually_discovered():
     """Vacuity guard: an empty glob would make every parametrized test above pass by
     collecting zero cases."""
