@@ -1068,6 +1068,22 @@ return $input.all().map((it) => {
 });
 """
 
+# Stamps the two data-quality fields WITHOUT discarding the row. Replaces the
+# n8n-nodes-base.set node that caused BUG 12 — see the build site for why the platform
+# option was abandoned. Pure spread: everything Decide Action needs (merge,
+# existingRecord, object_id, scored) survives.
+ENRICH_SET_DQ_JS = r"""// Set Data Quality + Gap Flag — row-carrying passthrough.
+// BUG 12: this was a Set node, which emits only its assigned fields and therefore
+// deleted merge/existingRecord/object_id/scored for Decide Action downstream.
+return $input.all().map((it) => ({
+  json: {
+    ...it.json,
+    data_quality: "scored_waterfall",
+    gap_flag: it.json.gap_flag === true,
+  },
+}));
+"""
+
 # CLOUD: compute action + property patch; IF nodes route to real HubSpot write.
 ENRICH_DECIDE_CLOUD = r"""// Decide Action — CLOUD variant.
 // Computes action + the HubSpot property patch from the scored+merged winners.
@@ -3547,21 +3563,20 @@ def build_enrichment_cloud():
     sx += 220
     nodes.append(code_node("Merge Winners", ENRICH_MERGE, sx, y - 80))
     sx += 220
-    set_dq = {
-        "parameters": {"assignments": {"assignments": [
-            {"id": nid("a"), "name": "data_quality", "value": "scored_waterfall", "type": "string"},
-            {"id": nid("a"), "name": "gap_flag", "value": "={{ $json.gap_flag }}", "type": "boolean"},
-        # BUG 12 (found live 2026-07-29, execution 13): Set typeVersion 3.x emits ONLY its
-        # assigned fields unless includeOtherFields is true. Without it this node deleted
-        # merge/existingRecord/object_id/scored on the way to Decide Action, which then
-        # resolved hs_object_id to null and the patch to {} — so the contacts write path
-        # could not write to ANY record under ANY flag combination. Guarded by
-        # tests/test_row_carry.py.
-        ]}, "options": {"includeOtherFields": True}},
-        "id": nid("g"), "name": "Set Data Quality + Gap Flag",
-        "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [sx, y - 80],
-    }
-    nodes.append(set_dq)
+    # BUG 12 (found live 2026-07-29, executions 13 AND 14). This was an
+    # `n8n-nodes-base.set` typeVersion 3.4, which emits ONLY its assigned fields — so it
+    # deleted merge/existingRecord/object_id/scored on the way to `Decide Action`, which
+    # then resolved hs_object_id to null and the patch to {}. The contacts write path
+    # could not write to ANY record under ANY flag combination.
+    #
+    # Adding `options.includeOtherFields: true` did NOT fix it: execution 14 read that
+    # option back as deployed and the node still emitted only the two fields, so that is
+    # not where/what this typeVersion reads. Rather than guess n8n's Set schema a second
+    # time against production, this is now a Code node that spreads the row explicitly —
+    # deterministic, offline-testable, and the same shape as every other row-carrying node
+    # in this workflow. The node NAME is unchanged so connections and name-keyed maps hold.
+    # Guarded by tests/test_row_carry.py.
+    nodes.append(code_node("Set Data Quality + Gap Flag", ENRICH_SET_DQ_JS, sx, y - 80))
     sx += 220
     nodes.append(code_node("Decide Action", ENRICH_DECIDE_CLOUD, sx, y - 80))
 

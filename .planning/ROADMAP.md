@@ -608,7 +608,7 @@ Plans:
   4. Offline suite green with zero regressions; builder rebuild deterministic.
   5. **Live**: the 16.7 armed window re-run unchanged reaches `HubSpot Update` with a real `hs_object_id` and a non-empty properties patch — closing 16.7's SC-1, SC-3 (at write time), SC-4 and SC-7.
 
-**Plans**: TBD
+**Plans**: 16.8-01 (COMPLETE 2026-07-29, commits `fb87cb5` + the Code-node follow-up). Criterion 2 deviated deliberately: n8n's `options.includeOtherFields` was tried and deployed and did NOT work (execution 14 read it back live while the node still dropped the row), so the node became a Code node that spreads explicitly — recorded rather than silently substituted.
 
 ## Milestone 3 Progress
 
@@ -627,5 +627,5 @@ Plans:
 | 16.4. Fetch-By-ObjectId (INSERTED) | 2/2 | Complete | 2026-07-28 |
 | 16.5. Deliberate Research/Escalation Enablement (INSERTED) | 2/3 | Partial — contacts research VERIFIED live; companies blocked by BUG 10 | 2026-07-28 |
 | 16.6. Companies Search Transport Fix (INSERTED) | 1/1 | **Complete** — criteria 1 & 7 VERIFIED LIVE (execution 12, non-null Merge Company) | 2026-07-29 |
-| 16.7. Write-Path Canary (INSERTED) | 2/2 | Partial — armed window ran; BUG 10 closed live, but BUG 12 (row-dropping Set node) makes the contacts write path structurally incapable of writing. Zero records modified. | — |
-| 16.8. Row-Carry Fix (BUG 12) (INSERTED) | 0/? | Planned — `Set Data Quality + Gap Flag` discards merge/existingRecord/object_id | — |
+| 16.7. Write-Path Canary (INSERTED) | 2/2 | **Complete** — first HubSpot write in project history; protected fields provably survived it; rolled back | 2026-07-29 |
+| 16.8. Row-Carry Fix (BUG 12) (INSERTED) | 1/1 | **Complete** — Set node replaced with a row-spreading Code node; verified live (execution 15) | 2026-07-29 |

@@ -78,14 +78,21 @@ def test_mid_chain_set_nodes_carry_the_row_through(path):
 
 
 def test_the_specific_bug_12_node_carries_the_row():
-    """Pinned by name, because this is the node whose silence cost a live armed window."""
+    """Pinned by name, because this is the node whose silence cost two live armed windows.
+
+    It must NOT be an `n8n-nodes-base.set`. Adding `options.includeOtherFields: true` was
+    tried and deployed; execution 14 read the option back as live and the node still
+    emitted only its two assigned fields. The node is a Code node that spreads the row
+    explicitly, so the row-carry property is a property of code we control rather than of
+    an n8n parameter schema this repo cannot test offline.
+    """
     wf = _load(ROOT / "n8n" / "wf_enrichment_cloud.json")
     node = next(n for n in wf["nodes"] if n["name"] == "Set Data Quality + Gap Flag")
-    assert node["type"] == "n8n-nodes-base.set"
-    assert node["parameters"]["options"].get("includeOtherFields") is True
-    # Its own two assignments must survive the fix.
-    assigned = {a["name"] for a in node["parameters"]["assignments"]["assignments"]}
-    assert assigned == {"data_quality", "gap_flag"}
+    assert node["type"] == "n8n-nodes-base.code", "must not regress to a Set node"
+    js = node["parameters"]["jsCode"]
+    assert "...it.json" in js, "must spread the inbound row"
+    assert 'data_quality: "scored_waterfall"' in js
+    assert "gap_flag:" in js
     # And it must still sit exactly where the row-loss happened.
     assert _downstream(wf, "Set Data Quality + Gap Flag") == ["Decide Action"]
     feeders = [src for src in wf["connections"]
