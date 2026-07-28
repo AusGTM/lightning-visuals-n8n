@@ -99,7 +99,8 @@ NODE_CREDENTIAL_MAP = {
 }
 
 
-# Phase 16.5 Task 1 / Phase 16.7 — the deploy-time overlay's closed target set.
+# Phase 16.5 Task 1, widened as prep for the Phase 16.7 write-path canary — the
+# deploy-time overlay's closed target set.
 # `MAX_WEB_RESEARCH_PER_RUN` / `MAX_SONNET_VALIDATIONS_PER_RUN` / `ANTHROPIC_SONNET_MODEL`
 # are also CONFIG_FLAG_DEFAULTS entries but would let an open-ended mechanism widen cost
 # caps or swap models — "enabling one thing must not widen anything else" has to be

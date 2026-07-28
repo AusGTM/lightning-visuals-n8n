@@ -558,6 +558,29 @@ Plans:
   6. Full offline suite green, zero regressions vs the 459 pytest / 275 node baseline; builder deterministic; the 7 frozen companies node bodies unmoved.
   7. **Live**: a companies bare-event run reaches `Merge Company` with a NON-NULL merge — the literal `bd682a2`, still unverified — with zero HubSpot writes.
 
+**Plans**: 16.6-01 (transport migration, code-complete 2026-07-28 — commits `8a30cc2`, `9e60181`, `c704865`). Criteria 2-6 met offline; criteria 1 and 7 are LIVE-UNVERIFIED and remain open — the deployed build is still the pre-fix one.
+
+### Phase 16.7: Write-Path Canary
+
+**Goal**: The first HubSpot write in the project's history, bounded to one allowlisted test record, proving live that the non-clobber merge writes what policy permits and protects what it does not — the core value claim (`never clobbers HubSpot data`) has zero live evidence today because nothing has ever been written.
+
+**Depends on**: Phase 16.6 (its live verification runs in the same armed window)
+**INSERTED 2026-07-29.**
+
+Current live posture: `ALLOW_HUBSPOT_RECORD_WRITES="false"`, `ALLOW_HUBSPOT_CREATE="false"`, `TEST_RECORD_IDS=""` — an empty allowlist that denies everything (`_writeSafetyAllows()` returns false with no allowlist entries). Nothing has ever been written to HubSpot. Zero-write oracles: contact **201** `lastmodifieddate` `2026-07-18T01:14:03.751Z`, company **9604614548** `hs_lastmodifieddate` `2026-07-28T03:42:15.843Z`.
+
+Enablement mechanism is in place as of `7f0dce4`: `ENABLE_BAKED_FLAGS` now carries the write-safety constants and value-bearing allowlist flags, refusing to arm writes without a non-empty allowlist in the same request. No rebuild is needed to run the canary.
+
+**Success Criteria (draft — refine at plan time):**
+
+  1. Exactly one HubSpot record is modified — contact `201` — proven by a before/after read of BOTH oracles: 201's `lastmodifieddate` advances, company `9604614548`'s `hs_lastmodifieddate` is byte-identical.
+  2. `ALLOW_HUBSPOT_CREATE` stays `"false"` throughout; no create node executes; no new record appears in the portal.
+  3. A field the policy protects (a `manual_protected` / `fill_blank_only` property with an existing value) is provably NOT overwritten — quoted before and after. This, not the write itself, is the core-value proof.
+  4. A field the policy permits is written with its full source-metadata set (`_source`, `_confidence`, `_verified_at`, `_verified_by_model`, `_validation_status`), quoted from the record after the run.
+  5. The run is judged node-by-node from the execution API's `runData`, never from the webhook's HTTP status or body.
+  6. The deployment is restored to the disabled build afterwards, verified by API read-back: both write-safety constants back to `"false"` and the allowlist back to empty.
+  7. Every change to record `201` is reversible, and the rollback is exercised rather than assumed (`scripts/rollback_canary_proof.py` exists for this).
+
 **Plans**: TBD
 
 ## Milestone 3 Progress
@@ -576,4 +599,5 @@ Plans:
 | 16.3. Companies Stale-Timestamp Fix (INSERTED) | 1/1 | Complete | 2026-07-28 |
 | 16.4. Fetch-By-ObjectId (INSERTED) | 2/2 | Complete | 2026-07-28 |
 | 16.5. Deliberate Research/Escalation Enablement (INSERTED) | 2/3 | Partial — contacts research VERIFIED live; companies blocked by BUG 10 | 2026-07-28 |
-| 16.6. Companies Search Transport Fix (INSERTED) | 0/? | Planning | — |
+| 16.6. Companies Search Transport Fix (INSERTED) | 1/1 | Code-complete — criteria 1 & 7 LIVE-UNVERIFIED (pre-fix build still deployed) | — |
+| 16.7. Write-Path Canary (INSERTED) | 0/? | Planning — enablement mechanism landed `7f0dce4` | — |
