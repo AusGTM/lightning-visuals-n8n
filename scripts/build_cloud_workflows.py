@@ -3551,7 +3551,13 @@ def build_enrichment_cloud():
         "parameters": {"assignments": {"assignments": [
             {"id": nid("a"), "name": "data_quality", "value": "scored_waterfall", "type": "string"},
             {"id": nid("a"), "name": "gap_flag", "value": "={{ $json.gap_flag }}", "type": "boolean"},
-        ]}, "options": {}},
+        # BUG 12 (found live 2026-07-29, execution 13): Set typeVersion 3.x emits ONLY its
+        # assigned fields unless includeOtherFields is true. Without it this node deleted
+        # merge/existingRecord/object_id/scored on the way to Decide Action, which then
+        # resolved hs_object_id to null and the patch to {} — so the contacts write path
+        # could not write to ANY record under ANY flag combination. Guarded by
+        # tests/test_row_carry.py.
+        ]}, "options": {"includeOtherFields": True}},
         "id": nid("g"), "name": "Set Data Quality + Gap Flag",
         "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [sx, y - 80],
     }

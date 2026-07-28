@@ -859,7 +859,9 @@
             }
           ]
         },
-        "options": {}
+        "options": {
+          "includeOtherFields": true
+        }
       },
       "id": "g00510000-0000-4000-8000-000000000000",
       "name": "Set Data Quality + Gap Flag",
