@@ -162,3 +162,19 @@ def test_case_16_version_stamp():
                "lv_country_region_normalized": "AU", "lv_revenue_band": "5-50M"})
     assert r.scoring_version == "lv-icp-v0.1"
     assert r.breakdown["version"] == "lv-icp-v0.1"
+
+
+def test_case_17_hard_veto_survives_confidence_downgrade():
+    # Bug 1 (STATE.md "SCORING PRECEDENCE RULE", Phase 14 found-not-fixed): the
+    # hardware-vendor veto fires (anti_icp_flag=True, tier="D") but org_type is
+    # unknown, which ALSO trips the confidence-downgrade block. That block used to
+    # overwrite tier/motion unconditionally, discarding the veto's own D/disqualify
+    # label. A hard veto must win the label (CLAUDE.md 10.3); confidence still drops
+    # to 55 because org_type really is unknown -- that uncertainty is real and stays
+    # visible in the score breakdown even though it no longer changes the label.
+    r = score({"lv_is_hardware_vendor": True, "lv_produces_content": True,
+               "lv_country_region_normalized": "AU", "lv_revenue_band": "5-50M"})
+    assert r.anti_icp_flag is True
+    assert r.tier == "D"
+    assert r.recommended_motion == "disqualify"
+    assert r.confidence == 55
