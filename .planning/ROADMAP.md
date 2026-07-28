@@ -581,7 +581,15 @@ Enablement mechanism is in place as of `7f0dce4`: `ENABLE_BAKED_FLAGS` now carri
   6. The deployment is restored to the disabled build afterwards, verified by API read-back: both write-safety constants back to `"false"` and the allowlist back to empty.
   7. Every change to record `201` is reversible, and the rollback is exercised rather than assumed (`scripts/rollback_canary_proof.py` exists for this).
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 16.7-01-PLAN.md — OFFLINE: BUG 11 — both HubSpot UPDATE nodes ship as native nodes with an EMPTY field map and reference the computed patch nowhere (documented in `build_cloud_workflows.py` as placeholders "populated at deploy/operator-config time", and no such deploy-time population exists). Capture it red, move both onto a credential-bound `httpRequest` PATCH that fails hard on rejection, leave creates native and pinned as unverified, and emit the exact live PATCH Plan 02 must confirm. Without this, criteria 3 and 4 are unreachable and criterion 3 would pass vacuously.
+- [ ] 16.7-02-PLAN.md — LIVE: arm `ALLOW_HUBSPOT_RECORD_WRITES` with `TEST_RECORD_IDS=201` only, gate on API read-back, fire the companies event FIRST (closes 16.6 criteria 1 and 7 and tests the allowlist empirically at zero LLM cost) then the contacts event, prove a protected field unchanged and a permitted field written from fresh record reads, roll contact 201 back and verify by re-read, and restore the disabled build unconditionally.
+
+**Sequencing decision**: the BUG 10 companies verification runs in the SAME armed window, fired first. The companies record is deliberately NOT allowlisted, so that run is simultaneously the containment test — proving `TEST_RECORD_IDS` bounds the blast radius empirically rather than by reading `_writeSafetyAllows()`.
+
+**Criterion 4 restated**: Phase 15 retired flat per-field metadata properties for one provenance JSON blob, and that blob carries no `_verified_by_model` key. Criterion 4 is satisfied in its Phase-15 form (written field + provenance entry + cache-key datetime, quoted from a post-run read), stated explicitly rather than silently reinterpreted.
 
 ## Milestone 3 Progress
 
@@ -600,4 +608,4 @@ Enablement mechanism is in place as of `7f0dce4`: `ENABLE_BAKED_FLAGS` now carri
 | 16.4. Fetch-By-ObjectId (INSERTED) | 2/2 | Complete | 2026-07-28 |
 | 16.5. Deliberate Research/Escalation Enablement (INSERTED) | 2/3 | Partial — contacts research VERIFIED live; companies blocked by BUG 10 | 2026-07-28 |
 | 16.6. Companies Search Transport Fix (INSERTED) | 1/1 | Code-complete — criteria 1 & 7 LIVE-UNVERIFIED (pre-fix build still deployed) | — |
-| 16.7. Write-Path Canary (INSERTED) | 0/? | Planning — enablement mechanism landed `7f0dce4` | — |
+| 16.7. Write-Path Canary (INSERTED) | 0/2 | Planned — BUG 11 found at plan time (write nodes carry no patch); 16.7-01 offline fix, 16.7-02 armed live window | — |
