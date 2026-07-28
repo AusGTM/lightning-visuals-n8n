@@ -516,6 +516,30 @@ Plans:
 - [x] 16.4-01-PLAN.md — Tracer: the fetch-by-objectId lane wired end-to-end on contacts (pure adapter module, credential-bound search-by-`hs_object_id` node, node-name row recovery, identity_keys backfill) plus the new bare-event e2e harness, then mirrored onto companies
 - [x] 16.4-02-PLAN.md — Unit tier on the pure adapter, integration/row-flow regression across the new hop, caller-envelope back-compat, safe-degradation cases, pytest topology + generic credential guard, and the recorded Track-B live checkpoint
 
+### Phase 16.5: Deliberate Research/Escalation Enablement
+
+**Goal**: An operator can deploy a research- and escalation-enabled build of the enrichment workflow as an explicit, auditable act, WITHOUT the committed workflow JSON ever carrying those flags on — and the live run that follows finally exercises the web-research → judge lane against real HubSpot, verifying the `bd682a2` row-loss fix that has never executed live.
+**Depends on**: Phase 16.4
+**INSERTED 2026-07-28** (user directive: "rebuild with research + escalation enabled and fire the final run"). `ALLOW_WEB_RESEARCH` and `ALLOW_SONNET_ESCALATION` are baked as literal `false` into every Cloud Code node by `_flag_const(..., cloud=True)` — deliberately, per Phase 16's Criterion 5 (zero `$env`/`$vars` may survive in a built Cloud workflow), so there is no runtime toggle by design. Enabling therefore requires a build- or deploy-time decision, and the naive fix (flipping `CONFIG_FLAG_DEFAULTS`) is unacceptable: it would make EVERY future build ship LLM-spending paths on by default, and a rebuild-and-commit by anyone would silently arm production.
+
+**Success Criteria (draft — refine at plan time):**
+
+  1. The committed `n8n/wf_*.json` continue to carry `ALLOW_WEB_RESEARCH = false` and `ALLOW_SONNET_ESCALATION = false`. This is asserted by a test, so an enabled build can never be committed by accident.
+  2. Enablement is an explicit, visible operator act (a deploy-time flag or equivalent), never an ambient environment variable that could silently change what a plain rebuild produces. The deterministic-rebuild invariant is preserved: the same source always yields the same committed JSON.
+  3. The enablement mechanism is a pure, offline-testable transformation over a workflow dict — mirroring `bind_credentials()`'s existing precedent — and FAILS CLOSED if it does not find exactly the flag constants it expects to change (a silent no-op that deploys a disabled workflow while reporting success is the failure mode to prevent).
+  4. Criterion 5 still holds on the enabled build: zero `$env`/`$vars` anywhere, no secret literal committed, `tests/test_architecture_guard.py` green.
+  5. Cost controls remain intact and provably so: `MAX_WEB_RESEARCH_PER_RUN` and `MAX_SONNET_VALIDATIONS_PER_RUN` still bound the run, and enabling research does NOT enable HubSpot record writes (`ALLOW_HUBSPOT_RECORD_WRITES` stays false).
+  6. Full offline suite green, zero regressions vs the 422 pytest / 272 node baseline; builder deterministic.
+  7. **Live**: one enabled run fires against contact 201, the research→judge lane executes, and the row survives every HTTP hop to `Merge Winners` — verifying `bd682a2` live for the first time. Zero HubSpot writes; the run is inspected node-by-node, not judged by its response body alone.
+     - *Planning note (2026-07-28):* `bd682a2` is titled "recover row across HTTP hops in **companies** research/judge chain" — its fix sites are `Validate Research Output`/`Apply Judge Verdict` and its symptom is a null merge at `Merge Company`. Contact 201 drives the CONTACTS branch, whose row-recovery is the 16.2-02 mirror of that fix. Plan 02 therefore satisfies criterion 7 as written and verifies the contacts mirror at `Merge Winners`; Plan 03 fires the same enabled build at a real company record to verify the LITERAL `bd682a2` at `Merge Company`. If Plan 03 is declined, the phase record must state that the literal companies fix remains live-unverified.
+
+**Plans**: 3 plans
+
+Plans:
+- [ ] 16.5-01-PLAN.md — deploy-time research/escalation overlay (pure, fail-closed), enabled-build invariants, and the offline oracle predicting both live lanes
+- [ ] 16.5-02-PLAN.md — LIVE: deploy enabled, fire contact 201, inspect node-by-node to a non-null merge at `Merge Winners`, restore to disabled (criterion 7)
+- [ ] 16.5-03-PLAN.md — LIVE: fire a real company record to verify the literal `bd682a2` at `Merge Company`, restore to disabled, close the phase record
+
 ## Milestone 3 Progress
 
 | Phase | Plans Complete | Status | Completed |
@@ -531,3 +555,4 @@ Plans:
 | 16.2. Contacts Research + Judge Mirror (INSERTED) | 2/2 | Complete | 2026-07-24 |
 | 16.3. Companies Stale-Timestamp Fix (INSERTED) | 1/1 | Complete | 2026-07-28 |
 | 16.4. Fetch-By-ObjectId (INSERTED) | 2/2 | Complete | 2026-07-28 |
+| 16.5. Deliberate Research/Escalation Enablement (INSERTED) | 0/3 | Planned | — |
