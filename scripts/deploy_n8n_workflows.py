@@ -80,6 +80,21 @@ NODE_CREDENTIAL_MAP = {
     "Lusha Usage": {"cred_type": "httpHeaderAuth", "cred_name": "LV Lusha"},
     "Apollo Usage": {"cred_type": "httpHeaderAuth", "cred_name": "LV Apollo"},
     "ZoomInfo Usage Mint": {"cred_type": "httpBasicAuth", "cred_name": "LV ZoomInfo"},
+    # Quick task 2026-07-28 — pre-activation blocker: these 10 hubspot nodes were absent
+    # from the map entirely, so `mapping is None: continue` deployed them UNBOUND with no
+    # error, 401-ing only at runtime. Confirmed live against the built wf_*_cloud.json.
+    # wf_contact_ingest_cloud.json (1 node):
+    "HubSpot Search by Email": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    # wf_scheduled_maintenance_cloud.json (9 nodes):
+    "SJ-3 Search (requested poller)": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    "SJ-1 Search (input-gap scan)": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    "SJ-1 Set Requested": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    "SJ-2 Search (stale refresh)": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    "SJ-2 Set Requested": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    "Dedupe Search (candidate contacts)": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    "Dedupe Set Needs Review": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    "Review Search (approved=true)": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    "Review Apply Update": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
 }
 
 
