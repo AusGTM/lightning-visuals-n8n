@@ -2,18 +2,19 @@
 gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: Company Enrichment & ICP Research
-current_phase: 16.5
-current_phase_name: research-escalation-enablement
-status: in_progress
-stopped_at: "Phase 16.5-01 EXECUTED + committed (0e7ad42 deploy-time overlay, 7d4c17a enabled-build invariants, e0982fd offline oracle). Wave 1 of Phase 16.5 (OFFLINE ONLY) complete: enable_baked_flags() deploy-time overlay in scripts/deploy_n8n_workflows.py (pure, fail-closed, mirrors bind_credentials()), ENABLE_BAKED_FLAGS operator env var wired above the write gate, artifact-invariant tests (committed stays disabled, Criterion 5 holds on the ENABLED build, diff-is-only-the-four-flag-lines), and an offline oracle (enabledResearchLaneFlow.test.mjs) proving both the contacts and companies research-then-judge lanes fire, escalate, and survive both HTTP hops to a non-null merge on the ENABLED build. Full suite green: 459 pytest / 275 node, 0 regressions vs the 422/272 baseline. n8n/ and n8n/code/ untouched. Next: Plan 02 (contacts live run) and Plan 03 (companies live run — the bd682a2 verification), each firing DRY_RUN=false ALLOW_N8N_DEPLOY=true ENABLE_BAKED_FLAGS=ALLOW_WEB_RESEARCH,ALLOW_SONNET_ESCALATION python scripts/deploy_n8n_workflows.py against real HubSpot records 201 (contact) / 9604614548 (Melbourne Racing Club)."
-last_updated: "2026-07-28T07:41:25Z"
+current_phase: 16.6
+current_phase_name: companies-search-transport-fix
+status: paused
+stopped_at: "PAUSED 2026-07-28 ~16:05 +10:00 after Phase 16.6 (BUG 10). Session arc: 16.3 (companies stale-timestamp, VERIFIED 6/6) -> 16.4 (fetch-by-objectId, VERIFIED 7/7) -> quick hubspot-credential-binding -> two Python-lane debug fixes -> Track B provision/deploy/ACTIVATE on n8n Cloud -> canary steps 1-3 live -> 16.5 (deploy-time research/escalation overlay; contacts research lane VERIFIED LIVE, criterion 7 MET; companies BLOCKED) -> 16.6 (BUG 10 fixed, code-complete but LIVE-UNVERIFIED). TEN live-only bugs found and fixed, every one passing a full offline suite and deploying clean before failing on first real API contact. Suite 346 -> 504 pytest / 275 node. LIVE STATE: LV Enrichment ACTIVE + DISARMED (research/escalation false, read-back verified) in Robert's n8n project T9IPFKpIn2aUYYj3, workflow 950HPb7a1GgSAIyZ; other two workflows INACTIVE; ALLOW_HUBSPOT_RECORD_WRITES=false with an EMPTY allowlist. NOTHING HAS EVER BEEN WRITTEN TO HUBSPOT. NEXT: the write-path canary (TEST_RECORD_IDS=201 only, no creates) — the first live proof of the non-clobber merge, and the run that can also close BUG 10's still-open live verification. See .planning/HANDOFF.json and .planning/phases/16.6-companies-search-transport-fix/.continue-here.md."
+last_updated: "2026-07-28T16:05:00+10:00"
 last_activity: 2026-07-28
-last_activity_desc: Executed Phase 16.5 Plan 01 (Wave 1, offline-only) — deploy-time research/escalation enablement overlay + offline oracle predicting the live runs
+last_activity_desc: Fixed BUG 10 (companies search transport) via /gsd-debug, then paused with a full handoff
 progress:
-  total_phases: 21
-  completed_phases: 6
-  total_plans: 26
-  completed_plans: 13
+  total_phases: 23
+  completed_phases: 8
+  total_plans: 31
+  completed_plans: 17
+
 ---
 
 # Project State
