@@ -585,11 +585,30 @@ Enablement mechanism is in place as of `7f0dce4`: `ENABLE_BAKED_FLAGS` now carri
 
 Plans:
 - [x] 16.7-01-PLAN.md — OFFLINE (COMPLETE 2026-07-29, commits 5cab661/38f3ebb/1e1a51c): BUG 11 — both HubSpot UPDATE nodes ship as native nodes with an EMPTY field map and reference the computed patch nowhere (documented in `build_cloud_workflows.py` as placeholders "populated at deploy/operator-config time", and no such deploy-time population exists). Capture it red, move both onto a credential-bound `httpRequest` PATCH that fails hard on rejection, leave creates native and pinned as unverified, and emit the exact live PATCH Plan 02 must confirm. Without this, criteria 3 and 4 are unreachable and criterion 3 would pass vacuously.
-- [ ] 16.7-02-PLAN.md — LIVE: arm `ALLOW_HUBSPOT_RECORD_WRITES` with `TEST_RECORD_IDS=201` only, gate on API read-back, fire the companies event FIRST (closes 16.6 criteria 1 and 7 and tests the allowlist empirically at zero LLM cost) then the contacts event, prove a protected field unchanged and a permitted field written from fresh record reads, roll contact 201 back and verify by re-read, and restore the disabled build unconditionally.
+- [~] 16.7-02-PLAN.md — LIVE (EXECUTED 2026-07-29, PARTIAL — see 16.7-02-SUMMARY.md): arm `ALLOW_HUBSPOT_RECORD_WRITES` with `TEST_RECORD_IDS=201` only, gate on API read-back, fire the companies event FIRST (closes 16.6 criteria 1 and 7 and tests the allowlist empirically at zero LLM cost) then the contacts event, prove a protected field unchanged and a permitted field written from fresh record reads, roll contact 201 back and verify by re-read, and restore the disabled build unconditionally.
 
 **Sequencing decision**: the BUG 10 companies verification runs in the SAME armed window, fired first. The companies record is deliberately NOT allowlisted, so that run is simultaneously the containment test — proving `TEST_RECORD_IDS` bounds the blast radius empirically rather than by reading `_writeSafetyAllows()`.
 
 **Criterion 4 restated**: Phase 15 retired flat per-field metadata properties for one provenance JSON blob, and that blob carries no `_verified_by_model` key. Criterion 4 is satisfied in its Phase-15 form (written field + provenance entry + cache-key datetime, quoted from a post-run read), stated explicitly rather than silently reinterpreted.
+
+### Phase 16.8: Row-Carry Fix (BUG 12)
+
+**Goal**: The contacts write path can actually reach HubSpot. Today it cannot, for any record, under any flag combination.
+
+**Depends on**: Phase 16.7
+**INSERTED 2026-07-29** — found live in the 16.7 armed window, execution 13.
+
+`Merge Winners → Set Data Quality + Gap Flag → Decide Action`. `Set Data Quality + Gap Flag` is `n8n-nodes-base.set` typeVersion `3.4` with `"options": {}`; `includeOtherFields` is unset and defaults to **false** in Set v3.x, so the node emits ONLY `{data_quality, gap_flag}` and discards `merge`, `existingRecord`, `object_id` and `scored`. `Decide Action` then resolves `row.existingRecord.hs_object_id` to `null` and `_buildContactPatch(undefined)` to `{}`, so `_writeSafetyAllows()` denies regardless of the allowlist, no `action` key is emitted, `IF Enrich` receives zero items and `HubSpot Update` never runs. Present in execution 8 (2026-07-28) too — pre-existing, invisible while writes were disabled because the webhook still returned a plausible 200.
+
+**Success Criteria (draft — refine at plan time):**
+
+  1. A red test, run against the committed artifact, asserts `Decide Action`'s input carries `existingRecord`, `merge`, `object_id` and `scored` — failing today.
+  2. The fix is the node's own `includeOtherFields` option, not a hand-rolled spread in a Code node — the platform feature that exists for exactly this.
+  3. Every OTHER `n8n-nodes-base.set` node in a row-carrying position across all three workflows is swept for the same defect and each is either fixed or explicitly recorded as terminal-by-design.
+  4. Offline suite green with zero regressions; builder rebuild deterministic.
+  5. **Live**: the 16.7 armed window re-run unchanged reaches `HubSpot Update` with a real `hs_object_id` and a non-empty properties patch — closing 16.7's SC-1, SC-3 (at write time), SC-4 and SC-7.
+
+**Plans**: TBD
 
 ## Milestone 3 Progress
 
@@ -607,5 +626,6 @@ Plans:
 | 16.3. Companies Stale-Timestamp Fix (INSERTED) | 1/1 | Complete | 2026-07-28 |
 | 16.4. Fetch-By-ObjectId (INSERTED) | 2/2 | Complete | 2026-07-28 |
 | 16.5. Deliberate Research/Escalation Enablement (INSERTED) | 2/3 | Partial — contacts research VERIFIED live; companies blocked by BUG 10 | 2026-07-28 |
-| 16.6. Companies Search Transport Fix (INSERTED) | 1/1 | Code-complete — criteria 1 & 7 LIVE-UNVERIFIED (pre-fix build still deployed) | — |
-| 16.7. Write-Path Canary (INSERTED) | 1/2 | Wave 1 COMPLETE — BUG 11 fixed offline (write nodes now carry the patch); wave 2 waiting at the arming checkpoint | — |
+| 16.6. Companies Search Transport Fix (INSERTED) | 1/1 | **Complete** — criteria 1 & 7 VERIFIED LIVE (execution 12, non-null Merge Company) | 2026-07-29 |
+| 16.7. Write-Path Canary (INSERTED) | 2/2 | Partial — armed window ran; BUG 10 closed live, but BUG 12 (row-dropping Set node) makes the contacts write path structurally incapable of writing. Zero records modified. | — |
+| 16.8. Row-Carry Fix (BUG 12) (INSERTED) | 0/? | Planned — `Set Data Quality + Gap Flag` discards merge/existingRecord/object_id | — |

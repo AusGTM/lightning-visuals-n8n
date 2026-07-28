@@ -1,5 +1,5 @@
 ---
-status: awaiting_human_verify
+status: resolved
 trigger: |
   DATA_START
   Debug and FIX BUG 10 in /Users/robertli/Desktop/consulting/lightning-visuals/lv-n8n-poc.
@@ -451,3 +451,20 @@ files_changed:
     deploy._node_requires_credential() instead of a type filter)
   - tests/n8n/sjPredicates.test.mjs (jsonBody-based filterGroups() extractor)
   - tests/n8n/reviewLoop.test.mjs (jsonBody-based Review Search assertion)
+
+## Live verification — CLOSED 2026-07-29
+
+Verified live in the Phase 16.7 armed window, execution **12** on `LV Enrichment (Cloud template)`
+(`950HPb7a1GgSAIyZ`), companies bare-event run for `9604614548`:
+
+- `HubSpot Company Fetch By Id` (now `n8n-nodes-base.httpRequest` POST) returned
+  `{"total": 1, "results": [{"id": "9604614548", "properties": {"domain": "mrc.racing.com", ...}}]}`
+  — NOT the `json: null` item. Its own error field was `null`.
+- `Adapt Company Fetch By Id`: `lookup_failed: false`, `fetch_diagnostic: "ok: matched via search envelope"`.
+- `Company Gate`: `action: "enrich"` — no longer overridden to `skip`.
+- `Normalize + Score Company`: **1 row** (the exact node where the 16.5-03 run emitted 0).
+- `Merge Company`: **`merge` NON-NULL** — the literal `bd682a2`, verified live for the first time.
+- Zero HubSpot writes; company `hs_lastmodifieddate` byte-identical after the run.
+
+26 nodes ran versus 18 in the blocked run. ROADMAP Phase 16.6 criteria 1 and 7 are MET.
+Full record: `.planning/phases/16.7-write-path-canary/16.7-02-SUMMARY.md`.
