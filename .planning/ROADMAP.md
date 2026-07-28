@@ -540,6 +540,26 @@ Plans:
 - [ ] 16.5-02-PLAN.md — LIVE: deploy enabled, fire contact 201, inspect node-by-node to a non-null merge at `Merge Winners`, restore to disabled (criterion 7)
 - [ ] 16.5-03-PLAN.md — LIVE: fire a real company record to verify the literal `bd682a2` at `Merge Company`, restore to disabled, close the phase record
 
+### Phase 16.6: Companies Search Transport Fix
+
+**Goal**: Every `company:search` in the system returns real records live, so the companies enrichment branch, all three schedule predicates, and the review loop can actually run — unblocking the literal `bd682a2` verification and the companies half of the pipeline.
+**Depends on**: Phase 16.5
+**INSERTED 2026-07-28** (BUG 10, found live during the 16.5 companies canary). n8n's HubSpot node returns an item with **`json: null`** for `resource: company, operation: search`, while the byte-identical request succeeds directly against the CRM v3 API (HTTP 200, `total:1`, real record). It does not throw even with `onError` cleared, so nothing surfaces as an error — the null simply propagates. The `resource: contact` twin, with structurally identical configuration, works correctly. Downstream this reads as `unrecognized response shape` -> `lookup_failed` -> gate `skip` -> `Normalize + Score Company` emits zero rows -> the companies research/judge lane never executes.
+
+**Blast radius (verified by enumeration, not assumed): SIX nodes across TWO workflows** — `HubSpot Company Search` and `HubSpot Company Fetch By Id` in `wf_enrichment_cloud.json`; `SJ-1 Search (input-gap scan)`, `SJ-2 Search (stale refresh)`, `SJ-3 Search (requested poller)` and `Review Search (approved=true)` in `wf_scheduled_maintenance_cloud.json`. None had ever run live. Every contact-resource search is unaffected and must stay untouched.
+
+**Success Criteria (draft — refine at plan time):**
+
+  1. All six `company:search` nodes retrieve real records live, verified by read-back of an actual execution — not by a green offline suite.
+  2. The transport change is confined to company searches. Every `contact:search` node keeps its current type and parameters byte-identical, proven by diff — contacts is the one path known to work live and must not regress.
+  3. Whatever replaces the node stays credential-bound: zero `$env`/`$vars` in any built Cloud workflow, no secret literal committed, and the node appears in `NODE_CREDENTIAL_MAP` so `bind_credentials()` fails closed if it is ever unmapped.
+  4. The response reaches the existing adapters in a shape they already parse (`ENRICH_ADAPT_CO_SEARCH`, `adaptFetchById.js`) — if an adapter must change, that is called out explicitly rather than absorbed.
+  5. `company:create` and `company:update` are ALSO never-run-live; state explicitly whether they share the defect, and if they are left unfixed say so rather than implying coverage.
+  6. Full offline suite green, zero regressions vs the 459 pytest / 275 node baseline; builder deterministic; the 7 frozen companies node bodies unmoved.
+  7. **Live**: a companies bare-event run reaches `Merge Company` with a NON-NULL merge — the literal `bd682a2`, still unverified — with zero HubSpot writes.
+
+**Plans**: TBD
+
 ## Milestone 3 Progress
 
 | Phase | Plans Complete | Status | Completed |
@@ -555,4 +575,5 @@ Plans:
 | 16.2. Contacts Research + Judge Mirror (INSERTED) | 2/2 | Complete | 2026-07-24 |
 | 16.3. Companies Stale-Timestamp Fix (INSERTED) | 1/1 | Complete | 2026-07-28 |
 | 16.4. Fetch-By-ObjectId (INSERTED) | 2/2 | Complete | 2026-07-28 |
-| 16.5. Deliberate Research/Escalation Enablement (INSERTED) | 1/3 | In Progress | Plan 01: 2026-07-28 |
+| 16.5. Deliberate Research/Escalation Enablement (INSERTED) | 2/3 | Partial — contacts research VERIFIED live; companies blocked by BUG 10 | 2026-07-28 |
+| 16.6. Companies Search Transport Fix (INSERTED) | 0/? | Planning | — |
