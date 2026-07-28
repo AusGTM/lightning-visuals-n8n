@@ -99,17 +99,44 @@ NODE_CREDENTIAL_MAP = {
 }
 
 
-# Phase 16.5 Task 1 — the deploy-time research/escalation overlay's closed target set.
-# ONLY the two boolean kill switches `_flag_const(..., cloud=True)` bakes as bare-boolean
-# JS literals. `MAX_WEB_RESEARCH_PER_RUN` / `MAX_SONNET_VALIDATIONS_PER_RUN` /
-# `ANTHROPIC_SONNET_MODEL` are also CONFIG_FLAG_DEFAULTS entries but would let an
-# open-ended mechanism widen cost caps or swap models — "enabling research must not widen
-# anything else" has to be structural, not a convention, so a name outside this set is a
-# ValueError, never a silent no-op. Deliberately NOT imported from build_cloud_workflows —
-# that module runs taxonomy/escalation codegen at import time and writes into n8n/code/;
-# a deploy script must never carry that side effect. tests/test_enabled_build_invariants.py
-# pins this set as a subset of CONFIG_FLAG_DEFAULTS from a TEST, which may import freely.
-_OVERLAYABLE_FLAGS = frozenset({"ALLOW_WEB_RESEARCH", "ALLOW_SONNET_ESCALATION"})
+# Phase 16.5 Task 1 / Phase 16.7 — the deploy-time overlay's closed target set.
+# `MAX_WEB_RESEARCH_PER_RUN` / `MAX_SONNET_VALIDATIONS_PER_RUN` / `ANTHROPIC_SONNET_MODEL`
+# are also CONFIG_FLAG_DEFAULTS entries but would let an open-ended mechanism widen cost
+# caps or swap models — "enabling one thing must not widen anything else" has to be
+# structural, not a convention, so a name outside this table is a ValueError, never a
+# silent no-op. Deliberately NOT imported from build_cloud_workflows — that module runs
+# taxonomy/escalation codegen at import time and writes into n8n/code/; a deploy script
+# must never carry that side effect. tests/test_enabled_build_invariants.py pins this
+# table against CONFIG_FLAG_DEFAULTS / WRITE_SAFETY_DEFAULTS from a TEST, which may
+# import freely — including each entry's disabled literal, so a change to how the builder
+# bakes a constant cannot silently make the exact-literal rewrite below stop matching.
+#
+# Each entry: name -> (disabled_literal, default_enabled_literal, takes_value)
+#   disabled_literal        the EXACT JS literal the builder bakes for the safe default.
+#                           `_flag_const(..., cloud=True)` emits a BARE boolean;
+#                           `_write_safety_const()` emits a JSON STRING — hence both forms.
+#   default_enabled_literal what a bare `NAME` request rewrites to. None => a value is
+#                           mandatory (an allowlist with no value is meaningless).
+#   takes_value             whether `NAME=VALUE` is accepted; the value is rendered with
+#                           json.dumps, so it is always a quoted JS string literal.
+_OVERLAY_FLAG_SPEC = {
+    "ALLOW_WEB_RESEARCH":          ("false", "true", False),
+    "ALLOW_SONNET_ESCALATION":     ("false", "true", False),
+    # Write-safety constants. Overlayable so the write-path canary can arm ONE record
+    # without a rebuild, and guarded below: writes cannot be enabled unless the same
+    # invocation also supplies a non-empty allowlist.
+    "ALLOW_HUBSPOT_RECORD_WRITES": ('"false"', '"true"', False),
+    "ALLOW_HUBSPOT_CREATE":        ('"false"', '"true"', False),
+    "TEST_RECORD_IDS":             ('""', None, True),
+    "TEST_RECORD_DOMAINS":         ('""', None, True),
+}
+_OVERLAYABLE_FLAGS = frozenset(_OVERLAY_FLAG_SPEC)
+_WRITE_ENABLING_FLAGS = frozenset({"ALLOW_HUBSPOT_RECORD_WRITES", "ALLOW_HUBSPOT_CREATE"})
+_ALLOWLIST_FLAGS = frozenset({"TEST_RECORD_IDS", "TEST_RECORD_DOMAINS"})
+# `,` already separates ENTRIES in ENABLE_BAKED_FLAGS, so a multi-id allowlist value
+# uses `|` and is rendered back to the comma-separated form `_writeSafetyAllows()` splits
+# on. No HubSpot object id or domain contains either character.
+_ALLOWLIST_VALUE_RE = re.compile(r"[A-Za-z0-9._-]+(?:\|[A-Za-z0-9._-]+)*")
 
 
 def _has_n8n() -> bool:
@@ -253,23 +280,38 @@ def enable_baked_flags(workflow: dict, flags) -> tuple:
     false-success this design exists to prevent.
     """
     for flag in flags:
-        if flag not in _OVERLAYABLE_FLAGS:
+        if flag not in _OVERLAY_FLAG_SPEC:
             raise ValueError(
                 f"cannot enable {flag!r}: not in the overlayable set "
-                f"{sorted(_OVERLAYABLE_FLAGS)}. Cost caps, model names and write-safety "
-                f"constants are never overlayable."
+                f"{sorted(_OVERLAYABLE_FLAGS)}. Cost caps and model names are never "
+                f"overlayable."
             )
 
+    # A bare sequence of names keeps working (every pre-16.7 caller passes one) and means
+    # "each flag's default enabled literal"; a mapping carries an explicit target literal.
+    if isinstance(flags, dict):
+        targets = dict(flags)
+    else:
+        targets = {}
+        for flag in flags:
+            default_enabled = _OVERLAY_FLAG_SPEC[flag][1]
+            if default_enabled is None:
+                raise ValueError(
+                    f"{flag} requires an explicit target value; pass a "
+                    f"{{flag: literal}} mapping rather than a bare name"
+                )
+            targets[flag] = default_enabled
+
     wf = json.loads(json.dumps(workflow))  # deep copy, stdlib only — mirrors bind_credentials
-    counts = {flag: 0 for flag in flags}
+    counts = {flag: 0 for flag in targets}
 
     for node in wf.get("nodes", []):
         js_code = node.get("parameters", {}).get("jsCode")
         if not isinstance(js_code, str):
             continue
-        for flag in flags:
-            disabled_decl = f"const {flag} = false;"
-            enabled_decl = f"const {flag} = true;"
+        for flag, target_literal in targets.items():
+            disabled_decl = f"const {flag} = {_OVERLAY_FLAG_SPEC[flag][0]};"
+            enabled_decl = f"const {flag} = {target_literal};"
             occurrences = js_code.count(disabled_decl)
             if occurrences:
                 js_code = js_code.replace(disabled_decl, enabled_decl)
@@ -277,23 +319,29 @@ def enable_baked_flags(workflow: dict, flags) -> tuple:
         node["parameters"]["jsCode"] = js_code
 
     # Fail-closed re-scan: any requested flag whose declaration (in ANY spacing/literal
-    # form) still fails to read the enabled boolean means the exact-literal replace above
+    # form) still fails to read the target literal means the exact-literal replace above
     # could not reach it — raise rather than return a workflow that deploys disabled.
-    serialized = json.dumps(wf)
-    for flag in flags:
+    # Scanned per-node over the raw jsCode, not over json.dumps(wf), so a JSON-string
+    # literal's quotes are compared as written rather than in their escaped form.
+    for flag, target_literal in targets.items():
         decl_re = re.compile(rf"const\s+{re.escape(flag)}\s*=\s*([^;]+);")
-        for match in decl_re.finditer(serialized):
-            literal = match.group(1)
-            if literal != "true":
-                raise ValueError(
-                    f"cannot enable {flag!r} in {wf.get('name')!r}: a declaration still "
-                    f"carries literal {literal!r} after rewrite. Nothing was deployed."
-                )
+        for node in wf.get("nodes", []):
+            js_code = node.get("parameters", {}).get("jsCode")
+            if not isinstance(js_code, str):
+                continue
+            for match in decl_re.finditer(js_code):
+                literal = match.group(1)
+                if literal != target_literal:
+                    raise ValueError(
+                        f"cannot enable {flag!r} in {wf.get('name')!r}: a declaration "
+                        f"still carries literal {literal!r} after rewrite. Nothing was "
+                        f"deployed."
+                    )
 
     return wf, counts
 
 
-def _requested_overlay_flags() -> list:
+def _requested_overlay_flags() -> dict:
     """The operator-visibility flag. Reads `ENABLE_BAKED_FLAGS` — a comma-separated list
     of constant names to enable — NEVER the flags' own names. This repo's `.env` already
     defines `ALLOW_WEB_RESEARCH` and `ALLOW_SONNET_ESCALATION` for the Python harness
@@ -304,16 +352,74 @@ def _requested_overlay_flags() -> list:
     legible in the command that performs it. Unset or empty yields an empty list, so a
     plain deploy can never arm anything. A name outside _OVERLAYABLE_FLAGS raises rather
     than silently enabling nothing, so a typo refuses the deploy instead of no-op'ing.
+
+    An entry is either a bare `NAME` (rewrites to that flag's default enabled literal) or
+    `NAME=VALUE` for the allowlist constants, whose point is a value rather than a flip.
+    VALUE is rendered with json.dumps, so it always lands as a quoted JS string literal
+    and can never inject arbitrary JS. Returns an ordered {name: target_literal} mapping.
     """
     raw = os.getenv("ENABLE_BAKED_FLAGS", "")
-    names = [n.strip() for n in raw.split(",") if n.strip()]
-    for name in names:
-        if name not in _OVERLAYABLE_FLAGS:
+    entries = [n.strip() for n in raw.split(",") if n.strip()]
+    requested = {}
+    for entry in entries:
+        name, sep, value = entry.partition("=")
+        name = name.strip()
+        if name not in _OVERLAY_FLAG_SPEC:
             raise ValueError(
                 f"ENABLE_BAKED_FLAGS names unknown flag {name!r}; permitted: "
                 f"{sorted(_OVERLAYABLE_FLAGS)}"
             )
-    return names
+        disabled_literal, default_enabled, takes_value = _OVERLAY_FLAG_SPEC[name]
+        if sep:
+            if not takes_value:
+                raise ValueError(
+                    f"{name} is a boolean kill switch and takes no value; write it bare "
+                    f"as {name!r}, not {entry!r}"
+                )
+            candidate = value.strip()
+            # Allowlist values are HubSpot object ids and domains — nothing else. The
+            # charset is enforced rather than merely escaped because the fail-closed
+            # re-scan's declaration regex terminates at the first `;`, so a value
+            # containing one would split a declaration it then could not verify. A
+            # narrow charset removes that class outright instead of widening the parser.
+            if not _ALLOWLIST_VALUE_RE.fullmatch(candidate):
+                raise ValueError(
+                    f"{name} value {candidate!r} is not a plain id/domain list: only "
+                    f"letters, digits, '.', '-', '_' and ',' separators are permitted"
+                )
+            target = json.dumps(candidate.replace("|", ","))
+        else:
+            if default_enabled is None:
+                raise ValueError(
+                    f"{name} requires an explicit value ({name}=<value>) — enabling it "
+                    f"bare would leave the allowlist empty, which denies everything and "
+                    f"makes the request a silent no-op"
+                )
+            target = default_enabled
+        if target == disabled_literal:
+            raise ValueError(
+                f"{name} was requested with the DISABLED literal {target} — that is a "
+                f"no-op dressed as an enablement; omit the flag instead"
+            )
+        requested[name] = target
+
+    # Fail-safe: writes may not be armed without an allowlist in the SAME invocation.
+    # `_writeSafetyAllows()` denies everything on an empty allowlist, so this cannot
+    # currently cause a write — it exists so that stops being true by accident.
+    if requested.keys() & _WRITE_ENABLING_FLAGS:
+        allowlisted = {f for f in requested.keys() & _ALLOWLIST_FLAGS if requested[f] != '""'}
+        if not allowlisted:
+            raise ValueError(
+                "refusing to enable HubSpot writes without an allowlist: name "
+                "TEST_RECORD_IDS=<id[,id]> and/or TEST_RECORD_DOMAINS=<domain> in the "
+                "same ENABLE_BAKED_FLAGS request"
+            )
+    if "ALLOW_HUBSPOT_CREATE" in requested and "ALLOW_HUBSPOT_RECORD_WRITES" not in requested:
+        raise ValueError(
+            "ALLOW_HUBSPOT_CREATE has no effect unless ALLOW_HUBSPOT_RECORD_WRITES is "
+            "enabled in the same request — the gate checks record-writes first"
+        )
+    return requested
 
 
 def _create_workflow_live(body: dict):
@@ -386,8 +492,8 @@ def main(argv=None) -> int:
             return 1
 
         for flag in requested_flags:
-            print(f"ENABLE_BAKED_FLAGS: {flag} rewritten {total_counts[flag]}x "
-                  f"in {rewritten_in[flag]}")
+            print(f"ENABLE_BAKED_FLAGS: {flag} -> {requested_flags[flag]} rewritten "
+                  f"{total_counts[flag]}x in {rewritten_in[flag]}")
 
         zero_flags = [flag for flag in requested_flags if total_counts[flag] == 0]
         if zero_flags:

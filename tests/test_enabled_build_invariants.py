@@ -176,5 +176,26 @@ def test_overlayable_flags_is_a_strict_subset_of_config_flag_defaults():
     CONFIG_FLAG_DEFAULTS, tests/test_builder_flag_parity.py fails on the six-name pin
     and this test fails on the subset check — the overlay cannot silently drift away
     from the thing it rewrites."""
-    assert deploy._OVERLAYABLE_FLAGS < set(CONFIG_FLAG_DEFAULTS.keys())
-    assert deploy._OVERLAYABLE_FLAGS == {"ALLOW_WEB_RESEARCH", "ALLOW_SONNET_ESCALATION"}
+    from scripts.build_cloud_workflows import WRITE_SAFETY_DEFAULTS, _write_safety_const
+
+    assert deploy._OVERLAYABLE_FLAGS < set(CONFIG_FLAG_DEFAULTS) | set(WRITE_SAFETY_DEFAULTS)
+    assert deploy._OVERLAYABLE_FLAGS == {
+        "ALLOW_WEB_RESEARCH",
+        "ALLOW_SONNET_ESCALATION",
+        "ALLOW_HUBSPOT_RECORD_WRITES",
+        "ALLOW_HUBSPOT_CREATE",
+        "TEST_RECORD_IDS",
+        "TEST_RECORD_DOMAINS",
+    }
+    # Cost caps and model names stay structurally out of reach.
+    assert not deploy._OVERLAYABLE_FLAGS & {
+        "MAX_WEB_RESEARCH_PER_RUN", "MAX_SONNET_VALIDATIONS_PER_RUN", "ANTHROPIC_SONNET_MODEL",
+    }
+    # Each spec entry's disabled literal must be byte-identical to what the builder bakes —
+    # otherwise the exact-literal rewrite silently matches nothing and the deploy refuses
+    # (or worse, a future looser matcher rewrites the wrong declaration).
+    for flag, (disabled_literal, _enabled, _takes_value) in deploy._OVERLAY_FLAG_SPEC.items():
+        if flag in WRITE_SAFETY_DEFAULTS:
+            assert _write_safety_const(flag) == f"const {flag} = {disabled_literal};"
+        else:
+            assert disabled_literal == "false"

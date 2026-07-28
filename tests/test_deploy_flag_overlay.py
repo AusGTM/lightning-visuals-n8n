@@ -146,13 +146,17 @@ def test_enable_baked_flags_never_returns_a_workflow_with_a_surviving_disabled_d
 
 
 # --- (e) non-overlayable names rejected --------------------------------------------------
+#
+# Phase 16.7 deliberately MOVED the write-safety constants into the overlayable set so the
+# write-path canary can arm one record without a rebuild; their guards (an allowlist is
+# mandatory in the same request, values are charset-restricted) live in
+# tests/test_deploy_write_safety_overlay.py. Cost caps and model names stay out of reach
+# permanently — those are what this parametrization protects.
 
 @pytest.mark.parametrize("bad_flag", [
     "MAX_WEB_RESEARCH_PER_RUN",
     "MAX_SONNET_VALIDATIONS_PER_RUN",
     "ANTHROPIC_SONNET_MODEL",
-    "ALLOW_HUBSPOT_RECORD_WRITES",
-    "ALLOW_HUBSPOT_CREATE",
 ])
 def test_enable_baked_flags_rejects_non_overlayable_names(bad_flag):
     wf = _load_enrichment_workflow()
@@ -164,8 +168,6 @@ def test_enable_baked_flags_rejects_non_overlayable_names(bad_flag):
     "MAX_WEB_RESEARCH_PER_RUN",
     "MAX_SONNET_VALIDATIONS_PER_RUN",
     "ANTHROPIC_SONNET_MODEL",
-    "ALLOW_HUBSPOT_RECORD_WRITES",
-    "ALLOW_HUBSPOT_CREATE",
 ])
 def test_requested_overlay_flags_rejects_non_overlayable_names_from_env(monkeypatch, bad_flag):
     monkeypatch.setenv("ENABLE_BAKED_FLAGS", bad_flag)
