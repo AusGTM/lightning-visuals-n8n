@@ -56,6 +56,11 @@ def promote_fake(record, field, current_value, candidates, policy):
             "requires_sonnet_validation": False}
 
 
+def stage_only_fake(record, field, current_value, candidates, policy):
+    return {"decision": "stage_only", "confidence": 90, "reason": "test",
+            "requires_sonnet_validation": False}
+
+
 # --- SC1: mock adapters + web research satisfy the ProviderResult contract ---
 
 def test_sc1a_mock_adapters_return_contract():
@@ -192,6 +197,28 @@ def test_sc4_full_source_attribution(monkeypatch):
     if "lv_produces_content" in provenance:
         assert "lv_produces_content_verified_at" in mr.metadata_patch
         assert mr.metadata_patch["lv_produces_content_verified_at"] == provenance["lv_produces_content"]["verified_at"]
+
+
+def test_sc4b_cache_key_not_stamped_unless_promoted(monkeypatch):
+    # Bug 2 (STATE.md 16.3-01 "Found, not fixed"): the JS mergeContacts.js/mergeCompanies.js
+    # stamp their cache-key verified_at datetime ONLY when a field is promoted (Phase
+    # 16.2/16.3 stale-timestamp fix). Python's build_merge_result used to derive the same
+    # cache-key datetimes (lv_org_type_verified_at / lv_produces_content_verified_at) from
+    # `if field in provenance` alone -- true for ANY chosen candidate regardless of the
+    # final decision. Force every field to stage_only: the provenance blob (audit trail)
+    # must still record the candidate, but the cache-key datetime -- the thing RT-5/SJ-2's
+    # stale-refresh scan reads -- must not be stamped, or a staged-not-promoted field would
+    # look "freshly verified" and never get re-picked up.
+    monkeypatch.setattr("src.merge_policy.classify_field_with_haiku", stage_only_fake)
+    record = load_record()
+    mr = build_merge_result(record, build_all_candidates(record))
+
+    assert "lv_org_type" not in mr.canonical_patch
+
+    provenance = json.loads(mr.metadata_patch["lv_enrichment_provenance"])
+    assert "lv_org_type" in provenance, "audit trail must still record the evaluated candidate"
+
+    assert "lv_org_type_verified_at" not in mr.metadata_patch
 
 
 # --- integ: end-to-end wiring incl. Phase 2 scorer, offline, no monkeypatch ---
