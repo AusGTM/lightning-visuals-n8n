@@ -123,6 +123,32 @@ test("mergeCompanies: a promoted lv_org_type sets the lv_org_type_verified_at ca
   assert.equal(Object.keys(cacheKeys).length, 1);
 });
 
+// --- Phase 16.3 (companies twin of Phase 16.2 gpt #6): stale-timestamp fix — cache key
+// stamped ONLY on promote. Uses the evidence-gate withhold mechanism (companies-native,
+// since companies has no stale_refreshable field with a cache-key mapping) rather than
+// mergeContacts.test.mjs's stale_refreshable path — the gated set is read from the
+// module's own policy (TX-4 discipline), mirroring the existing test at :89-105. -------
+
+test("stale-timestamp fix: a needs_review (unevidenced gated) lv_org_type emits NO lv_org_type_verified_at", () => {
+  const gated = DEFAULT_COMPANY_POLICY.lv_org_type.require_evidence_url_for;
+  const gatedValue = gated[0];
+  const { canonicalPatch, cacheKeys, decisions } = mergeCompanies(
+    {}, { lv_org_type: gatedValue }, undefined, { source: "claude_web", confidence: 90 });
+  assert.ok(!("lv_org_type" in canonicalPatch));
+  assert.equal(decisions.find((d) => d.field === "lv_org_type").decision, "needs_review");
+  assert.ok(!("lv_org_type_verified_at" in cacheKeys), "unpromoted unevidenced lv_org_type must not be marked fresh");
+});
+
+test("stale-timestamp fix: a promoted lv_org_type DOES emit lv_org_type_verified_at", () => {
+  const gated = DEFAULT_COMPANY_POLICY.lv_org_type.require_evidence_url_for;
+  const gatedValue = gated[0];
+  const { canonicalPatch, cacheKeys } = mergeCompanies(
+    {}, { lv_org_type: gatedValue }, undefined,
+    { source: "claude_web", confidence: 90, evidence: { lv_org_type: "https://x/about" } });
+  assert.equal(canonicalPatch.lv_org_type, gatedValue);
+  assert.ok(cacheKeys.lv_org_type_verified_at, "promoted lv_org_type keeps its cache-key stamp");
+});
+
 // --- Flat opts.confidence default ------------------------------------------------------
 test("mergeCompanies: flat opts.confidence default (80) applies when opts omits it", () => {
   const { decisions } = mergeCompanies({}, { lv_content_type: ["live_broadcast"] }, undefined, {});

@@ -202,12 +202,16 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
     if (!_isBlank(evidenceUrl)) entry.evidence_url = evidenceUrl;
     provenance[field] = entry;
 
-    if (COMPANY_CACHE_KEY_FIELDS[field]) {
-      cacheKeys[COMPANY_CACHE_KEY_FIELDS[field]] = verifiedAt;
-    }
-
     if (decision === "promote") {
       canonicalPatch[field] = value;
+      // STALE-TIMESTAMP FIX (Phase 16.3, companies twin of Phase 16.2 gpt #6): the
+      // cache-key datetime is stamped ONLY when the field is actually ACCEPTED — moved
+      // inside this branch (was previously unconditional) so a needs_review/stale-but-
+      // unpromoted candidate is never marked fresh, which would otherwise suppress the
+      // next stale-refresh check (CLAUDE.md §19.5) forever.
+      if (COMPANY_CACHE_KEY_FIELDS[field]) {
+        cacheKeys[COMPANY_CACHE_KEY_FIELDS[field]] = verifiedAt;
+      }
     }
 
     decisions.push({

@@ -186,8 +186,7 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
       // when the field is actually ACCEPTED — moved inside this branch (was previously
       // unconditional) so a needs_review/stale-but-unpromoted candidate is never marked
       // fresh, which would otherwise suppress the next stale-refresh check forever.
-      // NOTE: mergeCompanies.js has the same latent issue — Track-B follow-up, not fixed
-      // here (companies byte-identity guard, Plan 01's frozen fixture).
+      // Mirrored onto mergeCompanies.js in Phase 16.3 — both paths now carry the fix.
       if (CONTACT_CACHE_KEY_FIELDS[field]) {
         cacheKeys[CONTACT_CACHE_KEY_FIELDS[field]] = verifiedAt;
       }
