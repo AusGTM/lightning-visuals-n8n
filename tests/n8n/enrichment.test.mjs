@@ -28,7 +28,13 @@ const lushaCo = load("lusha_company.json");
 const apolloCo = load("apollo_company.json");
 const zoomCo = load("zoominfo_company.json");
 const apolloLive = load("apollo_live_match.json"); // real people/match: nested under `person`
-const lushaLive = load("lusha_live_person.json"); // real v2 person: nested under contact.data
+// NOTE: despite the filename/original comment, this singular `{contact:{data:{...}}}`
+// envelope was NEVER actually observed live -- the real live /v2/person contract
+// (confirmed 2026-07-28, see lusha_live_person_v2.json) is a PLURAL contactId-keyed
+// `{contacts:{...}}` map. Kept only as an offline back-compat fallback shape (do not
+// delete -- lushaCandidates() still supports it).
+const lushaLive = load("lusha_live_person.json");
+const lushaLiveV2 = load("lusha_live_person_v2.json"); // REAL live v2/person envelope (confirmed)
 const zoomLive = load("zoominfo_live_enrich.json"); // real GTM enrich: data[].attributes + meta.matchStatus
 
 function find(cands, field, source) {
@@ -119,6 +125,39 @@ test("toCandidates: Lusha live v2 (contact.data + emailAddresses/phoneNumbers) m
   assert.equal(find(co, "lv_revenue_band", "lusha").normalizedValue, "50-500M"); // 250M lower bound
   assert.equal(find(co, "lv_employee_band", "lusha").normalizedValue, "201-500");
   assert.equal(find(co, "lv_country_region_normalized", "lusha").normalizedValue, "AU");
+});
+
+// --- toCandidates: REAL live v2/person envelope -- plural, contactId-keyed `contacts`
+// map (confirmed live against portal 22617666, 2026-07-28). firstName/lastName/
+// fullName/companyId/emails/emailAddresses/phones are captured verbatim from the live
+// response; the phoneNumbers[0] item body was elided in the live capture and is
+// reconstructed here using the same number/phoneType/doNotCall/updateDate shape the
+// code (and the pre-existing lusha_live_person.json fixture) already expect.
+test("toCandidates: Lusha live v2 PLURAL contacts-map (real contract) extracts email + mobile", () => {
+  const c = toCandidates("lusha", lushaLiveV2, "contacts");
+  const email = find(c, "email", "lusha");
+  assert.ok(email, "email candidate present from contacts['1'].data.emailAddresses");
+  assert.equal(email.normalizedValue, "brendan@lightningvisuals.com");
+  assert.equal(email.accuracy, 1.0); // A+ work
+  const mob = find(c, "mobilephone", "lusha");
+  assert.ok(mob, "mobilephone candidate present from contacts['1'].data.phoneNumbers");
+  assert.equal(mob.normalizedValue, "+61493511289");
+});
+
+test("toCandidates: Lusha contacts-map per-contact error -> skip (never throw, zero candidates)", () => {
+  const raw = { contacts: { "1": { error: "NOT_FOUND", isCreditCharged: false } } };
+  assert.doesNotThrow(() => toCandidates("lusha", raw, "contacts"));
+  assert.deepEqual(toCandidates("lusha", raw, "contacts"), []);
+});
+
+test("toCandidates: Lusha contacts-map entry with no data key -> skip (never throw)", () => {
+  const raw = { contacts: { "1": { error: null, isCreditCharged: true } } };
+  assert.doesNotThrow(() => toCandidates("lusha", raw, "contacts"));
+  assert.deepEqual(toCandidates("lusha", raw, "contacts"), []);
+});
+
+test("toCandidates: Lusha empty contacts map -> no candidates, never throw", () => {
+  assert.deepEqual(toCandidates("lusha", { contacts: {} }, "contacts"), []);
 });
 
 test("toCandidates: ZoomInfo live GTM enrich (data[].attributes + meta.matchStatus)", () => {
