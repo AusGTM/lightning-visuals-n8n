@@ -112,11 +112,17 @@ def compute_icp_score(record: HubSpotRecord, candidate_patch: dict) -> ICPScoreR
     motion_map = cfg["recommended_motion"]
     recommended_motion = motion_map.get(tier, "research_more")
 
+    # BUG FIX (STATE.md "SCORING PRECEDENCE RULE", Phase 14 found-not-fixed): a fired
+    # hard veto must keep its D/disqualify label (CLAUDE.md 10.3) even when org_type/
+    # produces_content is also missing. Confidence still drops to 55 either way -- the
+    # underlying data really is incomplete and that stays visible in the breakdown --
+    # but tier/recommended_motion are only downgraded when no veto has already won.
     confidence = 85
     if org_type == "unknown" or produces_content is None:
         confidence = 55
-        tier = "Needs Review" if score >= 15 else "Unscored"
-        recommended_motion = "research_more"
+        if not anti_icp_flag:
+            tier = "Needs Review" if score >= 15 else "Unscored"
+            recommended_motion = "research_more"
 
     return ICPScoreResult(
         score=score,

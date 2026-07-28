@@ -105,24 +105,21 @@ def test_jg5_supertech_hardware_veto_independent_of_jg4():
     """JG-5 (offline dev-oracle rubric proof, Approach C): src/icp_scoring.py's existing
     hardware-vendor hard veto fires for Supertech Electronics whether lv_produces_content
     is the un-demoted false positive (True) or the JG-4-demoted value (None). This
-    exercises the UNCHANGED src/icp_scoring.py as a dev oracle only (AR-3) — it asserts
-    nothing about any n8n write path; no veto is computed in production JS (Approach C).
+    exercises src/icp_scoring.py as a dev oracle only (AR-3) — it asserts nothing about
+    any n8n write path; no veto is computed in production JS (Approach C).
 
-    DISCOVERED GAP (documented, not silently patched — Task 1's Do-Not list forbids
-    touching src/icp_scoring.py in this plan): the veto SIGNAL (`anti_icp_flag` +
-    `anti_icp_reason`, the two fields Approach C's internal routing actually reads) is
-    empirically independent of lv_produces_content in both branches, proven below.
-    The `tier` LABEL is not, in the None branch only: icp_scoring.py's pre-existing
-    confidence-downgrade block (lines ~115-119) unconditionally rewrites `tier` to
-    "Needs Review"/"Unscored" whenever `lv_produces_content is None`, WITHOUT checking
-    whether `anti_icp_flag` already fired — a precedence bug that predates this phase
-    (present before Task 1 touched this file at all; reproduced against the unmodified
-    module). Per the plan's own instruction ("if it passes in only one [branch], the
-    veto is not independent and the plan's premise is wrong; stop and report"), this is
-    reported here rather than force-asserted or silently fixed. See 14-01-SUMMARY.md
-    "Deviations" for the one-line fix this would take and the recommendation to get
-    explicit sign-off before applying it (icp_scoring.py is shared by other pinned
-    score/tier assertions in tests/test_icp_scoring.py and tests/test_web_research_spec.py).
+    FIXED (was: DISCOVERED GAP, Phase 14; the plan's own Do-Not list forbade touching
+    src/icp_scoring.py that phase). The veto SIGNAL (`anti_icp_flag` + `anti_icp_reason`)
+    was always independent of lv_produces_content in both branches, proven below. The
+    `tier` LABEL used to NOT be, in the None branch: icp_scoring.py's confidence-downgrade
+    block unconditionally rewrote `tier` to "Needs Review"/"Unscored" whenever
+    `lv_produces_content is None`, without checking whether `anti_icp_flag` already fired.
+    This test used to assert that buggy downgrade explicitly (`tier in ("Needs Review",
+    "Unscored")`, self-documented as "not a silent pass either way, flip this when
+    fixed") rather than force a silent pass. icp_scoring.py now skips the tier/motion
+    downgrade once a hard veto has already fired (confidence still drops to 55 — the
+    missing org_type/produces_content data is real — but the veto's D/disqualify label
+    and CLAUDE.md 10.3's hard-veto contract win). Both branches now assert tier == "D".
     """
     from src.icp_scoring import compute_icp_score
     from src.schemas import HubSpotRecord
@@ -135,8 +132,9 @@ def test_jg5_supertech_hardware_veto_independent_of_jg4():
         "lv_is_hardware_vendor": True,
     }
 
-    # (lv_produces_content, expected exact tier or None to accept the documented-gap set)
-    cases = [(True, "D"), (None, None)]
+    # (lv_produces_content, expected tier) -- both branches now expect "D": the veto
+    # label survives the confidence downgrade regardless of which branch trips it.
+    cases = [(True, "D"), (None, "D")]
 
     for produces_content, expected_tier in cases:
         rec = HubSpotRecord(
@@ -150,18 +148,7 @@ def test_jg5_supertech_hardware_veto_independent_of_jg4():
             f"hardware-vendor veto must fire independently of lv_produces_content={produces_content!r}"
         )
         assert "hardware" in (result.anti_icp_reason or "").lower()
-
-        if expected_tier is not None:
-            assert result.tier == expected_tier
-        else:
-            # Documented gap: tier LABEL is downgraded by the confidence-downgrade block
-            # despite anti_icp_flag already True. Assert the actual (buggy but pre-existing)
-            # behavior explicitly so a future fix to icp_scoring.py's precedence flips this
-            # to "D" and this assertion is the one that then needs updating — not a silent
-            # pass either way.
-            assert result.tier in ("Needs Review", "Unscored"), (
-                f"expected the documented pre-existing tier-downgrade gap, got {result.tier!r}"
-            )
+        assert result.tier == expected_tier
 
 
 def test_ro2_judge_gate_cannot_see_size_conflicts():
