@@ -514,7 +514,7 @@ Plans:
 
 Plans:
 - [x] 16.4-01-PLAN.md — Tracer: the fetch-by-objectId lane wired end-to-end on contacts (pure adapter module, credential-bound search-by-`hs_object_id` node, node-name row recovery, identity_keys backfill) plus the new bare-event e2e harness, then mirrored onto companies
-- [ ] 16.4-02-PLAN.md — Unit tier on the pure adapter, integration/row-flow regression across the new hop, caller-envelope back-compat, safe-degradation cases, pytest topology + generic credential guard, and the recorded Track-B live checkpoint
+- [x] 16.4-02-PLAN.md — Unit tier on the pure adapter, integration/row-flow regression across the new hop, caller-envelope back-compat, safe-degradation cases, pytest topology + generic credential guard, and the recorded Track-B live checkpoint
 
 ## Milestone 3 Progress
 
@@ -530,4 +530,4 @@ Plans:
 | 16.1. Provider Selection, Credit Reporting & Schedule Safety (INSERTED) | 2/2 | Complete | 2026-07-24 |
 | 16.2. Contacts Research + Judge Mirror (INSERTED) | 2/2 | Complete | 2026-07-24 |
 | 16.3. Companies Stale-Timestamp Fix (INSERTED) | 1/1 | Complete | 2026-07-28 |
-| 16.4. Fetch-By-ObjectId (INSERTED) | 1/2 | In Progress | — |
+| 16.4. Fetch-By-ObjectId (INSERTED) | 2/2 | Complete | 2026-07-28 |
