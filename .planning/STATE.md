@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: Company Enrichment & ICP Research
-current_phase: 16.6
-current_phase_name: companies-search-transport-fix
-status: paused
-stopped_at: "PAUSED 2026-07-28 ~16:05 +10:00 after Phase 16.6 (BUG 10). Session arc: 16.3 (companies stale-timestamp, VERIFIED 6/6) -> 16.4 (fetch-by-objectId, VERIFIED 7/7) -> quick hubspot-credential-binding -> two Python-lane debug fixes -> Track B provision/deploy/ACTIVATE on n8n Cloud -> canary steps 1-3 live -> 16.5 (deploy-time research/escalation overlay; contacts research lane VERIFIED LIVE, criterion 7 MET; companies BLOCKED) -> 16.6 (BUG 10 fixed, code-complete but LIVE-UNVERIFIED). TEN live-only bugs found and fixed, every one passing a full offline suite and deploying clean before failing on first real API contact. Suite 346 -> 504 pytest / 275 node. LIVE STATE: LV Enrichment ACTIVE + DISARMED (research/escalation false, read-back verified) in Robert's n8n project T9IPFKpIn2aUYYj3, workflow 950HPb7a1GgSAIyZ; other two workflows INACTIVE; ALLOW_HUBSPOT_RECORD_WRITES=false with an EMPTY allowlist. NOTHING HAS EVER BEEN WRITTEN TO HUBSPOT. NEXT: the write-path canary (TEST_RECORD_IDS=201 only, no creates) — the first live proof of the non-clobber merge, and the run that can also close BUG 10's still-open live verification. See .planning/HANDOFF.json and .planning/phases/16.6-companies-search-transport-fix/.continue-here.md."
-last_updated: "2026-07-28T16:05:00+10:00"
-last_activity: 2026-07-28
-last_activity_desc: Fixed BUG 10 (companies search transport) via /gsd-debug, then paused with a full handoff
+current_phase: 16.7
+current_phase_name: write-path-canary
+status: in_progress
+stopped_at: "2026-07-29 — Phase 16.7 (write-path canary) WAVE 1 COMPLETE, WAVE 2 AT ITS ARMING CHECKPOINT. Wave 1 found and fixed BUG 11 offline: both `HubSpot Update` and `HubSpot Company Update` shipped as native HubSpot nodes with an EMPTY `updateFields` map, referencing the merge patch (`$json.properties`) nowhere — the canary would have written nothing and criterion 3 ('a protected field was not overwritten') would have passed VACUOUSLY. Both are now credential-bound `httpRequest` PATCH nodes to `/crm/v3/objects/{contacts,companies}/{{hs_object_id}}` carrying `{properties: $json.properties}`, deliberately WITHOUT `onError: continueRegularOutput` so a rejected write fails loudly. Node names preserved so NODE_CREDENTIAL_MAP binding survives; contact search nodes byte-untouched; zero $env/$vars; rebuild deterministic. Suite 519 -> 528 pytest / 278 node, zero regressions. Also this session: ENABLE_BAKED_FLAGS widened to write-safety + value flags (7f0dce4) so the canary needs no rebuild — guarded so writes cannot be armed without a non-empty allowlist in the same request. WAVE 2 IS LIVE and blocked on the operator: the arming deploy and webhook fire are denied to the agent by the session permission classifier. Sequencing decision: companies fires FIRST in the same armed window — company 9604614548 is deliberately OFF the allowlist, so that run is simultaneously the BUG 10 live verification (Phase 16.6 criteria 1 and 7) and the EMPIRICAL containment test, at zero LLM spend since research/escalation stay disarmed. PRIOR CONTEXT: paused 2026-07-28 after Phase 16.6 (BUG 10). Session arc: 16.3 (companies stale-timestamp, VERIFIED 6/6) -> 16.4 (fetch-by-objectId, VERIFIED 7/7) -> quick hubspot-credential-binding -> two Python-lane debug fixes -> Track B provision/deploy/ACTIVATE on n8n Cloud -> canary steps 1-3 live -> 16.5 (deploy-time research/escalation overlay; contacts research lane VERIFIED LIVE, criterion 7 MET; companies BLOCKED) -> 16.6 (BUG 10 fixed, code-complete but LIVE-UNVERIFIED). TEN live-only bugs found and fixed, every one passing a full offline suite and deploying clean before failing on first real API contact. Suite 346 -> 504 pytest / 275 node. LIVE STATE: LV Enrichment ACTIVE + DISARMED (research/escalation false, read-back verified) in Robert's n8n project T9IPFKpIn2aUYYj3, workflow 950HPb7a1GgSAIyZ; other two workflows INACTIVE; ALLOW_HUBSPOT_RECORD_WRITES=false with an EMPTY allowlist. NOTHING HAS EVER BEEN WRITTEN TO HUBSPOT. NEXT: the write-path canary (TEST_RECORD_IDS=201 only, no creates) — the first live proof of the non-clobber merge, and the run that can also close BUG 10's still-open live verification. See .planning/HANDOFF.json and .planning/phases/16.6-companies-search-transport-fix/.continue-here.md."
+last_updated: "2026-07-29T09:40:00+10:00"
+last_activity: 2026-07-29
+last_activity_desc: "Phase 16.7 planned and wave 1 executed — BUG 11 (write nodes carried no patch body) found and fixed offline; wave 2 waits at the arming checkpoint"
 progress:
-  total_phases: 23
+  total_phases: 24
   completed_phases: 8
-  total_plans: 31
-  completed_plans: 17
+  total_plans: 33
+  completed_plans: 18
 
 ---
 
@@ -172,7 +172,8 @@ Items carried forward to later milestones:
 
 ## Session Continuity
 
-Last session: 2026-07-28T07:41:25Z
+Last session: 2026-07-29 (resumed from HANDOFF.json; Phase 16.6 code-complete, LIVE-UNVERIFIED; next action = write-path canary, TEST_RECORD_IDS=201 only)
+Prior session: 2026-07-28T07:41:25Z
 Stopped at: Phase 16.5-01 EXECUTED + committed (0e7ad42 deploy-time overlay, 7d4c17a enabled-build invariants, e0982fd offline oracle). Wave 1 (OFFLINE ONLY) of Phase 16.5 complete. Waves 2/3 (Plan 02 contacts live run, Plan 03 companies live run — the bd682a2 verification) not yet started.
 Resume file: None
 **TRACK B PROVISION + DEPLOY DONE 2026-07-28** — deployed to **Robert Li's personal project** (`T9IPFKpIn2aUYYj3`) on `alexherman.app.n8n.cloud`. All 6 credentials provisioned; all 3 workflows deployed and verified by read-back: `LV Contact Ingest` (19 nodes, 4 bound, 3 HubSpot, 0 unbound), `LV Enrichment` (94 nodes, 22 bound, 8 HubSpot, 0 unbound), `LV Scheduled Maintenance` (30 nodes, 9 bound, 9 HubSpot, 0 unbound). No duplicate node names, no stale credential references. **All three `active=false`** — activation is the only remaining step and is deliberately NOT done.
