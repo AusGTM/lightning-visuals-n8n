@@ -27,6 +27,7 @@ n8n creates new workflows inactive by default.
 """
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from urllib.parse import urlparse
@@ -96,6 +97,19 @@ NODE_CREDENTIAL_MAP = {
     "Review Search (approved=true)": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "Review Apply Update": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
 }
+
+
+# Phase 16.5 Task 1 — the deploy-time research/escalation overlay's closed target set.
+# ONLY the two boolean kill switches `_flag_const(..., cloud=True)` bakes as bare-boolean
+# JS literals. `MAX_WEB_RESEARCH_PER_RUN` / `MAX_SONNET_VALIDATIONS_PER_RUN` /
+# `ANTHROPIC_SONNET_MODEL` are also CONFIG_FLAG_DEFAULTS entries but would let an
+# open-ended mechanism widen cost caps or swap models — "enabling research must not widen
+# anything else" has to be structural, not a convention, so a name outside this set is a
+# ValueError, never a silent no-op. Deliberately NOT imported from build_cloud_workflows —
+# that module runs taxonomy/escalation codegen at import time and writes into n8n/code/;
+# a deploy script must never carry that side effect. tests/test_enabled_build_invariants.py
+# pins this set as a subset of CONFIG_FLAG_DEFAULTS from a TEST, which may import freely.
+_OVERLAYABLE_FLAGS = frozenset({"ALLOW_WEB_RESEARCH", "ALLOW_SONNET_ESCALATION"})
 
 
 def _has_n8n() -> bool:
@@ -219,6 +233,89 @@ def bind_credentials(workflow: dict, name_to_id: dict, node_cred_map: dict = Non
     return wf
 
 
+def enable_baked_flags(workflow: dict, flags) -> tuple:
+    """Pure, deep-copying, fails-closed deploy-time overlay — same shape as
+    bind_credentials() above, applied at the same point in flight. Returns a NEW
+    workflow dict (input is never mutated) plus a {flag: rewrite_count} map. A returned
+    count of zero for a given workflow is NOT an error here (two of the three cloud
+    workflows legitimately declare neither flag) — rejecting a zero total across the
+    WHOLE deploy set is the caller's (main()'s) responsibility.
+
+    Rejects any name outside _OVERLAYABLE_FLAGS with a ValueError. For each requested
+    flag, replaces the EXACT literal disabled declaration `_flag_const(..., cloud=True)`
+    emits (`const NAME = false;`, a bare boolean — never regex-loose) with the enabled
+    form, in every node's `parameters.jsCode`. Then — the point of this function — the
+    fail-closed check: re-scans the SERIALIZED result for every `const NAME = <literal>;`
+    declaration (a looser regex than the replace step, so a spacing or numeric-literal
+    drift the exact replace could not reach still gets caught) and raises if any
+    surviving declaration of a requested flag carries anything but the enabled literal.
+    A workflow that deploys silently disabled while reporting success is the exact
+    false-success this design exists to prevent.
+    """
+    for flag in flags:
+        if flag not in _OVERLAYABLE_FLAGS:
+            raise ValueError(
+                f"cannot enable {flag!r}: not in the overlayable set "
+                f"{sorted(_OVERLAYABLE_FLAGS)}. Cost caps, model names and write-safety "
+                f"constants are never overlayable."
+            )
+
+    wf = json.loads(json.dumps(workflow))  # deep copy, stdlib only — mirrors bind_credentials
+    counts = {flag: 0 for flag in flags}
+
+    for node in wf.get("nodes", []):
+        js_code = node.get("parameters", {}).get("jsCode")
+        if not isinstance(js_code, str):
+            continue
+        for flag in flags:
+            disabled_decl = f"const {flag} = false;"
+            enabled_decl = f"const {flag} = true;"
+            occurrences = js_code.count(disabled_decl)
+            if occurrences:
+                js_code = js_code.replace(disabled_decl, enabled_decl)
+                counts[flag] += occurrences
+        node["parameters"]["jsCode"] = js_code
+
+    # Fail-closed re-scan: any requested flag whose declaration (in ANY spacing/literal
+    # form) still fails to read the enabled boolean means the exact-literal replace above
+    # could not reach it — raise rather than return a workflow that deploys disabled.
+    serialized = json.dumps(wf)
+    for flag in flags:
+        decl_re = re.compile(rf"const\s+{re.escape(flag)}\s*=\s*([^;]+);")
+        for match in decl_re.finditer(serialized):
+            literal = match.group(1)
+            if literal != "true":
+                raise ValueError(
+                    f"cannot enable {flag!r} in {wf.get('name')!r}: a declaration still "
+                    f"carries literal {literal!r} after rewrite. Nothing was deployed."
+                )
+
+    return wf, counts
+
+
+def _requested_overlay_flags() -> list:
+    """The operator-visibility flag. Reads `ENABLE_BAKED_FLAGS` — a comma-separated list
+    of constant names to enable — NEVER the flags' own names. This repo's `.env` already
+    defines `ALLOW_WEB_RESEARCH` and `ALLOW_SONNET_ESCALATION` for the Python harness
+    lane; had the overlay read those names, a routine deploy from a developer machine
+    with that `.env` sourced would have armed production silently — precisely the
+    ambient-environment failure CONTEXT rejected. `ENABLE_BAKED_FLAGS` cannot collide with
+    it, and because its VALUE is the explicit list of constants to flip, the enablement is
+    legible in the command that performs it. Unset or empty yields an empty list, so a
+    plain deploy can never arm anything. A name outside _OVERLAYABLE_FLAGS raises rather
+    than silently enabling nothing, so a typo refuses the deploy instead of no-op'ing.
+    """
+    raw = os.getenv("ENABLE_BAKED_FLAGS", "")
+    names = [n.strip() for n in raw.split(",") if n.strip()]
+    for name in names:
+        if name not in _OVERLAYABLE_FLAGS:
+            raise ValueError(
+                f"ENABLE_BAKED_FLAGS names unknown flag {name!r}; permitted: "
+                f"{sorted(_OVERLAYABLE_FLAGS)}"
+            )
+    return names
+
+
 def _create_workflow_live(body: dict):
     import requests
     payload = {k: v for k, v in body.items() if k in ("name", "nodes", "connections", "settings")}
@@ -250,6 +347,53 @@ def main(argv=None) -> int:
 
     print(f"Workflows to create: {[w['name'] for w in diff['create']]}")
     print(f"Workflows to update: {[u['body']['name'] for u in diff['update']]}")
+
+    # Phase 16.5 Task 1 — the deploy-time research/escalation overlay. Sits ABOVE the
+    # write gate so a dry run reports exactly what a live run would arm, and refuses
+    # (zero HTTP calls made) before credentials are even loaded. An empty request leaves
+    # every existing caller and test's control flow untouched.
+    try:
+        requested_flags = _requested_overlay_flags()
+    except ValueError as exc:
+        print(f"REFUSED: {exc}")
+        return 1
+
+    if requested_flags:
+        total_counts = {flag: 0 for flag in requested_flags}
+        rewritten_in = {flag: [] for flag in requested_flags}
+        try:
+            new_create = []
+            for wf in diff["create"]:
+                new_wf, counts = enable_baked_flags(wf, requested_flags)
+                for flag, n in counts.items():
+                    total_counts[flag] += n
+                    if n:
+                        rewritten_in[flag].append(wf["name"])
+                new_create.append(new_wf)
+            diff["create"] = new_create
+
+            new_update = []
+            for u in diff["update"]:
+                new_body, counts = enable_baked_flags(u["body"], requested_flags)
+                for flag, n in counts.items():
+                    total_counts[flag] += n
+                    if n:
+                        rewritten_in[flag].append(u["body"]["name"])
+                new_update.append({"id": u["id"], "body": new_body})
+            diff["update"] = new_update
+        except ValueError as exc:
+            print(f"REFUSED: {exc}")
+            return 1
+
+        for flag in requested_flags:
+            print(f"ENABLE_BAKED_FLAGS: {flag} rewritten {total_counts[flag]}x "
+                  f"in {rewritten_in[flag]}")
+
+        zero_flags = [flag for flag in requested_flags if total_counts[flag] == 0]
+        if zero_flags:
+            print(f"REFUSED: requested flag(s) {zero_flags} matched zero declarations "
+                  f"across the entire deploy set — nothing was deployed.")
+            return 1
 
     if not _writes_allowed():
         print("DRY RUN (default) — no writes will be made. Set DRY_RUN=false AND "
