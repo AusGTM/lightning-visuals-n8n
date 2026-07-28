@@ -506,7 +506,15 @@ Plans:
   6. A fetch failure (404/401/5xx) degrades safely — no create, no clobber — consistent with the `lookup_failed` create→skip precedent from Phase 16-01.
   7. Full offline suite green, zero regressions; builder deterministic. No live calls in the suite.
 
-**Plans**: TBD
+**Note (planning, 2026-07-28):** criterion 1's literal wording ("between `Parse HubSpot Event` and the identity builders") was CORRECTED at plan time by 16.4-RESEARCH.md. Placing a gate on the `Route By Object Type` -> identity-builder edge breaks `tests/test_cloud_write_path.py::test_object_type_router_sends_companies_events_to_the_company_branch`, which pins those exact edge targets — and bare-event-ness is not computable there anyway, since `identity_keys` does not exist until the identity builder runs. The lane is therefore placed immediately AFTER each identity builder (`Build (Company) Identity -> IF (Company) Bare Event -> HubSpot (Company) Fetch By Id -> Adapt (Company) Fetch By Id -> Enrichment Gate / Company Gate`), which reuses the `identity_keys` already computed, converges back into the existing gate, and leaves the pinned router edges untouched. Fetch-by-id uses the native HubSpot node's `search` operation filtered on `hs_object_id EQ` — n8n's V2 single-record retrieval operation still routes to HubSpot's sunset Contacts v1 / legacy Companies v2 endpoints and returns a non-flat property shape incompatible with every downstream consumer.
+
+**Track-B dependency (MEDIUM confidence, unproven against portal 22617666):** the whole design rests on HubSpot's CRM v3 Search API accepting `hs_object_id` as a filterable property with `EQ`. Corroborated by practitioner usage; not confirmed by HubSpot's own Search guide and not testable within this phase's offline-only fence. Recorded as an explicit live checkpoint with a one-call verification and a bounded fallback (credential-bound raw HTTP GET to `/crm/v3/objects/{type}/{id}?properties=`, which changes only the two fetch nodes).
+
+**Plans**: 2 plans
+
+Plans:
+- [ ] 16.4-01-PLAN.md — Tracer: the fetch-by-objectId lane wired end-to-end on contacts (pure adapter module, credential-bound search-by-`hs_object_id` node, node-name row recovery, identity_keys backfill) plus the new bare-event e2e harness, then mirrored onto companies
+- [ ] 16.4-02-PLAN.md — Unit tier on the pure adapter, integration/row-flow regression across the new hop, caller-envelope back-compat, safe-degradation cases, pytest topology + generic credential guard, and the recorded Track-B live checkpoint
 
 ## Milestone 3 Progress
 
@@ -522,4 +530,4 @@ Plans:
 | 16.1. Provider Selection, Credit Reporting & Schedule Safety (INSERTED) | 2/2 | Complete | 2026-07-24 |
 | 16.2. Contacts Research + Judge Mirror (INSERTED) | 2/2 | Complete | 2026-07-24 |
 | 16.3. Companies Stale-Timestamp Fix (INSERTED) | 1/1 | Complete | 2026-07-28 |
-| 16.4. Fetch-By-ObjectId (INSERTED) | 0/? | Not started | — |
+| 16.4. Fetch-By-ObjectId (INSERTED) | 0/? | Planning | — |
