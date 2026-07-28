@@ -223,3 +223,217 @@ test("companies: a bare HubSpot event drives the full compiled chain to a patch 
   assert.ok(final.properties && typeof final.properties === "object" && !Array.isArray(final.properties),
     "properties is a plain object");
 });
+
+// =========================================================================================
+// Phase 16.4-02 Task 1 — INTEGRATION tier: dedicated row-flow regression, caller-envelope
+// back-compat, safe degradation, and the true live plain-array payload shape. SC-3/SC-4/SC-6.
+// =========================================================================================
+
+// --- (2) ROW-FLOW REGRESSION: a dedicated, minimal chain stopping right after the adapter,
+// so a red here points at exactly one thing — the bd682a2 bug class (a post-HTTP Code node
+// reading the current item instead of recovering the row BY NODE NAME). Reuses the same seed
+// body/mocks as the main e2e test above; this is a NARROWER, purpose-built assertion, not a
+// duplicate of it. ------------------------------------------------------------------------
+
+const CONTACT_ROW_FLOW_CHAIN = [
+  { name: "Parse HubSpot Event", http: false },
+  { name: "Build Identity", http: false },
+  { name: "HubSpot Fetch By Id", http: true },
+  { name: "Adapt Fetch By Id", http: false },
+];
+
+test("contacts row-flow (bd682a2 bug class): object_id, object_type, provider_enabled and a non-empty providers_requested all survive the HTTP hop via node-name recovery", () => {
+  const { trace, threw } = runChain(WF_PATH, CONTACT_ROW_FLOW_CHAIN, CONTACT_SEED_BODY, CONTACT_HTTP_MOCKS);
+  assert.equal(threw, null, `no node threw (got: ${JSON.stringify(threw)})`);
+  const adapted = trace["Adapt Fetch By Id"];
+  assert.equal(adapted.object_id, "789",
+    "bd682a2 regression: object_id did not survive the fetch hop — the adapter is reading the current item, not the pre-hop row by node name");
+  assert.equal(adapted.object_type, "contacts",
+    "bd682a2 regression: object_type did not survive the fetch hop");
+  assert.deepEqual(adapted.provider_enabled, { lusha: true, apollo: true, zoominfo: false },
+    "bd682a2 regression: provider_enabled did not survive the fetch hop");
+  assert.deepEqual(adapted.providers_requested, ["lusha", "apollo"],
+    "bd682a2 regression: providers_requested must be the EXACT non-empty array the envelope requested — a dropped-then-defaulted empty array is the silent failure this guards against");
+});
+
+const COMPANY_ROW_FLOW_CHAIN = [
+  { name: "Parse HubSpot Event", http: false },
+  { name: "Build Company Identity", http: false },
+  { name: "HubSpot Company Fetch By Id", http: true },
+  { name: "Adapt Company Fetch By Id", http: false },
+];
+
+test("companies row-flow (bd682a2 bug class): object_id, object_type, provider_enabled and a non-empty providers_requested all survive the HTTP hop via node-name recovery", () => {
+  const { trace, threw } = runChain(WF_PATH, COMPANY_ROW_FLOW_CHAIN, COMPANY_SEED_BODY, COMPANY_HTTP_MOCKS);
+  assert.equal(threw, null, `no node threw (got: ${JSON.stringify(threw)})`);
+  const adapted = trace["Adapt Company Fetch By Id"];
+  assert.equal(adapted.object_id, "4567",
+    "bd682a2 regression: object_id did not survive the fetch hop — the adapter is reading the current item, not the pre-hop row by node name");
+  assert.equal(adapted.object_type, "companies",
+    "bd682a2 regression: object_type did not survive the fetch hop");
+  assert.deepEqual(adapted.provider_enabled, { lusha: true, apollo: true, zoominfo: false },
+    "bd682a2 regression: provider_enabled did not survive the fetch hop");
+  assert.deepEqual(adapted.providers_requested, ["lusha", "apollo"],
+    "bd682a2 regression: providers_requested must be the EXACT non-empty array the envelope requested — a dropped-then-defaulted empty array is the silent failure this guards against");
+});
+
+// --- (3) CALLER-ENVELOPE BACK-COMPAT: the direct-field envelope the WHOLE existing offline
+// suite drives, through the OLD lane only (Build Identity -> HubSpot Search -> Adapt Search).
+// The fetch-by-id nodes are not even IN this chain — proof the false lane is byte-for-byte
+// untouched by this phase, not merely "not asserted to have changed". --------------------
+
+const CONTACT_ENVELOPE_SEED_BODY = {
+  providers: ["lusha"],
+  events: [{
+    objectId: 321, objectType: "contact",
+    subscriptionType: "contact.propertyChange",
+    email: "Someone@ExampleCo.example",
+  }],
+};
+
+const CONTACT_DIRECT_FIELD_CHAIN = [
+  { name: "Parse HubSpot Event", http: false },
+  { name: "Build Identity", http: false },
+  { name: "HubSpot Search", http: true },
+  { name: "Adapt Search", http: false },
+  { name: "Enrichment Gate", http: false },
+];
+
+test("contacts caller-envelope back-compat: an email in the body resolves identity_keys the OLD way, never touching a fetch node, and providers_requested still resolves from the envelope", () => {
+  const { trace, threw } = runChain(WF_PATH, CONTACT_DIRECT_FIELD_CHAIN, CONTACT_ENVELOPE_SEED_BODY,
+    { "HubSpot Search": { results: [], total: 0 } });
+  assert.equal(threw, null, `no node threw (got: ${JSON.stringify(threw)})`);
+  const adapted = trace["Adapt Search"];
+  // Pre-16.4 ENRICH_BUILD_IDENTITY derivation exactly: normalizeEmailBasic + domain from
+  // the email's own domain part (no `domain` field was ever sent in this body).
+  assert.deepEqual(adapted.identity_keys, {
+    email: "someone@exampleco.example",
+    domain: "exampleco.example",
+    linkedin_url: null,
+    firstName: null,
+    lastName: null,
+    companyName: null,
+  });
+  assert.deepEqual(adapted.providers_requested, ["lusha"],
+    "the 16.1 per-request providers selection must still resolve from the envelope on this lane");
+});
+
+const COMPANY_ENVELOPE_SEED_BODY = {
+  providers: ["apollo"],
+  events: [{
+    objectId: 654, objectType: "company",
+    subscriptionType: "company.propertyChange",
+    domain: "https://www.ExampleCo.com/about",
+  }],
+};
+
+const COMPANY_DIRECT_FIELD_CHAIN = [
+  { name: "Parse HubSpot Event", http: false },
+  { name: "Build Company Identity", http: false },
+  { name: "HubSpot Company Search", http: true },
+  { name: "Adapt Company Search", http: false },
+  { name: "Company Gate", http: false },
+];
+
+test("companies caller-envelope back-compat: a domain in the body resolves identity_keys the OLD way, never touching a fetch node, and providers_requested still resolves from the envelope", () => {
+  const { trace, threw } = runChain(WF_PATH, COMPANY_DIRECT_FIELD_CHAIN, COMPANY_ENVELOPE_SEED_BODY,
+    { "HubSpot Company Search": { results: [], total: 0 } });
+  assert.equal(threw, null, `no node threw (got: ${JSON.stringify(threw)})`);
+  const adapted = trace["Adapt Company Search"];
+  // Pre-16.4 ENRICH_BUILD_CO_IDENTITY derivation exactly: cleanDomain(row.domain).
+  assert.deepEqual(adapted.identity_keys, { domain: "exampleco.com", companyName: null });
+  assert.deepEqual(adapted.providers_requested, ["apollo"],
+    "the 16.1 per-request providers selection must still resolve from the envelope on this lane");
+});
+
+// --- (4) SAFE DEGRADATION: a fetch failure (0-results and errored) degrades to
+// lookup_failed:true -> action:"skip" through the gate WRAPPER's create->skip override —
+// never through the frozen enrichmentGate.js module the unit tier alone can reach. --------
+
+const CONTACT_DEGRADE_CHAIN = [
+  { name: "Parse HubSpot Event", http: false },
+  { name: "Build Identity", http: false },
+  { name: "HubSpot Fetch By Id", http: true },
+  { name: "Adapt Fetch By Id", http: false },
+  { name: "Enrichment Gate", http: false },
+];
+
+test("contacts safe degradation: a 0-result fetch on a known hs_object_id degrades to lookup_failed and the gate skips (never create)", () => {
+  const { trace, threw } = runChain(WF_PATH, CONTACT_DEGRADE_CHAIN, CONTACT_SEED_BODY,
+    { "HubSpot Fetch By Id": { results: [], total: 0 } });
+  assert.equal(threw, null, `no node threw (got: ${JSON.stringify(threw)})`);
+  const adapted = trace["Adapt Fetch By Id"];
+  assert.equal(adapted.lookup_failed, true);
+  assert.match(adapted.fetch_diagnostic, /zero-results/);
+  assert.equal(trace["Enrichment Gate"].action, "skip",
+    'a 0-result fetch on a KNOWN hs_object_id must degrade to "skip", never "create" (no duplicate-record risk on a server-assigned id)');
+});
+
+test("contacts safe degradation: an errored fetch response ALSO degrades to lookup_failed and the gate skips, with a diagnostic distinguishable from the zero-results case", () => {
+  const { trace, threw } = runChain(WF_PATH, CONTACT_DEGRADE_CHAIN, CONTACT_SEED_BODY,
+    { "HubSpot Fetch By Id": { error: "HubSpot 500: upstream timeout" } });
+  assert.equal(threw, null, `no node threw (got: ${JSON.stringify(threw)})`);
+  const adapted = trace["Adapt Fetch By Id"];
+  assert.equal(adapted.lookup_failed, true);
+  assert.match(adapted.fetch_diagnostic, /HubSpot 500: upstream timeout/);
+  assert.doesNotMatch(adapted.fetch_diagnostic, /zero-results/);
+  assert.equal(trace["Enrichment Gate"].action, "skip");
+});
+
+const COMPANY_DEGRADE_CHAIN = [
+  { name: "Parse HubSpot Event", http: false },
+  { name: "Build Company Identity", http: false },
+  { name: "HubSpot Company Fetch By Id", http: true },
+  { name: "Adapt Company Fetch By Id", http: false },
+  { name: "Company Gate", http: false },
+];
+
+test("companies safe degradation: a 0-result fetch on a known hs_object_id degrades to lookup_failed and the gate skips (never create)", () => {
+  const { trace, threw } = runChain(WF_PATH, COMPANY_DEGRADE_CHAIN, COMPANY_SEED_BODY,
+    { "HubSpot Company Fetch By Id": { results: [], total: 0 } });
+  assert.equal(threw, null, `no node threw (got: ${JSON.stringify(threw)})`);
+  const adapted = trace["Adapt Company Fetch By Id"];
+  assert.equal(adapted.lookup_failed, true);
+  assert.match(adapted.fetch_diagnostic, /zero-results/);
+  assert.equal(trace["Company Gate"].action, "skip",
+    'a 0-result fetch on a KNOWN hs_object_id must degrade to "skip", never "create" (no duplicate-record risk on a server-assigned id)');
+});
+
+// --- (5) THE TRUE LIVE SHAPE: a plain HubSpot event array body — no envelope, no top-level
+// `providers` key — is the ONLY payload shape a real private-app webhook subscription can
+// ever produce. It must resolve to zero providers enabled (the documented safe default,
+// CONTEXT Locked Decision 2) while STILL resolving an identity via the fetch-by-id lane. --
+
+const CONTACT_PLAIN_ARRAY_SEED_BODY = [{
+  objectId: 789, objectType: "contact",
+  subscriptionType: "contact.propertyChange",
+  propertyName: "lv_enrichment_requested",
+  occurredAt: 1783316400000,
+}];
+
+test("contacts true live shape: a plain HubSpot event array (no envelope) resolves zero providers enabled and STILL resolves identity via the fetch lane", () => {
+  const { trace, threw } = runChain(WF_PATH, CONTACT_ROW_FLOW_CHAIN, CONTACT_PLAIN_ARRAY_SEED_BODY, CONTACT_HTTP_MOCKS);
+  assert.equal(threw, null, `no node threw (got: ${JSON.stringify(threw)})`);
+  const adapted = trace["Adapt Fetch By Id"];
+  assert.deepEqual(adapted.providers_requested, []);
+  assert.deepEqual(adapted.provider_enabled, { lusha: false, apollo: false, zoominfo: false });
+  assert.equal(adapted.identity_keys.email, "riley.chen@exampleracing.example",
+    "identity still resolves via the fetch backfill even though no provider is enabled");
+});
+
+const COMPANY_PLAIN_ARRAY_SEED_BODY = [{
+  objectId: 4567, objectType: "company",
+  subscriptionType: "company.propertyChange",
+  propertyName: "lv_enrichment_requested",
+  occurredAt: 1783316400000,
+}];
+
+test("companies true live shape: a plain HubSpot event array (no envelope) resolves zero providers enabled and STILL resolves identity via the fetch lane", () => {
+  const { trace, threw } = runChain(WF_PATH, COMPANY_ROW_FLOW_CHAIN, COMPANY_PLAIN_ARRAY_SEED_BODY, COMPANY_HTTP_MOCKS);
+  assert.equal(threw, null, `no node threw (got: ${JSON.stringify(threw)})`);
+  const adapted = trace["Adapt Company Fetch By Id"];
+  assert.deepEqual(adapted.providers_requested, []);
+  assert.deepEqual(adapted.provider_enabled, { lusha: false, apollo: false, zoominfo: false });
+  assert.equal(adapted.identity_keys.domain, "exampleracing.example",
+    "identity still resolves via the fetch backfill even though no provider is enabled");
+});
