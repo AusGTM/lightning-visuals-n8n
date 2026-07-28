@@ -217,6 +217,14 @@ def build_merge_result(record: HubSpotRecord, candidates: List[CandidateValue]) 
     staging_patch = {}
     canonical_patch = {}
     provenance = {}
+    # Fields whose final_decision was "promote" this call -- mirrors mergeContacts.js's
+    # `cacheKeys` map (Phase 16.2 gpt #6 / Phase 16.3-01), kept separate from `provenance`
+    # because the two answer different questions: `provenance` is the audit trail ("did we
+    # evaluate a candidate for this field", true for stage_only/needs_review/reject too);
+    # `promoted_fields` is the freshness signal ("is it safe to treat this field as
+    # up to date"), true only on promote. Conflating them was Bug 2 (STATE.md 16.3-01
+    # "Found, not fixed").
+    promoted_fields = set()
 
     # ONE timestamp shared across every field this call touches — parity with the JS
     # stamper, which computes a single verifiedAt per mergeCompanies()/mergeContacts() call
@@ -315,6 +323,7 @@ def build_merge_result(record: HubSpotRecord, candidates: List[CandidateValue]) 
 
         if final_decision == "promote" and chosen:
             canonical_patch[field] = chosen.normalized_value
+            promoted_fields.add(field)
 
     # Serialize the provenance blob ONCE (not per field) + emit the carve-out cache-key
     # datetimes as real top-level properties (Phase 15 provenance model).
@@ -324,8 +333,14 @@ def build_merge_result(record: HubSpotRecord, candidates: List[CandidateValue]) 
     metadata_patch = {}
     if provenance:
         metadata_patch[provenance_key] = serialize_provenance(provenance)[:60000]
+    # BUG FIX (STATE.md 16.3-01 "Found, not fixed" -- mirrors mergeContacts.js:183-194 /
+    # mergeCompanies.js's Phase 16.3 fix): gate on `field in promoted_fields`, not
+    # `field in provenance`. A staged/needs_review/rejected field still gets its full
+    # provenance ENTRY (the audit trail Phase 16.2 wanted preserved), but must NOT get
+    # its cache-key verified_at stamped -- that would tell the next stale-refresh scan
+    # (RT-5/SJ-2) the field is current when it was never actually accepted.
     for field, cache_prop in cache_key_fields.items():
-        if field in provenance:
+        if field in promoted_fields:
             metadata_patch[cache_prop] = provenance[field]["verified_at"]
 
     # Approach C (STATE.md Blockers; Phase 15 criterion 4 retires the write path):
