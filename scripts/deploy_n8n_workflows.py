@@ -165,15 +165,47 @@ def compute_workflow_diff(local_workflows: list, live_workflows: list) -> dict:
     return {"create": create, "update": update}
 
 
+# n8n httpRequest node `parameters.authentication` values that mean "this node carries a
+# credential". Non-credential-bearing httpRequest nodes (the repo's secret-free
+# Bearer-only nodes, e.g. "ZoomInfo Usage" — a Code node, not even httpRequest — reusing a
+# token minted upstream) have authentication unset/"none" and must keep deploying unbound.
+_CREDENTIAL_BEARING_HTTP_AUTH_MODES = {"genericCredentialType", "predefinedCredentialType"}
+
+
+def _node_requires_credential(node: dict) -> bool:
+    """Scoped by node type — never a blanket "every node needs a credential". Code, IF,
+    Set, NoOp, Merge, Schedule Trigger, etc. never require one and always pass through."""
+    node_type = node.get("type")
+    if node_type == "n8n-nodes-base.hubspot":
+        return True
+    if node_type == "n8n-nodes-base.httpRequest":
+        auth = node.get("parameters", {}).get("authentication")
+        return auth in _CREDENTIAL_BEARING_HTTP_AUTH_MODES
+    if node_type == "n8n-nodes-base.webhook":
+        # The Cloud webhook's native Header Auth gate (CLAUDE.md §18.1) — "none"/unset
+        # means the node has no auth configured and needs no credential.
+        auth = node.get("parameters", {}).get("authentication")
+        return bool(auth) and auth != "none"
+    return False
+
+
 def bind_credentials(workflow: dict, name_to_id: dict, node_cred_map: dict = None) -> dict:
     """Pure function. Returns a NEW workflow dict with each mapped node's top-level
-    `credentials` block attached. Fails closed: raises ValueError if a mapped node's
-    credential name has no resolvable id in `name_to_id` — never emits an unbound node."""
+    `credentials` block attached. Fails closed two ways: (1) a mapped node's credential
+    name has no resolvable id in `name_to_id`, or (2) a node whose TYPE requires a
+    credential (hubspot; httpRequest/webhook with credential-bearing auth) is absent from
+    `node_cred_map` entirely — never emits an unbound node that would 401 at runtime."""
     node_cred_map = NODE_CREDENTIAL_MAP if node_cred_map is None else node_cred_map
     wf = json.loads(json.dumps(workflow))  # deep copy, stdlib only
     for node in wf.get("nodes", []):
         mapping = node_cred_map.get(node.get("name"))
         if mapping is None:
+            if _node_requires_credential(node):
+                raise ValueError(
+                    f"cannot deploy {wf.get('name')!r}: node {node.get('name')!r} "
+                    f"(type {node.get('type')!r}) requires a credential but has no "
+                    f"NODE_CREDENTIAL_MAP entry. Add it to NODE_CREDENTIAL_MAP."
+                )
             continue
         cred_name = mapping["cred_name"]
         cred_id = name_to_id.get(cred_name)
