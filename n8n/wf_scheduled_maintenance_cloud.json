@@ -48,7 +48,8 @@
         },
         "additionalFields": {
           "properties": "hs_object_id,lv_enrichment_requested,lv_enrichment_status"
-        }
+        },
+        "authentication": "appToken"
       },
       "id": "hs00020000-0000-4000-8000-000000000000",
       "name": "SJ-3 Search (requested poller)",
@@ -156,7 +157,8 @@
         },
         "additionalFields": {
           "properties": "hs_object_id,lv_org_type,lv_produces_content"
-        }
+        },
+        "authentication": "appToken"
       },
       "id": "hs00060000-0000-4000-8000-000000000000",
       "name": "SJ-1 Search (input-gap scan)",
@@ -196,7 +198,8 @@
               }
             ]
           }
-        }
+        },
+        "authentication": "appToken"
       },
       "id": "hu00080000-0000-4000-8000-000000000000",
       "name": "SJ-1 Set Requested",
@@ -273,7 +276,8 @@
         },
         "additionalFields": {
           "properties": "hs_object_id,lv_org_type,lv_produces_content,lv_org_type_verified_at,lv_produces_content_verified_at"
-        }
+        },
+        "authentication": "appToken"
       },
       "id": "hs00110000-0000-4000-8000-000000000000",
       "name": "SJ-2 Search (stale refresh)",
@@ -358,7 +362,8 @@
               }
             ]
           }
-        }
+        },
+        "authentication": "appToken"
       },
       "id": "hu00160000-0000-4000-8000-000000000000",
       "name": "SJ-2 Set Requested",
@@ -432,7 +437,8 @@
         },
         "additionalFields": {
           "properties": "hs_object_id,email,phone,lv_linkedin_url"
-        }
+        },
+        "authentication": "appToken"
       },
       "id": "hs00200000-0000-4000-8000-000000000000",
       "name": "Dedupe Search (candidate contacts)",
@@ -486,7 +492,8 @@
               }
             ]
           }
-        }
+        },
+        "authentication": "appToken"
       },
       "id": "hu00230000-0000-4000-8000-000000000000",
       "name": "Dedupe Set Needs Review",
@@ -538,7 +545,8 @@
         },
         "additionalFields": {
           "properties": "hs_object_id,lv_org_type,lv_produces_content,lv_revenue_band,lv_employee_band,lv_content_type,lv_sponsorship_reliant,lv_is_hardware_vendor,lv_is_gambling_operator,lv_enrichment_review_candidate_json,lv_enrichment_needs_review,lv_enrichment_review_approved,lv_enrichment_review_reason"
-        }
+        },
+        "authentication": "appToken"
       },
       "id": "hs00250000-0000-4000-8000-000000000000",
       "name": "Review Search (approved=true)",
@@ -637,7 +645,8 @@
         "resource": "company",
         "operation": "update",
         "companyId": "={{ $json.hs_object_id }}",
-        "updateFields": {}
+        "updateFields": {},
+        "authentication": "appToken"
       },
       "id": "hu00320000-0000-4000-8000-000000000000",
       "name": "Review Apply Update",

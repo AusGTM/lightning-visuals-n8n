@@ -153,7 +153,8 @@
         },
         "additionalFields": {
           "properties": "email,firstname,lastname,jobtitle,phone,mobilephone,hs_object_id,lv_jobtitle_verified_at,lv_mobilephone_verified_at,seniority,lv_contact_enrichment_provenance"
-        }
+        },
+        "authentication": "appToken"
       },
       "id": "hs00100000-0000-4000-8000-000000000000",
       "name": "HubSpot Search",
@@ -245,7 +246,8 @@
         },
         "additionalFields": {
           "properties": "email,firstname,lastname,jobtitle,phone,mobilephone,hs_object_id,lv_jobtitle_verified_at,lv_mobilephone_verified_at,seniority,lv_contact_enrichment_provenance,company,lv_linkedin_url"
-        }
+        },
+        "authentication": "appToken"
       },
       "id": "hs00150000-0000-4000-8000-000000000000",
       "name": "HubSpot Fetch By Id",
@@ -892,7 +894,8 @@
         "resource": "contact",
         "operation": "create",
         "email": "={{ $json.properties.email }}",
-        "additionalFields": {}
+        "additionalFields": {},
+        "authentication": "appToken"
       },
       "id": "hc00550000-0000-4000-8000-000000000000",
       "name": "HubSpot Create",
@@ -939,7 +942,8 @@
         "resource": "contact",
         "operation": "update",
         "contactId": "={{ $json.hs_object_id }}",
-        "updateFields": {}
+        "updateFields": {},
+        "authentication": "appToken"
       },
       "id": "hu00580000-0000-4000-8000-000000000000",
       "name": "HubSpot Update",
@@ -985,7 +989,8 @@
         },
         "additionalFields": {
           "properties": "name,domain,industry,annualrevenue,numberofemployees,hs_object_id,lv_org_type,lv_produces_content,lv_content_type,lv_is_hardware_vendor,lv_is_gambling_operator,lv_enrichment_provenance,lv_org_type_verified_at,lv_produces_content_verified_at"
-        }
+        },
+        "authentication": "appToken"
       },
       "id": "hs00600000-0000-4000-8000-000000000000",
       "name": "HubSpot Company Search",
@@ -1091,7 +1096,8 @@
         },
         "additionalFields": {
           "properties": "name,domain,industry,annualrevenue,numberofemployees,hs_object_id,lv_org_type,lv_produces_content,lv_content_type,lv_is_hardware_vendor,lv_is_gambling_operator,lv_enrichment_provenance,lv_org_type_verified_at,lv_produces_content_verified_at"
-        }
+        },
+        "authentication": "appToken"
       },
       "id": "hs00660000-0000-4000-8000-000000000000",
       "name": "HubSpot Company Fetch By Id",
@@ -1654,7 +1660,9 @@
       "parameters": {
         "resource": "company",
         "operation": "create",
-        "additionalFields": {}
+        "name": "={{ $json.name || $json.identity_keys.companyName || $json.identity_keys.domain }}",
+        "additionalFields": {},
+        "authentication": "appToken"
       },
       "id": "hc00990000-0000-4000-8000-000000000000",
       "name": "HubSpot Company Create",
@@ -1701,7 +1709,8 @@
         "resource": "company",
         "operation": "update",
         "companyId": "={{ $json.hs_object_id }}",
-        "updateFields": {}
+        "updateFields": {},
+        "authentication": "appToken"
       },
       "id": "hu01020000-0000-4000-8000-000000000000",
       "name": "HubSpot Company Update",

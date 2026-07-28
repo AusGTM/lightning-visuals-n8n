@@ -3659,7 +3659,14 @@ def build_enrichment_cloud():
     if_co_create = _if_node("IF Company Create", "create", csx, cy - 80)
     nodes.append(if_co_create)
     hs_co_create = {
+        # `name` is REQUIRED by n8n's company:create and its absence is an activation-time
+        # error ("Missing or invalid required parameters: name"), not a deploy-time one —
+        # found live 2026-07-28. Resolved the same way HubSpot Create resolves `email`:
+        # off the row, falling back through the identity anchors the company branch
+        # already computes (Build Company Identity -> identity_keys.companyName/domain).
         "parameters": {"resource": "company", "operation": "create",
+                       "name": "={{ $json.name || $json.identity_keys.companyName "
+                               "|| $json.identity_keys.domain }}",
                        "additionalFields": {}},
         "id": nid("hc"), "name": "HubSpot Company Create",
         "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [csx + 220, cy - 200]}
@@ -4385,31 +4392,54 @@ def build_scheduled_maintenance_cloud():
 
 # ---- write ------------------------------------------------------------------
 
+# n8n's HubSpot node picks its credential TYPE from its own `authentication` parameter.
+# Left unset it defaults to the legacy API-key mode, which demands a `hubspotApi`
+# credential — so every node deployed bound to `hubspotAppToken` (what
+# provision_n8n_credentials.py creates from HUBSPOT_PRIVATE_APP_TOKEN) is rejected at
+# ACTIVATION time with "Missing required credential: hubspotApi". Deploy succeeds; publish
+# is what fails. Found live 2026-07-28 activating LV Enrichment.
+#
+# Stamped here, at the single write point, rather than at each of the 13 HubSpot-node
+# construction sites: one place to be correct, and any HubSpot node a future phase adds
+# inherits it instead of silently re-introducing the bug. Guarded by
+# tests/test_hubspot_node_auth.py.
+HUBSPOT_NODE_TYPE = "n8n-nodes-base.hubspot"
+HUBSPOT_AUTH_MODE = "appToken"
+
+
+def _normalize_hubspot_auth(wf: dict) -> dict:
+    """Stamp `authentication: appToken` on every HubSpot node in a built workflow."""
+    for node in wf.get("nodes", []):
+        if node.get("type") == HUBSPOT_NODE_TYPE:
+            node.setdefault("parameters", {})["authentication"] = HUBSPOT_AUTH_MODE
+    return wf
+
+
 def main():
     out_local = ROOT / "n8n" / "wf_contact_ingest_local.json"
     out_cloud = ROOT / "n8n" / "wf_contact_ingest_cloud.json"
-    out_local.write_text(json.dumps(build_local(), indent=2) + "\n")
+    out_local.write_text(json.dumps(_normalize_hubspot_auth(build_local()), indent=2) + "\n")
     _idc[0] = 0
-    out_cloud.write_text(json.dumps(build_cloud(), indent=2) + "\n")
+    out_cloud.write_text(json.dumps(_normalize_hubspot_auth(build_cloud()), indent=2) + "\n")
     print(f"wrote {out_local.relative_to(ROOT)}")
     print(f"wrote {out_cloud.relative_to(ROOT)}")
 
     _idc[0] = 0
     er_local = ROOT / "n8n" / "wf_enrichment_local.json"
-    er_local.write_text(json.dumps(build_enrichment_local(), indent=2) + "\n")
+    er_local.write_text(json.dumps(_normalize_hubspot_auth(build_enrichment_local()), indent=2) + "\n")
     _idc[0] = 0
     er_cloud = ROOT / "n8n" / "wf_enrichment_cloud.json"
-    er_cloud.write_text(json.dumps(build_enrichment_cloud(), indent=2) + "\n")
+    er_cloud.write_text(json.dumps(_normalize_hubspot_auth(build_enrichment_cloud()), indent=2) + "\n")
     _idc[0] = 0
     er_live = ROOT / "n8n" / "wf_enrichment_local_live.json"
-    er_live.write_text(json.dumps(build_enrichment_local_live(), indent=2) + "\n")
+    er_live.write_text(json.dumps(_normalize_hubspot_auth(build_enrichment_local_live()), indent=2) + "\n")
     print(f"wrote {er_local.relative_to(ROOT)}")
     print(f"wrote {er_cloud.relative_to(ROOT)}")
     print(f"wrote {er_live.relative_to(ROOT)}")
 
     _idc[0] = 0
     sched_cloud = ROOT / "n8n" / "wf_scheduled_maintenance_cloud.json"
-    sched_cloud.write_text(json.dumps(build_scheduled_maintenance_cloud(), indent=2) + "\n")
+    sched_cloud.write_text(json.dumps(_normalize_hubspot_auth(build_scheduled_maintenance_cloud()), indent=2) + "\n")
     print(f"wrote {sched_cloud.relative_to(ROOT)}")
 
 

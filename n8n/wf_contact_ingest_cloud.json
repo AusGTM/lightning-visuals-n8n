@@ -140,7 +140,8 @@
         "filterGroupsUi": {
           "filterGroupsValues": []
         },
-        "additionalFields": {}
+        "additionalFields": {},
+        "authentication": "appToken"
       },
       "id": "hs00100000-0000-4000-8000-000000000000",
       "name": "HubSpot Search by Email",
@@ -244,7 +245,8 @@
         "resource": "contact",
         "operation": "update",
         "contactId": "={{ $json.contact_id }}",
-        "updateFields": {}
+        "updateFields": {},
+        "authentication": "appToken"
       },
       "id": "hu00170000-0000-4000-8000-000000000000",
       "name": "HubSpot Update",
@@ -291,7 +293,8 @@
         "resource": "contact",
         "operation": "create",
         "email": "={{ $json.properties.email }}",
-        "additionalFields": {}
+        "additionalFields": {},
+        "authentication": "appToken"
       },
       "id": "hc00200000-0000-4000-8000-000000000000",
       "name": "HubSpot Create",
