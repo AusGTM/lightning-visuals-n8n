@@ -46,6 +46,9 @@ NODE_CREDENTIAL_MAP = {
     # node's OWN native Header Auth, bound to this credential — never a Code node.
     "Webhook Trigger": {"cred_type": "httpHeaderAuth", "cred_name": "LV Enrichment Webhook"},
     "HubSpot Search": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    # Phase 16.4 Task 1 (gpt #9 lesson repeated deliberately): the new fetch-by-objectId
+    # search node — an unmapped HubSpot node deploys UNBOUND and silently 401s at runtime.
+    "HubSpot Fetch By Id": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot Create": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot Update": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot Company Search": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},

@@ -3137,6 +3137,52 @@ def _credit_http_node(name, url, method, x, y, auth=None, extra_headers=None):
     }
 
 
+# ---- Phase 16.4 Task 1: fetch-by-objectId lane (contacts) -------------------
+#
+# A genuine HubSpot private-app webhook event carries only objectId/objectType — no
+# email/domain/name — so on the live path Build Identity produces an empty identity and
+# every downstream lookup/provider call runs against nothing (see ENRICH_PARSE_EVENT_
+# CLOUD's shim comment). This additive lane fetches the record BY id (native HubSpot
+# search filtered on hs_object_id, never the node's single-record retrieval operation —
+# RESEARCH: that operation still routes to HubSpot's sunset v1/legacy-v2 endpoints and
+# returns a non-flat {value,timestamp} property shape) and backfills identity_keys from
+# the fetched record, converging back into the EXISTING "Enrichment Gate" alongside the
+# unmodified "Adapt Search" lane.
+#
+# Extracted verbatim from the existing "HubSpot Search" node (byte-identical emitted
+# string) so the fetch-by-id property list can share it without drift.
+ENRICH_CONTACT_SEARCH_PROPERTIES_CSV = (
+    "email,firstname,lastname,jobtitle,phone,"
+    "mobilephone,hs_object_id,lv_jobtitle_verified_at,"
+    "lv_mobilephone_verified_at,seniority,"
+    "lv_contact_enrichment_provenance"
+)
+# The fetch-by-id list adds `company`/`lv_linkedin_url` — HubSpot's default contact
+# freetext-company property and the PN-1-renamed LinkedIn property, feeding
+# identity_keys.companyName/.linkedin_url on the backfill. The existing search lane never
+# needed them; deliberately NOT the broader CLAUDE.md §18.4 list (several of those
+# properties do not exist in portal 22617666 and HubSpot silently drops unknown names).
+ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV = ENRICH_CONTACT_SEARCH_PROPERTIES_CSV + ",company,lv_linkedin_url"
+
+ENRICH_ADAPT_FETCH_BY_ID_CONTACT = inline("adaptFetchById.js") + r"""
+
+// --- n8n wrapper: adapt "HubSpot Fetch By Id" -> existingRecord + backfilled identity_keys ---
+// Mirrors ENRICH_ADAPT_SEARCH's row-recovery idiom EXACTLY (bd682a2 bug class, review
+// gpt #9): the native HubSpot node is an HTTP node under the hood and has already
+// REPLACED the current item with its own response by the time this Code node runs — the
+// pre-hop row is recovered BY NODE NAME, never the current item ($json/$input are never
+// read here).
+const rows = $('Build Identity').all();
+const fetched = $('HubSpot Fetch By Id').all();
+return rows.map((it, i) => {
+  const row = it.json;
+  const { existingRecord, lookup_failed, fetch_diagnostic } = adaptFetchByIdResult(fetched[i]);
+  const identity_keys = backfillIdentityKeys(row.object_type || "contacts", existingRecord, row.identity_keys);
+  return { json: { ...row, existingRecord, lookup_failed, fetch_diagnostic, identity_keys } };
+});
+"""
+
+
 def build_enrichment_cloud():
     nodes = []
     y = 300
@@ -3197,11 +3243,13 @@ def build_enrichment_cloud():
     nodes.append(route_by_type)
 
     x += 220
+    build_identity_x = x
     nodes.append(code_node("Build Identity", ENRICH_BUILD_IDENTITY, x, y))
 
     # Task 6 (review #8): real filterGroups (email EQ) + hs_object_id in the property
     # list — was an empty filterGroupsUi placeholder that matched no filter at all.
     x += 220
+    hs_search_x = x
     hs_search = {
         "parameters": {"resource": "contact", "operation": "search",
                        "filterGroupsUi": {"filterGroupsValues": [
@@ -3211,10 +3259,7 @@ def build_enrichment_cloud():
                            ]}},
                        ]},
                        "additionalFields": {
-                           "properties": "email,firstname,lastname,jobtitle,phone,"
-                                         "mobilephone,hs_object_id,lv_jobtitle_verified_at,"
-                                         "lv_mobilephone_verified_at,seniority,"
-                                         "lv_contact_enrichment_provenance",
+                           "properties": ENRICH_CONTACT_SEARCH_PROPERTIES_CSV,
                        }},
         "id": nid("hs"), "name": "HubSpot Search",
         "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [x, y],
@@ -3223,9 +3268,43 @@ def build_enrichment_cloud():
     nodes.append(hs_search)
 
     x += 220
+    adapt_search_x = x
     nodes.append(code_node("Adapt Search", ENRICH_ADAPT_SEARCH, x, y))
     x += 220
     nodes.append(code_node("Enrichment Gate", ENRICH_GATE, x, y))
+
+    # Phase 16.4 Task 1: fetch-by-objectId lane — additive SECOND inbound edge into
+    # "Enrichment Gate", on a free row below the main row so none of the four existing
+    # nodes above move `position` (RESEARCH: the gate sits AFTER the identity builder,
+    # never before — moving it earlier would break tests/test_cloud_write_path.py's
+    # pinned "Route By Object Type" edges).
+    fby = y + 200
+    if_bare_event = _if_bool_expr_node(
+        "IF Bare Event",
+        "!!$('Build Identity').item.json.object_id && "
+        "!$('Build Identity').item.json.identity_keys.email",
+        build_identity_x, fby,
+    )
+    # Conservative by construction: true ONLY when we have an id to fetch AND the
+    # existing lane has no key to search on. Any payload the existing lane could handle
+    # (a direct-field/caller-envelope test payload carrying an email) keeps the existing
+    # lane byte-for-byte; a payload with neither an id nor a key also keeps it.
+    nodes.append(if_bare_event)
+    hs_fetch_by_id = _hs_search_node(
+        "HubSpot Fetch By Id", "contact", hs_search_x, fby,
+        filter_groups=[[{"propertyName": "hs_object_id", "operator": "EQ",
+                          "value": "={{ $('Build Identity').item.json.object_id }}"}]],
+        properties_csv=ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV,
+    )
+    # `search` on CRM v3, reusing `_hs_search_node` verbatim — never the node's
+    # single-record retrieval operation: n8n's V2 HubSpot node implementation (typeVersion
+    # 2.1, pinned here) still routes single-record retrieval to HubSpot's sunset
+    # /contacts/v1/... endpoint, which returns properties as {value, timestamp, ...}
+    # objects rather than the flat map every consumer downstream in this pipeline
+    # assumes — a silent corruption of every field it touches.
+    nodes.append(hs_fetch_by_id)
+    nodes.append(code_node(
+        "Adapt Fetch By Id", ENRICH_ADAPT_FETCH_BY_ID_CONTACT, adapt_search_x, fby))
 
     # Phase 16.1 (reviews A1): a SINGLE `action != "skip"` dispatch lane feeds the
     # provider gate chain — replaces the old Route Action switch, whose create+enrich
@@ -3622,8 +3701,18 @@ def build_enrichment_cloud():
         [{"node": "Build Company Identity", "type": "main", "index": 0}],  # true
         [{"node": "Build Identity", "type": "main", "index": 0}],          # false
     ]}
-    conns.update(chain(["Build Identity", "HubSpot Search",
-                        "Adapt Search", "Enrichment Gate", "IF Provider Processing Needed"]))
+    # Phase 16.4 Task 1: Build Identity now fans into "IF Bare Event" first — the fetch-
+    # by-id lane's gate — rather than straight into "HubSpot Search". `chain()` overwrites
+    # `conns[a]`, so this is split into 3 calls rather than appended to the single 5-name
+    # chain HEAD~ had.
+    conns.update(chain(["Build Identity", "IF Bare Event"]))
+    conns["IF Bare Event"] = {"main": [
+        [{"node": "HubSpot Fetch By Id", "type": "main", "index": 0}],  # true: bare event
+        [{"node": "HubSpot Search", "type": "main", "index": 0}],       # false: existing lane
+    ]}
+    conns.update(chain(["HubSpot Fetch By Id", "Adapt Fetch By Id", "Enrichment Gate"]))
+    conns.update(chain(["HubSpot Search", "Adapt Search",
+                        "Enrichment Gate", "IF Provider Processing Needed"]))
     # Phase 16.1 (reviews A1): a SINGLE lane feeds the provider gate chain — the
     # create-vs-enrich double-feed that used to run the gate chain + Normalize + Score
     # twice for a mixed batch is gone; action=="skip" is the only branch point here.
