@@ -536,7 +536,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 16.5-01-PLAN.md — deploy-time research/escalation overlay (pure, fail-closed), enabled-build invariants, and the offline oracle predicting both live lanes
+- [x] 16.5-01-PLAN.md — deploy-time research/escalation overlay (pure, fail-closed), enabled-build invariants, and the offline oracle predicting both live lanes (COMPLETE 2026-07-28, see 16.5-01-SUMMARY.md)
 - [ ] 16.5-02-PLAN.md — LIVE: deploy enabled, fire contact 201, inspect node-by-node to a non-null merge at `Merge Winners`, restore to disabled (criterion 7)
 - [ ] 16.5-03-PLAN.md — LIVE: fire a real company record to verify the literal `bd682a2` at `Merge Company`, restore to disabled, close the phase record
 
@@ -555,4 +555,4 @@ Plans:
 | 16.2. Contacts Research + Judge Mirror (INSERTED) | 2/2 | Complete | 2026-07-24 |
 | 16.3. Companies Stale-Timestamp Fix (INSERTED) | 1/1 | Complete | 2026-07-28 |
 | 16.4. Fetch-By-ObjectId (INSERTED) | 2/2 | Complete | 2026-07-28 |
-| 16.5. Deliberate Research/Escalation Enablement (INSERTED) | 0/3 | Planned | — |
+| 16.5. Deliberate Research/Escalation Enablement (INSERTED) | 1/3 | In Progress | Plan 01: 2026-07-28 |
