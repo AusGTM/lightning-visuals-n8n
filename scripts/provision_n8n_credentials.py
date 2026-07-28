@@ -131,11 +131,54 @@ CREDENTIAL_MANIFEST = [
 ]
 
 
+class CredentialEnumerationForbidden(Exception):
+    """GET /api/v1/credentials is instance-owner-scoped; a member's API key gets 403."""
+
+
 def _get_live_credentials() -> list:
+    """List the credentials this API key can see.
+
+    n8n scopes `GET /api/v1/credentials` to the INSTANCE OWNER — a member's key gets a
+    403 even though it can freely POST/DELETE credentials and read type schemas (verified
+    live 2026-07-28 on n8n Cloud: POST 200, DELETE 200, schema GET 200, list 403).
+    Raising here rather than swallowing keeps the create-if-missing contract honest; the
+    caller decides how to degrade.
+    """
     import requests
     r = requests.get(f"{_base_url()}/api/v1/credentials", headers=_n8n_headers(), timeout=30)
+    if r.status_code == 403:
+        raise CredentialEnumerationForbidden(
+            "GET /api/v1/credentials returned 403 — this API key is not the instance "
+            "owner's. Creation still works; only enumeration is restricted."
+        )
     r.raise_for_status()
     return r.json().get("data", [])
+
+
+def _live_credentials_or_local_fallback() -> tuple:
+    """Returns (name->id map, enumerated: bool).
+
+    When enumeration is forbidden, fall back to the locally-recorded id map from a prior
+    successful run. That file is the only remaining evidence of what exists, so using it
+    preserves create-if-missing far better than assuming an empty instance would — an
+    empty assumption silently creates a DUPLICATE credential set on every re-run, and
+    duplicates are indistinguishable by name in the n8n UI.
+    """
+    if not _has_n8n():
+        return {}, True
+    try:
+        return {c["name"]: c["id"] for c in _get_live_credentials()}, True
+    except CredentialEnumerationForbidden as exc:
+        print(f"NOTE: {exc}")
+        if CRED_ID_MAP_PATH.exists():
+            local = json.loads(CRED_ID_MAP_PATH.read_text())
+            print(f"      Falling back to {CRED_ID_MAP_PATH.name} ({len(local)} known credential(s)) "
+                  "for create-if-missing. Delete that file to force a fresh create.")
+            return local, False
+        print(f"      No {CRED_ID_MAP_PATH.name} present — treating the instance as having none "
+              "and creating all. If credentials with these names already exist under this "
+              "project, this run will create DUPLICATES; delete them in the n8n UI first.")
+        return {}, False
 
 
 def _get_credential_schema(cred_type: str) -> dict:
@@ -173,11 +216,24 @@ def _schema_matches(cred_type: str, data: dict) -> bool:
 
 
 def _create_credential_live(name: str, cred_type: str, data: dict):
+    """Returns (status_code, new_id_or_None).
+
+    The POST response body carries the new credential's id. Capturing it here is what
+    makes provisioning work for a NON-owner API key: `GET /api/v1/credentials` is
+    owner-scoped (403 for a member), so re-reading the instance afterwards to discover
+    ids is not available. The id is only ever offered once — take it.
+    """
     import requests
     body = {"name": name, "type": cred_type, "data": data}  # NEVER printed/logged
     r = requests.post(f"{_base_url()}/api/v1/credentials", headers=_n8n_headers(),
                        json=body, timeout=30)
-    return r.status_code
+    new_id = None
+    if r.status_code in (200, 201):
+        try:
+            new_id = r.json().get("id")  # id only — the response's `data` is never read
+        except ValueError:
+            new_id = None
+    return r.status_code, new_id
 
 
 def write_credential_id_map(id_map: dict, path: Path = CRED_ID_MAP_PATH) -> Path:
@@ -190,7 +246,7 @@ def provision(manifest: list, live_writes: bool) -> tuple:
     """Returns (id_map, failures). id_map holds every manifest entry already-existing
     live or freshly created this run (names + ids only). failures is a list of
     (name, reason) tuples for entries this run could not resolve."""
-    live_by_name = {c["name"]: c["id"] for c in _get_live_credentials()} if _has_n8n() else {}
+    live_by_name, _enumerated = _live_credentials_or_local_fallback()
 
     id_map = {}
     failures = []
@@ -220,19 +276,21 @@ def provision(manifest: list, live_writes: bool) -> tuple:
             failures.append((name, "schema introspection mismatch"))
             continue
 
-        status = _create_credential_live(name, cred_type, data)
+        status, new_id = _create_credential_live(name, cred_type, data)
         if status in (200, 201):
             print(f"created credential {name!r} ({status})")
+            if new_id:
+                id_map[name] = new_id
+            else:
+                failures.append((name, "created but no id in response"))
+                print(f"WARNING: {name!r} was created but returned no id — cannot bind it.")
         else:
             failures.append((name, status))
             print(f"FAILED to create credential {name!r} ({status})")
 
-    if live_writes:
-        fresh_by_name = {c["name"]: c["id"] for c in _get_live_credentials()}
-        for entry in manifest:
-            if entry["type"] is not None and entry["name"] in fresh_by_name:
-                id_map[entry["name"]] = fresh_by_name[entry["name"]]
-
+    # No post-hoc re-enumeration: ids come from each POST response above (see
+    # _create_credential_live). Re-reading the instance would 403 for any non-owner key
+    # and is redundant for an owner key.
     return id_map, failures
 
 
