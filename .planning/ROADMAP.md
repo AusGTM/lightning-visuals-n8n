@@ -465,10 +465,48 @@ retroactively; its artifacts and tests are in the tree.
 - [x] 16.2-02-PLAN.md — Contact research→judge chain: contactResearch.js + contactJudge.js + mergeContacts.foldContactResearch siblings, wire the 10-node chain at the seam with row-recovery across HTTP hops (mirror bd682a2) + entry marker-strip + chosen_field allowlist, ENRICH_MERGE write-safety fold, seniority fetch, anthropic credential + deploy binding, mirrored tests incl. the item-flow row-recovery regression (SC-1, SC-3 honest-mirror, SC-4) [wave 2, depends_on 16.2-01]
 
 **Follow-ups (Track B / deferred, not blocking 16.2):**
-- **fetch-by-objectId** — genuine HubSpot private-app events carry only `objectId`/`objectType`; both the contacts and companies chains are verified against synthetic/direct-field (caller-envelope) payloads only. A live HubSpot→n8n path needs the deferred fetch-by-id node (same 16.1 deferral). Blocks live Track B for real HubSpot events.
-- **companies stale-timestamp** — `lv_*_verified_at` refresh-on-non-promote (gpt #6) was fixed on the CONTACTS path; the companies path has the same latent issue — separate fix.
+- **fetch-by-objectId** — PROMOTED 2026-07-28 to **Phase 16.4**. Genuine HubSpot private-app events carry only `objectId`/`objectType`; both the contacts and companies chains are verified against synthetic/direct-field (caller-envelope) payloads only. Blocks live Track B for real HubSpot events.
+- **companies stale-timestamp** — PROMOTED 2026-07-28 to **Phase 16.3**. `lv_*_verified_at` refresh-on-non-promote (gpt #6) was fixed on the CONTACTS path; the companies path has the same latent issue.
 - **E2E conflict lane** — the row-flow harness seeds a gap, so the full conflict→escalation→judge→cap-demote lane is exercised only by pure-function unit tests, never end-to-end through compiled node bodies. A live/simulated conflict-seed run would close this.
 - **X1 companies row-loss** was found + FIXED this session (bd682a2) — but neither research/judge chain has run LIVE yet; verify on the first Track B run.
+
+### Phase 16.3: Companies Stale Timestamp Fix
+
+**Goal**: The companies path stamps its `lv_*_verified_at` cache-key datetimes ONLY when a field is actually promoted, so a `needs_review`/stale-but-unpromoted candidate can never mark itself fresh and suppress the next stale-refresh forever — mirroring the fix already shipped on the contacts path (Phase 16.2, gpt #6).
+**Depends on**: Phase 16.2
+**INSERTED 2026-07-28** (promoted from the Phase 16.2 "companies stale-timestamp" Track-B follow-up). `mergeContacts.js:183-194` moved the `cacheKeys[...]` write inside the `decision === "promote"` branch and left an explicit NOTE that `mergeCompanies.js` has the same latent issue, deliberately unfixed there to keep Plan 16.2-01's frozen companies byte-identity guard green. That guard has now discharged its purpose (the 16.2 mirror shipped), so this phase performs the fix plus the deliberate, reviewed re-baseline of the frozen fixture.
+
+**Success Criteria (draft — refine at plan time):**
+
+  1. `mergeCompanies.js` stamps `cacheKeys[COMPANY_CACHE_KEY_FIELDS[field]]` only inside the `decision === "promote"` branch — a structural mirror of `mergeContacts.js`, verified by reading both.
+  2. Unit tests mirror `tests/n8n/mergeContacts.test.mjs:126-144`: a stale-but-unpromoted `lv_org_type`/`lv_produces_content` emits NO `lv_*_verified_at`; a promoted one still does.
+  3. END-TO-END FUNCTIONAL validation (not just the pure function): the bug and its fix are demonstrated through the COMPILED `Merge Company` Code-node body as emitted by `build_enrichment_cloud()` — a stale-unpromoted companies row driven through the real chain emits no cache-key stamp, and the same row on the pre-fix build does. Red-before-green is required evidence, not an assertion of intent.
+  4. `tests/fixtures/companies_jscode_frozen.json` is re-baselined as an EXPLICIT, reviewed act in its own commit; the diff is confined to the `Merge Company` node — the other six frozen nodes stay byte-identical.
+  5. `wf_enrichment_cloud.json` / `wf_enrichment_local_live.json` regenerated; builder deterministic (rebuild twice, no diff).
+  6. Full offline suite green with zero regressions vs the 346 pytest / 228 node baseline. No live calls.
+
+**Plans**: 1 plan
+
+Plans:
+- [ ] 16.3-01-PLAN.md — Red-before-green compiled-node proof, the promote-branch cache-key fix + retired contacts NOTE, and the bounded reviewed re-baseline of the frozen companies fixture
+
+### Phase 16.4: Fetch By ObjectId
+
+**Goal**: A genuine HubSpot private-app webhook event — which carries only `objectId`/`objectType` and none of the identity fields — drives a complete enrichment run, because the workflow fetches the current record from HubSpot by id instead of reading identity fields off the event body. Unblocks every meaningful live Track-B verification.
+**Depends on**: Phase 16.3
+**INSERTED 2026-07-28** (promoted from the Phase 16.2 "fetch-by-objectId" Track-B follow-up; originally deferred in Phase 16 Task 6 as a documented budget carve-out). `ENRICH_PARSE_EVENT_CLOUD` (`build_cloud_workflows.py:3040-3046`) spreads the raw event (`...event`) so that Build Identity / Build Company Identity keep working against a direct-field TEST payload; its own comment states a real HubSpot event carries none of those fields, so on the live path both identity builders see only `object_id`/`object_type`. Until this lands, a live run exercises only the synthetic caller-envelope path and therefore cannot verify the bd682a2 row-loss fix under real conditions.
+
+**Success Criteria (draft — refine at plan time):**
+
+  1. A fetch-by-id node (HubSpot credential-bound, per object type) sits between `Parse HubSpot Event` and the identity builders; Build Identity / Build Company Identity read the FETCHED record by node name, never the raw spread event.
+  2. A bare HubSpot event payload — `{objectId, objectType, subscriptionType, propertyName, occurredAt}` with NO email/domain — produces populated `identity_keys` for both the contacts and companies branches.
+  3. The existing direct-field / caller-envelope payload path keeps working (back-compat), including the per-request `providers` selection resolution.
+  4. Row-flow integrity across the new HTTP hop is proven the bd682a2 way — node-name recovery, not `$json` — by an item-flow regression test mirroring `tests/n8n/researchChainRowFlow.test.mjs`.
+  5. Test coverage at three levels: UNIT (identity extraction from a fetched record), INTEGRATION (Parse Event → fetch → identity builder chain over compiled node bodies), and END-TO-END FUNCTIONAL (a bare-objectId event driven through the full compiled contacts AND companies chains to a patch payload).
+  6. A fetch failure (404/401/5xx) degrades safely — no create, no clobber — consistent with the `lookup_failed` create→skip precedent from Phase 16-01.
+  7. Full offline suite green, zero regressions; builder deterministic. No live calls in the suite.
+
+**Plans**: TBD
 
 ## Milestone 3 Progress
 
@@ -483,3 +521,5 @@ retroactively; its artifacts and tests are in the tree.
 | 16. Scheduled Workflows & Review Surface | 2/2 | Complete | 2026-07-23 |
 | 16.1. Provider Selection, Credit Reporting & Schedule Safety (INSERTED) | 2/2 | Complete | 2026-07-24 |
 | 16.2. Contacts Research + Judge Mirror (INSERTED) | 2/2 | Complete | 2026-07-24 |
+| 16.3. Companies Stale-Timestamp Fix (INSERTED) | 0/1 | Planned | — |
+| 16.4. Fetch-By-ObjectId (INSERTED) | 0/? | Not started | — |
