@@ -128,7 +128,7 @@ def test_decide_company_action_uses_stable_stringify_not_a_hand_rolled_serialize
     assert "stableStringify(" in code  # actually called by the wrapper
 
 
-def test_hubspot_company_create_and_update_nodes_are_native_hubspot_nodes():
+def test_hubspot_company_create_node_is_a_native_hubspot_node():
     """Task 5's port converts the raw-HTTP company HubSpot calls to the credential-bound
     native n8n-nodes-base.hubspot node, same as the contacts branch. "HubSpot Company
     Search" deliberately EXCLUDED (BUG 10 / Phase 16.6): n8n's HubSpot node has no
@@ -136,17 +136,34 @@ def test_hubspot_company_create_and_update_nodes_are_native_hubspot_nodes():
     CompanyDescription.ts's companyOperations option list — only create/delete/get/getAll/
     getRecentlyCreatedUpdated/searchByDomain/update exist), so the native node silently
     returned json:null live; see test_hubspot_company_search_is_credential_bound_httprequest
-    below for its replacement shape. company:create/company:update's live behavior is
-    UNVERIFIED — BUG 10's trace only exercised operation:search."""
+    below for its replacement shape. company:create's live behavior is UNVERIFIED — BUG
+    10's trace only exercised operation:search, and Phase 16.7-01 (BUG 11) left create
+    untouched (`ALLOW_HUBSPOT_CREATE` stays "false" for the whole of Phase 16.7)."""
     doc = _load()
-    for name, resource, operation in [
-        ("HubSpot Company Create", "company", "create"),
-        ("HubSpot Company Update", "company", "update"),
-    ]:
-        node = next(n for n in doc["nodes"] if n["name"] == name)
-        assert node["type"] == "n8n-nodes-base.hubspot"
-        assert node["parameters"]["resource"] == resource
-        assert node["parameters"]["operation"] == operation
+    node = next(n for n in doc["nodes"] if n["name"] == "HubSpot Company Create")
+    assert node["type"] == "n8n-nodes-base.hubspot"
+    assert node["parameters"]["resource"] == "company"
+    assert node["parameters"]["operation"] == "create"
+
+
+def test_hubspot_company_update_node_is_credential_bound_httprequest_patch():
+    """Phase 16.7-01 (BUG 11): "HubSpot Company Update" moved off the native hubspot node
+    (committed with an EMPTY `updateFields` map — a placeholder that never referenced the
+    computed patch) onto a credential-bound httpRequest PATCH that carries
+    `{"properties": $json.properties}` directly, reusing the SAME "LV HubSpot" credential
+    via predefinedCredentialType/nodeCredentialType:hubspotAppToken. See
+    tests/test_write_node_transport.py for the full structural guard (onError absence,
+    URL/body shape, credential-map presence) shared with the contacts mirror,
+    "HubSpot Update"."""
+    doc = _load()
+    node = next(n for n in doc["nodes"] if n["name"] == "HubSpot Company Update")
+    assert node["type"] == "n8n-nodes-base.httpRequest"
+    assert node["parameters"]["method"] == "PATCH"
+    assert node["parameters"]["url"] == (
+        "=https://api.hubapi.com/crm/v3/objects/companies/{{ $json.hs_object_id }}"
+    )
+    assert node["parameters"]["authentication"] == "predefinedCredentialType"
+    assert node["parameters"]["nodeCredentialType"] == "hubspotAppToken"
 
 
 def test_hubspot_company_search_is_credential_bound_httprequest_via_predefined_credential_type():

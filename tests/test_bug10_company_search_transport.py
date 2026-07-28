@@ -100,16 +100,26 @@ NODES = {
     },
 }
 
-# The two write operations on the SAME resource (`company`) that share nothing empirically
-# proven or disproven by BUG 10's live trace — the trace only exercised `operation:
-# search`. Explicitly out of scope for this fix (16.6-CONTEXT.md's open question); pinned
-# here as UNCHANGED so a future edit cannot silently claim they were fixed too.
-UNCHANGED_WRITE_NODES = ["HubSpot Company Create", "HubSpot Company Update"]
+# The write operation on `company` that BUG 10's live trace never exercised (the trace
+# only covered `operation: search`) AND that Phase 16.7-01 also left untouched:
+# `company:create`. Pinned here as UNCHANGED so a future edit cannot silently claim it was
+# fixed too. `HubSpot Company Update` was REMOVED from this list in Phase 16.7-01 (BUG
+# 11): that node moved off the native hubspot node entirely (onto a credential-bound
+# httpRequest PATCH — see tests/test_write_node_transport.py), so "unchanged" no longer
+# describes it — pinning it here now would be false, not merely stale.
+UNCHANGED_WRITE_NODES = ["HubSpot Company Create"]
 
+# Scoped to the contacts SEARCH/FETCH nodes this guard was actually written to protect —
+# the ONE live-proven path (resource:contact/operation:search returns the real record),
+# which BUG 10's fix left byte-identical. "HubSpot Create"/"HubSpot Update" were REMOVED
+# from the wf_enrichment_cloud.json list in Phase 16.7-01: "HubSpot Update" moved
+# transport entirely (BUG 11 fix, see tests/test_write_node_transport.py) and so is no
+# longer byte-identical to HEAD by design; "HubSpot Create" was never a search/fetch node
+# this guard was scoped to protect in the first place — its own unchanged-ness is now
+# pinned by tests/test_write_node_transport.py's create-node guard instead.
 CONTACT_NODES_BY_WORKFLOW = {
     "wf_contact_ingest_cloud.json": ["HubSpot Search by Email"],
-    "wf_enrichment_cloud.json": ["HubSpot Search", "HubSpot Fetch By Id",
-                                  "HubSpot Create", "HubSpot Update"],
+    "wf_enrichment_cloud.json": ["HubSpot Search", "HubSpot Fetch By Id"],
     "wf_scheduled_maintenance_cloud.json": ["Dedupe Search (candidate contacts)",
                                              "Dedupe Set Needs Review"],
 }
@@ -227,20 +237,24 @@ def test_company_search_node_body_preserves_the_original_filter_semantics(name):
         assert token in body, f"{name}: jsonBody missing expected token {token!r}\n{body}"
 
 
-# --- company:create / company:update — explicitly UNCHANGED, defect status UNKNOWN -----
+# --- company:create — explicitly UNCHANGED, defect status UNKNOWN ----------------------
 
 @pytest.mark.parametrize("name", UNCHANGED_WRITE_NODES)
-def test_company_create_and_update_remain_the_native_hubspot_node_unchanged(name):
+def test_company_create_remains_the_native_hubspot_node_unchanged(name):
     """BUG 10's live trace exercised ONLY `operation: search`. Whether `operation: create`
-    or `operation: update` share the defect is UNVERIFIED — neither has ever run live
-    (16.6-CONTEXT.md's open question). This fix does not touch them; this test pins that
-    fact mechanically so a future change cannot silently imply they were fixed too. The
-    write-path canary (next phase) is what will actually exercise them live."""
+    shares the defect is UNVERIFIED — it has never run live (16.6-CONTEXT.md's open
+    question), and `ALLOW_HUBSPOT_CREATE` stays `"false"` for the whole of Phase 16.7 (per
+    16.7-CONTEXT.md Locked Decision 2), so it stays unexercised here too. This test pins
+    that fact mechanically so a future change cannot silently imply it was fixed.
+    `HubSpot Company Update` was REMOVED from this list in Phase 16.7-01 (BUG 11) — it
+    moved off the native node entirely; see tests/test_write_node_transport.py for its
+    replacement's guard and for the companion pin that `HubSpot Create`/`HubSpot Company
+    Create` remain native and unverified."""
     doc = _load("wf_enrichment_cloud.json")
     node = _node(doc, name)
     assert node["type"] == "n8n-nodes-base.hubspot"
     assert node["parameters"]["resource"] == "company"
-    assert node["parameters"]["operation"] in ("create", "update")
+    assert node["parameters"]["operation"] == "create"
 
 
 # --- contacts: byte-identical to HEAD (the one live-proven path must not regress) ------

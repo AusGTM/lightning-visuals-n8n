@@ -2721,7 +2721,8 @@ def build_enrichment_local_live():
 
 # ---- CLOUD enrichment workflow ----------------------------------------------
 
-def _http_node(name, url, x, y, auth=None, headers=None, form_body=None, json_body=None):
+def _http_node(name, url, x, y, auth=None, headers=None, form_body=None, json_body=None,
+                method="POST", on_error="continueRegularOutput"):
     """auth: None | 'header' (generic Header Auth credential) | 'basic' (generic Basic Auth)
     | 'hubspot' (predefinedCredentialType, reuses the SAME provisioned hubspotAppToken
     credential the native n8n-nodes-base.hubspot nodes use — BUG 10's fix, see
@@ -2729,8 +2730,18 @@ def _http_node(name, url, x, y, auth=None, headers=None, form_body=None, json_bo
     headers: list of {name, value} sent as extra HTTP headers (e.g. a dynamic Bearer).
     form_body: list of {name, value} sent as application/x-www-form-urlencoded (OAuth token calls).
     json_body: n8n expression string for the JSON body; when None (and no form_body) the node
-               POSTs the bare JSON identity_keys body."""
-    params = {"method": "POST", "url": url, "options": {"timeout": 20000}}
+               POSTs the bare JSON identity_keys body.
+    method: HTTP verb. Defaults to POST — every existing call site keeps its current
+            behavior unchanged (proven by rebuild-diff, not just by this default).
+    on_error: n8n `onError` mode. Defaults to 'continueRegularOutput' — every existing
+              call site keeps its current behavior unchanged. Passing on_error=None OMITS
+              the `onError` key from the emitted node entirely (Task 2, BUG 11 fix,
+              Phase 16.7-01): a WRITE node deliberately does NOT get
+              continueRegularOutput, because that mode would turn a rejected HubSpot PATCH
+              into a normal-looking item that flows on to Build Response and returns a
+              healthy 200 — the exact swallowed-failure mechanism that made ten live-only
+              bugs invisible offline. A failed write must fail the execution instead."""
+    params = {"method": method, "url": url, "options": {"timeout": 20000}}
     if form_body is not None:
         params.update({"sendBody": True, "contentType": "form-urlencoded",
                        "bodyParameters": {"parameters": form_body}})
@@ -2745,12 +2756,14 @@ def _http_node(name, url, x, y, auth=None, headers=None, form_body=None, json_bo
         params.update({"authentication": "predefinedCredentialType", "nodeCredentialType": "hubspotAppToken"})
     if headers:
         params.update({"sendHeaders": True, "headerParameters": {"parameters": headers}})
-    return {
+    node = {
         "parameters": params,
         "id": nid("h"), "name": name,
         "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2, "position": [x, y],
-        "onError": "continueRegularOutput",
     }
+    if on_error is not None:
+        node["onError"] = on_error
+    return node
 
 
 # ---- ZoomInfo CLOUD credential path (Task 2 decision: split-code-node) ------
@@ -3558,13 +3571,14 @@ def build_enrichment_cloud():
     nodes.append(hs_create)
     if_enrich = _if_node("IF Enrich", "enrich", sx + 220, y - 20)
     nodes.append(if_enrich)
-    hs_update = {
-        # Task 6 (review #8): targets the REAL id preserved by Adapt Search, not the
-        # previously-hardcoded, never-set contact_id field.
-        "parameters": {"resource": "contact", "operation": "update",
-                       "contactId": "={{ $json.hs_object_id }}", "updateFields": {}},
-        "id": nid("hu"), "name": "HubSpot Update",
-        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [sx + 440, y - 20]}
+    # BUG 11 / Phase 16.7-01: credential-bound httpRequest PATCH, NOT the native hubspot
+    # node — the native `update` operation exists, but this builder never populated its
+    # `updateFields` (empty map, referencing $json.properties nowhere; see
+    # _hs_http_patch_node's docstring for the confirmed mechanism). Targets the REAL id
+    # preserved by Adapt Search (Task 6, review #8), carried via the URL expression now
+    # instead of a native id parameter. Node NAME is unchanged so
+    # deploy_n8n_workflows.py's NODE_CREDENTIAL_MAP entry keeps binding it.
+    hs_update = _hs_http_patch_node("HubSpot Update", "contacts", sx + 440, y - 20)
     nodes.append(hs_update)
 
     # (Skip (NoOp) is created earlier now — Phase 16.1 — as the single-lane dispatch's
@@ -3743,11 +3757,10 @@ def build_enrichment_cloud():
     nodes.append(hs_co_create)
     if_co_enrich = _if_node("IF Company Enrich", "enrich", csx + 220, cy - 20)
     nodes.append(if_co_enrich)
-    hs_co_update = {
-        "parameters": {"resource": "company", "operation": "update",
-                       "companyId": "={{ $json.hs_object_id }}", "updateFields": {}},
-        "id": nid("hu"), "name": "HubSpot Company Update",
-        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [csx + 440, cy - 20]}
+    # BUG 11 / Phase 16.7-01: credential-bound httpRequest PATCH — companies mirror of
+    # "HubSpot Update" above. Node NAME is unchanged so NODE_CREDENTIAL_MAP keeps binding
+    # it; see _hs_http_patch_node's docstring for the confirmed mechanism.
+    hs_co_update = _hs_http_patch_node("HubSpot Company Update", "companies", csx + 440, cy - 20)
     nodes.append(hs_co_update)
 
     # --- Phase 16.1 Plan 02 (reviews C1/C2/C3, SC-4/SC-5): single-item credit branch ---
@@ -4253,6 +4266,48 @@ def _hs_http_search_node(name, resource, x, y, filter_groups, properties_csv, li
     )
 
 
+def _hs_http_patch_node(name, resource, x, y):
+    """Credential-bound httpRequest replacement for the native hubspot node's `update`
+    operation on BOTH contacts and companies — BUG 11, Phase 16.7-01. Mirrors
+    _hs_http_search_node's shape and docstring standard above, for the same class of
+    reason: the native node cannot do the job. Unlike BUG 10 (no `operation: "search"`
+    exists at all for resource:company), BUG 11 is that the native `update` operation
+    exists but this builder never populates its `updateFields` — both "HubSpot Update"
+    and "HubSpot Company Update" are committed with `updateFields: {}`, an empty map,
+    documented in this file's own prior comment as a placeholder "populated at deploy/
+    operator-config time, not baked by this builder." No such deploy-time population
+    exists anywhere in scripts/deploy_n8n_workflows.py — the computed patch lives on
+    `$json.properties` and is referenced by nothing. A canary fired against the native
+    node would issue a property-less update, proving nothing about the non-clobber merge.
+
+    This node PATCHes the real CRM v3 object endpoint directly with `{"properties":
+    $json.properties}` — the exact patch "Decide Action"/"Decide Company Action" compute.
+
+    Node NAME is preserved (both "HubSpot Update" and "HubSpot Company Update" are
+    already mapped in scripts/deploy_n8n_workflows.py's NODE_CREDENTIAL_MAP), so
+    credential binding by name keeps working unchanged. `auth="hubspot"` reuses the SAME
+    provisioned "LV HubSpot" credential the native nodes used (predefinedCredentialType/
+    nodeCredentialType:hubspotAppToken) — never a new credential object, never $env/$vars.
+
+    `on_error=None` is the deliberate departure from every other httpRequest node this
+    builder emits (which default to continueRegularOutput): a WRITE node must fail its
+    execution on a rejected PATCH, not flow on as a healthy item reaching Build Response
+    and returning a plausible 200 — CONTEXT Locked Decision 3's exact "judge from runData,
+    never from HTTP status" lesson, now enforced structurally instead of only by policy.
+
+    Hard-fails on any resource outside contacts/companies, mirroring
+    _hs_http_search_node's hard-fail on anything but "company" — so this cannot silently
+    spread to a resource this plan never audited."""
+    if resource not in ("contacts", "companies"):
+        raise ValueError(f"_hs_http_patch_node only supports contacts/companies — got resource={resource!r}")
+    url = "=https://api.hubapi.com/crm/v3/objects/" + resource + "/{{ $json.hs_object_id }}"
+    body = "={{ JSON.stringify({ properties: $json.properties }) }}"
+    return _http_node(
+        name, url, x, y,
+        auth="hubspot", json_body=body, method="PATCH", on_error=None,
+    )
+
+
 def _hs_update_set_property(name, resource, x, y, property_name, value_literal="true"):
     """Terminal dispatch write (SJ-1/SJ-2): sets ONE known custom boolean property to a
     static value on the matched record's id (review consensus #5 — a search that only
@@ -4450,9 +4505,12 @@ def build_scheduled_maintenance_cloud():
     nodes.append(review_stale_noop)
     # Applies canonicalPatch + clearPatch. Property values are dynamic per-record
     # (reviewApply's output), so this node is a documented-equivalent placeholder — the
-    # same convention this file already uses for "HubSpot Update"/"HubSpot Company
-    # Update" in the webhook branch (updateFields populated at deploy/operator-config
-    # time, not baked by this builder).
+    # same convention "HubSpot Update"/"HubSpot Company Update" in the webhook branch
+    # used to follow (updateFields populated at deploy/operator-config time, not baked by
+    # this builder), UNTIL Phase 16.7-01 (BUG 11) moved those two onto a credential-bound
+    # httpRequest PATCH that DOES carry the computed patch. This node
+    # ("Review Apply Update", in the separate scheduled-maintenance workflow) is
+    # explicitly OUT of that fix's scope and keeps its placeholder status.
     review_apply_update = {
         "parameters": {"resource": "company", "operation": "update",
                        "companyId": "={{ $json.hs_object_id }}", "updateFields": {}},

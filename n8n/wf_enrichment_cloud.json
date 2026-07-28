@@ -965,16 +965,21 @@
     },
     {
       "parameters": {
-        "resource": "contact",
-        "operation": "update",
-        "contactId": "={{ $json.hs_object_id }}",
-        "updateFields": {},
-        "authentication": "appToken"
+        "method": "PATCH",
+        "url": "=https://api.hubapi.com/crm/v3/objects/contacts/{{ $json.hs_object_id }}",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ properties: $json.properties }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "hu00580000-0000-4000-8000-000000000000",
+      "id": "h00580000-0000-4000-8000-000000000000",
       "name": "HubSpot Update",
-      "type": "n8n-nodes-base.hubspot",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         7040,
         280
@@ -1710,16 +1715,21 @@
     },
     {
       "parameters": {
-        "resource": "company",
-        "operation": "update",
-        "companyId": "={{ $json.hs_object_id }}",
-        "updateFields": {},
-        "authentication": "appToken"
+        "method": "PATCH",
+        "url": "=https://api.hubapi.com/crm/v3/objects/companies/{{ $json.hs_object_id }}",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ properties: $json.properties }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "hu01020000-0000-4000-8000-000000000000",
+      "id": "h01020000-0000-4000-8000-000000000000",
       "name": "HubSpot Company Update",
-      "type": "n8n-nodes-base.hubspot",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         7700,
         700

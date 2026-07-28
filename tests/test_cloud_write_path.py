@@ -153,13 +153,26 @@ def test_gate_never_routes_a_lookup_failed_row_to_create(gate_js, label):
 
 
 def test_hubspot_update_nodes_target_hs_object_id_not_the_never_set_contact_id():
+    """Phase 16.7-01 (BUG 11): both update nodes moved off the native hubspot node onto a
+    credential-bound httpRequest PATCH (tests/test_write_node_transport.py has the full
+    structural guard) — the real id now travels in the URL expression rather than a
+    native `contactId`/`companyId` parameter. This test still protects the same original
+    fact review #8 cared about: the target is the REAL id preserved upstream, never a
+    hardcoded/never-set placeholder."""
     doc = _load()
     hs_update = _node(doc, "HubSpot Update")
-    assert hs_update["parameters"]["contactId"] == "={{ $json.hs_object_id }}"
-    assert "contact_id" not in hs_update["parameters"]["contactId"]
+    assert hs_update["type"] == "n8n-nodes-base.httpRequest"
+    assert "contactId" not in hs_update["parameters"]
+    assert hs_update["parameters"]["url"] == (
+        "=https://api.hubapi.com/crm/v3/objects/contacts/{{ $json.hs_object_id }}"
+    )
 
     hs_co_update = _node(doc, "HubSpot Company Update")
-    assert hs_co_update["parameters"]["companyId"] == "={{ $json.hs_object_id }}"
+    assert hs_co_update["type"] == "n8n-nodes-base.httpRequest"
+    assert "companyId" not in hs_co_update["parameters"]
+    assert hs_co_update["parameters"]["url"] == (
+        "=https://api.hubapi.com/crm/v3/objects/companies/{{ $json.hs_object_id }}"
+    )
 
 
 # --- (c) write-safety gate (review #9) ------------------------------------------------
