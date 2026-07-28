@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v0.3
 milestone_name: Company Enrichment & ICP Research
-current_phase: 16.2
-current_phase_name: contacts-research-judge-mirror
-status: in_progress
-stopped_at: "Phase 16.2-02 EXECUTED + committed (3040df7 Task 1 contactResearch.js/contactJudge.js/mergeContacts.foldContactResearch, 3f3aa16 Task 2 wired the 10-node contact chain at the seam + credentials/deploy binding). Phase 16.2 (both waves) now COMPLETE. Offline suite 346 pytest / 228 node, 0 regressions vs the 336/179 post-16.2-01 baseline, deterministic rebuild, companies jsCode byte-identical (frozen-snapshot guard green) + companies row-flow regression green. NEXT: phase completion / next roadmap phase."
-last_updated: "2026-07-24T04:15:11.000Z"
-last_activity: 2026-07-24
-last_activity_desc: Phase 16.2-02 executed and committed (contact research->judge chain wired at the seam, write-safety fold, credential/deploy bookkeeping; Phase 16.2 complete)
+current_phase: 16.3
+current_phase_name: companies-stale-timestamp-fix
+status: complete
+stopped_at: "Phase 16.3-01 EXECUTED + committed (402d8a1 RED, 318a73e GREEN, 467a7d7 fixture re-baseline). mergeCompanies.js's cache-key write relocated inside the promote branch, mirroring mergeContacts.js; proven end-to-end through the compiled Merge Company node body with pinned red-before-green evidence; companies_jscode_frozen.json re-baselined bounded to Merge Company only (14-pair proof, 2 differ). Full suite green: 346 pytest / 234 node, 0 regressions vs the 346/228 baseline. Next: Phase 16.4 (fetch-by-objectId)."
+last_updated: "2026-07-28T11:14:34+10:00"
+last_activity: 2026-07-28
+last_activity_desc: Executed and committed Phase 16.3-01 (companies stale-timestamp fix)
 progress:
-  total_phases: 19
+  total_phases: 21
   completed_phases: 5
-  total_plans: 22
-  completed_plans: 9
+  total_plans: 23
+  completed_plans: 10
 ---
 
 # Project State
@@ -23,16 +23,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-07)
 
 **Core value:** The ICP scoring engine turns firmographic + enrichment signals into trustworthy, auditable A/B/C/D prioritization (with hard vetoes) and never clobbers HubSpot data — proven in dry-run locally.
-**Current focus:** Phase 16.2 — contacts-research-judge-mirror COMPLETE (both waves executed; ready for phase completion / next roadmap phase)
+**Current focus:** Phase 16.3 — companies-stale-timestamp-fix (COMPLETE). Next: Phase 16.4 (fetch-by-objectid), then live Track B.
 
 ## Current Position
 
-Phase: 16.2 (contacts-research-judge-mirror) — COMPLETE, 2/2 plans executed
-Plan: 16.2-01 COMPLETE (companies-byte-identity guard + target-parameterize the six research/judge factories c944496, additive mergeContacts evidence/confidenceByField port 28058b9); 16.2-02 COMPLETE (contactResearch.js/contactJudge.js/mergeContacts.foldContactResearch 3040df7, wired the 10-node contact chain at the seam + credentials/deploy 3f3aa16)
-Status: 16.2-02 verified (346 pytest / 228 node, 0 regressions vs the 336/179 post-16.2-01 baseline) — the contacts branch now runs the full jobtitle/seniority research->judge chain at the 16.1 seam, row-recovery mirrors bd682a2, marker hygiene + chosen_field allowlist + write-safety fold all proven by node tests, companies byte-identity + row-flow regression both stay green, deterministic rebuild confirmed
-Last activity: 2026-07-24 — Phase 16.2-02 executed and committed; Phase 16.2 complete
+Phase: 16.3 (companies-stale-timestamp-fix) — COMPLETE, 1/1 plan executed
+Prior: Phase 16.2 (contacts-research-judge-mirror) — COMPLETE, 2/2 plans executed
+Plan: 16.3-01 COMPLETE (RED compiled-node proof 402d8a1, GREEN promote-branch relocation + mirrored tests + rebuild 318a73e, bounded frozen-fixture re-baseline 467a7d7)
+Status: 16.3-01 verified (346 pytest / 234 node, 0 regressions vs the 346/228 baseline) — mergeCompanies.js now stamps its cache-key datetimes only on promote, structurally mirroring mergeContacts.js; the bug/fix are demonstrated end-to-end through the compiled Merge Company node body (pinned pre-fix fixture vs live post-fix body); companies_jscode_frozen.json re-baselined bounded to Merge Company only (14-pair proof: 2 differ, 12 byte-identical); companies research-fold path (build_cloud_workflows.py:2216) confirmed to inherit the fix for free; src/merge_policy.py:279-287's equivalent unconditional-write shape found and explicitly NOT fixed (out of fence, flagged for a future phase); deterministic rebuild confirmed
+Last activity: 2026-07-28 — Phase 16.3-01 executed and committed; Phase 16.3 complete
 
-Progress: [██████████] ~[███░░░░░░░] 35% (18/18 phases through Milestone 3's current roadmap; Phase 16.2 COMPLETE, both waves)
+Progress: [██████████] ~[███░░░░░░░] 36% (19/19 phases through Milestone 3's current roadmap; Phase 16.3 COMPLETE)
 
 *(NOTE: `gsd state.update-progress` mis-derives this bar from `completed_plans/total_plans`
 across concatenated milestones — see MEMORY.md "gsd state.update-progress unsafe here".
@@ -79,6 +80,7 @@ now shows Phase 16.1 as 2/2 Complete, Phase 16.2 as 1/2 In Progress, everything 
 | Phase 16.1 P02 | ~30min | 3 tasks | 9 files |
 | Phase 16.2 P01 | ~55min | 2 tasks | 11 files |
 | Phase 16.2 P02 | ~26min | 2 tasks | 19 files |
+| Phase 16.3 P01 | ~4min (commit span) | 3 tasks | 12 files |
 
 ## Accumulated Context
 
@@ -102,6 +104,7 @@ Decisions are logged in PROJECT.md Key Decisions table. SPEC-level architectural
 - Phase 16.1-01: the linear provider chain (Lusha→Apollo→ZoomInfo in series) could only drop a SUFFIX of providers, never an arbitrary subset — fixed by fanning both waterfalls out behind per-provider `IF <provider> Enabled` gates with a BYPASS lane that rejoins at the next stage (mirrors the pre-existing `IF ZoomInfo Needs Mint` convergence precedent), so `Normalize + Score(+ Company)` always fires exactly once even with zero providers enabled. Both branches call the SAME new `_provider_gate_bypass_chain(...)` builder helper (CONTEXT Locked Decision 8 — the Phase 16.2 reuse seam), not two hand-rolled copies. Every gate reads `provider_enabled.<name>` by node name from `Parse HubSpot Event` (never bare `$json`, which an upstream provider's HTTP response may have replaced); every provider request body reads `identity_keys` by node name from `Enrichment Gate`/`Build Company Requests` for the same reason — this closes a latent identity-loss bug that pre-dated 16.1 (Apollo's body read `$json.identity_keys` while sitting downstream of Lusha's response). The object-type router keeps its existing 2-way `Route By Object Type` node UNCHANGED (a pre-existing test pins its exact shape) and gets a new `IF Object Type Supported` gate immediately upstream instead — an "IF + explicit unsupported check" chain, one of the two forms the plan sanctioned, rather than rewriting the existing node into a 3-way Switch. `PROVIDER_REGISTRY` lives in a NEW side-effect-free `scripts/provider_registry.py` (not inside `build_cloud_workflows.py`, which triggers taxonomy/escalation codegen writes at import) so Phase 16.1-02's read-only credit-check script can import it without rewriting repo files. `requirements.mark-complete` was skipped for this plan: its `requirements:` frontmatter lists local Success-Criteria IDs (SC-1/SC-2/SC-3/SC-8 etc.) that are phase-scoped, not global REQ-IDs from REQUIREMENTS.md, and don't exist there to mark. See `16.1-01-SUMMARY.md`.
 - [Phase ?]: Phase 16.1-02: credit checks run ONCE per webhook run via a dedicated single-item branch off Parse HubSpot Event (not the multi-row terminal flow), closing the live-observed Lusha 5 req/min 429 -> all-null failure mode (reviews C1).
 - Phase 16.2-02: contactResearch.js/contactJudge.js are NEW sibling modules (never edits to judge.js/webResearch.js) that reuse the shared modules' field-agnostic helpers by `require()`, co-inlined at build time — the companies byte-identity guard stays green throughout. Security-hardening beyond the RESEARCH plan: `validateContactResearch` demotes a jobtitle/seniority value to null unless its cited evidence is a PARSEABLE `https:` URL (gpt #10); `applyContactJudgeVerdict` allowlists `chosen_field` to `{jobtitle, seniority}` + requires decision/confidence before ever writing a field, because `ENRICH_PARSE_EVENT_CLOUD` spreads raw caller event props into the row, making an unvalidated `chosen_field` a write-any-field vector. `EnrichTarget` gained one new field (`entry_strip_markers`, default False) so a target can opt into marker-stripping at its chain's entry node without touching `COMPANIES_TARGET`'s emitted string — CONTACTS_TARGET opts in, stripping `research_candidate`/`judge_verdict`/`judge_flags`/`judge_confidence_by_field`/`judge_promoted_fields` from every row before anything else runs. `foldContactResearch` (mergeContacts.js) is a write-SAFETY gate, not adjudication (SC-3 honest mirror — companies doesn't adjudicate provider-vs-research either): research wins a field only when judge-promoted or filling a genuinely-blank gap (kimi HIGH-2 — provider-absent alone is not a gap when the existing record already has a value); a withheld research decision is rewritten to `stage_only`/`withheld_by_overlap_precedence` so the audit trail matches the actual patch (gpt #8). Also fixed a stale-timestamp bug (gpt #6, contacts-only — mergeCompanies.js has the same latent issue, flagged Track-B): the cache-key `verified_at` now stamps only on an actually-promoted field. **Found mid-implementation:** contactJudge.js's original 2-line destructuring `require()` didn't match the builder's single-line stripper regex, leaving a stale `require(...)` call inlined that re-declared `ESCALATION_CONFIDENCE_BAND` — a `SyntaxError` at the built Code node, caught immediately by the row-flow regression test; collapsed to one line (single-line requires are the established convention `webResearch.js`/`judge.js` already use). The row-flow test harness (mirroring `researchChainRowFlow.test.mjs`) runs every chain node UNCONDITIONALLY regardless of the real IF-node branching n8n itself evaluates, so its seed row must avoid triggering `computeContactEscalation` (else `applyCostCap`'s budget-0 default demotes the candidate via `applyContactUnadjudicated` before the test's own mock judge verdict runs, a combination that can never occur in a real execution where the IF-false lane would have bypassed the judge nodes entirely) — same constraint the companies test already lives under. Full offline suite 346 pytest / 228 node, 0 regressions vs the 336/179 post-16.2-01 baseline; the four frozen shared JS modules stay git-unchanged; deterministic rebuild confirmed. See `16.2-02-SUMMARY.md`.
+- Phase 16.3-01: mirrored the Phase 16.2 gpt #6 contacts stale-timestamp fix onto `mergeCompanies.js` — `cacheKeys[COMPANY_CACHE_KEY_FIELDS[field]] = verifiedAt` moved inside `decision === "promote"`, structurally identical to `mergeContacts.js:183-194`, no shared-helper extraction. Proven through the COMPILED `Merge Company` node body (not just the pure function): a permanent pinned pre-fix jsCode fixture (`tests/fixtures/merge_company_prefix_jscode.json`) is diffed against the live post-fix body read out of the committed workflow JSON via the `researchChainRowFlow.test.mjs` `new Function(...)` mechanism — captured red (verbatim `node --test` failure) BEFORE the fix landed. The companies research-fold path (`ENRICH_MERGE_CO`'s `cacheKeys: {...merged.cacheKeys, ...researchMerged.cacheKeys}` spread, `build_cloud_workflows.py:2216`) inherits the fix for free — it only spreads maps already produced by `mergeCompanies()`, never synthesizes one; no builder edit made. `tests/fixtures/companies_jscode_frozen.json` re-baselined as its own isolated commit, proven bounded BEFORE writing (14 {variant,node} pairs checked, exactly 2 differ — both `Merge Company` — comment-stripped diff confirmed as exactly the relocated 3-line block). **Found, not fixed:** `src/merge_policy.py:279-287` has the same unconditional-write shape (`source_metadata()` gated only on `if chosen:`, not `final_decision == "promote"`) — explicitly out of this phase's fence (Python harness lane, plan prohibited editing it); flagged for a future phase. Full offline suite 346 pytest / 234 node, 0 regressions vs the 346/228 baseline; deterministic rebuild confirmed. See `16.3-01-SUMMARY.md`.
 - Phase 16.2-01: the six companies research/judge/validate/apply-verdict Code-node factories in `build_cloud_workflows.py` (`_enrich_research_gate_js`, `_enrich_build_research_request_js`, `ENRICH_VALIDATE_RESEARCH`, `_enrich_judge_gate_js`, `_enrich_build_judge_request_js`, `ENRICH_APPLY_JUDGE_VERDICT`) now take a `target` config (a new `EnrichTarget` dataclass) defaulting to `COMPANIES_TARGET`, which reproduces today's exact emitted jsCode string — proven by a frozen-snapshot guard (`tests/test_companies_factory_frozen.py`) that CALLS `build_enrichment_cloud()`/`build_enrichment_local_live()` in-test rather than diffing committed JSON, so a shared-module edit with no rebuild still fails loudly. `CONTACTS_TARGET` is authored (provider-aware gap predicate reading `existingRecord`+`scored.winners`, contact role-verification research prompt, no A/R/G/T grounding in the judge pass-1 per RESEARCH Task 3.4) but genuinely UNWIRED — no call site passes it, and its `inline_modules` name `contactResearch.js`/`contactJudge.js` (Plan 02 writes these) by string only, never via an actual `inline()` call, so the build cannot fail on a missing sibling module. `mergeContacts.js` additively gained mergeCompanies' `evidence`/`confidenceByField` opts + `_needsEvidence` gate (byte-identical for the one existing provider caller) — this is the substrate Plan 02's contact research fold writes evidence URLs and per-field judge confidence into. Full offline suite 336 pytest / 179 node, 0 regressions vs the 332/170 pre-16.2 baseline; the four frozen shared JS modules (`judge.js`/`webResearch.js`/`scoreEnrichment.js`/`mergeCompanies.js`) stay git-unchanged. See `16.2-01-SUMMARY.md`.
 
 ### Pending Todos
@@ -136,6 +139,8 @@ Decisions are logged in PROJECT.md Key Decisions table. SPEC-level architectural
 - **HubSpot on Starter** ($35); Pro tier required before any writeback/n8n milestone.
 - **Enrich-first reality**: org type verified for only 66/712 companies; `closed_lost_reason` 0% filled.
 
+- **NEW 2026-07-28 (Phase 16.3, discovered not fixed): `src/merge_policy.py:279-287` has the same unconditional-cache-write shape the JS merge modules had before their stale-timestamp fixes.** `source_metadata()` is called whenever `if chosen:` (a candidate was selected), not gated on `final_decision == "promote"` — the same class of bug as gpt #6 (Phase 16.2 contacts, Phase 16.3 companies). Not fixed: this phase's plan explicitly prohibited editing `src/merge_policy.py` (it is the Python harness's own separate lane, used by the local-first MVP `main.py` path, not the n8n Code-node runtime this phase's fence covers). Needs an explicit decision before a future phase relies on the Python harness's provenance/cache-key freshness for stale-refresh purposes.
+
 ## Deferred Items
 
 Items carried forward to later milestones:
@@ -149,7 +154,7 @@ Items carried forward to later milestones:
 
 ## Session Continuity
 
-Last session: 2026-07-24T03:45:03.812Z
-Stopped at: Phase 16.2-01 EXECUTED + committed (c944496, 28058b9) -- Wave 1 of 2 complete; Wave 2 (16.2-02) depends on this plan.
+Last session: 2026-07-28T01:14:34.000Z
+Stopped at: Phase 16.3-01 EXECUTED + committed (402d8a1 RED, 318a73e GREEN, 467a7d7 fixture re-baseline) -- Phase 16.3 complete, single plan.
 Resume file: None
-Next command: Execute 16.2-02-PLAN.md (contact research->judge chain: contactResearch.js + contactJudge.js siblings, wire the 10-node chain at the seam with row-recovery across HTTP hops, ENRICH_MERGE 2nd-merge fold, anthropic credential + deploy binding, mirrored tests) via `/gsd-execute-phase 16.2`. Track B (live operator runbook) remains available as an out-of-band operator task.
+Next command: Plan and execute Phase 16.4 (fetch-by-objectId) via `/gsd-plan-phase 16.4` then `/gsd-execute-phase 16.4`. Track B live operator runbook remains available as an out-of-band operator task.

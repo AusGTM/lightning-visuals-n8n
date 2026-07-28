@@ -488,7 +488,7 @@ retroactively; its artifacts and tests are in the tree.
 **Plans**: 1 plan
 
 Plans:
-- [ ] 16.3-01-PLAN.md — Red-before-green compiled-node proof, the promote-branch cache-key fix + retired contacts NOTE, and the bounded reviewed re-baseline of the frozen companies fixture
+- [x] 16.3-01-PLAN.md — Red-before-green compiled-node proof, the promote-branch cache-key fix + retired contacts NOTE, and the bounded reviewed re-baseline of the frozen companies fixture
 
 ### Phase 16.4: Fetch By ObjectId
 
@@ -521,5 +521,5 @@ Plans:
 | 16. Scheduled Workflows & Review Surface | 2/2 | Complete | 2026-07-23 |
 | 16.1. Provider Selection, Credit Reporting & Schedule Safety (INSERTED) | 2/2 | Complete | 2026-07-24 |
 | 16.2. Contacts Research + Judge Mirror (INSERTED) | 2/2 | Complete | 2026-07-24 |
-| 16.3. Companies Stale-Timestamp Fix (INSERTED) | 0/1 | Planned | — |
+| 16.3. Companies Stale-Timestamp Fix (INSERTED) | 1/1 | Complete | 2026-07-28 |
 | 16.4. Fetch-By-ObjectId (INSERTED) | 0/? | Not started | — |
