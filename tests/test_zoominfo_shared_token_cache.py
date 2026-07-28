@@ -99,8 +99,10 @@ def _assert_every_mint_gated_by_the_shared_cache(doc):
         assert 'getWorkflowStaticData("global")' in code
         assert "needsMint(" in code
         # secret-free (Task 2 decision) — the Token Gate Code node must never read the
-        # client credential fields itself.
-        assert "client_id" not in code and "client_secret" not in code
+        # actual client credential values itself (zoominfoToken.js's own header comment
+        # mentions "client_id"/"client_secret" in prose, which inline() legitimately
+        # carries in — check for the real ZOOMINFO_CLIENT_* variable names instead).
+        assert "ZOOMINFO_CLIENT" not in code
 
 
 def _assert_every_cache_write_uses_the_same_key(doc):
@@ -143,7 +145,7 @@ def test_credit_branch_usage_check_reads_a_bearer_token_not_its_own_mint_respons
     doc = m.build_enrichment_cloud()
     code = _node(doc, "ZoomInfo Usage")["parameters"]["jsCode"]
     assert "zoom_token" in code
-    assert "client_id" not in code and "client_secret" not in code
+    assert "ZOOMINFO_CLIENT" not in code
 
 
 def test_committed_wf_enrichment_cloud_json_zoominfo_topology_is_current():

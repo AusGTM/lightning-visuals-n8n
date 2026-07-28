@@ -197,7 +197,9 @@ flowchart TD
     direction TB
     CRQ --> CLC{"IF Lusha Credit Requested"} -->|yes| LUC["Lusha Usage — httpRequest"]
     CRQ --> CAC{"IF Apollo Credit Requested"} -->|yes| APC["Apollo Usage — httpRequest"]
-    CRQ --> CZC{"IF ZoomInfo Credit Requested"} -->|yes| ZUM["ZoomInfo Usage Mint — httpRequest"] --> ZU["ZoomInfo Usage — code"]
+    CRQ --> CZC{"IF ZoomInfo Credit Requested"} -->|yes| ZUTG["ZoomInfo Usage Token Gate — code"] --> ZUIF{"IF Usage Needs Mint"}
+    ZUIF -->|mint| ZUM["ZoomInfo Usage Mint — httpRequest · Basic · cred LV ZoomInfo"] --> ZUC["ZoomInfo Usage Cache Token — code"] --> ZU["ZoomInfo Usage — code"]
+    ZUIF -->|cached| ZU
   end
 
   RT -->|contact| CB

@@ -2974,6 +2974,35 @@ def _zoom_split_company_subgraph(gate_source_node, x, y):
     return nodes, conns, "ZoomInfo Company Token Gate", "ZoomInfo Company"
 
 
+def _zoom_split_usage_subgraph(gate_source_node, x, y):
+    """Credit-branch counterpart of _zoom_split_contacts_subgraph — the SAME Token Gate /
+    IF Needs Mint / Mint / Cache Token shape, sharing the identical `sd.zoominfo` cache
+    key, so the credit branch's usage check goes through the ONE shared cache instead of
+    minting its own ungated token (Bug A, live 2026-07-28). Final node name stays
+    "ZoomInfo Usage" (unchanged downstream reference in Build Response / test_
+    remaining_credits_response.py). Node names carry a " Usage" tag so
+    NODE_CREDENTIAL_MAP can bind this Mint node without colliding with the row-flow
+    mints — "ZoomInfo Usage Mint" already exists in NODE_CREDENTIAL_MAP unchanged."""
+    nodes = [
+        code_node("ZoomInfo Usage Token Gate", _zoom_split_gate_js(gate_source_node), x, y),
+        _if_bool_node("IF ZoomInfo Usage Needs Mint", "zoom_needs_mint", x + 220, y),
+        _zoom_mint_node("ZoomInfo Usage Mint", x + 440, y - 120),
+        code_node("ZoomInfo Usage Cache Token", _zoom_split_cache_js("ZoomInfo Usage Token Gate"),
+                  x + 660, y - 120),
+        code_node("ZoomInfo Usage", _zoom_split_usage_js(), x + 880, y),
+    ]
+    conns = {
+        "ZoomInfo Usage Token Gate": {"main": [[{"node": "IF ZoomInfo Usage Needs Mint", "type": "main", "index": 0}]]},
+        "IF ZoomInfo Usage Needs Mint": {"main": [
+            [{"node": "ZoomInfo Usage Mint", "type": "main", "index": 0}],  # true: mint
+            [{"node": "ZoomInfo Usage", "type": "main", "index": 0}],       # false: use cached
+        ]},
+        "ZoomInfo Usage Mint": {"main": [[{"node": "ZoomInfo Usage Cache Token", "type": "main", "index": 0}]]},
+        "ZoomInfo Usage Cache Token": {"main": [[{"node": "ZoomInfo Usage", "type": "main", "index": 0}]]},
+    }
+    return nodes, conns, "ZoomInfo Usage Token Gate", "ZoomInfo Usage"
+
+
 def _route_action_switch(name, x, y):
     """Switch node routing $json.action -> create/enrich/skip. Shared by the contacts and
     companies Cloud branches (previously duplicated inline for contacts only)."""
@@ -3066,28 +3095,47 @@ const providers_requested = (first && first.json && first.json.providers_request
 return [{ json: { providers_requested } }];
 """
 
-# Phase 16.1 Plan 02 — secret-free, Bearer-only ZoomInfo usage/credit check. Reads ONLY
-# the bearer minted by the credential-bound "ZoomInfo Usage Mint" node (the ONLY node in
-# this branch that ever touches client_id/client_secret) and GETs the usage endpoint with
-# the vnd.api+json Accept header the live curl required (16.1-RESEARCH.md Task 1 — plain
-# application/json 406s). Degrades to { error } on ANY failure; Build Response's
-# extractCredits treats a malformed/errored body as null, never raising (SC-5).
-ENRICH_ZOOM_USAGE_CHECK = r"""// ZoomInfo Usage — Phase 16.1 Plan 02 (secret-free, Bearer only).
+# Bug A fix (live 2026-07-28): the credit branch's ZoomInfo usage check used to mint its
+# OWN token unconditionally (no needsMint() gate) and read it straight off its own prior
+# HTTP node's raw response — never touching the sd.zoominfo cache the contacts/companies
+# row-flow subgraphs read and write. ZoomInfo allows exactly ONE active token per
+# credential, so that ungated mint invalidated whatever the row-flow had just cached
+# WITHOUT updating the cache to match, leaving it pointing at a token ZoomInfo had
+# already killed — the row-flow's NEXT run then reused that "still fresh per its `exp`,
+# actually dead" token and 401'd (live-observed as consecutive-run 401s while the credit
+# check itself succeeded in the same run). Reads only `zoom_token`, attached by the
+# SAME Token Gate/Cache Token nodes the contacts/companies Enrich nodes use — see
+# _zoom_split_usage_subgraph() — so this consumer shares the one cache instead of
+# bypassing it. Same isAuthError/cache-clear-on-401 behavior as the row-flow Enrich
+# nodes (Bug B fix): 400/403/404/429/5xx must never clear the cache, only a real 401.
+def _zoom_split_usage_js():
+    return inline("zoominfoToken.js") + r"""
+
+// --- n8n wrapper: ZoomInfo usage/credit check via Bearer token (CLOUD split-code-node) ---
 const USAGE_URL = "https://api.zoominfo.com/gtm/data/v1/users/usage";
-const mint = $input.first();
-const token = mint && mint.json && mint.json.access_token;
-if (!token) return [{ json: { error: "no zoominfo token available (mint failed)" } }];
-let res;
-try {
-  res = await this.helpers.httpRequest({
-    method: "GET", url: USAGE_URL,
-    headers: { Authorization: "Bearer " + token, Accept: "application/vnd.api+json" },
-  });
-} catch (e) {
-  res = { error: String((e && e.message) || e) };
+const sd = $getWorkflowStaticData("global");
+const items = $input.all();
+const out = [];
+for (const item of items) {
+  const token = item.json.zoom_token;
+  if (!token) { out.push({ json: { error: "no zoominfo token available (mint failed or missing)" } }); continue; }
+  let res;
+  try {
+    res = await this.helpers.httpRequest({
+      method: "GET", url: USAGE_URL,
+      headers: { Authorization: "Bearer " + token, Accept: "application/vnd.api+json" },
+    });
+  } catch (e) {
+    if (isAuthError(extractErrorStatus(e))) {
+      delete sd.zoominfo;  // token rejected -> clear cache so the NEXT run re-mints
+    }
+    res = { error: String((e && e.message) || e) };
+  }
+  out.push({ json: res });
 }
-return [{ json: res }];
+return out;
 """
+
 
 # Phase 16.1 Plan 02 (reviews C1/C3/LOW-3) — the convergence node every enrichment
 # terminal feeds (5 real terminals + the 2 re-pointed IF-enrich-false lanes + the
@@ -3720,12 +3768,18 @@ def build_enrichment_cloud():
         "Lusha Usage", lusha_credit["url"], lusha_credit["method"], bx, by - 120, auth="header"))
     nodes.append(_credit_http_node(
         "Apollo Usage", apollo_credit["url"], apollo_credit["method"], bx, by, auth="header"))
-    # ZoomInfo: mint (credential-bound, "LV ZoomInfo") -> secret-free Bearer-only usage GET,
-    # same split shape as ZoomInfo Mint/ZoomInfo Mint Company but a DISTINCT node name (C2)
-    # so deploy's NODE_CREDENTIAL_MAP can bind it without colliding with the row-flow mints.
-    nodes.append(_zoom_mint_node("ZoomInfo Usage Mint", bx, by + 120))
-    bx += 220
-    nodes.append(code_node("ZoomInfo Usage", ENRICH_ZOOM_USAGE_CHECK, bx, by + 120))
+    # ZoomInfo: Bug A fix (live 2026-07-28) — the credit branch no longer mints its own
+    # ungated token. It gets the SAME 5-node Token Gate/IF Needs Mint/Mint/Cache Token
+    # subgraph shape as the contacts/companies row-flows, sharing the identical
+    # sd.zoominfo cache key (_zoom_split_usage_subgraph), so at most one mint happens per
+    # run when the cache is warm and every consumer's mint result is visible to every
+    # other consumer. gate_source_node="Credit Request" mirrors the row-flow subgraphs'
+    # paired-index identity-recovery idiom (harmless here — $input already IS the Credit
+    # Request row, single-item, by the time the Gate runs).
+    zoom_usage_nodes, zoom_usage_conns, zoom_usage_entry, zoom_usage_exit = (
+        _zoom_split_usage_subgraph("Credit Request", bx, by + 120))
+    nodes.extend(zoom_usage_nodes)
+    bx += 880
 
     credit_conns = {
         "Credit Request": {"main": [[
@@ -3740,9 +3794,9 @@ def build_enrichment_cloud():
             [{"node": "Apollo Usage", "type": "main", "index": 0}], [],
         ]},
         "IF ZoomInfo Credit Requested": {"main": [
-            [{"node": "ZoomInfo Usage Mint", "type": "main", "index": 0}], [],
+            [{"node": zoom_usage_entry, "type": "main", "index": 0}], [],
         ]},
-        "ZoomInfo Usage Mint": {"main": [[{"node": "ZoomInfo Usage", "type": "main", "index": 0}]]},
+        **zoom_usage_conns,
     }
 
     # Build Response / Respond to Webhook — the convergence every terminal branch feeds
@@ -4005,7 +4059,15 @@ def build_enrichment_cloud():
             "it fires on whichever arrives FIRST — per-batch first-arrival, parity with "
             "the prior `lastNode` behavior, NOT hard determinism across a mixed batch. "
             "The 0-event/empty-body case and exact arrival ordering are Track B "
-            "execution-level test items, not provable offline."
+            "execution-level test items, not provable offline.\n\n"
+            "**ZoomInfo shares the row-flow's token cache (Bug A fix, live 2026-07-28):** "
+            "the usage check used to mint its OWN token unconditionally, bypassing "
+            "`sd.zoominfo` entirely — ZoomInfo allows exactly ONE active token per "
+            "credential, so that ungated mint invalidated whatever the contacts/"
+            "companies row-flow had just cached, without updating the cache to match. "
+            "It now goes through the SAME Token Gate/IF Needs Mint/Mint/Cache Token "
+            "shape (`ZoomInfo Usage Token Gate` etc.) as the row-flow subgraphs, sharing "
+            "the identical cache key."
         ), "x": bx, "y": by - 340, "h": 340, "w": 460},
     ]
     # n8n's POST /api/v1/workflows REJECTS a workflow containing duplicate node names

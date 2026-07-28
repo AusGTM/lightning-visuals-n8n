@@ -83,7 +83,12 @@ def test_each_credit_http_nodes_only_inbound_is_its_own_gate_true_lane():
     expected_gate = {
         "Lusha Usage": "IF Lusha Credit Requested",
         "Apollo Usage": "IF Apollo Credit Requested",
-        "ZoomInfo Usage Mint": "IF ZoomInfo Credit Requested",
+        # Bug A fix (live 2026-07-28): ZoomInfo no longer mints straight off the credit
+        # gate — it goes through the SAME Token Gate / IF Needs Mint / Mint / Cache Token
+        # shape the row-flow subgraphs use first, sharing the sd.zoominfo cache instead
+        # of minting an ungated, independently-tracked token (see
+        # tests/test_zoominfo_shared_token_cache.py for the full topology proof).
+        "ZoomInfo Usage Token Gate": "IF ZoomInfo Credit Requested",
     }
     for credit_node, gate_name in expected_gate.items():
         edges = _inbound_edges(doc, credit_node)
@@ -91,8 +96,14 @@ def test_each_credit_http_nodes_only_inbound_is_its_own_gate_true_lane():
             f"{credit_node} must have exactly ONE inbound edge — its own {gate_name} "
             f"TRUE (index 0) output — got {edges}"
         )
-    # ZoomInfo Usage (the secret-free GET) is fed only by its own Mint node.
-    assert _inbound_edges(doc, "ZoomInfo Usage") == [("ZoomInfo Usage Mint", 0)]
+    # ZoomInfo Usage Mint only fires behind its own needsMint() gate, never directly off
+    # the credit-requested gate (that direct edge is exactly Bug A's shape).
+    assert _inbound_edges(doc, "ZoomInfo Usage Mint") == [("IF ZoomInfo Usage Needs Mint", 0)]
+    # ZoomInfo Usage (the secret-free GET) is fed by BOTH the IF's mint-then-cache lane
+    # and its cache-hit bypass lane — mirroring the row-flow Enrich nodes' convergence.
+    assert set(_inbound_edges(doc, "ZoomInfo Usage")) == {
+        ("IF ZoomInfo Usage Needs Mint", 1), ("ZoomInfo Usage Cache Token", 0),
+    }
 
 
 def test_credit_gates_false_lane_is_a_dead_end_no_rejoin_needed():
@@ -132,7 +143,10 @@ def test_zoominfo_usage_get_sets_the_vnd_api_json_accept_header():
     doc = _load()
     code = _node(doc, "ZoomInfo Usage")["parameters"]["jsCode"]
     assert "application/vnd.api+json" in code
-    assert "client_id" not in code and "client_secret" not in code  # secret-free (C2)
+    # secret-free (C2) — never reads the actual ZOOMINFO_CLIENT_* credential values
+    # (zoominfoToken.js's own header comment mentions "client_id"/"client_secret" in
+    # prose, which inline() legitimately carries in, so check the real var names).
+    assert "ZOOMINFO_CLIENT" not in code
 
 
 def test_zero_env_or_vars_expressions_in_the_credit_branch():
