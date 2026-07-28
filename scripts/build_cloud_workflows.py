@@ -3983,10 +3983,15 @@ def build_enrichment_cloud():
             "execution-level test items, not provable offline."
         ), "x": bx, "y": by - 340, "h": 340, "w": 460},
     ]
-    for n in notes:
+    # n8n's POST /api/v1/workflows REJECTS a workflow containing duplicate node names
+    # (400 duplicate_node_name) — found on the first live deploy 2026-07-28, where all
+    # 7 stickies here shared the name "Sticky Note". Sticky notes are decorative and never
+    # appear in `connections`, so numbering them is safe. Guarded by
+    # tests/test_node_name_uniqueness.py.
+    for i, n in enumerate(notes, start=1):
         nodes.append({
             "parameters": {"content": n["content"], "height": n["h"], "width": n["w"]},
-            "id": nid("s"), "name": "Sticky Note",
+            "id": nid("s"), "name": f"Sticky Note {i}",
             "type": "n8n-nodes-base.stickyNote", "typeVersion": 1,
             "position": [n["x"], n["y"]],
         })
@@ -4353,10 +4358,12 @@ def build_scheduled_maintenance_cloud():
             "deploy time."
         ), "x": 800, "y": 1080, "h": 340, "w": 480},
     ]
-    for n in notes:
+    # See the enrichment builder's note: duplicate node names are a hard 400 from n8n's
+    # workflow-create API. Guarded by tests/test_node_name_uniqueness.py.
+    for i, n in enumerate(notes, start=1):
         nodes.append({
             "parameters": {"content": n["content"], "height": n["h"], "width": n["w"]},
-            "id": nid("s"), "name": "Sticky Note",
+            "id": nid("s"), "name": f"Sticky Note {i}",
             "type": "n8n-nodes-base.stickyNote", "typeVersion": 1,
             "position": [n["x"], n["y"]],
         })

@@ -82,7 +82,13 @@ ZOOMINFO_CREDENTIAL_TYPE = "httpBasicAuth"
 
 
 def _hubspot_data() -> dict:
-    return {"accessToken": os.getenv("HUBSPOT_PRIVATE_APP_TOKEN")}
+    # Field name is `appToken`, NOT `accessToken` — confirmed by live schema introspection
+    # against n8n Cloud 2026-07-28 (GET /api/v1/credentials/schema/hubspotAppToken returns
+    # properties {appToken, allowedHttpRequestDomains, allowedDomains}). The original
+    # `accessToken` guess was caught by this script's own schema-mismatch guard, which
+    # aborted the credential rather than creating an unusable one — the guard working as
+    # designed on the first live provisioning run.
+    return {"appToken": os.getenv("HUBSPOT_PRIVATE_APP_TOKEN")}
 
 
 def _lusha_data() -> dict:

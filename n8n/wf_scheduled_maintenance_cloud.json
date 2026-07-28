@@ -655,7 +655,7 @@
         "width": 520
       },
       "id": "s00330000-0000-4000-8000-000000000000",
-      "name": "Sticky Note",
+      "name": "Sticky Note 1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -670,7 +670,7 @@
         "width": 480
       },
       "id": "s00340000-0000-4000-8000-000000000000",
-      "name": "Sticky Note",
+      "name": "Sticky Note 2",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [

@@ -1938,7 +1938,7 @@
         "width": 480
       },
       "id": "s01160000-0000-4000-8000-000000000000",
-      "name": "Sticky Note",
+      "name": "Sticky Note 1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1953,7 +1953,7 @@
         "width": 460
       },
       "id": "s01170000-0000-4000-8000-000000000000",
-      "name": "Sticky Note",
+      "name": "Sticky Note 2",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1968,7 +1968,7 @@
         "width": 380
       },
       "id": "s01180000-0000-4000-8000-000000000000",
-      "name": "Sticky Note",
+      "name": "Sticky Note 3",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1983,7 +1983,7 @@
         "width": 420
       },
       "id": "s01190000-0000-4000-8000-000000000000",
-      "name": "Sticky Note",
+      "name": "Sticky Note 4",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -1998,7 +1998,7 @@
         "width": 420
       },
       "id": "s01200000-0000-4000-8000-000000000000",
-      "name": "Sticky Note",
+      "name": "Sticky Note 5",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -2013,7 +2013,7 @@
         "width": 420
       },
       "id": "s01210000-0000-4000-8000-000000000000",
-      "name": "Sticky Note",
+      "name": "Sticky Note 6",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
@@ -2028,7 +2028,7 @@
         "width": 460
       },
       "id": "s01220000-0000-4000-8000-000000000000",
-      "name": "Sticky Note",
+      "name": "Sticky Note 7",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
