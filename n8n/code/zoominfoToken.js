@@ -50,4 +50,30 @@ function isAuthError(statusCode) {
   return Number(statusCode) === 401;
 }
 
-module.exports = { needsMint, computeExpiry, parseTokenResponse, isAuthError };
+// Bug B (live 2026-07-28): n8n's this.helpers.httpRequest throws an AxiosError, whose
+// status lives at `e.response.status` — a shape the original inline check
+// (statusCode/httpCode/response.statusCode) never covered, so a real 401 was silently
+// missed and the cache never cleared. Tries every shape actually observed in this
+// runtime (axios; n8n's NodeApiError, whose httpCode is sometimes a STRING; a bare
+// statusCode) and, as a last resort, parses the "status code NNN" trailer n8n/axios
+// append to the error message. Returns NaN (never a false 401) when nothing usable is
+// found — isAuthError(NaN) is false, matching the safe conservative default.
+function extractErrorStatus(e) {
+  if (!e) return NaN;
+  const candidates = [
+    e.statusCode,
+    e.httpCode,
+    e.response && e.response.status,
+    e.response && e.response.statusCode,
+  ];
+  for (const c of candidates) {
+    if (c !== undefined && c !== null && c !== "") {
+      const n = Number(c);
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  const m = /status code (\d{3})/i.exec((e && e.message) || "");
+  return m ? Number(m[1]) : NaN;
+}
+
+module.exports = { needsMint, computeExpiry, parseTokenResponse, isAuthError, extractErrorStatus };

@@ -1243,7 +1243,7 @@ for (let i = 0; i < items.length; i++) {
   try {
     res = await enrich.call(this, token, payload);
   } catch (e) {
-    if (isAuthError(e.statusCode || e.httpCode || (e.response && e.response.statusCode))) {
+    if (isAuthError(extractErrorStatus(e))) {
       delete sd.zoominfo;                     // token rejected -> re-mint once + retry
       token = await mint.call(this);
       try { res = await enrich.call(this, token, payload); }
@@ -1439,7 +1439,7 @@ for (let i = 0; i < items.length; i++) {
   try {
     res = await enrich.call(this, token, payload);
   } catch (e) {
-    if (isAuthError(e.statusCode || e.httpCode || (e.response && e.response.statusCode))) {
+    if (isAuthError(extractErrorStatus(e))) {
       delete sd.zoominfo;                     // token rejected -> re-mint once + retry
       token = await mint.call(this);
       try { res = await enrich.call(this, token, payload); }
@@ -2855,7 +2855,7 @@ for (const item of items) {
       body: JSON.stringify(payload),
     });
   } catch (e) {
-    if (isAuthError(e.statusCode || e.httpCode || (e.response && e.response.statusCode))) {
+    if (isAuthError(extractErrorStatus(e))) {
       delete sd.zoominfo;  // token rejected -> clear cache so the NEXT run re-mints
     }
     res = { error: String((e && e.message) || e) };
@@ -2906,7 +2906,7 @@ for (const item of items) {
       body: JSON.stringify(payload),
     });
   } catch (e) {
-    if (isAuthError(e.statusCode || e.httpCode || (e.response && e.response.statusCode))) {
+    if (isAuthError(extractErrorStatus(e))) {
       delete sd.zoominfo;
     }
     res = { error: String((e && e.message) || e) };
