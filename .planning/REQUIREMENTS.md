@@ -92,61 +92,55 @@ Explicitly excluded from the current roadmap.
 
 ---
 
-## v3 Requirements (Milestone 3 — Company Enrichment & ICP Research)
+## v4 Requirements (Milestone v0.4 — Reachability & Verification Debt)
 
-**Defined:** 2026-07-20
-Source: `docs/WEB-RESEARCH-SPEC.md` (30 numbered requirements, cited by ID in the test suites).
-These REQ-IDs group that spec into phase-mappable units; the spec IDs are the testable contract.
+**Defined:** 2026-07-29
+Source: `.planning/debug/bug-23-enrichment-contact-nomatch-chain-stop.md` (fix plan §"What the
+fix's plan must include") + v0.3 deferred items (STATE.md Deferred Items, v0.3-ROADMAP.md
+"Issues deferred" / "Technical debt incurred").
+The v3 section formerly here is archived verbatim in `.planning/milestones/v0.3-REQUIREMENTS.md`.
 
-### Company Enrichment
+### Reachability (BUG 23)
 
-- [x] **REQ-company-branch**: Companies enrich via a sibling n8n branch off the same trigger — NOT nested under contacts. The ICP fields are per-domain and expensive; nesting re-pays for every contact at the same company. Read-only, no write nodes. (Phase 11)
-- [x] **REQ-company-merge**: Company non-clobber merge with a `domain` hard guard and an evidence-URL gate that runs before the ownership-class branches, so an unevidenced ICP claim cannot promote. (Phase 11)
-- [x] **REQ-provider-contracts**: Every provider contract confirmed against the live API before wiring, with units verified. ZoomInfo GTM `revenue` is THOUSANDS; treating it as dollars banded every company 1000x low and inverted the ICP signal. (Phase 11)
-- [x] **REQ-conflict-withhold**: Cross-provider disagreement on entity-specific signals (size) withholds promotion and routes to review rather than silently selecting one candidate. This is also the franchise/subsidiary detector — no hierarchy modelling required. (Phase 11)
+- [ ] **REACH-01**: The enrichment lane's `HubSpot Search` and `HubSpot Fetch By Id` run on the credential-bound httpRequest envelope transport (mirroring BUG 22's change, including the `lookup_failed` item-error mapping), so a no-match search emits exactly one classifiable item instead of stopping the chain — `adaptFetchById`'s 0-result handling stops being dead code and `contact:create` becomes reachable.
+- [ ] **REACH-02**: Both nodes are dropped from the byte-identical pin in `tests/test_bug10_company_search_transport.py` with the same documented rationale as the prior two removals — the guard was pinning a node broken for half its input space.
+- [ ] **REACH-03**: Live canary of BOTH cases — contact 201 still matches and enriches (regression check on the single most live-proven path in the system), and a nonexistent email reaches `Decide Action` as `create`, write-gated.
+- [ ] **REACH-04**: The harness gap is closed — `bareEventChainFlow`'s http mocks model the native node's 0-item behavior, or (better) the lane asserts no native search nodes remain.
 
-### Taxonomy & Extensibility
+### Normalization
 
-- [x] **REQ-taxonomy-single-source**: `config/taxonomy.yaml` is the only hand-edited vocabulary for `lv_org_type` and `lv_content_type`. Scoring config, field policy, n8n node literals, research prompt and normalizers all derive from it. Adding a value is a one-file edit; drift is a test failure, not a silent 0-score. (Spec TX-1…TX-9; Phase 12)
-- [x] **REQ-enum-normalization**: Normalizers never emit an off-vocabulary value. `lv_org_type` is free text in HubSpot, so there is no CRM-level guard — the normalizer is the only barrier. Python and JS agree on every shared case. (Spec NM-1…NM-6; Phase 12)
+- [ ] **NORM-01**: A numeric provider industry code (ZoomInfo's `"71"`) never survives normalization unchanged and never wins the waterfall over provider text (Apollo's `"media production"` lost to `"71"` in execution 19).
 
-### Research & Judgement
+### Copy-loops
 
-- [x] **REQ-web-retrieval**: `lv_produces_content` and `lv_org_type` resolve from citable first-party sources via native web search, within existing cost kill-switches. Measured: providers resolve org_type for 3/5 accounts and produces_content for 0/5. (Spec RT-1…RT-5; Phase 13)
-- [x] **REQ-evidence-by-field**: Research output carries per-field evidence URLs — the shape the merge gate already requires. A flat URL array does not satisfy it. (Spec OC-1; Phase 13)
-- [x] **REQ-tristate-content**: `lv_produces_content` honors true/false/null as distinct. `false` fires a hard veto; thin or absent evidence MUST yield `null`. A failed search is not evidence of absence, and thin-web-presence ANZ clubs are the ICP core. (Spec TS-1…TS-5; Phase 13)
-- [x] **REQ-evidence-before-judgement**: Judgement never runs without retrieval. Size conflicts never trigger a model call alone — revenue band drives only graduated deductions, never a veto. (Spec RO-1, RO-2, JG-1…JG-3; Phase 14)
+- [ ] **COPY-01**: `lv_sponsorship_reliant` is copied from its candidate source (`build_cloud_workflows.py` ENRICH_MERGE_CO researchData loop) into the companies merge call — the property stops being permanently empty.
+- [ ] **COPY-02**: `persona_group`/`lv_persona_group` is copied from its candidate source (ENRICH_MERGE winners loop) into the contacts merge call — the property stops being permanently empty.
 
-### Scoring Ownership
+### Verification debt
 
-- [x] **REQ-inputs-only-writeback**: The pipeline writes ICP **inputs** and their source metadata, never the derived outputs. `lv_icp_fit_score`, `lv_icp_tier`, `lv_anti_icp_flag`, `lv_anti_icp_reason` and `lv_recommended_motion` are computed in HubSpot. `src/icp_scoring.py` still computes score/tier internally for routing and audit, but its results do not reach a PATCH. Supersedes CLAUDE.md §29. (Phase 15)
+- [ ] **VERIFY-01**: The six `/gsd-verify-work` re-runs carried from the v0.3 goal ledger are executed and their outcomes recorded.
 
-### CRM Migration
-
-- [x] **REQ-property-migration**: Missing metadata properties created via a dry-run-by-default sync emitting an undo manifest. Two known irreversible mutations require explicit sign-off and are NOT bundled: `lv_org_type` text→enumeration, and `lv_icp_fit_score` calculated→writable (destroys its formula). Tooling built + offline-proven (33-property/2-group manifest, sync/rollback/canary scripts); live property creation is an OPERATOR RUNBOOK step (15-01-SUMMARY.md), not yet run against portal 22617666. (Spec RT-5, PN-1..PN-5; Phase 15)
-- [x] **REQ-tiered-adjudication**: Research candidates are scored by the same unmodified A/R/G/T engine against a prior on file before any judge/merge decision — scoring ranks, it never decides. A prior written by this pipeline's own earlier output never contributes to the agreement component (self-confirmation guard, fail-closed on unrecognized sources); recencyDate sourced from Anthropic's `page_age` is ordering bias only, never a veto or staleness gate; the judge-eligible and deterministic-only field sets stay disjoint and asserted from their real sources; judge invocations are capped by a unit-tested pure function. (Spec TA-1..TA-8; Phase 15.5)
-
-### v3 Traceability
+### v4 Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REQ-company-branch | Phase 11 | Complete |
-| REQ-company-merge | Phase 11 | Complete |
-| REQ-provider-contracts | Phase 11 | Complete |
-| REQ-conflict-withhold | Phase 11 | Complete |
-| REQ-taxonomy-single-source | Phase 12 | Complete |
-| REQ-enum-normalization | Phase 12 | Complete |
-| REQ-web-retrieval | Phase 13 | Complete |
-| REQ-evidence-by-field | Phase 13 | Complete |
-| REQ-tristate-content | Phase 13 | Complete |
-| REQ-evidence-before-judgement | Phase 14 | Complete |
-| REQ-inputs-only-writeback | Phase 15 | Complete |
-| REQ-property-migration | Phase 15 | Complete (tooling; live operator runbook pending) |
-| REQ-tiered-adjudication | Phase 15.5 | Complete |
+| REACH-01 | — | Pending |
+| REACH-02 | — | Pending |
+| REACH-03 | — | Pending |
+| REACH-04 | — | Pending |
+| NORM-01 | — | Pending |
+| COPY-01 | — | Pending |
+| COPY-02 | — | Pending |
+| VERIFY-01 | — | Pending |
 
-**Coverage:** v3 requirements: 13 total — mapped to phases: 13 — unmapped: 0 ✓
+**Coverage:** v4 requirements: 8 total — mapping filled by roadmap.
 
-**Deferred beyond Milestone 3:** authoring the HubSpot-side calculation for score/tier/veto/motion (downstream; the rubric must be re-expressed in HubSpot calculation syntax against the `lv_*` inputs).
+### Out of Scope (v0.4)
+
+- **HubSpot-side score/tier calculation** — still the `1 + 1` placeholder; authoring it remains downstream work (Approach C scope fence).
+- **`lv_org_type` text→enumeration** — one-way door, deliberately not performed.
+- **`lv_country_region_normalized` field-policy entry** — flagged, decision not forced this milestone.
+- **`src/merge_policy.py:279-287` unconditional cache-write** — Python-harness lane only; needs its own decision before any stale-refresh reliance.
 
 ---
-*v3 requirements defined: 2026-07-20*
+*v4 requirements defined: 2026-07-29*
