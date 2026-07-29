@@ -657,7 +657,18 @@ Everything else the write path touches exists (`lv_enrichment_needs_review`, `lv
   3. **Live**: a companies run against a throwaway record reaches `HubSpot Company Update` with HTTP 2xx and the patch lands, verified by re-read.
   4. **Live**: `company:create` runs once against a domain with no existing record, and whatever it creates is deleted afterwards.
 
-**Plans**: TBD
+**Plans**: 16.9-01 (COMPLETE 2026-07-29). Criterion 1 resolved by RUNNING the existing Phase 15 migration — both properties were already declared in `config/hubspot_properties.yaml` and had simply never landed in the portal; the migration is idempotent and created exactly the two missing on both objects, with an undo manifest. Criterion 3 MET (execution 17: `HubSpot Company Update` HTTP 2xx, `lv_enrichment_status: "complete"` confirmed by fresh read on a throwaway that was then deleted). Criterion 4 NOT exercised — `company:create` still has never run live.
+
+### Phase 16.10: Write-Gate Coverage (BUG 15) and Live Escalation
+
+**Goal**: No cloud workflow can write to HubSpot without crossing the allowlist, and the Sonnet escalation path is proven on a real adjudication rather than assumed.
+
+**Depends on**: Phase 16.9
+**INSERTED 2026-07-29.** See `.planning/phases/16.10-write-gate-coverage-and-escalation/16.10-01-SUMMARY.md`.
+
+**Outcome — COMPLETE.** BUG 15: `_writeSafetyAllows()` existed only in the enrichment workflow, leaving six write nodes ungated across scheduled-maintenance and contact-ingest. Closed by `splice_write_gates()` plus an upstream-walking coverage guard. Sonnet escalation fired for the first time (execution 18) against a deliberately-conflicting throwaway: `Judge Gate` reasons `["org_type_conflict","confidence_band"]`, a real Sonnet-5 verdict, both `bd682a2` hops intact, `Merge Company` non-null — and `lv_org_type` correctly withheld from the patch as `unadjudicated`/`needs_review` while the evidenced `lv_content_type` promoted.
+
+**Still open**: `Review Apply Update` carries `updateFields: {}` (third instance of the BUG 11 defect) — gated now, but writes nothing. `company:create` has never run live. Both inactive workflows remain entirely live-untested beyond their gates.
 
 ## Milestone 3 Progress
 
@@ -678,4 +689,5 @@ Everything else the write path touches exists (`lv_enrichment_needs_review`, `lv
 | 16.6. Companies Search Transport Fix (INSERTED) | 1/1 | **Complete** — criteria 1 & 7 VERIFIED LIVE (execution 12, non-null Merge Company) | 2026-07-29 |
 | 16.7. Write-Path Canary (INSERTED) | 2/2 | **Complete** — first HubSpot write in project history; protected fields provably survived it; rolled back | 2026-07-29 |
 | 16.8. Row-Carry Fix (BUG 12) (INSERTED) | 1/1 | **Complete** — Set node replaced with a row-spreading Code node; verified live (execution 15) | 2026-07-29 |
-| 16.9. Create-Path Fix (BUG 13) + Company Writes (INSERTED) | 0/? | BUG 13 fixed (`c6462e9`); **BUG 14 OPEN** — `lv_enrichment_status` / `lv_enrichment_requested` do not exist in the portal, so every companies write fails | — |
+| 16.9. Create-Path Fix (BUG 13) + Company Writes (INSERTED) | 1/1 | **Complete** — BUG 13 fixed; BUG 14 resolved (both properties created via the Phase 15 migration, undo manifest written); `company:update` VERIFIED LIVE (execution 17) | 2026-07-29 |
+| 16.10. Write-Gate Coverage (BUG 15) + Live Escalation (INSERTED) | 1/1 | **Complete** — six ungated writes gated; Sonnet escalation exercised live (execution 18), judge adjudicated a real conflict and refused to promote the contested field | 2026-07-29 |
