@@ -4,7 +4,7 @@ milestone: v0.4
 milestone_name: Reachability & Verification Debt
 current_phase: 19
 status: completed
-stopped_at: "Phase 19 closed; operator ran runbook Step 0 (disarmed redeploy) same day — bug-26 RESOLVED, ledger now 5/6 passed, 1/6 human_needed (16.9 armed company:update canary, runbook Steps 1-4 pending)"
+stopped_at: "Phase 19 closed; operator ran the FULL runbook same day (Step 0 redeploy + 16.9 armed canary Steps 1-4) — bug-26 RESOLVED, ledger 6/6 passed, deployment restored disarmed and read back"
 last_updated: "2026-07-29T10:23:33.211Z"
 last_activity: 2026-07-29
 last_activity_desc: Phase 19 complete
@@ -31,15 +31,14 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 Phase: 19
 Plan: Not started
 Status: All phases complete
-11 passed, 15.5 passed, 16 passed (post-redeploy flip), 16.4 passed, 16.6 passed
-(post-redeploy flip), 16.9 human_needed (`company:update` armed canary — see
-`19-OPERATOR-RUNBOOK.md` Steps 1-4). Offline suite at floor (596 pytest / 309 node), zero
-regressions. Operator ran runbook Step 0 same day: disarmed redeploy 200×3, read-back
-confirmed Phase-18 markers live, write gates still disarmed — bug-26 RESOLVED
-(`.planning/debug/resolved/`).
-Last activity: 2026-07-29 — Phase 19 complete; Step 0 redeploy done, ledger 5/6 passed
-Next: operator armed `company:update` canary (`19-OPERATOR-RUNBOOK.md` Steps 1-4),
-then start the next milestone.
+ALL SIX PASSED: 11, 15.5, 16 (post-redeploy flip), 16.4, 16.6 (post-redeploy flip),
+16.9 (operator armed `company:update` canary EXECUTED — n8n execution 108, write proven on
+`9604614548` via `HubSpot Company Update`, neighbor unchanged, disarmed + read back 8x
+`"false"` literals, allowlist cleared). Offline suite at floor (596 pytest / 309 node),
+zero regressions. bug-26 RESOLVED same day via runbook Step 0 (`.planning/debug/resolved/`).
+Last activity: 2026-07-29 — Phase 19 complete; full operator runbook executed, ledger 6/6 passed
+Next: start the next milestone (/gsd-new-milestone) — v0.4 fully discharged, no operator debt
+remaining.
 
 ## Performance Metrics
 
@@ -170,7 +169,7 @@ Items carried forward to later milestones:
 | Debug | BUG 23 — enrichment `contact:create` structurally unreachable — **RESOLVED 2026-07-29, Phase 17** (transport swap + dual live canary; see `.planning/debug/bug-23-enrichment-contact-nomatch-chain-stop.md` Resolution) | Fixed | 2026-07-29 |
 | Normalization | ZoomInfo numeric `industry` code (`"71"`) wins the waterfall over Apollo text and normalizes unchanged — **RESOLVED 2026-07-29, Phase 18 Plan 01** (`_industryText` helper; see `18-01-SUMMARY.md`) | Fixed | 2026-07-29 |
 | Copy-loop | `lv_sponsorship_reliant` (companies) and `lv_persona_group` (contacts) never reached their merge calls, and had no producer — **FULLY RESOLVED 2026-07-29, Phase 18 Plan 03** (wiring landed 18-02; producers — research-prompt field + provider-mapper — landed 18-03; see `18-03-SUMMARY.md`). Remaining, not a blocker: sponsorship only populates on research-gated/enabled rows; persona's only realistic live producer today is Apollo. | Fixed | 2026-07-29 |
-| Verification | Six `/gsd-verify-work` re-runs carried from the original goal ledger — **CLOSED 2026-07-29, Phase 19**. See `19-LEDGER.md`: 11 passed, 15.5 passed, 16 passed (after same-day operator Step-0 redeploy resolved `bug-26`), 16.4 passed, 16.6 passed (post-redeploy replay — transport carries `lv_sponsorship_reliant`), 16.9 human_needed (SC-3 `company:update` armed canary — `19-OPERATOR-RUNBOOK.md` Steps 1-4, pending). 5/6 passed; 1/6 operator-gated, tracked by name, not silently absorbed. | Closed (VERIFY-01) | 2026-07-29 |
+| Verification | Six `/gsd-verify-work` re-runs carried from the original goal ledger — **CLOSED 2026-07-29, Phase 19; ALL SIX PASSED same day**. See `19-LEDGER.md`: 11, 15.5, 16.4 passed on re-run; 16 + 16.6 flipped after the operator Step-0 redeploy resolved `bug-26`; 16.9 flipped after the operator executed the full armed `company:update` canary (execution 108, write proven on `9604614548`, disarm read back). 6/6 passed — zero residual operator debt. | Closed (VERIFY-01) | 2026-07-29 |
 | Enrichment | REQ-finite-list-motion (named-list motion) | Deferred | 2026-07-07 |
 | Scoring | REQ-intent-scoring (pixel intent) | Deferred | 2026-07-07 |
 | Hygiene | REQ-closed-lost-capture | Deferred | 2026-07-07 |
@@ -186,7 +185,7 @@ Items carried forward to later milestones:
 
 Last session: 2026-07-29T20:15:40+10:00
 Prior session: 2026-07-29T09:19:05.759Z
-Stopped at: Phase 19 complete + operator Step-0 redeploy done (2026-07-29). Live deployment now CURRENT with git (Phase-18 markers read back present; bug-26 resolved). Ledger 5/6 passed; only 16.9's armed `company:update` canary remains (`19-OPERATOR-RUNBOOK.md` Steps 1-4). Note: the "all three `active=false`" statement below is HISTORICAL — all three workflows are live `active=true` as of the item-16 probe.
+Stopped at: Phase 19 complete + FULL operator runbook executed (2026-07-29): Step-0 redeploy (bug-26 resolved, deployment current with git), 16.9 armed `company:update` canary (execution 108, PASS), disarm + read-back (8x `"false"`, allowlist cleared). Ledger 6/6 passed. Note: the "all three `active=false`" statement below is HISTORICAL — all three workflows are live `active=true`.
 Resume file: None
 **TRACK B PROVISION + DEPLOY DONE 2026-07-28** — deployed to **Robert Li's personal project** (`T9IPFKpIn2aUYYj3`) on `alexherman.app.n8n.cloud`. All 6 credentials provisioned; all 3 workflows deployed and verified by read-back: `LV Contact Ingest` (19 nodes, 4 bound, 3 HubSpot, 0 unbound), `LV Enrichment` (94 nodes, 22 bound, 8 HubSpot, 0 unbound), `LV Scheduled Maintenance` (30 nodes, 9 bound, 9 HubSpot, 0 unbound). No duplicate node names, no stale credential references. **All three `active=false`** — activation is the only remaining step and is deliberately NOT done.
 

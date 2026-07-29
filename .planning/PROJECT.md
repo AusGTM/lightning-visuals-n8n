@@ -45,9 +45,10 @@ copy-loop fields wired AND given live producers, verified 5/5), Phase 19 (six-it
 ledger discharged: 3 passed, 3 honest human_needed — `19-LEDGER.md`, verified 6/6). Phase 19
 surfaced **BUG 26**: the live n8n Cloud `LV Enrichment` deployment predated Phase 18's rebuild —
 **RESOLVED same day** by the operator's runbook Step-0 disarmed redeploy (read-back confirmed
-Phase-18 markers live; brief in `.planning/debug/resolved/`); ledger now 5/6 passed. The one
-remaining operator step is 16.9's armed `company:update` canary (`19-OPERATOR-RUNBOOK.md`
-Steps 1-4).
+Phase-18 markers live; brief in `.planning/debug/resolved/`). The operator then executed the full
+16.9 armed `company:update` canary (execution 108: write proven on allowlisted `9604614548`,
+neighbor unchanged, disarm read back). **Ledger 6/6 passed — v0.4 fully discharged, live
+deployment current with git and disarmed.**
 
 **Target features:**
 - **BUG 23 fix** — enrichment `contact:create` reachable: transport swap on `HubSpot Search` +
