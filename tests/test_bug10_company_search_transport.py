@@ -124,8 +124,11 @@ UNCHANGED_WRITE_NODES = ["HubSpot Company Create"]
 # byte-identical-and-correct in any case — it carried `operation: "update"`, which does not
 # exist for resource:contact, so what this guard was pinning was a node with BUG 10's own
 # defect. Its shape is now pinned by tests/test_hubspot_native_operation_validity.py.
+# "HubSpot Search by Email" was REMOVED on the same grounds (BUG 22a, 2026-07-29): what
+# this guard was pinning byte-for-byte was a node with an EMPTY filterGroupsValues — a
+# search-by-email that searched by nothing and returned the portal's newest 100 contacts.
+# Its correct shape is now pinned by tests/test_ingest_search_contract.py instead.
 CONTACT_NODES_BY_WORKFLOW = {
-    "wf_contact_ingest_cloud.json": ["HubSpot Search by Email"],
     "wf_enrichment_cloud.json": ["HubSpot Search", "HubSpot Fetch By Id"],
     "wf_scheduled_maintenance_cloud.json": ["Dedupe Search (candidate contacts)"],
 }

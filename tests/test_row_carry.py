@@ -34,8 +34,12 @@ ROW_REPLACING_BY_DESIGN = {
     "Unsupported Object Type": "terminal marker consumed whole by Build Response",
     # Same shape for the skipped-enrichment branch: the reply IS {action: "skip"}.
     "Skip (NoOp)": "terminal marker consumed whole by Build Response",
-    # Head-of-chain config seed in the ingest workflow — there is no upstream row yet.
-    "Set Config": "head-of-chain config seed, no upstream row exists",
+    # "Set Config" was exempted here as "head-of-chain config seed, no upstream row
+    # exists" — WRONG, and instructively so (BUG 21): the webhook's BINARY was upstream,
+    # and the Set node dropped it, so the uploaded CSV never reached Extract From File and
+    # the ingest lane failed on its first-ever live run (execution 20). The node is a
+    # binary-carrying Code node now. Lesson for the next exemption written here: a Set
+    # node starves TWO channels, json and binary — justify both or neither.
     # Terminal queue markers; nothing downstream consumes them.
     "Set Review": "terminal, no downstream consumer",
     "SJ-2 Skip (NoOp)": "terminal, no downstream consumer",

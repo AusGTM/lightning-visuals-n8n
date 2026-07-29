@@ -182,22 +182,50 @@ return $input.all().map((it) => {
 
 # CLOUD ONLY: adapt the real HubSpot search node's output into searchResultsByKey.
 ADAPT_SEARCH_RESULTS = r"""// Adapt Search Results — CLOUD variant.
-// Maps the real HubSpot "Search by Email" node output (per row, same order)
-// into the searchResultsByKey shape resolveIdentity expects. A HubSpot search
-// with 0 results yields an empty id list => net_new/ambiguous downstream.
+// Maps the real HubSpot "Search by Email" node output into the searchResultsByKey shape
+// resolveIdentity expects. A search with 0 hits yields an empty id list => net_new.
+//
+// BUG 22b (found live 2026-07-29, execution 21): the old adapter indexed `search[i]` and
+// took ANY id it found. The native search node FLATTENS results into one item per contact
+// — so `search[0]` was simply the first contact the search returned, and (stacked on the
+// then-empty filter, BUG 22a) a made-up email "matched" an arbitrary real record. Index
+// alignment against a flattened list is unsound for multi-row uploads even with the
+// filter fixed. Match by VALUE instead: a hit counts only if the candidate's own email
+// equals this row's normalized email — order-independent, multi-row safe, and immune to
+// an unfiltered search (100 wrong contacts contribute zero hits).
 const rows = $('Normalize Phone').all();
 const search = $('HubSpot Search by Email').all();
-return rows.map((it, i) => {
+const candidates = [];
+let lookup_failed = false;
+for (const s of search) {
+  const res = s && s.json;
+  if (!res) continue;
+  // onError:continueRegularOutput puts a failed search in the ITEM (the Lusha/ZoomInfo
+  // masking mechanism). Treating an errored search as "no hits" would read as net_new and
+  // duplicate-create once creates are armed — the enrichment lanes' lookup_failed pattern
+  // applies here identically.
+  if (s.error || res.error || res.status === "error") { lookup_failed = true; continue; }
+  if (Array.isArray(res.results)) {                        // CRM v3 search envelope
+    for (const c of res.results) if (c && c.id) candidates.push(c);
+  } else if (res.id) {                                     // single-object result (fixtures)
+    candidates.push(res);
+  }
+}
+function candidateEmail(c) {
+  return normalizeEmailBasicSafe((c.properties && c.properties.email) || c.email);
+}
+return rows.map((it) => {
   const row = it.json;
+  const rowEmail = normalizeEmailBasicSafe(row.email_normalized || row.email);
   const hits = [];
-  const res = search[i] && search[i].json;
-  if (res && res.id) hits.push(String(res.id));            // single-object result
-  if (res && Array.isArray(res.results)) {                 // search list result
-    for (const c of res.results) if (c && c.id) hits.push(String(c.id));
+  if (rowEmail) {
+    for (const c of candidates) {
+      if (candidateEmail(c) === rowEmail) hits.push(String(c.id));
+    }
   }
   const srk = {};
-  if (normalizeEmailBasicSafe(row.email) && hits.length) srk.email = hits;
-  return { json: { ...row, searchResultsByKey: srk } };
+  if (rowEmail && hits.length) srk.email = hits;
+  return { json: { ...row, searchResultsByKey: srk, lookup_failed } };
 });
 
 function normalizeEmailBasicSafe(raw) {
@@ -350,6 +378,9 @@ return $input.all().map((it) => {
   else if (outcome === "net_new") action = allow_create ? "create" : "review";
   else if (outcome === "ambiguous") action = "review";
   else action = "skip";
+  // Fail-closed, mirroring the enrichment lanes' lookup_failed -> never-create override:
+  // a "net_new" produced by a FAILED search is not a new contact, it is an unknown.
+  if (row.lookup_failed === true && action === "create") action = "review";
   if (action === "create") {
     // BUG 19: identity is never in canonicalPatch (manual_protected), so a create without
     // this seed writes a record the by-email search can never find again — and the next
@@ -530,13 +561,20 @@ def build_cloud():
     nodes.append(webhook)
 
     x += 220
-    set_cfg = {
-        "parameters": {"assignments": {"assignments": [
-            {"id": nid("a"), "name": "allow_create", "value": False, "type": "boolean"}
-        ]}, "options": {}},
-        "id": nid("g"), "name": "Set Config",
-        "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [x, y],
-    }
+    # BUG 21 (found live 2026-07-29, execution 20 — the workflow's FIRST EVER run): this
+    # was an n8n-nodes-base.set v3.4, which drops the item's BINARY alongside the json it
+    # already drops — so the uploaded CSV never reached Extract From File ("Make sure that
+    # the previous node outputs a binary file") and the ingest lane could not process ANY
+    # upload. Same mechanism as BUG 12 (Set v3.4 emitting only its assigned fields), one
+    # payload channel over. Same twice-earned fix: a Code node whose behaviour this repo
+    # can test offline — spread json, carry binary through explicitly.
+    set_cfg = code_node("Set Config", r"""// Set Config — row-and-binary-carrying passthrough.
+// BUG 21: the Set node this replaces dropped the webhook's binary CSV on the floor.
+return $input.all().map((it) => ({
+  json: { ...it.json, allow_create: false },
+  binary: it.binary,
+}));
+""", x, y)
     nodes.append(set_cfg)
 
     x += 220
@@ -562,13 +600,31 @@ def build_cloud():
     nodes.append(code_node("Apply Email", APPLY_EMAIL, x, y))
 
     x += 220
-    hs_search = {
-        "parameters": {"resource": "contact", "operation": "search",
-                       "filterGroupsUi": {"filterGroupsValues": []}, "additionalFields": {}},
-        "id": nid("hs"), "name": "HubSpot Search by Email",
-        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [x, y],
-        "onError": "continueRegularOutput",
-    }
+    # BUG 22a (found live 2026-07-29, execution 21 — the lane's first COMPLETE run): this
+    # node shipped with `filterGroupsValues: []` — an EMPTY filter, the BUG 11 family's
+    # placeholder-never-populated shape — so the "search by email" returned the newest 100
+    # contacts in the portal, unfiltered. Stacked on BUG 22b (the adapter taking the first
+    # hit), a made-up canary email "matched" an arbitrary real contact; only the disarmed
+    # write gate stopped a mis-targeted PATCH.
+    #
+    # Then execution 22, with the filter fixed on the native node: a no-match search emits
+    # ZERO items and n8n stops the chain there — the lane dies exactly on ingest's primary
+    # case (a genuinely new contact). The empty filter had been masking that by always
+    # returning a full page. So the transport moves to the BUG 10 answer: a credential-
+    # bound httpRequest POST to the real CRM v3 search endpoint, which returns the
+    # {total, results} envelope as ONE item whether it matched or not. The adapter's
+    # envelope branch already parses that shape. Same "LV HubSpot" credential via its
+    # existing NODE_CREDENTIAL_MAP entry (cred_type hubspotAppToken binds identically on
+    # an httpRequest node — the BUG 10 mechanism).
+    hs_search = _http_node(
+        "HubSpot Search by Email",
+        "https://api.hubapi.com/crm/v3/objects/contacts/search", x, y,
+        auth="hubspot",
+        json_body=("={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: "
+                   "\"email\", operator: \"EQ\", value: ($json.email_normalized || $json.email) } ] } ], "
+                   "properties: [\"email\", \"firstname\", \"lastname\", \"jobtitle\", \"phone\", "
+                   "\"mobilephone\", \"hs_object_id\"], limit: 10 }) }}"),
+    )
     nodes.append(hs_search)
 
     for name, js in [("Adapt Search Results", ADAPT_SEARCH_RESULTS),

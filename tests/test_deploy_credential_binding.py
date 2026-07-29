@@ -55,11 +55,16 @@ def test_zero_hubspot_nodes_unmapped_across_every_built_cloud_workflow():
 
 
 def test_bind_credentials_succeeds_on_every_built_cloud_workflow():
+    # Anchored on credential-BEARING nodes, not on the native hubspot type: BUG 22
+    # (2026-07-29) moved contact ingest's last native hubspot node onto the BUG 10
+    # httpRequest transport, so a per-type anchor went vacuous for that workflow while
+    # the binding property under test — every credential-requiring node gets bound —
+    # is unchanged.
     for wf in _load_built_cloud_workflows():
         bound = deploy.bind_credentials(wf, FAKE_ID_MAP)
-        hubspot_nodes = [n for n in bound["nodes"] if n.get("type") == "n8n-nodes-base.hubspot"]
-        assert hubspot_nodes, f"{wf['name']} has no hubspot nodes — fixture drifted?"
-        for node in hubspot_nodes:
+        cred_nodes = [n for n in bound["nodes"] if deploy._node_requires_credential(n)]
+        assert cred_nodes, f"{wf['name']} has no credential-bearing nodes — fixture drifted?"
+        for node in cred_nodes:
             assert "credentials" in node, f"{wf['name']}: {node['name']!r} was not bound"
 
 
