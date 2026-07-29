@@ -40,7 +40,7 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))  # repo root on sys.path so `src.*` imports resolve
 
-MANIFEST_DIR = ROOT / ".planning" / "phases" / "15-hubspot-property-migration"
+MANIFEST_DIR = ROOT / "config" / "hubspot_migration"
 CONFIG_PATH = ROOT / "config" / "hubspot_properties.yaml"
 
 # Same portal guard as scripts/snapshot_hubspot_schema.py — asserted before ANY call.

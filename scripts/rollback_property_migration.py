@@ -52,7 +52,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))  # repo root on sys.path so `src.*` imports resolve
 
-MANIFEST_DIR = ROOT / ".planning" / "phases" / "15-hubspot-property-migration"
+MANIFEST_DIR = ROOT / "config" / "hubspot_migration"
 BASELINE_DIR = MANIFEST_DIR / "baseline"
 
 EXPECTED_PORTAL_ID = os.getenv("HUBSPOT_EXPECTED_PORTAL_ID", "22617666")

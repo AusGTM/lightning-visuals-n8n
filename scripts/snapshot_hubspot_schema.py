@@ -30,7 +30,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))  # repo root on sys.path so `src.*` imports resolve
 
-BASELINE_DIR = ROOT / ".planning" / "phases" / "15-hubspot-property-migration" / "baseline"
+BASELINE_DIR = ROOT / "config" / "hubspot_migration" / "baseline"
 
 # Portal 22617666 is the only portal this migration is designed against — asserted BEFORE
 # any call so a multi-portal credential mixup refuses pre-call, not mid-batch (RESEARCH

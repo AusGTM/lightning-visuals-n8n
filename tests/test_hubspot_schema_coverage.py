@@ -23,8 +23,8 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
-BASELINE = ROOT / ".planning" / "phases" / "15-hubspot-property-migration" / "baseline"
-MANIFEST_DIR = ROOT / ".planning" / "phases" / "15-hubspot-property-migration"
+BASELINE = ROOT / "config" / "hubspot_migration" / "baseline"
+MANIFEST_DIR = ROOT / "config" / "hubspot_migration"
 CLOUD_WORKFLOWS = sorted(ROOT.glob("n8n/wf_*_cloud.json"))
 
 # The project's own property namespaces. Canonical HubSpot properties (domain, jobtitle,
