@@ -281,6 +281,13 @@ return $input.all().map((it) => {
   } else if (outcome === "net_new") {
     if (allow_create) {
       action = "create";
+      // BUG 19: canonicalPatch never contains identity (email is manual_protected — right
+      // for an update, wrong for a create, where identity is the one thing that MUST be
+      // written or the record can never be matched again). Seed it from the ingest row,
+      // create branch ONLY — seeding on update would be the clobber the policy prevents.
+      if (row.email) patch.email = row.email;
+      if (row.firstname) patch.firstname = row.firstname;
+      if (row.lastname) patch.lastname = row.lastname;
       hubspot_op = { method: "POST", endpoint: "/crm/v3/objects/contacts", properties: patch };
     } else {
       action = "review";  // create gated off => route to review queue
@@ -343,6 +350,14 @@ return $input.all().map((it) => {
   else if (outcome === "net_new") action = allow_create ? "create" : "review";
   else if (outcome === "ambiguous") action = "review";
   else action = "skip";
+  if (action === "create") {
+    // BUG 19: identity is never in canonicalPatch (manual_protected), so a create without
+    // this seed writes a record the by-email search can never find again — and the next
+    // run creates another. Create branch ONLY; on update this would be a clobber.
+    if (row.email) properties.email = row.email;
+    if (row.firstname) properties.firstname = row.firstname;
+    if (row.lastname) properties.lastname = row.lastname;
+  }
   return { json: {
     action,
     outcome,
@@ -1058,6 +1073,10 @@ return $input.all().map((it) => {
   const patch = _buildContactPatch(row.merge);
   let hubspot_op = null;
   if (action === "create") {
+    // BUG 19: seed identity on create ONLY — canonicalPatch never carries email
+    // (manual_protected), and a record created without it is invisible to the search
+    // that gated the create.
+    if (id.email || row.email) patch.email = id.email || row.email;
     hubspot_op = { method: "POST", endpoint: "/crm/v3/objects/contacts", properties: patch };
   } else if (action === "enrich") {
     hubspot_op = { method: "PATCH", endpoint: "/crm/v3/objects/contacts/{id}", properties: patch };
@@ -1121,7 +1140,16 @@ return $input.all().map((it) => {
   const row = it.json;
   const properties = _buildContactPatch(row.merge);
   const hs_object_id = (row.existingRecord && row.existingRecord.hs_object_id) || null;
-  const domain = row.identity_keys && row.identity_keys.domain;
+  const id = row.identity_keys || {};
+  const domain = id.domain;
+  if (row.action === "create" && id.email) {
+    // BUG 19: canonicalPatch never carries email (manual_protected — an UPDATE rule), so
+    // an unseeded create writes a contact the by-email search can never find, and every
+    // later run creates another. Keyed on row.action (pre-gate): a write_blocked create
+    // sends nothing, and an enrich must never receive this seed (that IS the clobber the
+    // policy exists to prevent).
+    properties.email = id.email;
+  }
   let action = row.action;
   if ((action === "create" || action === "enrich") &&
       !_writeSafetyAllows(action, hs_object_id, domain)) {
@@ -2344,7 +2372,17 @@ return $input.all().map((it) => {
   }
 
   const hs_object_id = (row.existingRecord && row.existingRecord.hs_object_id) || null;
-  const domain = row.identity_keys && row.identity_keys.domain;
+  const id = row.identity_keys || {};
+  const domain = id.domain;
+  if (row.action === "create") {
+    // BUG 19 (confirmed live on a throwaway, 2026-07-29): canonicalPatch never carries
+    // domain (manual_protected — an UPDATE rule) and name is in no policy at all, so an
+    // unseeded create wrote name=None/domain=None and the domain-EQ search that had just
+    // decided "create" returned total=0 against it — unbounded re-creation. Seed on the
+    // create branch ONLY; on enrich this would be the exact clobber the policy prevents.
+    if (id.domain) properties.domain = id.domain;
+    if (id.companyName) properties.name = id.companyName;
+  }
   let action = row.action;
   if ((action === "create" || action === "enrich") &&
       !_writeSafetyAllows(action, hs_object_id, domain)) {

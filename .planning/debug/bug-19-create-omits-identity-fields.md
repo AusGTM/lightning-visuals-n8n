@@ -1,8 +1,9 @@
 ---
-status: root_caused_not_fixed
+status: resolved
 created: 2026-07-29
 found_by: "Reading the create payload before firing it, while attempting 16.9 SC-4; then confirmed live against a throwaway company"
 related: bug-13-create-nodes (fixed), bug-18-dedupe-contact-update-nonexistent-operation.md
+resolved: 2026-07-29
 ---
 
 # BUG 19 — `create` writes a record with no identity, and will re-create it forever
@@ -120,3 +121,39 @@ if (action === "create") {
 Read each lane's actual `identity_keys` shape before writing this — the three lanes were
 found to have drifted once already (BUG 16), and contact ingest carries different keys from
 enrichment. The guard test asserts per-lane, so it will catch a lane done from memory.
+
+## RESOLVED — 2026-07-29, same day
+
+All five lanes fixed by seeding identity from each lane's own row onto the payload, on the
+create branch ONLY (seeding on enrich/update is exactly the clobber `manual_protected`
+prevents — asserted per-lane, not assumed):
+
+| Lane | Seed | Source read first |
+|---|---|---|
+| `DECIDE_LOCAL` / `DECIDE_CLOUD` (ingest) | `email`, `firstname`, `lastname` | `row.email` / `row.firstname` / `row.lastname` — the ingest row carries them (the local echo already displayed them) |
+| `ENRICH_DECIDE_LOCAL` / `ENRICH_DECIDE_CLOUD` | `email` | `identity_keys.email` |
+| `ENRICH_DECIDE_CO_CLOUD` | `domain`, `name` | `identity_keys.domain` / `.companyName` |
+
+Guards, both directions: `tests/test_create_payload_identity.py` (xfails promoted to real
+assertions by strict-XPASS, exactly as designed, plus a per-assignment create-branch-guard
+check) and `tests/n8n/createIdentitySeed.test.mjs` (executes the compiled decide nodes:
+create seeds; enrich does NOT).
+
+**Live proof, and a confound corrected.** First fix canary searched immediately after the
+seeded create and got `total=0` — which exposed that the ORIGINAL bug canary's search step
+was confounded: HubSpot CRM search is eventually consistent, so an immediate `total=0`
+proves nothing on its own. (The unseeded conclusion still stands — a record with no domain
+can never match a domain filter, lag or not — but the empirical step didn't isolate it.)
+Re-run with polling:
+
+```
+CREATE (seeded)        -> 201
+search attempt 1 (~3s) -> total=0        (index lag)
+search attempt 2 (~6s) -> total=1, id match
+DELETE -> 204, re-read -> 404
+```
+
+Residual, minor, pre-existing: that ~seconds indexing window means two runs for the same
+domain arriving within it could still double-create even with the fix. That is inherent to
+search-gated creation on an eventually-consistent index; the dedupe sweep is the existing
+backstop, and webhook-scale timing makes it unlikely. Noted, not fixed.
