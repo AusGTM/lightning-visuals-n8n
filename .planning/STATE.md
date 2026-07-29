@@ -4,17 +4,17 @@ milestone: v0.4
 milestone_name: Reachability & Verification Debt
 current_phase: 19
 current_phase_name: Verification Debt Closure
-status: ready_to_execute
-stopped_at: Phase 19 planned (19-01, checker passed first iteration)
-last_updated: "2026-07-29T09:28:27.348Z"
+status: milestone_complete
+stopped_at: Completed 19-01-PLAN.md (all three tasks; six-item ledger closed, 3 passed / 3 human_needed)
+last_updated: "2026-07-29T20:15:40+10:00"
 last_activity: 2026-07-29
-last_activity_desc: Phase 18 complete, transitioned to Phase 19
+last_activity_desc: Phase 19 executed — VERIFY-01 closed, Milestone 4 complete
 progress:
   total_phases: 3
-  completed_phases: 2
-  total_plans: 5
-  completed_plans: 5
-  percent: 67
+  completed_phases: 3
+  total_plans: 6
+  completed_plans: 6
+  percent: 100
 ---
 
 # Project State
@@ -28,11 +28,15 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 
 ## Current Position
 
-Phase: 19 — Verification Debt Closure
-Plan: 19-01 (single wave, 3 tasks, autonomous) — plan checker VERIFICATION PASSED first iteration
-Status: Ready to execute. Six-item ledger reconstructed in 19-RESEARCH.md (items: 11, 15.5, 16, 16.4, 16.6, 16.9); 16.9 closes as human_needed + operator runbook.
-Last activity: 2026-07-29 — Phase 19 planned (researcher → planner → checker pass)
-Next: /gsd-execute-phase 19
+Phase: 19 — Verification Debt Closure — **COMPLETE**
+Plan: 19-01 (single wave, 3 tasks, autonomous) — executed 2026-07-29, all three tasks committed
+Status: Milestone 4 (v0.4) complete. `19-LEDGER.md` closes all six reconstructed re-run items:
+11 passed, 15.5 passed, 16 human_needed (live deployment behind git — `bug-26`), 16.4 passed,
+16.6 human_needed (same drift), 16.9 human_needed (`company:update` residual — see
+`19-OPERATOR-RUNBOOK.md`). Offline suite at floor (596 pytest / 309 node), zero regressions.
+Last activity: 2026-07-29 — Phase 19 executed (Tasks 1-3, `19-01-SUMMARY.md`)
+Next: operator follow-up per `19-OPERATOR-RUNBOOK.md` (redeploy + `company:update` canary),
+then start the next milestone.
 
 ## Performance Metrics
 
@@ -176,9 +180,9 @@ Items carried forward to later milestones:
 
 ## Session Continuity
 
-Last session: 2026-07-29T09:19:05.759Z
-Prior session: 2026-07-29T08:26:00.000Z
-Stopped at: Completed 18-03-PLAN.md (GAP 1/GAP 2 producers landed; both copy-loop gaps closed end-to-end; phase 18 fully executed)
+Last session: 2026-07-29T20:15:40+10:00
+Prior session: 2026-07-29T09:19:05.759Z
+Stopped at: Completed 19-01-PLAN.md (all six ledger items closed, 3 passed / 3 human_needed; Milestone 4 complete). Live deployment state now known to be BEHIND git — see `bug-26-enrichment-live-deployment-behind-git.md` and `19-OPERATOR-RUNBOOK.md` Step 0 for the redeploy that must run before the note below ("all three `active=false`") is trusted again; item 16's live probe this session found all three workflows now `active=true` with grown node counts, so a redeploy/activation happened since the note below was written but Phase 18 was not included in it.
 Resume file: None
 **TRACK B PROVISION + DEPLOY DONE 2026-07-28** — deployed to **Robert Li's personal project** (`T9IPFKpIn2aUYYj3`) on `alexherman.app.n8n.cloud`. All 6 credentials provisioned; all 3 workflows deployed and verified by read-back: `LV Contact Ingest` (19 nodes, 4 bound, 3 HubSpot, 0 unbound), `LV Enrichment` (94 nodes, 22 bound, 8 HubSpot, 0 unbound), `LV Scheduled Maintenance` (30 nodes, 9 bound, 9 HubSpot, 0 unbound). No duplicate node names, no stale credential references. **All three `active=false`** — activation is the only remaining step and is deliberately NOT done.
 

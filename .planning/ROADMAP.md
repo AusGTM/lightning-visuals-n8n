@@ -276,7 +276,7 @@ continues from 16.10 — this milestone starts at Phase 17.
 
 - [x] **Phase 17: Enrichment Contacts Reachability (BUG 23)** - Transport swap on `HubSpot Search` + `HubSpot Fetch By Id` makes `contact:create` reachable, byte-identical pin dropped for both nodes, dual live canary (match regression + no-match reachability) proves it, deployment restored disarmed
 - [x] **Phase 18: Normalization & Copy-Loop Fixes** - Numeric provider industry codes stop winning the waterfall over text; `lv_sponsorship_reliant` and `persona_group`/`lv_persona_group` stop being permanently empty *(re-opened 2026-07-29: 18-VERIFICATION.md scored 3/5 — both properties still have no live producer; gap closure in 18-03)* (completed 2026-07-29)
-- [ ] **Phase 19: Verification Debt Closure** - The six `/gsd-verify-work` re-runs carried from the v0.3 goal ledger are executed and their outcomes recorded
+- [x] **Phase 19: Verification Debt Closure** - The six `/gsd-verify-work` re-runs carried from the v0.3 goal ledger are executed and their outcomes recorded (3 passed, 3 human_needed — see `19-LEDGER.md`)
 
 ## Phase Details
 
@@ -388,9 +388,9 @@ defect a re-run surfaces is captured rather than silently absorbed into "passed.
   3. Any defect a re-run surfaces is captured as a debug brief or backlog item — nothing is silently
      dropped to close the ledger.
 
-**Plans**: 1 plan
+**Plans**: 1/1 plans executed
 
-- [ ] 19-01-PLAN.md — Identify the six re-runs, re-execute each (offline -> live read-only -> operator-gated), record all six outcomes in `19-LEDGER.md`
+- [x] 19-01-PLAN.md — Identify the six re-runs, re-execute each (offline -> live read-only -> operator-gated), record all six outcomes in `19-LEDGER.md`
 
 ## Milestone 4 Progress
 
@@ -398,4 +398,4 @@ defect a re-run surfaces is captured rather than silently absorbed into "passed.
 |-------|----------------|--------|-----------|
 | 17. Enrichment Contacts Reachability (BUG 23) | 2/2 | **Complete** — verified 5/5; contact:create live-reachable (exec 76), match path regression-checked field-by-field (execs 68-72), deployment restored disarmed | 2026-07-29 |
 | 18. Normalization & Copy-Loop Fixes | 3/3 | Complete    | 2026-07-29 |
-| 19. Verification Debt Closure | 0/1 | Planned | - |
+| 19. Verification Debt Closure | 1/1 | **Complete** — 3/6 items passed (11, 15.5, 16.4), 3/6 human_needed pending an operator redeploy/canary (16, 16.6, 16.9); nothing silently absorbed — see `19-LEDGER.md` | 2026-07-29 |
