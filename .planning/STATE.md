@@ -5,15 +5,15 @@ milestone_name: Reachability & Verification Debt
 current_phase: 18
 current_phase_name: normalization-copy-loop-fixes
 status: in_progress
-stopped_at: Completed 18-02-PLAN.md (COPY-01/COPY-02 wired; phase 18 fully executed)
-last_updated: "2026-07-29T08:26:00.000Z"
+stopped_at: Completed 18-03-PLAN.md (GAP 1/GAP 2 producers landed; both copy-loop gaps closed end-to-end)
+last_updated: "2026-07-29T09:20:50.243Z"
 last_activity: 2026-07-29
-last_activity_desc: Phase 18 fully executed (18-01 NORM-01, 18-02 COPY-01/COPY-02); both copy-loop gaps closed at the wiring level
+last_activity_desc: Phase 18 gap-closure plan 18-03 executed; both COPY-01/COPY-02 gaps closed end-to-end
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 2
-  completed_plans: 2
+  total_plans: 5
+  completed_plans: 5
   percent: 67
 ---
 
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 
 ## Current Position
 
-Phase: 18 (normalization-copy-loop-fixes) — COMPLETE (both plans executed)
-Plan: 18-01 (NORM-01, wave 1) — complete (`ae46e63`/`d54ed27`/`8d42d9a`); 18-02 (COPY-01/COPY-02, wave 2) — complete (`1942ad4`/`5052b66`/`c1aefef`/`5dc5137`/`57b5eb2`/`dfb31c8`)
-Status: NORM-01/COPY-01/COPY-02 all wired and proven red-before-green through the COMPILED node bodies. Full offline suite 596 pytest / 298 node, 0 regressions vs the 596/289 floor; the frozen companies node-body guard (`Merge Company`, cloud + local_live) was re-baselined under a bounded, recorded diff in its own isolated commit. Missing-producer carry-forward recorded and explicit: neither `lv_persona_group` nor `lv_sponsorship_reliant` has a live producer yet (no provider mapper for persona; companies research prompt doesn't ask for sponsorship) — this supersedes the prior "two latent copy-loop bugs" Blockers/Concerns entry, which described the now-closed wiring gap only. See `18-02-SUMMARY.md`.
-Last activity: 2026-07-29 — Phase 18 fully executed (18-01 NORM-01, 18-02 COPY-01/COPY-02)
+Phase: 18 (normalization-copy-loop-fixes) — COMPLETE (all 3 plans executed, both verification gaps closed end-to-end)
+Plan: 18-01 (NORM-01, wave 1) — complete (`ae46e63`/`d54ed27`/`8d42d9a`); 18-02 (COPY-01/COPY-02 wiring, wave 2) — complete (`1942ad4`/`5052b66`/`c1aefef`/`5dc5137`/`57b5eb2`/`dfb31c8`); 18-03 (COPY-01/COPY-02 producers, gap closure) — complete (`a757e52`/`371fe9d`/`b9a6394`/`bd515e7`/`08b6695`/`a45c662`/`d251880`)
+Status: NORM-01/COPY-01/COPY-02 all wired AND now producer-complete, proven red-before-green through the COMPILED node bodies against RECORDED fixtures (never a hand-constructed test row). 18-VERIFICATION.md's SC-3/SC-4 gaps (CR-01 Critical, WR-01 Warning in 18-REVIEW.md) are closed: the Claude web-research prompt now asks for `lv_sponsorship_reliant` and survives the frozen validator into `research_candidate.data`; a new `_personaGroup()` provider-mapper producer in `normalizeProviders.js` emits `lv_persona_group` from Apollo's/Lusha's own department fields. Full offline suite 596 pytest / 309 node, 0 regressions vs the 596/298 floor; the frozen companies node-body guard (`Build Research Request`, cloud + local_live) was re-baselined a second time under a bounded, recorded diff in its own isolated commit, then confirmed the separate WR-01 CSV edit moved zero further frozen pairs. Honest scope limits recorded (not a clean sweep): sponsorship only populates on research-gated, research-enabled rows; persona's only realistic live producer today is Apollo (Lusha's branch exists but has only ever matched the "Other" non-signal live value; ZoomInfo has no producer). See `18-03-SUMMARY.md`.
+Last activity: 2026-07-29 — Phase 18 gap-closure plan 18-03 executed; both COPY-01/COPY-02 gaps closed end-to-end
 Next: plan the next phase in Milestone v0.4 (Phase 19: Verification Debt Closure)
 
 ## Performance Metrics
@@ -78,6 +78,7 @@ Next: plan the next phase in Milestone v0.4 (Phase 19: Verification Debt Closure
 | Phase 16.4 P02 | ~11min (commit span) | 2 tasks | 3 files |
 | Phase 16.5 P01 | ~45min | 3 tasks | 4 files |
 | Phase 17 P02 | 30min | 4 tasks | 4 files |
+| Phase 18 P03 | 50min | 3 tasks | 9 files |
 
 ## Accumulated Context
 
@@ -108,6 +109,7 @@ Decisions are logged in PROJECT.md Key Decisions table. SPEC-level architectural
 - Phase 16.2-01: the six companies research/judge/validate/apply-verdict Code-node factories in `build_cloud_workflows.py` (`_enrich_research_gate_js`, `_enrich_build_research_request_js`, `ENRICH_VALIDATE_RESEARCH`, `_enrich_judge_gate_js`, `_enrich_build_judge_request_js`, `ENRICH_APPLY_JUDGE_VERDICT`) now take a `target` config (a new `EnrichTarget` dataclass) defaulting to `COMPANIES_TARGET`, which reproduces today's exact emitted jsCode string — proven by a frozen-snapshot guard (`tests/test_companies_factory_frozen.py`) that CALLS `build_enrichment_cloud()`/`build_enrichment_local_live()` in-test rather than diffing committed JSON, so a shared-module edit with no rebuild still fails loudly. `CONTACTS_TARGET` is authored (provider-aware gap predicate reading `existingRecord`+`scored.winners`, contact role-verification research prompt, no A/R/G/T grounding in the judge pass-1 per RESEARCH Task 3.4) but genuinely UNWIRED — no call site passes it, and its `inline_modules` name `contactResearch.js`/`contactJudge.js` (Plan 02 writes these) by string only, never via an actual `inline()` call, so the build cannot fail on a missing sibling module. `mergeContacts.js` additively gained mergeCompanies' `evidence`/`confidenceByField` opts + `_needsEvidence` gate (byte-identical for the one existing provider caller) — this is the substrate Plan 02's contact research fold writes evidence URLs and per-field judge confidence into. Full offline suite 336 pytest / 179 node, 0 regressions vs the 332/170 pre-16.2 baseline; the four frozen shared JS modules (`judge.js`/`webResearch.js`/`scoreEnrichment.js`/`mergeCompanies.js`) stay git-unchanged. See `16.2-01-SUMMARY.md`.
 - [Phase ?]: Phase 17-02: .env access is Bash-blocked in this session; drove live n8n/HubSpot API calls and scripts/deploy_n8n_workflows.py via an in-process python-dotenv wrapper instead of shell-sourcing .env.
 - [Phase ?]: Phase 17-02: Task 4 (armed create window) SKIPPED by instruction — operator-only, default-skip; ROADMAP criterion 4 fully satisfied at the write-gated decision layer without it.
+- [Phase ?]: Phase 18-03: closed both verification gaps end-to-end — research prompt now requests lv_sponsorship_reliant (proven to survive the frozen validator), and a new normalizeProviders.js _personaGroup() producer emits lv_persona_group from Apollo's/Lusha's own department fields; WR-01 audit-trail CSV omission also fixed.
 
 ### Pending Todos
 
@@ -135,8 +137,7 @@ Decisions are logged in PROJECT.md Key Decisions table. SPEC-level architectural
 - **12 days of untracked work (2026-07-08 → 2026-07-20)** happened outside GSD. Phase 11 reconciles it; not retrofitted as synthetic phases.
 - **RESOLVED 2026-07-28 (debug session, see Pending Todos).** **NEW 2026-07-21 (Phase 14, discovered not fixed): `icp_scoring.py`'s confidence-downgrade block outranks an already-fired hard veto's `tier` label.** `compute_icp_score` sets `tier="D"` when `anti_icp_flag` fires (e.g. `lv_is_hardware_vendor=True`), but a later, unconditional block (`if org_type == "unknown" or produces_content is None: ... tier = "Needs Review"/"Unscored"`) overwrites that tier whenever `lv_produces_content is None` — without checking `anti_icp_flag` first. Confirmed live: Supertech Electronics with `lv_is_hardware_vendor=True` + `lv_produces_content=None` yields `tier="Unscored", anti_icp_flag=True` — the veto SIGNAL fires correctly, the tier LABEL does not reflect it. No existing test combined these two conditions before Phase 14's JG-5 test probed it. Not fixed: Task 1's Do-Not list forbade touching `icp_scoring.py`/`icp_scoring.yaml`/any score number in Phase 14, and the plan's own contingency ("if it passes in only one branch, stop and report") was followed instead of a silent patch. Recommended one-line fix (skip the confidence-downgrade tier override when `anti_icp_flag` is already `True`) checked against all 16 `tests/test_icp_scoring.py` cases + TS-1/TS-4 — none currently combine a fired veto with `produces_content is None`, so blast radius appears zero, but this was NOT verified by applying the fix. Not blocking (pipeline does not write `lv_icp_tier` to HubSpot per Approach C) — needs an explicit decision before any future phase relies on this internal routing signal in that exact combination. See `14-01-SUMMARY.md` Deviations.
 
-- **RESOLVED (WIRING ONLY) 2026-07-29, Phase 18 Plan 02.** ~~NEW 2026-07-22 (Phase 15, carried forward, explicitly out of scope): two latent copy-loop bugs.~~ `lv_sponsorship_reliant` (companies, `ENRICH_MERGE_CO` researchData loop) and `lv_persona_group` (contacts, `ENRICH_MERGE` winners loop) now DO reach their merge calls — proven red-before-green through the compiled `Merge Company`/`Merge Winners` node bodies (`tests/n8n/sponsorshipReliantCopyLoop.test.mjs`, `tests/n8n/personaGroupCopyLoop.test.mjs`); see `18-02-SUMMARY.md`. **This does NOT mean either field populates live** — see the new missing-producer entry immediately below, which supersedes this one going forward.
-- **NEW 2026-07-29 (Phase 18 Plan 02, carried forward, explicitly out of scope): both copy-loop fields still have no live producer.** The wiring fix above only closes the path from candidate-object to merge call. No provider mapper in `n8n/code/normalizeProviders.js` emits a `persona_group` candidate for any of Lusha/Apollo/ZoomInfo, and the companies Claude-web-research prompt's required-fields schema does not ask for a sponsorship-reliance signal at all — so `scored.winners.persona_group` and `research_candidate.data.lv_sponsorship_reliant` are never populated by anything other than a hand-constructed test row today. Needs a future phase: a persona provider-mapper/research addition, and a companies research-prompt schema extension for sponsorship reliance.
+- **RESOLVED END-TO-END 2026-07-29, Phase 18 Plan 03.** ~~RESOLVED (WIRING ONLY) 2026-07-29, Phase 18 Plan 02.~~ ~~NEW 2026-07-22 (Phase 15, carried forward, explicitly out of scope): two latent copy-loop bugs.~~ `lv_sponsorship_reliant` and `lv_persona_group` now have REAL PRODUCERS, not just wiring: the companies Claude-web-research prompt (`Build Research Request`, both variants) now asks for `lv_sponsorship_reliant` in `required_fields` and its forced JSON schema, proven to survive the frozen `Validate Research Output` validator into `research_candidate.data` (`tests/n8n/researchRequestSponsorshipContract.test.mjs`); a new `_personaGroup()` provider-mapper in `n8n/code/normalizeProviders.js` emits a `persona_group` candidate from Apollo's/Lusha's own department field, proven through the compiled `Normalize + Score` -> `Merge Winners` chain driven by a RECORDED fixture (`tests/n8n/personaGroupProducer.test.mjs`). WR-01 (audit-trail CSV omission) also closed. See `18-03-SUMMARY.md`. **Honest scope limits (not a clean sweep):** sponsorship only populates on research-gated (`needsResearch`), research-enabled (`ALLOW_WEB_RESEARCH`, disabled by default) rows; persona's only realistic live producer today is Apollo — Lusha's branch exists in code but has only ever matched fixtures where the live department value is the "Other" non-signal, and ZoomInfo has no producer (no recorded shape ever carries a department field). Neither field has been proven against a real n8n Cloud execution or HubSpot write yet — that remains a future live-canary step, same pattern as every other producer in this repo.
 - **NEW 2026-07-22 (Phase 15, explicitly out of scope): `lv_country_region_normalized` has no explicit `field_policy.yaml` entry** — falls to the default `fill_blank_only` policy at merge time. Property created; the policy question is flagged, not resolved.
 - **NEW 2026-07-22 (Phase 15, one-way door, explicitly NOT scheduled): `lv_org_type` text→enumeration type change deferred (criterion 3).** HubSpot's own guidance: a field-type change can invalidate existing values with no documented API-level undo beyond restoring a pre-change export. Not performed, not gated as a disabled step — "not performed" is stronger than "gated."
 - **REQ-signoff-gate**: point weights are illustrative pending Alex's JTBD 2 sign-off. Does not block Milestone 1 (config-driven), but gates the production weighted rubric.
@@ -158,7 +159,7 @@ Items carried forward to later milestones:
 |----------|------|--------|-------------|
 | Debug | BUG 23 — enrichment `contact:create` structurally unreachable — **RESOLVED 2026-07-29, Phase 17** (transport swap + dual live canary; see `.planning/debug/bug-23-enrichment-contact-nomatch-chain-stop.md` Resolution) | Fixed | 2026-07-29 |
 | Normalization | ZoomInfo numeric `industry` code (`"71"`) wins the waterfall over Apollo text and normalizes unchanged — **RESOLVED 2026-07-29, Phase 18 Plan 01** (`_industryText` helper; see `18-01-SUMMARY.md`) | Fixed | 2026-07-29 |
-| Copy-loop | `lv_sponsorship_reliant` (companies) and `lv_persona_group` (contacts) never reached their merge calls — **WIRING RESOLVED 2026-07-29, Phase 18 Plan 02** (one array entry + one dot-access if-block; see `18-02-SUMMARY.md`). **New deferred item:** neither field has a live producer yet — no provider mapper for persona, no companies research-prompt field for sponsorship. | Wiring fixed; producer deferred | 2026-07-29 |
+| Copy-loop | `lv_sponsorship_reliant` (companies) and `lv_persona_group` (contacts) never reached their merge calls, and had no producer — **FULLY RESOLVED 2026-07-29, Phase 18 Plan 03** (wiring landed 18-02; producers — research-prompt field + provider-mapper — landed 18-03; see `18-03-SUMMARY.md`). Remaining, not a blocker: sponsorship only populates on research-gated/enabled rows; persona's only realistic live producer today is Apollo. | Fixed | 2026-07-29 |
 | Verification | Six `/gsd-verify-work` re-runs carried from the original goal ledger | Deferred to v0.4 | 2026-07-29 |
 | Enrichment | REQ-finite-list-motion (named-list motion) | Deferred | 2026-07-07 |
 | Scoring | REQ-intent-scoring (pixel intent) | Deferred | 2026-07-07 |
@@ -173,9 +174,9 @@ Items carried forward to later milestones:
 
 ## Session Continuity
 
-Last session: 2026-07-29T08:26:00.000Z
-Prior session: 2026-07-29T07:11:23.507Z
-Stopped at: Completed 18-02-PLAN.md (COPY-01/COPY-02 wired; phase 18 fully executed)
+Last session: 2026-07-29T09:19:05.759Z
+Prior session: 2026-07-29T08:26:00.000Z
+Stopped at: Completed 18-03-PLAN.md (GAP 1/GAP 2 producers landed; both copy-loop gaps closed end-to-end; phase 18 fully executed)
 Resume file: None
 **TRACK B PROVISION + DEPLOY DONE 2026-07-28** — deployed to **Robert Li's personal project** (`T9IPFKpIn2aUYYj3`) on `alexherman.app.n8n.cloud`. All 6 credentials provisioned; all 3 workflows deployed and verified by read-back: `LV Contact Ingest` (19 nodes, 4 bound, 3 HubSpot, 0 unbound), `LV Enrichment` (94 nodes, 22 bound, 8 HubSpot, 0 unbound), `LV Scheduled Maintenance` (30 nodes, 9 bound, 9 HubSpot, 0 unbound). No duplicate node names, no stale credential references. **All three `active=false`** — activation is the only remaining step and is deliberately NOT done.
 

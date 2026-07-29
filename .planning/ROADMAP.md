@@ -356,7 +356,7 @@ transport definitions; this phase touches the merge-call construction for `ENRIC
      (596 pytest / 285 node, measured 2026-07-29 — the "587" figure above predates Phase 17), and
      the workflow builder is deterministic (rebuild twice, no diff).
 
-**Plans**: 2/3 plans executed (gap closure re-opened after 18-VERIFICATION.md scored 3/5)
+**Plans**: 3/3 plans executed
 **Wave 1**
 
 - [x] 18-01-PLAN.md — NORM-01: `_industryText` helper stops any numeric NAICS code becoming an industry candidate value (ZoomInfo + defensively Lusha), proven against the real execution-19 shape
@@ -367,7 +367,7 @@ transport definitions; this phase touches the merge-call construction for `ENRIC
 
 **Wave 3** *(gap closure — blocked on Wave 2 completion)*
 
-- [ ] 18-03-PLAN.md — COPY-01/COPY-02 producers: the companies research request actually asks for `lv_sponsorship_reliant` (+ WR-01 search-property fix), and a real Apollo/Lusha `departments` signal becomes the persona producer — closing the two "no live producer" gaps in 18-VERIFICATION.md
+- [x] 18-03-PLAN.md — COPY-01/COPY-02 producers: the companies research request actually asks for `lv_sponsorship_reliant` (+ WR-01 search-property fix), and a real Apollo/Lusha `departments` signal becomes the persona producer — closing the two "no live producer" gaps in 18-VERIFICATION.md
 
 ### Phase 19: Verification Debt Closure
 
