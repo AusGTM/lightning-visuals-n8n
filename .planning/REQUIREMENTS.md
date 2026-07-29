@@ -124,16 +124,20 @@ The v3 section formerly here is archived verbatim in `.planning/milestones/v0.3-
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REACH-01 | — | Pending |
-| REACH-02 | — | Pending |
-| REACH-03 | — | Pending |
-| REACH-04 | — | Pending |
-| NORM-01 | — | Pending |
-| COPY-01 | — | Pending |
-| COPY-02 | — | Pending |
-| VERIFY-01 | — | Pending |
+| REACH-01 | Phase 17 | Pending |
+| REACH-02 | Phase 17 | Pending |
+| REACH-03 | Phase 17 | Pending |
+| REACH-04 | Phase 17 | Pending |
+| NORM-01 | Phase 18 | Pending |
+| COPY-01 | Phase 18 | Pending |
+| COPY-02 | Phase 18 | Pending |
+| VERIFY-01 | Phase 19 | Pending |
 
-**Coverage:** v4 requirements: 8 total — mapping filled by roadmap.
+**Coverage:**
+
+- v4 requirements: 8 total
+- Mapped to phases: 8
+- Unmapped: 0 ✓
 
 ### Out of Scope (v0.4)
 

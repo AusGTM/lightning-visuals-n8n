@@ -234,3 +234,140 @@ waterfall + web retrieval for the two ICP fields providers cannot supply; first 
 project history with the non-clobber guarantee live-proven; 25 numbered bugs resolved. Full detail:
 [`.planning/milestones/v0.3-ROADMAP.md`](milestones/v0.3-ROADMAP.md) ·
 requirements: [`.planning/milestones/v0.3-REQUIREMENTS.md`](milestones/v0.3-REQUIREMENTS.md)
+
+---
+
+# Milestone 4 — Reachability & Verification Debt (v0.4)
+
+## Overview
+
+No new capability ships this milestone — it clears debt the v0.3 close explicitly deferred rather
+than papered over. Three unrelated defects, one genuinely risky: **BUG 23** left the enrichment
+contacts lane's `contact:create` path structurally unreachable (a no-match search silently stops
+the n8n chain rather than emitting a classifiable item), and the proven fix pattern (BUG 10, BUG 22)
+means touching `HubSpot Search` — the single most live-proven node in the system, pinned
+byte-identical in `tests/test_bug10_company_search_transport.py` by design to block exactly this
+kind of drive-by migration. That risk gets its own phase, with mandatory before/after live-canary
+evidence on both the newly-reachable path and the previously-proven one. Two small, independent,
+offline-provable fixes follow (a normalization gap that let a numeric provider code win the
+waterfall over text, and two known copy-loop gaps that leave properties permanently empty), then the
+six `/gsd-verify-work` re-runs carried from the v0.3 goal ledger close the milestone. Phase numbering
+continues from 16.10 — this milestone starts at Phase 17.
+
+**Constraints that apply across all of Milestone 4:**
+
+- All work stays on branch `feat/company-enrichment-icp-research`.
+- Any live HubSpot canary follows the repo's established armed-window discipline: arm write gates
+  via the deploy-time overlay only, target allowlisted test records only (`TEST_RECORD_DOMAINS` /
+  `TEST_CONTACT_IDS`), restore the disarmed build afterwards, and read the deployment back to confirm
+  disarmed state. Beware HubSpot search eventual consistency (~6s–3min propagation) and
+  tick-predates-seed races — see the knowledge-base entry on scheduled-lane canary timing before
+  scheduling any canary around a write.
+- The contacts match path (`HubSpot Search` returning a hit, e.g. contact 201) is the single
+  most live-proven path in the system. Any change to its transport requires explicit before/after
+  live evidence — not an assumption that offline-green implies live-safe.
+- Baseline offline suite: 587 pytest + node tests, run via `.venv/bin/python -m pytest` and
+  `node --test tests/n8n/*.test.mjs` (see knowledge-base `test-suite-run-commands` — the directory
+  form of the node test runner is broken on this Node version).
+
+## Phases
+
+- [ ] **Phase 17: Enrichment Contacts Reachability (BUG 23)** - Transport swap on `HubSpot Search` + `HubSpot Fetch By Id` makes `contact:create` reachable, byte-identical pin dropped for both nodes, dual live canary (match regression + no-match reachability) proves it, deployment restored disarmed
+- [ ] **Phase 18: Normalization & Copy-Loop Fixes** - Numeric provider industry codes stop winning the waterfall over text; `lv_sponsorship_reliant` and `persona_group`/`lv_persona_group` stop being permanently empty
+- [ ] **Phase 19: Verification Debt Closure** - The six `/gsd-verify-work` re-runs carried from the v0.3 goal ledger are executed and their outcomes recorded
+
+## Phase Details
+
+### Phase 17: Enrichment Contacts Reachability (BUG 23)
+
+**Goal**: The enrichment contacts lane's `contact:create` path is live-reachable for a genuine
+no-match event, and the existing live-proven match path is regression-checked, not assumed safe.
+**Depends on**: Phase 16.10 (Milestone 3 close)
+**Requirements**: REACH-01, REACH-02, REACH-03, REACH-04
+**Detail**: This is the risky phase in the milestone. `HubSpot Search` is pinned byte-identical in
+`tests/test_bug10_company_search_transport.py` by deliberate design — the guard exists specifically
+to stop a drive-by migration of the one path in the system with the deepest live track record (the
+entire 16.7 non-clobber canary chain runs through it). The plan must carry the same before/after
+live-canary discipline BUG 10 and BUG 22 established, not a code-only transport swap. Follows BUG
+22's proven pattern: move both nodes to the credential-bound httpRequest envelope transport (which
+`ENRICH_ADAPT_SEARCH` and `adaptFetchById.js` already parse), including the `lookup_failed`
+item-error mapping on a failed fetch.
+**Success Criteria** (what must be TRUE):
+
+  1. `HubSpot Search` and `HubSpot Fetch By Id` in the enrichment contacts lane run on the
+     credential-bound httpRequest envelope transport (mirroring BUG 22), so a zero-hit search emits
+     exactly one classifiable item instead of silently stopping the chain.
+  2. Both nodes are dropped from the byte-identical pin in `tests/test_bug10_company_search_transport.py`
+     with the same documented rationale as the prior two removals, and `bareEventChainFlow`'s http
+     mocks are updated to model the native node's 0-item behavior (or the lane's test asserts no
+     native search nodes remain) — the offline suite is green with zero regressions against the
+     587 pytest / node baseline.
+  3. Live canary case A (regression): an existing contact (e.g. 201) sent through the enrichment
+     webhook still matches and enriches exactly as before the transport swap — before/after evidence
+     is recorded, not asserted from the offline suite passing.
+  4. Live canary case B (reachability): a nonexistent email sent through the enrichment webhook
+     reaches `Decide Action` with `action: "create"`, write-gated — no HubSpot write occurs unless
+     the deploy is deliberately armed for that allowlisted record.
+  5. After both canaries, the deployment is restored to its disarmed state and read back from the
+     live n8n instance to confirm no write gate was left armed.
+
+**Plans**: TBD
+
+### Phase 18: Normalization & Copy-Loop Fixes
+
+**Goal**: Two known, offline-provable data-quality gaps stop silently degrading enrichment output —
+a numeric provider code no longer masquerades as a normalized industry value, and two ICP/persona
+properties stop being permanently empty.
+**Depends on**: Phase 17
+**Requirements**: NORM-01, COPY-01, COPY-02
+**Detail**: All three fixes are small, localized, and provable without any live call — each gets a
+red-before-green test using the real conflict/gap shape already observed live (execution 19 for
+NORM-01; the declared-but-never-copied candidate sources for COPY-01/COPY-02). Sequenced after
+Phase 17 because both phases touch `scripts/build_cloud_workflows.py` (Phase 17 touches node
+transport definitions; this phase touches the merge-call construction for `ENRICH_MERGE_CO` and
+`ENRICH_MERGE`) — running them in phase order avoids stacking unrelated diffs in one rebuild.
+**Success Criteria** (what must be TRUE):
+
+  1. A numeric provider industry code (ZoomInfo's `"71"`) never survives normalization unchanged —
+     reproduced from execution 19's real conflict (Apollo's `"media production"` vs ZoomInfo's
+     `"71"`) with a red-before-green test.
+  2. That same numeric code never wins the waterfall over provider text by confidence/priority
+     ordering alone — the fix is proven against the same execution-19 shape, not just a synthetic case.
+  3. `lv_sponsorship_reliant` is copied from its candidate source (`build_cloud_workflows.py`
+     `ENRICH_MERGE_CO` researchData loop) into the companies merge call — a test proves the property
+     populates from a real candidate instead of staying empty.
+  4. `persona_group`/`lv_persona_group` is copied from its candidate source (`ENRICH_MERGE` winners
+     loop) into the contacts merge call — a test proves the property populates from a real candidate
+     instead of staying empty.
+  5. The offline suite (587 pytest + node baseline) is green with zero regressions, and the workflow
+     builder is deterministic (rebuild twice, no diff).
+
+**Plans**: TBD
+
+### Phase 19: Verification Debt Closure
+
+**Goal**: The verification backlog carried out of v0.3 is closed — every deferred `/gsd-verify-work`
+re-run has actually been executed against current state, with its outcome on record.
+**Depends on**: Phase 18
+**Requirements**: VERIFY-01
+**Detail**: This phase does not build anything; it discharges a debt. The six re-runs are identified
+from the v0.3 goal ledger / `STATE.md` Deferred Items at plan time (not enumerated here, since the
+ledger is the source of truth and may itself have shifted since 2026-07-29), executed, and any new
+defect a re-run surfaces is captured rather than silently absorbed into "passed."
+**Success Criteria** (what must be TRUE):
+
+  1. Every one of the six `/gsd-verify-work` re-runs carried from the v0.3 goal ledger is identified
+     explicitly and re-executed against the post-v0.3-ship state.
+  2. Each run's outcome (passed / human_needed / failed) is recorded against the item it verifies.
+  3. Any defect a re-run surfaces is captured as a debug brief or backlog item — nothing is silently
+     dropped to close the ledger.
+
+**Plans**: TBD
+
+## Milestone 4 Progress
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 17. Enrichment Contacts Reachability (BUG 23) | 0/TBD | Not started | - |
+| 18. Normalization & Copy-Loop Fixes | 0/TBD | Not started | - |
+| 19. Verification Debt Closure | 0/TBD | Not started | - |
