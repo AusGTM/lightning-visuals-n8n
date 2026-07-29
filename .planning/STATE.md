@@ -4,8 +4,8 @@ milestone: v0.4
 milestone_name: Reachability & Verification Debt
 current_phase: 19
 current_phase_name: Verification Debt Closure
-status: planning
-stopped_at: Completed 18-03-PLAN.md (GAP 1/GAP 2 producers landed; both copy-loop gaps closed end-to-end; phase 18 fully executed)
+status: ready_to_execute
+stopped_at: Phase 19 planned (19-01, checker passed first iteration)
 last_updated: "2026-07-29T09:28:27.348Z"
 last_activity: 2026-07-29
 last_activity_desc: Phase 18 complete, transitioned to Phase 19
@@ -29,10 +29,10 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 ## Current Position
 
 Phase: 19 — Verification Debt Closure
-Plan: Not started
-Status: Ready to plan
-Last activity: 2026-07-29 — Phase 18 complete, transitioned to Phase 19
-Next: plan the next phase in Milestone v0.4 (Phase 19: Verification Debt Closure)
+Plan: 19-01 (single wave, 3 tasks, autonomous) — plan checker VERIFICATION PASSED first iteration
+Status: Ready to execute. Six-item ledger reconstructed in 19-RESEARCH.md (items: 11, 15.5, 16, 16.4, 16.6, 16.9); 16.9 closes as human_needed + operator runbook.
+Last activity: 2026-07-29 — Phase 19 planned (researcher → planner → checker pass)
+Next: /gsd-execute-phase 19
 
 ## Performance Metrics
 
