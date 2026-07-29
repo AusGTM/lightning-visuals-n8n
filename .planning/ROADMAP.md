@@ -263,16 +263,18 @@ continues from 16.10 — this milestone starts at Phase 17.
   disarmed state. Beware HubSpot search eventual consistency (~6s–3min propagation) and
   tick-predates-seed races — see the knowledge-base entry on scheduled-lane canary timing before
   scheduling any canary around a write.
+
 - The contacts match path (`HubSpot Search` returning a hit, e.g. contact 201) is the single
   most live-proven path in the system. Any change to its transport requires explicit before/after
   live evidence — not an assumption that offline-green implies live-safe.
+
 - Baseline offline suite: 587 pytest + node tests, run via `.venv/bin/python -m pytest` and
   `node --test tests/n8n/*.test.mjs` (see knowledge-base `test-suite-run-commands` — the directory
   form of the node test runner is broken on this Node version).
 
 ## Phases
 
-- [ ] **Phase 17: Enrichment Contacts Reachability (BUG 23)** - Transport swap on `HubSpot Search` + `HubSpot Fetch By Id` makes `contact:create` reachable, byte-identical pin dropped for both nodes, dual live canary (match regression + no-match reachability) proves it, deployment restored disarmed
+- [x] **Phase 17: Enrichment Contacts Reachability (BUG 23)** - Transport swap on `HubSpot Search` + `HubSpot Fetch By Id` makes `contact:create` reachable, byte-identical pin dropped for both nodes, dual live canary (match regression + no-match reachability) proves it, deployment restored disarmed
 - [ ] **Phase 18: Normalization & Copy-Loop Fixes** - Numeric provider industry codes stop winning the waterfall over text; `lv_sponsorship_reliant` and `persona_group`/`lv_persona_group` stop being permanently empty
 - [ ] **Phase 19: Verification Debt Closure** - The six `/gsd-verify-work` re-runs carried from the v0.3 goal ledger are executed and their outcomes recorded
 
@@ -297,24 +299,28 @@ item-error mapping on a failed fetch.
   1. `HubSpot Search` and `HubSpot Fetch By Id` in the enrichment contacts lane run on the
      credential-bound httpRequest envelope transport (mirroring BUG 22), so a zero-hit search emits
      exactly one classifiable item instead of silently stopping the chain.
+
   2. Both nodes are dropped from the byte-identical pin in `tests/test_bug10_company_search_transport.py`
      with the same documented rationale as the prior two removals, and `bareEventChainFlow`'s http
      mocks are updated to model the native node's 0-item behavior (or the lane's test asserts no
      native search nodes remain) — the offline suite is green with zero regressions against the
      587 pytest / node baseline.
+
   3. Live canary case A (regression): an existing contact (e.g. 201) sent through the enrichment
      webhook still matches and enriches exactly as before the transport swap — before/after evidence
      is recorded, not asserted from the offline suite passing.
+
   4. Live canary case B (reachability): a nonexistent email sent through the enrichment webhook
      reaches `Decide Action` with `action: "create"`, write-gated — no HubSpot write occurs unless
      the deploy is deliberately armed for that allowlisted record.
+
   5. After both canaries, the deployment is restored to its disarmed state and read back from the
      live n8n instance to confirm no write gate was left armed.
 
-**Plans**: 2 plans
+**Plans**: 2/2 plans executed
 
-- [ ] 17-01-PLAN.md — Transport swap + pin removal + harness reachability (offline, no live call)
-- [ ] 17-02-PLAN.md — Dual live canary: match-path regression (A) + create-path reachability (B), restored disarmed
+- [x] 17-01-PLAN.md — Transport swap + pin removal + harness reachability (offline, no live call)
+- [x] 17-02-PLAN.md — Dual live canary: match-path regression (A) + create-path reachability (B), restored disarmed
 
 ### Phase 18: Normalization & Copy-Loop Fixes
 
@@ -334,14 +340,18 @@ transport definitions; this phase touches the merge-call construction for `ENRIC
   1. A numeric provider industry code (ZoomInfo's `"71"`) never survives normalization unchanged —
      reproduced from execution 19's real conflict (Apollo's `"media production"` vs ZoomInfo's
      `"71"`) with a red-before-green test.
+
   2. That same numeric code never wins the waterfall over provider text by confidence/priority
      ordering alone — the fix is proven against the same execution-19 shape, not just a synthetic case.
+
   3. `lv_sponsorship_reliant` is copied from its candidate source (`build_cloud_workflows.py`
      `ENRICH_MERGE_CO` researchData loop) into the companies merge call — a test proves the property
      populates from a real candidate instead of staying empty.
+
   4. `persona_group`/`lv_persona_group` is copied from its candidate source (`ENRICH_MERGE` winners
      loop) into the contacts merge call — a test proves the property populates from a real candidate
      instead of staying empty.
+
   5. The offline suite (587 pytest + node baseline) is green with zero regressions, and the workflow
      builder is deterministic (rebuild twice, no diff).
 
@@ -361,6 +371,7 @@ defect a re-run surfaces is captured rather than silently absorbed into "passed.
 
   1. Every one of the six `/gsd-verify-work` re-runs carried from the v0.3 goal ledger is identified
      explicitly and re-executed against the post-v0.3-ship state.
+
   2. Each run's outcome (passed / human_needed / failed) is recorded against the item it verifies.
   3. Any defect a re-run surfaces is captured as a debug brief or backlog item — nothing is silently
      dropped to close the ledger.

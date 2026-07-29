@@ -102,10 +102,10 @@ The v3 section formerly here is archived verbatim in `.planning/milestones/v0.3-
 
 ### Reachability (BUG 23)
 
-- [ ] **REACH-01**: The enrichment lane's `HubSpot Search` and `HubSpot Fetch By Id` run on the credential-bound httpRequest envelope transport (mirroring BUG 22's change, including the `lookup_failed` item-error mapping), so a no-match search emits exactly one classifiable item instead of stopping the chain — `adaptFetchById`'s 0-result handling stops being dead code and `contact:create` becomes reachable.
-- [ ] **REACH-02**: Both nodes are dropped from the byte-identical pin in `tests/test_bug10_company_search_transport.py` with the same documented rationale as the prior two removals — the guard was pinning a node broken for half its input space.
-- [ ] **REACH-03**: Live canary of BOTH cases — contact 201 still matches and enriches (regression check on the single most live-proven path in the system), and a nonexistent email reaches `Decide Action` as `create`, write-gated.
-- [ ] **REACH-04**: The harness gap is closed — `bareEventChainFlow`'s http mocks model the native node's 0-item behavior, or (better) the lane asserts no native search nodes remain.
+- [x] **REACH-01**: The enrichment lane's `HubSpot Search` and `HubSpot Fetch By Id` run on the credential-bound httpRequest envelope transport (mirroring BUG 22's change, including the `lookup_failed` item-error mapping), so a no-match search emits exactly one classifiable item instead of stopping the chain — `adaptFetchById`'s 0-result handling stops being dead code and `contact:create` becomes reachable.
+- [x] **REACH-02**: Both nodes are dropped from the byte-identical pin in `tests/test_bug10_company_search_transport.py` with the same documented rationale as the prior two removals — the guard was pinning a node broken for half its input space.
+- [x] **REACH-03**: Live canary of BOTH cases — contact 201 still matches and enriches (regression check on the single most live-proven path in the system), and a nonexistent email reaches `Decide Action` as `create`, write-gated.
+- [x] **REACH-04**: The harness gap is closed — `bareEventChainFlow`'s http mocks model the native node's 0-item behavior, or (better) the lane asserts no native search nodes remain.
 
 ### Normalization
 
@@ -124,10 +124,10 @@ The v3 section formerly here is archived verbatim in `.planning/milestones/v0.3-
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| REACH-01 | Phase 17 | Pending |
-| REACH-02 | Phase 17 | Pending |
-| REACH-03 | Phase 17 | Pending |
-| REACH-04 | Phase 17 | Pending |
+| REACH-01 | Phase 17 | Complete |
+| REACH-02 | Phase 17 | Complete |
+| REACH-03 | Phase 17 | Complete |
+| REACH-04 | Phase 17 | Complete |
 | NORM-01 | Phase 18 | Pending |
 | COPY-01 | Phase 18 | Pending |
 | COPY-02 | Phase 18 | Pending |
