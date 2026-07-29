@@ -261,6 +261,36 @@ def bind_credentials(workflow: dict, name_to_id: dict, node_cred_map: dict = Non
     return wf
 
 
+def rebind_subworkflow_refs(workflow: dict, live_by_name: dict) -> dict:
+    """Pure, deep-copying, fail-closed — same shape as bind_credentials(). BUG 20
+    (found live 2026-07-29, first-ever activation attempt of LV Scheduled Maintenance):
+    the builder bakes executeWorkflow nodes with the LOCAL template id
+    (`LVenrichmentCloud01`), but n8n assigns its own server-side id on create and this
+    deploy matches workflows by NAME — so the reference points at an id that has never
+    existed on the server, and activation 400s with "references workflow ... which is
+    not published". The node's `cachedResultName` carries the referenced workflow's NAME,
+    which is the one identifier stable across both sides; rewrite the id from a fresh
+    live name->id map. A referenced name with no live workflow fails the deploy closed
+    (deploy the referenced workflow first; the idempotent re-run then resolves it)."""
+    wf = json.loads(json.dumps(workflow))  # deep copy, stdlib only
+    for node in wf.get("nodes", []):
+        if node.get("type") != "n8n-nodes-base.executeWorkflow":
+            continue
+        ref = node.get("parameters", {}).get("workflowId")
+        if not isinstance(ref, dict):
+            continue
+        target_name = ref.get("cachedResultName")
+        live = live_by_name.get(target_name)
+        if live is None:
+            raise ValueError(
+                f"cannot deploy {wf.get('name')!r}: node {node.get('name')!r} references "
+                f"sub-workflow {target_name!r}, which does not exist on the instance yet. "
+                f"Deploy the referenced workflow first, then re-run (idempotent)."
+            )
+        ref["value"] = live["id"]
+    return wf
+
+
 def enable_baked_flags(workflow: dict, flags) -> tuple:
     """Pure, deep-copying, fails-closed deploy-time overlay — same shape as
     bind_credentials() above, applied at the same point in flight. Returns a NEW
@@ -508,11 +538,12 @@ def main(argv=None) -> int:
         return 0
 
     name_to_id = _load_credential_id_map()
+    live_by_name = {w["name"]: w for w in live_workflows}
     failures = []
 
     for wf in diff["create"]:
         try:
-            bound = bind_credentials(wf, name_to_id)
+            bound = bind_credentials(rebind_subworkflow_refs(wf, live_by_name), name_to_id)
         except ValueError as exc:
             failures.append(("create", wf["name"], str(exc)))
             continue
@@ -526,7 +557,7 @@ def main(argv=None) -> int:
     for u in diff["update"]:
         name = u["body"]["name"]
         try:
-            bound = bind_credentials(u["body"], name_to_id)
+            bound = bind_credentials(rebind_subworkflow_refs(u["body"], live_by_name), name_to_id)
         except ValueError as exc:
             failures.append(("update", name, str(exc)))
             continue
