@@ -1,17 +1,20 @@
 ---
 phase: 16-scheduled-workflows-review-surface
 verified: 2026-07-23T07:00:00Z
-status: human_needed
+status: passed
 score: 9/9 must-haves verified (structurally, offline)
 behavior_unverified: 0
 overrides_applied: 0
 human_verification:
+
   - test: "Run the operator runbook: provision_n8n_credentials.py, deploy_n8n_workflows.py (with N8N_URL/N8N_API_KEY/ALLOW_N8N_DEPLOY=true), activate 'LV Enrichment (Cloud template)' and 'LV Scheduled Maintenance (Cloud)' on a real n8n Cloud instance, and live-create the two SJ-3 HubSpot properties."
     expected: "Both workflows appear active on n8n Cloud with every node credential-bound (no unbound-node import errors); the phase goal's literal 'the pipeline runs live on n8n Cloud, the background reconciliation layer runs on schedule' becomes true, not just deployable."
     why_human: "Requires a live n8n Cloud subscription, live HubSpot portal writes, and live provider credentials — none of which exist in this offline environment. Cannot be proven by grep/test."
+
   - test: "Flip lv_enrichment_review_approved=true on one real needs_review company record and watch the live 'Apply Review' branch fire."
     expected: "reviewApply's computed canonicalPatch+clearPatch actually reach the HubSpot company record — but the built 'Review Apply Update' node ships with updateFields:{} (a documented placeholder, same convention as the pre-existing webhook-branch Update nodes); an operator must map {...canonicalPatch, ...clearPatch} onto the node's custom-properties UI before this works live."
     why_human: "The dynamic per-record patch is not baked into the builder's JSON output by design (values vary per record); wiring it is an operator/deploy-time step this repo cannot execute or grep-prove offline."
+
   - test: "Send a real HubSpot company-object webhook event (objectId/objectType/subscriptionType only, no email/domain/firstname) through the deployed Cloud webhook and confirm identity resolves and enrichment proceeds end to end."
     expected: "The event resolves to the correct company and the companies branch runs providers/research/judge/merge against it."
     why_human: "Documented limitation (16-01-SUMMARY Deviation 3, MINIMUM-scope shim): Build Identity/Build Company Identity still read direct body fields (email/domain) rather than fetching the record by objectId. A genuine HubSpot event carries none of those fields, so this path is unproven against a real event shape without a live webhook call and a follow-up fetch-by-id node the plan explicitly scoped out."
@@ -120,3 +123,36 @@ consistent with the same "tooling proven / live pending" split used for Phase 15
 ---
 *Verified: 2026-07-23*
 *Verifier: Claude (gsd-verifier)*
+
+---
+
+## Resolution — 2026-07-29 (status human_needed -> passed)
+
+All three human_verification items are met with live evidence:
+
+1. **Operator runbook** — all three cloud workflows deployed, credential-bound, and ACTIVE
+   (LV Contact Ingest and LV Scheduled Maintenance for the first time ever; the latter
+   needed BUG 20's fix first). Schedules fire on five distinct lanes (executions 23, 24,
+   29, 33, 56). Both SJ-3 properties were live-created by the Phase 15 migration.
+
+2. **Review-loop apply** — CLOSED, execution 56. The §22.2 loop ran end to end on a real
+   record via the lane's own 15-minute tick: search -> extract -> reviewApply -> gate
+   ALLOWED -> `Review Apply Update` PATCH (error null). Verified property by property:
+   `lv_org_type` None -> 'broadcaster', both review flags 'true' -> 'false',
+   `lv_enrichment_reviewed_at` set. Throwaway deleted (404); build restored to disarmed and
+   read back; armed-window audit shows exactly one write node produced output in the entire
+   window. The item's originally-stated blocker (BUG 11's `updateFields:{}`) had been
+   obsolete since 6d2565c.
+
+3. **Bare HubSpot event shape** — resolved by Phase 16.4's fetch-by-id nodes; proven
+   offline by `bareEventChainFlow.test.mjs` from a 5-field seed and live by executions 12
+   and 19.
+
+Reaching item 2 cost three armed windows and surfaced two fail-closed defects, both fixed
+and guarded with reconstruction-proven tests: BUG 24 (`domain` absent from every company
+search, so `TEST_RECORD_DOMAINS` was inert on all three company write lanes) and BUG 25
+(`Apply Review` rebuilt the row without a spread, dropping `domain` before the gate and
+making BUG 24's fix inert). A security hole found the same day — the contact-ingest webhook
+shipping unauthenticated — was also fixed and live-verified (403/200).
+
+See `16-UAT.md`.

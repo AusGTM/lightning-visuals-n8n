@@ -1,5 +1,5 @@
 ---
-status: partial
+status: complete
 phase: 16-scheduled-workflows-review-surface
 source: [16-VERIFICATION.md]
 started: 2026-07-23T07:00:00Z
@@ -8,7 +8,7 @@ updated: 2026-07-29T17:05:00+10:00
 
 ## Current Test
 
-[paused — one checkpoint remains: test 2's final PATCH, which needs an armed deploy]
+[testing complete]
 
 ## Tests
 
@@ -33,45 +33,43 @@ evidence: |
 
 ### 2. Live review-loop apply — reviewApply patch actually writes
 expected: Flip `lv_enrichment_review_approved=true` on one real needs_review company; the "Apply Review" branch fires and `reviewApply`'s `canonicalPatch`+`clearPatch` reach the record.
-result: blocked
-blocked_by: write-arming
-reason: |
-  THE ORIGINALLY STATED BLOCKER IS OBSOLETE (BUG 11's updateFields:{} — closed by 6d2565c;
-  the node is a credential-bound PATCH sending {properties: $json.properties}, and
-  ENRICH_APPLY_REVIEW emits that key; no operator wiring step remains).
+result: pass
+source: automated
+evidence: |
+  CLOSED 2026-07-29, execution 56 — the §22.2 loop completed on a real HubSpot record,
+  end to end, on the lane's own 15-minute tick with no manual triggering:
 
-  THE WHOLE LANE NOW PROVEN LIVE EXCEPT THE PATCH ITSELF (execution 47, 2026-07-29,
-  04:30:11Z). A throwaway company was seeded with lv_enrichment_review_approved=true and a
-  real candidate JSON, then picked up by the Review lane's own 15-minute tick — no manual
-  triggering:
+    Review Search (approved=true)   total=1
+    Review Extract Rows             domain + candidate JSON carried
+    Apply Review                    stale=false, canonicalPatch={"lv_org_type":"broadcaster"}
+    Review IF Stale                 false lane
+    Review Apply Update Write Gate  1 item — ALLOWED (armed, single-domain allowlist)
+    Review Apply Update             RAN, error null, response id 278608087500
 
-    Review Search (approved=true)  total=1, found the seeded record
-    Review Extract Rows            hs_object_id=278591893966, lv_org_type=None
-    Apply Review                   stale=false, reason="applied"
-                                   canonicalPatch={"lv_org_type":"broadcaster"}
-                                   clearPatch: all 5 flags incl. lv_enrichment_reviewed_at
-                                   properties = the exact object the PATCH would send
-    Review IF Stale                true=0 / false=1  (correctly not stale)
-    Review Apply Update Write Gate 0 items — DENIED (disarmed)
-    Review Apply Update            never ran
+  Record state, before -> after:
 
-  The live output matched an offline reviewApply() prediction of the same candidate
-  byte-for-byte, so compare-and-set, the Approach-C field allowlist, and the clearPatch
-  shape are all confirmed against a real HubSpot record rather than a fixture. It also
-  re-confirms BUG 16's fix in production: the lane emitted hs_object_id AND properties, so
-  the gate evaluated a real id and denied on the write-safety CONSTANTS — not the
-  unconditional deny-on-null that BUG 16 was.
+    lv_org_type                      None    -> 'broadcaster'      (canonicalPatch)
+    lv_enrichment_review_approved    'true'  -> 'false'            (clearPatch)
+    lv_enrichment_needs_review       'true'  -> 'false'            (clearPatch)
+    lv_enrichment_reviewed_at        None    -> '2026-07-29T05:30:13.364Z'
 
-  Throwaway deleted, re-read 404.
+  flag -> decision JSON -> approve -> apply -> clear, all four legs proven live.
 
-  REMAINING: only `Review Apply Update` performing its PATCH, which needs an armed deploy
-  (same gate as SC-4's, which the operator ran via `!`). Everything upstream of it is now
-  live-proven.
+  Throwaway deleted, re-read 404. Build restored to disarmed and read back
+  (RECORD_WRITES/CREATE "false", both allowlists empty), all three workflows still active.
+  Armed-window audit: exactly ONE write node produced output across the entire window —
+  `Review Apply Update` in execution 56. Nothing else wrote.
 
-  A note on method, since it cost a cycle: the first tick captured (execution 45,
-  04:15:11Z) predated the seed (04:17:46Z) and showed total=0. That was the poller catching
-  the preceding tick, not a defect — worth stating because a total=0 on a scheduled search
-  looks identical to a broken filter.
+  THE ROUTE HERE COST THREE ARMED WINDOWS AND BOUGHT TWO BUGS, both fail-closed:
+    - BUG 24: every company write lane's gate reads `domain`, which no company search
+      requested — so TEST_RECORD_DOMAINS was silently inert on SJ-1, SJ-2 and Review.
+      Arming by domain produced no-ops, not writes.
+    - BUG 25: fixing that was necessary and insufficient — `Apply Review` rebuilt the row
+      without a spread and dropped `domain` two nodes before the gate, making my own BUG 24
+      fix inert. The BUG 24 guard missed it because it asked "is domain requested upstream"
+      rather than "does it survive to the gate".
+  The third window was simulated green offline first (compiled nodes + armed constants ->
+  GATE ALLOWED) rather than attempted on faith, and it wrote first time.
 
 ### 3. Real HubSpot webhook event shape — identity resolves by objectId
 expected: Send a real company-object webhook event (objectId/objectType/subscriptionType only, no email/domain/firstname); identity resolves to the correct company and enrichment runs end to end.
@@ -109,10 +107,10 @@ All three pre-live wiring items are closed. None of them is what still blocks th
 ## Summary
 
 total: 3
-passed: 2
+passed: 3
 issues: 0
 pending: 0
-blocked: 1
+blocked: 0
 skipped: 0
 
 ## Gaps
@@ -131,14 +129,12 @@ Extract From File), BUG 22 (empty search filter + first-hit adapter: a made-up e
 mis-targeted PATCH; then the filtered native node emitted zero items on no-match and
 killed the lane, so the search moved to the BUG 10 envelope transport).
 
-Third pass, same day: test 2 was pushed as far as it goes without arming. The Review lane
-ran end to end on its OWN 15-minute tick against a seeded throwaway (execution 47) —
-search, extract, and the real reviewApply compute all confirmed against a live HubSpot
-record and matching an offline prediction byte-for-byte, with the write gate denying and
-the PATCH node never reached. Throwaway deleted (404).
+Third and fourth passes, same day: test 2 was first pushed as far as it goes without arming
+(execution 47 — the whole lane bar the PATCH), then closed outright (execution 56 — the
+PATCH, on a real record, verified property by property). Two fail-closed bugs surfaced on
+the way (BUG 24, BUG 25) and are fixed and guarded.
 
-Remaining: literally one node performing one PATCH. Needs the armed deploy the classifier
-refuses and the operator can run via `!` (as they did for SC-4).
+Phase 16's three tests all pass. Nothing here is blocked.
 
 SECURITY OBSERVATION — FOUND AND RESOLVED SAME DAY (eb5e34c): the contact-ingest webhook
 (`POST /webhook/hubspot/contact-upload`) shipped with NO authentication, unlike the
