@@ -34,13 +34,29 @@ derived outputs (`lv_icp_fit_score`, `lv_icp_tier`, `lv_anti_icp_flag`, `lv_anti
 `lv_recommended_motion`) are HubSpot-side and their calculation is still the literal `1 + 1`
 placeholder. Authoring it is downstream work. Supersedes CLAUDE.md §29.
 
-### Next Milestone Goals (v0.4)
+## Current Milestone: v0.4 Reachability & Verification Debt
 
-- **BUG 23** — enrichment `contact:create` is structurally unreachable. Root-caused, not fixed.
-- Normalization gap — a numeric ZoomInfo `industry` code wins the waterfall over provider text.
-- Two latent copy-loop gaps (`lv_sponsorship_reliant`, `persona_group`) that leave properties
-  permanently empty.
-- Six `/gsd-verify-work` re-runs carried from the v0.3 goal ledger.
+**Goal:** Make every structurally dead or silently inert path in the deployed pipeline reachable
+and proven live, and clear the verification backlog carried out of v0.3.
+
+**Target features:**
+- **BUG 23 fix** — enrichment `contact:create` reachable: transport swap on `HubSpot Search` +
+  `HubSpot Fetch By Id` to the credential-bound httpRequest envelope (the mechanism proven by
+  BUG 10 and BUG 22), byte-identical-pin override with documented rationale, live canary of BOTH
+  cases (contact 201 must still match and enrich; a nonexistent email must reach `Decide Action`
+  as `create`, write-gated), and the harness gap closed (`bareEventChainFlow` mocks model the
+  native node's 0-item behavior, or the lane asserts no native search nodes remain).
+- **ZoomInfo numeric industry** — normalization gap: a numeric industry code (`"71"`) must not win
+  the waterfall over provider text and pass through normalization unchanged.
+- **Copy-loop gaps** — `lv_sponsorship_reliant` (companies, ENRICH_MERGE_CO researchData loop) and
+  `persona_group`/`lv_persona_group` (contacts, ENRICH_MERGE winners loop) wired from candidate
+  source into the merge call; both properties are currently permanently empty.
+- **Verification debt** — six `/gsd-verify-work` re-runs carried from the v0.3 goal ledger.
+
+**Key context:** the BUG 23 fix churns `HubSpot Search` — the single most live-proven node in the
+system (the whole 16.7 non-clobber canary chain runs through it), pinned byte-identical by design
+in `tests/test_bug10_company_search_transport.py`. The plan must carry before/after live-canary
+discipline, not a drive-by migration. Phase numbering continues from 16.10 (next: phase 17).
 
 ## Core Value
 
@@ -63,13 +79,21 @@ Full detail and traceability live in `.planning/REQUIREMENTS.md`.
 
 (None yet — ship Milestone 1 to validate.)
 
-### Active (Milestone 3 — Company Enrichment & ICP Research)
+### Active (Milestone v0.4 — Reachability & Verification Debt)
 
-- [x] Company enrichment as a sibling n8n branch, live provider waterfall, read-only (REQ-company-branch, REQ-company-merge, REQ-provider-contracts, REQ-conflict-withhold)
-- [ ] Taxonomy single-source so org/content types extend without drift (REQ-taxonomy-single-source, REQ-enum-normalization)
-- [ ] Web-research retrieval for the two provider-unresolvable ICP fields (REQ-web-retrieval, REQ-evidence-by-field, REQ-tristate-content)
-- [ ] Evidence-before-judgement escalation (REQ-evidence-before-judgement)
-- [ ] HubSpot metadata property migration, checkpointed (REQ-property-migration)
+- [ ] Enrichment `contact:create` reachable — transport swap + pin override + dual live canary + harness gap (BUG 23)
+- [ ] Numeric provider industry codes never survive normalization or win the waterfall over text (ZoomInfo `"71"`)
+- [ ] `lv_sponsorship_reliant` + `persona_group` copy-loops wired; properties stop being permanently empty
+- [ ] Six `/gsd-verify-work` re-runs from the v0.3 goal ledger closed
+
+### Shipped (Milestone 3 — Company Enrichment & ICP Research, 2026-07-29)
+
+- [x] Company enrichment as a sibling n8n branch, live provider waterfall (REQ-company-branch, REQ-company-merge, REQ-provider-contracts, REQ-conflict-withhold)
+- [x] Taxonomy single-source so org/content types extend without drift (REQ-taxonomy-single-source, REQ-enum-normalization)
+- [x] Web-research retrieval for the two provider-unresolvable ICP fields (REQ-web-retrieval, REQ-evidence-by-field, REQ-tristate-content)
+- [x] Evidence-before-judgement escalation (REQ-evidence-before-judgement)
+- [x] HubSpot metadata property migration tooling, checkpointed (REQ-property-migration; live runbook pending)
+- [x] Inputs-only writeback + tiered adjudication (REQ-inputs-only-writeback, REQ-tiered-adjudication)
 
 ### Shipped (Milestone 1 — Local-First MVP)
 
@@ -144,5 +168,22 @@ Full detail and traceability live in `.planning/REQUIREMENTS.md`.
 - **(M3) Research caching is blocked** until metadata properties exist; every run currently re-researches every company.
 - **Enrich-first reality**: org type verified for only 66 of 712 CRM companies; `closed_lost_reason` is 0% filled. Anti-ICP is currently inferred from firmographics; discovery calls now supply real reasons (price #1, cloud-fear #2).
 
+## Evolution
+
+This document evolves at phase transitions and milestone boundaries.
+
+**After each phase transition** (via `/gsd-transition`):
+1. Requirements invalidated? → Move to Out of Scope with reason
+2. Requirements validated? → Move to Validated with phase reference
+3. New requirements emerged? → Add to Active
+4. Decisions to log? → Add to Key Decisions
+5. "What This Is" still accurate? → Update if drifted
+
+**After each milestone** (via `/gsd-complete-milestone`):
+1. Full review of all sections
+2. Core Value check — still the right priority?
+3. Audit Out of Scope — reasons still valid?
+4. Update Context with current state
+
 ---
-*Last updated: 2026-07-20 — Milestone 3 opened; .planning/ reconciled after 12 days of untracked work*
+*Last updated: 2026-07-29 — Milestone v0.4 opened (Reachability & Verification Debt); v0.3 shipped and archived*
