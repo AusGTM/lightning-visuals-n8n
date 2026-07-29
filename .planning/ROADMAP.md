@@ -357,8 +357,12 @@ transport definitions; this phase touches the merge-call construction for `ENRIC
      the workflow builder is deterministic (rebuild twice, no diff).
 
 **Plans**: 2 plans
+**Wave 1**
 
 - [ ] 18-01-PLAN.md — NORM-01: `_industryText` helper stops any numeric NAICS code becoming an industry candidate value (ZoomInfo + defensively Lusha), proven against the real execution-19 shape
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 18-02-PLAN.md — COPY-01/COPY-02: `lv_sponsorship_reliant` and the lv-prefixed persona property reach their merge calls, proven through the compiled node bodies, with the bounded frozen-fixture re-baseline
 
 ### Phase 19: Verification Debt Closure
