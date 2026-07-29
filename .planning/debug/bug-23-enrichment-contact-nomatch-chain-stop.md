@@ -1,5 +1,5 @@
 ---
-status: fixed
+status: resolved
 created: 2026-07-29
 resolved: 2026-07-29
 found_by: "Generalizing execution 22's mechanism (ingest, BUG 22) to the enrichment contacts lane — not yet reproduced there live"
