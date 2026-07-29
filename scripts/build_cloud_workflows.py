@@ -1585,9 +1585,15 @@ return $input.all().map((it) => {
 """
 
 ENRICH_BUILD_CO_REQUESTS = r"""// Build Company Provider Requests — companies branch.
-// Both contracts confirmed 200 live against racingnsw.com.au:
-//   Lusha  GET  /v2/company?domain=            -> { data:{...}, meta:{} }
+// Both contracts re-probed live 2026-07-29 against racingnsw.com.au (BUG 17):
+//   Lusha  GET  /v2/company?domain=            -> 200 { data:{...}, meta:{} }
 //   Apollo POST /v1/organizations/enrich?domain= -> { organization:{...} }
+// `domain` is the ONLY accepted query property. `?domain=&companyName=` 400s with
+// "property companyName should not exist", exactly as the old POST body 400'd with
+// "property domain should not exist" — so companyName stays out of the URL and lives
+// on in identity_keys for the other providers. (A POST {companies:[{id,domain}]}
+// envelope also 201s, mirroring /v2/person, but returns an id-keyed map that
+// lushaCandidates() does not unwrap; the GET's `data` envelope is what it reads.)
 return $input.all().map((it) => {
   const row = it.json;
   const id = row.identity_keys || {};
@@ -1595,7 +1601,6 @@ return $input.all().map((it) => {
   const q = [];
   const add = (k, v) => { if (v) q.push(enc(k) + "=" + enc(v)); };
   add("domain", id.domain);
-  add("companyName", id.companyName);
   const lusha_company_url = "https://api.lusha.com/v2/company?" + q.join("&");
   const apollo_org_url =
     "https://api.apollo.io/v1/organizations/enrich?domain=" + enc(id.domain || "");
@@ -2767,6 +2772,13 @@ def _http_node(name, url, x, y, auth=None, headers=None, form_body=None, json_bo
     if form_body is not None:
         params.update({"sendBody": True, "contentType": "form-urlencoded",
                        "bodyParameters": {"parameters": form_body}})
+    elif method == "GET" and json_body is None:
+        # BUG 17: a GET provider call carries its identity in the URL, not a body. The
+        # default `{{ JSON.stringify($json.identity_keys) }}` body below is what made
+        # Lusha Company POST an identity object at an endpoint that only accepts
+        # `?domain=`. No other call site passes method="GET", so this branch is new
+        # ground, not a behaviour change.
+        pass
     else:
         params.update({"sendBody": True, "specifyBody": "json",
                        "jsonBody": json_body or "={{ JSON.stringify($json.identity_keys) }}"})
@@ -3677,15 +3689,18 @@ def build_enrichment_cloud():
     # contacts Lusha/Apollo bodies — a gate positioned after another provider's HTTP
     # response would otherwise see that response as $json, not the row.
     #
-    # Track B flag (reviews LOW-5, NOT fixed in 16.1): this node is emitted as a POST to
-    # a static URL with the default identity_keys body, but the live-verified contract is
-    # `GET /v2/company?domain=` — and ENRICH_BUILD_CO_REQUESTS already prebuilds an unused
-    # `lusha_company_url` for exactly that GET. Rewiring the identity SOURCE here (as this
-    # task does) does not correct the URL/method mismatch; that is a live-validation item
-    # for Track B, not a 16.1 offline-scope fix.
-    lusha_co = _http_node("Lusha Company", "https://api.lusha.com/v2/company", cpx, cy - 80,
-                          auth="header",  # credential header, e.g. api_key: <LUSHA_API_KEY>
-                          json_body="={{ JSON.stringify($('Build Company Requests').item.json.identity_keys) }}")
+    # BUG 17 (fixed 2026-07-29, live-probed): this node used to POST the identity object
+    # at the bare endpoint and 400 every single time with "property domain should not
+    # exist" — invisibly, because onError:continueRegularOutput puts a provider failure in
+    # the ITEM, not the node, so every company run reported success while silently
+    # enriching from two providers instead of three. The live contract is
+    # `GET /v2/company?domain=` (domain is the only accepted property; adding companyName
+    # 400s too), and ENRICH_BUILD_CO_REQUESTS prebuilds exactly that URL as
+    # `lusha_company_url` — which nothing consumed until now.
+    lusha_co = _http_node("Lusha Company",
+                          "={{ $('Build Company Requests').item.json.lusha_company_url }}",
+                          cpx, cy - 80, method="GET",
+                          auth="header")  # credential header, e.g. api_key: <LUSHA_API_KEY>
     nodes.append(lusha_co)
     apollo_org = _http_node(
         "Apollo Org", "https://api.apollo.io/v1/organizations/enrich", cpx + 220, cy - 80,

@@ -308,14 +308,18 @@ def test_company_empty_enabled_set_bypass_only_path_reaches_normalize_and_decide
     assert "Decide Company Action" in reachable
 
 
-def test_company_provider_request_bodies_read_identity_by_node_name_not_bare_json():
+def test_company_provider_requests_read_identity_by_node_name_not_bare_json():
+    """Phase 16.1's invariant: a provider node positioned after another provider's HTTP
+    node sees THAT provider's response as $json, so identity must be addressed by node
+    name. The invariant is about the identity EXPRESSION, not about which parameter
+    carries it — since BUG 17, Lusha Company is a GET whose identity rides in the URL
+    (`lusha_company_url`, itself built from identity_keys) rather than in a body."""
     doc = _load()
-    lusha_body = _node(doc, "Lusha Company")["parameters"]["jsonBody"]
-    apollo_body = _node(doc, "Apollo Org")["parameters"]["jsonBody"]
-    assert "$('Build Company Requests').item.json.identity_keys" in lusha_body
-    assert "$('Build Company Requests').item.json.identity_keys" in apollo_body
-    assert "$json.identity_keys" not in lusha_body
-    assert "$json.identity_keys" not in apollo_body
+    for name in ("Lusha Company", "Apollo Org"):
+        p = _node(doc, name)["parameters"]
+        expr = p.get("jsonBody") or p["url"]
+        assert "$('Build Company Requests').item.json." in expr, (name, expr)
+        assert "$json.identity_keys" not in expr, (name, expr)
 
 
 def test_company_provider_gates_read_provider_enabled_by_node_name_not_bare_json():

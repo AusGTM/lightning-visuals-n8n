@@ -193,3 +193,38 @@ def test_zoominfo_company_mint_node_is_credential_bound_basic_auth():
     assert node["type"] == "n8n-nodes-base.httpRequest"
     assert node["parameters"]["authentication"] == "genericCredentialType"
     assert node["parameters"]["genericAuthType"] == "httpBasicAuth"
+
+
+def test_lusha_company_uses_the_live_get_contract_and_sends_no_body():
+    """BUG 17 (live-probed 2026-07-29 against racingnsw.com.au). Lusha's /v2/company
+    accepts the domain as a QUERY parameter and nothing else:
+
+        GET  /v2/company?domain=racingnsw.com.au              -> 200 {data:{...}}
+        GET  /v2/company?domain=...&companyName=...           -> 400 companyName should not exist
+        POST /v2/company  {"domain":...,"companyName":...}    -> 400 domain should not exist
+
+    The node shipped as that last shape and 400'd on every company run ever made, in
+    silence, because onError:continueRegularOutput lands a provider failure in the item
+    rather than the node. Assert the transport, not just the URL string: a GET that
+    still carries the default identity_keys body would regress it."""
+    doc = _load()
+    node = next(n for n in doc["nodes"] if n["name"] == "Lusha Company")
+    p = node["parameters"]
+    assert p["method"] == "GET"
+    assert p["url"] == "={{ $('Build Company Requests').item.json.lusha_company_url }}"
+    assert "jsonBody" not in p and not p.get("sendBody"), \
+        "GET must not carry a body — the default identity_keys body is what 400'd"
+    assert p["genericAuthType"] == "httpHeaderAuth"
+
+
+def test_build_company_requests_never_puts_companyname_in_the_lusha_query():
+    """The other half of BUG 17: the prebuilt URL was itself unusable, because it appended
+    companyName — which Lusha rejects exactly as it rejects a body `domain`. Guard the
+    builder source, since a wrong URL would 400 identically and just as invisibly."""
+    from build_cloud_workflows import ENRICH_BUILD_CO_REQUESTS
+
+    src = ENRICH_BUILD_CO_REQUESTS
+    lusha_line = next(l for l in src.splitlines() if "lusha_company_url =" in l)
+    q_adds = [l for l in src.splitlines() if l.strip().startswith("add(")]
+    assert q_adds == ['  add("domain", id.domain);'], q_adds
+    assert "/v2/company?" in lusha_line
