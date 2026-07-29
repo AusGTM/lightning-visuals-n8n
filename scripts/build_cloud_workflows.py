@@ -2306,7 +2306,9 @@ return $input.all().map((it) => {
   // Phase 13 (D6): fold the Claude web-research candidate in as a SECOND mergeCompanies
   // call — mergeCompanies.js itself stays byte-identical. Research fields (lv_org_type,
   // lv_produces_content, lv_content_type, lv_is_hardware_vendor, lv_is_gambling_operator —
-  // widened in Phase 14 so the hard-veto INPUT flags finally reach HubSpot, D1/D2) never
+  // widened in Phase 14 so the hard-veto INPUT flags finally reach HubSpot, D1/D2;
+  // lv_sponsorship_reliant added Phase 18 COPY-01, closing a latent copy-loop gap the
+  // field's policy had covered since Phase 15 but this fold never actually reached) never
   // collide with the firmographic candidate's keys above, so a shallow merge of each patch
   // (+ concatenated decisions) is safe. By the time this node runs, the Judge Gate chain
   // upstream has already demoted any UNADJUDICATED vendor-flag `true` to `null`
@@ -2314,9 +2316,13 @@ return $input.all().map((it) => {
   let finalMerge = merged;
   const rc = row.research_candidate;
   if (rc && rc.matched) {
+    // COPY-01: lv_sponsorship_reliant appended at the END of this array (never inserted
+    // mid-array) so every existing field's key-insertion order stays byte-stable. The
+    // tri-state/blank continue guard below already applies uniformly to the new entry.
     const researchData = {};
     for (const f of ["lv_org_type", "lv_produces_content", "lv_content_type",
-                     "lv_is_hardware_vendor", "lv_is_gambling_operator"]) {
+                     "lv_is_hardware_vendor", "lv_is_gambling_operator",
+                     "lv_sponsorship_reliant"]) {
       const v = rc.data && rc.data[f];
       // tri-state null (TS-2 coercion) / blank -> skip, so mergeCompanies' own _isBlank
       // check has nothing to write; an evidenced false is NOT blank and flows through.
