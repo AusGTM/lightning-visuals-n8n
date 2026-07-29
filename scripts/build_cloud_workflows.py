@@ -3479,23 +3479,16 @@ def build_enrichment_cloud():
 
     # Task 6 (review #8): real filterGroups (email EQ) + hs_object_id in the property
     # list — was an empty filterGroupsUi placeholder that matched no filter at all.
+    # BUG 23 (Phase 17.01): moved off the native node onto _hs_http_search_node — see that
+    # helper's docstring for why (zero hits -> zero items -> chain stops, execution 22).
     x += 220
     hs_search_x = x
-    hs_search = {
-        "parameters": {"resource": "contact", "operation": "search",
-                       "filterGroupsUi": {"filterGroupsValues": [
-                           {"filtersUi": {"filterValues": [
-                               {"propertyName": "email", "operator": "EQ",
-                                "value": "={{ $json.identity_keys.email }}"},
-                           ]}},
-                       ]},
-                       "additionalFields": {
-                           "properties": ENRICH_CONTACT_SEARCH_PROPERTIES_CSV,
-                       }},
-        "id": nid("hs"), "name": "HubSpot Search",
-        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [x, y],
-        "onError": "continueRegularOutput",
-    }
+    hs_search = _hs_http_search_node(
+        "HubSpot Search", "contact", x, y,
+        filter_groups=[[{"propertyName": "email", "operator": "EQ",
+                          "value": "={{ $json.identity_keys.email }}"}]],
+        properties_csv=ENRICH_CONTACT_SEARCH_PROPERTIES_CSV,
+    )
     nodes.append(hs_search)
 
     x += 220
@@ -3521,18 +3514,21 @@ def build_enrichment_cloud():
     # (a direct-field/caller-envelope test payload carrying an email) keeps the existing
     # lane byte-for-byte; a payload with neither an id nor a key also keeps it.
     nodes.append(if_bare_event)
-    hs_fetch_by_id = _hs_search_node(
+    # BUG 23 (Phase 17.01): moved off _hs_search_node onto _hs_http_search_node — same
+    # zero-items-on-zero-hits hazard as the sibling search above (a deleted/nonexistent
+    # object id must not silently die here; adaptFetchById.js's 0-result branch needs the
+    # response to arrive as an item to classify it as lookup_failed).
+    hs_fetch_by_id = _hs_http_search_node(
         "HubSpot Fetch By Id", "contact", hs_search_x, fby,
         filter_groups=[[{"propertyName": "hs_object_id", "operator": "EQ",
                           "value": "={{ $('Build Identity').item.json.object_id }}"}]],
         properties_csv=ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV,
     )
-    # `search` on CRM v3, reusing `_hs_search_node` verbatim — never the node's
-    # single-record retrieval operation: n8n's V2 HubSpot node implementation (typeVersion
-    # 2.1, pinned here) still routes single-record retrieval to HubSpot's sunset
-    # /contacts/v1/... endpoint, which returns properties as {value, timestamp, ...}
-    # objects rather than the flat map every consumer downstream in this pipeline
-    # assumes — a silent corruption of every field it touches.
+    # POSTs directly to CRM v3 /crm/v3/objects/contacts/search — never the node's
+    # single-record retrieval operation: n8n's V2 HubSpot node implementation still routes
+    # single-record retrieval to HubSpot's sunset /contacts/v1/... endpoint, which returns
+    # properties as {value, timestamp, ...} objects rather than the flat map every consumer
+    # downstream in this pipeline assumes — a silent corruption of every field it touches.
     nodes.append(hs_fetch_by_id)
     nodes.append(code_node(
         "Adapt Fetch By Id", ENRICH_ADAPT_FETCH_BY_ID_CONTACT, adapt_search_x, fby))
@@ -4358,7 +4354,15 @@ def _hs_search_node(name, resource, x, y, filter_groups, properties_csv):
     silently returns responseData:undefined -> one item, json:null, status:success, no error
     — the exact live-confirmed defect (16.6-CONTEXT.md). Companies use
     _hs_http_search_node below instead, which bypasses the node's operation dispatch
-    entirely."""
+    entirely.
+
+    BUG 23 (Phase 17.01): the enrichment contacts lane's "HubSpot Search" /
+    "HubSpot Fetch By Id" also moved off this helper onto _hs_http_search_node — same
+    zero-items-on-zero-hits chain-stop hazard as BUG 10/22, just for a resource whose
+    search operation genuinely exists and works on a hit. This leaves exactly ONE call
+    site: "Dedupe Search (candidate contacts)" (wf_scheduled_maintenance_cloud.json),
+    which carries the SAME 0-item hazard and is deliberately out of that phase's fence —
+    recorded as a known, unfixed concern, not fixed here."""
     return {
         "parameters": {"resource": resource, "operation": "search",
                        "filterGroupsUi": {"filterGroupsValues": [
@@ -4403,24 +4407,43 @@ def _hs_search_json_body_expr(filter_groups, properties, limit):
     )
 
 
+_HS_SEARCH_URLS = {
+    "company": "https://api.hubapi.com/crm/v3/objects/companies/search",
+    "contact": "https://api.hubapi.com/crm/v3/objects/contacts/search",
+}
+
+
 def _hs_http_search_node(name, resource, x, y, filter_groups, properties_csv, limit=100):
     """Credential-bound httpRequest replacement for _hs_search_node's `search` operation —
-    COMPANIES ONLY (BUG 10, Phase 16.6). See _hs_search_node's docstring for the confirmed
-    mechanism: n8n's HubSpot node has no `operation: "search"` for resource:company at all,
-    so a native-node company search silently returns json:null. This POSTs directly to the
-    real CRM v3 search endpoint, bypassing the node's operation dispatch entirely — same
-    credential (predefinedCredentialType/hubspotAppToken reuses "LV HubSpot", the exact
-    credential NODE_CREDENTIAL_MAP already binds these node NAMES to), same filter/property
-    contract as _hs_search_node, so callers migrate with an identical argument list.
-    resource:contact is unaffected and stays on the native node (it has a real `search`
-    operation) — this deliberately hard-fails if ever called for anything but "company" so
-    the migration cannot silently spread to the one proven-working path."""
-    if resource != "company":
-        raise ValueError(f"_hs_http_search_node is companies-only (BUG 10) — got resource={resource!r}")
+    company and contact resources (BUG 10, Phase 16.6; BUG 23, Phase 17.01).
+
+    BUG 10 (companies): n8n's HubSpot node has no `operation: "search"` for resource:company
+    at all, so a native-node company search silently returns json:null.
+
+    BUG 23 (contacts): unlike BUG 10, `resource:contact operation:search` genuinely EXISTS
+    and genuinely returns the record on a hit — this is why every enrichment contacts
+    execution ever run (8-15, 19, all against an existing record) passed. The defect is
+    zero-hit behavior: the native node emits ZERO items on zero hits and n8n stops the
+    chain there (live-established by execution 22, BUG 22, the ingest lane) — so the node
+    is correct for half its input space and fatal for the other half, and index-aligned
+    adapters (`search[i]` / `fetched[i]`) silently misalign once an upstream row's search
+    emits no item at all.
+
+    Both resources POST directly to the real CRM v3 search endpoint, bypassing the node's
+    operation dispatch entirely — same credential (predefinedCredentialType/hubspotAppToken
+    reuses "LV HubSpot", the exact credential NODE_CREDENTIAL_MAP already binds these node
+    NAMES to), same filter/property contract as _hs_search_node, so callers migrate with an
+    identical argument list. Any resource outside this table still hard-fails, so the
+    migration cannot silently spread to a resource nobody audited."""
+    if resource not in _HS_SEARCH_URLS:
+        raise ValueError(
+            f"_hs_http_search_node has no URL mapping for resource={resource!r} "
+            f"(known: {sorted(_HS_SEARCH_URLS)})"
+        )
     props = [p.strip() for p in properties_csv.split(",") if p.strip()]
     body = _hs_search_json_body_expr(filter_groups, props, limit)
     return _http_node(
-        name, "https://api.hubapi.com/crm/v3/objects/companies/search", x, y,
+        name, _HS_SEARCH_URLS[resource], x, y,
         auth="hubspot", json_body=body,
     )
 

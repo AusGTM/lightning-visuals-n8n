@@ -131,8 +131,18 @@ UNCHANGED_WRITE_NODES = ["HubSpot Company Create"]
 # this guard was pinning byte-for-byte was a node with an EMPTY filterGroupsValues — a
 # search-by-email that searched by nothing and returned the portal's newest 100 contacts.
 # Its correct shape is now pinned by tests/test_ingest_search_contract.py instead.
+#
+# "HubSpot Search" / "HubSpot Fetch By Id" (wf_enrichment_cloud.json) were REMOVED for the
+# same reason as every entry above (BUG 23, Phase 17.01, 2026-07-29): the guard was
+# pinning a node broken for half its input space. `contact:search` really does return the
+# record on a hit — which is why the pin looked justified and why executions 8-15/19 all
+# passed — but zero hits emit zero items and n8n stops the chain there (live-established
+# by execution 22, BUG 22, the ingest lane), so `contact:create` was structurally dead:
+# the Enrichment Gate could never run for an email with no existing HubSpot record. Both
+# nodes moved to the credential-bound httpRequest envelope transport, which emits exactly
+# one item regardless of hit count. Their shape is now pinned by
+# tests/test_enrichment_contacts_search_transport.py instead.
 CONTACT_NODES_BY_WORKFLOW = {
-    "wf_enrichment_cloud.json": ["HubSpot Search", "HubSpot Fetch By Id"],
     "wf_scheduled_maintenance_cloud.json": ["Dedupe Search (candidate contacts)"],
 }
 

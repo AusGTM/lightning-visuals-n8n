@@ -95,21 +95,19 @@ def test_parse_hubspot_event_jscode_normalizes_object_type_per_claude_md_18_3():
 # --- (b) real HubSpot nodes + record-id preservation + fail-closed (review #8) -------
 
 def test_hubspot_search_node_carries_nonempty_filtergroups_and_requests_hs_object_id():
-    """Contacts only — "HubSpot Search" stays the native node (it has a real
-    resource:contact operation:search). "HubSpot Company Search" moved to a
-    credential-bound httpRequest node (BUG 10 / Phase 16.6: the native node has no
-    `operation: "search"` for resource:company); see
+    """BUG 23 (Phase 17.01): "HubSpot Search" moved off the native node onto the same
+    credential-bound httpRequest transport "HubSpot Company Search" already uses (BUG 10 /
+    Phase 16.6) — filters/properties now live in the jsonBody expression, not
+    filterGroupsUi/additionalFields. See
     test_hubspot_company_search_node_carries_nonempty_filters_and_requests_hs_object_id
-    below for its equivalent."""
+    below for the twin this test now mirrors exactly."""
     doc = _load()
     node = _node(doc, "HubSpot Search")
-    groups = node["parameters"]["filterGroupsUi"]["filterGroupsValues"]
-    assert groups, "HubSpot Search has an empty filterGroupsUi — matches no record ever"
-    filters = groups[0]["filtersUi"]["filterValues"]
-    assert filters, "HubSpot Search filter group has no filters"
-    assert "hs_object_id" in node["parameters"]["additionalFields"]["properties"], (
-        "HubSpot Search does not request hs_object_id"
+    body = node["parameters"]["jsonBody"]
+    assert "filterGroups:" in body and "filters:" in body, (
+        "HubSpot Search jsonBody has no filterGroups/filters — matches no record ever"
     )
+    assert '"hs_object_id"' in body, "HubSpot Search does not request hs_object_id"
 
 
 def test_hubspot_company_search_node_carries_nonempty_filters_and_requests_hs_object_id():
@@ -127,10 +125,9 @@ def test_hubspot_company_search_node_carries_nonempty_filters_and_requests_hs_ob
 
 def test_hubspot_search_filters_use_the_correct_identity_property():
     doc = _load()
-    contact_filter = _node(doc, "HubSpot Search")["parameters"]["filterGroupsUi"][
-        "filterGroupsValues"][0]["filtersUi"]["filterValues"][0]
-    assert contact_filter["propertyName"] == "email"
-    assert contact_filter["operator"] == "EQ"
+    contact_body = _node(doc, "HubSpot Search")["parameters"]["jsonBody"]
+    assert 'propertyName: "email"' in contact_body
+    assert 'operator: "EQ"' in contact_body
 
     company_body = _node(doc, "HubSpot Company Search")["parameters"]["jsonBody"]
     assert 'propertyName: "domain"' in company_body

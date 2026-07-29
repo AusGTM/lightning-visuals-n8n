@@ -41,6 +41,21 @@ def _load_enrichment_workflow() -> dict:
     return json.loads(ENRICHMENT_WF_PATH.read_text())
 
 
+def _hubspot_bound_node_names(workflow: dict) -> set:
+    """Same helper as tests/test_fetch_by_id_topology.py's `_hubspot_bound_node_names` —
+    copied rather than cross-imported (house convention: test files don't import each
+    other). Native n8n-nodes-base.hubspot nodes PLUS httpRequest nodes carrying
+    nodeCredentialType == hubspotAppToken (BUG 10/23: the search/fetch nodes that moved
+    off the native node reuse this credential type via a generic httpRequest node)."""
+    names = {n["name"] for n in workflow["nodes"] if n["type"] == "n8n-nodes-base.hubspot"}
+    names |= {
+        n["name"] for n in workflow["nodes"]
+        if n.get("type") == "n8n-nodes-base.httpRequest"
+        and n.get("parameters", {}).get("nodeCredentialType") == "hubspotAppToken"
+    }
+    return names
+
+
 # --- (a) purity -----------------------------------------------------------------------
 
 def test_enable_baked_flags_is_pure_input_untouched():
@@ -312,8 +327,15 @@ def test_enabled_through_real_path_and_bind_credentials_succeeds(monkeypatch):
     assert "const ALLOW_WEB_RESEARCH = false;" not in serialized
     assert "const ALLOW_SONNET_ESCALATION = false;" not in serialized
     # bind_credentials() composes with the overlay as main() does (proving composition,
-    # not just the individual pieces): every hubspot node in the captured body is bound.
-    hubspot_nodes = [n for n in body["nodes"] if n.get("type") == "n8n-nodes-base.hubspot"]
+    # not just the individual pieces): every HubSpot-credentialed node in the captured
+    # body is bound. BUG 23 (Phase 17.01): a bare `type == "n8n-nodes-base.hubspot"`
+    # filter went vacuous the moment the contacts search/fetch nodes joined companies on
+    # the httpRequest transport (BUG 10) — this is the "a guard that silently stops
+    # applying" failure mode caught before it happened. Widen the filter instead of
+    # deleting the assert, reusing the house helper
+    # (tests/test_fetch_by_id_topology.py's _hubspot_bound_node_names) rather than
+    # inventing a third variant.
+    hubspot_nodes = [n for n in body["nodes"] if n["name"] in _hubspot_bound_node_names(body)]
     assert hubspot_nodes
     for node in hubspot_nodes:
         assert "credentials" in node

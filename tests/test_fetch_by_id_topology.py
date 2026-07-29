@@ -72,7 +72,9 @@ def _strip_comments(js: str) -> str:
     return "\n".join(line for line in js.split("\n") if not line.strip().startswith("//"))
 
 
-# Per-branch config, symmetric where the two branches' shapes are symmetric.
+# Per-branch config, symmetric where the two branches' shapes are symmetric. Both branches
+# use the credential-bound httpRequest transport as of BUG 23 (Phase 17.01) — contacts
+# joined companies (BUG 10 / Phase 16.6) on the same shape, so `url` is now common to both.
 BRANCHES = {
     "contacts": {
         "identity_builder": "Build Identity",
@@ -83,6 +85,7 @@ BRANCHES = {
         "existing_gate": "Enrichment Gate",
         "resource": "contact",
         "properties_csv": ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV,
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts/search",
     },
     "companies": {
         "identity_builder": "Build Company Identity",
@@ -93,6 +96,7 @@ BRANCHES = {
         "existing_gate": "Company Gate",
         "resource": "company",
         "properties_csv": ENRICH_COMPANY_SEARCH_PROPERTIES_CSV,
+        "url": "https://api.hubapi.com/crm/v3/objects/companies/search",
     },
 }
 
@@ -130,47 +134,22 @@ def test_gate_sits_immediately_downstream_of_its_identity_builder(branch):
     )
 
 
-# --- fetch node shape: type, typeVersion, resource, operation, onError, single filter --
+# --- fetch node shape: type, typeVersion, transport, onError, filter ---------------------
 #
-# CONTACTS ONLY below (native n8n-nodes-base.hubspot — it has a real resource:contact
-# operation:search). COMPANIES moved to a credential-bound httpRequest node (BUG 10 /
-# Phase 16.6: n8n's HubSpot node has no `operation: "search"` for resource:company at all —
-# confirmed by reading CompanyDescription.ts's companyOperations option list, which has no
-# "search" entry, only create/delete/get/getAll/getRecentlyCreatedUpdated/searchByDomain/
-# update; the native node silently returned json:null live). See
-# test_company_fetch_node_is_credential_bound_httprequest_filtered_on_hs_object_id below
-# for the companies-shape equivalent, and tests/test_bug10_company_search_transport.py for
-# the full guard.
+# BOTH branches use the credential-bound httpRequest transport as of BUG 23 (Phase 17.01):
+# companies moved first (BUG 10 / Phase 16.6: n8n's HubSpot node has no
+# `operation: "search"` for resource:company at all — confirmed by reading
+# CompanyDescription.ts's companyOperations option list, which has no "search" entry, only
+# create/delete/get/getAll/getRecentlyCreatedUpdated/searchByDomain/update; the native node
+# silently returned json:null live). Contacts joined it for a different reason: its native
+# `operation: "search"` genuinely exists and genuinely returns the record on a hit, but
+# emits ZERO items on zero hits and n8n stops the chain there (live-established by
+# execution 22, BUG 22) — see tests/test_enrichment_contacts_search_transport.py for the
+# full guard, and tests/test_bug10_company_search_transport.py for the companies guard.
 
-def test_fetch_node_is_a_native_hubspot_search_filtered_on_hs_object_id():
-    cfg = BRANCHES["contacts"]
-    doc = _load()
-    node = _node(doc, cfg["fetch_node"])
-    assert node["type"] == "n8n-nodes-base.hubspot"
-    assert node["typeVersion"] == 2.1
-    assert node["onError"] == "continueRegularOutput"
-    params = node["parameters"]
-    assert params["resource"] == cfg["resource"]
-    assert params["operation"] == "search", (
-        f"{cfg['fetch_node']} must use the search operation, never the legacy single-record "
-        "retrieval operation (RESEARCH: that operation routes to HubSpot's sunset "
-        "v1/legacy-v2 endpoints and returns a non-flat {value,timestamp} shape)"
-    )
-    groups = params["filterGroupsUi"]["filterGroupsValues"]
-    assert len(groups) == 1, f"{cfg['fetch_node']} must carry exactly one filter group"
-    filters = groups[0]["filtersUi"]["filterValues"]
-    assert len(filters) == 1, f"{cfg['fetch_node']} must carry exactly one filter"
-    f = filters[0]
-    assert f["propertyName"] == "hs_object_id"
-    assert f["operator"] == "EQ"
-    assert cfg["identity_builder"] in f["value"], (
-        f"{cfg['fetch_node']}'s filter value must name its own branch's identity builder "
-        f"({cfg['identity_builder']!r}) by node name"
-    )
-
-
-def test_company_fetch_node_is_credential_bound_httprequest_filtered_on_hs_object_id():
-    cfg = BRANCHES["companies"]
+@pytest.mark.parametrize("branch", ["contacts", "companies"])
+def test_fetch_node_is_credential_bound_httprequest_filtered_on_hs_object_id(branch):
+    cfg = BRANCHES[branch]
     doc = _load()
     node = _node(doc, cfg["fetch_node"])
     assert node["type"] == "n8n-nodes-base.httpRequest"
@@ -178,7 +157,7 @@ def test_company_fetch_node_is_credential_bound_httprequest_filtered_on_hs_objec
     assert node["onError"] == "continueRegularOutput"
     params = node["parameters"]
     assert params["method"] == "POST"
-    assert params["url"] == "https://api.hubapi.com/crm/v3/objects/companies/search"
+    assert params["url"] == cfg["url"]
     assert params["authentication"] == "predefinedCredentialType"
     assert params["nodeCredentialType"] == "hubspotAppToken"
     body = params["jsonBody"]
@@ -230,15 +209,13 @@ def test_company_fetch_by_id_properties_are_identical_to_the_company_search_prop
     assert fetch_props == search_props == _csv_to_list(ENRICH_COMPANY_SEARCH_PROPERTIES_CSV)
 
 
-def test_fetch_node_properties_match_expected():
-    cfg = BRANCHES["contacts"]
-    doc = _load()
-    node = _node(doc, cfg["fetch_node"])
-    assert node["parameters"]["additionalFields"]["properties"] == _csv_to_list(cfg["properties_csv"])
-
-
-def test_company_fetch_node_properties_match_expected():
-    cfg = BRANCHES["companies"]
+# BUG 23 (Phase 17.01): contacts joined companies on the httpRequest jsonBody transport, so
+# the two branches' property checks merge into one parametrized test using the SAME
+# extractor (previously contacts read additionalFields.properties directly, since the
+# native node carried a separate field for it).
+@pytest.mark.parametrize("branch", ["contacts", "companies"])
+def test_fetch_node_properties_match_expected(branch):
+    cfg = BRANCHES[branch]
     doc = _load()
     node = _node(doc, cfg["fetch_node"])
     body_props = _extract_json_body_properties(node["parameters"]["jsonBody"])
@@ -259,23 +236,26 @@ def test_adapter_converges_on_the_existing_gate(branch):
     )
 
 
-# --- the generic guard: every HubSpot node uses an allowed operation --------------------
+# --- the generic guard: no native HubSpot node remains in this workflow ----------------
+#
+# BUG 23 (Phase 17.01): this used to be a mechanical guard against the legacy
+# single-record retrieval operation, over EVERY n8n-nodes-base.hubspot node in the built
+# workflow — not just the two new fetch nodes. It is now VACUOUS for wf_enrichment_cloud
+# .json: the contacts transport swap left zero native n8n-nodes-base.hubspot nodes in this
+# workflow (companies moved in Phase 16.6), so there is nothing left for an
+# operation-allowlist to check. Loosening/deleting it would silently stop catching a
+# future regression; instead it asserts the stronger fact directly — the reason the
+# allowlist mattered in the first place (RESEARCH Pitfall 1: the legacy single-record
+# retrieval operation routes to a sunset endpoint with a non-flat property shape) no
+# longer applies here because the operation-dispatching node type itself is gone.
 
-def test_every_hubspot_node_uses_an_allowed_operation():
-    """Mechanical guard against the legacy single-record retrieval operation, over EVERY
-    n8n-nodes-base.hubspot node in the built workflow — not just the two new fetch nodes.
-    A future HubSpot node added anywhere in this workflow with an operation outside this
-    set fails here, whether or not its author remembered RESEARCH Pitfall 1."""
+def test_no_native_hubspot_node_remains_in_the_workflow():
     doc = _load()
-    ALLOWED = {"search", "create", "update"}
-    offenders = []
-    for n in doc["nodes"]:
-        if n["type"] != "n8n-nodes-base.hubspot":
-            continue
-        op = n["parameters"].get("operation")
-        if op not in ALLOWED:
-            offenders.append((n["name"], op))
-    assert not offenders, f"HubSpot node(s) using a disallowed operation: {offenders}"
+    native = [n["name"] for n in doc["nodes"] if n["type"] == "n8n-nodes-base.hubspot"]
+    assert not native, (
+        f"wf_enrichment_cloud.json still contains native n8n-nodes-base.hubspot node(s): "
+        f"{native} — BUG 23's fix requires zero native HubSpot nodes in this workflow"
+    )
 
 
 # --- node-name row recovery (bd682a2 guard), stated structurally -----------------------
@@ -352,9 +332,16 @@ def test_every_hubspot_node_in_the_enrichment_workflow_is_registered_and_bound_t
         )
 
 
-def test_the_httprequest_hubspot_sweep_actually_finds_the_two_company_search_nodes():
+def test_the_httprequest_hubspot_sweep_actually_finds_all_four_search_nodes():
     """Vacuity guard for the widened sweep above: proves the httpRequest half of
-    _hubspot_bound_node_names actually fires, not just the (unchanged) native half."""
+    _hubspot_bound_node_names actually fires. BUG 23 (Phase 17.01) widened this from the
+    two company search nodes to all four — the native half is now permanently empty for
+    this workflow (test_no_native_hubspot_node_remains_in_the_workflow), so every
+    HubSpot-credentialed node this sweep can possibly find arrives via the httpRequest
+    branch."""
     doc = _load()
     names = _hubspot_bound_node_names(doc)
-    assert {"HubSpot Company Search", "HubSpot Company Fetch By Id"} <= names
+    assert {
+        "HubSpot Search", "HubSpot Fetch By Id",
+        "HubSpot Company Search", "HubSpot Company Fetch By Id",
+    } <= names

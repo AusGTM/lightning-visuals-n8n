@@ -134,44 +134,21 @@
     },
     {
       "parameters": {
-        "resource": "contact",
-        "operation": "search",
-        "filterGroupsUi": {
-          "filterGroupsValues": [
-            {
-              "filtersUi": {
-                "filterValues": [
-                  {
-                    "propertyName": "email",
-                    "operator": "EQ",
-                    "value": "={{ $json.identity_keys.email }}"
-                  }
-                ]
-              }
-            }
-          ]
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts/search",
+        "options": {
+          "timeout": 20000
         },
-        "additionalFields": {
-          "properties": [
-            "email",
-            "firstname",
-            "lastname",
-            "jobtitle",
-            "phone",
-            "mobilephone",
-            "hs_object_id",
-            "lv_jobtitle_verified_at",
-            "lv_mobilephone_verified_at",
-            "seniority",
-            "lv_contact_enrichment_provenance"
-          ]
-        },
-        "authentication": "appToken"
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"email\", operator: \"EQ\", value: $json.identity_keys.email } ] } ], properties: [\"email\", \"firstname\", \"lastname\", \"jobtitle\", \"phone\", \"mobilephone\", \"hs_object_id\", \"lv_jobtitle_verified_at\", \"lv_mobilephone_verified_at\", \"seniority\", \"lv_contact_enrichment_provenance\"], limit: 100 }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "hs00100000-0000-4000-8000-000000000000",
+      "id": "h00100000-0000-4000-8000-000000000000",
       "name": "HubSpot Search",
-      "type": "n8n-nodes-base.hubspot",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         1320,
         300
@@ -239,46 +216,21 @@
     },
     {
       "parameters": {
-        "resource": "contact",
-        "operation": "search",
-        "filterGroupsUi": {
-          "filterGroupsValues": [
-            {
-              "filtersUi": {
-                "filterValues": [
-                  {
-                    "propertyName": "hs_object_id",
-                    "operator": "EQ",
-                    "value": "={{ $('Build Identity').item.json.object_id }}"
-                  }
-                ]
-              }
-            }
-          ]
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts/search",
+        "options": {
+          "timeout": 20000
         },
-        "additionalFields": {
-          "properties": [
-            "email",
-            "firstname",
-            "lastname",
-            "jobtitle",
-            "phone",
-            "mobilephone",
-            "hs_object_id",
-            "lv_jobtitle_verified_at",
-            "lv_mobilephone_verified_at",
-            "seniority",
-            "lv_contact_enrichment_provenance",
-            "company",
-            "lv_linkedin_url"
-          ]
-        },
-        "authentication": "appToken"
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"hs_object_id\", operator: \"EQ\", value: $('Build Identity').item.json.object_id } ] } ], properties: [\"email\", \"firstname\", \"lastname\", \"jobtitle\", \"phone\", \"mobilephone\", \"hs_object_id\", \"lv_jobtitle_verified_at\", \"lv_mobilephone_verified_at\", \"seniority\", \"lv_contact_enrichment_provenance\", \"company\", \"lv_linkedin_url\"], limit: 100 }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "hs00150000-0000-4000-8000-000000000000",
+      "id": "h00150000-0000-4000-8000-000000000000",
       "name": "HubSpot Fetch By Id",
-      "type": "n8n-nodes-base.hubspot",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         1320,
         500
