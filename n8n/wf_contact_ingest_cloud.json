@@ -198,7 +198,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// Decide Action \u2014 CLOUD variant.\n// Computes action + the HubSpot property patch, then the IF nodes route to the\n// real HubSpot update/create (gated) / Set review nodes.\n// Phase 15: this is the SINGLE serialization point for the provenance blob \u2014 the\n// stamper (mergeContacts.js) returns the parsed provenance object, never a string.\nfunction _sortedForStringify(v) {\n  if (Array.isArray(v)) return v.map(_sortedForStringify);\n  if (v !== null && typeof v === \"object\") {\n    const out = {};\n    for (const k of Object.keys(v).sort()) out[k] = _sortedForStringify(v[k]);\n    return out;\n  }\n  return v;\n}\nfunction _stableStringify(v) { return JSON.stringify(_sortedForStringify(v)); }\nfunction _buildContactPatch(merge) {\n  if (!merge) return {};\n  const patch = { ...merge.canonicalPatch, ...(merge.cacheKeys || {}) };\n  if (merge.provenance && Object.keys(merge.provenance).length) {\n    patch.lv_contact_enrichment_provenance = _stableStringify(merge.provenance).slice(0, 60000);\n  }\n  return patch;\n}\n\nreturn $input.all().map((it) => {\n  const row = it.json;\n  const id = row.identity || {};\n  const outcome = id.outcome || \"rejected\";\n  const allow_create = row.allow_create === true;\n  const properties = _buildContactPatch(row.merge);\n  let action;\n  if (outcome === \"match\") action = \"update\";\n  else if (outcome === \"net_new\") action = allow_create ? \"create\" : \"review\";\n  else if (outcome === \"ambiguous\") action = \"review\";\n  else action = \"skip\";\n  return { json: {\n    action,\n    outcome,\n    contact_id: id.contact_id || null,\n    reason: id.reason || row.reject_reason || null,\n    email_status: row.email_status || null,\n    properties\n  }};\n});\n"
+        "jsCode": "// Decide Action \u2014 CLOUD variant.\n// Computes action + the HubSpot property patch, then the IF nodes route to the\n// real HubSpot update/create (gated) / Set review nodes.\n// Phase 15: this is the SINGLE serialization point for the provenance blob \u2014 the\n// stamper (mergeContacts.js) returns the parsed provenance object, never a string.\nfunction _sortedForStringify(v) {\n  if (Array.isArray(v)) return v.map(_sortedForStringify);\n  if (v !== null && typeof v === \"object\") {\n    const out = {};\n    for (const k of Object.keys(v).sort()) out[k] = _sortedForStringify(v[k]);\n    return out;\n  }\n  return v;\n}\nfunction _stableStringify(v) { return JSON.stringify(_sortedForStringify(v)); }\nfunction _buildContactPatch(merge) {\n  if (!merge) return {};\n  const patch = { ...merge.canonicalPatch, ...(merge.cacheKeys || {}) };\n  if (merge.provenance && Object.keys(merge.provenance).length) {\n    patch.lv_contact_enrichment_provenance = _stableStringify(merge.provenance).slice(0, 60000);\n  }\n  return patch;\n}\n\nreturn $input.all().map((it) => {\n  const row = it.json;\n  const id = row.identity || {};\n  const outcome = id.outcome || \"rejected\";\n  const allow_create = row.allow_create === true;\n  const properties = _buildContactPatch(row.merge);\n  let action;\n  if (outcome === \"match\") action = \"update\";\n  else if (outcome === \"net_new\") action = allow_create ? \"create\" : \"review\";\n  else if (outcome === \"ambiguous\") action = \"review\";\n  else action = \"skip\";\n  return { json: {\n    action,\n    outcome,\n    // BUG 16: this lane historically emitted only `contact_id`, while the write nodes and\n    // the write-safety gates spliced in Phase 16.10 both read `hs_object_id` \u2014 so the\n    // gates evaluated _writeSafetyAllows(action, null, null) and denied unconditionally,\n    // whatever the allowlist said. Emitting both converges this lane on the same row\n    // contract the enrichment lane uses. `contact_id` is retained: Resolve Identity and\n    // the response path still read it.\n    contact_id: id.contact_id || null,\n    hs_object_id: id.contact_id || null,\n    reason: id.reason || row.reject_reason || null,\n    email_status: row.email_status || null,\n    properties\n  }};\n});\n"
       },
       "id": "c00140000-0000-4000-8000-000000000000",
       "name": "Decide Action",
@@ -242,16 +242,21 @@
     },
     {
       "parameters": {
-        "resource": "contact",
-        "operation": "update",
-        "contactId": "={{ $json.contact_id }}",
-        "updateFields": {},
-        "authentication": "appToken"
+        "method": "PATCH",
+        "url": "=https://api.hubapi.com/crm/v3/objects/contacts/{{ $json.hs_object_id }}",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ properties: $json.properties }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "hu00170000-0000-4000-8000-000000000000",
+      "id": "h00170000-0000-4000-8000-000000000000",
       "name": "HubSpot Update",
-      "type": "n8n-nodes-base.hubspot",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         3300,
         180
@@ -290,16 +295,21 @@
     },
     {
       "parameters": {
-        "resource": "contact",
-        "operation": "create",
-        "email": "={{ $json.properties.email }}",
-        "additionalFields": {},
-        "authentication": "appToken"
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ properties: $json.properties }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "hc00200000-0000-4000-8000-000000000000",
+      "id": "h00200000-0000-4000-8000-000000000000",
       "name": "HubSpot Create",
-      "type": "n8n-nodes-base.hubspot",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         3520,
         280

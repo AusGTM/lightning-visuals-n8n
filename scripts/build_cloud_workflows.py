@@ -346,7 +346,14 @@ return $input.all().map((it) => {
   return { json: {
     action,
     outcome,
+    // BUG 16: this lane historically emitted only `contact_id`, while the write nodes and
+    // the write-safety gates spliced in Phase 16.10 both read `hs_object_id` — so the
+    // gates evaluated _writeSafetyAllows(action, null, null) and denied unconditionally,
+    // whatever the allowlist said. Emitting both converges this lane on the same row
+    // contract the enrichment lane uses. `contact_id` is retained: Resolve Identity and
+    // the response path still read it.
     contact_id: id.contact_id || null,
+    hs_object_id: id.contact_id || null,
     reason: id.reason || row.reject_reason || null,
     email_status: row.email_status || null,
     properties
@@ -560,23 +567,17 @@ def build_cloud():
     x += 220
     if_update = _if_node("IF Update", "update", x, y)
     nodes.append(if_update)
-    hs_update = {
-        "parameters": {"resource": "contact", "operation": "update",
-                       "contactId": "={{ $json.contact_id }}", "updateFields": {}},
-        "id": nid("hu"), "name": "HubSpot Update",
-        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [x + 220, y - 120],
-    }
-    nodes.append(hs_update)
+    # BUG 11/13 reached wf_enrichment_cloud.json only; this lane kept the original
+    # empty-field-map defect until 2026-07-29. Now on the same credential-bound PATCH node,
+    # reading `hs_object_id` which Decide Action emits as of the BUG 16 fix above.
+    nodes.append(_hs_http_patch_node("HubSpot Update", "contacts", x + 220, y - 120))
 
     if_create = _if_node("IF Create", "create", x + 220, y + 60)
     nodes.append(if_create)
-    hs_create = {
-        "parameters": {"resource": "contact", "operation": "create",
-                       "email": "={{ $json.properties.email }}", "additionalFields": {}},
-        "id": nid("hc"), "name": "HubSpot Create",
-        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [x + 440, y - 20],
-    }
-    nodes.append(hs_create)
+    # Same BUG 13 shape as the enrichment lane's create node: `additionalFields: {}`
+    # discarded the patch, and `$json.properties.email` can never resolve because `email`
+    # is manual_protected and never promotes into the patch.
+    nodes.append(_hs_http_create_node("HubSpot Create", "contacts", x + 440, y - 20))
 
     set_review = {
         "parameters": {"assignments": {"assignments": [
@@ -4192,7 +4193,12 @@ return $input.all().map((it) => {
   const row = it.json;
   const candidateJson = row.lv_enrichment_review_candidate_json || "[]";
   const result = reviewApply(candidateJson, row);
-  return { json: { hs_object_id: row.hs_object_id, ...result } };
+  // BUG 11/16: `Review Apply Update` shipped `updateFields: {}` and wrote nothing. The
+  // patch to apply is canonicalPatch + clearPatch; expose it as `properties` so this lane
+  // carries the same row contract as the enrichment lane and can use the shared
+  // credential-bound PATCH node.
+  const properties = { ...(result.canonicalPatch || {}), ...(result.clearPatch || {}) };
+  return { json: { hs_object_id: row.hs_object_id, ...result, properties } };
 });
 """
 
@@ -4616,11 +4622,7 @@ def build_scheduled_maintenance_cloud():
     # httpRequest PATCH that DOES carry the computed patch. This node
     # ("Review Apply Update", in the separate scheduled-maintenance workflow) is
     # explicitly OUT of that fix's scope and keeps its placeholder status.
-    review_apply_update = {
-        "parameters": {"resource": "company", "operation": "update",
-                       "companyId": "={{ $json.hs_object_id }}", "updateFields": {}},
-        "id": nid("hu"), "name": "Review Apply Update",
-        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [x4, y4 + 100]}
+    review_apply_update = _hs_http_patch_node("Review Apply Update", "companies", x4, y4 + 100)
     nodes.append(review_apply_update)
 
     conns.update(chain([review_trigger["name"], review_search["name"], "Review Extract Rows",
