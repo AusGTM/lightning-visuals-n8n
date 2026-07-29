@@ -311,7 +311,10 @@ item-error mapping on a failed fetch.
   5. After both canaries, the deployment is restored to its disarmed state and read back from the
      live n8n instance to confirm no write gate was left armed.
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+- [ ] 17-01-PLAN.md — Transport swap + pin removal + harness reachability (offline, no live call)
+- [ ] 17-02-PLAN.md — Dual live canary: match-path regression (A) + create-path reachability (B), restored disarmed
 
 ### Phase 18: Normalization & Copy-Loop Fixes
 
