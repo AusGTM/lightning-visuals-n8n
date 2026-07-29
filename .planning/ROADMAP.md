@@ -675,15 +675,15 @@ Everything else the write path touches exists (`lv_enrichment_needs_review`, `lv
 
 **Still open**: `company:create` has never run live. Both inactive workflows remain entirely live-untested beyond their gates.
 
-**BUG 11 / BUG 13 are PARTIALLY UNFIXED — found by the 16.9 verifier, 2026-07-29.** Both fixes were applied to `wf_enrichment_cloud.json` only. Three write nodes elsewhere still carry the original empty-field-map defect and would write nothing (or, for the create, send an expression that never resolves):
+**BUG 11 / BUG 13 scope gap — found by the 16.9 verifier, FIXED 2026-07-29 (`6d2565c`).** Both fixes had reached `wf_enrichment_cloud.json` only; three write nodes elsewhere still shipped an empty field map. All three now use the shared credential-bound `_hs_http_patch_node` / `_hs_http_create_node`.
 
-| workflow | node | defect | bug |
-|---|---|---|---|
-| `wf_scheduled_maintenance_cloud.json` | `Review Apply Update` | `updateFields: {}` | 11 (3rd instance) |
-| `wf_contact_ingest_cloud.json` | `HubSpot Update` | `updateFields: {}` | 11 (4th instance) |
-| `wf_contact_ingest_cloud.json` | `HubSpot Create` | `additionalFields: {}` + `email: $json.properties.email`, which the Decide output never carries | 13 |
+Fixing them required more than reuse. Three lanes had drifted to three different row contracts — enrichment (`hs_object_id` + `properties`), contact ingest (`contact_id` + `properties`), review (`hs_object_id` + `canonicalPatch`/`clearPatch`, no `properties` key). Dropping the helpers in unchanged would have produced `PATCH /contacts/undefined` on one lane and `{"properties": undefined}` on the other — the BUG 13 failure mode in two new places. Resolved by converging the contracts (contact ingest now also emits `hs_object_id`; the review lane now also emits `properties`) rather than parameterising the helpers.
 
-Both workflows are INACTIVE and all three nodes are now behind write-safety gates (16.10), so there is no live exposure — but a gate prevents an unauthorised write, it does not make a broken write work. The earlier claims that BUG 11 and BUG 13 were "fixed" were scoped to the enrichment workflow and should be read that way.
+**BUG 16, introduced in 16.10 and closed by the same commit.** The write gates spliced into contact ingest read `$json.hs_object_id`, which that lane never emitted, so `_writeSafetyAllows(action, null, null)` denied **unconditionally regardless of the allowlist** — a wall, not a gate. Fail-closed and never a live risk, but silent about why. It closes as a consequence of the contract convergence.
+
+`tests/test_write_lane_contracts.py` now guards the whole family generically across every cloud workflow: a write node may only read fields its lane emits, a gate's id expression must be satisfiable by the lane, and no write node may ship an empty field map. Non-vacuity was proven by re-running the predicates against the pre-fix artifacts from git, not assumed — the extractor had been loosened twice during development.
+
+Still native (correctly — they carry populated `updateFields`, so they are not the BUG 11 shape): `SJ-1 Set Requested`, `SJ-2 Set Requested`, `Dedupe Set Needs Review`. None has ever run live.
 
 ## Milestone 3 Progress
 
@@ -704,5 +704,5 @@ Both workflows are INACTIVE and all three nodes are now behind write-safety gate
 | 16.6. Companies Search Transport Fix (INSERTED) | 1/1 | **gaps_found** (verified 2026-07-29) — criterion 7 VERIFIED LIVE (execution 12, non-null Merge Company); criterion 1 PARTIAL — only 1 of 6 search nodes has actually executed live, the other 5 are deployed-but-unrun | — |
 | 16.7. Write-Path Canary (INSERTED) | 2/2 | **Complete** — first HubSpot write in project history; protected fields provably survived it; rolled back | 2026-07-29 |
 | 16.8. Row-Carry Fix (BUG 12) (INSERTED) | 1/1 | **Complete** — Set node replaced with a row-spreading Code node; verified live (execution 15) | 2026-07-29 |
-| 16.9. Create-Path Fix (BUG 13) + Company Writes (INSERTED) | 1/1 | **gaps_found** (verified 2026-07-29) — `company:update` verified live and BUG 14 resolved, but SC-2 (schema guard) and SC-4 (`company:create` live) unmet, and BUG 13's fix did NOT reach `wf_contact_ingest_cloud.json` | — |
+| 16.9. Create-Path Fix (BUG 13) + Company Writes (INSERTED) | 1/1 | **gaps_found** (verified 2026-07-29) — `company:update` verified live and BUG 14 resolved; the BUG 13 scope gap is now CLOSED (`6d2565c`), SC-2 (schema guard) and SC-4 (`company:create` live) remain unmet | — |
 | 16.10. Write-Gate Coverage (BUG 15) + Live Escalation (INSERTED) | 1/1 | **Complete** — six ungated writes gated; Sonnet escalation exercised live (execution 18), judge adjudicated a real conflict and refused to promote the contested field | 2026-07-29 |
