@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v0.4
 milestone_name: Reachability & Verification Debt
-current_phase: 18
-current_phase_name: normalization-copy-loop-fixes
-status: in_progress
-stopped_at: Completed 18-03-PLAN.md (GAP 1/GAP 2 producers landed; both copy-loop gaps closed end-to-end)
-last_updated: "2026-07-29T09:20:50.243Z"
+current_phase: 19
+current_phase_name: Verification Debt Closure
+status: planning
+stopped_at: Completed 18-03-PLAN.md (GAP 1/GAP 2 producers landed; both copy-loop gaps closed end-to-end; phase 18 fully executed)
+last_updated: "2026-07-29T09:28:27.348Z"
 last_activity: 2026-07-29
-last_activity_desc: Phase 18 gap-closure plan 18-03 executed; both COPY-01/COPY-02 gaps closed end-to-end
+last_activity_desc: Phase 18 complete, transitioned to Phase 19
 progress:
   total_phases: 3
   completed_phases: 2
@@ -28,17 +28,17 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 
 ## Current Position
 
-Phase: 18 (normalization-copy-loop-fixes) — COMPLETE (all 3 plans executed, both verification gaps closed end-to-end)
-Plan: 18-01 (NORM-01, wave 1) — complete (`ae46e63`/`d54ed27`/`8d42d9a`); 18-02 (COPY-01/COPY-02 wiring, wave 2) — complete (`1942ad4`/`5052b66`/`c1aefef`/`5dc5137`/`57b5eb2`/`dfb31c8`); 18-03 (COPY-01/COPY-02 producers, gap closure) — complete (`a757e52`/`371fe9d`/`b9a6394`/`bd515e7`/`08b6695`/`a45c662`/`d251880`)
-Status: NORM-01/COPY-01/COPY-02 all wired AND now producer-complete, proven red-before-green through the COMPILED node bodies against RECORDED fixtures (never a hand-constructed test row). 18-VERIFICATION.md's SC-3/SC-4 gaps (CR-01 Critical, WR-01 Warning in 18-REVIEW.md) are closed: the Claude web-research prompt now asks for `lv_sponsorship_reliant` and survives the frozen validator into `research_candidate.data`; a new `_personaGroup()` provider-mapper producer in `normalizeProviders.js` emits `lv_persona_group` from Apollo's/Lusha's own department fields. Full offline suite 596 pytest / 309 node, 0 regressions vs the 596/298 floor; the frozen companies node-body guard (`Build Research Request`, cloud + local_live) was re-baselined a second time under a bounded, recorded diff in its own isolated commit, then confirmed the separate WR-01 CSV edit moved zero further frozen pairs. Honest scope limits recorded (not a clean sweep): sponsorship only populates on research-gated, research-enabled rows; persona's only realistic live producer today is Apollo (Lusha's branch exists but has only ever matched the "Other" non-signal live value; ZoomInfo has no producer). See `18-03-SUMMARY.md`.
-Last activity: 2026-07-29 — Phase 18 gap-closure plan 18-03 executed; both COPY-01/COPY-02 gaps closed end-to-end
+Phase: 19 — Verification Debt Closure
+Plan: Not started
+Status: Ready to plan
+Last activity: 2026-07-29 — Phase 18 complete, transitioned to Phase 19
 Next: plan the next phase in Milestone v0.4 (Phase 19: Verification Debt Closure)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 0
+- Total plans completed: 4
 - Average duration: —
 - Total execution time: —
 
@@ -47,6 +47,7 @@ Next: plan the next phase in Milestone v0.4 (Phase 19: Verification Debt Closure
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 4 | 1 | ~10m | ~10m |
+| 18 | 3 | - | - |
 
 **Recent Trend:**
 
