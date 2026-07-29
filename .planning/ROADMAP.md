@@ -537,8 +537,18 @@ Plans:
 
 Plans:
 - [x] 16.5-01-PLAN.md — deploy-time research/escalation overlay (pure, fail-closed), enabled-build invariants, and the offline oracle predicting both live lanes (COMPLETE 2026-07-28, see 16.5-01-SUMMARY.md)
-- [ ] 16.5-02-PLAN.md — LIVE: deploy enabled, fire contact 201, inspect node-by-node to a non-null merge at `Merge Winners`, restore to disabled (criterion 7)
-- [ ] 16.5-03-PLAN.md — LIVE: fire a real company record to verify the literal `bd682a2` at `Merge Company`, restore to disabled, close the phase record
+- [x] 16.5-02-PLAN.md — LIVE: contact 201, research→judge lane executed, row survived every HTTP hop to a non-null `Merge Winners` (COMPLETE 2026-07-28, criterion 7 MET for contacts)
+- [x] 16.5-03-PLAN.md — LIVE: BLOCKED on the night by BUG 10; the literal `bd682a2` at `Merge Company` was subsequently verified live on 2026-07-29 in the Phase 16.7 armed window (execution 12) once BUG 10 was fixed. See `.planning/phases/16.7-write-path-canary/16.7-02-SUMMARY.md`.
+
+**CLOSED 2026-07-29. Outcome against the seven criteria:**
+
+  1. **MET** — committed JSON still carries both flags `false`, asserted by `tests/test_enabled_build_invariants.py`.
+  2. **MET** — `ENABLE_BAKED_FLAGS` is an explicit operator act with a name deliberately distinct from the `.env`-resident `ALLOW_WEB_RESEARCH`/`ALLOW_SONNET_ESCALATION`, so a routine rebuild from a developer machine cannot arm production. Deterministic rebuild preserved.
+  3. **MET** — `enable_baked_flags()` is pure and deep-copying, and fails closed via a post-rewrite re-scan. Widened on 2026-07-29 (`7f0dce4`) to cover the write-safety and value-bearing allowlist flags, with the same contract.
+  4. **MET** — zero `$env`/`$vars` in every deployed body, re-verified by API read-back on 2026-07-29.
+  5. **MET** — cost caps unchanged at 10/10 through every armed window, and arming research provably did not arm writes (they are separate overlay entries, and enabling writes without an allowlist is now refused outright).
+  6. **MET** — suite has grown 422 → 533 pytest and 272 → 278 node with zero regressions.
+  7. **MET, both branches.** Contacts mirror verified live 2026-07-28 (`Merge Winners` non-null). The LITERAL companies `bd682a2` verified live 2026-07-29, execution 12 — `Merge Company` merge non-null after BUG 10's transport fix. The planning note's caveat is discharged: the literal fix is no longer live-unverified.
 
 ### Phase 16.6: Companies Search Transport Fix
 
@@ -625,7 +635,7 @@ Plans:
 | 16.2. Contacts Research + Judge Mirror (INSERTED) | 2/2 | Complete | 2026-07-24 |
 | 16.3. Companies Stale-Timestamp Fix (INSERTED) | 1/1 | Complete | 2026-07-28 |
 | 16.4. Fetch-By-ObjectId (INSERTED) | 2/2 | Complete | 2026-07-28 |
-| 16.5. Deliberate Research/Escalation Enablement (INSERTED) | 2/3 | Partial — contacts research VERIFIED live; companies blocked by BUG 10 | 2026-07-28 |
+| 16.5. Deliberate Research/Escalation Enablement (INSERTED) | 3/3 | **Complete** — all 7 criteria met; criterion 7 verified on BOTH branches (companies closed 2026-07-29 via 16.7) | 2026-07-29 |
 | 16.6. Companies Search Transport Fix (INSERTED) | 1/1 | **Complete** — criteria 1 & 7 VERIFIED LIVE (execution 12, non-null Merge Company) | 2026-07-29 |
 | 16.7. Write-Path Canary (INSERTED) | 2/2 | **Complete** — first HubSpot write in project history; protected fields provably survived it; rolled back | 2026-07-29 |
 | 16.8. Row-Carry Fix (BUG 12) (INSERTED) | 1/1 | **Complete** — Set node replaced with a row-spreading Code node; verified live (execution 15) | 2026-07-29 |
