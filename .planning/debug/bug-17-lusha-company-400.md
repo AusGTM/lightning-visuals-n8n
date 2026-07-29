@@ -1,8 +1,35 @@
 ---
-status: root_caused_not_fixed
+status: resolved
 created: 2026-07-29
+resolved: 2026-07-29
+resolved_by: "61988dd — fix: BUG 17 — Lusha company enrichment, live-probed contract"
 found_by: "Live canary execution 19 (first ever run of HubSpot Company Search, all providers)"
 ---
+
+## Resolution (2026-07-29, commit `61988dd`)
+
+Contract re-probed live against `racingnsw.com.au`:
+
+- `GET /v2/company?domain=` → `200 { data:{...}, meta:{} }` — this is the shape `lushaCandidates()`
+  already unwraps.
+- `domain` is the ONLY accepted query property. `?domain=&companyName=` 400s with
+  `"property companyName should not exist"` — the exact mirror of the old POST body's
+  `"property domain should not exist"`. So `companyName` stays out of the URL and lives on in
+  `identity_keys` for Apollo/ZoomInfo.
+- A `POST {companies:[{id,domain}]}` envelope also succeeds (mirroring `/v2/person`), but returns an
+  id-keyed map `lushaCandidates()` does not unwrap. Not used.
+
+`Lusha Company` is now a GET consuming the prebuilt `lusha_company_url` (which nothing consumed
+before). Both halves of the bug — the ignored URL and the URL's own bad `companyName` param — are
+covered by tests: `tests/test_cloud_companies_branch.py:199` (node method/URL) and `:221` (the
+builder line), plus `tests/test_provider_gate_topology.py:362` (method-mismatch guard).
+
+Company enrichment now runs on three providers. Historical scores computed before this commit were
+Apollo + ZoomInfo only; the franchise/subsidiary conflict detector was comparing two sources where it
+should have compared three.
+
+**Still open (spun out, not a BUG 17 regression):** the "Related observation" below — ZoomInfo's
+numeric `industry: "71"` winning a text field is a normalization gap with no ticket yet.
 
 # BUG 17 — Lusha company enrichment has never worked, and the failure is invisible
 
