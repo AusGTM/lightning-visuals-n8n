@@ -275,7 +275,7 @@ continues from 16.10 — this milestone starts at Phase 17.
 ## Phases
 
 - [x] **Phase 17: Enrichment Contacts Reachability (BUG 23)** - Transport swap on `HubSpot Search` + `HubSpot Fetch By Id` makes `contact:create` reachable, byte-identical pin dropped for both nodes, dual live canary (match regression + no-match reachability) proves it, deployment restored disarmed
-- [ ] **Phase 18: Normalization & Copy-Loop Fixes** - Numeric provider industry codes stop winning the waterfall over text; `lv_sponsorship_reliant` and `persona_group`/`lv_persona_group` stop being permanently empty
+- [x] **Phase 18: Normalization & Copy-Loop Fixes** - Numeric provider industry codes stop winning the waterfall over text; `lv_sponsorship_reliant` and `persona_group`/`lv_persona_group` stop being permanently empty
 - [ ] **Phase 19: Verification Debt Closure** - The six `/gsd-verify-work` re-runs carried from the v0.3 goal ledger are executed and their outcomes recorded
 
 ## Phase Details
@@ -356,14 +356,14 @@ transport definitions; this phase touches the merge-call construction for `ENRIC
      (596 pytest / 285 node, measured 2026-07-29 — the "587" figure above predates Phase 17), and
      the workflow builder is deterministic (rebuild twice, no diff).
 
-**Plans**: 2 plans
+**Plans**: 2/2 plans executed
 **Wave 1**
 
-- [ ] 18-01-PLAN.md — NORM-01: `_industryText` helper stops any numeric NAICS code becoming an industry candidate value (ZoomInfo + defensively Lusha), proven against the real execution-19 shape
+- [x] 18-01-PLAN.md — NORM-01: `_industryText` helper stops any numeric NAICS code becoming an industry candidate value (ZoomInfo + defensively Lusha), proven against the real execution-19 shape
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 18-02-PLAN.md — COPY-01/COPY-02: `lv_sponsorship_reliant` and the lv-prefixed persona property reach their merge calls, proven through the compiled node bodies, with the bounded frozen-fixture re-baseline
+- [x] 18-02-PLAN.md — COPY-01/COPY-02: `lv_sponsorship_reliant` and the lv-prefixed persona property reach their merge calls, proven through the compiled node bodies, with the bounded frozen-fixture re-baseline
 
 ### Phase 19: Verification Debt Closure
 
@@ -391,5 +391,5 @@ defect a re-run surfaces is captured rather than silently absorbed into "passed.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 17. Enrichment Contacts Reachability (BUG 23) | 2/2 | **Complete** — verified 5/5; contact:create live-reachable (exec 76), match path regression-checked field-by-field (execs 68-72), deployment restored disarmed | 2026-07-29 |
-| 18. Normalization & Copy-Loop Fixes | 1/2 | In progress — 18-01 (NORM-01) executed, 596/289 offline suite, 0 regressions | 18-01: 2026-07-29 |
+| 18. Normalization & Copy-Loop Fixes | 2/2 | **Complete** — NORM-01/COPY-01/COPY-02 all wired and proven; 596 pytest / 298 node, 0 regressions; frozen companies guard re-baselined bounded | 18-01: 2026-07-29, 18-02: 2026-07-29 |
 | 19. Verification Debt Closure | 0/TBD | Not started | - |

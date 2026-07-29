@@ -113,8 +113,8 @@ The v3 section formerly here is archived verbatim in `.planning/milestones/v0.3-
 
 ### Copy-loops
 
-- [ ] **COPY-01**: `lv_sponsorship_reliant` is copied from its candidate source (`build_cloud_workflows.py` ENRICH_MERGE_CO researchData loop) into the companies merge call — the property stops being permanently empty.
-- [ ] **COPY-02**: `persona_group`/`lv_persona_group` is copied from its candidate source (ENRICH_MERGE winners loop) into the contacts merge call — the property stops being permanently empty.
+- [x] **COPY-01**: `lv_sponsorship_reliant` is copied from its candidate source (`build_cloud_workflows.py` ENRICH_MERGE_CO researchData loop) into the companies merge call — the property stops being permanently empty.
+- [x] **COPY-02**: `persona_group`/`lv_persona_group` is copied from its candidate source (ENRICH_MERGE winners loop) into the contacts merge call — the property stops being permanently empty.
 
 ### Verification debt
 
@@ -129,8 +129,8 @@ The v3 section formerly here is archived verbatim in `.planning/milestones/v0.3-
 | REACH-03 | Phase 17 | Complete |
 | REACH-04 | Phase 17 | Complete |
 | NORM-01 | Phase 18 | Complete |
-| COPY-01 | Phase 18 | Pending |
-| COPY-02 | Phase 18 | Pending |
+| COPY-01 | Phase 18 | Complete |
+| COPY-02 | Phase 18 | Complete |
 | VERIFY-01 | Phase 19 | Pending |
 
 **Coverage:**
