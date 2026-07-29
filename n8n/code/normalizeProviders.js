@@ -131,6 +131,20 @@ function _push(out, field, source, value, normalizedValue, accuracy, recencyDate
   out.push({ field, source, value, normalizedValue, accuracy: _clamp01(accuracy), recencyDate: recencyDate || null });
 }
 
+// Prefer human-readable industry text over a raw NAICS code; a bare numeric code is never
+// a valid `industry` text value (NORM-01). Precedence: the NAICS entry's own `.name` text
+// when the entry is an object carrying one; otherwise the provider's industry text fallback
+// (first element when the fallback is an array); otherwise null — no candidate is fabricated
+// from a bare code.
+function _industryText(naicsEntry, textFallback) {
+  if (naicsEntry && typeof naicsEntry === "object" && naicsEntry.name) {
+    return { raw: naicsEntry.name, key: _norm(naicsEntry.name) };
+  }
+  const fallback = Array.isArray(textFallback) ? textFallback[0] : textFallback;
+  if (fallback) return { raw: fallback, key: _norm(fallback) };
+  return null; // bare numeric code, no name, no fallback text -> skip, don't fabricate
+}
+
 function lushaCandidates(rawResponse, objectType) {
   const out = [];
   const src = "lusha";
@@ -184,8 +198,9 @@ function lushaCandidates(rawResponse, objectType) {
       : (co.companySize != null ? co.companySize
         : (co.employeeCount != null ? co.employeeCount : co.employees));
     _push(out, "lv_employee_band", src, emp, normalizeEmployeeBand(emp), 0.6, updated);
-    const naics = (co.naicsCodes || [])[0];
-    _push(out, "industry", src, naics || co.mainIndustry, naics ? String(naics) : _norm(co.mainIndustry), 0.6, updated);
+    const naics0 = (co.naicsCodes || [])[0];
+    const industry = _industryText(naics0, co.mainIndustry);
+    _push(out, "industry", src, industry && industry.raw, industry && industry.key, 0.6, updated);
     const country = (co.location && co.location.countryIso2) || co.countryIso2;
     _push(out, "lv_country_region_normalized", src, country, normalizeCountryRegion(country), 0.6, updated);
   }
@@ -297,11 +312,12 @@ function zoominfoCandidates(rawResponse, objectType) {
       normalizeCountryRegion(ziCountry || raw.country), 0.6, recency);
     // Live GTM naicsCodes are OBJECTS ({id,name}, most-general first); the flat fixtures
     // are bare code strings. String(obj) would have staged "[object Object]" as industry.
-    const naics0 = (raw.naicsCodes || [])[0];
-    const naics = naics0 && typeof naics0 === "object" ? naics0.id : naics0;
     // primaryIndustry is an array in the live response (["Hospitality", "Sports Teams ..."]).
-    const pi = Array.isArray(raw.primaryIndustry) ? raw.primaryIndustry[0] : raw.primaryIndustry;
-    _push(out, "industry", src, naics || pi, naics ? String(naics) : _norm(pi), 0.6, recency);
+    // NORM-01: prefer the NAICS entry's own human-readable name over its bare numeric code;
+    // a code is never a valid industry text value (see _industryText).
+    const naics0 = (raw.naicsCodes || [])[0];
+    const industry = _industryText(naics0, raw.primaryIndustry);
+    _push(out, "industry", src, industry && industry.raw, industry && industry.key, 0.6, recency);
   }
   return out;
 }

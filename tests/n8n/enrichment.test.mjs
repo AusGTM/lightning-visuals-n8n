@@ -262,12 +262,19 @@ test("score revenue: Apollo+Lusha band consensus beats lone ZoomInfo band", () =
   assert.notEqual(rev.normalizedValue, "50-500M");
 });
 
-test("score industry: NAICS agreement (Lusha≡ZoomInfo) wins over Apollo free-text", () => {
+// NORM-01 (2026-07-29): this test previously pinned the bare NAICS code "711211" as the
+// winning industry value, with Lusha and ZoomInfo "agreeing" on that code. NORM-01
+// deliberately retires code-as-agreement-key behavior (D-NORM-lusha): with the same flat
+// fixtures, Lusha's bare-string naicsCodes entry has no mainIndustry fallback, so it now
+// emits NO industry candidate at all. Apollo ("Spectator Sports") and ZoomInfo (naicsCodes
+// bare string falls back to its own primaryIndustry text, "Spectator Sports") instead
+// genuinely agree on TEXT — a real cross-provider consensus, not a numeric-code coincidence.
+test("score industry: Apollo+ZoomInfo agree on text; ZoomInfo wins on fresher recency", () => {
   const { best } = scoreCandidates(allCompanyCandidates(), { now: NOW });
   const ind = best.industry;
-  assert.equal(ind.normalizedValue, "711211");
-  assert.ok(["lusha", "zoominfo"].includes(ind.source));
-  assert.ok(ind.agreedBy.length >= 1);
+  assert.equal(ind.normalizedValue, "spectator sports");
+  assert.equal(ind.source, "zoominfo"); // fresher recency date (validDate) on the flat fixtures
+  assert.ok(ind.agreedBy.includes("apollo"));
 });
 
 test("scoreCandidates: winners map is flat and merge-ready", () => {
@@ -349,8 +356,11 @@ test("toCandidates: ZoomInfo revenue falls back to revenue*1000 with no revenueR
 
 test("toCandidates: ZoomInfo live naicsCodes are objects, not code strings", () => {
   // String({id,name}) would have staged "[object Object]" as the industry.
+  // NORM-01 (2026-07-29): this test previously pinned "71" (the bare NAICS sector code) as
+  // the expected normalizedValue. The fix reads the NAICS entry's own human-readable `.name`
+  // instead of its numeric `.id`, so the expected value changes from the code to the name.
   const c = toCandidates("zoominfo", zoomLiveCo, "companies");
-  assert.equal(find(c, "industry", "zoominfo").normalizedValue, "71");
+  assert.equal(find(c, "industry", "zoominfo").normalizedValue, "arts, entertainment, and recreation");
 });
 
 test("toCandidates: Lusha live company unwraps `data` and reads `employees`", () => {
