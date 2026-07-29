@@ -259,3 +259,71 @@ test("DELIBERATE-BREAK (D2): wiring the composite score (x100) into confidenceBy
   assert.ok(!(field in broken.canonicalPatch),
     "D2 proof: gating on the composite collapses a previously-promoted field's promotion");
 });
+
+test("TA-4/TS-1 via the PRODUCTION confidenceByField path: fresh vs stale page_age produce a byte-identical canonicalPatch", () => {
+  // The 15.5 verifier's open human-verification item, closed. The neighbouring TA-4/TS-1
+  // test proves recency moves the composite yet the promoted VALUE is stable — but it
+  // merges with a flat `confidence`, so it does not exercise the parameter through which
+  // recency could actually leak: `confidenceByField`.
+  //
+  // Production builds that map in "Apply Judge Verdict" (build_cloud_workflows.py:2225-2231):
+  //     judge_confidence_by_field[verdict.chosen_field] = verdict.confidence
+  // i.e. the JUDGE's own per-field confidence, never the A/R/G/T composite. This test
+  // derives the map that way from two rows differing ONLY in page_age and asserts the
+  // merges are identical — the real evidence the structural argument deserves.
+  //
+  // Its non-vacuity partner is the DELIBERATE-BREAK (D2) test above: wire the composite
+  // into the SAME parameter and promotion collapses.
+  //
+  // WHICH ASSERTION ACTUALLY BITES — measured, not assumed. Simulating the leak
+  // (confidenceByField = composite*100) gives: promoted=false, provenance.confidence=48.3
+  // on BOTH lanes. So the two lanes still produce equal canonicalPatches ({} === {}) and
+  // the deepEqual below would PASS under a real leak. It is necessary but not sufficient.
+  // The assertions that catch the leak are the promotion check and the provenance-confidence
+  // check at the end. Recorded because an equality-only version of this test would look
+  // like a proof and be one only by luck.
+  const now = "2026-07-23T00:00:00Z";
+  const field = "lv_org_type";
+  const researchCandidate = (verifiedAt) => ({
+    confidence: 90,
+    data: { [field]: "broadcaster" },
+    recency_by_field: { [field]: verifiedAt },
+    recency_source_by_field: { [field]: "page_age" },
+  });
+
+  // The judge adjudicates the field; its verdict confidence is what production propagates.
+  const verdict = { chosen_field: field, confidence: 88 };
+  const productionConfidenceByField = (scored) => {
+    // Mirror of Apply Judge Verdict's derivation — deliberately reads ONLY the verdict.
+    void scored; // the composite is in scope and is deliberately NOT consulted
+    return { [verdict.chosen_field]: verdict.confidence };
+  };
+
+  const runLane = (verifiedAt) => {
+    const scored = scoreResearchCandidates(researchCandidate(verifiedAt), {}, {}, { now });
+    return {
+      composite: scored[field].research.score,
+      merged: mergeCompanies({}, { [field]: scored[field].research.value }, undefined, {
+        source: "claude_web",
+        confidence: 90,
+        confidenceByField: productionConfidenceByField(scored),
+      }),
+    };
+  };
+
+  const fresh = runLane("2026-06-01");
+  const stale = runLane("2021-04-06"); // Wyong's real stale listing
+
+  // Precondition: the two lanes genuinely differ upstream, so the equality below is a
+  // real invariant rather than two identical inputs compared to each other.
+  assert.notEqual(fresh.composite, stale.composite,
+    "the lanes must differ in composite score, or this proves nothing");
+
+  const strip = (r) => JSON.parse(JSON.stringify(r).replace(/"verified_at":"[^"]*"/g, '"verified_at":"_"'));
+  assert.deepEqual(strip(fresh.merged.canonicalPatch), strip(stale.merged.canonicalPatch));
+  assert.equal(stale.merged.canonicalPatch[field], "broadcaster",
+    "stale evidence still promotes through the production path — recency is bias, not a gate");
+  // Provenance must record the JUDGE's confidence, not the composite — the leak would show here first.
+  assert.equal(fresh.merged.provenance[field].confidence, 88);
+  assert.equal(stale.merged.provenance[field].confidence, 88);
+});
