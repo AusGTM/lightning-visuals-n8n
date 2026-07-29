@@ -14,45 +14,38 @@ updated: 2026-07-29T17:05:00+10:00
 
 ### 1. Live operator runbook — deploy + provision + property creation
 expected: Run `scripts/provision_n8n_credentials.py` then `scripts/deploy_n8n_workflows.py` (with `N8N_URL`/`N8N_API_KEY`/`ALLOW_N8N_DEPLOY=true`), activate both Cloud workflows, live-create `lv_enrichment_requested`/`lv_enrichment_status`. Both workflows appear active, all nodes credential-bound, pipeline runs live + schedules fire.
-why_manual: Requires a live n8n Cloud subscription, live HubSpot writes, and live provider credentials — none exist offline.
-result: blocked
-blocked_by: deploy-permission
-reason: |
-  Three of four sub-parts have since been done — re-derived from the record on 2026-07-29,
-  not assumed:
-    - Credentials provisioned; `deploy_n8n_workflows.py` has run repeatedly against the
-      real instance (executions 10-19 exist), credential binding fail-closed, no
-      unbound-node import errors.
-    - The two SJ-3 properties were live-created on BOTH object types by the Phase 15
-      migration during the BUG 14 fix — undo manifest
-      73c5342c-a455-4d69-a0a7-41df85ef1a8f.
-    - "LV Enrichment (Cloud template)" IS active and has served live executions.
-  Remaining: **"LV Scheduled Maintenance (Cloud)" has never been activated**, so the phase
-  goal's "background reconciliation layer runs on schedule" clause is still unmet. Needs a
-  deploy, which the permission classifier refuses.
+result: pass
+source: automated
+evidence: |
+  Completed 2026-07-29, in stages across two sessions:
+    - Credentials provisioned earlier; deploys have run repeatedly (executions 10-25).
+    - Both SJ-3 properties live-created by the Phase 15 migration (manifest 73c5342c).
+    - "LV Enrichment (Cloud template)" active since the 16.7 canary window.
+    - "LV Contact Ingest (Cloud template)" ACTIVATED TODAY (HTTP 200) — first time ever.
+    - "LV Scheduled Maintenance (Cloud)" activation first 400'd — BUG 20, the
+      executeWorkflow node baked the LOCAL template id which never existed server-side —
+      fixed by rebind_subworkflow_refs() in the deploy script (88914d5), redeployed, then
+      ACTIVATED (HTTP 200).
+  All three cloud workflows read back active=true. SCHEDULES FIRE: executions 23 and 24
+  (mode=trigger) ran on the 15-minute tick — SJ-3 Search total=0 and Review Search
+  total=0, both correct against current portal state. The phase goal's "background
+  reconciliation layer runs on schedule" clause is now literally true.
 
 ### 2. Live review-loop apply — reviewApply patch actually writes
 expected: Flip `lv_enrichment_review_approved=true` on one real needs_review company; the "Apply Review" branch fires and `reviewApply`'s `canonicalPatch`+`clearPatch` reach the record.
 result: blocked
-blocked_by: deploy-permission
+blocked_by: write-arming
 reason: |
-  THE STATED BLOCKER IS OBSOLETE. This test was written against "the built Review Apply
-  Update node ships `updateFields:{}` ... an operator must map `{...canonicalPatch,
-  ...clearPatch}` onto the node's custom-properties UI." That empty map was later
-  classified as BUG 11, and its scope gap in this workflow was closed by 6d2565c. Read
-  from the built artifact on 2026-07-29:
+  THE ORIGINALLY STATED BLOCKER IS OBSOLETE (BUG 11's updateFields:{} — closed by 6d2565c;
+  the node is a credential-bound PATCH sending {properties: $json.properties}, and
+  ENRICH_APPLY_REVIEW emits that key; no operator wiring step remains).
 
-    n8n-nodes-base.httpRequest  PATCH
-    url      =https://api.hubapi.com/crm/v3/objects/companies/{{ $json.hs_object_id }}
-    jsonBody ={{ JSON.stringify({ properties: $json.properties }) }}
-    auth     predefinedCredentialType / hubspotAppToken
-
-  and `ENRICH_APPLY_REVIEW` emits `properties = {...canonicalPatch, ...clearPatch}`. The
-  per-record patch IS baked in — as an expression rather than a static map, which is why
-  the original "values vary per record so it cannot be baked" reasoning no longer holds.
-  **No operator wiring step remains.**
-
-  Blocked only on the live half: firing it needs LV Scheduled Maintenance active (test 1).
+  PROGRESS 2026-07-29: the Review lane's SEARCH half now runs live on schedule —
+  execution 24, Review Search (approved=true) HTTP-executed inside n8n, total=0 (no
+  approved record exists, correctly). What remains is only the WRITE half: flipping a real
+  record to approved and letting Review Apply Update PATCH it requires arming
+  ALLOW_HUBSPOT_RECORD_WRITES with an allowlist, and the permission classifier refuses the
+  arming deploy (it allowed the disarmed one). Writes stay off; the gate denies.
 
 ### 3. Real HubSpot webhook event shape — identity resolves by objectId
 expected: Send a real company-object webhook event (objectId/objectType/subscriptionType only, no email/domain/firstname); identity resolves to the correct company and enrichment runs end to end.
@@ -90,22 +83,34 @@ All three pre-live wiring items are closed. None of them is what still blocks th
 ## Summary
 
 total: 3
-passed: 1
+passed: 2
 issues: 0
 pending: 0
-blocked: 2
+blocked: 1
 skipped: 0
 
 ## Gaps
 
-[none — blocked tests are prerequisite gates, not code defects]
+[none — the remaining blocked test is a prerequisite gate (write arming), not a code defect]
 
 ## Notes
 
-Both blocked tests reduce to a single prerequisite: **activate LV Scheduled Maintenance**.
-Neither is a code gap. Every code-level item this UAT originally listed as blocking has
-since been fixed by a later phase, and each was re-derived here from the built artifact or
-the live record rather than trusted from a fix report.
+2026-07-29, second pass: activation happened. All three cloud workflows are active; the
+15-minute schedules fire (executions 23/24); the contact-ingest webhook serves uploads end
+to end (execution 25, {"queue":"needs_review"}). Getting there surfaced and closed three
+more live-only bugs — BUG 20 (executeWorkflow baked the local template id; activation
+400'd), BUG 21 (Set Config dropped the webhook's binary CSV; first upload died at
+Extract From File), BUG 22 (empty search filter + first-hit adapter: a made-up email
+"matched" an arbitrary real contact, and only the disarmed write gate stopped a
+mis-targeted PATCH; then the filtered native node emitted zero items on no-match and
+killed the lane, so the search moved to the BUG 10 envelope transport).
 
-Unblocking needs a permission rule the assistant cannot grant itself — add
-`"Bash(DRY_RUN=false ALLOW_N8N_DEPLOY=true:*)"` to `.claude/settings.local.json`.
+Remaining: test 2's write half only, which needs an armed deploy the permission
+classifier refuses (it allowed disarmed deploys and activation).
+
+SECURITY OBSERVATION, recorded not fixed: the contact-ingest webhook
+(`POST /webhook/hubspot/contact-upload`) has NO authentication — unlike the enrichment
+webhook's native Header Auth. Anyone with the URL can submit CSVs. Exposure today is
+bounded (writes disarmed, allow_create=false, worst case is provider/verifier spend and
+review-queue noise), but it should get the same headerAuth credential before writes are
+ever armed on this lane.
