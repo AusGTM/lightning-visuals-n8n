@@ -37,7 +37,7 @@ RESEARCH_SYSTEM = (
     '{"provider":"claude_web","object_type":"companies","matched":<bool>,'
     '"confidence":<int 0-100>,"data":{"lv_org_type":<str>,"lv_produces_content":<bool|null>,'
     '"lv_content_type":[<str>],"lv_is_hardware_vendor":<bool|null>,'
-    '"lv_is_gambling_operator":<bool|null>},'
+    '"lv_is_gambling_operator":<bool|null>,"lv_sponsorship_reliant":<bool|null>},'
     '"evidence_by_field":{"<field>":"<url>"},'
     '"entity_resolution":{"represents":"group|subsidiary|franchise_outlet|single_entity|unknown",'
     '"likely_revenue_band":<str|null>,"notes":<str>},'

@@ -3401,14 +3401,22 @@ return rows.map((it, i) => {
 
 # ---- Phase 16.4 Task 2: fetch-by-objectId lane (companies mirror) -----------
 #
-# Extracted verbatim from the existing "HubSpot Company Search" node (byte-identical
-# emitted string). The companies fetch-by-id list is this SAME constant VERBATIM, with no
-# additions — Build Company Identity only needs `domain` and `name`, both already here
-# (unlike contacts, which added 2 properties the existing search never needed).
+# Extracted from the existing "HubSpot Company Search" node. The companies fetch-by-id
+# list is this SAME constant VERBATIM — Build Company Identity only needs `domain` and
+# `name`, both already here (unlike contacts, which added 2 properties the existing
+# search never needed).
+#
+# WR-01 (18-REVIEW.md, Phase 18 Plan 03): lv_sponsorship_reliant was omitted here even
+# though it is a research fold field like its siblings — its policy class is
+# system_owned (mergeCompanies.js:43), so the omission never caused incorrect
+# promote/clobber behaviour, but it DID mean the merge decision's `current_value` audit
+# field was always misreported as null for this one field. Feeds ONLY
+# _hs_http_search_node HTTP nodes (never a Code node), so adding it moves zero frozen
+# {variant, node} pairs — verified below by re-running the frozen guard after this edit.
 ENRICH_COMPANY_SEARCH_PROPERTIES_CSV = (
     "name,domain,industry,annualrevenue,"
     "numberofemployees,hs_object_id,lv_org_type,"
-    "lv_produces_content,lv_content_type,"
+    "lv_produces_content,lv_content_type,lv_sponsorship_reliant,"
     "lv_is_hardware_vendor,lv_is_gambling_operator,"
     "lv_enrichment_provenance,lv_org_type_verified_at,"
     "lv_produces_content_verified_at"

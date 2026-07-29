@@ -950,7 +950,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"domain\", operator: \"EQ\", value: $json.identity_keys.domain } ] } ], properties: [\"name\", \"domain\", \"industry\", \"annualrevenue\", \"numberofemployees\", \"hs_object_id\", \"lv_org_type\", \"lv_produces_content\", \"lv_content_type\", \"lv_is_hardware_vendor\", \"lv_is_gambling_operator\", \"lv_enrichment_provenance\", \"lv_org_type_verified_at\", \"lv_produces_content_verified_at\"], limit: 100 }) }}",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"domain\", operator: \"EQ\", value: $json.identity_keys.domain } ] } ], properties: [\"name\", \"domain\", \"industry\", \"annualrevenue\", \"numberofemployees\", \"hs_object_id\", \"lv_org_type\", \"lv_produces_content\", \"lv_content_type\", \"lv_sponsorship_reliant\", \"lv_is_hardware_vendor\", \"lv_is_gambling_operator\", \"lv_enrichment_provenance\", \"lv_org_type_verified_at\", \"lv_produces_content_verified_at\"], limit: 100 }) }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "hubspotAppToken"
       },
@@ -1046,7 +1046,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"hs_object_id\", operator: \"EQ\", value: $('Build Company Identity').item.json.object_id } ] } ], properties: [\"name\", \"domain\", \"industry\", \"annualrevenue\", \"numberofemployees\", \"hs_object_id\", \"lv_org_type\", \"lv_produces_content\", \"lv_content_type\", \"lv_is_hardware_vendor\", \"lv_is_gambling_operator\", \"lv_enrichment_provenance\", \"lv_org_type_verified_at\", \"lv_produces_content_verified_at\"], limit: 100 }) }}",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"hs_object_id\", operator: \"EQ\", value: $('Build Company Identity').item.json.object_id } ] } ], properties: [\"name\", \"domain\", \"industry\", \"annualrevenue\", \"numberofemployees\", \"hs_object_id\", \"lv_org_type\", \"lv_produces_content\", \"lv_content_type\", \"lv_sponsorship_reliant\", \"lv_is_hardware_vendor\", \"lv_is_gambling_operator\", \"lv_enrichment_provenance\", \"lv_org_type_verified_at\", \"lv_produces_content_verified_at\"], limit: 100 }) }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "hubspotAppToken"
       },
