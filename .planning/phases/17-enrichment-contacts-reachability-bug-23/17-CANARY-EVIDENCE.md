@@ -256,4 +256,75 @@ a symptom of a transport-induced merge change. A transport regression silently c
 
 ## Case B — create-path reachability
 
+### Confirm the canary address does not exist (step 1, GET only)
+
+`POST /crm/v3/objects/contacts/search`, filter `email EQ lv-bug23-canary-delete-me@lv-canary-delete-me.example`:
+
+```json
+{"total":0,"results":[]}
+```
+Captured `2026-07-29T07:00:34Z`. Confirmed absent.
+
+### Fire payload B (step 2)
+
+Execution **76**, `startedAt` `2026-07-29T07:00:49.399Z`. Webhook response (not trusted as
+evidence, recorded for completeness): `{"action":"write_blocked","object_type":"contacts","hs_object_id":null,"gap_flag":true,"properties":{"email":"lv-bug23-canary-delete-me@lv-canary-delete-me.example"},"remaining_credits":[]}`.
+
+### Assertions from `runData` (step 3)
+
+- `HubSpot Search` ran, **exactly one item**, raw output:
+  ```json
+  {"total": 0, "results": []}
+  ```
+  This is the whole point: under the pre-swap native node, zero results emits **zero**
+  items and the chain would have stopped here. Under the post-swap httpRequest envelope
+  transport, the search node reliably emits exactly one item regardless of hit count, so
+  the chain continues to be classified downstream.
+- `Adapt Search` output: `existingRecord: {}` (empty object — confirmed-absent), `lookup_failed: false` (**not** a lookup failure — the correct classification; a `true` here would have suppressed the create to `skip` and the criterion would NOT be met).
+- `Enrichment Gate` output: `gate.action = "create"`, `reason: "no existing record"`, top-level `action: "create"`. **ROADMAP criterion 4 — MET.**
+- `Decide Action` ran; its input row carried `action: "create"` (from `Enrichment Gate`); its
+  output: `{"action":"write_blocked","object_type":"contacts","hs_object_id":null,"gap_flag":true,"properties":{"email":"lv-bug23-canary-delete-me@lv-canary-delete-me.example"}}`
+  — `properties.email` carries the canary address (the BUG 19 create-seed pattern), and
+  `action` is `write_blocked`, not `create` — writes disarmed by construction.
+- Neither `HubSpot Create` nor `HubSpot Update` appears anywhere in `runData` (verified by
+  key lookup against the full node list: `['Adapt Search', 'Build Identity', 'Build Response',
+  'Contact Research Trigger Gate', 'Credit Request', 'Decide Action', 'Enrichment Gate',
+  'HubSpot Search', 'IF Apollo Credit Requested', 'IF Apollo Enabled', 'IF Bare Event',
+  'IF Contact Research Needed', 'IF Create', 'IF Enrich', 'IF Lusha Credit Requested',
+  'IF Lusha Enabled', 'IF Object Type Supported', 'IF Provider Processing Needed',
+  'IF ZoomInfo Credit Requested', 'IF ZoomInfo Enabled', 'Merge Winners', 'Normalize + Score',
+  'Parse HubSpot Event', 'Respond to Webhook', 'Route By Object Type',
+  'Set Data Quality + Gap Flag', 'Webhook Trigger']` — neither create nor update node ran).
+  **Honest note on the plan's wording:** the plan's verify text names a "`Set Review`
+  branch" as what fires; no node literally named "Set Review" exists in the built workflow.
+  The node that runs and sets the review/gap signal is `Set Data Quality + Gap Flag`, whose
+  output feeds `Decide Action` with `gap_flag: true` — this is what the plan's phrase refers
+  to. Recorded as-is rather than inventing a node name that doesn't exist in this codebase.
+
+### Prove no record was created (step 4)
+
+Two searches, same filter, after the fire:
+
+| search | time | result | gap from search #1 |
+|---|---|---|---|
+| post-fire #1 | `2026-07-29T07:01:48Z` | `{"total":0,"results":[]}` | — |
+| post-fire #2 | `2026-07-29T07:05:36Z` | `{"total":0,"results":[]}` | ~3m48s |
+
+Note on process (recorded honestly, no evidence affected): the first attempt at the ≥3-min
+wait used a wait-until-epoch helper that mis-parsed an ISO timestamp via `date -u -d`
+(GNU-only, silently produced a wrong target epoch on this Darwin host) and returned after
+only ~40 seconds. A search fired at that point (`2026-07-29T07:02:28Z`, `total: 0`) was
+caught as invalid BEFORE being recorded as evidence here (the gap was checked against the
+required ≥3 minutes and found short) and discarded — not used above. The wait was redone
+with a pure-Python-computed target epoch, confirmed complete via the background job's own
+printed timestamp (`2026-07-29T07:05:11Z`, ≥180s after search #1) before firing the second
+search recorded in the table above.
+
+Both searches ≥3 minutes apart return `total: 0`. No record was created.
+
+**Verdict: Case B PASS. ROADMAP criterion 1 (live half, create-path) and criterion 4 —
+MET.** A genuine no-match event reaches `Decide Action` with `action: "create"`, correctly
+write-gated to `write_blocked`, with no write node executing and no record materializing in
+HubSpot across a >3-minute observation window.
+
 <!-- gsd:write-continue -->
