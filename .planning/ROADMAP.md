@@ -568,7 +568,12 @@ Plans:
   6. Full offline suite green, zero regressions vs the 459 pytest / 275 node baseline; builder deterministic; the 7 frozen companies node bodies unmoved.
   7. **Live**: a companies bare-event run reaches `Merge Company` with a NON-NULL merge — the literal `bd682a2`, still unverified — with zero HubSpot writes.
 
-**Plans**: 16.6-01 (transport migration, code-complete 2026-07-28 — commits `8a30cc2`, `9e60181`, `c704865`). Criteria 2-6 met offline; criteria 1 and 7 are LIVE-UNVERIFIED and remain open — the deployed build is still the pre-fix one.
+**Plans**: 16.6-01 (transport migration — commits `8a30cc2`, `9e60181`, `c704865`).
+
+**Verified 2026-07-29 — `gaps_found`.** Criteria 2, 3, 4, 6, 7 MET. Two shortfalls:
+
+- **Criterion 1 is PARTIAL.** It demands all six `company:search` nodes retrieve real records live, "verified by read-back of an actual execution". Only `HubSpot Company Fetch By Id` has that (execution 12). `HubSpot Company Search` and the four `wf_scheduled_maintenance_cloud.json` nodes (SJ-1/SJ-2/SJ-3/Review Search) were confirmed *deployed* with the correct shape by API read-back, but have never *executed*. The fix is very likely correct — identical transport, one live proof, parity pinned by tests — but that is generalization, not the live evidence the criterion asks for. An earlier ROADMAP entry claiming "criteria 1 & 7 VERIFIED LIVE" overstated this and has been corrected.
+- **Criterion 5 is PARTIAL.** It demanded an explicit yes/no on whether `company:create`/`company:update` share the defect. The record is honest that they were unfixed and unverified, and never implies coverage, but never wrote the direct sentence. (The RCA evidence supports "no" — the defect was specific to `operation: search` on `resource: company`.)
 
 ### Phase 16.7: Write-Path Canary
 
@@ -668,7 +673,17 @@ Everything else the write path touches exists (`lv_enrichment_needs_review`, `lv
 
 **Outcome — COMPLETE.** BUG 15: `_writeSafetyAllows()` existed only in the enrichment workflow, leaving six write nodes ungated across scheduled-maintenance and contact-ingest. Closed by `splice_write_gates()` plus an upstream-walking coverage guard. Sonnet escalation fired for the first time (execution 18) against a deliberately-conflicting throwaway: `Judge Gate` reasons `["org_type_conflict","confidence_band"]`, a real Sonnet-5 verdict, both `bd682a2` hops intact, `Merge Company` non-null — and `lv_org_type` correctly withheld from the patch as `unadjudicated`/`needs_review` while the evidenced `lv_content_type` promoted.
 
-**Still open**: `Review Apply Update` carries `updateFields: {}` (third instance of the BUG 11 defect) — gated now, but writes nothing. `company:create` has never run live. Both inactive workflows remain entirely live-untested beyond their gates.
+**Still open**: `company:create` has never run live. Both inactive workflows remain entirely live-untested beyond their gates.
+
+**BUG 11 / BUG 13 are PARTIALLY UNFIXED — found by the 16.9 verifier, 2026-07-29.** Both fixes were applied to `wf_enrichment_cloud.json` only. Three write nodes elsewhere still carry the original empty-field-map defect and would write nothing (or, for the create, send an expression that never resolves):
+
+| workflow | node | defect | bug |
+|---|---|---|---|
+| `wf_scheduled_maintenance_cloud.json` | `Review Apply Update` | `updateFields: {}` | 11 (3rd instance) |
+| `wf_contact_ingest_cloud.json` | `HubSpot Update` | `updateFields: {}` | 11 (4th instance) |
+| `wf_contact_ingest_cloud.json` | `HubSpot Create` | `additionalFields: {}` + `email: $json.properties.email`, which the Decide output never carries | 13 |
+
+Both workflows are INACTIVE and all three nodes are now behind write-safety gates (16.10), so there is no live exposure — but a gate prevents an unauthorised write, it does not make a broken write work. The earlier claims that BUG 11 and BUG 13 were "fixed" were scoped to the enrichment workflow and should be read that way.
 
 ## Milestone 3 Progress
 
@@ -686,8 +701,8 @@ Everything else the write path touches exists (`lv_enrichment_needs_review`, `lv
 | 16.3. Companies Stale-Timestamp Fix (INSERTED) | 1/1 | Complete | 2026-07-28 |
 | 16.4. Fetch-By-ObjectId (INSERTED) | 2/2 | Complete | 2026-07-28 |
 | 16.5. Deliberate Research/Escalation Enablement (INSERTED) | 3/3 | **Complete** — all 7 criteria met; criterion 7 verified on BOTH branches (companies closed 2026-07-29 via 16.7) | 2026-07-29 |
-| 16.6. Companies Search Transport Fix (INSERTED) | 1/1 | **Complete** — criteria 1 & 7 VERIFIED LIVE (execution 12, non-null Merge Company) | 2026-07-29 |
+| 16.6. Companies Search Transport Fix (INSERTED) | 1/1 | **gaps_found** (verified 2026-07-29) — criterion 7 VERIFIED LIVE (execution 12, non-null Merge Company); criterion 1 PARTIAL — only 1 of 6 search nodes has actually executed live, the other 5 are deployed-but-unrun | — |
 | 16.7. Write-Path Canary (INSERTED) | 2/2 | **Complete** — first HubSpot write in project history; protected fields provably survived it; rolled back | 2026-07-29 |
 | 16.8. Row-Carry Fix (BUG 12) (INSERTED) | 1/1 | **Complete** — Set node replaced with a row-spreading Code node; verified live (execution 15) | 2026-07-29 |
-| 16.9. Create-Path Fix (BUG 13) + Company Writes (INSERTED) | 1/1 | **Complete** — BUG 13 fixed; BUG 14 resolved (both properties created via the Phase 15 migration, undo manifest written); `company:update` VERIFIED LIVE (execution 17) | 2026-07-29 |
+| 16.9. Create-Path Fix (BUG 13) + Company Writes (INSERTED) | 1/1 | **gaps_found** (verified 2026-07-29) — `company:update` verified live and BUG 14 resolved, but SC-2 (schema guard) and SC-4 (`company:create` live) unmet, and BUG 13's fix did NOT reach `wf_contact_ingest_cloud.json` | — |
 | 16.10. Write-Gate Coverage (BUG 15) + Live Escalation (INSERTED) | 1/1 | **Complete** — six ungated writes gated; Sonnet escalation exercised live (execution 18), judge adjudicated a real conflict and refused to promote the contested field | 2026-07-29 |
