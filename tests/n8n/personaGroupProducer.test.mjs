@@ -99,7 +99,14 @@ test("(d) EDGE: recorded shapes with no department field at all emit no persona 
 // chained through the OUTPUT row Normalize + Score actually produces.
 // ---------------------------------------------------------------------------
 
-function seedRow(providers) {
+// The CLOUD "Normalize + Score" node does NOT read $input directly — it recovers its row
+// by NAME from "Enrichment Gate" (never bare $json, since the upstream provider HTTP
+// nodes replace $json with their own response) and pulls each provider's response by
+// name from "Lusha Enrich"/"Apollo Match"/"ZoomInfo Enrich" (mirrors
+// ENRICH_NORMALIZE_SCORE_CLOUD, scripts/build_cloud_workflows.py:1239-1266, and the same
+// node-name-lookup idiom tests/n8n/bareEventChainFlow.test.mjs already drives this exact
+// node through).
+function gateRow() {
   return {
     action: "enrich",
     object_type: "contacts",
@@ -112,14 +119,31 @@ function seedRow(providers) {
       seniority: "",
       lv_persona_group: "",
     },
-    providers,
   };
+}
+
+function runNormalizeAndScore(jsCode, providerResponses) {
+  const outputs = {
+    "Enrichment Gate": [gateRow()],
+    "Lusha Enrich": providerResponses.lusha !== undefined ? [providerResponses.lusha] : [],
+    "Apollo Match": providerResponses.apollo !== undefined ? [providerResponses.apollo] : [],
+    "ZoomInfo Enrich": providerResponses.zoominfo !== undefined ? [providerResponses.zoominfo] : [],
+  };
+  const $ = (name) => ({
+    all: () => (outputs[name] || []).map((j) => ({ json: j })),
+    get item() { return { json: (outputs[name] || [])[0] }; },
+  });
+  const $input = { all: () => [], get item() { return { json: undefined }; } };
+  const $now = new Date("2026-07-29T00:00:00Z");
+  const fn = new Function("$", "$input", "$json", "$node", "$now", "$today",
+    `"use strict";\n${jsCode}`);
+  const out = fn($, $input, undefined, {}, $now, $now) || [];
+  return out.map((it) => (it && it.json !== undefined ? it.json : it));
 }
 
 test("(e) GREEN (RED until the fix lands): the compiled Normalize + Score body, given the recorded Apollo response, yields a non-null persona entry in scored.winners", () => {
   const nodes = loadWorkflow();
-  const row = seedRow({ apollo: apolloContact, lusha: null, zoominfo: null });
-  const out = runJsCode(nodes["Normalize + Score"].parameters.jsCode, [row]);
+  const out = runNormalizeAndScore(nodes["Normalize + Score"].parameters.jsCode, { apollo: apolloContact });
   assert.ok(out[0].scored, "Normalize + Score produced a real scored object, not the null skip branch");
   assert.equal(out[0].scored.winners.persona_group, "media_and_communication",
     "COPY-02: the recorded Apollo department must win the waterfall for persona_group");
@@ -127,11 +151,10 @@ test("(e) GREEN (RED until the fix lands): the compiled Normalize + Score body, 
 
 test("(f) GREEN (RED until the fix lands): feeding that produced row into the compiled Merge Winners body yields lv_persona_group in canonicalPatch, with every other promoted field unchanged", () => {
   const nodes = loadWorkflow();
-  const row = seedRow({ apollo: apolloContact, lusha: null, zoominfo: null });
 
   // The row that reaches Merge Winners comes ONLY from Normalize + Score's own output —
   // never a hand-edited scored.winners.
-  const scoredOut = runJsCode(nodes["Normalize + Score"].parameters.jsCode, [row]);
+  const scoredOut = runNormalizeAndScore(nodes["Normalize + Score"].parameters.jsCode, { apollo: apolloContact });
   const mergeOut = runJsCode(nodes["Merge Winners"].parameters.jsCode, scoredOut);
   assert.ok(mergeOut[0].merge && typeof mergeOut[0].merge === "object", "merge is a real object");
   assert.equal(mergeOut[0].merge.canonicalPatch.lv_persona_group, "media_and_communication",
@@ -140,8 +163,8 @@ test("(f) GREEN (RED until the fix lands): feeding that produced row into the co
   // D-COPY-adjacency (derived, not hand-written): every canonical key a persona-free run
   // of the SAME provider row produces is still present and unchanged with the persona
   // candidate added — proves the fix is additive, not disruptive.
-  const noPersonaRow = seedRow({ apollo: { ...apolloContact, departments: undefined }, lusha: null, zoominfo: null });
-  const scoredNoPersona = runJsCode(nodes["Normalize + Score"].parameters.jsCode, [noPersonaRow]);
+  const personaFreeApollo = { ...apolloContact, departments: undefined };
+  const scoredNoPersona = runNormalizeAndScore(nodes["Normalize + Score"].parameters.jsCode, { apollo: personaFreeApollo });
   const mergeNoPersona = runJsCode(nodes["Merge Winners"].parameters.jsCode, scoredNoPersona);
   const baseKeys = Object.keys(mergeNoPersona[0].merge.canonicalPatch);
   assert.ok(baseKeys.length > 0, "the persona-free row must itself promote at least one field");
