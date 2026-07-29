@@ -18,7 +18,7 @@ trigger: |
   hs_object_id EQ filter, same 14-property list read straight out of the built node — succeeds
   against POST /crm/v3/objects/companies/search with HTTP 200, total:1 and the real record. The
   node does NOT throw: with onError cleared and the run re-fired, the execution still reported
-  status: success, no failing node, no message. Its input was correct
+  a successful run — no failing node, no message. Its input was correct
   (object_id: '9604614548'). The resource: contact twin, structurally identical, works.
 
   Cascade: Adapt Company Fetch By Id -> "error: unrecognized response shape" + lookup_failed:

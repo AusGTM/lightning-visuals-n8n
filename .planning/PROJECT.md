@@ -9,6 +9,39 @@ mock Claude web research, a Haiku→Sonnet LLM cascade, and a non-clobber merge 
 emitting dry-run HubSpot PATCH payloads. It is internal RevOps tooling for LV's sales
 team, not a customer-facing product.
 
+## Current State
+
+**Shipped: v0.3 — Company Enrichment & ICP Research (2026-07-29).**
+
+The description above is the project's origin, not its present shape. Three milestones in, this is
+no longer a local-first mock MVP:
+
+- **v0.1** — ICP scoring engine, hard vetoes, tiering, non-clobber merge, dry-run PATCH payloads,
+  proven locally against fixtures.
+- **v0.2** — contact ingestion, dedupe and enrichment ported into n8n; local Docker n8n replica.
+- **v0.3** — companies enrich through a live provider waterfall (Lusha + Apollo + ZoomInfo) with
+  native web retrieval for the two ICP fields no provider supplies, and **the pipeline now writes to
+  HubSpot**. Three workflows run in n8n Cloud (LV Contact Ingest, LV Enrichment, LV Scheduled
+  Maintenance). The non-clobber guarantee is live-proven, not asserted: a provider candidate that
+  cleared the confidence threshold was refused on ownership class alone, and an un-allowlisted
+  company was refused with `write_blocked`.
+
+**Deployment posture:** all three workflows are active and **disarmed** — write gates off by
+default, armed only inside a deliberate, audited window against allowlisted test records.
+
+**Scope fence that still holds:** the pipeline writes ICP *inputs* and their provenance. The
+derived outputs (`lv_icp_fit_score`, `lv_icp_tier`, `lv_anti_icp_flag`, `lv_anti_icp_reason`,
+`lv_recommended_motion`) are HubSpot-side and their calculation is still the literal `1 + 1`
+placeholder. Authoring it is downstream work. Supersedes CLAUDE.md §29.
+
+### Next Milestone Goals (v0.4)
+
+- **BUG 23** — enrichment `contact:create` is structurally unreachable. Root-caused, not fixed.
+- Normalization gap — a numeric ZoomInfo `industry` code wins the waterfall over provider text.
+- Two latent copy-loop gaps (`lv_sponsorship_reliant`, `persona_group`) that leave properties
+  permanently empty.
+- Six `/gsd-verify-work` re-runs carried from the v0.3 goal ledger.
+
 ## Core Value
 
 The ICP scoring engine turns firmographic + enrichment signals into trustworthy,

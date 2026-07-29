@@ -1,3 +1,8 @@
+---
+status: complete
+kind: knowledge_base
+---
+
 # GSD Debug Knowledge Base
 
 Resolved debug sessions. Used by `gsd-debugger` to surface known-pattern hypotheses at the start of new investigations.
