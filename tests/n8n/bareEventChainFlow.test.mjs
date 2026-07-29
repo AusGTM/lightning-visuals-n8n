@@ -277,6 +277,79 @@ test("companies row-flow (bd682a2 bug class): object_id, object_type, provider_e
     "bd682a2 regression: providers_requested must be the EXACT non-empty array the envelope requested — a dropped-then-defaulted empty array is the silent failure this guards against");
 });
 
+// --- BUG 23 (Phase 17.01) — the no-match case, driven to the write decision ---------------
+//
+// The http mocks throughout this file already model every HTTP-typed step as exactly ONE
+// item, including the 0-result case (`{results: [], total: 0}` below) — that IS the CRM v3
+// envelope shape, i.e. what the httpRequest transport this lane now uses actually returns.
+// It was NOT always a faithful model: before BUG 23's fix, "HubSpot Search" and "HubSpot
+// Fetch By Id" were the native n8n-nodes-base.hubspot node, which — live-established by
+// execution 22 (BUG 22, the ingest lane) — emits ZERO items on zero hits, and n8n stops the
+// chain there. A one-item `{results:[], total:0}` mock against that native node would have
+// been a lie: the equivalent live run would have died before "Adapt Search" ever ran.
+// CONTACT_DIRECT_FIELD_CHAIN below already exercises a 0-result "HubSpot Search" mock, but
+// only stops at "Enrichment Gate" and asserts identity derivation — it never drives the
+// no-match case to a write decision. The precondition assertion and chain below close that
+// gap: the offline twin of Plan 02's live case B (a nonexistent email must reach
+// action:"create", write-gated).
+
+test("precondition: HubSpot Search and HubSpot Fetch By Id are the httpRequest envelope transport (BUG 23), never the native node", () => {
+  const wf = JSON.parse(fs.readFileSync(WF_PATH, "utf8"));
+  const byName = {};
+  for (const n of wf.nodes) byName[n.name] = n;
+  for (const name of ["HubSpot Search", "HubSpot Fetch By Id"]) {
+    assert.equal(byName[name].type, "n8n-nodes-base.httpRequest",
+      `${name} must be the credential-bound httpRequest envelope transport — a native ` +
+      "node emits zero items on zero hits (BUG 23/22), which would silently invalidate " +
+      "every one-item HTTP mock in this file rather than fail loudly");
+  }
+});
+
+const CONTACT_NO_MATCH_SEED_BODY = {
+  providers: ["lusha", "apollo"],
+  events: [{
+    objectId: 999, objectType: "contact",
+    subscriptionType: "contact.propertyChange",
+    email: "lv-bug23-canary-delete-me@lv-canary-delete-me.example",
+  }],
+};
+
+// CONTACT_CHAIN with the fetch-by-id hop swapped for the direct-search hop — same
+// providers/gate/score/merge/decide tail, so a no-match search is driven all the way to
+// the write decision instead of stopping at the gate.
+const CONTACT_NO_MATCH_CHAIN = CONTACT_CHAIN.map((step) => {
+  if (step.name === "HubSpot Fetch By Id") return { name: "HubSpot Search", http: true };
+  if (step.name === "Adapt Fetch By Id") return { name: "Adapt Search", http: false };
+  return step;
+});
+
+const CONTACT_NO_MATCH_HTTP_MOCKS = {
+  "HubSpot Search": { results: [], total: 0 },
+  "Lusha Enrich": {},
+  "Apollo Match": {},
+};
+
+test("BUG 23: a no-match search reaches action:create through the gate, write-gated by default (never routed to skip via lookup_failed)", () => {
+  const { trace, threw, final } = runChain(
+    WF_PATH, CONTACT_NO_MATCH_CHAIN, CONTACT_NO_MATCH_SEED_BODY, CONTACT_NO_MATCH_HTTP_MOCKS);
+  assert.equal(threw, null, `no node threw (got: ${JSON.stringify(threw)})`);
+
+  const adapted = trace["Adapt Search"];
+  assert.equal(adapted.lookup_failed, false,
+    "a 0-result search is CONFIRMED-ABSENT, not a lookup failure — getting this backwards " +
+    "would route a genuine new contact to skip");
+  assert.deepEqual(adapted.existingRecord, {});
+
+  assert.equal(trace["Enrichment Gate"].action, "create",
+    "BUG 23: this is the path that was structurally unreachable before the transport swap");
+
+  assert.equal(final.action, "write_blocked",
+    "write-gated by default — WRITE_SAFETY_DEFAULTS ships every allowlist empty");
+  assert.equal(final.properties.email, "lv-bug23-canary-delete-me@lv-canary-delete-me.example",
+    "the BUG 19 create-seed: canonicalPatch never carries email (manual_protected), so a " +
+    "create must seed it directly from identity_keys");
+});
+
 // --- (3) CALLER-ENVELOPE BACK-COMPAT: the direct-field envelope the WHOLE existing offline
 // suite drives, through the OLD lane only (Build Identity -> HubSpot Search -> Adapt Search).
 // The fetch-by-id nodes are not even IN this chain — proof the false lane is byte-for-byte
