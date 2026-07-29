@@ -25,6 +25,30 @@ arming anything.
   here adds risk for no verification value.
 - Nothing else. No other flag, no other record.
 
+## Command form — `.env` loading
+
+The deploy script reads `N8N_URL`/`N8N_API_KEY` from the process environment and does not
+load `.env` itself, so a bare `python scripts/deploy_n8n_workflows.py` from a fresh shell
+skips with `skipped (no n8n creds)` (observed live 2026-07-29). Every deploy command below
+therefore runs through an in-process `python-dotenv` wrapper (the same pattern
+`17-CANARY-EVIDENCE.md` used):
+
+```bash
+.venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/deploy_n8n_workflows.py', run_name='__main__')"
+```
+
+- `load_dotenv()` defaults to `override=False`: variables already set in the shell
+  (`DRY_RUN=false`, `ALLOW_N8N_DEPLOY=true`, `ENABLE_BAKED_FLAGS=...`) WIN over `.env`
+  values. `.env` only fills in what the shell didn't set — the creds. In particular,
+  `.env`'s own `DRY_RUN=true` cannot un-arm a shell-set `DRY_RUN=false`, and `.env`'s
+  `ALLOW_WEB_RESEARCH`/`ALLOW_SONNET_ESCALATION` (Python-harness lane) stay inert because
+  the overlay reads only `ENABLE_BAKED_FLAGS`.
+- Run from the repo root (relative `scripts/` path and `.env` discovery both assume it).
+- Confirm whose key is in `.env`'s `N8N_API_KEY` before ANY deploy: API-created workflows
+  land in the key owner's n8n project. It must be Robert's key (Alex's is retained as
+  `N8N_API_KEY_2`) — a wrong key silently deploys into the wrong project (cost a full
+  deploy cycle on 2026-07-28).
+
 ## Step 0 — Redeploy the current committed build (disarmed)
 
 Closes `bug-26` first, so the canary below exercises Phase-18-current code (including the
@@ -32,7 +56,8 @@ Closes `bug-26` first, so the canary below exercises Phase-18-current code (incl
 plain disarmed redeploy.
 
 ```bash
-DRY_RUN=false ALLOW_N8N_DEPLOY=true python scripts/deploy_n8n_workflows.py
+DRY_RUN=false ALLOW_N8N_DEPLOY=true \
+  .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/deploy_n8n_workflows.py', run_name='__main__')"
 ```
 
 Read back `LV Enrichment`'s live node bodies afterward and confirm `_personaGroup` and
@@ -45,7 +70,7 @@ to present).
 ```bash
 DRY_RUN=false ALLOW_N8N_DEPLOY=true \
   ENABLE_BAKED_FLAGS="ALLOW_HUBSPOT_RECORD_WRITES,TEST_RECORD_IDS=9604614548" \
-  python scripts/deploy_n8n_workflows.py
+  .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/deploy_n8n_workflows.py', run_name='__main__')"
 ```
 
 Notes on the exact syntax (read from `_OVERLAY_FLAG_SPEC`/`_requested_overlay_flags()`):
@@ -88,7 +113,8 @@ Redeploy the SAME committed build with the write-enabling overlay removed entire
 `ENABLE_BAKED_FLAGS` at all — not even an empty one):
 
 ```bash
-DRY_RUN=false ALLOW_N8N_DEPLOY=true python scripts/deploy_n8n_workflows.py
+DRY_RUN=false ALLOW_N8N_DEPLOY=true \
+  .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/deploy_n8n_workflows.py', run_name='__main__')"
 ```
 
 ## Step 4 — Read the deployment back
