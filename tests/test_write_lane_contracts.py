@@ -198,6 +198,25 @@ def _search_properties(wf, name, depth=0):
     return found
 
 
+def _spreads_search_row(wf, name, depth=0):
+    """Does this node (or the chain it inherits from) flatten a HubSpot search row via the
+    `{ ...(r.properties || {}) }` idiom? Only then do the search's requested property names
+    actually reach the row — a node that builds a fresh object does not inherit them."""
+    node = _node(wf, name)
+    if node is None or depth > 6:
+        return False
+    js = node.get("parameters", {}).get("jsCode")
+    if isinstance(js, str):
+        if re.search(r"\.\.\.\s*\(?\s*r\.properties", js):
+            return True
+        tail = js[js.rfind("return $input"):] if "return $input" in js else js
+        constructs_row = "json:" in tail.replace(" ", "")
+        inherits = bool(re.search(r"\.\.\.\s*(?:it\.json|row)\b", tail))
+        if constructs_row and not inherits:
+            return False  # fresh object — upstream property names stop here
+    return any(_spreads_search_row(wf, f, depth + 1) for f in _feeders(wf, name))
+
+
 def _targets_companies(node):
     """Does this write node act on the companies object type?"""
     p = node.get("parameters", {})
@@ -228,10 +247,19 @@ def test_write_gates_domain_allowlist_is_usable_by_every_company_lane(path):
         # would be demanding a field the object type does not have.
         if not _targets_companies(node_obj):
             continue
+        # Must survive to the gate's IMMEDIATE feeder. An earlier draft OR'd
+        # _emitted_fields with _search_properties, which asked only "is domain requested
+        # somewhere upstream" — permissive enough to miss BUG 25, where Review Search
+        # requested it and `Apply Review` then constructed a fresh row that dropped it two
+        # nodes before the gate. _emitted_fields models row construction (it inherits only
+        # across an explicit spread), so it is the right authority; _search_properties is
+        # consulted only for the flatten idiom it cannot see.
         available = set()
         for f in _feeders(wf, gate_name):
-            available |= _emitted_fields(wf, f)
-            available |= _search_properties(wf, f)
+            emitted = _emitted_fields(wf, f)
+            if _spreads_search_row(wf, f):
+                emitted |= _search_properties(wf, f)
+            available |= emitted
         if not ({"domain", "identity_keys"} & available):
             offenders.append((gate_name, sorted(available)[:14]))
     assert not offenders, (

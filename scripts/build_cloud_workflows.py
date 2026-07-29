@@ -4326,7 +4326,12 @@ return $input.all().map((it) => {
   // carries the same row contract as the enrichment lane and can use the shared
   // credential-bound PATCH node.
   const properties = { ...(result.canonicalPatch || {}), ...(result.clearPatch || {}) };
-  return { json: { hs_object_id: row.hs_object_id, ...result, properties } };
+  // BUG 25: this constructed a fresh row and DROPPED everything else — including `domain`,
+  // which the downstream write gate reads for its allowlist check. BUG 24 added `domain` to
+  // Review Search's property list, but it died here, two nodes before the gate: the row-carry
+  // family (BUG 12/21) landing between a fix and the thing it was meant to enable. Spread the
+  // row; `properties` and the result keys are assigned after, so they still win.
+  return { json: { ...row, hs_object_id: row.hs_object_id, ...result, properties } };
 });
 """
 
