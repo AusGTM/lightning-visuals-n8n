@@ -128,22 +128,24 @@ def test_decide_company_action_uses_stable_stringify_not_a_hand_rolled_serialize
     assert "stableStringify(" in code  # actually called by the wrapper
 
 
-def test_hubspot_company_create_node_is_a_native_hubspot_node():
-    """Task 5's port converts the raw-HTTP company HubSpot calls to the credential-bound
-    native n8n-nodes-base.hubspot node, same as the contacts branch. "HubSpot Company
-    Search" deliberately EXCLUDED (BUG 10 / Phase 16.6): n8n's HubSpot node has no
-    `operation: "search"` for resource:company at all (confirmed by reading
-    CompanyDescription.ts's companyOperations option list — only create/delete/get/getAll/
-    getRecentlyCreatedUpdated/searchByDomain/update exist), so the native node silently
-    returned json:null live; see test_hubspot_company_search_is_credential_bound_httprequest
-    below for its replacement shape. company:create's live behavior is UNVERIFIED — BUG
-    10's trace only exercised operation:search, and Phase 16.7-01 (BUG 11) left create
-    untouched (`ALLOW_HUBSPOT_CREATE` stays "false" for the whole of Phase 16.7)."""
+def test_hubspot_company_create_is_a_credential_bound_httprequest_post():
+    """Was pinned as the native n8n-nodes-base.hubspot node. Phase 16.9 (BUG 13) moved it:
+    the native node carried `additionalFields: {}` so the computed patch was discarded, and
+    its `name` expression read `$json.name`/`$json.identity_keys.*`, none of which exist on
+    Decide Company Action's output (verified from live execution 12) — dereferencing the
+    absent identity_keys would have thrown. It now POSTs {"properties": $json.properties}
+    to the CRM v3 collection endpoint, credential-bound, with no error swallowing."""
     doc = _load()
     node = next(n for n in doc["nodes"] if n["name"] == "HubSpot Company Create")
-    assert node["type"] == "n8n-nodes-base.hubspot"
-    assert node["parameters"]["resource"] == "company"
-    assert node["parameters"]["operation"] == "create"
+    params = node["parameters"]
+    assert node["type"] == "n8n-nodes-base.httpRequest"
+    assert params["method"] == "POST"
+    assert params["url"] == "https://api.hubapi.com/crm/v3/objects/companies"
+    assert params["authentication"] == "predefinedCredentialType"
+    assert params["nodeCredentialType"] == "hubspotAppToken"
+    assert "$json.properties" in params["jsonBody"]
+    assert "identity_keys" not in params["jsonBody"]
+    assert node.get("onError") is None, "a rejected create must fail the execution"
 
 
 def test_hubspot_company_update_node_is_credential_bound_httprequest_patch():

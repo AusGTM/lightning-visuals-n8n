@@ -240,22 +240,21 @@ def test_company_search_node_body_preserves_the_original_filter_semantics(name):
 # --- company:create — explicitly UNCHANGED, defect status UNKNOWN ----------------------
 
 @pytest.mark.parametrize("name", UNCHANGED_WRITE_NODES)
-def test_company_create_remains_the_native_hubspot_node_unchanged(name):
-    """BUG 10's live trace exercised ONLY `operation: search`. Whether `operation: create`
-    shares the defect is UNVERIFIED — it has never run live (16.6-CONTEXT.md's open
-    question), and `ALLOW_HUBSPOT_CREATE` stays `"false"` for the whole of Phase 16.7 (per
-    16.7-CONTEXT.md Locked Decision 2), so it stays unexercised here too. This test pins
-    that fact mechanically so a future change cannot silently imply it was fixed.
-    `HubSpot Company Update` was REMOVED from this list in Phase 16.7-01 (BUG 11) — it
-    moved off the native node entirely; see tests/test_write_node_transport.py for its
-    replacement's guard and for the companion pin that `HubSpot Create`/`HubSpot Company
-    Create` remain native and unverified."""
+def test_company_create_is_not_a_search_node(name):
+    """BUG 10's live trace exercised ONLY `operation: search`, and its fix must never have
+    spread to the create path. This originally pinned the create node as NATIVE and
+    unverified; Phase 16.9 (BUG 13) subsequently moved it onto a credential-bound
+    httpRequest POST for reasons entirely unrelated to BUG 10 — see
+    tests/test_write_node_transport.py for that guard. What this test still protects is the
+    original property: whatever transport the create node uses, it is a CREATE against the
+    collection endpoint and not a search."""
     doc = _load("wf_enrichment_cloud.json")
     node = _node(doc, name)
-    assert node["type"] == "n8n-nodes-base.hubspot"
-    assert node["parameters"]["resource"] == "company"
-    assert node["parameters"]["operation"] == "create"
-
+    params = node["parameters"]
+    assert node["type"] == "n8n-nodes-base.httpRequest"
+    assert params["method"] == "POST"
+    assert params["url"].rstrip("/").endswith("/crm/v3/objects/companies")
+    assert "/search" not in params["url"]
 
 # --- contacts: byte-identical to HEAD (the one live-proven path must not regress) ------
 

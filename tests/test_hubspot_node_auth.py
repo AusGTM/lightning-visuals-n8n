@@ -77,22 +77,30 @@ def test_bound_hubspot_credential_type_matches_declared_auth_mode(wf_path: Path)
         )
 
 
-def test_company_create_supplies_its_required_name_parameter():
-    """n8n's company:create requires `name`; omitting it is an activation-time error
-    ("Missing or invalid required parameters: name"), not a deploy-time one."""
+def test_company_create_carries_the_patch_and_needs_no_name_parameter():
+    """n8n's NATIVE company:create required a `name` parameter (omitting it is an
+    activation-time error). Phase 16.9 (BUG 13) moved company creates off that node onto a
+    CRM v3 POST, where `name` is an ordinary member of `properties` — so the old guard no
+    longer has a native node to apply to. What replaces it is the property that actually
+    matters: the create must send the computed patch rather than an empty field map, which
+    is what made the native node useless."""
     checked = 0
     for wf_path in WORKFLOW_FILES:
         doc = json.loads(wf_path.read_text())
+        # No native company:create may survive anywhere — that is the regression to catch.
         for node in _hubspot_nodes(doc):
             params = node.get("parameters", {})
-            if params.get("resource") == "company" and params.get("operation") == "create":
+            assert not (params.get("resource") == "company"
+                        and params.get("operation") == "create"), (
+                f"{wf_path.name}: {node['name']!r} regressed to a native company:create")
+        for node in doc["nodes"]:
+            params = node.get("parameters", {})
+            if (node.get("type") == "n8n-nodes-base.httpRequest"
+                    and params.get("method") == "POST"
+                    and str(params.get("url", "")).endswith("/crm/v3/objects/companies")):
                 checked += 1
-                name_param = params.get("name")
-                assert name_param, (
-                    f"{wf_path.name}: {node['name']!r} is a company:create with no `name` "
-                    f"parameter — n8n rejects this at activation."
-                )
-    assert checked, "no company:create node found — this guard is vacuous"
+                assert "$json.properties" in params.get("jsonBody", "")
+    assert checked, "no company create node found — this guard is vacuous"
 
 
 @pytest.mark.parametrize("wf_path", WORKFLOW_FILES, ids=lambda p: p.name)

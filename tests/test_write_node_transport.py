@@ -124,16 +124,36 @@ def test_both_update_node_names_are_present_in_node_credential_map():
 
 # --- creates: untouched, native, explicitly pinned as live-unverified ------------------
 
-@pytest.mark.parametrize("name,expected", list(CREATE_NODES.items()))
-def test_create_nodes_are_still_native_and_unchanged_by_this_fix(name, expected):
-    """company:create / contacts create are NOT touched by this plan (ALLOW_HUBSPOT_CREATE
-    stays "false" for the whole phase, per 16.7-CONTEXT.md Locked Decision 2). Their live
-    defect status remains UNKNOWN — this pin exists so a future change cannot silently
-    imply they were fixed too, the same spirit as BUG 10's UNCHANGED_WRITE_NODES pin in
-    tests/test_bug10_company_search_transport.py."""
-    resource, operation = expected
+@pytest.mark.parametrize("name,resource", [("HubSpot Create", "contacts"),
+                                           ("HubSpot Company Create", "companies")])
+def test_create_nodes_post_the_computed_patch(name, resource):
+    """BUG 13, found 2026-07-29 while auditing the write lane before exercising creates
+    live. This test previously pinned both create nodes as NATIVE and deliberately
+    unverified — 16.7-01 left them alone because ALLOW_HUBSPOT_CREATE stayed false for that
+    whole phase. The audit found they were broken two ways at once, either of which alone
+    would have made a create canary meaningless:
+
+      1. `additionalFields: {}` — the same empty-map placeholder as BUG 11, so the computed
+         patch on $json.properties was discarded and a create would have produced a record
+         carrying only its identifier.
+      2. They read fields absent from their own input. Decide Action / Decide Company Action
+         emit exactly {action, object_type, hs_object_id, gap_flag, needs_review, properties}
+         (verified from live execution 12's runData), yet HubSpot Company Create read
+         `$json.name || $json.identity_keys.companyName || $json.identity_keys.domain` and
+         HubSpot Create read `$json.properties.email` — which is never present, because
+         email is manual_protected and can never promote into the patch.
+
+    Both now POST {"properties": $json.properties} to the CRM v3 collection endpoint."""
     doc = _load()
     node = _node(doc, name)
-    assert node["type"] == "n8n-nodes-base.hubspot"
-    assert node["parameters"]["resource"] == resource
-    assert node["parameters"]["operation"] == operation
+    params = node["parameters"]
+    assert node["type"] == "n8n-nodes-base.httpRequest", "must not regress to the native node"
+    assert params["method"] == "POST"
+    assert params["url"] == f"https://api.hubapi.com/crm/v3/objects/{resource}"
+    assert params["authentication"] == "predefinedCredentialType"
+    assert params["nodeCredentialType"] == "hubspotAppToken"
+    assert params["jsonBody"] == "={{ JSON.stringify({ properties: $json.properties }) }}"
+    # The two expressions that could never have resolved must be gone for good.
+    assert "identity_keys" not in params["jsonBody"]
+    assert "properties.email" not in params["jsonBody"]
+    assert node.get("onError") is None, "a rejected create must fail its execution loudly"

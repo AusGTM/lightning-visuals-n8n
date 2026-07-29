@@ -902,16 +902,21 @@
     },
     {
       "parameters": {
-        "resource": "contact",
-        "operation": "create",
-        "email": "={{ $json.properties.email }}",
-        "additionalFields": {},
-        "authentication": "appToken"
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ properties: $json.properties }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "hc00530000-0000-4000-8000-000000000000",
+      "id": "h00530000-0000-4000-8000-000000000000",
       "name": "HubSpot Create",
-      "type": "n8n-nodes-base.hubspot",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         6820,
         100
@@ -1652,16 +1657,21 @@
     },
     {
       "parameters": {
-        "resource": "company",
-        "operation": "create",
-        "name": "={{ $json.name || $json.identity_keys.companyName || $json.identity_keys.domain }}",
-        "additionalFields": {},
-        "authentication": "appToken"
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/companies",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ properties: $json.properties }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "hc00970000-0000-4000-8000-000000000000",
+      "id": "h00970000-0000-4000-8000-000000000000",
       "name": "HubSpot Company Create",
-      "type": "n8n-nodes-base.hubspot",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         7480,
         520

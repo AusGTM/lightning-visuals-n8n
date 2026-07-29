@@ -3584,12 +3584,10 @@ def build_enrichment_cloud():
     sx += 220
     if_create = _if_node("IF Create", "create", sx, y - 80)
     nodes.append(if_create)
-    hs_create = {
-        "parameters": {"resource": "contact", "operation": "create",
-                       "email": "={{ $json.properties.email }}", "additionalFields": {}},
-        "id": nid("hc"), "name": "HubSpot Create",
-        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [sx + 220, y - 200]}
-    nodes.append(hs_create)
+    # BUG 13 — see _hs_http_create_node. Was a native node with additionalFields:{} and an
+    # `email` expression reading $json.properties.email, which the Decide output never
+    # carries (email is manual_protected and can never promote into the patch).
+    nodes.append(_hs_http_create_node("HubSpot Create", "contacts", sx + 220, y - 200))
     if_enrich = _if_node("IF Enrich", "enrich", sx + 220, y - 20)
     nodes.append(if_enrich)
     # BUG 11 / Phase 16.7-01: credential-bound httpRequest PATCH, NOT the native hubspot
@@ -3763,19 +3761,15 @@ def build_enrichment_cloud():
     csx += 220
     if_co_create = _if_node("IF Company Create", "create", csx, cy - 80)
     nodes.append(if_co_create)
-    hs_co_create = {
-        # `name` is REQUIRED by n8n's company:create and its absence is an activation-time
-        # error ("Missing or invalid required parameters: name"), not a deploy-time one —
-        # found live 2026-07-28. Resolved the same way HubSpot Create resolves `email`:
-        # off the row, falling back through the identity anchors the company branch
-        # already computes (Build Company Identity -> identity_keys.companyName/domain).
-        "parameters": {"resource": "company", "operation": "create",
-                       "name": "={{ $json.name || $json.identity_keys.companyName "
-                               "|| $json.identity_keys.domain }}",
-                       "additionalFields": {}},
-        "id": nid("hc"), "name": "HubSpot Company Create",
-        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [csx + 220, cy - 200]}
-    nodes.append(hs_co_create)
+    # BUG 13 — see _hs_http_create_node. Was a native node with additionalFields:{} plus a
+    # `name` expression reading $json.name / $json.identity_keys.*, none of which exist on
+    # Decide Company Action's output (verified from live execution 12: it emits exactly
+    # action/object_type/hs_object_id/gap_flag/needs_review/properties). Dereferencing the
+    # absent identity_keys would have thrown. The 2026-07-28 note about `name` being a
+    # required activation-time parameter applied to the NATIVE node only; the CRM v3 REST
+    # endpoint takes it inside `properties` like any other field, and the merge supplies it
+    # there when it has one.
+    nodes.append(_hs_http_create_node("HubSpot Company Create", "companies", csx + 220, cy - 200))
     if_co_enrich = _if_node("IF Company Enrich", "enrich", csx + 220, cy - 20)
     nodes.append(if_co_enrich)
     # BUG 11 / Phase 16.7-01: credential-bound httpRequest PATCH — companies mirror of
@@ -4326,6 +4320,41 @@ def _hs_http_patch_node(name, resource, x, y):
     return _http_node(
         name, url, x, y,
         auth="hubspot", json_body=body, method="PATCH", on_error=None,
+    )
+
+
+def _hs_http_create_node(name, resource, x, y):
+    """Credential-bound httpRequest replacement for the native hubspot node's `create`
+    operation — BUG 13, the create-side twin of BUG 11, found 2026-07-29 while auditing
+    the write lane before exercising creates live. 16.7-01 deliberately left the create
+    nodes native and pinned them as unverified; this is that debt.
+
+    The native nodes were broken TWO ways at once, either of which alone would have made
+    a create canary meaningless:
+
+    1. `additionalFields: {}` — same empty-map placeholder as BUG 11, so the entire
+       computed patch on `$json.properties` was discarded. A create would have produced a
+       record carrying only its identifier.
+    2. They read fields that DO NOT EXIST on the node feeding them. `Decide Action` /
+       `Decide Company Action` emit exactly {action, object_type, hs_object_id, gap_flag,
+       needs_review, properties} — verified from live execution 12's runData. Yet
+       "HubSpot Company Create" read `$json.name || $json.identity_keys.companyName ||
+       $json.identity_keys.domain` (all undefined — and dereferencing `identity_keys`
+       would throw), and "HubSpot Create" read `$json.properties.email`, which is never
+       present because `email` is manual_protected and can never promote into the patch.
+
+    POSTing `{"properties": $json.properties}` to the collection endpoint fixes both: the
+    real patch is sent, and nothing outside the Decide output's own shape is referenced.
+    Node NAMES are preserved so NODE_CREDENTIAL_MAP binding by name keeps working, and
+    `on_error=None` is retained for the same reason as the PATCH node — a rejected write
+    must fail its execution rather than flowing on as a healthy item."""
+    if resource not in ("contacts", "companies"):
+        raise ValueError(f"_hs_http_create_node only supports contacts/companies — got resource={resource!r}")
+    url = "https://api.hubapi.com/crm/v3/objects/" + resource
+    body = "={{ JSON.stringify({ properties: $json.properties }) }}"
+    return _http_node(
+        name, url, x, y,
+        auth="hubspot", json_body=body, method="POST", on_error=None,
     )
 
 
