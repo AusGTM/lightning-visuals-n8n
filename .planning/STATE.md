@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 
 ## Current Position
 
-Phase: 18 (normalization-copy-loop-fixes) — PLANNED, ready to execute
-Plan: 18-01 (NORM-01, wave 1) + 18-02 (COPY-01/COPY-02, wave 2, depends on 18-01) — plan checker VERIFICATION PASSED first iteration
-Status: Phase 17 complete (BUG 23 closed live, evidence 17-CANARY-EVIDENCE.md). Phase 18 planned: RESEARCH + PATTERNS + VALIDATION + 2 plans committed. Baseline 596 pytest / 285 node.
-Last activity: 2026-07-29 — Phase 18 planned (researcher → planner → checker pass)
-Next: /gsd-execute-phase 18
+Phase: 18 (normalization-copy-loop-fixes) — IN PROGRESS
+Plan: 18-01 (NORM-01, wave 1) EXECUTED 2026-07-29 (`ae46e63`/`d54ed27`/`8d42d9a`) — 18-02 (COPY-01/COPY-02, wave 2, depends on 18-01) still pending
+Status: Phase 17 complete (BUG 23 closed live, evidence 17-CANARY-EVIDENCE.md). Phase 18-01 executed: `_industryText` helper closes NORM-01 (bare NAICS code can no longer win the industry waterfall); full offline suite now 596 pytest / 289 node, 0 regressions vs the 596/285 baseline. See `18-01-SUMMARY.md`.
+Last activity: 2026-07-29 — Plan 18-01 executed
+Next: /gsd-execute-phase 18 (plan 18-02)
 
 ## Performance Metrics
 
@@ -156,7 +156,7 @@ Items carried forward to later milestones:
 | Category | Item | Status | Deferred At |
 |----------|------|--------|-------------|
 | Debug | BUG 23 — enrichment `contact:create` structurally unreachable — **RESOLVED 2026-07-29, Phase 17** (transport swap + dual live canary; see `.planning/debug/bug-23-enrichment-contact-nomatch-chain-stop.md` Resolution) | Fixed | 2026-07-29 |
-| Normalization | ZoomInfo numeric `industry` code (`"71"`) wins the waterfall over Apollo text and normalizes unchanged — routed to `needs_review`, nothing clobbered, no ticket | Deferred to v0.4 | 2026-07-29 |
+| Normalization | ZoomInfo numeric `industry` code (`"71"`) wins the waterfall over Apollo text and normalizes unchanged — **RESOLVED 2026-07-29, Phase 18 Plan 01** (`_industryText` helper; see `18-01-SUMMARY.md`) | Fixed | 2026-07-29 |
 | Verification | Six `/gsd-verify-work` re-runs carried from the original goal ledger | Deferred to v0.4 | 2026-07-29 |
 | Enrichment | REQ-finite-list-motion (named-list motion) | Deferred | 2026-07-07 |
 | Scoring | REQ-intent-scoring (pixel intent) | Deferred | 2026-07-07 |

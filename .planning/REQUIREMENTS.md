@@ -109,7 +109,7 @@ The v3 section formerly here is archived verbatim in `.planning/milestones/v0.3-
 
 ### Normalization
 
-- [ ] **NORM-01**: A numeric provider industry code (ZoomInfo's `"71"`) never survives normalization unchanged and never wins the waterfall over provider text (Apollo's `"media production"` lost to `"71"` in execution 19).
+- [x] **NORM-01**: A numeric provider industry code (ZoomInfo's `"71"`) never survives normalization unchanged and never wins the waterfall over provider text (Apollo's `"media production"` lost to `"71"` in execution 19).
 
 ### Copy-loops
 
@@ -128,7 +128,7 @@ The v3 section formerly here is archived verbatim in `.planning/milestones/v0.3-
 | REACH-02 | Phase 17 | Complete |
 | REACH-03 | Phase 17 | Complete |
 | REACH-04 | Phase 17 | Complete |
-| NORM-01 | Phase 18 | Pending |
+| NORM-01 | Phase 18 | Complete |
 | COPY-01 | Phase 18 | Pending |
 | COPY-02 | Phase 18 | Pending |
 | VERIFY-01 | Phase 19 | Pending |

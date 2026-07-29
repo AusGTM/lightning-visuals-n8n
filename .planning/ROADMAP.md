@@ -391,5 +391,5 @@ defect a re-run surfaces is captured rather than silently absorbed into "passed.
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 17. Enrichment Contacts Reachability (BUG 23) | 2/2 | **Complete** — verified 5/5; contact:create live-reachable (exec 76), match path regression-checked field-by-field (execs 68-72), deployment restored disarmed | 2026-07-29 |
-| 18. Normalization & Copy-Loop Fixes | 0/TBD | Not started | - |
+| 18. Normalization & Copy-Loop Fixes | 1/2 | In progress — 18-01 (NORM-01) executed, 596/289 offline suite, 0 regressions | 18-01: 2026-07-29 |
 | 19. Verification Debt Closure | 0/TBD | Not started | - |
