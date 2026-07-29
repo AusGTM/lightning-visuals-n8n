@@ -2,10 +2,10 @@
 gsd_state_version: 1.0
 milestone: v0.4
 milestone_name: Reachability & Verification Debt
-current_phase: 17
-current_phase_name: enrichment-contacts-reachability-bug-23
-status: in_progress
-stopped_at: Completed 17-02-PLAN.md (BUG 23 closed live)
+current_phase: 18
+current_phase_name: normalization-copy-loop-fixes
+status: ready_to_execute
+stopped_at: Phase 18 planned (2 plans, checker passed)
 last_updated: "2026-07-29T07:11:23.520Z"
 last_activity: 2026-07-29
 last_activity_desc: Phase 17 fully executed (17-01 offline, 17-02 live canary); BUG 23 fixed
@@ -28,11 +28,11 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 
 ## Current Position
 
-Phase: 17 (enrichment-contacts-reachability-bug-23) — COMPLETE (both plans executed)
-Plan: 17-01 (offline: transport swap + pin removal + harness) — complete; 17-02 (dual live canary) — complete
-Status: BUG 23 CLOSED, phase 17 VERIFIED passed 5/5 — live canary proved both the match-path regression check (GO) and create-path reachability (Enrichment Gate.action=="create", write-gated); deployment restored disarmed and read back live. Suite 596 pytest / 285 node. Full evidence: 17-CANARY-EVIDENCE.md.
-Last activity: 2026-07-29 — Phase 17 fully executed (17-01 offline, 17-02 live canary); BUG 23 fixed
-Next: /gsd-plan-phase 18 (Normalization & Copy-Loop Fixes)
+Phase: 18 (normalization-copy-loop-fixes) — PLANNED, ready to execute
+Plan: 18-01 (NORM-01, wave 1) + 18-02 (COPY-01/COPY-02, wave 2, depends on 18-01) — plan checker VERIFICATION PASSED first iteration
+Status: Phase 17 complete (BUG 23 closed live, evidence 17-CANARY-EVIDENCE.md). Phase 18 planned: RESEARCH + PATTERNS + VALIDATION + 2 plans committed. Baseline 596 pytest / 285 node.
+Last activity: 2026-07-29 — Phase 18 planned (researcher → planner → checker pass)
+Next: /gsd-execute-phase 18
 
 ## Performance Metrics
 
