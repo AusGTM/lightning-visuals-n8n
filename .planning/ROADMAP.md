@@ -352,10 +352,14 @@ transport definitions; this phase touches the merge-call construction for `ENRIC
      loop) into the contacts merge call — a test proves the property populates from a real candidate
      instead of staying empty.
 
-  5. The offline suite (587 pytest + node baseline) is green with zero regressions, and the workflow
-     builder is deterministic (rebuild twice, no diff).
+  5. The offline suite is green with zero regressions against the ACTUAL current baseline
+     (596 pytest / 285 node, measured 2026-07-29 — the "587" figure above predates Phase 17), and
+     the workflow builder is deterministic (rebuild twice, no diff).
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+- [ ] 18-01-PLAN.md — NORM-01: `_industryText` helper stops any numeric NAICS code becoming an industry candidate value (ZoomInfo + defensively Lusha), proven against the real execution-19 shape
+- [ ] 18-02-PLAN.md — COPY-01/COPY-02: `lv_sponsorship_reliant` and the lv-prefixed persona property reach their merge calls, proven through the compiled node bodies, with the bounded frozen-fixture re-baseline
 
 ### Phase 19: Verification Debt Closure
 
