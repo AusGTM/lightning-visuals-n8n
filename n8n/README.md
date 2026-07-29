@@ -120,10 +120,10 @@ field into the same non-clobber merge. Same two-artifact pattern, same inliner
 
 | File | Purpose |
 | ---- | ------- |
-| `wf_enrichment_cloud.json` | Production-shaped template (88 nodes / 81 functional + 7 sticky). Auth-gated Webhook + object-type router → **symmetric contacts and companies branches**, each running per-request provider selection (waterfall → web research → judge → merge) plus a credit-reporting lane. Credentials bound per node by `scripts/deploy_n8n_workflows.py`. |
+| `wf_enrichment_cloud.json` | Production-shaped template (97 nodes / 90 functional + 7 sticky). Auth-gated Webhook + object-type router → **symmetric contacts and companies branches**, each running per-request provider selection (waterfall → web research → judge → merge) plus a credit-reporting lane. Credentials bound per node by `scripts/deploy_n8n_workflows.py`. |
 | `wf_enrichment_local.json` | Headless-executable. Trigger emits 3 sample identities; HubSpot search + provider waterfall + writes are Code mocks; the scoring/gate/merge logic is real. |
 | `wf_enrichment_local_live.json` | Local replica wired for **live** provider/HTTP calls (the reference build carrying the full company branch + research + judge). |
-| `wf_scheduled_maintenance_cloud.json` | The background reconciliation layer (30 nodes), emitted **`active: false`** (Phase 16.1 — ships inactive; an operator enables each schedule deliberately): SJ-1/2/3 schedules + weekly dedupe + the §22.2 review loop. See its diagram below. |
+| `wf_scheduled_maintenance_cloud.json` | The background reconciliation layer (34 nodes), emitted **`active: false`** (Phase 16.1 — ships inactive; an operator enables each schedule deliberately): SJ-1/2/3 schedules + weekly dedupe + the §22.2 review loop. See its diagram below. |
 
 ## Workflow graph — enrichment (`wf_enrichment_cloud.json`, as-built)
 
@@ -293,6 +293,8 @@ Default weights `wA=0.45, wR=0.20, wG=0.25, wT=0.10` (tunable). Default mode
 Each winner carries provenance `{value, source, score, components, agreedBy[]}`.
 
 ## Import to n8n Cloud
+
+**Live state (2026-07-29):** all three Cloud workflows are **deployed and active** on n8n Cloud, credential-bound, write gates disarmed at rest; live write canaries (non-clobber, `contact:create` reachability, `company:create`, `company:update`) all proven in audited armed windows via the `ENABLE_BAKED_FLAGS` overlay, deployment restored disarmed and read back each time.
 
 **Deploy is scripted (Phase 16) — do not hand-import.** n8n Cloud blocks `$env`
 (`N8N_BLOCK_ENV_ACCESS_IN_NODE`) and doesn't license `$vars`, and Code nodes can

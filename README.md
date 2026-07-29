@@ -51,13 +51,15 @@ flowchart LR
 | Company enrichment branch (waterfall + web research + judge + merge) | ✅ |
 | Contact enrichment branch (waterfall + web research + judge + merge — mirrors companies) | ✅ built (Phase 16.2) |
 | Per-request provider selection + credit reporting (`providers` payload, `remaining_credits`) | ✅ built (Phase 16.1) |
-| n8n Cloud workflows (contact ingest, enrichment, scheduled maintenance) | ✅ built + offline-proven |
+| n8n Cloud workflows (contact ingest, enrichment, scheduled maintenance) | ✅ **deployed + active on n8n Cloud**, write gates disarmed at rest |
 | HubSpot `lv_*` properties (33 + SJ-3 control props) | ✅ migrated live (Phase 15) |
 | Provider auth (Lusha / Apollo / ZoomInfo split-code-node) | ✅ credential-bound |
-| Scheduled workflows (SJ-1/2/3 + dedupe + review) | ✅ built (ship `active: false`) |
+| Scheduled workflows (SJ-1/2/3 + dedupe + review) | ✅ built (template ships `active: false`; enabled live by operator) |
 | §22.2 review-surface loop (flag → approve → apply → clear) | ✅ built |
-| Cloud deploy + credential provisioning (Public API) | ✅ scripted, dry-run verified |
-| **Live deploy + activation on n8n Cloud** | ⏳ operator runbook (see `n8n/README.md`) |
+| Cloud deploy + credential provisioning (Public API) | ✅ scripted + **live-proven** (idempotent redeploys) |
+| Live write canaries | ✅ non-clobber, `contact:create` reachability, `company:create`, `company:update` — all proven in audited armed windows, restored disarmed |
+| Normalization & producer fixes (numeric industry code, `lv_sponsorship_reliant`, `lv_persona_group`) | ✅ Phase 18, red-before-green |
+| v0.3/v0.4 verification ledger | ✅ 6/6 discharged (`.planning/phases/19-verification-debt-closure/19-LEDGER.md`) |
 
 Full test suite: `.venv/bin/python -m pytest -q` (Python oracle) + `node --test tests/n8n/*.test.mjs` (Code-node modules).
 
@@ -107,7 +109,7 @@ DRY_RUN=false ALLOW_N8N_DEPLOY=true .venv/bin/python scripts/provision_n8n_crede
 DRY_RUN=false ALLOW_N8N_DEPLOY=true .venv/bin/python scripts/deploy_n8n_workflows.py
 ```
 
-Activation (`POST /api/v1/workflows/{id}/activate`) is a deliberate separate step. See [`n8n/README.md`](n8n/README.md) for the full operator runbook and the two live-wiring items (`Review Apply Update` field map; webhook caller/auth).
+Activation (`POST /api/v1/workflows/{id}/activate`) is a deliberate separate step. All three workflows are **currently deployed and active** on n8n Cloud, disarmed at rest; write-enabling flags are baked in only through the `ENABLE_BAKED_FLAGS` overlay inside deliberate, allowlisted operator windows (ceremony: `.planning/phases/19-verification-debt-closure/19-OPERATOR-RUNBOOK.md`, which also encodes the `.env`-loading command form). See [`n8n/README.md`](n8n/README.md) for node-level detail.
 
 Secrets live in a gitignored `.env` (see `.env.example`). In production they live in **n8n's credential store**, never in the repo. Nothing writes to HubSpot or n8n unless a write is explicitly enabled and gated.
 

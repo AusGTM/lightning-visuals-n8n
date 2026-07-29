@@ -499,4 +499,6 @@ Golden set = the five live prospect accounts, which between them cover every bra
 - Name-mismatch detection — evaluated and rejected: blind to the identical-name case that
   actually costs (ZoomInfo "Harvey Norman"), and its only true positive is already caught
   by the §1 conflict detector
-- `lv_sponsorship_reliant`, `lv_cloud_fear_risk`, `lv_price_sensitivity_risk`
+- ~~`lv_sponsorship_reliant`~~ **DELIVERED in Phase 18-03** (added to the companies research
+  `required_fields` + forced JSON schema; copied into the merge call via the `ENRICH_MERGE_CO`
+  researchData loop) — `lv_cloud_fear_risk`, `lv_price_sensitivity_risk` remain out of scope
