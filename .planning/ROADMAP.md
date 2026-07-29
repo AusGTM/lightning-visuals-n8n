@@ -620,6 +620,45 @@ Plans:
 
 **Plans**: 16.8-01 (COMPLETE 2026-07-29, commits `fb87cb5` + the Code-node follow-up). Criterion 2 deviated deliberately: n8n's `options.includeOtherFields` was tried and deployed and did NOT work (execution 14 read it back live while the node still dropped the row), so the node became a Code node that spreads explicitly — recorded rather than silently substituted.
 
+### Phase 16.9: Create-Path Fix (BUG 13) and Company Write Verification
+
+**Goal**: `company:update` and `company:create` — neither of which had ever run live — write correctly, or their blockers are on the record.
+
+**Depends on**: Phase 16.8
+**INSERTED 2026-07-29.**
+
+**BUG 13 — FIXED (commit `c6462e9`).** Both create nodes were broken two ways at once: `additionalFields: {}` discarded the computed patch (BUG 11's twin), AND they read fields absent from their own input — `HubSpot Company Create` read `$json.name || $json.identity_keys.companyName || $json.identity_keys.domain` and `HubSpot Create` read `$json.properties.email`, while `Decide Action`/`Decide Company Action` emit exactly `{action, object_type, hs_object_id, gap_flag, needs_review, properties}` (verified from live execution 12). Dereferencing the absent `identity_keys` would have thrown. Both now POST `{"properties": $json.properties}` to the CRM v3 collection endpoint, credential-bound, error-swallowing off. Five stale native-node pins retargeted rather than deleted.
+
+**BUG 14 — OPEN, blocks the company write path.** Live, execution 16, against a throwaway company created and deleted for the purpose: `HubSpot Company Update` issued `PATCH {"properties":{"lv_enrichment_status":"complete"}}` and HubSpot rejected it —
+
+```
+Property "lv_enrichment_status" does not exist   (PROPERTY_DOESNT_EXIST, portal 22617666)
+```
+
+The execution failed loudly rather than returning a plausible 200 — the no-`onError` decision from 16.7-01 working exactly as intended.
+
+Enumerated against the live portal schema, exactly **two** company properties the pipeline depends on do not exist:
+
+| property | used by |
+|---|---|
+| `lv_enrichment_status` | `ENRICH_DECIDE_CO_CLOUD` writes it on every companies run (`"complete"` / `"needs_review"`); SJ-3's 15-minute poller filters on it |
+| `lv_enrichment_requested` | SJ-3's poller filters on it |
+
+Everything else the write path touches exists (`lv_enrichment_needs_review`, `lv_enrichment_review_reason`, `lv_enrichment_review_candidate_json`, `lv_enrichment_provenance`, `lv_org_type`, `lv_produces_content`, `lv_icp_tier`, `lv_icp_fit_score`). `scripts/sync_hubspot_properties.py` does not define either name.
+
+**Consequence**: EVERY companies write fails, and `company:create` cannot be exercised either since it emits the same property. This also means SJ-3's poller could never have matched anything.
+
+**Decision required (operator)**: creating two custom properties in the production portal is a schema change to the user's CRM and was deliberately not performed unilaterally. The alternative — stop emitting `lv_enrichment_status` — would silently drop a documented control property and break SJ-3's design.
+
+**Success Criteria (draft — refine at plan time):**
+
+  1. The two missing properties either exist in the portal (created through the repo's migration tooling, with an undo manifest) or the pipeline stops depending on them — decided explicitly, not defaulted.
+  2. A guard asserts every property name the Cloud workflows write or filter on exists in the snapshotted portal schema, so this class cannot recur silently.
+  3. **Live**: a companies run against a throwaway record reaches `HubSpot Company Update` with HTTP 2xx and the patch lands, verified by re-read.
+  4. **Live**: `company:create` runs once against a domain with no existing record, and whatever it creates is deleted afterwards.
+
+**Plans**: TBD
+
 ## Milestone 3 Progress
 
 | Phase | Plans Complete | Status | Completed |
@@ -639,3 +678,4 @@ Plans:
 | 16.6. Companies Search Transport Fix (INSERTED) | 1/1 | **Complete** — criteria 1 & 7 VERIFIED LIVE (execution 12, non-null Merge Company) | 2026-07-29 |
 | 16.7. Write-Path Canary (INSERTED) | 2/2 | **Complete** — first HubSpot write in project history; protected fields provably survived it; rolled back | 2026-07-29 |
 | 16.8. Row-Carry Fix (BUG 12) (INSERTED) | 1/1 | **Complete** — Set node replaced with a row-spreading Code node; verified live (execution 15) | 2026-07-29 |
+| 16.9. Create-Path Fix (BUG 13) + Company Writes (INSERTED) | 0/? | BUG 13 fixed (`c6462e9`); **BUG 14 OPEN** — `lv_enrichment_status` / `lv_enrichment_requested` do not exist in the portal, so every companies write fails | — |
