@@ -8,8 +8,7 @@ exact deploy-time overlay mechanism already built for it
 (`_OVERLAY_FLAG_SPEC` / `enable_baked_flags()`, `scripts/deploy_n8n_workflows.py`
 lines 110-141).
 
-**Do not run this until item 16's deployment-drift finding (`bug-26-enrichment-live-
-deployment-behind-git.md`) is closed first** — the live `LV Enrichment` deployment
+**Do not run this until item 16's deployment-drift finding (`bug-26-enrichment-live- deployment-behind-git.md`) is closed first** — the live `LV Enrichment` deployment
 currently predates Phase 18. A `company:update` canary run against the stale deployment
 would prove the wrong artifact. Redeploy the current committed build (step 0 below) before
 arming anything.
@@ -61,8 +60,7 @@ DRY_RUN=false ALLOW_N8N_DEPLOY=true \
 ```
 
 Read back `LV Enrichment`'s live node bodies afterward and confirm `_personaGroup` and
-`_industryText` are now both present in the `Normalize + Score` / `Normalize + Score
-Company` node bodies (the same check Phase 19 Task 1 ran, now expected to flip from absent
+`_industryText` are now both present in the `Normalize + Score` / `Normalize + Score Company` node bodies (the same check Phase 19 Task 1 ran, now expected to flip from absent
 to present).
 
 ## Step 1 — Arm
