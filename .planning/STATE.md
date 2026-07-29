@@ -30,9 +30,9 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 
 Phase: 17 (enrichment-contacts-reachability-bug-23) — COMPLETE (both plans executed)
 Plan: 17-01 (offline: transport swap + pin removal + harness) — complete; 17-02 (dual live canary) — complete
-Status: BUG 23 CLOSED — live canary proved both the match-path regression check (GO) and create-path reachability (Enrichment Gate.action=="create", write-gated); deployment restored disarmed and read back live. Full evidence: 17-CANARY-EVIDENCE.md.
+Status: BUG 23 CLOSED, phase 17 VERIFIED passed 5/5 — live canary proved both the match-path regression check (GO) and create-path reachability (Enrichment Gate.action=="create", write-gated); deployment restored disarmed and read back live. Suite 596 pytest / 285 node. Full evidence: 17-CANARY-EVIDENCE.md.
 Last activity: 2026-07-29 — Phase 17 fully executed (17-01 offline, 17-02 live canary); BUG 23 fixed
-Next: plan the next phase in Milestone v0.4 (Reachability & Verification Debt)
+Next: /gsd-plan-phase 18 (Normalization & Copy-Loop Fixes)
 
 ## Performance Metrics
 
