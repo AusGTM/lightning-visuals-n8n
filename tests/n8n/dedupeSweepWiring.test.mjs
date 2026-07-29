@@ -51,12 +51,21 @@ test("Dedupe Sweep feeds a downstream HubSpot write node that consumes to_review
     "the sweep must dispatch into a write-safety gate, not straight at the write node");
   const afterGate = wf.connections[gate.name].main[0].map((c) => c.node);
   assert.equal(afterGate.length, 1);
+  // BUG 18: the write node was a native hubspot node with `operation: "update"`, which does
+  // not exist for resource:contact (upstream ContactDescription.ts offers upsert, not
+  // update) — so it would have fallen through n8n's dispatch chain and returned json:null
+  // with status:success, BUG 10's failure mode on the contacts side. It is now the shared
+  // credential-bound PATCH, and the flag literal moved into the sweep's row `properties`.
+  // The property under test is unchanged: the sweep reaches a write that sets the flag.
   const downstream = findNode(wf, afterGate[0]);
-  assert.equal(downstream.type, "n8n-nodes-base.hubspot");
-  assert.equal(downstream.parameters.operation, "update");
-  const props = downstream.parameters.updateFields.customPropertiesUi.customPropertiesValues;
-  const set = props.find((p) => p.property === "lv_enrichment_needs_review");
-  assert.ok(set && set.value === "true", "downstream node must write lv_enrichment_needs_review=true");
+  assert.equal(downstream.type, "n8n-nodes-base.httpRequest");
+  assert.equal(downstream.parameters.method, "PATCH");
+  assert.match(downstream.parameters.url, /crm\/v3\/objects\/contacts\//);
+  assert.match(downstream.parameters.jsonBody, /\$json\.properties/);
+  assert.equal(downstream.parameters.nodeCredentialType, "hubspotAppToken");
+
+  assert.match(node.parameters.jsCode, /lv_enrichment_needs_review:\s*"true"/,
+    "the sweep must emit the review flag on the row the PATCH node sends");
 });
 
 test("the Dedupe Sweep wrapper reads dedupeSweep(records) output shape (to_review_ids)", () => {

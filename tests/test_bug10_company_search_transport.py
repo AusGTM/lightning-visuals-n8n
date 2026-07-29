@@ -117,11 +117,17 @@ UNCHANGED_WRITE_NODES = ["HubSpot Company Create"]
 # longer byte-identical to HEAD by design; "HubSpot Create" was never a search/fetch node
 # this guard was scoped to protect in the first place — its own unchanged-ness is now
 # pinned by tests/test_write_node_transport.py's create-node guard instead.
+#
+# "Dedupe Set Needs Review" was REMOVED for the same reason as "HubSpot Update", on the
+# same grounds (BUG 18, 2026-07-29): it was never a contacts SEARCH/FETCH node, and it has
+# moved off the native node onto the shared credential-bound PATCH. It could not have been
+# byte-identical-and-correct in any case — it carried `operation: "update"`, which does not
+# exist for resource:contact, so what this guard was pinning was a node with BUG 10's own
+# defect. Its shape is now pinned by tests/test_hubspot_native_operation_validity.py.
 CONTACT_NODES_BY_WORKFLOW = {
     "wf_contact_ingest_cloud.json": ["HubSpot Search by Email"],
     "wf_enrichment_cloud.json": ["HubSpot Search", "HubSpot Fetch By Id"],
-    "wf_scheduled_maintenance_cloud.json": ["Dedupe Search (candidate contacts)",
-                                             "Dedupe Set Needs Review"],
+    "wf_scheduled_maintenance_cloud.json": ["Dedupe Search (candidate contacts)"],
 }
 
 

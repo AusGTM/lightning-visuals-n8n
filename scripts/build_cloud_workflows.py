@@ -4196,7 +4196,19 @@ const records = rows.map((r) => ({
   properties: { email: r.email, phone: r.phone, linkedin_url: r.lv_linkedin_url },
 }));
 const report = dedupeSweep(records);
-return report.to_review_ids.map((id) => ({ json: { hs_object_id: id, to_review_reason: "dedupe_sweep" } }));
+// BUG 18: this lane's write node was a native hubspot node running `contact:update` — an
+// operation ContactDescription.ts does not define (contacts have upsert, not update), so
+// it would have silently returned json:null with status:success, exactly like BUG 10's
+// company:search. Converging this lane onto the shared `properties` row contract (the same
+// move BUG 11/16 made for the review lane above) lets it use the credential-bound PATCH
+// node instead of an operation that does not exist.
+return report.to_review_ids.map((id) => ({
+  json: {
+    hs_object_id: id,
+    to_review_reason: "dedupe_sweep",
+    properties: { lv_enrichment_needs_review: "true" },
+  },
+}));
 """
 
 # reviewApply.js's consumer contract is documented on the module itself — see its header.
@@ -4584,8 +4596,14 @@ def build_scheduled_maintenance_cloud():
     dedupe_node = code_node("Dedupe Sweep", ENRICH_DEDUPE_SWEEP, x3, y3)
     nodes.append(dedupe_node)
     x3 += 220
-    dedupe_flag_write = _hs_update_set_property(
-        "Dedupe Set Needs Review", "contact", x3, y3, "lv_enrichment_needs_review", "true")
+    # BUG 18 (2026-07-29): was _hs_update_set_property(..., "contact", ...), which emits the
+    # native node with `operation: "update"`. No such contact operation exists — upstream
+    # ContactDescription.ts defines upsert/delete/get/getAll/getRecentlyCreatedUpdated/search
+    # — so this node had BUG 10's exact failure mode on the contacts side: fall through the
+    # dispatch chain, return json:null, report status:success. Never live because this
+    # workflow has never been activated. `Dedupe Sweep` now emits the shared `properties`
+    # row contract so this takes the same credential-bound PATCH node as every other write.
+    dedupe_flag_write = _hs_http_patch_node("Dedupe Set Needs Review", "contacts", x3, y3)
     nodes.append(dedupe_flag_write)
 
     conns.update(chain([dedupe_trigger["name"], dedupe_search["name"], "Dedupe Extract Rows",
