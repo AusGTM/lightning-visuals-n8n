@@ -118,7 +118,7 @@ The v3 section formerly here is archived verbatim in `.planning/milestones/v0.3-
 
 ### Verification debt
 
-- [x] **VERIFY-01**: The six `/gsd-verify-work` re-runs carried from the v0.3 goal ledger are executed and their outcomes recorded. Closed 2026-07-29 (`19-LEDGER.md`): 3/6 passed (11, 15.5, 16.4), 3/6 recorded `human_needed` with a captured cause each (16 and 16.6 — live deployment behind git, `bug-26`; 16.9 — `company:update` residual, `19-OPERATOR-RUNBOOK.md`).
+- [x] **VERIFY-01**: The six `/gsd-verify-work` re-runs carried from the v0.3 goal ledger are executed and their outcomes recorded. Closed 2026-07-29 (`19-LEDGER.md`): 5/6 passed (11, 15.5, 16, 16.4, 16.6 — 16 and 16.6 flipped from `human_needed` after the same-day operator Step-0 redeploy resolved `bug-26`), 1/6 `human_needed` (16.9 — `company:update` armed canary, `19-OPERATOR-RUNBOOK.md` Steps 1-4, pending).
 
 ### v4 Traceability
 

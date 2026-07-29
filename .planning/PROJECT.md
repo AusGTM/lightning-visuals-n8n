@@ -43,9 +43,11 @@ and proven live, and clear the verification backlog carried out of v0.3.
 contact:create reachable, live-canaried), Phase 18 (numeric industry code neutralized; both
 copy-loop fields wired AND given live producers, verified 5/5), Phase 19 (six-item verification
 ledger discharged: 3 passed, 3 honest human_needed — `19-LEDGER.md`, verified 6/6). Phase 19
-surfaced **BUG 26**: the live n8n Cloud `LV Enrichment` deployment predates Phase 18's rebuild
-(`.planning/debug/bug-26-enrichment-live-deployment-behind-git.md`); the operator redeploy + 16.9
-armed-window ceremony are scripted in `19-OPERATOR-RUNBOOK.md`.
+surfaced **BUG 26**: the live n8n Cloud `LV Enrichment` deployment predated Phase 18's rebuild —
+**RESOLVED same day** by the operator's runbook Step-0 disarmed redeploy (read-back confirmed
+Phase-18 markers live; brief in `.planning/debug/resolved/`); ledger now 5/6 passed. The one
+remaining operator step is 16.9's armed `company:update` canary (`19-OPERATOR-RUNBOOK.md`
+Steps 1-4).
 
 **Target features:**
 - **BUG 23 fix** — enrichment `contact:create` reachable: transport swap on `HubSpot Search` +

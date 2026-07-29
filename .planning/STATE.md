@@ -4,7 +4,7 @@ milestone: v0.4
 milestone_name: Reachability & Verification Debt
 current_phase: 19
 status: completed
-stopped_at: "Completed 19-01-PLAN.md (all six ledger items closed, 3 passed / 3 human_needed; Milestone 4 complete). Live deployment state now known to be BEHIND git — see `bug-26-enrichment-live-deployment-behind-git.md` and `19-OPERATOR-RUNBOOK.md` Step 0 for the redeploy that must run before the note below (\"all three `active=false`\") is trusted again; item 16's live probe this session found all three workflows now `active=true` with grown node counts, so a redeploy/activation happened since the note below was written but Phase 18 was not included in it."
+stopped_at: "Phase 19 closed; operator ran runbook Step 0 (disarmed redeploy) same day — bug-26 RESOLVED, ledger now 5/6 passed, 1/6 human_needed (16.9 armed company:update canary, runbook Steps 1-4 pending)"
 last_updated: "2026-07-29T10:23:33.211Z"
 last_activity: 2026-07-29
 last_activity_desc: Phase 19 complete
@@ -31,11 +31,14 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 Phase: 19
 Plan: Not started
 Status: All phases complete
-11 passed, 15.5 passed, 16 human_needed (live deployment behind git — `bug-26`), 16.4 passed,
-16.6 human_needed (same drift), 16.9 human_needed (`company:update` residual — see
-`19-OPERATOR-RUNBOOK.md`). Offline suite at floor (596 pytest / 309 node), zero regressions.
-Last activity: 2026-07-29 — Phase 19 complete
-Next: operator follow-up per `19-OPERATOR-RUNBOOK.md` (redeploy + `company:update` canary),
+11 passed, 15.5 passed, 16 passed (post-redeploy flip), 16.4 passed, 16.6 passed
+(post-redeploy flip), 16.9 human_needed (`company:update` armed canary — see
+`19-OPERATOR-RUNBOOK.md` Steps 1-4). Offline suite at floor (596 pytest / 309 node), zero
+regressions. Operator ran runbook Step 0 same day: disarmed redeploy 200×3, read-back
+confirmed Phase-18 markers live, write gates still disarmed — bug-26 RESOLVED
+(`.planning/debug/resolved/`).
+Last activity: 2026-07-29 — Phase 19 complete; Step 0 redeploy done, ledger 5/6 passed
+Next: operator armed `company:update` canary (`19-OPERATOR-RUNBOOK.md` Steps 1-4),
 then start the next milestone.
 
 ## Performance Metrics
@@ -125,7 +128,7 @@ Decisions are logged in PROJECT.md Key Decisions table. SPEC-level architectural
 
 ### Blockers/Concerns
 
-- **NEW 2026-07-29 (Phase 19, VERIFY-01 closure): the live `LV Enrichment` n8n Cloud deployment is BEHIND git — it predates Phase 18.** A content probe (not the name-only `compute_workflow_diff`) proved the live deployment is missing both Phase 18 producer markers (`_personaGroup`, `_industryText`) that are present in the committed `n8n/wf_enrichment_cloud.json`; live node counts DID grow since the last recorded snapshot (some intermediate redeploy happened) but Phase 18's own changes were never included. Confirmed downstream: a live `HubSpot Company Search` replay against company `9604614548` returns `lv_sponsorship_reliant` as a present-but-null key — no live execution has ever run the code that would populate it. Not a code defect; the committed build is correct. Closing it needs an operator redeploy (`DRY_RUN=false ALLOW_N8N_DEPLOY=true python scripts/deploy_n8n_workflows.py`, no baked-flag overlay) — see `.planning/debug/bug-26-enrichment-live-deployment-behind-git.md` and `19-OPERATOR-RUNBOOK.md` Step 0 (which folds this redeploy in as a precondition of the 16.9 `company:update` canary).
+- **RESOLVED 2026-07-29 (same day, operator Step-0 redeploy): the live deployment drift below is CLOSED.** Runbook Step 0 ran (disarmed redeploy, 200×3); read-back confirmed `_personaGroup`/`_industryText` present live in both Normalize + Score nodes, `lv_sponsorship_reliant` present in Build Research Request/Merge Company, write gates still baked disabled. 16.6 replay re-run: transport carries the field, key present (value null = expected until the 16.9 armed canary). Brief moved to `.planning/debug/resolved/bug-26-enrichment-live-deployment-behind-git.md`; ledger rows 16 + 16.6 flipped to `passed`. Original finding kept below for history: the live `LV Enrichment` n8n Cloud deployment was BEHIND git — it predated Phase 18. A content probe (not the name-only `compute_workflow_diff`) proved the live deployment is missing both Phase 18 producer markers (`_personaGroup`, `_industryText`) that are present in the committed `n8n/wf_enrichment_cloud.json`; live node counts DID grow since the last recorded snapshot (some intermediate redeploy happened) but Phase 18's own changes were never included. Confirmed downstream: a live `HubSpot Company Search` replay against company `9604614548` returns `lv_sponsorship_reliant` as a present-but-null key — no live execution has ever run the code that would populate it. Not a code defect; the committed build is correct. Closing it needs an operator redeploy (`DRY_RUN=false ALLOW_N8N_DEPLOY=true python scripts/deploy_n8n_workflows.py`, no baked-flag overlay) — see `.planning/debug/bug-26-enrichment-live-deployment-behind-git.md` and `19-OPERATOR-RUNBOOK.md` Step 0 (which folds this redeploy in as a precondition of the 16.9 `company:update` canary).
 - **EXECUTED 2026-07-22 (Phase 15 Task 4): both ICP write-path retirement decisions below are now LIVE IN CODE**, not just decided. `src/merge_policy.py`, `main.py`, `config/field_policy.yaml`, `n8n/code/mergeCompanies.js` no longer write `lv_icp_fit_score`/`lv_icp_tier`; 3 test assertions flipped to assert absence. Engine still computes both internally for routing/audit.
 - **RESOLVED 2026-07-20 (user decision): `lv_icp_fit_score` is HubSpot-calculated and MUST NOT be written by this workflow.** Calculation happens in HubSpot programmatically. Supersedes CLAUDE.md §29, which lists it as a permitted canonical write. Write paths to remove: `src/merge_policy.py:303`, `main.py:60`, `config/field_policy.yaml:86` (promote_to_canonical -> false), `n8n/code/mergeCompanies.js:35` (class score_output -> non-promoting), plus inverted assertions in `tests/test_merge_policy.py:196` and `tests/test_main.py:60`. The company SEARCH property list (`build_cloud_workflows.py:1183`) is a READ and stays.
 - **RESOLVED 2026-07-20 (user decision): Approach C — HubSpot owns the DERIVED outputs; the pipeline writes only the INPUTS.** `lv_icp_fit_score` and `lv_icp_tier` are placeholders (the formula is literally `1 + 1`, so every company currently scores 2). Authoring the real HubSpot-side calculation is **downstream work, explicitly out of scope for Milestone 3**. This retires the tier/score divergence risk entirely, because the pipeline writes neither.
@@ -167,7 +170,7 @@ Items carried forward to later milestones:
 | Debug | BUG 23 — enrichment `contact:create` structurally unreachable — **RESOLVED 2026-07-29, Phase 17** (transport swap + dual live canary; see `.planning/debug/bug-23-enrichment-contact-nomatch-chain-stop.md` Resolution) | Fixed | 2026-07-29 |
 | Normalization | ZoomInfo numeric `industry` code (`"71"`) wins the waterfall over Apollo text and normalizes unchanged — **RESOLVED 2026-07-29, Phase 18 Plan 01** (`_industryText` helper; see `18-01-SUMMARY.md`) | Fixed | 2026-07-29 |
 | Copy-loop | `lv_sponsorship_reliant` (companies) and `lv_persona_group` (contacts) never reached their merge calls, and had no producer — **FULLY RESOLVED 2026-07-29, Phase 18 Plan 03** (wiring landed 18-02; producers — research-prompt field + provider-mapper — landed 18-03; see `18-03-SUMMARY.md`). Remaining, not a blocker: sponsorship only populates on research-gated/enabled rows; persona's only realistic live producer today is Apollo. | Fixed | 2026-07-29 |
-| Verification | Six `/gsd-verify-work` re-runs carried from the original goal ledger — **CLOSED 2026-07-29, Phase 19**. See `19-LEDGER.md`: 11 passed, 15.5 passed, 16 human_needed (live deployment behind git — `bug-26`), 16.4 passed, 16.6 human_needed (same drift, `lv_sponsorship_reliant` unprovable until redeployed), 16.9 human_needed (SC-3 `company:update` residual — `19-OPERATOR-RUNBOOK.md`). 3/6 passed outright; 3/6 need an operator redeploy/canary, tracked by name, not silently absorbed. | Closed (VERIFY-01) | 2026-07-29 |
+| Verification | Six `/gsd-verify-work` re-runs carried from the original goal ledger — **CLOSED 2026-07-29, Phase 19**. See `19-LEDGER.md`: 11 passed, 15.5 passed, 16 passed (after same-day operator Step-0 redeploy resolved `bug-26`), 16.4 passed, 16.6 passed (post-redeploy replay — transport carries `lv_sponsorship_reliant`), 16.9 human_needed (SC-3 `company:update` armed canary — `19-OPERATOR-RUNBOOK.md` Steps 1-4, pending). 5/6 passed; 1/6 operator-gated, tracked by name, not silently absorbed. | Closed (VERIFY-01) | 2026-07-29 |
 | Enrichment | REQ-finite-list-motion (named-list motion) | Deferred | 2026-07-07 |
 | Scoring | REQ-intent-scoring (pixel intent) | Deferred | 2026-07-07 |
 | Hygiene | REQ-closed-lost-capture | Deferred | 2026-07-07 |
@@ -183,7 +186,7 @@ Items carried forward to later milestones:
 
 Last session: 2026-07-29T20:15:40+10:00
 Prior session: 2026-07-29T09:19:05.759Z
-Stopped at: Completed 19-01-PLAN.md (all six ledger items closed, 3 passed / 3 human_needed; Milestone 4 complete). Live deployment state now known to be BEHIND git — see `bug-26-enrichment-live-deployment-behind-git.md` and `19-OPERATOR-RUNBOOK.md` Step 0 for the redeploy that must run before the note below ("all three `active=false`") is trusted again; item 16's live probe this session found all three workflows now `active=true` with grown node counts, so a redeploy/activation happened since the note below was written but Phase 18 was not included in it.
+Stopped at: Phase 19 complete + operator Step-0 redeploy done (2026-07-29). Live deployment now CURRENT with git (Phase-18 markers read back present; bug-26 resolved). Ledger 5/6 passed; only 16.9's armed `company:update` canary remains (`19-OPERATOR-RUNBOOK.md` Steps 1-4). Note: the "all three `active=false`" statement below is HISTORICAL — all three workflows are live `active=true` as of the item-16 probe.
 Resume file: None
 **TRACK B PROVISION + DEPLOY DONE 2026-07-28** — deployed to **Robert Li's personal project** (`T9IPFKpIn2aUYYj3`) on `alexherman.app.n8n.cloud`. All 6 credentials provisioned; all 3 workflows deployed and verified by read-back: `LV Contact Ingest` (19 nodes, 4 bound, 3 HubSpot, 0 unbound), `LV Enrichment` (94 nodes, 22 bound, 8 HubSpot, 0 unbound), `LV Scheduled Maintenance` (30 nodes, 9 bound, 9 HubSpot, 0 unbound). No duplicate node names, no stale credential references. **All three `active=false`** — activation is the only remaining step and is deliberately NOT done.
 
