@@ -70,7 +70,10 @@ NODES = {
     },
     "SJ-1 Search (input-gap scan)": {
         "workflow": "wf_scheduled_maintenance_cloud.json",
-        "properties_csv": "hs_object_id,lv_org_type,lv_produces_content",
+        # BUG 24: domain added so the lane's write gate can be satisfied by
+        # TEST_RECORD_DOMAINS at all (it read it.json.domain, which the lane
+        # never emitted, making the domain allowlist silently inert).
+        "properties_csv": "hs_object_id,domain,lv_org_type,lv_produces_content",
         "body_tokens": [
             'propertyName: "lv_org_type"', 'operator: "NOT_HAS_PROPERTY"',
             'operator: "EQ"', 'value: "unknown"',
@@ -79,7 +82,7 @@ NODES = {
     },
     "SJ-2 Search (stale refresh)": {
         "workflow": "wf_scheduled_maintenance_cloud.json",
-        "properties_csv": "hs_object_id,lv_org_type,lv_produces_content,"
+        "properties_csv": "hs_object_id,domain,lv_org_type,lv_produces_content,"  # BUG 24
                            "lv_org_type_verified_at,lv_produces_content_verified_at",
         "body_tokens": [
             'propertyName: "lv_org_type_verified_at"', 'operator: "LT"',
@@ -89,7 +92,7 @@ NODES = {
     },
     "Review Search (approved=true)": {
         "workflow": "wf_scheduled_maintenance_cloud.json",
-        "properties_csv": "hs_object_id,lv_org_type,lv_produces_content,lv_revenue_band,"
+        "properties_csv": "hs_object_id,domain,lv_org_type,lv_produces_content,lv_revenue_band,"  # BUG 24
                            "lv_employee_band,lv_content_type,lv_sponsorship_reliant,"
                            "lv_is_hardware_vendor,lv_is_gambling_operator,"
                            "lv_enrichment_review_candidate_json,lv_enrichment_needs_review,"

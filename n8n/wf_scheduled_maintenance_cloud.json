@@ -109,7 +109,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"lv_org_type\", operator: \"NOT_HAS_PROPERTY\" } ] }, { filters: [ { propertyName: \"lv_org_type\", operator: \"EQ\", value: \"unknown\" } ] }, { filters: [ { propertyName: \"lv_produces_content\", operator: \"NOT_HAS_PROPERTY\" } ] } ], properties: [\"hs_object_id\", \"lv_org_type\", \"lv_produces_content\"], limit: 100 }) }}",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"lv_org_type\", operator: \"NOT_HAS_PROPERTY\" } ] }, { filters: [ { propertyName: \"lv_org_type\", operator: \"EQ\", value: \"unknown\" } ] }, { filters: [ { propertyName: \"lv_produces_content\", operator: \"NOT_HAS_PROPERTY\" } ] } ], properties: [\"hs_object_id\", \"domain\", \"lv_org_type\", \"lv_produces_content\"], limit: 100 }) }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "hubspotAppToken"
       },
@@ -206,7 +206,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"lv_org_type_verified_at\", operator: \"LT\", value: $json.cutoff_ms } ] }, { filters: [ { propertyName: \"lv_produces_content_verified_at\", operator: \"LT\", value: $json.cutoff_ms } ] } ], properties: [\"hs_object_id\", \"lv_org_type\", \"lv_produces_content\", \"lv_org_type_verified_at\", \"lv_produces_content_verified_at\"], limit: 100 }) }}",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"lv_org_type_verified_at\", operator: \"LT\", value: $json.cutoff_ms } ] }, { filters: [ { propertyName: \"lv_produces_content_verified_at\", operator: \"LT\", value: $json.cutoff_ms } ] } ], properties: [\"hs_object_id\", \"domain\", \"lv_org_type\", \"lv_produces_content\", \"lv_org_type_verified_at\", \"lv_produces_content_verified_at\"], limit: 100 }) }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "hubspotAppToken"
       },
@@ -465,7 +465,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"lv_enrichment_review_approved\", operator: \"EQ\", value: \"true\" } ] } ], properties: [\"hs_object_id\", \"lv_org_type\", \"lv_produces_content\", \"lv_revenue_band\", \"lv_employee_band\", \"lv_content_type\", \"lv_sponsorship_reliant\", \"lv_is_hardware_vendor\", \"lv_is_gambling_operator\", \"lv_enrichment_review_candidate_json\", \"lv_enrichment_needs_review\", \"lv_enrichment_review_approved\", \"lv_enrichment_review_reason\"], limit: 100 }) }}",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"lv_enrichment_review_approved\", operator: \"EQ\", value: \"true\" } ] } ], properties: [\"hs_object_id\", \"domain\", \"lv_org_type\", \"lv_produces_content\", \"lv_revenue_band\", \"lv_employee_band\", \"lv_content_type\", \"lv_sponsorship_reliant\", \"lv_is_hardware_vendor\", \"lv_is_gambling_operator\", \"lv_enrichment_review_candidate_json\", \"lv_enrichment_needs_review\", \"lv_enrichment_review_approved\", \"lv_enrichment_review_reason\"], limit: 100 }) }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "hubspotAppToken"
       },

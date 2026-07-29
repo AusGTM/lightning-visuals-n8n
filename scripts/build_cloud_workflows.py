@@ -4617,7 +4617,9 @@ def build_scheduled_maintenance_cloud():
             [{"propertyName": "lv_org_type", "operator": "EQ", "value": "unknown"}],
             [{"propertyName": "lv_produces_content", "operator": "NOT_HAS_PROPERTY"}],
         ],
-        properties_csv="hs_object_id,lv_org_type,lv_produces_content")
+        # BUG 24: `domain` requested so this lane's write gate can be satisfied by
+        # TEST_RECORD_DOMAINS at all — see the Review Search comment below.
+        properties_csv="hs_object_id,domain,lv_org_type,lv_produces_content")
     nodes.append(sj1_search)
     x1 += 220
     nodes.append(code_node("SJ-1 Extract Rows", ENRICH_EXTRACT_SEARCH_ROWS, x1, y1))
@@ -4649,7 +4651,8 @@ def build_scheduled_maintenance_cloud():
             [{"propertyName": "lv_produces_content_verified_at", "operator": "LT",
               "value": "={{ $json.cutoff_ms }}"}],
         ],
-        properties_csv="hs_object_id,lv_org_type,lv_produces_content,"
+        # BUG 24: same as SJ-1 — `domain` is what makes the domain allowlist usable.
+        properties_csv="hs_object_id,domain,lv_org_type,lv_produces_content,"
                        "lv_org_type_verified_at,lv_produces_content_verified_at")
     nodes.append(sj2_search)
     x2 += 220
@@ -4724,7 +4727,15 @@ def build_scheduled_maintenance_cloud():
         filter_groups=[[
             {"propertyName": "lv_enrichment_review_approved", "operator": "EQ", "value": "true"},
         ]],
-        properties_csv="hs_object_id,lv_org_type,lv_produces_content,lv_revenue_band,"
+        # BUG 24 (found live 2026-07-29, first armed review canary): `domain` was absent
+        # here, so the lane never emitted it, so `Review Apply Update Write Gate` —
+        # which reads `it.json.domain` — could NEVER be satisfied by TEST_RECORD_DOMAINS.
+        # Only TEST_RECORD_IDS could ever allow this lane. Fail-closed, never a live risk,
+        # but a domain allowlist silently did nothing here: BUG 16's family (a gate reading
+        # a field its lane does not emit), in its partial form. `domain` is requested now so
+        # both allowlists work, and reviewApply ignores it (not in DEFAULT_COMPANY_POLICY's
+        # promote path for this candidate flow — it only reads fields named by the candidate).
+        properties_csv="hs_object_id,domain,lv_org_type,lv_produces_content,lv_revenue_band,"
                        "lv_employee_band,lv_content_type,lv_sponsorship_reliant,"
                        "lv_is_hardware_vendor,lv_is_gambling_operator,"
                        "lv_enrichment_review_candidate_json,lv_enrichment_needs_review,"
