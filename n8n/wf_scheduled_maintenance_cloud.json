@@ -611,6 +611,62 @@
         800,
         1080
       ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n  if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Drops any row the allowlist does not permit. An empty allowlist denies all.\nreturn $input.all().filter((it) => _writeSafetyAllows(\n  'enrich',\n  it.json.hs_object_id || (it.json.existingRecord && it.json.existingRecord.hs_object_id) || null,\n  (it.json.identity_keys && it.json.identity_keys.domain) || it.json.domain || null,\n));\n"
+      },
+      "id": "c00350000-0000-4000-8000-000000000000",
+      "name": "SJ-1 Set Requested Write Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        730,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n  if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Drops any row the allowlist does not permit. An empty allowlist denies all.\nreturn $input.all().filter((it) => _writeSafetyAllows(\n  'enrich',\n  it.json.hs_object_id || (it.json.existingRecord && it.json.existingRecord.hs_object_id) || null,\n  (it.json.identity_keys && it.json.identity_keys.domain) || it.json.domain || null,\n));\n"
+      },
+      "id": "c00360000-0000-4000-8000-000000000000",
+      "name": "SJ-2 Set Requested Write Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1390,
+        1040
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n  if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Drops any row the allowlist does not permit. An empty allowlist denies all.\nreturn $input.all().filter((it) => _writeSafetyAllows(\n  'enrich',\n  it.json.hs_object_id || (it.json.existingRecord && it.json.existingRecord.hs_object_id) || null,\n  (it.json.identity_keys && it.json.identity_keys.domain) || it.json.domain || null,\n));\n"
+      },
+      "id": "c00370000-0000-4000-8000-000000000000",
+      "name": "Dedupe Set Needs Review Write Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        950,
+        1520
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n  if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Drops any row the allowlist does not permit. An empty allowlist denies all.\nreturn $input.all().filter((it) => _writeSafetyAllows(\n  'enrich',\n  it.json.hs_object_id || (it.json.existingRecord && it.json.existingRecord.hs_object_id) || null,\n  (it.json.identity_keys && it.json.identity_keys.domain) || it.json.domain || null,\n));\n"
+      },
+      "id": "c00380000-0000-4000-8000-000000000000",
+      "name": "Review Apply Update Write Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1170,
+        1940
+      ]
     }
   ],
   "connections": {
@@ -673,7 +729,7 @@
       "main": [
         [
           {
-            "node": "SJ-1 Set Requested",
+            "node": "SJ-1 Set Requested Write Gate",
             "type": "main",
             "index": 0
           }
@@ -746,7 +802,7 @@
         ],
         [
           {
-            "node": "SJ-2 Set Requested",
+            "node": "SJ-2 Set Requested Write Gate",
             "type": "main",
             "index": 0
           }
@@ -790,7 +846,7 @@
       "main": [
         [
           {
-            "node": "Dedupe Set Needs Review",
+            "node": "Dedupe Set Needs Review Write Gate",
             "type": "main",
             "index": 0
           }
@@ -850,6 +906,50 @@
             "index": 0
           }
         ],
+        [
+          {
+            "node": "Review Apply Update Write Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SJ-1 Set Requested Write Gate": {
+      "main": [
+        [
+          {
+            "node": "SJ-1 Set Requested",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SJ-2 Set Requested Write Gate": {
+      "main": [
+        [
+          {
+            "node": "SJ-2 Set Requested",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedupe Set Needs Review Write Gate": {
+      "main": [
+        [
+          {
+            "node": "Dedupe Set Needs Review",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Apply Update Write Gate": {
+      "main": [
         [
           {
             "node": "Review Apply Update",

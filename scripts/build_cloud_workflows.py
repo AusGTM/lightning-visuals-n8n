@@ -622,6 +622,11 @@ def build_cloud():
     }
     nodes.append(note)
 
+    splice_write_gates(nodes, conns, {
+        "HubSpot Update": "enrich",
+        "HubSpot Create": "create",
+    })
+
     return {
         "id": "LVcontactIngestCloud01",
         "name": "LV Contact Ingest (Cloud template)",
@@ -4385,6 +4390,56 @@ def _execute_workflow_node(name, x, y, workflow_id, workflow_name):
     }
 
 
+# --- write-safety gate splice (BUG 15) ------------------------------------------------
+# `_writeSafetyAllows()` and the ALLOW_HUBSPOT_* constants existed ONLY in
+# wf_enrichment_cloud.json. `wf_scheduled_maintenance_cloud.json` and
+# `wf_contact_ingest_cloud.json` carried SIX write nodes between them with no allowlist
+# check at all, so activating either would have written to HubSpot with nothing bounding
+# the blast radius. Found 2026-07-29 while auditing coverage after the write-path canary;
+# both workflows are INACTIVE so there was never live exposure, and this closes the hole
+# before either is ever switched on.
+#
+# Implemented as a splice rather than by editing each builder: the gate is inserted
+# between a write node and whatever feeds it, so it cannot be forgotten for a write node
+# added later — tests/test_write_gate_coverage.py asserts EVERY write node in EVERY cloud
+# workflow sits directly behind one.
+def _write_gate_js(action: str) -> str:
+    return WRITE_SAFETY_GATE_JS + (
+        "\n// Drops any row the allowlist does not permit. An empty allowlist denies all.\n"
+        "return $input.all().filter((it) => _writeSafetyAllows(\n"
+        f"  {action!r},\n"
+        "  it.json.hs_object_id || (it.json.existingRecord && it.json.existingRecord.hs_object_id) || null,\n"
+        "  (it.json.identity_keys && it.json.identity_keys.domain) || it.json.domain || null,\n"
+        "));\n"
+    )
+
+
+def splice_write_gates(nodes, conns, gated):
+    """Insert a write-safety gate Code node in front of each named write node.
+
+    `gated` maps write-node name -> the action string passed to _writeSafetyAllows
+    ("create" or "enrich"). Every inbound connection to the write node is re-pointed at
+    its gate. Pure list/dict mutation over already-built structures — no builder needs to
+    know about it."""
+    by_name = {n["name"]: n for n in nodes}
+    for write_name, action in gated.items():
+        target = by_name.get(write_name)
+        if target is None:
+            raise ValueError(f"splice_write_gates: no node named {write_name!r} to gate")
+        gate_name = f"{write_name} Write Gate"
+        gx, gy = target["position"][0] - 150, target["position"][1]
+        nodes.append(code_node(gate_name, _write_gate_js(action), gx, gy))
+        for src, spec in conns.items():
+            if src == gate_name:
+                continue
+            for outputs in spec.get("main", []):
+                for conn in (outputs or []):
+                    if conn["node"] == write_name:
+                        conn["node"] = gate_name
+        conns[gate_name] = {"main": [[{"node": write_name, "type": "main", "index": 0}]]}
+    return nodes, conns
+
+
 def build_scheduled_maintenance_cloud():
     nodes = []
     conns = {}
@@ -4634,6 +4689,13 @@ def build_scheduled_maintenance_cloud():
             "type": "n8n-nodes-base.stickyNote", "typeVersion": 1,
             "position": [n["x"], n["y"]],
         })
+
+    splice_write_gates(nodes, conns, {
+        "SJ-1 Set Requested": "enrich",
+        "SJ-2 Set Requested": "enrich",
+        "Dedupe Set Needs Review": "enrich",
+        "Review Apply Update": "enrich",
+    })
 
     return {
         "id": "LVscheduledMaintenanceCloud01",

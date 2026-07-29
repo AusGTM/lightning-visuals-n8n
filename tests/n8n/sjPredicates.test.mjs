@@ -162,5 +162,12 @@ test("SJ-2: terminates in a HubSpot Update that sets lv_enrichment_requested=tru
   const wf_conns = wf.connections[ifNode.name];
   assert.ok(wf_conns, "SJ-2 IF Skip must have outgoing connections");
   const falseBranch = wf_conns.main[1].map((c) => c.node);
-  assert.ok(falseBranch.includes("SJ-2 Set Requested"), "the non-skip branch dispatches to the terminal Update");
+  // BUG 15: the write now sits behind a write-safety gate, so the non-skip branch
+  // dispatches at the gate and the gate dispatches at the Update.
+  assert.ok(falseBranch.includes("SJ-2 Set Requested Write Gate"),
+    "the non-skip branch dispatches to the write-safety gate");
+  const gate = findNode(wf, "SJ-2 Set Requested Write Gate");
+  assert.match(gate.parameters.jsCode, /_writeSafetyAllows/);
+  const afterGate = wf.connections[gate.name].main[0].map((c) => c.node);
+  assert.ok(afterGate.includes("SJ-2 Set Requested"), "the gate dispatches to the terminal Update");
 });

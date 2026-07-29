@@ -43,7 +43,15 @@ test("Dedupe Sweep feeds a downstream HubSpot write node that consumes to_review
   assert.ok(outgoing, "Dedupe Sweep must have an outgoing connection");
   const targets = outgoing.main[0].map((c) => c.node);
   assert.equal(targets.length, 1);
-  const downstream = findNode(wf, targets[0]);
+  // BUG 15: a write-safety gate now sits between the sweep and the write node, so the
+  // write is only reachable for allowlisted records. Hop through it — the property under
+  // test is still "the sweep reaches a HubSpot update that sets the review flag".
+  const gate = findNode(wf, targets[0]);
+  assert.match(gate.parameters.jsCode, /_writeSafetyAllows/,
+    "the sweep must dispatch into a write-safety gate, not straight at the write node");
+  const afterGate = wf.connections[gate.name].main[0].map((c) => c.node);
+  assert.equal(afterGate.length, 1);
+  const downstream = findNode(wf, afterGate[0]);
   assert.equal(downstream.type, "n8n-nodes-base.hubspot");
   assert.equal(downstream.parameters.operation, "update");
   const props = downstream.parameters.updateFields.customPropertiesUi.customPropertiesValues;
