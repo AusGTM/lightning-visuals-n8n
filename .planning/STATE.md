@@ -24,11 +24,11 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 
 ## Current Position
 
-Phase: 17 (enrichment-contacts-reachability) — not yet planned
-Plan: —
-Status: Roadmap created — 3 phases (17-19), 8/8 v4 requirements mapped
-Last activity: 2026-07-29 — Milestone v0.4 started; requirements + roadmap committed
-Next: /gsd-plan-phase 17
+Phase: 17 (enrichment-contacts-reachability-bug-23) — PLANNED, checker-passed
+Plan: 17-01 (offline: transport swap + pin removal + harness), 17-02 (dual live canary)
+Status: Plans verified — checker found 1 blocker (test_deploy_flag_overlay native-node assert goes red post-swap) + 1 should-fix (criterion-3 evidence depth); both revised (a057be1) and re-verified PASS
+Last activity: 2026-07-29 — Milestone v0.4 opened; requirements, roadmap, phase 17 plans all committed
+Next: /gsd-execute-phase 17
 
 ## Performance Metrics
 
