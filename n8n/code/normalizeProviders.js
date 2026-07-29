@@ -145,6 +145,21 @@ function _industryText(naicsEntry, textFallback) {
   return null; // bare numeric code, no name, no fallback text -> skip, don't fabricate
 }
 
+// COPY-02 (18-VERIFICATION.md GAP 2, D-GAP2-provider/D-GAP2-othervalue): a provider's OWN
+// department field, when present, is the persona_group producer -- no invented title-to-
+// persona taxonomy. Takes the first element when the value is an array. Lusha's live
+// "Other" label is a semantically-empty non-signal (case-insensitive compare) -- a
+// persona group of "Other" is not a classification, it renders in a HubSpot view as
+// though a decision were made when none was, which is strictly worse for the RevOps
+// reviewer than the property staying blank. Returns null rather than fabricating a value
+// from a non-value, mirroring _industryText's contract.
+function _personaGroup(departments) {
+  const first = Array.isArray(departments) ? departments[0] : departments;
+  if (!first) return null;
+  if (String(first).trim().toLowerCase() === "other") return null;
+  return first;
+}
+
 function lushaCandidates(rawResponse, objectType) {
   const out = [];
   const src = "lusha";
@@ -181,6 +196,12 @@ function lushaCandidates(rawResponse, objectType) {
       // No per-field grade for Lusha title -> ungraded base 0.6.
       _push(out, "jobtitle", src, raw.jobTitle.title, _norm(raw.jobTitle.title), 0.6, updated);
       _push(out, "seniority", src, raw.jobTitle.seniority, _norm(raw.jobTitle.seniority), 0.6, updated);
+      // COPY-02: persona_group producer, reading Lusha's own department field off the
+      // same jobTitle object the block already destructures. Unprefixed field name here
+      // (read-side key, mirrors seniority/jobtitle above) -- the PN-1 lv_ rename happens
+      // only at the merge/canonical-write boundary, which this file never touches.
+      const persona = _personaGroup(raw.jobTitle.departments);
+      _push(out, "persona_group", src, persona, _norm(persona), 0.6, updated);
     }
   } else {
     // company firmographics — no per-field grade -> base 0.6. Live nests under `company`
@@ -229,6 +250,9 @@ function apolloCandidates(raw, objectType) {
     }
     _push(out, "jobtitle", src, person.title, _norm(person.title), 0.6, updated);
     _push(out, "seniority", src, person.seniority, _norm(person.seniority), 0.6, updated);
+    // COPY-02: same persona_group producer, reading Apollo's own department field.
+    const persona = _personaGroup(person.departments);
+    _push(out, "persona_group", src, persona, _norm(persona), 0.6, updated);
   } else {
     const org = (raw.person && raw.person.organization) || raw.organization || raw.org || raw;
     // Live org revenue is `organization_revenue` (number); flat fixtures use `annual_revenue`.
