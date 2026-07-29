@@ -11,7 +11,15 @@ team, not a customer-facing product.
 
 ## Current State
 
-**Shipped: v0.3 — Company Enrichment & ICP Research (2026-07-29).**
+**Shipped: v0.4 — Reachability & Verification Debt (2026-07-29).** No new capability by design —
+the milestone cleared every debt the v0.3 close deferred: BUG 23 (`contact:create` structurally
+unreachable) fixed with dual live canary; a numeric provider industry code can no longer win the
+waterfall or survive normalization; `lv_sponsorship_reliant` and `lv_persona_group` wired AND given
+live producers; the six-item verification ledger discharged **6/6** (surfacing and same-day
+resolving BUG 26 deployment drift, and closing the last armed-write residual with a passed
+`company:update` canary). Live deployment is current with git, active, and disarmed at rest.
+
+**Previously shipped: v0.3 — Company Enrichment & ICP Research (2026-07-29).**
 
 The description above is the project's origin, not its present shape. Three milestones in, this is
 no longer a local-first mock MVP:
@@ -34,7 +42,16 @@ derived outputs (`lv_icp_fit_score`, `lv_icp_tier`, `lv_anti_icp_flag`, `lv_anti
 `lv_recommended_motion`) are HubSpot-side and their calculation is still the literal `1 + 1`
 placeholder. Authoring it is downstream work. Supersedes CLAUDE.md §29.
 
-## Current Milestone: v0.4 Reachability & Verification Debt
+## Next Milestone
+
+Not yet defined — run `/gsd-new-milestone`. Candidate scope (the deliberate deferrals still open):
+HubSpot-side ICP formula (currently the `1 + 1` placeholder — downstream owner decision),
+`lv_org_type` text→enumeration one-way door, `Dedupe Search (candidate contacts)` native-node
+transport swap (last BUG-23-family hazard), armed full-enrichment canary (providers + research
+live end-to-end), `lv_country_region_normalized` field-policy entry, JTBD 2 weighted-rubric
+sign-off (REQ-signoff-gate).
+
+## Shipped Milestone: v0.4 Reachability & Verification Debt (archived)
 
 **Goal:** Make every structurally dead or silently inert path in the deployed pipeline reachable
 and proven live, and clear the verification backlog carried out of v0.3.
@@ -197,4 +214,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-29 — Milestone v0.4 opened (Reachability & Verification Debt); v0.3 shipped and archived*
+*Last updated: 2026-07-29 after v0.4 milestone (Reachability & Verification Debt shipped and archived; ledger 6/6, zero operator debt)*

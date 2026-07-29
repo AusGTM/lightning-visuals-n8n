@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v0.4
 milestone_name: Reachability & Verification Debt
-current_phase: 19
-status: completed
-stopped_at: "Phase 19 closed; operator ran the FULL runbook same day (Step 0 redeploy + 16.9 armed canary Steps 1-4) — bug-26 RESOLVED, ledger 6/6 passed, deployment restored disarmed and read back"
-last_updated: "2026-07-29T10:23:33.211Z"
+status: Awaiting next milestone
+stopped_at: "Phase 19 complete + FULL operator runbook executed (2026-07-29): Step-0 redeploy (bug-26 resolved, deployment current with git), 16.9 armed `company:update` canary (execution 108, PASS), disarm + read-back (8x `\"false\"`, allowlist cleared). Ledger 6/6 passed. Note: the \"all three `active=false`\" statement below is HISTORICAL — all three workflows are live `active=true`."
+last_updated: "2026-07-29T11:04:53.946Z"
 last_activity: 2026-07-29
-last_activity_desc: Phase 19 complete
+last_activity_desc: Milestone v0.4 completed and archived
 progress:
   total_phases: 3
   completed_phases: 3
   total_plans: 6
   completed_plans: 6
   percent: 100
+current_phase: 19
 current_phase_name: Verification Debt Closure
 ---
 
@@ -24,21 +24,14 @@ current_phase_name: Verification Debt Closure
 See: .planning/PROJECT.md (updated 2026-07-07)
 
 **Core value:** The ICP scoring engine turns firmographic + enrichment signals into trustworthy, auditable A/B/C/D prioritization (with hard vetoes) and never clobbers HubSpot data — proven in dry-run locally.
-**Current focus:** Milestone v0.3 SHIPPED 2026-07-29 and archived to `.planning/milestones/v0.3-ROADMAP.md`. Next: v0.4, opening with BUG 23 (enrichment `contact:create` structurally unreachable).
+**Current focus:** Milestone v0.4 SHIPPED 2026-07-29 and archived to `.planning/milestones/v0.4-ROADMAP.md` (ledger 6/6, zero operator debt, live deployment current + disarmed). Next: `/gsd-new-milestone` — candidate scope in PROJECT.md "Next Milestone".
 
 ## Current Position
 
-Phase: 19
-Plan: Not started
-Status: All phases complete
-ALL SIX PASSED: 11, 15.5, 16 (post-redeploy flip), 16.4, 16.6 (post-redeploy flip),
-16.9 (operator armed `company:update` canary EXECUTED — n8n execution 108, write proven on
-`9604614548` via `HubSpot Company Update`, neighbor unchanged, disarmed + read back 8x
-`"false"` literals, allowlist cleared). Offline suite at floor (596 pytest / 309 node),
-zero regressions. bug-26 RESOLVED same day via runbook Step 0 (`.planning/debug/resolved/`).
-Last activity: 2026-07-29 — Phase 19 complete; full operator runbook executed, ledger 6/6 passed
-Next: start the next milestone (/gsd-new-milestone) — v0.4 fully discharged, no operator debt
-remaining.
+Phase: Milestone v0.4 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-07-29 — Milestone v0.4 completed and archived
 
 ## Performance Metrics
 
@@ -238,3 +231,7 @@ Next command: **fix BUG 10 (companies search returns null json) in its own phase
 **BUG 10 — ROOT CAUSE FOUND + OFFLINE FIX LANDED 2026-07-28 (`.planning/debug/bug-10-companies-search-null-json.md`, awaiting human live-verify).** Root cause is mechanistic, not just live-observed: n8n's HubSpot node has **no `operation: "search"` for `resource: company` at all** — confirmed by reading a fetched copy of n8n's actual node source (`CompanyDescription.ts`'s `companyOperations` schema only offers create/delete/get/getAll/getRecentlyCreatedUpdated/**searchByDomain**/update; `searchByDomain` is a different, domain-path-only v2 operation, not a drop-in). `_hs_search_node()` in `scripts/build_cloud_workflows.py` set `operation: "search"` unconditionally for both resources; `resource: contact` has a real CRM v3 search implementation, `resource: company` silently falls through the node's `execute()` if-chain with no default/throw, leaving `responseData` unassigned — surfacing as `json: null`, `status: success`, no error node. Two-factor (code: our invalid operation value; third-party: n8n's non-validating fallthrough) — neither alone reproduces the symptom. Fix: the 6 blast-radius nodes (`HubSpot Company Search`, `HubSpot Company Fetch By Id`, `SJ-1`/`SJ-2`/`SJ-3 Search`, `Review Search`) now POST directly to `/crm/v3/objects/companies/search` via a credential-bound `httpRequest` node (`predefinedCredentialType`/`nodeCredentialType: hubspotAppToken`, reusing the existing `LV HubSpot` credential — zero new credentials, zero `$env`/`$vars`). Contacts proved byte-identical to HEAD by diff. `company:create`/`company:update` are **explicitly untouched and UNVERIFIED** — BUG 10's live trace only ever exercised `operation: search`; whether create/update share any defect is unknown until the write-path canary exercises them live. Suite 459 → **504 pytest / 275 node**, zero regressions, deterministic rebuild confirmed twice, fix-acceptance guardrail passed (revert-and-reconfirm: bug returns on revert, fixed on reapply). Commits `8a30cc2` (red) / `9e60181` (fix). **NOT yet live-verified** — this session could not re-fire the disarmed deployment; the companies research canary re-run (Plan 03) is the next opportunity to prove it live and finally verify the literal `bd682a2` on companies.
 
 **PHASE 16.5 PLAN 01 EXECUTED 2026-07-28 (Wave 1, OFFLINE ONLY).** The "rebuild with ALLOW_WEB_RESEARCH=true" plan above was superseded by a deploy-time overlay instead of a rebuild — CONTEXT's leading candidate, confirmed against the code: a rebuild would have baked the enabled flags into the COMMITTED `n8n/*.json`, permanently arming production and breaking the deterministic-rebuild invariant. Instead: `enable_baked_flags()` in `scripts/deploy_n8n_workflows.py` (mirrors `bind_credentials()`'s exact shape — pure, deep-copying, fails closed via a post-rewrite serialized re-scan) rewrites the two flag constants IN FLIGHT, between reading the committed JSON and POSTing it, behind the operator-only `ENABLE_BAKED_FLAGS` env var (deliberately distinct from the `.env`-resident `ALLOW_WEB_RESEARCH`/`ALLOW_SONNET_ESCALATION` names — a same-name overlay would have armed production on a routine deploy). `main()` refuses (zero HTTP calls) before the write gate if a requested flag matches zero declarations anywhere in the deploy set. Artifact invariants: the committed build stays disabled everywhere (non-vacuously pinned), Criterion 5 holds on the ENABLED build (architecture guard's own regex, imported not retyped), the enabled-vs-committed diff touches ONLY the four flag declaration lines, write-safety constants and both cost caps are unchanged on the enabled build. An offline oracle (`tests/n8n/enabledResearchLaneFlow.test.mjs`, a second independent JS reimplementation of the rewrite) drives the ENABLED node bodies through both the contacts and companies research-then-judge lanes from a raw bare-event webhook body: research gate fires (contacts via the `seniority` provider_gap branch; companies via RT-3's `orgUnresolved || contentBlank`), judge escalates on a genuine conflict (`jobtitle_conflict` for contacts — the same Lusha-vs-Apollo/ZoomInfo disagreement noted above; `produces_content_false` for companies, since the RT-3-firing precondition of a blank existing `lv_org_type` structurally prevents `org_type_conflict` from ever firing), row survives BOTH HTTP hops to a non-null merge on `Merge Winners`/`Merge Company` — the literal `bd682a2` chain, still never verified live before this session. A disabled control over the unmodified committed workflow confirms the overlay, not something incidental, is the cause. `n8n/` and `n8n/code/` untouched throughout; `scripts/build_cloud_workflows.py` never opened for editing. Full offline suite 459 pytest / 275 node, 0 regressions vs the 422/272 baseline recorded at Task 1's precondition. **Rewrite counts on the real artifact:** `{'ALLOW_WEB_RESEARCH': 2, 'ALLOW_SONNET_ESCALATION': 2}` — matches the two declaration sites each already confirmed in-repo. **Operator command for Plan 02/03:** `DRY_RUN=false ALLOW_N8N_DEPLOY=true ENABLE_BAKED_FLAGS=ALLOW_WEB_RESEARCH,ALLOW_SONNET_ESCALATION python scripts/deploy_n8n_workflows.py`. See `16.5-01-SUMMARY.md` for the full offline oracle prediction (contacts: research fires on the seniority gap, judge escalates on the jobtitle disagreement; companies: research fires on blank org_type/produces_content, judge escalates if the live web research returns a genuine `produces_content: false` or an org-type conflict). Next: Plan 02 (contacts, real `hs_object_id 201`) and Plan 03 (companies, real `hs_object_id 9604614548` / Melbourne Racing Club) — each running the operator command above, firing the live webhook once, and redeploying the disabled build afterward so no plan leaves production armed.
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
