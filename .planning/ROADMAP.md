@@ -388,7 +388,9 @@ defect a re-run surfaces is captured rather than silently absorbed into "passed.
   3. Any defect a re-run surfaces is captured as a debug brief or backlog item — nothing is silently
      dropped to close the ledger.
 
-**Plans**: TBD
+**Plans**: 1 plan
+
+- [ ] 19-01-PLAN.md — Identify the six re-runs, re-execute each (offline -> live read-only -> operator-gated), record all six outcomes in `19-LEDGER.md`
 
 ## Milestone 4 Progress
 
@@ -396,4 +398,4 @@ defect a re-run surfaces is captured rather than silently absorbed into "passed.
 |-------|----------------|--------|-----------|
 | 17. Enrichment Contacts Reachability (BUG 23) | 2/2 | **Complete** — verified 5/5; contact:create live-reachable (exec 76), match path regression-checked field-by-field (execs 68-72), deployment restored disarmed | 2026-07-29 |
 | 18. Normalization & Copy-Loop Fixes | 3/3 | Complete    | 2026-07-29 |
-| 19. Verification Debt Closure | 0/TBD | Not started | - |
+| 19. Verification Debt Closure | 0/1 | Planned | - |
