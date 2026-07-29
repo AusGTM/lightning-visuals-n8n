@@ -553,8 +553,15 @@ def build_cloud():
     x = 220
 
     webhook = {
+        # Security fix (found during activation day, 2026-07-29): this webhook shipped
+        # UNAUTHENTICATED while the enrichment webhook has always required Header Auth —
+        # anyone with the URL could submit CSVs. Same native headerAuth, same shared
+        # "LV Enrichment Webhook" credential: both webhook nodes are named
+        # "Webhook Trigger", so the existing NODE_CREDENTIAL_MAP entry binds this one
+        # identically with zero deploy-script changes.
         "parameters": {"httpMethod": "POST", "path": "hubspot/contact-upload",
-                       "responseMode": "lastNode", "options": {}},
+                       "responseMode": "lastNode", "authentication": "headerAuth",
+                       "options": {}},
         "id": nid("w"), "name": "Webhook Trigger",
         "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [x, y],
     }

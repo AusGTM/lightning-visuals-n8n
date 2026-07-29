@@ -99,3 +99,13 @@ def test_adapter_flags_lookup_failed_and_decide_never_creates_on_it():
     assert "lookup_failed" in adapter
     decide = _node("Decide Action")["parameters"]["jsCode"]
     assert 'row.lookup_failed === true && action === "create"' in decide
+
+
+def test_ingest_webhook_requires_header_auth_like_the_enrichment_webhook():
+    """Security fix, activation day 2026-07-29: this webhook shipped UNAUTHENTICATED while
+    the enrichment webhook has always required native Header Auth — anyone with the URL
+    could submit CSVs. Same headerAuth, same shared credential (both webhook nodes are
+    named "Webhook Trigger", so NODE_CREDENTIAL_MAP binds this one identically)."""
+    node = _node("Webhook Trigger")
+    assert node["type"] == "n8n-nodes-base.webhook"
+    assert node["parameters"]["authentication"] == "headerAuth"
