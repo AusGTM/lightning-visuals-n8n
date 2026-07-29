@@ -327,4 +327,61 @@ MET.** A genuine no-match event reaches `Decide Action` with `action: "create"`,
 write-gated to `write_blocked`, with no write node executing and no record materializing in
 HubSpot across a >3-minute observation window.
 
-<!-- gsd:write-continue -->
+## Restore — disarmed redeploy + live read-back (Task 5)
+
+Task 4 was **SKIPPED** by explicit instruction (operator-only arming; default skip; not
+exercised in this session — no `ENABLE_BAKED_FLAGS` deploy occurred at any point). Task 5's
+unconditional restore was still run in full, exactly as the plan requires ("run this even if
+Task 4 was skipped").
+
+Redeployed disarmed (`DRY_RUN=false ALLOW_N8N_DEPLOY=true`, `ENABLE_BAKED_FLAGS` absent —
+same command as Task 2 step 1, via the same in-process `.env`-loading wrapper):
+
+```
+Workflows to create: []
+Workflows to update: ['LV Contact Ingest (Cloud template)', 'LV Enrichment (Cloud template)', 'LV Scheduled Maintenance (Cloud)']
+updated workflow LV Contact Ingest (Cloud template) (200)
+updated workflow LV Enrichment (Cloud template) (200)
+updated workflow LV Scheduled Maintenance (Cloud) (200)
+```
+
+Fresh `GET /api/v1/workflows/950HPb7a1GgSAIyZ` (live API, not the local build file):
+
+- `active`: `true`
+- `HubSpot Search`: `n8n-nodes-base.httpRequest`, `POST`,
+  `https://api.hubapi.com/crm/v3/objects/contacts/search`, credential-bound
+  `{"hubspotAppToken": {"id": "Y5z3bszayHGPDx30", "name": "LV HubSpot"}}`
+- `HubSpot Fetch By Id`: identical shape and credential binding
+- `ALLOW_HUBSPOT_RECORD_WRITES = "false"`
+- `ALLOW_HUBSPOT_CREATE = "false"`
+- `TEST_RECORD_IDS = ""`
+- `TEST_RECORD_DOMAINS = ""`
+- `ALLOW_WEB_RESEARCH = false`
+- `ALLOW_SONNET_ESCALATION = false`
+
+**ROADMAP criterion 5 — MET.** Every write gate is disarmed, deployment is live and active,
+and both swapped nodes remain on the credential-bound httpRequest shape (the transport swap
+survives the restore — restoring "disarmed" does not mean restoring "pre-swap"; Task 2's
+transport change is permanent, only the write-safety literals are re-confirmed unarmed).
+
+## Offline suite re-check (Verification item 5)
+
+Deploying to n8n Cloud does not touch the repo (`git status --porcelain` was clean
+throughout this plan's live-ops steps; only this evidence file and the debug/knowledge-base
+docs below were written). The offline suite recorded at Plan 01's baseline (596 pytest /
+285 node, 0 failures) is unaffected by anything in this plan.
+
+## Summary of ROADMAP Criteria (this plan)
+
+| Criterion | Verdict |
+|---|---|
+| ROADMAP 1 (live half) / REACH-01 | **MET** — Task 2 read-back (credential-bound httpRequest transport) + Task 3's one-item `{total:0,results:[]}` capture |
+| ROADMAP 3 / REACH-03 (regression half) | **MET** — Task 1 baseline + Task 2's field-by-field GO verdict + full-chain decision-shape match |
+| ROADMAP 4 / REACH-03 (reachability half) | **MET** — Task 3: `Enrichment Gate.action == "create"`, `Decide Action.action == "write_blocked"`, no write node in `runData`, two searches ≥3 min apart both `total: 0` |
+| ROADMAP 5 | **MET** — Task 5: unconditional disarmed redeploy + live read-back of all six flag literals + node shape |
+
+No secret value appears anywhere in this file. The only HubSpot writes contemplated in this
+plan (Task 4) were never performed — Task 4 was skipped by explicit operator instruction, so
+its criterion contribution is N/A, not partially met; criteria 1/3/4/5 above are each fully
+satisfied by Tasks 1-3 and 5 alone, with no dependency on Task 4.
+

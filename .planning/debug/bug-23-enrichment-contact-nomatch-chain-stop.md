@@ -1,6 +1,7 @@
 ---
-status: root_caused_not_fixed
+status: fixed
 created: 2026-07-29
+resolved: 2026-07-29
 found_by: "Generalizing execution 22's mechanism (ingest, BUG 22) to the enrichment contacts lane — not yet reproduced there live"
 related: bug-22 (fixed, same mechanism), bug-10 (the transport that is immune)
 ---
@@ -67,3 +68,44 @@ the credential-bound httpRequest envelope transport; `ENRICH_ADAPT_SEARCH` and
    nonexistent email (must reach `Decide Action` as `create`, write-gated).
 4. The harness gap: teach `bareEventChainFlow`'s http mocks to model the native node's
    0-item behavior, or better, assert the lane no longer contains native search nodes.
+
+## Resolution (2026-07-29)
+
+Fixed across two plans, Phase 17:
+
+- **17-01** (offline, commits `7b95309`/`0ce1fd8`): `HubSpot Search` and
+  `HubSpot Fetch By Id` in `wf_enrichment_cloud.json` moved to the credential-bound
+  httpRequest CRM v3 envelope transport (mirrors BUG 22/BUG 10). Both nodes dropped from
+  the byte-identical pin (`CONTACT_NODES_BY_WORKFLOW`) with the documented rationale.
+  `bareEventChainFlow.test.mjs` gained a no-match test driving the offline harness to
+  `action: "create"`, write-gated — closing item 4 above.
+- **17-02** (live canary, commits `3fa56f7`/`263157f`/`6357760`, this file's `status: fixed`):
+  - Live pre-swap baseline captured (execs 68/69, contact 201) before any deploy.
+  - Deployed disarmed (`DRY_RUN=false ALLOW_N8N_DEPLOY=true`, no `ENABLE_BAKED_FLAGS`),
+    read back live: both nodes confirmed `n8n-nodes-base.httpRequest`, credential-bound to
+    `LV HubSpot`.
+  - **Case A (match regression) — execs 70/71**: `existingRecord`, `identity_keys`,
+    `lookup_failed`, gate `action`, and `Decide Action` output byte-identical to the
+    pre-swap baseline for both the direct-field and bare-event shapes; only the search
+    node's own raw output shape changed (flattened record → `{total,results}` envelope) —
+    the fix itself. Full-chain re-run (exec 72, `providers:["lusha"]`) matched the
+    historical full-chain execution's (exec 15) per-field merge **decisions**
+    (`promote`/`stage_only`/`needs_review`) exactly; value differences traced to provider-
+    mix variance (1 provider requested vs 3 historically), not a transport regression.
+  - **Case B (create reachability) — exec 76**: a genuine no-match event
+    (`lv-bug23-canary-delete-me@lv-canary-delete-me.example`, confirmed absent before and
+    after) reached `HubSpot Search` (1 item, `{"total":0,"results":[]}`), `Adapt Search`
+    (`existingRecord: {}`, `lookup_failed: false`), `Enrichment Gate`
+    (`action: "create"` — the previously-unreachable path), and `Decide Action`
+    (`action: "write_blocked"`, `properties.email` carrying the canary address). Neither
+    `HubSpot Create` nor `HubSpot Update` ran. Two searches ~3m48s apart both confirmed
+    `total: 0` — no record created.
+  - Deployment restored disarmed and read back live: `active: true`, all six write-safety
+    literals (`ALLOW_HUBSPOT_RECORD_WRITES`, `ALLOW_HUBSPOT_CREATE`, `TEST_RECORD_IDS`,
+    `TEST_RECORD_DOMAINS`, `ALLOW_WEB_RESEARCH`, `ALLOW_SONNET_ESCALATION`) disarmed,
+    both nodes remain on the credential-bound httpRequest transport.
+  - The optional armed-create window (Task 4) was skipped by design — default-skip,
+    operator-approval-gated, not exercised in this session. Not required: criterion 4
+    (create-path reachability) is proven at the write-gated decision layer in Case B.
+
+Full evidence: `.planning/phases/17-enrichment-contacts-reachability-bug-23/17-CANARY-EVIDENCE.md`.
