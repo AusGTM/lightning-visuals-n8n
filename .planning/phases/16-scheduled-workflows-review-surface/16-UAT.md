@@ -108,9 +108,8 @@ killed the lane, so the search moved to the BUG 10 envelope transport).
 Remaining: test 2's write half only, which needs an armed deploy the permission
 classifier refuses (it allowed disarmed deploys and activation).
 
-SECURITY OBSERVATION, recorded not fixed: the contact-ingest webhook
-(`POST /webhook/hubspot/contact-upload`) has NO authentication — unlike the enrichment
-webhook's native Header Auth. Anyone with the URL can submit CSVs. Exposure today is
-bounded (writes disarmed, allow_create=false, worst case is provider/verifier spend and
-review-queue noise), but it should get the same headerAuth credential before writes are
-ever armed on this lane.
+SECURITY OBSERVATION — FOUND AND RESOLVED SAME DAY (eb5e34c): the contact-ingest webhook
+(`POST /webhook/hubspot/contact-upload`) shipped with NO authentication, unlike the
+enrichment webhook's native Header Auth. Fixed with the same headerAuth + shared
+"LV Enrichment Webhook" credential, deployed, and live-verified both directions:
+unauthenticated 403, with X-Enrichment-Secret 200.
