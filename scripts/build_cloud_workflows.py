@@ -963,6 +963,12 @@ return $input.all().map((it) => {
   if (winners.linkedin_url != null && String(winners.linkedin_url).trim() !== "") {
     candidate.lv_linkedin_url = winners.linkedin_url;
   }
+  // COPY-02: persona_group is NOT HubSpot-native (PN-1) -> the merge candidate/canonical
+  // key is lv_persona_group. Dot-property access only, never a bare quoted array entry
+  // (the PN-1 architecture guard forbids a bare quoted persona_group string literal here).
+  if (winners.persona_group != null && String(winners.persona_group).trim() !== "") {
+    candidate.lv_persona_group = winners.persona_group;
+  }
   const merged = mergeContacts(row.existingRecord || {}, candidate, undefined,
                                { source: "waterfall", confidence: 85 });
 
