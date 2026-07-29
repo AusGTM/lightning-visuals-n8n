@@ -39,10 +39,13 @@ placeholder. Authoring it is downstream work. Supersedes CLAUDE.md §29.
 **Goal:** Make every structurally dead or silently inert path in the deployed pipeline reachable
 and proven live, and clear the verification backlog carried out of v0.3.
 
-**Progress:** Phase 17 (BUG 23 — contact:create reachable, live-canaried) and Phase 18 (numeric
-industry code neutralized in normalization + waterfall; both copy-loop fields wired AND given live
-producers — research contract requests `lv_sponsorship_reliant`, `_personaGroup()` emits from
-Apollo/Lusha departments) complete 2026-07-29, verified 5/5. Remaining: Phase 19 verification debt.
+**Progress:** ALL THREE PHASES COMPLETE 2026-07-29 — milestone execution done. Phase 17 (BUG 23 —
+contact:create reachable, live-canaried), Phase 18 (numeric industry code neutralized; both
+copy-loop fields wired AND given live producers, verified 5/5), Phase 19 (six-item verification
+ledger discharged: 3 passed, 3 honest human_needed — `19-LEDGER.md`, verified 6/6). Phase 19
+surfaced **BUG 26**: the live n8n Cloud `LV Enrichment` deployment predates Phase 18's rebuild
+(`.planning/debug/bug-26-enrichment-live-deployment-behind-git.md`); the operator redeploy + 16.9
+armed-window ceremony are scripted in `19-OPERATOR-RUNBOOK.md`.
 
 **Target features:**
 - **BUG 23 fix** — enrichment `contact:create` reachable: transport swap on `HubSpot Search` +

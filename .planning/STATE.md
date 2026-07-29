@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v0.4
 milestone_name: Reachability & Verification Debt
 current_phase: 19
-current_phase_name: Verification Debt Closure
-status: milestone_complete
-stopped_at: Completed 19-01-PLAN.md (all three tasks; six-item ledger closed, 3 passed / 3 human_needed)
-last_updated: "2026-07-29T20:15:40+10:00"
+status: completed
+stopped_at: "Completed 19-01-PLAN.md (all six ledger items closed, 3 passed / 3 human_needed; Milestone 4 complete). Live deployment state now known to be BEHIND git — see `bug-26-enrichment-live-deployment-behind-git.md` and `19-OPERATOR-RUNBOOK.md` Step 0 for the redeploy that must run before the note below (\"all three `active=false`\") is trusted again; item 16's live probe this session found all three workflows now `active=true` with grown node counts, so a redeploy/activation happened since the note below was written but Phase 18 was not included in it."
+last_updated: "2026-07-29T10:23:33.211Z"
 last_activity: 2026-07-29
-last_activity_desc: Phase 19 executed — VERIFY-01 closed, Milestone 4 complete
+last_activity_desc: Phase 19 complete
 progress:
   total_phases: 3
   completed_phases: 3
   total_plans: 6
   completed_plans: 6
   percent: 100
+current_phase_name: Verification Debt Closure
 ---
 
 # Project State
@@ -28,13 +28,13 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 
 ## Current Position
 
-Phase: 19 — Verification Debt Closure — **COMPLETE**
-Plan: 19-01 (single wave, 3 tasks, autonomous) — executed 2026-07-29, all three tasks committed
-Status: Milestone 4 (v0.4) complete. `19-LEDGER.md` closes all six reconstructed re-run items:
+Phase: 19
+Plan: Not started
+Status: All phases complete
 11 passed, 15.5 passed, 16 human_needed (live deployment behind git — `bug-26`), 16.4 passed,
 16.6 human_needed (same drift), 16.9 human_needed (`company:update` residual — see
 `19-OPERATOR-RUNBOOK.md`). Offline suite at floor (596 pytest / 309 node), zero regressions.
-Last activity: 2026-07-29 — Phase 19 executed (Tasks 1-3, `19-01-SUMMARY.md`)
+Last activity: 2026-07-29 — Phase 19 complete
 Next: operator follow-up per `19-OPERATOR-RUNBOOK.md` (redeploy + `company:update` canary),
 then start the next milestone.
 
@@ -42,7 +42,7 @@ then start the next milestone.
 
 **Velocity:**
 
-- Total plans completed: 4
+- Total plans completed: 5
 - Average duration: —
 - Total execution time: —
 
@@ -52,6 +52,7 @@ then start the next milestone.
 |-------|-------|-------|----------|
 | 4 | 1 | ~10m | ~10m |
 | 18 | 3 | - | - |
+| 19 | 1 | - | - |
 
 **Recent Trend:**
 

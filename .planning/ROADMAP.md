@@ -398,4 +398,4 @@ defect a re-run surfaces is captured rather than silently absorbed into "passed.
 |-------|----------------|--------|-----------|
 | 17. Enrichment Contacts Reachability (BUG 23) | 2/2 | **Complete** — verified 5/5; contact:create live-reachable (exec 76), match path regression-checked field-by-field (execs 68-72), deployment restored disarmed | 2026-07-29 |
 | 18. Normalization & Copy-Loop Fixes | 3/3 | Complete    | 2026-07-29 |
-| 19. Verification Debt Closure | 1/1 | **Complete** — 3/6 items passed (11, 15.5, 16.4), 3/6 human_needed pending an operator redeploy/canary (16, 16.6, 16.9); nothing silently absorbed — see `19-LEDGER.md` | 2026-07-29 |
+| 19. Verification Debt Closure | 1/1 | Complete    | 2026-07-29 |
