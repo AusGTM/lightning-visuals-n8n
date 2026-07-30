@@ -97,6 +97,30 @@ classes, or replacing the HubSpot UI as a record-editing surface.
   can actually adjudicate. The enrichment pipeline already stores all of this in the source-metadata
   and `enrichment_last_decision` fields; this phase renders it, it does not recompute it.
 
+### Findings from planning
+- **D-12 (a real hole in the non-clobber guarantee — REVIEW-02):** `domain` is a
+  `DEFAULT_COMPANY_POLICY` key **whose class is `manual_protected`**. But `reviewApply`'s allowlist
+  is `Object.keys(DEFAULT_COMPANY_POLICY)` — **membership in the policy object, not the class
+  check**. So a stale or hand-edited candidate JSON naming `domain` would pass the allowlist and be
+  written, violating REVIEW-02's "a `manual_protected` value is never overwritten by a review
+  decision". Fix: **drop `manual_protected` and `review_required` classes before building the
+  patch**, consulting that same policy object — **inside the existing authority, not a second
+  one**, so D-05/D-07's single-source rule still holds.
+- **D-13 (research Open Q3 deliberately NOT followed):** research suggested growing Phase 27's
+  `hubspot/backend-status` with a queue-detail mode. Phase 27 is **unbuilt**, so its response shape
+  is undecided — building against it would couple this phase to a contract that does not exist yet.
+  The queue read lives in **this phase's own workflow** instead. The divergence is stated in
+  30-04's objective rather than left implicit.
+- **D-14 (the pinned flag assertion is widened deliberately, not incidentally):** `_OVERLAYABLE_FLAGS`
+  goes from 4 names to 5 to admit `ALLOW_HUBSPOT_REVIEW_WRITES`. This is the opposite call from
+  Phase 23's, which **reused** an existing flag precisely to avoid touching the pinned assertion —
+  the difference is that Phase 23 had a suitable existing flag and this phase does not. Editing a
+  pinned safety assertion is an explicit, justified task here, never an incidental edit.
+- **D-15 (reuse is enforced mechanically):** `reviewApply.js` is imported, never forked — and
+  `git diff --stat` on that file is an **acceptance criterion**. The 15-minute backstop loop is
+  likewise retained under a `git diff --stat` guard on the maintenance workflow, so "we kept the
+  backstop" is verified rather than asserted.
+
 ### Claude's Discretion
 - Queue ordering and how many conflicts are shown at once.
 - Wording of the conflict presentation and of the exact-write display.
