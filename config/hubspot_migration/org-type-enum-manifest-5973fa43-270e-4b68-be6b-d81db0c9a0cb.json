@@ -1,0 +1,172 @@
+{
+  "action": "forward",
+  "patch_body": {
+    "fieldType": "select",
+    "options": [
+      {
+        "displayOrder": 0,
+        "hidden": false,
+        "label": "governing_body_league",
+        "value": "governing_body_league"
+      },
+      {
+        "displayOrder": 1,
+        "hidden": false,
+        "label": "content_producer",
+        "value": "content_producer"
+      },
+      {
+        "displayOrder": 2,
+        "hidden": false,
+        "label": "broadcaster",
+        "value": "broadcaster"
+      },
+      {
+        "displayOrder": 3,
+        "hidden": false,
+        "label": "individual_club_team",
+        "value": "individual_club_team"
+      },
+      {
+        "displayOrder": 4,
+        "hidden": false,
+        "label": "regulator",
+        "value": "regulator"
+      },
+      {
+        "displayOrder": 5,
+        "hidden": false,
+        "label": "gambling_operator",
+        "value": "gambling_operator"
+      },
+      {
+        "displayOrder": 6,
+        "hidden": false,
+        "label": "hardware_vendor",
+        "value": "hardware_vendor"
+      },
+      {
+        "displayOrder": 7,
+        "hidden": false,
+        "label": "other",
+        "value": "other"
+      },
+      {
+        "displayOrder": 8,
+        "hidden": false,
+        "label": "unknown",
+        "value": "unknown"
+      }
+    ],
+    "type": "enumeration"
+  },
+  "post_change_property": {
+    "archived": false,
+    "calculated": false,
+    "createdAt": "2026-07-17T08:19:21.834Z",
+    "createdUserId": "93450314",
+    "dataSensitivity": "non_sensitive",
+    "description": "",
+    "displayOrder": -1,
+    "externalOptions": false,
+    "fieldType": "select",
+    "formField": true,
+    "groupName": "companyinformation",
+    "hasUniqueValue": false,
+    "hidden": false,
+    "label": "Org Type",
+    "modificationMetadata": {
+      "archivable": true,
+      "readOnlyDefinition": false,
+      "readOnlyValue": false
+    },
+    "name": "lv_org_type",
+    "options": [
+      {
+        "displayOrder": 0,
+        "hidden": false,
+        "label": "governing_body_league",
+        "value": "governing_body_league"
+      },
+      {
+        "displayOrder": 1,
+        "hidden": false,
+        "label": "content_producer",
+        "value": "content_producer"
+      },
+      {
+        "displayOrder": 2,
+        "hidden": false,
+        "label": "broadcaster",
+        "value": "broadcaster"
+      },
+      {
+        "displayOrder": 3,
+        "hidden": false,
+        "label": "individual_club_team",
+        "value": "individual_club_team"
+      },
+      {
+        "displayOrder": 4,
+        "hidden": false,
+        "label": "regulator",
+        "value": "regulator"
+      },
+      {
+        "displayOrder": 5,
+        "hidden": false,
+        "label": "gambling_operator",
+        "value": "gambling_operator"
+      },
+      {
+        "displayOrder": 6,
+        "hidden": false,
+        "label": "hardware_vendor",
+        "value": "hardware_vendor"
+      },
+      {
+        "displayOrder": 7,
+        "hidden": false,
+        "label": "other",
+        "value": "other"
+      },
+      {
+        "displayOrder": 8,
+        "hidden": false,
+        "label": "unknown",
+        "value": "unknown"
+      }
+    ],
+    "type": "enumeration",
+    "updatedAt": "2026-07-30T10:46:05.713Z",
+    "updatedUserId": "87581729"
+  },
+  "pre_change_property": {
+    "archived": false,
+    "calculated": false,
+    "createdAt": "2026-07-17T08:19:21.834Z",
+    "createdUserId": "93450314",
+    "dataSensitivity": "non_sensitive",
+    "description": "",
+    "displayOrder": -1,
+    "externalOptions": false,
+    "fieldType": "text",
+    "formField": true,
+    "groupName": "companyinformation",
+    "hasUniqueValue": false,
+    "hidden": false,
+    "label": "Org Type",
+    "modificationMetadata": {
+      "archivable": true,
+      "readOnlyDefinition": false,
+      "readOnlyValue": false
+    },
+    "name": "lv_org_type",
+    "options": [],
+    "type": "string",
+    "updatedAt": "2026-07-17T08:19:21.834Z",
+    "updatedUserId": "93450314"
+  },
+  "run_id": "5973fa43-270e-4b68-be6b-d81db0c9a0cb",
+  "timestamp": "2026-07-30T10:46:06.390613+00:00"
+}

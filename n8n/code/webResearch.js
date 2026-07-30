@@ -8,6 +8,16 @@ const { normalizeOrgTypeResult, normalizeContentTypes } = require("./taxonomy");
 
 const ALLOWED_REPRESENTS = new Set(["group", "subsidiary", "franchise_outlet", "single_entity", "unknown"]);
 
+// CLAUDE.md §14.2 web-research return contract (AU|NZ|ANZ|Other|Unknown) — a value
+// outside this set is model garbage/hallucination, not a real region. It is already
+// passed through generically as `data.lv_country_region_normalized` by the wholesale
+// `{...raw.data}` spread below (mirrors lv_sponsorship_reliant, Phase 18 COPY-01); this
+// guard only clamps an unrecognized value so it never silently promotes as an invented
+// enum string (existing provider-side normalizeCountryRegion, n8n/code/normalizeProviders.js,
+// is NOT reused here — it maps raw country NAMES like "Australia", not this field's
+// already-normalized enum output, and would wrongly demote a valid "ANZ"/"Unknown" to "Other").
+const ALLOWED_COUNTRY_REGIONS = new Set(["AU", "NZ", "ANZ", "Other", "Unknown"]);
+
 function validateResearchOutput(raw) {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
     return {
@@ -31,6 +41,11 @@ function validateResearchOutput(raw) {
     producesContent = null; // TS-2: unevidenced False is not evidence of absence
   }
   data.lv_produces_content = producesContent;
+
+  if (data.lv_country_region_normalized !== undefined && data.lv_country_region_normalized !== null &&
+      !ALLOWED_COUNTRY_REGIONS.has(data.lv_country_region_normalized)) {
+    data.lv_country_region_normalized = "Unknown";
+  }
 
   const er = raw.entity_resolution || {};
   const represents = ALLOWED_REPRESENTS.has(er.represents) ? er.represents : "unknown";

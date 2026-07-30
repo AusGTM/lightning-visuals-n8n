@@ -14,14 +14,14 @@ Each maps to exactly one roadmap phase.
 - [x] **REQ-lusha-v3-contract-probe**: Live-probe `POST /v3/contacts/search-and-enrich` and `POST /v3/companies/search-and-enrich` (and the two-step `search` → `enrich` pair) with minimal credit spend; document the confirmed request/response contract (envelope, `has`/`canReveal`/`billing` fields, error shapes) the way the ZoomInfo GTM contract was captured. Verify `check_provider_credits.py`'s usage endpoint against `GET /v3/account/usage`.
 - [x] **REQ-lusha-v3-request-builders**: Both lanes (contacts + companies) swap `GET /v2/*` → `POST /v3/*/search-and-enrich`: params move to body, identity keys map unchanged (email | name+company/domain | domain), `api_key` header auth retained. Builder + local-live variants + `scripts/dryrun_batch.mjs`.
 - [x] **REQ-lusha-selective-reveal** *(re-scoped 2026-07-30 after live probe — A3 REFUTED, see docs/LUSHA-V3-CONTRACT.md §6)*: Contacts requests still derive `reveal[]` from the enrichment gate's `missingFields`, but as **PII-minimization hygiene**, not a cost lever — live A/B showed reveal-1-field vs reveal-2-fields bills identically, and v3 first-time enrich is a flat 1 credit regardless of fields (the v2 ~4.65-credits/reveal phone bundling does not exist in v3). Empty `reveal:[]` is invalid (400) — a minimal non-empty set is always sent. Companies lane has NO reveal mechanism (flat 2 credits/match) — no reveal-derivation code written for it. Cost target already met by flat v3 pricing + id reuse (REQ-lusha-id-staging): full sweep projects ~1 cr/contact + 2 cr/company, well inside the ~3.9k balance.
-- [ ] **REQ-lusha-id-staging**: New staging properties `lusha_contact_id` / `lusha_company_id` persisted on match; re-enrichment paths pass stored IDs so already-revealed data re-enriches free (`canReveal.credits: 0`).
+- [x] **REQ-lusha-id-staging**: New staging properties `lusha_contact_id` / `lusha_company_id` persisted on match; re-enrichment paths pass stored IDs so already-revealed data re-enriches free (`canReveal.credits: 0`).
 - [x] **REQ-lusha-v3-normalize**: `lushaCandidates` in `normalizeProviders.js` parses the v3 envelope and emits candidates field-identical to v2 output downstream (merge/score/staging unchanged; HubSpot schema untouched beyond the two ID properties).
 - [x] **REQ-lusha-v3-verification**: v2-pinned tests migrated, frozen fixture re-baselined, both suites green, disarmed redeploy with read-back showing v3 URLs live and zero v2 URLs remaining.
 
 ### Armed Enrichment Canary
 
-- [ ] **REQ-armed-e2e-canary**: One armed end-to-end enrichment on allowlisted record(s): provider waterfall + Haiku web research + Sonnet judge → staged fields, source metadata, and promoted canonical writes land in HubSpot; neighbor records byte-untouched; disarm + read-back (`"false"`×N, allowlist cleared) closes the run.
-- [ ] **REQ-canary-cost-ledger**: The canary records actual spend — provider credits (before/after balances) and Anthropic tokens per call — against the 2026-07-30 estimates, producing a calibrated per-record cost figure for full-sweep planning.
+- [x] **REQ-armed-e2e-canary**: One armed end-to-end enrichment on allowlisted record(s): provider waterfall + Haiku web research + Sonnet judge → staged fields, source metadata, and promoted canonical writes land in HubSpot; neighbor records byte-untouched; disarm + read-back (`"false"`×N, allowlist cleared) closes the run.
+- [x] **REQ-canary-cost-ledger**: The canary records actual spend — provider credits (before/after balances) and Anthropic tokens per call — against the 2026-07-30 estimates, producing a calibrated per-record cost figure for full-sweep planning.
 
 ### Transport Hygiene
 
@@ -29,7 +29,7 @@ Each maps to exactly one roadmap phase.
 
 ### Schema Hygiene
 
-- [ ] **REQ-orgtype-enumeration**: `lv_org_type` converts text → HubSpot enumeration (the one-way door): property migrated with existing values preserved, pipeline writes validated against the enum options, rollback path documented before flipping.
+- [x] **REQ-orgtype-enumeration**: `lv_org_type` converts text → HubSpot enumeration (the one-way door): property migrated with existing values preserved, pipeline writes validated against the enum options, rollback path documented before flipping.
 - [x] **REQ-country-region-policy**: `lv_country_region_normalized` gains a `config/field_policy.yaml` entry so the already-produced research value can promote under policy instead of staging-only by default.
 
 ## Future Requirements (deferred to v0.7)
@@ -57,11 +57,11 @@ They are backend and business-owner items, carried to v0.7.
 | REQ-lusha-v3-contract-probe | Phase 20 | Complete |
 | REQ-lusha-v3-request-builders | Phase 20 | Complete |
 | REQ-lusha-selective-reveal | Phase 20 | Complete |
-| REQ-lusha-id-staging | Phase 20 | Pending |
+| REQ-lusha-id-staging | Phase 20 | Complete |
 | REQ-lusha-v3-normalize | Phase 20 | Complete |
 | REQ-lusha-v3-verification | Phase 20 | Complete |
 | REQ-dedupe-transport-swap | Phase 21 | Complete |
-| REQ-orgtype-enumeration | Phase 21 | Pending |
+| REQ-orgtype-enumeration | Phase 21 | Complete |
 | REQ-country-region-policy | Phase 21 | Complete |
-| REQ-armed-e2e-canary | Phase 22 | Pending |
-| REQ-canary-cost-ledger | Phase 22 | Pending |
+| REQ-armed-e2e-canary | Phase 22 | Complete |
+| REQ-canary-cost-ledger | Phase 22 | Complete |

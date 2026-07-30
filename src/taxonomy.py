@@ -105,6 +105,11 @@ def normalize_content_types(raw) -> list:
 # the vocabulary gate is reused by construction, not re-implemented.
 ALLOWED_REPRESENTS = {"group", "subsidiary", "franchise_outlet", "single_entity", "unknown"}
 
+# CLAUDE.md Section 14.2 web-research return contract for lv_country_region_normalized.
+# Mirrored by n8n/code/webResearch.js's ALLOWED_COUNTRY_REGIONS guard (kept parity-honest
+# by tests/n8n/parity.test.mjs's GENUINE Python parity assertion).
+ALLOWED_COUNTRY_REGIONS = {"AU", "NZ", "ANZ", "Other", "Unknown"}
+
 
 def validate_research_output(raw) -> dict:
     """OC-2/OC-3/OC-4, TS-1/TS-2/TS-3, AT-2, ER-1. Never raises."""
@@ -132,6 +137,10 @@ def validate_research_output(raw) -> dict:
     if produces_content is False and not evidence_by_field.get("lv_produces_content"):
         produces_content = None  # TS-2: unevidenced False is not evidence of absence
     data["lv_produces_content"] = produces_content
+
+    region = data.get("lv_country_region_normalized")
+    if region is not None and region not in ALLOWED_COUNTRY_REGIONS:
+        data["lv_country_region_normalized"] = "Unknown"
 
     er = dict(raw.get("entity_resolution") or {})
     represents = er.get("represents")

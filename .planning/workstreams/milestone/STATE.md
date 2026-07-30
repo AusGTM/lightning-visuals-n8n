@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v0.5
 milestone_name: Lusha v3 & Armed Enrichment
-current_phase: 20
-current_phase_name: lusha-v3-migration
+current_phase: 22
+current_phase_name: armed-e2e-enrichment-canary
 status: executing
 stopped_at: "Phase 20 complete (5/5 plans, VERIFICATION PASSED WITH GAPS): Lusha v2->v3 migrated both lanes, selective-reveal re-scoped to PII hygiene after live probe refuted cost premise (flat 1cr/contact), contacts stored-id reuse implemented (0-credit re-enrich), disarmed redeploy live-verified zero v2 URLs. ONE PENDING OPERATOR ACTION: armed create of lusha_contact_id/lusha_company_id properties (classifier-blocked for agent; command in 20-04-SUMMARY.md). Next: Phase 21."
-last_updated: "2026-07-30T03:05:33.465Z"
+last_updated: "2026-07-30T08:10:24.323Z"
 last_activity: 2026-07-30
-last_activity_desc: Phase 20 complete, verified; Phase 21 next
+last_activity_desc: Phases 20-22 built to the operator line; 22-OPERATOR-RUNBOOK.md is the handoff
 progress:
   total_phases: 3
-  completed_phases: 0
-  total_plans: 5
-  completed_plans: 5
-  percent: 33
+  completed_phases: 1
+  total_plans: 13
+  completed_plans: 13
+  percent: 100
 ---
 
 # Project State
@@ -24,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-07)
 
 **Core value:** The ICP scoring engine turns firmographic + enrichment signals into trustworthy, auditable A/B/C/D prioritization (with hard vetoes) and never clobbers HubSpot data — proven in dry-run locally.
-**Current focus:** Phase 20 — lusha-v3-migration
+**Current focus:** Phase 22 — armed-e2e-enrichment-canary
 
 ## Current Position
 
-Phase: 20 (lusha-v3-migration) — COMPLETE (verified, 1 pending operator action)
-Plan: 5 of 5 complete
-Status: Phase 21 ready to plan
-Last activity: 2026-07-30 — Phase 20 complete; ~16 Lusha credits spent on probes; live n8n serving v3
+Phase: 22 complete — MILESTONE v0.5 EXECUTION DONE (13/13 plans)
+Plan: all complete
+Status: Armed canary PASSED (execution 332): full chain live (providers + Haiku research + Sonnet judge), neighbors untouched, closed disarmed. Cost: $0.0686 Anthropic/record, 0 provider credits. BUG 27 found+fixed live (array->semicolon in PATCH). Residuals: lv_country_region_normalized promotion unexercised (22-LEDGER.md crit 2); Apollo credit key scope (users/api_profile 403). Next: /gsd-verify-work or /gsd-complete-milestone.
+Last activity: 2026-07-30 evening — canary window closed, ledger filled
 
 ## Performance Metrics
 
