@@ -313,7 +313,13 @@ Plans:
   3. `lv_org_type` is a HubSpot enumeration with all existing values preserved, and pipeline writes validate against the enum options (no silent 400s).
   4. `lv_country_region_normalized` has a `config/field_policy.yaml` entry, so the research value the pipeline already produces can promote under policy instead of defaulting to staging-only.
 
-**Plans**: TBD
+**Plans:** 4 plans
+
+Plans:
+- [ ] 21-01-PLAN.md — Retire the last native HubSpot search node (Dedupe Search) onto the httpRequest envelope, close the class with a guard predicate, disarmed redeploy + live read-back
+- [ ] 21-02-PLAN.md — `lv_country_region_normalized` policy entry on both mirrored surfaces, yaml↔JS conformance guard, named-cause frozen-fixture re-baseline
+- [ ] 21-03-PLAN.md — Disposable-property probe ladder (settles in-place type conversion, value survival, reverse patch, name reuse) + read-only live org_type value inventory
+- [ ] 21-04-PLAN.md — Rollback runbook first, then the gated migration script; one-way-door decision gate and operator-run armed conversion with independent read-back
 
 ### Phase 22: Armed E2E Enrichment Canary
 
