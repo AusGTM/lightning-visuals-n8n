@@ -222,6 +222,28 @@ def test_the_allowlisted_status_post_carries_no_record_payload():
         )
 
 
+def test_the_allowlisted_status_post_sends_an_empty_json_body():
+    """The kwarg the status POST actually uses is `json=`, which the check above does not
+    cover — grepping for `files=`/`data=` would stay green while `json={"events": [...]}`
+    shipped records down an arming-exempt path. Assert the body is the empty literal, by
+    AST so a formatting change cannot fool it."""
+    tree = _parse(SCRIPTS_DIR / "backend_status.py")
+    bodies = [
+        kw.value
+        for node in ast.walk(tree) if isinstance(node, ast.Call)
+        for kw in node.keywords if kw.arg == "json"
+    ]
+    assert bodies, (
+        "backend_status.py no longer passes json= at all — this guard has gone vacuous; "
+        "re-derive which kwarg now carries the request body."
+    )
+    for body in bodies:
+        assert isinstance(body, ast.Dict) and not body.keys, (
+            "backend_status.py's status POST now sends a non-empty json= body. It can "
+            "carry records, so it must not stay exempt from the arming gate."
+        )
+
+
 def test_dispatch_armed_parameter_still_carries_no_default():
     tree = _parse(SCRIPTS_DIR / "dispatch.py")
     dispatch_def = next(
