@@ -18,7 +18,7 @@
 // this repo's own source (scripts/build_cloud_workflows.py) — never from user input,
 // network responses, or any other untrusted source.
 //
-// The CLOUD variant bakes ANTHROPIC_SONNET_MODEL/WEB_RESEARCH_MAX_SEARCHES as literals
+// The CLOUD variant bakes ANTHROPIC_RESEARCH_MODEL/WEB_RESEARCH_MAX_SEARCHES as literals
 // (_flag_const(..., cloud=True)), so it runs under `new Function` with no $env/$vars
 // stub — used for the EXECUTED assertions (a)-(c),(e). The LOCAL_LIVE variant emits
 // `($vars && $vars.X) || $env.X || <default>` and would need those stubs to execute; its

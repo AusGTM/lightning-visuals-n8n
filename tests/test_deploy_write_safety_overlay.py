@@ -137,8 +137,8 @@ def test_boolean_kill_switch_rejects_a_value(monkeypatch):
         deploy._requested_overlay_flags()
 
 
-@pytest.mark.parametrize("cap", ["MAX_WEB_RESEARCH_PER_RUN", "MAX_SONNET_VALIDATIONS_PER_RUN",
-                                 "ANTHROPIC_SONNET_MODEL"])
+@pytest.mark.parametrize("cap", ["MAX_WEB_RESEARCH_PER_RUN", "MAX_JUDGE_VALIDATIONS_PER_RUN",
+                                 "ANTHROPIC_RESEARCH_MODEL", "ANTHROPIC_JUDGE_MODEL"])
 def test_cost_caps_and_models_stay_non_overlayable(monkeypatch, cap):
     monkeypatch.setenv("ENABLE_BAKED_FLAGS", f"{cap}=999")
     with pytest.raises(ValueError, match="unknown flag"):
@@ -156,9 +156,9 @@ def test_rescan_refuses_when_a_declaration_survives_in_an_unreachable_form():
 
 
 def test_unrequested_write_flags_are_untouched_by_a_research_only_request(monkeypatch):
-    monkeypatch.setenv("ENABLE_BAKED_FLAGS", "ALLOW_WEB_RESEARCH,ALLOW_SONNET_ESCALATION")
+    monkeypatch.setenv("ENABLE_BAKED_FLAGS", "ALLOW_WEB_RESEARCH")
     requested = deploy._requested_overlay_flags()
-    assert requested == {"ALLOW_WEB_RESEARCH": "true", "ALLOW_SONNET_ESCALATION": "true"}
+    assert requested == {"ALLOW_WEB_RESEARCH": "true"}
     new_wf, _ = deploy.enable_baked_flags(_wf(), requested)
     assert set(_decls(new_wf, "ALLOW_HUBSPOT_RECORD_WRITES")) == {'"false"'}
     assert set(_decls(new_wf, "TEST_RECORD_IDS")) == {'""'}

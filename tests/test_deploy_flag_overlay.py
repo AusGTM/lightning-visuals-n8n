@@ -30,7 +30,7 @@ def raise_http(*args, **kwargs):
 @pytest.fixture(autouse=True)
 def hermetic(monkeypatch):
     for var in ("N8N_URL", "N8N_API_KEY", "N8N_EXPECTED_URL", "ALLOW_N8N_DEPLOY", "DRY_RUN",
-                "ENABLE_BAKED_FLAGS", "ALLOW_WEB_RESEARCH", "ALLOW_SONNET_ESCALATION"):
+                "ENABLE_BAKED_FLAGS", "ALLOW_WEB_RESEARCH", "ALLOW_JUDGE_ESCALATION"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setattr(requests, "get", raise_http)
     monkeypatch.setattr(requests, "post", raise_http)
@@ -72,42 +72,30 @@ def test_enable_baked_flags_is_pure_input_untouched():
 def test_enable_baked_flags_exactness_on_real_committed_artifact():
     raw = ENRICHMENT_WF_PATH.read_text()
     expected_research_count = raw.count("const ALLOW_WEB_RESEARCH = false;")
-    expected_escalation_count = raw.count("const ALLOW_SONNET_ESCALATION = false;")
     assert expected_research_count > 0
-    assert expected_escalation_count > 0
+    # ALLOW_JUDGE_ESCALATION is no longer overlayable — it defaults `true` at build
+    # time (quick-260730-din) and has no _OVERLAY_FLAG_SPEC entry at all.
 
     wf = _load_enrichment_workflow()
-    new_wf, counts = deploy.enable_baked_flags(
-        wf, ["ALLOW_WEB_RESEARCH", "ALLOW_SONNET_ESCALATION"]
-    )
+    new_wf, counts = deploy.enable_baked_flags(wf, ["ALLOW_WEB_RESEARCH"])
     assert counts["ALLOW_WEB_RESEARCH"] == expected_research_count
-    assert counts["ALLOW_SONNET_ESCALATION"] == expected_escalation_count
 
     serialized = json.dumps(new_wf)
     assert re.findall(r"const ALLOW_WEB_RESEARCH = (\w+);", serialized) == \
         ["true"] * expected_research_count
-    assert re.findall(r"const ALLOW_SONNET_ESCALATION = (\w+);", serialized) == \
-        ["true"] * expected_escalation_count
 
 
 # --- (c) independence -------------------------------------------------------------------
 
 def test_enable_baked_flags_independence_research_only():
+    # ALLOW_JUDGE_ESCALATION is armed `true` in the committed build UNCONDITIONALLY
+    # (quick-260730-din) — enabling only research must not need, and cannot affect,
+    # that already-armed declaration.
     wf = _load_enrichment_workflow()
     new_wf, _ = deploy.enable_baked_flags(wf, ["ALLOW_WEB_RESEARCH"])
     serialized = json.dumps(new_wf)
     assert "const ALLOW_WEB_RESEARCH = true;" in serialized
-    assert "const ALLOW_SONNET_ESCALATION = false;" in serialized
-    assert "const ALLOW_SONNET_ESCALATION = true;" not in serialized
-
-
-def test_enable_baked_flags_independence_escalation_only():
-    wf = _load_enrichment_workflow()
-    new_wf, _ = deploy.enable_baked_flags(wf, ["ALLOW_SONNET_ESCALATION"])
-    serialized = json.dumps(new_wf)
-    assert "const ALLOW_SONNET_ESCALATION = true;" in serialized
-    assert "const ALLOW_WEB_RESEARCH = false;" in serialized
-    assert "const ALLOW_WEB_RESEARCH = true;" not in serialized
+    assert "const ALLOW_JUDGE_ESCALATION = true;" in serialized
 
 
 # --- (d) fail closed on drift — the headline test ---------------------------------------
@@ -129,14 +117,18 @@ def test_enable_baked_flags_raises_on_spacing_variant_the_exact_rewrite_cannot_m
 def test_enable_baked_flags_raises_on_numeric_literal_variant():
     # A numeric literal instead of the expected boolean — again unreachable by the exact
     # replace, and again must be caught by the re-scan rather than silently ignored.
+    # Subject is ALLOW_WEB_RESEARCH (still overlayable) rather than the judge
+    # escalation flag this test used before quick-260730-din — that flag left
+    # _OVERLAY_FLAG_SPEC entirely, so using it here would raise the "not overlayable"
+    # error before ever reaching this numeric-literal re-scan branch.
     workflow = {
         "name": "wf-drift-numeric",
         "nodes": [{"name": "Node A", "parameters": {
-            "jsCode": "const ALLOW_SONNET_ESCALATION = 0;\nconsole.log(1);"
+            "jsCode": "const ALLOW_WEB_RESEARCH = 0;\nconsole.log(1);"
         }}],
     }
-    with pytest.raises(ValueError, match="ALLOW_SONNET_ESCALATION"):
-        deploy.enable_baked_flags(workflow, ["ALLOW_SONNET_ESCALATION"])
+    with pytest.raises(ValueError, match="ALLOW_WEB_RESEARCH"):
+        deploy.enable_baked_flags(workflow, ["ALLOW_WEB_RESEARCH"])
 
 
 def test_enable_baked_flags_never_returns_a_workflow_with_a_surviving_disabled_declaration():
@@ -170,8 +162,10 @@ def test_enable_baked_flags_never_returns_a_workflow_with_a_surviving_disabled_d
 
 @pytest.mark.parametrize("bad_flag", [
     "MAX_WEB_RESEARCH_PER_RUN",
-    "MAX_SONNET_VALIDATIONS_PER_RUN",
-    "ANTHROPIC_SONNET_MODEL",
+    "MAX_JUDGE_VALIDATIONS_PER_RUN",
+    "ANTHROPIC_RESEARCH_MODEL",
+    "ANTHROPIC_JUDGE_MODEL",
+    "ALLOW_JUDGE_ESCALATION",
 ])
 def test_enable_baked_flags_rejects_non_overlayable_names(bad_flag):
     wf = _load_enrichment_workflow()
@@ -181,8 +175,10 @@ def test_enable_baked_flags_rejects_non_overlayable_names(bad_flag):
 
 @pytest.mark.parametrize("bad_flag", [
     "MAX_WEB_RESEARCH_PER_RUN",
-    "MAX_SONNET_VALIDATIONS_PER_RUN",
-    "ANTHROPIC_SONNET_MODEL",
+    "MAX_JUDGE_VALIDATIONS_PER_RUN",
+    "ANTHROPIC_RESEARCH_MODEL",
+    "ANTHROPIC_JUDGE_MODEL",
+    "ALLOW_JUDGE_ESCALATION",
 ])
 def test_requested_overlay_flags_rejects_non_overlayable_names_from_env(monkeypatch, bad_flag):
     monkeypatch.setenv("ENABLE_BAKED_FLAGS", bad_flag)
@@ -195,11 +191,9 @@ def test_requested_overlay_flags_rejects_non_overlayable_names_from_env(monkeypa
 def test_enable_baked_flags_zero_declarations_returns_unchanged_not_a_raise():
     wf = json.loads((ROOT / "n8n" / "wf_contact_ingest_cloud.json").read_text())
     raw = json.dumps(wf)
-    assert "ALLOW_WEB_RESEARCH" not in raw and "ALLOW_SONNET_ESCALATION" not in raw
-    new_wf, counts = deploy.enable_baked_flags(
-        wf, ["ALLOW_WEB_RESEARCH", "ALLOW_SONNET_ESCALATION"]
-    )
-    assert counts == {"ALLOW_WEB_RESEARCH": 0, "ALLOW_SONNET_ESCALATION": 0}
+    assert "ALLOW_WEB_RESEARCH" not in raw
+    new_wf, counts = deploy.enable_baked_flags(wf, ["ALLOW_WEB_RESEARCH"])
+    assert counts == {"ALLOW_WEB_RESEARCH": 0}
     assert new_wf == wf
 
 
@@ -242,9 +236,14 @@ def test_ambient_env_names_have_zero_effect_on_the_captured_put_body(monkeypatch
     monkeypatch.setenv("N8N_API_KEY", "fake-key")
     monkeypatch.setenv("DRY_RUN", "false")
     monkeypatch.setenv("ALLOW_N8N_DEPLOY", "true")
-    # The .env-style Python-lane names, both true — ENABLE_BAKED_FLAGS deliberately unset.
+    # The .env-style Python-lane names — ENABLE_BAKED_FLAGS deliberately unset.
+    # ALLOW_WEB_RESEARCH="true" mirrors the pre-existing proof it has zero effect.
+    # ALLOW_JUDGE_ESCALATION="false" is the NON-default value (the flag now bakes
+    # `true` by default) — setting it to the default would coincide and prove
+    # nothing; setting it to the opposite of the default is what actually proves
+    # the ambient env is inert.
     monkeypatch.setenv("ALLOW_WEB_RESEARCH", "true")
-    monkeypatch.setenv("ALLOW_SONNET_ESCALATION", "true")
+    monkeypatch.setenv("ALLOW_JUDGE_ESCALATION", "false")
 
     real_wf = _load_enrichment_workflow()
     monkeypatch.setattr(deploy, "_get_live_workflows", lambda: [{"id": "live-id", "name": real_wf["name"]}])
@@ -264,14 +263,17 @@ def test_ambient_env_names_have_zero_effect_on_the_captured_put_body(monkeypatch
     body = update_calls[0][1]
     serialized = json.dumps(body)
     assert "const ALLOW_WEB_RESEARCH = false;" in serialized
-    assert "const ALLOW_SONNET_ESCALATION = false;" in serialized
     assert "const ALLOW_WEB_RESEARCH = true;" not in serialized
-    assert "const ALLOW_SONNET_ESCALATION = true;" not in serialized
+    # Committed default is `true`, and the ambient env value ("false") had zero effect.
+    assert "const ALLOW_JUDGE_ESCALATION = true;" in serialized
+    assert "const ALLOW_JUDGE_ESCALATION = false;" not in serialized
 
 
-# --- (i) default-off through the real path -----------------------------------------------
+# --- (i) research default-off / judge default-on, through the real path ------------------
+# ALLOW_WEB_RESEARCH still defaults `false`; ALLOW_JUDGE_ESCALATION now defaults `true`
+# (quick-260730-din) — only the research half of this test's name is still "default off".
 
-def test_default_off_through_real_path_unset_enable_baked_flags(monkeypatch):
+def test_research_default_off_judge_default_on_through_real_path_unset_enable_baked_flags(monkeypatch):
     monkeypatch.setenv("N8N_URL", "https://foo.n8n.cloud")
     monkeypatch.setenv("N8N_API_KEY", "fake-key")
     monkeypatch.setenv("DRY_RUN", "false")
@@ -294,7 +296,7 @@ def test_default_off_through_real_path_unset_enable_baked_flags(monkeypatch):
     body = update_calls[0][1]
     serialized = json.dumps(body)
     assert "const ALLOW_WEB_RESEARCH = false;" in serialized
-    assert "const ALLOW_SONNET_ESCALATION = false;" in serialized
+    assert "const ALLOW_JUDGE_ESCALATION = true;" in serialized
 
 
 # --- (j) enabled through the real path ----------------------------------------------------
@@ -304,7 +306,7 @@ def test_enabled_through_real_path_and_bind_credentials_succeeds(monkeypatch):
     monkeypatch.setenv("N8N_API_KEY", "fake-key")
     monkeypatch.setenv("DRY_RUN", "false")
     monkeypatch.setenv("ALLOW_N8N_DEPLOY", "true")
-    monkeypatch.setenv("ENABLE_BAKED_FLAGS", "ALLOW_WEB_RESEARCH,ALLOW_SONNET_ESCALATION")
+    monkeypatch.setenv("ENABLE_BAKED_FLAGS", "ALLOW_WEB_RESEARCH")
 
     real_wf = _load_enrichment_workflow()
     monkeypatch.setattr(deploy, "_get_live_workflows", lambda: [{"id": "live-id", "name": real_wf["name"]}])
@@ -323,9 +325,9 @@ def test_enabled_through_real_path_and_bind_credentials_succeeds(monkeypatch):
     body = update_calls[0][1]
     serialized = json.dumps(body)
     assert "const ALLOW_WEB_RESEARCH = true;" in serialized
-    assert "const ALLOW_SONNET_ESCALATION = true;" in serialized
     assert "const ALLOW_WEB_RESEARCH = false;" not in serialized
-    assert "const ALLOW_SONNET_ESCALATION = false;" not in serialized
+    # ALLOW_JUDGE_ESCALATION is baked `true` unconditionally — no overlay needed.
+    assert "const ALLOW_JUDGE_ESCALATION = true;" in serialized
     # bind_credentials() composes with the overlay as main() does (proving composition,
     # not just the individual pieces): every HubSpot-credentialed node in the captured
     # body is bound. BUG 23 (Phase 17.01): a bare `type == "n8n-nodes-base.hubspot"`
@@ -346,7 +348,7 @@ def test_enabled_through_real_path_and_bind_credentials_succeeds(monkeypatch):
 def test_dry_run_visibility_prints_rewrite_plan_and_makes_zero_http_calls(monkeypatch, capsys):
     monkeypatch.setenv("N8N_URL", "https://foo.n8n.cloud")
     monkeypatch.setenv("N8N_API_KEY", "fake-key")
-    monkeypatch.setenv("ENABLE_BAKED_FLAGS", "ALLOW_WEB_RESEARCH,ALLOW_SONNET_ESCALATION")
+    monkeypatch.setenv("ENABLE_BAKED_FLAGS", "ALLOW_WEB_RESEARCH")
     # DRY_RUN default (true), ALLOW_N8N_DEPLOY unset — write gate closed.
 
     real_wf = _load_enrichment_workflow()
@@ -366,7 +368,6 @@ def test_dry_run_visibility_prints_rewrite_plan_and_makes_zero_http_calls(monkey
     out = capsys.readouterr().out
     assert "DRY RUN" in out
     assert "ALLOW_WEB_RESEARCH" in out
-    assert "ALLOW_SONNET_ESCALATION" in out
     assert "rewritten" in out
 
 

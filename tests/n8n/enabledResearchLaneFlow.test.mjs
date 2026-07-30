@@ -1,9 +1,11 @@
 // Phase 16.5 Task 3 — the offline oracle for Plan 02/03's live runs.
 //
-// Plan 02/03 spend real Anthropic dollars firing the research->judge lane live, against
-// a build with ALLOW_WEB_RESEARCH/ALLOW_SONNET_ESCALATION enabled. This file drives the
-// EXACT node bodies that build will ship — the committed wf_enrichment_cloud.json with
-// the same two exact-literal replacements the Python deploy-time overlay
+// Plan 02/03 spend real Anthropic dollars firing the research->judge lane live. Judge
+// escalation is now armed by default at build time (quick-260730-din,
+// ALLOW_JUDGE_ESCALATION defaults `true`) — only ALLOW_WEB_RESEARCH still needs the
+// deploy-time overlay to enable. This file drives the EXACT node bodies that build will
+// ship — the committed wf_enrichment_cloud.json with the same exact-literal replacement
+// the Python deploy-time overlay
 // (scripts/deploy_n8n_workflows.py::enable_baked_flags) performs — through both the
 // contacts and companies research-then-judge lanes, from a raw bare-event webhook body,
 // asserting the research gate fires, the judge escalates, and the row survives BOTH HTTP
@@ -31,9 +33,10 @@ import fs from "node:fs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const WF_PATH = path.join(ROOT, "n8n", "wf_enrichment_cloud.json");
 
-// --- (1) THE ENABLED WORKFLOW: the same two exact-literal replacements the Python
-// overlay performs (enable_baked_flags), independently reimplemented here. ---------------
-const OVERLAY_FLAGS = ["ALLOW_WEB_RESEARCH", "ALLOW_SONNET_ESCALATION"];
+// --- (1) THE ENABLED WORKFLOW: the same exact-literal replacement the Python
+// overlay performs (enable_baked_flags), independently reimplemented here. Judge
+// escalation needs no entry here — it is already baked `true` in the committed source. -
+const OVERLAY_FLAGS = ["ALLOW_WEB_RESEARCH"];
 
 function enableBakedFlagsJs(rawText, flags) {
   let text = rawText;

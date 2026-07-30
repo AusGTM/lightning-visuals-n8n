@@ -3,7 +3,7 @@
 # Phase 16 Task 4 (infra) / Task 5 (this file — deferred, see 16-01-SUMMARY.md
 # Deviations) — Criterion 5 parity guard. build_enrichment_local_live() (docker
 # replica) and build_enrichment_cloud() (Cloud webhook) must reference an IDENTICAL
-# 6-flag set and an IDENTICAL 6-secret set, sourced from ONE shared constant
+# 7-flag set and an IDENTICAL 6-secret set, sourced from ONE shared constant
 # (CONFIG_FLAG_DEFAULTS / SECRET_ENV_NAMES) — a flag or secret added, dropped, or
 # renamed in only one builder fails this test.
 #
@@ -30,10 +30,11 @@ from build_cloud_workflows import (  # noqa: E402
 EXPECTED_FLAGS = {
     "ALLOW_WEB_RESEARCH",
     "MAX_WEB_RESEARCH_PER_RUN",
-    "ANTHROPIC_SONNET_MODEL",
+    "ANTHROPIC_RESEARCH_MODEL",
+    "ANTHROPIC_JUDGE_MODEL",
     "WEB_RESEARCH_MAX_SEARCHES",
-    "ALLOW_SONNET_ESCALATION",
-    "MAX_SONNET_VALIDATIONS_PER_RUN",
+    "ALLOW_JUDGE_ESCALATION",
+    "MAX_JUDGE_VALIDATIONS_PER_RUN",
 }
 
 EXPECTED_SECRETS = {
@@ -46,7 +47,7 @@ EXPECTED_SECRETS = {
 }
 
 
-def test_config_flag_defaults_is_exactly_the_six_flags():
+def test_config_flag_defaults_is_exactly_the_seven_flags():
     assert set(CONFIG_FLAG_DEFAULTS.keys()) == EXPECTED_FLAGS
 
 
@@ -78,7 +79,7 @@ def _all_credential_bound_node_names(workflow: dict) -> set:
     return bound
 
 
-def test_local_live_references_all_six_flags_via_env_var_expressions():
+def test_local_live_references_all_seven_flags_via_env_var_expressions():
     wf = build_enrichment_local_live()
     code = _all_jscode(wf)
     for flag in EXPECTED_FLAGS:
@@ -88,7 +89,7 @@ def test_local_live_references_all_six_flags_via_env_var_expressions():
         )
 
 
-def test_cloud_references_all_six_flags_as_baked_literals():
+def test_cloud_references_all_seven_flags_as_baked_literals():
     wf = build_enrichment_cloud()
     code = _all_jscode(wf)
     for flag in EXPECTED_FLAGS:

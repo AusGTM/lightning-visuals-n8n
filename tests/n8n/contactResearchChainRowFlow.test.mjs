@@ -65,9 +65,10 @@ function runChain(wfPath) {
     // existingRecord.jobtitle/seniority BLANK (not a conflict scenario, mirroring
     // researchChainRowFlow.test.mjs's own choice of a non-conflicting existing
     // lv_org_type) — this keeps computeContactEscalation's judge_reasons empty, so
-    // Contact Judge Gate's applyCostCap (budget 0, ALLOW_SONNET_ESCALATION defaults
-    // false even on Cloud) never demotes the research candidate via
-    // applyContactUnadjudicated; this harness runs every chain node UNCONDITIONALLY
+    // Contact Judge Gate's applyCostCap (judge_reasons empty, so needs_judge is
+    // already false regardless of ALLOW_JUDGE_ESCALATION's default-true budget) never
+    // demotes the research candidate via applyContactUnadjudicated; this harness runs
+    // every chain node UNCONDITIONALLY
     // (it does not evaluate the IF-node branches n8n itself would), so a conflict
     // scenario here would exercise a combination (judge nodes fed a capped-and-already-
     // demoted candidate) that can never occur in a real execution.

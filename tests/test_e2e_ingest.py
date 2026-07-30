@@ -66,7 +66,7 @@ def raise_http(*args, **kwargs):
 def hermetic(monkeypatch):
     monkeypatch.delenv("HUBSPOT_PRIVATE_APP_TOKEN", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.setenv("ALLOW_SONNET_ESCALATION", "false")
+    monkeypatch.setenv("ALLOW_JUDGE_ESCALATION", "false")
     monkeypatch.setattr("src.merge_policy.classify_field_with_haiku", promote_fake)
     monkeypatch.setattr("src.hubspot_client.requests.get", raise_http)
     monkeypatch.setattr("src.hubspot_client.requests.post", raise_http)

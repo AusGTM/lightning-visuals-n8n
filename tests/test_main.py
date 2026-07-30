@@ -31,7 +31,7 @@ def base_setup(monkeypatch):
     monkeypatch.setattr("src.hubspot_client.requests.patch", no_http)
     monkeypatch.setenv("DRY_RUN", "true")
     monkeypatch.setenv("USE_MOCK_WEB_RESEARCH", "true")
-    monkeypatch.setenv("ALLOW_SONNET_ESCALATION", "false")
+    monkeypatch.setenv("ALLOW_JUDGE_ESCALATION", "false")
 
 
 def test_sc1_prints_four_sections(monkeypatch, capsys):

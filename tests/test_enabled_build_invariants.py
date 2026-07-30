@@ -20,7 +20,11 @@ from build_cloud_workflows import CONFIG_FLAG_DEFAULTS  # noqa: E402
 N8N = ROOT / "n8n"
 ENRICHMENT_WF_PATH = N8N / "wf_enrichment_cloud.json"
 
-FLAGS = ("ALLOW_WEB_RESEARCH", "ALLOW_SONNET_ESCALATION")
+# ALLOW_JUDGE_ESCALATION is no longer part of this tuple (quick-260730-din): it left
+# the overlayable set and now bakes `true` unconditionally in the committed build — the
+# opposite invariant from what this tuple represents (committed-disabled, overlayable).
+# See test_committed_build_judge_escalation_is_always_true below for its own guard.
+FLAGS = ("ALLOW_WEB_RESEARCH",)
 
 # Secret env-var runtime-lookup forms this repo's builders use — the docker-replica
 # ($env.NAME / $vars.NAME) reads. If any of these appear in the ENABLED build, a secret
@@ -61,14 +65,36 @@ def test_committed_build_flag_declarations_are_always_disabled(wf_path, flag):
         )
 
 
-def test_enrichment_workflow_declares_both_flags_at_least_once():
+def test_enrichment_workflow_declares_research_flag_at_least_once():
     """Non-vacuity: the parametrized guard above could otherwise pass by having every
-    workflow declare neither flag. Pin that the one workflow that DOES declare them
+    workflow declare the flag nowhere. Pin that the one workflow that DOES declare it
     (wf_enrichment_cloud.json) actually does, so the guard is exercised for real."""
     text = ENRICHMENT_WF_PATH.read_text()
     for flag in FLAGS:
         literals = _decl_literals(text, flag)
         assert literals, f"wf_enrichment_cloud.json declares {flag} zero times — guard is vacuous"
+
+
+# --- (1b) the committed build ARMS judge escalation by default (quick-260730-din) --------
+# The inverse of (1): this is the arm-by-default guarantee the whole rename task exists
+# to deliver, and it has zero coverage without this test.
+
+@pytest.mark.parametrize("wf_path", _built_cloud_workflow_paths(), ids=lambda p: p.name)
+def test_committed_build_judge_escalation_is_always_true(wf_path):
+    text = wf_path.read_text()
+    literals = _decl_literals(text, "ALLOW_JUDGE_ESCALATION")
+    for literal in literals:
+        assert literal == "true", (
+            f"{wf_path.name} declares ALLOW_JUDGE_ESCALATION with literal {literal!r} — "
+            "the committed build must always arm judge escalation by default."
+        )
+
+
+def test_enrichment_workflow_declares_judge_escalation_at_least_once():
+    """Non-vacuity companion to the inverted test above."""
+    text = ENRICHMENT_WF_PATH.read_text()
+    literals = _decl_literals(text, "ALLOW_JUDGE_ESCALATION")
+    assert literals, "wf_enrichment_cloud.json declares ALLOW_JUDGE_ESCALATION zero times — guard is vacuous"
 
 
 # --- (2) Criterion 5 survives enablement -------------------------------------------------
@@ -96,12 +122,15 @@ def test_enabled_build_has_no_secret_lookup_form_for_any_secret_name():
         assert f"$vars.{secret}" not in serialized
 
 
-# --- (3) the diff is exactly the four flag lines ------------------------------------------
+# --- (3) the diff is exactly the two flag lines --------------------------------------------
+# (quick-260730-din: ALLOW_JUDGE_ESCALATION left the overlayable set, so only
+# ALLOW_WEB_RESEARCH's 2 declaration sites in wf_enrichment_cloud.json differ now —
+# down from 4 when both flags were overlayable.)
 
-def test_enabled_vs_committed_diff_touches_only_the_four_flag_lines():
+def test_enabled_vs_committed_diff_touches_only_the_two_flag_lines():
     """The strongest single statement in this plan: serialize both builds with identical
     formatting, diff line-by-line, and assert every differing line is a declaration of
-    one of the two overlayable flags. A cost cap, a write-safety constant, a model name,
+    the one overlayable flag. A cost cap, a write-safety constant, a model name,
     a node parameter or a position appearing here fails by construction — no enumeration
     of forbidden things required."""
     committed_wf = json.loads(ENRICHMENT_WF_PATH.read_text())
@@ -158,7 +187,7 @@ def test_enabled_build_cost_caps_are_unchanged():
     committed_text = ENRICHMENT_WF_PATH.read_text()
     serialized = _enabled_enrichment_workflow_serialized()
 
-    for name in ("MAX_WEB_RESEARCH_PER_RUN", "MAX_SONNET_VALIDATIONS_PER_RUN"):
+    for name in ("MAX_WEB_RESEARCH_PER_RUN", "MAX_JUDGE_VALIDATIONS_PER_RUN"):
         committed_literals = _decl_literals(committed_text, name)
         enabled_literals = _decl_literals(serialized, name)
         assert committed_literals, f"{name} not found in committed build"
@@ -173,7 +202,7 @@ def test_enabled_build_cost_caps_are_unchanged():
 def test_overlayable_flags_is_a_strict_subset_of_config_flag_defaults():
     """A test may import build_cloud_workflows freely; the deploy script may not
     (import-time codegen side effect into n8n/code/). If someone renames a flag in
-    CONFIG_FLAG_DEFAULTS, tests/test_builder_flag_parity.py fails on the six-name pin
+    CONFIG_FLAG_DEFAULTS, tests/test_builder_flag_parity.py fails on the seven-name pin
     and this test fails on the subset check — the overlay cannot silently drift away
     from the thing it rewrites."""
     from scripts.build_cloud_workflows import WRITE_SAFETY_DEFAULTS, _write_safety_const
@@ -181,15 +210,16 @@ def test_overlayable_flags_is_a_strict_subset_of_config_flag_defaults():
     assert deploy._OVERLAYABLE_FLAGS < set(CONFIG_FLAG_DEFAULTS) | set(WRITE_SAFETY_DEFAULTS)
     assert deploy._OVERLAYABLE_FLAGS == {
         "ALLOW_WEB_RESEARCH",
-        "ALLOW_SONNET_ESCALATION",
         "ALLOW_HUBSPOT_RECORD_WRITES",
         "ALLOW_HUBSPOT_CREATE",
         "TEST_RECORD_IDS",
         "TEST_RECORD_DOMAINS",
     }
-    # Cost caps and model names stay structurally out of reach.
+    # Cost caps, model names, and judge escalation (default-true, quick-260730-din) stay
+    # structurally out of reach — permanently non-overlayable.
     assert not deploy._OVERLAYABLE_FLAGS & {
-        "MAX_WEB_RESEARCH_PER_RUN", "MAX_SONNET_VALIDATIONS_PER_RUN", "ANTHROPIC_SONNET_MODEL",
+        "MAX_WEB_RESEARCH_PER_RUN", "MAX_JUDGE_VALIDATIONS_PER_RUN",
+        "ANTHROPIC_RESEARCH_MODEL", "ANTHROPIC_JUDGE_MODEL", "ALLOW_JUDGE_ESCALATION",
     }
     # Each spec entry's disabled literal must be byte-identical to what the builder bakes —
     # otherwise the exact-literal rewrite silently matches nothing and the deploy refuses
