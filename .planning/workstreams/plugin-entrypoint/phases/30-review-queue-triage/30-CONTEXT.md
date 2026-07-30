@@ -47,9 +47,42 @@ classes, or replacing the HubSpot UI as a record-editing surface.
 
 ### Audit stamping
 - **D-08:** Every decision stamps **human source, timestamp, and the operator's stated reason**
-  into the **existing source-metadata fields** (REVIEW-04). No new audit schema is invented — the
-  `<field>_source` / `<field>_verified_at` / `<field>_verified_by_model` / `<field>_validation_status`
-  convention already exists and has a `human` source and a `human_approved` validation status.
+  into the existing audit mechanism (REVIEW-04). No new audit schema is invented.
+- **D-08a (CORRECTS D-08's premise — 30-RESEARCH.md, verified against deployed schema and code):**
+  The flat `<field>_source` / `<field>_verified_at` / `<field>_verified_by_model` /
+  `<field>_validation_status` convention described in the root `CLAUDE.md` **does not exist in this
+  repo's deployed schema**. The real mechanism is **one JSON blob per object** —
+  `lv_enrichment_provenance` (companies) / `lv_contact_enrichment_provenance` (contacts) — with
+  entries shaped `{source, confidence, verified_at, validation_status, value, evidence_url?}` and
+  **no `verified_by_model` key at all** (`src/merge_policy.py`, `n8n/code/mergeCompanies.js`).
+- **D-08b:** D-08's intent is still satisfiable: a human decision **additively merges an entry**
+  into that same blob with `source: "human"`, `validation_status: "human_approved"`, and
+  `reason: <operator text>`. Additive merge, never replacement — the prior machine entries stay.
+- **D-08c:** The review properties this phase drives **are real, but only under the `lv_` prefix**:
+  `lv_enrichment_needs_review`, `lv_enrichment_review_reason`, `lv_enrichment_review_candidate_json`,
+  `lv_enrichment_review_approved`, `lv_enrichment_reviewed_by`, `lv_enrichment_reviewed_at`,
+  `lv_icp_needs_review` — on both companies and contacts. The generic unprefixed names used in root
+  `CLAUDE.md` are wrong for this deployment.
+
+### Enforcement path and endpoint — corrected by research
+- **D-08d:** The non-clobber engine D-05 defers to **already exists and is tested**:
+  `n8n/code/reviewApply.js`, wired into `wf_scheduled_maintenance_cloud.json`'s 15-minute
+  `Review Trigger`. It performs compare-and-set staleness checking and never lets a
+  `manual_protected` field reach the queue at all. `tests/n8n/reviewLoop.test.mjs` covers the
+  contract. **Reuse it; do not re-implement.**
+- **D-08e:** A **new synchronous endpoint and a new baked flag are required.** No existing webhook
+  carries a review decision, and the existing apply path is a 15-minute poll — incompatible with
+  the confirm-then-verify pattern D-01 imports from Phase 28. The plan adds
+  `hubspot/review/decision` plus `ALLOW_HUBSPOT_REVIEW_WRITES` in
+  `scripts/deploy_n8n_workflows.py`'s `_OVERLAY_FLAG_SPEC`, mirroring how Phases 25/27 grow
+  `hubspot/backend-status`. The existing 15-minute loop **stays as a backstop** rather than being
+  retired.
+- **D-08f:** **D-11's "which source said what" cannot be fully literal.** By the time a field
+  reaches `needs_review` the pipeline has resolved to a single `source_provider` + `reason` string;
+  true multi-provider disagreement is computed transiently in `scoreEnrichment.js` (`ranked` /
+  `conflicts`) and **never persisted**. The queue renders what is stored, and says plainly that it
+  is showing the resolved source rather than the full disagreement. Persisting `conflicts` is a
+  cheap fast-follow, recorded as deferred rather than assumed.
 - **D-09:** The operator's stated reason is captured as free text and stored. A decision without a
   reason is still a decision, but the reason is what makes the audit trail useful later.
 

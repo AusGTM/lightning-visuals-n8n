@@ -55,10 +55,43 @@ NOTICE-01) and the scheduled sweep (NOTICE-03). Phase 26's re-check is operator-
 - **D-09:** This mirrors the adaptive convention set by Phase 23 D-08 for previews: small results
   shown whole, large results summarized with the actionable part surfaced. One convention across
   preview and report.
-- **D-10:** For enrichment dispatches the report shows, per record, at minimum **ICP tier and the
-  needs-review flag**, alongside remaining provider credits taken from the enrichment response's
-  own `remaining_credits` or the n8n-side status endpoint. The client never queries a provider
-  itself.
+- **D-10:** For enrichment dispatches the report shows, per record, the **needs-review flag** and
+  **remaining provider credits** — the latter taken from the enrichment response's own
+  `remaining_credits`, which 26-RESEARCH.md confirmed is genuinely present per item. The client
+  never queries a provider itself.
+- **D-10a (AMENDS REPORT-02 — ICP tier is out of scope for this plugin):** REPORT-02 as written
+  asks for ICP tier per record. **It is removed.** Reasons, verified in code:
+  `src/merge_policy.py:347`, `n8n/code/mergeCompanies.js:53`, and `config/field_policy.yaml:97` all
+  record the same Phase 15 criterion 4 decision — **"HubSpot owns the derived ICP outputs
+  (`lv_icp_fit_score`, `lv_icp_tier`, …)"**. The canonical ICP writes were deliberately removed
+  from the enrichment pipeline, so the backend has nothing to read back; a read-back node would
+  re-couple exactly what Phase 15 decoupled.
+- **D-10b:** The report shows **nothing at all** about ICP — not the tier, and not a "not
+  available" placeholder. The ICP scoring engine lives in HubSpot and the operator sees its output
+  in HubSpot. Separation of concerns is the point, and a placeholder would imply the plugin ought
+  to have the value. REPORT-02 should be reworded to drop its ICP-tier clause before this phase
+  seals. Fourth accepted requirement amendment in the milestone.
+
+### Corrections from 26-RESEARCH.md (verified against deployed workflow JSON)
+- **D-11:** **`Set Review` strips every identifying field.** It is an Edit-Fields node whose sole
+  assignment is `queue = "needs_review"`, and n8n outputs only explicitly-set fields for that node
+  type — so every needs-review row arrives as an indistinguishable `{"queue": "needs_review"}`.
+  The report must therefore be built from **`Decide Action`'s own per-item output** (upstream,
+  still carrying `contact_id` / `email` / `reason`) via
+  `GET /api/v1/executions/{id}?includeData=true`, **not** from the terminal nodes.
+- **D-12:** **No execution ID is returned by either webhook** — neither workflow references
+  `$execution.id`. D-06's run handle must be built by **time-proximity correlation** against
+  `GET /api/v1/executions?workflowId=`, not read out of the response. The plan must treat this
+  correlation as fallible and say so where it could be wrong.
+- **D-13:** The n8n Cloud webhook response timeout is a **Cloudflare-enforced 100 seconds**,
+  returning 524 on breach. That is the concrete trigger condition for D-01's executions-API
+  fallback.
+- **D-14:** **A no-email row can never resolve on retry.** The deployed workflow searches HubSpot
+  **only by email**; the firstname+lastname+company branch of the identity function is never
+  exercised in this deployment. Such a row lands in `needs_review` on every attempt — safe from
+  duplication, but permanently stuck. The report must **say this plainly** rather than presenting it
+  as a retryable failure: the row needs an email address or manual handling in HubSpot. This
+  narrows D-04's retry-safety claim, which holds fully for the email path only.
 
 ### Claude's Discretion
 - Exact wording of outcome labels shown to the operator, provided they map cleanly to
