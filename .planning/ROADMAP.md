@@ -292,7 +292,14 @@ downstream-owner decisions.
   4. A matched record persists `lusha_contact_id` / `lusha_company_id` staging properties, and a re-enrichment run passes the stored ID so already-revealed data comes back at `canReveal.credits: 0` (no new spend).
   5. Downstream is untouched: `lushaCandidates` in `normalizeProviders.js` parses the v3 envelope into candidates field-identical to v2 output (merge/score/staging unchanged); v2-pinned tests are migrated, the frozen fixture re-baselined, both suites green; a disarmed redeploy read-back shows v3 URLs live and zero v2 URLs remaining.
 
-**Plans**: TBD
+**Plans:** 5 plans
+
+Plans:
+- [ ] 20-01-PLAN.md — Live v3 contract probe: both lanes + two-step + reveal A/B + id reuse + no-match, credit-capped, with a blocking contract-review gate
+- [ ] 20-02-PLAN.md — v3 request builders both lanes (5 emission sites + dry-run harness) with selective reveal from the gate's missingFields
+- [ ] 20-03-PLAN.md — `lushaCandidates()` v3 envelope adapter, v3 fixtures, v2 branches and assertions migrated
+- [ ] 20-04-PLAN.md — `lusha_contact_id` / `lusha_company_id` staging: write-through, search read-back, request-side reuse
+- [ ] 20-05-PLAN.md — Zero-v2-URL guard, frozen fixture accounted for, both suites green, disarmed redeploy + live read-back
 
 ### Phase 21: Transport & Schema Hygiene
 
@@ -330,6 +337,6 @@ Phases execute in numeric order: 20 → 21 → 22 (autonomous-buildable work fir
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 20. Lusha v3 Migration | 0/? | Not started | - |
+| 20. Lusha v3 Migration | 0/5 | Planned | - |
 | 21. Transport & Schema Hygiene | 0/? | Not started | - |
 | 22. Armed E2E Enrichment Canary | 0/? | Not started | - |
