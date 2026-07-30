@@ -19,9 +19,9 @@ Be especially cautious with anti-ICP, no-content, hardware vendor, gambling oper
 
 
 def validate_conflict_with_sonnet(record, field, current_value, candidates, haiku_result, policy):
-    allow = os.getenv("ALLOW_SONNET_ESCALATION", "false").lower() == "true"
+    allow = os.getenv("ALLOW_JUDGE_ESCALATION", "true").lower() == "true"
     api_key = os.getenv("ANTHROPIC_API_KEY")
-    model = os.getenv("ANTHROPIC_SONNET_MODEL", "claude-sonnet-5-latest")
+    model = os.getenv("ANTHROPIC_JUDGE_MODEL", "claude-sonnet-5")
 
     if not allow or not api_key:
         return {

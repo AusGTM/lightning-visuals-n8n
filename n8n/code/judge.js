@@ -38,7 +38,7 @@ function isCitationSufficient(url, companyDomain) {
 }
 
 // applyEvidenceSufficiency — D6: runs on EVERY researched company regardless of
-// ALLOW_SONNET_ESCALATION (deterministic, free). Returns a NEW candidate object (no
+// ALLOW_JUDGE_ESCALATION (deterministic, free). Returns a NEW candidate object (no
 // in-place mutation of the caller's). TS-1: never writes `false` — insufficient evidence
 // demotes a `true` claim to `null` (needs_review), the same tri-state direction TS-2
 // already uses for unevidenced `false`.
@@ -179,7 +179,7 @@ function applyUnadjudicated(researchCandidate, reasons) {
 // judge but has no budget left comes back as a NEW object with needs_judge false and a
 // judge_capped true marker (never mutates the caller's row). Rows that never wanted the
 // judge pass through untouched. maxPerRun of 0 or non-finite caps everything — this is
-// what lets the ALLOW_SONNET_ESCALATION kill switch and the per-run budget share one
+// what lets the ALLOW_JUDGE_ESCALATION kill switch and the per-run budget share one
 // code path in the wrapper (pass 0 when off, MAX_PER_RUN when on).
 function applyCostCap(rows, maxPerRun) {
   const budget = Number.isFinite(maxPerRun) ? maxPerRun : 0;

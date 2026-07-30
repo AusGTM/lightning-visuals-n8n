@@ -80,7 +80,7 @@ def claude_web_research(record: HubSpotRecord) -> ProviderResult:
     from anthropic import Anthropic
 
     client = Anthropic()
-    model = os.getenv("ANTHROPIC_SONNET_MODEL", "claude-sonnet-5")
+    model = os.getenv("ANTHROPIC_RESEARCH_MODEL", "claude-sonnet-5")
     max_uses = int(os.getenv("WEB_RESEARCH_MAX_SEARCHES", "5"))
 
     props = record.properties

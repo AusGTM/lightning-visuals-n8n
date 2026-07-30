@@ -101,11 +101,15 @@ NODE_CREDENTIAL_MAP = {
 
 # Phase 16.5 Task 1, widened as prep for the Phase 16.7 write-path canary — the
 # deploy-time overlay's closed target set.
-# `MAX_WEB_RESEARCH_PER_RUN` / `MAX_SONNET_VALIDATIONS_PER_RUN` / `ANTHROPIC_SONNET_MODEL`
-# are also CONFIG_FLAG_DEFAULTS entries but would let an open-ended mechanism widen cost
-# caps or swap models — "enabling one thing must not widen anything else" has to be
-# structural, not a convention, so a name outside this table is a ValueError, never a
-# silent no-op. Deliberately NOT imported from build_cloud_workflows — that module runs
+# `MAX_WEB_RESEARCH_PER_RUN` / `MAX_JUDGE_VALIDATIONS_PER_RUN` / `ANTHROPIC_RESEARCH_MODEL`
+# / `ANTHROPIC_JUDGE_MODEL` are also CONFIG_FLAG_DEFAULTS entries but would let an
+# open-ended mechanism widen cost caps or swap models — "enabling one thing must not
+# widen anything else" has to be structural, not a convention, so a name outside this
+# table is a ValueError, never a silent no-op. `ALLOW_JUDGE_ESCALATION` is ALSO excluded
+# on purpose (quick-260730-din): it now defaults to `true` at build time, so the overlay
+# — which only ever widens disabled->enabled — has no meaningful entry for it; the
+# emergency-off path is editing CONFIG_FLAG_DEFAULTS + rebuild + disarmed redeploy.
+# Deliberately NOT imported from build_cloud_workflows — that module runs
 # taxonomy/escalation codegen at import time and writes into n8n/code/; a deploy script
 # must never carry that side effect. tests/test_enabled_build_invariants.py pins this
 # table against CONFIG_FLAG_DEFAULTS / WRITE_SAFETY_DEFAULTS from a TEST, which may
@@ -122,7 +126,6 @@ NODE_CREDENTIAL_MAP = {
 #                           json.dumps, so it is always a quoted JS string literal.
 _OVERLAY_FLAG_SPEC = {
     "ALLOW_WEB_RESEARCH":          ("false", "true", False),
-    "ALLOW_SONNET_ESCALATION":     ("false", "true", False),
     # Write-safety constants. Overlayable so the write-path canary can arm ONE record
     # without a rebuild, and guarded below: writes cannot be enabled unless the same
     # invocation also supplies a non-empty allowlist.
@@ -375,14 +378,16 @@ def enable_baked_flags(workflow: dict, flags) -> tuple:
 def _requested_overlay_flags() -> dict:
     """The operator-visibility flag. Reads `ENABLE_BAKED_FLAGS` — a comma-separated list
     of constant names to enable — NEVER the flags' own names. This repo's `.env` already
-    defines `ALLOW_WEB_RESEARCH` and `ALLOW_SONNET_ESCALATION` for the Python harness
-    lane; had the overlay read those names, a routine deploy from a developer machine
-    with that `.env` sourced would have armed production silently — precisely the
-    ambient-environment failure CONTEXT rejected. `ENABLE_BAKED_FLAGS` cannot collide with
-    it, and because its VALUE is the explicit list of constants to flip, the enablement is
-    legible in the command that performs it. Unset or empty yields an empty list, so a
-    plain deploy can never arm anything. A name outside _OVERLAYABLE_FLAGS raises rather
-    than silently enabling nothing, so a typo refuses the deploy instead of no-op'ing.
+    defines `ALLOW_WEB_RESEARCH` for the Python harness lane; had the overlay read that
+    name, a routine deploy from a developer machine with that `.env` sourced would have
+    armed production silently — precisely the ambient-environment failure CONTEXT
+    rejected. `ENABLE_BAKED_FLAGS` cannot collide with it, and because its VALUE is the
+    explicit list of constants to flip, the enablement is legible in the command that
+    performs it. Unset or empty yields an empty list, so a plain deploy can never arm
+    anything. A name outside _OVERLAYABLE_FLAGS raises rather than silently enabling
+    nothing, so a typo refuses the deploy instead of no-op'ing. `ALLOW_WEB_RESEARCH` is
+    the only remaining non-write-safety overlay target — judge escalation is now armed
+    at build time (quick-260730-din) and is not overlayable at all.
 
     An entry is either a bare `NAME` (rewrites to that flag's default enabled literal) or
     `NAME=VALUE` for the allowlist constants, whose point is a value rather than a flip.

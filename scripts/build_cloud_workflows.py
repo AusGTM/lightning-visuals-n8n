@@ -769,7 +769,7 @@ def _fixture(name: str):
 
 
 # ---- Criterion 5 parity single-source (Phase 16 Task 4) ---------------------
-# The 6 config flags (research/judge cost caps + model knobs) and 6 secrets both
+# The 7 config flags (research/judge cost caps + model knobs) and 6 secrets both
 # enrichment builders (local-live docker replica + Cloud webhook) consume. ONE dict/list
 # each — every call site below reads THESE, never a builder-local literal, so a flag or
 # secret added/dropped/renamed in one builder but not the other is structurally
@@ -778,10 +778,11 @@ def _fixture(name: str):
 CONFIG_FLAG_DEFAULTS = {
     "ALLOW_WEB_RESEARCH": "false",
     "MAX_WEB_RESEARCH_PER_RUN": "10",
-    "ANTHROPIC_SONNET_MODEL": "claude-sonnet-5",
+    "ANTHROPIC_RESEARCH_MODEL": "claude-sonnet-5",
+    "ANTHROPIC_JUDGE_MODEL": "claude-sonnet-5",
     "WEB_RESEARCH_MAX_SEARCHES": "5",
-    "ALLOW_SONNET_ESCALATION": "false",
-    "MAX_SONNET_VALIDATIONS_PER_RUN": "10",
+    "ALLOW_JUDGE_ESCALATION": "true",
+    "MAX_JUDGE_VALIDATIONS_PER_RUN": "50",
 }
 
 SECRET_ENV_NAMES = [
@@ -2099,7 +2100,7 @@ return $input.all().map((it) => {
 # schema (mixing a client tool with the web_search server tool in one turn defers the
 # search to a second round trip, breaking the single-HTTP-call n8n pattern).
 #
-# cloud=False (LOCAL-LIVE): ANTHROPIC_SONNET_MODEL/WEB_RESEARCH_MAX_SEARCHES read from
+# cloud=False (LOCAL-LIVE): ANTHROPIC_RESEARCH_MODEL/WEB_RESEARCH_MAX_SEARCHES read from
 # $vars/$env. cloud=True (CLOUD): both baked build-time literals (AR-4, Criterion 5).
 def _enrich_build_research_request_js(cloud=False, target=None):
     t = target or COMPANIES_TARGET
@@ -2108,13 +2109,13 @@ def _enrich_build_research_request_js(cloud=False, target=None):
 // --- n8n wrapper (""" + t.label + r"""): Build Research Request ---
 """ + t.research_system_prompt_fn_js + r"""
 
-""" + _flag_const("ANTHROPIC_SONNET_MODEL", cloud) + "\n" + _flag_const("WEB_RESEARCH_MAX_SEARCHES", cloud) + r"""
+""" + _flag_const("ANTHROPIC_RESEARCH_MODEL", cloud) + "\n" + _flag_const("WEB_RESEARCH_MAX_SEARCHES", cloud) + r"""
 
 return $input.all().map((it) => {
   const row = it.json;
   if (!row.research_needed) return { json: { ...row, research_request_body: null } };
   const id = row.identity_keys || {};
-  const model = ANTHROPIC_SONNET_MODEL;
+  const model = ANTHROPIC_RESEARCH_MODEL;
   const maxUses = parseInt(String(WEB_RESEARCH_MAX_SEARCHES), 10);
   const body = {
     model,
@@ -2162,7 +2163,7 @@ ENRICH_VALIDATE_RESEARCH = _enrich_validate_research_js()
 # absence and the graph ancestry).
 
 # Judge Gate — JG-4 (always, D6) + JG-1/RO-1/RO-2 escalation trigger + the D5 kill
-# switches (ALLOW_SONNET_ESCALATION, MAX_SONNET_VALIDATIONS_PER_RUN, enforced HERE,
+# switches (ALLOW_JUDGE_ESCALATION, MAX_JUDGE_VALIDATIONS_PER_RUN, enforced HERE,
 # physically upstream of the HTTP node — Pitfall 4 precedent).
 #
 # cloud=False (LOCAL-LIVE): both flags read from $vars/$env. cloud=True (CLOUD): both
@@ -2173,9 +2174,9 @@ def _enrich_judge_gate_js(cloud=False, target=None):
 
 // --- n8n wrapper (""" + t.label + r"""): Judge Gate ---
 """ + t.judge_gate_header_comment_js + r"""
-""" + _flag_const("ALLOW_SONNET_ESCALATION", cloud) + "\n" + _flag_const("MAX_SONNET_VALIDATIONS_PER_RUN", cloud) + r"""
-const allowOn = String(ALLOW_SONNET_ESCALATION).toLowerCase() === "true";
-const MAX_PER_RUN = parseInt(String(MAX_SONNET_VALIDATIONS_PER_RUN), 10);
+""" + _flag_const("ALLOW_JUDGE_ESCALATION", cloud) + "\n" + _flag_const("MAX_JUDGE_VALIDATIONS_PER_RUN", cloud) + r"""
+const allowOn = String(ALLOW_JUDGE_ESCALATION).toLowerCase() === "true";
+const MAX_PER_RUN = parseInt(String(MAX_JUDGE_VALIDATIONS_PER_RUN), 10);
 const NOW = new Date().toISOString();
 
 """ + t.judge_pass1_block_js + r"""
@@ -2199,18 +2200,18 @@ return capped.map((row) => {
 # Build Judge Request — JG-2 payload (identity + classification only, no size fields,
 # no tools key).
 #
-# cloud=False (LOCAL-LIVE): ANTHROPIC_SONNET_MODEL read from $vars/$env. cloud=True
+# cloud=False (LOCAL-LIVE): ANTHROPIC_JUDGE_MODEL read from $vars/$env. cloud=True
 # (CLOUD): baked build-time literal (AR-4, Criterion 5).
 def _enrich_build_judge_request_js(cloud=False, target=None):
     t = target or COMPANIES_TARGET
     return inline(*t.judge_build_inline_modules) + r"""
 
 // --- n8n wrapper (""" + t.label + r"""): Build Judge Request ---
-""" + _flag_const("ANTHROPIC_SONNET_MODEL", cloud) + r"""
+""" + _flag_const("ANTHROPIC_JUDGE_MODEL", cloud) + r"""
 return $input.all().map((it) => {
   const row = it.json;
   if (!row.needs_judge) return { json: { ...row, judge_request_body: null } };
-  const model = ANTHROPIC_SONNET_MODEL;
+  const model = ANTHROPIC_JUDGE_MODEL;
   const judge_request_body = """ + t.build_judge_fn + r"""(row, model, """ + str(t.judge_max_tokens) + r""");
   return { json: { ...row, judge_request_body } };
 });
