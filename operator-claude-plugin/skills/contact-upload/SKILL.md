@@ -95,10 +95,62 @@ be sent, and — only when explicitly armed — send it.
    python3 scripts/dispatch.py <path> armed
    ```
 
-   Report the result as "the POST was accepted, n8n returned this" — never as a
-   per-record outcome. Parsing per-record results is Phase 26's job, not this one's.
+   The webhook response you get back here is the raw JSON body `dispatch.py` printed
+   under `"response"` — hand it to the next step exactly as returned, unparsed.
 
-7. **Clean up.** If this batch came from `extraction.md`, delete the scratch artifact you
+7. **Report the outcome — per record, not a bare acceptance.**
+
+   First, check whether the synchronous body from step 6 is even usable: import
+   `scripts/report.py` (its functions are a library, the same way
+   `scripts/config_gate.py`/`scripts/tabular.py` already are, not a CLI) and call
+   `sync_response_is_sufficient(body)` on it.
+
+   n8n Cloud's webhook response is cut off by a Cloudflare-enforced ceiling of
+   roughly one hundred seconds (a 524 on breach) — treat crossing it, or any
+   connection/gateway error from step 6, as a fallback trigger, not a failed send.
+
+   - **If the body is sufficient** (every item carries a row-identifying field, or is
+     a full HubSpot object with an `id` and `properties`), render the outcome
+     directly from it.
+   - **If it is not** — thin, `Set Review`-shaped (only a `queue` marker), or the POST
+     timed out/gatewayed — correlate and fetch through `scripts/executions_client.py`
+     instead: resolve the `LV Contact Ingest (Cloud template)` workflow id, list its
+     recent executions, call `find_execution_for_dispatch()` against the time you
+     sent the POST, then `get_execution()` on the result. Feed that execution into
+     `scripts/report.py`'s `build_contact_report()` to get the counts, the ledger,
+     and the in-flight state.
+
+   When the report came from the executions API, **say so in your own words**, and
+   say the run may still be progressing — a report built this way is never presented
+   as a finished one, even when it already shows some rows landing (D-03).
+
+   Then render, in this order:
+   1. **Summary counts first** — created / updated-matched / needs_review / rejected
+      (and not-confirmed, if any write was gated or filtered before it reached
+      HubSpot).
+   2. **The failing rows in full**, each with its reason and its identity (a contact
+      id or HubSpot object id) or, failing that, its position in the batch — these
+      are the actionable ones regardless of batch size.
+   3. **The successful rows** only when the batch is small; above the small-batch
+      threshold, offer the complete per-record detail on request rather than
+      printing it — full per-row detail can carry contact PII (email, phone, name),
+      so keep it to the actionable subset or an explicit ask. Never paste a raw
+      execution payload into the conversation.
+
+   If a row's `email_status` is `NO_EMAIL` and its outcome is `ambiguous`, say
+   plainly that this row cannot resolve on retry — the deployed workflow searches
+   HubSpot only by email, so it will land in `needs_review` on every attempt until it
+   gets an email address or is handled manually in HubSpot. Do not present it as an
+   ordinary retryable failure.
+
+   Finally, print the run handle (execution id, if you have one) and state plainly
+   when it was matched by time proximity rather than returned by the webhook, so the
+   operator knows it could name a neighbouring run. Tell them they can ask for a
+   re-check whenever they want one — **the re-check happens only when they ask**.
+   Never offer a countdown, an automatic refresh, or a "checking again shortly"; this
+   skill does not watch a run on its own.
+
+8. **Clean up.** If this batch came from `extraction.md`, delete the scratch artifact you
    wrote once the batch ends — whether it was dispatched or the operator declined.
    Provenance is scoped to this session and to the operator's decision in the moment; it
    is not a durable record, the scratch directory is gitignored so it never reaches

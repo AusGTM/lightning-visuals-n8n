@@ -1,7 +1,15 @@
 """Tests for report.py's sufficiency check, write reconciliation, and adaptive
-shaping (REPORT-01, D-01, D-08, D-09, D-11).
+shaping (REPORT-01, D-01, D-08, D-09, D-11) — plus the AST-based no-poll-loop guard
+(D-07) that turns "this phase never grows a watch" into a property the suite
+enforces rather than a promise the next plan can quietly break.
 """
+import ast
+from pathlib import Path
+
 import report
+
+PLUGIN_ROOT = Path(__file__).resolve().parent.parent
+SCRIPTS_DIR = PLUGIN_ROOT / "scripts"
 
 
 # =====================================================================================
@@ -168,3 +176,56 @@ def test_failing_rows_carry_reason_and_identity_or_ordinal_position(contact_exec
     for row in r["failing_rows"]:
         assert row.get("reason"), f"failing row missing a reason: {row}"
         assert row.get("_identity"), f"failing row missing an identity/ordinal marker: {row}"
+
+
+# =====================================================================================
+# No poll loop grew here (D-07) — enforced by the suite, not just promised in prose.
+# =====================================================================================
+
+def _plugin_source_files():
+    return sorted(p for p in SCRIPTS_DIR.glob("*.py"))
+
+
+def _imports_forbidden_module(tree, name):
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            if any(alias.name == name or alias.name.startswith(name + ".") for alias in node.names):
+                return True
+        elif isinstance(node, ast.ImportFrom):
+            if node.module == name or (node.module or "").startswith(name + "."):
+                return True
+    return False
+
+
+def _calls_sleep(tree):
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func = node.func
+            name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", None)
+            if name == "sleep":
+                return True
+    return False
+
+
+def _has_while_loop(tree):
+    return any(isinstance(node, ast.While) for node in ast.walk(tree))
+
+
+def test_no_plugin_script_polls_sleeps_or_loops_on_execution_status():
+    files = _plugin_source_files()
+    assert files, "the guard must scan at least one plugin source file to mean anything"
+
+    offenders = []
+    for path in files:
+        tree = ast.parse(path.read_text(), filename=str(path))
+        if _imports_forbidden_module(tree, "time") or _imports_forbidden_module(tree, "sched"):
+            offenders.append(f"{path.name}: imports time/sched")
+        if _calls_sleep(tree):
+            offenders.append(f"{path.name}: calls a sleep()")
+        if _has_while_loop(tree):
+            offenders.append(f"{path.name}: contains a while loop")
+
+    assert not offenders, (
+        "D-07: the bounded watch is Phase 29's job, built once there — no plugin "
+        f"script may poll/sleep/loop over an execution's status. Offenders: {offenders}"
+    )
