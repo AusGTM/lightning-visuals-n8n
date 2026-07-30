@@ -26,6 +26,35 @@ OPERATOR = "operator"
 
 _NO_TEXT = "(no error text was supplied)"
 
+REDACTED = "[REDACTED]"
+TRUNCATION_MARKER = " … [truncated]"
+MAX_RAW_CHARS = 600
+
+# n8n and requests error text routinely echo the request headers back (T-27-06). Applied
+# in order: header lines and bearer values first (so the label survives and only the value
+# goes), then any remaining long opaque token. Everything else is left intact — a blanked
+# message is useless to the admin who has to act on it.
+_REDACTIONS = (
+    (
+        re.compile(
+            r"(?i)\b(authorization|x-n8n-api-key|x-enrichment-secret|api[-_ ]?key|"
+            r"secret|token)\b(\s*[:=]\s*)\S+"
+        ),
+        lambda m: f"{m.group(1)}{m.group(2)}{REDACTED}",
+    ),
+    (re.compile(r"(?i)\bbearer\s+\S+"), lambda m: f"Bearer {REDACTED}"),
+    (re.compile(r"\b[A-Za-z0-9_\-]{20,}\b"), lambda m: REDACTED),
+)
+
+
+def _sanitise(raw):
+    """Strip credential-shaped material, then bound the length."""
+    for pattern, replacement in _REDACTIONS:
+        raw = pattern.sub(replacement, raw)
+    if len(raw) > MAX_RAW_CHARS:
+        raw = raw[:MAX_RAW_CHARS].rstrip() + TRUNCATION_MARKER
+    return raw
+
 
 class _Entry:
     """One row of the table: what to match, what it means, and whose problem it is."""
@@ -84,11 +113,17 @@ def translate(text):
     ``is_interpretation`` and ``raw``. Never raises: a status surface must not blow up
     while explaining why something else blew up, so a null, empty or non-string input is
     simply the unmatched result.
+
+    D-05's guardrail lives here rather than in the caller, and takes no parameter: on no
+    match the attribution is unconditionally ``ADMIN``, so a caller that forgets the rule
+    cannot produce a wrong "you can fix this". ``raw`` is redacted and length-bounded on
+    every path, matched or not.
     """
-    raw = text if isinstance(text, str) and text.strip() else _NO_TEXT
+    source = text if isinstance(text, str) and text.strip() else _NO_TEXT
+    raw = _sanitise(source)
 
     for entry in TABLE:
-        if entry.pattern.search(raw):
+        if entry.pattern.search(source):
             return {
                 "matched": True,
                 "cause": entry.cause,
