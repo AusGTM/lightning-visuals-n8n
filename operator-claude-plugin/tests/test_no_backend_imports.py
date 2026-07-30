@@ -34,7 +34,9 @@ FORBIDDEN_MODULE_NAMES = {
 
 # operator-claude-plugin's own flat modules (scripts/ is on sys.path per conftest.py) —
 # never mistake these for undeclared third-party imports below.
-LOCAL_MODULES = {"config_gate", "tabular", "dispatch", "preview", "extraction"}
+# "report" was added in 26-02: report_enrichment.py reuses report.py's
+# `_run_data`/`_node_output_items` traversal rather than re-implementing it.
+LOCAL_MODULES = {"config_gate", "tabular", "dispatch", "preview", "extraction", "report"}
 
 # PyPI package name differs from its import name for PyYAML only, among this plugin's
 # three declared dependencies.
