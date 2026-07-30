@@ -1,42 +1,54 @@
 #!/usr/bin/env python3
 """scripts/enrichment_cost_ledger.py
 
-Phase 22 Plan 01 Task 2 — TOKEN-USAGE HALF ONLY. Plan 03 expands this same module with
-provider-credit diffing and the estimate comparison; the structure below (a small pure
-extraction function, a thin live fetch, a `main()` dispatching on argparse subcommands)
-is kept deliberately obvious so that expansion is additive, not a rewrite.
+Phase 22 Plan 01 Task 2 built the TOKEN-USAGE half (list/extract/capture over n8n's
+executions API). Phase 22 Plan 03 adds the PROVIDER-CREDIT half plus the cited 2026-07-30
+estimates baseline and the estimate-versus-actual report, so the whole point of an armed
+canary window — "what does one enriched record actually cost?" — has one answer.
 
-Read-only against the n8n Cloud Public API's executions endpoint. Three subcommands:
+Subcommands:
 
-  list      GET a small page of the executions collection; print id, workflow name,
-            status, start time — so an operator can find the canary's execution id
-            without the n8n UI.
-  extract   GET one execution with includeData=true; print node name, model, and the
-            four Anthropic usage counters for each of the four pinned Anthropic nodes
-            (Assumption A1 — the whole point of this task is observing whether these
-            counters actually survive on this n8n Cloud instance's execution replay).
-  capture   Same GET as extract, but writes an ALLOW-LISTED (never deny-listed) redacted
-            subset of the payload to tests/fixtures/n8n/execution_rundata_usage.json —
-            node names, model, the usage counters, run status, and nothing else. An
-            execution's node data can carry request headers and full prompt bodies; a
-            deny-list would leak whatever it failed to anticipate (T-22-02).
+  list       (Plan 01) GET a small page of the executions collection.
+  extract    (Plan 01) GET one execution; print Anthropic token usage per node.
+  capture    (Plan 01) Same GET; write a redacted allow-listed fixture.
+  credits    (Plan 03) Balance snapshot over the CONFIGURED providers' usage endpoints,
+             reusing check_provider_credits.py's per-provider check functions by import
+             (never a new HTTP client, never a match/enrich endpoint). `--settle` makes
+             this a settled AFTER-capture: waits, then re-reads until stable or bounded
+             out (docs/LUSHA-V3-CONTRACT.md §1's ~4s Lusha eventual-consistency lag).
+             Writes a snapshot JSON to the phase's snapshots directory.
+  diff       (Plan 03) Pure diff of two snapshot JSON files -> per-provider spend, with
+             unknown propagation and top-up-anomaly detection.
+  report     (Plan 03) Provider credit diff + Anthropic token usage (from a live
+             --execution-id or a --fixture file, e.g. Plan 01's committed fixture) priced
+             against the cited estimates baseline -> three printed blocks + a per-record
+             figure, marked partial whenever any input was unknown.
+  estimates  (Plan 03) Print the cited 2026-07-30 estimates baseline table.
 
 Reuses `_has_n8n()`/`_base_url()`/`_n8n_headers()`/`_get_live_workflows()` from
-scripts/deploy_n8n_workflows.py rather than re-implementing auth or URL assembly — one
-module owns how this repo talks to the n8n API (same idiom as
-scripts/verify_live_lusha_urls.py). No PATCH/POST path to n8n exists here. Prints only
-counts, node names, models and token counters — never a credential value, a full node
-body, or a prompt.
+scripts/deploy_n8n_workflows.py for the token half, and imports
+scripts/check_provider_credits.py wholesale (`_HAS`/`_CHECK`/`_is_number`/PROVIDER_REGISTRY)
+for the credit half — one module owns each concern; this ledger never re-derives either.
+No PATCH/POST path to n8n or a provider match/enrich endpoint exists here — only usage/
+executions reads. Prints only counts, node names, models, token counters and credit
+balances — never a credential value, a full node body, or a prompt (T-22-02, T-22-13).
 
 Usage:
     python scripts/enrichment_cost_ledger.py list
     python scripts/enrichment_cost_ledger.py extract --execution-id 12345
     python scripts/enrichment_cost_ledger.py capture --execution-id 12345
+    python scripts/enrichment_cost_ledger.py credits --label pre-canary
+    python scripts/enrichment_cost_ledger.py credits --label post-canary --settle
+    python scripts/enrichment_cost_ledger.py diff --before snap1.json --after snap2.json
+    python scripts/enrichment_cost_ledger.py report --before snap1.json --after snap2.json \\
+        --fixture tests/fixtures/n8n/execution_rundata_usage.json --record-count 1
+    python scripts/enrichment_cost_ledger.py estimates
 """
 import argparse
 import json
-import os
 import sys
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -44,9 +56,11 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
 from deploy_n8n_workflows import _has_n8n, _base_url, _n8n_headers, _get_live_workflows  # noqa: E402
+import check_provider_credits as credit_checker  # noqa: E402 — reused by import, never copied (T-22-12)
 
 FIXTURE_PATH = ROOT / "tests" / "fixtures" / "n8n" / "execution_rundata_usage.json"
 ENRICHMENT_WORKFLOW_PATH = ROOT / "n8n" / "wf_enrichment_cloud.json"
+SNAPSHOTS_DIR = ROOT / ".planning" / "phases" / "22-armed-e2e-enrichment-canary" / "snapshots"
 
 # The four httpRequest nodes calling api.anthropic.com/v1/messages directly (company +
 # contact lanes, research + judge) — pinned so a node rename can't leave this ledger
@@ -56,6 +70,109 @@ ANTHROPIC_NODE_NAMES = ("Claude Web Research", "Judge Call", "Contact Web Resear
 
 USAGE_COUNTERS = ("input_tokens", "output_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
 
+DEFAULT_SETTLE_INTERVAL_SECONDS = 5
+DEFAULT_SETTLE_MAX_ATTEMPTS = 4
+
+
+# =====================================================================================
+# Plan 03 Task 2 — cited 2026-07-30 estimates baseline. ONE module-level table, the only
+# source every report comparison reads. Every entry names the document (+ section) it was
+# measured or inferred from; a missing figure is recorded `value: None` with a `confidence`
+# note naming what must supply it — never fabricated (T-22-14: a wrong-but-confident
+# baseline is worse than a visibly missing one).
+# =====================================================================================
+ESTIMATES = {
+    "lusha_contacts_first_time_enrich": {
+        "value": 1, "unit": "credits/contact",
+        "citation": "docs/LUSHA-V3-CONTRACT.md — §7-8, live 2026-07-30 probe (first-time contacts enrich)",
+        "confidence": "measured",
+    },
+    "lusha_companies_match": {
+        "value": 2, "unit": "credits/company",
+        "citation": "docs/LUSHA-V3-CONTRACT.md — §5, live 2026-07-30 probe (companies combined match+enrich call)",
+        "confidence": "measured",
+    },
+    "lusha_contacts_stored_id_reuse": {
+        "value": 0, "unit": "credits/contact",
+        "citation": "docs/LUSHA-V3-CONTRACT.md — §8, 4/4 stored-id /contacts/enrich calls billed 0 credits",
+        "confidence": "measured",
+    },
+    "zoominfo_per_match": {
+        "value": 1.08, "unit": "credits/match",
+        "citation": (".planning/phases/22-armed-e2e-enrichment-canary/22-RESEARCH.md — Assumption A3 "
+                     "(v2-era measurement; ZoomInfo pricing is unaffected by the Lusha-only v3 migration)"),
+        "confidence": "inferred (measured pre-v3, carried forward — no ZoomInfo pricing change this milestone)",
+    },
+    "apollo_per_match": {
+        "value": None, "unit": "credits/match",
+        "citation": ("scripts/check_provider_credits.py — this account's APOLLO_API_KEY is non-master, "
+                     "live 403 on the usage endpoint"),
+        "confidence": "unknown — no committed document states this account's Apollo per-match cost",
+    },
+    "anthropic_research_model_input_per_mtok": {
+        "value": 1.00, "unit": "USD/million input tokens (claude-haiku-4-5)",
+        "citation": ".planning/milestones/v0.3-phases/14-judge-wiring/RESEARCH.md — Model/Cost Analysis table",
+        "confidence": "measured (WebSearch-sourced against Anthropic's model catalog, cross-checked twice)",
+    },
+    "anthropic_research_model_output_per_mtok": {
+        "value": 5.00, "unit": "USD/million output tokens (claude-haiku-4-5)",
+        "citation": ".planning/milestones/v0.3-phases/14-judge-wiring/RESEARCH.md — Model/Cost Analysis table",
+        "confidence": "measured (WebSearch-sourced against Anthropic's model catalog, cross-checked twice)",
+    },
+    "anthropic_judge_model_input_per_mtok": {
+        "value": 2.00,
+        "unit": "USD/million input tokens (claude-sonnet-5, intro pricing thru 2026-08-31; $3.00 standard after)",
+        "citation": ".planning/milestones/v0.3-phases/14-judge-wiring/RESEARCH.md — Model/Cost Analysis table",
+        "confidence": "measured (intro pricing, time-bound — re-check after 2026-08-31)",
+    },
+    "anthropic_judge_model_output_per_mtok": {
+        "value": 10.00,
+        "unit": "USD/million output tokens (claude-sonnet-5, intro pricing thru 2026-08-31; $15.00 standard after)",
+        "citation": ".planning/milestones/v0.3-phases/14-judge-wiring/RESEARCH.md — Model/Cost Analysis table",
+        "confidence": "measured (intro pricing, time-bound — re-check after 2026-08-31)",
+    },
+    "haiku_research_call_allin_estimate": {
+        "value": 0.07, "unit": "USD/company research call (tokens + web-search fees, all-in)",
+        "citation": (".planning/quick/260730-fij-enable-web-research-haiku/260730-fij-SUMMARY.md — "
+                     "Cost Note"),
+        "confidence": "rough (operator-stated estimate recorded at the time of the Haiku research-model swap)",
+    },
+}
+
+# Per-model $/MTok, derived from ESTIMATES above (never re-typed).
+MODEL_PRICES = {
+    "claude-haiku-4-5": {
+        "input_per_mtok": ESTIMATES["anthropic_research_model_input_per_mtok"]["value"],
+        "output_per_mtok": ESTIMATES["anthropic_research_model_output_per_mtok"]["value"],
+    },
+    "claude-sonnet-5": {
+        "input_per_mtok": ESTIMATES["anthropic_judge_model_input_per_mtok"]["value"],
+        "output_per_mtok": ESTIMATES["anthropic_judge_model_output_per_mtok"]["value"],
+    },
+}
+
+# Which ESTIMATES entry a given provider's credit spend compares against. Lusha's dominant
+# per-record cost is the first-time contacts enrich; the id-reuse/companies variants stay
+# in ESTIMATES for the operator to read directly (22-LEDGER.md), not folded into this map.
+PROVIDER_ESTIMATE_KEY = {
+    "lusha": "lusha_contacts_first_time_enrich",
+    "zoominfo": "zoominfo_per_match",
+    "apollo": "apollo_per_match",
+}
+
+
+def print_estimates() -> None:
+    print("2026-07-30 cost estimates baseline (cited):")
+    for key, entry in ESTIMATES.items():
+        value = "unknown" if entry["value"] is None else entry["value"]
+        print(f"  {key}: {value} {entry['unit']}")
+        print(f"    source: {entry['citation']}")
+        print(f"    confidence: {entry['confidence']}")
+
+
+# =====================================================================================
+# Plan 01 Task 2 — token-usage half (unchanged).
+# =====================================================================================
 
 def _get_execution(execution_id: str) -> dict:
     import requests
@@ -188,18 +305,276 @@ def _write_fixture(fixture: dict, path: Path = FIXTURE_PATH) -> Path:
     return path
 
 
+# =====================================================================================
+# Plan 03 Task 1 — provider credit capture, settle handling, diff, and the report.
+# =====================================================================================
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _has_any_provider_creds() -> bool:
+    return any(credit_checker._HAS[name]() for name in credit_checker.PROVIDER_REGISTRY)
+
+
+def capture_credit_snapshot(label: str) -> dict:
+    """One entry per provider in credit_checker.PROVIDER_REGISTRY. A provider WITHOUT
+    credentials configured is recorded {"configured": False, ...} rather than omitted —
+    "never checked" and "checked but unknown" must stay distinguishable. A configured
+    provider whose usage endpoint refuses (Apollo's non-master-key 403) is recorded with
+    its real HTTP status and credits=None — the capture itself still succeeds."""
+    providers = {}
+    for name in credit_checker.PROVIDER_REGISTRY:
+        if not credit_checker._HAS[name]():
+            providers[name] = {"configured": False, "credits": None, "status": None}
+            continue
+        result = credit_checker._CHECK[name]()
+        providers[name] = {
+            "configured": True,
+            "credits": result.get("credits"),
+            "status": result.get("status"),
+            "error": result.get("error"),
+        }
+    return {"label": label, "captured_at": _utc_now_iso(), "providers": providers}
+
+
+def capture_settled_snapshot(label: str, *, settle_interval: float = DEFAULT_SETTLE_INTERVAL_SECONDS,
+                              max_attempts: int = DEFAULT_SETTLE_MAX_ATTEMPTS,
+                              sleep_fn=None, capture_fn=None) -> dict:
+    """A settled AFTER-capture: waits `settle_interval` before the FIRST read (Lusha's
+    documented ~4s eventual-consistency lag, docs/LUSHA-V3-CONTRACT.md §1), then re-reads
+    until the provider balances stop changing between reads or `max_attempts` is reached.
+    Records how many reads it took and whether it stabilised in the returned snapshot's
+    "settle" key — a settle that never stabilises is still useful evidence (Pitfall 2:
+    T-22-15), never a raised error.
+
+    `sleep_fn`/`capture_fn` default to `time.sleep`/`capture_credit_snapshot` looked up at
+    call time (not bound as a default-argument value) so tests can monkeypatch
+    `enrichment_cost_ledger.time.sleep` directly, or inject a scripted `capture_fn`."""
+    sleep_fn = sleep_fn or time.sleep
+    capture_fn = capture_fn or capture_credit_snapshot
+
+    sleep_fn(settle_interval)
+    snapshot = capture_fn(label)
+    attempts = 1
+    stable = False
+    while attempts < max_attempts:
+        sleep_fn(settle_interval)
+        next_snapshot = capture_fn(label)
+        attempts += 1
+        if next_snapshot["providers"] == snapshot["providers"]:
+            snapshot = next_snapshot
+            stable = True
+            break
+        snapshot = next_snapshot
+    snapshot["settle"] = {"attempts": attempts, "stable": stable, "interval_seconds": settle_interval}
+    return snapshot
+
+
+def _write_snapshot(snapshot: dict, label: str) -> Path:
+    SNAPSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+    ts = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    path = SNAPSHOTS_DIR / f"credits-{label}-{ts}.json"
+    path.write_text(json.dumps(snapshot, indent=2, sort_keys=True) + "\n")
+    return path
+
+
+def diff_snapshots(before: dict, after: dict) -> dict:
+    """Pure over two snapshot dicts. Never raises: a malformed snapshot yields
+    {"providers": {}, "any_unknown": True, "reason": ...}. Per provider: a credits value
+    missing/unknown in EITHER snapshot yields spend=None (never 0, never a number derived
+    from a partial pair). An after-balance HIGHER than the before-balance (a mid-window
+    top-up) is reported as anomaly="top_up" with spend=None, never a negative spend."""
+    before_providers = before.get("providers") if isinstance(before, dict) else None
+    after_providers = after.get("providers") if isinstance(after, dict) else None
+    if not isinstance(before_providers, dict) or not isinstance(after_providers, dict):
+        return {"providers": {}, "any_unknown": True, "reason": "malformed snapshot(s)"}
+
+    providers = {}
+    for name in sorted(set(before_providers) | set(after_providers)):
+        b = before_providers.get(name) if isinstance(before_providers.get(name), dict) else {}
+        a = after_providers.get(name) if isinstance(after_providers.get(name), dict) else {}
+        b_credits = b.get("credits")
+        a_credits = a.get("credits")
+        if not credit_checker._is_number(b_credits) or not credit_checker._is_number(a_credits):
+            providers[name] = {"before": b_credits, "after": a_credits, "spend": None, "anomaly": None}
+            continue
+        delta = b_credits - a_credits
+        if delta < 0:
+            providers[name] = {"before": b_credits, "after": a_credits, "spend": None, "anomaly": "top_up"}
+        else:
+            providers[name] = {"before": b_credits, "after": a_credits, "spend": delta, "anomaly": None}
+
+    any_unknown = any(row["spend"] is None for row in providers.values())
+    return {"providers": providers, "any_unknown": any_unknown}
+
+
+def build_report(before_snapshot: dict, after_snapshot: dict, token_usage, record_count: int = 1) -> dict:
+    """Provider credit diff + Anthropic token usage, both priced against ESTIMATES/
+    MODEL_PRICES. Unknowns propagate: the overall report is `partial` whenever any
+    provider spend is unknown/anomalous OR the token usage is unavailable OR a node's
+    model has no cited price. `per_record_usd` prices the Anthropic dollars only — no
+    committed source states a credits-to-dollars conversion for any provider (T-22-11),
+    so credits stay reported per-provider rather than folded into a fabricated total."""
+    diff = diff_snapshots(before_snapshot, after_snapshot)
+    partial = bool(diff.get("any_unknown"))
+
+    provider_rows = []
+    for name, row in diff["providers"].items():
+        estimate_key = PROVIDER_ESTIMATE_KEY.get(name)
+        estimate = ESTIMATES.get(estimate_key, {}).get("value") if estimate_key else None
+        actual = row["spend"]
+        delta = actual - estimate if (actual is not None and estimate is not None) else None
+        provider_rows.append({
+            "provider": name, "actual": actual, "estimate": estimate, "delta": delta,
+            "anomaly": row["anomaly"],
+        })
+
+    anthropic_available = bool(token_usage and token_usage.get("available"))
+    anthropic_rows = []
+    anthropic_total_usd = 0.0
+    if not anthropic_available:
+        partial = True
+    else:
+        for row in token_usage["rows"]:
+            if row.get("status") != "ran" or not row.get("usage_available"):
+                continue
+            price = MODEL_PRICES.get(row.get("model"))
+            if price is None:
+                partial = True
+                anthropic_rows.append({**row, "cost_usd": None})
+                continue
+            cost = (
+                (row.get("input_tokens") or 0) / 1_000_000 * price["input_per_mtok"]
+                + (row.get("output_tokens") or 0) / 1_000_000 * price["output_per_mtok"]
+            )
+            anthropic_total_usd += cost
+            anthropic_rows.append({**row, "cost_usd": round(cost, 6)})
+
+    per_record_usd = None
+    if not partial:
+        per_record_usd = anthropic_total_usd / record_count if record_count else anthropic_total_usd
+
+    return {
+        "providers": provider_rows,
+        "anthropic": {
+            "available": anthropic_available,
+            "rows": anthropic_rows,
+            "total_usd": round(anthropic_total_usd, 6),
+        },
+        "record_count": record_count,
+        "per_record_usd": per_record_usd,
+        "partial": partial,
+    }
+
+
+def print_report(report: dict) -> None:
+    print("=== Provider credits: actual vs estimate ===")
+    for row in report["providers"]:
+        est = "unknown" if row["estimate"] is None else row["estimate"]
+        act = "unknown" if row["actual"] is None else row["actual"]
+        delta = "unknown" if row["delta"] is None else row["delta"]
+        anomaly = f" ANOMALY={row['anomaly']}" if row["anomaly"] else ""
+        print(f"  {row['provider']}: actual={act} estimate={est} delta={delta}{anomaly}")
+
+    print("=== Anthropic usage per call ===")
+    if not report["anthropic"]["available"]:
+        print("  UNAVAILABLE: no token usage supplied, or the execution's runData was unreadable")
+    else:
+        for row in report["anthropic"]["rows"]:
+            cost = "unknown (no cited price for this model)" if row["cost_usd"] is None else f"${row['cost_usd']:.6f}"
+            print(f"  node={row['node']!r} model={row.get('model')!r} "
+                  f"input_tokens={row.get('input_tokens')} output_tokens={row.get('output_tokens')} cost={cost}")
+
+    print("=== Totals ===")
+    for row in report["providers"]:
+        print(f"  total credits ({row['provider']}): {row['actual'] if row['actual'] is not None else 'unknown'}")
+    print(f"  total anthropic USD: {report['anthropic']['total_usd']}")
+    per_record = report["per_record_usd"]
+    per_record_display = "unknown" if per_record is None else round(per_record, 6)
+    partial_note = " [PARTIAL — one or more inputs unknown]" if report["partial"] else ""
+    print(f"  per-record USD ({report['record_count']} record(s)): {per_record_display}{partial_note}")
+
+
 def _parse_args(argv):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", nargs="?", default="list", choices=["list", "extract", "capture"])
+    parser.add_argument("mode", nargs="?", default="list",
+                         choices=["list", "extract", "capture", "credits", "diff", "report", "estimates"])
     parser.add_argument("--execution-id", default=None)
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--json", action="store_true")
+    parser.add_argument("--label", default="snapshot")
+    parser.add_argument("--settle", action="store_true")
+    parser.add_argument("--settle-interval", type=float, default=DEFAULT_SETTLE_INTERVAL_SECONDS)
+    parser.add_argument("--settle-max-attempts", type=int, default=DEFAULT_SETTLE_MAX_ATTEMPTS)
+    parser.add_argument("--before", default=None)
+    parser.add_argument("--after", default=None)
+    parser.add_argument("--fixture", default=None)
+    parser.add_argument("--record-count", type=int, default=1)
     return parser.parse_args(argv)
 
 
 def main(argv=None) -> int:
     args = _parse_args(argv)
 
+    if args.mode == "estimates":
+        print_estimates()
+        return 0
+
+    if args.mode == "credits":
+        if not _has_any_provider_creds():
+            print("skipped (no provider creds): none of LUSHA_API_KEY / APOLLO_API_KEY / "
+                  "ZOOMINFO_CLIENT_ID+ZOOMINFO_CLIENT_SECRET are set.")
+            return 0
+        if args.settle:
+            snapshot = capture_settled_snapshot(
+                args.label, settle_interval=args.settle_interval, max_attempts=args.settle_max_attempts)
+        else:
+            snapshot = capture_credit_snapshot(args.label)
+        path = _write_snapshot(snapshot, args.label)
+        print(f"wrote {path}")
+        for name, row in snapshot["providers"].items():
+            print(f"  {name}: configured={row['configured']} credits={row['credits']} status={row['status']}")
+        if "settle" in snapshot:
+            print(f"  settle: attempts={snapshot['settle']['attempts']} stable={snapshot['settle']['stable']}")
+        if args.json:
+            print(json.dumps(snapshot, default=str))
+        return 0
+
+    if args.mode == "diff":
+        if not args.before or not args.after:
+            print("REFUSED: diff mode requires --before and --after snapshot paths.")
+            return 1
+        before = json.loads(Path(args.before).read_text())
+        after = json.loads(Path(args.after).read_text())
+        result = diff_snapshots(before, after)
+        for name, row in result["providers"].items():
+            print(f"  {name}: before={row['before']} after={row['after']} spend={row['spend']} anomaly={row['anomaly']}")
+        if args.json:
+            print(json.dumps(result, default=str))
+        return 0
+
+    if args.mode == "report":
+        if not args.before or not args.after:
+            print("REFUSED: report mode requires --before and --after snapshot paths.")
+            return 1
+        before = json.loads(Path(args.before).read_text())
+        after = json.loads(Path(args.after).read_text())
+        token_usage = None
+        if args.execution_id:
+            if not _has_n8n():
+                print("skipped (no n8n creds): --execution-id requires N8N_URL/N8N_API_KEY.")
+                return 0
+            token_usage = extract_token_usage(_get_execution(args.execution_id))
+        elif args.fixture:
+            token_usage = extract_token_usage(json.loads(Path(args.fixture).read_text()))
+        report = build_report(before, after, token_usage, record_count=args.record_count)
+        print_report(report)
+        if args.json:
+            print(json.dumps(report, default=str))
+        return 0
+
+    # list / extract / capture — Plan 01's token half, unchanged, still n8n-only.
     if not _has_n8n():
         print("skipped (no n8n creds): the n8n URL and API key must both be set to run this ledger.")
         return 0
