@@ -14,17 +14,19 @@ mid-flight.
 | Phase | Plans | State |
 |---|---|---|
 | 23 Walking skeleton | 6 | 5 done. **23-06 is a human checkpoint — see §4** |
-| 24 Non-tabular adapters | 3 | ✅ **ALL 3 DONE** (24-01, 24-02, 24-03) |
+| 24 Non-tabular adapters | 3 | ✅ **COMPLETE** |
 | 25 Enrichment lane & cost guard | 7 | 25-02 done. **25-01 is a human checkpoint — see §4** |
-| 26 Outcome reporting & retry | 3 | checker-clean. 26-01 done. **26-02, 26-03 runnable now** |
-| 27 Backend status surface | 5 | planned, dependency (25-02) satisfied → **runnable after its checker** |
-| 28 Control actions | 6 | planned, chained behind 27 |
-| 29 Notices & sweep | 6 | planned, chained behind 27/28 |
-| 30 Review-queue triage | 7 | planned, chained behind 28 |
+| 26 Outcome reporting & retry | 3 | ✅ **COMPLETE** — amendment #4 closed, REQUIREMENTS.md reworded |
+| 27 Backend status surface | 5 | checker-clean (1 blocker fixed). **27-01 was in flight at handoff**; 27-02…05 chain off it |
+| 28 Control actions | 6 | planned, **checker not yet run** — chained behind 27 |
+| 29 Notices & sweep | 6 | planned, **checker not yet run** — chained behind 27/28 |
+| 30 Review-queue triage | 7 | planned, **checker not yet run** — chained behind 28 |
 
-**Test baselines at handoff:** `869 passed, 1 skipped` (pytest) and `378 passed` (node); the plugin's
-own suite is `125 passed`. Started the milestone at 709. Any drop is a regression to investigate,
-not absorb. Working tree was **clean** and every n8n artifact **disarmed** at handoff.
+**14 of 43 plans built. Two phases complete (24, 26).**
+
+**Test baselines at handoff:** `900 passed, 1 skipped` (pytest), `378 passed` (node), plugin suite
+`156 passed`. Started the milestone at 709. Any drop is a regression to investigate, not absorb.
+Every n8n artifact was **disarmed** at handoff, and REQUIREMENTS.md coverage is intact at **49/49**.
 
 **Plan-checker status:** 23, 24, 25, 26 all PASSED. **27, 28, 29, 30 have NOT been checked** —
 deliberately deferred, because checking plans against a tree where their dependencies don't exist
@@ -33,24 +35,31 @@ it.**
 
 ### First thing to do on resume
 
-**Nothing was in flight at handoff** — all executors completed and the tree was clean at commit
-`9552c65`. Sanity-check that it still is, then proceed:
+**One executor was in flight at handoff: `27-01`.** Check whether it finished:
 
 ```bash
+ls .planning/workstreams/plugin-entrypoint/phases/27-*/27-01-SUMMARY.md 2>/dev/null
 git status --porcelain | grep -v DS_Store | grep -v '^?? .claude/'   # expect empty
-.venv/bin/python -m pytest -q | tail -2                              # expect 869 passed, 1 skipped
-node --test tests/n8n/*.test.mjs 2>&1 | grep -E '^. (pass|fail) '    # expect pass 378, fail 0
+.venv/bin/python -m pytest -q | tail -2                              # expect >= 900 passed, 1 skipped
+node --test tests/n8n/*.test.mjs 2>&1 | grep -E '^. (pass|fail) '    # expect fail 0
 grep -c 'ALLOW_HUBSPOT_[A-Z_]* = \\"true\\"' n8n/*.json              # expect 0 everywhere
+git diff --stat HEAD -- n8n/wf_enrichment_cloud.json                 # expect EMPTY — see below
 ```
 
-**Immediately runnable, no human input needed** — a good next batch:
-- **26-02** and **26-03** (Phase 26 wave 2, both depend only on 26-01 which is done). Note **26-02
-  Task 3 closes amendment #4** by rewording REPORT-02 in REQUIREMENTS.md.
-- **Phase 27** — run `gsd-plan-checker` on it first (it has never been checked), then 27-01, whose
-  dependency on 25-02's `hubspot/backend-status` endpoint is now satisfied.
+**If a SUMMARY is missing while that plan's commits are present, the agent died mid-plan — re-run
+it rather than assuming it finished.**
 
-A general caution for any future batch: if a SUMMARY is missing while that plan's commits are
-present, the agent died mid-plan — re-run it rather than assuming it finished.
+**27-01 must NOT have touched `n8n/wf_enrichment_cloud.json`.** It extends
+`build_backend_status_cloud()` / `n8n/wf_backend_status_cloud.json` only. If the enrichment workflow
+changed, that is a D-14 violation and must be reverted — see §7.
+
+**Next batch after 27-01 lands:**
+1. **27-02 … 27-05** — they chain off 27-01.
+2. **Phase 28 checker, then Phase 28.** ⚠ Expect the checker to find staleness: 28's plans were
+   written before 27 was built, and 27-01 is *right now* reshaping the status endpoint that 28's
+   read-back verification depends on. Phase 27's checker caught exactly this class of bug (see §7).
+   Budget for a fix, not a clean pass.
+3. **Phases 29, 30** — checkers first, same reasoning.
 
 ---
 
@@ -199,6 +208,25 @@ Write it a runbook in the same form as 23-06's when the operator is ready.
 then 28, then 29 and 30 — except each phase's own armed checkpoints (28-02, 28-06, 29-01, 30-07).
 
 ---
+
+## 7b. Why the 28/29/30 checkers are deferred — this is not laziness
+
+**Run each phase's `gsd-plan-checker` immediately before executing that phase, never earlier.**
+
+All 43 plans were written in one batch, so a plan for a later phase necessarily *guessed* at
+artifacts its dependencies had not built yet. A checker run at planning time has nothing to compare
+against; only after the dependency exists can the mismatch be seen.
+
+**This already happened once and was caught exactly this way.** Phase 27's checker found that
+`27-01` targeted `build_enrichment_cloud()` / `n8n/wf_enrichment_cloud.json` — a guess made before
+Phase 25 executed. 25-02 had instead built the status endpoint as its own file per D-14, precisely
+so a responder would not sit on the enrichment workflow's branch and corrupt real enrichment
+responses. Unfixed, an executor would have added HubSpot search nodes to the enrichment workflow and
+silently violated D-14. Fixed in commit `5b138a1`.
+
+**Expect the same class of finding in 28, 29 and 30.** Phase 28 is the highest risk: it is the only
+phase that mutates production, and its read-back verification depends on the status-endpoint shape
+27-01 is changing. Treat a checker blocker there as expected work, not an anomaly.
 
 ## 8. Working conventions that have been paying off
 
