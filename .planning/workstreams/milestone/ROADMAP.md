@@ -268,8 +268,9 @@ everything at once: v3 + selective reveal, the Haiku research-model swap, and th
 (enum-valid `lv_org_type` writes, policy-promoted country region). The cost ledger from that run
 calibrates full-sweep planning.
 
-Deferred to v0.6: HubSpot-side ICP formula (the `1 + 1` placeholder) and JTBD 2 rubric sign-off —
-downstream-owner decisions.
+Deferred to the backlog — explicitly **not** v0.6, which is the operator client milestone:
+HubSpot-side ICP formula (the `1 + 1` placeholder) and JTBD 2 rubric sign-off — downstream-owner
+decisions awaiting a business owner.
 
 ## Phases
 

@@ -91,13 +91,13 @@ phase directories never collide with phases 20–22.**
 ### Phase 25: Enrichment Lane & Cost Guard
 
 **Goal**: An operator can trigger enrichment on records that already exist in HubSpot, and cannot launch a batch on either lane without first seeing what it will cost and how it will be split.
-**Depends on**: Phase 23 (dispatch shell and arming gate); sequenced after Phase 24 so the cost guard covers every input path that can produce a batch
+**Depends on**: Phase 23 (dispatch shell and arming gate); sequenced after Phase 24 so the cost guard covers every input path that can produce a batch. Builds the credit-only slice of the n8n-side status endpoint that Phase 27 later grows into full health — the client holds no provider credentials and cannot read balances directly
 **Requirements**: INGEST-04, DISPATCH-02, PREVIEW-02, PREVIEW-03
 **Success Criteria** (what must be TRUE):
 
   1. Naming existing HubSpot records — record IDs, a list, or a view — produces an enrichment request with no row structuring involved, previewed and approved through the same gate as any other batch.
   2. An approved enrichment POSTs to `hubspot/enrichment/event` with header auth in the envelope shape `Parse HubSpot Event` accepts, carrying an explicit provider selection; with no selection stated, no provider is enabled and no credits burn.
-  3. Every preview — both lanes — shows an estimated provider-credit and Anthropic-token cost for the batch, derived from the repo's measured per-record rates rather than a guess, and warns when the estimate exceeds the credits actually remaining.
+  3. Every preview — both lanes — shows an estimated provider-credit and Anthropic-token cost for the batch, derived from the repo's measured per-record rates rather than a guess, and warns when the estimate exceeds the credits actually remaining. Remaining balances arrive from the n8n-side status endpoint, never from the client calling a provider directly; a balance that cannot be read reads "unknown" and the warning says so rather than assuming headroom.
   4. A batch above the configured size limit is shown in the preview already split — chunk count and rows per chunk — before approval, and dispatch sends exactly that plan.
 
 **Plans**: TBD
@@ -110,7 +110,7 @@ phase directories never collide with phases 20–22.**
 **Success Criteria** (what must be TRUE):
 
   1. After a contact-upload dispatch the operator sees a per-record outcome — created, updated/matched, needs_review, or rejected with its reason — instead of a bare HTTP status.
-  2. After an enrichment dispatch the operator sees, per record and without leaving the session, at minimum the ICP tier and the needs-review flag, alongside remaining provider credits.
+  2. After an enrichment dispatch the operator sees, per record and without leaving the session, at minimum the ICP tier and the needs-review flag, alongside remaining provider credits as reported by the n8n-side status endpoint (or the enrichment response's own `remaining_credits`) — the client never queries a provider itself.
   3. When the n8n run is still in flight or the response came back partial, the report says so explicitly, shows the state it does know, and tells the operator how to re-check — it never presents an incomplete run as a finished one.
   4. A failed or partially-failed dispatch names the specific rows that did not land, and re-sending exactly those rows does not create duplicates of records the earlier attempt already accepted.
 
@@ -200,7 +200,7 @@ the operator can act on it without leaving the conversation.
 
 ## Coverage
 
-48 / 48 v0.6 requirements mapped to exactly one phase each. No orphans, no duplicates.
+49 / 49 v0.6 requirements mapped to exactly one phase each. No orphans, no duplicates.
 Traceability table lives in `REQUIREMENTS.md`.
 
 ## Notes for Planning

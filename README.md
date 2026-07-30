@@ -54,12 +54,18 @@ flowchart LR
 | n8n Cloud workflows (contact ingest, enrichment, scheduled maintenance) | ✅ **deployed + active on n8n Cloud**, write gates disarmed at rest |
 | HubSpot `lv_*` properties (33 + SJ-3 control props) | ✅ migrated live (Phase 15) |
 | Provider auth (Lusha / Apollo / ZoomInfo split-code-node) | ✅ credential-bound |
-| Scheduled workflows (SJ-1/2/3 + dedupe + review) | ✅ built (template ships `active: false`; enabled live by operator) |
+| Scheduled workflows (SJ-1/2/3 + dedupe + review) | ✅ built (template ships `active: false`; enabled live by an admin — see note below) |
 | §22.2 review-surface loop (flag → approve → apply → clear) | ✅ built |
 | Cloud deploy + credential provisioning (Public API) | ✅ scripted + **live-proven** (idempotent redeploys) |
 | Live write canaries | ✅ non-clobber, `contact:create` reachability, `company:create`, `company:update` — all proven in audited armed windows, restored disarmed |
 | Normalization & producer fixes (numeric industry code, `lv_sponsorship_reliant`, `lv_persona_group`) | ✅ Phase 18, red-before-green |
 | v0.3/v0.4 verification ledger | ✅ 6/6 discharged (`.planning/phases/19-verification-debt-closure/19-LEDGER.md`) |
+| Operator client (conversational front door + control plane) | 📋 planned — v0.6, [`operator-claude-plugin/`](operator-claude-plugin/README.md) |
+
+**"Operator" means two different people in this repo.** Everything above is administered from this
+repository by a technical operator/admin (scripts, deploys, armed windows, runbooks in `docs/`). The
+v0.6 client targets a *non-technical* operator who works only in Claude and never opens n8n or a
+terminal; `docs/` runbooks and `scripts/` are admin surfaces, not theirs.
 
 Full test suite: `.venv/bin/python -m pytest -q` (Python oracle) + `node --test tests/n8n/*.test.mjs` (Code-node modules).
 

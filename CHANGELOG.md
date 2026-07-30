@@ -8,6 +8,10 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 - Repository structure: README, CHANGELOG, proprietary LICENSE; docs reorganised into `docs/{business,architecture,reviews}`.
+- **`operator-claude-plugin/`** — directory for the operator-facing client (planned, milestone v0.6),
+  with its own README and independently-versioned CHANGELOG. Documented as a *suggested default thin
+  client*: n8n is a standalone backend reached over plain HTTP, so other front ends (Slack, web app,
+  CLI) can be built against the same contract. Client changes are recorded there, not here.
 - **Milestone 3 (company enrichment & ICP research)** — company enrichment branch, web research (native `web_search`), Haiku/Sonnet judge wiring, tiered candidate adjudication; **HubSpot `lv_*` property migration live** (33 + review/SJ-3 control props) via idempotent `scripts/sync_hubspot_properties.py`; **n8n Cloud deploy** over the Public API (`scripts/deploy_n8n_workflows.py` + `scripts/provision_n8n_credentials.py`, credential-bound, two-key gated); **scheduled maintenance** (`wf_scheduled_maintenance_cloud.json`: SJ-1/2/3 + weekly dedupe + §22.2 review loop); ZoomInfo converted to credential-bound **split-code-node** for n8n Cloud.
 - Live-provider **dry run** executed (Lusha/Apollo/ZoomInfo → scored winners → HubSpot read → printed payload, no write) — see `docs/reports/`.
 - **Phase 16.1 — per-request provider selection + credit reporting + schedule safety.** The enrichment webhook payload accepts a `providers` field (`all` / list / `none` / blank / absent→`none`); each provider runs behind an `IF <provider> Enabled` bypass gate so a disabled provider's HTTP node never fires (per-request cost gate, no global kill-switch). The webhook response carries `remaining_credits` per provider (single-item credit branch → `Respond to Webhook` with `responseMode: responseNode`); live-validated usage endpoints + `scripts/check_provider_credits.py` (read-only balance CLI). Scheduled-maintenance workflow ships `active: false`.

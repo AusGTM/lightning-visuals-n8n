@@ -93,7 +93,9 @@ above. This is why that endpoint has to exist.
 - [ ] **PREVIEW-01**: Operator sees the exact structured payload and row count before anything
       is sent, and must approve it
 - [ ] **PREVIEW-02**: Operator sees an estimated provider-credit and Anthropic-token cost for
-      the batch before approving, derived from measured per-record rates
+      the batch before approving, derived from measured per-record rates, and is warned when the
+      estimate exceeds remaining credits — balances sourced from the n8n-side status endpoint,
+      never by the client calling a provider directly
 - [ ] **PREVIEW-03**: Batches above a configured size are chunked, with the chunking plan shown
       in the preview
 - [ ] **PREVIEW-04**: Operator can abort at the preview with nothing sent and no cost incurred
@@ -104,8 +106,10 @@ above. This is why that endpoint has to exist.
 - [ ] **DISPATCH-01**: Approved row batches POST to `hubspot/contact-upload` with the correct
       header auth and body encoding
 - [ ] **DISPATCH-02**: Enrichment of existing HubSpot records POSTs to `hubspot/enrichment/event`
-- [ ] **DISPATCH-03**: Dispatch is disarmed by default — a live send requires an explicit
-      operator arming step, consistent with the repo's existing two-key write-gate convention
+- [ ] **DISPATCH-03**: Dispatch is disarmed by default — a live send requires the operator to
+      explicitly enable live writes, consistent with the repo's two-key write-gate convention.
+      That permission is conversation-scoped (see CONTROL-04) and granted in chat, never by
+      running a command
 - [ ] **DISPATCH-04**: A failed or partial dispatch is reported with the failing rows identified,
       and is safe to retry without duplicating already-accepted rows
 
@@ -114,7 +118,8 @@ above. This is why that endpoint has to exist.
 - [ ] **REPORT-01**: After dispatch, operator sees per-record outcome (accepted, matched,
       created, needs_review, rejected) rather than a bare HTTP status
 - [ ] **REPORT-02**: Operator sees enrichment results for dispatched records — at minimum ICP
-      tier and needs-review flag — without leaving the session
+      tier and needs-review flag — without leaving the session, with remaining credits taken from
+      the enrichment response or the n8n-side status endpoint
 - [ ] **REPORT-03**: Reporting degrades gracefully when the n8n run is still in flight, showing
       partial state and how to re-check
 

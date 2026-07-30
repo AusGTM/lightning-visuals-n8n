@@ -52,7 +52,36 @@ placeholder. Authoring it is downstream work. Supersedes CLAUDE.md §29.
 - Dedupe Search transport swap: retire the last native-node search (BUG-23 family)
 - Schema hygiene: `lv_org_type` text→enumeration one-way door + `lv_country_region_normalized` field-policy entry
 
-**Key context:** Lusha balance ~3.9k credits vs ~12.6k measured v2 full-sweep cost (~4.65 credits/reveal, phone bundling) — v3 selective reveal is a cost fix, not just deadline compliance. Research lane live on `claude-haiku-4-5` since 2026-07-30 (judge `claude-sonnet-5` armed, cap 50). Deferred to v0.6: HubSpot-side ICP formula (the `1 + 1` placeholder) + JTBD 2 weighted-rubric sign-off (REQ-signoff-gate) — downstream-owner decisions.
+**Key context:** Lusha balance ~3.9k credits vs ~12.6k measured v2 full-sweep cost (~4.65 credits/reveal, phone bundling) — v3 selective reveal is a cost fix, not just deadline compliance. Research lane live on `claude-haiku-4-5` since 2026-07-30 (judge `claude-sonnet-5` armed, cap 50). Still unowned and **not** scoped to v0.6: HubSpot-side ICP formula (the `1 + 1` placeholder) + JTBD 2 weighted-rubric sign-off (REQ-signoff-gate) — downstream-owner decisions awaiting a business owner, not client work.
+
+## Parallel Milestone: v0.6 Claude Plugin Entrypoint
+
+Runs concurrently with v0.5 in its own workstream (`.planning/workstreams/plugin-entrypoint/`,
+branch `worktree-claude-plugin-entrypoint`). v0.5 owns the backend; v0.6 owns the surface over it.
+
+**Goal:** Make Claude the operator's only interface to the n8n backend — both the ingestion front
+door and the control plane. The operator is non-technical, works in Claude Desktop, and never opens
+n8n, so anything n8n would surface in its own UI (failed runs, dead credentials, exhausted quotas,
+stuck locks, review queues) has to arrive in the conversation instead. An instruction to run a
+command is a requirement failure, not a fallback.
+
+**Target features:**
+- Ingestion front door (phases 23–26): spreadsheet → preview → approve → dispatch; then prose,
+  foreign JSON, public URLs and web-page screenshots with per-row provenance; enrichment lane on
+  existing records with a credit/token cost guard; per-record outcome reporting and safe retry
+- Control plane (phases 27–30): n8n-side health endpoint + plain-language status (text or dashboard
+  artifact); run/stop/reschedule and conversation-scoped live-write permission via allowlisted
+  mutations, confirmed then read-back verified; in-session run watch plus a read-only unattended
+  sweep; conversational review-queue triage with gated writeback stamped as a human decision
+
+**Key context:** 49 requirements, 8 phases, coverage 49/49. Client code is confined to
+`operator-claude-plugin/` and is documented as a *suggested default thin client* — n8n is a
+standalone backend over plain HTTP, so other front ends can be built against the same contract.
+Two constraints absorbed rather than designed around: arming is a workflow write (`ALLOW_*` gates
+are compiled into Code nodes by `ENABLE_BAKED_FLAGS`, cadence lives in Schedule Trigger params), and
+the client holds no provider credentials, so credit figures must return through a new n8n-side
+status endpoint. Unverified: whether scheduled/unattended agents exist in the operator's Claude
+Desktop environment (NOTICE-03 depends on it).
 
 ## Shipped Milestone: v0.4 Reachability & Verification Debt (archived)
 
