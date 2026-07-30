@@ -81,7 +81,9 @@ def test_an_unknown_source_renders_as_unknown_not_as_refused():
 def test_an_all_null_backend_renders_with_no_zero_standing_in_for_a_missing_count():
     rendered = status.render_backend_status(ALL_NULL_BACKEND)
     assert all(value == "unknown" for value in rendered["counts"].values())
-    assert "0" not in json.dumps(rendered)
+    # ensure_ascii=False: an escaped em dash (—) carries a literal 0 that has
+    # nothing to do with a count, and would make this assertion lie.
+    assert "0" not in json.dumps(rendered, ensure_ascii=False)
 
 
 def test_an_unreadable_balance_renders_as_unknown_never_as_zero_credits():

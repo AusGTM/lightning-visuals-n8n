@@ -1,5 +1,7 @@
 {
   "n8n_url": "https://<your-subdomain>.n8n.cloud",
   "webhook_secret": "<ask your admin — sent as the X-Enrichment-Secret header, never a real value in this file>",
+  "n8n_api_key": "<ask your admin — n8n Settings > n8n API; sent as the X-N8N-API-KEY header on read-only status calls, a DIFFERENT secret from webhook_secret, never a real value in this file>",
+  "stuck_execution_minutes": 15,
   "column_mapping_path": null
 }
