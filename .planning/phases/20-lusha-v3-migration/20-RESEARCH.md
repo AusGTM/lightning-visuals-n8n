@@ -421,7 +421,7 @@ lever (see Open Questions).
 | A6 | Error response shape is roughly `{"error": {"code": N, "message": "..."}}` for general errors and `{"statusCode": N, "message": "...", "errors": [...]}` for validation errors; rate-limit signals arrive via `x-rate-limit-*`/`x-*-requests-left` response headers, and a 429 does not consume a credit. | (not yet in a dedicated section — surface during plan's error-handling task) | Medium — if wrong, the plan's retry/backoff logic (mirroring the existing `onError: continueRegularOutput` + ZoomInfo mint-retry patterns) may misclassify a billable failure as free or vice versa. |
 | A7 | v3 contact/company IDs (`contactId`/`companyId`) are permanent, account-scoped identifiers suitable for the new `lusha_contact_id`/`lusha_company_id` staging properties, and passing a stored ID on a later request yields `canReveal.credits: 0` for already-revealed fields (this is the exact mechanism named in REQ-lusha-id-staging's success criterion). | HubSpot staging property pattern | High if wrong — this is REQ-lusha-id-staging's entire premise; if IDs are NOT free-re-enrichment keys (e.g. they're just opaque record identifiers with no billing exemption), the "re-enrichment is free" success criterion cannot be met as specified and needs renegotiation. |
 
-## Open Questions
+## Open Questions (deferred to Plan 01 probe — Q1→P2, Q2→P3, Q3→P6, Q4→P8; gated by Plan 01 Task 3 checkpoint)
 
 1. **Does the companies lane have a selective-reveal/credit-gated model at all, or is
    company enrichment a flat per-match charge?**
