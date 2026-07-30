@@ -367,6 +367,79 @@ def test_contacts_and_companies_gate_chains_are_isomorphic_modulo_provider_set_a
 # mismatch to guard.
 
 
+# --- Phase 20 Plan 05 (T-20-12): offline guard against a retired Lusha v2 URL --------
+#
+# The retired major-version prefix is assembled from parts rather than written inline,
+# so the literal this test searches for is built here rather than merely copy-pasted
+# from a fixture or another test file.
+_RETIRED_LUSHA_MAJOR_VERSION_PREFIX = "api.lusha.com/" + "v" + "2/"
+
+LUSHA_V3_CONTACTS_URL = "https://api.lusha.com/v3/contacts/search-and-enrich"
+LUSHA_V3_COMPANIES_URL = "https://api.lusha.com/v3/companies/search-and-enrich"
+LUSHA_V3_USAGE_URL = "https://api.lusha.com/v3/account/usage"
+
+WF_ENRICHMENT_LOCAL_LIVE_PATH = ROOT / "n8n" / "wf_enrichment_local_live.json"
+WF_ENRICHMENT_LOCAL_PATH = ROOT / "n8n" / "wf_enrichment_local.json"
+WF_SCHEDULED_MAINTENANCE_CLOUD_PATH = ROOT / "n8n" / "wf_scheduled_maintenance_cloud.json"
+
+_BUILT_LUSHA_ARTIFACT_PATHS = [
+    WORKFLOW_PATH,
+    WF_ENRICHMENT_LOCAL_LIVE_PATH,
+    WF_ENRICHMENT_LOCAL_PATH,
+    WF_SCHEDULED_MAINTENANCE_CLOUD_PATH,
+]
+
+
+def test_no_retired_lusha_major_version_url_remains_in_any_built_workflow():
+    """T-20-12: a regression that reintroduces the retired v2 Lusha path must fail here,
+    across every built workflow artifact this migration touched (or could touch). JSON
+    artifacts carry no comments, so a raw occurrence count over the file text is a
+    truthful measure of what's actually there — no comment-stripping is needed."""
+    for path in _BUILT_LUSHA_ARTIFACT_PATHS:
+        text = path.read_text()
+        assert text.count(_RETIRED_LUSHA_MAJOR_VERSION_PREFIX) == 0, (
+            f"{path.name} contains {_RETIRED_LUSHA_MAJOR_VERSION_PREFIX!r} — a retired "
+            "Lusha v2 URL has returned"
+        )
+
+    # And built IN-PROCESS, not only the committed file — a shared-module edit landed
+    # without a rebuild must fail here too (the frozen-fixture test's own pattern).
+    import build_cloud_workflows as m
+    for built in (m.build_enrichment_cloud(), m.build_enrichment_local_live()):
+        built_text = json.dumps(built)
+        assert built_text.count(_RETIRED_LUSHA_MAJOR_VERSION_PREFIX) == 0
+
+
+def test_v3_search_and_enrich_urls_present_in_cloud_and_local_live_enrichment():
+    """The negative assertion above cannot be satisfied by deleting the Lusha nodes
+    outright — this positive assertion pins both v3 endpoints as actually present in
+    the two live-calling enrichment artifacts."""
+    for path in (WORKFLOW_PATH, WF_ENRICHMENT_LOCAL_LIVE_PATH):
+        text = path.read_text()
+        assert text.count(LUSHA_V3_CONTACTS_URL) >= 1, f"{path.name} missing v3 contacts URL"
+        assert text.count(LUSHA_V3_COMPANIES_URL) >= 1, f"{path.name} missing v3 companies URL"
+
+
+def test_v3_account_usage_url_present_in_cloud_artifact():
+    """A broad future cleanup that deletes the credit-check node's URL must fail here —
+    it cannot be silently caught by the negative v2 assertion alone."""
+    text = WORKFLOW_PATH.read_text()
+    assert text.count(LUSHA_V3_USAGE_URL) >= 1
+
+
+def test_all_four_lusha_nodes_are_post_with_a_non_empty_json_body():
+    """A URL can be right while the verb is wrong — precisely BUG 17's failure shape.
+    Covers both build targets (CLOUD, LOCAL-LIVE) x both lanes (contacts, companies) —
+    four Lusha nodes total, built in-process."""
+    import build_cloud_workflows as m
+    for doc in (m.build_enrichment_cloud(), m.build_enrichment_local_live()):
+        for name in ("Lusha Enrich", "Lusha Company"):
+            node = _node(doc, name)
+            assert node["parameters"]["method"] == "POST", f"{name} is not POST"
+            body = node["parameters"].get("jsonBody")
+            assert body, f"{name} has no non-empty jsonBody"
+
+
 # --- determinism -----------------------------------------------------------------------
 
 def test_zero_env_or_vars_expressions_in_the_new_gate_topology():
