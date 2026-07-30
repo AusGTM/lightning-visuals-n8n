@@ -1,9 +1,20 @@
 # Requirements — v0.6 Claude Plugin Entrypoint
 
-**Milestone goal:** Give operators a conversational front door to the existing n8n
-enrichment backend: accept messy input in whatever shape it arrives, turn it into the
-payload the n8n webhooks already expect, preview cost and content before sending, POST
-it, and report what actually happened to each record.
+**Milestone goal:** Give operators a conversational front door **and control plane** for the
+existing n8n enrichment backend. Two jobs, one surface:
+
+1. **Ingestion front door** — accept messy input in whatever shape it arrives, turn it into the
+   payload the n8n webhooks already expect, preview cost and content before sending, POST it,
+   and report what actually happened to each record.
+2. **Control plane** — run, observe, schedule, and gate the backend from the conversation.
+   Anything n8n would surface in its own UI (failed executions, credential errors, exhausted
+   quotas, stuck locks, records awaiting review) surfaces here instead.
+
+**The operator is non-technical and never opens n8n.** They work in Claude Desktop, not a
+terminal. They will not run a command, edit a config file, or handle a secret. Any instruction
+of the form "run this script" is a failed requirement, not a workaround: if the plugin cannot
+do a thing itself, it must say so in plain language and name the person who can. n8n's UI,
+this repo's scripts, and the operator runbooks are **admin** surfaces, not operator ones.
 
 ## Scope anchor — what already exists (do NOT rebuild)
 
@@ -31,6 +42,16 @@ explicitly out of scope — it would fork a second source of truth.
 | --- | --- | --- | --- |
 | `hubspot/contact-upload` | POST | headerAuth | Net-new / bulk rows, binary CSV body |
 | `hubspot/enrichment/event` | POST | headerAuth | Trigger enrichment on existing HubSpot records |
+| `/api/v1/workflows`, `/api/v1/executions` | GET | `X-N8N-API-KEY` | Read workflow/run state (same client as `scripts/deploy_n8n_workflows.py`) |
+| `/api/v1/workflows/{id}/activate`, `/deactivate` | POST | `X-N8N-API-KEY` | Turn a workflow on/off — no JSON write |
+| `/api/v1/workflows/{id}` | PUT | `X-N8N-API-KEY` | **Allowlisted mutations only** — write-safety flag overlay, Schedule Trigger cadence |
+| `hubspot/backend-status` (new) | POST | headerAuth | n8n-side health: provider credit balances, queue counts, credential state |
+
+**Credential boundary.** Provider (ZoomInfo / Apollo / Lusha) and HubSpot credentials live in
+n8n and are managed there by an admin. The plugin holds only the n8n base URL, an n8n API key,
+and the webhook auth secret. It therefore **cannot** read provider credits directly the way
+`scripts/check_provider_credits.py` does — those come back through the n8n-side status endpoint
+above. This is why that endpoint has to exist.
 
 ---
 
@@ -50,6 +71,10 @@ explicitly out of scope — it would fork a second source of truth.
       from the page content
 - [ ] **INGEST-06**: Operator gets a clear, actionable error when an input is unreadable,
       empty, or unsupported — never a silent drop
+- [ ] **INGEST-07**: Operator can supply screenshots of a web page (one or many) and have
+      contact/company rows extracted from the rendered image, under the same provenance and
+      no-invention guarantees as text sources. Screenshots are operator-supplied only — the
+      plugin never automates capture
 
 ### Structuring and validation (STRUCT)
 
@@ -59,7 +84,9 @@ explicitly out of scope — it would fork a second source of truth.
       separated and reported rather than sent
 - [ ] **STRUCT-03**: Extraction from unstructured sources records provenance per row (which
       input, which span/URL) so an operator can audit a questionable row
-- [ ] **STRUCT-04**: Extraction never invents field values — absent data stays absent
+- [ ] **STRUCT-04**: Extraction never invents field values — absent data stays absent. A value
+      the source renders ambiguously (truncated text, an unreadable character in a screenshot)
+      is flagged for operator confirmation, not resolved by guessing
 
 ### Preview and cost guard (PREVIEW)
 
@@ -91,21 +118,96 @@ explicitly out of scope — it would fork a second source of truth.
 - [ ] **REPORT-03**: Reporting degrades gracefully when the n8n run is still in flight, showing
       partial state and how to re-check
 
+### Backend status and observability (STATUS)
+
+- [ ] **STATUS-01**: Operator can ask what the backend is doing and get one plain-language
+      answer — per workflow: on or off, whether live writes are currently enabled, when it last
+      ran and whether that run succeeded, and anything in flight right now
+- [ ] **STATUS-02**: A failed run is reported with its real cause translated into plain language
+      (expired credential, rate limit, exhausted quota, malformed record) and states whether the
+      operator or an admin can fix it — never a bare status code or stack trace
+- [ ] **STATUS-03**: Provider credit balances and remaining headroom are visible to the operator,
+      retrieved through the n8n-side status endpoint rather than by the plugin holding provider
+      credentials
+- [ ] **STATUS-04**: Runtime states that need a human are surfaced with counts: stuck locks
+      (`enrichment_status = running` past `enrichment_lock_until`), records queued but never
+      processed, and records awaiting review
+- [ ] **STATUS-05**: Status appears as conversational text by default; on request the plugin
+      publishes a dashboard Artifact carrying the same data, stamped with when it was fetched,
+      and re-publishes to the same URL on refresh
+- [ ] **STATUS-06**: Data the backend cannot supply is shown as explicitly unknown, never as zero
+      or healthy — a provider whose balance endpoint refuses access reads "unknown", not "0"
+
+### Backend control actions (CONTROL)
+
+- [ ] **CONTROL-01**: Operator can start a run now — either ingestion lane, or a scheduled scan
+      off-cycle — and is told it started and how its outcome will reach them
+- [ ] **CONTROL-02**: Operator can turn a workflow on or off
+- [ ] **CONTROL-03**: Operator can enable or disable a scheduled job and change its cadence,
+      expressed in plain terms ("check every 15 minutes" → "hourly"), not cron syntax
+- [ ] **CONTROL-04**: Operator can enable live writes for the current conversation only. The
+      permission lapses when the conversation ends and is never inherited by a later session;
+      status always states whether it is currently on
+- [ ] **CONTROL-05**: Every backend-mutating action states its consequence in plain language,
+      shows what will change, and requires explicit confirmation. Mutations are restricted to an
+      allowlist — write-safety flag overlay, schedule cadence, workflow active state — and any
+      other workflow-JSON change is refused
+- [ ] **CONTROL-06**: After any mutation the plugin re-reads the backend and reports verified or
+      failed. A `200` alone is never reported as success
+- [ ] **CONTROL-07**: Every mutation is reversible in one step, and the plugin states how to
+      reverse it at the moment it is applied
+
+### Notices and unattended monitoring (NOTICE)
+
+- [ ] **NOTICE-01**: After a dispatch, the plugin keeps watching until the run settles and reports
+      back unprompted with per-record outcomes and the cost actually incurred
+- [ ] **NOTICE-02**: The in-session watch is bounded; a run that has not settled by then is
+      reported as still running with how to re-check — the watch never simply goes quiet
+- [ ] **NOTICE-03**: A scheduled sweep runs with no session open and pushes a notification when
+      something needs a human: failed scheduled runs, credential or auth failure, exhausted
+      quota, stuck locks, or a review backlog over a configured threshold
+- [ ] **NOTICE-04**: The sweep is silent when the backend is healthy, and every notice it does
+      send states whether the operator or an admin can act on it
+- [ ] **NOTICE-05**: The sweep is read-only by construction — it burns no provider credits, enables
+      no writes, and dispatches nothing
+
+### Review-queue triage (REVIEW)
+
+- [ ] **REVIEW-01**: Operator sees the needs-review queue with each record's conflict in plain
+      language: the competing values, which source said what, evidence links, and a link to the
+      HubSpot record
+- [ ] **REVIEW-02**: Operator can resolve a review conversationally and the plugin writes the
+      decision back, honoring the existing field-policy ownership classes — a `manual_protected`
+      value is never overwritten by a review decision
+- [ ] **REVIEW-03**: Review writeback is gated by its own session-scoped confirmation, separate
+      from dispatch arming; while ungated it shows exactly what it would write and writes nothing
+- [ ] **REVIEW-04**: Every review decision stamps human source, timestamp, and the operator's
+      stated reason into the existing source-metadata fields, so the audit trail shows a person
+      decided it
+- [ ] **REVIEW-05**: Rejecting a record records the rejection reason and leaves it in the queue —
+      review flags are never silently cleared
+
 ### Plugin packaging (PLUGIN)
 
 - [ ] **PLUGIN-01**: The entrypoint installs and runs as a Claude plugin, invoked conversationally
       rather than by hand-running a script
-- [ ] **PLUGIN-02**: Endpoint URLs, auth secrets, and arming state are configured outside the
-      plugin source and are never committed
+- [ ] **PLUGIN-02**: Endpoint URLs and auth secrets are admin-provisioned outside the plugin
+      source and never committed. The operator never sees, pastes, or handles a secret — provider
+      and HubSpot credentials stay in n8n entirely
 - [ ] **PLUGIN-03**: The plugin refuses to run against a live endpoint when required configuration
-      is missing, with a message naming what is absent
+      is missing or rejected, naming in plain language what is broken and who can fix it, and
+      stating what still works — a dead provider credential does not present as total failure
+- [ ] **PLUGIN-04**: All client code lives under `operator-claude-plugin/`, carries its own README
+      and CHANGELOG, and touches no backend file. It reaches the backend only over the documented
+      HTTP contract, so it can be replaced by a different front end without backend changes
 
 ---
 
 ## Future Requirements (deferred)
 
 - Company-object ingestion (this milestone is contacts + enrichment triggers only)
-- Scheduled/unattended ingestion — the entrypoint is operator-driven by design
+- Unattended *ingestion* — the sweep (NOTICE-03) watches and reports, but never dispatches a
+  batch on its own; sending stays operator-initiated by design
 - Write-back of corrections from the plugin into HubSpot
 - Non-AU phone handling (blocked on the existing AU-only normalizer, tracked upstream)
 
@@ -118,11 +220,20 @@ explicitly out of scope — it would fork a second source of truth.
   LinkedIn profile data is obtained through the licensed provider waterfall (ZoomInfo, Apollo,
   Lusha), which already returns LinkedIn URLs and profile fields, not by scraping the site.
 - Authenticated or paywalled page scraping
+- **Arbitrary workflow deployment from the plugin.** Mutations are allowlisted (CONTROL-05).
+  Editing nodes, credentials, or workflow structure stays an admin task run from this repo —
+  the plugin is a control panel over the deployed backend, not a deploy pipeline
+- **Operator-run commands, scripts, or config files.** If the plugin cannot do it, it names who
+  can. Terminal instructions to the operator are a requirement failure
+- **Automated screenshot capture.** INGEST-07 reads images the operator already has and hands
+  over; the plugin does not drive a browser, log in, or capture pages itself. A screenshot is
+  not a route around the scraping exclusions above — LinkedIn profile fields still come from
+  the licensed provider waterfall, not from a picture of the page
 - Replacing the HubSpot UI as a record-editing surface
 
 ## Traceability
 
-Every v0.6 requirement maps to exactly one phase. Coverage: **24 / 24**, no orphans, no
+Every v0.6 requirement maps to exactly one phase. Coverage: **49 / 49**, no orphans, no
 duplicates. Phase numbering continues from the archived v0.5 milestone (ended at 22).
 
 | Requirement | Phase | Status |
@@ -133,6 +244,7 @@ duplicates. Phase numbering continues from the archived v0.5 milestone (ended at
 | INGEST-04 | Phase 25 | Pending |
 | INGEST-05 | Phase 24 | Pending |
 | INGEST-06 | Phase 24 | Pending |
+| INGEST-07 | Phase 24 | Pending |
 | STRUCT-01 | Phase 23 | Pending |
 | STRUCT-02 | Phase 24 | Pending |
 | STRUCT-03 | Phase 24 | Pending |
@@ -148,9 +260,34 @@ duplicates. Phase numbering continues from the archived v0.5 milestone (ended at
 | REPORT-01 | Phase 26 | Pending |
 | REPORT-02 | Phase 26 | Pending |
 | REPORT-03 | Phase 26 | Pending |
+| STATUS-01 | Phase 27 | Pending |
+| STATUS-02 | Phase 27 | Pending |
+| STATUS-03 | Phase 27 | Pending |
+| STATUS-04 | Phase 27 | Pending |
+| STATUS-05 | Phase 27 | Pending |
+| STATUS-06 | Phase 27 | Pending |
+| CONTROL-01 | Phase 28 | Pending |
+| CONTROL-02 | Phase 28 | Pending |
+| CONTROL-03 | Phase 28 | Pending |
+| CONTROL-04 | Phase 28 | Pending |
+| CONTROL-05 | Phase 28 | Pending |
+| CONTROL-06 | Phase 28 | Pending |
+| CONTROL-07 | Phase 28 | Pending |
+| NOTICE-01 | Phase 29 | Pending |
+| NOTICE-02 | Phase 29 | Pending |
+| NOTICE-03 | Phase 29 | Pending |
+| NOTICE-04 | Phase 29 | Pending |
+| NOTICE-05 | Phase 29 | Pending |
+| REVIEW-01 | Phase 30 | Pending |
+| REVIEW-02 | Phase 30 | Pending |
+| REVIEW-03 | Phase 30 | Pending |
+| REVIEW-04 | Phase 30 | Pending |
+| REVIEW-05 | Phase 30 | Pending |
 | PLUGIN-01 | Phase 23 | Pending |
 | PLUGIN-02 | Phase 23 | Pending |
 | PLUGIN-03 | Phase 23 | Pending |
+| PLUGIN-04 | Phase 23 | Pending |
 
-**Per-phase counts:** Phase 23 → 9, Phase 24 → 7, Phase 25 → 4, Phase 26 → 4.
+**Per-phase counts:** Phase 23 → 10, Phase 24 → 8, Phase 25 → 4, Phase 26 → 4, Phase 27 → 6,
+Phase 28 → 7, Phase 29 → 5, Phase 30 → 5.
 

@@ -72,6 +72,7 @@ tests/         # Python suite (pytest) + n8n JS module tests (node --test tests/
 n8n/           # n8n workflow templates (Cloud + local replica) and inlined Code-node modules (n8n/code/*.js)
 scripts/       # build_cloud_workflows.py (inliner) · deploy_n8n_workflows.py · provision_n8n_credentials.py · sync_hubspot_properties.py · replica proof scripts
 docs/          # project documentation (see below)
+operator-claude-plugin/  # operator-facing client (planned, v0.6) — one front end over this backend, replaceable
 .planning/     # GSD planning trail (roadmap, phases, decisions)
 main.py        # local MVP entrypoint (company scoring + `--ingest <file>` contact ingestion)
 CLAUDE.md      # canonical technical specification (also Claude Code project instructions)
@@ -83,6 +84,7 @@ CLAUDE.md      # canonical technical specification (also Claude Code project ins
 - **System contract** — [`docs/SYSTEM-CONTRACT.md`](docs/SYSTEM-CONTRACT.md) (the standard the system is evaluated against)
 - **Business** — [`docs/business/icp-scoring.md`](docs/business/icp-scoring.md) (ICP / Anti-ICP validation from closed deals)
 - **n8n workflows** — [`n8n/README.md`](n8n/README.md) (node-level mermaid, import, credentials, deploy, Cloud-vs-local)
+- **Operator client** — [`operator-claude-plugin/README.md`](operator-claude-plugin/README.md) (conversational front end + control panel; a suggested default thin client, not the only possible one — the backend is plain HTTP, so other front ends can be built against the same contract)
 - **Changelog** — [`CHANGELOG.md`](CHANGELOG.md)
 
 ## Quick start (local)
