@@ -1,0 +1,30 @@
+[
+  {
+    "group_name": "lv_enrichment",
+    "kind": "property",
+    "name": "lusha_company_id",
+    "object_type": "companies",
+    "request_body": {
+      "fieldType": "text",
+      "groupName": "lv_enrichment",
+      "label": "Lusha Company Id",
+      "name": "lusha_company_id",
+      "options": [],
+      "type": "string"
+    }
+  },
+  {
+    "group_name": "lv_enrichment_contacts",
+    "kind": "property",
+    "name": "lusha_contact_id",
+    "object_type": "contacts",
+    "request_body": {
+      "fieldType": "text",
+      "groupName": "lv_enrichment_contacts",
+      "label": "Lusha Contact Id",
+      "name": "lusha_contact_id",
+      "options": [],
+      "type": "string"
+    }
+  }
+]
