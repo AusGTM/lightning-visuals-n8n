@@ -9,6 +9,13 @@
 # diff-is-only-the-four-lines proof) live in tests/test_enabled_build_invariants.py.
 # The offline oracle for the enabled research/judge lanes lives in
 # tests/n8n/enabledResearchLaneFlow.test.mjs. This file is the mechanism only.
+#
+# quick-260730-fij: ALLOW_WEB_RESEARCH joined ALLOW_JUDGE_ESCALATION (quick-260730-din)
+# as a default-true, non-overlayable flag — it now defaults `true` at build time and has
+# no _OVERLAY_FLAG_SPEC entry. The write-safety family (ALLOW_HUBSPOT_RECORD_WRITES et
+# al.) is the ONLY remaining overlayable target, so every mechanism test below that used
+# to exercise ALLOW_WEB_RESEARCH now exercises ALLOW_HUBSPOT_RECORD_WRITES instead — same
+# mechanism, different (still-overlayable) subject.
 import copy
 import json
 import re
@@ -41,6 +48,18 @@ def _load_enrichment_workflow() -> dict:
     return json.loads(ENRICHMENT_WF_PATH.read_text())
 
 
+def _decls(workflow: dict, flag: str) -> list:
+    """Same helper as tests/test_deploy_write_safety_overlay.py's `_decls` — copied
+    rather than cross-imported (house convention). Extracts the raw RHS literal text
+    (including quote characters for quoted-string flags) from each node's jsCode."""
+    out = []
+    for node in workflow.get("nodes", []):
+        js = node.get("parameters", {}).get("jsCode")
+        if isinstance(js, str):
+            out += re.findall(rf"const\s+{flag}\s*=\s*([^;]+);", js)
+    return out
+
+
 def _hubspot_bound_node_names(workflow: dict) -> set:
     """Same helper as tests/test_fetch_by_id_topology.py's `_hubspot_bound_node_names` —
     copied rather than cross-imported (house convention: test files don't import each
@@ -61,41 +80,42 @@ def _hubspot_bound_node_names(workflow: dict) -> set:
 def test_enable_baked_flags_is_pure_input_untouched():
     wf = _load_enrichment_workflow()
     snapshot = copy.deepcopy(wf)
-    new_wf, counts = deploy.enable_baked_flags(wf, ["ALLOW_WEB_RESEARCH"])
+    new_wf, counts = deploy.enable_baked_flags(wf, ["ALLOW_HUBSPOT_RECORD_WRITES"])
     assert wf == snapshot  # input deep-equal to a pre-call snapshot
     assert new_wf is not wf
-    assert counts["ALLOW_WEB_RESEARCH"] > 0
+    assert counts["ALLOW_HUBSPOT_RECORD_WRITES"] > 0
 
 
 # --- (b) exactness on the real artifact -------------------------------------------------
 
 def test_enable_baked_flags_exactness_on_real_committed_artifact():
-    raw = ENRICHMENT_WF_PATH.read_text()
-    expected_research_count = raw.count("const ALLOW_WEB_RESEARCH = false;")
-    assert expected_research_count > 0
-    # ALLOW_JUDGE_ESCALATION is no longer overlayable — it defaults `true` at build
-    # time (quick-260730-din) and has no _OVERLAY_FLAG_SPEC entry at all.
-
     wf = _load_enrichment_workflow()
-    new_wf, counts = deploy.enable_baked_flags(wf, ["ALLOW_WEB_RESEARCH"])
-    assert counts["ALLOW_WEB_RESEARCH"] == expected_research_count
+    expected_count = len(_decls(wf, "ALLOW_HUBSPOT_RECORD_WRITES"))
+    assert expected_count > 0
+    # ALLOW_WEB_RESEARCH (quick-260730-fij) / ALLOW_JUDGE_ESCALATION (quick-260730-din)
+    # are no longer overlayable — both default `true` at build time and have no
+    # _OVERLAY_FLAG_SPEC entry at all.
 
-    serialized = json.dumps(new_wf)
-    assert re.findall(r"const ALLOW_WEB_RESEARCH = (\w+);", serialized) == \
-        ["true"] * expected_research_count
+    new_wf, counts = deploy.enable_baked_flags(wf, ["ALLOW_HUBSPOT_RECORD_WRITES"])
+    assert counts["ALLOW_HUBSPOT_RECORD_WRITES"] == expected_count
+    assert set(_decls(new_wf, "ALLOW_HUBSPOT_RECORD_WRITES")) == {'"true"'}
 
 
 # --- (c) independence -------------------------------------------------------------------
 
-def test_enable_baked_flags_independence_research_only():
-    # ALLOW_JUDGE_ESCALATION is armed `true` in the committed build UNCONDITIONALLY
-    # (quick-260730-din) — enabling only research must not need, and cannot affect,
-    # that already-armed declaration.
+def test_enable_baked_flags_independence_write_only():
+    # ALLOW_WEB_RESEARCH / ALLOW_JUDGE_ESCALATION are armed `true` in the committed build
+    # UNCONDITIONALLY — enabling only write-safety must not need, and cannot affect,
+    # those already-armed declarations.
     wf = _load_enrichment_workflow()
-    new_wf, _ = deploy.enable_baked_flags(wf, ["ALLOW_WEB_RESEARCH"])
+    new_wf, _ = deploy.enable_baked_flags(wf, ["ALLOW_HUBSPOT_RECORD_WRITES"])
     serialized = json.dumps(new_wf)
+    assert set(_decls(new_wf, "ALLOW_HUBSPOT_RECORD_WRITES")) == {'"true"'}
     assert "const ALLOW_WEB_RESEARCH = true;" in serialized
     assert "const ALLOW_JUDGE_ESCALATION = true;" in serialized
+    # Unrequested write-safety siblings stay untouched.
+    assert set(_decls(new_wf, "ALLOW_HUBSPOT_CREATE")) == {'"false"'}
+    assert set(_decls(new_wf, "TEST_RECORD_IDS")) == {'""'}
 
 
 # --- (d) fail closed on drift — the headline test ---------------------------------------
@@ -107,28 +127,28 @@ def test_enable_baked_flags_raises_on_spacing_variant_the_exact_rewrite_cannot_m
     workflow = {
         "name": "wf-drift-spacing",
         "nodes": [{"name": "Node A", "parameters": {
-            "jsCode": "const ALLOW_WEB_RESEARCH=false;\nconsole.log(1);"
+            "jsCode": 'const ALLOW_HUBSPOT_RECORD_WRITES="false";\nconsole.log(1);'
         }}],
     }
-    with pytest.raises(ValueError, match="ALLOW_WEB_RESEARCH"):
-        deploy.enable_baked_flags(workflow, ["ALLOW_WEB_RESEARCH"])
+    with pytest.raises(ValueError, match="ALLOW_HUBSPOT_RECORD_WRITES"):
+        deploy.enable_baked_flags(workflow, ["ALLOW_HUBSPOT_RECORD_WRITES"])
 
 
 def test_enable_baked_flags_raises_on_numeric_literal_variant():
-    # A numeric literal instead of the expected boolean — again unreachable by the exact
-    # replace, and again must be caught by the re-scan rather than silently ignored.
-    # Subject is ALLOW_WEB_RESEARCH (still overlayable) rather than the judge
-    # escalation flag this test used before quick-260730-din — that flag left
+    # A numeric literal instead of the expected quoted-string boolean — again unreachable
+    # by the exact replace, and again must be caught by the re-scan rather than silently
+    # ignored. Subject is ALLOW_HUBSPOT_RECORD_WRITES (still overlayable) rather than
+    # ALLOW_WEB_RESEARCH, which this test used before quick-260730-fij — that flag left
     # _OVERLAY_FLAG_SPEC entirely, so using it here would raise the "not overlayable"
     # error before ever reaching this numeric-literal re-scan branch.
     workflow = {
         "name": "wf-drift-numeric",
         "nodes": [{"name": "Node A", "parameters": {
-            "jsCode": "const ALLOW_WEB_RESEARCH = 0;\nconsole.log(1);"
+            "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = 0;\nconsole.log(1);"
         }}],
     }
-    with pytest.raises(ValueError, match="ALLOW_WEB_RESEARCH"):
-        deploy.enable_baked_flags(workflow, ["ALLOW_WEB_RESEARCH"])
+    with pytest.raises(ValueError, match="ALLOW_HUBSPOT_RECORD_WRITES"):
+        deploy.enable_baked_flags(workflow, ["ALLOW_HUBSPOT_RECORD_WRITES"])
 
 
 def test_enable_baked_flags_never_returns_a_workflow_with_a_surviving_disabled_declaration():
@@ -139,17 +159,17 @@ def test_enable_baked_flags_never_returns_a_workflow_with_a_surviving_disabled_d
     workflow = {
         "name": "wf-drift-mixed",
         "nodes": [
-            {"name": "Node A", "parameters": {"jsCode": "const ALLOW_WEB_RESEARCH = false;"}},
-            {"name": "Node B", "parameters": {"jsCode": "const ALLOW_WEB_RESEARCH=false;"}},
+            {"name": "Node A", "parameters": {"jsCode": 'const ALLOW_HUBSPOT_RECORD_WRITES = "false";'}},
+            {"name": "Node B", "parameters": {"jsCode": 'const ALLOW_HUBSPOT_RECORD_WRITES="false";'}},
         ],
     }
     try:
-        new_wf, _ = deploy.enable_baked_flags(workflow, ["ALLOW_WEB_RESEARCH"])
+        new_wf, _ = deploy.enable_baked_flags(workflow, ["ALLOW_HUBSPOT_RECORD_WRITES"])
     except ValueError:
         return  # raising is the correct fail-closed outcome
     serialized = json.dumps(new_wf)
-    assert "const ALLOW_WEB_RESEARCH = false;" not in serialized
-    assert "ALLOW_WEB_RESEARCH=false" not in serialized
+    assert 'const ALLOW_HUBSPOT_RECORD_WRITES = "false";' not in serialized
+    assert 'ALLOW_HUBSPOT_RECORD_WRITES="false"' not in serialized
 
 
 # --- (e) non-overlayable names rejected --------------------------------------------------
@@ -157,8 +177,9 @@ def test_enable_baked_flags_never_returns_a_workflow_with_a_surviving_disabled_d
 # Phase 16.7 deliberately MOVED the write-safety constants into the overlayable set so the
 # write-path canary can arm one record without a rebuild; their guards (an allowlist is
 # mandatory in the same request, values are charset-restricted) live in
-# tests/test_deploy_write_safety_overlay.py. Cost caps and model names stay out of reach
-# permanently — those are what this parametrization protects.
+# tests/test_deploy_write_safety_overlay.py. Cost caps, model names, and both research/
+# judge kill switches (now armed `true` at build time) stay out of reach permanently —
+# those are what this parametrization protects.
 
 @pytest.mark.parametrize("bad_flag", [
     "MAX_WEB_RESEARCH_PER_RUN",
@@ -166,6 +187,7 @@ def test_enable_baked_flags_never_returns_a_workflow_with_a_surviving_disabled_d
     "ANTHROPIC_RESEARCH_MODEL",
     "ANTHROPIC_JUDGE_MODEL",
     "ALLOW_JUDGE_ESCALATION",
+    "ALLOW_WEB_RESEARCH",
 ])
 def test_enable_baked_flags_rejects_non_overlayable_names(bad_flag):
     wf = _load_enrichment_workflow()
@@ -179,6 +201,7 @@ def test_enable_baked_flags_rejects_non_overlayable_names(bad_flag):
     "ANTHROPIC_RESEARCH_MODEL",
     "ANTHROPIC_JUDGE_MODEL",
     "ALLOW_JUDGE_ESCALATION",
+    "ALLOW_WEB_RESEARCH",
 ])
 def test_requested_overlay_flags_rejects_non_overlayable_names_from_env(monkeypatch, bad_flag):
     monkeypatch.setenv("ENABLE_BAKED_FLAGS", bad_flag)
@@ -189,11 +212,15 @@ def test_requested_overlay_flags_rejects_non_overlayable_names_from_env(monkeypa
 # --- (f) zero declarations is not a raise at the function level -------------------------
 
 def test_enable_baked_flags_zero_declarations_returns_unchanged_not_a_raise():
-    wf = json.loads((ROOT / "n8n" / "wf_contact_ingest_cloud.json").read_text())
-    raw = json.dumps(wf)
-    assert "ALLOW_WEB_RESEARCH" not in raw
-    new_wf, counts = deploy.enable_baked_flags(wf, ["ALLOW_WEB_RESEARCH"])
-    assert counts == {"ALLOW_WEB_RESEARCH": 0}
+    # A synthetic workflow with no declaration of the requested (still-overlayable) flag
+    # at all — every committed Cloud workflow bakes all four write-safety constants today,
+    # so a real artifact can no longer demonstrate this branch; a bare in-memory workflow
+    # does the same job without relying on that happening to stay true.
+    wf = {"name": "wf-no-flags", "nodes": [
+        {"name": "Node A", "parameters": {"jsCode": "console.log(1);"}},
+    ]}
+    new_wf, counts = deploy.enable_baked_flags(wf, ["ALLOW_HUBSPOT_RECORD_WRITES"])
+    assert counts == {"ALLOW_HUBSPOT_RECORD_WRITES": 0}
     assert new_wf == wf
 
 
@@ -206,7 +233,10 @@ def test_main_refuses_at_deploy_set_level_when_requested_flag_matches_zero_decla
     monkeypatch.setenv("N8N_API_KEY", "fake-key")
     monkeypatch.setenv("DRY_RUN", "false")
     monkeypatch.setenv("ALLOW_N8N_DEPLOY", "true")
-    monkeypatch.setenv("ENABLE_BAKED_FLAGS", "ALLOW_WEB_RESEARCH")
+    # TEST_RECORD_IDS alone is not a write-enabling flag, so the allowlist-mandatory
+    # fail-safe in _requested_overlay_flags() does not fire — this isolates the
+    # zero-declarations refusal this test targets.
+    monkeypatch.setenv("ENABLE_BAKED_FLAGS", "TEST_RECORD_IDS=201")
     monkeypatch.setattr(deploy, "_get_live_workflows", lambda: [])
     monkeypatch.setattr(
         deploy, "_load_local_workflows",
@@ -226,7 +256,7 @@ def test_main_refuses_at_deploy_set_level_when_requested_flag_matches_zero_decla
     assert update_calls == []
     out = capsys.readouterr().out
     assert "REFUSED" in out
-    assert "ALLOW_WEB_RESEARCH" in out
+    assert "TEST_RECORD_IDS" in out
 
 
 # --- (h) ambient env inertness — Criterion 2 as an executable statement -----------------
@@ -237,12 +267,12 @@ def test_ambient_env_names_have_zero_effect_on_the_captured_put_body(monkeypatch
     monkeypatch.setenv("DRY_RUN", "false")
     monkeypatch.setenv("ALLOW_N8N_DEPLOY", "true")
     # The .env-style Python-lane names — ENABLE_BAKED_FLAGS deliberately unset.
-    # ALLOW_WEB_RESEARCH="true" mirrors the pre-existing proof it has zero effect.
-    # ALLOW_JUDGE_ESCALATION="false" is the NON-default value (the flag now bakes
-    # `true` by default) — setting it to the default would coincide and prove
-    # nothing; setting it to the opposite of the default is what actually proves
-    # the ambient env is inert.
-    monkeypatch.setenv("ALLOW_WEB_RESEARCH", "true")
+    # Both formerly-overlayable flags now bake `true` unconditionally at build time
+    # (ALLOW_JUDGE_ESCALATION: quick-260730-din; ALLOW_WEB_RESEARCH: quick-260730-fij)
+    # and have no _OVERLAY_FLAG_SPEC entry — setting either ambient var to its OPPOSITE
+    # value ("false") is what actually proves the ambient env is inert; setting it to the
+    # default would coincide with the baked value and prove nothing.
+    monkeypatch.setenv("ALLOW_WEB_RESEARCH", "false")
     monkeypatch.setenv("ALLOW_JUDGE_ESCALATION", "false")
 
     real_wf = _load_enrichment_workflow()
@@ -262,51 +292,23 @@ def test_ambient_env_names_have_zero_effect_on_the_captured_put_body(monkeypatch
     assert len(update_calls) == 1
     body = update_calls[0][1]
     serialized = json.dumps(body)
-    assert "const ALLOW_WEB_RESEARCH = false;" in serialized
-    assert "const ALLOW_WEB_RESEARCH = true;" not in serialized
-    # Committed default is `true`, and the ambient env value ("false") had zero effect.
+    # Committed default is `true` for both, and the ambient env value ("false") had zero
+    # effect on either.
+    assert "const ALLOW_WEB_RESEARCH = true;" in serialized
+    assert "const ALLOW_WEB_RESEARCH = false;" not in serialized
     assert "const ALLOW_JUDGE_ESCALATION = true;" in serialized
     assert "const ALLOW_JUDGE_ESCALATION = false;" not in serialized
 
 
-# --- (i) research default-off / judge default-on, through the real path ------------------
-# ALLOW_WEB_RESEARCH still defaults `false`; ALLOW_JUDGE_ESCALATION now defaults `true`
-# (quick-260730-din) — only the research half of this test's name is still "default off".
+# --- (i) research and judge both default on, through the real path -----------------------
+# Both ALLOW_WEB_RESEARCH (quick-260730-fij) and ALLOW_JUDGE_ESCALATION (quick-260730-din)
+# now default `true` at build time and are baked unconditionally with no overlay involved.
 
-def test_research_default_off_judge_default_on_through_real_path_unset_enable_baked_flags(monkeypatch):
+def test_research_and_judge_default_on_through_real_path_unset_enable_baked_flags(monkeypatch):
     monkeypatch.setenv("N8N_URL", "https://foo.n8n.cloud")
     monkeypatch.setenv("N8N_API_KEY", "fake-key")
     monkeypatch.setenv("DRY_RUN", "false")
     monkeypatch.setenv("ALLOW_N8N_DEPLOY", "true")
-
-    real_wf = _load_enrichment_workflow()
-    monkeypatch.setattr(deploy, "_get_live_workflows", lambda: [{"id": "live-id", "name": real_wf["name"]}])
-    monkeypatch.setattr(deploy, "_load_local_workflows", lambda: [real_wf])
-    name_to_id = {"LV Lusha": "id-lusha", "LV Apollo": "id-apollo", "LV ZoomInfo": "id-zoominfo",
-                  "LV HubSpot": "id-hubspot", "LV Anthropic": "id-anthropic",
-                  "LV Enrichment Webhook": "id-webhook-secret"}
-    monkeypatch.setattr(deploy, "_load_credential_id_map", lambda: name_to_id)
-
-    update_calls = []
-    monkeypatch.setattr(deploy, "_update_workflow_live",
-                         lambda wid, body: (update_calls.append((wid, body)), (200, None))[1])
-
-    rc = deploy.main()
-    assert rc == 0
-    body = update_calls[0][1]
-    serialized = json.dumps(body)
-    assert "const ALLOW_WEB_RESEARCH = false;" in serialized
-    assert "const ALLOW_JUDGE_ESCALATION = true;" in serialized
-
-
-# --- (j) enabled through the real path ----------------------------------------------------
-
-def test_enabled_through_real_path_and_bind_credentials_succeeds(monkeypatch):
-    monkeypatch.setenv("N8N_URL", "https://foo.n8n.cloud")
-    monkeypatch.setenv("N8N_API_KEY", "fake-key")
-    monkeypatch.setenv("DRY_RUN", "false")
-    monkeypatch.setenv("ALLOW_N8N_DEPLOY", "true")
-    monkeypatch.setenv("ENABLE_BAKED_FLAGS", "ALLOW_WEB_RESEARCH")
 
     real_wf = _load_enrichment_workflow()
     monkeypatch.setattr(deploy, "_get_live_workflows", lambda: [{"id": "live-id", "name": real_wf["name"]}])
@@ -325,8 +327,39 @@ def test_enabled_through_real_path_and_bind_credentials_succeeds(monkeypatch):
     body = update_calls[0][1]
     serialized = json.dumps(body)
     assert "const ALLOW_WEB_RESEARCH = true;" in serialized
-    assert "const ALLOW_WEB_RESEARCH = false;" not in serialized
-    # ALLOW_JUDGE_ESCALATION is baked `true` unconditionally — no overlay needed.
+    assert "const ALLOW_JUDGE_ESCALATION = true;" in serialized
+
+
+# --- (j) enabled through the real path ----------------------------------------------------
+
+def test_enabled_through_real_path_and_bind_credentials_succeeds(monkeypatch):
+    monkeypatch.setenv("N8N_URL", "https://foo.n8n.cloud")
+    monkeypatch.setenv("N8N_API_KEY", "fake-key")
+    monkeypatch.setenv("DRY_RUN", "false")
+    monkeypatch.setenv("ALLOW_N8N_DEPLOY", "true")
+    monkeypatch.setenv("ENABLE_BAKED_FLAGS", "ALLOW_HUBSPOT_RECORD_WRITES,TEST_RECORD_IDS=201")
+
+    real_wf = _load_enrichment_workflow()
+    monkeypatch.setattr(deploy, "_get_live_workflows", lambda: [{"id": "live-id", "name": real_wf["name"]}])
+    monkeypatch.setattr(deploy, "_load_local_workflows", lambda: [real_wf])
+    name_to_id = {"LV Lusha": "id-lusha", "LV Apollo": "id-apollo", "LV ZoomInfo": "id-zoominfo",
+                  "LV HubSpot": "id-hubspot", "LV Anthropic": "id-anthropic",
+                  "LV Enrichment Webhook": "id-webhook-secret"}
+    monkeypatch.setattr(deploy, "_load_credential_id_map", lambda: name_to_id)
+
+    update_calls = []
+    monkeypatch.setattr(deploy, "_update_workflow_live",
+                         lambda wid, body: (update_calls.append((wid, body)), (200, None))[1])
+
+    rc = deploy.main()
+    assert rc == 0
+    body = update_calls[0][1]
+    assert set(_decls(body, "ALLOW_HUBSPOT_RECORD_WRITES")) == {'"true"'}
+    assert set(_decls(body, "TEST_RECORD_IDS")) == {'"201"'}
+    # ALLOW_WEB_RESEARCH / ALLOW_JUDGE_ESCALATION are baked `true` unconditionally — no
+    # overlay needed.
+    serialized = json.dumps(body)
+    assert "const ALLOW_WEB_RESEARCH = true;" in serialized
     assert "const ALLOW_JUDGE_ESCALATION = true;" in serialized
     # bind_credentials() composes with the overlay as main() does (proving composition,
     # not just the individual pieces): every HubSpot-credentialed node in the captured
@@ -348,7 +381,7 @@ def test_enabled_through_real_path_and_bind_credentials_succeeds(monkeypatch):
 def test_dry_run_visibility_prints_rewrite_plan_and_makes_zero_http_calls(monkeypatch, capsys):
     monkeypatch.setenv("N8N_URL", "https://foo.n8n.cloud")
     monkeypatch.setenv("N8N_API_KEY", "fake-key")
-    monkeypatch.setenv("ENABLE_BAKED_FLAGS", "ALLOW_WEB_RESEARCH")
+    monkeypatch.setenv("ENABLE_BAKED_FLAGS", "ALLOW_HUBSPOT_RECORD_WRITES,TEST_RECORD_IDS=201")
     # DRY_RUN default (true), ALLOW_N8N_DEPLOY unset — write gate closed.
 
     real_wf = _load_enrichment_workflow()
@@ -367,7 +400,7 @@ def test_dry_run_visibility_prints_rewrite_plan_and_makes_zero_http_calls(monkey
     assert update_calls == []
     out = capsys.readouterr().out
     assert "DRY RUN" in out
-    assert "ALLOW_WEB_RESEARCH" in out
+    assert "ALLOW_HUBSPOT_RECORD_WRITES" in out
     assert "rewritten" in out
 
 

@@ -132,7 +132,9 @@ def test_bare_allowlist_flag_is_refused_because_it_would_be_a_silent_no_op(monke
 
 
 def test_boolean_kill_switch_rejects_a_value(monkeypatch):
-    monkeypatch.setenv("ENABLE_BAKED_FLAGS", "ALLOW_WEB_RESEARCH=true")
+    # ALLOW_WEB_RESEARCH is no longer overlayable (quick-260730-fij: default `true` at
+    # build time) — ALLOW_HUBSPOT_RECORD_WRITES is the still-overlayable boolean subject.
+    monkeypatch.setenv("ENABLE_BAKED_FLAGS", "ALLOW_HUBSPOT_RECORD_WRITES=true")
     with pytest.raises(ValueError, match="takes no value"):
         deploy._requested_overlay_flags()
 
@@ -155,10 +157,15 @@ def test_rescan_refuses_when_a_declaration_survives_in_an_unreachable_form():
         deploy.enable_baked_flags(workflow, {"TEST_RECORD_IDS": '"201"'})
 
 
-def test_unrequested_write_flags_are_untouched_by_a_research_only_request(monkeypatch):
-    monkeypatch.setenv("ENABLE_BAKED_FLAGS", "ALLOW_WEB_RESEARCH")
+def test_unrequested_write_flags_are_untouched_by_an_allowlist_only_request(monkeypatch):
+    # ALLOW_WEB_RESEARCH is no longer overlayable (quick-260730-fij) — a bare allowlist
+    # value (not itself a write-enabling flag, so the allowlist-mandatory fail-safe does
+    # not fire) is the still-overlayable stand-in for "a narrow request touches nothing
+    # else."
+    monkeypatch.setenv("ENABLE_BAKED_FLAGS", "TEST_RECORD_IDS=201")
     requested = deploy._requested_overlay_flags()
-    assert requested == {"ALLOW_WEB_RESEARCH": "true"}
+    assert requested == {"TEST_RECORD_IDS": '"201"'}
     new_wf, _ = deploy.enable_baked_flags(_wf(), requested)
     assert set(_decls(new_wf, "ALLOW_HUBSPOT_RECORD_WRITES")) == {'"false"'}
-    assert set(_decls(new_wf, "TEST_RECORD_IDS")) == {'""'}
+    assert set(_decls(new_wf, "ALLOW_HUBSPOT_CREATE")) == {'"false"'}
+    assert set(_decls(new_wf, "TEST_RECORD_DOMAINS")) == {'""'}

@@ -1,21 +1,18 @@
 // Phase 16.5 Task 3 — the offline oracle for Plan 02/03's live runs.
 //
-// Plan 02/03 spend real Anthropic dollars firing the research->judge lane live. Judge
-// escalation is now armed by default at build time (quick-260730-din,
-// ALLOW_JUDGE_ESCALATION defaults `true`) — only ALLOW_WEB_RESEARCH still needs the
-// deploy-time overlay to enable. This file drives the EXACT node bodies that build will
-// ship — the committed wf_enrichment_cloud.json with the same exact-literal replacement
-// the Python deploy-time overlay
-// (scripts/deploy_n8n_workflows.py::enable_baked_flags) performs — through both the
-// contacts and companies research-then-judge lanes, from a raw bare-event webhook body,
-// asserting the research gate fires, the judge escalates, and the row survives BOTH HTTP
-// hops to a non-null merge. So Plan 02/03's live runs CONFIRM a prediction instead of
-// discovering one.
+// Plan 02/03 spend real Anthropic dollars firing the research->judge lane live. Both
+// kill switches are now armed by default at build time — ALLOW_JUDGE_ESCALATION
+// (quick-260730-din) and ALLOW_WEB_RESEARCH (quick-260730-fij) — so no deploy-time
+// overlay is needed for either anymore; the COMMITTED wf_enrichment_cloud.json IS the
+// enabled build. This file drives the EXACT node bodies that build ships through both
+// the contacts and companies research-then-judge lanes, from a raw bare-event webhook
+// body, asserting the research gate fires, the judge escalates, and the row survives
+// BOTH HTTP hops to a non-null merge. So Plan 02/03's live runs CONFIRM a prediction
+// instead of discovering one.
 //
-// This is a SECOND, independent implementation of the enabling rewrite (deliberately —
-// see (1) below): if the Python overlay's literal ever drifts from what this file
-// assumes, tests/test_enabled_build_invariants.py's parity/diff assertions catch the
-// Python side, and this file's own non-zero-replacement assertion catches the JS side.
+// The disabled CONTROL (section 4) needs the opposite rewrite now (true->false, applied
+// in-test) since there is no longer a disabled-by-default committed build to read
+// directly — proving the flag is what causes the gate to fire, not something incidental.
 //
 // NOTE: this executes the repo's OWN committed workflow jsCode via `new Function` — the
 // same thing n8n's Code node does at runtime — over a fixed, in-repo list of node names.
@@ -33,30 +30,30 @@ import fs from "node:fs";
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const WF_PATH = path.join(ROOT, "n8n", "wf_enrichment_cloud.json");
 
-// --- (1) THE ENABLED WORKFLOW: the same exact-literal replacement the Python
-// overlay performs (enable_baked_flags), independently reimplemented here. Judge
-// escalation needs no entry here — it is already baked `true` in the committed source. -
-const OVERLAY_FLAGS = ["ALLOW_WEB_RESEARCH"];
-
-function enableBakedFlagsJs(rawText, flags) {
-  let text = rawText;
-  let totalReplacements = 0;
-  for (const flag of flags) {
-    const disabled = `const ${flag} = false;`;
-    const enabled = `const ${flag} = true;`;
-    const count = text.split(disabled).length - 1;
-    totalReplacements += count;
-    text = text.split(disabled).join(enabled);
-  }
-  return { text, totalReplacements };
+// --- (1) THE ENABLED WORKFLOW: both ALLOW_WEB_RESEARCH and ALLOW_JUDGE_ESCALATION now
+// bake `true` unconditionally in the committed source — no rewrite needed, the committed
+// build IS the enabled build.
+function loadEnabledWorkflow() {
+  return JSON.parse(fs.readFileSync(WF_PATH, "utf8"));
 }
 
-function loadEnabledWorkflow() {
+// --- the inverse rewrite (true->false), used ONLY by the disabled control (section 4) —
+// a second, independent implementation kept deliberately simple (single flag, no reuse
+// of build_cloud_workflows/deploy_n8n_workflows) so it cannot silently share a bug with
+// the code under test.
+function disableFlagJs(rawText, flag) {
+  const enabled = `const ${flag} = true;`;
+  const disabled = `const ${flag} = false;`;
+  const count = rawText.split(enabled).length - 1;
+  return { text: rawText.split(enabled).join(disabled), totalReplacements: count };
+}
+
+function loadDisabledControlWorkflow(flag) {
   const rawText = fs.readFileSync(WF_PATH, "utf8");
-  const { text, totalReplacements } = enableBakedFlagsJs(rawText, OVERLAY_FLAGS);
-  // Assert the replacement actually changed something BEFORE running anything — a
-  // silent no-op here would make every downstream assertion meaningless.
-  assert.ok(totalReplacements > 0, "in-test literal replacement changed zero sites");
+  const { text, totalReplacements } = disableFlagJs(rawText, flag);
+  // Assert the in-test rewrite actually changed something BEFORE running anything — a
+  // silent no-op here would make the control meaningless.
+  assert.ok(totalReplacements > 0, "in-test disable rewrite changed zero sites");
   return JSON.parse(text);
 }
 
@@ -361,9 +358,12 @@ test("companies: enabled build fires the research gate, escalates the judge, and
 // (4) THE DISABLED CONTROL — proves the overlay, not something incidental, is the cause.
 // =========================================================================================
 
-test("contacts disabled control: the SAME chain over the UNMODIFIED committed workflow never fires the research gate", () => {
-  const committedWf = JSON.parse(fs.readFileSync(WF_PATH, "utf8"));
-  const { trace, threw } = runChain(committedWf, CONTACT_CHAIN, CONTACT_SEED_BODY, CONTACT_HTTP_MOCKS);
+test("contacts disabled control: the SAME chain over an explicitly-disabled workflow never fires the research gate", () => {
+  // ALLOW_WEB_RESEARCH now defaults `true` in the committed build (quick-260730-fij), so
+  // proving the flag (not something incidental) causes the gate to fire needs an explicit
+  // in-test disable rather than reading the committed file directly.
+  const disabledWf = loadDisabledControlWorkflow("ALLOW_WEB_RESEARCH");
+  const { trace, threw } = runChain(disabledWf, CONTACT_CHAIN, CONTACT_SEED_BODY, CONTACT_HTTP_MOCKS);
   assert.equal(threw, null, `no node threw (got: ${JSON.stringify(threw)})`);
   const gate = trace["Contact Research Trigger Gate"];
   assert.equal(gate.research_needed, false);
