@@ -183,6 +183,18 @@ def test_scan_found_at_least_one_plugin_source_file():
     assert len(_plugin_source_files()) > 0
 
 
+# The status read (27-03) is a POST only because the n8n webhook that answers it is a
+# POST endpoint — `hubspot/backend-status` has no write node anywhere in its chain
+# (tests/test_backend_status_wiring.py::test_endpoint_chain_contains_no_write_node), and
+# the request carries no records at all. It is a read wearing a POST's clothes, so it is
+# allowlisted here rather than gated on arming — and the allowlist is kept honest by
+# test_the_allowlisted_status_post_carries_no_record_payload below.
+_EXPECTED_SEND_SHAPED = [
+    ("backend_status.py", ["fetch_backend_status"]),
+    ("dispatch.py", ["dispatch"]),
+]
+
+
 def test_exactly_one_module_defines_the_send_shaped_function():
     offenders = []
     for path in _plugin_source_files():
@@ -190,11 +202,24 @@ def test_exactly_one_module_defines_the_send_shaped_function():
         if names:
             offenders.append((path.relative_to(SCRIPTS_DIR).as_posix(), names))
 
-    assert offenders == [("dispatch.py", ["dispatch"])], (
-        f"expected exactly one send-shaped function, dispatch.py's own dispatch(); "
-        f"found: {offenders}. A second dispatch path would let a retry bypass the "
-        "arming gate that dispatch.py's own `armed` parameter (no default) enforces."
+    assert sorted(offenders) == _EXPECTED_SEND_SHAPED, (
+        f"expected exactly one record-sending function, dispatch.py's own dispatch() "
+        f"(plus the allowlisted read-only status POST); found: {offenders}. A second "
+        "dispatch path would let a retry bypass the arming gate that dispatch.py's own "
+        "`armed` parameter (no default) enforces."
     )
+
+
+def test_the_allowlisted_status_post_carries_no_record_payload():
+    """Keeps the allowlist above from becoming a rubber stamp: the status POST may be
+    exempt from the arming gate only for as long as it cannot carry records. `files=`
+    (dispatch.py's multipart upload) or `data=` appearing here would make it a send."""
+    source = (SCRIPTS_DIR / "backend_status.py").read_text()
+    for payload_kwarg in ("files=", "data="):
+        assert payload_kwarg not in source, (
+            f"backend_status.py now passes {payload_kwarg} — it is no longer a bodyless "
+            "read and must not stay exempt from the arming gate."
+        )
 
 
 def test_dispatch_armed_parameter_still_carries_no_default():
