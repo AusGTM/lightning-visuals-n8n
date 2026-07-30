@@ -199,6 +199,35 @@ has to be said again in a new conversation.
 
 ---
 
+## Beyond spreadsheets: pasted text, JSON, a URL, or screenshots
+
+You don't need a spreadsheet to load contacts. Hand the skill any of these instead, and it reads
+them the same conversational way:
+
+- **Pasted text** — an email signature, a typed list of names and companies, an email thread.
+- **A JSON blob** — a contact export from some other system, in whatever shape it's in.
+- **A public URL** — paste the link and the skill fetches the page itself.
+- **Screenshots** — one or more images you've already captured (a scrolled profile page, a
+  contact list). Hand over as many as you have; if it's a long scrolled sequence, the skill will
+  ask you to submit in a couple of batches rather than one huge one.
+
+A few things are true across all four:
+
+- **A row is never completed by guessing.** If something can't be read clearly, or a field just
+  isn't there, it's left blank rather than filled in with a plausible guess.
+- **Anything uncertain comes back as one list to confirm**, alongside the preview — not one
+  interruption per row. If you approve without addressing something on that list, the field it
+  names stays blank; nothing gets filled in behind your back.
+- **The plugin does not capture screenshots itself, and it does not log into any site.** You
+  hand over images you already have. If you ask it to go grab a screenshot of a page, it will
+  tell you plainly that it doesn't do that.
+- **Profile data from a site the licensed provider waterfall already covers — LinkedIn, for
+  one — still comes from that waterfall on the backend,** never from a picture of the page you
+  hand over. A screenshot is not a shortcut around that.
+
+Nothing about the credential boundary above changes for any of this: this plugin still holds no
+provider or HubSpot credentials, and this phase adds no key of any kind.
+
 ## Layout
 
 ```text
