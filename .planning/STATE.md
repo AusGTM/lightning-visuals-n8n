@@ -2,15 +2,19 @@
 gsd_state_version: 1.0
 milestone: v0.5
 milestone_name: Lusha v3 & Armed Enrichment
-status: roadmap_created
-last_updated: "2026-07-30T12:00:00.000Z"
+current_phase: 20
+current_phase_name: lusha-v3-migration
+status: executing
+stopped_at: "Phase 20 complete (5/5 plans, VERIFICATION PASSED WITH GAPS): Lusha v2->v3 migrated both lanes, selective-reveal re-scoped to PII hygiene after live probe refuted cost premise (flat 1cr/contact), contacts stored-id reuse implemented (0-credit re-enrich), disarmed redeploy live-verified zero v2 URLs. ONE PENDING OPERATOR ACTION: armed create of lusha_contact_id/lusha_company_id properties (classifier-blocked for agent; command in 20-04-SUMMARY.md). Next: Phase 21."
+last_updated: "2026-07-30T03:05:33.465Z"
 last_activity: 2026-07-30
+last_activity_desc: Phase 20 complete, verified; Phase 21 next
 progress:
   total_phases: 3
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
-  percent: 0
+  total_plans: 5
+  completed_plans: 5
+  percent: 33
 ---
 
 # Project State
@@ -20,14 +24,14 @@ progress:
 See: .planning/PROJECT.md (updated 2026-07-07)
 
 **Core value:** The ICP scoring engine turns firmographic + enrichment signals into trustworthy, auditable A/B/C/D prioritization (with hard vetoes) and never clobbers HubSpot data — proven in dry-run locally.
-**Current focus:** Milestone v0.4 SHIPPED 2026-07-29 and archived to `.planning/milestones/v0.4-ROADMAP.md` (ledger 6/6, zero operator debt, live deployment current + disarmed). Next: `/gsd-new-milestone` — candidate scope in PROJECT.md "Next Milestone".
+**Current focus:** Phase 20 — lusha-v3-migration
 
 ## Current Position
 
-Phase: 20 of 22 (Lusha v3 Migration) — not started
-Plan: — (none yet; next: `/gsd-plan-phase 20`)
-Status: Roadmap created — v0.5 phases 20–22 defined, 11/11 requirements mapped
-Last activity: 2026-07-30 — v0.5 roadmap created (Phase 20 Lusha v3 Migration → Phase 21 Transport & Schema Hygiene → Phase 22 Armed E2E Canary; operator-gated canary last)
+Phase: 20 (lusha-v3-migration) — COMPLETE (verified, 1 pending operator action)
+Plan: 5 of 5 complete
+Status: Phase 21 ready to plan
+Last activity: 2026-07-30 — Phase 20 complete; ~16 Lusha credits spent on probes; live n8n serving v3
 
 ## Performance Metrics
 

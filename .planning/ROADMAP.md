@@ -273,7 +273,7 @@ downstream-owner decisions.
 
 ## Phases
 
-- [ ] **Phase 20: Lusha v3 Migration** - Both lanes swap to POST `/v3/*/search-and-enrich` with selective reveal, ID staging for free re-enrichment, and a verified disarmed redeploy before the 2026-11-18 v2 sunset
+- [x] **Phase 20: Lusha v3 Migration** - Both lanes swap to POST `/v3/*/search-and-enrich` with selective reveal, ID staging for free re-enrichment, and a verified disarmed redeploy before the 2026-11-18 v2 sunset
 - [ ] **Phase 21: Transport & Schema Hygiene** - Retire the last native search node (Dedupe Search), `lv_org_type` text→enumeration one-way door with rollback documented first, `lv_country_region_normalized` field-policy entry
 - [ ] **Phase 22: Armed E2E Enrichment Canary** - Final, operator-gated phase: full pipeline (providers + Haiku research + Sonnet judge) end-to-end on allowlisted records with writes armed, live-validating Phases 20–21 in one audited window, with a calibrated cost ledger
 
@@ -337,6 +337,8 @@ Phases execute in numeric order: 20 → 21 → 22 (autonomous-buildable work fir
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 20. Lusha v3 Migration | 0/5 | Planned | - |
+| 20. Lusha v3 Migration | 5/5 | Complete* | 2026-07-30 |
 | 21. Transport & Schema Hygiene | 0/? | Not started | - |
 | 22. Armed E2E Enrichment Canary | 0/? | Not started | - |
+
+\* Phase 20 complete pending one operator action: live create of `lusha_contact_id`/`lusha_company_id` (classifier-blocked for agents; command in 20-04-SUMMARY.md).
