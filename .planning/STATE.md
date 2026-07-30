@@ -1,20 +1,16 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.4
-milestone_name: Reachability & Verification Debt
-status: Awaiting next milestone
-stopped_at: "Phase 19 complete + FULL operator runbook executed (2026-07-29): Step-0 redeploy (bug-26 resolved, deployment current with git), 16.9 armed `company:update` canary (execution 108, PASS), disarm + read-back (8x `\"false\"`, allowlist cleared). Ledger 6/6 passed. Note: the \"all three `active=false`\" statement below is HISTORICAL — all three workflows are live `active=true`."
-last_updated: "2026-07-29T11:04:53.946Z"
-last_activity: 2026-07-29
-last_activity_desc: Milestone v0.4 completed and archived
+milestone: v0.5
+milestone_name: Lusha v3 & Armed Enrichment
+status: planning
+last_updated: "2026-07-30T01:57:00.649Z"
+last_activity: 2026-07-30
 progress:
-  total_phases: 3
-  completed_phases: 3
-  total_plans: 6
-  completed_plans: 6
-  percent: 100
-current_phase: 19
-current_phase_name: Verification Debt Closure
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -28,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 
 ## Current Position
 
-Phase: Milestone v0.4 complete
+Phase: Not started (defining requirements)
 Plan: —
-Status: Awaiting next milestone
-Last activity: 2026-07-30 — Completed quick task 260730-din: split research/judge model switches, judge escalation armed by default (cap 50)
+Status: Defining requirements
+Last activity: 2026-07-30 — Milestone v0.5 started
 
 ## Performance Metrics
 

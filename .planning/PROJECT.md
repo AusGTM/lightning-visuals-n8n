@@ -42,14 +42,17 @@ derived outputs (`lv_icp_fit_score`, `lv_icp_tier`, `lv_anti_icp_flag`, `lv_anti
 `lv_recommended_motion`) are HubSpot-side and their calculation is still the literal `1 + 1`
 placeholder. Authoring it is downstream work. Supersedes CLAUDE.md §29.
 
-## Next Milestone
+## Current Milestone: v0.5 Lusha v3 & Armed Enrichment
 
-Not yet defined — run `/gsd-new-milestone`. Candidate scope (the deliberate deferrals still open):
-HubSpot-side ICP formula (currently the `1 + 1` placeholder — downstream owner decision),
-`lv_org_type` text→enumeration one-way door, `Dedupe Search (candidate contacts)` native-node
-transport swap (last BUG-23-family hazard), armed full-enrichment canary (providers + research
-live end-to-end), `lv_country_region_normalized` field-policy entry, JTBD 2 weighted-rubric
-sign-off (REQ-signoff-gate).
+**Goal:** Migrate Lusha to v3 before the 2026-11-18 sunset with selective-reveal cost control, and prove the full enrichment pipeline (providers + Haiku research + Sonnet judge) live with writes armed.
+
+**Target features:**
+- Lusha v2→v3 migration: live contract probe → POST `/v3/*/search-and-enrich` ×2 lanes → `reveal[]` driven by gate `missingFields` (field policy becomes the cost control) → `lusha_contact_id`/`lusha_company_id` staging properties (free re-enrichment via `canReveal.credits=0`) → parser/tests/fixtures → disarmed redeploy
+- Armed full-enrichment canary: providers + Haiku research + Sonnet judge end-to-end on allowlisted records, writes armed deliberately
+- Dedupe Search transport swap: retire the last native-node search (BUG-23 family)
+- Schema hygiene: `lv_org_type` text→enumeration one-way door + `lv_country_region_normalized` field-policy entry
+
+**Key context:** Lusha balance ~3.9k credits vs ~12.6k measured v2 full-sweep cost (~4.65 credits/reveal, phone bundling) — v3 selective reveal is a cost fix, not just deadline compliance. Research lane live on `claude-haiku-4-5` since 2026-07-30 (judge `claude-sonnet-5` armed, cap 50). Deferred to v0.6: HubSpot-side ICP formula (the `1 + 1` placeholder) + JTBD 2 weighted-rubric sign-off (REQ-signoff-gate) — downstream-owner decisions.
 
 ## Shipped Milestone: v0.4 Reachability & Verification Debt (archived)
 
