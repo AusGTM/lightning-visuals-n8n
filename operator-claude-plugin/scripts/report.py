@@ -260,6 +260,11 @@ def build_contact_report(execution, handle):
         counts[label] += 1
         rows.append({**row, "row_number": i, "_identity": identity, "reported_label": label})
 
+    for row in rows:
+        state_for_row = classify_retryability(row)
+        row["retryability"] = state_for_row
+        row["retry_reason"] = _retry_reason(state_for_row)
+
     failing_rows = [row for row in rows if row["reported_label"] not in SUCCESS_LABELS]
     total = len(rows)
     adaptive = total > SMALL_BATCH_THRESHOLD
@@ -275,6 +280,63 @@ def build_contact_report(execution, handle):
         "rows": rows if not adaptive else None,
         "failing_rows": failing_rows,
         "reason_groups": _group_rejected_reasons(failing_rows),
+        # The re-sendable set (DISPATCH-04): only rows a re-send can actually fix.
+        # Permanently-stuck and business-outcome rows are named in failing_rows but
+        # deliberately excluded here.
+        "resendable_rows": [row for row in failing_rows if row["retryability"] == "transport_failure"],
         "adaptive": adaptive,
         "handle": handle,
     }
+
+
+# =====================================================================================
+# Retryability classification (DISPATCH-04) — what a re-send can actually fix.
+#
+# Four states, matching the plan's own naming:
+#   - nothing_to_retry:  the row already landed (created / updated-matched).
+#   - transport_failure: the row's action was decided but never confirmed written —
+#     the same shape as Phase 25's failed-chunk unit (a send that never got a
+#     response, or came back with a server error). Re-sending is safe and may fix it.
+#   - permanently_stuck: no usable email + an ambiguous identity outcome (D-11b/D-14).
+#     The deployed workflow resolves identity by email only, so this row lands in
+#     review on every attempt no matter how many times it is re-sent.
+#   - business_outcome:  the row reached a decision (review/reject) for any other
+#     reason. Re-sending it unchanged reproduces the identical outcome.
+# =====================================================================================
+
+_RETRY_REASONS = {
+    "nothing_to_retry": None,
+    "transport_failure": (
+        "this row's write was never confirmed to reach HubSpot — safe to re-send unchanged"
+    ),
+    "permanently_stuck": (
+        "this row will reach review on every attempt — the deployed workflow resolves "
+        "identity by email only, so it needs an email address or manual handling in "
+        "HubSpot, not a re-send"
+    ),
+    "business_outcome": "re-sending this row unchanged will reproduce the same outcome",
+}
+
+
+def _retry_reason(state):
+    return _RETRY_REASONS.get(state)
+
+
+def classify_retryability(row):
+    """Classifies a single ledger row (raw from `contact_row_ledger()`, or already
+    shaped by `build_contact_report()`) into one of the four retryability states
+    above. Never raises: a row missing any field this reads still gets a state,
+    matching every other function in this module.
+    """
+    if not isinstance(row, dict):
+        return "business_outcome"
+
+    label = row.get("reported_label") or _label_for_row(row)
+
+    if label in SUCCESS_LABELS:
+        return "nothing_to_retry"
+    if label == "not_confirmed":
+        return "transport_failure"
+    if row.get("email_status") == "NO_EMAIL" and row.get("outcome") == "ambiguous":
+        return "permanently_stuck"
+    return "business_outcome"
