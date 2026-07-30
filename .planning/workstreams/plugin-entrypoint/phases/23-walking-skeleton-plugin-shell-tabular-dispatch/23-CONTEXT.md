@@ -95,9 +95,18 @@ Out of scope this phase: non-tabular adapters (Phase 24), the enrichment lane an
 ### File handoff
 - **D-14:** **Both** paths are supported, attachment first with filesystem path as fallback: try
   to read a file the operator has attached in the session; if that is unavailable, ask for and
-  resolve a filesystem path. Research must confirm whether Claude Desktop exposes attachments to
-  a skill as a readable path — if it does not, the attachment leg degrades to the path leg and
-  the phase still works.
+  resolve a filesystem path.
+- **D-14a (resolved by 23-RESEARCH.md and confirmed with the user):** The operator works in the
+  **Claude Desktop Code tab**, so the plugin packaging in D-01 applies as designed
+  (`.claude-plugin/plugin.json` + `skills/<name>/SKILL.md` + `scripts/*.py`, GUI-installable, no
+  terminal). Research could **not** confirm from documentation that a Code-tab attachment resolves
+  to a real filesystem path for a skill's Python scripts, and an open upstream issue describes
+  exactly that gap for images. Therefore: build the **`@mention` autocomplete path as the reliable
+  mechanism**, attempt attachment opportunistically, and gate any attachment-specific plumbing
+  behind **one early live smoke test**. Do not build attachment plumbing beyond that test.
+- **D-14b:** Research also found a free win for D-02: a plugin skill is **already both
+  auto-triggered and slash-invocable** as `/plugin-name:skill-name`. No separate `commands/`
+  directory is needed to satisfy D-02.
 
 ### Claude's Discretion
 - Exact slash-command name and skill trigger phrasing.
