@@ -60,6 +60,40 @@ Not in scope: acting on what the sweep finds. Notices point at controls Phase 28
 - **D-10:** A **stuck-armed backend** is one of the conditions the sweep watches for. Phase 28 D-03
   names this sweep as the backstop for the crash window between arm and disarm.
 
+### Corrections and confirmations from 29-RESEARCH.md
+- **D-01a (D-04's availability risk is CLOSED for this machine):** Scheduled Claude routines are
+  real and enabled here — `claude_desktop_config.json` carries `coworkScheduledTasksEnabled: true`
+  and `ccdScheduledTasksEnabled: true`, and a working example already runs at
+  `~/Documents/Claude/Scheduled/weekday-morning-brief/SKILL.md`, firing on a cadence and driving
+  real MCP tool calls. **Still unverified:** whether a scheduled routine can invoke *this plugin's
+  own* skill rather than a generic connector. That is the plan's **first task**, not an assumption.
+- **D-01b:** Anthropic's lower-level scheduled mechanism (Managed Agents `deployments`, cron +
+  webhook delivery) is **not** the right fit — its notification path needs a developer-operated
+  webhook receiver, which contradicts the milestone's "operator never runs infrastructure" rule.
+  Retained only as D-04's named fallback.
+- **D-05a (NOTICE-01 is this phase's highest-risk claim):** Research observed the unprompted
+  background-notification behaviour NOTICE-01 describes working in the **CLI** runtime, but could
+  **not** confirm it in Claude Desktop — which is the actual target (Phase 23 D-14a). Therefore:
+  build **D-07's bounded "still running, here's how to re-check" path as the real NOTICE-01/02
+  mechanism**, and treat true unprompted mid-conversation follow-up as a **bonus if verified, never
+  a dependency**. A phase that depends on an unconfirmed platform primitive fails silently.
+- **D-06a (the watch bound is computable from data already fetched):** `/api/v1/executions` returns
+  both `startedAt` and `stoppedAt`. `scripts/enrichment_cost_ledger.py` already reads that list but
+  never computes a duration. No new endpoint is needed — just the computation, shared with Phase 25
+  D-11a's chunk-sizing measurement.
+- **D-08a (the five conditions are unevenly detectable):** stuck-lock, review-backlog, and partially
+  failed-scheduled-run reuse Phase 27's read surface unmodified. **Credential-failure and
+  exhausted-quota need new threshold/classification logic** over Phase 27's existing credit-probe
+  data — new logic, not new reads.
+- **D-08b (new instance of a known bug pattern):** `wf_scheduled_maintenance_cloud.json`'s own
+  HubSpot-Search nodes are `onError: continueRegularOutput`, so **the maintenance job silently
+  swallows the same failure class** Phase 27 found in the enrichment workflow (27-CONTEXT D-04a).
+  The sweep must not treat "the maintenance job reported success" as evidence of health.
+- **D-02a (NOTICE-05 becomes enforceable rather than promised):** implement the sweep as a
+  dedicated module plus an **AST / import-graph test asserting zero reachable mutation calls** —
+  mirroring `scripts/enrichment_cost_ledger.py`'s no-write guarantee, but enforced by CI instead of
+  a comment. This is the concrete mechanism D-02 asked for.
+
 ### Claude's Discretion
 - Sweep cadence default and whether it is admin-configurable.
 - Notification wording and grouping when several conditions fire at once.
