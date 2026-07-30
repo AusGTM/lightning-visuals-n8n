@@ -74,13 +74,13 @@ above. This is why that endpoint has to exist.
 - [ ] **INGEST-04**: Operator can name existing HubSpot records (list, view, or record IDs) to
       enrich, with no row structuring involved
 
-- [ ] **INGEST-05**: Operator can supply a public URL and have contact/company data extracted
+- [x] **INGEST-05**: Operator can supply a public URL and have contact/company data extracted
       from the page content
 
 - [x] **INGEST-06**: Operator gets a clear, actionable error when an input is unreadable,
       empty, or unsupported — never a silent drop
 
-- [ ] **INGEST-07**: Operator can supply screenshots of a web page (one or many) and have
+- [x] **INGEST-07**: Operator can supply screenshots of a web page (one or many) and have
       contact/company rows extracted from the rendered image, under the same provenance and
       no-invention guarantees as text sources. Screenshots are operator-supplied only — the
       plugin never automates capture
@@ -301,9 +301,9 @@ duplicates. Phase numbering continues from the archived v0.5 milestone (ended at
 | INGEST-02 | Phase 23 | Complete |
 | INGEST-03 | Phase 24 | Complete |
 | INGEST-04 | Phase 25 | Pending |
-| INGEST-05 | Phase 24 | Pending |
+| INGEST-05 | Phase 24 | Complete |
 | INGEST-06 | Phase 24 | Complete |
-| INGEST-07 | Phase 24 | Pending |
+| INGEST-07 | Phase 24 | Complete |
 | STRUCT-01 | Phase 23 | Complete |
 | STRUCT-02 | Phase 24 | Complete |
 | STRUCT-03 | Phase 24 | Complete |
