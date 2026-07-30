@@ -33,7 +33,7 @@ For ICP fields, classify conservatively and flag uncertainty.
 
 def classify_field_with_haiku(record, field, current_value, candidates, policy):
     api_key = os.getenv("ANTHROPIC_API_KEY")
-    model = os.getenv("ANTHROPIC_HAIKU_MODEL", "claude-3-5-haiku-latest")
+    model = os.getenv("ANTHROPIC_HAIKU_MODEL", "claude-haiku-4-5")
 
     if not api_key:
         return {
