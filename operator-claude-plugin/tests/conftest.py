@@ -10,6 +10,7 @@ The autouse `no_network` fixture is the point of this file: every plugin test ru
 discipline (23-VALIDATION.md's Wave 0 critical constraint).
 """
 import csv
+import json
 import sys
 from pathlib import Path
 
@@ -98,6 +99,70 @@ class _StubTransport:
 def stub_transport():
     """The seam every dispatch test uses in place of a real POST."""
     return _StubTransport()
+
+
+def _default_extraction_records():
+    """Two records exercising both identity groups: one via email, one via
+    firstname+lastname+company — matching config/column_mapping.yaml's `any_of` groups."""
+    return [
+        {
+            "row": {
+                "email": "amy@example.com",
+                "firstname": "Amy",
+                "lastname": "Adams",
+                "company": "Acme",
+            },
+            "provenance": {
+                "input": "pasted_text",
+                "locator": "line 3: 'Amy Adams, amy@example.com, Acme'",
+            },
+        },
+        {
+            "row": {"firstname": "Ben", "lastname": "Baker", "company": "Widgets Co"},
+            "provenance": {
+                "input": "pasted_text",
+                "locator": "line 5: 'Ben Baker, Widgets Co'",
+            },
+        },
+    ]
+
+
+@pytest.fixture
+def extraction_artifact_factory(tmp_path):
+    """Builds an extraction-artifact JSON file under tmp_path with sane defaults a test
+    can override (batch_id, source, records, ambiguities), or writes arbitrary raw text
+    verbatim (for malformed-artifact tests) — so later tests build variants without each
+    one hand-writing JSON."""
+
+    def _make(
+        filename="extracted.json",
+        batch_id="batch-1",
+        source=None,
+        records=None,
+        ambiguities=None,
+        raw_text=None,
+    ):
+        path = tmp_path / filename
+        if raw_text is not None:
+            path.write_text(raw_text, encoding="utf-8")
+            return path
+
+        artifact = {
+            "batch_id": batch_id,
+            "source": source if source is not None else {"kind": "prose", "detail": "pasted text"},
+            "records": _default_extraction_records() if records is None else records,
+            "ambiguities": [] if ambiguities is None else ambiguities,
+        }
+        path.write_text(json.dumps(artifact), encoding="utf-8")
+        return path
+
+    return _make
+
+
+@pytest.fixture
+def extraction_artifact(extraction_artifact_factory):
+    """A valid two-record prose extraction artifact written to tmp_path."""
+    return extraction_artifact_factory()
 
 
 @pytest.fixture(autouse=True)

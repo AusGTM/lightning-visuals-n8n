@@ -34,7 +34,7 @@ FORBIDDEN_MODULE_NAMES = {
 
 # operator-claude-plugin's own flat modules (scripts/ is on sys.path per conftest.py) —
 # never mistake these for undeclared third-party imports below.
-LOCAL_MODULES = {"config_gate", "tabular", "dispatch"}
+LOCAL_MODULES = {"config_gate", "tabular", "dispatch", "preview", "extraction"}
 
 # PyPI package name differs from its import name for PyYAML only, among this plugin's
 # three declared dependencies.

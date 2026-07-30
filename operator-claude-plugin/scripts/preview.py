@@ -33,6 +33,29 @@ def _normalize_header(header: str) -> str:
     return re.sub(r"\s+", " ", header.strip()).lower()
 
 
+def resolve_mapping_path(mapping_path=None):
+    """The one rule for finding config/column_mapping.yaml: an explicit path argument,
+    then the repo's config/column_mapping.yaml, then None (unavailable). Shared by this
+    module's display-only labelling and extraction.py's canonical-prop/identity-group
+    derivation, so exactly one rule for finding that file exists in the plugin — callers
+    decide whether "unavailable" degrades gracefully (this module's labels) or is a hard
+    error (extraction.py's validation allowlist)."""
+    if mapping_path is not None:
+        return Path(mapping_path)
+    if DEFAULT_MAPPING_PATH.exists():
+        return DEFAULT_MAPPING_PATH
+    return None
+
+
+def _adaptive_sample(items):
+    """First-10/last-3 sample above ADAPTIVE_THRESHOLD, every item at or below it
+    (D-08). Shared by build_preview() and build_extracted_preview() so the two preview
+    surfaces never disagree about the same batch."""
+    if len(items) <= ADAPTIVE_THRESHOLD:
+        return False, items
+    return True, {"leading": items[:LEAD_ROWS], "trailing": items[-TRAIL_ROWS:]}
+
+
 def _load_aliases(mapping_path):
     """Return (aliases, canonical_props) or (None, None) if the mapping file is absent,
     unreadable, or malformed. Read-only — never writes, never called by dispatch."""
@@ -112,11 +135,7 @@ def build_preview(path, mapping_path=None) -> dict:
     headers, rows = read_table(path)
     row_count = len(rows)
 
-    resolved_mapping_path = mapping_path
-    if resolved_mapping_path is None and DEFAULT_MAPPING_PATH.exists():
-        resolved_mapping_path = DEFAULT_MAPPING_PATH
-
-    header_labels = label_headers(headers, resolved_mapping_path)
+    header_labels = label_headers(headers, resolve_mapping_path(mapping_path))
 
     preview = {
         "headers": headers,
@@ -127,15 +146,10 @@ def build_preview(path, mapping_path=None) -> dict:
         "unmapped_canonical_props": header_labels["unmapped_canonical_props"],
     }
 
-    if row_count <= ADAPTIVE_THRESHOLD:
-        preview["adaptive"] = False
-        preview["sample_rows"] = rows
-    else:
-        preview["adaptive"] = True
-        preview["sample_rows"] = {
-            "leading": rows[:LEAD_ROWS],
-            "trailing": rows[-TRAIL_ROWS:],
-        }
+    adaptive, sample_rows = _adaptive_sample(rows)
+    preview["adaptive"] = adaptive
+    preview["sample_rows"] = sample_rows
+    if adaptive:
         preview["fill_rates"] = _fill_rates(headers, rows)
 
     return preview

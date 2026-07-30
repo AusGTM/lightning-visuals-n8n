@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 .n8n_credential_ids.json
 operator-claude-plugin/config/operator.local.json
+operator-claude-plugin/scratch/
