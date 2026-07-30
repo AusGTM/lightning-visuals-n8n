@@ -316,9 +316,9 @@ duplicates. Phase numbering continues from the archived v0.5 milestone (ended at
 | DISPATCH-02 | Phase 25 | Pending |
 | DISPATCH-03 | Phase 23 | Complete |
 | DISPATCH-04 | Phase 26 | Pending |
-| REPORT-01 | Phase 26 | Pending |
+| REPORT-01 | Phase 26 | Complete |
 | REPORT-02 | Phase 26 | Pending |
-| REPORT-03 | Phase 26 | Pending |
+| REPORT-03 | Phase 26 | Complete |
 | STATUS-01 | Phase 27 | Pending |
 | STATUS-02 | Phase 27 | Pending |
 | STATUS-03 | Phase 27 | Pending |

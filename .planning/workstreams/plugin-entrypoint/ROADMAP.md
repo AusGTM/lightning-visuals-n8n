@@ -163,7 +163,7 @@ Plans:
 
 Plans:
 
-- [ ] 26-01-PLAN.md — Contact-lane per-record ledger from the decision node, executions-API fallback, run handle, and honest in-flight framing (REPORT-01, REPORT-03)
+- [x] 26-01-PLAN.md — Contact-lane per-record ledger from the decision node, executions-API fallback, run handle, and honest in-flight framing (REPORT-01, REPORT-03)
 - [ ] 26-02-PLAN.md — Enrichment-lane review flag and remaining credits, with unknown kept distinct from zero and no ICP surface (REPORT-02)
 - [ ] 26-03-PLAN.md — Failing rows named and classified by what a re-send can fix; retry routes through the one armed dispatch path (DISPATCH-04)
 

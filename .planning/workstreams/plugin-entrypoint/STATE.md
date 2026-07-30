@@ -69,7 +69,7 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 | 23. Walking Skeleton — Plugin Shell & Tabular Dispatch | 10 | Executing (23-01, 23-02, 23-03, 23-04, 23-05 done, 5/6 plans) |
 | 24. Non-Tabular Input Adapters | 8 | Executing (24-01 done, 1/3 plans) |
 | 25. Enrichment Lane & Cost Guard | 4 | Not started |
-| 26. Outcome Reporting & Safe Retry | 4 | Not started |
+| 26. Outcome Reporting & Safe Retry | 4 | Executing (26-01 done, 1/3 plans) |
 | 27. Backend Status Surface | 6 | Not started |
 | 28. Control Actions | 7 | Not started |
 | 29. Notices & Unattended Sweep | 5 | Not started |
@@ -191,6 +191,23 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
   passed at completion (749 baseline + 25 new); no file outside `operator-claude-plugin/` or
   `.gitignore` touched. 24-02 (screenshot dedupe, ambiguity aggregation) and 24-03 (the four
   adapters wired into SKILL.md) build on this artifact contract next.
+
+- **26-01 built the contact-upload report tracer** — `operator-claude-plugin/scripts/executions_client.py`
+  (read-only `X-N8N-API-KEY` GETs, pure `find_execution_for_dispatch()` time-proximity
+  correlator marked `best_effort`) and `report.py` (`contact_row_ledger()` reads `Decide
+  Action`'s own output, never `Set Review`'s stripped `{"queue": "needs_review"}`;
+  `reconcile()` downgrades a decided update/create to `not_confirmed` when the terminal
+  write node produced zero items; `build_contact_report()` treats any non-settled or
+  unrecognised execution status as `in_flight`, never finished). `sync_response_is_
+  sufficient()` gates the synchronous webhook body, falling through to the executions
+  API when it's `Set Review`-shaped. SKILL.md's step 7 renders counts first, the
+  failing rows in full, the `NO_EMAIL`/`ambiguous` permanently-stuck case named
+  plainly, and a run handle whose re-check is explicitly manual-only — an AST guard
+  now makes D-07 (no poll loop) a property the suite enforces. Full repo suite: 869
+  passed at completion; no file outside `operator-claude-plugin/` or `.planning/`
+  touched. Known artifact: a concurrent-agent git-index race (24-02/24-03 sharing
+  the same working tree) misattributed one commit's message to the wrong diff —
+  content-correct, cosmetic only, documented in 26-01-SUMMARY.md's Issues Encountered.
 
 **Todos / carried context:**
 
