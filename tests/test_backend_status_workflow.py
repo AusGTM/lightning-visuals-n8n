@@ -158,9 +158,17 @@ def test_build_credit_status_only_inbound_is_the_last_probe_in_the_chain():
     assert {src for src, _ in edges} == {"ZoomInfo Usage"}
 
 
-def test_build_credit_status_only_outbound_is_respond_to_webhook():
+def test_build_credit_status_only_outbound_feeds_the_hubspot_count_search_chain():
+    """Phase 27 Plan 01: Build Credit Status now feeds the four HubSpot count searches
+    (still sequential, never fanned out — D-14) rather than responding directly."""
     doc = _load()
     targets = [e["node"] for b in doc["connections"]["Build Credit Status"]["main"] for e in b]
+    assert targets == ["HS Requested Search (Companies)"]
+
+
+def test_build_status_only_outbound_is_respond_to_webhook():
+    doc = _load()
+    targets = [e["node"] for b in doc["connections"]["Build Status"]["main"] for e in b]
     assert targets == ["Respond to Webhook"]
     node = _node(doc, "Respond to Webhook")
     assert node["type"] == "n8n-nodes-base.respondToWebhook"
@@ -195,5 +203,7 @@ def test_unreachable_dead_ends_absent_the_chain_is_fully_connected():
     reachable = _reachable_from(doc, "Status Webhook Trigger")
     for name in ("Status Credit Request", "Lusha Usage", "Apollo Usage",
                  "ZoomInfo Usage Token Gate", "ZoomInfo Usage", "Build Credit Status",
-                 "Respond to Webhook"):
+                 "HS Requested Search (Companies)", "HS Review Search (Companies)",
+                 "HS Requested Search (Contacts)", "HS Review Search (Contacts)",
+                 "Build Status", "Respond to Webhook"):
         assert name in reachable, f"{name} unreachable from Status Webhook Trigger"

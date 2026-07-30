@@ -4458,18 +4458,89 @@ const balances = providers_requested.map((provider) => {
 return [{ json: { balances, checked_at: new Date().toISOString() } }];
 """
 
+# Phase 27 Plan 01 — the full-health assembly node. Extends Build Credit Status's
+# balances with the four HubSpot count searches (requested-unresolved / awaiting-review,
+# companies + contacts, D-07c) and a credential-health block for the three providers plus
+# HubSpot itself (D-08/T-27-04). Reads every upstream node BY NAME through the same
+# guarded nodeAll idiom Build Credit Status uses; every count runs through
+# backendStatus.js's extractSearchTotal so a failed/refused search lands as `null`, never
+# `0` (STATUS-06). Only `.total` is ever read off a search response — row payloads are
+# never pulled for a badge count.
+ENRICH_STATUS_BUILD_STATUS = inline("backendStatus.js") + r"""
+
+// --- n8n wrapper: Build Status (Phase 27 Plan 01) ---
+function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
+function httpStatus(raw) {
+  if (!raw) return null;
+  const candidates = [raw.statusCode, raw.httpCode, raw.status,
+    raw.response && raw.response.status, raw.response && raw.response.statusCode];
+  for (const c of candidates) {
+    if (c !== undefined && c !== null && c !== "") {
+      const n = Number(c);
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  return null;
+}
+// A search node's own probe outcome IS its credential-health signal (Pitfall 1) —
+// independent of whether any enrichment run happened recently.
+function searchProbe(name) {
+  const rows = nodeAll(name);
+  const row = rows[0];
+  const raw = row && row.json;
+  if (!row) return { configured: true, status: null, value: null };
+  if (raw && raw.error) return { configured: true, status: httpStatus(raw), value: null };
+  return { configured: true, status: 200, value: extractSearchTotal(raw) };
+}
+
+const creditRows = nodeAll("Build Credit Status");
+const creditBody = (creditRows[0] && creditRows[0].json) || {};
+const balances = Array.isArray(creditBody.balances) ? creditBody.balances : [];
+const balanceByProvider = {};
+for (const b of balances) balanceByProvider[b.provider] = b;
+
+const companiesRequested = searchProbe("HS Requested Search (Companies)");
+const companiesReview = searchProbe("HS Review Search (Companies)");
+const contactsRequested = searchProbe("HS Requested Search (Contacts)");
+const contactsReview = searchProbe("HS Review Search (Contacts)");
+
+const health = ["lusha", "apollo", "zoominfo"].map((provider) => {
+  const b = balanceByProvider[provider] || {};
+  return { source: provider,
+    ...deriveSourceHealth({ configured: b.configured === true, status: b.status, value: b.credits }) };
+});
+// HubSpot's own credential health: the requested-companies probe is the canonical
+// signal — same credential as all four searches, so a refusal there IS the HubSpot
+// credential-health finding (D-08).
+health.push({ source: "hubspot", ...deriveSourceHealth(companiesRequested) });
+
+const body = buildStatusBody({
+  counts: {
+    companies_requested_unresolved: companiesRequested.value,
+    companies_awaiting_review: companiesReview.value,
+    contacts_requested_unresolved: contactsRequested.value,
+    contacts_awaiting_review: contactsReview.value,
+  },
+  health,
+  checked_at: creditBody.checked_at,
+});
+
+return [{ json: { ...body, balances } }];
+"""
+
 
 def build_backend_status_cloud():
-    """Phase 25 Plan 02 (D-14) — `hubspot/backend-status`, credit-only slice.
+    """Phase 25 Plan 02 (D-14) + Phase 27 Plan 01 — `hubspot/backend-status`, full health.
 
     Straight line, deliberately NOT a fan-out (D-14): Status Webhook Trigger -> Status
     Credit Request -> Lusha Usage -> Apollo Usage -> the shared ZoomInfo usage subgraph ->
-    Build Credit Status -> Respond to Webhook. Every probe node uses onError:
-    continueRegularOutput and reads nothing off its incoming item, so a failing probe
-    passes an error item along the SAME single chain instead of stopping it — the chain
-    guarantees exactly one item reaches the responder and all three probes have already
-    run by the time it does, unlike the enrichment lane's per-batch fan-out (tolerable
-    there, not tolerable for a status read).
+    Build Credit Status -> four HubSpot count searches (requested-unresolved /
+    awaiting-review, companies + contacts) -> Build Status -> Respond to Webhook. Every
+    probe node uses onError: continueRegularOutput and reads nothing off its incoming
+    item, so a failing probe passes an error item along the SAME single chain instead of
+    stopping it — the chain guarantees exactly one item reaches the responder and every
+    probe (provider AND HubSpot alike) has already run by the time it does, unlike the
+    enrichment lane's per-batch fan-out (tolerable there, not tolerable for a status read).
 
     Reuses the enrichment workflow's own node names for the three probes verbatim (`Lusha
     Usage`, `Apollo Usage`, the ZoomInfo usage subgraph's names) — NODE_CREDENTIAL_MAP is
@@ -4517,6 +4588,54 @@ def build_backend_status_cloud():
     x += 880
     nodes.append(code_node("Build Credit Status", ENRICH_STATUS_BUILD_RESPONSE, x, y))
 
+    # Phase 27 Plan 01 — four HubSpot count searches, one per (object type x question),
+    # chained sequentially after the credit probes (D-14: never fanned out, so the
+    # responder cannot fire before every probe — provider AND HubSpot alike — has run).
+    # Requested-but-unresolved uses OR'd filter groups, not a single group of NEQ
+    # predicates: HubSpot's NEQ operator does not match a record whose property is
+    # absent, and a record that was requested but never touched has no status value at
+    # all (Pitfall 2/plan note) — group A covers the property-absent case, group B the
+    # has-a-value-but-not-a-terminal-one case.
+    REQUESTED_UNRESOLVED_GROUPS = [
+        [{"propertyName": "lv_enrichment_requested", "operator": "EQ", "value": "true"},
+         {"propertyName": "lv_enrichment_status", "operator": "NOT_HAS_PROPERTY"}],
+        [{"propertyName": "lv_enrichment_requested", "operator": "EQ", "value": "true"},
+         {"propertyName": "lv_enrichment_status", "operator": "NEQ", "value": "complete"},
+         {"propertyName": "lv_enrichment_status", "operator": "NEQ", "value": "needs_review"}],
+    ]
+    # Awaiting-review ORs the two independent reasons a record needs a human.
+    AWAITING_REVIEW_GROUPS = [
+        [{"propertyName": "lv_enrichment_needs_review", "operator": "EQ", "value": "true"}],
+        [{"propertyName": "lv_icp_needs_review", "operator": "EQ", "value": "true"}],
+    ]
+
+    x += 220
+    hs_req_co = _hs_http_search_node(
+        "HS Requested Search (Companies)", "company", x, y,
+        filter_groups=REQUESTED_UNRESOLVED_GROUPS, properties_csv="hs_object_id", limit=1)
+    nodes.append(hs_req_co)
+
+    x += 220
+    hs_review_co = _hs_http_search_node(
+        "HS Review Search (Companies)", "company", x, y,
+        filter_groups=AWAITING_REVIEW_GROUPS, properties_csv="hs_object_id", limit=1)
+    nodes.append(hs_review_co)
+
+    x += 220
+    hs_req_ct = _hs_http_search_node(
+        "HS Requested Search (Contacts)", "contact", x, y,
+        filter_groups=REQUESTED_UNRESOLVED_GROUPS, properties_csv="hs_object_id", limit=1)
+    nodes.append(hs_req_ct)
+
+    x += 220
+    hs_review_ct = _hs_http_search_node(
+        "HS Review Search (Contacts)", "contact", x, y,
+        filter_groups=AWAITING_REVIEW_GROUPS, properties_csv="hs_object_id", limit=1)
+    nodes.append(hs_review_ct)
+
+    x += 220
+    nodes.append(code_node("Build Status", ENRICH_STATUS_BUILD_STATUS, x, y))
+
     x += 220
     nodes.append({
         "parameters": {"respondWith": "allIncomingItems", "options": {}},
@@ -4530,24 +4649,29 @@ def build_backend_status_cloud():
         zoom_usage_entry,
     ])
     conns.update(zoom_usage_conns)
-    conns.update(chain([zoom_usage_exit, "Build Credit Status", "Respond to Webhook"]))
+    conns.update(chain([
+        zoom_usage_exit, "Build Credit Status",
+        hs_req_co["name"], hs_review_co["name"], hs_req_ct["name"], hs_review_ct["name"],
+        "Build Status", "Respond to Webhook",
+    ]))
 
     notes = [{
         "content": (
-            "## LV Backend Status — credit-only slice (Phase 25 Plan 02, D-14)\n"
-            "`hubspot/backend-status`: three provider usage probes run SEQUENTIALLY "
-            "(Lusha -> Apollo -> the shared ZoomInfo usage subgraph) so every provider "
-            "has been checked before the single `Respond to Webhook` fires — never "
-            "fanned out, which would let the response race the still-running probes.\n\n"
+            "## LV Backend Status — full health (Phase 25 Plan 02 + Phase 27 Plan 01, D-14)\n"
+            "`hubspot/backend-status`: three provider usage probes, then four HubSpot "
+            "count searches, all run SEQUENTIALLY (never fanned out) so every probe — "
+            "provider AND HubSpot alike — has completed before the single `Respond to "
+            "Webhook` fires.\n\n"
             "An unreadable balance (Apollo's non-master key 403s by design on this "
             "account) renders as an explicit `unreadable: true` / `credits: null` "
-            "marker, never as zero (D-10). Reads provider usage endpoints only, never a "
-            "HubSpot endpoint, and performs zero writes. **Full health is Phase 27** "
-            "(STATUS-01..06) — this endpoint ships the credit slice only.\n\n"
+            "marker, never as zero (D-10/D-08). The two HubSpot counts "
+            "(requested-unresolved, awaiting-review) are reported for companies AND "
+            "contacts; a count the backend could not read is `null`, never `0` "
+            "(STATUS-06). Reads only — zero write nodes anywhere in this chain.\n\n"
             "**Webhook Trigger** binds the SAME shared `LV Enrichment Webhook` "
             "credential the enrichment trigger uses — one operator secret works "
             "against both endpoints with no new provisioning."
-        ), "x": x, "y": y + 260, "h": 300, "w": 480,
+        ), "x": x, "y": y + 260, "h": 320, "w": 520,
     }]
     for i, n in enumerate(notes, start=1):
         nodes.append({

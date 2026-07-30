@@ -192,30 +192,136 @@
     },
     {
       "parameters": {
-        "respondWith": "allIncomingItems",
-        "options": {}
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/companies/search",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"lv_enrichment_requested\", operator: \"EQ\", value: \"true\" }, { propertyName: \"lv_enrichment_status\", operator: \"NOT_HAS_PROPERTY\" } ] }, { filters: [ { propertyName: \"lv_enrichment_requested\", operator: \"EQ\", value: \"true\" }, { propertyName: \"lv_enrichment_status\", operator: \"NEQ\", value: \"complete\" }, { propertyName: \"lv_enrichment_status\", operator: \"NEQ\", value: \"needs_review\" } ] } ], properties: [\"hs_object_id\"], limit: 1 }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "rw00120000-0000-4000-8000-000000000000",
-      "name": "Respond to Webhook",
-      "type": "n8n-nodes-base.respondToWebhook",
-      "typeVersion": 1.1,
+      "id": "h00120000-0000-4000-8000-000000000000",
+      "name": "HS Requested Search (Companies)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         2200,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/companies/search",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"lv_enrichment_needs_review\", operator: \"EQ\", value: \"true\" } ] }, { filters: [ { propertyName: \"lv_icp_needs_review\", operator: \"EQ\", value: \"true\" } ] } ], properties: [\"hs_object_id\"], limit: 1 }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
+      },
+      "id": "h00130000-0000-4000-8000-000000000000",
+      "name": "HS Review Search (Companies)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2420,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts/search",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"lv_enrichment_requested\", operator: \"EQ\", value: \"true\" }, { propertyName: \"lv_enrichment_status\", operator: \"NOT_HAS_PROPERTY\" } ] }, { filters: [ { propertyName: \"lv_enrichment_requested\", operator: \"EQ\", value: \"true\" }, { propertyName: \"lv_enrichment_status\", operator: \"NEQ\", value: \"complete\" }, { propertyName: \"lv_enrichment_status\", operator: \"NEQ\", value: \"needs_review\" } ] } ], properties: [\"hs_object_id\"], limit: 1 }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
+      },
+      "id": "h00140000-0000-4000-8000-000000000000",
+      "name": "HS Requested Search (Contacts)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2640,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts/search",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"lv_enrichment_needs_review\", operator: \"EQ\", value: \"true\" } ] }, { filters: [ { propertyName: \"lv_icp_needs_review\", operator: \"EQ\", value: \"true\" } ] } ], properties: [\"hs_object_id\"], limit: 1 }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
+      },
+      "id": "h00150000-0000-4000-8000-000000000000",
+      "name": "HS Review Search (Contacts)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2860,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// n8n/code/backendStatus.js \u2014 pure-JS null-safe extraction and credential-health\n// derivation for the `hubspot/backend-status` endpoint's full-health slice (Phase 27).\n//\n// Mirrors providerSelection.js exactly: no n8n globals, no require() of siblings, every\n// exported function total and non-throwing. Inlined into Code nodes via the builder's\n// inline() (Code nodes cannot require() siblings).\n//\n// extractSearchTotal(raw)\n//   -> number | null\n//   Reads a HubSpot CRM v3 search response's `.total` field. Every shape mismatch\n//   (non-object, missing field, non-numeric, boolean) yields null \u2014 a genuine numeric\n//   zero is the ONLY input that returns 0 (D-08: unknown is never zero).\n//\n// deriveSourceHealth(probe)\n//   -> { state: \"ok\" | \"refused\" | \"unknown\", status: number|null, reason: string|null }\n//   `probe` is `{configured, status, value}` for one credential-bearing source. A non-2xx\n//   status can NEVER produce \"ok\" (T-27-04); an unconfigured/unreachable source produces\n//   \"unknown\", distinct from \"refused\" (D-08 \u2014 an absent credential is not a refusal).\n//\n// buildStatusBody(parts)\n//   -> { counts: {...}, credential_health: [...], checked_at }\n//   Assembles the response, preserving `null` counts as JSON null (STATUS-06) \u2014 never 0,\n//   never an omitted key. Never throws; every malformed branch degrades to unknown/null.\n\nfunction extractSearchTotal(raw) {\n  if (!raw || typeof raw !== \"object\" || Array.isArray(raw)) return null;\n  const total = raw.total;\n  if (typeof total !== \"number\" || !Number.isFinite(total)) return null;\n  return total;\n}\n\nfunction deriveSourceHealth(probe) {\n  const p = probe && typeof probe === \"object\" ? probe : {};\n  const configured = p.configured === true;\n  const status = typeof p.status === \"number\" && Number.isFinite(p.status) ? p.status : null;\n\n  if (!configured) {\n    // No credential to probe with at all \u2014 cannot-tell, never \"refused\" (D-08).\n    return { state: \"unknown\", status: null, reason: \"not_configured\" };\n  }\n  if (status === null) {\n    // Configured but no usable status came back (timeout, not executed, malformed shape).\n    return { state: \"unknown\", status: null, reason: \"no_response\" };\n  }\n  if (status >= 200 && status < 300) {\n    if (p.value === null || p.value === undefined) {\n      // A 2xx with no usable value is still a \"can't tell,\" never a false \"ok\".\n      return { state: \"unknown\", status, reason: \"unrecognized_response_shape\" };\n    }\n    return { state: \"ok\", status, reason: null };\n  }\n  // Any non-2xx (401/403/429/5xx/...) is reachable-but-refused \u2014 never \"ok\".\n  return { state: \"refused\", status, reason: \"http_\" + status };\n}\n\nfunction buildStatusBody(parts) {\n  const safe = parts && typeof parts === \"object\" && parts !== null ? parts : {};\n  const counts = safe.counts && typeof safe.counts === \"object\" ? safe.counts : {};\n  const health = Array.isArray(safe.health) ? safe.health : [];\n\n  const normCount = (v) => (typeof v === \"number\" && Number.isFinite(v) ? v : null);\n\n  return {\n    counts: {\n      companies_requested_unresolved: normCount(counts.companies_requested_unresolved),\n      companies_awaiting_review: normCount(counts.companies_awaiting_review),\n      contacts_requested_unresolved: normCount(counts.contacts_requested_unresolved),\n      contacts_awaiting_review: normCount(counts.contacts_awaiting_review),\n    },\n    credential_health: health.map((h) => {\n      const entry = h && typeof h === \"object\" ? h : {};\n      const state = entry.state === \"ok\" || entry.state === \"refused\" ? entry.state : \"unknown\";\n      return {\n        source: typeof entry.source === \"string\" ? entry.source : \"unknown\",\n        state,\n        status: typeof entry.status === \"number\" ? entry.status : null,\n        reason: typeof entry.reason === \"string\" ? entry.reason : null,\n      };\n    }),\n    checked_at: typeof safe.checked_at === \"string\" ? safe.checked_at : new Date().toISOString(),\n  };\n}\n\n// --- n8n wrapper: Build Status (Phase 27 Plan 01) ---\nfunction nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }\nfunction httpStatus(raw) {\n  if (!raw) return null;\n  const candidates = [raw.statusCode, raw.httpCode, raw.status,\n    raw.response && raw.response.status, raw.response && raw.response.statusCode];\n  for (const c of candidates) {\n    if (c !== undefined && c !== null && c !== \"\") {\n      const n = Number(c);\n      if (Number.isFinite(n)) return n;\n    }\n  }\n  return null;\n}\n// A search node's own probe outcome IS its credential-health signal (Pitfall 1) \u2014\n// independent of whether any enrichment run happened recently.\nfunction searchProbe(name) {\n  const rows = nodeAll(name);\n  const row = rows[0];\n  const raw = row && row.json;\n  if (!row) return { configured: true, status: null, value: null };\n  if (raw && raw.error) return { configured: true, status: httpStatus(raw), value: null };\n  return { configured: true, status: 200, value: extractSearchTotal(raw) };\n}\n\nconst creditRows = nodeAll(\"Build Credit Status\");\nconst creditBody = (creditRows[0] && creditRows[0].json) || {};\nconst balances = Array.isArray(creditBody.balances) ? creditBody.balances : [];\nconst balanceByProvider = {};\nfor (const b of balances) balanceByProvider[b.provider] = b;\n\nconst companiesRequested = searchProbe(\"HS Requested Search (Companies)\");\nconst companiesReview = searchProbe(\"HS Review Search (Companies)\");\nconst contactsRequested = searchProbe(\"HS Requested Search (Contacts)\");\nconst contactsReview = searchProbe(\"HS Review Search (Contacts)\");\n\nconst health = [\"lusha\", \"apollo\", \"zoominfo\"].map((provider) => {\n  const b = balanceByProvider[provider] || {};\n  return { source: provider,\n    ...deriveSourceHealth({ configured: b.configured === true, status: b.status, value: b.credits }) };\n});\n// HubSpot's own credential health: the requested-companies probe is the canonical\n// signal \u2014 same credential as all four searches, so a refusal there IS the HubSpot\n// credential-health finding (D-08).\nhealth.push({ source: \"hubspot\", ...deriveSourceHealth(companiesRequested) });\n\nconst body = buildStatusBody({\n  counts: {\n    companies_requested_unresolved: companiesRequested.value,\n    companies_awaiting_review: companiesReview.value,\n    contacts_requested_unresolved: contactsRequested.value,\n    contacts_awaiting_review: contactsReview.value,\n  },\n  health,\n  checked_at: creditBody.checked_at,\n});\n\nreturn [{ json: { ...body, balances } }];\n"
+      },
+      "id": "c00160000-0000-4000-8000-000000000000",
+      "name": "Build Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3080,
         300
       ]
     },
     {
       "parameters": {
-        "content": "## LV Backend Status \u2014 credit-only slice (Phase 25 Plan 02, D-14)\n`hubspot/backend-status`: three provider usage probes run SEQUENTIALLY (Lusha -> Apollo -> the shared ZoomInfo usage subgraph) so every provider has been checked before the single `Respond to Webhook` fires \u2014 never fanned out, which would let the response race the still-running probes.\n\nAn unreadable balance (Apollo's non-master key 403s by design on this account) renders as an explicit `unreadable: true` / `credits: null` marker, never as zero (D-10). Reads provider usage endpoints only, never a HubSpot endpoint, and performs zero writes. **Full health is Phase 27** (STATUS-01..06) \u2014 this endpoint ships the credit slice only.\n\n**Webhook Trigger** binds the SAME shared `LV Enrichment Webhook` credential the enrichment trigger uses \u2014 one operator secret works against both endpoints with no new provisioning.",
-        "height": 300,
-        "width": 480
+        "respondWith": "allIncomingItems",
+        "options": {}
       },
-      "id": "s00130000-0000-4000-8000-000000000000",
+      "id": "rw00170000-0000-4000-8000-000000000000",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        3300,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## LV Backend Status \u2014 full health (Phase 25 Plan 02 + Phase 27 Plan 01, D-14)\n`hubspot/backend-status`: three provider usage probes, then four HubSpot count searches, all run SEQUENTIALLY (never fanned out) so every probe \u2014 provider AND HubSpot alike \u2014 has completed before the single `Respond to Webhook` fires.\n\nAn unreadable balance (Apollo's non-master key 403s by design on this account) renders as an explicit `unreadable: true` / `credits: null` marker, never as zero (D-10/D-08). The two HubSpot counts (requested-unresolved, awaiting-review) are reported for companies AND contacts; a count the backend could not read is `null`, never `0` (STATUS-06). Reads only \u2014 zero write nodes anywhere in this chain.\n\n**Webhook Trigger** binds the SAME shared `LV Enrichment Webhook` credential the enrichment trigger uses \u2014 one operator secret works against both endpoints with no new provisioning.",
+        "height": 320,
+        "width": 520
+      },
+      "id": "s00180000-0000-4000-8000-000000000000",
       "name": "Sticky Note 1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
       "position": [
-        2200,
+        3300,
         560
       ]
     }
@@ -328,6 +434,61 @@
       ]
     },
     "Build Credit Status": {
+      "main": [
+        [
+          {
+            "node": "HS Requested Search (Companies)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HS Requested Search (Companies)": {
+      "main": [
+        [
+          {
+            "node": "HS Review Search (Companies)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HS Review Search (Companies)": {
+      "main": [
+        [
+          {
+            "node": "HS Requested Search (Contacts)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HS Requested Search (Contacts)": {
+      "main": [
+        [
+          {
+            "node": "HS Review Search (Contacts)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HS Review Search (Contacts)": {
+      "main": [
+        [
+          {
+            "node": "Build Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Status": {
       "main": [
         [
           {
