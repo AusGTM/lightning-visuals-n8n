@@ -118,6 +118,46 @@ verification is built on that read surface.
 - **D-20:** A **no-op GET→PUT round-trip test** is the first live PUT this phase performs, to
   confirm `settings` and `connections` survive the round trip cleanly on this n8n Cloud version.
 
+### Findings from planning — these change the phase's shape
+- **D-21 (arming is a FOUR-constant overlay, not one flag — and the flag alone is a no-op):** the
+  deployed `_writeSafetyAllows()` in every write gate begins
+  `if (!allowedDomains.length && !allowedIds.length) return false;` — **an empty allowlist denies
+  everything**. Setting `ALLOW_HUBSPOT_RECORD_WRITES = "true"` with empty `TEST_RECORD_IDS` /
+  `TEST_RECORD_DOMAINS` therefore **grants nothing while reporting a successful arm**. The research
+  assumed a single-flag flip. Arming must refuse an empty allowlist and **derive it from the
+  batch** — which makes the grant **record-scoped as well as operation-scoped**, strictly stronger
+  than D-02 claims.
+- **D-22 (`enable_baked_flags()` cannot disarm):** its exact-literal replace searches for the
+  *disabled* declaration, so it only widens disabled→enabled. **Disarm needs a bidirectional
+  mirror** carrying the same fail-closed re-scan — and that re-scan is precisely what makes D-03's
+  loud disarm-failure detectable.
+- **D-23 (node counts reconciled — both planners were right):** verified directly against the
+  committed JSON. `ALLOW_HUBSPOT_RECORD_WRITES` appears in **8** nodes (contact 2, enrichment 2,
+  maintenance 4); `ALLOW_HUBSPOT_CREATE` appears in **9** (contact 3, enrichment 2, maintenance 4).
+  The contact lane carries three `CREATE` but only two `RECORD_WRITES` because Phase 23 added the
+  third at `Decide Action`. **The two flags are declared in different subsets**, so any fixed node
+  list is wrong for at least one flag. Scan every node; report disagreement.
+- **D-24 (the bracket must RESTORE, not blindly activate):** `deactivate → PUT → activate` must
+  restore the **prior** active state. Blindly activating would silently turn on a workflow the
+  operator had deliberately left off — a mutation nobody requested, arriving as a side effect of
+  re-timing a schedule. The research's pattern does not say this.
+
+- **D-25 (allowlist widened by exactly one field — operator decision, 2026-07-31):**
+  `LV Scheduled Maintenance (Cloud)` carries **five Schedule Triggers in one workflow**, so
+  workflow-level activate/deactivate cannot express CONTROL-03's "disable **a scheduled job**". The
+  mutation allowlist is therefore **widened by one field**: a Schedule Trigger node's `disabled`
+  boolean. Constraints that make this bounded rather than open-ended:
+  - It is a **single boolean on a node type already in the allowlist**.
+  - It carries the **same field-level diff enforcement** as every other mutation (D-19), so it
+    cannot be used as a foothold to rewrite anything else in the node.
+  - It carries the **same read-back verification** (D-14).
+  This **amends the allowlist definition in REQUIREMENTS.md** — the milestone's sixth accepted
+  amendment. The rejected alternatives: refusing per-job control would have amended CONTROL-03
+  instead (narrowing "a scheduled job" to "a workflow"), and splitting the five triggers into
+  separate workflows was a structural backend change far outside a control-surface phase.
+  — **Reversibility:** reversible — removing the field from the allowlist is a one-line change plus
+  the operator-facing wording.
+
 ### Claude's Discretion
 - Wording of consequence statements per action type.
 - Confirmation phrasing and how the diff of "what will change" is displayed.

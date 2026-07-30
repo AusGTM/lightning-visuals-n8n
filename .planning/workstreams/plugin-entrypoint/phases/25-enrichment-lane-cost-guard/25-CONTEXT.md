@@ -103,6 +103,29 @@ extending the backend where a requirement demands it.
   batch** — a re-sendable unit, not a list of errors. This is the seam Phase 26's safe retry
   (DISPATCH-04) builds on: the failed set is already a well-formed batch by construction.
 
+### Judgment calls made during planning
+- **D-14 (the status endpoint is a NEW workflow file, not a second trigger in
+  `wf_enrichment_cloud.json`):** research suggested wiring the dangling `*Usage` probe nodes to a
+  response. That is wrong — those nodes **fork off `Parse HubSpot Event` and run early**, so a
+  responder on that branch would **beat `Build Response` and return the wrong body for an actual
+  enrichment call**. A separate workflow file carries zero regression risk and is the natural home
+  for Phase 27's growth. Probes are chained **sequentially**, not fanned out, so all three complete
+  before the single response fires.
+- **D-15 (an oversize list is REFUSED, never truncated):** D-02 (backend resolves; the client
+  cannot count) and D-11a (~100s ceiling, no `Split In Batches`) collide — a 500-member list
+  resolved server-side into one execution cannot finish. Refusing, with a redirect to record IDs,
+  is honest. **Silently truncating would enrich an arbitrary subset and report success**, which is
+  the worst available outcome. This is a real capability bound, recorded in `25-BLOCKERS.md` and
+  `CHANGELOG.md` so an admin finds it without opening a plan.
+- **D-16 (the tabular lane's cost block is a stated zero WITH its reason, not an omitted block):**
+  criterion 3 says *every* preview on *both* lanes. Contact-upload runs no provider and no model
+  call, so zero is the true answer — and it renders through the **same shared helper** as the
+  enrichment block, so the two cannot drift apart.
+- **D-17 (the unknown-vs-zero assertion shape is constrained):** the distinction is tested three
+  times independently — n8n response assembly, client comparison, and rendered preview text — and
+  each test must assert the two produce **different output**. An assertion of the form "unreadable
+  is falsy" **passes against the defect**, so that shape is explicitly banned in `25-VALIDATION.md`.
+
 ### Claude's Discretion
 - The chunk size threshold's default value and where it is configured.
 - Rate-table file format and how the measurement date is represented.
