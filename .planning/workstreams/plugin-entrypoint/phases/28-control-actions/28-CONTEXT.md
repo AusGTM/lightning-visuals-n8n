@@ -421,3 +421,42 @@ fixtures, and a module-shaped transport must be handed down to `n8n_read` as `tr
 `transport`. The executor of 28-01 adds a module-shaped recorder fixture whose `.get`/`.post`/`.put`
 share one `calls` list. Not a safety defect — the first test run fails loudly — but it is real work
 that no plan costed.
+
+### D-35 — corrections folded back from executing 28-01 (2026-07-31)
+
+D-33 was right and its fixture shipped as `conftest.py::_StubModuleTransport`
+(`stub_module_transport_factory`), whose `.get`/`.post`/`.put` share one ordered `calls` list. Four
+things the execution found that later plans in this phase inherit:
+
+- **"A refusal makes ZERO network calls" is unsatisfiable as literally written, and the plan says so
+  in two places at once.** `apply_mutation` must always fetch fresh and must never accept a cached
+  workflow object (T-28-06), so the refusal it raises has already performed exactly one GET. The
+  enforceable invariant — and the one the threat register actually cares about — is that a refusal
+  makes **no MUTATING call**: nothing was deactivated and nothing was PUT. The recorder therefore
+  exposes `mutating_calls` (post/put only) alongside `calls` and `verbs`, and 28-01's test asserts
+  `transport.mutating_calls == []` and `transport.verbs == ["get"]`. **Later plans should assert the
+  same pair, not `len(calls) == 0`.**
+
+- **Adding a `CAPABILITY_KEYS` row is not a one-file change.** `tests/test_status_unknown.py` pins
+  the exact capability set twice (`test_a_fully_configured_config_passes_both_capabilities`, and the
+  `usable_capabilities(cfg) == ["status"]` assertion in the webhook-secret test). Adding `"control"`
+  fails both. Correct behaviour, stale assertions — both updated by 28-01 and both now assert against
+  a set. **Any later plan that adds a capability row must name that file in `files_modified`.**
+
+- **`apply_mutation`'s `verify_fn` is required and has no default**, mirroring `dispatch()`'s
+  no-default `armed`. It is the caller's NARROW reader for the one thing being changed (a write-safety
+  literal, a cron string), never a whole-body comparison — n8n normalizes fields server-side, so a
+  whole-body verdict would fail on noise and then have to be loosened, which is exactly how
+  status-code optimism gets back in. 28-03/28-04 pass their own: `n8n_arming` passes a
+  `read_write_safety`-based reader, `n8n_cadence` passes a Schedule-Trigger reader.
+
+- **The bracket skips BOTH calls when the workflow was already off.** `deactivate → PUT → activate`
+  is written for the live case; deactivating an already-inactive workflow is a pointless mutating
+  call, and activating it afterwards is the exact side effect D-24 forbids. So `apply_mutation`'s
+  recorded sequence is `get, post(deactivate), put, post(activate), get` for an active workflow and
+  `get, put, get` for an inactive one.
+
+**Not folded in, flagged instead:** D-34's uniform `ALLOW_*` rule arrived while 28-01 was executing
+and names `ALLOW_N8N_ARM` for `n8n_arming` specifically. Whether `n8n_control`'s own mutating entry
+points need an `ALLOW_N8N_CONTROL` peer is a **28-05 surface decision**, not one 28-01 should have
+made unilaterally — 28-01 shipped only the `config_gate` `"control"` capability row its plan named.
