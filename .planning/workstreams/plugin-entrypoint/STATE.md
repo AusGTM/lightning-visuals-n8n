@@ -6,16 +6,16 @@ current_phase: 23
 current_phase_name: walking-skeleton-plugin-shell-tabular-dispatch
 current_plan: 03
 status: executing
-stopped_at: 23-03 complete (wave 1, autonomous) — plugin test scaffolding, autouse network guard, config boundary, and plugin-local requirements.txt. Other wave-1 plans (23-01, 23-02) may be executing concurrently in separate agents.
-last_updated: "2026-07-30T22:15:00.000Z"
+stopped_at: 23-01 complete (wave 1, autonomous) — contact-lane create gate now reads the overlayable ALLOW_HUBSPOT_CREATE constant in Decide Action. 23-03 also complete. Other wave-1 plan (23-02) may still be executing concurrently in a separate agent.
+last_updated: "2026-07-30T23:28:32.000Z"
 last_activity: 2026-07-30
-last_activity_desc: executed 23-03 (plugin test scaffolding + network guard)
+last_activity_desc: executed 23-01 (contact-lane create gate fix + regression tests + changelog)
 progress:
   total_phases: 8
   completed_phases: 0
   total_plans: 6
-  completed_plans: 1
-  percent: 2
+  completed_plans: 2
+  percent: 4
 ---
 
 # Project State
@@ -23,9 +23,9 @@ progress:
 ## Current Position
 
 Phase: 23 — Walking Skeleton — Plugin Shell & Tabular Dispatch (executing)
-Plan: 23-03 complete (wave 1)
-Status: 23-03 (test scaffolding + network guard) done; other wave-1 plans may be in flight
-Last activity: 2026-07-30 — executed 23-03
+Plan: 23-01 complete (wave 1); 23-03 also complete
+Status: 23-01 (contact-lane create gate fix) and 23-03 (test scaffolding + network guard) done; 23-02 may be in flight
+Last activity: 2026-07-30 — executed 23-01
 
 ## Accepted requirement amendments (reconcile before each phase seals)
 
@@ -58,15 +58,15 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 ## Progress
 
 **Phases Complete:** 0 / 8
-**Current Plan:** 23-03 (complete; wave 1)
+**Current Plan:** 23-01, 23-03 (both complete; wave 1)
 
 ```
-[░░░░░░░░░░░░░░░░░░░░] 2%
+[█░░░░░░░░░░░░░░░░░░░] 4%
 ```
 
 | Phase | Requirements | Status |
 |-------|--------------|--------|
-| 23. Walking Skeleton — Plugin Shell & Tabular Dispatch | 10 | Executing (23-03 done, 1/6 plans) |
+| 23. Walking Skeleton — Plugin Shell & Tabular Dispatch | 10 | Executing (23-01, 23-03 done, 2/6 plans) |
 | 24. Non-Tabular Input Adapters | 8 | Not started |
 | 25. Enrichment Lane & Cost Guard | 4 | Not started |
 | 26. Outcome Reporting & Safe Retry | 4 | Not started |
@@ -141,6 +141,13 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
   no scroll-and-shoot. A screenshot is not a bypass of the scraping exclusions: LinkedIn
   profile fields still come from the licensed provider waterfall.
 
+- **23-01 closed D-15/D-16/D-16a/D-16b.** `Decide Action` (contact-ingest Cloud workflow) now
+  derives its create decision from the existing overlayable `ALLOW_HUBSPOT_CREATE` constant
+  (composed at the `build_cloud()` build site, not `Set Config`), instead of a hardcoded row
+  field — an armed deploy can now actually create a net-new contact, with the same
+  `TEST_RECORD_*` allowlist requirement as every other write path. No fifth overlay flag added;
+  no file under `operator-claude-plugin/` touched.
+
 **Todos / carried context:**
 
 - Phase 26 planning must first verify what `hubspot/contact-upload` actually returns:
@@ -161,6 +168,6 @@ milestone otherwise scoped as plugin-only.
 
 ## Session Continuity
 
-**Stopped At:** 23-03 (test scaffolding + network guard) complete
-**Resume File:** `.planning/workstreams/plugin-entrypoint/phases/23-walking-skeleton-plugin-shell-tabular-dispatch/23-03-SUMMARY.md`
-**Next Action:** Continue executing phase 23's remaining plans (23-01, 23-02 wave 1; 23-04 wave 2; 23-05 wave 3; 23-06 wave 4)
+**Stopped At:** 23-01 (contact-lane create gate fix) complete; 23-03 (test scaffolding + network guard) also complete
+**Resume File:** `.planning/workstreams/plugin-entrypoint/phases/23-walking-skeleton-plugin-shell-tabular-dispatch/23-01-SUMMARY.md`
+**Next Action:** Continue executing phase 23's remaining plans (23-02 wave 1; 23-04 wave 2; 23-05 wave 3; 23-06 wave 4)
