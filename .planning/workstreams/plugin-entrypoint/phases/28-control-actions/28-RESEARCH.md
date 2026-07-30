@@ -559,9 +559,24 @@ first thing verified once implementation starts.
 
 ## Open Questions
 
-1. **CONTROL-01's "start a scheduled scan off-cycle" has no existing n8n Public API endpoint to
-   call — the plan needs an explicit alternative mechanism, not an assumption that D-05's
-   language already names a real call.**
+> **Status annotation added 2026-07-31 during Phase 28 plan repair.** These three were unannotated,
+> which invited a re-litigation of settled scope. Question 1 is **RESOLVED** — it was answered by a
+> decision, not by a probe. Questions 2 and 3 are **resolved by 28-02, pending execution** — the
+> plan exists and names the observation; only the human-run checkpoint remains.
+
+1. **[RESOLVED — 28-CONTEXT.md D-05a/D-05b/D-05c]** CONTROL-01's "start a scheduled scan off-cycle"
+   has no existing n8n Public API endpoint to call.
+   - **Resolution:** the research's recommendation (a) — repurposing the cadence mutation as a
+     one-shot fire — was **rejected** by D-05c: it mutates a schedule to simulate a trigger, and a
+     crash mid-sequence leaves the backend on the wrong schedule, silently changing how often it
+     burns provider credits. Recommendation (b) was taken instead: CONTROL-01 **narrows to the
+     ingestion lanes** and off-cycle scheduled scans are dropped, with enable/disable (CONTROL-02)
+     and re-timing (CONTROL-03) as the operator's available controls. This is the milestone's fifth
+     accepted amendment. 28-05 Task 3 records it in REQUIREMENTS.md and ROADMAP.md; 28-02's
+     `execute_probe` confirms the endpoint's absence against this tenant rather than against the
+     upstream PR's state. **Do not re-propose the cadence-as-fire workaround; it was considered and
+     refused on the record.**
+   - The original research text follows, unedited, for provenance.
    - What we know: `POST /workflows/{id}/execute` was proposed in n8n-io/n8n PR #20304 (requires
      a new `workflow:execute` API-key scope, returns `{executionId, waitingForWebhook}`) but
      remains **open and unmerged** as of this research session, with no target release named.
@@ -586,7 +601,9 @@ first thing verified once implementation starts.
      that doesn't exist. This is a genuine scope decision for the user/planner, not something
      this research should silently resolve.
 
-2. **Does a deactivate→PUT→activate bracket actually and reliably force the active-workflow
+2. **[RESOLVED BY 28-02, PENDING EXECUTION — `cadence_reload`, Task 3, a `blocking-human`
+   checkpoint; the observation lands in 28-FINDINGS.md]** Does a deactivate→PUT→activate bracket
+   actually and reliably force the active-workflow
    runtime to honor a changed Code-node literal or Schedule Trigger interval, on THIS n8n Cloud
    account/version — or does the reported caching behavior require something stronger (as one
    community report's "had to duplicate the workflow" workaround hints)?**
@@ -608,7 +625,9 @@ first thing verified once implementation starts.
      failure, not preemptively over-built against a risk that may not materialize on this
      account's actual n8n version.
 
-3. **Does `settings`/`connections` round-trip cleanly (GET then PUT, unmodified) on this repo's
+3. **[RESOLVED BY 28-02, PENDING EXECUTION — `roundtrip`, Task 2, a `blocking-human` checkpoint;
+   the observation lands in 28-FINDINGS.md]** Does `settings`/`connections` round-trip cleanly (GET
+   then PUT, unmodified) on this repo's
    specific n8n Cloud version, or does the nested-shape validation issue one community report
    describes ("settings... requires attention... contains unsupported properties") apply here
    too?**

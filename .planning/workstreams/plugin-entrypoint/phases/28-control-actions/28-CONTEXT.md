@@ -10,8 +10,9 @@ Phase 28 is **the only phase in this milestone that mutates the backend**. The o
 run, turn a workflow on or off, re-time a scheduled job, and enable live writes — all from the
 conversation, each mutation confirmed before it happens and verified by read-back after.
 
-The mutation set is **allowlisted**: write-safety flag overlay, Schedule Trigger cadence, workflow
-active state. Any other workflow-JSON change is **refused rather than attempted**. Arbitrary
+The mutation set is **allowlisted**: write-safety flag overlay, Schedule Trigger cadence, a Schedule
+Trigger node's `disabled` boolean (added by D-25, 2026-07-31 — amendment #6), and workflow active
+state. **Four items.** Any other workflow-JSON change is **refused rather than attempted**. Arbitrary
 workflow deployment from the plugin is a permanent exclusion — editing nodes, credentials, or
 workflow structure stays an admin task run from this repo.
 
@@ -158,6 +159,91 @@ verification is built on that read surface.
   — **Reversibility:** reversible — removing the field from the allowlist is a one-line change plus
   the operator-facing wording.
 
+### Corrections against the shipped Phase 27 code (folded in 2026-07-31 after a plan-checker run)
+
+**Why these exist:** Phase 28's plans were written against Phase 27's RESEARCH document, before
+Phase 27 had shipped. Phase 27 is now code-complete and the real modules differ from what the plans
+assumed. `gsd-plan-checker` returned 5 blockers and 7 concerns; these decisions are the resolutions.
+**A correction left only in a plan gets re-litigated — that is why they are here.**
+
+- **D-26 (`read_write_safety` ALREADY EXISTS — do not write a second one):**
+  `operator-claude-plugin/scripts/n8n_read.py::read_write_safety(workflow_body, flag_name)`
+  (module line 229, shipped by 27-01) returns `{value, nodes, disagreement}`, already scans every
+  node, and its declaration regex at line 247 is character-for-character
+  `deploy_n8n_workflows.py::enable_baked_flags()`'s own fail-closed re-scan regex (deploy line 374).
+  `n8n_arming.py` **imports and calls it**, looping it over the four `_OVERLAY_FLAG_SPEC` names, and
+  defines no reader and no second declaration regex. `conftest.py` puts `scripts/` on `sys.path`
+  flat, so two same-named readers would both be importable under bare names — and a duplicate cannot
+  detect the desync it is itself the cause of. **`set_write_safety` is the only genuinely new
+  function**; its fail-closed re-scan *calls* `n8n_read`'s regex rather than copying it.
+
+- **D-27 (`fetch_workflow` is not to be written either — reuse `n8n_read.get_workflow`):**
+  `n8n_read.get_workflow(config, workflow_id, transport)` (line 88) is the same GET against the same
+  endpoint with the same `X-N8N-API-KEY` header, already config-based and already injectable. Its
+  `None`-on-every-failure-mode contract feeds the `failed` verdict rule directly: an unreadable
+  read-back is not a verified one. Note the argument order is `(config, workflow_id, ...)`.
+
+- **D-28 (the transport seam — `transport=requests`, never `transport=requests.put`):**
+  `operator-claude-plugin/tests/test_retry_reuses_dispatch.py` is a structural guard no earlier
+  Phase 28 plan mentioned. It `rglob`s **every** `operator-claude-plugin/scripts/*.py`, including
+  modules not yet written (line 110); flags any function whose `transport` parameter defaults to
+  `requests.post`/`requests.put` (line 129) or that calls `requests.put(...)` directly (line 146);
+  and allowlists exactly two functions in `_EXPECTED_SEND_SHAPED` (line 192) —
+  `backend_status.py::fetch_backend_status` and `dispatch.py::dispatch`.
+  **Binding rule for all four of this phase's new modules:** the `transport` parameter defaults to
+  the **bare `requests` module**, and every call goes through `transport.put(...)` /
+  `transport.post(...)`. That matches `n8n_read.py`'s injectable-READ seam, not `dispatch.py`'s SEND
+  seam (`dispatch.py:26` is `transport=requests.post`). **Appending to `_EXPECTED_SEND_SHAPED` is a
+  weakening and is forbidden** — that list is what stands between a retry path and the arming gate
+  `dispatch()`'s no-default `armed` parameter enforces. `git diff --stat` on that test file must be
+  empty when the phase closes.
+
+- **D-29 (one credential source: `config_gate`, and control is its own capability):** the plugin has
+  never read `N8N_URL` / `N8N_API_KEY` from the shell — those are the backend deploy script's
+  variables. Everything plugin-side loads credentials with `config_gate.load_config()` from
+  `config/operator.local.json`. Consequences, both binding:
+  - **28-01 adds `"control": ("n8n_url", "n8n_api_key")` to `config_gate.CAPABILITY_KEYS`**, and
+    28-05 calls `require_capability(cfg, "control")` at the surface entry point. Control is a
+    separate capability from `"status"` because a config that may read the backend is not thereby
+    one that may mutate it. This follows 27-03's explicit instruction: add a row, do not re-add a
+    global gate.
+  - **Any wrong-instance guard compares `config["n8n_url"]` against `N8N_EXPECTED_URL`** — the value
+    the request actually authenticates with. A guard reading `os.getenv("N8N_URL")` while the
+    request authenticates from config is a guard that cannot fire.
+  - **The probe's enabling variable is named `ALLOW_N8N_PROBE`**, must read exactly `true`, and
+    matches the repo's existing `ALLOW_N8N_DEPLOY` idiom. It was previously referred to only as "the
+    probe's enabling environment variable", which a human checkpoint cannot be run against.
+  - The deploy tenant is confirmed `https://alexherman.app.n8n.cloud` and `N8N_EXPECTED_URL` is now
+    set to it in `.env`.
+
+- **D-30 (there is ONE ingestion-lane dispatcher, not two — discover, never assume):**
+  `dispatch.py::dispatch` (line 26) is contact-lane only: multipart CSV, `files={"data": ...}`,
+  `X-Enrichment-Secret`. The **enrichment lane's dispatcher is Phase 25 work** (25-03/25-04), and
+  both are blocked behind the **25-01 human checkpoint, which has not been written**. So
+  `start_lane` fronts *whichever lane dispatchers exist at execution time*, resolved at call time,
+  and refuses a lane with no dispatcher by name — never raising an ImportError and never silently
+  routing an enrichment batch down the contact lane's CSV path. CONTROL-01's wording becomes "either
+  ingestion lane **that is built**".
+
+- **D-31 (the allowlist charset pin compares the character class, not the separator):** the deploy
+  script's `_ALLOWLIST_VALUE_RE` (line 156) permits `|`, converted to a comma at line 440, **only**
+  because `,` already separates entries inside the `ENABLE_BAKED_FLAGS` environment-variable
+  envelope. The plugin has no such envelope, so **comma-direct is correct plugin-side**. Pin
+  `[A-Za-z0-9._-]`; a test that pinned `|` would fail a correct implementation.
+
+**Also corrected, mechanically:** every deploy-script line citation in the Phase 28 plans was stale
+by 12–18 lines and has been refreshed against the current file — `_base_url`/`_n8n_headers`/
+`_get_live_workflows` 182–201, `_has_n8n`/`_instance_ok`/`_writes_allowed` 159–179,
+`_OVERLAY_FLAG_SPEC`…`_ALLOWLIST_VALUE_RE` 141–156, `enable_baked_flags` 310–388,
+`_requested_overlay_flags`'s two fail-safes 455–472, `_create_workflow_live`/`_update_workflow_live`
+474–488.
+
+**Verified correct and NOT to be "fixed":** the 8 `RECORD_WRITES` / 9 `CREATE` node counts in
+different subsets (D-23); the five Schedule Trigger names; `settings == {}` on the maintenance
+workflow; the four-key `(name, nodes, connections, settings)` filter; `assert_only_allowlisted_change`
+running **before** the deactivate; the prior-active-restoring bracket (D-24); and the `no_network`
+guard's coverage of GET — it is **not** GET-blind, verified three separate times.
+
 ### Claude's Discretion
 - Wording of consequence statements per action type.
 - Confirmation phrasing and how the diff of "what will change" is displayed.
@@ -213,7 +299,11 @@ verification is built on that read surface.
 
 ### Reusable Assets
 - Phase 27's read surface — workflow state, execution state, and the write-safety flag read. Every
-  mutation here is bracketed by two of those reads.
+  mutation here is bracketed by two of those reads. **Phase 27 has SHIPPED; these are real modules,
+  not planned ones** — read `operator-claude-plugin/scripts/n8n_read.py`, `config_gate.py` and
+  `status.py` on disk, and `27-01-SUMMARY.md`…`27-05-SUMMARY.md`, before writing anything. Every
+  function named in D-26 through D-29 exists today. See also the "Interfaces 27-04 Inherits" section
+  of `27-03-SUMMARY.md`, which is the authoritative signature list.
 - The admin-side write-safety flag overlay in the deploy scripts — the canonical definition of what
   armed means in this repo.
 - Phase 23's dispatch path, which D-05 reuses verbatim for lane starts.
@@ -228,9 +318,10 @@ verification is built on that read surface.
 
 ### Integration Points
 - `POST /api/v1/workflows/{id}/activate` / `/deactivate` — no JSON write, lowest-risk mutation.
-- `PUT /api/v1/workflows/{id}` — allowlisted only: write-safety flag overlay and Schedule Trigger
-  cadence. Everything else refused.
-- Existing webhooks — lane starts (D-05).
+- `PUT /api/v1/workflows/{id}` — allowlisted only: write-safety flag overlay, Schedule Trigger
+  cadence, and a Schedule Trigger's `disabled` boolean (D-25). Everything else refused.
+- Existing webhooks — lane starts (D-05). **One dispatcher exists today**, contact lane only; see
+  D-30.
 - Phase 27's status endpoint and n8n read API — pre-read and read-back for every mutation.
 
 </code_context>
@@ -255,8 +346,12 @@ verification is built on that read surface.
   deferred.
 - **Review-queue writeback gating** — Phase 30 / REVIEW-03, which has its own session-scoped
   confirmation separate from dispatch arming.
-- **Widening the mutation allowlist** — out of scope; any addition is a new requirement, not a
-  planning decision.
+- **FURTHER widening of the mutation allowlist** — out of scope; any addition is a new requirement,
+  not a planning decision. **This no longer covers the Schedule Trigger `disabled` field**: that
+  widening was surfaced as a requirement, accepted by the operator on 2026-07-31, and recorded as
+  D-25 and as the milestone's sixth accepted amendment. The allowlist is now **four** items. This
+  bullet's earlier absolute wording is what let a planner reopen D-25 as a live decision checkpoint;
+  it reads as a boundary on *future* additions only.
 
 </deferred>
 
@@ -264,3 +359,5 @@ verification is built on that read surface.
 
 *Phase: 28-control-actions*
 *Context gathered: 2026-07-30*
+*Corrections D-26…D-31 folded in 2026-07-31 from a `gsd-plan-checker` run (5 blockers, 7 concerns),
+after Phase 27 shipped. D-25's status as a settled amendment was reasserted at the same time.*
