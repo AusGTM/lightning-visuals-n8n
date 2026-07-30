@@ -21,21 +21,15 @@ const FIX = path.join(ROOT, "tests/fixtures/enrichment");
 const load = (name) => JSON.parse(fs.readFileSync(path.join(FIX, name), "utf8"));
 const NOW = "2026-07-14T00:00:00Z";
 
-const lushaC = load("lusha_contact.json");
 const apolloC = load("apollo_contact.json");
 const zoomC = load("zoominfo_contact.json");
-const lushaCo = load("lusha_company.json");
 const apolloCo = load("apollo_company.json");
 const zoomCo = load("zoominfo_company.json");
 const apolloLive = load("apollo_live_match.json"); // real people/match: nested under `person`
-// NOTE: despite the filename/original comment, this singular `{contact:{data:{...}}}`
-// envelope was NEVER actually observed live -- the real live /v2/person contract
-// (confirmed 2026-07-28, see lusha_live_person_v2.json) is a PLURAL contactId-keyed
-// `{contacts:{...}}` map. Kept only as an offline back-compat fallback shape (do not
-// delete -- lushaCandidates() still supports it).
-const lushaLive = load("lusha_live_person.json");
-const lushaLiveV2 = load("lusha_live_person_v2.json"); // REAL live v2/person envelope (confirmed)
 const zoomLive = load("zoominfo_live_enrich.json"); // real GTM enrich: data[].attributes + meta.matchStatus
+// Lusha v3 is the live contract as of 2026-07-30 (docs/LUSHA-V3-CONTRACT.md) -- the v2
+// `{contacts:{...}}`/`{contact:{data:{...}}}` envelopes these fixtures replaced were
+// retired in Plan 03 Task 3 (v2 sunsets 2026-11-18; every emission site now targets v3).
 const lushaV3Contact = load("lusha_v3_contact.json"); // v3 contacts: results[] flat envelope
 const lushaV3Company = load("lusha_v3_company.json"); // v3 companies: results[] flat envelope
 const lushaV3NoMatch = load("lusha_v3_no_match.json"); // v3 no-match: results[0].error, outer 200
@@ -97,74 +91,32 @@ test("normalizePhone: region-aware (keyed off provider country)", () => {
   assert.equal(normalizePhone("12345", "US"), null);
 });
 
-test("toCandidates: Lusha US contact -> +1 E.164 via country_iso2; region-less non-AU dropped", () => {
-  const usContact = { contact: { data: {
-    location: { country_iso2: "US" },
-    phoneNumbers: [{ number: "(475) 450-4590", phoneType: "mobile", doNotCall: false }],
+// --- toCandidates: v3 envelope (results[] flat array, confirmed live 2026-07-30) --------
+// v2's plural contactId-keyed `{contacts:{...}}` map and singular `{contact:{data:{...}}}`
+// envelope tests (and the fixtures/behaviours they pinned: contact.data unwrap, live email/
+// mobile/jobtitle/company extraction, per-contact error skip, missing-data skip, empty-map
+// skip) were retired in Plan 03 Task 3 -- every behaviour they protected has a v3-driven
+// equivalent below (email extraction, per-email confidence grading, mobile-vs-landline
+// routing, do-not-call suppression, un-normalizable-phone dropping, job title/seniority/
+// department extraction, revenue/headcount band normalization, industry classification,
+// country normalization, per-record error handling).
+const byField = (arr) => [...arr].sort((a, b) => a.field.localeCompare(b.field));
+
+test("toCandidates: v3 US contact -> +1 E.164 via location.countryIso2; region-less non-AU dropped", () => {
+  const usContact = { results: [{
+    location: { countryIso2: "US" },
+    phones: [{ number: "(475) 450-4590", type: "mobile", doNotCall: false }],
     updateDate: "2026-06-01",
-  } } };
+  }] };
   const mob = find(toCandidates("lusha", usContact, "contacts"), "mobilephone", "lusha");
-  assert.ok(mob, "US number parsed with country_iso2=US");
+  assert.ok(mob, "US number parsed with location.countryIso2=US");
   assert.equal(mob.normalizedValue, "+14754504590");
   // Same US number but NO country signal -> AU heuristic returns null -> null-drop (no candidate).
-  const noGeo = { contact: { data: {
-    phoneNumbers: [{ number: "(475) 450-4590", phoneType: "mobile", doNotCall: false }],
-  } } };
+  const noGeo = { results: [{
+    phones: [{ number: "(475) 450-4590", type: "mobile", doNotCall: false }],
+  }] };
   assert.equal(toCandidates("lusha", noGeo, "contacts").filter((c) => c.field === "mobilephone").length, 0);
 });
-
-test("toCandidates: Lusha live v2 (contact.data + emailAddresses/phoneNumbers) maps fields", () => {
-  const c = toCandidates("lusha", lushaLive, "contacts");
-  const email = find(c, "email", "lusha");
-  assert.ok(email, "email candidate present from contact.data.emailAddresses");
-  assert.equal(email.accuracy, 1.0); // A+ work
-  assert.equal(email.normalizedValue, "mjames@australianturfclub.com.au");
-  const mob = find(c, "mobilephone", "lusha");
-  assert.ok(mob, "mobilephone from phoneNumbers[].phoneType=mobile");
-  assert.equal(mob.normalizedValue, "+61412867770");
-  assert.equal(find(c, "jobtitle", "lusha").normalizedValue, "general manager of broadcast");
-
-  const co = toCandidates("lusha", lushaLive, "companies");
-  assert.equal(find(co, "lv_revenue_band", "lusha").normalizedValue, "50-500M"); // 250M lower bound
-  assert.equal(find(co, "lv_employee_band", "lusha").normalizedValue, "201-500");
-  assert.equal(find(co, "lv_country_region_normalized", "lusha").normalizedValue, "AU");
-});
-
-// --- toCandidates: REAL live v2/person envelope -- plural, contactId-keyed `contacts`
-// map (confirmed live against portal 22617666, 2026-07-28). firstName/lastName/
-// fullName/companyId/emails/emailAddresses/phones are captured verbatim from the live
-// response; the phoneNumbers[0] item body was elided in the live capture and is
-// reconstructed here using the same number/phoneType/doNotCall/updateDate shape the
-// code (and the pre-existing lusha_live_person.json fixture) already expect.
-test("toCandidates: Lusha live v2 PLURAL contacts-map (real contract) extracts email + mobile", () => {
-  const c = toCandidates("lusha", lushaLiveV2, "contacts");
-  const email = find(c, "email", "lusha");
-  assert.ok(email, "email candidate present from contacts['1'].data.emailAddresses");
-  assert.equal(email.normalizedValue, "brendan@lightningvisuals.com");
-  assert.equal(email.accuracy, 1.0); // A+ work
-  const mob = find(c, "mobilephone", "lusha");
-  assert.ok(mob, "mobilephone candidate present from contacts['1'].data.phoneNumbers");
-  assert.equal(mob.normalizedValue, "+61493511289");
-});
-
-test("toCandidates: Lusha contacts-map per-contact error -> skip (never throw, zero candidates)", () => {
-  const raw = { contacts: { "1": { error: "NOT_FOUND", isCreditCharged: false } } };
-  assert.doesNotThrow(() => toCandidates("lusha", raw, "contacts"));
-  assert.deepEqual(toCandidates("lusha", raw, "contacts"), []);
-});
-
-test("toCandidates: Lusha contacts-map entry with no data key -> skip (never throw)", () => {
-  const raw = { contacts: { "1": { error: null, isCreditCharged: true } } };
-  assert.doesNotThrow(() => toCandidates("lusha", raw, "contacts"));
-  assert.deepEqual(toCandidates("lusha", raw, "contacts"), []);
-});
-
-test("toCandidates: Lusha empty contacts map -> no candidates, never throw", () => {
-  assert.deepEqual(toCandidates("lusha", { contacts: {} }, "contacts"), []);
-});
-
-// --- toCandidates: v3 envelope (results[] flat array, confirmed live 2026-07-30) --------
-const byField = (arr) => [...arr].sort((a, b) => a.field.localeCompare(b.field));
 
 test("toCandidates: v3 contacts field set is exactly the v2 contacts field set", () => {
   const c = toCandidates("lusha", lushaV3Contact, "contacts");
@@ -172,9 +124,19 @@ test("toCandidates: v3 contacts field set is exactly the v2 contacts field set",
   assert.deepEqual(fields, ["email", "jobtitle", "mobilephone", "persona_group", "phone", "seniority"]);
 });
 
-test("toCandidates: v3 mobile-discriminated phone -> mobilephone, other -> phone", () => {
+test("toCandidates: v3 A+ email confidence grades to accuracy 1.0; job title/seniority/department extracted", () => {
   const c = toCandidates("lusha", lushaV3Contact, "contacts");
-  assert.equal(find(c, "mobilephone", "lusha").normalizedValue, "+61412345678");
+  assert.equal(find(c, "email", "lusha").accuracy, 1.0); // A+ work
+  assert.equal(find(c, "jobtitle", "lusha").normalizedValue, "head of broadcast");
+  assert.equal(find(c, "seniority", "lusha").normalizedValue, "director");
+  assert.equal(find(c, "persona_group", "lusha").normalizedValue, "broadcast");
+});
+
+test("toCandidates: v3 mobile-discriminated phone -> mobilephone/0.8, other -> phone/0.8", () => {
+  const c = toCandidates("lusha", lushaV3Contact, "contacts");
+  const mob = find(c, "mobilephone", "lusha");
+  assert.equal(mob.accuracy, 0.8);
+  assert.equal(mob.normalizedValue, "+61412345678");
   assert.equal(find(c, "phone", "lusha").normalizedValue, "+61290001234");
 });
 
@@ -201,24 +163,28 @@ test("toCandidates: v3 companies field set is exactly lv_revenue_band/lv_employe
   assert.equal(find(c, "lv_country_region_normalized", "lusha").normalizedValue, "AU");
 });
 
-test("toCandidates: v3 contacts candidate set deep-equals v2 for the same underlying data", () => {
+// The v2 plural/singular envelope wrappers no longer exist (retired, Plan 20-03 Task 3), so
+// "the v2 candidate set" for equivalent input is now proven against the bare/flat shape --
+// the pre-envelope intermediate object BOTH v2's unwrap and v3's adapter fed into the SAME
+// unchanged extraction logic below. Deep-equality here is exactly the "downstream is
+// untouched" guarantee: same values in, byte-identical candidates out, regardless of envelope.
+test("toCandidates: v3 contacts candidate set deep-equals the flat pre-envelope shape for the same underlying data", () => {
   const shared = {
     emails: [{ email: "same@example.com", type: "work", confidence: "A+", updateDate: "2026-05-01" }],
     phones: [{ number: "0412 345 678", type: "mobile", doNotCall: false, updateDate: "2026-04-15" }],
     jobTitle: { title: "Head of Broadcast", seniority: "Director", departments: ["Broadcast"] },
     updateDate: "2026-05-01",
   };
-  const v2Raw = { contact: { error: null, isCreditCharged: true,
-    data: { ...shared, location: { country_iso2: "AU" } } } };
+  const flatRaw = { ...shared, location: { country_iso2: "AU" } };
   const v3Raw = { requestId: "x", results: [{ ...shared, location: { country: "Australia", countryIso2: "AU" } }],
     billing: { creditsCharged: 1, resultsReturned: 1 } };
   assert.deepEqual(
     byField(toCandidates("lusha", v3Raw, "contacts")),
-    byField(toCandidates("lusha", v2Raw, "contacts")));
+    byField(toCandidates("lusha", flatRaw, "contacts")));
 });
 
-test("toCandidates: v3 companies candidate set deep-equals v2 for the same underlying data", () => {
-  const v2Raw = { revenueRange: [10000000, 50000000], employeeCount: 191,
+test("toCandidates: v3 companies candidate set deep-equals the flat pre-envelope shape for the same underlying data", () => {
+  const flatRaw = { revenueRange: [10000000, 50000000], employeeCount: 191,
     mainIndustry: "Entertainment", location: { countryIso2: "AU" } };
   const v3Raw = { requestId: "x", results: [{
     revenueRange: { min: 10000000, max: 50000000 }, employeeCount: { exact: 191, min: 51, max: 200 },
@@ -226,7 +192,7 @@ test("toCandidates: v3 companies candidate set deep-equals v2 for the same under
     billing: { creditsCharged: 2, resultsReturned: 1 } };
   assert.deepEqual(
     byField(toCandidates("lusha", v3Raw, "companies")),
-    byField(toCandidates("lusha", v2Raw, "companies")));
+    byField(toCandidates("lusha", flatRaw, "companies")));
 });
 
 test("toCandidates: v3 no-match envelope -> zero candidates, never throw", () => {
@@ -269,18 +235,6 @@ test("toCandidates: ZoomInfo legacy/flat envelopes still unwrap (back-compat)", 
   assert.ok(find(toCandidates("zoominfo", { data: [zoomC] }, "contacts"), "email", "zoominfo"));
 });
 
-test("toCandidates: Lusha A+ email -> 1.0; mobile phone -> mobilephone/0.8; doNotCall suppressed", () => {
-  const c = toCandidates("lusha", lushaC, "contacts");
-  assert.equal(find(c, "email", "lusha").accuracy, 1.0);
-  const ph = find(c, "mobilephone", "lusha");
-  assert.equal(ph.accuracy, 0.8);
-  assert.equal(ph.normalizedValue, "+61412345678"); // 0412 345 678 -> E.164
-  // doNotCall phone is dropped, not scored
-  const dnc = toCandidates("lusha",
-    { phones: [{ number: "0412 000 000", type: "mobile", doNotCall: true }] }, "contacts");
-  assert.equal(dnc.length, 0);
-});
-
 test("toCandidates: ZoomInfo uses contactAccuracyScore; non-FULL_MATCH drops person fields", () => {
   const c = toCandidates("zoominfo", zoomC, "contacts");
   assert.equal(find(c, "email", "zoominfo").accuracy, 0.95); // 95/100
@@ -294,7 +248,7 @@ test("toCandidates: ZoomInfo uses contactAccuracyScore; non-FULL_MATCH drops per
 // --- scoreCandidates: right winner per field -----------------------------------
 function allContactCandidates() {
   return [
-    ...toCandidates("lusha", lushaC, "contacts"),
+    ...toCandidates("lusha", lushaV3Contact, "contacts"),
     ...toCandidates("apollo", apolloC, "contacts"),
     ...toCandidates("zoominfo", zoomC, "contacts"),
   ];
@@ -339,7 +293,7 @@ test("score: candidate with no recencyDate gets neutral R=0.5", () => {
 // --- company scoring: revenue disagreement resolved by consensus; NAICS agree ---
 function allCompanyCandidates() {
   return [
-    ...toCandidates("lusha", lushaCo, "companies"),
+    ...toCandidates("lusha", lushaV3Company, "companies"),
     ...toCandidates("apollo", apolloCo, "companies"),
     ...toCandidates("zoominfo", zoomCo, "companies"),
   ];
@@ -348,18 +302,19 @@ function allCompanyCandidates() {
 test("score revenue: Apollo+Lusha band consensus beats lone ZoomInfo band", () => {
   const { best } = scoreCandidates(allCompanyCandidates(), { now: NOW });
   const rev = best.lv_revenue_band;
-  assert.equal(rev.normalizedValue, "5-50M"); // 12M & 10M-25M agree; ZoomInfo 65M -> 50-500M loses
+  assert.equal(rev.normalizedValue, "5-50M"); // 12M (Apollo) & 10M-50M (Lusha v3) agree; ZoomInfo 65M -> 50-500M loses
   assert.ok(rev.agreedBy.includes("lusha") || rev.agreedBy.includes("apollo"));
   assert.notEqual(rev.normalizedValue, "50-500M");
 });
 
 // NORM-01 (2026-07-29): this test previously pinned the bare NAICS code "711211" as the
 // winning industry value, with Lusha and ZoomInfo "agreeing" on that code. NORM-01
-// deliberately retires code-as-agreement-key behavior (D-NORM-lusha): with the same flat
-// fixtures, Lusha's bare-string naicsCodes entry has no mainIndustry fallback, so it now
-// emits NO industry candidate at all. Apollo ("Spectator Sports") and ZoomInfo (naicsCodes
-// bare string falls back to its own primaryIndustry text, "Spectator Sports") instead
-// genuinely agree on TEXT — a real cross-provider consensus, not a numeric-code coincidence.
+// deliberately retired code-as-agreement-key behavior (D-NORM-lusha). Plan 20-03 (v3
+// migration) then gave Lusha its own flat `industry` field ("Entertainment"), a THIRD,
+// genuinely distinct value that still loses to the real cross-provider consensus below:
+// Apollo ("Spectator Sports") and ZoomInfo (naicsCodes bare string falls back to its own
+// primaryIndustry text, "Spectator Sports") agree on TEXT, so their consensus still wins
+// over Lusha's lone "Entertainment" value.
 test("score industry: Apollo+ZoomInfo agree on text; ZoomInfo wins on fresher recency", () => {
   const { best } = scoreCandidates(allCompanyCandidates(), { now: NOW });
   const ind = best.industry;
@@ -454,16 +409,3 @@ test("toCandidates: ZoomInfo live naicsCodes are objects, not code strings", () 
   assert.equal(find(c, "industry", "zoominfo").normalizedValue, "arts, entertainment, and recreation");
 });
 
-test("toCandidates: Lusha live company unwraps `data` and reads `employees`", () => {
-  // Live /v2/company wraps in `data` and returns headcount as a spaced range string;
-  // without the unwrap this response produced ZERO candidates.
-  const raw = { data: { name: "Racing NSW", revenueRange: [10000000, 50000000],
-                        employees: "51 - 200", mainIndustry: "Entertainment",
-                        location: { countryIso2: "AU" } }, meta: {} };
-  const c = toCandidates("lusha", raw, "companies");
-  assert.ok(c.length > 0, "live company response must yield candidates");
-  assert.equal(find(c, "lv_revenue_band", "lusha").normalizedValue, "5-50M");
-  // spaced range collapses onto the lv_employee_band enum value
-  assert.equal(find(c, "lv_employee_band", "lusha").normalizedValue, "51-200");
-  assert.equal(find(c, "lv_country_region_normalized", "lusha").normalizedValue, "AU");
-});

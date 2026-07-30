@@ -1092,7 +1092,7 @@ ENRICH_PROVIDER_MOCK = (
     "// Cloud replaces this with 3 real HTTP nodes (Lusha/Apollo/ZoomInfo). Here we\n"
     "// return the tests/fixtures/enrichment/*.json contact shapes so normalizeProviders\n"
     "// + scoreEnrichment run for real on realistic data. SKIP identities get no call.\n"
-    "const LUSHA = " + json.dumps(_fixture("lusha_contact.json")) + ";\n"
+    "const LUSHA = " + json.dumps(_fixture("lusha_v3_contact.json")) + ";\n"
     "const APOLLO = " + json.dumps(_fixture("apollo_contact.json")) + ";\n"
     "const ZOOMINFO = " + json.dumps(_fixture("zoominfo_contact.json")) + ";\n"
     "return $input.all().map((it) => {\n"

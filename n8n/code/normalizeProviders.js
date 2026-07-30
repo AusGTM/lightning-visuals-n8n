@@ -161,12 +161,16 @@ function _personaGroup(departments) {
 }
 
 // _lushaRecord(rawResponse, objectType) -- Lusha envelope adapter, sibling to _zoomRecord().
-// v3 (confirmed live 2026-07-30, docs/LUSHA-V3-CONTRACT.md) is a flat
+// The v3 Enrichment API (the live contract as of 2026-07-30, confirmed against a real
+// api.lusha.com session and recorded in docs/LUSHA-V3-CONTRACT.md) is a flat
 // { requestId, results: [...], billing } envelope, positionally aligned with the request's
 // single-item array (this waterfall sends one identity per call, so results[0] is safe with
 // no match-back key). A per-result `error` (no-match/error shape, contract §9), a missing or
 // non-array `results`, a non-object input and a null input all resolve to {} -- zero
-// candidates, never a throw (skip-not-retry, CLAUDE.md Sec 26.1).
+// candidates, never a throw (skip-not-retry, CLAUDE.md Sec 26.1). v2's envelope handling
+// (a plural contactId-keyed `{contacts:{...}}` map and a singular `{contact:{data}}}` form)
+// was retired in this phase (Plan 20-03) ahead of v2's 2026-11-18 sunset -- no v2-shaped
+// response can reach this function once Plan 05's redeploy ships.
 //
 // v3 field names already match the intermediate shape the extraction logic below reads
 // (emails[].email/.type/.confidence, phones[].number/.type/.doNotCall, jobTitle.title/
@@ -176,9 +180,6 @@ function _personaGroup(departments) {
 // as {min,max}/{exact,min,max} objects rather than the [lo,hi] array or plain number the
 // extraction expects, and industry classification is a flat `industry` string rather than
 // naicsCodes -- _lushaV3Company does that reshaping.
-//
-// v2's plural contactId-keyed `{contacts: {...}}` map and the singular `{contact:{data}}}`
-// offline-fixture shape are retained here as a fallback for now (retired in Plan 03 Task 3).
 function _lushaV3Contact(entry) {
   const loc = entry.location || {};
   return {
@@ -217,12 +218,9 @@ function _lushaRecord(rawResponse, objectType) {
     return objectType === "companies" ? _lushaV3Company(entry) : _lushaV3Contact(entry);
   }
 
-  // ---- v2 fallback (retired in Plan 03 Task 3) ----
-  if (raw.contacts && typeof raw.contacts === "object") {
-    const entry = Object.values(raw.contacts)[0];
-    return (entry && !entry.error && entry.data) || {};
-  }
-  if (raw.contact && raw.contact.data) return raw.contact.data;
+  // Bare/flat fallback: offline unit tests pass a record's fields directly with no envelope
+  // at all (e.g. `{ phones: [...] }`). Not a v2 envelope shape -- v3 has no wrapper either
+  // once unwrapped above, so this is the same pass-through both versions relied on.
   return raw;
 }
 
@@ -258,12 +256,12 @@ function lushaCandidates(rawResponse, objectType) {
       _push(out, "persona_group", src, persona, _norm(persona), 0.6, updated);
     }
   } else {
-    // company firmographics — no per-field grade -> base 0.6. Live nests under `company`
-    // with array revenueRange/companySize [lo,hi] and location.countryIso2; fixtures are flat.
-    // Live /v2/company wraps the record in `data`; the person endpoint uses `company`;
-    // fixtures are flat. Without the `data` unwrap the live company response yielded
-    // ZERO candidates (every lookup hit the envelope, not the record).
-    const co = raw.company || raw.data || raw;
+    // company firmographics — no per-field grade -> base 0.6. `raw.company` serves the
+    // contacts/person endpoint's nested company object (extraction, not envelope -- kept
+    // regardless of envelope version); the retired v2 `/v2/company` `data`-wrapper term was
+    // dropped here in Plan 20-03 Task 3 (docs/LUSHA-V3-CONTRACT.md §5 confirms v3's companies
+    // response is flat, no `data` key). `raw` itself is the v3 adapter's own flat output.
+    const co = raw.company || raw;
     const rev = Array.isArray(co.revenueRange) ? co.revenueRange[0] : co.revenueRange;
     _push(out, "lv_revenue_band", src, rev, normalizeRevenueBand(rev), 0.6, updated);
     // Live /v2/company returns the headcount as `employees` ("51 - 200", a spaced range

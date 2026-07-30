@@ -30,9 +30,16 @@ const { toCandidates } = require(path.join(ROOT, "n8n/code/normalizeProviders.js
 
 const load = (name) => JSON.parse(fs.readFileSync(path.join(FIX, name), "utf8"));
 const apolloContact = load("apollo_contact.json");       // departments: ["media_and_communication"]
-const lushaLivePerson = load("lusha_live_person.json");  // jobTitle.departments: ["Other"] (non-signal)
 const apolloLiveMatch = load("apollo_live_match.json");  // no departments field at all
-const lushaLiveV2 = load("lusha_live_person_v2.json");   // no jobTitle key at all
+// Plan 20-03 retired the two v2-envelope Lusha "live person" fixtures this file previously
+// loaded; these inline v3-shaped ({results:[...]}) responses cover the same two edge cases
+// those fixtures exercised: a semantically-empty "Other" department label, and no jobTitle
+// key at all.
+const lushaOtherDept = { results: [{
+  jobTitle: { title: "General Manager of Broadcast", departments: ["Other"], seniority: "Manager" },
+  emails: [], phones: [],
+}] };
+const lushaNoJobTitle = { results: [{ emails: [], phones: [] }] };
 
 function find(cands, field, source) {
   return cands.find((c) => c.field === field && c.source === source);
@@ -80,7 +87,7 @@ test("(b) GREEN (RED until the fix lands): Apollo contacts candidates include a 
 });
 
 test("(c) GREEN (RED until the fix lands, then asserts absence permanently): Lusha's live 'Other' department label produces NO persona candidate, jobtitle/seniority still present", () => {
-  const c = toCandidates("lusha", lushaLivePerson, "contacts");
+  const c = toCandidates("lusha", lushaOtherDept, "contacts");
   assert.ok(find(c, "jobtitle", "lusha"), "jobtitle candidate still present");
   assert.ok(find(c, "seniority", "lusha"), "seniority candidate still present");
   assert.ok(!find(c, "persona_group", "lusha"),
@@ -90,8 +97,8 @@ test("(c) GREEN (RED until the fix lands, then asserts absence permanently): Lus
 test("(d) EDGE: recorded shapes with no department field at all emit no persona candidate and do not throw", () => {
   assert.doesNotThrow(() => toCandidates("apollo", apolloLiveMatch, "contacts"));
   assert.ok(!find(toCandidates("apollo", apolloLiveMatch, "contacts"), "persona_group", "apollo"));
-  assert.doesNotThrow(() => toCandidates("lusha", lushaLiveV2, "contacts"));
-  assert.ok(!find(toCandidates("lusha", lushaLiveV2, "contacts"), "persona_group", "lusha"));
+  assert.doesNotThrow(() => toCandidates("lusha", lushaNoJobTitle, "contacts"));
+  assert.ok(!find(toCandidates("lusha", lushaNoJobTitle, "contacts"), "persona_group", "lusha"));
 });
 
 // ---------------------------------------------------------------------------
