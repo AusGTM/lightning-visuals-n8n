@@ -48,10 +48,20 @@ Every live command runs through the same in-process `python-dotenv` wrapper
   `.env`'s own `DRY_RUN=true` cannot un-arm a shell-set `DRY_RUN=false`.
 - Run everything from the repo root — the relative `scripts/` path and `.env` discovery both
   assume it.
-- **Confirm whose key is in `.env`'s `N8N_API_KEY` before ANY deploy command.** API-created
-  workflows land in the key owner's n8n project. It must be Robert's key (Alex's is retained
-  separately as `N8N_API_KEY_2`). A wrong key silently deploys into the wrong project — this has
-  already cost a full deploy cycle once.
+- **Set `N8N_EXPECTED_URL` before ANY deploy command.** API-created workflows land in the key
+  owner's n8n project, and a wrong key silently deploys into the wrong one — this has already cost
+  a full deploy cycle once. The deploy target is `https://alexherman.app.n8n.cloud`, confirmed
+  2026-07-31 as the correct tenant:
+
+  ```bash
+  grep -q '^N8N_EXPECTED_URL=' .env || echo 'N8N_EXPECTED_URL=https://alexherman.app.n8n.cloud' >> .env
+  ```
+
+  `_instance_ok()` pins `N8N_URL == N8N_EXPECTED_URL` **only when that variable is set**; unset, it
+  falls back to `host.endswith(".n8n.cloud")`, which any n8n Cloud tenant satisfies. Setting it
+  turns the fallback into an exact-match pin. **Superseded:** this bullet previously said the key
+  must be Robert's with Alex's in `N8N_API_KEY_2`. `N8N_API_KEY_2` does not exist, so that check was
+  unfollowable — Section B was blocked on it during the 2026-07-31 window.
 
 ---
 

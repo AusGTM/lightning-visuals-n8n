@@ -105,6 +105,17 @@ below was verified against deployed JSON or live probes. Do not "correct" them b
   this repo. Unresolved — 25-01 probes it.
 - **Claude Desktop Code-tab file handoff: BOTH legs work** (verified live 2026-07-31). Attachment
   resolves to a real path; `@mention` resolves too but **indexes the workspace only**.
+- **The deploy tenant is `https://alexherman.app.n8n.cloud`** — confirmed correct 2026-07-31.
+  **`N8N_EXPECTED_URL` must be set to it**, because
+  `scripts/deploy_n8n_workflows.py::_instance_ok()` pins `N8N_URL == N8N_EXPECTED_URL` **only when
+  that variable is set**; unset, it falls back to `host.endswith(".n8n.cloud")`, which any n8n Cloud
+  tenant satisfies. The guard separates "is an n8n host" from "is not" — never "is the right
+  tenant". **Both runbooks' old instruction (key must be Robert's, Alex's in `N8N_API_KEY_2`) was
+  unfollowable: `N8N_API_KEY_2` does not exist.** Corrected in both; it blocked 23-06 Section B.
+- **The plugin manifest's `author` must be an object, not a string** — `claude plugin validate`
+  rejects `"author": "Lightning Visuals"` with `expected object, received string`, and the Desktop
+  plugin-manager install would have failed the same way. `test_plugin_manifest.py` asserted only
+  that the key was *present*, never its type. Found live by 23-06 A1, 2026-07-31.
 - **Scheduled Claude routines are enabled on this machine** (`coworkScheduledTasksEnabled`,
   `ccdScheduledTasksEnabled`), with a working example at
   `~/Documents/Claude/Scheduled/weekday-morning-brief/SKILL.md`. Unverified: whether one can invoke

@@ -53,9 +53,27 @@ Several steps are conversational and have no command. They say so explicitly.
 
 ### Before ANY deploy command
 
-**Confirm whose key is in `.env`'s `N8N_API_KEY`.** API-created workflows land in the key owner's
-n8n project. It must be Robert's key — Alex's is retained separately as `N8N_API_KEY_2`. A wrong key
-silently deploys into the wrong project. This has already cost a full deploy cycle once.
+**Confirm `N8N_EXPECTED_URL` is set.** API-created workflows land in the key owner's n8n project,
+and a wrong key silently deploys into the wrong one. This has already cost a full deploy cycle once.
+
+The deploy target is **`https://alexherman.app.n8n.cloud`** — confirmed 2026-07-31 as the correct
+tenant. Pin it so the check is mechanical rather than remembered:
+
+```bash
+grep -q '^N8N_EXPECTED_URL=' .env || echo 'N8N_EXPECTED_URL=https://alexherman.app.n8n.cloud' >> .env
+grep -c '^N8N_EXPECTED_URL=' .env    # expect exactly 1
+```
+
+**Why this is not optional.** `scripts/deploy_n8n_workflows.py::_instance_ok()` pins
+`N8N_URL == N8N_EXPECTED_URL` **only when `N8N_EXPECTED_URL` is set**. Left unset it falls back to
+`host.endswith(".n8n.cloud")`, which *any* n8n Cloud tenant satisfies — so the guard distinguishes
+"is an n8n host" from "is not", but never "is the right tenant". Setting the variable converts that
+fallback into an exact-match pin. Found during 23-06 Section A, 2026-07-31.
+
+**Superseded wording:** earlier revisions of this runbook and of `23-OPERATOR-RUNBOOK.md` said the
+key must be Robert's, with Alex's retained as `N8N_API_KEY_2`. **`N8N_API_KEY_2` does not exist**,
+so that arrangement was never in place and the instruction was unfollowable. The tenant pin above
+replaces it.
 
 ### Variables these steps use
 
