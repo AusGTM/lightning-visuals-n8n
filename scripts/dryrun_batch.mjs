@@ -24,6 +24,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { toCandidates } = require(path.join(ROOT, "n8n/code/normalizeProviders.js"));
 const { scoreCandidates } = require(path.join(ROOT, "n8n/code/scoreEnrichment.js"));
 const { decideAction } = require(path.join(ROOT, "n8n/code/enrichmentGate.js"));
+const { lushaContactBody } = require(path.join(ROOT, "n8n/code/lushaRequest.js"));
 
 const NOW = new Date().toISOString();
 
@@ -61,18 +62,21 @@ async function call(url, opts) {
   }
 }
 
-// --- Lusha v2 person: GET, header api_key ------------------------------------
+// --- Lusha v3 contacts search-and-enrich: POST, header api_key --------------
+// The harness computes its gate decision AFTER the provider calls (see runOne() below —
+// hsSearch + decideAction happen after this call), so no missingFields array is available
+// yet at call time. Pass an empty array: lushaContactBody() defaults the reveal list to
+// the minimal non-empty ["emails"] (v3 rejects an empty reveal — docs/LUSHA-V3-CONTRACT.md
+// §6), which is the cheap, correct default for a read-only dry-run harness.
 async function lusha(id) {
   const key = process.env.LUSHA_API_KEY;
   if (!key) return { status: 0, body: null, err: "no LUSHA_API_KEY" };
-  const q = new URLSearchParams();
-  if (id.email) q.set("email", id.email);
-  if (id.linkedin_url) q.set("linkedinUrl", id.linkedin_url);
-  if (id.firstName) q.set("firstName", id.firstName);
-  if (id.lastName) q.set("lastName", id.lastName);
-  if (id.companyName) q.set("companyName", id.companyName);
-  if (id.domain) q.set("companyDomain", id.domain);
-  return call(`https://api.lusha.com/v2/person?${q}`, { method: "GET", headers: { api_key: key } });
+  const body = lushaContactBody(id, []);
+  return call("https://api.lusha.com/v3/contacts/search-and-enrich", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", api_key: key },
+    body: JSON.stringify(body),
+  });
 }
 
 // --- Apollo people/match: POST, header X-Api-Key, reveal email ---------------

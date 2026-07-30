@@ -1463,28 +1463,27 @@ const rows = [
 return rows.map((r) => ({ json: r }));
 """
 
-ENRICH_BUILD_REQUESTS = r"""// Build Live Provider Requests — LOCAL-LIVE variant.
+ENRICH_BUILD_REQUESTS = inline("lushaRequest.js") + r"""
+
+// --- n8n wrapper: Build Live Provider Requests — LOCAL-LIVE variant. ---
 // Turns identity_keys into the concrete per-provider request shapes the LIVE HTTP nodes
 // reference by name (HTTP nodes replace $json with their response, so downstream nodes read
-// requests via $('Build Requests').item). Lusha v2 = GET querystring; Apollo people/match =
-// JSON body with reveal_personal_emails. ZoomInfo builds its own body from the Gate identity.
+// requests via $('Build Requests').item). Lusha v3 = POST /v3/contacts/search-and-enrich
+// JSON body (retired v2 GET querystring — see docs/LUSHA-V3-CONTRACT.md), built by the
+// shared lushaContactBody() with the reveal list derived from the gate's missingFields.
+// Apollo people/match = JSON body with reveal_personal_emails. ZoomInfo builds its own
+// body from the Gate identity.
 return $input.all().map((it) => {
   const row = it.json;
   const id = row.identity_keys || {};
-  const enc = encodeURIComponent;
-  const q = [];
-  const add = (k, v) => { if (v) q.push(enc(k) + "=" + enc(v)); };
-  add("firstName", id.firstName); add("lastName", id.lastName);
-  add("companyName", id.companyName); add("companyDomain", id.domain);
-  add("email", id.email); add("linkedinUrl", id.linkedin_url);
-  const lusha_url = "https://api.lusha.com/v2/person?" + q.join("&");
+  const lusha_body = lushaContactBody(id, (row.gate && row.gate.missingFields) || []);
   const apollo_body = { reveal_personal_emails: true };
   if (id.email) apollo_body.email = id.email;
   if (id.domain) apollo_body.domain = id.domain;
   if (id.firstName) apollo_body.first_name = id.firstName;
   if (id.lastName) apollo_body.last_name = id.lastName;
   if (id.companyName) apollo_body.organization_name = id.companyName;
-  return { json: { ...row, lusha_url, apollo_body } };
+  return { json: { ...row, lusha_body, apollo_body } };
 });
 """
 
@@ -2619,9 +2618,11 @@ def build_enrichment_local_live():
     nodes.append(code_node("Build Requests", ENRICH_BUILD_REQUESTS, x, y))
     x += 230
     nodes.append(_live_http(
-        "Lusha Enrich", x, y, "GET",
-        "={{ $('Build Requests').item.json.lusha_url }}",
-        [{"name": "api_key", "value": "=" + _env_secret_expr("LUSHA_API_KEY")}]))
+        "Lusha Enrich", x, y, "POST",
+        "https://api.lusha.com/v3/contacts/search-and-enrich",
+        [{"name": "api_key", "value": "=" + _env_secret_expr("LUSHA_API_KEY")},
+         {"name": "Content-Type", "value": "application/json"}],
+        json_body="={{ JSON.stringify($('Build Requests').item.json.lusha_body) }}"))
     x += 230
     nodes.append(_live_http(
         "Apollo Match", x, y, "POST", "https://api.apollo.io/v1/people/match",
@@ -3592,24 +3593,50 @@ def build_enrichment_cloud():
     # because a provider gate positioned after another provider's HTTP node sees THAT
     # provider's response as $json, not the row — closing the latent identity-loss bug.
     #
-    # Live v2/person contract (confirmed 2026-07-28 against portal 22617666): the body
-    # must be {"contacts":[{...}]} — a contacts ARRAY, each element requiring a
-    # caller-chosen `contactId`. Only `email` and `linkedinUrl` are accepted identity
-    # properties inside an element; firstName/lastName/companyName/companyDomain/domain/
-    # phoneNumber/jobTitle are all REJECTED. Posting the bare identity_keys object (the
-    # old shape) 400'd live with "property email should not exist". When neither
-    # email nor linkedin_url is present the element would only ever 400, so the
-    # contacts array is left empty instead (skip-not-retry, CLAUDE.md Sec 26.1) — the
-    # row still keeps flowing to Apollo/ZoomInfo either way via the existing gate chain.
-    lusha = _http_node("Lusha Enrich", "https://api.lusha.com/v2/person", px, y - 80,
+    # v3 contract (docs/LUSHA-V3-CONTRACT.md §3, live-confirmed 2026-07-30): POST
+    # /v3/contacts/search-and-enrich, body {"contacts":[{...}]} — a contacts ARRAY, each
+    # element a PLAIN identity object with NO synthetic index key (v3 rejects a v2-style
+    # `contactId` outright: 400 "property contactId should not exist"). `reveal` is a
+    # top-level array of field-name strings (confirmed values: "emails", "phones"),
+    # derived here from the Enrichment Gate's `missingFields` via the same fixed
+    # email->emails/mobilephone->phones allow-list n8n/code/lushaRequest.js's
+    # lushaReveal() encodes (T-20-02 mitigation: only these two literal names can ever
+    # reach the request) — PII-minimization hygiene per the re-scoped
+    # REQ-lusha-selective-reveal (§6: reveal-field-count does NOT change billed cost, so
+    # this is never send a broader reveal than the gate asked for, not a cost control).
+    # An empty reveal is an invalid v3 request (§6: 400 "reveal must contain at least 1
+    # elements"), so this defaults to ["emails"] when nothing is missing.
+    #
+    # n8n expressions cannot require() a module, so this stays a hand-written mirror of
+    # lushaContactBody()/lushaReveal() rather than sharing the module directly — Task 3's
+    # anti-drift parity test in tests/n8n/lushaRequestContract.test.mjs asserts this
+    # expression's output deep-equals the shared module's for a matrix of inputs, which
+    # is what keeps the two from silently diverging.
+    #
+    # History: this CLOUD node deliberately keeps sending the NARROW identity set
+    # (email + linkedinUrl only) that was live-confirmed for it pre-migration against the
+    # retired v2 endpoint (firstName/lastName/companyName/companyDomain/domain/
+    # phoneNumber/jobTitle all 400'd there). The LOCAL-LIVE builder and the dry-run
+    # harness send the broader name+company set they already sent. That split predates
+    # this migration and is carried forward deliberately, not silently unified — see
+    # docs/LUSHA-V3-CONTRACT.md's accepted-properties table (§3) for what would decide
+    # whether it can be unified later.
+    lusha = _http_node("Lusha Enrich", "https://api.lusha.com/v3/contacts/search-and-enrich",
+                       px, y - 80,
                        auth="header",  # credential header, e.g. api_key: <LUSHA_API_KEY>
                        json_body=(
                            "={{ (() => { "
                            "const id = $('Enrichment Gate').item.json.identity_keys || {}; "
-                           "const c = { contactId: \"1\" }; "
+                           "const gate = $('Enrichment Gate').item.json.gate || {}; "
+                           "const missing = gate.missingFields || []; "
+                           "const REVEAL_MAP = { email: 'emails', mobilephone: 'phones' }; "
+                           "const revealed = missing.filter((f) => Object.prototype.hasOwnProperty.call(REVEAL_MAP, f)).map((f) => REVEAL_MAP[f]).sort(); "
+                           "const reveal = revealed.length ? revealed : ['emails']; "
+                           "const c = {}; "
                            "if (id.email) c.email = id.email; "
                            "if (id.linkedin_url) c.linkedinUrl = id.linkedin_url; "
-                           "return JSON.stringify({ contacts: (c.email || c.linkedinUrl) ? [c] : [] }); "
+                           "const hasIdentity = !!(c.email || c.linkedinUrl); "
+                           "return JSON.stringify(hasIdentity ? { contacts: [c], reveal } : { contacts: [] }); "
                            "})() }}"
                        ))
     nodes.append(lusha)
