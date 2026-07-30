@@ -23,12 +23,24 @@ over the same n8n system, so its version says nothing about backend capability.
   posture (disarmed by default, conversation-scoped live-write permission, confirm-then-verify
   on every mutation, read-only unattended monitoring), and cost posture (previewed estimates
   from measured rates, warn against remaining credits, chunking plan before send).
+- **Phase 23 — plugin shell and the contact-upload lane.** A loadable Claude Code plugin
+  (`.claude-plugin/plugin.json` + `skills/contact-upload/SKILL.md`, auto-triggered and
+  slash-invocable) driving four thin, independently-testable Python modules:
+  `config_gate.py` (refuses before any network call on missing/invalid config),
+  `tabular.py` (reads CSV/XLSX headers and rows verbatim, converts XLSX to CSV bytes for
+  the wire), `preview.py` (adaptive, display-only preview — reads
+  `config/column_mapping.yaml` only as a read-only lookup for labelling, never to
+  transform a row; ≤20 rows renders every row, larger batches render first-10/last-3 plus
+  per-column fill rates), and `dispatch.py` (the one POST to `hubspot/contact-upload`;
+  `armed` has no default, so a forgotten argument is a `TypeError`, never a silent send).
+  Config setup is a one-time operator step from a tracked example file
+  (`config/operator.local.example.json`); see this file's README for the full setup,
+  file-handoff, and preview walkthrough.
 
 ### Planned
 
-Milestone v0.6, phases 23–30 — see `.planning/workstreams/plugin-entrypoint/ROADMAP.md`:
+Milestone v0.6, phases 24–30 — see `.planning/workstreams/plugin-entrypoint/ROADMAP.md`:
 
-- **23** Plugin shell, spreadsheet ingestion, preview/approve, dispatch to `hubspot/contact-upload`
 - **24** Non-tabular adapters: prose, foreign JSON, public URLs, web-page screenshots, with
   per-row provenance and no invented values
 - **25** Enrichment lane on existing records + cost guard (credit/token estimate, chunking)

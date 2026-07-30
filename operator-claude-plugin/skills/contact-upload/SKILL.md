@@ -36,21 +36,38 @@ be sent, and — only when explicitly armed — send it.
    operator directly for one. Do not scan temp directories, retry in a loop, or guess at
    a storage convention.
 
-3. **Read the file.**
+3. **Build and show the preview.**
 
    ```
-   python3 scripts/tabular.py <path>
+   python3 scripts/preview.py <path>
    ```
 
-   <!-- PREVIEW-STEP-OWNER: scripts/tabular.py owns this entire preview step in this
-        plan. Plan 23-05 replaces it with the real adaptive preview (per-column fill
-        rates, first-10/last-3 for large batches, an Artifact on request) — that plan
-        edits this step, it does not rewrite it. -->
+   This reads the file once and reads `config/column_mapping.yaml` only as a read-only
+   lookup for labelling — it never changes what gets sent. The file goes over the wire
+   exactly as read; canonical mapping happens on the backend's `Map Columns` node. Treat
+   the preview as a prediction of what the backend will do, not a transformation this
+   plugin performed.
 
-   Show the operator the header list and row count this reports.
+   Render the result as a **markdown table in chat by default.** Only publish it as an
+   Artifact if the operator asks for one. Always show:
+   - the total row count (`row_count`)
+   - each source header next to the canonical prop it maps to, from `header_labels`
+     (e.g. `Email Address → email`)
+   - every dropped header called out explicitly (`"dropped": true` — no canonical prop
+     matched), and any canonical prop no header maps to (`unmapped_canonical_props`,
+     e.g. a missing email column)
+   - if `mapping_available` is `false`, say plainly that labels are unavailable rather
+     than guessing them
+
+   If `adaptive` is `true` (more than ~20 rows), do not print every row. Show instead:
+   the leading and trailing sample rows (`sample_rows.leading` / `.trailing`) and the
+   per-column fill rates (`fill_rates`) — including for dropped columns, since a column
+   the backend will drop is exactly the one the operator wants to notice. If `adaptive`
+   is `false`, show every row from `sample_rows`.
 
 4. **Ask for approval.** If the operator declines, STOP here — nothing is sent, and
-   nothing beyond reading the file has happened.
+   nothing beyond reading the file has happened. Declining costs nothing beyond that one
+   read.
 
 5. **Check arming.** Disarmed is the default and the state of every new conversation.
    Say plainly that sending is off, and that the operator can turn it on for this
