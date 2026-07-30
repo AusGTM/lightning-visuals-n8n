@@ -36,6 +36,13 @@ be sent, and — only when explicitly armed — send it.
    operator directly for one. Do not scan temp directories, retry in a loop, or guess at
    a storage convention.
 
+   **If the input is not a spreadsheet** — pasted text, a JSON blob, a URL, or one or
+   more images — the file-reading path above does not apply. Read
+   `extraction.md` in this skill's own directory and follow it instead: it is the
+   extraction contract for everything that isn't already tabular. Once it hands you the
+   validator's accepted rows, continue at step 3 below with those rows in place of a
+   read file — everything from the preview onward is identical either way.
+
 3. **Build and show the preview.**
 
    ```
@@ -65,6 +72,13 @@ be sent, and — only when explicitly armed — send it.
    the backend will drop is exactly the one the operator wants to notice. If `adaptive`
    is `false`, show every row from `sample_rows`.
 
+   **For a batch that came from `extraction.md` rather than a file,** the preview shows
+   everything above plus what a spreadsheet preview never needs: provenance beside each
+   row (which input it came from, and where in it), the rejected rows with their
+   reasons, any reported keys that did not map to a canonical prop, and the single
+   ambiguity block — one list of every uncertain cell in the batch, presented once,
+   never one interruption per row.
+
 4. **Ask for approval.** If the operator declines, STOP here — nothing is sent, and
    nothing beyond reading the file has happened. Declining costs nothing beyond that one
    read.
@@ -83,3 +97,10 @@ be sent, and — only when explicitly armed — send it.
 
    Report the result as "the POST was accepted, n8n returned this" — never as a
    per-record outcome. Parsing per-record results is Phase 26's job, not this one's.
+
+7. **Clean up.** If this batch came from `extraction.md`, delete the scratch artifact you
+   wrote once the batch ends — whether it was dispatched or the operator declined.
+   Provenance is scoped to this session and to the operator's decision in the moment; it
+   is not a durable record, the scratch directory is gitignored so it never reaches
+   history, and deleting the file is what keeps it from outliving the conversation on
+   disk.
