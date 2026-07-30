@@ -134,9 +134,14 @@ above. This is why that endpoint has to exist.
 - [ ] **STATUS-03**: Provider credit balances and remaining headroom are visible to the operator,
       retrieved through the n8n-side status endpoint rather than by the plugin holding provider
       credentials
-- [ ] **STATUS-04**: Runtime states that need a human are surfaced with counts: stuck locks
-      (`enrichment_status = running` past `enrichment_lock_until`), records queued but never
-      processed, and records awaiting review
+- [ ] **STATUS-04**: Runtime states that need a human are surfaced with counts: wedged runs (an
+      execution still in `status = running` past a configured threshold, read from the n8n
+      executions API), records queued but never processed, and records awaiting review.
+      *Amended per 27-CONTEXT.md D-07a/D-07b/D-07d: the original wording
+      (`enrichment_status = running` past `enrichment_lock_until`) is unbuildable — that property
+      does not exist in this portal's schema, and nothing in the pipeline ever writes the `running`
+      status value. "Queued" is a bare count; no request timestamp is stored, so it can never be
+      age-based (D-07c). Third accepted requirement amendment in this milestone.*
 - [ ] **STATUS-05**: Status appears as conversational text by default; on request the plugin
       publishes a dashboard Artifact carrying the same data, stamped with when it was fetched,
       and re-publishes to the same URL on refresh

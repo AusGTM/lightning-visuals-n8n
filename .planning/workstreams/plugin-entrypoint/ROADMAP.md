@@ -155,10 +155,28 @@ Plans:
   1. Asking "what's the backend doing?" returns, per workflow: on or off, whether live writes are currently enabled, when it last ran and whether that run succeeded, and what is in flight — read from the n8n API, not asserted from local config.
   2. A failed execution is reported by cause in plain language — expired credential, rate limit, exhausted quota, malformed record — and names whether the operator or an admin can fix it. No status codes, no stack traces, no "check the n8n UI".
   3. Provider credit balances and remaining headroom reach the operator through the n8n-side status endpoint. The plugin never holds a provider or HubSpot credential, and a provider whose balance cannot be read (Apollo's key is not master — it 403s) shows as unknown, never as zero or healthy.
-  4. Stuck locks, records queued but never processed, and the review backlog are surfaced with counts, so a silently wedged backend is visible without anyone thinking to look.
+  4. Wedged runs (an execution still running past a configured threshold), records queued but never processed, and the review backlog are surfaced with counts, so a silently wedged backend is visible without anyone thinking to look. *(Amended by 27-CONTEXT.md D-07a/D-07b/D-07d — the original wording named a HubSpot lock property that does not exist in this portal's schema, and a runtime status value nothing in the pipeline ever writes. "Stuck" is redefined against the executions API. Third accepted requirement amendment in this milestone.)*
   5. Status is conversational text by default; on request a dashboard Artifact carries the same data stamped with its fetch time, and refreshing re-publishes to the same URL rather than minting a second one.
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 27-01-PLAN.md — Backend: grow `hubspot/backend-status` from credits-only to full health — queued and review-backlog counts for both object types, plus credential health, with unknown never collapsing to zero
+- [ ] 27-02-PLAN.md — Failure-cause translation: the static signature table and D-05's guardrail (unmatched errors labelled as interpretation, raw text redacted, attribution defaulted to an admin)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 27-03-PLAN.md — Tracer: one workflow end to end — config gate, read-only n8n API client, write-safety literal read, backend-status POST, unknown rendering
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 27-04-PLAN.md — Full picture: every workflow with no allowlist, stuck-by-execution-age, per-node error harvesting, and the conversational answer plus its skill
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 27-05-PLAN.md — Dashboard Artifact, the two-field identifier store with a 30-day default TTL and garbage collection, and one human checkpoint for same-URL refresh across sessions
 
 ### Phase 28: Control Actions
 
