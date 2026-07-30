@@ -105,7 +105,12 @@ Plans:
   5. A field absent from the source stays absent in the row — never inferred, guessed, or filled from the model's own knowledge. A prose entry with no email address does not acquire one, and a screenshot value the image renders ambiguously (truncated, cut off, unreadable glyph) is surfaced for operator confirmation rather than completed by guessing.
   6. Rows failing the identity rule (`email` OR `firstname`+`lastname`+`company`) appear in a separate rejected list with a per-row reason and are excluded from the dispatch payload; unreadable, empty, or unsupported input produces a named error, never a silent zero-row success.
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 24-01-PLAN.md — Extraction validator spine: artifact handoff, identity pre-flight, canonical-key reporting, provenance strip (wave 1)
+- [ ] 24-02-PLAN.md — Screenshot overlap dedupe on the identity key, and one-list ambiguity aggregation (wave 2)
+- [ ] 24-03-PLAN.md — The extraction contract: prose, foreign-JSON, URL and screenshot adapters wired into the Phase 23 skill (wave 2)
 
 ### Phase 25: Enrichment Lane & Cost Guard
 
@@ -129,11 +134,16 @@ Plans:
 **Success Criteria** (what must be TRUE):
 
   1. After a contact-upload dispatch the operator sees a per-record outcome — created, updated/matched, needs_review, or rejected with its reason — instead of a bare HTTP status.
-  2. After an enrichment dispatch the operator sees, per record and without leaving the session, at minimum the ICP tier and the needs-review flag, alongside remaining provider credits as reported by the n8n-side status endpoint (or the enrichment response's own `remaining_credits`) — the client never queries a provider itself.
+  2. **[AMENDED by 26-CONTEXT.md D-10a / D-10b — ICP-tier clause removed]** After an enrichment dispatch the operator sees, per record and without leaving the session, the needs-review flag alongside remaining provider credits as reported by the n8n-side status endpoint (or the enrichment response's own `remaining_credits`) — the client never queries a provider itself. *ICP tier, fit score and anti-ICP flag are deliberately absent: HubSpot owns those derived outputs by the Phase 15 "Approach C" decision (`src/merge_policy.py:347`, `n8n/code/mergeCompanies.js:53`, `config/field_policy.yaml:97`), so the backend has nothing to hand back and the report shows neither a value nor a placeholder. REPORT-02 in REQUIREMENTS.md should be reworded to match before this phase seals — fourth accepted requirement amendment in this milestone.*
   3. When the n8n run is still in flight or the response came back partial, the report says so explicitly, shows the state it does know, and tells the operator how to re-check — it never presents an incomplete run as a finished one.
   4. A failed or partially-failed dispatch names the specific rows that did not land, and re-sending exactly those rows does not create duplicates of records the earlier attempt already accepted.
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+- [ ] 26-01-PLAN.md — Contact-lane per-record ledger from the decision node, executions-API fallback, run handle, and honest in-flight framing (REPORT-01, REPORT-03)
+- [ ] 26-02-PLAN.md — Enrichment-lane review flag and remaining credits, with unknown kept distinct from zero and no ICP surface (REPORT-02)
+- [ ] 26-03-PLAN.md — Failing rows named and classified by what a re-send can fix; retry routes through the one armed dispatch path (DISPATCH-04)
 
 ### Phase 27: Backend Status Surface
 
