@@ -64,6 +64,31 @@ pre-flight* that separates rows too thin to be useful; it is not a dedupe agains
   **ambiguities** (D-06), not as silent collapses. The operator decides whether two partial
   captures are one person.
 
+### Corrections and structural calls made during planning
+- **D-10 (CORRECTS 24-RESEARCH.md):** the research recommended a scratch path of
+  `operator-claude-plugin/scripts/.tmp/` for the extraction handoff artifact. **Dot-directories are
+  permission-blocked to tooling in this environment** — the same constraint that produced Phase 23's
+  D-04 non-dotfile config rule. Use a **non-dot scratch directory**, with a `.gitignore` entry so
+  provenance never enters history (D-05).
+- **D-11 (removes the copy-paste hazard structurally):** the canonical prop set **and** the identity
+  groups are both **derived from `config/column_mapping.yaml`**, not retyped. That YAML already
+  carries `required_identity.any_of`, so a single read gives the validator both rules and neither
+  can drift from the backend. This also structurally prevents the `src/file_loader.py::_has_identity`
+  copy that 24-RESEARCH.md names as a pitfall — there is nothing left to copy from.
+- **D-12:** foreign-JSON unmappable keys **reuse the invented-field path**. Claude carries an
+  unmapped source key onto the row as-is and the validator's existing strip-and-report surfaces it.
+  One mechanism serves criterion 2 and the invented-field case, rather than a second reporting
+  channel that could disagree with the first.
+- **D-13 (the drift pin):** D-01's biggest structural risk is `extraction.md`'s documented artifact
+  schema silently diverging from `extraction.py`'s accepted schema. The defence is a contract test
+  that **parses the fenced example artifacts out of the markdown and runs them through the real
+  validator**. This is the only automated defence available, since the extraction step itself
+  cannot be tested.
+- **D-14 (manual gates, from research assumptions A1/A2):** two things cannot be automated —
+  whether the Desktop skill runtime actually exposes `web_fetch`, and the real per-turn image
+  ceiling. **If `web_fetch` proves unavailable the URL adapter is blocked BY DESIGN.** Reaching for
+  an HTTP client would violate D-01/D-02 — it is not a fallback.
+
 ### Claude's Discretion
 - Foreign-JSON key-translation approach, and how unmappable keys are reported (criterion 2
   requires only that they are reported, not silently dropped).

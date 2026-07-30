@@ -76,9 +76,24 @@ NOTICE-01) and the scheduled sweep (NOTICE-03). Phase 26's re-check is operator-
 - **D-11:** **`Set Review` strips every identifying field.** It is an Edit-Fields node whose sole
   assignment is `queue = "needs_review"`, and n8n outputs only explicitly-set fields for that node
   type — so every needs-review row arrives as an indistinguishable `{"queue": "needs_review"}`.
-  The report must therefore be built from **`Decide Action`'s own per-item output** (upstream,
-  still carrying `contact_id` / `email` / `reason`) via
+  The report must therefore be built from **`Decide Action`'s own per-item output** (upstream) via
   `GET /api/v1/executions/{id}?includeData=true`, **not** from the terminal nodes.
+- **D-11a (CORRECTS D-11 and 26-RESEARCH.md — verified against the node's return statement during
+  planning):** `Decide Action` **does not emit `email`**. Its actual return is
+  `{action, outcome, contact_id, hs_object_id, reason, email_status, properties}`. Row identity in
+  the report is therefore `contact_id` / `hs_object_id` when matched, and otherwise the row's
+  **ordinal position** — which is sound because `Apply Email` re-expands the batched verifier result
+  via `$('Normalize Phone').all()`, preserving source-file row order end to end. Any plan touching
+  this must verify the field set against the node's own return statement first rather than trusting
+  the research doc.
+- **D-11b (sharpens D-14's permanently-stuck rule):** the concrete machine-checkable marker is
+  **`email_status === "NO_EMAIL"`**, assigned in `Apply Email` when no address normalizes, combined
+  with an `ambiguous` outcome. Use that rather than inferring stuckness from the absence of an
+  email field.
+- **D-11c (node-name collision — real footgun):** **both deployed workflows contain a node literally
+  named `Decide Action`**, and the enrichment workflow additionally has `Decide Company Action`.
+  Node selection must be **by workflow first, then lane**. Selecting by node name alone will read
+  the wrong lane's output.
 - **D-12:** **No execution ID is returned by either webhook** — neither workflow references
   `$execution.id`. D-06's run handle must be built by **time-proximity correlation** against
   `GET /api/v1/executions?workflowId=`, not read out of the response. The plan must treat this
