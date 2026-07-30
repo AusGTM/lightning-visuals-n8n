@@ -439,7 +439,12 @@ def build_report(before_snapshot: dict, after_snapshot: dict, token_usage, recor
         for row in token_usage["rows"]:
             if row.get("status") != "ran" or not row.get("usage_available"):
                 continue
-            price = MODEL_PRICES.get(row.get("model"))
+            model_id = str(row.get("model") or "")
+            # The API reports dated IDs (claude-haiku-4-5-20251001); the price table
+            # keys aliases. Exact match first, then alias-prefix match.
+            price = MODEL_PRICES.get(model_id) or next(
+                (v for k, v in MODEL_PRICES.items() if model_id.startswith(k + "-")), None
+            )
             if price is None:
                 partial = True
                 anthropic_rows.append({**row, "cost_usd": None})

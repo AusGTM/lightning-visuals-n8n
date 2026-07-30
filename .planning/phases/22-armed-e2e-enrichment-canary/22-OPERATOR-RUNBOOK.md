@@ -112,7 +112,7 @@ section).
 own exit code:
 
 ```bash
-.venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/snapshot_hubspot_schema.py', run_name='__main__')"
+.venv/bin/python scripts/snapshot_hubspot_schema.py
 ```
 
 Confirm `lusha_contact_id` exists on contacts and `lusha_company_id` exists on
@@ -160,7 +160,7 @@ cheap rollback or an expensive one.
 residual-state line reports nothing left behind, THEN independently confirm:
 
 ```bash
-.venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/snapshot_hubspot_schema.py', run_name='__main__')" --label post-probe
+.venv/bin/python scripts/snapshot_hubspot_schema.py --label post-probe
 ```
 
 Check the probe property name does not appear in the companies snapshot. If it does,
@@ -214,7 +214,7 @@ not this runbook.
 **C1 — pre-migration baseline.**
 
 ```bash
-.venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/snapshot_hubspot_schema.py', run_name='__main__')" --label pre-orgtype-enum
+.venv/bin/python scripts/snapshot_hubspot_schema.py --label pre-orgtype-enum
 ```
 
 Confirm the companies snapshot shows `lv_org_type` as type `string`, fieldType `text`,
@@ -253,7 +253,7 @@ Note the manifest filename it prints — that is the rollback's input.
 **C5 — independent read-back (distinct step, not the script's exit code).**
 
 ```bash
-.venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/snapshot_hubspot_schema.py', run_name='__main__')" --label post-orgtype-enum
+.venv/bin/python scripts/snapshot_hubspot_schema.py --label post-orgtype-enum
 ```
 
 Diff this against C1's `pre-orgtype-enum` snapshot. The ONLY difference should be
@@ -346,12 +346,14 @@ it. Read the `research_gate_will_fire` line.
     ```bash
     .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/canary_record_snapshot.py', run_name='__main__')" snapshot --label pre-canary
     ```
+
     Confirm `research_gate_will_fire: true` on the re-snapshot before proceeding.
   - **Branch 2 — pick a different allowlisted company whose fields are still blank.**
     Add its id to `TEST_COMPANY_IDS` if not already present, then:
     ```bash
     .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/canary_record_snapshot.py', run_name='__main__')" snapshot --label pre-canary --target-id <other-allowlisted-company-id>
     ```
+
     Every subsequent step in Section D that names `9604614548` uses this id instead, and
     Step 3's `TEST_RECORD_IDS` overlay value uses this id instead.
 
@@ -410,8 +412,7 @@ curl -sS -X POST "$N8N_URL/webhook/hubspot/enrichment/event" \
 ```
 
 (`$N8N_URL` is the base URL, no trailing slash, e.g. `https://<subdomain>.n8n.cloud`; the
-webhook path is fixed at `/webhook/hubspot/enrichment/event` per the deployed `Webhook
-Trigger` node. `$N8N_ENRICHMENT_WEBHOOK_SECRET` is the same secret provisioned into the
+webhook path is fixed at `/webhook/hubspot/enrichment/event` per the deployed `Webhook Trigger` node. `$N8N_ENRICHMENT_WEBHOOK_SECRET` is the same secret provisioned into the
 webhook's Header Auth credential — never logged, never pasted into the ledger.)
 
 Exactly ONE event is sent. **A second fire is a new window, not a retry** — if this POST

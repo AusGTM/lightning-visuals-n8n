@@ -20,7 +20,7 @@ Each maps to exactly one roadmap phase.
 
 ### Armed Enrichment Canary
 
-- [ ] **REQ-armed-e2e-canary**: One armed end-to-end enrichment on allowlisted record(s): provider waterfall + Haiku web research + Sonnet judge → staged fields, source metadata, and promoted canonical writes land in HubSpot; neighbor records byte-untouched; disarm + read-back (`"false"`×N, allowlist cleared) closes the run.
+- [x] **REQ-armed-e2e-canary**: One armed end-to-end enrichment on allowlisted record(s): provider waterfall + Haiku web research + Sonnet judge → staged fields, source metadata, and promoted canonical writes land in HubSpot; neighbor records byte-untouched; disarm + read-back (`"false"`×N, allowlist cleared) closes the run.
 - [x] **REQ-canary-cost-ledger**: The canary records actual spend — provider credits (before/after balances) and Anthropic tokens per call — against the 2026-07-30 estimates, producing a calibrated per-record cost figure for full-sweep planning.
 
 ### Transport Hygiene
@@ -60,5 +60,5 @@ Each maps to exactly one roadmap phase.
 | REQ-dedupe-transport-swap | Phase 21 | Complete |
 | REQ-orgtype-enumeration | Phase 21 | Complete |
 | REQ-country-region-policy | Phase 21 | Complete |
-| REQ-armed-e2e-canary | Phase 22 | Pending |
+| REQ-armed-e2e-canary | Phase 22 | Complete |
 | REQ-canary-cost-ledger | Phase 22 | Complete |
