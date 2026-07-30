@@ -102,7 +102,7 @@ above. This is why that endpoint has to exist.
 
 ### Preview and cost guard (PREVIEW)
 
-- [ ] **PREVIEW-01**: Operator sees the exact structured payload and row count before anything
+- [x] **PREVIEW-01**: Operator sees the exact structured payload and row count before anything
       is sent, and must approve it
 
 - [ ] **PREVIEW-02**: Operator sees an estimated provider-credit and Anthropic-token cost for
@@ -113,7 +113,7 @@ above. This is why that endpoint has to exist.
 - [ ] **PREVIEW-03**: Batches above a configured size are chunked, with the chunking plan shown
       in the preview
 
-- [ ] **PREVIEW-04**: Operator can abort at the preview with nothing sent and no cost incurred
+- [x] **PREVIEW-04**: Operator can abort at the preview with nothing sent and no cost incurred
       beyond extraction
 
 ### Dispatch (DISPATCH)
@@ -239,7 +239,7 @@ above. This is why that endpoint has to exist.
 - [x] **PLUGIN-01**: The entrypoint installs and runs as a Claude plugin, invoked conversationally
       rather than by hand-running a script
 
-- [ ] **PLUGIN-02**: Endpoint URL and webhook secret live in a plugin-local config file that is
+- [x] **PLUGIN-02**: Endpoint URL and webhook secret live in a plugin-local config file that is
       never committed. The operator performs setup once, copying the tracked example file and
       filling in the two values obtained from the n8n admin. Nothing is committed, the plugin
       never displays a secret back or asks for one in the conversation, and provider and HubSpot
@@ -308,10 +308,10 @@ duplicates. Phase numbering continues from the archived v0.5 milestone (ended at
 | STRUCT-02 | Phase 24 | Pending |
 | STRUCT-03 | Phase 24 | Pending |
 | STRUCT-04 | Phase 24 | Pending |
-| PREVIEW-01 | Phase 23 | Pending |
+| PREVIEW-01 | Phase 23 | Complete |
 | PREVIEW-02 | Phase 25 | Pending |
 | PREVIEW-03 | Phase 25 | Pending |
-| PREVIEW-04 | Phase 23 | Pending |
+| PREVIEW-04 | Phase 23 | Complete |
 | DISPATCH-01 | Phase 23 | Complete |
 | DISPATCH-02 | Phase 25 | Pending |
 | DISPATCH-03 | Phase 23 | Complete |
@@ -343,7 +343,7 @@ duplicates. Phase numbering continues from the archived v0.5 milestone (ended at
 | REVIEW-04 | Phase 30 | Pending |
 | REVIEW-05 | Phase 30 | Pending |
 | PLUGIN-01 | Phase 23 | Complete |
-| PLUGIN-02 | Phase 23 | Pending |
+| PLUGIN-02 | Phase 23 | Complete |
 | PLUGIN-03 | Phase 23 | Complete |
 | PLUGIN-04 | Phase 23 | Complete |
 

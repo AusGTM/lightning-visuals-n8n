@@ -4,18 +4,18 @@ milestone: v0.6
 milestone_name: Claude Plugin Entrypoint
 current_phase: 23
 current_phase_name: walking-skeleton-plugin-shell-tabular-dispatch
-current_plan: 04
+current_plan: 05
 status: executing
-stopped_at: 23-04 complete (wave 2, the tracer) — config gate, tabular read/convert, disarmed dispatch, plugin manifest, and the contact-upload skill all proven end to end with a stub transport; unarmed path leaves zero calls recorded. 23-01, 23-02, 23-03 also complete.
-last_updated: "2026-07-31T00:00:00.000Z"
+stopped_at: 23-05 complete (wave 3) — adaptive display-only preview (preview.py), skill wording driving it, operator README setup/usage docs, PLUGIN-02 wording reconciled with D-05. 23-01 through 23-04 also complete.
+last_updated: "2026-07-31T21:15:00.000Z"
 last_activity: 2026-07-31
-last_activity_desc: executed 23-04 (walking-skeleton tracer — config_gate.py, tabular.py, dispatch.py, plugin manifest + skill, architecture guard)
+last_activity_desc: executed 23-05 (adaptive preview, skill/README docs, PLUGIN-02 reconciliation)
 progress:
   total_phases: 8
   completed_phases: 0
   total_plans: 6
-  completed_plans: 3
-  percent: 6
+  completed_plans: 4
+  percent: 8
 ---
 
 # Project State
@@ -23,9 +23,9 @@ progress:
 ## Current Position
 
 Phase: 23 — Walking Skeleton — Plugin Shell & Tabular Dispatch (executing)
-Plan: 23-01, 23-02, 23-03 complete (wave 1); 23-04 complete (wave 2, the tracer)
-Status: 23-01 (contact-lane create gate fix), 23-02 (file-handoff smoke test), 23-03 (test scaffolding + network guard), and 23-04 (config gate / tabular / disarmed dispatch / plugin shell) done
-Last activity: 2026-07-31 — executed 23-04
+Plan: 23-01, 23-02, 23-03 complete (wave 1); 23-04 complete (wave 2, the tracer); 23-05 complete (wave 3)
+Status: 23-01 (contact-lane create gate fix), 23-02 (file-handoff smoke test), 23-03 (test scaffolding + network guard), 23-04 (config gate / tabular / disarmed dispatch / plugin shell), and 23-05 (adaptive preview, skill/README docs, PLUGIN-02 reconciliation) done
+Last activity: 2026-07-31 — executed 23-05
 
 ## Accepted requirement amendments (reconcile before each phase seals)
 
@@ -34,7 +34,7 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 
 | # | Requirement | Amendment | Source |
 |---|---|---|---|
-| 1 | PLUGIN-02 | Operator, not admin, performs config setup from the committed example file | Phase 23 D-05 |
+| 1 | PLUGIN-02 | Operator, not admin, performs config setup from the committed example file | Phase 23 D-05 (wording reconciled in REQUIREMENTS.md by 23-05) |
 | 2 | Phase 25 criterion 2 | Provider default ships as full waterfall, so silence enables providers. Mitigated: `Parse HubSpot Event` has no server-side default and fails closed, and the resolved selection is always shown in the preview | Phase 25 D-05 / D-06a |
 | 3 | STATUS-04 + Phase 27 criterion 4 | "Stuck lock" redefined as a long-running execution. `enrichment_lock_until` does not exist and `lv_enrichment_status` is never set to `running` | Phase 27 D-07a–d |
 | 4 | REPORT-02 | ICP-tier clause removed entirely. HubSpot owns the derived ICP outputs per Phase 15 Approach C; the backend has nothing to read back and a placeholder would imply otherwise | Phase 26 D-10a / D-10b |
@@ -58,15 +58,15 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 ## Progress
 
 **Phases Complete:** 0 / 8
-**Current Plan:** 23-01, 23-02, 23-03, 23-04 (all complete; 4/6 plans)
+**Current Plan:** 23-01, 23-02, 23-03, 23-04, 23-05 (all complete; 5/6 plans)
 
 ```
-[█░░░░░░░░░░░░░░░░░░░] 6%
+[█░░░░░░░░░░░░░░░░░░░] 8%
 ```
 
 | Phase | Requirements | Status |
 |-------|--------------|--------|
-| 23. Walking Skeleton — Plugin Shell & Tabular Dispatch | 10 | Executing (23-01, 23-02, 23-03, 23-04 done, 4/6 plans) |
+| 23. Walking Skeleton — Plugin Shell & Tabular Dispatch | 10 | Executing (23-01, 23-02, 23-03, 23-04, 23-05 done, 5/6 plans) |
 | 24. Non-Tabular Input Adapters | 8 | Not started |
 | 25. Enrichment Lane & Cost Guard | 4 | Not started |
 | 26. Outcome Reporting & Safe Retry | 4 | Not started |
@@ -164,6 +164,18 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
   guard now makes PLUGIN-04 (no backend import) a test, not a promise. Full repo suite: 741
   passed, no regressions; no file outside `operator-claude-plugin/` touched.
 
+- **23-05 replaced the 23-04 preview placeholder with the real adaptive preview.**
+  `preview.py`'s `label_headers()`/`build_preview()` read `config/column_mapping.yaml`
+  as a read-only display lookup only (mirroring `Map Columns`' case-insensitive,
+  whitespace-collapsed rule exactly rather than improving on it), never transforming a
+  row — a byte-identity test proves the source file is untouched. ≤20 rows renders every
+  row; above that, first-10/last-3 plus per-column fill rates (including dropped
+  columns). SKILL.md, README.md, and CHANGELOG.md now teach setup and usage end to end,
+  and PLUGIN-02's wording was reconciled with D-05 (operator self-setup replaces the
+  stale admin-provisioned text, in both REQUIREMENTS.md and two stale README passages
+  that had drifted the same way). Full repo suite: 749 passed, no regressions; no file
+  outside `operator-claude-plugin/` or `.planning/` touched.
+
 **Todos / carried context:**
 
 - Phase 26 planning must first verify what `hubspot/contact-upload` actually returns:
@@ -184,6 +196,6 @@ milestone otherwise scoped as plugin-only.
 
 ## Session Continuity
 
-**Stopped At:** 23-04 (walking-skeleton tracer: config gate, tabular read/convert, disarmed dispatch, plugin manifest + skill, architecture guard) complete. 23-01, 23-02, 23-03 also complete.
-**Resume File:** `.planning/workstreams/plugin-entrypoint/phases/23-walking-skeleton-plugin-shell-tabular-dispatch/23-04-SUMMARY.md`
-**Next Action:** Continue executing phase 23's remaining plans (23-05 wave 3 — real adaptive preview; 23-06 wave 4)
+**Stopped At:** 23-05 (adaptive preview, skill/README docs, PLUGIN-02 reconciliation) complete. 23-01 through 23-04 also complete.
+**Resume File:** `.planning/workstreams/plugin-entrypoint/phases/23-walking-skeleton-plugin-shell-tabular-dispatch/23-05-SUMMARY.md`
+**Next Action:** Continue executing phase 23's remaining plan (23-06, wave 4 — the final plan closing out the phase)

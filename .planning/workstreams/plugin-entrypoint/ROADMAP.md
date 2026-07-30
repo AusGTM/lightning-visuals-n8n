@@ -70,7 +70,7 @@ phase directories never collide with phases 20–22.**
   4. Every file the client adds lives under `operator-claude-plugin/`, with its own README and CHANGELOG, and no backend file is modified to make the client work — the client is replaceable without touching `n8n/`, `config/`, or the enrichment `src/` modules.
   5. With the endpoint URL or auth secret missing from admin-provisioned configuration (which lives outside the plugin source and is never committed), the plugin refuses before any network call and says in plain language what is not configured and who can fix it — the operator is never shown a key, asked to paste one, or left staring at a socket error.
 
-**Plans**: 6 plans
+**Plans**: 5/6 plans executed
 
 Plans:
 **Wave 1**
@@ -85,7 +85,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 23-05-PLAN.md — Adaptive preview with display-only column labelling, skill preview/approve wording, operator docs, PLUGIN-02 reconciliation
+- [x] 23-05-PLAN.md — Adaptive preview with display-only column labelling, skill preview/approve wording, operator docs, PLUGIN-02 reconciliation
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
@@ -108,6 +108,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
+
 - [ ] 24-01-PLAN.md — Extraction validator spine: artifact handoff, identity pre-flight, canonical-key reporting, provenance strip (wave 1)
 - [ ] 24-02-PLAN.md — Screenshot overlap dedupe on the identity key, and one-list ambiguity aggregation (wave 2)
 - [ ] 24-03-PLAN.md — The extraction contract: prose, foreign-JSON, URL and screenshot adapters wired into the Phase 23 skill (wave 2)
@@ -161,6 +162,7 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
+
 - [ ] 26-01-PLAN.md — Contact-lane per-record ledger from the decision node, executions-API fallback, run handle, and honest in-flight framing (REPORT-01, REPORT-03)
 - [ ] 26-02-PLAN.md — Enrichment-lane review flag and remaining credits, with unknown kept distinct from zero and no ICP surface (REPORT-02)
 - [ ] 26-03-PLAN.md — Failing rows named and classified by what a re-send can fix; retry routes through the one armed dispatch path (DISPATCH-04)
@@ -326,7 +328,7 @@ the operator can act on it without leaving the conversation.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 23. Walking Skeleton — Plugin Shell & Tabular Dispatch | 2/6 | Executing | - |
+| 23. Walking Skeleton — Plugin Shell & Tabular Dispatch | 5/6 | In Progress|  |
 | 24. Non-Tabular Input Adapters | 0/? | Not started | - |
 | 25. Enrichment Lane & Cost Guard | 0/? | Not started | - |
 | 26. Outcome Reporting & Safe Retry | 0/? | Not started | - |
