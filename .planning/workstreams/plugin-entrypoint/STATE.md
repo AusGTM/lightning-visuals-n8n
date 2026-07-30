@@ -67,7 +67,7 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 | Phase | Requirements | Status |
 |-------|--------------|--------|
 | 23. Walking Skeleton — Plugin Shell & Tabular Dispatch | 10 | Executing (23-01, 23-02, 23-03, 23-04, 23-05 done, 5/6 plans) |
-| 24. Non-Tabular Input Adapters | 8 | Not started |
+| 24. Non-Tabular Input Adapters | 8 | Executing (24-01 done, 1/3 plans) |
 | 25. Enrichment Lane & Cost Guard | 4 | Not started |
 | 26. Outcome Reporting & Safe Retry | 4 | Not started |
 | 27. Backend Status Surface | 6 | Not started |
@@ -176,7 +176,28 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
   that had drifted the same way). Full repo suite: 749 passed, no regressions; no file
   outside `operator-claude-plugin/` or `.planning/` touched.
 
+- **24-01 built the extraction validator spine** — `operator-claude-plugin/scripts/extraction.py`
+  validates (never extracts) a Claude-written JSON artifact: `canonical_props()` and
+  `identity_groups()` derive from `config/column_mapping.yaml` rather than being retyped;
+  `has_identity()` trims before checking presence, matching the deployed `Map Columns` node's
+  `requiredIdentity()` rather than the untrimmed `src/file_loader.py::_has_identity`; a
+  non-canonical key is stripped from the row AND reported (record index + key) before the
+  identity check runs; every artifact-shape failure raises a distinct `ExtractionError` code
+  (never a silent zero-row success); `write_dispatch_csv()` raises on any row key outside the
+  canonical set, including a smuggled `provenance` key, so STRUCT-01 is structural, not a
+  runtime filter someone can forget. `preview.py` gained `resolve_mapping_path()` (one shared
+  mapping-file lookup) and `build_extracted_preview()` (provenance/rejects/dropped-keys/
+  ambiguities in one structure, reusing the same adaptive-sample rule). Full repo suite: 774
+  passed at completion (749 baseline + 25 new); no file outside `operator-claude-plugin/` or
+  `.gitignore` touched. 24-02 (screenshot dedupe, ambiguity aggregation) and 24-03 (the four
+  adapters wired into SKILL.md) build on this artifact contract next.
+
 **Todos / carried context:**
+
+- 24-03 must write `extraction.md`'s documented artifact schema example(s) such that a
+  contract test (D-13) can parse the fenced examples out of the markdown and run them
+  through `extraction.py`'s real `validate()` — this pin was not yet built in 24-01 since
+  `extraction.md` itself doesn't exist until 24-03.
 
 - Phase 26 planning must first verify what `hubspot/contact-upload` actually returns:
   `responseMode: lastNode` over a branching graph may not carry every row's outcome. The

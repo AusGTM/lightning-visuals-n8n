@@ -109,7 +109,7 @@ Plans:
 
 Plans:
 
-- [ ] 24-01-PLAN.md — Extraction validator spine: artifact handoff, identity pre-flight, canonical-key reporting, provenance strip (wave 1)
+- [x] 24-01-PLAN.md — Extraction validator spine: artifact handoff, identity pre-flight, canonical-key reporting, provenance strip (wave 1)
 - [ ] 24-02-PLAN.md — Screenshot overlap dedupe on the identity key, and one-list ambiguity aggregation (wave 2)
 - [ ] 24-03-PLAN.md — The extraction contract: prose, foreign-JSON, URL and screenshot adapters wired into the Phase 23 skill (wave 2)
 

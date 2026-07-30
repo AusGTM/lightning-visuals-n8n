@@ -62,13 +62,13 @@ above. This is why that endpoint has to exist.
 
 ### Input adapters (INGEST)
 
-- [ ] **INGEST-01**: Operator can paste freeform text (prose, email signatures, a typed list of
+- [x] **INGEST-01**: Operator can paste freeform text (prose, email signatures, a typed list of
       names/companies) and have contact rows extracted from it
 
 - [x] **INGEST-02**: Operator can point the plugin at a CSV or XLSX file and have its rows read
       without pre-cleaning the headers
 
-- [ ] **INGEST-03**: Operator can supply already-structured JSON in a foreign shape and have it
+- [x] **INGEST-03**: Operator can supply already-structured JSON in a foreign shape and have it
       translated to canonical rows
 
 - [ ] **INGEST-04**: Operator can name existing HubSpot records (list, view, or record IDs) to
@@ -77,7 +77,7 @@ above. This is why that endpoint has to exist.
 - [ ] **INGEST-05**: Operator can supply a public URL and have contact/company data extracted
       from the page content
 
-- [ ] **INGEST-06**: Operator gets a clear, actionable error when an input is unreadable,
+- [x] **INGEST-06**: Operator gets a clear, actionable error when an input is unreadable,
       empty, or unsupported — never a silent drop
 
 - [ ] **INGEST-07**: Operator can supply screenshots of a web page (one or many) and have
@@ -90,13 +90,13 @@ above. This is why that endpoint has to exist.
 - [x] **STRUCT-01**: Extracted rows are emitted over the canonical contact props only, so the
       existing n8n `Map Columns` node accepts them unchanged
 
-- [ ] **STRUCT-02**: Rows failing the identity rule (email OR firstname+lastname+company) are
+- [x] **STRUCT-02**: Rows failing the identity rule (email OR firstname+lastname+company) are
       separated and reported rather than sent
 
-- [ ] **STRUCT-03**: Extraction from unstructured sources records provenance per row (which
+- [x] **STRUCT-03**: Extraction from unstructured sources records provenance per row (which
       input, which span/URL) so an operator can audit a questionable row
 
-- [ ] **STRUCT-04**: Extraction never invents field values — absent data stays absent. A value
+- [x] **STRUCT-04**: Extraction never invents field values — absent data stays absent. A value
       the source renders ambiguously (truncated text, an unreadable character in a screenshot)
       is flagged for operator confirmation, not resolved by guessing
 
@@ -297,17 +297,17 @@ duplicates. Phase numbering continues from the archived v0.5 milestone (ended at
 
 | Requirement | Phase | Status |
 | --- | --- | --- |
-| INGEST-01 | Phase 24 | Pending |
+| INGEST-01 | Phase 24 | Complete |
 | INGEST-02 | Phase 23 | Complete |
-| INGEST-03 | Phase 24 | Pending |
+| INGEST-03 | Phase 24 | Complete |
 | INGEST-04 | Phase 25 | Pending |
 | INGEST-05 | Phase 24 | Pending |
-| INGEST-06 | Phase 24 | Pending |
+| INGEST-06 | Phase 24 | Complete |
 | INGEST-07 | Phase 24 | Pending |
 | STRUCT-01 | Phase 23 | Complete |
-| STRUCT-02 | Phase 24 | Pending |
-| STRUCT-03 | Phase 24 | Pending |
-| STRUCT-04 | Phase 24 | Pending |
+| STRUCT-02 | Phase 24 | Complete |
+| STRUCT-03 | Phase 24 | Complete |
+| STRUCT-04 | Phase 24 | Complete |
 | PREVIEW-01 | Phase 23 | Complete |
 | PREVIEW-02 | Phase 25 | Pending |
 | PREVIEW-03 | Phase 25 | Pending |
