@@ -334,7 +334,13 @@ Plans:
   4. The run closes disarmed and audited: read-back shows every write flag `"false"` and the allowlist cleared.
   5. A cost ledger records actual spend — provider credit balances before/after and Anthropic tokens per call — against the 2026-07-30 estimates, producing a calibrated per-record cost figure that makes fleet-wide arming an informed operator decision.
 
-**Plans**: TBD
+**Plans:** 4 plans
+
+Plans:
+- [ ] 22-01-PLAN.md — Read-only pre-canary tracer: record snapshot/compare tool with research-gate prediction, plus a live n8n execution probe settling token-usage availability
+- [ ] 22-02-PLAN.md — Live write-safety read-back verifier (armed and disarmed expectations, both write lanes) with a proven disarmed baseline
+- [ ] 22-03-PLAN.md — Cost ledger: provider balance capture with settle handling, cited 2026-07-30 estimates baseline, estimate-versus-actual report, ledger document
+- [ ] 22-04-PLAN.md — Consolidated operator runbook sequencing every pending armed action, one-way-door decision gate, and the blocking armed-canary checkpoint
 
 ## Milestone 5 Progress
 
@@ -345,6 +351,6 @@ Phases execute in numeric order: 20 → 21 → 22 (autonomous-buildable work fir
 |-------|----------------|--------|-----------|
 | 20. Lusha v3 Migration | 5/5 | Complete* | 2026-07-30 |
 | 21. Transport & Schema Hygiene | 0/? | Not started | - |
-| 22. Armed E2E Enrichment Canary | 0/? | Not started | - |
+| 22. Armed E2E Enrichment Canary | 0/4 | Planned | - |
 
 \* Phase 20 complete pending one operator action: live create of `lusha_contact_id`/`lusha_company_id` (classifier-blocked for agents; command in 20-04-SUMMARY.md).
