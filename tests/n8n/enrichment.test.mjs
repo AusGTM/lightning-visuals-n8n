@@ -12,7 +12,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
-const { toCandidates } = require(path.join(ROOT, "n8n/code/normalizeProviders.js"));
+const { toCandidates, lushaRecordId } = require(path.join(ROOT, "n8n/code/normalizeProviders.js"));
 const { scoreCandidates } = require(path.join(ROOT, "n8n/code/scoreEnrichment.js"));
 const { decideAction } = require(path.join(ROOT, "n8n/code/enrichmentGate.js"));
 const { normalizePhone } = require(path.join(ROOT, "n8n/code/normalizePhone.js"));
@@ -215,6 +215,54 @@ test("toCandidates: v3 missing record object, {}, and null -> zero candidates, n
   assert.deepEqual(toCandidates("lusha", {}, "contacts"), []);
   assert.doesNotThrow(() => toCandidates("lusha", null, "contacts"));
   assert.deepEqual(toCandidates("lusha", null, "contacts"), []);
+});
+
+// --- lushaRecordId: Plan 04 (REQ-lusha-id-staging) extraction, sibling of toCandidates ---
+
+test("lushaRecordId: v3 contact fixture returns results[0].id", () => {
+  assert.equal(lushaRecordId(lushaV3Contact, "contacts"), "v1.SYNTHETIC_CONTACT_ID_0001");
+});
+
+test("lushaRecordId: v3 company fixture returns results[0].id", () => {
+  assert.equal(lushaRecordId(lushaV3Company, "companies"), "v1.SYNTHETIC_COMPANY_ID_0002");
+});
+
+test("lushaRecordId: no-match fixture returns null", () => {
+  assert.equal(lushaRecordId(lushaV3NoMatch, "contacts"), null);
+});
+
+test("lushaRecordId: a per-record error marker returns null", () => {
+  const raw = { requestId: "x", results: [{ error: { code: "NOT_FOUND", message: "Contact not found" } }],
+    billing: { creditsCharged: 0, resultsReturned: 0 } };
+  assert.equal(lushaRecordId(raw, "contacts"), null);
+});
+
+test("lushaRecordId: {} and null never throw and return null", () => {
+  assert.doesNotThrow(() => lushaRecordId({}, "contacts"));
+  assert.equal(lushaRecordId({}, "contacts"), null);
+  assert.doesNotThrow(() => lushaRecordId(null, "contacts"));
+  assert.equal(lushaRecordId(null, "contacts"), null);
+});
+
+test("lushaRecordId: an id-less bare record (no id field) returns null, never throws", () => {
+  assert.doesNotThrow(() => lushaRecordId({ emails: [] }, "contacts"));
+  assert.equal(lushaRecordId({ emails: [] }, "contacts"), null);
+});
+
+test("toCandidates: lushaCandidates()'s field set is unchanged by the presence of lushaRecordId", () => {
+  // Guards REQ-lusha-v3-normalize's field-identical candidate stream: the id must never
+  // leak into the candidate stream as a new field, even though it is now extractable.
+  const contactFields = new Set(toCandidates("lusha", lushaV3Contact, "contacts").map((c) => c.field));
+  assert.deepEqual([...contactFields].sort(),
+    ["email", "jobtitle", "mobilephone", "persona_group", "phone", "seniority"]);
+  assert.ok(!contactFields.has("id"), "id must never appear as a candidate field");
+  assert.ok(!contactFields.has("lusha_contact_id"), "lusha_contact_id must never appear as a candidate field");
+
+  const companyFields = new Set(toCandidates("lusha", lushaV3Company, "companies").map((c) => c.field));
+  assert.deepEqual([...companyFields].sort(),
+    ["industry", "lv_country_region_normalized", "lv_employee_band", "lv_revenue_band"]);
+  assert.ok(!companyFields.has("id"), "id must never appear as a candidate field");
+  assert.ok(!companyFields.has("lusha_company_id"), "lusha_company_id must never appear as a candidate field");
 });
 
 test("toCandidates: ZoomInfo live GTM enrich (data[].attributes + meta.matchStatus)", () => {

@@ -183,6 +183,7 @@ function _personaGroup(departments) {
 function _lushaV3Contact(entry) {
   const loc = entry.location || {};
   return {
+    id: entry.id,
     emails: entry.emails,
     phones: entry.phones,
     jobTitle: entry.jobTitle,
@@ -200,6 +201,7 @@ function _lushaV3Company(entry) {
       : (ec.min != null && ec.max != null ? Math.round((ec.min + ec.max) / 2) : null);
   }
   return {
+    id: entry.id,
     revenueRange,
     employeeCount: ec,
     mainIndustry: entry.industry,
@@ -278,6 +280,25 @@ function lushaCandidates(rawResponse, objectType) {
     _push(out, "lv_country_region_normalized", src, country, normalizeCountryRegion(country), 0.6, updated);
   }
   return out;
+}
+
+// lushaRecordId(rawResponse, objectType) -- extracts the opaque Lusha record identifier
+// (docs/LUSHA-V3-CONTRACT.md §4/§5: `results[i].id`) for Plan 04's HubSpot staging
+// properties (lusha_contact_id / lusha_company_id). A deliberate SIBLING of
+// lushaCandidates(), not a field inside it -- REQ-lusha-v3-normalize requires the
+// candidate stream stay field-identical, so the id must never enter scoreCandidates as a
+// candidate. Reuses the SAME _lushaRecord() envelope adapter Plan 03 built (a no-match, a
+// per-record error, a missing/non-object entry, `{}` and `null` all resolve through that
+// adapter to {} / no id). Never throws; returns null for anything that is not a non-empty
+// string id.
+function lushaRecordId(rawResponse, objectType) {
+  try {
+    const rec = _lushaRecord(rawResponse, objectType);
+    const id = rec && rec.id;
+    return typeof id === "string" && id.trim() !== "" ? id : null;
+  } catch (e) {
+    return null;
+  }
 }
 
 function apolloCandidates(raw, objectType) {
@@ -414,6 +435,7 @@ function toCandidates(providerName, rawResponse, objectType) {
 
 module.exports = {
   toCandidates,
+  lushaRecordId,
   normalizeRevenueBand,
   normalizeEmployeeBand,
   normalizeCountryRegion,

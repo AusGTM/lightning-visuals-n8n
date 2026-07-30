@@ -214,3 +214,30 @@ def test_zero_env_or_vars_expressions_still_survive_write_safety_addition():
     import re
     text = WORKFLOW_PATH.read_text()
     assert not re.findall(r"\$env\b|\$vars\b", text)
+
+
+# --- (d) Plan 04 (REQ-lusha-id-staging): the id row field reaches the property patch -----
+
+def test_decide_action_spreads_lusha_ids_into_the_contact_patch():
+    doc = _load()
+    code = _node(doc, "Decide Action")["parameters"]["jsCode"]
+    assert "row.lusha_ids" in code, "Decide Action does not spread row.lusha_ids into properties"
+
+
+def test_decide_company_action_spreads_lusha_ids_into_the_company_patch():
+    doc = _load()
+    code = _node(doc, "Decide Company Action")["parameters"]["jsCode"]
+    assert "row.lusha_ids" in code, "Decide Company Action does not spread row.lusha_ids into properties"
+
+
+def test_normalize_score_nodes_extract_lusha_record_id():
+    """The three normalize-and-score producers (contacts CLOUD, companies CLOUD) must call
+    lushaRecordId() and attach it as its OWN row field, never as a scored candidate."""
+    doc = _load()
+    contact_code = _node(doc, "Normalize + Score")["parameters"]["jsCode"]
+    assert "lushaRecordId(" in contact_code
+    assert "lusha_contact_id" in contact_code
+
+    company_code = _node(doc, "Normalize + Score Company")["parameters"]["jsCode"]
+    assert "lushaRecordId(" in company_code
+    assert "lusha_company_id" in company_code
