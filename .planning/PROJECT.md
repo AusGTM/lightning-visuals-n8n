@@ -52,7 +52,7 @@ placeholder. Authoring it is downstream work. Supersedes CLAUDE.md §29.
 - Dedupe Search transport swap: retire the last native-node search (BUG-23 family)
 - Schema hygiene: `lv_org_type` text→enumeration one-way door + `lv_country_region_normalized` field-policy entry
 
-**Key context:** Lusha balance ~3.9k credits vs ~12.6k measured v2 full-sweep cost (~4.65 credits/reveal, phone bundling) — v3 selective reveal is a cost fix, not just deadline compliance. Research lane live on `claude-haiku-4-5` since 2026-07-30 (judge `claude-sonnet-5` armed, cap 50). Deferred to v0.6: HubSpot-side ICP formula (the `1 + 1` placeholder) + JTBD 2 weighted-rubric sign-off (REQ-signoff-gate) — downstream-owner decisions.
+**Key context:** Lusha balance ~3.9k credits vs ~12.6k measured v2 full-sweep cost (~4.65 credits/reveal, phone bundling) — v3 selective reveal is a cost fix, not just deadline compliance. Research lane live on `claude-haiku-4-5` since 2026-07-30 (judge `claude-sonnet-5` armed, cap 50). Deferred to **v0.7** (not v0.6, which is the operator client): HubSpot-side ICP formula (the `1 + 1` placeholder) + JTBD 2 weighted-rubric sign-off (REQ-signoff-gate) — downstream-owner decisions needing a business owner, not client work.
 
 ## Shipped Milestone: v0.4 Reachability & Verification Debt (archived)
 
