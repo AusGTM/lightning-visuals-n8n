@@ -31,7 +31,7 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 Phase: Milestone v0.4 complete
 Plan: —
 Status: Awaiting next milestone
-Last activity: 2026-07-29 — Milestone v0.4 completed and archived
+Last activity: 2026-07-30 — Completed quick task 260730-din: split research/judge model switches, judge escalation armed by default (cap 50)
 
 ## Performance Metrics
 
@@ -173,6 +173,7 @@ Items carried forward to later milestones:
 | Date | Slug | Summary | Commits |
 |------|------|---------|---------|
 | 2026-07-28 | [hubspot-credential-binding](quick/20260728-hubspot-credential-binding/SUMMARY.md) | Bound the 10 unmapped HubSpot nodes to `LV HubSpot` and made `bind_credentials()` fail closed by node type instead of silently deploying any unmapped credential-requiring node unbound | `dbb07d5`, `fbc7509`, `16ca87c` |
+| 2026-07-30 | [judge-research-model-switches](quick/20260730-judge-research-model-switches/260730-din-SUMMARY.md) | Split `ANTHROPIC_SONNET_MODEL` into `ANTHROPIC_RESEARCH_MODEL` + `ANTHROPIC_JUDGE_MODEL` (both `claude-sonnet-5`); `ALLOW_JUDGE_ESCALATION` (renamed, default `true` — judge armed) + `MAX_JUDGE_VALIDATIONS_PER_RUN` (renamed, `50`); overlay entry deleted; disarmed redeploy read-back verified. Verified 8/8, review clean | `aac1f9f`, `7bd952b`, `19da368` |
 
 ## Session Continuity
 
@@ -180,6 +181,7 @@ Last session: 2026-07-29T20:15:40+10:00
 Prior session: 2026-07-29T09:19:05.759Z
 Stopped at: Phase 19 complete + FULL operator runbook executed (2026-07-29): Step-0 redeploy (bug-26 resolved, deployment current with git), 16.9 armed `company:update` canary (execution 108, PASS), disarm + read-back (8x `"false"`, allowlist cleared). Ledger 6/6 passed. Note: the "all three `active=false`" statement below is HISTORICAL — all three workflows are live `active=true`.
 Resume file: None
+**QUICK TASK 260730-din DONE 2026-07-30** — split `ANTHROPIC_SONNET_MODEL` into `ANTHROPIC_RESEARCH_MODEL` + `ANTHROPIC_JUDGE_MODEL` (both `claude-sonnet-5`), renamed `ALLOW_SONNET_ESCALATION` -> `ALLOW_JUDGE_ESCALATION` (default flipped to `true`, judge now armed by default) and `MAX_SONNET_VALIDATIONS_PER_RUN` -> `MAX_JUDGE_VALIDATIONS_PER_RUN` (default raised to `50`); live `LV Enrichment` deployment redeployed disarmed and read-back verified (judge `true`x2, cap `50`, both models `claude-sonnet-5`, zero old-name occurrences, all write-safety flags still `"false"`).
 **TRACK B PROVISION + DEPLOY DONE 2026-07-28** — deployed to **Robert Li's personal project** (`T9IPFKpIn2aUYYj3`) on `alexherman.app.n8n.cloud`. All 6 credentials provisioned; all 3 workflows deployed and verified by read-back: `LV Contact Ingest` (19 nodes, 4 bound, 3 HubSpot, 0 unbound), `LV Enrichment` (94 nodes, 22 bound, 8 HubSpot, 0 unbound), `LV Scheduled Maintenance` (30 nodes, 9 bound, 9 HubSpot, 0 unbound). No duplicate node names, no stale credential references. **All three `active=false`** — activation is the only remaining step and is deliberately NOT done.
 
 **Project-ownership gotcha (cost a full deploy cycle).** API-created workflows and credentials land in the personal project of the API KEY's owner, and n8n's GUI is project-scoped — so a first deploy under Alex's key was invisible to Robert even though the API returned all three. Resolved by re-issuing the key under Robert (`N8N_API_KEY`; Alex's retained as `N8N_API_KEY_2`), deleting the 3 workflows + 6 credentials from Alex's project (verified 0/0 after), and re-running. **Anyone re-deploying must confirm whose key is in `N8N_API_KEY` first.**
