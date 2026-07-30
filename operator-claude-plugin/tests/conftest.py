@@ -189,6 +189,59 @@ class _StubGetTransport:
         return _as_response(scripted, _StubGetResponse)
 
 
+class _StubModuleTransport:
+    """A MODULE-shaped recorder: `.get`/`.post`/`.put` on one object, sharing one `calls`
+    list so a whole mutation sequence reads back in order.
+
+    Phase 28's modules take `transport` defaulting to the bare `requests` module (28-CONTEXT
+    D-28) rather than to a single bound verb, so neither `_StubTransport` nor
+    `_StubGetTransport` — both plain callables — fits them. Note that a module-shaped
+    transport must be handed down to `n8n_read` as `transport.get`, since `_get_json` CALLS
+    what it is given (D-33).
+
+    Scripted entries are shared with `_as_response`: a bare payload (200), a
+    `(status_code, payload)` pair, or an Exception raised as a transport failure. With no
+    `responses` every call answers 200 with the default accepted body.
+    """
+
+    def __init__(self, responses=None):
+        self._responses = list(responses) if responses is not None else None
+        self.calls = []
+
+    def _record(self, verb, url, **kwargs):
+        self.calls.append({"verb": verb, "url": url, **kwargs})
+        if self._responses is None:
+            return _StubResponse()
+        scripted = self._responses.pop(0) if self._responses else {}
+        return _as_response(scripted, _StubResponse)
+
+    def get(self, url, headers=None, params=None, timeout=None, **kwargs):
+        return self._record("get", url, headers=headers, params=params, timeout=timeout)
+
+    def post(self, url, headers=None, json=None, timeout=None, **kwargs):
+        return self._record("post", url, headers=headers, json=json, timeout=timeout)
+
+    def put(self, url, headers=None, json=None, timeout=None, **kwargs):
+        return self._record("put", url, headers=headers, json=json, timeout=timeout)
+
+    @property
+    def verbs(self):
+        return [call["verb"] for call in self.calls]
+
+    @property
+    def mutating_calls(self):
+        """Every state-changing call. A refusal must leave this empty — the GET that a
+        refusal necessarily performed first is not a mutation."""
+        return [call for call in self.calls if call["verb"] in ("post", "put")]
+
+
+@pytest.fixture
+def stub_module_transport_factory():
+    """Returns `_StubModuleTransport` so a control test can script a whole
+    GET → POST → PUT → POST → GET sequence against one recorder."""
+    return _StubModuleTransport
+
+
 @pytest.fixture
 def stub_get_transport_factory():
     """Returns the `_StubGetTransport` class so a test can script its own sequence of

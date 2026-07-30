@@ -25,14 +25,19 @@ _SETUP_HINT = (
 # Note the status capability does NOT list webhook_secret. Losing that secret costs only
 # the backend-supplied half of the status answer (balances, HubSpot counts), which
 # reports itself unavailable — the workflow and execution half still answers.
+# Control needs the same two keys status needs but is a SEPARATE capability on purpose: a
+# config that may read the backend is not thereby one that may mutate it, so "read-only
+# plugin" stays expressible by withholding the row rather than by convention (D-29).
 CAPABILITY_KEYS = {
     "contact-upload": ("n8n_url", "webhook_secret"),
     "status": ("n8n_url", "n8n_api_key"),
+    "control": ("n8n_url", "n8n_api_key"),
 }
 
 _CAPABILITY_DESCRIPTIONS = {
     "contact-upload": "uploading contacts",
     "status": "the backend status check",
+    "control": "turning workflows on or off",
 }
 
 

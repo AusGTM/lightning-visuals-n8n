@@ -136,10 +136,13 @@ def test_no_capability_refusal_ever_contains_a_configured_value(fake_config):
             assert value not in message
 
 
-def test_a_fully_configured_config_passes_both_capabilities(fake_config):
-    for capability in ("contact-upload", "status"):
+def test_a_fully_configured_config_passes_every_capability(fake_config):
+    # `control` joined the table in 28-01: the same two keys as `status`, kept a separate
+    # row because a config that may read the backend is not thereby one that may mutate it.
+    for capability in ("contact-upload", "status", "control"):
         config_gate.require_capability(fake_config, capability)
-    assert set(config_gate.usable_capabilities(fake_config)) == {"contact-upload", "status"}
+    assert set(config_gate.usable_capabilities(fake_config)) == {
+        "contact-upload", "status", "control"}
 
 
 def test_the_status_capability_does_not_require_the_webhook_secret(fake_config):
@@ -147,7 +150,7 @@ def test_the_status_capability_does_not_require_the_webhook_secret(fake_config):
     costs the backend-supplied half, not the whole answer."""
     cfg = {k: v for k, v in fake_config.items() if k != "webhook_secret"}
     config_gate.require_capability(cfg, "status")
-    assert config_gate.usable_capabilities(cfg) == ["status"]
+    assert set(config_gate.usable_capabilities(cfg)) == {"status", "control"}
 
 
 def test_the_status_read_refuses_before_any_transport_is_constructed(fake_config):
