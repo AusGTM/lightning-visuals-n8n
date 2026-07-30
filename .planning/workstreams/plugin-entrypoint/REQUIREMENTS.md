@@ -150,7 +150,7 @@ above. This is why that endpoint has to exist.
 
 ### Backend status and observability (STATUS)
 
-- [ ] **STATUS-01**: Operator can ask what the backend is doing and get one plain-language
+- [x] **STATUS-01**: Operator can ask what the backend is doing and get one plain-language
       answer — per workflow: on or off, whether live writes are currently enabled, when it last
       ran and whether that run succeeded, and anything in flight right now
 
@@ -325,7 +325,7 @@ duplicates. Phase numbering continues from the archived v0.5 milestone (ended at
 | REPORT-01 | Phase 26 | Complete |
 | REPORT-02 | Phase 26 | Pending |
 | REPORT-03 | Phase 26 | Complete |
-| STATUS-01 | Phase 27 | Pending |
+| STATUS-01 | Phase 27 | Complete |
 | STATUS-02 | Phase 27 | Complete |
 | STATUS-03 | Phase 27 | Complete |
 | STATUS-04 | Phase 27 | Complete |

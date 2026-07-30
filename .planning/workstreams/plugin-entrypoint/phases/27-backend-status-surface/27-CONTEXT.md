@@ -60,6 +60,16 @@ Phase 28) and no unprompted notification (that is Phase 29).
   read from the executions API the client already reads for STATUS-01. No schema change, no
   enrichment-pipeline work inside a read-only phase. This detects a wedged *run* rather than a
   wedged *record* — the more useful signal for the operator either way.
+- **D-07b(i) — refinement made at execution time (27-04), do not flatten it.** `stuck` is
+  **tri-state**, not boolean: `True` is over the threshold, `False` is under it or not in flight,
+  and **`None` is in flight with an age we could not read** (a missing or unparseable `startedAt`).
+  Collapsing `None` to `False` would make an unreadable run render as "running normally" — the same
+  unknown-as-healthy failure D-08 exists to prevent, just wearing a different key. The renderer says
+  the age is unknown and names the threshold it could *not* be judged against.
+- **D-07b(ii):** because A2's threshold is a carried convention rather than a measured value, the
+  verdict **always travels with both numbers** — the run's age and the threshold — and the rendered
+  sentence says in words that the threshold is a convention. A future plan that renders a bare
+  "stuck" verdict has removed the operator's ability to judge the call.
 - **D-07c:** "Queued" and "review backlog" **are** answerable today using the real `lv_`-prefixed
   properties (`lv_enrichment_requested`, `lv_enrichment_status`, `lv_enrichment_needs_review`,
   `lv_icp_needs_review`). Note that "queued" can only be a bare count — no request timestamp is
@@ -113,6 +123,14 @@ Phase 28) and no unprompted notification (that is Phase 29).
   two flags are declared in **different subsets** of those nodes. The reader must therefore **scan
   every node and report disagreement**, never trust a fixed node list. A hardcoded list would have
   been wrong the day it was written, and would silently under-report an armed backend.
+  — **Consequence found at execution time (27-04).** Widening to every workflow (D-07) means the
+  reader now works from `GET /api/v1/workflows`'s **collection** entries rather than a per-workflow
+  body fetch. That endpoint is documented to return full workflow objects, but nothing in this repo
+  proves it always carries `nodes`, and a thin entry would make write-safety read `unknown` for
+  every workflow at once — D-10's failure mode wearing an honest-looking word. `describe_all()`
+  therefore uses the collection entry only when it actually carries a `nodes` list, and falls back
+  to fetching that workflow's body otherwise. **Do not "simplify" that fallback away** in 27-05 or
+  Phase 28; it is what keeps an armed backend from reading unknown instead of on.
 - **D-11 (REFUTED — verified empirically, do NOT act on the original claim):** planning reported
   that `operator-claude-plugin/tests/conftest.py`'s autouse `no_network` fixture fails to block
   `requests.get`, leaving GET-based reads able to reach the live n8n instance. **This is false.** A
