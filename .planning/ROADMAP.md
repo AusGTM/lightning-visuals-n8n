@@ -246,3 +246,90 @@ both copy-loop fields wired with live producers; six-item verification ledger di
 deployment restored disarmed). Full detail:
 [`.planning/milestones/v0.4-ROADMAP.md`](milestones/v0.4-ROADMAP.md) ·
 requirements: [`.planning/milestones/v0.4-REQUIREMENTS.md`](milestones/v0.4-REQUIREMENTS.md)
+
+---
+
+# Milestone 5 — Lusha v3 & Armed Enrichment (v0.5)
+
+## Overview
+
+Two forcing functions drive this milestone. First, Lusha v2 dies 2026-11-18 and the measured v2
+economics are broken anyway — ~4.65 credits/reveal from phone-field bundling means a full sweep
+(~12.6k credits) exceeds the current ~3.9k balance. The v3 migration is therefore a cost fix, not
+just deadline compliance: `reveal[]` derived from the gate's `missingFields` makes the field policy
+the cost control, and staged Lusha IDs make re-enrichment free. Second, the full enrichment pipeline
+(providers + Haiku research on `claude-haiku-4-5` + Sonnet judge) has never run end-to-end with
+writes armed — every armed canary so far proved a single write path.
+
+Sequencing is deliberate: all autonomous-buildable work (code, tests, disarmed redeploys) lands
+first — Lusha v3 migration, then transport/schema hygiene — because arming HubSpot writes is
+operator-gated. The armed canary is the final phase, so one audited armed window live-validates
+everything at once: v3 + selective reveal, the Haiku research-model swap, and the hygiene changes
+(enum-valid `lv_org_type` writes, policy-promoted country region). The cost ledger from that run
+calibrates full-sweep planning.
+
+Deferred to v0.6: HubSpot-side ICP formula (the `1 + 1` placeholder) and JTBD 2 rubric sign-off —
+downstream-owner decisions.
+
+## Phases
+
+- [ ] **Phase 20: Lusha v3 Migration** - Both lanes swap to POST `/v3/*/search-and-enrich` with selective reveal, ID staging for free re-enrichment, and a verified disarmed redeploy before the 2026-11-18 v2 sunset
+- [ ] **Phase 21: Transport & Schema Hygiene** - Retire the last native search node (Dedupe Search), `lv_org_type` text→enumeration one-way door with rollback documented first, `lv_country_region_normalized` field-policy entry
+- [ ] **Phase 22: Armed E2E Enrichment Canary** - Final, operator-gated phase: full pipeline (providers + Haiku research + Sonnet judge) end-to-end on allowlisted records with writes armed, live-validating Phases 20–21 in one audited window, with a calibrated cost ledger
+
+## Phase Details
+
+### Phase 20: Lusha v3 Migration
+
+**Goal**: Both Lusha lanes (contacts + companies) run on the v3 API with selective reveal as the cost control and staged IDs for free re-enrichment — verified by both test suites and redeployed disarmed, well ahead of the 2026-11-18 v2 sunset.
+**Depends on**: Phase 19 (v0.4 complete; live deployment current and disarmed)
+**Requirements**: REQ-lusha-v3-contract-probe, REQ-lusha-v3-request-builders, REQ-lusha-selective-reveal, REQ-lusha-id-staging, REQ-lusha-v3-normalize, REQ-lusha-v3-verification
+**Success Criteria** (what must be TRUE):
+
+  1. The v3 contract is documented from live probes with minimal credit spend — `POST /v3/contacts/search-and-enrich`, `POST /v3/companies/search-and-enrich`, and the two-step `search` → `enrich` pair, capturing the envelope, `has`/`canReveal`/`billing` fields, and error shapes (ZoomInfo-GTM-probe precedent) — and `check_provider_credits.py` reads usage correctly against `GET /v3/account/usage`.
+  2. Both lanes issue `POST /v3/*/search-and-enrich` with params in the body, identity keys mapped unchanged (email | name+company/domain | domain), and `api_key` header auth retained — exercised by the builders, their local-live variants, and `scripts/dryrun_batch.mjs`.
+  3. A contact record that already holds phone/mobile in HubSpot produces a v3 request with no phone reveal: `reveal[]` is derived from the enrichment gate's `missingFields`, so `fill_blank_only`-protected values are never paid for, and the projected full-sweep Lusha cost fits the ~3.9k credit balance.
+  4. A matched record persists `lusha_contact_id` / `lusha_company_id` staging properties, and a re-enrichment run passes the stored ID so already-revealed data comes back at `canReveal.credits: 0` (no new spend).
+  5. Downstream is untouched: `lushaCandidates` in `normalizeProviders.js` parses the v3 envelope into candidates field-identical to v2 output (merge/score/staging unchanged); v2-pinned tests are migrated, the frozen fixture re-baselined, both suites green; a disarmed redeploy read-back shows v3 URLs live and zero v2 URLs remaining.
+
+**Plans**: TBD
+
+### Phase 21: Transport & Schema Hygiene
+
+**Goal**: The last structurally fragile transport and the two known schema debts are cleared — no native search nodes remain, `lv_org_type` is a real enumeration, and the country-region research value can promote under policy — all buildable and verifiable without arming writes.
+**Depends on**: Phase 20
+**Requirements**: REQ-dedupe-transport-swap, REQ-orgtype-enumeration, REQ-country-region-policy
+**Success Criteria** (what must be TRUE):
+
+  1. `Dedupe Search (candidate contacts)` runs through the credential-bound httpRequest envelope (BUG-10/22/23 mechanism) and no native HubSpot search node remains in any deployed workflow; the weekly sweep stays classify-only, writing only the needs-review flag through the existing gated PATCH.
+  2. A rollback path for the `lv_org_type` text→enumeration conversion is documented BEFORE the migration runs (one-way door discipline).
+  3. `lv_org_type` is a HubSpot enumeration with all existing values preserved, and pipeline writes validate against the enum options (no silent 400s).
+  4. `lv_country_region_normalized` has a `config/field_policy.yaml` entry, so the research value the pipeline already produces can promote under policy instead of defaulting to staging-only.
+
+**Plans**: TBD
+
+### Phase 22: Armed E2E Enrichment Canary
+
+**Goal**: The full enrichment pipeline — provider waterfall (now Lusha v3) + Haiku web research + Sonnet judge — is proven live with writes armed on allowlisted records, live-validating the Phase 20–21 changes in one audited operator window, and its true per-record cost is measured for full-sweep planning.
+**Depends on**: Phases 20 and 21 (final phase — arming writes is operator-gated; one armed window then validates the v3 migration AND the hygiene changes together)
+**Requirements**: REQ-armed-e2e-canary, REQ-canary-cost-ledger
+**Success Criteria** (what must be TRUE):
+
+  1. One armed end-to-end enrichment on allowlisted record(s) lands staged fields, source metadata, and promoted canonical writes in HubSpot, produced by the complete chain: provider waterfall + Haiku web research (`claude-haiku-4-5`, first live validation of the research-model swap) + Sonnet judge.
+  2. The run live-validates Phases 20–21: Lusha data arrives via v3 selective reveal (no reveal paid for a field the record already holds), and writes succeed against the migrated schema (`lv_org_type` accepted by the enumeration; `lv_country_region_normalized` promoted under its new policy entry).
+  3. Neighbor (non-allowlisted) records are byte-untouched after the run.
+  4. The run closes disarmed and audited: read-back shows every write flag `"false"` and the allowlist cleared.
+  5. A cost ledger records actual spend — provider credit balances before/after and Anthropic tokens per call — against the 2026-07-30 estimates, producing a calibrated per-record cost figure that makes fleet-wide arming an informed operator decision.
+
+**Plans**: TBD
+
+## Milestone 5 Progress
+
+**Execution Order:**
+Phases execute in numeric order: 20 → 21 → 22 (autonomous-buildable work first; the operator-gated armed canary is last)
+
+| Phase | Plans Complete | Status | Completed |
+|-------|----------------|--------|-----------|
+| 20. Lusha v3 Migration | 0/? | Not started | - |
+| 21. Transport & Schema Hygiene | 0/? | Not started | - |
+| 22. Armed E2E Enrichment Canary | 0/? | Not started | - |

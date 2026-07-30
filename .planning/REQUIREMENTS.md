@@ -47,4 +47,18 @@ Each maps to exactly one roadmap phase.
 
 ## Traceability
 
-(filled by roadmap)
+11/11 v0.5 requirements mapped — no orphans, no duplicates.
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| REQ-lusha-v3-contract-probe | Phase 20 | Pending |
+| REQ-lusha-v3-request-builders | Phase 20 | Pending |
+| REQ-lusha-selective-reveal | Phase 20 | Pending |
+| REQ-lusha-id-staging | Phase 20 | Pending |
+| REQ-lusha-v3-normalize | Phase 20 | Pending |
+| REQ-lusha-v3-verification | Phase 20 | Pending |
+| REQ-dedupe-transport-swap | Phase 21 | Pending |
+| REQ-orgtype-enumeration | Phase 21 | Pending |
+| REQ-country-region-policy | Phase 21 | Pending |
+| REQ-armed-e2e-canary | Phase 22 | Pending |
+| REQ-canary-cost-ledger | Phase 22 | Pending |

@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v0.5
 milestone_name: Lusha v3 & Armed Enrichment
-status: planning
-last_updated: "2026-07-30T01:57:00.649Z"
+status: roadmap_created
+last_updated: "2026-07-30T12:00:00.000Z"
 last_activity: 2026-07-30
 progress:
-  total_phases: 0
+  total_phases: 3
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -24,10 +24,10 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-07-30 — Milestone v0.5 started
+Phase: 20 of 22 (Lusha v3 Migration) — not started
+Plan: — (none yet; next: `/gsd-plan-phase 20`)
+Status: Roadmap created — v0.5 phases 20–22 defined, 11/11 requirements mapped
+Last activity: 2026-07-30 — v0.5 roadmap created (Phase 20 Lusha v3 Migration → Phase 21 Transport & Schema Hygiene → Phase 22 Armed E2E Canary; operator-gated canary last)
 
 ## Performance Metrics
 
