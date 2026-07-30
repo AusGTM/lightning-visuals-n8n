@@ -52,6 +52,20 @@ over the same n8n system, so its version says nothing about backend capability.
   `extraction.md`'s documented examples to the real validator so the two halves of the contract
   cannot silently drift apart. One preview, one dispatch path, unchanged — this phase adds
   producers in front of Phase 23's choke point, nothing behind it.
+- **Phase 26 — per-record outcome reporting and safe retry.** After a send, the operator sees
+  what happened to each row — created, updated-matched, needs-review, rejected, or
+  not-confirmed — read from the decision the backend actually made (`scripts/report.py`), not a
+  bare HTTP status; falling back to one read of `scripts/executions_client.py`'s executions API
+  when the synchronous response is thin or the Cloudflare ~100s webhook ceiling is hit, and
+  saying plainly when a report came from that fallback and may still be progressing. Every
+  failing row is now told apart by whether re-sending it can help: a row with no usable email
+  and an ambiguous identity outcome is named permanently stuck — the deployed workflow resolves
+  identity by email only, so it needs an email address or manual handling in HubSpot, never
+  another attempt — while a genuine transport failure is offered back for retry. Retry reuses
+  the one existing `scripts/dispatch.py` entry point verbatim, arming gate intact; duplicate
+  safety on a re-send is the backend's own identity resolution, not a client-side ledger, and an
+  AST-based guard now keeps it that way by construction. Re-checking a run by its printed handle
+  happens only when the operator asks — no poll loop, here or anywhere else in this client.
 
 ### Planned
 

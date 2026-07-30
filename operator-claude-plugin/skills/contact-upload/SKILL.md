@@ -150,9 +150,45 @@ be sent, and — only when explicitly armed — send it.
    Never offer a countdown, an automatic refresh, or a "checking again shortly"; this
    skill does not watch a run on its own.
 
-8. **Clean up.** If this batch came from `extraction.md`, delete the scratch artifact you
-   wrote once the batch ends — whether it was dispatched or the operator declined.
-   Provenance is scoped to this session and to the operator's decision in the moment; it
-   is not a durable record, the scratch directory is gitignored so it never reaches
-   history, and deleting the file is what keeps it from outliving the conversation on
-   disk.
+8. **Re-check, only when the operator asks.** The report handed you a run handle in step
+   7. If the operator asks to re-check it, perform exactly **one** fetch —
+   `resolve_workflow_id()` → `list_executions()` → `get_execution()` on that same
+   execution id via `scripts/executions_client.py` — and render `build_contact_report()`
+   again from the fresh result. Do not schedule anything, do not offer to keep watching,
+   and do not promise to come back on your own: the unprompted bounded watch that checks
+   without being asked is a later capability (built once, deliberately not here), and
+   this step exists so it never grows a poll loop in the meantime. Re-checking happens
+   only when the operator asks for it, every time.
+
+9. **Retry a transport failure — same dispatch, same arming gate.** Step 7's report
+   tags every failing row with what a re-send can and cannot fix. Only rows tagged
+   `transport_failure` (`resendable_rows`) are worth re-sending; offer those, by name,
+   if any exist.
+
+   State the safety property in your own words before retrying: re-sending is safe
+   because the backend resolves identity on every row and updates a record it already
+   has rather than creating a second one — the client keeps no record of what it
+   previously sent, on purpose, since a client-side ledger of accepted rows would be a
+   second dedupe authority that can drift from the backend's own. This holds for rows
+   carrying an email address. Point at any `permanently_stuck` rows and say plainly
+   those are not part of the re-send — they need an email address or manual handling in
+   HubSpot, not another attempt.
+
+   To retry, hand the same file straight back to the **one** dispatch entry point —
+
+   ```
+   python3 scripts/dispatch.py <path> armed
+   ```
+
+   — the same function, the same arguments, the same arming gate as step 6. A re-send
+   is a send: if the operator has not said the arming phrase again this turn, this call
+   refuses exactly as an original send refuses. There is no separate retry function and
+   nothing to parse out of the failed subset — reuse the send you already have. Then
+   return to step 7 to report the new outcome.
+
+10. **Clean up.** If this batch came from `extraction.md`, delete the scratch artifact
+    you wrote once the batch ends — whether it was dispatched or the operator declined.
+    Provenance is scoped to this session and to the operator's decision in the moment;
+    it is not a durable record, the scratch directory is gitignored so it never reaches
+    history, and deleting the file is what keeps it from outliving the conversation on
+    disk.
