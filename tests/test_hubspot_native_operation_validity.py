@@ -2,7 +2,7 @@
 #
 # Phase 16.6 criterion 5 — BUG 10's root cause, turned into a predicate.
 #
-# BUG 10: `_hs_search_node()` emitted `operation: "search"` for `resource: company`.
+# BUG 10: the native-search node builder emitted `operation: "search"` for `resource: company`.
 # n8n's HubSpot node has no such operation — its company branch is a flat if-chain with no
 # matching case and no default/throw — so `responseData` stayed undefined and serialized to
 # `null` with `status: success` and no error node. Six nodes were affected and the failure

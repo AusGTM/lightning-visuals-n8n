@@ -350,36 +350,21 @@
     },
     {
       "parameters": {
-        "resource": "contact",
-        "operation": "search",
-        "filterGroupsUi": {
-          "filterGroupsValues": [
-            {
-              "filtersUi": {
-                "filterValues": [
-                  {
-                    "propertyName": "email",
-                    "operator": "HAS_PROPERTY"
-                  }
-                ]
-              }
-            }
-          ]
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts/search",
+        "options": {
+          "timeout": 20000
         },
-        "additionalFields": {
-          "properties": [
-            "hs_object_id",
-            "email",
-            "phone",
-            "lv_linkedin_url"
-          ]
-        },
-        "authentication": "appToken"
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"email\", operator: \"HAS_PROPERTY\" } ] } ], properties: [\"hs_object_id\", \"email\", \"phone\", \"lv_linkedin_url\"], limit: 100 }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "hs00200000-0000-4000-8000-000000000000",
+      "id": "h00200000-0000-4000-8000-000000000000",
       "name": "Dedupe Search (candidate contacts)",
-      "type": "n8n-nodes-base.hubspot",
-      "typeVersion": 2.1,
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
       "position": [
         440,
         1520

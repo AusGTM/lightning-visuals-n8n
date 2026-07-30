@@ -4442,45 +4442,10 @@ def _schedule_trigger(name, x, y, field, interval_value):
     }
 
 
-def _hs_search_node(name, resource, x, y, filter_groups, properties_csv):
-    """Native n8n-nodes-base.hubspot search node. filter_groups is a list of groups; each
-    group is a list of filter dicts {propertyName, operator, value?} — groups OR, filters
-    within a group AND (mirrors HS_CO_SEARCH_BODY_EXPR's envelope, RESEARCH Pitfall 3).
-
-    CONTACTS ONLY (BUG 10, Phase 16.6): n8n's HubSpot node schema has a real
-    `operation: "search"` for resource:contact (POSTs /crm/v3/objects/contacts/search) but
-    NOT for resource:company (its schema only offers create/delete/get/getAll/
-    getRecentlyCreatedUpdated/searchByDomain/update — confirmed by reading
-    CompanyDescription.ts). execute()'s resource:company branch has no case for an
-    unrecognized operation and no default/throw, so a company node built with this helper
-    silently returns responseData:undefined -> one item, json:null, status:success, no error
-    — the exact live-confirmed defect (16.6-CONTEXT.md). Companies use
-    _hs_http_search_node below instead, which bypasses the node's operation dispatch
-    entirely.
-
-    BUG 23 (Phase 17.01): the enrichment contacts lane's "HubSpot Search" /
-    "HubSpot Fetch By Id" also moved off this helper onto _hs_http_search_node — same
-    zero-items-on-zero-hits chain-stop hazard as BUG 10/22, just for a resource whose
-    search operation genuinely exists and works on a hit. This leaves exactly ONE call
-    site: "Dedupe Search (candidate contacts)" (wf_scheduled_maintenance_cloud.json),
-    which carries the SAME 0-item hazard and is deliberately out of that phase's fence —
-    recorded as a known, unfixed concern, not fixed here."""
-    return {
-        "parameters": {"resource": resource, "operation": "search",
-                       "filterGroupsUi": {"filterGroupsValues": [
-                           {"filtersUi": {"filterValues": group}} for group in filter_groups
-                       ]},
-                       "additionalFields": {"properties": properties_csv}},
-        "id": nid("hs"), "name": name,
-        "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [x, y],
-        "onError": "continueRegularOutput",
-    }
-
-
 def _hs_search_json_body_expr(filter_groups, properties, limit):
     """Renders (filter_groups, properties, limit) as a single n8n `={{ JSON.stringify(...) }}`
-    expression — the same envelope _hs_search_node's filterGroupsUi/additionalFields.properties
-    produces via the native node (groups OR, filters-within-group AND — RESEARCH Pitfall 3),
+    expression — the same envelope the native HubSpot search node's filterGroupsUi/
+    additionalFields.properties produces (groups OR, filters-within-group AND — RESEARCH Pitfall 3),
     and the same shape HS_CO_SEARCH_BODY_EXPR already proves works for the raw-HTTP
     local-live variant. A filter value that is itself an n8n expression (`={{ ... }}`, e.g.
     reading another node by name) is unwrapped and interpolated as a raw JS expression —
@@ -4516,8 +4481,8 @@ _HS_SEARCH_URLS = {
 
 
 def _hs_http_search_node(name, resource, x, y, filter_groups, properties_csv, limit=100):
-    """Credential-bound httpRequest replacement for _hs_search_node's `search` operation —
-    company and contact resources (BUG 10, Phase 16.6; BUG 23, Phase 17.01).
+    """Credential-bound httpRequest replacement for the native HubSpot node's `search`
+    operation — company and contact resources (BUG 10, Phase 16.6; BUG 23, Phase 17.01).
 
     BUG 10 (companies): n8n's HubSpot node has no `operation: "search"` for resource:company
     at all, so a native-node company search silently returns json:null.
@@ -4534,9 +4499,14 @@ def _hs_http_search_node(name, resource, x, y, filter_groups, properties_csv, li
     Both resources POST directly to the real CRM v3 search endpoint, bypassing the node's
     operation dispatch entirely — same credential (predefinedCredentialType/hubspotAppToken
     reuses "LV HubSpot", the exact credential NODE_CREDENTIAL_MAP already binds these node
-    NAMES to), same filter/property contract as _hs_search_node, so callers migrate with an
-    identical argument list. Any resource outside this table still hard-fails, so the
-    migration cannot silently spread to a resource nobody audited."""
+    NAMES to), same filter/property contract the native search operation took, so callers
+    migrate with an identical argument list. Any resource outside this table still
+    hard-fails, so the migration cannot silently spread to a resource nobody audited.
+
+    Phase 21 Plan 01 closed the class: "Dedupe Search (candidate contacts)" — the last
+    remaining native-search call site — moved onto this helper too, and the native-search
+    node builder was deleted outright. This is now the ONLY way a search node gets built
+    in this file."""
     if resource not in _HS_SEARCH_URLS:
         raise ValueError(
             f"_hs_http_search_node has no URL mapping for resource={resource!r} "
@@ -4819,7 +4789,7 @@ def build_scheduled_maintenance_cloud():
     dedupe_trigger = _schedule_trigger("Dedupe Trigger (weekly)", x, y3, "weeks", 1)
     nodes.append(dedupe_trigger)
     x3 = x + 220
-    dedupe_search = _hs_search_node(
+    dedupe_search = _hs_http_search_node(
         "Dedupe Search (candidate contacts)", "contact", x3, y3,
         filter_groups=[[{"propertyName": "email", "operator": "HAS_PROPERTY"}]],
         properties_csv="hs_object_id,email,phone,lv_linkedin_url")
@@ -5021,7 +4991,7 @@ def _normalize_hubspot_auth(wf: dict) -> dict:
            Creator exists): no String-argument constructor/factory method to deserialize
            from String value ('email,firstname,...')
 
-       Every `_hs_search_node()` call site passed a CSV string, so EVERY search node in
+       Every native-search call site passed a CSV string, so EVERY search node in
        every workflow was broken — none had ever run live. Confirmed 2026-07-28 by
        capturing HubSpot's own error from a live execution of `HubSpot Fetch By Id`.
        The CSV form is kept at the call sites (it is far more readable there) and split
