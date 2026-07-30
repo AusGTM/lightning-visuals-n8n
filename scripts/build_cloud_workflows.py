@@ -4386,6 +4386,187 @@ def build_enrichment_cloud():
 
 
 # =============================================================================
+# BACKEND STATUS workflow (Phase 25 Plan 02, D-14) — the credit-only slice of
+# `hubspot/backend-status`. A NEW workflow file, deliberately NOT a second trigger inside
+# "LV Enrichment (Cloud template)": the enrichment workflow's own `Lusha Usage`/`Apollo
+# Usage`/ZoomInfo usage-subgraph nodes fork off `Parse HubSpot Event` and run at the START
+# of a real enrichment call, well before that call's own `Build Response` assembles. A
+# responder wired onto that branch would race ahead of `Build Response` and answer a real
+# enrichment POST with the wrong body — a regression this separate file cannot introduce.
+# Phase 27 (STATUS-01..06) grows this same file into full health; this plan ships only the
+# credit slice.
+# =============================================================================
+
+# Single-item node, mirroring ENRICH_CREDIT_REQUEST's "never reads $input" discipline —
+# its output cardinality can never track anything upstream, so it always emits exactly
+# one item. Unlike the enrichment lane's Credit Request (which reflects the CALLER's
+# per-batch providers_requested), this probes ALL THREE providers UNCONDITIONALLY: a
+# status check has no notion of which providers a batch will use (D-10, research A4).
+ENRICH_STATUS_CREDIT_REQUEST = r"""// Status Credit Request — Phase 25 Plan 02 (D-10, research A4).
+// Probes ALL THREE providers unconditionally — a status check has no notion of which
+// providers a batch uses.
+return [{ json: { providers_requested: __PROVIDER_NAMES__ } }];
+""".replace("__PROVIDER_NAMES__", json.dumps(provider_registry.PROVIDER_NAMES))
+
+# Phase 25 Plan 02 (D-10/D-17, T-25-03/T-25-05) — the response-assembly node. Reads each
+# usage probe BY NAME through the SAME guarded nodeAll idiom ENRICH_BUILD_RESPONSE uses (a
+# not-executed node -> [] -> the unreadable marker; an error-carrying item -> the
+# unreadable marker) and NEVER falls back to a number — a defaulted numeric value would be
+# indistinguishable from a real balance, which is exactly the defect D-10 exists to
+# prevent. Emits ONLY an extracted number-or-null, a `configured` boolean (always true
+# here — this endpoint probes all three canonical providers unconditionally, so there is
+# no "not configured" case to represent, unlike the admin CLI's env-var gate), an explicit
+# `unreadable` boolean, a short synthesized error label (never the provider's own raw
+# error text), and an HTTP status code — never a raw provider response body (T-25-03).
+ENRICH_STATUS_BUILD_RESPONSE = inline("providerSelection.js") + r"""
+
+// --- n8n wrapper: Build Credit Status (Phase 25 Plan 02) ---
+function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
+function httpStatus(raw) {
+  if (!raw) return null;
+  const candidates = [raw.statusCode, raw.httpCode, raw.status,
+    raw.response && raw.response.status, raw.response && raw.response.statusCode];
+  for (const c of candidates) {
+    if (c !== undefined && c !== null && c !== "") {
+      const n = Number(c);
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  return null;
+}
+const first = $('Status Credit Request').first();
+const providers_requested = (first && first.json && first.json.providers_requested) || [];
+const CREDIT_NODE_BY_PROVIDER = { lusha: "Lusha Usage", apollo: "Apollo Usage", zoominfo: "ZoomInfo Usage" };
+const balances = providers_requested.map((provider) => {
+  const nodeName = CREDIT_NODE_BY_PROVIDER[provider];
+  const rows = nodeName ? nodeAll(nodeName) : [];
+  const row = rows[0];
+  const raw = row && row.json;
+  const status = httpStatus(raw);
+  let credits = null;
+  let error = null;
+  if (!row) {
+    error = "not_executed";
+  } else if (raw && raw.error) {
+    error = status ? ("http_" + status) : "provider_error";
+  } else {
+    credits = extractCredits(provider, raw);
+    if (credits === null) error = "unrecognized_response_shape";
+  }
+  return { provider, configured: true, credits, unreadable: credits === null, error, status };
+});
+return [{ json: { balances, checked_at: new Date().toISOString() } }];
+"""
+
+
+def build_backend_status_cloud():
+    """Phase 25 Plan 02 (D-14) — `hubspot/backend-status`, credit-only slice.
+
+    Straight line, deliberately NOT a fan-out (D-14): Status Webhook Trigger -> Status
+    Credit Request -> Lusha Usage -> Apollo Usage -> the shared ZoomInfo usage subgraph ->
+    Build Credit Status -> Respond to Webhook. Every probe node uses onError:
+    continueRegularOutput and reads nothing off its incoming item, so a failing probe
+    passes an error item along the SAME single chain instead of stopping it — the chain
+    guarantees exactly one item reaches the responder and all three probes have already
+    run by the time it does, unlike the enrichment lane's per-batch fan-out (tolerable
+    there, not tolerable for a status read).
+
+    Reuses the enrichment workflow's own node names for the three probes verbatim (`Lusha
+    Usage`, `Apollo Usage`, the ZoomInfo usage subgraph's names) — NODE_CREDENTIAL_MAP is
+    keyed by node name across every built workflow, so this reuse costs zero new
+    credential registration. Only `Status Webhook Trigger` is new, and it binds the SAME
+    shared webhook-secret credential the enrichment trigger binds.
+    """
+    nodes = []
+    y = 300
+    x = 220
+
+    # Native Header Auth on the trigger itself (T-25-04) — same mechanism, same credential
+    # ("LV Enrichment Webhook") as the enrichment workflow's Webhook Trigger; not left open
+    # because this endpoint is read-only.
+    webhook = {
+        "parameters": {"httpMethod": "POST", "path": "hubspot/backend-status",
+                       "responseMode": "responseNode", "authentication": "headerAuth", "options": {}},
+        "id": nid("w"), "name": "Status Webhook Trigger",
+        "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [x, y],
+    }
+    nodes.append(webhook)
+
+    x += 220
+    nodes.append(code_node("Status Credit Request", ENRICH_STATUS_CREDIT_REQUEST, x, y))
+
+    lusha_credit = provider_registry.PROVIDER_REGISTRY["lusha"]["credit"]
+    apollo_credit = provider_registry.PROVIDER_REGISTRY["apollo"]["credit"]
+
+    x += 220
+    nodes.append(_credit_http_node(
+        "Lusha Usage", lusha_credit["url"], lusha_credit["method"], x, y, auth="header"))
+
+    x += 220
+    nodes.append(_credit_http_node(
+        "Apollo Usage", apollo_credit["url"], apollo_credit["method"], x, y, auth="header"))
+
+    # ZoomInfo: the SAME 5-node Token Gate/IF Needs Mint/Mint/Cache Token/Usage subgraph
+    # the enrichment lane's credit branch uses, sharing the identical sd.zoominfo cache key
+    # (Bug A fix, live 2026-07-28) — this endpoint never mints its own ungated token.
+    x += 220
+    zoom_usage_nodes, zoom_usage_conns, zoom_usage_entry, zoom_usage_exit = (
+        _zoom_split_usage_subgraph("Status Credit Request", x, y))
+    nodes.extend(zoom_usage_nodes)
+
+    x += 880
+    nodes.append(code_node("Build Credit Status", ENRICH_STATUS_BUILD_RESPONSE, x, y))
+
+    x += 220
+    nodes.append({
+        "parameters": {"respondWith": "allIncomingItems", "options": {}},
+        "id": nid("rw"), "name": "Respond to Webhook",
+        "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.1,
+        "position": [x, y],
+    })
+
+    conns = chain([
+        "Status Webhook Trigger", "Status Credit Request", "Lusha Usage", "Apollo Usage",
+        zoom_usage_entry,
+    ])
+    conns.update(zoom_usage_conns)
+    conns.update(chain([zoom_usage_exit, "Build Credit Status", "Respond to Webhook"]))
+
+    notes = [{
+        "content": (
+            "## LV Backend Status — credit-only slice (Phase 25 Plan 02, D-14)\n"
+            "`hubspot/backend-status`: three provider usage probes run SEQUENTIALLY "
+            "(Lusha -> Apollo -> the shared ZoomInfo usage subgraph) so every provider "
+            "has been checked before the single `Respond to Webhook` fires — never "
+            "fanned out, which would let the response race the still-running probes.\n\n"
+            "An unreadable balance (Apollo's non-master key 403s by design on this "
+            "account) renders as an explicit `unreadable: true` / `credits: null` "
+            "marker, never as zero (D-10). Reads provider usage endpoints only, never a "
+            "HubSpot endpoint, and performs zero writes. **Full health is Phase 27** "
+            "(STATUS-01..06) — this endpoint ships the credit slice only.\n\n"
+            "**Webhook Trigger** binds the SAME shared `LV Enrichment Webhook` "
+            "credential the enrichment trigger uses — one operator secret works "
+            "against both endpoints with no new provisioning."
+        ), "x": x, "y": y + 260, "h": 300, "w": 480,
+    }]
+    for i, n in enumerate(notes, start=1):
+        nodes.append({
+            "parameters": {"content": n["content"], "height": n["h"], "width": n["w"]},
+            "id": nid("s"), "name": f"Sticky Note {i}",
+            "type": "n8n-nodes-base.stickyNote", "typeVersion": 1,
+            "position": [n["x"], n["y"]],
+        })
+
+    return {
+        "id": "LVBackendStatusCloud01",
+        "name": "LV Backend Status (Cloud template)",
+        "nodes": nodes,
+        "connections": conns,
+        "settings": {},
+    }
+
+
+# =============================================================================
 # SCHEDULED MAINTENANCE workflow (Phase 16-02) — SJ-1/2/3 + dedupe sweep + review loop.
 # Companion to "LV Enrichment (Cloud template)" (build_enrichment_cloud): that workflow
 # reacts to a webhook event; this one is the background reconciliation + human-review
@@ -5075,6 +5256,11 @@ def main():
     sched_cloud = ROOT / "n8n" / "wf_scheduled_maintenance_cloud.json"
     sched_cloud.write_text(json.dumps(_normalize_hubspot_auth(build_scheduled_maintenance_cloud()), indent=2) + "\n")
     print(f"wrote {sched_cloud.relative_to(ROOT)}")
+
+    _idc[0] = 0
+    status_cloud = ROOT / "n8n" / "wf_backend_status_cloud.json"
+    status_cloud.write_text(json.dumps(_normalize_hubspot_auth(build_backend_status_cloud()), indent=2) + "\n")
+    print(f"wrote {status_cloud.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

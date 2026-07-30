@@ -1,0 +1,343 @@
+{
+  "id": "LVBackendStatusCloud01",
+  "name": "LV Backend Status (Cloud template)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "hubspot/backend-status",
+        "responseMode": "responseNode",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "w00010000-0000-4000-8000-000000000000",
+      "name": "Status Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Status Credit Request \u2014 Phase 25 Plan 02 (D-10, research A4).\n// Probes ALL THREE providers unconditionally \u2014 a status check has no notion of which\n// providers a batch uses.\nreturn [{ json: { providers_requested: [\"lusha\", \"apollo\", \"zoominfo\"] } }];\n"
+      },
+      "id": "c00020000-0000-4000-8000-000000000000",
+      "name": "Status Credit Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.lusha.com/v3/account/usage",
+        "options": {
+          "timeout": 20000
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "h00030000-0000-4000-8000-000000000000",
+      "name": "Lusha Usage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.apollo.io/api/v1/usage_stats/api_usage_stats",
+        "options": {
+          "timeout": 20000
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
+      },
+      "id": "h00040000-0000-4000-8000-000000000000",
+      "name": "Apollo Usage",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// zoominfoToken.js \u2014 pure token cache/refresh helpers for the ZoomInfo OAuth2 flow.\n//\n// ZoomInfo (Okta) issues short-lived bearer tokens. For AUTONOMOUS operation the\n// workflow must mint its own token from long-lived client_id + client_secret and\n// re-mint when it expires or is rejected (401) \u2014 never store a static token.\n//\n// These are PURE functions (no n8n, no network) so they unit-test against Node.\n// In the local replica the Code node wraps them around $getWorkflowStaticData (cross-run\n// cache), this.helpers.httpRequest, and Date.now(). In the n8n Cloud deploy (Phase 16\n// split-code-node) the mint is done by a credential-bound \"ZoomInfo Mint\" HTTP node \u2014\n// these helpers run in the SECRET-FREE Token Gate/Cache Code nodes (cache + expiry +\n// re-mint-on-401 decisioning only; no client_id/client_secret ever in a Code node).\n//\n// Cache shape stored in workflow static data: { access_token, exp, token_type }\n//   exp = absolute expiry in epoch MILLISECONDS.\n\n// Mint a new token iff there is no cached token or it is within `skewMs` of expiry.\n// Minting slightly early (default 60s skew) avoids using a token that dies mid-request.\nfunction needsMint(cached, nowMs, skewMs = 60000) {\n  if (!cached || !cached.access_token || !cached.exp) return true;\n  return cached.exp - nowMs <= skewMs;\n}\n\n// Absolute expiry (epoch ms) from the token response's `expires_in` (seconds).\n// Missing/invalid expires_in -> conservative 5-minute lifetime so we re-mint soon\n// rather than trust an unknown-lifetime token indefinitely.\nfunction computeExpiry(expiresInSec, nowMs) {\n  const secs = Number(expiresInSec);\n  if (!Number.isFinite(secs) || secs <= 0) return nowMs + 5 * 60000;\n  return nowMs + secs * 1000;\n}\n\n// Parse an OAuth token-endpoint response into the cache shape. Accepts the JSON\n// object or a raw JSON string. Throws if no token field is present (fail loud \u2014\n// a tokenless response must not be cached as if valid).\nfunction parseTokenResponse(body, nowMs) {\n  const b = typeof body === \"string\" ? JSON.parse(body) : (body || {});\n  const token = b.access_token || b.jwt || b.token;\n  if (!token) throw new Error(\"ZoomInfo token response missing access_token\");\n  return {\n    access_token: token,\n    exp: computeExpiry(b.expires_in, nowMs),\n    token_type: b.token_type || \"Bearer\",\n  };\n}\n\n// A 401 means the token was rejected (expired/revoked) -> clear cache, re-mint, retry once.\n// Other statuses (400/403/404/429/5xx) are NOT auth failures and must not trigger a re-mint.\nfunction isAuthError(statusCode) {\n  return Number(statusCode) === 401;\n}\n\n// Bug B (live 2026-07-28): n8n's this.helpers.httpRequest throws an AxiosError, whose\n// status lives at `e.response.status` \u2014 a shape the original inline check\n// (statusCode/httpCode/response.statusCode) never covered, so a real 401 was silently\n// missed and the cache never cleared. Tries every shape actually observed in this\n// runtime (axios; n8n's NodeApiError, whose httpCode is sometimes a STRING; a bare\n// statusCode) and, as a last resort, parses the \"status code NNN\" trailer n8n/axios\n// append to the error message. Returns NaN (never a false 401) when nothing usable is\n// found \u2014 isAuthError(NaN) is false, matching the safe conservative default.\nfunction extractErrorStatus(e) {\n  if (!e) return NaN;\n  const candidates = [\n    e.statusCode,\n    e.httpCode,\n    e.response && e.response.status,\n    e.response && e.response.statusCode,\n  ];\n  for (const c of candidates) {\n    if (c !== undefined && c !== null && c !== \"\") {\n      const n = Number(c);\n      if (Number.isFinite(n)) return n;\n    }\n  }\n  const m = /status code (\\d{3})/i.exec((e && e.message) || \"\");\n  return m ? Number(m[1]) : NaN;\n}\n\n// --- n8n wrapper: ZoomInfo token cache gate (CLOUD split-code-node, secret-free) ---\n// Never reads client_id/client_secret \u2014 only the credential-bound \"ZoomInfo Mint\" HTTP\n// node touches those (Task 2 decision).\nconst sd = $getWorkflowStaticData(\"global\");\nconst gateRows = (function () { try { return $('Status Credit Request').all(); } catch (e) { return []; } })();\nconst items = $input.all();\nreturn items.map((item, i) => {\n  const row = (gateRows[i] && gateRows[i].json) || item.json || {};\n  const cached = sd.zoominfo;\n  const needs_mint = needsMint(cached, Date.now());\n  return { json: { ...row, zoom_needs_mint: needs_mint,\n                   zoom_token: needs_mint ? null : cached.access_token } };\n});\n"
+      },
+      "id": "c00050000-0000-4000-8000-000000000000",
+      "name": "ZoomInfo Usage Token Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i00060000-0000-4000-8000-000000000000",
+              "leftValue": "={{ $json.zoom_needs_mint }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if00070000-0000-4000-8000-000000000000",
+      "name": "IF ZoomInfo Usage Needs Mint",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.zoominfo.com/gtm/oauth/v1/token",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "grant_type",
+              "value": "client_credentials"
+            }
+          ]
+        },
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpBasicAuth"
+      },
+      "id": "h00080000-0000-4000-8000-000000000000",
+      "name": "ZoomInfo Usage Mint",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        180
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// zoominfoToken.js \u2014 pure token cache/refresh helpers for the ZoomInfo OAuth2 flow.\n//\n// ZoomInfo (Okta) issues short-lived bearer tokens. For AUTONOMOUS operation the\n// workflow must mint its own token from long-lived client_id + client_secret and\n// re-mint when it expires or is rejected (401) \u2014 never store a static token.\n//\n// These are PURE functions (no n8n, no network) so they unit-test against Node.\n// In the local replica the Code node wraps them around $getWorkflowStaticData (cross-run\n// cache), this.helpers.httpRequest, and Date.now(). In the n8n Cloud deploy (Phase 16\n// split-code-node) the mint is done by a credential-bound \"ZoomInfo Mint\" HTTP node \u2014\n// these helpers run in the SECRET-FREE Token Gate/Cache Code nodes (cache + expiry +\n// re-mint-on-401 decisioning only; no client_id/client_secret ever in a Code node).\n//\n// Cache shape stored in workflow static data: { access_token, exp, token_type }\n//   exp = absolute expiry in epoch MILLISECONDS.\n\n// Mint a new token iff there is no cached token or it is within `skewMs` of expiry.\n// Minting slightly early (default 60s skew) avoids using a token that dies mid-request.\nfunction needsMint(cached, nowMs, skewMs = 60000) {\n  if (!cached || !cached.access_token || !cached.exp) return true;\n  return cached.exp - nowMs <= skewMs;\n}\n\n// Absolute expiry (epoch ms) from the token response's `expires_in` (seconds).\n// Missing/invalid expires_in -> conservative 5-minute lifetime so we re-mint soon\n// rather than trust an unknown-lifetime token indefinitely.\nfunction computeExpiry(expiresInSec, nowMs) {\n  const secs = Number(expiresInSec);\n  if (!Number.isFinite(secs) || secs <= 0) return nowMs + 5 * 60000;\n  return nowMs + secs * 1000;\n}\n\n// Parse an OAuth token-endpoint response into the cache shape. Accepts the JSON\n// object or a raw JSON string. Throws if no token field is present (fail loud \u2014\n// a tokenless response must not be cached as if valid).\nfunction parseTokenResponse(body, nowMs) {\n  const b = typeof body === \"string\" ? JSON.parse(body) : (body || {});\n  const token = b.access_token || b.jwt || b.token;\n  if (!token) throw new Error(\"ZoomInfo token response missing access_token\");\n  return {\n    access_token: token,\n    exp: computeExpiry(b.expires_in, nowMs),\n    token_type: b.token_type || \"Bearer\",\n  };\n}\n\n// A 401 means the token was rejected (expired/revoked) -> clear cache, re-mint, retry once.\n// Other statuses (400/403/404/429/5xx) are NOT auth failures and must not trigger a re-mint.\nfunction isAuthError(statusCode) {\n  return Number(statusCode) === 401;\n}\n\n// Bug B (live 2026-07-28): n8n's this.helpers.httpRequest throws an AxiosError, whose\n// status lives at `e.response.status` \u2014 a shape the original inline check\n// (statusCode/httpCode/response.statusCode) never covered, so a real 401 was silently\n// missed and the cache never cleared. Tries every shape actually observed in this\n// runtime (axios; n8n's NodeApiError, whose httpCode is sometimes a STRING; a bare\n// statusCode) and, as a last resort, parses the \"status code NNN\" trailer n8n/axios\n// append to the error message. Returns NaN (never a false 401) when nothing usable is\n// found \u2014 isAuthError(NaN) is false, matching the safe conservative default.\nfunction extractErrorStatus(e) {\n  if (!e) return NaN;\n  const candidates = [\n    e.statusCode,\n    e.httpCode,\n    e.response && e.response.status,\n    e.response && e.response.statusCode,\n  ];\n  for (const c of candidates) {\n    if (c !== undefined && c !== null && c !== \"\") {\n      const n = Number(c);\n      if (Number.isFinite(n)) return n;\n    }\n  }\n  const m = /status code (\\d{3})/i.exec((e && e.message) || \"\");\n  return m ? Number(m[1]) : NaN;\n}\n\n// --- n8n wrapper: cache the freshly-minted ZoomInfo token (CLOUD split-code-node) ---\nconst sd = $getWorkflowStaticData(\"global\");\nconst gateRows = (function () { try { return $('ZoomInfo Usage Token Gate').all(); } catch (e) { return []; } })();\nconst items = $input.all();\nreturn items.map((item, i) => {\n  const row = (gateRows[i] && gateRows[i].json) || {};\n  let zoom_token = null;\n  try {\n    const parsed = parseTokenResponse(item.json, Date.now());\n    sd.zoominfo = parsed;\n    zoom_token = parsed.access_token;\n  } catch (e) {\n    zoom_token = null;   // mint response malformed -> Enrich below sees no usable token\n  }\n  return { json: { ...row, zoom_token } };\n});\n"
+      },
+      "id": "c00090000-0000-4000-8000-000000000000",
+      "name": "ZoomInfo Usage Cache Token",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1760,
+        180
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// zoominfoToken.js \u2014 pure token cache/refresh helpers for the ZoomInfo OAuth2 flow.\n//\n// ZoomInfo (Okta) issues short-lived bearer tokens. For AUTONOMOUS operation the\n// workflow must mint its own token from long-lived client_id + client_secret and\n// re-mint when it expires or is rejected (401) \u2014 never store a static token.\n//\n// These are PURE functions (no n8n, no network) so they unit-test against Node.\n// In the local replica the Code node wraps them around $getWorkflowStaticData (cross-run\n// cache), this.helpers.httpRequest, and Date.now(). In the n8n Cloud deploy (Phase 16\n// split-code-node) the mint is done by a credential-bound \"ZoomInfo Mint\" HTTP node \u2014\n// these helpers run in the SECRET-FREE Token Gate/Cache Code nodes (cache + expiry +\n// re-mint-on-401 decisioning only; no client_id/client_secret ever in a Code node).\n//\n// Cache shape stored in workflow static data: { access_token, exp, token_type }\n//   exp = absolute expiry in epoch MILLISECONDS.\n\n// Mint a new token iff there is no cached token or it is within `skewMs` of expiry.\n// Minting slightly early (default 60s skew) avoids using a token that dies mid-request.\nfunction needsMint(cached, nowMs, skewMs = 60000) {\n  if (!cached || !cached.access_token || !cached.exp) return true;\n  return cached.exp - nowMs <= skewMs;\n}\n\n// Absolute expiry (epoch ms) from the token response's `expires_in` (seconds).\n// Missing/invalid expires_in -> conservative 5-minute lifetime so we re-mint soon\n// rather than trust an unknown-lifetime token indefinitely.\nfunction computeExpiry(expiresInSec, nowMs) {\n  const secs = Number(expiresInSec);\n  if (!Number.isFinite(secs) || secs <= 0) return nowMs + 5 * 60000;\n  return nowMs + secs * 1000;\n}\n\n// Parse an OAuth token-endpoint response into the cache shape. Accepts the JSON\n// object or a raw JSON string. Throws if no token field is present (fail loud \u2014\n// a tokenless response must not be cached as if valid).\nfunction parseTokenResponse(body, nowMs) {\n  const b = typeof body === \"string\" ? JSON.parse(body) : (body || {});\n  const token = b.access_token || b.jwt || b.token;\n  if (!token) throw new Error(\"ZoomInfo token response missing access_token\");\n  return {\n    access_token: token,\n    exp: computeExpiry(b.expires_in, nowMs),\n    token_type: b.token_type || \"Bearer\",\n  };\n}\n\n// A 401 means the token was rejected (expired/revoked) -> clear cache, re-mint, retry once.\n// Other statuses (400/403/404/429/5xx) are NOT auth failures and must not trigger a re-mint.\nfunction isAuthError(statusCode) {\n  return Number(statusCode) === 401;\n}\n\n// Bug B (live 2026-07-28): n8n's this.helpers.httpRequest throws an AxiosError, whose\n// status lives at `e.response.status` \u2014 a shape the original inline check\n// (statusCode/httpCode/response.statusCode) never covered, so a real 401 was silently\n// missed and the cache never cleared. Tries every shape actually observed in this\n// runtime (axios; n8n's NodeApiError, whose httpCode is sometimes a STRING; a bare\n// statusCode) and, as a last resort, parses the \"status code NNN\" trailer n8n/axios\n// append to the error message. Returns NaN (never a false 401) when nothing usable is\n// found \u2014 isAuthError(NaN) is false, matching the safe conservative default.\nfunction extractErrorStatus(e) {\n  if (!e) return NaN;\n  const candidates = [\n    e.statusCode,\n    e.httpCode,\n    e.response && e.response.status,\n    e.response && e.response.statusCode,\n  ];\n  for (const c of candidates) {\n    if (c !== undefined && c !== null && c !== \"\") {\n      const n = Number(c);\n      if (Number.isFinite(n)) return n;\n    }\n  }\n  const m = /status code (\\d{3})/i.exec((e && e.message) || \"\");\n  return m ? Number(m[1]) : NaN;\n}\n\n// --- n8n wrapper: ZoomInfo usage/credit check via Bearer token (CLOUD split-code-node) ---\nconst USAGE_URL = \"https://api.zoominfo.com/gtm/data/v1/users/usage\";\nconst sd = $getWorkflowStaticData(\"global\");\nconst items = $input.all();\nconst out = [];\nfor (const item of items) {\n  const token = item.json.zoom_token;\n  if (!token) { out.push({ json: { error: \"no zoominfo token available (mint failed or missing)\" } }); continue; }\n  let res;\n  try {\n    res = await this.helpers.httpRequest({\n      method: \"GET\", url: USAGE_URL,\n      headers: { Authorization: \"Bearer \" + token, Accept: \"application/vnd.api+json\" },\n    });\n  } catch (e) {\n    if (isAuthError(extractErrorStatus(e))) {\n      delete sd.zoominfo;  // token rejected -> clear cache so the NEXT run re-mints\n    }\n    res = { error: String((e && e.message) || e) };\n  }\n  out.push({ json: res });\n}\nreturn out;\n"
+      },
+      "id": "c00100000-0000-4000-8000-000000000000",
+      "name": "ZoomInfo Usage",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// n8n/code/providerSelection.js \u2014 pure-JS provider-selection cost gate for n8n Code nodes.\n//\n// Phase 16.1: the caller-supplied `providers` webhook field is the PRIMARY burn gate\n// (CONTEXT Locked Decision 1 \u2014 no global build-time kill-switch). This module is pure,\n// deterministic, and carries NO n8n globals \u2014 mirrors enrichmentGate.js exactly, inlined\n// into Code nodes via the builder's inline() (Code nodes cannot require() siblings).\n//\n// parseWebhookBody(body)\n//   -> { events, providers }\n//   Explicit payload contract (reviews A4): a bare HubSpot event array carries no\n//   top-level `providers` slot; an envelope `{ providers, events: [...] }` object carries\n//   the caller's selection at the envelope level. A single bare event object (neither an\n//   array nor an envelope with `.events`) is treated as the one event, and its own\n//   `.providers` field (if any) IS the envelope-level providers value here \u2014 the n8n\n//   wrapper additionally falls back to `event.providers` per-event when this returns\n//   undefined (`parsed.providers ?? event.providers`), covering the same single-event case\n//   without double logic.\n//\n// resolveEnabledProviders(raw, allNames)\n//   -> { provider_enabled: { <name>: boolean, ... }, providers_requested: [...] }\n//   \"all\"                    -> every name in allNames enabled\n//   \"none\" / \"\" / null / undefined / anything else (absent/unrecognized) -> none enabled\n//   an array                 -> exactly those names (lowercased, intersected with\n//                                allNames; unknown names dropped)\n//\n// extractCredits(provider, raw)\n//   -> number | null\n//   Three null-safe per-provider credit extractors (RESEARCH.md Task 1, live-curl-\n//   validated). Forward-provisioned here for Plan 02 (16.1 does not call this at\n//   runtime); unit-tested now so Plan 02 can consume it with zero further verification.\n//   Every extractor returns null on ANY shape mismatch \u2014 never throws, never fails the run.\n\nfunction parseWebhookBody(body) {\n  const events = Array.isArray(body)\n    ? body\n    : (body && Array.isArray(body.events) ? body.events : [body]);\n  const providers = (body && !Array.isArray(body)) ? body.providers : undefined;\n  return { events, providers };\n}\n\nfunction resolveEnabledProviders(raw, allNames) {\n  const all = Array.isArray(allNames) ? allNames : [];\n  const allLower = all.map((n) => String(n).toLowerCase());\n  let enabledLower;\n\n  if (raw === \"all\") {\n    enabledLower = allLower.slice();\n  } else if (Array.isArray(raw)) {\n    const requestedLower = raw.map((n) => String(n).toLowerCase());\n    enabledLower = allLower.filter((n) => requestedLower.indexOf(n) !== -1);\n  } else {\n    // \"none\" | \"\" | null | undefined | any other unrecognized value -> nothing enabled\n    // (CONTEXT Locked Decision 2 \u2014 safe default, explicit opt-in required).\n    enabledLower = [];\n  }\n\n  const enabledSet = new Set(enabledLower);\n  const provider_enabled = {};\n  const providers_requested = [];\n  for (const name of all) {\n    const lower = String(name).toLowerCase();\n    const isEnabled = enabledSet.has(lower);\n    provider_enabled[name] = isEnabled;\n    if (isEnabled) providers_requested.push(name);\n  }\n\n  return { provider_enabled, providers_requested };\n}\n\nfunction extractCredits(provider, raw) {\n  const p = String(provider || \"\").toLowerCase();\n\n  if (p === \"lusha\") {\n    // 200 body -> { credits: { total, used, remaining } } [VERIFIED: live curl 200]\n    return (raw && raw.credits && typeof raw.credits.remaining === \"number\")\n      ? raw.credits.remaining : null;\n  }\n\n  if (p === \"apollo\") {\n    // THIS account's key 403s (non-master) [VERIFIED: live curl 403] -> raw carries no\n    // `remaining` field -> null. A master key's usage_stats body (undocumented shape for\n    // this account) is read defensively: only a top-level numeric `remaining` is trusted.\n    return (raw && typeof raw.remaining === \"number\") ? raw.remaining : null;\n  }\n\n  if (p === \"zoominfo\") {\n    // JSON:API: data[0].attributes.usage[] keyed by limitType. [VERIFIED: live curl 200]\n    // The real redeemable-records balance lives under limitType === \"uniqueIdLimit\";\n    // fall back to the first entry with a non-zero totalLimit before giving up (Open\n    // Question #1 \u2014 a different ZoomInfo plan may report its balance under another key).\n    const usage = (raw && raw.data && raw.data[0] && raw.data[0].attributes\n      && raw.data[0].attributes.usage) || [];\n    if (!Array.isArray(usage)) return null;\n    let entry = usage.find((u) => u && u.limitType === \"uniqueIdLimit\");\n    if (!entry) entry = usage.find((u) => u && typeof u.totalLimit === \"number\" && u.totalLimit > 0);\n    return (entry && typeof entry.usageRemaining === \"number\") ? entry.usageRemaining : null;\n  }\n\n  return null;\n}\n\n// --- n8n wrapper: Build Credit Status (Phase 25 Plan 02) ---\nfunction nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }\nfunction httpStatus(raw) {\n  if (!raw) return null;\n  const candidates = [raw.statusCode, raw.httpCode, raw.status,\n    raw.response && raw.response.status, raw.response && raw.response.statusCode];\n  for (const c of candidates) {\n    if (c !== undefined && c !== null && c !== \"\") {\n      const n = Number(c);\n      if (Number.isFinite(n)) return n;\n    }\n  }\n  return null;\n}\nconst first = $('Status Credit Request').first();\nconst providers_requested = (first && first.json && first.json.providers_requested) || [];\nconst CREDIT_NODE_BY_PROVIDER = { lusha: \"Lusha Usage\", apollo: \"Apollo Usage\", zoominfo: \"ZoomInfo Usage\" };\nconst balances = providers_requested.map((provider) => {\n  const nodeName = CREDIT_NODE_BY_PROVIDER[provider];\n  const rows = nodeName ? nodeAll(nodeName) : [];\n  const row = rows[0];\n  const raw = row && row.json;\n  const status = httpStatus(raw);\n  let credits = null;\n  let error = null;\n  if (!row) {\n    error = \"not_executed\";\n  } else if (raw && raw.error) {\n    error = status ? (\"http_\" + status) : \"provider_error\";\n  } else {\n    credits = extractCredits(provider, raw);\n    if (credits === null) error = \"unrecognized_response_shape\";\n  }\n  return { provider, configured: true, credits, unreadable: credits === null, error, status };\n});\nreturn [{ json: { balances, checked_at: new Date().toISOString() } }];\n"
+      },
+      "id": "c00110000-0000-4000-8000-000000000000",
+      "name": "Build Credit Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1980,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "id": "rw00120000-0000-4000-8000-000000000000",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## LV Backend Status \u2014 credit-only slice (Phase 25 Plan 02, D-14)\n`hubspot/backend-status`: three provider usage probes run SEQUENTIALLY (Lusha -> Apollo -> the shared ZoomInfo usage subgraph) so every provider has been checked before the single `Respond to Webhook` fires \u2014 never fanned out, which would let the response race the still-running probes.\n\nAn unreadable balance (Apollo's non-master key 403s by design on this account) renders as an explicit `unreadable: true` / `credits: null` marker, never as zero (D-10). Reads provider usage endpoints only, never a HubSpot endpoint, and performs zero writes. **Full health is Phase 27** (STATUS-01..06) \u2014 this endpoint ships the credit slice only.\n\n**Webhook Trigger** binds the SAME shared `LV Enrichment Webhook` credential the enrichment trigger uses \u2014 one operator secret works against both endpoints with no new provisioning.",
+        "height": 300,
+        "width": 480
+      },
+      "id": "s00130000-0000-4000-8000-000000000000",
+      "name": "Sticky Note 1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2200,
+        560
+      ]
+    }
+  ],
+  "connections": {
+    "Status Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Status Credit Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Status Credit Request": {
+      "main": [
+        [
+          {
+            "node": "Lusha Usage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lusha Usage": {
+      "main": [
+        [
+          {
+            "node": "Apollo Usage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Apollo Usage": {
+      "main": [
+        [
+          {
+            "node": "ZoomInfo Usage Token Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ZoomInfo Usage Token Gate": {
+      "main": [
+        [
+          {
+            "node": "IF ZoomInfo Usage Needs Mint",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF ZoomInfo Usage Needs Mint": {
+      "main": [
+        [
+          {
+            "node": "ZoomInfo Usage Mint",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "ZoomInfo Usage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ZoomInfo Usage Mint": {
+      "main": [
+        [
+          {
+            "node": "ZoomInfo Usage Cache Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ZoomInfo Usage Cache Token": {
+      "main": [
+        [
+          {
+            "node": "ZoomInfo Usage",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ZoomInfo Usage": {
+      "main": [
+        [
+          {
+            "node": "Build Credit Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Credit Status": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {}
+}
