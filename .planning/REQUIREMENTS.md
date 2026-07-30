@@ -25,7 +25,7 @@ Each maps to exactly one roadmap phase.
 
 ### Transport Hygiene
 
-- [ ] **REQ-dedupe-transport-swap**: `Dedupe Search (candidate contacts)` swaps from the native HubSpot node to the credential-bound httpRequest envelope (BUG-10/22/23 mechanism); weekly sweep remains classify-only (writes only the needs-review flag through the existing gated PATCH).
+- [x] **REQ-dedupe-transport-swap**: `Dedupe Search (candidate contacts)` swaps from the native HubSpot node to the credential-bound httpRequest envelope (BUG-10/22/23 mechanism); weekly sweep remains classify-only (writes only the needs-review flag through the existing gated PATCH).
 
 ### Schema Hygiene
 
@@ -57,7 +57,7 @@ Each maps to exactly one roadmap phase.
 | REQ-lusha-id-staging | Phase 20 | Pending |
 | REQ-lusha-v3-normalize | Phase 20 | Complete |
 | REQ-lusha-v3-verification | Phase 20 | Complete |
-| REQ-dedupe-transport-swap | Phase 21 | Pending |
+| REQ-dedupe-transport-swap | Phase 21 | Complete |
 | REQ-orgtype-enumeration | Phase 21 | Pending |
 | REQ-country-region-policy | Phase 21 | Pending |
 | REQ-armed-e2e-canary | Phase 22 | Pending |
