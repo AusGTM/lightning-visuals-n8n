@@ -129,6 +129,26 @@ installed plugin.
 
 # SECTION B — the armed create canary (23-06 Task 2)
 
+> ## ⚠ STOP — two defects found walking this section on 2026-07-31
+>
+> Both confirmed against the committed artifacts and the live instance. **Section B is not safe to
+> run exactly as written below.** Full detail and the replacement commands are in
+> `../../OPERATOR-RUNBOOK.md` §RB-3, "Two defects found walking this runbook".
+>
+> 1. **The read-back at Steps 1, 3b and 7 does not cover the lane this canary fires at.**
+>    `verify_live_write_safety.py` hardcodes `LV Enrichment (Cloud template)` and the two
+>    `Decide*` node names (lines 60 and 64) and takes no workflow argument — covering 2 of 9
+>    CREATE sites, 2 of 8 RECORD_WRITES sites, and **zero nodes in
+>    `LV Contact Ingest (Cloud template)`**. A `disarmed PASS` at Step 7 is therefore **not**
+>    evidence the contact lane is disarmed. Run the all-workflow scan in §RB-3 as well; silence
+>    is the pass.
+> 2. **23-01's create-gate fix is committed but not deployed** (live `updatedAt` 2026-07-30
+>    declares literals in only the two write gates). Step 3 would push never-live-tested logic
+>    in the same action that arms writes. **Insert Steps 2b/2c from §RB-3** — a disarmed deploy
+>    plus read-back — so "did the fix deploy" and "did arming work" stay separable.
+>
+> Both route to `/gsd-plan-phase 23 --gaps --ws plugin-entrypoint` for the permanent fix.
+
 ### Step 0 — confirm the canary does not already exist
 
 In HubSpot, search for `canary-23-06-20260731@australiagtm.com`. **It must not exist.** A

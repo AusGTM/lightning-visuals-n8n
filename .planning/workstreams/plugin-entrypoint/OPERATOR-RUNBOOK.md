@@ -298,6 +298,62 @@ here for completeness; that file governs on any discrepancy.
 `TEST_RECORD_DOMAINS=australiagtm.com`. Arming `ALLOW_HUBSPOT_CREATE` is a **deliberate departure**
 from 22-OPERATOR-RUNBOOK.md, which forbade it — Phase 23's entire goal *is* the create path.
 
+### ⚠ Two defects found walking this runbook on 2026-07-31 — read before Section B
+
+Both were found by the operator mid-window, and both were independently confirmed against the
+committed artifacts and the live instance. **Section B is not safe to run as originally written.**
+
+**Defect 1 — the read-back at Steps 1, 3b and 7 does not cover the lane being armed.**
+`scripts/verify_live_write_safety.py` hardcodes one workflow (`ENRICHMENT_WORKFLOW_NAME`, line 60)
+and two node names (`WRITE_DECISION_NODE_NAMES = ("Decide Action", "Decide Company Action")`, line
+64), and takes no workflow argument. Confirmed coverage: **2 of the 9 `ALLOW_HUBSPOT_CREATE` sites
+and 2 of the 8 `ALLOW_HUBSPOT_RECORD_WRITES` sites — and zero nodes in
+`LV Contact Ingest (Cloud template)`**, whose gates are named `HubSpot Update Write Gate` and
+`HubSpot Create Write Gate`. That is the lane this canary fires at.
+
+Consequence: **a `VERDICT: disarmed PASS` at Step 7 is not evidence the contact lane is disarmed.**
+Until the verifier is fixed, close the window by *also* confirming the contact lane directly:
+
+```bash
+.venv/bin/python -c "
+from dotenv import load_dotenv; load_dotenv()
+import os, re, requests
+base = os.getenv('N8N_URL','').rstrip('/'); key = os.getenv('N8N_API_KEY')
+r = requests.get(f'{base}/api/v1/workflows', headers={'X-N8N-API-KEY': key}, timeout=30); r.raise_for_status()
+for w in r.json()['data']:
+    d = requests.get(f\"{base}/api/v1/workflows/{w['id']}\", headers={'X-N8N-API-KEY': key}, timeout=30).json()
+    for n in d.get('nodes', []):
+        for flag, val in re.findall(r'(ALLOW_HUBSPOT_[A-Z_]+)\s*=\s*\"(true|false)\"', n.get('parameters',{}).get('jsCode','') or ''):
+            if val == 'true': print('ARMED:', w['name'], '|', n['name'], '|', flag)
+print('scan complete — any ARMED line above means the window is still open')
+"
+```
+
+Read-only. **Silence is the pass.** Any `ARMED:` line means the backend is still armed regardless of
+what the verifier reported.
+
+**Defect 2 — 23-01's create-gate fix is committed but not deployed.** Confirmed live 2026-07-31:
+`LV Contact Ingest (Cloud template)` (`updatedAt` 2026-07-30) declares literals in only its two
+write gates; the committed artifact also declares `ALLOW_HUBSPOT_CREATE` in `Decide Action`. So
+**Step 3 would push 23-01's never-live-tested logic in the same action that arms writes**, leaving
+"did the fix deploy" and "did arming work" inseparable if the canary misbehaves.
+
+**Insert this between Step 2 and Step 3** — a disarmed deploy, then a read-back, so the fix lands
+and is proven *before* anything is armed:
+
+```bash
+# Step 2b — deploy the committed (disarmed) artifacts, arming nothing
+DRY_RUN=false ALLOW_N8N_DEPLOY=true \
+  .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/deploy_n8n_workflows.py', run_name='__main__')"
+
+# Step 2c — confirm 23-01's fix is now live AND everything is still disarmed
+.venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/verify_live_write_safety.py', run_name='__main__')" --expectation disarmed
+```
+
+Then re-run the Defect-1 scan above and confirm `LV Contact Ingest`'s `Decide Action` now declares
+`ALLOW_HUBSPOT_CREATE = "false"` — three CREATE sites in that workflow, not two. Only then proceed
+to Step 3.
+
 ### Section A — install and invoke (read-only, gates Section B)
 
 ```bash
