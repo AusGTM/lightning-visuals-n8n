@@ -371,7 +371,14 @@ return $input.all().map((it) => {
   const row = it.json;
   const id = row.identity || {};
   const outcome = id.outcome || "rejected";
-  const allow_create = row.allow_create === true;
+  // D-16/D-16a/D-16b: this used to read row.allow_create, a field seeded on the webhook
+  // item at Set Config — but Extract From File emits fresh items parsed from the binary
+  // CSV, so nothing seeded upstream of it survives to here (BUG 12/BUG 21 row-loss
+  // family). The sole authority is the baked ALLOW_HUBSPOT_CREATE constant this node
+  // declares (composed at the build site, prepended ahead of this jsCode) — the SAME
+  // overlayable constant HubSpot Create Write Gate downstream already reads, so arming
+  // creation here still requires that gate's allowlist too. Not OR'd with a row value.
+  const allow_create = String(ALLOW_HUBSPOT_CREATE).toLowerCase() === "true";
   const properties = _buildContactPatch(row.merge);
   let action;
   if (outcome === "match") action = "update";
@@ -577,6 +584,11 @@ def build_cloud():
     # can test offline — spread json, carry binary through explicitly.
     set_cfg = code_node("Set Config", r"""// Set Config — row-and-binary-carrying passthrough.
 // BUG 21: the Set node this replaces dropped the webhook's binary CSV on the floor.
+// D-16b: this row's `allow_create` is NOT the Cloud create gate any more — it does not
+// survive Extract From File's fresh-item parse, and the real gate now lives at Decide
+// Action, which reads the baked ALLOW_HUBSPOT_CREATE constant instead. This seed stays
+// here only for the LOCAL/dry-run echo lane (DECIDE_LOCAL), which legitimately keeps
+// reading a row-seeded gate.
 return $input.all().map((it) => ({
   json: { ...it.json, allow_create: false },
   binary: it.binary,
@@ -634,10 +646,16 @@ return $input.all().map((it) => ({
     )
     nodes.append(hs_search)
 
+    # D-16b: the create constant is composed HERE, at the build site, rather than at
+    # DECIDE_CLOUD's module-level definition — _write_safety_const is defined later in
+    # this module, so calling it at definition time would raise NameError. Prepending it
+    # to this one node's jsCode (not Set Config, not the other three chain nodes) keeps
+    # Decide Action the single Cloud-only place this lane reads the baked constant.
+    decide_action_js = _write_safety_const("ALLOW_HUBSPOT_CREATE") + "\n" + DECIDE_CLOUD
     for name, js in [("Adapt Search Results", ADAPT_SEARCH_RESULTS),
                      ("Resolve Identity", RESOLVE_IDENTITY),
                      ("Merge Contacts", MERGE_CONTACTS),
-                     ("Decide Action", DECIDE_CLOUD)]:
+                     ("Decide Action", decide_action_js)]:
         x += 220
         nodes.append(code_node(name, js, x, y))
 
