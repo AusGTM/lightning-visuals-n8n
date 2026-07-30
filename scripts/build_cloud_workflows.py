@@ -1232,6 +1232,11 @@ return $input.all().map((it) => {
       !_writeSafetyAllows(action, hs_object_id, domain)) {
     action = "write_blocked";
   }
+  // BUG 27 (live 400 on execution 328): HubSpot v3 PATCH rejects JSON arrays —
+  // multi-checkbox values must be semicolon-joined strings. Single choke point.
+  for (const k of Object.keys(properties)) {
+    if (Array.isArray(properties[k])) properties[k] = properties[k].join(";");
+  }
   return { json: {
     action,
     object_type: row.object_type || "contacts",
@@ -2486,6 +2491,12 @@ return $input.all().map((it) => {
   if ((action === "create" || action === "enrich") &&
       !_writeSafetyAllows(action, hs_object_id, domain)) {
     action = "write_blocked";
+  }
+
+  // BUG 27 (live 400 on execution 328): HubSpot v3 PATCH rejects JSON arrays —
+  // multi-checkbox values (lv_content_type) must be semicolon-joined strings.
+  for (const k of Object.keys(properties)) {
+    if (Array.isArray(properties[k])) properties[k] = properties[k].join(";");
   }
 
   return { json: {
