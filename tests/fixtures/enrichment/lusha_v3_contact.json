@@ -1,0 +1,48 @@
+{
+  "requestId": "11111111-1111-1111-1111-111111111111",
+  "results": [
+    {
+      "id": "v1.SYNTHETIC_CONTACT_ID_0001",
+      "firstName": "Jamie",
+      "lastName": "Rivera",
+      "fullName": "Jamie Rivera",
+      "jobTitle": {
+        "title": "Head of Broadcast",
+        "departments": ["Broadcast"],
+        "seniority": "Director",
+        "startDate": "2025-03-01"
+      },
+      "company": {
+        "id": "v1.SYNTHETIC_COMPANY_ID_0001",
+        "name": "Example Racing League",
+        "domain": "exampleracing.example",
+        "industry": "Entertainment"
+      },
+      "location": {
+        "country": "Australia",
+        "countryIso2": "AU",
+        "city": "Sydney",
+        "continent": "Oceania",
+        "coordinates": [151.207, -33.868],
+        "isEuContact": false
+      },
+      "socialLinks": { "linkedin": "https://www.linkedin.com/in/synthetic-slug-0001" },
+      "partialProfile": false,
+      "linkedinConnections": 400,
+      "linkedinFollowers": 410,
+      "emails": [
+        { "email": "jamie.rivera@exampleracing.example", "type": "work", "confidence": "A+", "updateDate": "2026-05-01" }
+      ],
+      "phones": [
+        { "number": "0412 345 678", "type": "mobile", "doNotCall": false, "updateDate": "2026-04-15" },
+        { "number": "02 9000 1234", "type": "direct", "doNotCall": false, "updateDate": "2026-04-10" },
+        { "number": "0400 000 999", "type": "mobile", "doNotCall": true, "updateDate": "2026-04-01" },
+        { "number": "123", "type": "direct", "doNotCall": false, "updateDate": "2026-03-01" }
+      ],
+      "tags": [],
+      "previousEmployment": [],
+      "updateDate": "2026-05-01"
+    }
+  ],
+  "billing": { "creditsCharged": 1, "resultsReturned": 1 }
+}

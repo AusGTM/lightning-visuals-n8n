@@ -388,3 +388,13 @@ refutation`):
 - **A7 confirmed — Plan 04 (`lusha_contact_id`/`lusha_company_id` staging) unchanged.**
 
 Plans 02 and 04 may now proceed against this contract and the re-scoped requirement.
+
+## Plan 03 test fixtures — synthetic transcription note
+
+`tests/fixtures/enrichment/lusha_v3_contact.json`, `lusha_v3_company.json` and
+`lusha_v3_no_match.json` (added in Plan 03) are structural transcriptions of the envelopes
+captured above (§4, §5, §9): same keys, same nesting, same array-versus-object choices. Every
+revealed email address, phone number, name, id, and LinkedIn slug in those three fixtures is a
+synthetic placeholder invented for the test suite — none is a real value from the live probe
+session recorded in this document. Only the envelope *shape* is transcribed; the *values* are
+not (threat T-20-03).

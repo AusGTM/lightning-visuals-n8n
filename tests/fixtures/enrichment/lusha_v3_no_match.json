@@ -1,0 +1,7 @@
+{
+  "requestId": "33333333-3333-3333-3333-333333333333",
+  "results": [
+    { "error": { "code": "NOT_FOUND", "message": "Contact not found" } }
+  ],
+  "billing": { "creditsCharged": 0, "resultsReturned": 0 }
+}
