@@ -105,16 +105,23 @@ def render_backend_status(result) -> dict:
     }
 
 
-def describe_workflow(config: dict, workflow_id, transport=requests.get) -> dict:
+def describe_workflow(config: dict, workflow_id, transport=requests.get,
+                      body=None, last_run=None) -> dict:
     """On-or-off, whether live writes are currently enabled, when it last ran and
     whether that run succeeded — every one read from the n8n API rather than asserted
     from the plugin's own config (D-03, STATUS-01).
 
     An unreadable workflow yields None for `active` and None for every flag, never a
     reassuring default (D-08).
+
+    `body` and `last_run` may be supplied by a caller that has already read them —
+    `describe_all` has both from its two collection calls, and re-fetching per workflow
+    would turn one page into N calls.
     """
-    body = n8n_read.get_workflow(config, workflow_id, transport=transport)
-    last_run = n8n_read.last_execution(config, workflow_id, transport=transport)
+    if body is None:
+        body = n8n_read.get_workflow(config, workflow_id, transport=transport)
+    if last_run is None:
+        last_run = n8n_read.last_execution(config, workflow_id, transport=transport)
 
     active = body.get("active") if isinstance(body, dict) else None
     write_safety = {
@@ -129,6 +136,61 @@ def describe_workflow(config: dict, workflow_id, transport=requests.get) -> dict
         "write_safety": write_safety,
         "last_run": last_run,
         "in_flight": last_run.get("in_flight"),
+    }
+
+
+def describe_all(config: dict, transport=requests.get, now=None) -> dict:
+    """Every workflow the API key can see — no allowlist, no name filter, no config list
+    of workflows to watch (D-07). A newly deployed or renamed workflow is in the answer
+    the moment n8n returns it, because the collection response IS the list.
+
+    Costs two calls in the common case: the workflow collection, and one bounded page of
+    recent executions grouped by workflow. A workflow absent from that page gets its own
+    filtered read — a bounded page is not complete history, and reporting never-run from
+    an absence in it would be a fabrication.
+
+    `readable` False with an empty list is "could not read the collection"; `readable`
+    True with an empty list is "there are genuinely none".
+    """
+    workflows = n8n_read.list_workflows(config, transport=transport)
+    if workflows is None:
+        return {"readable": False, "workflows": []}
+
+    page = n8n_read.recent_executions(config, transport=transport)
+    latest_by_workflow = {}
+    for execution in page if isinstance(page, list) else []:
+        if not isinstance(execution, dict):
+            continue
+        # The page is newest first, so the first entry seen for a workflow is its latest.
+        latest_by_workflow.setdefault(str(execution.get("workflowId")), execution)
+
+    described = []
+    for workflow in workflows:
+        if not isinstance(workflow, dict):
+            continue
+        workflow_id = workflow.get("id")
+        raw = latest_by_workflow.get(str(workflow_id))
+        last_run = (n8n_read.summarize_execution(raw, config, now=now) if raw is not None
+                    else n8n_read.last_execution(config, workflow_id,
+                                                 transport=transport, now=now))
+        # n8n's collection returns full workflow objects; a thin entry without nodes
+        # would leave write-safety unknown and silently under-report an armed backend
+        # (the D-10 failure), so fetch the body instead of guessing.
+        body = workflow if isinstance(workflow.get("nodes"), list) else None
+        described.append(describe_workflow(config, workflow_id, transport=transport,
+                                           body=body, last_run=last_run))
+
+    return {"readable": True, "workflows": described}
+
+
+def full_report(config: dict, get_transport=requests.get,
+                post_transport=requests.post, now=None) -> dict:
+    """The whole picture: every workflow, plus the half only the backend can supply."""
+    config_gate.require_capability(config, "status")
+    return {
+        "workflows": describe_all(config, transport=get_transport, now=now),
+        "backend": render_backend_status(
+            backend_status.fetch_backend_status(config, transport=post_transport)),
     }
 
 

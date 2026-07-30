@@ -321,8 +321,12 @@ def test_no_fetched_workflow_body_leaks_into_the_answer(fake_config,
     ])
     result = status.describe_all(fake_config, transport=transport, now=NOW)
 
-    assert marker not in json.dumps(result)
-    assert "nodes" not in json.dumps(result)
+    rendered = json.dumps(result)
+    assert marker not in rendered
+    # `write_safety.nodes` is 27-03's deliberate list of DECLARING NODE NAMES, which is
+    # not a body leak. The body itself is `jsCode` under `parameters` — that is what must
+    # never cross out of the module.
+    assert "jsCode" not in rendered and "parameters" not in rendered
 
 
 def test_describe_all_refuses_before_any_transport_when_the_key_is_missing(fake_config):

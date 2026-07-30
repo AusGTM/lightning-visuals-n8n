@@ -26,6 +26,7 @@ raise-on-failure contract for the report lane; this module's degrade-to-unknown 
 is deliberately the opposite, because a status read must answer even when a read fails.
 """
 import re
+from datetime import datetime, timezone
 
 import requests
 
@@ -34,6 +35,16 @@ DEFAULT_TIMEOUT = 30
 # n8n's documented execution statuses: canceled, crashed, error, new, running, success,
 # unknown, waiting. Only these two mean "still going".
 IN_FLIGHT_STATUSES = frozenset({"running", "new", "waiting"})
+
+# 27-RESEARCH.md A2: carried from root CLAUDE.md §11.2's `LOCK_TTL_MINUTES` convention,
+# which describes a mechanism this repo never built. A starting point, not a measured
+# value — which is why every stuck verdict carries the threshold it was judged against.
+DEFAULT_STUCK_MINUTES = 15
+
+# One bounded page. n8n's documented max is 250; this is a status read on operator
+# demand, not a poll loop. A workflow missing from the page gets its own filtered read
+# rather than being reported never-run from an absence in it.
+EXECUTIONS_PAGE_LIMIT = 100
 
 
 def _base_url(config: dict) -> str:
@@ -93,15 +104,88 @@ def _derive_status(execution: dict):
     return None
 
 
-def last_execution(config: dict, workflow_id, transport=requests.get) -> dict:
+def stuck_threshold_minutes(config: dict):
+    """Minutes a run may be in flight before it reads as wedged. Configuration first,
+    documented default when absent, unparseable or non-positive — a status read must not
+    fail because a config value was typed wrong."""
+    try:
+        value = float((config or {}).get("stuck_execution_minutes"))
+    except (TypeError, ValueError):
+        return DEFAULT_STUCK_MINUTES
+    return value if value > 0 else DEFAULT_STUCK_MINUTES
+
+
+def elapsed_minutes(started_at, now=None):
+    """Minutes since an ISO start timestamp, or None when it is missing or unparseable.
+
+    None is unknown age, never zero age: a run whose start we cannot read is not a run
+    that just started. n8n stamps a trailing `Z`; a naive timestamp is read as UTC, which
+    is what the API emits.
+    """
+    if not isinstance(started_at, str) or not started_at.strip():
+        return None
+    try:
+        started = datetime.fromisoformat(started_at.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=timezone.utc)
+    return ((now or datetime.now(timezone.utc)) - started).total_seconds() / 60.0
+
+
+def summarize_execution(execution, config: dict, now=None) -> dict:
+    """One raw execution item as the status surface reads it — including the stuck
+    verdict (D-07b).
+
+    Stuck is an execution-age question, answered entirely from the executions API. There
+    is no HubSpot lock state to consult: `enrichment_lock_until` does not exist in this
+    portal's schema and nothing in the pipeline ever wrote a `running` status (D-07a).
+
+    `stuck` is tri-state on purpose. True is over the threshold, False is not, and None
+    is in flight with an age we could not read — which must not round down to "fine".
+    """
+    execution = execution if isinstance(execution, dict) else {}
+    status = _derive_status(execution)
+    in_flight = status in IN_FLIGHT_STATUSES if status else None
+    threshold = stuck_threshold_minutes(config)
+
+    running_for = elapsed_minutes(execution.get("startedAt"), now=now) if in_flight else None
+    if not in_flight:
+        stuck = False
+    elif running_for is None:
+        stuck = None
+    else:
+        stuck = running_for > threshold
+
+    return {
+        "execution_id": execution.get("id"),
+        "status": status,
+        "started_at": execution.get("startedAt"),
+        "stopped_at": execution.get("stoppedAt"),
+        "never_run": False,
+        "in_flight": in_flight,
+        "running_for_minutes": running_for,
+        "stuck": stuck,
+        "stuck_threshold_minutes": threshold,
+        "error": None,
+    }
+
+
+def _unknown_execution(config: dict) -> dict:
+    return {"execution_id": None, "status": None, "started_at": None, "stopped_at": None,
+            "never_run": False, "in_flight": None, "running_for_minutes": None,
+            "stuck": None, "stuck_threshold_minutes": stuck_threshold_minutes(config),
+            "error": None}
+
+
+def last_execution(config: dict, workflow_id, transport=requests.get, now=None) -> dict:
     """The most recent execution for one workflow.
 
     Always returns the same shape. `never_run` True with no error means the workflow has
     genuinely never run; an `error` means the read failed and nothing is known — those
     two are the pair a naive implementation conflates into a reassuring blank.
     """
-    unknown = {"status": None, "started_at": None, "stopped_at": None,
-               "never_run": False, "in_flight": None, "error": None}
+    unknown = _unknown_execution(config)
 
     body = _get_json(config, f"{_base_url(config)}/api/v1/executions",
                      {"workflowId": workflow_id, "limit": 1}, transport)
@@ -112,18 +196,24 @@ def last_execution(config: dict, workflow_id, transport=requests.get) -> dict:
     if not isinstance(data, list):
         return dict(unknown, error="unrecognized_response_shape")
     if not data:
-        return dict(unknown, never_run=True, in_flight=False)
+        return dict(unknown, never_run=True, in_flight=False, stuck=False)
 
-    execution = data[0] if isinstance(data[0], dict) else {}
-    status = _derive_status(execution)
-    return {
-        "status": status,
-        "started_at": execution.get("startedAt"),
-        "stopped_at": execution.get("stoppedAt"),
-        "never_run": False,
-        "in_flight": status in IN_FLIGHT_STATUSES if status else None,
-        "error": None,
-    }
+    return summarize_execution(data[0], config, now=now)
+
+
+def recent_executions(config: dict, transport=requests.get, limit: int = EXECUTIONS_PAGE_LIMIT):
+    """One bounded page of recent executions across every workflow, newest first.
+
+    `None` is unreadable, `[]` is "read fine, nothing there". This page is a shortcut for
+    the common case, never a history: a workflow absent from it is not thereby never-run,
+    and the caller owes it a filtered read of its own.
+    """
+    body = _get_json(config, f"{_base_url(config)}/api/v1/executions",
+                     {"limit": limit}, transport)
+    if body is None:
+        return None
+    data = body.get("data")
+    return data if isinstance(data, list) else None
 
 
 def read_write_safety(workflow_body, flag_name: str) -> dict:
