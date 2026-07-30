@@ -27,6 +27,37 @@ stripped and reported, never silently dropped (INGEST-03). `provenance.input` na
 input the row came from; `provenance.locator` names the span within it (a span of text, a
 JSON path, a URL, or an image name and region) — together the two facts STRUCT-03
 requires of every accepted row.
+
+After the identity pre-flight, `validate()` also runs overlap dedupe (D-08/D-09) and
+ambiguity aggregation (D-06/D-07):
+
+  - Two accepted rows whose first-satisfied identity group (per `identity_groups()`,
+    tried in order) agrees exactly once trimmed and case-folded collapse into one row.
+    The merged row's `provenance` becomes a LIST of every source provenance record that
+    fed it (unmerged rows keep a single provenance dict, unchanged from 24-01). A
+    non-identity field the merged records disagree on is dropped from the row and
+    reported as an ambiguity rather than one source winning.
+  - Two accepted rows that agree on every field of some identity group one of them
+    fully carries, but where the group is incomplete on the other side, are NOT merged:
+    both survive and an ambiguity is raised asking whether they are the same person.
+  - Ambiguities from the artifact itself, from merge conflicts, and from near-duplicates
+    are aggregated into ONE list, each entry shaped
+    `{"record_index": int, "field": str | None, "reason": str}` — `record_index` is the
+    position in the deduplicated record list (the same order `accepted` preserves, minus
+    any record this module's own D-07 check subsequently rejects for contradicting one
+    of its own ambiguities). Sorted by `(record_index, field)` so two runs over the same
+    artifact produce byte-identical output.
+  - D-07 enforcement: a record carrying both an ambiguity naming a field AND a
+    non-empty value for that same field is a contradiction (the extraction said it was
+    unsure, then filled it anyway) and is rejected. This is the *structural* half of
+    STRUCT-04 — the only invention this module can mechanically detect. It cannot
+    verify that an extracted value is TRUE; that is a prompt contract 24-03's SKILL.md
+    carries, not a code guarantee (24-RESEARCH.md's STRUCT-04 row).
+  - There is no function anywhere in this module that applies or resolves an ambiguity.
+    The correction path does not need one: the operator answers in chat, Claude rewrites
+    the artifact, and `validate()` runs again over the corrected file. A Python
+    resolution path would be a second way for a value to enter a row — exactly the
+    surface D-07 exists to keep closed.
 """
 import csv
 import json
@@ -53,10 +84,11 @@ class ExtractionError(Exception):
 
 @dataclass
 class ExtractionResult:
-    accepted: list       # [{"row": {canonical: value}, "provenance": {...}}, ...]
+    accepted: list       # [{"row": {canonical: value}, "provenance": {...} | [...]}, ...]
     rejected: list       # [{"index": int, "reason": str}, ...]
     dropped_keys: list   # [{"index": int, "key": str}, ...]
-    ambiguities: list = field(default_factory=list)
+    ambiguities: list = field(default_factory=list)   # [{"record_index", "field", "reason"}, ...]
+    collapses: list = field(default_factory=list)      # [{"record_index", "merged_from": [...]}, ...]
 
 
 def _load_mapping(mapping_path=None) -> dict:
@@ -109,6 +141,210 @@ def has_identity(row: dict, groups=None) -> bool:
     if groups is None:
         groups = identity_groups()
     return any(all(_present(row.get(key)) for key in group) for group in groups)
+
+
+def _casefold_trim(value) -> str:
+    """A dedupe MATCH case-folds and trims; `_present()`/`has_identity()` deliberately do
+    not — presence and equality are different questions (24-RESEARCH.md Pitfall 5)."""
+    return str(value).strip().casefold()
+
+
+def _group_presence(row: dict, group: list) -> tuple:
+    """For one identity group's fields on one row: ({field: casefolded/trimmed value}
+    for fields that are present), and whether every field of the group is present."""
+    present = {f: _casefold_trim(row[f]) for f in group if _present(row.get(f))}
+    return present, len(present) == len(group)
+
+
+def _first_satisfied_key(row: dict, groups: list):
+    """The record's identity key for exact-match clustering: the first group in
+    `groups` order that `row` fully satisfies, as `(group_index, casefolded tuple)`.
+    Every accepted record satisfies at least one group (has_identity() already
+    guaranteed that at the pre-flight), so this never returns None for an accepted row."""
+    for gi, group in enumerate(groups):
+        present, full = _group_presence(row, group)
+        if full:
+            return (gi, tuple(present[f] for f in group))
+    return None
+
+
+def _compare_identity(row_a: dict, row_b: dict, groups: list):
+    """Compare two accepted rows against every identity group. No similarity score, no
+    edit distance, no threshold — only ever exact (casefolded, trimmed) equality of
+    fields both rows actually carry (24-RESEARCH.md Pitfall 5); anything short of that is
+    either "near_dup" or no signal at all, never a collapse.
+
+    Returns:
+      ("match", None, None)       - some group is fully present on both sides and every
+                                     field they share agrees.
+      ("near_dup", field, side)   - some group is fully present on exactly one side, and
+                                     every field both sides actually carry agrees, but the
+                                     group is not fully present on the other side. `side`
+                                     ("a" or "b") names the incomplete row; `field` is the
+                                     first field of that group missing from it.
+      (None, None, None)          - no group gives either signal, including when two rows
+                                     disagree on a field they both carry — disagreement is
+                                     evidence of two different people, never a signal.
+    """
+    near_dup = None
+    for group in groups:
+        pa, full_a = _group_presence(row_a, group)
+        pb, full_b = _group_presence(row_b, group)
+        common = set(pa) & set(pb)
+        if not common or any(pa[f] != pb[f] for f in common):
+            continue
+        if full_a and full_b:
+            return "match", None, None
+        if near_dup is None:
+            if full_a:
+                field_name = next(f for f in group if not _present(row_b.get(f)))
+                near_dup = (field_name, "b")
+            elif full_b:
+                field_name = next(f for f in group if not _present(row_a.get(f)))
+                near_dup = (field_name, "a")
+    if near_dup is not None:
+        return ("near_dup", *near_dup)
+    return None, None, None
+
+
+def _merge_cluster(entries: list) -> tuple:
+    """Merge >=2 accepted entries that share an exact identity key into one surviving
+    row: each field is taken where the cluster agrees (the union of what either side
+    supplied); a field the cluster disagrees on is dropped from the merged row and its
+    name returned as a conflict, rather than one source winning. Provenance becomes a
+    list naming every source the merged row was read from."""
+    keys = set()
+    for e in entries:
+        keys.update(e["row"].keys())
+
+    merged_row = {}
+    conflicts = []
+    for key in sorted(keys):
+        values = [e["row"][key] for e in entries if _present(e["row"].get(key))]
+        if not values:
+            continue
+        if len({_casefold_trim(v) for v in values}) == 1:
+            merged_row[key] = values[0]
+        else:
+            conflicts.append(key)
+
+    provenance = [e["provenance"] for e in entries]
+    return {"row": merged_row, "provenance": provenance}, conflicts
+
+
+def dedupe(accepted: list, groups=None) -> tuple:
+    """Collapse overlap in a scrolled screenshot sequence onto the identity rule (D-08),
+    and surface anything short of an exact identity-key match as an ambiguity instead of
+    guessing with a similarity score (D-09).
+
+    Matching is keyed on each record's FIRST satisfied identity group only (per
+    `_first_satisfied_key`) — a deliberate simplification, not full pairwise clustering
+    across every group a record happens to satisfy. The near-duplicate check below is
+    the deliberately separate mechanism that still compares every group pairwise, so a
+    record whose primary key differs from another's can still surface as a question
+    rather than silently passing through unmatched.
+    # ponytail: a record that fully satisfies a NON-primary group matching another
+    # record's own non-primary group (differing primary keys, e.g. one side keyed by
+    # email, the other by name+company, yet also fully agreeing on the other's group)
+    # is not flagged. Add pairwise cross-cluster "match" handling if this proves live.
+
+    Returns (final_accepted, collapses, ambiguities):
+      final_accepted — `accepted`, with exact-identity-key clusters merged into one row
+      collapses      — one entry per merge: `{"record_index", "merged_from": [...]}` —
+                        `record_index` is the surviving row's position in
+                        `final_accepted`; `merged_from` lists the pre-merge positions in
+                        `accepted` that fed it
+      ambiguities    — one entry per merge conflict and per near-duplicate pair, in the
+                        shared `{"record_index", "field", "reason"}` shape (near-dup
+                        entries also carry `"other_record_index"` naming the row it was
+                        compared against)
+    """
+    if groups is None:
+        groups = identity_groups()
+    n = len(accepted)
+    if n <= 1:
+        return list(accepted), [], []
+
+    clusters_by_key: dict = {}
+    key_order: list = []
+    for i, entry in enumerate(accepted):
+        key = _first_satisfied_key(entry["row"], groups)
+        if key not in clusters_by_key:
+            clusters_by_key[key] = []
+            key_order.append(key)
+        clusters_by_key[key].append(i)
+
+    final_accepted: list = []
+    collapses: list = []
+    ambiguities: list = []
+    original_to_final: dict = {}
+
+    for key in key_order:
+        member_idxs = clusters_by_key[key]
+        final_index = len(final_accepted)
+        for i in member_idxs:
+            original_to_final[i] = final_index
+
+        if len(member_idxs) == 1:
+            final_accepted.append(accepted[member_idxs[0]])
+            continue
+
+        merged_entry, conflicts = _merge_cluster([accepted[i] for i in member_idxs])
+        final_accepted.append(merged_entry)
+        collapses.append({"record_index": final_index, "merged_from": member_idxs})
+        for field_name in conflicts:
+            ambiguities.append(
+                {
+                    "record_index": final_index,
+                    "field": field_name,
+                    "reason": (
+                        f"merged records disagree on '{field_name}' — value left "
+                        "absent rather than picking one source over another"
+                    ),
+                }
+            )
+
+    seen_pairs = set()
+    for a in range(n):
+        for b in range(a + 1, n):
+            if original_to_final[a] == original_to_final[b]:
+                continue  # already the same surviving row
+            signal, field_name, incomplete_side = _compare_identity(
+                accepted[a]["row"], accepted[b]["row"], groups
+            )
+            if signal != "near_dup":
+                continue
+            incomplete_original = a if incomplete_side == "a" else b
+            other_original = b if incomplete_side == "a" else a
+            incomplete_final = original_to_final[incomplete_original]
+            other_final = original_to_final[other_original]
+            pair_key = tuple(sorted((incomplete_final, other_final)))
+            if pair_key in seen_pairs:
+                continue
+            seen_pairs.add(pair_key)
+            ambiguities.append(
+                {
+                    "record_index": incomplete_final,
+                    "other_record_index": other_final,
+                    "field": field_name,
+                    "reason": (
+                        f"agrees with record {other_final} on the identity fields both "
+                        f"carry, but '{field_name}' is absent here — asking whether "
+                        "these are the same person rather than guessing"
+                    ),
+                }
+            )
+
+    return final_accepted, collapses, ambiguities
+
+
+def _ambiguity_sort_key(entry):
+    """Deterministic sort: (record_index, field), tolerating an ambiguity entry that
+    isn't shaped like ours (a raw string, say) by sorting it after every dict entry."""
+    if not isinstance(entry, dict):
+        return (1, 0, "")
+    idx = entry.get("record_index")
+    return (0, idx if isinstance(idx, int) else 0, entry.get("field") or "")
 
 
 def load_artifact(path) -> dict:
@@ -166,6 +402,17 @@ def validate(artifact: dict, mapping_path=None) -> ExtractionResult:
     "reported rather than silently dropped" can be honoured, since the backend's own
     `Map Columns` node drops an unmapped key with no error and no channel back to the
     operator.
+
+    After the per-record pre-flight, three more passes run over what was accepted, in
+    this order (each depends on the one before it):
+
+      1. `dedupe()` — collapse overlap onto the identity rule (D-08), raising an
+         ambiguity for a merge conflict or a near-duplicate instead of guessing (D-09).
+      2. Aggregate every ambiguity — the artifact's own plus dedupe's — into one sorted
+         list (D-06).
+      3. D-07 enforcement: a record whose row carries a value for a field one of the
+         now-aggregated ambiguities names on that same record is a contradiction — the
+         extraction step said it was unsure, then filled it anyway — and is rejected.
     """
     props = set(canonical_props(mapping_path))
     groups = identity_groups(mapping_path)
@@ -225,11 +472,42 @@ def validate(artifact: dict, mapping_path=None) -> ExtractionResult:
         except Exception as e:  # one bad record must never crash the batch
             rejected.append({"index": i, "reason": f"parse error: {e}"})
 
+    deduped_accepted, collapses, dedupe_ambiguities = dedupe(accepted, groups)
+
+    all_ambiguities = list(artifact.get("ambiguities") or []) + dedupe_ambiguities
+    all_ambiguities.sort(key=_ambiguity_sort_key)
+
+    final_accepted: list = []
+    for i, entry in enumerate(deduped_accepted):
+        contradicting_field = None
+        for amb in all_ambiguities:
+            if not isinstance(amb, dict) or amb.get("record_index") != i:
+                continue
+            f = amb.get("field")
+            if f and _present(entry["row"].get(f)):
+                contradicting_field = f
+                break
+        if contradicting_field:
+            rejected.append(
+                {
+                    "index": i,
+                    "reason": (
+                        f"record flagged '{contradicting_field}' as an unresolved "
+                        "ambiguity yet its row still carries a value for that field — "
+                        "an unconfirmed ambiguity must leave the value absent, never "
+                        "asserted (D-07)"
+                    ),
+                }
+            )
+        else:
+            final_accepted.append(entry)
+
     return ExtractionResult(
-        accepted=accepted,
+        accepted=final_accepted,
         rejected=rejected,
         dropped_keys=dropped_keys,
-        ambiguities=artifact.get("ambiguities", []),
+        ambiguities=all_ambiguities,
+        collapses=collapses,
     )
 
 
@@ -286,6 +564,7 @@ if __name__ == "__main__":
                 "rejected": _result.rejected,
                 "dropped_keys": _result.dropped_keys,
                 "ambiguities": _result.ambiguities,
+                "collapses": _result.collapses,
             }
         )
     )
