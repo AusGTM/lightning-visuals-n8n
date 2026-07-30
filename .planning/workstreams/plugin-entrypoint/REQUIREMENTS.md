@@ -135,9 +135,15 @@ above. This is why that endpoint has to exist.
 - [ ] **REPORT-01**: After dispatch, operator sees per-record outcome (accepted, matched,
       created, needs_review, rejected) rather than a bare HTTP status
 
-- [ ] **REPORT-02**: Operator sees enrichment results for dispatched records — at minimum ICP
-      tier and needs-review flag — without leaving the session, with remaining credits taken from
-      the enrichment response or the n8n-side status endpoint
+- [ ] **REPORT-02** **[AMENDED by 26-CONTEXT.md D-10a / D-10b — the ICP-tier clause is removed]**:
+      Operator sees enrichment results for dispatched records — per record, the needs-review flag
+      — without leaving the session, with remaining credits taken from the enrichment response's
+      own `remaining_credits` or the n8n-side status endpoint. *The fit score, the anti-ICP flag,
+      and the tier those two feed are deliberately absent: HubSpot owns those derived outputs by
+      the Phase 15 "Approach C" decision (`src/merge_policy.py:347`, `n8n/code/mergeCompanies.js:53`,
+      `config/field_policy.yaml:97`), so the backend has nothing to hand back and the report shows
+      neither a value nor a placeholder for one. Fourth accepted requirement amendment in this
+      milestone.*
 
 - [ ] **REPORT-03**: Reporting degrades gracefully when the n8n run is still in flight, showing
       partial state and how to re-check
