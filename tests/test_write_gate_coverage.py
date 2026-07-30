@@ -69,10 +69,24 @@ def _js(wf, name):
     return (node or {}).get("parameters", {}).get("jsCode", "") or ""
 
 
+# Phase 25 Plan 02 (D-14) — wf_backend_status_cloud.json is DELIBERATELY read-only: it
+# reads provider usage endpoints only, never a HubSpot endpoint, and performs zero writes.
+# It is excluded from the "every cloud workflow has a write node" vacuity assumption below
+# — asserted, not just skipped, so a write node landing there unnoticed would still fail.
+NO_WRITE_NODES_EXPECTED = {"wf_backend_status_cloud.json"}
+
+
 @pytest.mark.parametrize("path", CLOUD_WORKFLOWS, ids=lambda p: p.name)
 def test_every_write_node_sits_behind_a_write_safety_gate(path):
     wf = _load(path)
     writes = [n for n in wf["nodes"] if _is_write_node(n)]
+    if path.name in NO_WRITE_NODES_EXPECTED:
+        assert not writes, (
+            f"{path.name} is documented read-only (D-14) but now contains write node(s) "
+            f"{[n['name'] for n in writes]} — widening NO_WRITE_NODES_EXPECTED must be a "
+            "deliberate, reviewed act, not a silent pass"
+        )
+        return
     assert writes, f"{path.name}: no write node found — this guard would be vacuous"
     ungated = []
     for node in writes:
