@@ -327,10 +327,10 @@ duplicates. Phase numbering continues from the archived v0.5 milestone (ended at
 | REPORT-03 | Phase 26 | Complete |
 | STATUS-01 | Phase 27 | Pending |
 | STATUS-02 | Phase 27 | Pending |
-| STATUS-03 | Phase 27 | Pending |
-| STATUS-04 | Phase 27 | Pending |
+| STATUS-03 | Phase 27 | Complete |
+| STATUS-04 | Phase 27 | Complete |
 | STATUS-05 | Phase 27 | Pending |
-| STATUS-06 | Phase 27 | Pending |
+| STATUS-06 | Phase 27 | Complete |
 | CONTROL-01 | Phase 28 | Pending |
 | CONTROL-02 | Phase 28 | Pending |
 | CONTROL-03 | Phase 28 | Pending |
