@@ -76,12 +76,12 @@ Plans:
 **Wave 1**
 
 - [x] 23-01-PLAN.md — Backend gate fix: the contact lane's create decision reads the deploy-time-overlayable write-safety constant (D-15/D-16, must land first)
-- [ ] 23-02-PLAN.md — Early Code-tab smoke test: does an attached file resolve to a readable path, and can that session run the scripts (D-14a)
-- [ ] 23-03-PLAN.md — Wave 0: plugin test package, autouse network guard, own requirements.txt, config example + gitignore entry
+- [x] 23-02-PLAN.md — Early Code-tab smoke test: does an attached file resolve to a readable path, and can that session run the scripts (D-14a)
+- [x] 23-03-PLAN.md — Wave 0: plugin test package, autouse network guard, own requirements.txt, config example + gitignore entry
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 23-04-PLAN.md — Tracer: config gate → file read → disarmed dispatch, plus the plugin manifest, the skill, and the no-backend-imports guard
+- [x] 23-04-PLAN.md — Tracer: config gate → file read → disarmed dispatch, plus the plugin manifest, the skill, and the no-backend-imports guard
 
 **Wave 3** *(blocked on Wave 2 completion)*
 

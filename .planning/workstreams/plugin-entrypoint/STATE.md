@@ -4,18 +4,18 @@ milestone: v0.6
 milestone_name: Claude Plugin Entrypoint
 current_phase: 23
 current_phase_name: walking-skeleton-plugin-shell-tabular-dispatch
-current_plan: 03
+current_plan: 04
 status: executing
-stopped_at: 23-01 complete (wave 1, autonomous) — contact-lane create gate now reads the overlayable ALLOW_HUBSPOT_CREATE constant in Decide Action. 23-03 also complete. Other wave-1 plan (23-02) may still be executing concurrently in a separate agent.
-last_updated: "2026-07-30T23:28:32.000Z"
-last_activity: 2026-07-30
-last_activity_desc: executed 23-01 (contact-lane create gate fix + regression tests + changelog)
+stopped_at: 23-04 complete (wave 2, the tracer) — config gate, tabular read/convert, disarmed dispatch, plugin manifest, and the contact-upload skill all proven end to end with a stub transport; unarmed path leaves zero calls recorded. 23-01, 23-02, 23-03 also complete.
+last_updated: "2026-07-31T00:00:00.000Z"
+last_activity: 2026-07-31
+last_activity_desc: executed 23-04 (walking-skeleton tracer — config_gate.py, tabular.py, dispatch.py, plugin manifest + skill, architecture guard)
 progress:
   total_phases: 8
   completed_phases: 0
   total_plans: 6
-  completed_plans: 2
-  percent: 4
+  completed_plans: 3
+  percent: 6
 ---
 
 # Project State
@@ -23,9 +23,9 @@ progress:
 ## Current Position
 
 Phase: 23 — Walking Skeleton — Plugin Shell & Tabular Dispatch (executing)
-Plan: 23-01 complete (wave 1); 23-03 also complete
-Status: 23-01 (contact-lane create gate fix) and 23-03 (test scaffolding + network guard) done; 23-02 may be in flight
-Last activity: 2026-07-30 — executed 23-01
+Plan: 23-01, 23-02, 23-03 complete (wave 1); 23-04 complete (wave 2, the tracer)
+Status: 23-01 (contact-lane create gate fix), 23-02 (file-handoff smoke test), 23-03 (test scaffolding + network guard), and 23-04 (config gate / tabular / disarmed dispatch / plugin shell) done
+Last activity: 2026-07-31 — executed 23-04
 
 ## Accepted requirement amendments (reconcile before each phase seals)
 
@@ -58,15 +58,15 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 ## Progress
 
 **Phases Complete:** 0 / 8
-**Current Plan:** 23-01, 23-03 (both complete; wave 1)
+**Current Plan:** 23-01, 23-02, 23-03, 23-04 (all complete; 4/6 plans)
 
 ```
-[█░░░░░░░░░░░░░░░░░░░] 4%
+[█░░░░░░░░░░░░░░░░░░░] 6%
 ```
 
 | Phase | Requirements | Status |
 |-------|--------------|--------|
-| 23. Walking Skeleton — Plugin Shell & Tabular Dispatch | 10 | Executing (23-01, 23-03 done, 2/6 plans) |
+| 23. Walking Skeleton — Plugin Shell & Tabular Dispatch | 10 | Executing (23-01, 23-02, 23-03, 23-04 done, 4/6 plans) |
 | 24. Non-Tabular Input Adapters | 8 | Not started |
 | 25. Enrichment Lane & Cost Guard | 4 | Not started |
 | 26. Outcome Reporting & Safe Retry | 4 | Not started |
@@ -148,6 +148,22 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
   `TEST_RECORD_*` allowlist requirement as every other write path. No fifth overlay flag added;
   no file under `operator-claude-plugin/` touched.
 
+- **23-02's live smoke test resolved D-14a with a positive result**, widening 23-04's build: an
+  operator attachment in the Code tab resolves to a real filesystem path (not just
+  conversation-content), `@mention` also resolves to a real path (workspace-scoped only),
+  `python3` is available, and `openpyxl`/`requests`/`PyYAML` import with no install step. 23-04
+  built the genuine two-legged file handoff (attachment + `@mention`) rather than the
+  single-leg-plus-try/except degradation the plan text originally anticipated.
+
+- **23-04 is the walking skeleton itself.** `config_gate.py` → `tabular.py` → `dispatch.py`
+  wired end to end, proven against a stub transport: `armed` has no default (TypeError if
+  omitted), the unarmed path leaves the stub's call log empty, and the armed path produces the
+  exact `hubspot/contact-upload` multipart contract (header `X-Enrichment-Secret`, file field
+  `data`, `text/csv`). Plugin manifest + `skills/contact-upload/SKILL.md` give it one loadable
+  entry point (auto-triggered and slash-invocable, no `commands/` duplicate). An AST-based
+  guard now makes PLUGIN-04 (no backend import) a test, not a promise. Full repo suite: 741
+  passed, no regressions; no file outside `operator-claude-plugin/` touched.
+
 **Todos / carried context:**
 
 - Phase 26 planning must first verify what `hubspot/contact-upload` actually returns:
@@ -168,6 +184,6 @@ milestone otherwise scoped as plugin-only.
 
 ## Session Continuity
 
-**Stopped At:** 23-01 (contact-lane create gate fix) complete; 23-03 (test scaffolding + network guard) also complete
-**Resume File:** `.planning/workstreams/plugin-entrypoint/phases/23-walking-skeleton-plugin-shell-tabular-dispatch/23-01-SUMMARY.md`
-**Next Action:** Continue executing phase 23's remaining plans (23-02 wave 1; 23-04 wave 2; 23-05 wave 3; 23-06 wave 4)
+**Stopped At:** 23-04 (walking-skeleton tracer: config gate, tabular read/convert, disarmed dispatch, plugin manifest + skill, architecture guard) complete. 23-01, 23-02, 23-03 also complete.
+**Resume File:** `.planning/workstreams/plugin-entrypoint/phases/23-walking-skeleton-plugin-shell-tabular-dispatch/23-04-SUMMARY.md`
+**Next Action:** Continue executing phase 23's remaining plans (23-05 wave 3 — real adaptive preview; 23-06 wave 4)
