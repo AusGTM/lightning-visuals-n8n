@@ -99,7 +99,7 @@ ESTIMATES = {
     },
     "zoominfo_per_match": {
         "value": 1.08, "unit": "credits/match",
-        "citation": (".planning/phases/22-armed-e2e-enrichment-canary/22-RESEARCH.md — Assumption A3 "
+        "citation": (".planning/workstreams/milestone/phases/22-armed-e2e-enrichment-canary/22-RESEARCH.md — Assumption A3 "
                      "(v2-era measurement; ZoomInfo pricing is unaffected by the Lusha-only v3 migration)"),
         "confidence": "inferred (measured pre-v3, carried forward — no ZoomInfo pricing change this milestone)",
     },

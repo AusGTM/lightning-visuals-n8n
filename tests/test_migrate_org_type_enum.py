@@ -39,7 +39,7 @@ VALID_RUNBOOK = """# ORG-TYPE-ENUM-MIGRATION.md
 
 MIGRATION-SHAPE: in place (cheap reverse-PATCH rollback confirmed) -- verbatim verdict
 ROLLBACK-COMMAND: DRY_RUN=false ALLOW_HUBSPOT_PROPERTY_WRITES=true python scripts/migrate_org_type_enum.py --rollback
-VERDICT-SOURCE: .planning/phases/21-transport-schema-hygiene/21-03-SUMMARY.md (commit abc1234)
+VERDICT-SOURCE: .planning/workstreams/milestone/phases/21-transport-schema-hygiene/21-03-SUMMARY.md (commit abc1234)
 REFERENCE-ARTIFACTS: baseline=config/hubspot_migration/baseline/portal-schema-companies-pre-orgtype-enum.json inventory=config/hubspot_migration/org_type_inventory-20260730T071919Z.json
 """
 

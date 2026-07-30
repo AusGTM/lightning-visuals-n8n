@@ -5,7 +5,7 @@ Phase 21 Task 2 — the gated `lv_org_type` text-to-enumeration migration.
 
 Implements exactly ONE migration shape: IN PLACE conversion (PATCH the existing
 `lv_org_type` property's `type`/`fieldType`/`options`), per the operator's live probe
-verdict recorded in `.planning/phases/21-transport-schema-hygiene/21-03-SUMMARY.md`
+verdict recorded in `.planning/workstreams/milestone/phases/21-transport-schema-hygiene/21-03-SUMMARY.md`
 (`recommended_migration_shape: in place (cheap reverse-PATCH rollback confirmed)`). The
 other two shapes the probe considered (archive-and-recreate, shadow-property-under-a-new-
 name) are NOT implemented here — the verdict ruled them out, and an unexercised branch of
