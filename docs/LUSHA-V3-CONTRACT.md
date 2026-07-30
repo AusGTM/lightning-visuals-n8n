@@ -469,6 +469,61 @@ refutation`):
 
 Plans 02 and 04 may now proceed against this contract and the re-scoped requirement.
 
+## Live deployment read-back (Plan 05, 2026-07-30)
+
+**Deploy date:** 2026-07-30 (UTC), via a disarmed redeploy of the current committed
+build — no `ENABLE_BAKED_FLAGS` overlay, not even an empty one:
+
+```
+DRY_RUN=false ALLOW_N8N_DEPLOY=true \
+  .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/deploy_n8n_workflows.py', run_name='__main__')"
+```
+
+Deploy output (no flag-overlay line present — nothing was armed):
+
+```
+Workflows to create: []
+Workflows to update: ['LV Contact Ingest (Cloud template)', 'LV Enrichment (Cloud template)', 'LV Scheduled Maintenance (Cloud)']
+updated workflow LV Contact Ingest (Cloud template) (200)
+updated workflow LV Enrichment (Cloud template) (200)
+updated workflow LV Scheduled Maintenance (Cloud) (200)
+```
+
+**Before the redeploy**, an independent read-back via `scripts/verify_live_lusha_urls.py`
+found the live `LV Enrichment (Cloud template)` deployment predated Plans 02-04 (same
+deployment-drift shape as Phase 19's BUG 26): 4 retired v2 URL occurrences, 0 v3
+search-and-enrich occurrences for either lane, `Lusha Enrich` still POSTing
+`v2/person`, `Lusha Company` still a GET against a `lusha_company_url` built for the
+retired endpoint. This is exactly why the read-back is a distinct step from the
+deploy — the deploy script's exit code alone would never have surfaced this.
+
+**After the redeploy**, `scripts/verify_live_lusha_urls.py`'s independent read-back
+(same command form, through the in-process dotenv wrapper) reported:
+
+```
+workflow: 'LV Enrichment (Cloud template)'
+retired v2 URL occurrences: 0
+v3 contacts search-and-enrich occurrences: 2
+v3 companies search-and-enrich occurrences: 2
+v3 account usage occurrences: 2
+node 'Lusha Enrich' (provider-data): method=POST url=={{ $('Enrichment Gate').item.json.existingRecord && $('Enrichment Gate').item.json.existingRecord.lusha_contact_id ? 'https://api.lusha.com/v3/contacts/enrich' : 'https://api.lusha.com/v3/contacts/search-and-enrich' }} body_present=True
+node 'IF Lusha Enabled' (other): method=None url=None body_present=False
+node 'Lusha Company' (provider-data): method=POST url=https://api.lusha.com/v3/companies/search-and-enrich body_present=True
+node 'IF Lusha Company Enabled' (other): method=None url=None body_present=False
+node 'IF Lusha Credit Requested' (other): method=None url=None body_present=False
+node 'Lusha Usage' (other): method=GET url=https://api.lusha.com/v3/account/usage body_present=False
+PASS: v3 URLs are live, zero retired v2 URLs remain.
+```
+
+Zero retired v2 URLs, both v3 search-and-enrich endpoints present, the v3 account-usage
+endpoint present, and both Lusha provider-data nodes (`Lusha Enrich`, `Lusha Company`)
+report `method=POST` with a present body — `Lusha Usage` is deliberately GET/no-body
+(it is the credit-check node, not a data node — `scripts/provider_registry.py`).
+
+**Nothing was armed at any point in this plan.** No `ENABLE_BAKED_FLAGS` value was
+passed to either deploy invocation; `ALLOW_HUBSPOT_RECORD_WRITES`/`ALLOW_HUBSPOT_CREATE`
+were never touched. The deployment closes disarmed.
+
 ## Plan 03 test fixtures — synthetic transcription note
 
 `tests/fixtures/enrichment/lusha_v3_contact.json`, `lusha_v3_company.json` and
