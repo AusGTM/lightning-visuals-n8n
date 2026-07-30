@@ -365,3 +365,26 @@ omitted where a placeholder would be misleading. Field names, list shapes, and v
 document does not carry real Lusha-revealed PII. Company-level firmographic data (§5) is
 not personal data and required no redaction. LinkedIn profile slugs were also replaced
 with a placeholder out of caution even though they are already-public professional URLs.
+
+## Gate verdict (Task 3 — operator review)
+
+**Approved 2026-07-30.** Operator confirmed the A3/A7 verdicts, the 12-credit spend, and
+the PII redaction above. The re-scope this doc's §6/§8 findings implied has already
+landed upstream (`559eda5`, `docs(phase-20): re-scope REQ-lusha-selective-reveal after A3
+refutation`):
+
+- **REQ-lusha-selective-reveal re-scoped**, not dropped: `reveal[]` derived from
+  `missingFields` survives as **PII-minimization hygiene** on the contacts lane only
+  (never send a broader reveal than the gate asked for), not as a cost-control lever —
+  the live A/B proved reveal-field-count doesn't change billed cost. A minimal
+  non-empty set is always sent (`reveal:[]` is invalid — §6). No reveal-derivation code
+  is written for the companies lane (no mechanism exists there — §5/§6).
+- **Cost lever is stored-id re-enrichment (A7) + flat v3 pricing**, not selective reveal:
+  full-sweep cost now projects at flat v3 rates (~1 credit/contact first-time enrich, ~2
+  credits/company match, 0 credits on any stored-id re-enrich), comfortably inside the
+  ~3.9k balance — see ROADMAP.md success criterion 3 (re-scoped) and REQUIREMENTS.md.
+- **Plan 02 proceeds on the combined `search-and-enrich` endpoint only** (§7
+  recommendation) — no two-step topology change.
+- **A7 confirmed — Plan 04 (`lusha_contact_id`/`lusha_company_id` staging) unchanged.**
+
+Plans 02 and 04 may now proceed against this contract and the re-scoped requirement.
