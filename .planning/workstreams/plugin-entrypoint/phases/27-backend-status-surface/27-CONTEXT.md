@@ -122,6 +122,14 @@ Phase 28) and no unprompted notification (that is Phase 29).
   `Session.request` **is** patched. The guard is sound for the `requests` library as used here, and
   **no already-committed test is compromised**. Adding an explicit `requests.get` patch is optional
   belt-and-braces clarity, not a bug fix; do not describe it as closing a hole.
+  — **Re-verified and made durable at execution time (27-03).** `27-03-PLAN.md`'s `key_links`
+  asserted the opposite ("patches post/request/Session.request but NOT `requests.get` ... the guard
+  must be widened in the same commit") — a restatement of the refuted claim that survived into the
+  plan. It was **not** acted on. Instead the executor added
+  `operator-claude-plugin/tests/test_n8n_read.py::test_requests_get_raises_inside_a_test`, which
+  fails loudly if the coverage ever regresses, and left the guard itself untouched. The plan text
+  has been corrected. **Any future plan asserting the guard is GET-blind is wrong; read this
+  bullet, not the plan.**
 - **D-12 (amendment applied, not deferred):** ROADMAP Phase 27 criterion 4 and REQUIREMENTS.md
   STATUS-04 were **reworded to the execution-age definition during planning** rather than left for
   later reconciliation. Correct call — `/gsd-verify-work` would otherwise have failed the phase
