@@ -50,6 +50,39 @@ Phase 28) and no unprompted notification (that is Phase 29).
   or renamed workflow appears without a config edit. Truthful by construction, since a workflow
   going silently unreported is the exact failure this phase exists to prevent.
 
+### Stuck locks — definition corrected by research
+- **D-07a (27-RESEARCH.md, verified against `config/hubspot_properties.yaml` and the deployed
+  workflow JSON):** STATUS-04's documented stuck-lock definition is **unbuildable as written**.
+  `enrichment_lock_until` **does not exist** as a property anywhere, and `lv_enrichment_status` is
+  only ever written as `needs_review` or `complete` — **nothing ever sets it to `running`**. That
+  definition came from the generic root `CLAUDE.md` and was never implemented in this deployment.
+- **D-07b:** **"Stuck" is redefined as an execution still in `status = running` past a threshold**,
+  read from the executions API the client already reads for STATUS-01. No schema change, no
+  enrichment-pipeline work inside a read-only phase. This detects a wedged *run* rather than a
+  wedged *record* — the more useful signal for the operator either way.
+- **D-07c:** "Queued" and "review backlog" **are** answerable today using the real `lv_`-prefixed
+  properties (`lv_enrichment_requested`, `lv_enrichment_status`, `lv_enrichment_needs_review`,
+  `lv_icp_needs_review`). Note that "queued" can only be a bare count — no request timestamp is
+  stored, so it can never be age-based.
+- **D-07d:** REQUIREMENTS.md STATUS-04 and this phase's criterion 4 should be reworded to the
+  execution-age definition before the phase seals. Third accepted requirement amendment in the
+  milestone.
+
+### Error coverage — corrected by research
+- **D-04a (27-RESEARCH.md):** STATUS-02's four named causes are **not equally observable**. Every
+  provider-facing node (Lusha / Apollo / ZoomInfo / Anthropic) is configured
+  `onError: continueRegularOutput`, so a 401, 429, or exhausted quota **does not fail the n8n
+  execution** — those runs are reported as `success`. Only `HubSpot Create` / `HubSpot Update`
+  genuinely fail a run, covering "malformed record" only.
+- **D-04b:** Therefore the status surface **reads the execution's per-node output data, not just
+  the run status** — detecting provider errors inside runs n8n calls successful. This makes
+  STATUS-02 true for all four causes **with no backend change**. The pattern already exists
+  in-repo: `scripts/enrichment_cost_ledger.py` reads execution data the same way.
+- **D-04c:** The operator is given a **very succinct prose explanation** of the error — a sentence,
+  not a dump. The raw text remains available (D-05) but is not what leads.
+  — **Reversibility:** reversible — falling back to status-only reading is a narrowing, not a
+  rewrite.
+
 ### Unknown handling
 - **D-08:** Inherited and reaffirmed from Phase 25 D-10: a value the backend cannot supply reads as
   **"unknown"**, never as zero and never as healthy. Apollo's key is not a master key and returns
@@ -61,6 +94,17 @@ Phase 28) and no unprompted notification (that is Phase 29).
   request, stamped with its fetch time, and a refresh **re-publishes to the same URL** rather than
   minting a second one. This is the convention Phase 23 D-09 anticipated for previews — one
   rendering convention across the plugin.
+- **D-09a:** "Same URL" extends **across sessions, not just within one**. The artifact identifier
+  is **persisted by the plugin** so the operator can bookmark one durable dashboard link.
+  Research confirmed same-conversation stability is automatic; cross-session requires this stored
+  identifier.
+- **D-09b:** The stored identifier carries an **operator-configurable TTL in the operator config
+  file, defaulting to 30 days**. Expired identifiers are **garbage-collected on the next plugin
+  open**. This is the first plugin-managed state in the design — everything else has been
+  admin-provisioned config or session-scoped. The plan must keep it to exactly this: an identifier
+  and a timestamp, not a general-purpose store.
+  — **Reversibility:** reversible — dropping to same-conversation-only means deleting the store
+  and the GC step.
 
 ### Claude's Discretion
 - Layout and grouping of the conversational status output.
