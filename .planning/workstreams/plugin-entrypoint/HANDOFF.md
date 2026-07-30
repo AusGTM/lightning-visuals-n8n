@@ -13,36 +13,49 @@ mid-flight.
 
 | Phase | Plans | State |
 |---|---|---|
-| 23 Walking skeleton | 6 | 5 done. **23-06 is a human checkpoint — see §4** |
+| 23 Walking skeleton | 6 | 5 done. **23-06 operator window IN PROGRESS — Section A partial, Section B blocked on two live findings, see §4** |
 | 24 Non-tabular adapters | 3 | ✅ **COMPLETE** |
 | 25 Enrichment lane & cost guard | 7 | 25-02 done. **25-01 is a human checkpoint — see §4** |
 | 26 Outcome reporting & retry | 3 | ✅ **COMPLETE** — amendment #4 closed, REQUIREMENTS.md reworded |
-| 27 Backend status surface | 5 | checker-clean (1 blocker fixed). **27-01 DONE** — D-14 verified held, `wf_enrichment_cloud.json` untouched. **27-02…05 runnable now** |
-| 28 Control actions | 6 | planned, **checker not yet run** — chained behind 27 |
-| 29 Notices & sweep | 6 | planned, **checker not yet run** — chained behind 27/28 |
-| 30 Review-queue triage | 7 | planned, **checker not yet run** — chained behind 28 |
+| 27 Backend status surface | 5 | ✅ **CODE-COMPLETE** — 27-01…05 all built. Only **27-05 Task 3** (dashboard same-URL, operator-run) outstanding |
+| 28 Control actions | 6 | **checked twice** (5 blockers → repaired → 1 more → repaired). **28-01 DONE.** 28-02 is a human gate; 28-03/04 chain behind it; **28-05 serialized** behind the operator's `test_plugin_manifest.py` fix |
+| 29 Notices & sweep | 6 | checker run 2026-07-31. **29-02 is the only plan runnable now** (`depends_on: []`); 29-03/04 need 29-01 (human) |
+| 30 Review-queue triage | 7 | checker run 2026-07-31. **30-01…30-06 is a fully autonomous six-plan serial chain** — the largest block of unattended work left. Only 30-07 is human |
 
-**15 of 43 plans built. Two phases complete (24, 26).**
+**22 of 43 plans built. Three phases complete (24, 26, 27-code).**
 
-**Test baselines at handoff:** `919 passed, 1 skipped` (pytest), `400 passed` (node), plugin suite
-`156 passed`. Started the milestone at 709. Any drop is a regression to investigate, not absorb.
-Every n8n artifact was **disarmed** at handoff, tree **clean**, and REQUIREMENTS.md coverage intact
-at **49/49**.
+**Test baselines — CURRENT:** `1163 passed, 1 skipped` (pytest), `404 passed` (node), plugin suite
+`400 passed`. Milestone started at 709 pytest / 400 node; the handoff before this one read 919/400.
+**Node is 404, not 400** — the four extra are the Apollo sentinel tests merged from
+`fix/apollo-zero-revenue-band`. Any drop is a regression to investigate, not absorb.
+Every n8n artifact is **disarmed** (`grep -c` → 0) and REQUIREMENTS.md coverage is intact at **49/49**.
 
-**Plan-checker status:** 23, 24, 25, 26 all PASSED. **27, 28, 29, 30 have NOT been checked** —
-deliberately deferred, because checking plans against a tree where their dependencies don't exist
-produces a pass that goes stale. **Run the checker for each of those immediately before executing
-it.**
+**Branch:** work is on **`feat/v0.6-plugin-entrypoint`**, not `master`. `master` is at `3e8dd1d`
+(= `origin/master`, a GitHub merge that pulled the v0.6 line in along with the Apollo fix). The
+v0.6 branch is a clean descendant of `origin/master`. Two branches are now fully merged and safe to
+delete: `fix/apollo-zero-revenue-band` and `worktree-claude-plugin-entrypoint` — **the latter still
+has a live worktree at `.claude/worktrees/claude-plugin-entrypoint` and is 109 commits behind
+master. Anyone resuming there would be missing the entire milestone.**
+
+**Plan-checker status: all 8 phases have now been checked.** 23–26 passed earlier. 27 passed after
+one blocker. 28 took two rounds (5 blockers, then 1 that the repair itself introduced into the one
+file it had not edited — see §7b). 29 and 30 were checked 2026-07-31 immediately before execution.
+
+**Uncommitted, and not yours:** an operator is mid-23-06 holding `STATE.md`,
+`operator-claude-plugin/.claude-plugin/plugin.json`,
+`operator-claude-plugin/tests/test_plugin_manifest.py`, and an untracked `23-06-SUMMARY.md`. Do not
+stage, commit, or edit any of them. **`test_plugin_manifest.py` is why 28-05 is serialized.**
 
 ### First thing to do on resume
 
-**Nothing was in flight at handoff.** All executors completed; tree clean at commit `157fa14`.
-Sanity-check, then proceed:
+**No executor is in flight.** But the tree is **not** clean and that is expected — an operator holds
+four uncommitted 23-06 files (listed in §1). Sanity-check, then proceed:
 
 ```bash
-git status --porcelain | grep -v DS_Store | grep -v '^?? .claude/'   # expect empty
-.venv/bin/python -m pytest -q | tail -2                              # expect 919 passed, 1 skipped
-node --test tests/n8n/*.test.mjs 2>&1 | grep -E '^. (pass|fail) '    # expect pass 400, fail 0
+git rev-parse --abbrev-ref HEAD                                      # expect feat/v0.6-plugin-entrypoint
+git status --porcelain | grep -v DS_Store | grep -v '^?? .claude/'   # expect ONLY the operator's 4 files
+.venv/bin/python -m pytest -q | tail -2                              # expect 1163 passed, 1 skipped
+node --test tests/n8n/*.test.mjs 2>&1 | grep -E '^. (pass|fail) '    # expect pass 404, fail 0
 grep -c 'ALLOW_HUBSPOT_[A-Z_]* = \\"true\\"' n8n/*.json              # expect 0 everywhere
 ```
 
@@ -51,13 +64,16 @@ mid-plan — re-run it rather than assuming it finished. This has happened twice
 times the code was committed and only the summary was orphaned, so check before re-running.
 
 **Next batch, in order:**
-1. **27-02, 27-03, 27-04, 27-05** — all chain off 27-01, which is done. 27-03 is the tracer.
-2. **Phase 28 checker, then Phase 28.** ⚠ Expect the checker to find staleness: 28's plans were
-   written before 27 existed, and 27-01 has now reshaped the status endpoint that 28's read-back
-   verification depends on — it added a `Build Status` stage past the credit-only `Build Credit
-   Status` node, which already forced two assertion updates in
-   `tests/test_backend_status_workflow.py`. **Budget for a fix, not a clean pass.** See §7b.
-3. **Phases 29, 30** — checkers first, same reasoning.
+1. **30-01 → 30-06** — the largest remaining autonomous block, a six-plan serial chain. Checker was
+   run 2026-07-31 immediately before execution; act on its findings first, and note that a finding
+   in a *later* plan may change how 30-01 must be built, since everything chains off it.
+2. **29-02** — the only Phase 29 plan runnable without a human (`depends_on: []`). 29-03/04 need
+   29-01, which is an operator probe.
+3. **28-03, 28-04** once 28-02's operator probe lands; **28-05 only after** the operator commits
+   `test_plugin_manifest.py` (it is serialized on that shared surface, by operator decision).
+
+**Do not re-run the phase checkers.** All 8 phases are checked. Re-checking is warranted only after
+a repair pass — which is itself a real source of drift, see §7b.
 
 ---
 
@@ -142,7 +158,32 @@ Each was surfaced explicitly and chosen. **None is silent drift. Do not revert t
 
 Agent tooling in this repo is **classifier-blocked from arming writes**. These must be run by a human.
 
-### 23-06 — plugin install + armed create canary
+**A consolidated runbook now covers ALL human-gated plans in one file:**
+`.planning/workstreams/plugin-entrypoint/OPERATOR-RUNBOOK.md` — every command with its `.env`
+loading form, a readiness table, and uniform gating rules. The per-phase runbooks remain
+authoritative for their own ceremony. **Eight gates remain, not nine: RB-6 (28-04) was withdrawn**
+because D-25 had already settled that decision and the plan was asking the operator to re-decide it.
+
+### 23-06 — plugin install + armed create canary  ← IN PROGRESS, and it found two real defects
+
+Walking it surfaced two confirmed defects that **block Section B as originally written**. Both are
+independently verified against the committed artifacts and the live instance:
+
+1. **The armed-window read-back does not cover the lane the canary fires at.**
+   `scripts/verify_live_write_safety.py` hardcodes the enrichment workflow (line 60) and the two
+   `Decide*` node names (line 64), taking no workflow argument — so it inspects 2 of 9
+   `ALLOW_HUBSPOT_CREATE` sites, 2 of 8 `ALLOW_HUBSPOT_RECORD_WRITES` sites, and **no node at all in
+   `LV Contact Ingest (Cloud template)`**. A `disarmed PASS` is therefore **not** evidence the
+   contact lane is disarmed. Mitigated in the runbook with an all-workflow read-only scan; the
+   permanent fix routes to `/gsd-plan-phase 23 --gaps --ws plugin-entrypoint`.
+2. **23-01's create-gate fix is committed but not deployed** — live contact ingest declares literals
+   in only its two write gates. Step 3 would push never-live-tested logic in the same action that
+   arms writes. Runbook now inserts Steps 2b/2c: a disarmed deploy plus read-back first.
+
+Also found by A1: **the plugin manifest's `author` must be an object, not a string** —
+`claude plugin validate` rejects the bare string, and the Desktop install would have failed the same
+way. `test_plugin_manifest.py` asserted the key was *present*, never its type.
+
 **Runbook written and committed:**
 `.planning/workstreams/plugin-entrypoint/phases/23-walking-skeleton-plugin-shell-tabular-dispatch/23-OPERATOR-RUNBOOK.md`
 
