@@ -114,10 +114,26 @@ Out of scope this phase: non-tabular adapters (Phase 24), the enrichment lane an
   **not** one of the four deploy-time-overlayable flags in `scripts/deploy_n8n_workflows.py`. Every
   net-new contact row is therefore forced to `needs_review` regardless of arming state — **the lane
   cannot create a contact today**, which is exactly what this phase's goal requires.
-- **D-16:** Resolution: **make `allow_create` a deploy-time overlayable flag** alongside the
-  existing four, so arming actually enables creation. This is small, matches the two-key write-gate
-  convention already in place, and is admin work in this repo rather than the client reaching into
-  the backend.
+- **D-16:** Resolution: arming must actually enable creation. This is small, matches the two-key
+  write-gate convention already in place, and is admin work in this repo rather than the client
+  reaching into the backend.
+- **D-16a (SUPERSEDES D-16's mechanism — found during planning, verified against deployed JSON):**
+  Do **not** add a fifth overlayable flag. The lane already has **two create gates in series**:
+  `HubSpot Create Write Gate` already declares and reads the **existing overlayable**
+  `ALLOW_HUBSPOT_CREATE`; only `Set Config`'s `allow_create: false` blocks the decision upstream of
+  it. So the fix **reuses `ALLOW_HUBSPOT_CREATE`**. Reason: `tests/test_enabled_build_invariants.py`
+  pins `_OVERLAYABLE_FLAGS` to exactly four names and `CONFIG_FLAG_DEFAULTS` is parity-guarded
+  across both builders — a fifth flag would mean editing a pinned safety assertion. Reuse also keeps
+  `_requested_overlay_flags`' "no writes without a `TEST_RECORD_*` allowlist" fail-safe applying to
+  contact creation for free.
+- **D-16b (SUPERSEDES D-15's placement):** The fix is **not** applied at `Set Config`.
+  `Extract From File` emits **fresh items** parsed from the binary CSV, so a value seeded on the
+  webhook item upstream of it does not survive — this is the **BUG 12 / BUG 21 row-loss family that
+  already cost this repo two armed windows**. The constant is baked into **`Decide Action`**:
+  contact-lane, Cloud-only, downstream of every transform, and already the node that computes
+  `allow_create`. Composition happens at the build site (`build_cloud`'s chain list), not at
+  `DECIDE_CLOUD`'s module-level definition, because `_write_safety_const` is defined later in the
+  module.
 - **D-17:** Scope note the planner must respect: this is a **backend change inside a phase whose
   criterion 4 says no backend file is modified to make the client work**. It is not that — the
   client works either way; the *backend gate* is what is broken. Criterion 4 still binds the
