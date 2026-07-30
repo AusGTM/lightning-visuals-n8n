@@ -197,7 +197,18 @@ then 28, then 29 and 30 — except each phase's own armed checkpoints (28-02, 28
 ## 8. Working conventions that have been paying off
 
 - **Tell every executor about its concurrent siblings** and which filesystem region each owns.
-  Batches have been conflict-free because of this, not by luck.
+- **The real shared surfaces are `SKILL.md` and `README.md`, not `conftest.py`.** Learned the hard
+  way: 24-03 and 26-01 collided on `operator-claude-plugin/skills/contact-upload/SKILL.md` while
+  both were uncommitted in the same working tree. Almost every plan from Phase 24 onward adds a
+  step to that one file, because it is the single operator-facing script for the whole plugin.
+  **Name it explicitly when briefing concurrent executors**, or serialize any two plans that both
+  touch it.
+  - The collision resolved cleanly — the 26-01 agent detected it and isolated the sibling's hunks
+    with `git add -p` — and content integrity was verified afterward (8 steps, correct order, both
+    contributions present). But it left an artifact: **commits `d8bc409` and `347faaf` carry an
+    identical message**, and `d8bc409` is **mislabelled** — it says "report step in the skill" but
+    actually contains 24-03's extraction hunks. History was not rewritten, since rewriting shared
+    history is riskier than a wrong commit message. Do not be confused by it.
 - **Verify safety claims independently** rather than trusting agent reports. Two planner claims were
   wrong when checked (the `requests.get` guard "hole"; a node count). One executor claim about
   weakening an architecture guard turned out to be a *strengthening* — it asserts zero write nodes
