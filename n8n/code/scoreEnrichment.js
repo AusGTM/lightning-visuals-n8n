@@ -63,11 +63,13 @@ function scoreCandidates(candidates, opts) {
 
   const best = {};
   const winners = {};
+  const ranked = {};
 
   for (const field of Object.keys(groups)) {
     const group = groups[field];
     const ceil = staleCeilings[field] || DEFAULT_STALE_CEILING;
     let top = null;
+    const scoredGroup = [];
 
     for (const c of group) {
       // Agreement: OTHER candidates (distinct sources) whose normalizedValue matches.
@@ -95,13 +97,18 @@ function scoreCandidates(candidates, opts) {
       };
 
       if (top === null || _beats(cand, top, trust)) top = cand;
+      scoredGroup.push(cand);
     }
 
     best[field] = top;
     winners[field] = top.value;
+    // ranked[field] — D4 (Phase 15.5): every scored candidate, not just the argmax,
+    // sorted with the SAME deterministic tie-break _beats already uses. Purely additive:
+    // existing callers destructuring {best}/{winners} are unaffected.
+    ranked[field] = scoredGroup.slice().sort((a, b) => (_beats(a, b, trust) ? -1 : (_beats(b, a, trust) ? 1 : 0)));
   }
 
-  return { best, winners };
+  return { best, winners, ranked };
 }
 
 // Deterministic tie-break: higher score, then higher trust, then source name.

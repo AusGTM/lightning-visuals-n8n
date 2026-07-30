@@ -1,0 +1,157 @@
+# config/taxonomy.yaml
+#
+# NORMATIVE vocabulary for lv_org_type and lv_content_type. THE single source of truth.
+#
+# Every other representation of these vocabularies is DERIVED and must never be
+# hand-edited:
+#   - config/icp_scoring.yaml  base_score.org_type   (scores below are authoritative)
+#   - config/field_policy.yaml lv_org_type.require_evidence_url_for
+#   - n8n Code nodes           (builder inlines a generated JS literal at build time —
+#                               n8n Code nodes cannot read files, so the values must be
+#                               literals, but GENERATED literals, never typed by hand)
+#   - the web-research prompt  allowed_org_types
+#   - HubSpot property options for lv_org_type / lv_content_type
+#
+# tests/test_taxonomy_conformance.py enforces that they all agree. Adding a value here
+# and forgetting to regenerate is a TEST FAILURE, not a silent 0-score.
+#
+# TO ADD A VALUE: edit this file -> rebuild workflows -> run the HubSpot property sync ->
+# run the conformance suite. Never edit a node.
+
+version: lv-taxonomy-v1
+
+# --- lv_org_type -------------------------------------------------------------
+# score:            points contributed by base_score.org_type (icp_scoring.yaml)
+# requires_evidence: value may not be promoted without an evidence URL
+#                    (-> field_policy lv_org_type.require_evidence_url_for)
+# hard_veto:        names a key in icp_scoring.yaml hard_vetoes, if this type vetoes
+# deduction_signal: names the boolean ICP field this type implies, if any
+# synonyms:         lowercase forms the normalizer maps INTO this value. Matching is on
+#                   the normalized string (lowercased, punctuation->space, collapsed).
+org_types:
+  governing_body_league:
+    score: 40
+    requires_evidence: true
+    synonyms:
+      - league
+      - governing body
+      - peak body
+      - racing authority
+      - sporting authority
+      - sports governing body
+      - controlling body
+
+  content_producer:
+    score: 20
+    requires_evidence: true
+    synonyms:
+      - production company
+      - media producer
+      - content studio
+      - production house
+      - media company
+
+  broadcaster:
+    score: 20
+    requires_evidence: false
+    synonyms:
+      - tv network
+      - television network
+      - network
+      - channel
+      - broadcast network
+      - free to air
+
+  individual_club_team:
+    score: 5
+    requires_evidence: false
+    synonyms:
+      - club
+      - team
+      - racing club
+      - football club
+      - sporting club
+      - franchise team
+
+  regulator:
+    score: 5
+    requires_evidence: false
+    synonyms:
+      - regulatory body
+      - regulator authority
+      - commission
+      - integrity body
+
+  gambling_operator:
+    score: 0
+    requires_evidence: true
+    deduction_signal: lv_is_gambling_operator
+    synonyms:
+      - bookmaker
+      - betting operator
+      - wagering operator
+      - sportsbook
+      - casino
+      - online gambling
+
+  hardware_vendor:
+    score: 0
+    requires_evidence: true
+    hard_veto: hardware_vendor
+    deduction_signal: lv_is_hardware_vendor
+    synonyms:
+      - av vendor
+      - led vendor
+      - display vendor
+      - av integrator
+      - systems integrator
+      - equipment supplier
+      - hardware supplier
+
+  other:
+    score: 0
+    requires_evidence: false
+    synonyms: []
+
+  unknown:
+    score: 0
+    requires_evidence: false
+    is_default: true
+    synonyms: []
+
+# --- lv_content_type ---------------------------------------------------------
+# implies_content: what this value implies for lv_produces_content.
+#   true  -> the org produces broadcast/streaming output
+#   false -> positively established that it does not
+#   null  -> tells us nothing (see TRI-STATE below)
+#
+# TRI-STATE RULE (lv_produces_content): true | false | null are NOT interchangeable.
+# `false` fires the no_content HARD VETO (icp_scoring.py:91) -> Tier D -> disqualify.
+# `null` does not, and routes to Needs Review / Unscored by score.
+# Research may emit `false` ONLY on positive evidence of absence (a substantive site with
+# no broadcast/streaming/highlights anywhere). Thin or missing web presence is `null`.
+content_types:
+  live_broadcast:
+    implies_content: true
+    synonyms: [live tv, live coverage, live racing, broadcast]
+
+  streaming:
+    implies_content: true
+    synonyms: [live stream, livestream, ott, watch live, streaming platform]
+
+  near_live:
+    implies_content: true
+    synonyms: [delayed coverage, near live]
+
+  highlights:
+    implies_content: true
+    synonyms: [replays, clips, highlights package]
+
+  none:
+    implies_content: false
+    synonyms: []
+
+  unknown:
+    implies_content: null
+    is_default: true
+    synonyms: []

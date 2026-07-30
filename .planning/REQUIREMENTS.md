@@ -1,90 +1,67 @@
-# Requirements: lv-n8n-poc
+# Requirements: lv-n8n-poc — Milestone v0.5 Lusha v3 & Armed Enrichment
 
-**Defined:** 2026-07-07
-**Core Value:** The ICP scoring engine turns firmographic + enrichment signals into trustworthy, auditable A/B/C/D prioritization (with hard vetoes) and never clobbers HubSpot data — proven in dry-run locally.
+**Defined:** 2026-07-30
+**Core Value:** The ICP scoring engine turns firmographic + enrichment signals into trustworthy, auditable A/B/C/D prioritization (with hard vetoes) and never clobbers HubSpot data — now proven live, not just in dry-run.
 
-Sources: `icp-scoring.md` (PRD, business rationale) and `CLAUDE.md` (SPEC, implementation contract).
-v1 = Milestone 1 (local-first MVP). v2 = later HubSpot/n8n-dependent milestones.
+Sources: Lusha v3 migration guide + OpenAPI docs (reviewed 2026-07-30, memory `lusha-v3-migration-deadline`), measured provider economics (memory `measured-provider-match-rates`), Haiku/Sonnet A/B eval (2026-07-30), PROJECT.md deferred-scope ledger.
 
-## v1 Requirements
+## v0.5 Requirements
 
-Milestone 1 scope. Each maps to exactly one roadmap phase.
+Each maps to exactly one roadmap phase.
 
-### ICP Scoring
+### Lusha v3 Migration (deadline: v2 dies 2026-11-18)
 
-- [ ] **REQ-icp-scoring-model**: Compute a numeric ICP fit score from firmographic + enrichment signals available at scoring time (deal value excluded). Org type gov-body/league +40, content producer/broadcaster +20, individual club +5, other 0; produces content +20; ANZ geography +10; revenue $5–500M +10. (icp-scoring.md §5; CLAUDE.md §10)
-- [ ] **REQ-anti-icp-vetoes**: Hard vetoes (non-ANZ geography, no broadcast/streaming content, AV/LED hardware vendor) set `lv_anti_icp_flag = true` and force tier D. Gambling operators and >$500M revenue are NOT vetoes. (icp-scoring.md §4–5; CLAUDE.md §10)
-- [ ] **REQ-graduated-deductions**: Post-base negative-decay deductions that never disqualify: revenue $500–750M −5, $750M–1B −15, $1B–1.2B −30, $1.2B+ −50; gambling operator −20. None set the anti-ICP flag. (icp-scoring.md §5; CLAUDE.md §10)
-- [ ] **REQ-tiering**: Map score + veto rules to A/B/C/D: A ≥ 70 (priority direct), B 40–69 (work if context strong), C 15–39 (nurture via league), D any hard veto (disqualify). SPEC additionally emits Unscored / Needs Review for missing/conflicting inputs. (icp-scoring.md §5; CLAUDE.md §10, §12.7)
-- [ ] **REQ-org-type-targeting**: Encode the shift from individual-club targeting to governing-bodies/leagues in the rubric. Best-fit = AU governing-body/league (or content producer) producing live/near-live content at mid-market revenue; individual clubs are anti-ICP as a direct target. (icp-scoring.md §1, §4)
+- [x] **REQ-lusha-v3-contract-probe**: Live-probe `POST /v3/contacts/search-and-enrich` and `POST /v3/companies/search-and-enrich` (and the two-step `search` → `enrich` pair) with minimal credit spend; document the confirmed request/response contract (envelope, `has`/`canReveal`/`billing` fields, error shapes) the way the ZoomInfo GTM contract was captured. Verify `check_provider_credits.py`'s usage endpoint against `GET /v3/account/usage`.
+- [x] **REQ-lusha-v3-request-builders**: Both lanes (contacts + companies) swap `GET /v2/*` → `POST /v3/*/search-and-enrich`: params move to body, identity keys map unchanged (email | name+company/domain | domain), `api_key` header auth retained. Builder + local-live variants + `scripts/dryrun_batch.mjs`.
+- [x] **REQ-lusha-selective-reveal** *(re-scoped 2026-07-30 after live probe — A3 REFUTED, see docs/LUSHA-V3-CONTRACT.md §6)*: Contacts requests still derive `reveal[]` from the enrichment gate's `missingFields`, but as **PII-minimization hygiene**, not a cost lever — live A/B showed reveal-1-field vs reveal-2-fields bills identically, and v3 first-time enrich is a flat 1 credit regardless of fields (the v2 ~4.65-credits/reveal phone bundling does not exist in v3). Empty `reveal:[]` is invalid (400) — a minimal non-empty set is always sent. Companies lane has NO reveal mechanism (flat 2 credits/match) — no reveal-derivation code written for it. Cost target already met by flat v3 pricing + id reuse (REQ-lusha-id-staging): full sweep projects ~1 cr/contact + 2 cr/company, well inside the ~3.9k balance.
+- [x] **REQ-lusha-id-staging**: New staging properties `lusha_contact_id` / `lusha_company_id` persisted on match; re-enrichment paths pass stored IDs so already-revealed data re-enriches free (`canReveal.credits: 0`).
+- [x] **REQ-lusha-v3-normalize**: `lushaCandidates` in `normalizeProviders.js` parses the v3 envelope and emits candidates field-identical to v2 output downstream (merge/score/staging unchanged; HubSpot schema untouched beyond the two ID properties).
+- [x] **REQ-lusha-v3-verification**: v2-pinned tests migrated, frozen fixture re-baselined, both suites green, disarmed redeploy with read-back showing v3 URLs live and zero v2 URLs remaining.
 
-### Enrichment Pipeline (mock)
+### Armed Enrichment Canary
 
-- [ ] **REQ-enrichment-plan**: Enrich ICP-decisive signals HubSpot does not natively hold, via the provider/research stack. Milestone 1 delivers the pipeline abstraction in mock form: provider waterfall adapters (ZoomInfo/Apollo/Lusha), Claude web-research adapter, Haiku classifier for org-type/content, and a Sonnet validator stub. Live provider wiring is deferred. (icp-scoring.md §6; CLAUDE.md §11, §16)
+- [x] **REQ-armed-e2e-canary**: One armed end-to-end enrichment on allowlisted record(s): provider waterfall + Haiku web research + Sonnet judge → staged fields, source metadata, and promoted canonical writes land in HubSpot; neighbor records byte-untouched; disarm + read-back (`"false"`×N, allowlist cleared) closes the run.
+- [x] **REQ-canary-cost-ledger**: The canary records actual spend — provider credits (before/after balances) and Anthropic tokens per call — against the 2026-07-30 estimates, producing a calibrated per-record cost figure for full-sweep planning.
 
-### HubSpot Property Contract
+### Transport Hygiene
 
-- [ ] **REQ-hubspot-icp-properties**: Define and exercise the ICP property schema in three roles — inputs (`lv_org_type`, `lv_produces_content`, country, annualrevenue), outputs (`lv_icp_fit_score`, `lv_icp_tier`, `lv_anti_icp_flag`), hygiene (`lv_closed_lost_reason`, `deal_source`) — through the non-clobber merge and dry-run PATCH. Property creation in HubSpot is deferred to the writeback milestone. (icp-scoring.md §5–6; CLAUDE.md §4–8)
+- [x] **REQ-dedupe-transport-swap**: `Dedupe Search (candidate contacts)` swaps from the native HubSpot node to the credential-bound httpRequest envelope (BUG-10/22/23 mechanism); weekly sweep remains classify-only (writes only the needs-review flag through the existing gated PATCH).
 
-### MVP Foundation & Safety
+### Schema Hygiene
 
-<!-- Derived from CLAUDE.md §11 (Local MVP objectives) and §29 (scope cut): the SPEC-mandated infrastructure the business PRD does not enumerate. -->
+- [x] **REQ-orgtype-enumeration**: `lv_org_type` converts text → HubSpot enumeration (the one-way door): property migrated with existing values preserved, pipeline writes validated against the enum options, rollback path documented before flipping.
+- [x] **REQ-country-region-policy**: `lv_country_region_normalized` gains a `config/field_policy.yaml` entry so the already-produced research value can promote under policy instead of staging-only by default.
 
-- [ ] **MVP-01**: Config-driven scaffolding — `icp_scoring.yaml`, `field_policy.yaml`, `provider_priority.yaml`, `source_registry.yaml`, `escalation_policy.yaml`, pydantic schemas, and test fixtures all exist, load, and validate. (CLAUDE.md §11, §12.1)
-- [ ] **MVP-02**: Non-clobber merge engine enforces field-ownership governance (manual_protected / system_owned / fill_blank_only / stale_refreshable / review_required / score_output / veto_output) with promote / stage / reject / needs_review decisions. (CLAUDE.md §9, §17)
-- [ ] **MVP-03**: Every enriched field is stamped with source, confidence, evidence URL + summary, verified_at, verified_by_model, and validation_status. (CLAUDE.md §6)
-- [ ] **MVP-04**: Dry-run mode prints the exact HubSpot PATCH payload; canonical writes are limited to `lv_icp_*` outputs (firmographics staged only, manual fields never touched); safety-gate env flags change the emitted payload as documented. (CLAUDE.md §11.2, §21, §29)
+## Future Requirements (deferred to v0.7)
 
-## v2 Requirements
+v0.6 is the operator client milestone (front door + control plane) and scopes none of these.
+They are backend and business-owner items, carried to v0.7.
 
-Deferred to later HubSpot/n8n-dependent milestones. Tracked, not in the Milestone 1 roadmap.
-
-### Enrichment & GTM Motion
-
-- **REQ-finite-list-motion**: Prefer enrich+score of a named best-fit list (~100–150 ANZ orgs; racing core ~25–28) over high-volume prospecting. Requires real CRM + live enrichment. (icp-scoring.md §8)
-- **REQ-intent-scoring**: Forward-looking HubSpot-pixel intent scoring (+3 any visit / +7 pricing-product-demo / +5 return within 14d / +10 ≥3 sessions or multi-contact). Not present in the SPEC's `icp_scoring.yaml`; HubSpot-pixel dependent. (icp-scoring.md §5)
-
-### HubSpot Hygiene
-
-- **REQ-closed-lost-capture**: Introduce `lv_closed_lost_reason` picklist and begin capturing loss reasons (0% filled today — the single biggest blocker to evidence-based anti-ICP). HubSpot-property dependent. (icp-scoring.md §4, §6)
-
-### Process Gate
-
-- **REQ-signoff-gate**: Alex sign-off on best-fit (governing-bodies-first) and anti-ICP (clubs-direct / non-AU / no-content) before the JTBD 2 weighted rubric build. Point weights in §5 are illustrative and are themselves the sign-off item. HubSpot Starter → Pro required for production. (icp-scoring.md §9)
+- HubSpot-side ICP formula — replace the `1 + 1` calculated-property placeholder (downstream-owner decision).
+- JTBD 2 weighted-rubric sign-off (REQ-signoff-gate) — rubric weights need business owner.
+- Lusha v3 signals/webhooks (job-change, headcount) as HubSpot staleness triggers.
+- Lusha `waterfallReveal` beta (third-party fall-through) — needs support-enabled account access.
 
 ## Out of Scope
 
-Explicitly excluded from the current roadmap.
-
-| Feature | Reason |
-|---------|--------|
-| n8n Cloud workflows (webhook/schedule/subworkflows) | Milestone 1 is local Python only; production orchestration is a later milestone |
-| Live provider APIs (real ZoomInfo/Apollo/Lusha) | Mock adapters prove the abstraction first; live wiring is CLAUDE.md Phase 3 |
-| HubSpot writeback / property creation / private app | Dry-run PATCH only in Milestone 1; test-record writeback is CLAUDE.md Phase 1 |
-| Canonical firmographic promotion | SPEC §29 scope cut — only `lv_icp_*` outputs written canonically in the MVP |
-| Contact enrichment/scoring | MVP scope cut — score companies only first (CLAUDE.md §29) |
+- Lusha Prospecting / Lookalikes / Tables / Decision Makers APIs — net-new acquisition surfaces, not enrichment of existing CRM records.
+- org_type evidence-gate in `computeEscalation` — explicitly rejected 2026-07-30 (plausible-not-observed; YAGNI).
+- Scheduled full-portal sweep arming — canary proves the path; fleet-wide arming is an operator decision after the cost ledger lands.
 
 ## Traceability
 
+11/11 v0.5 requirements mapped — no orphans, no duplicates.
+
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| MVP-01 | Phase 1 | Pending |
-| REQ-icp-scoring-model | Phase 2 | Pending |
-| REQ-anti-icp-vetoes | Phase 2 | Pending |
-| REQ-graduated-deductions | Phase 2 | Pending |
-| REQ-tiering | Phase 2 | Pending |
-| REQ-org-type-targeting | Phase 2 | Pending |
-| REQ-enrichment-plan | Phase 3 | Pending |
-| REQ-hubspot-icp-properties | Phase 3 | Pending |
-| MVP-02 | Phase 3 | Pending |
-| MVP-03 | Phase 3 | Pending |
-| MVP-04 | Phase 4 | Pending |
-
-**Coverage:**
-- v1 requirements: 11 total
-- Mapped to phases: 11
-- Unmapped: 0 ✓
-
----
-*Requirements defined: 2026-07-07*
-*Last updated: 2026-07-07 after ingest-driven project initialization*
+| REQ-lusha-v3-contract-probe | Phase 20 | Complete |
+| REQ-lusha-v3-request-builders | Phase 20 | Complete |
+| REQ-lusha-selective-reveal | Phase 20 | Complete |
+| REQ-lusha-id-staging | Phase 20 | Complete |
+| REQ-lusha-v3-normalize | Phase 20 | Complete |
+| REQ-lusha-v3-verification | Phase 20 | Complete |
+| REQ-dedupe-transport-swap | Phase 21 | Complete |
+| REQ-orgtype-enumeration | Phase 21 | Complete |
+| REQ-country-region-policy | Phase 21 | Complete |
+| REQ-armed-e2e-canary | Phase 22 | Complete |
+| REQ-canary-cost-ledger | Phase 22 | Complete |

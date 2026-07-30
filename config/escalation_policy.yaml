@@ -20,9 +20,11 @@ sonnet_5:
     - gambling_operator_detected: true
     - hardware_vendor_detected: true
     - canonical_overwrite_requested: true
-    # Illustrative range: escalate to Sonnet when confidence falls in this band.
-    # (SPEC §15.1 rendered this as a corrupted `[2][3]` markdown footnote artifact.)
-    - confidence_between: [70, 85]
+    # Escalate to Sonnet when confidence falls in this band: docs/WEB-RESEARCH-SPEC.md
+    # §8 JG-1 states "confidence in 75-85" normatively. (Prior [70, 85] was reconstructed
+    # from CLAUDE.md §15.1's corrupted `[2][3]` markdown footnote artifact and was never
+    # parsed by any code — this is the first real consumer.)
+    - confidence_between: [75, 85]
     - multiple_sources_disagree: true
   output_required:
     - decision
@@ -40,3 +42,13 @@ human_review:
     - hard_veto_uncertain: true
     - provider_and_web_research_conflict: true
     - canonical_manual_value_conflict: true
+
+evidence_sufficiency:
+  # JG-4: a citation on one of these hosts substantiates content output even though
+  # the host is not the company's own domain (owned channel). Non-root path still
+  # required. Validated against the 20 real rows in the Phase-13 closed-won/lost smoke.
+  known_video_hosts:
+    - youtube.com
+    - youtu.be
+    - vimeo.com
+    - twitch.tv

@@ -24,6 +24,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const { toCandidates } = require(path.join(ROOT, "n8n/code/normalizeProviders.js"));
 const { scoreCandidates } = require(path.join(ROOT, "n8n/code/scoreEnrichment.js"));
 const { decideAction } = require(path.join(ROOT, "n8n/code/enrichmentGate.js"));
+const { lushaContactBody, lushaContactEnrichByIdBody } = require(path.join(ROOT, "n8n/code/lushaRequest.js"));
 
 const NOW = new Date().toISOString();
 
@@ -61,18 +62,54 @@ async function call(url, opts) {
   }
 }
 
-// --- Lusha v2 person: GET, header api_key ------------------------------------
-async function lusha(id) {
+// --- lightweight pre-lookup: does HubSpot already hold a stored Lusha id? ----
+// Plan 04 Task 2b: a SEPARATE, minimal HubSpot search (properties: [lusha_contact_id]
+// only) run BEFORE the provider calls, so the harness can gate on the stored id the same
+// way production does. Deliberately NOT folded into hsSearch() below — that one runs
+// AFTER the provider calls (it needs discoveredEmail for its own by-email fallback) and
+// asks for the full gate property set; this is read-only, cheap, and single-purpose.
+async function hsLookupStoredContactId(id) {
+  const tok = process.env.HUBSPOT_PRIVATE_APP_TOKEN;
+  if (!tok) return null;
+  const filters = id.email
+    ? [{ propertyName: "email", operator: "EQ", value: id.email }]
+    : [{ propertyName: "firstname", operator: "EQ", value: id.firstName },
+       { propertyName: "lastname", operator: "EQ", value: id.lastName }];
+  const r = await call("https://api.hubapi.com/crm/v3/objects/contacts/search", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${tok}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ filterGroups: [{ filters }], properties: ["lusha_contact_id"], limit: 1 }),
+  });
+  const hit = r.body && Array.isArray(r.body.results) && r.body.results[0];
+  return (hit && hit.properties && hit.properties.lusha_contact_id) || null;
+}
+
+// --- Lusha v3 contacts: search-and-enrich, OR the confirmed-free stored-id reuse path --
+// Plan 04 Task 2b: when hsLookupStoredContactId() found a stored id, lushaContactEnrichByIdBody()
+// builds the CONFIRMED-FREE POST /v3/contacts/enrich body instead ({ids,reveal}, §8.1) —
+// a genuinely different endpoint, not a property added to search-and-enrich. The harness
+// computes its full gate decision AFTER the provider calls (see runOne() below — hsSearch
+// + decideAction happen after this call), so no missingFields array is available yet at
+// call time either way. Pass an empty array: both builders default the reveal list to the
+// minimal non-empty ["emails"] (v3 rejects an empty reveal — docs/LUSHA-V3-CONTRACT.md
+// §6), which is the cheap, correct default for a read-only dry-run harness.
+async function lusha(id, storedContactId) {
   const key = process.env.LUSHA_API_KEY;
   if (!key) return { status: 0, body: null, err: "no LUSHA_API_KEY" };
-  const q = new URLSearchParams();
-  if (id.email) q.set("email", id.email);
-  if (id.linkedin_url) q.set("linkedinUrl", id.linkedin_url);
-  if (id.firstName) q.set("firstName", id.firstName);
-  if (id.lastName) q.set("lastName", id.lastName);
-  if (id.companyName) q.set("companyName", id.companyName);
-  if (id.domain) q.set("companyDomain", id.domain);
-  return call(`https://api.lusha.com/v2/person?${q}`, { method: "GET", headers: { api_key: key } });
+  const enrichByIdBody = lushaContactEnrichByIdBody(storedContactId, []);
+  if (enrichByIdBody) {
+    return call("https://api.lusha.com/v3/contacts/enrich", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", api_key: key },
+      body: JSON.stringify(enrichByIdBody),
+    });
+  }
+  const body = lushaContactBody(id, []);
+  return call("https://api.lusha.com/v3/contacts/search-and-enrich", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", api_key: key },
+    body: JSON.stringify(body),
+  });
 }
 
 // --- Apollo people/match: POST, header X-Api-Key, reveal email ---------------
@@ -154,7 +191,8 @@ async function hsSearch(id, discoveredEmail) {
 // --- per-candidate run -------------------------------------------------------
 async function runOne(c) {
   const id = identityKeys(c);
-  const [lu, ap, zi] = await Promise.all([lusha(id), apollo(id), zoominfo(id)]);
+  const storedContactId = await hsLookupStoredContactId(id);
+  const [lu, ap, zi] = await Promise.all([lusha(id, storedContactId), apollo(id), zoominfo(id)]);
 
   const cands = [
     ...(lu.status === 200 ? toCandidates("lusha", lu.body, "contacts") : []),

@@ -52,7 +52,7 @@ echo "service healthy: $(curl -s http://localhost:$PORT/health)"
 # 2 + 3. Import then execute each workflow.
 run_wf() {
   local file="$1" id="$2" out="$3"
-  docker cp "n8n/$file" "$CONTAINER:/tmp/$file"
+  docker cp "n8n/deprecated/$file" "$CONTAINER:/tmp/$file"
   docker exec "$CONTAINER" n8n import:workflow --input="/tmp/$file" 2>&1 \
     | grep -v "Error tracking" | grep -q "Successfully imported" \
     || fail "import of $file failed"

@@ -12,6 +12,8 @@
 #   Row C (no email, phone+lastname+company) -> weak phone+lastname hit -> ambiguous
 #   Row D (no email, name+company, NO phone) -> name+company miss -> hard no-email rule
 #   Row E (only jobtitle+phone, no identity key) -> REJECTED at LOAD, never resolved
+import json
+
 import pytest
 
 from src.ingest import run_contact_ingest
@@ -64,7 +66,7 @@ def raise_http(*args, **kwargs):
 def hermetic(monkeypatch):
     monkeypatch.delenv("HUBSPOT_PRIVATE_APP_TOKEN", raising=False)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    monkeypatch.setenv("ALLOW_SONNET_ESCALATION", "false")
+    monkeypatch.setenv("ALLOW_JUDGE_ESCALATION", "false")
     monkeypatch.setattr("src.merge_policy.classify_field_with_haiku", promote_fake)
     monkeypatch.setattr("src.hubspot_client.requests.get", raise_http)
     monkeypatch.setattr("src.hubspot_client.requests.post", raise_http)
@@ -102,8 +104,10 @@ def test_match_row_field_invariants():
     report = _run()
     m = next(e for e in report if e["action"] == "patch")
 
-    # email: STAGED under provider-namespaced key, but manual_protected -> NEVER canonical.
-    assert "csv_email" in m["payload"]
+    # Phase 15: staged INSIDE the provenance blob (no flat staging keys).
+    provenance = json.loads(m["payload"]["lv_contact_enrichment_provenance"])
+    # email: staged, but manual_protected -> NEVER canonical.
+    assert provenance["email"]["source"] == "csv"
     assert "email" not in m["canonical_patch"]
     assert "email" not in m["payload"]
     # phone: blank on the record -> fill_blank_only promotes the upload phone.
@@ -111,7 +115,7 @@ def test_match_row_field_invariants():
     # jobtitle: present + conflicting -> stale_refreshable needs_review, withheld.
     assert "jobtitle" not in m["canonical_patch"]
     # linkedin: present -> fill_blank_only stages but NEVER clobbers canonical.
-    assert "csv_linkedin_url" in m["payload"]
+    assert provenance["linkedin_url"]["source"] == "csv"
     assert "linkedin_url" not in m["canonical_patch"]
 
 

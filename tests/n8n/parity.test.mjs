@@ -12,6 +12,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
+import fs from "node:fs";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
@@ -22,7 +23,15 @@ const { normalizeEmailBasic } = require(path.join(ROOT, "n8n/code/normalizeEmail
 const { mapRow, requiredIdentity } = require(path.join(ROOT, "n8n/code/columnMap.js"));
 const { resolveIdentity } = require(path.join(ROOT, "n8n/code/resolveIdentity.js"));
 const { mergeContacts } = require(path.join(ROOT, "n8n/code/mergeContacts.js"));
+const { mergeCompanies, stableStringify } = require(path.join(ROOT, "n8n/code/mergeCompanies.js"));
 const { dedupeSweep } = require(path.join(ROOT, "n8n/code/dedupeSweep.js"));
+const {
+  normalizeOrgType, normalizeOrgTypeResult, normalizeContentTypes,
+} = require(path.join(ROOT, "n8n/code/taxonomy.js"));
+const {
+  validateResearchOutput, toProviderResult,
+} = require(path.join(ROOT, "n8n/code/webResearch.js"));
+const { isCitationSufficient } = require(path.join(ROOT, "n8n/code/judge.js"));
 
 // --- Python oracle helpers ----------------------------------------------------
 const PY = path.join(ROOT, ".venv/bin/python");
@@ -31,6 +40,45 @@ function pyPhone(raw) {
   const out = execFileSync(PY, ["-c",
     "import sys,json;from src.normalizer import normalize_phone;print(json.dumps(normalize_phone(json.loads(sys.argv[1]))))",
     JSON.stringify(raw)], { cwd: ROOT }).toString().trim();
+  return JSON.parse(out);
+}
+
+// NM-6 oracle: one subprocess call runs the whole shared fixture table through
+// src.taxonomy and returns all three normalizers' outputs per case.
+function pyTaxonomy(fixtureRelPath) {
+  const script = `
+import json, sys
+from src.taxonomy import normalize_org_type, normalize_org_type_result, normalize_content_types
+with open(sys.argv[1]) as f:
+    cases = json.load(f)
+print(json.dumps({
+    "org_type": [normalize_org_type(c) for c in cases["org_type_cases"]],
+    "org_type_result": [normalize_org_type_result(c) for c in cases["org_type_cases"]],
+    "content_types": [normalize_content_types(c) for c in cases["content_type_list_cases"]],
+}))
+`;
+  const out = execFileSync(PY, ["-c", script, fixtureRelPath], { cwd: ROOT }).toString().trim();
+  return JSON.parse(out);
+}
+
+// Phase 13 oracle: one subprocess call runs the whole shared research-cases fixture
+// through src.taxonomy's validate_research_output/to_provider_result and returns, per
+// case, the validate dict and the to_provider_result projected to a JSON-safe shape.
+function pyResearch(fixtureRelPath) {
+  const script = `
+import json, sys
+from src.taxonomy import validate_research_output, to_provider_result
+with open(sys.argv[1]) as f:
+    cases = json.load(f)["research_cases"]
+def project(r):
+    return {"provider": r.provider, "object_type": r.object_type, "matched": r.matched,
+            "confidence": r.confidence, "data": r.data, "evidence_by_field": r.evidence_by_field}
+print(json.dumps({
+    "validate": [validate_research_output(c) for c in cases],
+    "provider_result": [project(to_provider_result(c)) for c in cases],
+}))
+`;
+  const out = execFileSync(PY, ["-c", script, fixtureRelPath], { cwd: ROOT }).toString().trim();
   return JSON.parse(out);
 }
 
@@ -161,7 +209,7 @@ test("columnMap: requiredIdentity — email OR firstname+lastname+company", () =
 test("mergeContacts: email not canonical, blank phone filled, jobtitle conflict -> review", () => {
   const existing = { jobtitle: "Analyst", phone: "", email: "old@corp.com" };
   const candidate = { email: "new@corp.com", phone: "+61412345678", jobtitle: "Engineer" };
-  const { canonicalPatch, stagingPatch, metadataPatch, decisions } = mergeContacts(existing, candidate);
+  const { canonicalPatch, provenance, decisions } = mergeContacts(existing, candidate);
 
   // email (manual_protected, min_conf 95 > csv 80) -> never canonical
   assert.ok(!("email" in canonicalPatch), "email must not be canonical");
@@ -172,14 +220,82 @@ test("mergeContacts: email not canonical, blank phone filled, jobtitle conflict 
   const jt = decisions.find((d) => d.field === "jobtitle");
   assert.equal(jt.decision, "needs_review");
 
-  // every candidate field is staged and carries source metadata
+  // Phase 15: every candidate field has ONE provenance entry (no flat staging/metadata
+  // keys) — {source, confidence, verified_at, validation_status, value}.
   for (const f of ["email", "phone", "jobtitle"]) {
-    assert.ok((`csv_${f}`) in stagingPatch, `staged csv_${f}`);
-    assert.equal(metadataPatch[`${f}_source`], "csv");
-    assert.equal(metadataPatch[`${f}_confidence`], 80);
-    assert.ok(metadataPatch[`${f}_verified_at`], `${f} verified_at stamped`);
-    assert.ok(metadataPatch[`${f}_validation_status`], `${f} validation_status stamped`);
+    assert.ok(provenance[f], `provenance entry for ${f}`);
+    assert.equal(provenance[f].source, "csv");
+    assert.equal(provenance[f].confidence, 80);
+    assert.ok(provenance[f].verified_at, `${f} verified_at stamped`);
+    assert.ok(provenance[f].validation_status, `${f} validation_status stamped`);
+    assert.equal(provenance[f].value, candidate[f]);
   }
+});
+
+// --- mergeCompanies -----------------------------------------------------------
+test("mergeCompanies: domain never canonical, ICP fields promote, present industry -> review", () => {
+  const existing = { domain: "racingnsw.com.au", industry: "Sports", lv_org_type: "" };
+  const candidate = {
+    domain: "racingnsw.com.au",
+    industry: "Sports & Entertainment",
+    lv_org_type: "governing_body_league",
+    lv_revenue_band: "50-500M",
+  };
+  const opts = { source: "zoominfo", confidence: 85,
+                 evidence: { lv_org_type: "https://racingnsw.com.au/about" } };
+  const { canonicalPatch, provenance, cacheKeys, decisions } =
+    mergeCompanies(existing, candidate, undefined, opts);
+
+  // domain (manual_protected, min_conf 95 > 85) -> never canonical
+  assert.ok(!("domain" in canonicalPatch), "domain must not be canonical");
+  // lv_org_type (system_owned, 85>=80) + evidence URL supplied -> promote
+  assert.equal(canonicalPatch.lv_org_type, "governing_body_league");
+  // lv_revenue_band (system_owned, 85>=75) -> promote
+  assert.equal(canonicalPatch.lv_revenue_band, "50-500M");
+  // present industry (stale_refreshable) -> needs_review, not promoted
+  assert.ok(!("industry" in canonicalPatch));
+  assert.equal(decisions.find((d) => d.field === "industry").decision, "needs_review");
+
+  // Phase 15: every candidate field has ONE provenance entry (no flat staging/metadata
+  // keys) — {source, confidence, verified_at, validation_status, value}.
+  for (const f of ["domain", "industry", "lv_org_type", "lv_revenue_band"]) {
+    assert.ok(provenance[f], `provenance entry for ${f}`);
+    assert.equal(provenance[f].source, "zoominfo");
+    assert.equal(provenance[f].confidence, 85);
+    assert.ok(provenance[f].verified_at, `${f} verified_at stamped`);
+    assert.ok(provenance[f].validation_status, `${f} validation_status stamped`);
+    assert.equal(provenance[f].value, candidate[f]);
+  }
+  assert.equal(provenance.lv_org_type.evidence_url, "https://racingnsw.com.au/about");
+
+  // Cache key: lv_org_type's verified_at mirrors to the top-level queryable property;
+  // lv_produces_content has no candidate this call, so its cache key is absent.
+  assert.equal(cacheKeys.lv_org_type_verified_at, provenance.lv_org_type.verified_at);
+  assert.ok(!("lv_produces_content_verified_at" in cacheKeys));
+});
+
+test("mergeCompanies: unevidenced ICP claims -> needs_review, never canonical", () => {
+  const candidate = {
+    lv_org_type: "hardware_vendor",  // in require_evidence_url_for -> gated
+    lv_produces_content: true,       // require_evidence_url: true -> always gated
+  };
+  const { canonicalPatch, decisions } =
+    mergeCompanies({}, candidate, undefined, { source: "apollo", confidence: 90 });
+
+  for (const f of ["lv_org_type", "lv_produces_content"]) {
+    assert.ok(!(f in canonicalPatch), `${f} must not promote without evidence`);
+    const d = decisions.find((x) => x.field === f);
+    assert.equal(d.decision, "needs_review");
+    assert.equal(d.validation_status, "human_review_required");
+    assert.equal(d.evidence_url, null);
+  }
+});
+
+test("mergeCompanies: require_evidence_url_for gates only the listed values", () => {
+  // "other" is NOT in lv_org_type.require_evidence_url_for -> promotes unevidenced
+  const { canonicalPatch } =
+    mergeCompanies({}, { lv_org_type: "other" }, undefined, { confidence: 90 });
+  assert.equal(canonicalPatch.lv_org_type, "other");
 });
 
 // --- dedupeSweep --------------------------------------------------------------
@@ -209,4 +325,126 @@ test("dedupeSweep: cross-format phone dup collapses; garbage -> mangled", () => 
   assert.deepEqual(r.to_review_ids, ["1", "2", "3", "4", "5"]);
   assert.equal(r.counts.duplicates, r.duplicate_count);
   assert.ok(!r.to_review_ids.includes("6")); // blank phone is not a finding
+});
+
+// --- taxonomy: NM-6 Python/JS parity -------------------------------------------
+test("taxonomy: NM-6 GENUINE parity vs Python src.taxonomy across the shared fixture", () => {
+  const fixturePath = path.join(ROOT, "tests/fixtures/taxonomy_parity_cases.json");
+  const fixture = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
+  const py = pyTaxonomy("tests/fixtures/taxonomy_parity_cases.json");
+
+  const jsOrgType = fixture.org_type_cases.map((c) => normalizeOrgType(c));
+  const jsOrgTypeResult = fixture.org_type_cases.map((c) => normalizeOrgTypeResult(c));
+  const jsContentTypes = fixture.content_type_list_cases.map((c) => normalizeContentTypes(c));
+
+  assert.deepStrictEqual(jsOrgType, py.org_type, "normalize_org_type parity");
+  assert.deepStrictEqual(jsOrgTypeResult, py.org_type_result, "normalize_org_type_result parity");
+  assert.deepStrictEqual(jsContentTypes, py.content_types, "normalize_content_types parity");
+});
+
+// --- webResearch: JS/Python parity (Phase 13) ----------------------------------
+test("webResearch: GENUINE parity vs Python src.taxonomy validate_research_output/to_provider_result", () => {
+  const fixturePath = path.join(ROOT, "tests/fixtures/research_validation_cases.json");
+  const fixture = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
+  const cases = fixture.research_cases;
+  const py = pyResearch("tests/fixtures/research_validation_cases.json");
+
+  const jsValidate = cases.map((c) => validateResearchOutput(c));
+  const jsProviderResult = cases.map((c) => {
+    const r = toProviderResult(c);
+    return { provider: r.provider, object_type: r.object_type, matched: r.matched,
+             confidence: r.confidence, data: r.data, evidence_by_field: r.evidence_by_field };
+  });
+
+  assert.deepStrictEqual(jsValidate, py.validate, "validateResearchOutput parity");
+  assert.deepStrictEqual(jsProviderResult, py.provider_result, "toProviderResult parity");
+});
+
+// --- judge: JG-4 GENUINE parity vs Python src.judge.is_citation_sufficient ----------
+// Name carries "judge" + "parity" so --test-name-pattern="judge.*parity" targets it.
+function pyJudgeSufficiency(fixtureRelPath) {
+  const script = `
+import json, sys
+from src.judge import is_citation_sufficient
+with open(sys.argv[1]) as f:
+    cases = json.load(f)["evidence_cases"]
+print(json.dumps([is_citation_sufficient(c["citation_url"], c["domain"]) for c in cases]))
+`;
+  const out = execFileSync(PY, ["-c", script, fixtureRelPath], { cwd: ROOT }).toString().trim();
+  return JSON.parse(out);
+}
+
+test("judge: JG-4 GENUINE parity vs Python src.judge.is_citation_sufficient over the 20-row fixture", () => {
+  const fixturePath = path.join(ROOT, "tests/fixtures/evidence_sufficiency_cases.json");
+  const { evidence_cases: cases } = JSON.parse(fs.readFileSync(fixturePath, "utf8"));
+  const py = pyJudgeSufficiency("tests/fixtures/evidence_sufficiency_cases.json");
+  const js = cases.map((c) => isCitationSufficient(c.citation_url, c.domain));
+  assert.deepStrictEqual(js, py, "isCitationSufficient parity (JS vs Python) over all 20 rows");
+});
+
+// --- provenance blob: Python json.dumps(sort_keys=True, separators=(",",":"),
+// ensure_ascii=False) vs JS stableStringify MUST be byte-identical (Phase 15 Task 5).
+function pySerializeProvenance(entries) {
+  const script = `
+import json, sys
+from src.merge_policy import serialize_provenance
+print(serialize_provenance(json.loads(sys.argv[1])))
+`;
+  const out = execFileSync(PY, ["-c", script, JSON.stringify(entries)], { cwd: ROOT }).toString();
+  // print() adds exactly one trailing newline; serialize_provenance() itself returns none —
+  // strip exactly one for a fair byte comparison.
+  return out.replace(/\n$/, "");
+}
+
+const PROVENANCE_FIXTURE = {
+  lv_org_type: { source: "zoominfo", confidence: 85, verified_at: "2026-07-22T00:00:00Z",
+                 validation_status: "provider_only", value: "governing_body_league" },
+  lv_produces_content: { source: "claude_web", confidence: 88, verified_at: "2026-07-22T00:00:00Z",
+                          validation_status: "llm_classified", value: true,
+                          evidence_url: ["https://example.org/watch-live"] },
+  // Non-ASCII fixture row — RESEARCH.md/PLAN.md Task 5: ensure_ascii=False is
+  // load-bearing, not cosmetic. A macron in a plausible AU/NZ club name/evidence string.
+  lv_content_type: { source: "claude_web", confidence: 80, verified_at: "2026-07-22T00:00:00Z",
+                      validation_status: "llm_classified",
+                      value: "Ngā Puna Wai Sports Hub live_broadcast" },
+};
+
+test("provenance blob: Python and JS produce byte-identical serialization (incl. non-ASCII row)", () => {
+  const js = stableStringify(PROVENANCE_FIXTURE);
+  const py = pySerializeProvenance(PROVENANCE_FIXTURE);
+  assert.equal(js, py, "provenance blob byte-parity (Python json.dumps vs JS stableStringify)");
+  assert.ok(js.includes("Ngā"), "non-ASCII characters must survive unescaped in the JS serialization");
+  assert.ok(py.includes("Ngā"), "non-ASCII characters must survive unescaped in the Python "
+    + "serialization (ensure_ascii=False) — without this the byte-identical claim is unproven");
+});
+
+test("provenance blob DELIBERATE-BREAK 1: changing one candidate value changes the blob, Python==JS still holds", () => {
+  const changed = JSON.parse(JSON.stringify(PROVENANCE_FIXTURE));
+  changed.lv_org_type.value = "content_producer";  // deliberately different from the base fixture
+  const jsBase = stableStringify(PROVENANCE_FIXTURE);
+  const jsChanged = stableStringify(changed);
+  assert.notEqual(jsChanged, jsBase, "changing a candidate value must change the serialized blob");
+  const pyChanged = pySerializeProvenance(changed);
+  assert.equal(jsChanged, pyChanged, "Python/JS parity must still hold after the value change");
+});
+
+test("provenance blob DELIBERATE-BREAK 2: dropping ensure_ascii=False breaks parity on the non-ASCII row", () => {
+  // Simulates dropping `ensure_ascii=False` from src/merge_policy.py's
+  // serialize_provenance() WITHOUT touching the real source file: Python's json.dumps
+  // defaults to ensure_ascii=True, which \uXXXX-escapes every non-ASCII character;
+  // JSON.stringify never does. This proves the flag is load-bearing, not cosmetic — see
+  // the SUMMARY for the companion one-time proof performed directly against the source.
+  const brokenScript = `
+import json, sys
+entries = json.loads(sys.argv[1])
+print(json.dumps(entries, sort_keys=True, separators=(",", ":")))
+`;
+  const broken = execFileSync(PY, ["-c", brokenScript, JSON.stringify(PROVENANCE_FIXTURE)],
+    { cwd: ROOT }).toString().replace(/\n$/, "");
+  const js = stableStringify(PROVENANCE_FIXTURE);
+  assert.notEqual(broken, js,
+    "dropping ensure_ascii=False must break byte-parity on the non-ASCII row (lv_content_type) — "
+    + "proves the flag is load-bearing, not cosmetic");
+  assert.ok(broken.includes("\\u"), "the broken (ensure_ascii default True) variant must \\u-escape the macron");
+  assert.ok(js.includes("Ngā"), "the correct JS serialization keeps the raw UTF-8 characters");
 });

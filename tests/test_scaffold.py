@@ -38,11 +38,13 @@ def load_json(name):
 
 
 def test_configs_load():
-    """SC1: exactly 6 config YAMLs load; icp_scoring version is lv-icp-v0.1."""
+    """SC1: exactly 8 config YAMLs load; icp_scoring version is lv-icp-v0.1."""
     files = sorted(glob.glob(str(CONFIG_DIR / "*.yaml")))
-    assert len(files) == 6, files  # +column_mapping.yaml (Phase 6)
+    # +column_mapping.yaml (Phase 6), +taxonomy.yaml (Phase 12), +hubspot_properties.yaml (Phase 15)
+    assert len(files) == 8, files
     cfg = {Path(f).name: yaml.safe_load(open(f)) for f in files}
     assert cfg["icp_scoring.yaml"]["version"] == "lv-icp-v0.1"
+    assert cfg["taxonomy.yaml"]["version"] == "lv-taxonomy-v1"
     assert set(cfg["provider_priority.yaml"]) >= {"companies", "contacts"}
     assert "aliases" in cfg["column_mapping.yaml"]
 

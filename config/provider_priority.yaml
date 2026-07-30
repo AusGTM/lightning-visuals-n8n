@@ -26,6 +26,6 @@ contacts:
   phone: [lusha, zoominfo, apollo, claude_web]
   mobilephone: [lusha, zoominfo, apollo, claude_web]
   email: [lusha, apollo, zoominfo, claude_web]
-  linkedin_url: [zoominfo, apollo, lusha, claude_web]
+  lv_linkedin_url: [zoominfo, apollo, lusha, claude_web]
   seniority: [zoominfo, apollo, lusha, claude_web]
-  persona_group: [zoominfo, apollo, lusha, claude_web]
+  lv_persona_group: [zoominfo, apollo, lusha, claude_web]

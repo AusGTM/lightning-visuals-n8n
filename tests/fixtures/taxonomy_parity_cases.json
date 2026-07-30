@@ -1,0 +1,44 @@
+{
+  "_comment": "Shared NM-6 parity table for src/taxonomy.py and n8n/code/taxonomy.js. Neither language carries its own case list — both read this file (tests/n8n/parity.test.mjs shells out to Python for the same rows).",
+  "org_type_cases": [
+    "governing_body_league",
+    "content_producer",
+    "broadcaster",
+    "individual_club_team",
+    "regulator",
+    "gambling_operator",
+    "hardware_vendor",
+    "other",
+    "unknown",
+
+    "league",
+    "production company",
+    "tv network",
+    "club",
+    "regulatory body",
+    "bookmaker",
+    "av vendor",
+
+    "Governing Body",
+    "governing-body",
+    "  GOVERNING  BODY ",
+    "LED vendor",
+    "Racing_Club",
+
+    "completely made up",
+    "",
+    null,
+    "42",
+    "<script>",
+    "governing_body_leagueX"
+  ],
+  "content_type_list_cases": [
+    ["live stream", "streaming", "bogus_value", "highlights"],
+    ["live_broadcast", "live_broadcast", "unknown"],
+    ["ott", "OTT", "Live Stream", "clips"],
+    [],
+    ["nonsense_only", "also nonsense"],
+    null,
+    "not_a_list"
+  ]
+}

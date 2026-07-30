@@ -64,8 +64,12 @@ function normalizeRevenueBand(value) {
 
 function normalizeEmployeeBand(value) {
   if (value === null || value === undefined || value === "") return null;
-  // Already a band string (e.g. ZoomInfo employeeRange "201-500") -> pass through.
-  if (typeof value === "string" && !/^\d+$/.test(value.trim())) return value.trim();
+  // Already a band string (e.g. ZoomInfo employeeRange "201-500") -> pass through, with
+  // whitespace around the hyphen collapsed: live Lusha returns "51 - 200", and the spaced
+  // form is NOT an lv_employee_band enum value ("51-200" is).
+  if (typeof value === "string" && !/^\d+$/.test(value.trim())) {
+    return value.trim().replace(/\s*-\s*/g, "-");
+  }
   const v = parseInt(value, 10);
   if (Number.isNaN(v)) return null;
   if (v <= 9) return "1-9";
@@ -127,11 +131,105 @@ function _push(out, field, source, value, normalizedValue, accuracy, recencyDate
   out.push({ field, source, value, normalizedValue, accuracy: _clamp01(accuracy), recencyDate: recencyDate || null });
 }
 
+// Prefer human-readable industry text over a raw NAICS code; a bare numeric code is never
+// a valid `industry` text value (NORM-01). Precedence: the NAICS entry's own `.name` text
+// when the entry is an object carrying one; otherwise the provider's industry text fallback
+// (first element when the fallback is an array); otherwise null — no candidate is fabricated
+// from a bare code.
+function _industryText(naicsEntry, textFallback) {
+  if (naicsEntry && typeof naicsEntry === "object" && naicsEntry.name) {
+    return { raw: naicsEntry.name, key: _norm(naicsEntry.name) };
+  }
+  const fallback = Array.isArray(textFallback) ? textFallback[0] : textFallback;
+  if (fallback) return { raw: fallback, key: _norm(fallback) };
+  return null; // bare numeric code, no name, no fallback text -> skip, don't fabricate
+}
+
+// COPY-02 (18-VERIFICATION.md GAP 2, D-GAP2-provider/D-GAP2-othervalue): a provider's OWN
+// department field, when present, is the persona_group producer -- no invented title-to-
+// persona taxonomy. Takes the first element when the value is an array. Lusha's live
+// "Other" label is a semantically-empty non-signal (case-insensitive compare) -- a
+// persona group of "Other" is not a classification, it renders in a HubSpot view as
+// though a decision were made when none was, which is strictly worse for the RevOps
+// reviewer than the property staying blank. Returns null rather than fabricating a value
+// from a non-value, mirroring _industryText's contract.
+function _personaGroup(departments) {
+  const first = Array.isArray(departments) ? departments[0] : departments;
+  if (!first) return null;
+  if (String(first).trim().toLowerCase() === "other") return null;
+  return first;
+}
+
+// _lushaRecord(rawResponse, objectType) -- Lusha envelope adapter, sibling to _zoomRecord().
+// The v3 Enrichment API (the live contract as of 2026-07-30, confirmed against a real
+// api.lusha.com session and recorded in docs/LUSHA-V3-CONTRACT.md) is a flat
+// { requestId, results: [...], billing } envelope, positionally aligned with the request's
+// single-item array (this waterfall sends one identity per call, so results[0] is safe with
+// no match-back key). A per-result `error` (no-match/error shape, contract §9), a missing or
+// non-array `results`, a non-object input and a null input all resolve to {} -- zero
+// candidates, never a throw (skip-not-retry, CLAUDE.md Sec 26.1). v2's envelope handling
+// (a plural contactId-keyed `{contacts:{...}}` map and a singular `{contact:{data}}}` form)
+// was retired in this phase (Plan 20-03) ahead of v2's 2026-11-18 sunset -- no v2-shaped
+// response can reach this function once Plan 05's redeploy ships.
+//
+// v3 field names already match the intermediate shape the extraction logic below reads
+// (emails[].email/.type/.confidence, phones[].number/.type/.doNotCall, jobTitle.title/
+// .seniority/.departments) for CONTACTS, so _lushaV3Contact only renames the one field that
+// differs: location.countryIso2 (v3, camelCase) -> location.country_iso2 (the snake_case key
+// the extraction's region lookup reads). For COMPANIES, v3's revenueRange/employeeCount ship
+// as {min,max}/{exact,min,max} objects rather than the [lo,hi] array or plain number the
+// extraction expects, and industry classification is a flat `industry` string rather than
+// naicsCodes -- _lushaV3Company does that reshaping.
+function _lushaV3Contact(entry) {
+  const loc = entry.location || {};
+  return {
+    id: entry.id,
+    emails: entry.emails,
+    phones: entry.phones,
+    jobTitle: entry.jobTitle,
+    location: { ...loc, country_iso2: loc.countryIso2 },
+    updateDate: entry.updateDate,
+  };
+}
+
+function _lushaV3Company(entry) {
+  const rr = entry.revenueRange;
+  const revenueRange = rr && typeof rr === "object" && !Array.isArray(rr) ? [rr.min, rr.max] : rr;
+  let ec = entry.employeeCount;
+  if (ec && typeof ec === "object") {
+    ec = ec.exact != null ? ec.exact
+      : (ec.min != null && ec.max != null ? Math.round((ec.min + ec.max) / 2) : null);
+  }
+  return {
+    id: entry.id,
+    revenueRange,
+    employeeCount: ec,
+    mainIndustry: entry.industry,
+    location: entry.location,
+    updateDate: entry.updateDate,
+  };
+}
+
+function _lushaRecord(rawResponse, objectType) {
+  const raw = rawResponse;
+  if (!raw || typeof raw !== "object") return {};
+
+  if (Array.isArray(raw.results)) {
+    const entry = raw.results[0];
+    if (!entry || typeof entry !== "object" || entry.error) return {};
+    return objectType === "companies" ? _lushaV3Company(entry) : _lushaV3Contact(entry);
+  }
+
+  // Bare/flat fallback: offline unit tests pass a record's fields directly with no envelope
+  // at all (e.g. `{ phones: [...] }`). Not a v2 envelope shape -- v3 has no wrapper either
+  // once unwrapped above, so this is the same pass-through both versions relied on.
+  return raw;
+}
+
 function lushaCandidates(rawResponse, objectType) {
   const out = [];
   const src = "lusha";
-  // Live v2 person nests the record under contact.data; flat fixtures pass through.
-  const raw = (rawResponse && rawResponse.contact && rawResponse.contact.data) || rawResponse || {};
+  const raw = _lushaRecord(rawResponse, objectType) || {};
   const updated = raw.updateDate;
   const region = raw.location && (raw.location.country_iso2 || raw.location.country); // ISO2 or name
   if (objectType === "contacts") {
@@ -152,22 +250,55 @@ function lushaCandidates(rawResponse, objectType) {
       // No per-field grade for Lusha title -> ungraded base 0.6.
       _push(out, "jobtitle", src, raw.jobTitle.title, _norm(raw.jobTitle.title), 0.6, updated);
       _push(out, "seniority", src, raw.jobTitle.seniority, _norm(raw.jobTitle.seniority), 0.6, updated);
+      // COPY-02: persona_group producer, reading Lusha's own department field off the
+      // same jobTitle object the block already destructures. Unprefixed field name here
+      // (read-side key, mirrors seniority/jobtitle above) -- the PN-1 lv_ rename happens
+      // only at the merge/canonical-write boundary, which this file never touches.
+      const persona = _personaGroup(raw.jobTitle.departments);
+      _push(out, "persona_group", src, persona, _norm(persona), 0.6, updated);
     }
   } else {
-    // company firmographics — no per-field grade -> base 0.6. Live nests under `company`
-    // with array revenueRange/companySize [lo,hi] and location.countryIso2; fixtures are flat.
+    // company firmographics — no per-field grade -> base 0.6. `raw.company` serves the
+    // contacts/person endpoint's nested company object (extraction, not envelope -- kept
+    // regardless of envelope version); the retired v2 `/v2/company` `data`-wrapper term was
+    // dropped here in Plan 20-03 Task 3 (docs/LUSHA-V3-CONTRACT.md §5 confirms v3's companies
+    // response is flat, no `data` key). `raw` itself is the v3 adapter's own flat output.
     const co = raw.company || raw;
     const rev = Array.isArray(co.revenueRange) ? co.revenueRange[0] : co.revenueRange;
     _push(out, "lv_revenue_band", src, rev, normalizeRevenueBand(rev), 0.6, updated);
+    // Live /v2/company returns the headcount as `employees` ("51 - 200", a spaced range
+    // string); companySize/employeeCount are null there and only appear in the fixtures.
     const emp = Array.isArray(co.companySize)
-      ? co.companySize[co.companySize.length - 1] : (co.companySize != null ? co.companySize : co.employeeCount);
+      ? co.companySize[co.companySize.length - 1]
+      : (co.companySize != null ? co.companySize
+        : (co.employeeCount != null ? co.employeeCount : co.employees));
     _push(out, "lv_employee_band", src, emp, normalizeEmployeeBand(emp), 0.6, updated);
-    const naics = (co.naicsCodes || [])[0];
-    _push(out, "industry", src, naics || co.mainIndustry, naics ? String(naics) : _norm(co.mainIndustry), 0.6, updated);
+    const naics0 = (co.naicsCodes || [])[0];
+    const industry = _industryText(naics0, co.mainIndustry);
+    _push(out, "industry", src, industry && industry.raw, industry && industry.key, 0.6, updated);
     const country = (co.location && co.location.countryIso2) || co.countryIso2;
     _push(out, "lv_country_region_normalized", src, country, normalizeCountryRegion(country), 0.6, updated);
   }
   return out;
+}
+
+// lushaRecordId(rawResponse, objectType) -- extracts the opaque Lusha record identifier
+// (docs/LUSHA-V3-CONTRACT.md §4/§5: `results[i].id`) for Plan 04's HubSpot staging
+// properties (lusha_contact_id / lusha_company_id). A deliberate SIBLING of
+// lushaCandidates(), not a field inside it -- REQ-lusha-v3-normalize requires the
+// candidate stream stay field-identical, so the id must never enter scoreCandidates as a
+// candidate. Reuses the SAME _lushaRecord() envelope adapter Plan 03 built (a no-match, a
+// per-record error, a missing/non-object entry, `{}` and `null` all resolve through that
+// adapter to {} / no id). Never throws; returns null for anything that is not a non-empty
+// string id.
+function lushaRecordId(rawResponse, objectType) {
+  try {
+    const rec = _lushaRecord(rawResponse, objectType);
+    const id = rec && rec.id;
+    return typeof id === "string" && id.trim() !== "" ? id : null;
+  } catch (e) {
+    return null;
+  }
 }
 
 function apolloCandidates(raw, objectType) {
@@ -192,6 +323,9 @@ function apolloCandidates(raw, objectType) {
     }
     _push(out, "jobtitle", src, person.title, _norm(person.title), 0.6, updated);
     _push(out, "seniority", src, person.seniority, _norm(person.seniority), 0.6, updated);
+    // COPY-02: same persona_group producer, reading Apollo's own department field.
+    const persona = _personaGroup(person.departments);
+    _push(out, "persona_group", src, persona, _norm(persona), 0.6, updated);
   } else {
     const org = (raw.person && raw.person.organization) || raw.organization || raw.org || raw;
     // Live org revenue is `organization_revenue` (number); flat fixtures use `annual_revenue`.
@@ -255,12 +389,32 @@ function zoominfoCandidates(rawResponse, objectType) {
     const ml = Array.isArray(raw.managementLevel) ? raw.managementLevel[0] : raw.managementLevel;
     _push(out, "seniority", src, ml, _norm(ml), acc, recency);
   } else {
-    _push(out, "lv_revenue_band", src, raw.revenue != null ? raw.revenue : raw.revenueRange,
-      normalizeRevenueBand(raw.revenue != null ? raw.revenue : raw.revenueRange), 0.6, recency);
+    // UNITS: GTM `revenue` is in THOUSANDS, not dollars — confirmed live against three
+    // records (Racing NSW 268163 + revenueRange "$250 mil. - $500 mil."; ZoomInfo 1254000
+    // + "$1 bil. - $5 bil."; FanDuel 14050000 + "Over $5 bil."), and Apollo independently
+    // reports Racing NSW annual_revenue 268000000 dollars. Feeding the raw number to
+    // normalizeRevenueBand (which expects dollars) banded every company 1000x low —
+    // FanDuel's $14b read as "5-50M". Prefer the unambiguous `revenueRange` string;
+    // fall back to revenue*1000.
+    const ziRev = raw.revenueRange != null && raw.revenueRange !== ""
+      ? raw.revenueRange
+      : (typeof raw.revenue === "number" ? raw.revenue * 1000 : null);
+    _push(out, "lv_revenue_band", src, ziRev, normalizeRevenueBand(ziRev), 0.6, recency);
+    // employeeCount is an exact integer; employeeRange ("100 - 250") is NOT an
+    // lv_employee_band enum value, so it is only a last resort.
     _push(out, "lv_employee_band", src, raw.employeeCount != null ? raw.employeeCount : raw.employeeRange,
       normalizeEmployeeBand(raw.employeeCount != null ? raw.employeeCount : raw.employeeRange), 0.6, recency);
-    const naics = (raw.naicsCodes || [])[0];
-    _push(out, "industry", src, naics || raw.primaryIndustry, naics ? String(naics) : _norm(raw.primaryIndustry), 0.6, recency);
+    const ziCountry = _iso2(raw.country);
+    _push(out, "lv_country_region_normalized", src, raw.country,
+      normalizeCountryRegion(ziCountry || raw.country), 0.6, recency);
+    // Live GTM naicsCodes are OBJECTS ({id,name}, most-general first); the flat fixtures
+    // are bare code strings. String(obj) would have staged "[object Object]" as industry.
+    // primaryIndustry is an array in the live response (["Hospitality", "Sports Teams ..."]).
+    // NORM-01: prefer the NAICS entry's own human-readable name over its bare numeric code;
+    // a code is never a valid industry text value (see _industryText).
+    const naics0 = (raw.naicsCodes || [])[0];
+    const industry = _industryText(naics0, raw.primaryIndustry);
+    _push(out, "industry", src, industry && industry.raw, industry && industry.key, 0.6, recency);
   }
   return out;
 }
@@ -281,6 +435,7 @@ function toCandidates(providerName, rawResponse, objectType) {
 
 module.exports = {
   toCandidates,
+  lushaRecordId,
   normalizeRevenueBand,
   normalizeEmployeeBand,
   normalizeCountryRegion,

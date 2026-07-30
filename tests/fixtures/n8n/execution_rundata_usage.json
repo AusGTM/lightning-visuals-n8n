@@ -1,0 +1,52 @@
+{
+  "data": {
+    "resultData": {
+      "runData": {
+        "Claude Web Research": [
+          {
+            "data": {
+              "main": [
+                [
+                  {
+                    "json": {
+                      "model": "claude-sonnet-5",
+                      "usage": {
+                        "cache_creation_input_tokens": 0,
+                        "cache_read_input_tokens": 0,
+                        "input_tokens": 20247,
+                        "output_tokens": 915
+                      }
+                    }
+                  }
+                ]
+              ]
+            },
+            "executionStatus": "success"
+          }
+        ],
+        "Judge Call": [
+          {
+            "data": {
+              "main": [
+                [
+                  {
+                    "json": {
+                      "model": "claude-sonnet-5",
+                      "usage": {
+                        "cache_creation_input_tokens": 0,
+                        "cache_read_input_tokens": 0,
+                        "input_tokens": 1318,
+                        "output_tokens": 559
+                      }
+                    }
+                  }
+                ]
+              ]
+            },
+            "executionStatus": "success"
+          }
+        ]
+      }
+    }
+  }
+}

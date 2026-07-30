@@ -56,6 +56,11 @@ def promote_fake(record, field, current_value, candidates, policy):
             "requires_sonnet_validation": False}
 
 
+def stage_only_fake(record, field, current_value, candidates, policy):
+    return {"decision": "stage_only", "confidence": 90, "reason": "test",
+            "requires_sonnet_validation": False}
+
+
 # --- SC1: mock adapters + web research satisfy the ProviderResult contract ---
 
 def test_sc1a_mock_adapters_return_contract():
@@ -159,8 +164,11 @@ def test_sc3_e2e_promote_forced_still_protects_manual(monkeypatch):
 
     # manual_protected domain never reaches canonical even with promote-forced classifier
     assert "domain" not in mr.canonical_patch
-    assert "zoominfo_domain" in mr.staging_patch
-    assert "apollo_domain" in mr.staging_patch
+    # Phase 15: staging folds into the provenance blob — no flat zoominfo_/apollo_ staging
+    # properties; staging_patch itself stays empty.
+    assert mr.staging_patch == {}
+    provenance = json.loads(mr.metadata_patch["lv_enrichment_provenance"])
+    assert provenance["domain"]["source"] in ("zoominfo", "apollo", "lusha")
 
     # system_owned lv_org_type promotes
     assert mr.canonical_patch.get("lv_org_type") == "governing_body_league"
@@ -171,30 +179,59 @@ def test_sc4_full_source_attribution(monkeypatch):
     record = load_record()
     mr = build_merge_result(record, build_all_candidates(record))
 
-    for key in [
-        "lv_org_type_source",
-        "lv_org_type_confidence",
-        "lv_org_type_evidence_url",
-        "lv_org_type_evidence_summary",
-        "lv_org_type_verified_at",
-        "lv_org_type_verified_by_model",
-        "lv_org_type_validation_status",
-    ]:
-        assert key in mr.metadata_patch
+    # Phase 15: per-field metadata rides in ONE provenance blob, not flat {field}_* keys.
+    assert "lv_enrichment_provenance" in mr.metadata_patch
+    provenance = json.loads(mr.metadata_patch["lv_enrichment_provenance"])
+    entry = provenance["lv_org_type"]
+    for key in ["source", "confidence", "verified_at", "validation_status", "value"]:
+        assert key in entry, f"provenance[lv_org_type] missing {key}"
 
-    # by design {field}_evidence_url in metadata_patch is the LIST (Phase 4 serializes)
+    # by design entry["evidence_url"] is the LIST (Phase 4 serializes; Phase 15 keeps it)
     org_cand = next(c for c in build_all_candidates(record) if c.canonical_field == "lv_org_type")
-    assert mr.metadata_patch["lv_org_type_evidence_url"] == org_cand.evidence.evidence_urls
-    assert isinstance(mr.metadata_patch["lv_org_type_evidence_url"], list)
+    assert entry["evidence_url"] == org_cand.evidence.evidence_urls
+    assert isinstance(entry["evidence_url"], list)
+
+    # the 2 company cache-key datetimes are real top-level properties (RT-5/SJ-2)
+    assert "lv_org_type_verified_at" in mr.metadata_patch
+    assert mr.metadata_patch["lv_org_type_verified_at"] == entry["verified_at"]
+    if "lv_produces_content" in provenance:
+        assert "lv_produces_content_verified_at" in mr.metadata_patch
+        assert mr.metadata_patch["lv_produces_content_verified_at"] == provenance["lv_produces_content"]["verified_at"]
+
+
+def test_sc4b_cache_key_not_stamped_unless_promoted(monkeypatch):
+    # Bug 2 (STATE.md 16.3-01 "Found, not fixed"): the JS mergeContacts.js/mergeCompanies.js
+    # stamp their cache-key verified_at datetime ONLY when a field is promoted (Phase
+    # 16.2/16.3 stale-timestamp fix). Python's build_merge_result used to derive the same
+    # cache-key datetimes (lv_org_type_verified_at / lv_produces_content_verified_at) from
+    # `if field in provenance` alone -- true for ANY chosen candidate regardless of the
+    # final decision. Force every field to stage_only: the provenance blob (audit trail)
+    # must still record the candidate, but the cache-key datetime -- the thing RT-5/SJ-2's
+    # stale-refresh scan reads -- must not be stamped, or a staged-not-promoted field would
+    # look "freshly verified" and never get re-picked up.
+    monkeypatch.setattr("src.merge_policy.classify_field_with_haiku", stage_only_fake)
+    record = load_record()
+    mr = build_merge_result(record, build_all_candidates(record))
+
+    assert "lv_org_type" not in mr.canonical_patch
+
+    provenance = json.loads(mr.metadata_patch["lv_enrichment_provenance"])
+    assert "lv_org_type" in provenance, "audit trail must still record the evaluated candidate"
+
+    assert "lv_org_type_verified_at" not in mr.metadata_patch
 
 
 # --- integ: end-to-end wiring incl. Phase 2 scorer, offline, no monkeypatch ---
 
 def test_integ_wires_icp_scorer():
+    # Approach C (Phase 15 criterion 4): the write path to lv_icp_fit_score/lv_icp_tier is
+    # retired — HubSpot owns the derived outputs. These assertions prove the write path is
+    # GONE; reintroducing it turns them red. The engine still computes icp_score internally
+    # (mr.icp_score is not None) for in-pipeline routing and the audit breakdown.
     record = load_record()
     mr = build_merge_result(record, build_all_candidates(record))
-    assert "lv_icp_fit_score" in mr.canonical_patch
-    assert "lv_icp_tier" in mr.canonical_patch
+    assert "lv_icp_fit_score" not in mr.canonical_patch
+    assert "lv_icp_tier" not in mr.canonical_patch
     assert mr.status_patch["enrichment_status"] in ("complete", "needs_review")
     assert mr.icp_score is not None
 

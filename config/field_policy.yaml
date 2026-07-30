@@ -36,6 +36,17 @@ companies:
     promote_to_canonical: true
     min_confidence: 70
 
+  # 75: deliberately above the flat-firmographic band (lv_employee_band at 70) because
+  # this field is the geography input to the non-ANZ hard veto, so a wrong promotion
+  # disqualifies a real account -- and below the evidence-gated judgment fields (85)
+  # because it is a normalized enum with no evidence-URL requirement, so demanding
+  # provider certainty here would leave it effectively stage-only and defeat the
+  # purpose. This threshold is a reviewable judgment, not a derived constant.
+  lv_country_region_normalized:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 75
+
   lv_org_type:
     class: system_owned
     promote_to_canonical: true
@@ -83,15 +94,9 @@ companies:
     allow_web_research: true
     allow_sonnet_escalation: true
 
-  lv_icp_fit_score:
-    class: score_output
-    promote_to_canonical: true
-    recompute_always: true
-
-  lv_icp_tier:
-    class: score_output
-    promote_to_canonical: true
-    recompute_always: true
+  # lv_icp_fit_score / lv_icp_tier: Approach C (Phase 15 criterion 4) — HubSpot owns
+  # these derived outputs; the pipeline never writes them. Policy entries removed so
+  # nothing classifies them as promotable if they ever appear in a candidate set.
 
   lv_anti_icp_flag:
     class: veto_output
@@ -130,7 +135,9 @@ contacts:
     protect_if_current_present: false
     allow_sonnet_escalation: true
 
-  linkedin_url:
+  # PN-1: linkedin_url is NOT HubSpot-native (absent from the verified-native list) —
+  # renamed lv_linkedin_url.
+  lv_linkedin_url:
     class: fill_blank_only
     promote_to_canonical: true
     min_confidence: 85
@@ -141,7 +148,8 @@ contacts:
     promote_to_canonical: true
     min_confidence: 75
 
-  persona_group:
+  # PN-1: persona_group is NOT HubSpot-native — renamed lv_persona_group.
+  lv_persona_group:
     class: system_owned
     promote_to_canonical: true
     min_confidence: 75

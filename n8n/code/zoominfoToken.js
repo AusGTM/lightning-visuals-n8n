@@ -5,8 +5,11 @@
 // re-mint when it expires or is rejected (401) — never store a static token.
 //
 // These are PURE functions (no n8n, no network) so they unit-test against Node.
-// The n8n Code node wraps them around $getWorkflowStaticData (cross-run cache),
-// this.helpers.httpRequest (mint + enrich), and Date.now().
+// In the local replica the Code node wraps them around $getWorkflowStaticData (cross-run
+// cache), this.helpers.httpRequest, and Date.now(). In the n8n Cloud deploy (Phase 16
+// split-code-node) the mint is done by a credential-bound "ZoomInfo Mint" HTTP node —
+// these helpers run in the SECRET-FREE Token Gate/Cache Code nodes (cache + expiry +
+// re-mint-on-401 decisioning only; no client_id/client_secret ever in a Code node).
 //
 // Cache shape stored in workflow static data: { access_token, exp, token_type }
 //   exp = absolute expiry in epoch MILLISECONDS.
@@ -47,4 +50,30 @@ function isAuthError(statusCode) {
   return Number(statusCode) === 401;
 }
 
-module.exports = { needsMint, computeExpiry, parseTokenResponse, isAuthError };
+// Bug B (live 2026-07-28): n8n's this.helpers.httpRequest throws an AxiosError, whose
+// status lives at `e.response.status` — a shape the original inline check
+// (statusCode/httpCode/response.statusCode) never covered, so a real 401 was silently
+// missed and the cache never cleared. Tries every shape actually observed in this
+// runtime (axios; n8n's NodeApiError, whose httpCode is sometimes a STRING; a bare
+// statusCode) and, as a last resort, parses the "status code NNN" trailer n8n/axios
+// append to the error message. Returns NaN (never a false 401) when nothing usable is
+// found — isAuthError(NaN) is false, matching the safe conservative default.
+function extractErrorStatus(e) {
+  if (!e) return NaN;
+  const candidates = [
+    e.statusCode,
+    e.httpCode,
+    e.response && e.response.status,
+    e.response && e.response.statusCode,
+  ];
+  for (const c of candidates) {
+    if (c !== undefined && c !== null && c !== "") {
+      const n = Number(c);
+      if (Number.isFinite(n)) return n;
+    }
+  }
+  const m = /status code (\d{3})/i.exec((e && e.message) || "");
+  return m ? Number(m[1]) : NaN;
+}
+
+module.exports = { needsMint, computeExpiry, parseTokenResponse, isAuthError, extractErrorStatus };

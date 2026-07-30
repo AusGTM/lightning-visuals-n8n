@@ -1,0 +1,500 @@
+companies:
+  groups:
+  - name: lv_enrichment
+    label: LV Enrichment
+  properties:
+  - name: lv_content_type
+    label: LV Content Type
+    type: enumeration
+    fieldType: checkbox
+    groupName: lv_enrichment
+    options:
+    - label: Live Broadcast
+      value: live_broadcast
+      displayOrder: 0
+      hidden: false
+    - label: Streaming
+      value: streaming
+      displayOrder: 1
+      hidden: false
+    - label: Near Live
+      value: near_live
+      displayOrder: 2
+      hidden: false
+    - label: Highlights
+      value: highlights
+      displayOrder: 3
+      hidden: false
+    - label: None
+      value: none
+      displayOrder: 4
+      hidden: false
+    - label: Unknown
+      value: unknown
+      displayOrder: 5
+      hidden: false
+  - name: lv_revenue_band
+    label: LV Revenue Band
+    type: enumeration
+    fieldType: select
+    groupName: lv_enrichment
+    options:
+    - label: <1M
+      value: <1M
+      displayOrder: 0
+      hidden: false
+    - label: 1-5M
+      value: 1-5M
+      displayOrder: 1
+      hidden: false
+    - label: 5-50M
+      value: 5-50M
+      displayOrder: 2
+      hidden: false
+    - label: 50-500M
+      value: 50-500M
+      displayOrder: 3
+      hidden: false
+    - label: 500-750M
+      value: 500-750M
+      displayOrder: 4
+      hidden: false
+    - label: 750M-1B
+      value: 750M-1B
+      displayOrder: 5
+      hidden: false
+    - label: 1B-1.2B
+      value: 1B-1.2B
+      displayOrder: 6
+      hidden: false
+    - label: 1.2B+
+      value: 1.2B+
+      displayOrder: 7
+      hidden: false
+    - label: Unknown
+      value: unknown
+      displayOrder: 8
+      hidden: false
+  - name: lv_employee_band
+    label: LV Employee Band
+    type: enumeration
+    fieldType: select
+    groupName: lv_enrichment
+    options:
+    - label: 1-9
+      value: 1-9
+      displayOrder: 0
+      hidden: false
+    - label: 10-50
+      value: 10-50
+      displayOrder: 1
+      hidden: false
+    - label: 51-200
+      value: 51-200
+      displayOrder: 2
+      hidden: false
+    - label: 201-500
+      value: 201-500
+      displayOrder: 3
+      hidden: false
+    - label: 501-1000
+      value: 501-1000
+      displayOrder: 4
+      hidden: false
+    - label: 1001+
+      value: 1001+
+      displayOrder: 5
+      hidden: false
+    - label: Unknown
+      value: unknown
+      displayOrder: 6
+      hidden: false
+  - name: lv_country_region_normalized
+    label: LV Country/Region (normalized)
+    type: enumeration
+    fieldType: select
+    groupName: lv_enrichment
+    options:
+    - label: AU
+      value: AU
+      displayOrder: 0
+      hidden: false
+    - label: NZ
+      value: NZ
+      displayOrder: 1
+      hidden: false
+    - label: ANZ
+      value: ANZ
+      displayOrder: 2
+      hidden: false
+    - label: US
+      value: US
+      displayOrder: 3
+      hidden: false
+    - label: UK
+      value: UK
+      displayOrder: 4
+      hidden: false
+    - label: EU
+      value: EU
+      displayOrder: 5
+      hidden: false
+    - label: Other
+      value: Other
+      displayOrder: 6
+      hidden: false
+    - label: Unknown
+      value: Unknown
+      displayOrder: 7
+      hidden: false
+  - name: lv_is_hardware_vendor
+    label: LV Is Hardware Vendor
+    type: bool
+    fieldType: booleancheckbox
+    groupName: lv_enrichment
+    options:
+    - label: 'Yes'
+      value: 'true'
+      displayOrder: 0
+      hidden: false
+    - label: 'No'
+      value: 'false'
+      displayOrder: 1
+      hidden: false
+  - name: lv_is_gambling_operator
+    label: LV Is Gambling Operator
+    type: bool
+    fieldType: booleancheckbox
+    groupName: lv_enrichment
+    options:
+    - label: 'Yes'
+      value: 'true'
+      displayOrder: 0
+      hidden: false
+    - label: 'No'
+      value: 'false'
+      displayOrder: 1
+      hidden: false
+  - name: lv_sponsorship_reliant
+    label: LV Sponsorship Reliant
+    type: bool
+    fieldType: booleancheckbox
+    groupName: lv_enrichment
+    options:
+    - label: 'Yes'
+      value: 'true'
+      displayOrder: 0
+      hidden: false
+    - label: 'No'
+      value: 'false'
+      displayOrder: 1
+      hidden: false
+  - name: lv_enrichment_provenance
+    label: LV Enrichment Provenance
+    type: string
+    fieldType: textarea
+    groupName: lv_enrichment
+    options: []
+  - name: lv_org_type_verified_at
+    label: LV Org Type Verified At
+    type: datetime
+    fieldType: date
+    groupName: lv_enrichment
+    options: []
+  - name: lv_produces_content_verified_at
+    label: LV Produces Content Verified At
+    type: datetime
+    fieldType: date
+    groupName: lv_enrichment
+    options: []
+  - name: lv_enrichment_needs_review
+    label: LV Enrichment Needs Review
+    type: bool
+    fieldType: booleancheckbox
+    groupName: lv_enrichment
+    options:
+    - label: 'Yes'
+      value: 'true'
+      displayOrder: 0
+      hidden: false
+    - label: 'No'
+      value: 'false'
+      displayOrder: 1
+      hidden: false
+  - name: lv_enrichment_review_reason
+    label: LV Enrichment Review Reason
+    type: string
+    fieldType: textarea
+    groupName: lv_enrichment
+    options: []
+  - name: lv_enrichment_review_candidate_json
+    label: LV Enrichment Review Candidate JSON
+    type: string
+    fieldType: textarea
+    groupName: lv_enrichment
+    options: []
+  - name: lv_enrichment_review_approved
+    label: LV Enrichment Review Approved
+    type: bool
+    fieldType: booleancheckbox
+    groupName: lv_enrichment
+    options:
+    - label: 'Yes'
+      value: 'true'
+      displayOrder: 0
+      hidden: false
+    - label: 'No'
+      value: 'false'
+      displayOrder: 1
+      hidden: false
+  - name: lusha_company_id
+    label: Lusha Company Id
+    type: string
+    fieldType: text
+    groupName: lv_enrichment
+    options: []
+  - name: lv_enrichment_reviewed_by
+    label: LV Enrichment Reviewed By
+    type: string
+    fieldType: text
+    groupName: lv_enrichment
+    options: []
+  - name: lv_enrichment_reviewed_at
+    label: LV Enrichment Reviewed At
+    type: datetime
+    fieldType: date
+    groupName: lv_enrichment
+    options: []
+  - name: lv_icp_needs_review
+    label: LV ICP Needs Review
+    type: bool
+    fieldType: booleancheckbox
+    groupName: lv_enrichment
+    options:
+    - label: 'Yes'
+      value: 'true'
+      displayOrder: 0
+      hidden: false
+    - label: 'No'
+      value: 'false'
+      displayOrder: 1
+      hidden: false
+  - name: lv_anti_icp_reason
+    label: LV Anti-ICP Reason
+    type: string
+    fieldType: textarea
+    groupName: lv_enrichment
+    options: []
+  - name: lv_icp_score_breakdown
+    label: LV ICP Score Breakdown
+    type: string
+    fieldType: textarea
+    groupName: lv_enrichment
+    options: []
+  - name: lv_enrichment_requested
+    label: LV Enrichment Requested
+    type: bool
+    fieldType: booleancheckbox
+    groupName: lv_enrichment
+    options:
+    - label: 'Yes'
+      value: 'true'
+      displayOrder: 0
+      hidden: false
+    - label: 'No'
+      value: 'false'
+      displayOrder: 1
+      hidden: false
+  - name: lv_enrichment_status
+    label: LV Enrichment Status
+    type: enumeration
+    fieldType: select
+    groupName: lv_enrichment
+    options:
+    - label: Queued
+      value: queued
+      displayOrder: 0
+      hidden: false
+    - label: Running
+      value: running
+      displayOrder: 1
+      hidden: false
+    - label: Complete
+      value: complete
+      displayOrder: 2
+      hidden: false
+    - label: Failed
+      value: failed
+      displayOrder: 3
+      hidden: false
+    - label: Needs Review
+      value: needs_review
+      displayOrder: 4
+      hidden: false
+    - label: Skipped
+      value: skipped
+      displayOrder: 5
+      hidden: false
+contacts:
+  groups:
+  - name: lv_enrichment_contacts
+    label: LV Enrichment (Contacts)
+  properties:
+  - name: lv_linkedin_url
+    label: LV LinkedIn URL
+    type: string
+    fieldType: text
+    groupName: lv_enrichment_contacts
+    options: []
+  - name: lv_persona_group
+    label: LV Persona Group
+    type: string
+    fieldType: text
+    groupName: lv_enrichment_contacts
+    options: []
+  - name: lv_contact_enrichment_provenance
+    label: LV Contact Enrichment Provenance
+    type: string
+    fieldType: textarea
+    groupName: lv_enrichment_contacts
+    options: []
+  - name: lv_jobtitle_verified_at
+    label: LV Jobtitle Verified At
+    type: datetime
+    fieldType: date
+    groupName: lv_enrichment_contacts
+    options: []
+  - name: lv_mobilephone_verified_at
+    label: LV Mobilephone Verified At
+    type: datetime
+    fieldType: date
+    groupName: lv_enrichment_contacts
+    options: []
+  - name: lv_enrichment_needs_review
+    label: LV Enrichment Needs Review
+    type: bool
+    fieldType: booleancheckbox
+    groupName: lv_enrichment_contacts
+    options:
+    - label: 'Yes'
+      value: 'true'
+      displayOrder: 0
+      hidden: false
+    - label: 'No'
+      value: 'false'
+      displayOrder: 1
+      hidden: false
+  - name: lv_enrichment_review_reason
+    label: LV Enrichment Review Reason
+    type: string
+    fieldType: textarea
+    groupName: lv_enrichment_contacts
+    options: []
+  - name: lv_enrichment_review_candidate_json
+    label: LV Enrichment Review Candidate JSON
+    type: string
+    fieldType: textarea
+    groupName: lv_enrichment_contacts
+    options: []
+  - name: lv_enrichment_review_approved
+    label: LV Enrichment Review Approved
+    type: bool
+    fieldType: booleancheckbox
+    groupName: lv_enrichment_contacts
+    options:
+    - label: 'Yes'
+      value: 'true'
+      displayOrder: 0
+      hidden: false
+    - label: 'No'
+      value: 'false'
+      displayOrder: 1
+      hidden: false
+  - name: lusha_contact_id
+    label: Lusha Contact Id
+    type: string
+    fieldType: text
+    groupName: lv_enrichment_contacts
+    options: []
+  - name: lv_enrichment_reviewed_by
+    label: LV Enrichment Reviewed By
+    type: string
+    fieldType: text
+    groupName: lv_enrichment_contacts
+    options: []
+  - name: lv_enrichment_reviewed_at
+    label: LV Enrichment Reviewed At
+    type: datetime
+    fieldType: date
+    groupName: lv_enrichment_contacts
+    options: []
+  - name: lv_icp_needs_review
+    label: LV ICP Needs Review
+    type: bool
+    fieldType: booleancheckbox
+    groupName: lv_enrichment_contacts
+    options:
+    - label: 'Yes'
+      value: 'true'
+      displayOrder: 0
+      hidden: false
+    - label: 'No'
+      value: 'false'
+      displayOrder: 1
+      hidden: false
+  - name: lv_anti_icp_reason
+    label: LV Anti-ICP Reason
+    type: string
+    fieldType: textarea
+    groupName: lv_enrichment_contacts
+    options: []
+  - name: lv_icp_score_breakdown
+    label: LV ICP Score Breakdown
+    type: string
+    fieldType: textarea
+    groupName: lv_enrichment_contacts
+    options: []
+  - name: lv_enrichment_requested
+    label: LV Enrichment Requested
+    type: bool
+    fieldType: booleancheckbox
+    groupName: lv_enrichment_contacts
+    options:
+    - label: 'Yes'
+      value: 'true'
+      displayOrder: 0
+      hidden: false
+    - label: 'No'
+      value: 'false'
+      displayOrder: 1
+      hidden: false
+  - name: lv_enrichment_status
+    label: LV Enrichment Status
+    type: enumeration
+    fieldType: select
+    groupName: lv_enrichment_contacts
+    options:
+    - label: Queued
+      value: queued
+      displayOrder: 0
+      hidden: false
+    - label: Running
+      value: running
+      displayOrder: 1
+      hidden: false
+    - label: Complete
+      value: complete
+      displayOrder: 2
+      hidden: false
+    - label: Failed
+      value: failed
+      displayOrder: 3
+      hidden: false
+    - label: Needs Review
+      value: needs_review
+      displayOrder: 4
+      hidden: false
+    - label: Skipped
+      value: skipped
+      displayOrder: 5
+      hidden: false

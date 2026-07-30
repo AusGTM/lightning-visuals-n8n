@@ -34,6 +34,15 @@ function _staleAfterDays(policy, field) {
   return p && p.stale_after_days != null ? p.stale_after_days : null;
 }
 
+// Phase 15: staleness reads the REAL cache-key property, never the provenance blob
+// (HubSpot cannot filter/read inside a JSON text property). Any leading `lv_` on `field`
+// is stripped and re-prefixed exactly once, so `lv_org_type` -> `lv_org_type_verified_at`
+// and `jobtitle` -> `lv_jobtitle_verified_at` (mirrors PN-4 composition).
+function _cacheKeyName(field) {
+  const base = String(field).replace(/^lv_/, "");
+  return `lv_${base}_verified_at`;
+}
+
 function _fieldValid(field, value, validity) {
   if (validity && Object.prototype.hasOwnProperty.call(validity, field)) {
     return validity[field] === true;
@@ -73,7 +82,7 @@ function decideAction(existingRecord, requiredFields, policy, nowIso, opts) {
 
     const ttl = _staleAfterDays(policy, field);
     if (ttl != null) {
-      const verifiedAt = existingRecord[`${field}_verified_at`];
+      const verifiedAt = existingRecord[_cacheKeyName(field)];
       if (_isBlank(verifiedAt)) {
         staleFields.push(field); // present value, unknown freshness -> validate
       } else {

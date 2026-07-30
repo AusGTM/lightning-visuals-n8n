@@ -892,7 +892,8 @@ HUBSPOT_PORTAL_ID=00000000
 # Anthropic
 ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxx
 ANTHROPIC_HAIKU_MODEL=claude-3-5-haiku-latest
-ANTHROPIC_SONNET_MODEL=claude-sonnet-5-latest
+ANTHROPIC_RESEARCH_MODEL=claude-haiku-4-5
+ANTHROPIC_JUDGE_MODEL=claude-sonnet-5
 # Claude web research uses the NATIVE web_search tool on the standard Messages API
 # (authenticated by ANTHROPIC_API_KEY above) — no separate endpoint or key needed.
 WEB_RESEARCH_MAX_SEARCHES=5
@@ -906,8 +907,8 @@ LUSHA_API_KEY=
 DRY_RUN=true
 USE_MOCK_PROVIDERS=true
 USE_MOCK_WEB_RESEARCH=true
-ALLOW_WEB_RESEARCH=false
-ALLOW_SONNET_ESCALATION=false
+ALLOW_WEB_RESEARCH=true
+ALLOW_JUDGE_ESCALATION=true
 ALLOW_CANONICAL_WRITES=false
 ALLOW_ICP_SCORE_WRITES=true
 ALLOW_STAGING_WRITES=true
@@ -920,7 +921,7 @@ ALLOW_TEST_RECORD_WRITES=true
 TEST_CONTACT_IDS=123,456
 TEST_COMPANY_IDS=789
 MAX_WEB_RESEARCH_PER_RUN=10
-MAX_SONNET_VALIDATIONS_PER_RUN=10
+MAX_JUDGE_VALIDATIONS_PER_RUN=50
 MAX_PROVIDER_CREDITS_PER_RUN=50
 ```
 
@@ -1240,7 +1241,7 @@ def claude_web_research(record: HubSpotRecord) -> ProviderResult:
     from anthropic import Anthropic
 
     client = Anthropic()
-    model = os.getenv("ANTHROPIC_SONNET_MODEL", "claude-sonnet-5")
+    model = os.getenv("ANTHROPIC_RESEARCH_MODEL", "claude-sonnet-5")
     max_uses = int(os.getenv("WEB_RESEARCH_MAX_SEARCHES", "5"))
     props = record.properties
     user_payload = {
@@ -1474,9 +1475,9 @@ Be especially cautious with anti-ICP, no-content, hardware vendor, gambling oper
 """
 
 def validate_conflict_with_sonnet(record, field, current_value, candidates, haiku_result, policy):
-    allow = os.getenv("ALLOW_SONNET_ESCALATION", "false").lower() == "true"
+    allow = os.getenv("ALLOW_JUDGE_ESCALATION", "true").lower() == "true"
     api_key = os.getenv("ANTHROPIC_API_KEY")
-    model = os.getenv("ANTHROPIC_SONNET_MODEL", "claude-sonnet-5-latest")
+    model = os.getenv("ANTHROPIC_JUDGE_MODEL", "claude-sonnet-5")
 
     if not allow or not api_key:
         return {
@@ -2132,16 +2133,17 @@ USE_MOCK_PROVIDERS=true \
 USE_MOCK_WEB_RESEARCH=true \
 ALLOW_CANONICAL_WRITES=false \
 ALLOW_ICP_SCORE_WRITES=true \
-ALLOW_SONNET_ESCALATION=false \
+ALLOW_JUDGE_ESCALATION=false \
 python main.py
 
-# Dry-run with Sonnet validation enabled
+# Dry-run with judge (Sonnet) validation enabled — this is the default now, shown
+# explicitly for clarity
 DRY_RUN=true \
 USE_MOCK_PROVIDERS=true \
 USE_MOCK_WEB_RESEARCH=true \
 ALLOW_CANONICAL_WRITES=false \
 ALLOW_ICP_SCORE_WRITES=true \
-ALLOW_SONNET_ESCALATION=true \
+ALLOW_JUDGE_ESCALATION=true \
 python main.py
 
 # Live write to HubSpot test company only
@@ -3026,15 +3028,15 @@ https://<your-n8n-cloud-subdomain>/webhook/hubspot/enrichment/event
 ```text
 ENRICHMENT_ENABLED=true
 ALLOW_PROVIDER_CALLS=true
-ALLOW_WEB_RESEARCH=false
-ALLOW_SONNET_ESCALATION=false
+ALLOW_WEB_RESEARCH=true
+ALLOW_JUDGE_ESCALATION=true
 ALLOW_CANONICAL_WRITES=false
 ALLOW_ICP_SCORE_WRITES=true
 ALLOW_STAGING_WRITES=true
 ALLOW_NOTES=true
 MAX_PROVIDER_CREDITS_PER_RUN=50
 MAX_WEB_RESEARCH_PER_RUN=10
-MAX_SONNET_VALIDATIONS_PER_RUN=10
+MAX_JUDGE_VALIDATIONS_PER_RUN=50
 MAX_RECORDS_PER_SCHEDULED_RUN=100
 ```
 
@@ -3343,7 +3345,7 @@ ALLOW_ICP_SCORE_WRITES=true
 ALLOW_STAGING_WRITES=true
 ALLOW_PROVIDER_CALLS=true
 ALLOW_WEB_RESEARCH=true
-ALLOW_SONNET_ESCALATION=true
+ALLOW_JUDGE_ESCALATION=true
 ```
 
 Promotion ramp:

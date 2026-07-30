@@ -23,7 +23,6 @@ def load_fixture(path):
 def run_local_mvp():
     dry_run = os.getenv("DRY_RUN", "true").lower() == "true"
     allow_canonical = os.getenv("ALLOW_CANONICAL_WRITES", "false").lower() == "true"
-    allow_icp_score_writes = os.getenv("ALLOW_ICP_SCORE_WRITES", "true").lower() == "true"
     allow_staging = os.getenv("ALLOW_STAGING_WRITES", "true").lower() == "true"
 
     record = HubSpotRecord(**load_fixture("tests/fixtures/company_current.json"))
@@ -52,24 +51,11 @@ def run_local_mvp():
 
     patch.update(merge_result.status_patch)
 
+    # Approach C (Phase 15 criterion 4): the pipeline no longer writes ICP outputs in
+    # any mode — HubSpot owns lv_icp_fit_score/lv_icp_tier/etc. merge_result.canonical_patch
+    # itself never contains them any more (src/merge_policy.py retired that write path).
     if allow_canonical:
         patch.update(merge_result.canonical_patch)
-    else:
-        if allow_icp_score_writes and merge_result.icp_score:
-            for key in [
-                "lv_icp_fit_score",
-                "lv_icp_tier",
-                "lv_anti_icp_flag",
-                "lv_anti_icp_reason",
-                "lv_icp_score_breakdown",
-                "lv_icp_scored_at",
-                "lv_icp_scoring_version",
-                "lv_icp_confidence",
-                "lv_icp_needs_review",
-                "lv_recommended_motion"
-            ]:
-                if key in merge_result.canonical_patch:
-                    patch[key] = merge_result.canonical_patch[key]
 
     print("\n=== Provider + Research Results ===")
     print(json.dumps([r.model_dump() for r in provider_results], indent=2, default=str))

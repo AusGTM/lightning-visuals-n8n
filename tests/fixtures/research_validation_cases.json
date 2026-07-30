@@ -1,0 +1,102 @@
+{
+  "_comment": "Shared parity table for src/taxonomy.py's validate_research_output/to_provider_result and n8n/code/webResearch.js's validateResearchOutput/toProviderResult. Neither language carries its own case list — tests/n8n/parity.test.mjs shells out to Python for these same rows.",
+  "research_cases": [
+    {
+      "_case": "OC-1 keyed-evidence",
+      "provider": "claude_web",
+      "object_type": "companies",
+      "confidence": 88,
+      "data": {
+        "lv_org_type": "governing_body_league",
+        "lv_produces_content": true
+      },
+      "evidence_by_field": {
+        "lv_org_type": "https://example.org/about",
+        "lv_produces_content": "https://example.org/watch-live"
+      }
+    },
+    {
+      "_case": "OC-2/OC-3 synonym+nonsense",
+      "confidence": 70,
+      "data": {
+        "lv_org_type": "peak body",
+        "lv_content_type": ["live stream", "nonsense"],
+        "lv_produces_content": true
+      },
+      "evidence_by_field": {
+        "lv_org_type": "https://x/about",
+        "lv_produces_content": "https://x/live"
+      }
+    },
+    "not json at all",
+    {
+      "_case": "TS-2 unevidenced-false",
+      "data": {
+        "lv_org_type": "individual_club_team",
+        "lv_produces_content": false
+      },
+      "evidence_by_field": {
+        "lv_org_type": "https://x/about"
+      }
+    },
+    {
+      "_case": "TS-3 evidenced-false",
+      "data": {
+        "lv_org_type": "individual_club_team",
+        "lv_produces_content": false
+      },
+      "evidence_by_field": {
+        "lv_org_type": "https://x/about",
+        "lv_produces_content": "https://x/media"
+      }
+    },
+    {
+      "_case": "AT-2 off-vocabulary",
+      "data": {
+        "lv_org_type": "esports_organiser",
+        "lv_produces_content": true
+      },
+      "evidence_by_field": {
+        "lv_org_type": "https://x/about",
+        "lv_produces_content": "https://x/live"
+      }
+    },
+    {
+      "_case": "ER-1 franchise_outlet",
+      "data": {
+        "lv_org_type": "other",
+        "lv_produces_content": null
+      },
+      "entity_resolution": {
+        "represents": "franchise_outlet",
+        "likely_revenue_band": "1.2B+",
+        "notes": ""
+      },
+      "evidence_by_field": {}
+    },
+    {
+      "_case": "off-set represents value",
+      "data": {
+        "lv_org_type": "other",
+        "lv_produces_content": null
+      },
+      "entity_resolution": {
+        "represents": "conglomerate",
+        "likely_revenue_band": null,
+        "notes": "not in the allowed set"
+      },
+      "evidence_by_field": {}
+    },
+    {
+      "_case": "missing entity_resolution",
+      "data": {
+        "lv_org_type": "broadcaster",
+        "lv_produces_content": true
+      },
+      "evidence_by_field": {
+        "lv_org_type": "https://x/about",
+        "lv_produces_content": "https://x/live"
+      }
+    }
+  ]
+}

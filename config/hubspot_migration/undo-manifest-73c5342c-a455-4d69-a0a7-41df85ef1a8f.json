@@ -1,0 +1,158 @@
+[
+  {
+    "group_name": "lv_enrichment",
+    "kind": "property",
+    "name": "lv_enrichment_requested",
+    "object_type": "companies",
+    "request_body": {
+      "fieldType": "booleancheckbox",
+      "groupName": "lv_enrichment",
+      "label": "LV Enrichment Requested",
+      "name": "lv_enrichment_requested",
+      "options": [
+        {
+          "displayOrder": 0,
+          "hidden": false,
+          "label": "Yes",
+          "value": "true"
+        },
+        {
+          "displayOrder": 1,
+          "hidden": false,
+          "label": "No",
+          "value": "false"
+        }
+      ],
+      "type": "bool"
+    }
+  },
+  {
+    "group_name": "lv_enrichment",
+    "kind": "property",
+    "name": "lv_enrichment_status",
+    "object_type": "companies",
+    "request_body": {
+      "fieldType": "select",
+      "groupName": "lv_enrichment",
+      "label": "LV Enrichment Status",
+      "name": "lv_enrichment_status",
+      "options": [
+        {
+          "displayOrder": 0,
+          "hidden": false,
+          "label": "Queued",
+          "value": "queued"
+        },
+        {
+          "displayOrder": 1,
+          "hidden": false,
+          "label": "Running",
+          "value": "running"
+        },
+        {
+          "displayOrder": 2,
+          "hidden": false,
+          "label": "Complete",
+          "value": "complete"
+        },
+        {
+          "displayOrder": 3,
+          "hidden": false,
+          "label": "Failed",
+          "value": "failed"
+        },
+        {
+          "displayOrder": 4,
+          "hidden": false,
+          "label": "Needs Review",
+          "value": "needs_review"
+        },
+        {
+          "displayOrder": 5,
+          "hidden": false,
+          "label": "Skipped",
+          "value": "skipped"
+        }
+      ],
+      "type": "enumeration"
+    }
+  },
+  {
+    "group_name": "lv_enrichment_contacts",
+    "kind": "property",
+    "name": "lv_enrichment_requested",
+    "object_type": "contacts",
+    "request_body": {
+      "fieldType": "booleancheckbox",
+      "groupName": "lv_enrichment_contacts",
+      "label": "LV Enrichment Requested",
+      "name": "lv_enrichment_requested",
+      "options": [
+        {
+          "displayOrder": 0,
+          "hidden": false,
+          "label": "Yes",
+          "value": "true"
+        },
+        {
+          "displayOrder": 1,
+          "hidden": false,
+          "label": "No",
+          "value": "false"
+        }
+      ],
+      "type": "bool"
+    }
+  },
+  {
+    "group_name": "lv_enrichment_contacts",
+    "kind": "property",
+    "name": "lv_enrichment_status",
+    "object_type": "contacts",
+    "request_body": {
+      "fieldType": "select",
+      "groupName": "lv_enrichment_contacts",
+      "label": "LV Enrichment Status",
+      "name": "lv_enrichment_status",
+      "options": [
+        {
+          "displayOrder": 0,
+          "hidden": false,
+          "label": "Queued",
+          "value": "queued"
+        },
+        {
+          "displayOrder": 1,
+          "hidden": false,
+          "label": "Running",
+          "value": "running"
+        },
+        {
+          "displayOrder": 2,
+          "hidden": false,
+          "label": "Complete",
+          "value": "complete"
+        },
+        {
+          "displayOrder": 3,
+          "hidden": false,
+          "label": "Failed",
+          "value": "failed"
+        },
+        {
+          "displayOrder": 4,
+          "hidden": false,
+          "label": "Needs Review",
+          "value": "needs_review"
+        },
+        {
+          "displayOrder": 5,
+          "hidden": false,
+          "label": "Skipped",
+          "value": "skipped"
+        }
+      ],
+      "type": "enumeration"
+    }
+  }
+]

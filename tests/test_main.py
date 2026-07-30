@@ -31,7 +31,7 @@ def base_setup(monkeypatch):
     monkeypatch.setattr("src.hubspot_client.requests.patch", no_http)
     monkeypatch.setenv("DRY_RUN", "true")
     monkeypatch.setenv("USE_MOCK_WEB_RESEARCH", "true")
-    monkeypatch.setenv("ALLOW_SONNET_ESCALATION", "false")
+    monkeypatch.setenv("ALLOW_JUDGE_ESCALATION", "false")
 
 
 def test_sc1_prints_four_sections(monkeypatch, capsys):
@@ -56,11 +56,13 @@ def test_sc2_promotes_only_icp_stages_firmographics(monkeypatch):
 
     patch = run_local_mvp()
 
-    # ICP outputs promoted to canonical
-    assert "lv_icp_fit_score" in patch
-    assert "lv_icp_tier" in patch
-    # firmographics staged, not promoted
-    assert any(k.startswith("zoominfo_") for k in patch)
+    # Approach C (Phase 15 criterion 4): ICP outputs are NEVER written by the pipeline —
+    # HubSpot owns them. These assertions prove the write path is GONE.
+    assert "lv_icp_fit_score" not in patch
+    assert "lv_icp_tier" not in patch
+    # firmographics staged via the provenance blob, not promoted (Phase 15: no flat
+    # zoominfo_-prefixed staging properties any more)
+    assert "lv_enrichment_provenance" in patch
     # never a bare manual/firmographic canonical key
     assert "domain" not in patch
     assert "annualrevenue" not in patch
@@ -75,19 +77,19 @@ def test_sc3_staging_flag_toggles(monkeypatch):
 
     monkeypatch.setenv("ALLOW_STAGING_WRITES", "false")
     patch = run_local_mvp()
-    assert not any(
-        k.startswith(("zoominfo_", "apollo_", "claude_web_")) for k in patch
-    )
-    # metadata_patch source keys are {field}_source; exclude the always-present
-    # status key enrichment_primary_source (part of status_patch, not staging).
+    # Phase 15: staging folds into the provenance blob, gated the same way
+    # ALLOW_STAGING_WRITES gated flat staging properties before.
+    assert "lv_enrichment_provenance" not in patch
+    # no flat per-field metadata survives anywhere; exclude the always-present status key
+    # enrichment_primary_source (part of status_patch, not staging/metadata).
     assert [k for k in patch if k.endswith("_source") and k != "enrichment_primary_source"] == []
-    # status + ICP outputs survive regardless of staging flag
-    assert "lv_icp_tier" in patch
+    # status survives regardless of staging flag; ICP outputs are never written (Approach C)
+    assert "lv_icp_tier" not in patch
     assert "enrichment_status" in patch
 
     monkeypatch.setenv("ALLOW_STAGING_WRITES", "true")
     patch2 = run_local_mvp()
-    assert any(k.startswith("zoominfo_") for k in patch2)
+    assert "lv_enrichment_provenance" in patch2
 
 
 def test_sc3_canonical_flag_toggles_firmographic(monkeypatch):

@@ -1,0 +1,21 @@
+{
+  "requestId": "22222222-2222-2222-2222-222222222222",
+  "results": [
+    {
+      "id": "v1.SYNTHETIC_COMPANY_ID_0002",
+      "name": "Example Racing League",
+      "domain": "exampleracing.example",
+      "emailDomain": "exampleracing.example",
+      "homepageUrl": "https://exampleracing.example",
+      "companyType": "Private Company",
+      "yearFounded": 1996,
+      "employeeCount": { "exact": 191, "min": 51, "max": 200 },
+      "industry": "Entertainment",
+      "subIndustry": "Sports",
+      "location": { "city": "Sydney", "state": "New South Wales", "country": "Australia", "countryIso2": "AU" },
+      "revenueRange": { "min": 10000000, "max": 50000000 },
+      "socialLinks": { "linkedin": "https://www.linkedin.com/company/example-racing-league" }
+    }
+  ],
+  "billing": { "creditsCharged": 2, "resultsReturned": 1 }
+}

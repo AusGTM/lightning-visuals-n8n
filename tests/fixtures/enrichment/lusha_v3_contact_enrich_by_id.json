@@ -1,0 +1,29 @@
+{
+  "requestId": "44444444-4444-4444-4444-444444444444",
+  "results": [
+    {
+      "id": "v1.SYNTHETIC_CONTACT_ID_0001",
+      "emails": [
+        {"email": "REDACTED-SYNTHETIC@example-corp.com.au", "type": "work",
+         "confidence": null, "updateDate": "2024-09-25", "dataSource": "lusha"}
+      ],
+      "firstName": "Kyle", "lastName": "Bettler", "fullName": "Kyle Bettler",
+      "jobTitle": {"title": "Head of Live Racing", "departments": ["Other"],
+                   "seniority": "Director", "startDate": "2025-03-01"},
+      "company": {"id": "v1.2H4pQSagp9OuOjAPuKXjEWQyn8yvWUI",
+                   "name": "Entain Australia & New Zealand",
+                   "domain": "www.entaingroup.com.au", "industry": "Entertainment"},
+      "location": {"country": "Australia", "countryIso2": "AU", "city": "Sydney",
+                    "continent": "Oceania", "isEuContact": false},
+      "socialLinks": {"linkedin": "https://www.linkedin.com/in/example-redacted-slug"},
+      "linkedinConnections": 559, "linkedinFollowers": 563, "partialProfile": false,
+      "previousEmployment": [
+        {"company": {"name": "Racing NSW", "domain": "racingnsw.com.au"},
+         "jobTitle": {"departments": ["Operations"],
+                      "title": "Race Fields and Operations Manager", "seniority": "Manager"}}
+      ],
+      "updateDate": "2024-09-25"
+    }
+  ],
+  "billing": {"creditsCharged": 0, "resultsReturned": 1}
+}

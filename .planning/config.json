@@ -1,0 +1,26 @@
+{
+  "workflow": {
+    "_auto_chain_active": false
+  },
+  "review": {
+    "reviewer_instances": {
+      "gpt-5-6-sol": {
+        "cli": "opencode",
+        "model": "openrouter/openai/gpt-5.6-sol"
+      },
+      "kimi-k3": {
+        "cli": "opencode",
+        "model": "openrouter/moonshotai/kimi-k3"
+      },
+      "gemini-3-6-flash": {
+        "cli": "opencode",
+        "model": "openrouter/google/gemini-3.6-flash"
+      }
+    },
+    "default_reviewers": [
+      "gpt-5-6-sol",
+      "kimi-k3",
+      "gemini-3-6-flash"
+    ]
+  }
+}
