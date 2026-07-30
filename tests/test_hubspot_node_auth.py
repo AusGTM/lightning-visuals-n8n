@@ -103,38 +103,24 @@ def test_company_create_carries_the_patch_and_needs_no_name_parameter():
     assert checked, "no company create node found — this guard is vacuous"
 
 
-@pytest.mark.parametrize("wf_path", WORKFLOW_FILES, ids=lambda p: p.name)
-def test_hubspot_properties_are_a_list_not_a_csv_string(wf_path: Path):
-    """n8n forwards `additionalFields.properties` verbatim into the CRM v3 search body,
-    where HubSpot requires an ARRAY. A CSV string is rejected with a VALIDATION_ERROR
-    ("no String-argument constructor ... from String value ('email,firstname,...')") —
-    confirmed live 2026-07-28 from a real execution of HubSpot Fetch By Id. Every search
-    node in every workflow had this defect; none had ever run live."""
-    doc = json.loads(wf_path.read_text())
-    bad = {}
-    for node in _hubspot_nodes(doc):
-        add = node.get("parameters", {}).get("additionalFields")
-        if isinstance(add, dict) and "properties" in add:
-            props = add["properties"]
-            if not isinstance(props, list):
-                bad[node["name"]] = type(props).__name__
-    assert not bad, (
-        f"{wf_path.name}: HubSpot node(s) pass `properties` as a non-list: {bad}. "
-        f"HubSpot's search API rejects a CSV string with a 400 VALIDATION_ERROR."
-    )
-
-
-def test_at_least_one_node_actually_requests_properties():
-    """Vacuity guard for the check above: if no node carried a `properties` field, that
-    sweep would pass without asserting anything."""
-    total = 0
-    for wf_path in WORKFLOW_FILES:
-        doc = json.loads(wf_path.read_text())
-        for node in _hubspot_nodes(doc):
-            add = node.get("parameters", {}).get("additionalFields")
-            if isinstance(add, dict) and "properties" in add:
-                total += 1
-    assert total, "no HubSpot node requests `properties` — the list-shape sweep is vacuous"
+# Phase 21 Plan 01 — the native-node CSV-vs-list pair that used to live here
+# (test_hubspot_properties_are_a_list_not_a_csv_string + its vacuity guard
+# test_at_least_one_node_actually_requests_properties) is retired. "Dedupe Search
+# (candidate contacts)" was the last native-hubspot node anywhere in this repo carrying
+# `additionalFields.properties` — every other search site moved to the httpRequest
+# transport back in Phase 16.6/17.01, and this plan closed the final call site. The two
+# remaining native hubspot nodes (SJ-1/SJ-2 "Set Requested") are `update` operations that
+# use `updateFields.customPropertiesUi`, never `additionalFields.properties`
+# (`_hs_update_set_property`, scripts/build_cloud_workflows.py) — so this class is now
+# PERMANENTLY empty, not just empty today. Following this file's own stated philosophy
+# ("a guard that silently stops applying is worse than no guard"), keeping a vacuity
+# guard that can never again pass would be exactly that failure mode in reverse: a test
+# that can never again DO anything but fail, forcing a future editor to silently delete
+# it under time pressure instead of understanding why. The defect class itself remains
+# fully covered — by the httpRequest-transport equivalents below,
+# test_hubspot_httprequest_search_properties_are_a_real_json_array_never_a_csv_string and
+# its own vacuity guard test_at_least_one_hubspot_credentialed_httprequest_node_exists_to_check
+# — which is where every search node's CSV-vs-list risk actually lives now.
 
 
 def test_workflow_files_were_actually_discovered():
