@@ -83,3 +83,42 @@ def test_every_script_path_named_in_extraction_md_exists_on_disk():
         assert (SCRIPTS_DIR / script).exists(), (
             f"extraction.md references scripts/{script}, which does not exist on disk"
         )
+
+
+def test_screenshot_example_artifact_collapses_to_one_row_with_one_carried_ambiguity():
+    """The second fenced example: two screenshot-sourced records naming the same person
+    (email matches once trimmed/case-folded) but disagreeing on `jobtitle` — one image's
+    clipped view reads one character short. Per D-08/D-09, dedupe on the identity rule is
+    the validator's job, not something extraction.md instructs Claude to pre-decide; this
+    runs the documented example through the real validator (including its dedupe pass) and
+    asserts the two records collapse to exactly one accepted row, with the job-title
+    disagreement carried through as exactly one ambiguity."""
+    blocks = _fenced_json_blocks(_extraction_md_text())
+    assert len(blocks) >= 2, "expected a second fenced example artifact for the screenshot case"
+
+    artifact = blocks[1]
+    assert artifact["source"]["kind"] == "screenshot"
+    assert len(artifact["records"]) == 2, "the documented example starts as two records"
+
+    result = extraction.validate(artifact)
+
+    assert len(result.accepted) == 1, (
+        "the two records name the same person and must collapse to one accepted row"
+    )
+    assert len(result.ambiguities) == 1, (
+        "the jobtitle disagreement must be carried through as exactly one ambiguity"
+    )
+    assert result.ambiguities[0]["field"] == "jobtitle"
+
+
+def test_extraction_md_states_the_fetch_failed_and_nothing_usable_outcomes_separately():
+    text = _extraction_md_text()
+    assert "url_not_allowed" in text
+    assert "Fetch failed" in text or "fetch failed" in text.lower()
+    assert "nothing usable" in text.lower() or "Nothing usable" in text
+
+
+def test_extraction_md_states_the_no_automated_screenshot_capture_fence():
+    text = _extraction_md_text()
+    assert "capture" in text.lower()
+    assert "web_fetch" in text
