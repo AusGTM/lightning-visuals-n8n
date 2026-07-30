@@ -30,7 +30,7 @@ Each maps to exactly one roadmap phase.
 ### Schema Hygiene
 
 - [ ] **REQ-orgtype-enumeration**: `lv_org_type` converts text → HubSpot enumeration (the one-way door): property migrated with existing values preserved, pipeline writes validated against the enum options, rollback path documented before flipping.
-- [ ] **REQ-country-region-policy**: `lv_country_region_normalized` gains a `config/field_policy.yaml` entry so the already-produced research value can promote under policy instead of staging-only by default.
+- [x] **REQ-country-region-policy**: `lv_country_region_normalized` gains a `config/field_policy.yaml` entry so the already-produced research value can promote under policy instead of staging-only by default.
 
 ## Future Requirements (deferred to v0.6+)
 
@@ -59,6 +59,6 @@ Each maps to exactly one roadmap phase.
 | REQ-lusha-v3-verification | Phase 20 | Complete |
 | REQ-dedupe-transport-swap | Phase 21 | Complete |
 | REQ-orgtype-enumeration | Phase 21 | Pending |
-| REQ-country-region-policy | Phase 21 | Pending |
+| REQ-country-region-policy | Phase 21 | Complete |
 | REQ-armed-e2e-canary | Phase 22 | Pending |
 | REQ-canary-cost-ledger | Phase 22 | Pending |
