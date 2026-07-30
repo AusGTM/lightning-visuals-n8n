@@ -154,7 +154,7 @@ above. This is why that endpoint has to exist.
       answer — per workflow: on or off, whether live writes are currently enabled, when it last
       ran and whether that run succeeded, and anything in flight right now
 
-- [ ] **STATUS-02**: A failed run is reported with its real cause translated into plain language
+- [x] **STATUS-02**: A failed run is reported with its real cause translated into plain language
       (expired credential, rate limit, exhausted quota, malformed record) and states whether the
       operator or an admin can fix it — never a bare status code or stack trace
 
@@ -326,7 +326,7 @@ duplicates. Phase numbering continues from the archived v0.5 milestone (ended at
 | REPORT-02 | Phase 26 | Pending |
 | REPORT-03 | Phase 26 | Complete |
 | STATUS-01 | Phase 27 | Pending |
-| STATUS-02 | Phase 27 | Pending |
+| STATUS-02 | Phase 27 | Complete |
 | STATUS-03 | Phase 27 | Complete |
 | STATUS-04 | Phase 27 | Complete |
 | STATUS-05 | Phase 27 | Pending |
