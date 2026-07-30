@@ -5,10 +5,10 @@ milestone_name: Claude Plugin Entrypoint
 current_phase: 23
 current_phase_name: walking-skeleton-plugin-shell-tabular-dispatch
 status: planning
-stopped_at: "Roadmap re-cut — 8 phases (23-30), 49/49 requirements mapped. v0.6 is now front door + control plane. Next: /gsd-plan-phase 23."
-last_updated: "2026-07-30T00:00:00.000Z"
+stopped_at: "All 8 phases (23-30) discussed — CONTEXT.md locked for each. Research complete for 23-28 and 30; 29 in flight. Phase 23 planning underway. Five requirement amendments accepted, listed below."
+last_updated: "2026-07-30T12:30:00.000Z"
 last_activity: 2026-07-30
-last_activity_desc: v0.6 scope widened to control plane; phases 27-30 added (status, control, notices, review triage); screenshot adapter INGEST-07 added to Phase 24
+last_activity_desc: Batch discuss+research pass over all of v0.6; research contradicted the written spec in four places and those corrections are folded into the phase CONTEXT files
 progress:
   total_phases: 8
   completed_phases: 0
@@ -21,10 +21,33 @@ progress:
 
 ## Current Position
 
-Phase: 23 — Walking Skeleton — Plugin Shell & Tabular Dispatch (not started)
+Phase: 23 — Walking Skeleton — Plugin Shell & Tabular Dispatch (planning)
 Plan: —
-Status: Roadmap approved shape, awaiting phase planning
-Last activity: 2026-07-30 — ROADMAP.md re-cut for control plane, 49/49 requirements mapped
+Status: All 8 phases discussed and locked; 23 in planning
+Last activity: 2026-07-30 — batch discuss + research pass over v0.6
+
+## Accepted requirement amendments (reconcile before each phase seals)
+
+Five places where a locked decision or a verified research finding diverges from the written
+requirement. Each was surfaced explicitly and chosen deliberately — none is a silent drift.
+
+| # | Requirement | Amendment | Source |
+|---|---|---|---|
+| 1 | PLUGIN-02 | Operator, not admin, performs config setup from the committed example file | Phase 23 D-05 |
+| 2 | Phase 25 criterion 2 | Provider default ships as full waterfall, so silence enables providers. Mitigated: `Parse HubSpot Event` has no server-side default and fails closed, and the resolved selection is always shown in the preview | Phase 25 D-05 / D-06a |
+| 3 | STATUS-04 + Phase 27 criterion 4 | "Stuck lock" redefined as a long-running execution. `enrichment_lock_until` does not exist and `lv_enrichment_status` is never set to `running` | Phase 27 D-07a–d |
+| 4 | REPORT-02 | ICP-tier clause removed entirely. HubSpot owns the derived ICP outputs per Phase 15 Approach C; the backend has nothing to read back and a placeholder would imply otherwise | Phase 26 D-10a / D-10b |
+| 5 | CONTROL-01 + Phase 28 criterion 1 | Off-cycle scheduled-scan execution dropped. No n8n API endpoint exists (upstream PR #20304 unmerged). Operator controls scans via enable/disable and re-timing instead | Phase 28 D-05a–c |
+
+## Backend changes v0.6 requires (not client-only)
+
+- **`allow_create` overlay flag** (Phase 23 D-16) — `Set Config` hardcodes `allow_create: false`
+  and it is not deploy-time overlayable, so the contact lane cannot create a record today. Must
+  land early in Phase 23.
+- **List/view resolution** (Phase 25 D-02) — plus an unresolved feasibility question: HubSpot saved
+  views have no public API, and `crm.lists.read` scope is unevidenced in this repo.
+- **Credit-only status endpoint** (Phase 25), generalized to full health (Phase 27).
+- **`hubspot/review/decision` webhook + `ALLOW_HUBSPOT_REVIEW_WRITES` flag** (Phase 30 D-08e).
 
 ## Progress
 
