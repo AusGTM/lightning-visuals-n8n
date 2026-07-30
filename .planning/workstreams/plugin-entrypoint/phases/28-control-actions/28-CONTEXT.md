@@ -52,6 +52,25 @@ verification is built on that read surface.
   path, so the dispatch path is the only way in for a lane.
 - **D-07:** No new manual-trigger webhooks are added to workflows. Each would be another entry
   point to secure for no gain.
+- **D-05a (AMENDS CONTROL-01 — off-cycle scheduled scans are dropped):** 28-RESEARCH.md found that
+  **`POST /api/v1/workflows/{id}/execute` does not exist** — it is an open, unmerged upstream PR
+  (#20304) requiring a `workflow:execute` scope. There is no endpoint to start a scheduled scan
+  off-cycle today.
+- **D-05b:** Resolution: **CONTROL-01 narrows to the two ingestion lanes**, which do have webhooks
+  and work as D-05 describes. Scheduled scans are controlled instead through capabilities this
+  phase already delivers — **enable/disable (CONTROL-02)** via
+  `POST /api/v1/workflows/{id}/activate` / `/deactivate`, and **re-timing (CONTROL-03)** via the
+  allowlisted Schedule Trigger cadence mutation. "Run this scan right now" is simply not an offered
+  capability.
+- **D-05c:** The rejected alternative and why: repurposing the Schedule Trigger cadence as a
+  one-shot near-future fire would mutate a schedule in order to simulate a trigger, and a crash
+  between "set to fire soon" and "restore prior cadence" leaves the backend on the wrong schedule —
+  silently changing how often it burns provider credits. That is a new failure mode on the surface
+  whose entire purpose is safe control. Not worth it for a capability the operator can reach
+  another way. ROADMAP Phase 28 criterion 1 and REQUIREMENTS CONTROL-01 both need their
+  "scheduled scan off-cycle" clause dropped before this phase seals.
+  — **Reversibility:** reversible — if upstream PR #20304 lands, off-cycle execution becomes a
+  small addition rather than a redesign.
 
 ### Cadence
 - **D-08:** Cadence accepts **free-form natural language**, parsed to a schedule — but the parse is
@@ -77,6 +96,27 @@ verification is built on that read surface.
 - **D-14:** After every mutation the plugin **re-reads the backend and reports verified or failed**.
   A `200` from n8n is **never** reported as success on its own (CONTROL-06).
 - **D-15:** Any requested change outside the allowlist is **refused, not attempted** (CONTROL-05).
+
+### Mutation mechanics — corrected by research
+- **D-16:** The `PUT /api/v1/workflows/{id}` body is a **strict 4-key allowlist** — `name`, `nodes`,
+  `connections`, `settings`. n8n rejects anything else with `"must NOT have additional properties"`.
+  `scripts/deploy_n8n_workflows.py::_update_workflow_live()` already implements this filter
+  correctly; **reuse it verbatim** rather than re-deriving it.
+- **D-17 (this phase's central risk):** A bare `GET`-after-`PUT` proves the value was **persisted**,
+  not that the running instance is **honoring** it. Community and upstream evidence indicates an
+  already-active workflow does not reliably reload updated Code-node or Schedule-Trigger content
+  until deactivated and reactivated. These are **different claims** and the plan must treat them
+  separately — CONTROL-06's read-back must verify *effective*, not merely *written*.
+- **D-18:** Therefore every mutating PUT is bracketed **deactivate → PUT → activate**, and the plan
+  carries an **early live-fire verification task** (flip the flag, dispatch, inspect what was
+  actually written) to convert this from inference to observed fact. This is a Wave-0 task, not an
+  assumption baked into later tasks.
+- **D-19:** D-15's structural allowlist enforcement is implemented as a **node-by-node diff between
+  the fetched original and the outgoing body**, refusing the PUT if anything outside the allowlisted
+  node(s)/fields differs. This makes an out-of-allowlist change *impossible* rather than merely
+  unattempted, which is what CONTROL-05 asks for.
+- **D-20:** A **no-op GET→PUT round-trip test** is the first live PUT this phase performs, to
+  confirm `settings` and `connections` survive the round trip cleanly on this n8n Cloud version.
 
 ### Claude's Discretion
 - Wording of consequence statements per action type.

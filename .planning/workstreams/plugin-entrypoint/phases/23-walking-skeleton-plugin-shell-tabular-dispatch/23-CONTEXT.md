@@ -108,6 +108,25 @@ Out of scope this phase: non-tabular adapters (Phase 24), the enrichment lane an
   auto-triggered and slash-invocable** as `/plugin-name:skill-name`. No separate `commands/`
   directory is needed to satisfy D-02.
 
+### Backend blocker found by research — must be fixed for this phase to meet its goal
+- **D-15 (26-RESEARCH.md, verified in deployed workflow JSON):** `Set Config` in
+  `wf_contact_ingest_cloud.json` **hardcodes `allow_create: false` unconditionally**, and it is
+  **not** one of the four deploy-time-overlayable flags in `scripts/deploy_n8n_workflows.py`. Every
+  net-new contact row is therefore forced to `needs_review` regardless of arming state — **the lane
+  cannot create a contact today**, which is exactly what this phase's goal requires.
+- **D-16:** Resolution: **make `allow_create` a deploy-time overlayable flag** alongside the
+  existing four, so arming actually enables creation. This is small, matches the two-key write-gate
+  convention already in place, and is admin work in this repo rather than the client reaching into
+  the backend.
+- **D-17:** Scope note the planner must respect: this is a **backend change inside a phase whose
+  criterion 4 says no backend file is modified to make the client work**. It is not that — the
+  client works either way; the *backend gate* is what is broken. Criterion 4 still binds the
+  client's own files. Record this as a deliberate, separately-justified backend fix rather than
+  letting it erode PLUGIN-04.
+- **D-18:** Sequencing: this fix must land **before** Phase 23 can demonstrate its stated flow.
+  Treat it as an early task, not a trailing one — otherwise the walking skeleton demonstrates a
+  flow that stops short of its own goal.
+
 ### Claude's Discretion
 - Exact slash-command name and skill trigger phrasing.
 - Python module layout inside `operator-claude-plugin/scripts/`, and which library reads XLSX.
