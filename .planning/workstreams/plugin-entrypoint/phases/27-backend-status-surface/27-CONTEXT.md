@@ -106,6 +106,27 @@ Phase 28) and no unprompted notification (that is Phase 29).
   — **Reversibility:** reversible — dropping to same-conversation-only means deleting the store
   and the GC step.
 
+### Findings from planning — one confirmed, one refuted
+- **D-10 (CONFIRMED, and it invalidates every prior estimate):** the write-safety literal is **not**
+  in 2 nodes (research) or 3 (the planning brief). The committed cloud workflows carry it in **9
+  nodes across 3 workflows** — contact ingest 3, enrichment 2, scheduled maintenance 4 — and the
+  two flags are declared in **different subsets** of those nodes. The reader must therefore **scan
+  every node and report disagreement**, never trust a fixed node list. A hardcoded list would have
+  been wrong the day it was written, and would silently under-report an armed backend.
+- **D-11 (REFUTED — verified empirically, do NOT act on the original claim):** planning reported
+  that `operator-claude-plugin/tests/conftest.py`'s autouse `no_network` fixture fails to block
+  `requests.get`, leaving GET-based reads able to reach the live n8n instance. **This is false.** A
+  direct probe run under the fixture raised
+  `RuntimeError: Network access blocked in test ...` on a `requests.get` call. The reason: `requests.get`
+  delegates to `requests.api.request`, which opens a `Session` and calls `Session.request` — and
+  `Session.request` **is** patched. The guard is sound for the `requests` library as used here, and
+  **no already-committed test is compromised**. Adding an explicit `requests.get` patch is optional
+  belt-and-braces clarity, not a bug fix; do not describe it as closing a hole.
+- **D-12 (amendment applied, not deferred):** ROADMAP Phase 27 criterion 4 and REQUIREMENTS.md
+  STATUS-04 were **reworded to the execution-age definition during planning** rather than left for
+  later reconciliation. Correct call — `/gsd-verify-work` would otherwise have failed the phase
+  against a criterion nothing in the deployed system could satisfy. D-07d sanctions the change.
+
 ### Claude's Discretion
 - Layout and grouping of the conversational status output.
 - Dashboard Artifact design, provided it carries the same data and the fetch-time stamp.
