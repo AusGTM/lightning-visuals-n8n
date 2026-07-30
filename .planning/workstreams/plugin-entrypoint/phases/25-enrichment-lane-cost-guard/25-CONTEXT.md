@@ -34,6 +34,15 @@ extending the backend where a requirement demands it.
   The preview must say plainly that the count is backend-resolved rather than displaying a
   fabricated number. — **Reversibility:** costly — the alternative (a read-only HubSpot token in
   the client) changes the credential boundary the whole milestone is built around.
+- **D-02a (raised by 25-RESEARCH.md — UNRESOLVED, plan must sequence this first):** INGEST-04 names
+  "list, view, or record IDs", but research found that **HubSpot saved views have no discoverable
+  public API**, and the Lists API path (`GET /crm/v3/lists/object-type-id/{id}/name/{name}` +
+  `/memberships`) requires a **`crm.lists.read` scope that is not evidenced anywhere in this repo's
+  HubSpot credential setup**. Two early plan tasks follow, both before any list/view
+  implementation: (1) one live call to verify whether the existing credential carries
+  `crm.lists.read`; (2) a decision on view resolution. If views remain unresolvable, **INGEST-04
+  scopes down to lists + record IDs** and that reduction is recorded as a requirement amendment
+  rather than silently dropped.
 
 ### Provider selection
 - **D-03:** Provider selection has an **admin-config default that is overridable per batch**. The
@@ -52,6 +61,14 @@ extending the backend where a requirement demands it.
 - **D-06:** Whatever the resolved selection is, the **preview states it explicitly** before
   approval. The operator always sees which providers this batch will use — the default being
   permissive makes this display mandatory, not optional.
+- **D-06a (from 25-RESEARCH.md — softens D-05's risk):** The deployed `Parse HubSpot Event` node
+  has **no server-side default** for `providers` — an absent or unrecognized value resolves to
+  **zero providers**, so the backend cannot burn credits on a malformed request. The envelope is
+  `{ "providers": [...], "events": [{objectId, objectType}, ...] }` with `X-Enrichment-Secret`
+  header auth. Consequence: the client must **always send an explicit resolved provider list**,
+  never rely on omission. The permissive default in D-03 is therefore purely a *client-side*
+  convenience sitting on top of a fail-closed backend — which is the mitigation that makes the
+  criterion-2 amendment in D-05 tolerable.
 
 ### Cost estimation
 - **D-07:** Cost rates live in a **versioned rate table inside the plugin, stamped with the date
@@ -70,6 +87,16 @@ extending the backend where a requirement demands it.
 ### Chunking and dispatch
 - **D-11:** The **client splits** oversized batches. The preview shows the chunk count and rows per
   chunk before approval, and dispatch sends exactly that plan.
+- **D-11a (from 25-RESEARCH.md — chunk size is constrained, not arbitrary):** n8n Cloud webhook
+  responses are capped at roughly 100 seconds, and the enrichment workflow has **no
+  `Split In Batches` node** — every record in a POST runs the full provider + Haiku + Sonnet chain
+  before the response fires. Chunk size must therefore be derived from measured per-record
+  latency, not chosen as a round number. No batch-timing data exists in this repo yet, so the plan
+  needs a measurement task before fixing the default.
+- **D-11b:** Because of the timeout ceiling, a **timeout must count as a failed chunk** for D-12's
+  skip rule — the same as a non-2xx. Distinguishing "timed out but may have succeeded server-side"
+  from "backend rejected it" is Phase 26's problem, not this phase's; here it is simply a failure
+  that gets skipped and collected.
 - **D-12:** Chunks are sent **sequentially**, and a failing chunk is **skipped rather than
   aborting the run**. Remaining chunks continue.
 - **D-13:** Failed chunks are **collected and presented back to the operator as a separate
