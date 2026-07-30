@@ -11,7 +11,7 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const { LUSHA_REVEAL_BY_FIELD, lushaReveal, lushaContactBody, lushaCompanyBody } =
+const { LUSHA_REVEAL_BY_FIELD, lushaReveal, lushaContactBody, lushaContactEnrichByIdBody, lushaCompanyBody } =
   require(path.join(ROOT, "n8n/code/lushaRequest.js"));
 
 // ---- lushaReveal() ----------------------------------------------------------
@@ -101,6 +101,30 @@ test("lushaContactBody: broader identity set (firstName/lastName/companyName/com
 test("lushaContactBody: only jobtitle missing -> empty reveal from lushaReveal, defaulted to ['emails']", () => {
   const body = lushaContactBody({ email: "a@b.com" }, ["jobtitle"]);
   assert.deepEqual(body.reveal, ["emails"]);
+});
+
+// ---- lushaContactEnrichByIdBody() — Task 2b confirmed-free stored-id path -----
+
+test("lushaContactEnrichByIdBody: stored id present -> {ids:[id], reveal} (no contacts key)", () => {
+  const body = lushaContactEnrichByIdBody("v1.SYNTHETIC_ID", ["mobilephone"]);
+  assert.deepEqual(body, { ids: ["v1.SYNTHETIC_ID"], reveal: ["phones"] });
+  assert.ok(!("contacts" in body));
+});
+
+test("lushaContactEnrichByIdBody: nothing missing -> reveal defaults to ['emails']", () => {
+  const body = lushaContactEnrichByIdBody("v1.SYNTHETIC_ID", []);
+  assert.deepEqual(body.reveal, ["emails"]);
+});
+
+test("lushaContactEnrichByIdBody: storedId null/undefined/'' -> null (caller falls back to lushaContactBody)", () => {
+  assert.equal(lushaContactEnrichByIdBody(null, []), null);
+  assert.equal(lushaContactEnrichByIdBody(undefined, []), null);
+  assert.equal(lushaContactEnrichByIdBody("", []), null);
+});
+
+test("lushaContactEnrichByIdBody: a stored id never regresses the no-id body — lushaContactBody() unchanged", () => {
+  const noId = lushaContactBody({ email: "a@b.com" }, ["mobilephone"]);
+  assert.deepEqual(noId, { contacts: [{ email: "a@b.com" }], reveal: ["phones"] });
 });
 
 // ---- lushaCompanyBody() -------------------------------------------------------

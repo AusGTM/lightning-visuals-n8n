@@ -97,6 +97,29 @@ function lushaContactBody(identityKeys, missingFields) {
   return { contacts: [contact], reveal };
 }
 
+// lushaContactEnrichByIdBody(storedId, missingFields) -> the v3 POST /v3/contacts/enrich
+// request body — the CONFIRMED-FREE stored-id re-enrichment path (Plan 20-04 Task 2b;
+// docs/LUSHA-V3-CONTRACT.md §8/§8.1, 4/4 live calls billed 0 credits). A DELIBERATE
+// SIBLING of lushaContactBody(), never folded into it: /contacts/enrich takes a
+// top-level `ids` array and REJECTS the `contacts`/identity-object shape entirely
+// (§8.1 live-confirmed: "property contacts should not exist"; a bare `{"id": ...}` is
+// also rejected, "property id should not exist") — this is a genuinely different
+// endpoint + body shape, not an extra property on the search-and-enrich body Plan 02
+// built. Reuses the SAME lushaReveal() allow-list/default as lushaContactBody() — the
+// stored id changes which identity the request resolves, not which fields are worth
+// paying to reveal.
+//
+// Returns null when storedId is blank (null/undefined/""): the caller's contract is
+// "null means build the normal lushaContactBody() request instead", so an absent stored
+// id can never regress a first-time enrichment — this function is simply never called
+// for that case, and lushaContactBody()'s output stays byte-identical to Plan 02's.
+function lushaContactEnrichByIdBody(storedId, missingFields) {
+  if (_blank(storedId)) return null;
+  const revealed = lushaReveal(missingFields);
+  const reveal = revealed.length ? revealed : ["emails"];
+  return { ids: [storedId], reveal };
+}
+
 // lushaCompanyBody(identityKeys) -> the v3 POST /v3/companies/search-and-enrich request
 // body. domain ONLY (docs/LUSHA-V3-CONTRACT.md §5) — BUG 17 established live that
 // `companyName` 400s this lane ("property companyName should not exist" on the retired
@@ -115,5 +138,6 @@ module.exports = {
   LUSHA_REVEAL_BY_FIELD,
   lushaReveal,
   lushaContactBody,
+  lushaContactEnrichByIdBody,
   lushaCompanyBody,
 };

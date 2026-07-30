@@ -33,6 +33,11 @@ const zoomLive = load("zoominfo_live_enrich.json"); // real GTM enrich: data[].a
 const lushaV3Contact = load("lusha_v3_contact.json"); // v3 contacts: results[] flat envelope
 const lushaV3Company = load("lusha_v3_company.json"); // v3 companies: results[] flat envelope
 const lushaV3NoMatch = load("lusha_v3_no_match.json"); // v3 no-match: results[0].error, outer 200
+// Plan 04 Task 2b: the CONFIRMED-FREE stored-id path's OWN envelope (POST
+// /v3/contacts/enrich), captured live 2026-07-30 (docs/LUSHA-V3-CONTRACT.md §8.1) —
+// structurally identical result-item shape to the search-and-enrich fixture above, but
+// `phones` is genuinely ABSENT (not `phones: []`) since `reveal` only asked for emails.
+const lushaV3ContactEnrichById = load("lusha_v3_contact_enrich_by_id.json");
 
 function find(cands, field, source) {
   return cands.find((c) => c.field === field && c.source === source);
@@ -247,6 +252,19 @@ test("lushaRecordId: {} and null never throw and return null", () => {
 test("lushaRecordId: an id-less bare record (no id field) returns null, never throws", () => {
   assert.doesNotThrow(() => lushaRecordId({ emails: [] }, "contacts"));
   assert.equal(lushaRecordId({ emails: [] }, "contacts"), null);
+});
+
+test("toCandidates: the /contacts/enrich (stored-id reuse) envelope parses through the SAME adapter, no code change needed", () => {
+  // §8.1: phones absent (not []) when reveal didn't ask for it — the existing
+  // raw.phoneNumbers || raw.phones || [] fallback already tolerates an absent key.
+  const c = toCandidates("lusha", lushaV3ContactEnrichById, "contacts");
+  const fields = [...new Set(c.map((x) => x.field))].sort();
+  assert.deepEqual(fields, ["email", "jobtitle", "seniority"]);
+  assert.equal(find(c, "email", "lusha").normalizedValue, "redacted-synthetic@example-corp.com.au");
+});
+
+test("lushaRecordId: the /contacts/enrich (stored-id reuse) envelope also yields results[0].id", () => {
+  assert.equal(lushaRecordId(lushaV3ContactEnrichById, "contacts"), "v1.SYNTHETIC_CONTACT_ID_0001");
 });
 
 test("toCandidates: lushaCandidates()'s field set is unchanged by the presence of lushaRecordId", () => {

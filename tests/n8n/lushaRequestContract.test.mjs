@@ -27,7 +27,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const WF_PATH = path.join(ROOT, "n8n", "wf_enrichment_cloud.json");
-const { lushaContactBody } = require(path.join(ROOT, "n8n/code/lushaRequest.js"));
+const { lushaContactBody, lushaContactEnrichByIdBody } = require(path.join(ROOT, "n8n/code/lushaRequest.js"));
 
 function loadNode(name) {
   const wf = JSON.parse(fs.readFileSync(WF_PATH, "utf8"));
@@ -38,23 +38,33 @@ function loadNode(name) {
 
 // Strips the n8n "={{ <js expression> }}" wrapper and evaluates the inner expression
 // with a mock $() node-accessor, mirroring how n8n itself evaluates it at runtime. Serves
-// BOTH identity_keys and gate.missingFields off the "Enrichment Gate" node, matching what
-// the real committed expression reads.
-function evalExpr(rawExpr, identityKeys, missingFields) {
+// identity_keys, gate.missingFields, AND existingRecord (Plan 04 Task 2b's stored-id
+// branch) off the "Enrichment Gate" node, matching what the real committed expression reads.
+function evalExpr(rawExpr, identityKeys, missingFields, existingRecord) {
   const m = /^=\{\{([\s\S]*)\}\}$/.exec(rawExpr.trim());
   assert.ok(m, `expression must be a single {{ }} n8n expression, got: ${rawExpr}`);
   const $ = (name) => {
     assert.equal(name, "Enrichment Gate", `unexpected $() call: ${name}`);
-    return { item: { json: { identity_keys: identityKeys, gate: { missingFields: missingFields || [] } } } };
+    return { item: { json: {
+      identity_keys: identityKeys, gate: { missingFields: missingFields || [] },
+      existingRecord: existingRecord || {},
+    } } };
   };
   const fn = new Function("$", `"use strict"; return (${m[1]});`);
   return fn($);
 }
 
-function buildBody(identityKeys, missingFields) {
+function buildBody(identityKeys, missingFields, existingRecord) {
   const node = loadNode("Lusha Enrich");
-  const raw = evalExpr(node.parameters.jsonBody, identityKeys, missingFields);
+  const raw = evalExpr(node.parameters.jsonBody, identityKeys, missingFields, existingRecord);
   return JSON.parse(raw);
+}
+
+// The URL field is ALSO an n8n expression now (Plan 04 Task 2b) — evaluates it the same
+// way, returning the plain string (not JSON-parsed).
+function buildUrl(existingRecord) {
+  const node = loadNode("Lusha Enrich");
+  return evalExpr(node.parameters.url, {}, [], existingRecord);
 }
 
 const BANNED_ELEMENT_KEYS = [
@@ -139,4 +149,48 @@ test("Lusha Enrich body: CLOUD expression output deep-equals lushaContactBody() 
       `expression/module mismatch for identity=${JSON.stringify(identity)} missing=${JSON.stringify(missing)}`
     );
   }
+});
+
+// --- Plan 04 Task 2b: stored-id reuse branch (§8.1 confirmed-free path) -------------
+
+test("Lusha Enrich body: still reads existingRecord by node name (Enrichment Gate), never bare $json", () => {
+  const node = loadNode("Lusha Enrich");
+  assert.ok(node.parameters.jsonBody.includes("$('Enrichment Gate').item.json.existingRecord"));
+  assert.ok(node.parameters.url.includes("$('Enrichment Gate').item.json.existingRecord"));
+});
+
+test("Lusha Enrich URL: switches to /contacts/enrich only when existingRecord.lusha_contact_id is present", () => {
+  assert.equal(buildUrl({ lusha_contact_id: "v1.SYNTHETIC_ID" }), "https://api.lusha.com/v3/contacts/enrich");
+  assert.equal(buildUrl({}), "https://api.lusha.com/v3/contacts/search-and-enrich");
+  assert.equal(buildUrl({ lusha_contact_id: "" }), "https://api.lusha.com/v3/contacts/search-and-enrich");
+  assert.equal(buildUrl({ lusha_contact_id: null }), "https://api.lusha.com/v3/contacts/search-and-enrich");
+});
+
+const STORED_ID_PARITY_MATRIX = [
+  { existingRecord: { lusha_contact_id: "v1.SYNTHETIC_ID" }, missing: ["mobilephone"] },
+  { existingRecord: { lusha_contact_id: "v1.SYNTHETIC_ID" }, missing: [] },
+  { existingRecord: { lusha_contact_id: "v1.SYNTHETIC_ID" }, missing: ["email", "mobilephone"] },
+];
+
+test("Lusha Enrich body: stored-id branch deep-equals lushaContactEnrichByIdBody() for a matrix of inputs (anti-drift)", () => {
+  for (const { existingRecord, missing } of STORED_ID_PARITY_MATRIX) {
+    const fromExpr = buildBody({ email: "a@b.com" }, missing, existingRecord);
+    const fromModule = lushaContactEnrichByIdBody(existingRecord.lusha_contact_id, missing);
+    assert.deepEqual(
+      fromExpr, fromModule,
+      `expression/module mismatch for existingRecord=${JSON.stringify(existingRecord)} missing=${JSON.stringify(missing)}`
+    );
+    assert.ok(!("contacts" in fromExpr), "stored-id branch must never emit a contacts key");
+  }
+});
+
+test("Lusha Enrich body: a stored id present but blank ('' / null) falls back to the search-and-enrich body unchanged", () => {
+  const identity = { email: "a@b.com" };
+  const withBlankId = buildBody(identity, ["mobilephone"], { lusha_contact_id: "" });
+  const withNullId = buildBody(identity, ["mobilephone"], { lusha_contact_id: null });
+  const withNoRecord = buildBody(identity, ["mobilephone"], {});
+  const fromModule = lushaContactBody(identity, ["mobilephone"]);
+  assert.deepEqual(withBlankId, fromModule);
+  assert.deepEqual(withNullId, fromModule);
+  assert.deepEqual(withNoRecord, fromModule);
 });

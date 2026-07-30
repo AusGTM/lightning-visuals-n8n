@@ -1481,12 +1481,20 @@ ENRICH_BUILD_REQUESTS = inline("lushaRequest.js") + r"""
 // requests via $('Build Requests').item). Lusha v3 = POST /v3/contacts/search-and-enrich
 // JSON body (retired v2 GET querystring — see docs/LUSHA-V3-CONTRACT.md), built by the
 // shared lushaContactBody() with the reveal list derived from the gate's missingFields.
-// Apollo people/match = JSON body with reveal_personal_emails. ZoomInfo builds its own
-// body from the Gate identity.
+// Plan 04 Task 2b: when the record already carries a stored lusha_contact_id,
+// lushaContactEnrichByIdBody() builds the CONFIRMED-FREE POST /v3/contacts/enrich body
+// instead ({ids, reveal}, no contacts/identity object at all — §8.1, a genuinely
+// different endpoint, not a property added to search-and-enrich). Falls back to the
+// unchanged lushaContactBody() output when no stored id is present (never regresses a
+// first-time enrichment). Apollo people/match = JSON body with reveal_personal_emails.
+// ZoomInfo builds its own body from the Gate identity.
 return $input.all().map((it) => {
   const row = it.json;
   const id = row.identity_keys || {};
-  const lusha_body = lushaContactBody(id, (row.gate && row.gate.missingFields) || []);
+  const missingFields = (row.gate && row.gate.missingFields) || [];
+  const storedContactId = row.existingRecord && row.existingRecord.lusha_contact_id;
+  const lusha_body = lushaContactEnrichByIdBody(storedContactId, missingFields)
+    || lushaContactBody(id, missingFields);
   const apollo_body = { reveal_personal_emails: true };
   if (id.email) apollo_body.email = id.email;
   if (id.domain) apollo_body.domain = id.domain;
@@ -2631,7 +2639,12 @@ def build_enrichment_local_live():
     x += 230
     nodes.append(_live_http(
         "Lusha Enrich", x, y, "POST",
-        "https://api.lusha.com/v3/contacts/search-and-enrich",
+        # Plan 04 Task 2b: the body's own shape says which endpoint to call — an `ids`
+        # key means lushaContactEnrichByIdBody() built the stored-id-reuse body (the
+        # CONFIRMED-FREE path, §8.1), otherwise it's the unchanged search-and-enrich body.
+        "={{ $('Build Requests').item.json.lusha_body.ids ? "
+        "'https://api.lusha.com/v3/contacts/enrich' : "
+        "'https://api.lusha.com/v3/contacts/search-and-enrich' }}",
         [{"name": "api_key", "value": "=" + _env_secret_expr("LUSHA_API_KEY")},
          {"name": "Content-Type", "value": "application/json"}],
         json_body="={{ JSON.stringify($('Build Requests').item.json.lusha_body) }}"))
@@ -3635,24 +3648,38 @@ def build_enrichment_cloud():
     # this migration and is carried forward deliberately, not silently unified — see
     # docs/LUSHA-V3-CONTRACT.md's accepted-properties table (§3) for what would decide
     # whether it can be unified later.
-    lusha = _http_node("Lusha Enrich", "https://api.lusha.com/v3/contacts/search-and-enrich",
-                       px, y - 80,
-                       auth="header",  # credential header, e.g. api_key: <LUSHA_API_KEY>
-                       json_body=(
-                           "={{ (() => { "
-                           "const id = $('Enrichment Gate').item.json.identity_keys || {}; "
-                           "const gate = $('Enrichment Gate').item.json.gate || {}; "
-                           "const missing = gate.missingFields || []; "
-                           "const REVEAL_MAP = { email: 'emails', mobilephone: 'phones' }; "
-                           "const revealed = missing.filter((f) => Object.prototype.hasOwnProperty.call(REVEAL_MAP, f)).map((f) => REVEAL_MAP[f]).sort(); "
-                           "const reveal = revealed.length ? revealed : ['emails']; "
-                           "const c = {}; "
-                           "if (id.email) c.email = id.email; "
-                           "if (id.linkedin_url) c.linkedinUrl = id.linkedin_url; "
-                           "const hasIdentity = !!(c.email || c.linkedinUrl); "
-                           "return JSON.stringify(hasIdentity ? { contacts: [c], reveal } : { contacts: [] }); "
-                           "})() }}"
-                       ))
+    # Plan 04 Task 2b: when the row's existingRecord already carries a stored
+    # lusha_contact_id, the CONFIRMED-FREE stored-id path takes over — POST
+    # /v3/contacts/enrich, body {ids:[storedId], reveal} (§8.1: a genuinely different
+    # endpoint; /contacts/enrich REJECTS a `contacts` key entirely, "property contacts
+    # should not exist"). Both the URL and the body expressions below branch on the SAME
+    # storedId check so they can never disagree about which lane a given row takes.
+    lusha = _http_node(
+        "Lusha Enrich",
+        "={{ $('Enrichment Gate').item.json.existingRecord && "
+        "$('Enrichment Gate').item.json.existingRecord.lusha_contact_id ? "
+        "'https://api.lusha.com/v3/contacts/enrich' : "
+        "'https://api.lusha.com/v3/contacts/search-and-enrich' }}",
+        px, y - 80,
+        auth="header",  # credential header, e.g. api_key: <LUSHA_API_KEY>
+        json_body=(
+            "={{ (() => { "
+            "const id = $('Enrichment Gate').item.json.identity_keys || {}; "
+            "const gate = $('Enrichment Gate').item.json.gate || {}; "
+            "const missing = gate.missingFields || []; "
+            "const REVEAL_MAP = { email: 'emails', mobilephone: 'phones' }; "
+            "const revealed = missing.filter((f) => Object.prototype.hasOwnProperty.call(REVEAL_MAP, f)).map((f) => REVEAL_MAP[f]).sort(); "
+            "const reveal = revealed.length ? revealed : ['emails']; "
+            "const existingRecord = $('Enrichment Gate').item.json.existingRecord || {}; "
+            "const storedId = existingRecord.lusha_contact_id; "
+            "if (storedId) { return JSON.stringify({ ids: [storedId], reveal }); } "
+            "const c = {}; "
+            "if (id.email) c.email = id.email; "
+            "if (id.linkedin_url) c.linkedinUrl = id.linkedin_url; "
+            "const hasIdentity = !!(c.email || c.linkedinUrl); "
+            "return JSON.stringify(hasIdentity ? { contacts: [c], reveal } : { contacts: [] }); "
+            "})() }}"
+        ))
     nodes.append(lusha)
     # reveal_personal_emails=true forces Apollo to return the contactable email (a bare
     # people/match returns identity only). Phone is async: reveal_phone_number needs a
