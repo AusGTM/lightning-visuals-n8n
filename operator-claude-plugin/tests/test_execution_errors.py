@@ -70,8 +70,9 @@ def test_a_node_whose_runs_are_not_a_list_is_unreadable_rather_than_clean():
 
 
 def test_a_node_absent_from_the_run_data_produces_no_finding():
-    """A node that never ran is not a node that failed."""
-    result = execution_errors.harvest_errors(_execution({"Decide Action": _node_run()}))
+    """A node that never ran is not a node that failed — it simply is not there, and
+    nothing may be reported about it."""
+    result = execution_errors.harvest_errors(_execution({"Decide Action": [_node_run()]}))
     assert result["available"] is True
     assert result["findings"] == []
 

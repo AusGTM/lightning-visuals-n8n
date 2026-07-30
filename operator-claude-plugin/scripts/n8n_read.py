@@ -201,6 +201,16 @@ def last_execution(config: dict, workflow_id, transport=requests.get, now=None) 
     return summarize_execution(data[0], config, now=now)
 
 
+def get_execution(config: dict, execution_id, transport=requests.get):
+    """One execution WITH its run data — the only read here that returns a large payload.
+
+    Gated at the call site rather than inside: it is issued for a run already known to
+    have failed, or one the operator names, never for every run in a page (T-27-18).
+    """
+    return _get_json(config, f"{_base_url(config)}/api/v1/executions/{execution_id}",
+                     {"includeData": "true"}, transport)
+
+
 def recent_executions(config: dict, transport=requests.get, limit: int = EXECUTIONS_PAGE_LIMIT):
     """One bounded page of recent executions across every workflow, newest first.
 
