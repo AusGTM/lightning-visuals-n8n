@@ -1,0 +1,29 @@
+{
+  "captured_at": "2026-07-30T11:38:39Z",
+  "label": "post-canary",
+  "providers": {
+    "apollo": {
+      "configured": true,
+      "credits": null,
+      "error": null,
+      "status": 403
+    },
+    "lusha": {
+      "configured": true,
+      "credits": 3940,
+      "error": null,
+      "status": 200
+    },
+    "zoominfo": {
+      "configured": true,
+      "credits": 9301,
+      "error": null,
+      "status": 200
+    }
+  },
+  "settle": {
+    "attempts": 2,
+    "interval_seconds": 5,
+    "stable": true
+  }
+}
