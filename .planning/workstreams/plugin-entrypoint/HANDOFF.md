@@ -14,16 +14,17 @@ mid-flight.
 | Phase | Plans | State |
 |---|---|---|
 | 23 Walking skeleton | 6 | 5 done. **23-06 is a human checkpoint — see §4** |
-| 24 Non-tabular adapters | 3 | 24-01 done. 24-02, 24-03 were running at handoff |
+| 24 Non-tabular adapters | 3 | ✅ **ALL 3 DONE** (24-01, 24-02, 24-03) |
 | 25 Enrichment lane & cost guard | 7 | 25-02 done. **25-01 is a human checkpoint — see §4** |
-| 26 Outcome reporting & retry | 3 | checker-clean. 26-01 was running at handoff |
-| 27 Backend status surface | 5 | planned, blocked on 25-02 (now done) → runnable |
+| 26 Outcome reporting & retry | 3 | checker-clean. 26-01 done. **26-02, 26-03 runnable now** |
+| 27 Backend status surface | 5 | planned, dependency (25-02) satisfied → **runnable after its checker** |
 | 28 Control actions | 6 | planned, chained behind 27 |
 | 29 Notices & sweep | 6 | planned, chained behind 27/28 |
 | 30 Review-queue triage | 7 | planned, chained behind 28 |
 
-**Test baselines at handoff:** `810 passed, 1 skipped` (pytest) and `378 passed` (node). Started the
-milestone at 709. Any drop is a regression to investigate, not absorb.
+**Test baselines at handoff:** `869 passed, 1 skipped` (pytest) and `378 passed` (node); the plugin's
+own suite is `125 passed`. Started the milestone at 709. Any drop is a regression to investigate,
+not absorb. Working tree was **clean** and every n8n artifact **disarmed** at handoff.
 
 **Plan-checker status:** 23, 24, 25, 26 all PASSED. **27, 28, 29, 30 have NOT been checked** —
 deliberately deferred, because checking plans against a tree where their dependencies don't exist
@@ -32,19 +33,24 @@ it.**
 
 ### First thing to do on resume
 
-Three executor agents were in flight at handoff: **24-02**, **24-03**, **26-01**. Their results
-arrive as task notifications. If context was cleared before they landed, check for their summaries:
+**Nothing was in flight at handoff** — all executors completed and the tree was clean at commit
+`9552c65`. Sanity-check that it still is, then proceed:
 
 ```bash
-ls .planning/workstreams/plugin-entrypoint/phases/24-*/24-0{2,3}-SUMMARY.md \
-   .planning/workstreams/plugin-entrypoint/phases/26-*/26-01-SUMMARY.md 2>/dev/null
-git log --oneline -15
-.venv/bin/python -m pytest -q | tail -3
-node --test tests/n8n/*.test.mjs 2>&1 | tail -6
+git status --porcelain | grep -v DS_Store | grep -v '^?? .claude/'   # expect empty
+.venv/bin/python -m pytest -q | tail -2                              # expect 869 passed, 1 skipped
+node --test tests/n8n/*.test.mjs 2>&1 | grep -E '^. (pass|fail) '    # expect pass 378, fail 0
+grep -c 'ALLOW_HUBSPOT_[A-Z_]* = \\"true\\"' n8n/*.json              # expect 0 everywhere
 ```
 
-A missing SUMMARY with commits present means the agent died mid-plan — re-run that plan rather than
-assuming it finished.
+**Immediately runnable, no human input needed** — a good next batch:
+- **26-02** and **26-03** (Phase 26 wave 2, both depend only on 26-01 which is done). Note **26-02
+  Task 3 closes amendment #4** by rewording REPORT-02 in REQUIREMENTS.md.
+- **Phase 27** — run `gsd-plan-checker` on it first (it has never been checked), then 27-01, whose
+  dependency on 25-02's `hubspot/backend-status` endpoint is now satisfied.
+
+A general caution for any future batch: if a SUMMARY is missing while that plan's commits are
+present, the agent died mid-plan — re-run it rather than assuming it finished.
 
 ---
 
