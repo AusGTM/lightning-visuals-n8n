@@ -278,11 +278,87 @@ returned `id` back in the `ids` array:
 
 **Every `/contacts/enrich` call against a stored `id` billed 0 credits**, regardless of
 whether it was the first-ever reveal for that id or a repeat. **Verdict: CONFIRMED.**
-Passing a stored `lusha_contact_id`/`lusha_company_id` back on
-`/contacts/enrich`/(presumed, untested directly) a companies-lane enrich call avoids the
-1-credit search charge that a fresh identity-based `search-and-enrich` call always incurs
-— including on a verified repeat of the exact same identity (§7). This is exactly
-REQ-lusha-id-staging's premise, and it holds.
+Passing a stored `lusha_contact_id` back on `/contacts/enrich` avoids the 1-credit search
+charge that a fresh identity-based `search-and-enrich` call always incurs — including on a
+verified repeat of the exact same identity (§7). This is exactly REQ-lusha-id-staging's
+premise, and it holds for contacts.
+
+### 8.1 Task 2b addendum (2026-07-30, second session) — full envelope + companies verdict
+
+Plan 01 recorded `billing.creditsCharged` for `/contacts/enrich` but never the FULL response
+body, and left the companies-lane by-id question as "presumed, untested directly." Both are
+now settled, live, PII-redacted (synthetic placeholders per the redaction note below), spend
+4 credits total (contacts search-and-enrich 1 + contacts enrich-by-id 0 + companies
+search-and-enrich 2 + companies enrich-by-id-attempt 1):
+
+**`POST /v3/contacts/enrich` full envelope** (`{"ids": ["<id>"], "reveal": ["emails"]}`) —
+structurally IDENTICAL result-item shape to `/contacts/search-and-enrich` (§4): same
+`id`/`firstName`/`lastName`/`fullName`/`jobTitle`/`company`/`location`/`socialLinks`/
+`previousEmployment`/`updateDate` keys, plus `linkedinConnections`/`linkedinFollowers`/
+`partialProfile` (present here, absent from the §4 example only because that capture
+happened not to include them — not a shape difference). `phones` is simply ABSENT from the
+top-level result object when `reveal` didn't ask for it (not `phones: []`) — the existing
+`_lushaRecord()`/`_lushaV3Contact()` adapter's `raw.phones || []` fallback already handles
+an absent key identically to an empty array, so **no adapter change is needed**:
+
+```json
+{
+  "requestId": "<uuid>",
+  "results": [
+    {
+      "id": "v1.KAhdDgsmsNBQGn3i1G3Kol8BeXocnO-klQ",
+      "emails": [
+        {"email": "REDACTED-SYNTHETIC@example-corp.com.au", "type": "work",
+         "confidence": null, "updateDate": "2024-09-25", "dataSource": "lusha"}
+      ],
+      "firstName": "Kyle", "lastName": "Bettler", "fullName": "Kyle Bettler",
+      "jobTitle": {"title": "Head of Live Racing", "departments": ["Other"],
+                   "seniority": "Director", "startDate": "2025-03-01"},
+      "company": {"id": "v1.2H4pQSagp9OuOjAPuKXjEWQyn8yvWUI",
+                   "name": "Entain Australia & New Zealand",
+                   "domain": "www.entaingroup.com.au", "industry": "Entertainment"},
+      "location": {"country": "Australia", "countryIso2": "AU", "city": "Sydney",
+                    "continent": "Oceania", "coordinates": [151.207, -33.868],
+                    "isEuContact": false},
+      "socialLinks": {"linkedin": "https://www.linkedin.com/in/example-redacted-slug"},
+      "linkedinConnections": 559, "linkedinFollowers": 563, "partialProfile": false,
+      "previousEmployment": [
+        {"company": {"name": "Racing NSW", "domain": "racingnsw.com.au"},
+         "jobTitle": {"departments": ["Operations"],
+                      "title": "Race Fields and Operations Manager", "seniority": "Manager"}}
+      ],
+      "updateDate": "2024-09-25"
+    }
+  ],
+  "billing": {"creditsCharged": 0, "resultsReturned": 1}
+}
+```
+
+**Companies by-id enrich — the endpoint EXISTS, but it is NOT free.** `POST
+/v3/companies/enrich` with body `{"ids": ["<company id>"]}` returned a live **200** with the
+full company record (same shape as `/companies/search-and-enrich`'s result item, §5) — this
+is a real, working endpoint, not a 404/guessed route. However `billing.creditsCharged: 1` on
+that call, against `creditsCharged: 2` for the immediately-preceding `search-and-enrich` call
+on the SAME company. **Verdict: companies-lane id reuse is a 50% saving (2 -> 1 credit), NOT
+a free re-enrichment** — structurally different from the contacts lane's confirmed-free
+path. This corrects the "presumed, untested directly" note above (§8) and the "(presumed,
+untested directly)" free-reuse framing: the route exists, but REQ-lusha-id-staging's
+"already-revealed data returns without new spend" premise does **not** hold for companies —
+only a reduced, non-zero charge does. Per the Task 2b scope, **no companies-lane reuse code
+ships in this plan** — a 50%-saving-but-not-free mechanism is a distinct cost/complexity
+trade-off from the contacts lane's confirmed-zero-cost path and deserves its own explicit
+sign-off rather than folding into this plan's contacts-only implementation.
+
+```json
+{
+  "requestId": "<uuid>",
+  "results": [
+    {"id": "v1.I1A7s1z0zyPx-me1MP0DoLFaOfyjNjfH", "name": "Racing NSW",
+     "domain": "www.racingnsw.com.au", "industry": "Entertainment", "..." : "(same shape as §5)"}
+  ],
+  "billing": {"creditsCharged": 1, "resultsReturned": 1}
+}
+```
 
 ## 9. No-match envelope, error shapes, and rate-limit headers
 
@@ -365,6 +441,10 @@ omitted where a placeholder would be misleading. Field names, list shapes, and v
 document does not carry real Lusha-revealed PII. Company-level firmographic data (§5) is
 not personal data and required no redaction. LinkedIn profile slugs were also replaced
 with a placeholder out of caution even though they are already-public professional URLs.
+
+**Task 2b addendum spend (2026-07-30, orchestrator-directed, Plan 20-04):** 4 credits
+total (1 + 0 + 2 + 1, see §8.1) via `scripts/probe_lusha_v3.py --task2b`, run with
+`PROBE_MAX_CREDITS=5 PROBE_MAX_BILLABLE=4`. Same redaction treatment applied.
 
 ## Gate verdict (Task 3 — operator review)
 

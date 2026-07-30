@@ -56,6 +56,9 @@ CONTACTS_URL = "https://api.lusha.com/v3/contacts/search-and-enrich"
 CONTACTS_SEARCH_URL = "https://api.lusha.com/v3/contacts/search"
 CONTACTS_ENRICH_URL = "https://api.lusha.com/v3/contacts/enrich"
 COMPANIES_URL = "https://api.lusha.com/v3/companies/search-and-enrich"
+# Hypothesized only — §2's endpoint table lists no companies-lane by-id enrich route.
+# Task 2b (Plan 20-04) probes this ONE URL/shape to settle existence; never assumed live.
+COMPANIES_ENRICH_URL = "https://api.lusha.com/v3/companies/enrich"
 USAGE_URL = "https://api.lusha.com/v3/account/usage"
 
 PROBE_MAX_CREDITS = int(os.getenv("PROBE_MAX_CREDITS", "40"))
@@ -415,6 +418,56 @@ def probe_usage_endpoint(key, ledger):
     return step
 
 
+def probe_task2b_reuse_envelope(key, ledger):
+    """Task 2b (Plan 20-04, orchestrator-directed follow-up to Plan 01) — two things Plan
+    01 left unresolved for the request-side "Reuse" implementation:
+
+    1. The FULL response envelope of `POST /v3/contacts/enrich` (the confirmed-free
+       stored-id path, §8) — Plan 01 only recorded `billing.creditsCharged` for this
+       endpoint, never the body shape normalizeProviders.js's adapter needs to parse.
+    2. Whether a companies-lane by-id enrich endpoint exists at all (§2's endpoint table
+       lists none; §8 called this "presumed, untested directly").
+
+    Budget (caller sets PROBE_MAX_CREDITS=5 / PROBE_MAX_BILLABLE=4 to enforce this): 1
+    credit (contacts search-and-enrich, mint a fresh id) + 0 (contacts enrich-by-id,
+    confirmed free) + 2 credits (companies search-and-enrich, mint a fresh company id) +
+    0-2 credits (ONE companies enrich-by-id attempt) = <=5 credits total.
+    """
+    result = {}
+
+    search_step = _record_billable_step(
+        ledger, "T2b_contact_search_and_enrich", "POST", CONTACTS_URL,
+        {"contacts": [dict(CONTACT_IDENTITY)]}, key)
+    results = (search_step["response_body"] or {}).get("results") or []
+    contact_id = results[0].get("id") if results and isinstance(results[0], dict) else None
+    result["contact_id"] = contact_id
+
+    if contact_id and not _cap_breached(ledger):
+        enrich_step = _record_billable_step(
+            ledger, "T2b_contact_enrich_by_id", "POST", CONTACTS_ENRICH_URL,
+            {"ids": [contact_id], "reveal": ["emails"]}, key)
+        result["contact_enrich_by_id_status"] = enrich_step["status"]
+        result["contact_enrich_by_id_envelope"] = enrich_step["response_body"]
+        result["contact_enrich_by_id_credits_charged"] = enrich_step["billing_credits_charged"]
+
+    if not _cap_breached(ledger):
+        co_search_step = _record_billable_step(
+            ledger, "T2b_company_search_and_enrich", "POST", COMPANIES_URL,
+            {"companies": [{"domain": COMPANY_DOMAIN}]}, key)
+        co_results = (co_search_step["response_body"] or {}).get("results") or []
+        company_id = co_results[0].get("id") if co_results and isinstance(co_results[0], dict) else None
+        result["company_id"] = company_id
+
+        if company_id and not _cap_breached(ledger):
+            co_enrich_step = _record_billable_step(
+                ledger, "T2b_company_enrich_by_id_attempt", "POST", COMPANIES_ENRICH_URL,
+                {"ids": [company_id]}, key)
+            result["company_enrich_by_id_status"] = co_enrich_step["status"]
+            result["company_enrich_by_id_envelope"] = co_enrich_step["response_body"]
+
+    return result
+
+
 def run_full_ladder(key, ledger):
     winner, contact_id = probe_contacts_lane(key, ledger)
     print(f"P1 contacts lane winner: {winner}")
@@ -457,7 +510,11 @@ def main(argv=None):
     credits_start = _get_credits(key)
     ledger["totals"]["credits_start"] = credits_start
 
-    run_full_ladder(key, ledger)
+    if "--task2b" in argv:
+        result = probe_task2b_reuse_envelope(key, ledger)
+        ledger["task2b_result"] = result
+    else:
+        run_full_ladder(key, ledger)
 
     ledger["totals"]["credits_end"] = _get_credits(key)
 
