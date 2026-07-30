@@ -198,6 +198,17 @@ Runbook) before any further armed record-level action, including Task 4's C7 smo
 All created files confirmed present on disk; all three task commits (`b55fc45`,
 `ecfad31`, `88b2131`) confirmed present in `git log`.
 
+## Task 3 Resolution (one-way door gate) — RESOLVED: proceed-now
+
+Resolved by orchestrator 2026-07-30 (same session as the build). Decision: **proceed-now**,
+executed as Operator Runbook Section C in the Sitting 2 window immediately before the
+Phase 22 canary. This is the same substantive choice as 22-OPERATOR-RUNBOOK.md's recorded
+"migrate-first" decision (22-04 Task 2); recorded here so this plan's own gate shows its
+resolution. Basis: (a) in-place conversion + cheap reverse-PATCH rollback confirmed by the
+live probe; (b) all 712 companies blank on lv_org_type — zero data at risk; (c) the canary's
+criterion 2 needs the enum live to prove anything new. Task 4 remains operator-run
+(Section C), with the .env TEST_COMPANY_IDS=9604614548 fix required before C7.
+
 ---
 *Phase: 21-transport-schema-hygiene*
 *Completed: 2026-07-30*
