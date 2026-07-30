@@ -138,6 +138,12 @@ def _verdict(requested, observed):
 def _quote(value) -> str:
     if value is None:
         return "nothing readable"
+    # A string value is already the operator-readable form. Running it through json.dumps
+    # would backslash-escape the quotes inside a JS flag literal, which is noise in a
+    # sentence a person has to read.
+    if isinstance(value, str):
+        text = value
+        return text if len(text) <= _REVERSAL_VALUE_LIMIT else text[:_REVERSAL_VALUE_LIMIT] + "…"
     try:
         text = json.dumps(value, sort_keys=True, default=str)
     except (TypeError, ValueError):
