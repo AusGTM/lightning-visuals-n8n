@@ -3,3 +3,9 @@ __pycache__/
 .env
 *.pyc
 .n8n_credential_ids.json
+operator-claude-plugin/config/operator.local.json
+operator-claude-plugin/scratch/
+# The plugin's only persisted state: one dashboard Artifact identifier + its timestamp
+# (D-09b). Named as the file rather than the directory on purpose — a second state file
+# should show up in `git status` and get argued about, not be swallowed by a wildcard.
+operator-claude-plugin/state/dashboard_artifact.json

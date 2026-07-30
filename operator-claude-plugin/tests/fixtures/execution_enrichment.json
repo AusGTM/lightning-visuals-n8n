@@ -1,0 +1,118 @@
+{
+  "id": "54321",
+  "status": "success",
+  "startedAt": "2026-07-31T09:00:00.000Z",
+  "stoppedAt": "2026-07-31T09:00:04.000Z",
+  "workflowId": "888",
+  "data": {
+    "resultData": {
+      "runData": {
+        "Decide Company Action": [
+          {
+            "executionStatus": "success",
+            "data": {
+              "main": [
+                [
+                  {
+                    "json": {
+                      "action": "create",
+                      "object_type": "companies",
+                      "hs_object_id": null,
+                      "gap_flag": false,
+                      "needs_review": false,
+                      "properties": {"domain": "redacted-co-1.example"}
+                    }
+                  },
+                  {
+                    "json": {
+                      "action": "enrich",
+                      "object_type": "companies",
+                      "hs_object_id": "co-redacted-1001",
+                      "gap_flag": false,
+                      "needs_review": true,
+                      "properties": {"lv_org_type": "content_producer"}
+                    }
+                  },
+                  {
+                    "json": {
+                      "action": "write_blocked",
+                      "object_type": "companies",
+                      "hs_object_id": "co-redacted-1002",
+                      "gap_flag": false,
+                      "needs_review": false,
+                      "properties": {"lv_revenue_band": "5-50M"}
+                    }
+                  },
+                  {
+                    "json": {
+                      "action": "skip",
+                      "object_type": "companies",
+                      "hs_object_id": "co-redacted-1003",
+                      "gap_flag": false,
+                      "needs_review": false,
+                      "properties": {}
+                    }
+                  }
+                ]
+              ]
+            }
+          }
+        ],
+        "Decide Action": [
+          {
+            "executionStatus": "success",
+            "data": {
+              "main": [
+                [
+                  {
+                    "json": {
+                      "action": "enrich",
+                      "object_type": "contacts",
+                      "hs_object_id": "ct-redacted-2001",
+                      "gap_flag": false,
+                      "properties": {"jobtitle": "Broadcast Engineer"}
+                    }
+                  },
+                  {
+                    "json": {
+                      "action": "create",
+                      "object_type": "contacts",
+                      "hs_object_id": null,
+                      "gap_flag": false,
+                      "properties": {"email": "redacted-2002@example.com"}
+                    }
+                  }
+                ]
+              ]
+            }
+          }
+        ],
+        "Build Response": [
+          {
+            "executionStatus": "success",
+            "data": {
+              "main": [
+                [
+                  {
+                    "json": {
+                      "action": "create",
+                      "object_type": "companies",
+                      "hs_object_id": null,
+                      "gap_flag": false,
+                      "needs_review": false,
+                      "properties": {"domain": "redacted-co-1.example"},
+                      "remaining_credits": [
+                        {"provider": "lusha", "credits": 42},
+                        {"provider": "apollo", "credits": null}
+                      ]
+                    }
+                  }
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

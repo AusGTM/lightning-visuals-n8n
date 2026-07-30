@@ -18,6 +18,7 @@ N8N = ROOT / "n8n"
 
 # Workflows intended for n8n Cloud. Everything here must be self-contained.
 ACTIVE = [
+    "wf_backend_status_cloud.json",
     "wf_contact_ingest_cloud.json",
     "wf_contact_ingest_local.json",
     "wf_enrichment_cloud.json",

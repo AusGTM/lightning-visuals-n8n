@@ -1,0 +1,105 @@
+{
+  "id": "12345",
+  "status": "success",
+  "startedAt": "2026-07-30T10:00:00.000Z",
+  "stoppedAt": "2026-07-30T10:00:03.000Z",
+  "workflowId": "999",
+  "data": {
+    "resultData": {
+      "runData": {
+        "Decide Action": [
+          {
+            "executionStatus": "success",
+            "data": {
+              "main": [
+                [
+                  {
+                    "json": {
+                      "action": "update",
+                      "outcome": "match",
+                      "contact_id": "contact-redacted-001",
+                      "hs_object_id": "1001",
+                      "reason": null,
+                      "email_status": "verified",
+                      "properties": {"lv_org_type": "content_producer"}
+                    }
+                  },
+                  {
+                    "json": {
+                      "action": "create",
+                      "outcome": "net_new",
+                      "contact_id": null,
+                      "hs_object_id": null,
+                      "reason": null,
+                      "email_status": "verified",
+                      "properties": {"email": "redacted-002@example.com"}
+                    }
+                  },
+                  {
+                    "json": {
+                      "action": "review",
+                      "outcome": "ambiguous",
+                      "contact_id": null,
+                      "hs_object_id": null,
+                      "reason": "no valid email — identity could not be resolved",
+                      "email_status": "NO_EMAIL",
+                      "properties": {}
+                    }
+                  },
+                  {
+                    "json": {
+                      "action": "skip",
+                      "outcome": "rejected",
+                      "contact_id": null,
+                      "hs_object_id": null,
+                      "reason": "missing required identity fields",
+                      "email_status": "NO_EMAIL",
+                      "properties": {}
+                    }
+                  }
+                ]
+              ]
+            }
+          }
+        ],
+        "HubSpot Update": [
+          {
+            "executionStatus": "success",
+            "data": {
+              "main": [
+                [
+                  {"json": {"id": "1001", "properties": {"lv_org_type": "content_producer"}}}
+                ]
+              ]
+            }
+          }
+        ],
+        "HubSpot Create": [
+          {
+            "executionStatus": "success",
+            "data": {
+              "main": [
+                [
+                  {"json": {"id": "2002", "properties": {"email": "redacted-002@example.com"}}}
+                ]
+              ]
+            }
+          }
+        ],
+        "Set Review": [
+          {
+            "executionStatus": "success",
+            "data": {
+              "main": [
+                [
+                  {"json": {"queue": "needs_review"}},
+                  {"json": {"queue": "needs_review"}}
+                ]
+              ]
+            }
+          }
+        ]
+      }
+    }
+  }
+}

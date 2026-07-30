@@ -81,6 +81,19 @@ NODE_CREDENTIAL_MAP = {
     "Lusha Usage": {"cred_type": "httpHeaderAuth", "cred_name": "LV Lusha"},
     "Apollo Usage": {"cred_type": "httpHeaderAuth", "cred_name": "LV Apollo"},
     "ZoomInfo Usage Mint": {"cred_type": "httpBasicAuth", "cred_name": "LV ZoomInfo"},
+    # Phase 25 Plan 02 (D-14) — `wf_backend_status_cloud.json`'s trigger. Binds the SAME
+    # shared webhook-secret credential the enrichment trigger binds ("LV Enrichment
+    # Webhook") — one operator secret works against both endpoints, no new provisioning.
+    # Every provider probe node in that workflow reuses a name already mapped above.
+    "Status Webhook Trigger": {"cred_type": "httpHeaderAuth", "cred_name": "LV Enrichment Webhook"},
+    # Phase 27 Plan 01 — the four HubSpot count searches added to the status endpoint's
+    # chain (requested-unresolved / awaiting-review, companies + contacts). An unmapped
+    # HubSpot node deploys UNBOUND and 401s only at activation, the failure class this
+    # repo has already been bitten by three times.
+    "HS Requested Search (Companies)": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    "HS Review Search (Companies)": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    "HS Requested Search (Contacts)": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    "HS Review Search (Contacts)": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     # Quick task 2026-07-28 — pre-activation blocker: these 10 hubspot nodes were absent
     # from the map entirely, so `mapping is None: continue` deployed them UNBOUND with no
     # error, 401-ing only at runtime. Confirmed live against the built wf_*_cloud.json.

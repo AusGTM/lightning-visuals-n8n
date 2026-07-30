@@ -70,7 +70,26 @@ phase directories never collide with phases 20–22.**
   4. Every file the client adds lives under `operator-claude-plugin/`, with its own README and CHANGELOG, and no backend file is modified to make the client work — the client is replaceable without touching `n8n/`, `config/`, or the enrichment `src/` modules.
   5. With the endpoint URL or auth secret missing from admin-provisioned configuration (which lives outside the plugin source and is never committed), the plugin refuses before any network call and says in plain language what is not configured and who can fix it — the operator is never shown a key, asked to paste one, or left staring at a socket error.
 
-**Plans**: TBD
+**Plans**: 5/6 plans executed
+
+Plans:
+**Wave 1**
+
+- [x] 23-01-PLAN.md — Backend gate fix: the contact lane's create decision reads the deploy-time-overlayable write-safety constant (D-15/D-16, must land first)
+- [x] 23-02-PLAN.md — Early Code-tab smoke test: does an attached file resolve to a readable path, and can that session run the scripts (D-14a)
+- [x] 23-03-PLAN.md — Wave 0: plugin test package, autouse network guard, own requirements.txt, config example + gitignore entry
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [x] 23-04-PLAN.md — Tracer: config gate → file read → disarmed dispatch, plus the plugin manifest, the skill, and the no-backend-imports guard
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [x] 23-05-PLAN.md — Adaptive preview with display-only column labelling, skill preview/approve wording, operator docs, PLUGIN-02 reconciliation
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 23-06-PLAN.md — Manual gates: Desktop install/invocation, and one human-executed armed canary that creates a contact
 
 ### Phase 24: Non-Tabular Input Adapters
 
@@ -86,7 +105,13 @@ phase directories never collide with phases 20–22.**
   5. A field absent from the source stays absent in the row — never inferred, guessed, or filled from the model's own knowledge. A prose entry with no email address does not acquire one, and a screenshot value the image renders ambiguously (truncated, cut off, unreadable glyph) is surfaced for operator confirmation rather than completed by guessing.
   6. Rows failing the identity rule (`email` OR `firstname`+`lastname`+`company`) appear in a separate rejected list with a per-row reason and are excluded from the dispatch payload; unreadable, empty, or unsupported input produces a named error, never a silent zero-row success.
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+
+- [x] 24-01-PLAN.md — Extraction validator spine: artifact handoff, identity pre-flight, canonical-key reporting, provenance strip (wave 1)
+- [ ] 24-02-PLAN.md — Screenshot overlap dedupe on the identity key, and one-list ambiguity aggregation (wave 2)
+- [ ] 24-03-PLAN.md — The extraction contract: prose, foreign-JSON, URL and screenshot adapters wired into the Phase 23 skill (wave 2)
 
 ### Phase 25: Enrichment Lane & Cost Guard
 
@@ -100,7 +125,27 @@ phase directories never collide with phases 20–22.**
   3. Every preview — both lanes — shows an estimated provider-credit and Anthropic-token cost for the batch, derived from the repo's measured per-record rates rather than a guess, and warns when the estimate exceeds the credits actually remaining. Remaining balances arrive from the n8n-side status endpoint, never from the client calling a provider directly; a balance that cannot be read reads "unknown" and the warning says so rather than assuming headroom.
   4. A batch above the configured size limit is shown in the preview already split — chunk count and rows per chunk — before approval, and dispatch sends exactly that plan.
 
-**Plans**: TBD
+**Plans**: 7 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 25-01-PLAN.md — Blockers first: live `crm.lists.read` scope probe, chunk-timing measurement, and the recorded saved-view decision (D-02a, D-11a)
+- [ ] 25-02-PLAN.md — n8n credit-only `hubspot/backend-status` endpoint, with unreadable proven distinct from zero (D-10)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 25-03-PLAN.md — n8n list resolution on the enrichment webhook: additive branch, bounded expansion, view refusal (D-01/D-02)
+- [ ] 25-04-PLAN.md — Client tracer: provider-selection resolution, enrichment envelope, disarmed dispatch, and the documented full-waterfall default (D-03/D-04/D-06a)
+- [ ] 25-05-PLAN.md — Dated plugin-local rate table, batch estimate, status-endpoint balance client, tri-state comparison (D-07/D-08/D-09/D-10)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 25-06-PLAN.md — Chunk plan computed once, sequential dispatch that skips a failure, failed chunks returned as a re-sendable batch (D-11/D-12/D-13)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 25-07-PLAN.md — Cost block on both lanes, the enrichment skill, operator docs, and the criterion-2 and view-scope amendments (D-05, D-02a)
 
 ### Phase 26: Outcome Reporting & Safe Retry
 
@@ -110,11 +155,17 @@ phase directories never collide with phases 20–22.**
 **Success Criteria** (what must be TRUE):
 
   1. After a contact-upload dispatch the operator sees a per-record outcome — created, updated/matched, needs_review, or rejected with its reason — instead of a bare HTTP status.
-  2. After an enrichment dispatch the operator sees, per record and without leaving the session, at minimum the ICP tier and the needs-review flag, alongside remaining provider credits as reported by the n8n-side status endpoint (or the enrichment response's own `remaining_credits`) — the client never queries a provider itself.
+  2. **[AMENDED by 26-CONTEXT.md D-10a / D-10b — ICP-tier clause removed]** After an enrichment dispatch the operator sees, per record and without leaving the session, the needs-review flag alongside remaining provider credits as reported by the n8n-side status endpoint (or the enrichment response's own `remaining_credits`) — the client never queries a provider itself. *ICP tier, fit score and anti-ICP flag are deliberately absent: HubSpot owns those derived outputs by the Phase 15 "Approach C" decision (`src/merge_policy.py:347`, `n8n/code/mergeCompanies.js:53`, `config/field_policy.yaml:97`), so the backend has nothing to hand back and the report shows neither a value nor a placeholder. REPORT-02 in REQUIREMENTS.md should be reworded to match before this phase seals — fourth accepted requirement amendment in this milestone.*
   3. When the n8n run is still in flight or the response came back partial, the report says so explicitly, shows the state it does know, and tells the operator how to re-check — it never presents an incomplete run as a finished one.
   4. A failed or partially-failed dispatch names the specific rows that did not land, and re-sending exactly those rows does not create duplicates of records the earlier attempt already accepted.
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+Plans:
+
+- [x] 26-01-PLAN.md — Contact-lane per-record ledger from the decision node, executions-API fallback, run handle, and honest in-flight framing (REPORT-01, REPORT-03)
+- [ ] 26-02-PLAN.md — Enrichment-lane review flag and remaining credits, with unknown kept distinct from zero and no ICP surface (REPORT-02)
+- [ ] 26-03-PLAN.md — Failing rows named and classified by what a re-send can fix; retry routes through the one armed dispatch path (DISPATCH-04)
 
 ### Phase 27: Backend Status Surface
 
@@ -126,10 +177,28 @@ phase directories never collide with phases 20–22.**
   1. Asking "what's the backend doing?" returns, per workflow: on or off, whether live writes are currently enabled, when it last ran and whether that run succeeded, and what is in flight — read from the n8n API, not asserted from local config.
   2. A failed execution is reported by cause in plain language — expired credential, rate limit, exhausted quota, malformed record — and names whether the operator or an admin can fix it. No status codes, no stack traces, no "check the n8n UI".
   3. Provider credit balances and remaining headroom reach the operator through the n8n-side status endpoint. The plugin never holds a provider or HubSpot credential, and a provider whose balance cannot be read (Apollo's key is not master — it 403s) shows as unknown, never as zero or healthy.
-  4. Stuck locks, records queued but never processed, and the review backlog are surfaced with counts, so a silently wedged backend is visible without anyone thinking to look.
+  4. Wedged runs (an execution still running past a configured threshold), records queued but never processed, and the review backlog are surfaced with counts, so a silently wedged backend is visible without anyone thinking to look. *(Amended by 27-CONTEXT.md D-07a/D-07b/D-07d — the original wording named a HubSpot lock property that does not exist in this portal's schema, and a runtime status value nothing in the pipeline ever writes. "Stuck" is redefined against the executions API. Third accepted requirement amendment in this milestone.)*
   5. Status is conversational text by default; on request a dashboard Artifact carries the same data stamped with its fetch time, and refreshing re-publishes to the same URL rather than minting a second one.
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 27-01-PLAN.md — Backend: grow `hubspot/backend-status` from credits-only to full health — queued and review-backlog counts for both object types, plus credential health, with unknown never collapsing to zero
+- [ ] 27-02-PLAN.md — Failure-cause translation: the static signature table and D-05's guardrail (unmatched errors labelled as interpretation, raw text redacted, attribution defaulted to an admin)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 27-03-PLAN.md — Tracer: one workflow end to end — config gate, read-only n8n API client, write-safety literal read, backend-status POST, unknown rendering
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 27-04-PLAN.md — Full picture: every workflow with no allowlist, stuck-by-execution-age, per-node error harvesting, and the conversational answer plus its skill
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 27-05-PLAN.md — Dashboard Artifact, the two-field identifier store with a 30-day default TTL and garbage collection, and one human checkpoint for same-URL refresh across sessions
 
 ### Phase 28: Control Actions
 
@@ -144,7 +213,29 @@ phase directories never collide with phases 20–22.**
   4. Every mutation states its consequence before it happens ("this lets enrichment overwrite company fields in HubSpot"), shows what will change, and waits for explicit confirmation. The mutation set is allowlisted — write-safety flag overlay, Schedule Trigger cadence, workflow active state — and any other workflow-JSON change is refused rather than attempted.
   5. After every mutation the plugin re-reads the backend and reports verified or failed. A `200` from n8n is never reported as success on its own, and the inverse action is stated at the moment the change lands.
 
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 28-01-PLAN.md — Tracer: the mutation pipeline end to end (fetch, four-key PUT filter, structural allowlist diff, prior-active-restoring bracket, independent read-back) proven on workflow on/off
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 28-02-PLAN.md — Live semantics probes, human-executed, arming nothing: the no-op GET→PUT round-trip, the execute-endpoint check, and whether the deactivate→PUT→activate bracket is actually effective
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 28-03-PLAN.md — Arming lifecycle: bidirectional write-safety setter, record-scoped arm, read-back-verified disarm, loud disarm failure
+- [ ] 28-04-PLAN.md — Cadence in plain terms: read, describe, parse-or-refuse, one-node mutation; plus the per-job schedule enable/disable decision
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 28-05-PLAN.md — Operator surface: one confirmation choke point, the backend-control skill, lane starts, and the CONTROL-01 amendment
+
+**Wave 5** *(blocked on Wave 4)*
+
+- [ ] 28-06-PLAN.md — Manual gates: one human-executed armed canary bounded to a single record, plus control-surface documentation
 
 ### Phase 29: Notices & Unattended Sweep
 
@@ -159,7 +250,26 @@ phase directories never collide with phases 20–22.**
   4. The sweep is silent when the backend is healthy, and each notice it does send states whether the operator or an admin can act on it.
   5. The sweep is read-only by construction: it burns no provider credits, enables no writes, dispatches nothing. A sweep that fires while live writes are off changes nothing about that.
 
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 29-01-PLAN.md — Platform probes: can a scheduled routine invoke this plugin's own skill, where does its notice land, and does Desktop chat follow up unprompted (D-04, bonus-only)
+- [ ] 29-02-PLAN.md — Wave 0: sweep fixtures including the two deceptively-healthy payloads, plus the measured watch bound from data the ledger already fetches (D-06a)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 29-03-PLAN.md — Tracer: one condition end to end (read → classify → attribute → notice), plus NOTICE-05's import-graph guard proven to bite (D-02a)
+- [ ] 29-04-PLAN.md — The bounded in-session watch: two terminal reports and no third, per-record outcomes and cost actually incurred (D-05a, D-07)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 29-05-PLAN.md — The remaining conditions: credential failure and exhausted quota as new judgment over existing data, failed scheduled run past its swallowed-error blind spot, review backlog, stuck-armed backstop; silence when healthy
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 29-06-PLAN.md — Ship it: the sweep skill, the scheduled-routine template, the two-part install docs, and one live gate proving a notice arrives with no session open
 
 ### Phase 30: Review-Queue Triage
 
@@ -174,7 +284,36 @@ phase directories never collide with phases 20–22.**
   4. Every decision stamps human source, timestamp, and the operator's stated reason into the existing source-metadata fields, so the audit trail distinguishes a person's call from a model's.
   5. Rejecting a record records the reason and leaves it in the queue. Review flags are never silently cleared, and a record never leaves the queue without a recorded decision.
 
-**Plans**: TBD
+**Plans**: 7 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 30-01-PLAN.md — Review writeback gets its own backend arming flag, separate from dispatch arming in both directions, and the pinned four-name overlayable set is deliberately widened to five
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 30-02-PLAN.md — Tracer: one rejection end to end — webhook, refetch, decision module, dry-run preview, disarmed write gate, single-property PATCH
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 30-03-PLAN.md — Approve through the existing `reviewApply` compare-and-set, stamped as a human decision in the provenance blob; contacts routed through the same endpoint
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 30-04-PLAN.md — `hubspot/review/queue`: one authenticated, provably read-only call returning the flagged backlog with its stored conflict detail
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 30-05-PLAN.md — Client: plain-language conflict rendering, display-only field-policy labelling, HubSpot record links
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 30-06-PLAN.md — Client: session-scoped review arm, the backend's own exact-write display, read-back verification, and the review-triage skill
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 30-07-PLAN.md — Admin runbook plus the one human-executed armed canary on a single allowlisted record, closed by a read-back-verified disarm
 
 ## v0.6 Progress
 
@@ -189,7 +328,7 @@ the operator can act on it without leaving the conversation.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 23. Walking Skeleton — Plugin Shell & Tabular Dispatch | 0/? | Not started | - |
+| 23. Walking Skeleton — Plugin Shell & Tabular Dispatch | 5/6 | In Progress|  |
 | 24. Non-Tabular Input Adapters | 0/? | Not started | - |
 | 25. Enrichment Lane & Cost Guard | 0/? | Not started | - |
 | 26. Outcome Reporting & Safe Retry | 0/? | Not started | - |
@@ -209,19 +348,23 @@ Traceability table lives in `REQUIREMENTS.md`.
   identity resolution, dedupe and create/update routing are n8n-side and stay there. The
   plugin's only mapping responsibility is producing canonical-prop rows from *non-tabular*
   sources; tabular input passes through to the existing `Map Columns` node.
+
 - **XLSX is not a wire format.** `Extract From File` on the contact-upload workflow runs
   `operation: csv`, so an XLSX input has to be read locally and sent as CSV bytes.
   `src/file_loader.py` already reads CSV/TSV/JSON/XLSX into `list[dict]` — reuse it rather
   than adding a parser.
+
 - **The `providers` field is the burn gate.** `Parse HubSpot Event` treats an absent or
   unrecognized `providers` value as *no providers enabled*. Any enrichment payload the
   plugin builds must set it explicitly and deliberately.
+
 - **Response-shape risk for REPORT-01.** `hubspot/contact-upload` uses
   `responseMode: lastNode` across a branching graph (`HubSpot Update` / `HubSpot Create` /
   `Set Review`), so the HTTP response may not carry every row's outcome. Phase 26 planning
   should verify what actually comes back before assuming a complete per-record ledger is
   available from the response alone; the n8n executions API (already used by
   `scripts/enrichment_cost_ledger.py`) is the fallback source.
+
 - **The client is a separate implementation living in `operator-claude-plugin/`.** Backend
   directories (`n8n/`, `config/`, `scripts/`, and the enrichment modules in `src/`) are not this
   milestone's to edit — the one exception is the new n8n-side status endpoint, which is backend
@@ -230,12 +373,14 @@ Traceability table lives in `REQUIREMENTS.md`.
   without a backend change. `src/file_loader.py` reuse is a co-location convenience (file reading
   is client-side work, not backend logic) and is documented as such — not a licence to import
   merge policy, scoring, or provider code.
+
 - **The plugin holds no provider credentials.** ZoomInfo/Apollo/Lusha and HubSpot creds live in
   n8n, managed by an admin there. So `scripts/check_provider_credits.py`'s direct-to-provider
   reads are an *admin* tool, not a model for the plugin. Credit balances reach the operator
   through a new n8n-side status endpoint. Phase 25 builds the credit-only slice it needs for
   PREVIEW-02; Phase 27 generalizes the same endpoint to full health. Plan them as one endpoint
   grown twice, not two endpoints.
+
 - **Arming is a workflow write, not a runtime setting.** `ALLOW_*` write gates are compiled into
   the workflows' Code nodes by `deploy_n8n_workflows.py` via the `ENABLE_BAKED_FLAGS` overlay,
   and schedule cadence lives in Schedule Trigger parameters — both mean `PUT /api/v1/workflows/{id}`.
@@ -244,20 +389,24 @@ Traceability table lives in `REQUIREMENTS.md`.
   than hand-rolling the rewrite. Note the standing constraint: agent tooling in this repo is
   blocked from performing arming writes, so Phase 28's armed path needs a human in the loop to
   execute and verify even though the operator-facing design is a yes/no in chat.
+
 - **Session-scoped arming is the plugin's own state, not n8n's.** n8n's baked flag is persistent
   by nature; the conversation-scoped permission lives in the plugin and gates whether it will
   use it. Both states must appear in status (CONTROL-04, STATUS-01) — "n8n allows writes" and
   "I am willing to write right now" are different facts and conflating them is how a silent
   live send happens.
+
 - **Cost rates already measured.** Per-record provider match rates and Lusha credit burn
   (~4.65 credits/reveal under v2; v3 flat ~1cr/contact) plus the Anthropic token probe live
   in the v0.5 artifacts and `scripts/enrichment_cost_ledger.py` /
   `scripts/check_provider_credits.py`. PREVIEW-02 derives from those, it does not re-measure.
+
 - **Screenshots arrive as attachments, not captures.** INGEST-07 reads images the operator
   hands over in-session; the plugin drives no browser and logs into nothing. Planning must not
   reach for browser automation here — that would recreate the scraping path this milestone
   excludes. Extraction is a vision read on the attached image; the confidence signal it needs
   is "is this glyph legible", not "is this fact true".
+
 - **Out of scope, do not plan phases for:** anti-bot-detection or user-agent spoofing for URL
   ingestion, authenticated/paywalled scraping, automated screenshot capture, company-object
   ingestion, scheduled/unattended runs, and write-back of corrections from the plugin.

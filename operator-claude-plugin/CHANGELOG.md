@@ -23,14 +23,76 @@ over the same n8n system, so its version says nothing about backend capability.
   posture (disarmed by default, conversation-scoped live-write permission, confirm-then-verify
   on every mutation, read-only unattended monitoring), and cost posture (previewed estimates
   from measured rates, warn against remaining credits, chunking plan before send).
+- **Phase 23 — plugin shell and the contact-upload lane.** A loadable Claude Code plugin
+  (`.claude-plugin/plugin.json` + `skills/contact-upload/SKILL.md`, auto-triggered and
+  slash-invocable) driving four thin, independently-testable Python modules:
+  `config_gate.py` (refuses before any network call on missing/invalid config),
+  `tabular.py` (reads CSV/XLSX headers and rows verbatim, converts XLSX to CSV bytes for
+  the wire), `preview.py` (adaptive, display-only preview — reads
+  `config/column_mapping.yaml` only as a read-only lookup for labelling, never to
+  transform a row; ≤20 rows renders every row, larger batches render first-10/last-3 plus
+  per-column fill rates), and `dispatch.py` (the one POST to `hubspot/contact-upload`;
+  `armed` has no default, so a forgotten argument is a `TypeError`, never a silent send).
+  Config setup is a one-time operator step from a tracked example file
+  (`config/operator.local.example.json`); see this file's README for the full setup,
+  file-handoff, and preview walkthrough.
+- **Phase 24 — non-tabular input adapters.** Four new ways to hand the skill contacts without a
+  spreadsheet: pasted freeform text, a foreign-shaped JSON blob, a public URL (fetched with the
+  native `web_fetch` tool only — no HTTP client, no user-agent choice, no viewport, no
+  authenticated fetch), and operator-supplied screenshots (never captured by the plugin itself).
+  Extraction is Claude reading the source in-session — no Anthropic API call, no API key anywhere
+  in the plugin — governed by one no-invention rule stated once in the new
+  `skills/contact-upload/extraction.md` bundled resource: absent data stays absent, an unclear
+  value goes to a single per-batch ambiguity list instead of being guessed, and a row is never
+  completed just to pass the identity check. `extraction.py` (the validator, not the extractor)
+  enforces the checkable half: every accepted row carries provenance, a non-canonical key is
+  stripped and reported rather than silently dropped, overlapping screenshot reads of the same
+  person collapse on the same identity rule the backend uses, and a value an extraction itself
+  flagged as ambiguous cannot also be asserted as a fact. `test_extraction_contract.py` pins
+  `extraction.md`'s documented examples to the real validator so the two halves of the contract
+  cannot silently drift apart. One preview, one dispatch path, unchanged — this phase adds
+  producers in front of Phase 23's choke point, nothing behind it.
+- **Phase 26 — per-record outcome reporting and safe retry.** After a send, the operator sees
+  what happened to each row — created, updated-matched, needs-review, rejected, or
+  not-confirmed — read from the decision the backend actually made (`scripts/report.py`), not a
+  bare HTTP status; falling back to one read of `scripts/executions_client.py`'s executions API
+  when the synchronous response is thin or the Cloudflare ~100s webhook ceiling is hit, and
+  saying plainly when a report came from that fallback and may still be progressing. Every
+  failing row is now told apart by whether re-sending it can help: a row with no usable email
+  and an ambiguous identity outcome is named permanently stuck — the deployed workflow resolves
+  identity by email only, so it needs an email address or manual handling in HubSpot, never
+  another attempt — while a genuine transport failure is offered back for retry. Retry reuses
+  the one existing `scripts/dispatch.py` entry point verbatim, arming gate intact; duplicate
+  safety on a re-send is the backend's own identity resolution, not a client-side ledger, and an
+  AST-based guard now keeps it that way by construction. Re-checking a run by its printed handle
+  happens only when the operator asks — no poll loop, here or anywhere else in this client.
+
+- **Phase 27 — backend status surface.** A `/operator-claude-plugin:backend-status` skill that
+  answers "what is the backend doing?" without the operator opening n8n and without this client
+  holding a provider or HubSpot credential. The picture is split along that credential boundary:
+  the client reads `/api/v1/workflows` and `/api/v1/executions` itself for on/off state, live-write
+  arming, what is in flight and how the last run ended, while the n8n-side `hubspot/backend-status`
+  endpoint supplies only what needs credentials the client does not have — provider balances,
+  credential health, and HubSpot queue/review counts. Every workflow the API key can see is
+  reported with no allowlist, so a newly deployed or renamed workflow appears without a config
+  edit. "Stuck" is an execution-age verdict that always carries both the run's age and the
+  threshold, because that threshold is a carried convention rather than a measured figure.
+  Failures are read out of per-node output rather than run status — every provider-facing node is
+  configured to carry on when it errors, so a rejected credential leaves the run reading `success`
+  — and are translated to one plain sentence naming who can fix it, with an unrecognised signature
+  labelled as an interpretation, shown beside its raw text, and attributed to an admin rather than
+  to the operator. A datum the backend could not supply reads `unknown`, never zero and never
+  healthy. **On request only**, the same reading publishes as a dashboard Artifact stamped with
+  when the data was fetched (not when the page was drawn), republishing to the same link on
+  refresh — including from a new conversation, backed by the client's first and only piece of
+  persisted state: one artifact identifier and its timestamp, gitignored, expiring after
+  `dashboard_artifact_ttl_days` (default 30) and collected on the next skill open. The whole
+  surface reads: it turns nothing on or off, starts nothing, and writes to no record.
 
 ### Planned
 
-Milestone v0.6, phases 23–30 — see `.planning/workstreams/plugin-entrypoint/ROADMAP.md`:
+Milestone v0.6, phases 25–30 — see `.planning/workstreams/plugin-entrypoint/ROADMAP.md`:
 
-- **23** Plugin shell, spreadsheet ingestion, preview/approve, dispatch to `hubspot/contact-upload`
-- **24** Non-tabular adapters: prose, foreign JSON, public URLs, web-page screenshots, with
-  per-row provenance and no invented values
 - **25** Enrichment lane on existing records + cost guard (credit/token estimate, chunking)
 - **26** Per-record outcome reporting and safe retry without duplicates
 - **27** Backend status surface: n8n-side health endpoint, plain-language read, dashboard artifact

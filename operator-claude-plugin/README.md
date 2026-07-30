@@ -4,8 +4,10 @@ A conversational **front end and control panel** for the n8n enrichment backend 
 repository. It lets a non-technical operator load contacts, trigger enrichment, watch runs,
 change schedules, and resolve review conflicts — from a chat window, without opening n8n.
 
-> **Status: planned, not yet implemented.** This directory currently holds only its README and
-> CHANGELOG. Implementation lands across phases 23–30 of milestone v0.6; see
+> **Status: one lane implemented.** Phase 23 shipped the plugin shell and the
+> spreadsheet-to-`hubspot/contact-upload` lane described in this README's setup and usage
+> sections below. Remaining lanes (non-tabular ingestion, enrichment, status, control,
+> notices, review triage) land across phases 24–30 of milestone v0.6; see
 > `.planning/workstreams/plugin-entrypoint/ROADMAP.md`.
 
 ---
@@ -101,11 +103,15 @@ The intended operator is **non-technical and works in Claude Desktop.** They do 
 run commands, edit config files, or handle secrets. This shapes the design more than anything
 else:
 
-- **No terminal instructions, ever.** If the client cannot do something itself, it says so in
-  plain language and names the person who can. "Run this script" is a bug, not a fallback.
-- **No secrets in the conversation.** Configuration is admin-provisioned. The client holds only
-  the n8n base URL, an n8n API key, and the webhook secret. Provider and HubSpot credentials
-  stay in n8n. The operator sees health — "ZoomInfo access expired, ask an admin" — never values.
+- **No terminal instructions during everyday use, ever.** Loading contacts, previewing, approving,
+  and arming all happen by talking to the skill — never by running a script. The one exception is
+  the one-time setup below: the operator copies a tracked example file and fills in two values
+  obtained from an admin. That is a one-time file edit, not an ongoing terminal workflow, and nothing
+  about it repeats once the plugin is configured.
+- **No secrets typed into the conversation.** The client holds only the n8n base URL, an n8n API
+  key, and the webhook secret — set once in the plugin-local config file (see "One-time setup"),
+  never pasted into chat, never echoed back by the skill. Provider and HubSpot credentials stay in
+  n8n entirely. The operator sees health — "ZoomInfo access expired, ask an admin" — never values.
 - **Errors are translated.** Expired credential, rate limit, exhausted quota, malformed record.
   No status codes, no stack traces, no "check the n8n logs".
 - **Partial failure is normal and must read as such.** A dead provider does not present as total
@@ -135,16 +141,158 @@ costs nothing beyond extraction.
 
 ---
 
+## One-time setup
+
+Do this once, before the first upload:
+
+1. In `operator-claude-plugin/config/`, copy `operator.local.example.json` to
+   `operator.local.json` (same directory). This filename is deliberately not a dotfile —
+   dotfiles are unreadable to this environment's tooling.
+2. Fill in its two values, both obtained from your n8n admin:
+   - `n8n_url` — the `https://` address of your n8n Cloud instance.
+   - `webhook_secret` — sent as the `X-Enrichment-Secret` header on every request; never
+     shown back to you by the skill, and never typed into the conversation.
+3. Install this plugin's own dependencies once: `pip install -r
+   operator-claude-plugin/requirements.txt` (`openpyxl`, `requests`, `PyYAML`). If you're
+   running in the same Claude Desktop Code-tab environment this plugin was verified
+   against, these already import with no install step.
+4. `operator.local.json` is gitignored — it is never committed, and the plugin never
+   displays its contents back to you.
+
+If something is missing or malformed, the skill refuses before making any network call
+and says in plain language what to fix — run the skill (or `/operator-claude-plugin:contact-upload`)
+and its first message names the exact problem and points back to step 1 above.
+
+## Giving it a file
+
+Two ways to hand the skill a spreadsheet, both confirmed working in this plugin's Code-tab
+environment:
+
+- **Attach it** to the conversation, the same way you'd attach any file in chat.
+- **`@mention` it** by name using the autocomplete picker, if the file already lives inside
+  this repository's workspace.
+
+Either way works — just say you have a contact spreadsheet to load and hand it over by
+whichever of the two is convenient. You never need to type a filesystem path by hand.
+
+## What the preview shows, and what approving/arming mean
+
+Before anything is sent, the skill shows you a preview built from the file exactly as you
+gave it — the plugin never rewrites your file, it only reads it to describe what n8n's
+own mapping will do:
+
+- **Row count** — how many contacts are in the file.
+- **Header labels** — each column header next to the canonical field n8n will map it to
+  (e.g. `Email Address → email`), and every header n8n's mapping won't recognize, called
+  out explicitly as dropped, so nothing silently disappears without you seeing it first.
+- **Large batches** (more than about 20 rows) show the first 10 and last 3 rows plus a
+  fill-rate percentage per column, instead of the whole table, so the preview stays
+  readable at any size.
+- **On request only**, the same preview can be published as a standalone Artifact instead
+  of a chat table.
+
+**Approving** the preview does not send anything by itself — sending is off by default for
+every new conversation. **Declining** ends things right there: nothing is sent, and
+nothing beyond reading the file has happened. To actually send, say **"arm the upload"**
+after approving; arming lasts for that conversation only, is never written to disk, and
+has to be said again in a new conversation.
+
+---
+
+## Beyond spreadsheets: pasted text, JSON, a URL, or screenshots
+
+You don't need a spreadsheet to load contacts. Hand the skill any of these instead, and it reads
+them the same conversational way:
+
+- **Pasted text** — an email signature, a typed list of names and companies, an email thread.
+- **A JSON blob** — a contact export from some other system, in whatever shape it's in.
+- **A public URL** — paste the link and the skill fetches the page itself.
+- **Screenshots** — one or more images you've already captured (a scrolled profile page, a
+  contact list). Hand over as many as you have; if it's a long scrolled sequence, the skill will
+  ask you to submit in a couple of batches rather than one huge one.
+
+A few things are true across all four:
+
+- **A row is never completed by guessing.** If something can't be read clearly, or a field just
+  isn't there, it's left blank rather than filled in with a plausible guess.
+- **Anything uncertain comes back as one list to confirm**, alongside the preview — not one
+  interruption per row. If you approve without addressing something on that list, the field it
+  names stays blank; nothing gets filled in behind your back.
+- **The plugin does not capture screenshots itself, and it does not log into any site.** You
+  hand over images you already have. If you ask it to go grab a screenshot of a page, it will
+  tell you plainly that it doesn't do that.
+- **Profile data from a site the licensed provider waterfall already covers — LinkedIn, for
+  one — still comes from that waterfall on the backend,** never from a picture of the page you
+  hand over. A screenshot is not a shortcut around that.
+
+Nothing about the credential boundary above changes for any of this: this plugin still holds no
+provider or HubSpot credentials, and this phase adds no key of any kind.
+
+## Asking what the backend is doing
+
+Ask in plain language — "what's the backend doing?", "is anything stuck?", "how many
+records are waiting for review?", "has anything run out of credit?" — or invoke
+`/operator-claude-plugin:backend-status`. **This surface only reads.** It cannot turn a
+workflow on or off, start or cancel a run, or change a record.
+
+The answer comes back as text and covers every workflow the n8n API key can see (there is
+no list to maintain — a newly deployed or renamed workflow just appears):
+
+- whether each one is switched on, and whether **live writes to HubSpot** are currently
+  armed on it;
+- what is running right now, and whether it has been running long enough to look wedged —
+  stated with both the run's age and the threshold, because that threshold is a
+  convention rather than a measurement;
+- when it last ran, and if that run failed, **why**, in one sentence naming who can fix
+  it — no status codes, no stack traces;
+- how many companies and contacts are queued or waiting on a review decision;
+- provider credit balances and credential health.
+
+**`unknown` never means zero.** A count or a balance the backend could not read says so
+in that word. A provider we cannot ask about (Apollo's key legitimately refuses balance
+reads) shows as unknown, not as healthy and not as an empty balance.
+
+### The dashboard
+
+Text is what you get by default. Ask for **a dashboard** and the same reading is published
+as an Artifact — one page with the same workflows, counts and balances, stamped with
+**when the data was fetched**, not when the page was drawn. A dashboard left open in a tab
+is not a live view; it says what was true at the moment stamped on it. Ask for a refresh
+and it republishes to the **same link**, so the link is worth bookmarking — including from
+a new conversation, which is the only part of this that needed the plugin to remember
+anything.
+
+What it remembers is one identifier and the time it was saved, in
+`operator-claude-plugin/state/dashboard_artifact.json` — never committed, and carrying no
+URL, no secret and no record. It expires after **30 days** by default; change
+`dashboard_artifact_ttl_days` in `config/operator.local.json` to make that longer or
+shorter, and set it to `0` to stop the link being reused at all. An expired pointer is
+deleted the next time the skill runs, and the next dashboard request mints a fresh link.
+
 ## Layout
 
 ```text
 operator-claude-plugin/
-  README.md      # this file
-  CHANGELOG.md   # changes to this client only; backend changes live in the root CHANGELOG
+  README.md               # this file
+  CHANGELOG.md            # changes to this client only; backend changes live in the root CHANGELOG
+  requirements.txt        # this plugin's own dependencies — openpyxl, requests, PyYAML
+  .claude-plugin/
+    plugin.json           # plugin manifest
+  skills/contact-upload/
+    SKILL.md               # the conversation contract: state target, resolve file, preview, approve, arm, dispatch
+  scripts/
+    config_gate.py         # load/validate operator.local.json; refuses before any network call
+    tabular.py              # read CSV/XLSX headers+rows verbatim; convert XLSX to CSV bytes for the wire
+    preview.py              # adaptive, display-only preview (reads config/column_mapping.yaml as a lookup only)
+    dispatch.py             # the one POST to hubspot/contact-upload; armed has no default
+  config/
+    operator.local.example.json  # tracked template — copy to operator.local.json (gitignored) per setup above
+  tests/                   # this plugin's own test suite, run under the repo's .venv
 ```
 
-Implementation files arrive with phase 23. Backend code stays where it is — `n8n/`, `src/`,
-`config/`, `scripts/` are not this directory's concern.
+Backend code stays where it is — the **repo root's** `n8n/`, `src/`, `config/`, `scripts/`
+directories are a different thing from this directory's own `config/` and `scripts/` above, and
+this plugin never imports from them.
 
 ## Related
 
