@@ -1864,10 +1864,13 @@ function needsResearch(existingRecord) {
     "unless a cited source directly supports the classification.",
     "lv_sponsorship_reliant is a sponsorship-reliance signal, not a hard-veto input - answer",
     "null unless a cited source directly supports the classification.",
+    "lv_country_region_normalized (one of AU|NZ|ANZ|Other|Unknown) feeds the non-ANZ",
+    "hard veto - answer from cited evidence (HQ/about page), prefer \"Unknown\" over",
+    "guessing, and cite it in evidence_by_field.lv_country_region_normalized.",
     "Return ONLY one JSON object, no prose, no markdown fences, matching:",
     '{"data":{"lv_org_type":<str>,"lv_produces_content":<bool|null>,"lv_content_type":[<str>],',
     '"lv_is_hardware_vendor":<bool|null>,"lv_is_gambling_operator":<bool|null>,',
-    '"lv_sponsorship_reliant":<bool|null>},',
+    '"lv_sponsorship_reliant":<bool|null>,"lv_country_region_normalized":<str|null>},',
     '"evidence_by_field":{"<field>":"<url>"},"entity_resolution":{...},',
     '"matched":<bool>,"confidence":<int 0-100>}',
   ].join(" ");
@@ -1885,7 +1888,7 @@ function needsResearch(existingRecord) {
       known_revenue_band: (row.existingRecord && row.existingRecord.lv_revenue_band) || null,
       required_fields: ["lv_org_type", "lv_produces_content", "lv_content_type",
                         "lv_is_hardware_vendor", "lv_is_gambling_operator",
-                        "lv_sponsorship_reliant"],
+                        "lv_sponsorship_reliant", "lv_country_region_normalized"],
       return_only_json: true,""",
     validate_inline_modules=("taxonomy.generated.js", "taxonomy.js", "webResearch.js"),
     validate_call_fn="researchCandidateFromHttpItem",
@@ -2345,13 +2348,14 @@ return $input.all().map((it) => {
   let finalMerge = merged;
   const rc = row.research_candidate;
   if (rc && rc.matched) {
-    // COPY-01: lv_sponsorship_reliant appended at the END of this array (never inserted
-    // mid-array) so every existing field's key-insertion order stays byte-stable. The
-    // tri-state/blank continue guard below already applies uniformly to the new entry.
+    // COPY-01: lv_sponsorship_reliant / lv_country_region_normalized appended at the END
+    // of this array (never inserted mid-array) so every existing field's key-insertion
+    // order stays byte-stable. The tri-state/blank continue guard below already applies
+    // uniformly to each new entry.
     const researchData = {};
     for (const f of ["lv_org_type", "lv_produces_content", "lv_content_type",
                      "lv_is_hardware_vendor", "lv_is_gambling_operator",
-                     "lv_sponsorship_reliant"]) {
+                     "lv_sponsorship_reliant", "lv_country_region_normalized"]) {
       const v = rc.data && rc.data[f];
       // tri-state null (TS-2 coercion) / blank -> skip, so mergeCompanies' own _isBlank
       // check has nothing to write; an evidenced false is NOT blank and flows through.
@@ -2365,10 +2369,18 @@ return $input.all().map((it) => {
       const researchMerged = mergeCompanies(row.existingRecord || {}, researchData, undefined,
         { source: "claude_web", confidence: rc.confidence || 80, evidence: rc.evidence_by_field || {},
           confidenceByField: row.judge_confidence_by_field || {} });
-      // Phase 15: the two mergeCompanies calls handle DISJOINT field sets (waterfall:
-      // domain/industry/revenue_band/employee_band/country; claude_web: org_type/
-      // produces_content/content_type/hardware/gambling), so a shallow merge of each
-      // provenance object + cacheKeys object is safe — no key collision.
+      // Phase 15: the two mergeCompanies calls handle mostly DISJOINT field sets
+      // (waterfall: domain/industry/revenue_band/employee_band/country; claude_web:
+      // org_type/produces_content/content_type/hardware/gambling/sponsorship), so a
+      // shallow merge of each provenance object + cacheKeys object is safe for those keys.
+      // lv_country_region_normalized (REQ-country-region-policy) is the ONE field both
+      // candidate sets can populate — the spread below intentionally lets researchMerged
+      // win when claude_web reaches its own promote decision (last-spread-wins), else the
+      // waterfall decision stands. Decisions from both calls are concatenated (never
+      // deduped), so an audit trail with two entries for this field is expected, not a
+      // bug. ponytail: no cross-source conflict check here (that's CONFLICT_WATCH's job
+      // above, scoped to revenue/employee bands only) — add one if silent overwrite
+      // between provider and research region values proves to be a real problem.
       finalMerge = {
         canonicalPatch: { ...merged.canonicalPatch, ...researchMerged.canonicalPatch },
         provenance: { ...merged.provenance, ...researchMerged.provenance },
