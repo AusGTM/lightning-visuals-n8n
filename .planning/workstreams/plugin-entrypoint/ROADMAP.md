@@ -191,7 +191,29 @@ Plans:
   4. Every mutation states its consequence before it happens ("this lets enrichment overwrite company fields in HubSpot"), shows what will change, and waits for explicit confirmation. The mutation set is allowlisted — write-safety flag overlay, Schedule Trigger cadence, workflow active state — and any other workflow-JSON change is refused rather than attempted.
   5. After every mutation the plugin re-reads the backend and reports verified or failed. A `200` from n8n is never reported as success on its own, and the inverse action is stated at the moment the change lands.
 
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 28-01-PLAN.md — Tracer: the mutation pipeline end to end (fetch, four-key PUT filter, structural allowlist diff, prior-active-restoring bracket, independent read-back) proven on workflow on/off
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 28-02-PLAN.md — Live semantics probes, human-executed, arming nothing: the no-op GET→PUT round-trip, the execute-endpoint check, and whether the deactivate→PUT→activate bracket is actually effective
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 28-03-PLAN.md — Arming lifecycle: bidirectional write-safety setter, record-scoped arm, read-back-verified disarm, loud disarm failure
+- [ ] 28-04-PLAN.md — Cadence in plain terms: read, describe, parse-or-refuse, one-node mutation; plus the per-job schedule enable/disable decision
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 28-05-PLAN.md — Operator surface: one confirmation choke point, the backend-control skill, lane starts, and the CONTROL-01 amendment
+
+**Wave 5** *(blocked on Wave 4)*
+
+- [ ] 28-06-PLAN.md — Manual gates: one human-executed armed canary bounded to a single record, plus control-surface documentation
 
 ### Phase 29: Notices & Unattended Sweep
 
