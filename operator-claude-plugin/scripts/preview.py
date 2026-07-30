@@ -155,6 +155,34 @@ def build_preview(path, mapping_path=None) -> dict:
     return preview
 
 
+def build_extracted_preview(result) -> dict:
+    """Structured preview for an extraction result (Phase 24): every accepted row
+    alongside its provenance, every rejected row with its reason, every dropped
+    non-canonical key, and the batch's ambiguities — the operator's one-stop view before
+    approving. Returns structured data, not rendered markdown (D-09: the skill owns
+    rendering). Read-only: no network call, no file write. Reuses _adaptive_sample(), the
+    same sampling rule build_preview() applies, so the two preview surfaces never
+    disagree about the same batch.
+
+    `result` is duck-typed (an extraction.ExtractionResult or anything with the same
+    `.accepted`/`.rejected`/`.dropped_keys`/`.ambiguities` attributes) — this module does
+    not import extraction.py, so there is no import cycle with extraction.py importing
+    resolve_mapping_path() above.
+    """
+    accepted = result.accepted
+
+    adaptive, sample_rows = _adaptive_sample(accepted)
+
+    return {
+        "row_count": len(accepted),
+        "adaptive": adaptive,
+        "sample_rows": sample_rows,
+        "rejected": result.rejected,
+        "dropped_keys": result.dropped_keys,
+        "ambiguities": result.ambiguities,
+    }
+
+
 if __name__ == "__main__":
     import sys
 
