@@ -361,3 +361,37 @@ guard's coverage of GET — it is **not** GET-blind, verified three separate tim
 *Context gathered: 2026-07-30*
 *Corrections D-26…D-31 folded in 2026-07-31 from a `gsd-plan-checker` run (5 blockers, 7 concerns),
 after Phase 27 shipped. D-25's status as a settled amendment was reasserted at the same time.*
+
+### D-32 — the repair's own drift, caught by the re-check (2026-07-31)
+
+A second checker run over the repaired plans found the repair had **orphaned a reference in the one
+file it did not edit**. `28-06` still described the mutation allowlist as *"the three allowlisted
+mutations … plus per-job schedule enablement **if 28-04's decision permitted it**"* — the deleted
+checkpoint's conditional voice. Since D-25 settled that decision, an allowlist documented as three
+conditional items would have contradicted the code, this file, and the REQUIREMENTS/ROADMAP text
+28-05 Task 3 writes. **The allowlist is four items, unconditionally**, the fourth being a Schedule
+Trigger node's `disabled` boolean. Corrected in `28-06`.
+
+Also corrected there: `28-06`'s precondition named `N8N_URL`/`N8N_API_KEY` as shell variables, which
+the B4 repair had already established the plugin never reads — it loads credentials only from
+`operator.local.json` via `config_gate.load_config()`. The precondition now names the operator
+config and `N8N_EXPECTED_URL`, with the deploy-script steps called out as the genuine exception,
+since `deploy_n8n_workflows.py` is a repo script and does read the shell environment.
+
+**Lesson for future repairs: a fix that edits N of M plans must re-scan the other M−N for references
+to what it changed.** The re-check is what caught this; the repair pass did not.
+
+### D-33 — the transport object shape is a real seam change, and no fixture matches it yet
+
+D-27's `transport=requests` rule (bare module, called as `transport.put(...)`) correctly keeps
+Phase 28 out of `test_retry_reuses_dispatch.py`'s `_SEND_CALL_ATTRS = {"post","put"}` guard — but it
+is a **different object shape** from everything shipped. Verified 2026-07-31:
+`tests/conftest.py`'s `_StubTransport` (:114) and `_StubGetTransport` (:174) are **callables**, not
+module-shaped objects carrying `.get`/`.post`/`.put`; and `n8n_read.get_workflow(config, id,
+transport=requests.get)` (:88) passes `transport` straight to `_get_json`, which **calls** it (:58).
+
+So every "recording transport" acceptance criterion in this phase is unsatisfiable with the shipped
+fixtures, and a module-shaped transport must be handed down to `n8n_read` as `transport.get`, not as
+`transport`. The executor of 28-01 adds a module-shaped recorder fixture whose `.get`/`.post`/`.put`
+share one `calls` list. Not a safety defect — the first test run fails loudly — but it is real work
+that no plan costed.
