@@ -124,7 +124,27 @@ Plans:
   3. Every preview — both lanes — shows an estimated provider-credit and Anthropic-token cost for the batch, derived from the repo's measured per-record rates rather than a guess, and warns when the estimate exceeds the credits actually remaining. Remaining balances arrive from the n8n-side status endpoint, never from the client calling a provider directly; a balance that cannot be read reads "unknown" and the warning says so rather than assuming headroom.
   4. A batch above the configured size limit is shown in the preview already split — chunk count and rows per chunk — before approval, and dispatch sends exactly that plan.
 
-**Plans**: TBD
+**Plans**: 7 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 25-01-PLAN.md — Blockers first: live `crm.lists.read` scope probe, chunk-timing measurement, and the recorded saved-view decision (D-02a, D-11a)
+- [ ] 25-02-PLAN.md — n8n credit-only `hubspot/backend-status` endpoint, with unreadable proven distinct from zero (D-10)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 25-03-PLAN.md — n8n list resolution on the enrichment webhook: additive branch, bounded expansion, view refusal (D-01/D-02)
+- [ ] 25-04-PLAN.md — Client tracer: provider-selection resolution, enrichment envelope, disarmed dispatch, and the documented full-waterfall default (D-03/D-04/D-06a)
+- [ ] 25-05-PLAN.md — Dated plugin-local rate table, batch estimate, status-endpoint balance client, tri-state comparison (D-07/D-08/D-09/D-10)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 25-06-PLAN.md — Chunk plan computed once, sequential dispatch that skips a failure, failed chunks returned as a re-sendable batch (D-11/D-12/D-13)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 25-07-PLAN.md — Cost block on both lanes, the enrichment skill, operator docs, and the criterion-2 and view-scope amendments (D-05, D-02a)
 
 ### Phase 26: Outcome Reporting & Safe Retry
 
