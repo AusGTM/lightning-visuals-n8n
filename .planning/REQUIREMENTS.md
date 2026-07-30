@@ -16,7 +16,7 @@ Each maps to exactly one roadmap phase.
 - [x] **REQ-lusha-selective-reveal** *(re-scoped 2026-07-30 after live probe — A3 REFUTED, see docs/LUSHA-V3-CONTRACT.md §6)*: Contacts requests still derive `reveal[]` from the enrichment gate's `missingFields`, but as **PII-minimization hygiene**, not a cost lever — live A/B showed reveal-1-field vs reveal-2-fields bills identically, and v3 first-time enrich is a flat 1 credit regardless of fields (the v2 ~4.65-credits/reveal phone bundling does not exist in v3). Empty `reveal:[]` is invalid (400) — a minimal non-empty set is always sent. Companies lane has NO reveal mechanism (flat 2 credits/match) — no reveal-derivation code written for it. Cost target already met by flat v3 pricing + id reuse (REQ-lusha-id-staging): full sweep projects ~1 cr/contact + 2 cr/company, well inside the ~3.9k balance.
 - [ ] **REQ-lusha-id-staging**: New staging properties `lusha_contact_id` / `lusha_company_id` persisted on match; re-enrichment paths pass stored IDs so already-revealed data re-enriches free (`canReveal.credits: 0`).
 - [x] **REQ-lusha-v3-normalize**: `lushaCandidates` in `normalizeProviders.js` parses the v3 envelope and emits candidates field-identical to v2 output downstream (merge/score/staging unchanged; HubSpot schema untouched beyond the two ID properties).
-- [ ] **REQ-lusha-v3-verification**: v2-pinned tests migrated, frozen fixture re-baselined, both suites green, disarmed redeploy with read-back showing v3 URLs live and zero v2 URLs remaining.
+- [x] **REQ-lusha-v3-verification**: v2-pinned tests migrated, frozen fixture re-baselined, both suites green, disarmed redeploy with read-back showing v3 URLs live and zero v2 URLs remaining.
 
 ### Armed Enrichment Canary
 
@@ -56,7 +56,7 @@ Each maps to exactly one roadmap phase.
 | REQ-lusha-selective-reveal | Phase 20 | Complete |
 | REQ-lusha-id-staging | Phase 20 | Pending |
 | REQ-lusha-v3-normalize | Phase 20 | Complete |
-| REQ-lusha-v3-verification | Phase 20 | Pending |
+| REQ-lusha-v3-verification | Phase 20 | Complete |
 | REQ-dedupe-transport-swap | Phase 21 | Pending |
 | REQ-orgtype-enumeration | Phase 21 | Pending |
 | REQ-country-region-policy | Phase 21 | Pending |
