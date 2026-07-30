@@ -120,3 +120,72 @@ def test_committed_write_safety_constants_are_all_disabled(path):
         for literal in re.findall(rf"const {const} = ([^;]+);", blob):
             assert literal == disabled, (
                 f"{path.name}: {const} is committed as {literal!r}, not {disabled!r}")
+
+
+# Phase 21 Plan 01 — pins the weekly dedupe lane (n8n/wf_scheduled_maintenance_cloud.json)
+# as classify-only: exactly one write node, and its emitted property keys never widen past
+# an explicit allowlist. dedupeSweep.js's own header says CLASSIFY ONLY; this is that
+# guarantee turned into a predicate, so a second write or a widened key set fails the suite
+# instead of shipping silently.
+_MAINTENANCE_WORKFLOW_NAME = "wf_scheduled_maintenance_cloud.json"
+_DEDUPE_WRITE_NODE = "Dedupe Set Needs Review"
+_DEDUPE_SWEEP_NODE = "Dedupe Sweep"
+
+# Derived from what n8n/code/dedupeSweep.js's wrapper (ENRICH_DEDUPE_SWEEP in
+# scripts/build_cloud_workflows.py) actually assigns to `properties` — the ONLY thing
+# _hs_http_patch_node's body serializes (`{"properties": $json.properties}`); the sibling
+# `to_review_reason` field the wrapper also emits on the row is metadata that never reaches
+# HubSpot, since the write node never reads it. If a future change genuinely widens this to
+# a broader set (e.g. surfacing a reason property), update this allowlist as its own
+# reviewed act, not silently.
+_DEDUPE_LANE_ALLOWED_PROPERTY_KEYS = {
+    "lv_enrichment_needs_review",  # the needs-review flag — the sweep's one write output
+}
+
+
+def _maintenance_workflow_path():
+    match = [p for p in CLOUD_WORKFLOWS if p.name == _MAINTENANCE_WORKFLOW_NAME]
+    assert match, f"{_MAINTENANCE_WORKFLOW_NAME} not found among {CLOUD_WORKFLOWS}"
+    return match[0]
+
+
+def test_dedupe_lane_has_exactly_one_gated_write_node():
+    wf = _load(_maintenance_workflow_path())
+    dedupe_writes = [n["name"] for n in wf["nodes"]
+                     if n["name"].startswith("Dedupe ") and _is_write_node(n)]
+    assert dedupe_writes == [_DEDUPE_WRITE_NODE], (
+        f"expected exactly one write node in the Dedupe lane ({_DEDUPE_WRITE_NODE!r}); "
+        f"found {dedupe_writes} instead — a second write node here is a new, unreviewed "
+        f"write surface on a lane dedupeSweep.js documents as CLASSIFY ONLY"
+    )
+
+
+def test_dedupe_lane_emits_only_allowlisted_property_keys():
+    import re
+    wf = _load(_maintenance_workflow_path())
+    sweep_node = next(n for n in wf["nodes"] if n["name"] == _DEDUPE_SWEEP_NODE)
+    js_code = sweep_node["parameters"]["jsCode"]
+    # The inlined dedupeSweep.js module (frozen, imported verbatim) carries its own
+    # header comment mentioning "properties" in prose — scope the extraction to the n8n
+    # wrapper appended after it, which is where the row actually PATCHed to HubSpot is
+    # constructed, so a comment elsewhere in the frozen module can't feed a false match.
+    marker = "n8n wrapper: Dedupe Sweep"
+    wrapper_start = js_code.find(marker)
+    assert wrapper_start != -1, f"{_DEDUPE_SWEEP_NODE}: wrapper marker {marker!r} not found"
+    wrapper_code = js_code[wrapper_start:]
+    # The wrapper builds TWO `properties: { ... }` object literals: the input `records`
+    # passed INTO dedupeSweep() (email/phone/linkedin_url, read from HubSpot — never
+    # written), and the output row's `properties`, which is the one _hs_http_patch_node
+    # actually PATCHes. The output literal is the LAST one in source order (it's built
+    # inside the `return report.to_review_ids.map(...)` that follows the sweep call).
+    matches = list(re.finditer(r"properties:\s*\{([^}]*)\}", wrapper_code))
+    assert matches, f"{_DEDUPE_SWEEP_NODE}: no `properties: {{ ... }}` literal found in jsCode"
+    match = matches[-1]
+    keys = set(re.findall(r"(\w+)\s*:", match.group(1)))
+    assert keys, f"{_DEDUPE_SWEEP_NODE}: extracted zero property keys — extraction is broken"
+    unexpected = keys - _DEDUPE_LANE_ALLOWED_PROPERTY_KEYS
+    assert not unexpected, (
+        f"{_DEDUPE_SWEEP_NODE} emits property key(s) {unexpected} outside the classify-only "
+        f"allowlist {_DEDUPE_LANE_ALLOWED_PROPERTY_KEYS} — a new key here is a new, "
+        f"unreviewed HubSpot write surface on a lane dedupeSweep.js documents as CLASSIFY ONLY"
+    )

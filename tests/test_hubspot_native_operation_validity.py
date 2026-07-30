@@ -92,3 +92,26 @@ def test_the_guard_is_actually_looking_at_something():
     assert any(r == "company" for _, _, r, _ in found), \
         "no native company node left — re-read 16.6-CRITERION-5-ANSWER.md, which documents " \
         "SJ-1/SJ-2 as the reason this guard covers company operations at all"
+
+
+# Phase 21 Plan 01 — closes the class BUG 10/22/23 opened. "Dedupe Search (candidate
+# contacts)" was the last remaining native-search call site (n8n/wf_scheduled_maintenance_
+# cloud.json); it has migrated onto the credential-bound httpRequest envelope
+# (_hs_http_search_node in scripts/build_cloud_workflows.py), because the native node
+# returns ZERO items on a zero-hit search and n8n silently stops the chain there while
+# reporting status:success — the exact failure mode BUG 10 hid across six nodes.
+#
+# Scoped to the search OPERATION only, not to native nodes in general: SJ-1/SJ-2's native
+# `company:update` nodes are deliberately out of this phase's fence (and are exactly what
+# keeps test_the_guard_is_actually_looking_at_something above non-vacuous).
+def test_no_native_hubspot_search_operation_remains_in_any_cloud_workflow():
+    offenders = [
+        (wf.name, name)
+        for wf in CLOUD_WORKFLOWS
+        for name, resource, operation in _native_nodes(wf)
+        if operation == "search"
+    ]
+    assert not offenders, (
+        "native HubSpot search node(s) found — replace with _hs_http_search_node (the "
+        f"credential-bound httpRequest envelope): {offenders}"
+    )
