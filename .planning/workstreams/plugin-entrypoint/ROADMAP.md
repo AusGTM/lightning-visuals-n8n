@@ -282,7 +282,36 @@ Plans:
   4. Every decision stamps human source, timestamp, and the operator's stated reason into the existing source-metadata fields, so the audit trail distinguishes a person's call from a model's.
   5. Rejecting a record records the reason and leaves it in the queue. Review flags are never silently cleared, and a record never leaves the queue without a recorded decision.
 
-**Plans**: TBD
+**Plans**: 7 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 30-01-PLAN.md — Review writeback gets its own backend arming flag, separate from dispatch arming in both directions, and the pinned four-name overlayable set is deliberately widened to five
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 30-02-PLAN.md — Tracer: one rejection end to end — webhook, refetch, decision module, dry-run preview, disarmed write gate, single-property PATCH
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 30-03-PLAN.md — Approve through the existing `reviewApply` compare-and-set, stamped as a human decision in the provenance blob; contacts routed through the same endpoint
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 30-04-PLAN.md — `hubspot/review/queue`: one authenticated, provably read-only call returning the flagged backlog with its stored conflict detail
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 30-05-PLAN.md — Client: plain-language conflict rendering, display-only field-policy labelling, HubSpot record links
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
+- [ ] 30-06-PLAN.md — Client: session-scoped review arm, the backend's own exact-write display, read-back verification, and the review-triage skill
+
+**Wave 7** *(blocked on Wave 6 completion)*
+
+- [ ] 30-07-PLAN.md — Admin runbook plus the one human-executed armed canary on a single allowlisted record, closed by a read-back-verified disarm
 
 ## v0.6 Progress
 
