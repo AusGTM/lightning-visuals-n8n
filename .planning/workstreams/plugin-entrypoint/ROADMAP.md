@@ -73,11 +73,22 @@ phase directories never collide with phases 20–22.**
 **Plans**: 6 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 23-01-PLAN.md — Backend gate fix: the contact lane's create decision reads the deploy-time-overlayable write-safety constant (D-15/D-16, must land first)
 - [ ] 23-02-PLAN.md — Early Code-tab smoke test: does an attached file resolve to a readable path, and can that session run the scripts (D-14a)
 - [ ] 23-03-PLAN.md — Wave 0: plugin test package, autouse network guard, own requirements.txt, config example + gitignore entry
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 23-04-PLAN.md — Tracer: config gate → file read → disarmed dispatch, plus the plugin manifest, the skill, and the no-backend-imports guard
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 23-05-PLAN.md — Adaptive preview with display-only column labelling, skill preview/approve wording, operator docs, PLUGIN-02 reconciliation
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 23-06-PLAN.md — Manual gates: Desktop install/invocation, and one human-executed armed canary that creates a contact
 
 ### Phase 24: Non-Tabular Input Adapters
@@ -217,19 +228,23 @@ Traceability table lives in `REQUIREMENTS.md`.
   identity resolution, dedupe and create/update routing are n8n-side and stay there. The
   plugin's only mapping responsibility is producing canonical-prop rows from *non-tabular*
   sources; tabular input passes through to the existing `Map Columns` node.
+
 - **XLSX is not a wire format.** `Extract From File` on the contact-upload workflow runs
   `operation: csv`, so an XLSX input has to be read locally and sent as CSV bytes.
   `src/file_loader.py` already reads CSV/TSV/JSON/XLSX into `list[dict]` — reuse it rather
   than adding a parser.
+
 - **The `providers` field is the burn gate.** `Parse HubSpot Event` treats an absent or
   unrecognized `providers` value as *no providers enabled*. Any enrichment payload the
   plugin builds must set it explicitly and deliberately.
+
 - **Response-shape risk for REPORT-01.** `hubspot/contact-upload` uses
   `responseMode: lastNode` across a branching graph (`HubSpot Update` / `HubSpot Create` /
   `Set Review`), so the HTTP response may not carry every row's outcome. Phase 26 planning
   should verify what actually comes back before assuming a complete per-record ledger is
   available from the response alone; the n8n executions API (already used by
   `scripts/enrichment_cost_ledger.py`) is the fallback source.
+
 - **The client is a separate implementation living in `operator-claude-plugin/`.** Backend
   directories (`n8n/`, `config/`, `scripts/`, and the enrichment modules in `src/`) are not this
   milestone's to edit — the one exception is the new n8n-side status endpoint, which is backend
@@ -238,12 +253,14 @@ Traceability table lives in `REQUIREMENTS.md`.
   without a backend change. `src/file_loader.py` reuse is a co-location convenience (file reading
   is client-side work, not backend logic) and is documented as such — not a licence to import
   merge policy, scoring, or provider code.
+
 - **The plugin holds no provider credentials.** ZoomInfo/Apollo/Lusha and HubSpot creds live in
   n8n, managed by an admin there. So `scripts/check_provider_credits.py`'s direct-to-provider
   reads are an *admin* tool, not a model for the plugin. Credit balances reach the operator
   through a new n8n-side status endpoint. Phase 25 builds the credit-only slice it needs for
   PREVIEW-02; Phase 27 generalizes the same endpoint to full health. Plan them as one endpoint
   grown twice, not two endpoints.
+
 - **Arming is a workflow write, not a runtime setting.** `ALLOW_*` write gates are compiled into
   the workflows' Code nodes by `deploy_n8n_workflows.py` via the `ENABLE_BAKED_FLAGS` overlay,
   and schedule cadence lives in Schedule Trigger parameters — both mean `PUT /api/v1/workflows/{id}`.
@@ -252,20 +269,24 @@ Traceability table lives in `REQUIREMENTS.md`.
   than hand-rolling the rewrite. Note the standing constraint: agent tooling in this repo is
   blocked from performing arming writes, so Phase 28's armed path needs a human in the loop to
   execute and verify even though the operator-facing design is a yes/no in chat.
+
 - **Session-scoped arming is the plugin's own state, not n8n's.** n8n's baked flag is persistent
   by nature; the conversation-scoped permission lives in the plugin and gates whether it will
   use it. Both states must appear in status (CONTROL-04, STATUS-01) — "n8n allows writes" and
   "I am willing to write right now" are different facts and conflating them is how a silent
   live send happens.
+
 - **Cost rates already measured.** Per-record provider match rates and Lusha credit burn
   (~4.65 credits/reveal under v2; v3 flat ~1cr/contact) plus the Anthropic token probe live
   in the v0.5 artifacts and `scripts/enrichment_cost_ledger.py` /
   `scripts/check_provider_credits.py`. PREVIEW-02 derives from those, it does not re-measure.
+
 - **Screenshots arrive as attachments, not captures.** INGEST-07 reads images the operator
   hands over in-session; the plugin drives no browser and logs into nothing. Planning must not
   reach for browser automation here — that would recreate the scraping path this milestone
   excludes. Extraction is a vision read on the attached image; the confidence signal it needs
   is "is this glyph legible", not "is this fact true".
+
 - **Out of scope, do not plan phases for:** anti-bot-detection or user-agent spoofing for URL
   ingestion, authenticated/paywalled scraping, automated screenshot capture, company-object
   ingestion, scheduled/unattended runs, and write-back of corrections from the plugin.
