@@ -55,6 +55,31 @@ test("mergeCompanies: same field below min_confidence -> needs_review, absent fr
   assert.equal(d.decision, "needs_review");
 });
 
+// --- lv_country_region_normalized threshold (Plan 21-02, REQ-country-region-policy) ---
+test("mergeCompanies: lv_country_region_normalized at min_confidence promotes with provenance", () => {
+  const minConf = DEFAULT_COMPANY_POLICY.lv_country_region_normalized.min_confidence;
+  const { canonicalPatch, provenance, decisions } = mergeCompanies({},
+    { lv_country_region_normalized: "AU" }, undefined,
+    { source: "lusha", confidence: minConf });
+  assert.equal(canonicalPatch.lv_country_region_normalized, "AU");
+  const entry = provenance.lv_country_region_normalized;
+  assert.ok(entry, "provenance entry present");
+  assert.equal(entry.confidence, minConf);
+  const d = decisions.find((x) => x.field === "lv_country_region_normalized");
+  assert.equal(d.decision, "promote");
+});
+
+test("mergeCompanies: lv_country_region_normalized below min_confidence stages only, still provenanced", () => {
+  const minConf = DEFAULT_COMPANY_POLICY.lv_country_region_normalized.min_confidence;
+  const { canonicalPatch, provenance, decisions } = mergeCompanies({},
+    { lv_country_region_normalized: "AU" }, undefined,
+    { source: "lusha", confidence: minConf - 1 });
+  assert.ok(!("lv_country_region_normalized" in canonicalPatch), "must not promote below threshold");
+  assert.ok(provenance.lv_country_region_normalized, "staging survives even when promotion does not");
+  const d = decisions.find((x) => x.field === "lv_country_region_normalized");
+  assert.equal(d.decision, "needs_review");
+});
+
 // --- Domain hard guard ---------------------------------------------------------------
 test("mergeCompanies: domain hard guard forces stage_only even when the gate itself would promote", () => {
   // Deliberately override the policy so the deterministic gate alone WOULD promote
