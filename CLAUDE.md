@@ -892,7 +892,7 @@ HUBSPOT_PORTAL_ID=00000000
 # Anthropic
 ANTHROPIC_API_KEY=sk-ant-xxxxxxxxxxxxxxxx
 ANTHROPIC_HAIKU_MODEL=claude-3-5-haiku-latest
-ANTHROPIC_RESEARCH_MODEL=claude-sonnet-5
+ANTHROPIC_RESEARCH_MODEL=claude-haiku-4-5
 ANTHROPIC_JUDGE_MODEL=claude-sonnet-5
 # Claude web research uses the NATIVE web_search tool on the standard Messages API
 # (authenticated by ANTHROPIC_API_KEY above) — no separate endpoint or key needed.
@@ -907,7 +907,7 @@ LUSHA_API_KEY=
 DRY_RUN=true
 USE_MOCK_PROVIDERS=true
 USE_MOCK_WEB_RESEARCH=true
-ALLOW_WEB_RESEARCH=false
+ALLOW_WEB_RESEARCH=true
 ALLOW_JUDGE_ESCALATION=true
 ALLOW_CANONICAL_WRITES=false
 ALLOW_ICP_SCORE_WRITES=true
@@ -3028,7 +3028,7 @@ https://<your-n8n-cloud-subdomain>/webhook/hubspot/enrichment/event
 ```text
 ENRICHMENT_ENABLED=true
 ALLOW_PROVIDER_CALLS=true
-ALLOW_WEB_RESEARCH=false
+ALLOW_WEB_RESEARCH=true
 ALLOW_JUDGE_ESCALATION=true
 ALLOW_CANONICAL_WRITES=false
 ALLOW_ICP_SCORE_WRITES=true

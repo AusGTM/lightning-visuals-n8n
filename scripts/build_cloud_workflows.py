@@ -776,9 +776,9 @@ def _fixture(name: str):
 # impossible (tests/test_builder_flag_parity.py proves it once the Cloud companies
 # branch lands, Task 5).
 CONFIG_FLAG_DEFAULTS = {
-    "ALLOW_WEB_RESEARCH": "false",
+    "ALLOW_WEB_RESEARCH": "true",
     "MAX_WEB_RESEARCH_PER_RUN": "10",
-    "ANTHROPIC_RESEARCH_MODEL": "claude-sonnet-5",
+    "ANTHROPIC_RESEARCH_MODEL": "claude-haiku-4-5",
     "ANTHROPIC_JUDGE_MODEL": "claude-sonnet-5",
     "WEB_RESEARCH_MAX_SEARCHES": "5",
     "ALLOW_JUDGE_ESCALATION": "true",
