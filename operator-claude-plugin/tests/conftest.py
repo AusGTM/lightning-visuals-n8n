@@ -6,9 +6,11 @@ root would resolve to the REPO's own scripts/ package (test_no_backend_imports.p
 to forbid exactly that collision).
 
 The autouse `no_network` fixture is the point of this file: every plugin test runs with
-`requests` stubbed so no test can ever perform a real POST, by construction rather than by
-discipline (23-VALIDATION.md's Wave 0 critical constraint).
+`requests` stubbed so no test can ever perform a real POST (or GET — the guard patches
+`Session.request`, which `requests.get` routes through too), by construction rather than
+by discipline (23-VALIDATION.md's Wave 0 critical constraint).
 """
+import copy
 import csv
 import json
 import sys
@@ -20,6 +22,7 @@ import requests
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = PLUGIN_ROOT / "scripts"
+FIXTURES_DIR = PLUGIN_ROOT / "tests" / "fixtures"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
@@ -65,10 +68,17 @@ def sample_xlsx(tmp_path):
 
 @pytest.fixture
 def fake_config():
-    """Syntactically valid config dict — never read from the operator's real config file."""
+    """Syntactically valid config dict — never read from the operator's real config file.
+
+    Includes `n8n_api_key`: the executions-API fallback (26-01) authenticates with
+    `X-N8N-API-KEY`, distinct from `webhook_secret`'s `X-Enrichment-Secret`
+    (26-CONTEXT.md key_links) — both live in the same config file per REQUIREMENTS.md's
+    credential-boundary table.
+    """
     return {
         "n8n_url": "https://fake-tenant.n8n.cloud",
         "webhook_secret": "fake-secret-for-tests-only",
+        "n8n_api_key": "fake-n8n-api-key-for-tests-only",
         "column_mapping_path": None,
     }
 
@@ -99,6 +109,45 @@ class _StubTransport:
 def stub_transport():
     """The seam every dispatch test uses in place of a real POST."""
     return _StubTransport()
+
+
+@pytest.fixture
+def contact_execution():
+    """A redacted execution payload shaped like `data.resultData.runData` for
+    `hubspot/contact-upload`, with one `Decide Action` row per outcome (match/
+    net_new/ambiguous/rejected) plus `HubSpot Update`, `HubSpot Create` and
+    `Set Review` entries. Returns a fresh deep copy per test so no test can mutate a
+    fixture another test then reads."""
+    return copy.deepcopy(json.loads((FIXTURES_DIR / "execution_contact_upload.json").read_text()))
+
+
+class _StubGetResponse:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def json(self):
+        return self._payload
+
+
+class _StubGetTransport:
+    """Callable recording every GET `executions_client.py` makes, returning a scripted
+    payload per call in order — in place of a real `requests.get`."""
+
+    def __init__(self, payloads):
+        self._payloads = list(payloads)
+        self.calls = []
+
+    def __call__(self, url, headers=None, params=None, timeout=None, **kwargs):
+        self.calls.append({"url": url, "headers": headers, "params": params, "timeout": timeout})
+        payload = self._payloads.pop(0) if self._payloads else {}
+        return _StubGetResponse(payload)
+
+
+@pytest.fixture
+def stub_get_transport_factory():
+    """Returns the `_StubGetTransport` class so a test can script its own sequence of
+    payloads (workflow list, then execution list, then execution fetch, ...)."""
+    return _StubGetTransport
 
 
 def _default_extraction_records():
