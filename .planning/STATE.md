@@ -8,13 +8,13 @@ status: executing
 stopped_at: "Phase 20 complete (5/5 plans, VERIFICATION PASSED WITH GAPS): Lusha v2->v3 migrated both lanes, selective-reveal re-scoped to PII hygiene after live probe refuted cost premise (flat 1cr/contact), contacts stored-id reuse implemented (0-credit re-enrich), disarmed redeploy live-verified zero v2 URLs. ONE PENDING OPERATOR ACTION: armed create of lusha_contact_id/lusha_company_id properties (classifier-blocked for agent; command in 20-04-SUMMARY.md). Next: Phase 21."
 last_updated: "2026-07-30T08:10:24.323Z"
 last_activity: 2026-07-30
-last_activity_desc: Phase 22 execution started
+last_activity_desc: Phases 20-22 built to the operator line; 22-OPERATOR-RUNBOOK.md is the handoff
 progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 13
-  completed_plans: 7
-  percent: 33
+  completed_plans: 10
+  percent: 77
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 
 ## Current Position
 
-Phase: 22 (armed-e2e-enrichment-canary) — EXECUTING
-Plan: 1 of 4
-Status: Executing Phase 22
-Last activity: 2026-07-30 — Phase 22 execution started
+Phase: 22 (armed-e2e-enrichment-canary) — at final operator checkpoint
+Plan: 20: 5/5 · 21: 2/4 (21-03-T3 probe + 21-04 verdict-gated) · 22: 3/4 (22-04-T3 = armed window)
+Status: ALL autonomous work done. Handoff: .planning/phases/22-armed-e2e-enrichment-canary/22-OPERATOR-RUNBOOK.md (two sittings; Sitting 1 verdicts unblock the agent interlude that builds 21-04)
+Last activity: 2026-07-30 — Phases 20-22 planned + executed to the operator line; ~20 Lusha credits spent on probes; live n8n current (v3 URLs, zero native search); suites 682 pytest / 354 node
 
 ## Performance Metrics
 

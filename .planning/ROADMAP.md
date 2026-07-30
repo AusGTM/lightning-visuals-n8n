@@ -350,7 +350,7 @@ Phases execute in numeric order: 20 → 21 → 22 (autonomous-buildable work fir
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 20. Lusha v3 Migration | 5/5 | Complete* | 2026-07-30 |
-| 21. Transport & Schema Hygiene | 0/? | Not started | - |
-| 22. Armed E2E Enrichment Canary | 0/4 | Planned | - |
+| 21. Transport & Schema Hygiene | 2/4 | Operator-gated (21-03 probe, 21-04 verdict-gated) | - |
+| 22. Armed E2E Enrichment Canary | 3/4 | Operator-gated (armed window, 22-OPERATOR-RUNBOOK.md) | - |
 
 \* Phase 20 complete pending one operator action: live create of `lusha_contact_id`/`lusha_company_id` (classifier-blocked for agents; command in 20-04-SUMMARY.md).
