@@ -17,16 +17,17 @@ mid-flight.
 | 24 Non-tabular adapters | 3 | ✅ **COMPLETE** |
 | 25 Enrichment lane & cost guard | 7 | 25-02 done. **25-01 is a human checkpoint — see §4** |
 | 26 Outcome reporting & retry | 3 | ✅ **COMPLETE** — amendment #4 closed, REQUIREMENTS.md reworded |
-| 27 Backend status surface | 5 | checker-clean (1 blocker fixed). **27-01 was in flight at handoff**; 27-02…05 chain off it |
+| 27 Backend status surface | 5 | checker-clean (1 blocker fixed). **27-01 DONE** — D-14 verified held, `wf_enrichment_cloud.json` untouched. **27-02…05 runnable now** |
 | 28 Control actions | 6 | planned, **checker not yet run** — chained behind 27 |
 | 29 Notices & sweep | 6 | planned, **checker not yet run** — chained behind 27/28 |
 | 30 Review-queue triage | 7 | planned, **checker not yet run** — chained behind 28 |
 
-**14 of 43 plans built. Two phases complete (24, 26).**
+**15 of 43 plans built. Two phases complete (24, 26).**
 
-**Test baselines at handoff:** `900 passed, 1 skipped` (pytest), `378 passed` (node), plugin suite
+**Test baselines at handoff:** `919 passed, 1 skipped` (pytest), `400 passed` (node), plugin suite
 `156 passed`. Started the milestone at 709. Any drop is a regression to investigate, not absorb.
-Every n8n artifact was **disarmed** at handoff, and REQUIREMENTS.md coverage is intact at **49/49**.
+Every n8n artifact was **disarmed** at handoff, tree **clean**, and REQUIREMENTS.md coverage intact
+at **49/49**.
 
 **Plan-checker status:** 23, 24, 25, 26 all PASSED. **27, 28, 29, 30 have NOT been checked** —
 deliberately deferred, because checking plans against a tree where their dependencies don't exist
@@ -35,30 +36,27 @@ it.**
 
 ### First thing to do on resume
 
-**One executor was in flight at handoff: `27-01`.** Check whether it finished:
+**Nothing was in flight at handoff.** All executors completed; tree clean at commit `157fa14`.
+Sanity-check, then proceed:
 
 ```bash
-ls .planning/workstreams/plugin-entrypoint/phases/27-*/27-01-SUMMARY.md 2>/dev/null
 git status --porcelain | grep -v DS_Store | grep -v '^?? .claude/'   # expect empty
-.venv/bin/python -m pytest -q | tail -2                              # expect >= 900 passed, 1 skipped
-node --test tests/n8n/*.test.mjs 2>&1 | grep -E '^. (pass|fail) '    # expect fail 0
+.venv/bin/python -m pytest -q | tail -2                              # expect 919 passed, 1 skipped
+node --test tests/n8n/*.test.mjs 2>&1 | grep -E '^. (pass|fail) '    # expect pass 400, fail 0
 grep -c 'ALLOW_HUBSPOT_[A-Z_]* = \\"true\\"' n8n/*.json              # expect 0 everywhere
-git diff --stat HEAD -- n8n/wf_enrichment_cloud.json                 # expect EMPTY — see below
 ```
 
-**If a SUMMARY is missing while that plan's commits are present, the agent died mid-plan — re-run
-it rather than assuming it finished.**
+**General caution:** if a SUMMARY is missing while that plan's commits are present, the agent died
+mid-plan — re-run it rather than assuming it finished. This has happened twice (26-01, 26-02); both
+times the code was committed and only the summary was orphaned, so check before re-running.
 
-**27-01 must NOT have touched `n8n/wf_enrichment_cloud.json`.** It extends
-`build_backend_status_cloud()` / `n8n/wf_backend_status_cloud.json` only. If the enrichment workflow
-changed, that is a D-14 violation and must be reverted — see §7.
-
-**Next batch after 27-01 lands:**
-1. **27-02 … 27-05** — they chain off 27-01.
+**Next batch, in order:**
+1. **27-02, 27-03, 27-04, 27-05** — all chain off 27-01, which is done. 27-03 is the tracer.
 2. **Phase 28 checker, then Phase 28.** ⚠ Expect the checker to find staleness: 28's plans were
-   written before 27 was built, and 27-01 is *right now* reshaping the status endpoint that 28's
-   read-back verification depends on. Phase 27's checker caught exactly this class of bug (see §7).
-   Budget for a fix, not a clean pass.
+   written before 27 existed, and 27-01 has now reshaped the status endpoint that 28's read-back
+   verification depends on — it added a `Build Status` stage past the credit-only `Build Credit
+   Status` node, which already forced two assertion updates in
+   `tests/test_backend_status_workflow.py`. **Budget for a fix, not a clean pass.** See §7b.
 3. **Phases 29, 30** — checkers first, same reasoning.
 
 ---
