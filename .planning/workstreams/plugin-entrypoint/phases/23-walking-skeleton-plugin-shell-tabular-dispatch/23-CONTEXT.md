@@ -104,6 +104,25 @@ Out of scope this phase: non-tabular adapters (Phase 24), the enrichment lane an
   exactly that gap for images. Therefore: build the **`@mention` autocomplete path as the reliable
   mechanism**, attempt attachment opportunistically, and gate any attachment-specific plumbing
   behind **one early live smoke test**. Do not build attachment plumbing beyond that test.
+- **D-14a-RESOLVED (smoke test executed 2026-07-31 — see `23-02-SUMMARY.md`):** The probe ran in a
+  live Code-tab session and **all four observations came back positive**, refuting the pessimistic
+  assumption above:
+  - **Attachment resolves to a real filesystem path** — `/Users/robertli/Desktop/lv-smoke-test.csv`,
+    with a shell command successfully reading its first line. Not conversation-content-only.
+  - **`@mention` resolves to a real path** — confirmed on a repo file. Note `@` indexes the
+    **workspace only**, so it cannot reach files outside the repo.
+  - `python3` 3.14.5 is available in-session, and `openpyxl` / `requests` / `PyYAML` **import
+    directly with no install step**.
+  **Revised instruction for 23-04:** build a genuine **two-legged file handoff** — `@mention` for
+  workspace files, attachment for files anywhere else (the realistic operator case: a spreadsheet
+  in Downloads, not committed to the repo). This supersedes D-14a's single-leg-plus-try/except
+  degradation. **Still build no speculative plumbing**: the probe licenses reading a path the
+  session hands over, not temp-directory scanning, upload shims, or guessing at storage
+  conventions. If no path is supplied, ask — do not hunt.
+- **D-14c (interpreter discipline, recorded by the operator):** the session's system `python3`
+  carries the plugin's three dependencies, but the **repo's test suite still requires
+  `.venv/bin/python -m pytest`** — system python lacks the suite's broader dependency set. Two
+  interpreters, two purposes; conflating them breaks test runs.
 - **D-14b:** Research also found a free win for D-02: a plugin skill is **already both
   auto-triggered and slash-invocable** as `/plugin-name:skill-name`. No separate `commands/`
   directory is needed to satisfy D-02.
