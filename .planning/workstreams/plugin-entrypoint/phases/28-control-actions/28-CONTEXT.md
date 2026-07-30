@@ -381,6 +381,32 @@ since `deploy_n8n_workflows.py` is a repo script and does read the shell environ
 **Lesson for future repairs: a fix that edits N of M plans must re-scan the other M−N for references
 to what it changed.** The re-check is what caught this; the repair pass did not.
 
+### D-34 — gating is uniform: every dangerous operation carries an env kill switch (2026-07-31)
+
+**Operator decision.** The re-check noted an asymmetry: 28-02's *read-only* diagnostic probe is gated
+behind `ALLOW_N8N_PROBE`, while `n8n_arming` — the only module in the milestone that writes a
+write-safety constant's **enabled** literal to a live workflow — had no env gate at all, relying
+solely on the human checkpoint and `execute_action`'s no-default confirmation.
+
+That inverts this repo's established convention. Nine `ALLOW_*` gates already exist
+(`ALLOW_N8N_DEPLOY`, `ALLOW_HUBSPOT_CREATE`, `ALLOW_HUBSPOT_RECORD_WRITES`,
+`ALLOW_HUBSPOT_PROPERTY_WRITES`, `ALLOW_WEB_RESEARCH`, `ALLOW_JUDGE_ESCALATION`,
+`ALLOW_LUSHA_PROBE`, `ALLOW_CANONICAL_WRITES`, and now `ALLOW_N8N_PROBE`). The rule is now explicit:
+**gating behaviour is the same everywhere — one `ALLOW_*` variable per dangerous capability, value
+must read exactly `true`, checked before any transport is constructed, refusing in plain language
+that names the variable and says an admin sets it.**
+
+`ALLOW_N8N_ARM` is added to `n8n_arming` in 28-03 accordingly. Three properties are load-bearing:
+
+1. **It gates arming only, never disarming.** A kill switch that blocked a disarm would strand an
+   armed backend — the exact failure this phase's ceremony exists to prevent.
+2. **Its semantics must match `ALLOW_N8N_PROBE`'s exactly.** Two gates in one phase that disagree on
+   what counts as "on" is worse than one gate, because the operator learns a rule that is false half
+   the time. Near-miss values (`1`, `yes`, `TRUE`) refuse in both.
+3. **It is defence in depth, not a replacement.** The human checkpoint and the no-default
+   confirmation both stay. It is the gate that still holds when an agent, a test harness, or a
+   scheduled routine reaches the module by a path nobody anticipated.
+
 ### D-33 — the transport object shape is a real seam change, and no fixture matches it yet
 
 D-27's `transport=requests` rule (bare module, called as `transport.put(...)`) correctly keeps

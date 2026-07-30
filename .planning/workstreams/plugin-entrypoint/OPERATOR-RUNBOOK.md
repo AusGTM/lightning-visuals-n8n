@@ -79,7 +79,24 @@ replaces it.
 
 `N8N_URL`, `N8N_API_KEY`, `N8N_EXPECTED_URL`, `N8N_ENRICHMENT_WEBHOOK_SECRET`,
 `HUBSPOT_PRIVATE_APP_TOKEN`, `HUBSPOT_EXPECTED_PORTAL_ID`, `TEST_COMPANY_IDS`, plus the
-run-time switches you set inline: `DRY_RUN`, `ALLOW_N8N_DEPLOY`, `ENABLE_BAKED_FLAGS`.
+run-time switches you set inline: `DRY_RUN`, `ALLOW_N8N_DEPLOY`, `ENABLE_BAKED_FLAGS`,
+`ALLOW_N8N_PROBE` (RB-5), `ALLOW_N8N_ARM` (RB-7).
+
+### Gating is uniform — one rule, everywhere (D-34)
+
+Every dangerous capability in this repo sits behind exactly one `ALLOW_*` environment variable, and
+they all behave identically:
+
+- The value must read **exactly `true`**. `1`, `yes`, `TRUE`, `True` and empty all refuse.
+- The check runs **before any transport is constructed**, so a missing gate costs zero HTTP calls.
+- The refusal names the variable and says an admin sets it.
+
+Current set: `ALLOW_N8N_DEPLOY`, `ALLOW_N8N_PROBE`, `ALLOW_N8N_ARM`, `ALLOW_HUBSPOT_CREATE`,
+`ALLOW_HUBSPOT_RECORD_WRITES`, `ALLOW_HUBSPOT_PROPERTY_WRITES`, `ALLOW_WEB_RESEARCH`,
+`ALLOW_JUDGE_ESCALATION`, `ALLOW_LUSHA_PROBE`, `ALLOW_CANONICAL_WRITES`.
+
+**`ALLOW_N8N_ARM` gates arming only — never disarming.** A kill switch that could block a disarm
+would strand an armed backend, which is the failure mode this entire ceremony exists to prevent.
 
 ---
 
@@ -90,21 +107,26 @@ run-time switches you set inline: `DRY_RUN`, `ALLOW_N8N_DEPLOY`, `ENABLE_BAKED_F
 | RB-1 | **25-01** lists-scope + chunk timing | ⚠ Probe B yes, Probe A **no** | Probe A's script `scripts/check_hubspot_list_scope.py` is built by 25-01 **Task 1**, which is autonomous and not yet run |
 | RB-2 | **29-01** scheduled-routine host probe | ✅ **yes** | none — no dependencies, no code needed |
 | RB-3 | **23-06** plugin install + armed create canary | ✅ **yes** | none — all scripts exist, canary CSV prepared |
-| RB-4 | **27-05** dashboard same-URL check | ❌ | 27-05 Tasks 1–2 not built (27-02/03/04 in flight) |
-| RB-5 | **28-02** n8n semantics live gate | ❌ | `scripts/probe_n8n_semantics.py` is built by 28-02 Task 1; **Phase 28 checker not yet run** |
-| RB-6 | **28-04** five-triggers decision | ❌ | gated behind 28-02; decision only, no commands |
+| RB-4 | **27-05** dashboard same-URL check | ✅ **yes** | none — Phase 27 is code-complete; this is its last outstanding step |
+| RB-5 | **28-02** n8n semantics live gate | ❌ | `scripts/probe_n8n_semantics.py` is built by 28-02 Task 1 (which follows 28-01) |
+| ~~RB-6~~ | ~~**28-04** five-triggers decision~~ | **withdrawn** | The decision was already made — D-25 / amendment #6. 28-04's checkpoint was deleted and the plan is now autonomous. **Nothing for you to do here.** |
 | RB-7 | **28-06** armed arm→dispatch→disarm canary | ❌ | gated behind 28-05 |
 | RB-8 | **29-06** live notice gate | ❌ | gated behind 29-04/05 |
 | RB-9 | **30-07** armed review canary | ❌ | gated behind 30-06 |
 
-**Provisional sections.** RB-4 through RB-9 belong to phases whose `gsd-plan-checker` has **not**
-run. Plans were written before their dependencies existed, and the checker has already caught one
-stale target this milestone (27-01 aimed at the wrong workflow file). **Script names, subcommands
-and flags in RB-4…RB-9 may change when their phase is checked.** Re-read the section against its
-plan before running it.
+**Provisional sections.** RB-8 and RB-9 belong to phases 29 and 30, whose `gsd-plan-checker` has
+**not** run. **Script names, subcommands and flags there may change.** Re-read against the plan
+before running.
+
+RB-5 and RB-7 are **no longer provisional** — Phase 28 was checked twice on 2026-07-31 (5 blockers
+then 1, all repaired) and its commands here are current. RB-6 is withdrawn entirely.
+
+That checking caught real staleness both times, which is why it happens immediately before a phase
+executes rather than at planning time: 27-01 aimed at the wrong workflow file, and Phase 28's plans
+were written against Phase 27's research doc rather than the code Phase 27 shipped.
 
 **Highest leverage first:** RB-1 (25-01) unblocks 4 plans, RB-2 (29-01) unblocks 4 and has zero
-dependencies. RB-3 (23-06) unblocks nothing — it is Phase 23's own proof.
+dependencies. RB-3 (23-06) and RB-4 (27-05) unblock nothing — each is its own phase's proof.
 
 ---
 
@@ -505,10 +527,10 @@ committed JSON, so if any workflow round-trips cleanly it is this one.
 
 ```bash
 # no-op round-trip — expect verdict "verified", settings and connections identical before/after
-<PROBE_ENABLE_VAR>=true .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/probe_n8n_semantics.py', run_name='__main__')" roundtrip --workflow-id <ID>
+ALLOW_N8N_PROBE=true .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/probe_n8n_semantics.py', run_name='__main__')" roundtrip --workflow-id <ID>
 
 # execute-endpoint check — expect 404 or 405, confirming D-05a
-<PROBE_ENABLE_VAR>=true .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/probe_n8n_semantics.py', run_name='__main__')" execute_probe --workflow-id <ID>
+ALLOW_N8N_PROBE=true .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/probe_n8n_semantics.py', run_name='__main__')" execute_probe --workflow-id <ID>
 ```
 
 - **A schema rejection naming additional properties means the four-key filter is wrong** and 28-01
@@ -533,7 +555,7 @@ makes the reload observation meaningless.
    change is a small delta. **Confirm the choice against current provider-credit headroom first.**
 
 ```bash
-<PROBE_ENABLE_VAR>=true .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/probe_n8n_semantics.py', run_name='__main__')" cadence_reload --workflow-id <ID> --node "Review Trigger (15 min)"
+ALLOW_N8N_PROBE=true .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/probe_n8n_semantics.py', run_name='__main__')" cadence_reload --workflow-id <ID> --node "Review Trigger (15 min)"
 ```
 
 3. Watch reported execution start times over the bounded polling window. **New spacing** → the
@@ -592,9 +614,19 @@ write-safety constant is set to its enabled literal on the live instance**, boun
 `TEST_RECORD_*` allowlist to a single record. Every automated test behind it ran against a stubbed
 transport.
 
-**Precondition:** `N8N_URL`, `N8N_API_KEY` and the plugin's operator config all present, and a
-disposable HubSpot test record whose id or email domain will be the **entire** content of the arming
-allowlist.
+**Precondition:** the plugin's `operator.local.json` carries the `control` capability's keys
+(`n8n_url`, `n8n_api_key`); `N8N_EXPECTED_URL` is set and matches; **`ALLOW_N8N_ARM=true` is set for
+the invoking shell**; and a disposable HubSpot test record exists whose id or email domain will be
+the **entire** content of the arming allowlist.
+
+The plugin reads credentials from `operator.local.json` only — **never** from `N8N_URL` /
+`N8N_API_KEY` shell variables. The deploy-script steps below are the exception: `deploy_n8n_workflows.py`
+is a repo script and does read the shell environment.
+
+**On `ALLOW_N8N_ARM` (D-34):** it gates arming and **not** disarming, so unsetting it mid-window can
+never trap you with an armed backend. Unset it again as soon as the window closes — it is the gate
+that still holds if an agent, a test harness, or a scheduled routine reaches the arming module by a
+path nobody anticipated.
 
 1. **Pick the lane.** Prefer the enrichment lane with a single HubSpot object id in the record
    allowlist if Phase 25's enrichment dispatch is built; otherwise the contact lane with a single
