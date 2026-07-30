@@ -36,6 +36,17 @@ companies:
     promote_to_canonical: true
     min_confidence: 70
 
+  # 75: deliberately above the flat-firmographic band (lv_employee_band at 70) because
+  # this field is the geography input to the non-ANZ hard veto, so a wrong promotion
+  # disqualifies a real account -- and below the evidence-gated judgment fields (85)
+  # because it is a normalized enum with no evidence-URL requirement, so demanding
+  # provider certainty here would leave it effectively stage-only and defeat the
+  # purpose. This threshold is a reviewable judgment, not a derived constant.
+  lv_country_region_normalized:
+    class: system_owned
+    promote_to_canonical: true
+    min_confidence: 75
+
   lv_org_type:
     class: system_owned
     promote_to_canonical: true

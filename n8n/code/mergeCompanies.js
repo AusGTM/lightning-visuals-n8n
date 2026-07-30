@@ -35,6 +35,13 @@ const DEFAULT_COMPANY_POLICY = {
   annualrevenue:           { class: "review_required",   min_confidence: 85 },
   lv_revenue_band:         { class: "system_owned",      min_confidence: 75 },
   lv_employee_band:        { class: "system_owned",      min_confidence: 70 },
+  // 75: deliberately above the flat-firmographic band (lv_employee_band at 70) because
+  // this field is the geography input to the non-ANZ hard veto, so a wrong promotion
+  // disqualifies a real account -- and below the evidence-gated judgment fields (85)
+  // because it is a normalized enum with no evidence-URL requirement, so demanding
+  // provider certainty here would leave it effectively stage-only and defeat the
+  // purpose. This threshold is a reviewable judgment, not a derived constant.
+  lv_country_region_normalized: { class: "system_owned", min_confidence: 75 },
   lv_org_type:             { class: "system_owned",      min_confidence: 80,
                              require_evidence_url_for: EVIDENCE_GATED_ORG_TYPES },
   lv_produces_content:     { class: "system_owned",      min_confidence: 85,
