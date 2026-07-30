@@ -70,7 +70,15 @@ phase directories never collide with phases 20–22.**
   4. Every file the client adds lives under `operator-claude-plugin/`, with its own README and CHANGELOG, and no backend file is modified to make the client work — the client is replaceable without touching `n8n/`, `config/`, or the enrichment `src/` modules.
   5. With the endpoint URL or auth secret missing from admin-provisioned configuration (which lives outside the plugin source and is never committed), the plugin refuses before any network call and says in plain language what is not configured and who can fix it — the operator is never shown a key, asked to paste one, or left staring at a socket error.
 
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+- [ ] 23-01-PLAN.md — Backend gate fix: the contact lane's create decision reads the deploy-time-overlayable write-safety constant (D-15/D-16, must land first)
+- [ ] 23-02-PLAN.md — Early Code-tab smoke test: does an attached file resolve to a readable path, and can that session run the scripts (D-14a)
+- [ ] 23-03-PLAN.md — Wave 0: plugin test package, autouse network guard, own requirements.txt, config example + gitignore entry
+- [ ] 23-04-PLAN.md — Tracer: config gate → file read → disarmed dispatch, plus the plugin manifest, the skill, and the no-backend-imports guard
+- [ ] 23-05-PLAN.md — Adaptive preview with display-only column labelling, skill preview/approve wording, operator docs, PLUGIN-02 reconciliation
+- [ ] 23-06-PLAN.md — Manual gates: Desktop install/invocation, and one human-executed armed canary that creates a contact
 
 ### Phase 24: Non-Tabular Input Adapters
 
@@ -189,7 +197,7 @@ the operator can act on it without leaving the conversation.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 23. Walking Skeleton — Plugin Shell & Tabular Dispatch | 0/? | Not started | - |
+| 23. Walking Skeleton — Plugin Shell & Tabular Dispatch | 0/6 | Planned | - |
 | 24. Non-Tabular Input Adapters | 0/? | Not started | - |
 | 25. Enrichment Lane & Cost Guard | 0/? | Not started | - |
 | 26. Outcome Reporting & Safe Retry | 0/? | Not started | - |
