@@ -228,6 +228,47 @@ A few things are true across all four:
 Nothing about the credential boundary above changes for any of this: this plugin still holds no
 provider or HubSpot credentials, and this phase adds no key of any kind.
 
+## Asking what the backend is doing
+
+Ask in plain language — "what's the backend doing?", "is anything stuck?", "how many
+records are waiting for review?", "has anything run out of credit?" — or invoke
+`/operator-claude-plugin:backend-status`. **This surface only reads.** It cannot turn a
+workflow on or off, start or cancel a run, or change a record.
+
+The answer comes back as text and covers every workflow the n8n API key can see (there is
+no list to maintain — a newly deployed or renamed workflow just appears):
+
+- whether each one is switched on, and whether **live writes to HubSpot** are currently
+  armed on it;
+- what is running right now, and whether it has been running long enough to look wedged —
+  stated with both the run's age and the threshold, because that threshold is a
+  convention rather than a measurement;
+- when it last ran, and if that run failed, **why**, in one sentence naming who can fix
+  it — no status codes, no stack traces;
+- how many companies and contacts are queued or waiting on a review decision;
+- provider credit balances and credential health.
+
+**`unknown` never means zero.** A count or a balance the backend could not read says so
+in that word. A provider we cannot ask about (Apollo's key legitimately refuses balance
+reads) shows as unknown, not as healthy and not as an empty balance.
+
+### The dashboard
+
+Text is what you get by default. Ask for **a dashboard** and the same reading is published
+as an Artifact — one page with the same workflows, counts and balances, stamped with
+**when the data was fetched**, not when the page was drawn. A dashboard left open in a tab
+is not a live view; it says what was true at the moment stamped on it. Ask for a refresh
+and it republishes to the **same link**, so the link is worth bookmarking — including from
+a new conversation, which is the only part of this that needed the plugin to remember
+anything.
+
+What it remembers is one identifier and the time it was saved, in
+`operator-claude-plugin/state/dashboard_artifact.json` — never committed, and carrying no
+URL, no secret and no record. It expires after **30 days** by default; change
+`dashboard_artifact_ttl_days` in `config/operator.local.json` to make that longer or
+shorter, and set it to `0` to stop the link being reused at all. An expired pointer is
+deleted the next time the skill runs, and the next dashboard request mints a fresh link.
+
 ## Layout
 
 ```text

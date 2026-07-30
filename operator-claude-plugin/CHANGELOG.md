@@ -67,6 +67,28 @@ over the same n8n system, so its version says nothing about backend capability.
   AST-based guard now keeps it that way by construction. Re-checking a run by its printed handle
   happens only when the operator asks — no poll loop, here or anywhere else in this client.
 
+- **Phase 27 — backend status surface.** A `/operator-claude-plugin:backend-status` skill that
+  answers "what is the backend doing?" without the operator opening n8n and without this client
+  holding a provider or HubSpot credential. The picture is split along that credential boundary:
+  the client reads `/api/v1/workflows` and `/api/v1/executions` itself for on/off state, live-write
+  arming, what is in flight and how the last run ended, while the n8n-side `hubspot/backend-status`
+  endpoint supplies only what needs credentials the client does not have — provider balances,
+  credential health, and HubSpot queue/review counts. Every workflow the API key can see is
+  reported with no allowlist, so a newly deployed or renamed workflow appears without a config
+  edit. "Stuck" is an execution-age verdict that always carries both the run's age and the
+  threshold, because that threshold is a carried convention rather than a measured figure.
+  Failures are read out of per-node output rather than run status — every provider-facing node is
+  configured to carry on when it errors, so a rejected credential leaves the run reading `success`
+  — and are translated to one plain sentence naming who can fix it, with an unrecognised signature
+  labelled as an interpretation, shown beside its raw text, and attributed to an admin rather than
+  to the operator. A datum the backend could not supply reads `unknown`, never zero and never
+  healthy. **On request only**, the same reading publishes as a dashboard Artifact stamped with
+  when the data was fetched (not when the page was drawn), republishing to the same link on
+  refresh — including from a new conversation, backed by the client's first and only piece of
+  persisted state: one artifact identifier and its timestamp, gitignored, expiring after
+  `dashboard_artifact_ttl_days` (default 30) and collected on the next skill open. The whole
+  surface reads: it turns nothing on or off, starts nothing, and writes to no record.
+
 ### Planned
 
 Milestone v0.6, phases 25–30 — see `.planning/workstreams/plugin-entrypoint/ROADMAP.md`:

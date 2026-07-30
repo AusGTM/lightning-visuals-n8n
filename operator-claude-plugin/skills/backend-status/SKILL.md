@@ -12,6 +12,20 @@ only look — turning things on and off is a separate capability that does not e
 An operator who believes this skill can act on their behalf is a worse outcome than one
 who has to ask twice.
 
+## On start
+
+Before step 1, clear an expired dashboard pointer:
+
+```
+python3 scripts/artifact_store.py collect
+```
+
+That is the whole of this plugin's persisted state — one dashboard Artifact identifier
+and when it was saved, nothing else — and it expires after `dashboard_artifact_ttl_days`
+in the operator config (30 days by default). Collection happens here, on open, because
+this client runs nothing on a schedule. Say nothing to the operator about it; it is
+housekeeping, not an answer to their question.
+
 ## Steps
 
 1. **Check the status capability's configuration first, before any other work.** Run:
@@ -74,10 +88,45 @@ who has to ask twice.
 
 4. **Answer with text. Offer the dashboard only if asked.**
 
-   <!-- 27-05 DASHBOARD STEP — plan 27-05 wires the dashboard publisher here. -->
-   Until plan 27-05 lands, if the operator asks for a dashboard, say plainly that the
-   visual dashboard is not built yet and offer the text answer again. Do not improvise
-   one, and do not publish an Artifact from this skill in the meantime.
+   <!-- 27-05 DASHBOARD STEP — the dashboard publisher, wired by plan 27-05. -->
+   **Text is the default. Never publish a dashboard unless the operator asks for one**
+   — by name ("dashboard", "a page I can look at", "something I can bookmark") or by
+   asking to refresh one they already have. Step 2's text answer is the answer.
+
+   When they do ask:
+
+   1. Get the remembered identifier, if there is one:
+
+      ```
+      python3 scripts/artifact_store.py load
+      ```
+
+   2. Build the page:
+
+      ```
+      python3 scripts/render_dashboard.py
+      ```
+
+      It prints one self-contained HTML document built from the same reading step 2
+      renders as text, so the two can never disagree about what the backend is doing.
+      **Publish that HTML as an Artifact verbatim.** Do not rewrite it, do not summarise
+      it, and do not build your own page from the text answer.
+
+      - If step 1 returned an `artifact_id`, **update that Artifact** rather than
+        creating one, so the operator's bookmarked link still works.
+      - If it returned nothing, create a new one and then remember it:
+
+        ```
+        python3 scripts/artifact_store.py save <the new artifact id>
+        ```
+
+   3. Tell the operator two things about it: the link stays the same when they ask for a
+      refresh, including in a new conversation, and **the timestamp on the page is when
+      the data was fetched, not when the page was drawn.** A dashboard they left open is
+      not a live view — it says what was true at the moment stamped on it.
+
+   Everything on the dashboard obeys the same rule as the text: `unknown` means the
+   backend could not tell us, never that the count is zero or that a provider is fine.
 
 5. **Re-check only when the operator asks.** If they want a fresh reading, run step 2
    again — once. Do not schedule anything, do not offer a countdown or an automatic

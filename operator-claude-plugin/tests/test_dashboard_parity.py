@@ -97,6 +97,9 @@ def test_each_workflows_on_off_and_last_run_match_the_text_answer():
         assert f"Switched {entry['active']}" in text
         assert entry["last_run"] in text
         assert entry["right_now"] in text
+        # Whether live writes are on is the highest-consequence line on either surface.
+        for row in entry["live_writes"]:
+            assert row in text, row
 
 
 def test_provider_balances_appear_in_both_renderings_with_the_same_value():
@@ -232,7 +235,12 @@ def test_values_are_escaped_into_the_html_rather_than_interpolated_raw():
 
 def test_rendering_is_pure_no_network_and_no_file_read():
     """The store is the skill's to call, not the renderer's — a renderer that reads state
-    is a renderer that can publish a stale pointer's data by accident."""
+    is a renderer that can publish a stale pointer's data by accident.
+
+    The module's `__main__` block does fetch (it is the operator's entry point, the same
+    shape as `render_text.py`'s); what this forbids is a transport, a file read or a store
+    lookup anywhere the rendering functions can reach.
+    """
     source = (render_dashboard.__file__ and
               open(render_dashboard.__file__, encoding="utf-8").read())
     for forbidden in ("requests", "artifact_store", "urllib", "socket",
