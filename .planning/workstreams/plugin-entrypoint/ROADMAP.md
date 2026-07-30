@@ -188,7 +188,26 @@ Plans:
   4. The sweep is silent when the backend is healthy, and each notice it does send states whether the operator or an admin can act on it.
   5. The sweep is read-only by construction: it burns no provider credits, enables no writes, dispatches nothing. A sweep that fires while live writes are off changes nothing about that.
 
-**Plans**: TBD
+**Plans**: 6 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 29-01-PLAN.md — Platform probes: can a scheduled routine invoke this plugin's own skill, where does its notice land, and does Desktop chat follow up unprompted (D-04, bonus-only)
+- [ ] 29-02-PLAN.md — Wave 0: sweep fixtures including the two deceptively-healthy payloads, plus the measured watch bound from data the ledger already fetches (D-06a)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 29-03-PLAN.md — Tracer: one condition end to end (read → classify → attribute → notice), plus NOTICE-05's import-graph guard proven to bite (D-02a)
+- [ ] 29-04-PLAN.md — The bounded in-session watch: two terminal reports and no third, per-record outcomes and cost actually incurred (D-05a, D-07)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
+- [ ] 29-05-PLAN.md — The remaining conditions: credential failure and exhausted quota as new judgment over existing data, failed scheduled run past its swallowed-error blind spot, review backlog, stuck-armed backstop; silence when healthy
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 29-06-PLAN.md — Ship it: the sweep skill, the scheduled-routine template, the two-part install docs, and one live gate proving a notice arrives with no session open
 
 ### Phase 30: Review-Queue Triage
 
