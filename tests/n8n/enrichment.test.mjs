@@ -36,6 +36,9 @@ const apolloLive = load("apollo_live_match.json"); // real people/match: nested 
 const lushaLive = load("lusha_live_person.json");
 const lushaLiveV2 = load("lusha_live_person_v2.json"); // REAL live v2/person envelope (confirmed)
 const zoomLive = load("zoominfo_live_enrich.json"); // real GTM enrich: data[].attributes + meta.matchStatus
+const lushaV3Contact = load("lusha_v3_contact.json"); // v3 contacts: results[] flat envelope
+const lushaV3Company = load("lusha_v3_company.json"); // v3 companies: results[] flat envelope
+const lushaV3NoMatch = load("lusha_v3_no_match.json"); // v3 no-match: results[0].error, outer 200
 
 function find(cands, field, source) {
   return cands.find((c) => c.field === field && c.source === source);
@@ -158,6 +161,94 @@ test("toCandidates: Lusha contacts-map entry with no data key -> skip (never thr
 
 test("toCandidates: Lusha empty contacts map -> no candidates, never throw", () => {
   assert.deepEqual(toCandidates("lusha", { contacts: {} }, "contacts"), []);
+});
+
+// --- toCandidates: v3 envelope (results[] flat array, confirmed live 2026-07-30) --------
+const byField = (arr) => [...arr].sort((a, b) => a.field.localeCompare(b.field));
+
+test("toCandidates: v3 contacts field set is exactly the v2 contacts field set", () => {
+  const c = toCandidates("lusha", lushaV3Contact, "contacts");
+  const fields = [...new Set(c.map((x) => x.field))].sort();
+  assert.deepEqual(fields, ["email", "jobtitle", "mobilephone", "persona_group", "phone", "seniority"]);
+});
+
+test("toCandidates: v3 mobile-discriminated phone -> mobilephone, other -> phone", () => {
+  const c = toCandidates("lusha", lushaV3Contact, "contacts");
+  assert.equal(find(c, "mobilephone", "lusha").normalizedValue, "+61412345678");
+  assert.equal(find(c, "phone", "lusha").normalizedValue, "+61290001234");
+});
+
+test("toCandidates: v3 do-not-call phone produces no candidate", () => {
+  const c = toCandidates("lusha", lushaV3Contact, "contacts");
+  // Only one mobilephone and one phone candidate exist -- the doNotCall mobile entry
+  // (0400 000 999) must not have produced a second mobilephone candidate.
+  assert.equal(c.filter((x) => x.field === "mobilephone").length, 1);
+  assert.notEqual(find(c, "mobilephone", "lusha").value, "0400 000 999");
+});
+
+test("toCandidates: v3 un-normalizable phone produces no candidate", () => {
+  const c = toCandidates("lusha", lushaV3Contact, "contacts");
+  assert.equal(c.filter((x) => x.value === "123").length, 0);
+});
+
+test("toCandidates: v3 companies field set is exactly lv_revenue_band/lv_employee_band/industry/lv_country_region_normalized", () => {
+  const c = toCandidates("lusha", lushaV3Company, "companies");
+  const fields = [...new Set(c.map((x) => x.field))].sort();
+  assert.deepEqual(fields, ["industry", "lv_country_region_normalized", "lv_employee_band", "lv_revenue_band"]);
+  assert.equal(find(c, "lv_revenue_band", "lusha").normalizedValue, "5-50M");
+  assert.equal(find(c, "lv_employee_band", "lusha").normalizedValue, "51-200");
+  assert.equal(find(c, "industry", "lusha").normalizedValue, "entertainment");
+  assert.equal(find(c, "lv_country_region_normalized", "lusha").normalizedValue, "AU");
+});
+
+test("toCandidates: v3 contacts candidate set deep-equals v2 for the same underlying data", () => {
+  const shared = {
+    emails: [{ email: "same@example.com", type: "work", confidence: "A+", updateDate: "2026-05-01" }],
+    phones: [{ number: "0412 345 678", type: "mobile", doNotCall: false, updateDate: "2026-04-15" }],
+    jobTitle: { title: "Head of Broadcast", seniority: "Director", departments: ["Broadcast"] },
+    updateDate: "2026-05-01",
+  };
+  const v2Raw = { contact: { error: null, isCreditCharged: true,
+    data: { ...shared, location: { country_iso2: "AU" } } } };
+  const v3Raw = { requestId: "x", results: [{ ...shared, location: { country: "Australia", countryIso2: "AU" } }],
+    billing: { creditsCharged: 1, resultsReturned: 1 } };
+  assert.deepEqual(
+    byField(toCandidates("lusha", v3Raw, "contacts")),
+    byField(toCandidates("lusha", v2Raw, "contacts")));
+});
+
+test("toCandidates: v3 companies candidate set deep-equals v2 for the same underlying data", () => {
+  const v2Raw = { revenueRange: [10000000, 50000000], employeeCount: 191,
+    mainIndustry: "Entertainment", location: { countryIso2: "AU" } };
+  const v3Raw = { requestId: "x", results: [{
+    revenueRange: { min: 10000000, max: 50000000 }, employeeCount: { exact: 191, min: 51, max: 200 },
+    industry: "Entertainment", location: { countryIso2: "AU" } }],
+    billing: { creditsCharged: 2, resultsReturned: 1 } };
+  assert.deepEqual(
+    byField(toCandidates("lusha", v3Raw, "companies")),
+    byField(toCandidates("lusha", v2Raw, "companies")));
+});
+
+test("toCandidates: v3 no-match envelope -> zero candidates, never throw", () => {
+  assert.doesNotThrow(() => toCandidates("lusha", lushaV3NoMatch, "contacts"));
+  assert.deepEqual(toCandidates("lusha", lushaV3NoMatch, "contacts"), []);
+});
+
+test("toCandidates: v3 per-record error marker -> zero candidates, never throw", () => {
+  const raw = { requestId: "x", results: [{ error: { code: "NOT_FOUND", message: "Contact not found" } }],
+    billing: { creditsCharged: 0, resultsReturned: 0 } };
+  assert.doesNotThrow(() => toCandidates("lusha", raw, "contacts"));
+  assert.deepEqual(toCandidates("lusha", raw, "contacts"), []);
+});
+
+test("toCandidates: v3 missing record object, {}, and null -> zero candidates, never throw", () => {
+  const missingRecord = { requestId: "x", results: [], billing: { creditsCharged: 0, resultsReturned: 0 } };
+  assert.doesNotThrow(() => toCandidates("lusha", missingRecord, "contacts"));
+  assert.deepEqual(toCandidates("lusha", missingRecord, "contacts"), []);
+  assert.doesNotThrow(() => toCandidates("lusha", {}, "contacts"));
+  assert.deepEqual(toCandidates("lusha", {}, "contacts"), []);
+  assert.doesNotThrow(() => toCandidates("lusha", null, "contacts"));
+  assert.deepEqual(toCandidates("lusha", null, "contacts"), []);
 });
 
 test("toCandidates: ZoomInfo live GTM enrich (data[].attributes + meta.matchStatus)", () => {

@@ -160,22 +160,76 @@ function _personaGroup(departments) {
   return first;
 }
 
+// _lushaRecord(rawResponse, objectType) -- Lusha envelope adapter, sibling to _zoomRecord().
+// v3 (confirmed live 2026-07-30, docs/LUSHA-V3-CONTRACT.md) is a flat
+// { requestId, results: [...], billing } envelope, positionally aligned with the request's
+// single-item array (this waterfall sends one identity per call, so results[0] is safe with
+// no match-back key). A per-result `error` (no-match/error shape, contract §9), a missing or
+// non-array `results`, a non-object input and a null input all resolve to {} -- zero
+// candidates, never a throw (skip-not-retry, CLAUDE.md Sec 26.1).
+//
+// v3 field names already match the intermediate shape the extraction logic below reads
+// (emails[].email/.type/.confidence, phones[].number/.type/.doNotCall, jobTitle.title/
+// .seniority/.departments) for CONTACTS, so _lushaV3Contact only renames the one field that
+// differs: location.countryIso2 (v3, camelCase) -> location.country_iso2 (the snake_case key
+// the extraction's region lookup reads). For COMPANIES, v3's revenueRange/employeeCount ship
+// as {min,max}/{exact,min,max} objects rather than the [lo,hi] array or plain number the
+// extraction expects, and industry classification is a flat `industry` string rather than
+// naicsCodes -- _lushaV3Company does that reshaping.
+//
+// v2's plural contactId-keyed `{contacts: {...}}` map and the singular `{contact:{data}}}`
+// offline-fixture shape are retained here as a fallback for now (retired in Plan 03 Task 3).
+function _lushaV3Contact(entry) {
+  const loc = entry.location || {};
+  return {
+    emails: entry.emails,
+    phones: entry.phones,
+    jobTitle: entry.jobTitle,
+    location: { ...loc, country_iso2: loc.countryIso2 },
+    updateDate: entry.updateDate,
+  };
+}
+
+function _lushaV3Company(entry) {
+  const rr = entry.revenueRange;
+  const revenueRange = rr && typeof rr === "object" && !Array.isArray(rr) ? [rr.min, rr.max] : rr;
+  let ec = entry.employeeCount;
+  if (ec && typeof ec === "object") {
+    ec = ec.exact != null ? ec.exact
+      : (ec.min != null && ec.max != null ? Math.round((ec.min + ec.max) / 2) : null);
+  }
+  return {
+    revenueRange,
+    employeeCount: ec,
+    mainIndustry: entry.industry,
+    location: entry.location,
+    updateDate: entry.updateDate,
+  };
+}
+
+function _lushaRecord(rawResponse, objectType) {
+  const raw = rawResponse;
+  if (!raw || typeof raw !== "object") return {};
+
+  if (Array.isArray(raw.results)) {
+    const entry = raw.results[0];
+    if (!entry || typeof entry !== "object" || entry.error) return {};
+    return objectType === "companies" ? _lushaV3Company(entry) : _lushaV3Contact(entry);
+  }
+
+  // ---- v2 fallback (retired in Plan 03 Task 3) ----
+  if (raw.contacts && typeof raw.contacts === "object") {
+    const entry = Object.values(raw.contacts)[0];
+    return (entry && !entry.error && entry.data) || {};
+  }
+  if (raw.contact && raw.contact.data) return raw.contact.data;
+  return raw;
+}
+
 function lushaCandidates(rawResponse, objectType) {
   const out = [];
   const src = "lusha";
-  // Live v2/person response (confirmed 2026-07-28 against portal 22617666) is a
-  // PLURAL, contactId-keyed map: {"contacts": {"<contactId>": {error, isCreditCharged,
-  // data: {...}}}}. A per-contact `error` or a missing `data` key must never throw
-  // (skip-not-retry, CLAUDE.md Sec 26.1) -- both fall through to {} (zero candidates
-  // for this row). The singular `contact.data` form below was never actually observed
-  // live -- it is kept only for the pre-existing offline fixture/back-compat shape.
-  let raw = rawResponse || {};
-  if (raw.contacts && typeof raw.contacts === "object") {
-    const entry = Object.values(raw.contacts)[0];
-    raw = (entry && !entry.error && entry.data) || {};
-  } else if (raw.contact && raw.contact.data) {
-    raw = raw.contact.data;
-  }
+  const raw = _lushaRecord(rawResponse, objectType) || {};
   const updated = raw.updateDate;
   const region = raw.location && (raw.location.country_iso2 || raw.location.country); // ISO2 or name
   if (objectType === "contacts") {
