@@ -99,9 +99,12 @@ pre-flight* that separates rows too thin to be useful; it is not a dedupe agains
 
 ### Backend contract (read-only)
 - `config/column_mapping.yaml` — the canonical prop set adapters must emit over. Read-only.
-- `n8n/wf_contact_ingest_cloud.json` — `Map Columns` defines what canonical means; the identity
-  rule (`email` OR `firstname`+`lastname`+`company`) used by D-08 is implemented in
-  `Resolve Identity` / `Merge Contacts`.
+- `n8n/wf_contact_ingest_cloud.json` — `Map Columns` defines what canonical means. **Corrected by
+  24-RESEARCH.md:** the identity rule (`email` OR `firstname`+`lastname`+`company`) that D-08 and
+  STRUCT-02 mirror lives in `Map Columns`' `requiredIdentity()` (trim-then-presence-check), **not**
+  in `Resolve Identity` / `Merge Contacts` — those are CRM-dedupe matching and are out of scope.
+  Note also that `src/file_loader.py::_has_identity` does **not** trim whitespace, unlike the live
+  n8n JS; the client-side validator must trim and must not be copied from that function.
 
 </canonical_refs>
 
