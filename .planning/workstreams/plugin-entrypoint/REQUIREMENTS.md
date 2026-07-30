@@ -239,9 +239,12 @@ above. This is why that endpoint has to exist.
 - [x] **PLUGIN-01**: The entrypoint installs and runs as a Claude plugin, invoked conversationally
       rather than by hand-running a script
 
-- [ ] **PLUGIN-02**: Endpoint URLs and auth secrets are admin-provisioned outside the plugin
-      source and never committed. The operator never sees, pastes, or handles a secret — provider
-      and HubSpot credentials stay in n8n entirely
+- [ ] **PLUGIN-02**: Endpoint URL and webhook secret live in a plugin-local config file that is
+      never committed. The operator performs setup once, copying the tracked example file and
+      filling in the two values obtained from the n8n admin. Nothing is committed, the plugin
+      never displays a secret back or asks for one in the conversation, and provider and HubSpot
+      credentials stay in n8n entirely (amended per D-05, `23-CONTEXT.md`, from the original
+      admin-provisioned wording)
 
 - [x] **PLUGIN-03**: The plugin refuses to run against a live endpoint when required configuration
       is missing or rejected, naming in plain language what is broken and who can fix it, and
