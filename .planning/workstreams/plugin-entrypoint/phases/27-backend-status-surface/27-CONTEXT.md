@@ -115,6 +115,23 @@ Phase 28) and no unprompted notification (that is Phase 29).
   and a timestamp, not a general-purpose store.
   — **Reversibility:** reversible — dropping to same-conversation-only means deleting the store
   and the GC step.
+- **D-09c — three refinements made at execution time (27-05), all load-bearing for Phase 28,
+  which wires more steps into the same skill.**
+  1. **The store's public surface is four names, not three.** `load`/`save`/`collect` are the
+     operations, but `state_path()` has to be public too — the plan's own acceptance criteria
+     call it, and both the gitignore proof and the not-a-dotfile proof need the resolved path
+     without duplicating the resolution logic in a test. A test pins the public set to exactly
+     those four, so the module cannot grow a fifth verb that writes something else.
+  2. **"Rendering is pure" scopes to the rendering functions, not to the file.**
+     `render_dashboard.py` carries a `__main__` block that fetches and renders — it is the
+     operator's entry point, the same shape as `render_text.py`'s, and the skill needs one
+     command to run. What must stay pure is everything the rendering functions can reach: no
+     transport, no file read, and specifically **no store lookup**, because a renderer that
+     loaded the pointer itself could publish one run's data under another run's identifier.
+     Do not "purify" the CLI away and leave the skill with no command to call.
+  3. **Collection lives in its own `## On start` section of the skill, above step 1**, rather
+     than inside an existing step. 27-04 owns steps 1–3 and 5; a later plan adding its own
+     start-time housekeeping should extend that section rather than renumbering the steps.
 
 ### Findings from planning — one confirmed, one refuted
 - **D-10 (CONFIRMED, and it invalidates every prior estimate):** the write-safety literal is **not**
