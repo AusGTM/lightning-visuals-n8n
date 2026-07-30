@@ -94,6 +94,26 @@ Not in scope: acting on what the sweep finds. Notices point at controls Phase 28
   mirroring `scripts/enrichment_cost_ledger.py`'s no-write guarantee, but enforced by CI instead of
   a comment. This is the concrete mechanism D-02 asked for.
 
+### Planning judgments recorded
+- **D-09 (tracer is not first):** the tracer is plan 3, not plan 1. The platform probe (29-01) and
+  the fixtures + measured watch bound (29-02) must precede it — the probe is the first question the
+  research demands answered, and the tracer needs something to verify against.
+- **D-10 (NOTICE-05's guard is an ALLOWLIST, not a denylist):** the import-graph guard enumerates
+  what the sweep may reach rather than what it may not. It therefore **fails closed on imports
+  Phases 28 and 30 have not written yet**, instead of silently permitting them. The same allowlist
+  is extended to the shipped skill body — a clean module graph invoked by a wide skill would pass a
+  module-only guard while still violating the requirement.
+- **D-11 (an accepted, unmitigated gap — T-29-19):** **a sweep that stops running is
+  indistinguishable from a healthy backend.** Silence means healthy (D-08), so a dead sweep and a
+  well backend produce identical operator experience. D-08 locks the notice list to exactly five
+  conditions, so a sixth (a heartbeat or dead-man's switch) was **not** smuggled in during
+  planning. It is recorded as an accepted threat for a future requirement. **This is a real hole in
+  the milestone's monitoring story and should be raised as a v0.7 candidate**, not left implicit.
+- **D-12 (the live gate is safe by construction):** the end-to-end gate fires a condition by
+  **lowering the review-backlog threshold** — never by breaking a credential or arming the backend
+  — plus a step verifying no write and no credit consumption occurred. That verification is the
+  observable counterpart to the static import guard.
+
 ### Claude's Discretion
 - Sweep cadence default and whether it is admin-configurable.
 - Notification wording and grouping when several conditions fire at once.
