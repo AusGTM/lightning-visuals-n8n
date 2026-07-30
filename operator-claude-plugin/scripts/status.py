@@ -214,13 +214,16 @@ def status_report(config: dict, workflow_id, get_transport=requests.get,
 if __name__ == "__main__":
     import sys
 
-    if len(sys.argv) != 2:
-        print(json.dumps({"ok": False, "error": "usage: status.py <workflow_id>"}))
+    if len(sys.argv) > 2:
+        print(json.dumps({"ok": False, "error": "usage: status.py [workflow_id]"}))
         raise SystemExit(1)
 
     try:
         _cfg = config_gate.load_config()
-        _report = status_report(_cfg, sys.argv[1])
+        # No argument is the skill's own first call: it doubles as the capability check
+        # and as the whole-picture read (D-07).
+        _report = (status_report(_cfg, sys.argv[1]) if len(sys.argv) == 2
+                   else full_report(_cfg))
     except config_gate.ConfigError as _e:
         print(json.dumps({"ok": False, "error": str(_e)}))
         raise SystemExit(1)
