@@ -1681,27 +1681,25 @@ return $input.all().map((it) => {
 });
 """
 
-ENRICH_BUILD_CO_REQUESTS = r"""// Build Company Provider Requests — companies branch.
-// Both contracts re-probed live 2026-07-29 against racingnsw.com.au (BUG 17):
-//   Lusha  GET  /v2/company?domain=            -> 200 { data:{...}, meta:{} }
-//   Apollo POST /v1/organizations/enrich?domain= -> { organization:{...} }
-// `domain` is the ONLY accepted query property. `?domain=&companyName=` 400s with
-// "property companyName should not exist", exactly as the old POST body 400'd with
-// "property domain should not exist" — so companyName stays out of the URL and lives
-// on in identity_keys for the other providers. (A POST {companies:[{id,domain}]}
-// envelope also 201s, mirroring /v2/person, but returns an id-keyed map that
-// lushaCandidates() does not unwrap; the GET's `data` envelope is what it reads.)
+ENRICH_BUILD_CO_REQUESTS = inline("lushaRequest.js") + r"""
+
+// --- n8n wrapper: Build Company Provider Requests — companies branch. ---
+// Lusha: POST /v3/companies/search-and-enrich, body {"companies":[{"domain":...}]}
+// (docs/LUSHA-V3-CONTRACT.md §5, live-confirmed 2026-07-30) — built by the shared
+// lushaCompanyBody(), domain ONLY. History: the retired v2 GET /v2/company?domain=
+// endpoint (BUG 17, re-probed live 2026-07-29 against racingnsw.com.au) rejected
+// `companyName` outright ("property companyName should not exist" as a query param,
+// mirroring the same-shaped rejection the old POST body got for `domain`) — that is
+// why companyName has never been part of the Lusha company identity and still isn't
+// under v3; it lives on in identity_keys for the other providers only.
+// Apollo: unchanged, still POST /v1/organizations/enrich?domain=.
 return $input.all().map((it) => {
   const row = it.json;
   const id = row.identity_keys || {};
-  const enc = encodeURIComponent;
-  const q = [];
-  const add = (k, v) => { if (v) q.push(enc(k) + "=" + enc(v)); };
-  add("domain", id.domain);
-  const lusha_company_url = "https://api.lusha.com/v2/company?" + q.join("&");
+  const lusha_company_body = lushaCompanyBody(id);
   const apollo_org_url =
-    "https://api.apollo.io/v1/organizations/enrich?domain=" + enc(id.domain || "");
-  return { json: { ...row, lusha_company_url, apollo_org_url } };
+    "https://api.apollo.io/v1/organizations/enrich?domain=" + encodeURIComponent(id.domain || "");
+  return { json: { ...row, lusha_company_body, apollo_org_url } };
 });
 """
 
@@ -2717,9 +2715,11 @@ def build_enrichment_local_live():
     nodes.append(code_node("Build Company Requests", ENRICH_BUILD_CO_REQUESTS, cx, cy))
     cx += 230
     nodes.append(_live_http(
-        "Lusha Company", cx, cy, "GET",
-        "={{ $('Build Company Requests').item.json.lusha_company_url }}",
-        [{"name": "api_key", "value": "=" + _env_secret_expr("LUSHA_API_KEY")}]))
+        "Lusha Company", cx, cy, "POST",
+        "https://api.lusha.com/v3/companies/search-and-enrich",
+        [{"name": "api_key", "value": "=" + _env_secret_expr("LUSHA_API_KEY")},
+         {"name": "Content-Type", "value": "application/json"}],
+        json_body="={{ JSON.stringify($('Build Company Requests').item.json.lusha_company_body) }}"))
     cx += 230
     nodes.append(_live_http(
         "Apollo Org", cx, cy, "POST",
@@ -3838,18 +3838,27 @@ def build_enrichment_cloud():
     # contacts Lusha/Apollo bodies — a gate positioned after another provider's HTTP
     # response would otherwise see that response as $json, not the row.
     #
-    # BUG 17 (fixed 2026-07-29, live-probed): this node used to POST the identity object
-    # at the bare endpoint and 400 every single time with "property domain should not
-    # exist" — invisibly, because onError:continueRegularOutput puts a provider failure in
-    # the ITEM, not the node, so every company run reported success while silently
-    # enriching from two providers instead of three. The live contract is
-    # `GET /v2/company?domain=` (domain is the only accepted property; adding companyName
-    # 400s too), and ENRICH_BUILD_CO_REQUESTS prebuilds exactly that URL as
-    # `lusha_company_url` — which nothing consumed until now.
+    # BUG 17 (fixed 2026-07-29, live-probed against the (now-retired) v2 endpoint): this
+    # node used to POST the identity object at the bare v2 endpoint and 400 every single
+    # time with "property domain should not exist" — invisibly, because
+    # onError:continueRegularOutput puts a provider failure in the ITEM, not the node, so
+    # every company run reported success while silently enriching from two providers
+    # instead of three. `domain` was (and, per the v3 probe below, still is) the only
+    # accepted identity property; adding `companyName` 400s on both v2 and v3.
+    #
+    # v3 contract (docs/LUSHA-V3-CONTRACT.md §5, live-confirmed 2026-07-30): POST
+    # /v3/companies/search-and-enrich, body {"companies":[{"domain":...}]} — no synthetic
+    # `companyId` index key (rejected the same way contacts' `contactId` is). No `reveal`
+    # key on this lane: §5/§6 confirm the companies lane exposes no `has`/`canReveal`
+    # structure at all, so there is nothing to derive a reveal list from — no
+    # reveal-derivation code exists for companies, deliberately.
+    # ENRICH_BUILD_CO_REQUESTS prebuilds this body via the shared lushaCompanyBody() as
+    # `lusha_company_body`.
     lusha_co = _http_node("Lusha Company",
-                          "={{ $('Build Company Requests').item.json.lusha_company_url }}",
-                          cpx, cy - 80, method="GET",
-                          auth="header")  # credential header, e.g. api_key: <LUSHA_API_KEY>
+                          "https://api.lusha.com/v3/companies/search-and-enrich",
+                          cpx, cy - 80,
+                          auth="header",  # credential header, e.g. api_key: <LUSHA_API_KEY>
+                          json_body="={{ JSON.stringify($('Build Company Requests').item.json.lusha_company_body) }}")
     nodes.append(lusha_co)
     apollo_org = _http_node(
         "Apollo Org", "https://api.apollo.io/v1/organizations/enrich", cpx + 220, cy - 80,

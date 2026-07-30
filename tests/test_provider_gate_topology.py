@@ -359,13 +359,12 @@ def test_contacts_and_companies_gate_chains_are_isomorphic_modulo_provider_set_a
         assert "$('Parse HubSpot Event').item.json.provider_enabled." in co_left
 
 
-def test_track_b_lusha_company_url_method_mismatch_is_flagged_in_builder_source():
-    """reviews LOW-5: Lusha Company is emitted as POST to a static URL with the default
-    identity_keys body, but the live-verified contract is GET /v2/company?domain= — a
-    Track B validation item, not fixed in 16.1. Assert the flag exists in source."""
-    src = (ROOT / "scripts" / "build_cloud_workflows.py").read_text()
-    assert "Track B" in src
-    assert "lusha_company_url" in src
+# reviews LOW-5's Track B item (Lusha Company method/contract mismatch, flagged but not
+# fixed in Phase 16.1) was resolved by BUG 17's fix and is now fully superseded by the
+# Phase 20 v3 migration — the live contract lives in docs/LUSHA-V3-CONTRACT.md, and the
+# builder emits the confirmed POST /v3/companies/search-and-enrich shape (see
+# tests/test_cloud_companies_branch.py). No replacement assertion: there is no longer a
+# mismatch to guard.
 
 
 # --- determinism -----------------------------------------------------------------------

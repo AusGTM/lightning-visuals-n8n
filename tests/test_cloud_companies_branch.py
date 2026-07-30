@@ -195,36 +195,45 @@ def test_zoominfo_company_mint_node_is_credential_bound_basic_auth():
     assert node["parameters"]["genericAuthType"] == "httpBasicAuth"
 
 
-def test_lusha_company_uses_the_live_get_contract_and_sends_no_body():
-    """BUG 17 (live-probed 2026-07-29 against racingnsw.com.au). Lusha's /v2/company
-    accepts the domain as a QUERY parameter and nothing else:
-
-        GET  /v2/company?domain=racingnsw.com.au              -> 200 {data:{...}}
-        GET  /v2/company?domain=...&companyName=...           -> 400 companyName should not exist
-        POST /v2/company  {"domain":...,"companyName":...}    -> 400 domain should not exist
-
-    The node shipped as that last shape and 400'd on every company run ever made, in
-    silence, because onError:continueRegularOutput lands a provider failure in the item
-    rather than the node. Assert the transport, not just the URL string: a GET that
-    still carries the default identity_keys body would regress it."""
+def test_lusha_company_uses_the_v3_post_contract_with_a_json_body():
+    """Phase 20 (Lusha v2 -> v3 migration). docs/LUSHA-V3-CONTRACT.md §5 (live-confirmed
+    2026-07-30): POST /v3/companies/search-and-enrich, body {"companies":[{"domain":...}]}
+    — domain is still the only accepted identity property (BUG 17's finding carries
+    forward unchanged under v3; adding companyName still 400s). Assert the transport, not
+    just the URL string: a built node without a non-empty jsonBody would silently regress
+    to the old query-string shape."""
     doc = _load()
     node = next(n for n in doc["nodes"] if n["name"] == "Lusha Company")
     p = node["parameters"]
-    assert p["method"] == "GET"
-    assert p["url"] == "={{ $('Build Company Requests').item.json.lusha_company_url }}"
-    assert "jsonBody" not in p and not p.get("sendBody"), \
-        "GET must not carry a body — the default identity_keys body is what 400'd"
+    assert p["method"] == "POST"
+    assert p["url"] == "https://api.lusha.com/v3/companies/search-and-enrich"
+    assert p.get("jsonBody"), "POST must carry the built v3 companies body"
     assert p["genericAuthType"] == "httpHeaderAuth"
 
 
-def test_build_company_requests_never_puts_companyname_in_the_lusha_query():
-    """The other half of BUG 17: the prebuilt URL was itself unusable, because it appended
-    companyName — which Lusha rejects exactly as it rejects a body `domain`. Guard the
-    builder source, since a wrong URL would 400 identically and just as invisibly."""
+def test_build_company_requests_never_puts_companyname_in_the_lusha_body():
+    """The v3-era form of BUG 17's guard: the prebuilt request body must never carry
+    companyName, which Lusha rejects on this lane under both v2 and v3. Guard the builder
+    source (delegates to the shared lushaCompanyBody() builder, no inline query-string
+    assembly for Lusha) AND that builder's actual output, since either regressing would
+    400 identically and just as invisibly (onError:continueRegularOutput lands a provider
+    failure in the item, not the node)."""
+    import subprocess
+
     from build_cloud_workflows import ENRICH_BUILD_CO_REQUESTS
 
-    src = ENRICH_BUILD_CO_REQUESTS
-    lusha_line = next(l for l in src.splitlines() if "lusha_company_url =" in l)
-    q_adds = [l for l in src.splitlines() if l.strip().startswith("add(")]
-    assert q_adds == ['  add("domain", id.domain);'], q_adds
-    assert "/v2/company?" in lusha_line
+    assert "lushaCompanyBody(id)" in ENRICH_BUILD_CO_REQUESTS
+    assert "lusha_company_body" in ENRICH_BUILD_CO_REQUESTS
+    assert "lusha_company_url" not in ENRICH_BUILD_CO_REQUESTS, \
+        "no query-string assembly for Lusha should remain in this builder"
+
+    harness = """
+const { lushaCompanyBody } = require(%r);
+const body = lushaCompanyBody({ domain: "racingnsw.com.au", companyName: "Racing NSW" });
+console.log(JSON.stringify(body));
+""" % str(ROOT / "n8n" / "code" / "lushaRequest.js")
+    r = subprocess.run(["node", "-e", harness], capture_output=True, text=True, timeout=30)
+    assert r.returncode == 0, r.stderr[:800]
+    body = json.loads(r.stdout.strip())
+    assert body == {"companies": [{"domain": "racingnsw.com.au"}]}
+    assert "companyName" not in body["companies"][0]

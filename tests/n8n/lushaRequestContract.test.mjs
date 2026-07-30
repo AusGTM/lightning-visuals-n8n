@@ -1,12 +1,12 @@
 // tests/n8n/lushaRequestContract.test.mjs
 //
-// Pins the REAL Lusha v2/person request contract (confirmed live against portal
-// 22617666, 2026-07-28): POST body must be {"contacts":[{"contactId",...}]} (an array,
-// each element requiring a caller-chosen contactId), with ONLY `email`/`linkedinUrl`
-// accepted as identity properties inside an element -- everything else (firstName,
-// lastName, companyName, companyDomain, domain, phoneNumber, jobTitle) is REJECTED and
-// caused a live 400 "property email should not exist" when the bare identity_keys
-// object was posted directly.
+// Pins the REAL Lusha v3 contacts request contract (confirmed live against
+// docs/LUSHA-V3-CONTRACT.md, 2026-07-30): POST /v3/contacts/search-and-enrich body must
+// be {"contacts":[{...}]} — a plain identity object with NO synthetic index key (v3
+// rejects a v2-style `contactId` outright: 400 "property contactId should not exist") —
+// plus a top-level `reveal` array derived from the Enrichment Gate's `missingFields`
+// through the same fixed email->emails/mobilephone->phones allow-list
+// n8n/code/lushaRequest.js's lushaReveal() encodes.
 //
 // Executes the "Lusha Enrich" node's REAL committed jsonBody n8n-expression string via
 // `new Function` -- the same idiom tests/n8n/bareEventChainFlow.test.mjs already uses
@@ -22,9 +22,12 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
+import { createRequire } from "node:module";
 
+const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const WF_PATH = path.join(ROOT, "n8n", "wf_enrichment_cloud.json");
+const { lushaContactBody } = require(path.join(ROOT, "n8n/code/lushaRequest.js"));
 
 function loadNode(name) {
   const wf = JSON.parse(fs.readFileSync(WF_PATH, "utf8"));
@@ -34,59 +37,71 @@ function loadNode(name) {
 }
 
 // Strips the n8n "={{ <js expression> }}" wrapper and evaluates the inner expression
-// with a mock $() node-accessor, mirroring how n8n itself evaluates it at runtime.
-function evalExpr(rawExpr, identityKeys) {
+// with a mock $() node-accessor, mirroring how n8n itself evaluates it at runtime. Serves
+// BOTH identity_keys and gate.missingFields off the "Enrichment Gate" node, matching what
+// the real committed expression reads.
+function evalExpr(rawExpr, identityKeys, missingFields) {
   const m = /^=\{\{([\s\S]*)\}\}$/.exec(rawExpr.trim());
   assert.ok(m, `expression must be a single {{ }} n8n expression, got: ${rawExpr}`);
   const $ = (name) => {
     assert.equal(name, "Enrichment Gate", `unexpected $() call: ${name}`);
-    return { item: { json: { identity_keys: identityKeys } } };
+    return { item: { json: { identity_keys: identityKeys, gate: { missingFields: missingFields || [] } } } };
   };
   const fn = new Function("$", `"use strict"; return (${m[1]});`);
   return fn($);
 }
 
-function buildBody(identityKeys) {
+function buildBody(identityKeys, missingFields) {
   const node = loadNode("Lusha Enrich");
-  const raw = evalExpr(node.parameters.jsonBody, identityKeys);
+  const raw = evalExpr(node.parameters.jsonBody, identityKeys, missingFields);
   return JSON.parse(raw);
 }
 
 const BANNED_ELEMENT_KEYS = [
-  "firstName", "lastName", "companyName", "companyDomain", "domain", "phoneNumber", "jobTitle",
+  "contactId", "firstName", "lastName", "companyName", "companyDomain", "domain", "phoneNumber", "jobTitle",
 ];
 
-test("Lusha Enrich body: maps identity_keys -> {contacts:[{contactId, email, linkedinUrl}]}", () => {
-  const body = buildBody({
-    email: "brendan@lightningvisuals.com",
-    linkedin_url: "https://linkedin.com/in/brendancarmody",
-    firstName: "Brendan", lastName: "Carmody",
-    companyName: "Lightning Visuals", domain: "lightningvisuals.com",
-  });
-  assert.deepEqual(Object.keys(body), ["contacts"]);
+test("Lusha Enrich body: full identity + missing mobile phone -> email/linkedinUrl identity + phone reveal", () => {
+  const body = buildBody(
+    { email: "brendan@lightningvisuals.com", linkedin_url: "https://linkedin.com/in/brendancarmody" },
+    ["mobilephone"]
+  );
+  assert.deepEqual(Object.keys(body).sort(), ["contacts", "reveal"]);
   assert.equal(body.contacts.length, 1);
   const c = body.contacts[0];
-  assert.equal(c.contactId, "1");
   assert.equal(c.email, "brendan@lightningvisuals.com");
   assert.equal(c.linkedinUrl, "https://linkedin.com/in/brendancarmody");
+  assert.deepEqual(body.reveal, ["phones"]);
   for (const banned of BANNED_ELEMENT_KEYS) {
-    assert.ok(!(banned in body), `top-level body must not contain rejected property ${banned}`);
     assert.ok(!(banned in c), `contact element must not contain rejected property ${banned}`);
   }
 });
 
+test("Lusha Enrich body: same identity, nothing missing -> reveal defaults to minimal non-empty ['emails']", () => {
+  const body = buildBody(
+    { email: "brendan@lightningvisuals.com", linkedin_url: "https://linkedin.com/in/brendancarmody" },
+    []
+  );
+  assert.deepEqual(body.reveal, ["emails"]);
+});
+
+test("Lusha Enrich body: only jobtitle missing -> empty allow-list mapping, defaulted to ['emails']", () => {
+  const body = buildBody({ email: "a@b.com" }, ["jobtitle"]);
+  assert.deepEqual(body.reveal, ["emails"]);
+});
+
 test("Lusha Enrich body: omits linkedinUrl key when identity_keys.linkedin_url is blank", () => {
-  const body = buildBody({ email: "a@b.com", linkedin_url: "" });
-  assert.deepEqual(Object.keys(body.contacts[0]).sort(), ["contactId", "email"]);
+  const body = buildBody({ email: "a@b.com", linkedin_url: "" }, []);
+  assert.deepEqual(Object.keys(body.contacts[0]).sort(), ["email"]);
 });
 
 test("Lusha Enrich body: omits email key when identity_keys.email is null, keeps linkedinUrl", () => {
-  const body = buildBody({ email: null, linkedin_url: "https://linkedin.com/in/x" });
-  assert.deepEqual(Object.keys(body.contacts[0]).sort(), ["contactId", "linkedinUrl"]);
+  const body = buildBody({ email: null, linkedin_url: "https://linkedin.com/in/x" }, []);
+  assert.deepEqual(Object.keys(body.contacts[0]).sort(), ["linkedinUrl"]);
 });
 
 test("Lusha Enrich body: neither email nor linkedin_url present -> empty contacts array (skip-not-retry, never a malformed element)", () => {
-  const body = buildBody({ firstName: "X", lastName: "Y", companyName: "Z", domain: "z.com" });
+  const body = buildBody({ firstName: "X", lastName: "Y", companyName: "Z", domain: "z.com" }, ["email"]);
   assert.deepEqual(body, { contacts: [] });
 });
 
@@ -94,4 +109,34 @@ test("Lusha Enrich body: still reads identity by node name (Enrichment Gate), ne
   const node = loadNode("Lusha Enrich");
   assert.ok(node.parameters.jsonBody.includes("$('Enrichment Gate').item.json.identity_keys"));
   assert.ok(!node.parameters.jsonBody.includes("$json.identity_keys"));
+});
+
+test("Lusha Enrich body: also reads missingFields by node name (Enrichment Gate), never bare $json", () => {
+  const node = loadNode("Lusha Enrich");
+  assert.ok(node.parameters.jsonBody.includes("$('Enrichment Gate').item.json.gate"));
+  assert.ok(node.parameters.jsonBody.includes("missingFields"));
+});
+
+// --- anti-drift parity: the CLOUD expression must never diverge from the shared module ---
+// This is the one seam Task 2 could not close by construction (n8n expressions cannot
+// require() a module), so it is pinned here instead: for a matrix of identity/missing-field
+// combinations, the hand-written expression's output must deep-equal lushaContactBody()'s.
+const PARITY_MATRIX = [
+  { identity: { email: "a@b.com", linkedin_url: "https://linkedin.com/in/a" }, missing: ["mobilephone"] },
+  { identity: { email: "a@b.com", linkedin_url: "https://linkedin.com/in/a" }, missing: [] },
+  { identity: { email: "a@b.com" }, missing: ["email", "mobilephone"] },
+  { identity: { linkedin_url: "https://linkedin.com/in/a" }, missing: ["jobtitle"] },
+  { identity: {}, missing: ["mobilephone"] },
+];
+
+test("Lusha Enrich body: CLOUD expression output deep-equals lushaContactBody() for a matrix of inputs (anti-drift)", () => {
+  assert.ok(PARITY_MATRIX.length >= 4, "parity matrix must cover at least 4 combinations");
+  for (const { identity, missing } of PARITY_MATRIX) {
+    const fromExpr = buildBody(identity, missing);
+    const fromModule = lushaContactBody(identity, missing);
+    assert.deepEqual(
+      fromExpr, fromModule,
+      `expression/module mismatch for identity=${JSON.stringify(identity)} missing=${JSON.stringify(missing)}`
+    );
+  }
 });
