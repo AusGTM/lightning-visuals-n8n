@@ -52,6 +52,15 @@ function _revenueToDollars(value) {
 function normalizeRevenueBand(value) {
   const v = _revenueToDollars(value);
   if (v === null) return null;
+  // ZERO IS NO-DATA, NOT A BAND. Apollo returns `organization_revenue: 0.0` (a number,
+  // not null) for every company it has no revenue figure for — confirmed live against
+  // mrc.racing.com, whose HubSpot record already carries annualrevenue 206,078,000.
+  // Banding that 0 as "<1M" is worse than saying nothing: "<1M" scores 0 ICP points
+  // where the truthful "50-500M" scores +10, so a missing figure silently reads as a
+  // disqualifying one. Guarded here rather than at the Apollo call site because
+  // ZoomInfo's `revenue * 1000` collapses to 0 the same way. Downstream, a null band is
+  // dropped by Merge Company's `v != null` candidate filter — no candidate is emitted.
+  if (v <= 0) return null;
   if (v < 1e6) return "<1M";
   if (v < 5e6) return "1-5M";
   if (v < 50e6) return "5-50M";
@@ -72,6 +81,10 @@ function normalizeEmployeeBand(value) {
   }
   const v = parseInt(value, 10);
   if (Number.isNaN(v)) return null;
+  // Same zero-is-no-data rule as normalizeRevenueBand: a headcount of 0 is a provider
+  // saying "unknown", never a real company, and "1-9" is a lie that reads as a real
+  // (tiny) size to the scorer.
+  if (v <= 0) return null;
   if (v <= 9) return "1-9";
   if (v <= 50) return "10-50";
   if (v <= 200) return "51-200";
