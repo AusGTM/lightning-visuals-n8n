@@ -32,10 +32,10 @@ Each maps to exactly one roadmap phase.
 - [ ] **REQ-orgtype-enumeration**: `lv_org_type` converts text → HubSpot enumeration (the one-way door): property migrated with existing values preserved, pipeline writes validated against the enum options, rollback path documented before flipping.
 - [x] **REQ-country-region-policy**: `lv_country_region_normalized` gains a `config/field_policy.yaml` entry so the already-produced research value can promote under policy instead of staging-only by default.
 
-## Future Requirements (deferred — backlog, not v0.6)
+## Future Requirements (deferred to v0.7)
 
-v0.6 is the operator client milestone (front door + control plane) and scopes none of these;
-they are backend or business-owner items awaiting a home.
+v0.6 is the operator client milestone (front door + control plane) and scopes none of these.
+They are backend and business-owner items, carried to v0.7.
 
 - HubSpot-side ICP formula — replace the `1 + 1` calculated-property placeholder (downstream-owner decision).
 - JTBD 2 weighted-rubric sign-off (REQ-signoff-gate) — rubric weights need business owner.
