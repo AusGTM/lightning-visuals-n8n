@@ -13,8 +13,8 @@ progress:
   total_phases: 3
   completed_phases: 1
   total_plans: 13
-  completed_plans: 10
-  percent: 77
+  completed_plans: 13
+  percent: 100
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-07-07)
 
 ## Current Position
 
-Phase: 22 (armed-e2e-enrichment-canary) — at final operator checkpoint
-Plan: 20: 5/5 · 21: 2/4 (21-03-T3 probe + 21-04 verdict-gated) · 22: 3/4 (22-04-T3 = armed window)
-Status: ALL autonomous work done. Handoff: .planning/phases/22-armed-e2e-enrichment-canary/22-OPERATOR-RUNBOOK.md (two sittings; Sitting 1 verdicts unblock the agent interlude that builds 21-04)
-Last activity: 2026-07-30 — Phases 20-22 planned + executed to the operator line; ~20 Lusha credits spent on probes; live n8n current (v3 URLs, zero native search); suites 682 pytest / 354 node
+Phase: 22 complete — MILESTONE v0.5 EXECUTION DONE (13/13 plans)
+Plan: all complete
+Status: Armed canary PASSED (execution 332): full chain live (providers + Haiku research + Sonnet judge), neighbors untouched, closed disarmed. Cost: $0.0686 Anthropic/record, 0 provider credits. BUG 27 found+fixed live (array->semicolon in PATCH). Residuals: lv_country_region_normalized promotion unexercised (22-LEDGER.md crit 2); Apollo credit key scope (users/api_profile 403). Next: /gsd-verify-work or /gsd-complete-milestone.
+Last activity: 2026-07-30 evening — canary window closed, ledger filled
 
 ## Performance Metrics
 
