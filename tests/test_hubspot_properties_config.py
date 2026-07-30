@@ -33,10 +33,21 @@ def test_config_parses():
     assert "contacts" in cfg
 
 
+# Phase 20 Plan 04 (REQ-lusha-id-staging): the two opaque Lusha record-identifier staging
+# properties are deliberately NOT lv_-prefixed. PN-1 governs CANONICAL enriched fields
+# (ICP inputs/outputs the merge policy writes); these two are a raw third-party provider
+# id, staged for request-side reuse only, and the plan names them lusha_contact_id /
+# lusha_company_id explicitly (docs/LUSHA-V3-CONTRACT.md, 20-04-PLAN.md) — an intentional,
+# narrow exception to the blanket PN-1 rule, not a drift.
+_PN1_EXEMPT_NAMES = {"lusha_contact_id", "lusha_company_id"}
+
+
 def test_every_property_name_is_lv_prefixed():
     cfg = load_config()
     for object_type in ("companies", "contacts"):
         for prop in cfg[object_type]["properties"]:
+            if prop["name"] in _PN1_EXEMPT_NAMES:
+                continue
             assert prop["name"].startswith("lv_"), f"{object_type}.{prop['name']} is not lv_-prefixed (PN-1)"
 
 
@@ -92,8 +103,8 @@ def test_every_groupname_is_a_declared_group():
 
 def test_exact_counts_guard_against_manifest_drift():
     cfg = load_config()
-    assert len(cfg["companies"]["properties"]) == 21
-    assert len(cfg["contacts"]["properties"]) == 16
+    assert len(cfg["companies"]["properties"]) == 22
+    assert len(cfg["contacts"]["properties"]) == 17
     assert len(cfg["companies"]["groups"]) == 1
     assert len(cfg["contacts"]["groups"]) == 1
 
@@ -133,3 +144,44 @@ def test_lv_enrichment_status_has_exactly_six_status_values():
         assert prop["type"] == "enumeration"
         values = {opt["value"] for opt in prop["options"]}
         assert values == expected
+
+
+# Phase 20 Plan 04 (REQ-lusha-id-staging) --------------------------------------------
+
+def test_lusha_id_staging_properties_declared_with_expected_shape():
+    cfg = load_config()
+    contact_prop = next(p for p in cfg["contacts"]["properties"] if p["name"] == "lusha_contact_id")
+    assert contact_prop["type"] == "string"
+    assert contact_prop["fieldType"] == "text"
+    assert contact_prop["groupName"] == "lv_enrichment_contacts"
+    assert contact_prop["options"] == []
+
+    company_prop = next(p for p in cfg["companies"]["properties"] if p["name"] == "lusha_company_id")
+    assert company_prop["type"] == "string"
+    assert company_prop["fieldType"] == "text"
+    assert company_prop["groupName"] == "lv_enrichment"
+    assert company_prop["options"] == []
+
+
+def test_lusha_id_staging_properties_appear_in_search_property_lists():
+    """A config entry with no matching search-list entry would silently break the
+    read-back path (existingRecord.lusha_contact_id / .lusha_company_id never populated) —
+    this is the failure mode worth pinning, per the plan's own acceptance criteria."""
+    import sys
+    from pathlib import Path as _Path
+
+    root = _Path(__file__).resolve().parent.parent
+    sys.path.insert(0, str(root / "scripts"))
+    from build_cloud_workflows import (  # noqa: E402
+        ENRICH_CONTACT_SEARCH_PROPERTIES_CSV,
+        ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV,
+        ENRICH_COMPANY_SEARCH_PROPERTIES_CSV,
+        HS_SEARCH_BODY_EXPR,
+        HS_CO_SEARCH_BODY_EXPR,
+    )
+
+    assert "lusha_contact_id" in ENRICH_CONTACT_SEARCH_PROPERTIES_CSV.split(",")
+    assert "lusha_contact_id" in ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV.split(",")
+    assert "lusha_company_id" in ENRICH_COMPANY_SEARCH_PROPERTIES_CSV.split(",")
+    assert '"lusha_contact_id"' in HS_SEARCH_BODY_EXPR
+    assert '"lusha_company_id"' in HS_CO_SEARCH_BODY_EXPR

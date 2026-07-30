@@ -247,6 +247,12 @@ companies:
       value: 'false'
       displayOrder: 1
       hidden: false
+  - name: lusha_company_id
+    label: Lusha Company Id
+    type: string
+    fieldType: text
+    groupName: lv_enrichment
+    options: []
   - name: lv_enrichment_reviewed_by
     label: LV Enrichment Reviewed By
     type: string
@@ -404,6 +410,12 @@ contacts:
       value: 'false'
       displayOrder: 1
       hidden: false
+  - name: lusha_contact_id
+    label: Lusha Contact Id
+    type: string
+    fieldType: text
+    groupName: lv_enrichment_contacts
+    options: []
   - name: lv_enrichment_reviewed_by
     label: LV Enrichment Reviewed By
     type: string

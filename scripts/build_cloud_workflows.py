@@ -942,7 +942,14 @@ return $input.all().map((it) => {
   ];
   const gap_flag = cands.length === 0;  // ALL sources returned nothing -> flag manual
   const { best, winners } = scoreCandidates(cands, { now: new Date().toISOString() });
-  return { json: { ...row, scored: { best, winners }, gap_flag } };
+  // Plan 04: the matched Lusha record id rides as its OWN row field (never a candidate --
+  // it must never enter scoreCandidates/the merge policy). Omitted entirely when null, so
+  // an absent id can never become an empty-string write over a previously stored id.
+  const lushaId = lushaRecordId(p.lusha, ot);
+  const lusha_ids = lushaId
+    ? (ot === "companies" ? { lusha_company_id: lushaId } : { lusha_contact_id: lushaId })
+    : null;
+  return { json: { ...row, scored: { best, winners }, gap_flag, ...(lusha_ids ? { lusha_ids } : {}) } };
 });
 """
 
@@ -1140,7 +1147,7 @@ return $input.all().map((it) => {
         score: Math.round(b.score * 100) / 100, agreedBy: b.agreedBy });
     }
   }
-  const patch = _buildContactPatch(row.merge);
+  const patch = { ..._buildContactPatch(row.merge), ...(row.lusha_ids || {}) };
   let hubspot_op = null;
   if (action === "create") {
     // BUG 19: seed identity on create ONLY — canonicalPatch never carries email
@@ -1208,7 +1215,7 @@ function _buildContactPatch(merge) {
 """ + WRITE_SAFETY_GATE_JS + r"""
 return $input.all().map((it) => {
   const row = it.json;
-  const properties = _buildContactPatch(row.merge);
+  const properties = { ..._buildContactPatch(row.merge), ...(row.lusha_ids || {}) };
   const hs_object_id = (row.existingRecord && row.existingRecord.hs_object_id) || null;
   const id = row.identity_keys || {};
   const domain = id.domain;
@@ -1262,7 +1269,10 @@ return rows.map((it, i) => {
   ];
   const gap_flag = cands.length === 0;
   const { best, winners } = scoreCandidates(cands, { now: new Date().toISOString() });
-  return { json: { ...row, providers: p, scored: { best, winners }, gap_flag } };
+  // Plan 04: sibling row field, never a candidate — see the LOCAL variant's identical comment.
+  const lushaId = lushaRecordId(p.lusha, ot);
+  const lusha_ids = lushaId ? { lusha_contact_id: lushaId } : null;
+  return { json: { ...row, providers: p, scored: { best, winners }, gap_flag, ...(lusha_ids ? { lusha_ids } : {}) } };
 });
 """
 
@@ -1495,7 +1505,7 @@ HS_SEARCH_BODY_EXPR = (
     '{ propertyName: "lastname", operator: "EQ", value: $json.identity_keys.lastName } ]) } ], '
     'properties: ["email","firstname","lastname","jobtitle","phone","mobilephone",'
     '"lv_jobtitle_verified_at","lv_mobilephone_verified_at","seniority",'
-    '"lv_contact_enrichment_provenance"], limit: 5 }) }}'
+    '"lv_contact_enrichment_provenance","lusha_contact_id"], limit: 5 }) }}'
 )
 
 # ---- COMPANIES branch -------------------------------------------------------
@@ -1624,7 +1634,7 @@ HS_CO_SEARCH_BODY_EXPR = (
     '"lv_org_type","lv_produces_content","lv_content_type","lv_is_hardware_vendor",'
     '"lv_is_gambling_operator","lv_icp_tier","lv_icp_fit_score","lv_anti_icp_flag",'
     '"lv_enrichment_provenance",'
-    '"lv_org_type_verified_at","lv_produces_content_verified_at"], '
+    '"lv_org_type_verified_at","lv_produces_content_verified_at","lusha_company_id"], '
     'limit: 5 }) }}'
 )
 
@@ -1736,7 +1746,11 @@ return rows.map((it, i) => {
     (sourcesByField[c.field] || (sourcesByField[c.field] = []))
       .push({ source: c.source, value: c.normalizedValue });
   }
-  return { json: { ...row, providers: p, scored: { best, winners, sourcesByField }, gap_flag } };
+  // Plan 04: sibling row field, never a candidate — see ENRICH_NORMALIZE_SCORE's comment.
+  const lushaId = lushaRecordId(p.lusha, "companies");
+  const lusha_ids = lushaId ? { lusha_company_id: lushaId } : null;
+  return { json: { ...row, providers: p, scored: { best, winners, sourcesByField }, gap_flag,
+    ...(lusha_ids ? { lusha_ids } : {}) } };
 });
 """
 
@@ -2432,7 +2446,7 @@ return $input.all().map((it) => {
 
   let properties = {};
   if (merge) {
-    properties = { ...merge.canonicalPatch, ...(merge.cacheKeys || {}) };
+    properties = { ...merge.canonicalPatch, ...(merge.cacheKeys || {}), ...(row.lusha_ids || {}) };
     if (merge.provenance && Object.keys(merge.provenance).length) {
       properties.lv_enrichment_provenance = stableStringify(merge.provenance).slice(0, 60000);
     }
@@ -3374,7 +3388,7 @@ ENRICH_CONTACT_SEARCH_PROPERTIES_CSV = (
     "email,firstname,lastname,jobtitle,phone,"
     "mobilephone,hs_object_id,lv_jobtitle_verified_at,"
     "lv_mobilephone_verified_at,seniority,"
-    "lv_contact_enrichment_provenance"
+    "lv_contact_enrichment_provenance,lusha_contact_id"
 )
 # The fetch-by-id list adds `company`/`lv_linkedin_url` — HubSpot's default contact
 # freetext-company property and the PN-1-renamed LinkedIn property, feeding
@@ -3421,7 +3435,7 @@ ENRICH_COMPANY_SEARCH_PROPERTIES_CSV = (
     "lv_produces_content,lv_content_type,lv_sponsorship_reliant,"
     "lv_is_hardware_vendor,lv_is_gambling_operator,"
     "lv_enrichment_provenance,lv_org_type_verified_at,"
-    "lv_produces_content_verified_at"
+    "lv_produces_content_verified_at,lusha_company_id"
 )
 
 ENRICH_ADAPT_FETCH_BY_ID_COMPANY = inline("adaptFetchById.js") + r"""
