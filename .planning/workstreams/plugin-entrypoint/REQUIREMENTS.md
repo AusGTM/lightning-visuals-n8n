@@ -122,4 +122,35 @@ explicitly out of scope — it would fork a second source of truth.
 
 ## Traceability
 
-_Filled by roadmap._
+Every v0.6 requirement maps to exactly one phase. Coverage: **24 / 24**, no orphans, no
+duplicates. Phase numbering continues from the archived v0.5 milestone (ended at 22).
+
+| Requirement | Phase | Status |
+| --- | --- | --- |
+| INGEST-01 | Phase 24 | Pending |
+| INGEST-02 | Phase 23 | Pending |
+| INGEST-03 | Phase 24 | Pending |
+| INGEST-04 | Phase 25 | Pending |
+| INGEST-05 | Phase 24 | Pending |
+| INGEST-06 | Phase 24 | Pending |
+| STRUCT-01 | Phase 23 | Pending |
+| STRUCT-02 | Phase 24 | Pending |
+| STRUCT-03 | Phase 24 | Pending |
+| STRUCT-04 | Phase 24 | Pending |
+| PREVIEW-01 | Phase 23 | Pending |
+| PREVIEW-02 | Phase 25 | Pending |
+| PREVIEW-03 | Phase 25 | Pending |
+| PREVIEW-04 | Phase 23 | Pending |
+| DISPATCH-01 | Phase 23 | Pending |
+| DISPATCH-02 | Phase 25 | Pending |
+| DISPATCH-03 | Phase 23 | Pending |
+| DISPATCH-04 | Phase 26 | Pending |
+| REPORT-01 | Phase 26 | Pending |
+| REPORT-02 | Phase 26 | Pending |
+| REPORT-03 | Phase 26 | Pending |
+| PLUGIN-01 | Phase 23 | Pending |
+| PLUGIN-02 | Phase 23 | Pending |
+| PLUGIN-03 | Phase 23 | Pending |
+
+**Per-phase counts:** Phase 23 → 9, Phase 24 → 7, Phase 25 → 4, Phase 26 → 4.
+
