@@ -88,27 +88,62 @@ class _StubResponse:
         self.status_code = status_code
         self._payload = payload if payload is not None else {"status": "accepted"}
 
+    @property
+    def ok(self):
+        return 200 <= self.status_code < 300
+
     def json(self):
+        if isinstance(self._payload, Exception):
+            raise self._payload
         return self._payload
 
 
-class _StubTransport:
-    """Callable recording every call it's handed, in place of a real requests.post."""
+def _as_response(scripted, response_cls):
+    """One scripted stub entry -> a response object. A bare payload means 200; a
+    `(status_code, payload)` pair carries a status; an Exception instance is raised by
+    the transport itself (a dead endpoint), and an Exception as the *payload* half of a
+    pair is raised by `.json()` (a 200 carrying an unparseable body)."""
+    if isinstance(scripted, Exception):
+        raise scripted
+    if isinstance(scripted, tuple):
+        status_code, payload = scripted
+        return response_cls(status_code=status_code, payload=payload)
+    return response_cls(status_code=200, payload=scripted)
 
-    def __init__(self):
+
+class _StubTransport:
+    """Callable recording every call it's handed, in place of a real requests.post.
+
+    With no `responses` it answers every call with the default accepted body (every
+    dispatch test's usage). With one it replays them in order — see `_as_response` for
+    the entry shapes, which cover a non-2xx, a dead endpoint and an unparseable body.
+    """
+
+    def __init__(self, responses=None):
+        self._responses = list(responses) if responses is not None else None
         self.calls = []
 
     def __call__(self, url, headers=None, files=None, timeout=None, **kwargs):
         self.calls.append(
             {"url": url, "headers": headers, "files": files, "timeout": timeout, **kwargs}
         )
-        return _StubResponse()
+        if self._responses is None:
+            return _StubResponse()
+        scripted = self._responses.pop(0) if self._responses else {}
+        return _as_response(scripted, _StubResponse)
 
 
 @pytest.fixture
 def stub_transport():
     """The seam every dispatch test uses in place of a real POST."""
     return _StubTransport()
+
+
+@pytest.fixture
+def stub_post_transport_factory():
+    """Returns the `_StubTransport` class so a test can script POST responses
+    (a 401, a dead endpoint, an unparseable body) rather than the default accepted one."""
+    return _StubTransport
 
 
 @pytest.fixture
@@ -122,16 +157,27 @@ def contact_execution():
 
 
 class _StubGetResponse:
-    def __init__(self, payload):
+    def __init__(self, payload, status_code=200):
         self._payload = payload
+        self.status_code = status_code
+
+    @property
+    def ok(self):
+        return 200 <= self.status_code < 300
 
     def json(self):
+        if isinstance(self._payload, Exception):
+            raise self._payload
         return self._payload
 
 
 class _StubGetTransport:
-    """Callable recording every GET `executions_client.py` makes, returning a scripted
-    payload per call in order — in place of a real `requests.get`."""
+    """Callable recording every GET a read client makes, returning a scripted response
+    per call in order — in place of a real `requests.get`.
+
+    A scripted entry is a bare payload (200), a `(status_code, payload)` pair, or an
+    Exception (raised as a transport failure) — see `_as_response`.
+    """
 
     def __init__(self, payloads):
         self._payloads = list(payloads)
@@ -139,8 +185,8 @@ class _StubGetTransport:
 
     def __call__(self, url, headers=None, params=None, timeout=None, **kwargs):
         self.calls.append({"url": url, "headers": headers, "params": params, "timeout": timeout})
-        payload = self._payloads.pop(0) if self._payloads else {}
-        return _StubGetResponse(payload)
+        scripted = self._payloads.pop(0) if self._payloads else {}
+        return _as_response(scripted, _StubGetResponse)
 
 
 @pytest.fixture
