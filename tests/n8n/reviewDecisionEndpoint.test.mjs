@@ -123,13 +123,127 @@ test("a row flagged ONLY by lv_icp_needs_review is still in the queue", () => {
   assert.equal(Object.keys(out.properties).length, 1);
 });
 
-test("approve is explicitly unsupported in this plan and writes nothing", () => {
-  const out = buildReviewDecision({
-    decision: "approve", reason: "looks right", row: flaggedRow(), nowIso: NOW,
+// --- approve (Plan 03) ------------------------------------------------------------------
+//
+// The approve path applies the record's OWN stored candidate through reviewApply's
+// compare-and-set — the phase's single non-clobber authority (D-05/D-08d/D-15). These
+// cases pin the outcomes; tests/n8n/reviewHumanProvenance.test.mjs pins the blob.
+
+const P_PROVENANCE = "lv_enrichment_provenance";
+
+function approve(overrides) {
+  const { row, ...rest } = overrides || {};
+  return buildReviewDecision({
+    objectType: "companies", decision: "approve", reason: "Confirmed from the About page.",
+    reviewedBy: "revops@example.com", row: row || flaggedRow(), nowIso: NOW, ...rest,
   });
-  assert.equal(out.outcome, "unsupported");
+}
+
+/** The held candidate as an ARRAY, so a case can forge an extra decision into it. */
+function heldDecisions(row) {
+  return JSON.parse(row[P_CANDIDATE_JSON]);
+}
+
+test("approve on a clean flagged row applies the held candidate, clears the queue, and stamps the human", () => {
+  const out = approve();
+  assert.equal(out.outcome, "applied");
+
+  // reviewApply's canonical patch — the candidate's own chosen values, unchanged.
+  assert.equal(out.properties.lv_org_type, "governing_body_league");
+  assert.equal(out.properties.lv_produces_content, true);
+  // ...plus its clear patch, which is what takes the record OUT of the queue. Unlike a
+  // rejection (D-10), an approval is entitled to: the decision is recorded alongside it.
+  assert.equal(out.properties[P_NEEDS_REVIEW], false);
+  assert.equal(out.properties[P_CANDIDATE_JSON], "");
+  assert.equal(typeof out.properties[P_REVIEWED_AT], "string",
+    "reviewApply's clear patch stamps reviewed-at; this module must not stamp it twice");
+  assert.equal(out.properties[P_REVIEWED_BY], "revops@example.com");
+  assert.equal(typeof out.properties[P_PROVENANCE], "string");
+});
+
+test("approve on a drifted record writes NOTHING and leaves it queued (reviewApply's stale path)", () => {
+  // A manual edit landed after the candidate was frozen: the live value no longer matches
+  // the decision's stored current_value.
+  const row = flaggedRow({ lv_org_type: "content_producer" });
+  const out = approve({ row });
+
+  assert.equal(out.outcome, "stale");
   assert.deepEqual(out.properties, {});
-  assert.match(out.message, /approve/i);
+  assert.match(out.message, /lv_org_type/, "the operator must learn WHICH field drifted");
+  assert.equal(P_NEEDS_REVIEW in out.properties, false, "a stale record stays in the queue");
+});
+
+test("approve with no held candidate is refused honestly — this is what a dedupe-flagged row hits", () => {
+  for (const candidate of ["", "[]", undefined, null, "   "]) {
+    const row = flaggedRow({ [P_CANDIDATE_JSON]: candidate, [P_ICP_NEEDS_REVIEW]: "true" });
+    const out = approve({ row });
+    assert.equal(out.outcome, "no_candidate", `candidate ${JSON.stringify(candidate)}`);
+    assert.deepEqual(out.properties, {});
+  }
+});
+
+test("approve on a malformed candidate applies nothing and says so, rather than clearing the queue", () => {
+  const out = approve({ row: flaggedRow({ [P_CANDIDATE_JSON]: '[{"field":' }) });
+  assert.equal(out.outcome, "no_candidate");
+  assert.deepEqual(out.properties, {},
+    "a candidate that cannot be read must never reach reviewApply's clear patch");
+});
+
+test("approve on a row that is not actually flagged yields not_flagged and writes nothing", () => {
+  const row = flaggedRow({
+    [P_NEEDS_REVIEW]: "false", [P_ICP_NEEDS_REVIEW]: "false", [P_CANDIDATE_JSON]: "",
+  });
+  const out = approve({ row });
+  assert.equal(out.outcome, "not_flagged");
+  assert.deepEqual(out.properties, {});
+});
+
+test("a forged candidate naming a manual_protected / review_required field cannot write it (REVIEW-02, T-30-11)", () => {
+  // reviewApply's allowlist is the set of policy KEYS, and `domain` is one of them with
+  // class manual_protected — so membership alone does NOT exclude it. This is D-12's hole.
+  const base = flaggedRow();
+  const forged = heldDecisions(base).concat([
+    { field: "domain", current_value: "exampleracing.example", chosen_value: "attacker.example",
+      decision: "needs_review", confidence: 99 },
+    { field: "annualrevenue", current_value: null, chosen_value: "999999999",
+      decision: "needs_review", confidence: 99 },
+  ]);
+  const out = approve({ row: flaggedRow({ [P_CANDIDATE_JSON]: JSON.stringify(forged) }) });
+
+  assert.equal(out.outcome, "applied");
+  assert.equal("domain" in out.properties, false,
+    "a manual_protected field is never written by a review decision");
+  assert.equal("annualrevenue" in out.properties, false,
+    "nor is a review_required one");
+  assert.equal(out.properties.lv_org_type, "governing_body_league",
+    "a legitimate field in the SAME candidate still applies");
+  assert.match(out.message, /domain/,
+    "and the operator is told which fields were withheld");
+});
+
+test("approve on a contact writes nothing: no contacts candidate producer exists in this repo", () => {
+  const out = approve({ objectType: "contacts" });
+  assert.equal(out.outcome, "no_candidate");
+  assert.deepEqual(out.properties, {});
+});
+
+test("an absent reviewed-by label is omitted, never written as an empty string", () => {
+  for (const reviewedBy of [undefined, null, "", "   ", 7]) {
+    const out = approve({ reviewedBy });
+    assert.equal(P_REVIEWED_BY in out.properties, false,
+      `writing "" would ERASE a previously recorded reviewer (${JSON.stringify(reviewedBy)})`);
+    assert.equal(out.outcome, "applied");
+  }
+  const long = approve({ reviewedBy: "r".repeat(400) });
+  assert.equal(long.properties[P_REVIEWED_BY].length, 255);
+});
+
+test("the compare-and-set is DELEGATED to reviewApply, never re-implemented here (D-05/D-15)", () => {
+  const src = fs.readFileSync(MODULE_PATH, "utf8");
+  assert.match(src, /require\("\.\/reviewApply"\)/,
+    "reviewDecision.js must import the existing engine");
+  assert.equal(/current_value/.test(src), false,
+    "a second copy of the staleness comparison would be a second non-clobber authority");
 });
 
 test("an unknown decision word is refused", () => {
