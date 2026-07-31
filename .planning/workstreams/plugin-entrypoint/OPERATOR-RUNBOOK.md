@@ -102,17 +102,28 @@ would strand an armed backend, which is the failure mode this entire ceremony ex
 
 ## §0b — Readiness: what you can run today
 
+**Swept against the tree 2026-07-31, 11:00.** Suite at the time: **1214 pytest / 1 skipped, 474 node
+/ 0 fail, 414 plugin**. **24 of 43 plans built.** Every `n8n/*.json` disarmed (8 files, grep → 0).
+
 | § | Plan | Runnable now? | Blocker |
 |---|---|---|---|
-| RB-1 | **25-01** lists-scope + chunk timing | ⚠ Probe B yes, Probe A **no** | Probe A's script `scripts/check_hubspot_list_scope.py` is built by 25-01 **Task 1**, which is autonomous and not yet run |
-| RB-2 | **29-01** scheduled-routine host probe | ✅ **yes** | none — no dependencies, no code needed |
-| RB-3 | **23-06** plugin install + armed create canary | ✅ **yes** | none — all scripts exist, canary CSV prepared |
-| RB-4 | **27-05** dashboard same-URL check | ✅ **yes** | none — Phase 27 is code-complete; this is its last outstanding step |
-| RB-5 | **28-02** n8n semantics live gate | ❌ | `scripts/probe_n8n_semantics.py` is built by 28-02 Task 1 (which follows 28-01) |
-| ~~RB-6~~ | ~~**28-04** five-triggers decision~~ | **withdrawn** | The decision was already made — D-25 / amendment #6. 28-04's checkpoint was deleted and the plan is now autonomous. **Nothing for you to do here.** |
-| RB-7 | **28-06** armed arm→dispatch→disarm canary | ❌ | gated behind 28-05 |
-| RB-8 | **29-06** live notice gate | ❌ | gated behind 29-04/05 |
-| RB-9 | **30-07** armed review canary | ❌ | gated behind 30-06 |
+| RB-1 | **25-01** lists-scope + chunk timing | ⚠ Probe B yes, Probe A **no** | `scripts/check_hubspot_list_scope.py` still **MISSING** — built by 25-01 **Task 1**, autonomous, not yet run. **Ask for Task 1 first.** Probe B is partly pre-measured — see the note in RB-1 before spending credits |
+| RB-2 | **29-01** scheduled-routine host probe | ✅ **yes** | none — no dependencies, no code needed. **Unblocks 4 plans; joint highest leverage** |
+| RB-3 | **23-06** install + armed create canary | ⚠ Section A yes, Section B **NO** | **three confirmed defects** — see the block in RB-3. Section B cannot pass as written |
+| RB-4 | **27-05** dashboard same-URL check | ✅ **yes** | none — Phase 27 is code-complete; this is its last step |
+| RB-5 | **28-02** n8n semantics live gate | ❌ | `scripts/probe_n8n_semantics.py` still **MISSING** — built by 28-02 Task 1. **Gates 28-03/04/05/06** |
+| ~~RB-6~~ | ~~**28-04** five-triggers decision~~ | **withdrawn** | Already decided — D-25 / amendment #6. Checkpoint deleted, plan now autonomous. **Nothing for you to do.** |
+| RB-7 | **28-06** armed arm→dispatch→disarm canary | ❌ | behind 28-02 → 28-05. Now needs `ALLOW_N8N_ARM` too |
+| RB-8 | **29-06** live notice gate | ❌ | behind 29-01 → 29-03/04/05 |
+| RB-9 | **30-07** armed review canary | ❌ | behind 30-05/30-06 (30-01…04 built). Now needs `ALLOW_REVIEW_SUBMIT`; **four changes — read RB-9's header block** |
+
+**Eight gates remain**, not nine — RB-6 is withdrawn. Two are partially done (RB-3's Section A,
+RB-4's plan built to its checkpoint).
+
+**What unblocks the most, in order:** **RB-2 (29-01)** and **RB-5 (28-02)** each release four plans
+and are the only things standing between the milestone and a fully autonomous finish of phases 28
+and 29. **RB-1 (25-01)** releases four more. **RB-3 and RB-4 unblock nothing** — each is its own
+phase's proof.
 
 **Provisional sections.** RB-8 and RB-9 belong to phases 29 and 30, whose `gsd-plan-checker` has
 **not** run. **Script names, subcommands and flags there may change.** Re-read against the plan
@@ -751,9 +762,35 @@ Record all six results in `29-06-SUMMARY.md`, **including anything that surfaced
 
 ---
 
-# RB-9 · Plan 30-07 — Armed review canary *(provisional)*
+# RB-9 · Plan 30-07 — Armed review canary
 
-**Blocked** behind 30-06. Phase 30 exit gate. One record is the **entire blast radius.**
+**Blocked** behind 30-06 (30-01…30-04 are built; 30-05 in flight). Phase 30 exit gate. One record is
+the **entire blast radius.**
+
+### Read before running — four things changed under this section
+
+1. **TWO gates now, at different layers, and both must be open.**
+   `ALLOW_HUBSPOT_REVIEW_WRITES` is a **backend baked constant**, compiled into workflow JSON and
+   read by `_writeSafetyAllows()` **inside n8n**. `ALLOW_REVIEW_SUBMIT` is a **plugin-side operator
+   env var**, read by Python **on your machine before a request exists** (D-34's uniform rule:
+   value must read **exactly `true`**; `1`, `yes`, `TRUE` all refuse). Different processes, both
+   required. Do not confuse them, and do not set the backend constant expecting the plugin to move.
+2. **A new step 6b proves the plugin gate independently.** With `ALLOW_REVIEW_SUBMIT` **unset**,
+   attempt the rejection and confirm the plugin refuses naming the variable — this is the only live
+   proof the plugin gate holds on its own rather than being masked by the conversation arm. Step 9
+   unsets it alongside the disarmed redeploy.
+3. **A contact can only be allowlisted by `TEST_RECORD_IDS`.** Domain-only arming **denies silently**
+   for contacts. If your canary record is a contact, a `TEST_RECORD_DOMAINS` entry alone will look
+   armed and write nothing.
+4. **This canary does NOT prove protected-field enforcement (D-31).** `manual_protected` is filtered
+   on the review-decision endpoint (`reviewDecision.js`, by class) but **not** on the 15-minute
+   backstop (`reviewApply.js`, allowlists by key, leaving `domain` and `annualrevenue` writable) —
+   and the backstop is the path the documented approve flow uses. Record what you observed; do not
+   write "protected fields are protected" in the log.
+
+⚠ **`verify_live_write_safety.py` inspects NO node in the review workflow.** It hardcodes the
+enrichment workflow and two `Decide*` node names. Use §RB-3 Defect 1's all-workflow scan for this
+window's arm and disarm read-backs — the verifier alone cannot see the flag you are arming.
 
 1. Choose **ONE** HubSpot test company currently flagged for review and holding a stored review
    candidate. Note its record id.
@@ -816,7 +853,37 @@ confirmed disarmed state.
 | RB-3 | 23-06 | A1–A7 observed; the armed and disarmed verdicts; whether HubSpot shows a **created** contact; raw webhook response; execution id |
 | RB-4 | 27-05 | "approved", or which step's behaviour differed |
 | RB-5 | 28-02 | "approved" + roundtrip verdict + settings/connections comparison + execute-endpoint status code; then execution spacing + restore verdict + 28-FINDINGS.md written |
-| RB-6 | 28-04 | `widen-by-one-field` or `refuse-per-job` |
+| ~~RB-6~~ | ~~28-04~~ | **withdrawn — nothing to reply** |
 | RB-7 | 28-06 | "approved" + both read-back verdicts + armed-window duration + only-allowlisted-record confirmation + disarmed-after-redeploy confirmation |
 | RB-8 | 29-06 | The six results |
-| RB-9 | 30-07 | "approved" + the record id + the confirmed disarmed read-back |
+| RB-9 | 30-07 | "approved" + the record id + the confirmed disarmed read-back + the step-6b refusal + whether the record was a company or a contact |
+
+---
+
+## Changelog — what moved under this runbook since it was written
+
+Kept so a section you read yesterday is not silently different today.
+
+| When | Change |
+|---|---|
+| 2026-07-31 | **Tenant pinned.** `N8N_EXPECTED_URL` = `https://alexherman.app.n8n.cloud`. Replaces the unfollowable "key must be Robert's, Alex's in `N8N_API_KEY_2`" check — `N8N_API_KEY_2` does not exist |
+| 2026-07-31 | **RB-3 gained three confirmed defects.** The read-back covers 2 of 9 flag sites and no contact-lane node; 23-01's fix is committed-but-undeployed; and Step 3b **fails on a correctly armed backend** because it rejects `CREATE`. Section B cannot pass as written |
+| 2026-07-31 | **RB-4 became runnable** — Phase 27 is code-complete |
+| 2026-07-31 | **RB-5's probe variable is named** `ALLOW_N8N_PROBE`, and its credential source is settled as `config_gate.load_config()`, not shell `N8N_URL`/`N8N_API_KEY` |
+| 2026-07-31 | **RB-6 withdrawn** — the decision it asked for was already made (D-25 / amendment #6) |
+| 2026-07-31 | **Gating made uniform (D-34)** — one `ALLOW_*` per dangerous capability, value exactly `true`, checked before any transport. Added `ALLOW_N8N_ARM` (RB-7) and `ALLOW_REVIEW_SUBMIT` (RB-9) |
+| 2026-07-31 | **RB-1's Probe B partly pre-measured** — 36.1 s/record measured free from execution history, implying a chunk default of 1–2 and a likely 524 on the five-record probe |
+| 2026-07-31 | **RB-9 gained four changes** — two gates at different layers, a new step 6b, contacts allowlistable only by `TEST_RECORD_IDS`, and the D-31 caveat that it does not prove protected-field enforcement |
+
+### Standing caveat — one script, three defects, two armed windows
+
+`scripts/verify_live_write_safety.py` is the read-back both RB-3 and RB-9 depend on, and it has
+three independent problems found by three separate routes today: it inspects **one workflow and two
+nodes** (2 of 9 `CREATE` sites, none in the contact lane, none in the review workflow); it **rejects
+a correctly armed window** whenever anything beyond `ALLOW_HUBSPOT_RECORD_WRITES` is armed; and it
+therefore cannot see `ALLOW_HUBSPOT_REVIEW_WRITES` at all.
+
+**Until it is fixed, treat its verdict as necessary but not sufficient in every armed window**, and
+run RB-3 Defect 1's all-workflow scan alongside it. The fix is one coherent piece of work —
+a workflow argument, an expected-armed-flags argument, and no hardcoded scope — and routes to
+`/gsd-plan-phase 23 --gaps --ws plugin-entrypoint`.
