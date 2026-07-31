@@ -354,6 +354,26 @@ print('scan complete — any ARMED line above means the window is still open')
 Read-only. **Silence is the pass.** Any `ARMED:` line means the backend is still armed regardless of
 what the verifier reported.
 
+**Defect 3 — Step 3b is guaranteed to FAIL, and the runbook tells you not to fire on a fail.**
+Step 3 arms `ALLOW_HUBSPOT_RECORD_WRITES` **and** `ALLOW_HUBSPOT_CREATE`. Step 3b then runs
+`--expectation armed`, whose armed branch requires `ALLOW_HUBSPOT_RECORD_WRITES == "true"` and
+**every other write-enabling boolean to read `"false"`** — with the message *"canary scope is record
+writes only"*. There is no CLI flag to permit `CREATE`. So Step 3b reports FAIL for a backend that
+is armed exactly as Step 3 intended.
+
+This is **pre-existing and not caused by Phase 30** — the verifier was written for Phase 22's canary,
+whose scope deliberately excluded create. 23-06 departs from that on purpose, because Phase 23's
+entire goal *is* the create path. The runbook and the verifier encode two different definitions of
+"correctly armed", and nobody hit it until now because Section B never got past Step 1.
+
+**Until it is fixed, do not read Step 3b's FAIL as "the arming did not work".** Confirm the armed
+state with the all-workflow scan from Defect 1 instead, checking that exactly
+`ALLOW_HUBSPOT_RECORD_WRITES` and `ALLOW_HUBSPOT_CREATE` read `true`, that
+`ALLOW_HUBSPOT_REVIEW_WRITES` reads `false`, and that the allowlist is your domain and nothing else.
+The proper fix — an explicit "which flags do you expect armed" argument rather than a hardcoded
+scope — belongs with Defect 1's fix in `/gsd-plan-phase 23 --gaps --ws plugin-entrypoint`, since
+both are the same script.
+
 **Defect 2 — 23-01's create-gate fix is committed but not deployed.** Confirmed live 2026-07-31:
 `LV Contact Ingest (Cloud template)` (`updatedAt` 2026-07-30) declares literals in only its two
 write gates; the committed artifact also declares `ALLOW_HUBSPOT_CREATE` in `Decide Action`. So

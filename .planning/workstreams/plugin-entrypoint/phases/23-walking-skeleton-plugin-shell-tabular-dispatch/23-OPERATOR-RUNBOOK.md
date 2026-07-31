@@ -142,7 +142,13 @@ installed plugin.
 >    `LV Contact Ingest (Cloud template)`**. A `disarmed PASS` at Step 7 is therefore **not**
 >    evidence the contact lane is disarmed. Run the all-workflow scan in §RB-3 as well; silence
 >    is the pass.
-> 2. **23-01's create-gate fix is committed but not deployed** (live `updatedAt` 2026-07-30
+> 2. **Step 3b will FAIL even when arming worked.** Step 3 arms `ALLOW_HUBSPOT_RECORD_WRITES`
+>    **and** `ALLOW_HUBSPOT_CREATE`, but `--expectation armed` requires every boolean *other than*
+>    `ALLOW_HUBSPOT_RECORD_WRITES` to read `"false"` (*"canary scope is record writes only"*), and
+>    there is no flag to permit create. Pre-existing: the verifier encodes Phase 22's canary scope,
+>    which 23-06 deliberately departs from. **Do not read that FAIL as "arming did not work"** —
+>    confirm with §RB-3's all-workflow scan instead. Fix belongs with defect 1; same script.
+> 3. **23-01's create-gate fix is committed but not deployed** (live `updatedAt` 2026-07-30
 >    declares literals in only the two write gates). Step 3 would push never-live-tested logic
 >    in the same action that arms writes. **Insert Steps 2b/2c from §RB-3** — a disarmed deploy
 >    plus read-back — so "did the fix deploy" and "did arming work" stay separable.
