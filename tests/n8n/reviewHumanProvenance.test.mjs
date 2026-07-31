@@ -173,11 +173,18 @@ test("an approval writes the merged blob into lv_enrichment_provenance and says 
     undefined, { source: "claude_web", confidence: 60 });
   const held = decisions.filter((d) => d.decision === "needs_review");
 
+  // ONE call, reused below. `realBlob()` runs mergeCompanies with no injected clock, so each
+  // call stamps `verified_at` with the wall clock — two calls straddling a millisecond boundary
+  // produced a 1 ms diff and failed this test ~25% of runs (measured 3/12). Comparing the
+  // carried-through entry against the very object the row was built from is also the stronger
+  // assertion: "untouched" means identical to what went in, not merely equal to a fresh
+  // equivalent.
+  const priorBlob = realBlob();
   const row = {
     ...existing, hs_object_id: "789", record_found: true,
     lv_enrichment_needs_review: "true",
     lv_enrichment_review_candidate_json: stableStringify(held),
-    [P_PROVENANCE]: stableStringify(realBlob()),
+    [P_PROVENANCE]: stableStringify(priorBlob),
   };
 
   const { properties, outcome, message } = buildReviewDecision({
@@ -190,7 +197,7 @@ test("an approval writes the merged blob into lv_enrichment_provenance and says 
   assert.equal(blob.lv_org_type.source, "human");
   assert.equal(blob.lv_org_type.verified_at, NOW);
   assert.equal(blob.lv_produces_content.reason, "checked the About page");
-  assert.deepEqual(blob.industry, realBlob().industry,
+  assert.deepEqual(blob.industry, priorBlob.industry,
     "the field this approval never touched is carried through untouched");
   assert.doesNotMatch(message, /provenance/i,
     "a readable blob is the quiet path — no warning to the operator");
