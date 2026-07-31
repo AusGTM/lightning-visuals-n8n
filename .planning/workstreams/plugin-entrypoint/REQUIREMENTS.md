@@ -71,8 +71,17 @@ above. This is why that endpoint has to exist.
 - [x] **INGEST-03**: Operator can supply already-structured JSON in a foreign shape and have it
       translated to canonical rows
 
-- [ ] **INGEST-04**: Operator can name existing HubSpot records (list, view, or record IDs) to
-      enrich, with no row structuring involved
+- [x] **INGEST-04**: Operator can name existing HubSpot records (a HubSpot **list** or **record
+      IDs**) to enrich, with no row structuring involved.
+      *A saved **view** is refused, with this redirect verbatim: "I can't resolve a HubSpot
+      \*view\* — HubSpot doesn't expose views through its API. Save that view as a \*\*list\*\*
+      in HubSpot and give me the list name, or paste the record IDs directly." HubSpot exposes no
+      public API for saved views and no evidence of one was found, and resolving a view name
+      against the list endpoint would enrich the wrong record set with no error whenever the two
+      names collide. Lists ARE supported — `crm.lists.read` was added to the static-auth app,
+      granted on reinstall, and probed live 2026-07-31 (HTTP 200, list id 15, 102 members) — so
+      only views are dropped. Decision and probe output recorded in `25-BLOCKERS.md`
+      §"View resolution"; seventh accepted requirement amendment in this milestone.*
 
 - [x] **INGEST-05**: Operator can supply a public URL and have contact/company data extracted
       from the page content
@@ -105,12 +114,12 @@ above. This is why that endpoint has to exist.
 - [x] **PREVIEW-01**: Operator sees the exact structured payload and row count before anything
       is sent, and must approve it
 
-- [ ] **PREVIEW-02**: Operator sees an estimated provider-credit and Anthropic-token cost for
+- [x] **PREVIEW-02**: Operator sees an estimated provider-credit and Anthropic-token cost for
       the batch before approving, derived from measured per-record rates, and is warned when the
       estimate exceeds remaining credits — balances sourced from the n8n-side status endpoint,
       never by the client calling a provider directly
 
-- [ ] **PREVIEW-03**: Batches above a configured size are chunked, with the chunking plan shown
+- [x] **PREVIEW-03**: Batches above a configured size are chunked, with the chunking plan shown
       in the preview
 
 - [x] **PREVIEW-04**: Operator can abort at the preview with nothing sent and no cost incurred
@@ -121,7 +130,7 @@ above. This is why that endpoint has to exist.
 - [x] **DISPATCH-01**: Approved row batches POST to `hubspot/contact-upload` with the correct
       header auth and body encoding
 
-- [ ] **DISPATCH-02**: Enrichment of existing HubSpot records POSTs to `hubspot/enrichment/event`
+- [x] **DISPATCH-02**: Enrichment of existing HubSpot records POSTs to `hubspot/enrichment/event`
 - [x] **DISPATCH-03**: Dispatch is disarmed by default — a live send requires the operator to
       explicitly enable live writes, consistent with the repo's two-key write-gate convention.
       That permission is conversation-scoped (see CONTROL-04) and granted in chat, never by
@@ -306,7 +315,7 @@ duplicates. Phase numbering continues from the archived v0.5 milestone (ended at
 | INGEST-01 | Phase 24 | Complete |
 | INGEST-02 | Phase 23 | Complete |
 | INGEST-03 | Phase 24 | Complete |
-| INGEST-04 | Phase 25 | Pending |
+| INGEST-04 | Phase 25 | Complete |
 | INGEST-05 | Phase 24 | Complete |
 | INGEST-06 | Phase 24 | Complete |
 | INGEST-07 | Phase 24 | Complete |
@@ -315,11 +324,11 @@ duplicates. Phase numbering continues from the archived v0.5 milestone (ended at
 | STRUCT-03 | Phase 24 | Complete |
 | STRUCT-04 | Phase 24 | Complete |
 | PREVIEW-01 | Phase 23 | Complete |
-| PREVIEW-02 | Phase 25 | Pending |
-| PREVIEW-03 | Phase 25 | Pending |
+| PREVIEW-02 | Phase 25 | Complete |
+| PREVIEW-03 | Phase 25 | Complete |
 | PREVIEW-04 | Phase 23 | Complete |
 | DISPATCH-01 | Phase 23 | Complete |
-| DISPATCH-02 | Phase 25 | Pending |
+| DISPATCH-02 | Phase 25 | Complete |
 | DISPATCH-03 | Phase 23 | Complete |
 | DISPATCH-04 | Phase 26 | Pending |
 | REPORT-01 | Phase 26 | Complete |

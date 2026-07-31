@@ -124,32 +124,32 @@ Plans:
 **Requirements**: INGEST-04, DISPATCH-02, PREVIEW-02, PREVIEW-03
 **Success Criteria** (what must be TRUE):
 
-  1. Naming existing HubSpot records — record IDs, a list, or a view — produces an enrichment request with no row structuring involved, previewed and approved through the same gate as any other batch.
-  2. An approved enrichment POSTs to `hubspot/enrichment/event` with header auth in the envelope shape `Parse HubSpot Event` accepts, carrying an explicit provider selection; with no selection stated, no provider is enabled and no credits burn.
+  1. **[AMENDED by 25-BLOCKERS.md §"View resolution" — saved views scoped out]** Naming existing HubSpot records — record IDs or a HubSpot list — produces an enrichment request with no row structuring involved, previewed and approved through the same gate as any other batch. *A saved **view** is refused with a redirect to saving it as a list, because HubSpot exposes no public API for views and no evidence of one was found. Lists themselves are supported and were probed live on 2026-07-31 — `crm.lists.read` granted, HTTP 200, 102 members read — so this is the small amendment (views only), not the large one (lists and views). Seventh accepted requirement amendment in this milestone; INGEST-04 is reworded to match.*
+  2. **[AMENDED by 25-CONTEXT.md D-05 — the shipped client default is the full waterfall]** An approved enrichment POSTs to `hubspot/enrichment/event` with header auth in the envelope shape `Parse HubSpot Event` accepts, carrying an explicit provider selection resolved from a per-batch override over an admin default that ships as the full waterfall — and that resolved selection is stated in the preview before approval, every time, whatever it resolved to. The backend enables no provider when a request carries no recognizable selection, so a malformed or selection-less request burns nothing. *The original wording folded the backend's fail-closed behaviour and the client's own default into one sentence, reading as though staying silent enabled nothing; with a permissive client default, staying silent enables everything. The user was shown that conflict and chose the default-on behaviour, mitigated by the mandatory preview display above and by the backend's fail-closed parser. Second accepted requirement amendment in this milestone.*
   3. Every preview — both lanes — shows an estimated provider-credit and Anthropic-token cost for the batch, derived from the repo's measured per-record rates rather than a guess, and warns when the estimate exceeds the credits actually remaining. Remaining balances arrive from the n8n-side status endpoint, never from the client calling a provider directly; a balance that cannot be read reads "unknown" and the warning says so rather than assuming headroom.
   4. A batch above the configured size limit is shown in the preview already split — chunk count and rows per chunk — before approval, and dispatch sends exactly that plan.
 
-**Plans**: 7 plans
+**Plans**: 7/7 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 25-01-PLAN.md — Blockers first: live `crm.lists.read` scope probe, chunk-timing measurement, and the recorded saved-view decision (D-02a, D-11a)
-- [ ] 25-02-PLAN.md — n8n credit-only `hubspot/backend-status` endpoint, with unreadable proven distinct from zero (D-10)
+- [x] 25-01-PLAN.md — Blockers first: live `crm.lists.read` scope probe, chunk-timing measurement, and the recorded saved-view decision (D-02a, D-11a)
+- [x] 25-02-PLAN.md — n8n credit-only `hubspot/backend-status` endpoint, with unreadable proven distinct from zero (D-10)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 25-03-PLAN.md — n8n list resolution on the enrichment webhook: additive branch, bounded expansion, view refusal (D-01/D-02)
-- [ ] 25-04-PLAN.md — Client tracer: provider-selection resolution, enrichment envelope, disarmed dispatch, and the documented full-waterfall default (D-03/D-04/D-06a)
-- [ ] 25-05-PLAN.md — Dated plugin-local rate table, batch estimate, status-endpoint balance client, tri-state comparison (D-07/D-08/D-09/D-10)
+- [x] 25-03-PLAN.md — n8n list resolution on the enrichment webhook: additive branch, bounded expansion, view refusal (D-01/D-02)
+- [x] 25-04-PLAN.md — Client tracer: provider-selection resolution, enrichment envelope, disarmed dispatch, and the documented full-waterfall default (D-03/D-04/D-06a)
+- [x] 25-05-PLAN.md — Dated plugin-local rate table, batch estimate, status-endpoint balance client, tri-state comparison (D-07/D-08/D-09/D-10)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 25-06-PLAN.md — Chunk plan computed once, sequential dispatch that skips a failure, failed chunks returned as a re-sendable batch (D-11/D-12/D-13)
+- [x] 25-06-PLAN.md — Chunk plan computed once, sequential dispatch that skips a failure, failed chunks returned as a re-sendable batch (D-11/D-12/D-13)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 25-07-PLAN.md — Cost block on both lanes, the enrichment skill, operator docs, and the criterion-2 and view-scope amendments (D-05, D-02a)
+- [x] 25-07-PLAN.md — Cost block on both lanes, the enrichment skill, operator docs, and the criterion-2 and view-scope amendments (D-05, D-02a)
 
 ### Phase 26: Outcome Reporting & Safe Retry
 
