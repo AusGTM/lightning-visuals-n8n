@@ -858,9 +858,14 @@ def _env_secret_expr(name: str) -> str:
 # create additionally requires ALLOW_HUBSPOT_CREATE, and every write requires the target
 # record's domain or hs_object_id to be on the TEST_RECORD_* allowlist (an empty
 # allowlist denies everything — no accidental "allow all" via an unset env var).
+# ALLOW_HUBSPOT_REVIEW_WRITES (Phase 30 Plan 01, D-02/D-08e) is the review-writeback
+# authority and is deliberately NOT reachable from ALLOW_HUBSPOT_RECORD_WRITES in either
+# direction: Phase 28's arm/dispatch/disarm cycle flips the dispatch flag, and nothing it
+# arms may enable a review write — nor the reverse. Same allowlist requirement applies.
 WRITE_SAFETY_DEFAULTS = {
     "ALLOW_HUBSPOT_RECORD_WRITES": "false",
     "ALLOW_HUBSPOT_CREATE": "false",
+    "ALLOW_HUBSPOT_REVIEW_WRITES": "false",
     "TEST_RECORD_DOMAINS": "",
     "TEST_RECORD_IDS": "",
 }
@@ -880,8 +885,16 @@ WRITE_SAFETY_GATE_JS = (
     "\n".join(_write_safety_const(k) for k in WRITE_SAFETY_DEFAULTS)
     + r"""
 function _writeSafetyAllows(action, hsObjectId, domain) {
-  if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== "true") return false;
-  if (action === "create" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== "true") return false;
+  // Review writeback has its OWN authority (D-02): the review action never consults
+  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,
+  // so arming either gate grants nothing on the other path. The allowlist below is
+  // shared and mandatory for both.
+  if (action === "review") {
+    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== "true") return false;
+  } else {
+    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== "true") return false;
+    if (action === "create" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== "true") return false;
+  }
   const allowedDomains = String(TEST_RECORD_DOMAINS).split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
   const allowedIds = String(TEST_RECORD_IDS).split(",").map((s) => s.trim()).filter(Boolean);
   if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything

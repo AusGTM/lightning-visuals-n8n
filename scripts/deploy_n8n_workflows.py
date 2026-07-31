@@ -142,13 +142,20 @@ _OVERLAY_FLAG_SPEC = {
     # Write-safety constants. Overlayable so the write-path canary can arm ONE record
     # without a rebuild, and guarded below: writes cannot be enabled unless the same
     # invocation also supplies a non-empty allowlist.
+    # ALLOW_HUBSPOT_REVIEW_WRITES is a SEPARATE authority from the dispatch pair above
+    # (Phase 30 Plan 01, D-02/D-08e) — arming review writeback grants nothing on the
+    # dispatch path and vice versa. It is still write-enabling, so the allowlist guard
+    # below applies to it identically.
     "ALLOW_HUBSPOT_RECORD_WRITES": ('"false"', '"true"', False),
     "ALLOW_HUBSPOT_CREATE":        ('"false"', '"true"', False),
+    "ALLOW_HUBSPOT_REVIEW_WRITES": ('"false"', '"true"', False),
     "TEST_RECORD_IDS":             ('""', None, True),
     "TEST_RECORD_DOMAINS":         ('""', None, True),
 }
 _OVERLAYABLE_FLAGS = frozenset(_OVERLAY_FLAG_SPEC)
-_WRITE_ENABLING_FLAGS = frozenset({"ALLOW_HUBSPOT_RECORD_WRITES", "ALLOW_HUBSPOT_CREATE"})
+_WRITE_ENABLING_FLAGS = frozenset({
+    "ALLOW_HUBSPOT_RECORD_WRITES", "ALLOW_HUBSPOT_CREATE", "ALLOW_HUBSPOT_REVIEW_WRITES",
+})
 _ALLOWLIST_FLAGS = frozenset({"TEST_RECORD_IDS", "TEST_RECORD_DOMAINS"})
 # `,` already separates ENTRIES in ENABLE_BAKED_FLAGS, so a multi-id allowlist value
 # uses `|` and is rendered back to the comma-separated form `_writeSafetyAllows()` splits

@@ -66,6 +66,12 @@ WRITE_DECISION_NODE_NAMES = ("Decide Action", "Decide Company Action")
 # Never re-typed: the checked set IS the overlay's overlayable set, imported directly.
 CHECKED_CONSTANTS = tuple(_OVERLAY_FLAG_SPEC.keys())
 ALLOWLIST_CONSTANTS = ("TEST_RECORD_IDS", "TEST_RECORD_DOMAINS")
+# Everything else in the checked set is a write-enabling boolean. Derived, not re-typed,
+# so a constant added to the overlay (ALLOW_HUBSPOT_REVIEW_WRITES was the fifth, Phase 30
+# Plan 01) is read back the moment it exists — an armed flag this verifier does not know
+# about would otherwise report a live artifact as "disarmed PASS", which is the exact
+# false-success this read-back exists to prevent.
+BOOLEAN_CONSTANTS = tuple(c for c in CHECKED_CONSTANTS if c not in ALLOWLIST_CONSTANTS)
 
 EXPECTATIONS = ("disarmed", "armed")
 
@@ -149,14 +155,9 @@ def verify(workflow: dict, expectation: str, expected_allowlist: str = None) -> 
         name = report["name"]
 
         if expectation == "disarmed":
-            if c["ALLOW_HUBSPOT_RECORD_WRITES"] != "false":
-                reasons.append(
-                    f"{name}: ALLOW_HUBSPOT_RECORD_WRITES={c['ALLOW_HUBSPOT_RECORD_WRITES']!r}, expected \"false\""
-                )
-            if c["ALLOW_HUBSPOT_CREATE"] != "false":
-                reasons.append(
-                    f"{name}: ALLOW_HUBSPOT_CREATE={c['ALLOW_HUBSPOT_CREATE']!r}, expected \"false\""
-                )
+            for flag in BOOLEAN_CONSTANTS:
+                if c[flag] != "false":
+                    reasons.append(f"{name}: {flag}={c[flag]!r}, expected \"false\"")
             for allow_const in ALLOWLIST_CONSTANTS:
                 if c[allow_const] != "":
                     reasons.append(
@@ -167,10 +168,16 @@ def verify(workflow: dict, expectation: str, expected_allowlist: str = None) -> 
                 reasons.append(
                     f"{name}: ALLOW_HUBSPOT_RECORD_WRITES={c['ALLOW_HUBSPOT_RECORD_WRITES']!r}, expected \"true\""
                 )
-            if c["ALLOW_HUBSPOT_CREATE"] != "false":
+            # Every OTHER write-enabling boolean must still read disabled. The canary's
+            # scope is record writes only — never create, and never review writeback,
+            # which is a separate arming authority (D-02, Phase 30 Plan 01): a dispatch
+            # armed window that also left review armed is a widened blast radius.
+            for flag in BOOLEAN_CONSTANTS:
+                if flag == "ALLOW_HUBSPOT_RECORD_WRITES" or c[flag] == "false":
+                    continue
                 reasons.append(
-                    f"{name}: ALLOW_HUBSPOT_CREATE={c['ALLOW_HUBSPOT_CREATE']!r}, expected \"false\" "
-                    f"(canary scope is record writes only, never create)"
+                    f"{name}: {flag}={c[flag]!r}, expected \"false\" "
+                    f"(canary scope is record writes only)"
                 )
             observed = c["TEST_RECORD_IDS"] or c["TEST_RECORD_DOMAINS"]
             if observed != expected_allowlist:
@@ -199,13 +206,10 @@ def _print_report(result: dict) -> None:
             print(f"node {report['name']!r}: ERROR — {report['error']}")
             continue
         c = report["constants"]
-        print(
-            f"node {report['name']!r}: "
-            f"ALLOW_HUBSPOT_RECORD_WRITES={c['ALLOW_HUBSPOT_RECORD_WRITES']!r} "
-            f"ALLOW_HUBSPOT_CREATE={c['ALLOW_HUBSPOT_CREATE']!r} "
-            f"TEST_RECORD_IDS={c['TEST_RECORD_IDS']!r} "
-            f"TEST_RECORD_DOMAINS={c['TEST_RECORD_DOMAINS']!r}"
-        )
+        # Every checked constant is printed, not a hardcoded four — an operator reading
+        # this report must be able to see the state of a flag added after it was written.
+        rendered = " ".join(f"{k}={c[k]!r}" for k in CHECKED_CONSTANTS)
+        print(f"node {report['name']!r}: {rendered}")
 
     for reason in result["reasons"]:
         print(f"FAIL: {reason}")

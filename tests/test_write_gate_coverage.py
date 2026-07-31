@@ -111,12 +111,16 @@ def test_every_cloud_workflow_with_a_write_declares_the_safety_constants(path):
     """The gate is only meaningful if the constants it reads are actually declared in the
     same workflow — a gate whose ALLOW_HUBSPOT_RECORD_WRITES is undefined would throw
     rather than deny, which is a different failure but not a safe one."""
+    from scripts.build_cloud_workflows import WRITE_SAFETY_DEFAULTS
+
     wf = _load(path)
     if not any(_is_write_node(n) for n in wf["nodes"]):
         pytest.skip("no write nodes in this workflow")
     blob = json.dumps(wf)
-    for const in ("ALLOW_HUBSPOT_RECORD_WRITES", "ALLOW_HUBSPOT_CREATE",
-                  "TEST_RECORD_IDS", "TEST_RECORD_DOMAINS"):
+    # Driven off the builder's own set rather than a hardcoded tuple: a constant added
+    # later (ALLOW_HUBSPOT_REVIEW_WRITES was the fifth, Phase 30 Plan 01) is covered the
+    # moment it exists, instead of silently sitting outside this guarantee.
+    for const in WRITE_SAFETY_DEFAULTS:
         assert f"const {const} = " in blob, f"{path.name}: {const} is never declared"
 
 
@@ -126,11 +130,14 @@ def test_committed_write_safety_constants_are_all_disabled(path):
     tests/test_enabled_build_invariants.py holds for the enrichment workflow, now that two
     more workflows carry these constants."""
     import re
+
+    from scripts.build_cloud_workflows import WRITE_SAFETY_DEFAULTS
+
     blob = json.dumps(_load(path))
-    for const, disabled in (("ALLOW_HUBSPOT_RECORD_WRITES", '\\"false\\"'),
-                            ("ALLOW_HUBSPOT_CREATE", '\\"false\\"'),
-                            ("TEST_RECORD_IDS", '\\"\\"'),
-                            ("TEST_RECORD_DOMAINS", '\\"\\"')):
+    for const, value in WRITE_SAFETY_DEFAULTS.items():
+        # The safe literal as it appears INSIDE the serialized workflow: the builder bakes
+        # json.dumps(value) into jsCode, and jsCode is itself a JSON string here.
+        disabled = json.dumps(json.dumps(value))[1:-1]
         for literal in re.findall(rf"const {const} = ([^;]+);", blob):
             assert literal == disabled, (
                 f"{path.name}: {const} is committed as {literal!r}, not {disabled!r}")

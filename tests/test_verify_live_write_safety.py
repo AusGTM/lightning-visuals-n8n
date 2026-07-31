@@ -28,14 +28,25 @@ def hermetic(monkeypatch):
     monkeypatch.setattr(requests, "put", _raise_http)
 
 
-def _node(name, writes="false", create="false", ids="", domains=""):
+def _node(name, writes="false", create="false", review="false", ids="", domains=""):
+    values = {
+        "ALLOW_HUBSPOT_RECORD_WRITES": writes,
+        "ALLOW_HUBSPOT_CREATE": create,
+        "ALLOW_HUBSPOT_REVIEW_WRITES": review,
+        "TEST_RECORD_DOMAINS": domains,
+        "TEST_RECORD_IDS": ids,
+    }
+    # Declared off the verifier's OWN checked set, so a constant added to the overlay
+    # (ALLOW_HUBSPOT_REVIEW_WRITES was the fifth, Phase 30 Plan 01) fails loudly here as
+    # a missing fixture value rather than making every node report a missing constant.
+    assert set(values) == set(verifier.CHECKED_CONSTANTS), (
+        "fixture is out of date with verifier.CHECKED_CONSTANTS: "
+        f"{set(verifier.CHECKED_CONSTANTS) ^ set(values)}"
+    )
     js_code = (
         "// unrelated preamble, e.g. taxonomy consts, should never confuse the parser\n"
         'const SOME_OTHER_CONST = "unrelated";\n'
-        f'const ALLOW_HUBSPOT_RECORD_WRITES = "{writes}";\n'
-        f'const ALLOW_HUBSPOT_CREATE = "{create}";\n'
-        f'const TEST_RECORD_DOMAINS = "{domains}";\n'
-        f'const TEST_RECORD_IDS = "{ids}";\n'
+        + "".join(f'const {k} = "{v}";\n' for k, v in values.items())
     )
     return {"name": name, "parameters": {"jsCode": js_code}}
 
@@ -78,7 +89,30 @@ def test_disarmed_fails_on_stale_allowlist_even_with_flags_disabled():
     assert any("Decide Company Action" in r and "TEST_RECORD_IDS" in r for r in result["reasons"])
 
 
+def test_disarmed_fails_when_review_writeback_is_still_armed():
+    """Phase 30 Plan 01: ALLOW_HUBSPOT_REVIEW_WRITES is a write-enabling flag this
+    read-back had no knowledge of when it was written. A live artifact with review
+    writeback armed reporting `disarmed PASS` is the exact false-success this script
+    exists to prevent, so the checked booleans are derived from the overlay set."""
+    wf = _wf(contact={"review": "true", "ids": "201"}, company={})
+    result = verifier.verify(wf, "disarmed")
+    assert result["ok"] is False
+    assert any("Decide Action" in r and "ALLOW_HUBSPOT_REVIEW_WRITES" in r for r in result["reasons"])
+
+
 # --- armed expectation ------------------------------------------------------------------
+
+def test_armed_fails_when_review_writeback_is_also_enabled():
+    """A dispatch armed window must not silently carry review writeback with it (D-02) —
+    the canary's scope is record writes only."""
+    wf = _wf(
+        contact={"writes": "true", "review": "true", "ids": "201"},
+        company={"writes": "true", "ids": "201"},
+    )
+    result = verifier.verify(wf, "armed", expected_allowlist="201")
+    assert result["ok"] is False
+    assert any("ALLOW_HUBSPOT_REVIEW_WRITES" in r for r in result["reasons"])
+
 
 def test_armed_passes_with_requested_allowlist_and_writes_enabled_on_both_nodes():
     wf = _wf(
