@@ -147,6 +147,15 @@ def build_envelope(spec, providers):
     A list identifier is carried through untouched: the client does not resolve it, does
     not count it, and does not fabricate a count (D-01, D-02). Every form carries
     `providers`.
+
+    THE LIST ENVELOPE IS NESTED, and it has to be (D-19). `n8n/code/listExpansion.js`
+    reads `isPlainObject(body.list)` and then `body.list.name` / `body.list.objectType`.
+    A flat `{"list": "<name>", "objectType": ...}` passes the `IF List Input` gate — a
+    string is non-null — and is then refused by every request with "the enrichment request
+    named no list", because `isPlainObject("Acme")` is false. That shape shipped briefly
+    and broke the whole list lane while both sides' own tests stayed green, each testing
+    its own half of a boundary neither crossed. `test_list_envelope_contract.py` and
+    `tests/n8n/listEnvelopeContract.test.mjs` now pin the SAME literal from both sides.
     """
     if not isinstance(spec, dict):
         raise RecordSpecError(
@@ -158,8 +167,10 @@ def build_envelope(spec, providers):
     envelope = {"providers": list(providers)}
 
     if spec.get("list"):
-        envelope["list"] = spec["list"]
-        envelope["objectType"] = normalize_object_type(spec.get("object_type"))
+        envelope["list"] = {
+            "name": spec["list"],
+            "objectType": normalize_object_type(spec.get("object_type")),
+        }
         return envelope
 
     if "record_ids" in spec:

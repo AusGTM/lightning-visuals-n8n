@@ -103,8 +103,11 @@ def test_list_name_is_carried_verbatim_with_no_events_and_no_count():
     envelope = enrichment.build_envelope(
         {"list": "New Targets.xlsx", "object_type": "contacts"}, ["lusha"]
     )
-    assert envelope["list"] == "New Targets.xlsx"
-    assert envelope["objectType"] == "contacts"
+    # NESTED, per D-19 — the backend reads isPlainObject(body.list) then .name/.objectType.
+    # A flat {"list": "<name>", "objectType": ...} is refused by every request while both
+    # sides' own tests stay green; see test_list_envelope_contract.py.
+    assert envelope["list"] == {"name": "New Targets.xlsx", "objectType": "contacts"}
+    assert "objectType" not in envelope, "objectType belongs inside `list`, not beside it"
     assert "events" not in envelope
     assert not any("count" in key.lower() for key in envelope)
 
