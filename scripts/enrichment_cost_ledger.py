@@ -656,9 +656,20 @@ def collect_durations(workflow_name=None, limit: int = 20) -> list:
     """One row per recent execution: duration from the collection response, record count
     from that execution's own run data. Read-only, two existing GET helpers, no new path.
     """
+    # The collection response on this tenant carries no `workflowData` — every item's
+    # name is None — so a name filter reading it alone silently matches nothing and
+    # reports an empty history. Resolve through the workflow collection exactly as `list`
+    # mode already does. (Found live 2026-07-31: filtering on workflowData.name returned
+    # 0 rows while 2 enrichment executions were sitting in the same page.)
+    try:
+        workflows_by_id = {w.get("id"): w.get("name") for w in _get_live_workflows()}
+    except Exception:
+        workflows_by_id = {}
+
     rows = []
     for execution in _list_executions(limit):
-        name = (execution.get("workflowData") or {}).get("name")
+        name = ((execution.get("workflowData") or {}).get("name")
+                or workflows_by_id.get(execution.get("workflowId")))
         if workflow_name and name != workflow_name:
             continue
         try:

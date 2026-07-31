@@ -506,3 +506,28 @@ def test_durations_mode_skips_without_credentials_rather_than_calling_n8n(capsys
     so this asserts the credential gate fires BEFORE the transport, the same as list mode."""
     assert ledger.main(["durations"]) == 0
     assert "skipped (no n8n creds)" in capsys.readouterr().out
+
+
+def test_collect_durations_resolves_the_workflow_name_from_the_workflow_collection(monkeypatch):
+    """The executions collection on this tenant carries no `workflowData` — every item's
+    name is None. A filter reading only that matches nothing and reports an empty history,
+    which is indistinguishable from "no executions to measure" and would have produced a
+    provisional bound when a measured one was available (found live 2026-07-31)."""
+    monkeypatch.setattr(ledger, "_list_executions", lambda limit: [
+        {"id": "1", "workflowId": "wf-a", "status": "success",
+         "startedAt": "2026-07-31T10:00:00.000Z", "stoppedAt": "2026-07-31T10:00:36.000Z"},
+        {"id": "2", "workflowId": "wf-b", "status": "success",
+         "startedAt": "2026-07-31T10:00:00.000Z", "stoppedAt": "2026-07-31T10:00:03.000Z"},
+    ])
+    monkeypatch.setattr(ledger, "_get_live_workflows", lambda: [
+        {"id": "wf-a", "name": "LV Enrichment (Cloud template)"},
+        {"id": "wf-b", "name": "LV Scheduled Maintenance (Cloud)"},
+    ])
+    monkeypatch.setattr(ledger, "_get_execution",
+                        lambda execution_id: _write_node_execution({"HubSpot Company Update": 1}))
+
+    rows = ledger.collect_durations("LV Enrichment (Cloud template)", 20)
+    assert [row["execution_id"] for row in rows] == ["1"]
+    assert rows[0]["workflow"] == "LV Enrichment (Cloud template)"
+    assert rows[0]["duration_seconds"] == pytest.approx(36.0)
+    assert rows[0]["record_count"] == 1
