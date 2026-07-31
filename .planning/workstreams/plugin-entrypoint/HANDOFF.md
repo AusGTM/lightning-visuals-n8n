@@ -191,19 +191,29 @@ because D-25 had already settled that decision and the plan was asking the opera
 
 ### 23-06 — plugin install + armed create canary  ← IN PROGRESS, and it found two real defects
 
-Walking it surfaced two confirmed defects that **block Section B as originally written**. Both are
-independently verified against the committed artifacts and the live instance:
+Walking it surfaced **three** confirmed defects. **Two are now FIXED by plan 23-07; one remains.**
 
-1. **The armed-window read-back does not cover the lane the canary fires at.**
-   `scripts/verify_live_write_safety.py` hardcodes the enrichment workflow (line 60) and the two
-   `Decide*` node names (line 64), taking no workflow argument — so it inspects 2 of 9
-   `ALLOW_HUBSPOT_CREATE` sites, 2 of 8 `ALLOW_HUBSPOT_RECORD_WRITES` sites, and **no node at all in
-   `LV Contact Ingest (Cloud template)`**. A `disarmed PASS` is therefore **not** evidence the
-   contact lane is disarmed. Mitigated in the runbook with an all-workflow read-only scan; the
-   permanent fix routes to `/gsd-plan-phase 23 --gaps --ws plugin-entrypoint`.
-2. **23-01's create-gate fix is committed but not deployed** — live contact ingest declares literals
-   in only its two write gates. Step 3 would push never-live-tested logic in the same action that
-   arms writes. Runbook now inserts Steps 2b/2c: a disarmed deploy plus read-back first.
+1. ✅ **FIXED — the read-back did not cover the lane the canary fires at.**
+   `verify_live_write_safety.py` hardcoded the enrichment workflow and two `Decide*` node names,
+   taking no workflow argument, so it inspected **2 of 11 declaring nodes** and **none in
+   `LV Contact Ingest`**. 23-07 replaced naming with **discovery**: verified live, it now scans
+   **8 workflows / 11 declaring nodes**. A zero-discovery scan **fails** rather than passing quietly.
+2. ✅ **FIXED — `--expectation armed` rejected a correctly armed window.** It required
+   `RECORD_WRITES` armed and *every* other boolean disabled ("canary scope is record writes only"),
+   with no way to permit `CREATE` — so Step 3b failed on a backend armed exactly as Step 3 intended.
+   23-07 added **`--expect-armed FLAG,FLAG`**, symmetric: named flags must be enabled, **everything
+   else is still asserted disabled**. Verified: arming an unnamed flag is caught, in the contact lane.
+   Omitting the flag keeps Phase 22's stricter meaning, so the completed Phase 22 runbook still works.
+3. ⏳ **STILL OPEN — 23-01's create-gate fix is committed but not deployed.** Live contact ingest
+   declares literals in only its two write gates. Step 3 would push never-live-tested logic in the
+   same action that arms writes. Runbook inserts Steps 2b/2c: a disarmed deploy plus read-back first.
+
+**Declaration counts move — never memorise them.** They were 9/8 in the morning and
+**CREATE 11 / RECORD_WRITES 10 / REVIEW_WRITES 10 across 11 nodes** by the afternoon, because 30-01
+added a constant to 8 nodes and 30-02 added a whole workflow. Both runbooks now **derive** the
+expected rewrite count at deploy time; a stale figure makes a *correct* deploy look like a misfire.
+**`STATE.md` ~line 280 still carries the old 2-of-9 claim** — it is operator-held and uncommitted,
+so it was deliberately not edited.
 
 Also found by A1: **the plugin manifest's `author` must be an object, not a string** —
 `claude plugin validate` rejects the bare string, and the Desktop install would have failed the same
