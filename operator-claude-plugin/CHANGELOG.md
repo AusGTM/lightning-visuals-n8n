@@ -52,6 +52,40 @@ over the same n8n system, so its version says nothing about backend capability.
   `extraction.md`'s documented examples to the real validator so the two halves of the contract
   cannot silently drift apart. One preview, one dispatch path, unchanged — this phase adds
   producers in front of Phase 23's choke point, nothing behind it.
+- **Phase 25 — the enrichment lane, and a cost guard over both lanes.** A
+  `/operator-claude-plugin:enrich-records` skill for records that are already in HubSpot:
+  paste record IDs or name a **HubSpot list**, and the client passes that identifier through
+  verbatim for n8n to resolve with the one HubSpot credential that exists. A **saved view is
+  refused** with a redirect to saving it as a list — HubSpot exposes no view API, and silently
+  trying the list endpoint with a view's name would enrich the wrong records with no error.
+  That is a recorded scope amendment to INGEST-04, not a silent omission.
+  `scripts/enrichment.py` always sends an explicit provider selection (the backend enables
+  nothing when a request names nothing), resolved from a per-batch override over an admin
+  default that **ships as the full waterfall** — so the preview states the resolved selection
+  every time, whatever it resolved to.
+  Every preview on **both** lanes now carries a cost block, rendered through one shared helper
+  so the two cannot drift: per-provider estimated credits against the credits actually
+  remaining, the Anthropic dollar figure, and the date the rates were measured with their age,
+  from a dated plugin-local `config/cost_rates.json` rather than a runtime read of any repo doc.
+  The figures say *at most* — Lusha is priced at its first-time rate, never its cheaper
+  re-enrich rate. **A balance that could not be read renders as `unknown`, never as zero and
+  never as healthy**, and its warning says headroom could not be *confirmed*; a genuine zero
+  renders as zero and warns like any other insufficiency. Apollo's `unknown` is the normal
+  answer there — it exposes rate limits rather than a credit pool — and the copy says so
+  instead of presenting it as a fault. Balances come only from the n8n-side
+  `hubspot/backend-status` endpoint; the client holds no provider credential and never asks a
+  provider directly, and the preview renders in full when that endpoint is unreachable.
+  Oversized batches are split before approval — `scripts/chunking.py` shows the chunk count and
+  the rows in each chunk, and dispatch iterates exactly that plan with no splitting path of its
+  own. Chunks go sequentially, a failing chunk is skipped rather than aborting the run, and the
+  failures come back as a **re-sendable batch** rather than a list of errors. The per-request
+  ceiling is read from config with no fallback constant anywhere, and is labelled
+  **PROVISIONAL**: it derives from single-record, company-lane timings against the backend's
+  ~100 s response window, and the full-waterfall timing probe has not been run. The tabular
+  lane's cost block is a stated **zero with its reason** rather than an omitted block — that
+  lane calls no provider and makes no model call, so its zero is a fact rather than an unread
+  balance.
+
 - **Phase 26 — per-record outcome reporting and safe retry.** After a send, the operator sees
   what happened to each row — created, updated-matched, needs-review, rejected, or
   not-confirmed — read from the decision the backend actually made (`scripts/report.py`), not a

@@ -4,10 +4,10 @@ A conversational **front end and control panel** for the n8n enrichment backend 
 repository. It lets a non-technical operator load contacts, trigger enrichment, watch runs,
 change schedules, and resolve review conflicts — from a chat window, without opening n8n.
 
-> **Status: one lane implemented.** Phase 23 shipped the plugin shell and the
-> spreadsheet-to-`hubspot/contact-upload` lane described in this README's setup and usage
-> sections below. Remaining lanes (non-tabular ingestion, enrichment, status, control,
-> notices, review triage) land across phases 24–30 of milestone v0.6; see
+> **Status: both dispatch lanes implemented.** Phase 23 shipped the plugin shell and the
+> spreadsheet-to-`hubspot/contact-upload` lane; Phase 25 added the enrichment lane for
+> records already in HubSpot, and the cost guard that covers both. Remaining surfaces
+> (control, notices, review triage) land across the rest of milestone v0.6; see
 > `.planning/workstreams/plugin-entrypoint/ROADMAP.md`.
 
 ---
@@ -59,7 +59,7 @@ else:
 | --- | --- | --- | --- |
 | `hubspot/contact-upload` | POST | header secret | Contact rows, binary CSV body |
 | `hubspot/enrichment/event` | POST | header secret | Enrich records that already exist |
-| `hubspot/backend-status` | POST | header secret | Health: provider credits, queue counts, credential state |
+| `hubspot/backend-status` | POST | header secret | Health: provider credits, queue counts, credential state. **The only source of remaining provider balances** — the client holds no provider credential and never asks a provider directly |
 | `/api/v1/workflows`, `/api/v1/executions` | GET | `X-N8N-API-KEY` | Read workflow and run state |
 | `/api/v1/workflows/{id}/activate` \| `/deactivate` | POST | `X-N8N-API-KEY` | Turn a workflow on or off |
 | `/api/v1/workflows/{id}` | PUT | `X-N8N-API-KEY` | **Allowlisted mutations only** — write-safety flag overlay, Schedule Trigger cadence |
@@ -134,10 +134,14 @@ Inherited from the backend and non-negotiable:
 ## Cost posture
 
 Provider credits are real money and the operator cannot see a bill. Every batch is previewed
-with an estimated provider-credit and Anthropic-token cost derived from the measured rates in
-this repo (`scripts/enrichment_cost_ledger.py`, `docs/`), warns when the estimate exceeds the
+with an estimated provider-credit and Anthropic-token cost, warns when the estimate exceeds the
 credits actually remaining, and shows its chunking plan before sending. Aborting at the preview
 costs nothing beyond extraction.
+
+Those rates live in `config/cost_rates.json` **inside this plugin**, dated with when each one
+was measured — copied from the repo's measured actuals at build time, never read from a repo
+doc at runtime. The date is shown in every preview so a stale table reads as stale instead of
+reading as fact. **`unknown` is never rendered as zero and never as healthy**, on either lane.
 
 ---
 
@@ -237,6 +241,62 @@ A few things are true across all four:
 
 Nothing about the credential boundary above changes for any of this: this plugin still holds no
 provider or HubSpot credentials, and this phase adds no key of any kind.
+
+## Enriching records that are already in HubSpot
+
+Nothing to upload — these records exist. Say so in your own words ("enrich these
+companies", "run the waterfall on this list") or invoke
+`/operator-claude-plugin:enrich-records`.
+
+**What you can name:**
+
+- **Record IDs** — paste them, and say whether they are contacts or companies.
+- **A HubSpot list** — give the list name. **The record count is worked out by the
+  backend, not here**, so the preview shows the list name and the word `unknown` where a
+  count would go. That is not zero and not "nothing to do" — it is the client declining to
+  invent a number it cannot read. The backend also refuses a list too large to finish
+  inside one response, rather than enriching an arbitrary part of it and reporting success.
+- **A saved view** — not supported. HubSpot doesn't expose views through its API, so the
+  skill says so and asks you to save the view as a **list**, or paste the record IDs. It
+  will not quietly try the list endpoint with the view's name: a view name that collides
+  with an unrelated list name would enrich the wrong records with no error at all.
+
+**Which providers run.** By default, all of them — `enrichment_providers` in your config
+ships as the full waterfall, so saying nothing enables everything. You can override it for
+one batch by saying which providers you want (or `none`); that override applies to that
+batch and is never written back to the config file. **Whatever it resolves to, the preview
+says so before you approve** — every time, including when it resolved to all of them.
+
+**What the cost block means.** Per provider, the credits this batch is estimated to spend,
+next to the credits actually remaining — plus the Anthropic model spend in dollars, and the
+date those rates were measured with how old they are. The figures say **at most**: Lusha is
+priced at its first-time rate rather than its cheaper re-enrich rate, so the estimate
+over-states deliberately.
+
+- A balance **below** the estimate is a warning naming that provider.
+- A balance of **zero** is the same warning. Zero is a real balance.
+- A balance that **could not be read** is neither. It reads `unknown`, and the warning says
+  headroom **could not be confirmed** — never that there is enough. If the status endpoint
+  is unreachable every balance reads unknown and the preview still renders in full; a cost
+  guard that disappears when the backend is down is not a guard.
+- **Apollo's `unknown` is normal, not broken.** Apollo exposes per-endpoint rate limits
+  rather than a depleting credit pool, so there is no per-match credit price for it and a
+  different API key would not produce one. Nobody needs to fix it. For Lusha and ZoomInfo,
+  an unknown balance usually does mean something an **admin** can look at — a credential or
+  the n8n status endpoint itself.
+
+**How chunking appears.** A batch bigger than the configured per-request ceiling is split
+before you approve, and the preview shows the chunk count and the rows in each chunk.
+Dispatch sends exactly that plan — nothing is re-split at send time. The ceiling is
+currently **provisional**: it was derived from single-record timings against the backend's
+~100-second response window, and the full-waterfall timing probe has not been run. Chunks
+go one at a time; if one fails the rest still go, and the failed records come back as a
+**batch you can re-send** rather than a list of errors.
+
+Sending is disarmed by default here as everywhere else. Approving the preview sends
+nothing; say **"arm the enrichment"** to turn sending on for that conversation only.
+Arming this lane does not arm the contact-upload lane, or the review lane, in either
+direction.
 
 ## Asking what the backend is doing
 
@@ -358,10 +418,16 @@ operator-claude-plugin/
     plugin.json           # plugin manifest
   skills/contact-upload/
     SKILL.md               # the conversation contract: state target, resolve file, preview, approve, arm, dispatch
+  skills/enrich-records/
+    SKILL.md               # the enrichment lane: records or list, providers, cost, chunk plan, approve, arm, dispatch
   scripts/
     config_gate.py         # load/validate operator.local.json; refuses before any network call
     tabular.py              # read CSV/XLSX headers+rows verbatim; convert XLSX to CSV bytes for the wire
     preview.py              # adaptive, display-only preview (reads config/column_mapping.yaml as a lookup only)
+    preview_enrichment.py   # the enrichment preview: records, providers, cost, chunk plan — and the cost block both lanes share
+    cost_guard.py           # dated rate table, batch estimate, balance read, tri-state verdict
+    chunking.py             # the chunk plan the preview shows and dispatch sends, unchanged
+    enrichment.py           # provider resolution, the enrichment envelope, the one enrichment POST
     dispatch.py             # the one POST to hubspot/contact-upload; armed has no default
   config/
     operator.local.example.json  # tracked template — copy to operator.local.json (gitignored) per setup above
