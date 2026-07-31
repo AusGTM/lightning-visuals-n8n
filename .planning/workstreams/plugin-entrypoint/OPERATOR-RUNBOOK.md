@@ -500,9 +500,30 @@ separate with `|`, not `,` (`,` already separates entries in `ENABLE_BAKED_FLAGS
 outside `_OVERLAYABLE_FLAGS` **raises** rather than silently enabling nothing. `VALUE` is rendered
 with `json.dumps`, so it always lands as a quoted JS string literal and can never inject JS.
 
-**Expected rewrite counts: create in 9 nodes, record-writes in 8** (contact ingest 3/2, enrichment
-2/2, maintenance 4/4 — the two flags are declared in *different* subsets). A count of 0 for either
-means the script refused and deployed nothing.
+**Do not trust a memorised rewrite count — derive it.** The counts grow every time a plan adds a
+write gate, and a stale number in a runbook makes a *correct* deploy look like a misfire. **Derive
+the expected counts from the committed artifacts immediately before you deploy:**
+
+```bash
+python3 -c "
+import json, glob, re
+from collections import Counter
+c = Counter()
+for f in sorted(glob.glob('n8n/wf_*.json')):
+    for n in json.load(open(f)).get('nodes', []):
+        code = n.get('parameters', {}).get('jsCode', '') or ''
+        for flag, _ in re.findall(r'(ALLOW_HUBSPOT_[A-Z_]+)\s*=\s*\"(?:true|false)\"', code):
+            c[flag] += 1
+for k, v in sorted(c.items()): print(f'{k}: {v}')
+"
+```
+
+**As of 2026-07-31 that prints `CREATE: 11, RECORD_WRITES: 10, REVIEW_WRITES: 10` across 11 distinct
+nodes** — up from 9/8 earlier the same day, because 30-01 added the review constant to 8 nodes and
+30-02 added a whole review workflow. **The flags sit in different subsets**, so the numbers are not
+expected to match each other.
+
+**A count of 0 for a flag you asked to arm means the script refused and deployed nothing.**
 
 **If Step 3b does not pass, DO NOT FIRE.** Return to Step 3.
 

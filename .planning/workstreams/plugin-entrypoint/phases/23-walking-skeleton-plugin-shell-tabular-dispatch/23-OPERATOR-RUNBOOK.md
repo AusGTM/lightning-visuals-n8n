@@ -204,10 +204,18 @@ Syntax notes (`_OVERLAY_FLAG_SPEC` / `_requested_overlay_flags()`):
 - `VALUE` is rendered with `json.dumps`, so it always lands as a quoted JS string literal and can
   never inject JS.
 
-The deploy prints its rewrite count before any write happens. **Expect the create flag to rewrite
-in 9 nodes and record-writes in 8** (verified 2026-07-31: contact ingest 3/2, enrichment 2/2,
-maintenance 4/4 — the two flags are declared in *different* subsets). A count of 0 for either flag
-means the script refuses and deploys nothing.
+The deploy prints its rewrite count before any write happens. **Do not compare it against a
+memorised number — derive the expectation instead**, using the snippet in
+`../../OPERATOR-RUNBOOK.md` §RB-3 Step 3. The counts grow whenever a plan adds a write gate, and a
+stale figure makes a correct deploy look like a misfire.
+
+**Superseded:** this step previously said "create in 9 nodes and record-writes in 8". That was true
+when written on 2026-07-31 and was **already wrong later the same day** — 30-01 added
+`ALLOW_HUBSPOT_REVIEW_WRITES` to 8 nodes and 30-02 added a whole review workflow, taking the tree to
+**CREATE 11 / RECORD_WRITES 10 / REVIEW_WRITES 10 across 11 declaring nodes**. The flags sit in
+*different subsets*, so the numbers are not expected to match one another.
+
+**A count of 0 for a flag you asked to arm means the script refused and deployed nothing.**
 
 ### Step 3b — armed read-back (required, distinct step)
 
