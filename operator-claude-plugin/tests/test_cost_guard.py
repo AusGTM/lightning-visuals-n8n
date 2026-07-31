@@ -190,11 +190,11 @@ def test_no_returned_reason_echoes_the_configured_secret(stub_post_transport_fac
 # --------------------------------------------------------------------------- comparison
 
 
-def _estimate(credits, *, known=True, provider="lusha"):
+def _estimate(credits, *, known=True, provider="lusha", rate=1):
     return {
         "record_count": 10, "record_count_known": True,
         "provider_credits": {provider: {"credits": credits, "known": known,
-                                        "rate": 1, "unit": "credits/contact",
+                                        "rate": rate, "unit": "credits/contact",
                                         "confidence": "measured"}},
         "anthropic_usd": 0.68624,
         "rates_version": "test", "rates_measured_on": "2026-07-30",
@@ -247,9 +247,17 @@ def test_an_unknown_estimate_against_an_unreadable_balance_is_unknown_and_does_n
 
 
 def test_an_unknown_estimate_against_a_readable_balance_is_still_unknown():
-    verdict = cost_guard.compare(_estimate(None, known=False), _readable(500))["lusha"]
-    assert verdict["verdict"] == "unknown"
-    assert "rate" in verdict["reason"]
+    """A readable balance cannot rescue an unestimable cost — an `ok` here would be a
+    false clearance. The reason must name WHICH of the two causes applies, so the
+    operator can tell a missing rate from a backend-resolved record count."""
+    no_rate = cost_guard.compare(
+        _estimate(None, known=False, rate=None), _readable(500))["lusha"]
+    assert no_rate["verdict"] == "unknown"
+    assert "rate" in no_rate["reason"]
+
+    no_count = cost_guard.compare(_estimate(None, known=False), _readable(500))["lusha"]
+    assert no_count["verdict"] == "unknown"
+    assert "record count" in no_count["reason"]
 
 
 def test_no_arithmetic_is_performed_on_an_unreadable_balance():
