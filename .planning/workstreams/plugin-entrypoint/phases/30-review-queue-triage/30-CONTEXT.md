@@ -227,6 +227,52 @@ disk. `30-01`, `30-03` and `30-07` passed the checker clean and are not touched 
   leaves this phase **unmodified**; a third stub would be redundant. Per **28 D-35**, a refusal
   asserts `transport.mutating_calls == []`, not `len(calls) == 0`.
 
+### Corrections folded in from executing 30-02 (2026-07-31)
+
+**Four facts the plan could not have known until the endpoint existed. All four bind 30-03
+and 30-06.**
+
+- **D-22 (a synchronous lane cannot reuse `ENRICH_EXTRACT_SEARCH_ROWS` verbatim):** that
+  adapter emits `rows.map(...)`, i.e. **zero items on a zero-hit search**. On the four
+  scheduled branches zero rows means "nothing to do" and the branch simply ends. On a
+  webhook lane with `responseMode: responseNode` it means nothing ever reaches the
+  responder and the caller waits out the ~100s Cloudflare ceiling instead of being told the
+  record was not found. `30-02` therefore ships `REVIEW_EXTRACT_RECORD`, the same envelope
+  handling plus a `{hs_object_id: null, record_found: false}` marker on zero hits, which
+  `buildReviewDecision` turns into `outcome: "refused"`. **Any future synchronous lane
+  built on a HubSpot search inherits this requirement.**
+
+- **D-23 (an armed-but-not-allowlisted decision returns NO body — the client must treat
+  that as failure):** the write gate is a filter Code node. When it drops the row, nothing
+  reaches the PATCH, the verify refetch, `Build Review Response` or the responder, so the
+  execution ends without a response. This is fail-closed and correct — no write happened —
+  but it is **not** a `{outcome: ...}` payload. `30-06`'s client must treat an empty,
+  non-JSON, or timed-out response to a `dry_run: false` decision as **failed**, exactly as
+  it treats `verified_properties: null`, and must not distinguish it from a rejected write.
+  A structured "gate denied" response is deliberately **not** added: an else-branch out of
+  the gate would put a path around the write gate, which is the one property
+  `tests/test_write_gate_coverage.py` exists to guarantee.
+
+- **D-24 (this endpoint responds with `firstIncomingItem`, not `allIncomingItems`):** the
+  two existing responders (`wf_enrichment_cloud`, `wf_backend_status_cloud`) use
+  `allIncomingItems`, which renders as a JSON **array**. Exactly one decision is
+  adjudicated per request here, so the review endpoint returns the contract **object**
+  itself. `30-06` parses a dict, not `body[0]`. (Worth noting in passing:
+  `operator-claude-plugin/scripts/backend_status.py:61` already requires a dict from an
+  endpoint that emits an array — an unrelated latent mismatch on the Phase 27 lane, still
+  unexercised live, recorded here so it is not rediscovered as a Phase 30 defect.)
+
+- **D-25 ("flagged" ORs both `lv_` review flags plus a held candidate):** the plan's
+  `not_flagged` predicate was written as "needs-review flag falsy **and** candidate JSON
+  empty". Taken literally, a record flagged solely by `lv_icp_needs_review` — a legitimate
+  queue member, since `wf_backend_status_cloud`'s `AWAITING_REVIEW_GROUPS` ORs the two
+  flags — would have been refused as not-in-the-queue and the operator could never
+  adjudicate it. `buildReviewDecision` therefore treats a row as flagged when
+  `lv_enrichment_needs_review` **or** `lv_icp_needs_review` is truthy, **or** a candidate
+  JSON other than `""`/`"[]"` is held. HubSpot returns booleancheckbox values as the
+  strings `"true"`/`"false"`, so the check normalises rather than testing truthiness —
+  `"false"` is a truthy JS string.
+
 ### Claude's Discretion
 - Queue ordering and how many conflicts are shown at once.
 - Wording of the conflict presentation and of the exact-write display.
