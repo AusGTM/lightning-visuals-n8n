@@ -14,6 +14,7 @@ import json
 import re
 from pathlib import Path
 
+from preview_enrichment import TABULAR_COST_REASON, cost_block, zero_cost_estimate
 from tabular import read_table, to_csv_bytes
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
@@ -125,6 +126,18 @@ def _fill_rates(headers, rows) -> dict:
     return rates
 
 
+def tabular_cost_block(row_count) -> str:
+    """This lane's cost block, rendered through the enrichment lane's SAME helper.
+
+    Criterion 3 says every preview on both lanes. Contact-upload calls no provider and
+    makes no model call, so its honest figures are zero credits and zero dollars WITH the
+    reason stated — a real, explainable zero, unlike a balance that could not be read
+    (D-16). Reusing the one helper is the point: two cost blocks that can drift apart is
+    the second-source-of-truth pattern this milestone avoids everywhere else.
+    """
+    return cost_block(zero_cost_estimate(row_count), {}, reason=TABULAR_COST_REASON)
+
+
 def build_preview(path, mapping_path=None) -> dict:
     """Build the structured preview for one tabular file. Read-only end to end: no
     network call, and the source file's bytes are identical before and after.
@@ -144,6 +157,7 @@ def build_preview(path, mapping_path=None) -> dict:
         "header_labels": header_labels["labels"],
         "mapping_available": header_labels["available"],
         "unmapped_canonical_props": header_labels["unmapped_canonical_props"],
+        "cost_block": tabular_cost_block(row_count),
     }
 
     adaptive, sample_rows = _adaptive_sample(rows)
@@ -180,6 +194,7 @@ def build_extracted_preview(result) -> dict:
         "rejected": result.rejected,
         "dropped_keys": result.dropped_keys,
         "ambiguities": result.ambiguities,
+        "cost_block": tabular_cost_block(len(accepted)),
     }
 
 
