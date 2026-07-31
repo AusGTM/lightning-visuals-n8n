@@ -178,6 +178,34 @@ scope question, and a 403 answers it the other way.** Either is a result.
 **Record:** the verdict, the HTTP status, and — if granted — the member count and whether a paging
 cursor came back.
 
+### ⚡ Probe B is now PARTLY PRE-ANSWERED — read this before spending credits
+
+Plan **29-02 measured enrichment run durations on 2026-07-31**, read-only and free, from
+`/api/v1/executions` on the live tenant. Full detail in
+`phases/29-notices-unattended-sweep/29-TIMING.md`. What it establishes:
+
+| Measured | Value | Basis |
+|---|---|---|
+| Max single-run duration | **38.9 s** | n=5, company lane |
+| Max seconds-per-record | **36.1 s** | n=2 (only 2 runs carried a recoverable record count) |
+| Headroom rate used downstream | **45 s/record** | observed max + ~25% |
+
+**What this implies before you run anything:** at ~36 s/record, a **3-record** POST lands near
+**108 s** — already past the ~100 s Cloudflare ceiling — and the full-waterfall case (B4) is
+slower still. So the answer is very likely `max_records_per_chunk` of **1 or 2**, and **B3 (five
+records) is likely to 524 rather than return a timing.** That is a useful result, not a failure —
+but expect it rather than treating it as a fault.
+
+**What it does NOT answer, and why B1–B4 are still worth running:**
+- Every measured run is **single-record, company-lane**. Linearity at N>1 is *extrapolated*, and
+  the whole point of B2/B3 is to test exactly that.
+- None of the measured runs is a **full waterfall**. B4 remains the only source for the expensive
+  path, which is the one the chunk default must survive.
+
+**Cheapest sequencing given the above:** run **B1** (confirm ~36 s reproduces), then **B4** (the
+number that actually sets the default). Run B2/B3 only if you want the linearity curve — and if B3
+524s, record that as the ceiling being found, which is itself the measurement.
+
 ### Probe B — chunk timing (four timed POSTs)
 
 Load the shell (Form 2), then confirm without printing:
