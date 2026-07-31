@@ -66,10 +66,12 @@ Every n8n artifact is **disarmed** (`grep -c` → 0) and REQUIREMENTS.md coverag
 
 **Branch:** work is on **`feat/v0.6-plugin-entrypoint`**, not `master`. `master` is at `3e8dd1d`
 (= `origin/master`, a GitHub merge that pulled the v0.6 line in along with the Apollo fix). The
-v0.6 branch is a clean descendant of `origin/master`. Two branches are now fully merged and safe to
-delete: `fix/apollo-zero-revenue-band` and `worktree-claude-plugin-entrypoint` — **the latter still
-has a live worktree at `.claude/worktrees/claude-plugin-entrypoint` and is 109 commits behind
-master. Anyone resuming there would be missing the entire milestone.**
+v0.6 branch is a clean descendant of `origin/master`. **`worktree-claude-plugin-entrypoint` and its
+worktree at `.claude/worktrees/claude-plugin-entrypoint` are GONE** (removed 2026-07-31, verified
+first: zero unmerged commits, zero uncommitted or untracked files, and `git branch -d` — the merged-
+only delete — accepted it). It was 109 commits behind master, so anyone resuming there would have
+been missing the entire milestone. `fix/apollo-zero-revenue-band` is also fully merged and safe to
+delete; left in place.
 
 **Plan-checker status: all 8 phases have now been checked.** 23–26 passed earlier. 27 passed after
 one blocker. 28 took two rounds (5 blockers, then 1 that the repair itself introduced into the one
@@ -225,8 +227,11 @@ Walking it surfaced **three** confirmed defects. **Two are now FIXED by plan 23-
 **CREATE 11 / RECORD_WRITES 10 / REVIEW_WRITES 10 across 11 nodes** by the afternoon, because 30-01
 added a constant to 8 nodes and 30-02 added a whole workflow. Both runbooks now **derive** the
 expected rewrite count at deploy time; a stale figure makes a *correct* deploy look like a misfire.
-**`STATE.md` ~line 280 still carries the old 2-of-9 claim** — it is operator-held and uncommitted,
-so it was deliberately not edited.
+**`STATE.md`'s stale 2-of-8 claim is now corrected** (2026-07-31): FINDING 1 struck through and
+marked resolved by 23-07, FINDING 2's memorised count replaced with the derive-at-deploy-time rule,
+and Session Continuity brought forward from "27-05 is next" to the real state. **The file is still
+operator-held and left UNSTAGED** — it carries the operator's own uncommitted 23-06 hunks, which are
+not ours to commit. Whoever owns those hunks commits the whole file.
 
 Also found by A1: **the plugin manifest's `author` must be an object, not a string** —
 `claude plugin validate` rejects the bare string, and the Desktop install would have failed the same
