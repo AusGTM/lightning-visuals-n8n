@@ -323,6 +323,42 @@ and 30-06.**
   patch, and a `lv_enrichment_provenance` JSON blob that can be kilobytes — not the
   single-key patch a rejection produces.
 
+### Corrections folded in from executing 30-04 (2026-07-31)
+
+**Three facts the plan could not have known until the queue read existed. All three bind
+30-05 and 30-06.**
+
+- **D-32 (the queue returns ONE envelope, not one item per record — and this is forced,
+  not stylistic):** `30-04`'s plan says `Review Queue Rows` should carry the search
+  envelope's total "onto every emitted row". Two committed facts make a per-row emission
+  impossible. **D-22**: `rows.map(...)` emits ZERO items on a zero-hit search, and on a
+  `responseMode: responseNode` webhook that means nothing reaches the responder and the
+  caller waits out the ~100s Cloudflare ceiling — and an *empty queue is this phase's
+  normal end state*, so this lane meets that case constantly, not rarely. **D-24**: the
+  responder is `firstIncomingItem`, so a per-row emission would return the first record and
+  silently drop the rest. The node therefore emits exactly one item,
+  `{object_type, search_ok, total, returned, rows}`, always. **30-05 reads `.rows`, and
+  `total` vs `returned` is how it tells the operator a page is a page.**
+
+- **D-33 (`search_ok` — an empty queue and a failed search are different answers):** HubSpot
+  search nodes run `onError: continueRegularOutput` (a repo-wide convention), so a 401, a
+  429 or a malformed body arrives at the adapter as an item with no `results` array.
+  Treated as an envelope that renders as *"0 flagged records"* — telling the operator their
+  backlog is clear when it was never read. The envelope therefore carries `search_ok`, false
+  exactly when the item was not a search result. **30-05/30-06 must report `search_ok:
+  false` as a failure, never as an empty queue** — the same rule D-19 sets for a written
+  decision arriving with `verified_properties: null`.
+
+- **D-34 (the contacts lane DOES request `lv_enrichment_review_candidate_json`; it is
+  simply always empty):** 30-03's handoff said contacts render with "no candidate JSON".
+  That is true of the *content*, not the property list: the candidate key belongs to
+  `_REVIEW_FAMILY`, the tuple both lanes share so a decision cannot become possible on one
+  object type and not the other. The queue's contacts search requests it and HubSpot
+  returns `""`. **The client must treat a contact as candidate-less by EMPTINESS, not by
+  key absence** — a `"k" in row === false` test would be wrong here, which is the exact
+  inverse of the key-presence rule 30-03 established for asserting an absent provenance
+  key.
+
 ### Claude's Discretion
 - Queue ordering and how many conflicts are shown at once.
 - Wording of the conflict presentation and of the exact-write display.
@@ -421,7 +457,8 @@ and 30-06.**
 *Corrections D-16…D-21 folded in 2026-07-31 from a `gsd-plan-checker` run (4 blockers, 2 concerns),
 after Phase 28's D-33/D-34 landed. Repair edited `30-02`, `30-04`, `30-05`, `30-06` only —
 `30-01` was executing concurrently and `30-01`/`30-03`/`30-07` passed clean.*
-*D-22…D-25 folded in from executing `30-02`; D-26…D-30 from executing `30-03` (both 2026-07-31).*
+*D-22…D-25 folded in from executing `30-02`; D-26…D-30 from executing `30-03`;
+D-32…D-34 from executing `30-04` (all 2026-07-31).*
 
 ---
 
