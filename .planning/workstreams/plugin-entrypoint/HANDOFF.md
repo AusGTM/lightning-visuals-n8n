@@ -54,11 +54,14 @@ mid-flight.
 **Node includes 4 Apollo sentinel tests** merged from `fix/apollo-zero-revenue-band` — not a
 regression signal. Any drop is a regression to investigate, not absorb.
 
-**Known flake, unfixed:** an intermittent **1 ms timestamp mismatch** in
-`tests/n8n/mergeContacts.test.mjs` (`lv_jobtitle_verified_at`, inside a `deepStrictEqual`). It is
-the signature of a wall clock read **twice** and compared for equality. One of this class was fixed
-today (`a0790cc`, ~25% failure rate, fixed by capturing once and reusing); this one remains.
-**Fix it the same way — never re-run until green.**
+**Known flake — ✅ FIXED.** The intermittent **1 ms timestamp mismatch** in
+`tests/n8n/mergeContacts.test.mjs` (`lv_jobtitle_verified_at`) came from a strip helper anchored on
+`"verified_at":`, which normalizes the bare provenance key but **never the prefixed canonical-patch
+key**. The same narrow pattern was inlined **four times** (1× mergeContacts, 3× mergeCompanies), so
+all four carried it. Now one shared `tests/n8n/verifiedAtStrip.mjs`, matching any key ending in
+`verified_at` and normalizing only the value. Verified deterministically (stamps 1 ms apart: old
+pattern DIFFERS, new EQUAL; a real value change still fails) rather than by re-running until green.
+Sibling of `a0790cc`, same class: **a wall clock read twice and compared for equality.**
 Every n8n artifact is **disarmed** (`grep -c` → 0) and REQUIREMENTS.md coverage is intact at **49/49**.
 
 **Branch:** work is on **`feat/v0.6-plugin-entrypoint`**, not `master`. `master` is at `3e8dd1d`
