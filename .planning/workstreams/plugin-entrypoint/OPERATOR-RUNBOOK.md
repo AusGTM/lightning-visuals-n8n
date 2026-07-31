@@ -107,7 +107,7 @@ would strand an armed backend, which is the failure mode this entire ceremony ex
 
 | § | Plan | Runnable now? | Blocker |
 |---|---|---|---|
-| RB-1 | **25-01** lists-scope + chunk timing | ⚠ Probe B yes, Probe A **no** | `scripts/check_hubspot_list_scope.py` still **MISSING** — built by 25-01 **Task 1**, autonomous, not yet run. **Ask for Task 1 first.** Probe B is partly pre-measured — see the note in RB-1 before spending credits |
+| RB-1 | **25-01** lists-scope + chunk timing | ✅ **yes — both probes** | none. `check_hubspot_list_scope.py` **built 2026-07-31**. Probe B is partly pre-measured — read the note in RB-1 before spending credits. **Releases 4 plans** |
 | RB-2 | **29-01** scheduled-routine host probe | ✅ **yes** | none — no dependencies, no code needed. **Unblocks 4 plans; joint highest leverage** |
 | RB-3 | **23-06** install + armed create canary | ⚠ Section A yes, Section B **NO** | **three confirmed defects** — see the block in RB-3. Section B cannot pass as written |
 | RB-4 | **27-05** dashboard same-URL check | ✅ **yes** | none — Phase 27 is code-complete; this is its last step |
@@ -172,19 +172,36 @@ These hold in every section below.
 HubSpot: the deployed `wf_enrichment_cloud.json` is the committed disarmed build, so its
 write-safety constants are off and its `TEST_RECORD_*` allowlist is empty.
 
-### Prerequisite — build Task 1 first
-
-`scripts/check_hubspot_list_scope.py` **does not exist yet**. It is Task 1 of this plan and is
-autonomous. Ask for 25-01 Task 1 to be built before starting; Probe A cannot run without it.
-
-### Probe A — HubSpot Lists scope (free, read-only)
+### Probe A — HubSpot Lists scope (free, read-only) · ✅ **script BUILT 2026-07-31, ready to run**
 
 ```bash
 .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/check_hubspot_list_scope.py', run_name='__main__')" "<name of a real company list in the portal>"
 ```
 
-If the portal has no company list, run it against a deliberately nonsense name — **a 404 answers the
-scope question, and a 403 answers it the other way.** Either is a result.
+**No company list to hand? A nonsense name answers the question just as well:**
+
+```bash
+.venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/check_hubspot_list_scope.py', run_name='__main__')" "no-such-list-20260731"
+```
+
+Optional second positional argument is the object-type id — `0-2` companies (default), `0-1` contacts.
+
+**How to read the verdict:**
+
+| Result | Means |
+|---|---|
+| **200** | granted — plus a follow-up line with `member_count=` and `has_paging_cursor=` |
+| **404** | **granted.** The request was authorized; only the *name* missed |
+| **403** | **denied** — the credential lacks `crm.lists.read` |
+| 401 / 5xx / timeout | neither; exits 2. Not an answer — re-run |
+
+**Run it through the wrapper.** With `HUBSPOT_PRIVATE_APP_TOKEN` unset the script prints
+`skipped (no credentials)` and states explicitly that this is **NOT a scope verdict** — verified.
+It makes zero HTTP calls in that state, so a bare `python scripts/...` cannot produce a
+silent false "denied".
+
+Every run also prints that it settles the **Lists API only** — saved views are a different concept
+with no public API, and this probe does not speak to them.
 
 **Record:** the verdict, the HTTP status, and — if granted — the member count and whether a paging
 cursor came back.
