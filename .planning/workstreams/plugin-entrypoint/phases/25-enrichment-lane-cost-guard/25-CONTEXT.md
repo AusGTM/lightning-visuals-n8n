@@ -269,6 +269,39 @@ extending the backend where a requirement demands it.
   Failure is defined in exactly one place — non-2xx, transport exception including a timeout
   (D-11b), or an unreadable body.
 
+- **D-23 (the shared cost block lives in the ENRICHMENT module, and the tabular lane imports it
+  — not the other way round):** D-16 requires one helper so the two lanes' cost blocks cannot
+  drift, but not which module owns it. 25-07 put `cost_block()` / `zero_cost_estimate()` in
+  `preview_enrichment.py` and had `preview.py` import them, because the reverse would drag
+  `preview.py`'s `config/column_mapping.yaml` display lookup — and `tabular.read_table` — into
+  the enrichment lane, which reads no file at all. `preview_enrichment.py` imports `chunking`,
+  `cost_guard` and `enrichment`; nothing imports `preview.py`, so there is no cycle. The tabular
+  lane's block is `cost_block(zero_cost_estimate(row_count), {}, reason=TABULAR_COST_REASON)`:
+  the same renderer, an empty verdict map, and a zero that is a **fact** rather than an unread
+  balance — `preview_enrichment.UNKNOWN` is asserted absent from it, which is what keeps a real
+  zero and an unreadable one from converging on one another from the other direction.
+
+- **D-24 (`test_plugin_manifest.py` could not be extended, so the new skill got its own
+  contract test):** 25-07 Task 2's acceptance criteria say to assert the new skill's script
+  references "with the same manifest test Phase 23 established, extended to cover the new
+  skill". That file is **operator-held and uncommitted** mid-23-06 and hardcodes a single
+  `contact-upload` SKILL_PATH; editing it, or widening a glob onto it, would collide with work
+  in flight. The assertions live in `operator-claude-plugin/tests/test_enrich_skill_contract.py`
+  instead — same checks (frontmatter parses and carries name+description, every
+  `scripts/<name>.py` the body names exists on disk, no `commands/` directory), scoped to
+  `skills/enrich-records/`. Whoever eventually generalises the manifest test over
+  `skills/*/SKILL.md` should delete the duplicate half of this file rather than leave both.
+
+- **D-25 (amendment #4's ICP/tier ban is enforced against EVERY skill body, including one that
+  has not been written yet):** `test_report_enrichment.py::test_no_operator_facing_skill_body_
+  mentions_icp_or_tier_not_even_a_placeholder` rglobs `skills/` and fires on the substrings
+  `icp` and `tier` in any file there. 25-07's first draft of `enrich-records/SKILL.md` described
+  the backend as doing "merge policy and ICP scoring" — a factually true sentence about the
+  backend, caught immediately as a violation of the client-side ban. The wording is now
+  "merge policy and scoring". Worth knowing before writing any future skill body: the ban is on
+  the *word*, in *any* context, because HubSpot owns those derived outputs and a plugin that
+  names them at all invites a reader to expect one back.
+
 ### Claude's Discretion
 - The chunk size threshold's default value and where it is configured.
 - Rate-table file format and how the measurement date is represented.
