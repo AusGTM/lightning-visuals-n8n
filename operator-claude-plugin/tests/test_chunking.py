@@ -10,13 +10,16 @@ Two assertions here carry the weight, and neither is a chunk-count assertion:
   the partial-read-impersonating-a-healthy-number shape this milestone has hit repeatedly.
 """
 import ast
+import inspect
 import json
 from pathlib import Path
 
 import pytest
+import requests
 
 import chunking
 import enrichment
+from dispatch import NotArmedError
 
 CONFIG_EXAMPLE = (
     Path(__file__).resolve().parent.parent / "config" / "operator.local.example.json"
@@ -214,3 +217,308 @@ def test_a_list_chunk_is_accepted_by_the_envelope_builder_as_the_nested_list_sha
     )
     envelope = enrichment.build_envelope(plan.chunks[0], ["lusha"])
     assert envelope["list"] == {"name": "New Targets.xlsx", "objectType": "contacts"}
+
+
+# ==================================================================================
+# Task 2 — sequential dispatch: skip a failure, hand the failures back as a batch.
+#
+# Two of these carry the weight: a failing MIDDLE chunk must still leave the third
+# chunk's transport call on the record (a test that only counts failures passes against
+# a dispatcher that aborts), and the failed batch must be asserted to EXCLUDE every id
+# from a chunk that succeeded (a count-only assertion passes against a dispatcher that
+# hands back the whole batch).
+# ==================================================================================
+
+PROVIDERS = ["zoominfo", "lusha"]
+
+
+def three_chunk_plan():
+    return chunking.plan_chunks(spec(6), 2)
+
+
+def sent_ids(transport):
+    return [
+        [event["objectId"] for event in call["json"]["events"]]
+        for call in transport.calls
+    ]
+
+
+def test_a_disarmed_plan_raises_before_any_chunk_is_sent(
+    fake_config, stub_module_transport_factory
+):
+    transport = stub_module_transport_factory()
+    with pytest.raises(NotArmedError):
+        chunking.dispatch_plan(
+            three_chunk_plan(), PROVIDERS, False, fake_config, transport=transport
+        )
+    assert transport.calls == []
+
+
+def test_omitting_the_armed_argument_entirely_is_a_type_error(
+    fake_config, stub_module_transport_factory
+):
+    with pytest.raises(TypeError):
+        chunking.dispatch_plan(
+            three_chunk_plan(), PROVIDERS, config=fake_config,
+            transport=stub_module_transport_factory(),
+        )
+
+
+def test_no_function_in_this_module_gives_armed_a_default():
+    """D-18: restrict the walk to functions — `inspect.signature` on a bare Exception
+    subclass raises on Python 3.14, which is a defect in the check, not the module."""
+    armed_functions = [
+        f for _name, f in inspect.getmembers(chunking, inspect.isfunction)
+        if inspect.getmodule(f) is chunking
+        and "armed" in inspect.signature(f).parameters
+    ]
+    assert armed_functions
+    assert all(
+        inspect.signature(f).parameters["armed"].default is inspect.Parameter.empty
+        for f in armed_functions
+    )
+
+
+def test_an_armed_three_chunk_plan_sends_three_requests_in_plan_order(
+    fake_config, stub_module_transport_factory
+):
+    transport = stub_module_transport_factory()
+    outcome = chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport
+    )
+    assert transport.verbs == ["post", "post", "post"]
+    assert sent_ids(transport) == [["1", "2"], ["3", "4"], ["5", "6"]]
+    assert [r.ok for r in outcome.results] == [True, True, True]
+
+
+def test_every_request_carries_the_provider_selection_unchanged(
+    fake_config, stub_module_transport_factory
+):
+    transport = stub_module_transport_factory()
+    chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport
+    )
+    assert [call["json"]["providers"] for call in transport.calls] == [PROVIDERS] * 3
+
+
+def test_a_failing_middle_chunk_does_not_stop_the_final_chunk_being_sent(
+    fake_config, stub_module_transport_factory
+):
+    transport = stub_module_transport_factory(
+        [{"ok": True}, (500, {"message": "boom"}), {"ok": True}]
+    )
+    outcome = chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport
+    )
+    assert sent_ids(transport) == [["1", "2"], ["3", "4"], ["5", "6"]]
+    assert [r.ok for r in outcome.results] == [True, False, True]
+    assert "500" in outcome.results[1].reason
+
+
+def test_a_non_2xx_carrying_a_readable_json_body_is_still_a_failure(
+    fake_config, stub_module_transport_factory
+):
+    """The clean-looking refusal: a 4xx whose body parses fine. Classifying on the
+    parsed body alone reports it as a success."""
+    transport = stub_module_transport_factory([(401, {"message": "unauthorized"})])
+    outcome = chunking.dispatch_plan(
+        chunking.plan_chunks(spec(2), 2), PROVIDERS, True, fake_config,
+        transport=transport,
+    )
+    assert outcome.results[0].ok is False
+    assert outcome.failed_batch == {"record_ids": ["1", "2"], "object_type": "companies"}
+
+
+def test_a_transport_timeout_is_recorded_as_a_failed_chunk(
+    fake_config, stub_module_transport_factory
+):
+    """D-11b: a timeout counts as a failure for the skip rule even though the backend
+    may still be working. `DEFAULT_TIMEOUT` is 120 s, deliberately above the ~100 s
+    Cloudflare ceiling, so a ceiling breach normally arrives as the backend's timeout."""
+    transport = stub_module_transport_factory(
+        [requests.exceptions.Timeout("read timed out"), {"ok": True}, {"ok": True}]
+    )
+    outcome = chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport
+    )
+    assert [r.ok for r in outcome.results] == [False, True, True]
+    assert "timeout" in outcome.results[0].reason.lower()
+    assert len(transport.calls) == 3
+
+
+def test_a_timeouts_reason_differs_from_a_status_failures_reason(
+    fake_config, stub_module_transport_factory
+):
+    transport = stub_module_transport_factory(
+        [requests.exceptions.Timeout("t"), (503, {"m": "x"}), {"ok": True}]
+    )
+    outcome = chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport
+    )
+    assert outcome.results[0].reason != outcome.results[1].reason
+
+
+def test_an_unreadable_response_body_is_a_failed_chunk_and_the_run_continues(
+    fake_config, stub_module_transport_factory
+):
+    transport = stub_module_transport_factory(
+        [(200, ValueError("not json")), {"ok": True}, {"ok": True}]
+    )
+    outcome = chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport
+    )
+    assert [r.ok for r in outcome.results] == [False, True, True]
+    assert len(transport.calls) == 3
+
+
+def test_a_run_in_which_every_chunk_fails_still_attempts_every_chunk(
+    fake_config, stub_module_transport_factory
+):
+    transport = stub_module_transport_factory(
+        [(500, {"m": 1}), requests.exceptions.Timeout("t"), (502, {"m": 3})]
+    )
+    outcome = chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport
+    )
+    assert len(transport.calls) == 3
+    assert [r.ok for r in outcome.results] == [False, False, False]
+    assert outcome.failed_batch["record_ids"] == ["1", "2", "3", "4", "5", "6"]
+
+
+def test_a_run_with_no_failures_returns_no_failed_batch(
+    fake_config, stub_module_transport_factory
+):
+    outcome = chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config,
+        transport=stub_module_transport_factory(),
+    )
+    assert outcome.failed_batch is None
+
+
+def test_the_failed_batch_holds_no_id_from_a_chunk_that_succeeded(
+    fake_config, stub_module_transport_factory
+):
+    """A test that only counts failures passes against a dispatcher that hands back the
+    whole batch."""
+    transport = stub_module_transport_factory(
+        [{"ok": True}, (500, {"m": "x"}), {"ok": True}]
+    )
+    outcome = chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport
+    )
+    assert outcome.failed_batch["record_ids"] == ["3", "4"]
+    for succeeded in ("1", "2", "5", "6"):
+        assert succeeded not in outcome.failed_batch["record_ids"]
+
+
+def test_the_failed_batch_keeps_the_original_order_across_non_adjacent_chunks(
+    fake_config, stub_module_transport_factory
+):
+    transport = stub_module_transport_factory(
+        [(500, {"m": 1}), {"ok": True}, (500, {"m": 3})]
+    )
+    outcome = chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport
+    )
+    assert outcome.failed_batch["record_ids"] == ["1", "2", "5", "6"]
+
+
+def test_the_failed_batch_is_accepted_unmodified_by_the_envelope_builder(
+    fake_config, stub_module_transport_factory
+):
+    """D-13: Phase 26 re-DISPATCHES this object; it does not reconstruct one."""
+    transport = stub_module_transport_factory(
+        [{"ok": True}, (500, {"m": "x"}), {"ok": True}]
+    )
+    outcome = chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport
+    )
+    envelope = enrichment.build_envelope(outcome.failed_batch, PROVIDERS)
+    assert envelope == {
+        "providers": PROVIDERS,
+        "events": [
+            {"objectId": "3", "objectType": "companies"},
+            {"objectId": "4", "objectType": "companies"},
+        ],
+    }
+
+
+def test_the_failed_batch_replans_into_the_same_chunk_shape(
+    fake_config, stub_module_transport_factory
+):
+    """The re-send is a plan of its own, not a special case — so a failed batch bigger
+    than the ceiling is chunked again rather than sent whole."""
+    transport = stub_module_transport_factory(
+        [(500, {"m": 1}), (500, {"m": 2}), {"ok": True}]
+    )
+    outcome = chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport
+    )
+    replan = chunking.plan_chunks(outcome.failed_batch, 2)
+    assert replan.chunk_count == 2
+    assert replan.record_count == 4
+
+
+def test_a_failed_list_chunk_comes_back_as_the_list_spec_not_as_ids(
+    fake_config, stub_module_transport_factory
+):
+    """A list carries no ids the client knows, so the re-sendable unit is the list
+    itself — never a fabricated id set."""
+    transport = stub_module_transport_factory([(500, {"m": "x"})])
+    plan = chunking.plan_chunks({"list": "New Targets.xlsx", "object_type": "contacts"}, 2)
+    outcome = chunking.dispatch_plan(
+        plan, PROVIDERS, True, fake_config, transport=transport
+    )
+    assert outcome.failed_batch == {"list": "New Targets.xlsx", "object_type": "contacts"}
+    assert "record_ids" not in outcome.failed_batch
+
+
+def test_result_records_report_which_chunk_failed_and_its_size(
+    fake_config, stub_module_transport_factory
+):
+    transport = stub_module_transport_factory(
+        [{"ok": True}, (500, {"m": "x"}), {"ok": True}]
+    )
+    outcome = chunking.dispatch_plan(
+        chunking.plan_chunks(spec(5), 2), PROVIDERS, True, fake_config,
+        transport=transport,
+    )
+    assert [r.index for r in outcome.results] == [0, 1, 2]
+    assert [r.rows for r in outcome.results] == [2, 2, 1]
+    assert outcome.results[1].ok is False
+
+
+def test_result_records_carry_nothing_from_the_config(
+    fake_config, stub_module_transport_factory
+):
+    """T-25-17: a relayed transport exception's text can echo request headers."""
+    transport = stub_module_transport_factory(
+        [requests.exceptions.Timeout(
+            f"POST {fake_config['n8n_url']} X-Enrichment-Secret: "
+            f"{fake_config['webhook_secret']}"
+        )]
+    )
+    outcome = chunking.dispatch_plan(
+        chunking.plan_chunks(spec(2), 2), PROVIDERS, True, fake_config,
+        transport=transport,
+    )
+    rendered = repr(outcome.results)
+    assert fake_config["webhook_secret"] not in rendered
+    assert fake_config["n8n_url"] not in rendered
+
+
+def test_the_dispatcher_iterates_the_plan_and_never_resplits_it(
+    fake_config, stub_module_transport_factory
+):
+    """T-25-24: the operator approved a specific split. A dispatcher with its own
+    splitting path can send a batch nobody saw — so a hand-built plan whose chunks
+    exceed any ceiling is still sent exactly as given."""
+    plan = chunking.ChunkPlan(
+        chunks=({"record_ids": ["7", "8", "9"], "object_type": "companies"},),
+        row_counts=(3,),
+        record_count=3,
+    )
+    transport = stub_module_transport_factory()
+    chunking.dispatch_plan(plan, PROVIDERS, True, fake_config, transport=transport)
+    assert len(transport.calls) == 1
+    assert sent_ids(transport) == [["7", "8", "9"]]
