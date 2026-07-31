@@ -4,8 +4,9 @@
 **Target:** `LV Scheduled Maintenance (Cloud)`, workflow id `1fXPuIabz3RsAHgn`, `active: true`
 **Probe:** `operator-claude-plugin/scripts/probe_n8n_semantics.py`
 
-Two of the three questions are answered. **A1 is NOT** — see Q3, and do not let its "verified"
-sub-results read as an answer to it.
+**All three questions are answered.** Q3 took two runs — the first exposed a real defect in the
+probe, now fixed. Read Q3's caveat before building on it: the *load* question is answered YES, the
+*cadence precision* question is not.
 
 ---
 
@@ -52,7 +53,51 @@ the operator re-times or enables/disables instead. 28-04 builds on this as settl
 
 ## Q3 — Does the deactivate → PUT → activate bracket make a Schedule Trigger change effective on a RUNNING instance? (D-18, Research A1)
 
-**Status: UNANSWERED. Do not record this as answered, and do not let 28-03 assume either result.**
+**Status: ANSWERED YES on the load question — with one bounded caveat on cadence precision.**
+Answered on the second attempt, in a real terminal, 2026-07-31. The first attempt is kept below
+because the defect it exposed is the reason the probe is now safe to run.
+
+### The answer
+
+**Run:** `cadence_reload 1fXPuIabz3RsAHgn "Review Trigger (15 min)"`, TTY, ~10 minute wait.
+`change_verdict: verified`, `restore_verdict: verified`, `prior_interval` restored to 15.
+
+**Observed execution starts** (20 returned against a page limit of 20 — the page is **saturated**,
+so truncation drops the OLDEST; everything after the change is present):
+
+Steady state is *pairs* on the quarter hour — `02:45:11.062/.098`, `03:00:11.062/.111`,
+`03:15:11.061/.099` — because **two** Schedule Triggers run at 15 minutes (`Review Trigger (15 min)`
+and `SJ-3 Trigger (15 min)`), firing ~40 ms apart. Those are the `0.0` entries in
+`spacing_minutes`. The hourly `SJ-1 Trigger` adds the `:00:01` fires, the `0.17` gaps.
+
+After the change, two **single** fires appear:
+
+| Start | Gap from previous |
+|---|---|
+| `2026-07-31T03:22:11.043Z` | **7.0 min** |
+| `2026-07-31T03:26:11.040Z` | **4.0 min** |
+
+**Both are off the 15-minute grid, and both are single rather than paired** — precisely the
+signature of one retimed trigger while its 15-minute sibling stayed put. `SJ-3`'s next grid fire
+(`03:30:11`) falls after the read, so its absence is consistent too.
+
+**Conclusion: the deactivate → PUT → activate bracket DOES make a Schedule Trigger change effective
+on a running instance.** D-18 / A1 answered. Confidence **HIGH** — a 15-minute schedule cannot
+produce a fire at `03:22` or `03:26`.
+
+### The caveat — do not overstate this into cadence precision
+
+The commanded interval was **2 minutes**; observed gaps were **7 and 4**, and a fire expected around
+`03:24` is absent. Page saturation does not explain it (truncation removes the oldest, and these are
+the newest). Whatever the cause — scheduler re-basing after reactivation, a skipped tick, Cloud-side
+queueing — **the exact post-change cadence is not established.**
+
+- ✅ **Safe to rely on (28-03):** a re-timed trigger takes effect without a redeploy.
+- ⚠️ **Not established (28-04):** that the new cadence matches the requested interval exactly. If
+  28-04 shows the operator a "next run" time or promises a precise new spacing, that claim is
+  **unverified** and should be worded as requested-not-guaranteed, or evidenced separately.
+
+### First attempt (2026-07-31, non-TTY) — kept for the defect it found
 
 **What was run:** `cadence_reload 1fXPuIabz3RsAHgn "Review Trigger (15 min)"`
 
@@ -78,11 +123,8 @@ reads only. No writes, no provider credits, no HubSpot mutations.
   execution spacing actually changes. That observation requires the executions read that never ran.
   **A1 is precisely this question**, and stored-config correctness is not evidence for it.
 
-**To answer it:** re-run the same command **in a real terminal**. It now refuses outright without a
-TTY (see below), so the failure cannot repeat. Expect: new ~2-minute spacing → the bracket is
-effective, 28-03 can rely on it; unchanged 15-minute spacing for the whole window → the bracket is
-insufficient and 28-03 needs a different mechanism, which is the entire reason this probe runs
-before an armed window depends on it.
+**Resolved by the second run above.** The probe now refuses without a TTY, so this failure cannot
+repeat.
 
 ---
 
@@ -108,7 +150,7 @@ operator path. Plugin suite 654 → **656**.
 
 | Plan | Released? | Basis |
 |---|---|---|
-| 28-03 | ⚠️ **partially** | Q1 settles the PUT filter it depends on. **A1 (Q3) is still open** — if 28-03 relies on the bracket forcing a reload, that assumption is unverified |
-| 28-04 | ✅ | Q2 confirms the amendment it is built on |
+| 28-03 | ✅ | Q1 settles the PUT filter; Q3 confirms the bracket forces a reload on a running instance |
+| 28-04 | ✅ **with one wording constraint** | Q2 confirms the amendment it is built on. Per Q3's caveat, it must not promise an exact post-change cadence or a precise "next run" time — requested ≠ guaranteed |
 | 28-05 | ⛔ | chains behind 28-03/04, and is separately serialized behind the operator committing `test_plugin_manifest.py` |
 | 28-06 | ⛔ | armed canary, behind 28-05, needs `ALLOW_N8N_ARM` |
