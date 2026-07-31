@@ -109,6 +109,18 @@ NODE_CREDENTIAL_MAP = {
     "Dedupe Set Needs Review": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "Review Search (approved=true)": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "Review Apply Update": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    # Phase 30 Plan 02 — wf_review_decision_cloud.json's four credential-bearing nodes.
+    # The trigger binds the SAME shared webhook-secret credential the enrichment and
+    # status triggers bind (one operator secret, three endpoints, no new provisioning).
+    # The three HubSpot nodes reuse "LV HubSpot"; an unmapped one deploys UNBOUND and
+    # 401s only at activation — the failure class this repo has been bitten by three
+    # times. "Review Verify Fetch" is the post-PATCH independent refetch (D-19): unbound,
+    # it would 401 and the endpoint would report `verified_properties: null` on a write
+    # that actually landed.
+    "Review Decision Webhook": {"cred_type": "httpHeaderAuth", "cred_name": "LV Enrichment Webhook"},
+    "Review Fetch By Id": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    "Review Decision Update": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    "Review Verify Fetch": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
 }
 
 

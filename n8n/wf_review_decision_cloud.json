@@ -1,0 +1,342 @@
+{
+  "id": "LVReviewDecisionCloud01",
+  "name": "LV Review Decision (Cloud)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "hubspot/review/decision",
+        "responseMode": "responseNode",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "w00010000-0000-4000-8000-000000000000",
+      "name": "Review Decision Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Parse Review Decision \u2014 the ONLY place the request body is read (T-30-05).\n// SIX keys are accepted and nothing else: object_type, record_id, decision, reason,\n// reviewed_by, dry_run. No field name, no value, no patch: the caller cannot tell this\n// endpoint WHAT to write, only which record and which decision word. Any other key in the\n// body is IGNORED, never merged \u2014 an injected `properties`/`field`/`value` has no path\n// into the patch, which is always computed from the record's own refetched state.\n//\n// dry_run defaults to TRUE when absent or not a boolean (D-03): the fail-safe direction\n// is \"show, do not write\", so a malformed or truncated request previews rather than writes.\nconst item = $input.first();\nconst raw = (item && item.json) || {};\n// n8n's Webhook node nests the request under `body`; a directly-seeded item (tests, or an\n// Execute Workflow call) carries the fields at the top level.\nconst body = (raw.body && typeof raw.body === \"object\" && !Array.isArray(raw.body)) ? raw.body : raw;\n\n// Digits-only, coerced to a string. Anything else is null, which fails the fetch closed\n// and returns \"record not found\" rather than searching on operator-supplied text.\nconst rawId = (typeof body.record_id === \"string\" || typeof body.record_id === \"number\")\n  ? String(body.record_id).trim() : \"\";\nconst record_id = /^[0-9]+$/.test(rawId) ? rawId : null;\n\nreturn [{ json: {\n  object_type: body.object_type === \"contacts\" ? \"contacts\" : \"companies\",\n  record_id,\n  decision: typeof body.decision === \"string\" ? body.decision : null,\n  // Passed through UNCOERCED so a wrong-typed reason is refused downstream rather than\n  // silently becoming an empty one; absent reads as empty (D-09).\n  reason: body.reason === undefined ? \"\" : body.reason,\n  reviewed_by: typeof body.reviewed_by === \"string\" ? body.reviewed_by : null,\n  dry_run: body.dry_run === false ? false : true,\n}}];\n"
+      },
+      "id": "c00020000-0000-4000-8000-000000000000",
+      "name": "Parse Review Decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/companies/search",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"hs_object_id\", operator: \"EQ\", value: $('Parse Review Decision').first().json.record_id } ] } ], properties: [\"hs_object_id\", \"name\", \"domain\", \"lv_enrichment_needs_review\", \"lv_icp_needs_review\", \"lv_enrichment_review_reason\", \"lv_enrichment_review_candidate_json\", \"lv_enrichment_review_approved\", \"lv_enrichment_reviewed_by\", \"lv_enrichment_reviewed_at\", \"lv_enrichment_provenance\", \"annualrevenue\", \"industry\", \"lv_anti_icp_flag\", \"lv_anti_icp_reason\", \"lv_content_type\", \"lv_country_region_normalized\", \"lv_employee_band\", \"lv_is_gambling_operator\", \"lv_is_hardware_vendor\", \"lv_org_type\", \"lv_produces_content\", \"lv_revenue_band\", \"lv_sponsorship_reliant\", \"numberofemployees\"], limit: 1 }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
+      },
+      "id": "h00030000-0000-4000-8000-000000000000",
+      "name": "Review Fetch By Id",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        660,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Review Extract Record \u2014 ENRICH_EXTRACT_SEARCH_ROWS's envelope handling plus the one\n// thing a SYNCHRONOUS lane needs that the scheduled lanes do not: a zero-hit search must\n// still emit exactly ONE item. On a scheduled branch zero rows means \"nothing to do\" and\n// the branch simply ends; here it would mean nothing ever reaches\n// `Respond Review Decision` and the caller waits out a Cloudflare timeout instead of\n// being told the record was not found.\nconst item = $input.first();\nconst res = (item && item.json) || {};\nconst rows = Array.isArray(res.results) ? res.results : (res.properties ? [res] : []);\nif (!rows.length) return [{ json: { hs_object_id: null, record_found: false } }];\nconst r = rows[0];\nreturn [{ json: { ...(r.properties || {}), hs_object_id: r.id, record_found: true } }];\n"
+      },
+      "id": "c00040000-0000-4000-8000-000000000000",
+      "name": "Review Extract Record",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// n8n/code/taxonomy.generated.js\n//\n// GENERATED FROM config/taxonomy.yaml \u2014 DO NOT EDIT.\n// taxonomy version: lv-taxonomy-v1\n// Regenerate with: .venv/bin/python scripts/gen_taxonomy_js.py\n//\n// Vocabulary data only (spec D2) \u2014 see n8n/code/taxonomy.js for the\n// hand-written normalizer logic that consumes this module.\n\nconst TAXONOMY_VERSION = \"lv-taxonomy-v1\";\n\nconst ORG_TYPES = [\n  \"governing_body_league\",\n  \"content_producer\",\n  \"broadcaster\",\n  \"individual_club_team\",\n  \"regulator\",\n  \"gambling_operator\",\n  \"hardware_vendor\",\n  \"other\",\n  \"unknown\"\n];\n\nconst ORG_TYPE_SYNONYMS = {\n  \"league\": \"governing_body_league\",\n  \"governing body\": \"governing_body_league\",\n  \"peak body\": \"governing_body_league\",\n  \"racing authority\": \"governing_body_league\",\n  \"sporting authority\": \"governing_body_league\",\n  \"sports governing body\": \"governing_body_league\",\n  \"controlling body\": \"governing_body_league\",\n  \"production company\": \"content_producer\",\n  \"media producer\": \"content_producer\",\n  \"content studio\": \"content_producer\",\n  \"production house\": \"content_producer\",\n  \"media company\": \"content_producer\",\n  \"tv network\": \"broadcaster\",\n  \"television network\": \"broadcaster\",\n  \"network\": \"broadcaster\",\n  \"channel\": \"broadcaster\",\n  \"broadcast network\": \"broadcaster\",\n  \"free to air\": \"broadcaster\",\n  \"club\": \"individual_club_team\",\n  \"team\": \"individual_club_team\",\n  \"racing club\": \"individual_club_team\",\n  \"football club\": \"individual_club_team\",\n  \"sporting club\": \"individual_club_team\",\n  \"franchise team\": \"individual_club_team\",\n  \"regulatory body\": \"regulator\",\n  \"regulator authority\": \"regulator\",\n  \"commission\": \"regulator\",\n  \"integrity body\": \"regulator\",\n  \"bookmaker\": \"gambling_operator\",\n  \"betting operator\": \"gambling_operator\",\n  \"wagering operator\": \"gambling_operator\",\n  \"sportsbook\": \"gambling_operator\",\n  \"casino\": \"gambling_operator\",\n  \"online gambling\": \"gambling_operator\",\n  \"av vendor\": \"hardware_vendor\",\n  \"led vendor\": \"hardware_vendor\",\n  \"display vendor\": \"hardware_vendor\",\n  \"av integrator\": \"hardware_vendor\",\n  \"systems integrator\": \"hardware_vendor\",\n  \"equipment supplier\": \"hardware_vendor\",\n  \"hardware supplier\": \"hardware_vendor\"\n};\n\nconst EVIDENCE_GATED_ORG_TYPES = [\n  \"content_producer\",\n  \"gambling_operator\",\n  \"governing_body_league\",\n  \"hardware_vendor\"\n];\n\nconst DEFAULT_ORG_TYPE = \"unknown\";\n\nconst CONTENT_TYPES = [\n  \"live_broadcast\",\n  \"streaming\",\n  \"near_live\",\n  \"highlights\",\n  \"none\",\n  \"unknown\"\n];\n\nconst CONTENT_TYPE_SYNONYMS = {\n  \"live tv\": \"live_broadcast\",\n  \"live coverage\": \"live_broadcast\",\n  \"live racing\": \"live_broadcast\",\n  \"broadcast\": \"live_broadcast\",\n  \"live stream\": \"streaming\",\n  \"livestream\": \"streaming\",\n  \"ott\": \"streaming\",\n  \"watch live\": \"streaming\",\n  \"streaming platform\": \"streaming\",\n  \"delayed coverage\": \"near_live\",\n  \"near live\": \"near_live\",\n  \"replays\": \"highlights\",\n  \"clips\": \"highlights\",\n  \"highlights package\": \"highlights\"\n};\n\nconst CONTENT_TYPE_IMPLIES = {\n  \"live_broadcast\": true,\n  \"streaming\": true,\n  \"near_live\": true,\n  \"highlights\": true,\n  \"none\": false,\n  \"unknown\": null\n};\n\nconst DEFAULT_CONTENT_TYPE = \"unknown\";\n\n// mergeCompanies.js \u2014 pure-JS DETERMINISTIC non-clobber merge for COMPANY records.\n//\n// Companies sibling of mergeContacts.js. Same deterministic gate + provenance-blob shape\n// (src/merge_policy.py), different field policy and two rules contacts do not have:\n//   - `domain` hard guard (mirrors the contacts `email` guard)\n//   - evidence-URL requirement on the ICP fields (field_policy.yaml\n//     lv_produces_content.require_evidence_url / lv_org_type.require_evidence_url_for)\n//\n// PROVENANCE MODEL (Phase 15): per-field metadata/staging is ONE provenance object keyed\n// by field ({source, confidence, verified_at, evidence_url?, validation_status, value}),\n// not flat `{field}_source`/`{provider}_{field}` properties. The caller (the\n// build_cloud_workflows.py wrapper) serializes it ONCE via stableStringify() into\n// `lv_enrichment_provenance`, alongside the 2 cache-key datetimes this module surfaces on\n// `cacheKeys` for lv_org_type / lv_produces_content.\n//\n// NO Haiku / NO Sonnet \u2014 the LLM stages merge_policy runs after the gate are omitted\n// (n8n Code nodes cannot call them; escalation happens downstream). The decision IS the\n// gate's decision.\n//\n// This computes the POLICY decision only. Whether a promoted field actually ships to\n// HubSpot is the write gate's call (ALLOW_CANONICAL_WRITES, CLAUDE.md \u00a718.5/\u00a729) \u2014 that\n// is deliberately NOT duplicated here.\n\n\n// Default companies field policy (source of truth: config/field_policy.yaml `companies`).\n// lv_org_type's gated set is NOT hand-typed here (spec TX-4) \u2014 it derives from\n// config/taxonomy.yaml org_types.*.requires_evidence via the generated taxonomy module,\n// so adding/removing an evidence-gated org_type is a taxonomy.yaml + rebuild, not a\n// second hand edit here.\nconst DEFAULT_COMPANY_POLICY = {\n  domain:                  { class: \"manual_protected\",  min_confidence: 95 },\n  industry:                { class: \"stale_refreshable\", min_confidence: 75 },\n  numberofemployees:       { class: \"stale_refreshable\", min_confidence: 70 },\n  annualrevenue:           { class: \"review_required\",   min_confidence: 85 },\n  lv_revenue_band:         { class: \"system_owned\",      min_confidence: 75 },\n  lv_employee_band:        { class: \"system_owned\",      min_confidence: 70 },\n  // 75: deliberately above the flat-firmographic band (lv_employee_band at 70) because\n  // this field is the geography input to the non-ANZ hard veto, so a wrong promotion\n  // disqualifies a real account -- and below the evidence-gated judgment fields (85)\n  // because it is a normalized enum with no evidence-URL requirement, so demanding\n  // provider certainty here would leave it effectively stage-only and defeat the\n  // purpose. This threshold is a reviewable judgment, not a derived constant.\n  lv_country_region_normalized: { class: \"system_owned\", min_confidence: 75 },\n  lv_org_type:             { class: \"system_owned\",      min_confidence: 80,\n                             require_evidence_url_for: EVIDENCE_GATED_ORG_TYPES },\n  lv_produces_content:     { class: \"system_owned\",      min_confidence: 85,\n                             require_evidence_url: true },\n  lv_content_type:         { class: \"system_owned\",      min_confidence: 75 },\n  lv_sponsorship_reliant:  { class: \"system_owned\",      min_confidence: 70 },\n  lv_is_hardware_vendor:   { class: \"system_owned\",      min_confidence: 85 },\n  lv_is_gambling_operator: { class: \"system_owned\",      min_confidence: 85 },\n  // lv_icp_fit_score / lv_icp_tier: Approach C (Phase 15 criterion 4) \u2014 HubSpot owns\n  // these derived outputs. Removed from policy so either falls to the default\n  // non-promoting policy (fill_blank_only) if it ever appears in a candidate, never\n  // \"score_output\".\n  lv_anti_icp_flag:        { class: \"veto_output\",       min_confidence: 0 },\n  lv_anti_icp_reason:      { class: \"veto_output\",       min_confidence: 0 },\n};\n\nfunction _isBlank(v) {\n  return v === null || v === undefined || v === \"\" ||\n         (Array.isArray(v) && v.length === 0);\n}\n\nfunction _nowIso() {\n  return new Date().toISOString();\n}\n\n// Recursively sort object keys before JSON.stringify \u2014 the JS half of the shared\n// byte-identical serialization contract with src/merge_policy.py's serialize_provenance()\n// (Python: json.dumps(obj, sort_keys=True, separators=(\",\", \":\"), ensure_ascii=False)).\n// JSON.stringify already emits compact (\",\" / \":\") separators and raw (non-escaped)\n// UTF-8 by default, matching Python's ensure_ascii=False \u2014 the only remaining gap is key\n// ORDER, which this closes.\nfunction _sortedForStringify(value) {\n  if (Array.isArray(value)) return value.map(_sortedForStringify);\n  if (value !== null && typeof value === \"object\") {\n    const out = {};\n    for (const k of Object.keys(value).sort()) out[k] = _sortedForStringify(value[k]);\n    return out;\n  }\n  return value;\n}\n\nfunction stableStringify(value) {\n  return JSON.stringify(_sortedForStringify(value));\n}\n\n// The 2 company cache-key fields (RT-5/SJ-2's queryable datetimes) \u2014 everything else\n// rides in the provenance blob.\nconst COMPANY_CACHE_KEY_FIELDS = {\n  lv_org_type: \"lv_org_type_verified_at\",\n  lv_produces_content: \"lv_produces_content_verified_at\",\n};\n\n// Does this field+value need an evidence URL before it may promote?\n// require_evidence_url: always. require_evidence_url_for: only for the listed values\n// (e.g. lv_org_type may promote to \"other\" unevidenced, but not to \"hardware_vendor\").\nfunction _needsEvidence(policy, value) {\n  if (!policy) return false;\n  if (policy.require_evidence_url === true) return true;\n  const gated = policy.require_evidence_url_for;\n  if (Array.isArray(gated)) return gated.indexOf(value) !== -1;\n  return false;\n}\n\n// Deterministic gate \u2014 single candidate, mirrors merge_policy.deterministic_gate.\n// has_conflict is always false with one candidate, so the conflict branch is dropped.\nfunction _gate(field, currentValue, confidence, policy, evidenceUrl, value) {\n  const fieldClass = (policy && policy.class) || \"fill_blank_only\";\n  const minConfidence = (policy && policy.min_confidence != null) ? policy.min_confidence : 80;\n\n  if (confidence < minConfidence) {\n    return { decision: \"needs_review\",\n             reason: `Best confidence ${confidence} below threshold ${minConfidence}.` };\n  }\n  // Evidence gate runs BEFORE the class branches: an unevidenced ICP claim is never\n  // promotable no matter how system_owned the field is (CLAUDE.md \u00a721.3).\n  if (_needsEvidence(policy, value) && _isBlank(evidenceUrl)) {\n    return { decision: \"needs_review\",\n             reason: `Field ${field}=${value} requires an evidence URL; none supplied.` };\n  }\n  if (fieldClass === \"manual_protected\") {\n    return { decision: \"stage_only\", reason: \"Field is manual_protected.\" };\n  }\n  if (fieldClass === \"review_required\") {\n    return { decision: \"needs_review\", reason: \"Field requires review.\" };\n  }\n  if (fieldClass === \"system_owned\" || fieldClass === \"score_output\" || fieldClass === \"veto_output\") {\n    return { decision: \"promote\", reason: \"System-owned field passed confidence threshold.\" };\n  }\n  if (fieldClass === \"fill_blank_only\") {\n    if (_isBlank(currentValue)) {\n      return { decision: \"promote\", reason: \"Current value blank and candidate passed threshold.\" };\n    }\n    return { decision: \"stage_only\", reason: \"Current value exists and field is fill_blank_only.\" };\n  }\n  if (fieldClass === \"stale_refreshable\") {\n    if (_isBlank(currentValue)) {\n      return { decision: \"promote\", reason: \"Current value blank and candidate passed threshold.\" };\n    }\n    return { decision: \"needs_review\", reason: \"Refresh candidate requires review in MVP.\" };\n  }\n  return { decision: \"stage_only\", reason: \"Default conservative behavior.\" };\n}\n\nfunction _statusFor(decision) {\n  // Deterministic (no LLM) validation_status from source_registry vocabulary.\n  return decision === \"needs_review\" ? \"human_review_required\" : \"provider_only\";\n}\n\n// mergeCompanies(existingProps, candidateRow, fieldPolicy?, opts?)\n//   existingProps: current HubSpot company properties (the record being enriched)\n//   candidateRow:  canonical-keyed candidate values (post normalizeProviders + score)\n//   fieldPolicy:   companies policy block; defaults to DEFAULT_COMPANY_POLICY\n//   opts:          { source=\"provider\", confidence=80, evidence={field: url},\n//                    confidenceByField={field: number} }\n//                  `evidence` mirrors enrichmentGate's opts.validity: an upstream-supplied\n//                  per-field map, absent = no evidence.\n//                  `confidenceByField` (Phase 15.5 TA-8, additive) \u2014 a per-field override\n//                  of the flat `confidence`; when a field has an entry here it wins,\n//                  otherwise the flat value (and its 80 default) applies exactly as\n//                  before. Every current caller omits this key and is therefore\n//                  byte-identical. READ D2 (docs/... \u00a78.5 / RESEARCH.md) before ever\n//                  wiring an A/R/G/T composite score in here: this map must only ever\n//                  carry a 0-100 confidence on the SAME scale as `confidence`\n//                  (the judge verdict's per-field confidence), never the composite.\nfunction mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {\n  existingProps = existingProps || {};\n  candidateRow = candidateRow || {};\n  const policy = fieldPolicy || DEFAULT_COMPANY_POLICY;\n  const source = (opts && opts.source) || \"provider\";\n  const flatConfidence = (opts && opts.confidence != null) ? opts.confidence : 80;\n  const confidenceByField = (opts && opts.confidenceByField) || {};\n  const evidence = (opts && opts.evidence) || {};\n  const verifiedAt = _nowIso();\n\n  const canonicalPatch = {};\n  const provenance = {};\n  const cacheKeys = {};\n  const decisions = [];\n\n  for (const field of Object.keys(candidateRow)) {\n    const value = candidateRow[field];\n    if (_isBlank(value)) continue; // nothing to merge\n\n    const currentValue = existingProps[field];\n    const fieldPol = policy[field] || { class: \"fill_blank_only\", min_confidence: 80 };\n    const evidenceUrl = evidence[field];\n    // The resolved per-field value is used EVERYWHERE the flat one used to be \u2014 the gate\n    // threshold, the provenance entry, and the decision record \u2014 so the recorded\n    // confidence and the confidence that made the decision can never disagree.\n    const confidence = confidenceByField[field] != null ? confidenceByField[field] : flatConfidence;\n\n    const gate = _gate(field, currentValue, confidence, fieldPol, evidenceUrl, value);\n    let decision = gate.decision;\n\n    // HARD GUARD: domain never promotes to canonical on the enrich path (belt-and-braces \u2014\n    // the manual_protected class + the 95 threshold already prevent it, but this holds\n    // regardless of policy edits). Mirrors the mergeContacts email guard.\n    if (field === \"domain\" && decision === \"promote\") decision = \"stage_only\";\n\n    const validationStatus = _statusFor(decision);\n\n    // ONE provenance entry per field \u2014 replaces the old flat metadataPatch/stagingPatch.\n    const entry = { source, confidence, verified_at: verifiedAt,\n                    validation_status: validationStatus, value };\n    if (!_isBlank(evidenceUrl)) entry.evidence_url = evidenceUrl;\n    provenance[field] = entry;\n\n    if (decision === \"promote\") {\n      canonicalPatch[field] = value;\n      // STALE-TIMESTAMP FIX (Phase 16.3, companies twin of Phase 16.2 gpt #6): the\n      // cache-key datetime is stamped ONLY when the field is actually ACCEPTED \u2014 moved\n      // inside this branch (was previously unconditional) so a needs_review/stale-but-\n      // unpromoted candidate is never marked fresh, which would otherwise suppress the\n      // next stale-refresh check (CLAUDE.md \u00a719.5) forever.\n      if (COMPANY_CACHE_KEY_FIELDS[field]) {\n        cacheKeys[COMPANY_CACHE_KEY_FIELDS[field]] = verifiedAt;\n      }\n    }\n\n    decisions.push({\n      field,\n      current_value: currentValue === undefined ? null : currentValue,\n      chosen_value: value,\n      source_provider: source,\n      decision,\n      confidence,\n      reason: gate.reason,\n      validation_status: validationStatus,\n      evidence_url: _isBlank(evidenceUrl) ? null : evidenceUrl,\n      verified_at: verifiedAt,\n    });\n  }\n\n  return { canonicalPatch, provenance, cacheKeys, decisions };\n}\n\n// reviewApply.js \u2014 pure-JS \u00a722.2 review-loop apply function for n8n Code nodes.\n//\n// CONSUMER CONTRACT: consumes EXACTLY what ENRICH_DECIDE_CO_CLOUD (build_cloud_workflows.py)\n// writes into lv_enrichment_review_candidate_json \u2014 stableStringify(needsReview), where\n// needsReview is mergeCompanies()'s decisions[] filtered to decision === \"needs_review\".\n// Each decision is shaped { field, current_value, chosen_value, source_provider, decision,\n// confidence, reason, validation_status, evidence_url, verified_at } (mergeCompanies.js:213-224).\n//\n// reviewApply(candidateJson, refetchedProperties) -> { canonicalPatch, clearPatch, stale, reason }\n//\n// STRUCTURAL Approach-C guard: canonicalPatch only ever accepts a field that is a key of\n// mergeCompanies' own DEFAULT_COMPANY_POLICY \u2014 the same allowlist mergeCompanies itself\n// promotes from. The two HubSpot-derived ICP score/tier outputs (Approach C) are\n// deliberately ABSENT from that policy object (see mergeCompanies.js's own comment), so a\n// candidate JSON that illegitimately names one is silently dropped without this file ever\n// naming either field literally.\n//\n// FAIL-CLOSED: malformed / truncated JSON never throws -> empty patches + a reason.\n// NON-CLOBBER (compare-and-set): a held decision's `current_value` is compared against the\n// freshly-refetched live value of that field. If ANY field disagrees, a newer manual edit\n// landed after the candidate was created \u2014 apply NOTHING (both patches stay empty), report\n// stale=true, and leave the record queued (do not clear its review flags). All-or-nothing\n// avoids a partial-apply/re-check loop: applying only the non-conflicting fields this run\n// would change their live values without clearing lv_enrichment_review_candidate_json, so\n// the NEXT run's compare-and-set would see its own just-applied write as a \"conflict\".\n\n\nfunction reviewApply(candidateJson, refetchedProperties) {\n  refetchedProperties = refetchedProperties || {};\n\n  let decisions;\n  try {\n    decisions = JSON.parse(candidateJson);\n    if (!Array.isArray(decisions)) throw new Error(\"candidate JSON is not an array\");\n  } catch (e) {\n    return { canonicalPatch: {}, clearPatch: {}, stale: false,\n             reason: \"malformed review candidate JSON\" };\n  }\n\n  const allowedFields = Object.keys(DEFAULT_COMPANY_POLICY);\n  const canonicalPatch = {};\n  const staleFields = [];\n\n  for (const d of decisions) {\n    if (!d || typeof d.field !== \"string\" || allowedFields.indexOf(d.field) === -1) continue;\n    const liveValue = refetchedProperties[d.field];\n    const normalizedLive = liveValue === undefined ? null : liveValue;\n    const storedCurrent = d.current_value === undefined ? null : d.current_value;\n    if (JSON.stringify(normalizedLive) !== JSON.stringify(storedCurrent)) {\n      staleFields.push(d.field);\n      continue;\n    }\n    canonicalPatch[d.field] = d.chosen_value;\n  }\n\n  if (staleFields.length > 0) {\n    return {\n      canonicalPatch: {}, clearPatch: {}, stale: true,\n      reason: `field(s) changed since candidate was created, re-review required: ${staleFields.join(\",\")}`,\n    };\n  }\n\n  const clearPatch = {\n    lv_enrichment_needs_review: false,\n    lv_enrichment_review_approved: false,\n    lv_enrichment_review_reason: \"\",\n    lv_enrichment_review_candidate_json: \"\",\n    lv_enrichment_reviewed_at: new Date().toISOString(),\n  };\n\n  return { canonicalPatch, clearPatch, stale: false, reason: \"applied\" };\n}\n\n// reviewDecision.js \u2014 pure-JS decision-to-property-patch for the SYNCHRONOUS\n// `hubspot/review/decision` endpoint (Phase 30 Plan 02, D-08e).\n//\n// Sibling of reviewApply.js, not a replacement for it. reviewApply is the 15-minute\n// backstop loop's compare-and-set APPLY engine (approve -> promote the held candidate ->\n// clear the flags); this module serves the operator-driven endpoint. 30-03 routes the\n// approve branch INTO reviewApply rather than re-implementing it (D-08d/D-15).\n//\n// CONSUMER CONTRACT: `Build Review Decision` (scripts/build_cloud_workflows.py) calls\n//\n//   buildReviewDecision({ decision, reason, reviewedBy, row, nowIso })\n//     -> { properties, outcome, message }\n//\n// where `row` is the freshly-refetched HubSpot record already flattened by\n// `Review Extract Record` ({ ...record.properties, hs_object_id, record_found }), and\n// `properties` is put straight onto the row for the shared credential-bound PATCH node.\n// `outcome` is one of: rejected | not_flagged | unsupported | refused.\n//\n// `reviewedBy` and `nowIso` are accepted but deliberately UNUSED on every branch this\n// plan owns \u2014 they belong to 30-03's approve path, which stamps lv_enrichment_reviewed_by\n// / lv_enrichment_reviewed_at as the human-provenance record. A rejection stamps neither,\n// on purpose (below).\n//\n// D-10 / REVIEW-05 \u2014 THE LOAD-BEARING RULE: a rejection RECORDS THE REASON AND NOTHING\n// ELSE. It never clears lv_enrichment_needs_review or lv_icp_needs_review, never blanks\n// lv_enrichment_review_candidate_json, and never stamps a reviewed-at. The record stays in\n// the queue WITH a recorded decision. \"Clear the flag for consistency\" is precisely the\n// silent de-queueing REVIEW-05 forbids, so the rejection branch is kept literally minimal:\n// build the one-key patch and return.\n//\n// FAIL-CLOSED: never throws, never does I/O, requires nothing outside n8n/code/. Anything\n// unrecognised is `refused` with EMPTY properties \u2014 the endpoint's only writing outcome is\n// `rejected`.\n\n// The `lv_`-prefixed review family (config/hubspot_properties.yaml). The generic\n// unprefixed names in the root CLAUDE.md do not exist in this deployment (30 D-08c).\nconst P_NEEDS_REVIEW = \"lv_enrichment_needs_review\";\nconst P_ICP_NEEDS_REVIEW = \"lv_icp_needs_review\";\nconst P_REVIEW_REASON = \"lv_enrichment_review_reason\";\nconst P_CANDIDATE_JSON = \"lv_enrichment_review_candidate_json\";\n// Named for the same reason the two flags above are: so the D-10 guarantee reads as an\n// explicit non-write of a known property rather than an accidental omission. 30-03's\n// approve branch is what writes these two.\nconst P_REVIEWED_BY = \"lv_enrichment_reviewed_by\";  // eslint-disable-line no-unused-vars\nconst P_REVIEWED_AT = \"lv_enrichment_reviewed_at\";  // eslint-disable-line no-unused-vars\n\n// HubSpot's own textarea ceiling \u2014 the same [:60000] cap merge_policy.py and the\n// enrichment wrapper apply to every JSON blob they stage.\nconst MAX_TEXT = 60000;\n\n// HubSpot returns booleancheckbox values as the STRINGS \"true\"/\"false\", so a bare\n// truthiness test would read \"false\" as flagged.\nfunction _truthy(v) {\n  if (v === true) return true;\n  if (typeof v === \"string\") return v.trim().toLowerCase() === \"true\";\n  return false;\n}\n\nfunction buildReviewDecision(input) {\n  const inp = (input && typeof input === \"object\") ? input : {};\n  const refused = (message) => ({ properties: {}, outcome: \"refused\", message });\n\n  const row = inp.row;\n  if (!row || typeof row !== \"object\" || Array.isArray(row)) {\n    return refused(\"no record to decide on\");\n  }\n  if (row.record_found === false || row.hs_object_id === undefined\n      || row.hs_object_id === null || row.hs_object_id === \"\") {\n    return refused(\"record not found\");\n  }\n\n  // D-09: a decision without a reason is still a decision, so absent reads as empty. A\n  // reason of the WRONG TYPE is a malformed request, not an empty one.\n  let reason = inp.reason;\n  if (reason === undefined || reason === null) reason = \"\";\n  if (typeof reason !== \"string\") return refused(\"reason must be text\");\n  if (reason.length > MAX_TEXT) reason = reason.slice(0, MAX_TEXT);\n\n  if (inp.decision === \"approve\") {\n    return {\n      properties: {}, outcome: \"unsupported\",\n      message: \"approve is not served by this endpoint yet \u2014 use the review-approved \"\n             + \"backstop loop, or wait for the approve path (Phase 30 Plan 03)\",\n    };\n  }\n  if (inp.decision !== \"reject\") {\n    return refused(\"unknown decision \" + JSON.stringify(inp.decision)\n                   + ' \u2014 expected \"approve\" or \"reject\"');\n  }\n\n  // Flagged the way the queue itself defines flagged: either review flag set, or a held\n  // candidate. \"[]\" is reviewApply's own empty default, so it is not a candidate.\n  const rawCandidate = row[P_CANDIDATE_JSON];\n  const candidate = (rawCandidate === undefined || rawCandidate === null)\n    ? \"\" : String(rawCandidate).trim();\n  const flagged = _truthy(row[P_NEEDS_REVIEW]) || _truthy(row[P_ICP_NEEDS_REVIEW])\n                  || (candidate !== \"\" && candidate !== \"[]\");\n  if (!flagged) {\n    return {\n      properties: {}, outcome: \"not_flagged\",\n      message: \"record is not in the review queue \u2014 nothing to decide\",\n    };\n  }\n\n  return {\n    properties: { [P_REVIEW_REASON]: reason },\n    outcome: \"rejected\",\n    message: \"rejection reason recorded; the record stays in the review queue\",\n  };\n}\n\n// --- n8n wrapper: Build Review Decision ---\nconst parsed = $('Parse Review Decision').first().json;\nconst first = $input.first();\nconst row = (first && first.json) || {};\n\nlet result;\nif (parsed.object_type !== \"companies\") {\n  // Companies only in this plan; contacts routing lands in 30-03. The fetch above already\n  // ran against companies, which is a harmless read \u2014 no write can follow a refusal.\n  result = { properties: {}, outcome: \"refused\",\n             message: \"only company records are served by this endpoint yet\" };\n} else {\n  result = buildReviewDecision({\n    decision: parsed.decision,\n    reason: parsed.reason,\n    reviewedBy: parsed.reviewed_by,\n    row,\n    nowIso: new Date().toISOString(),\n  });\n}\n\nconst properties = result.properties || {};\nconst hasWrite = Object.keys(properties).length > 0;\n\n// BUG 12/21/25 row-carry family: SPREAD the refetched row rather than constructing a\n// fresh object. `domain` lives on it and the write gate reads it for the allowlist check\n// \u2014 a gate reading a field its lane does not emit has already cost this repo two armed\n// windows. `properties`/`hs_object_id` are assigned after the spread so they still win.\n//\n// `dry_run` here is the ROUTING boolean `Review IF Dry Run` switches on, not an echo of\n// the request: it is the caller's dry_run OR \"there is no write to perform\". A refused /\n// not_flagged / unsupported outcome therefore reaches the response WITHOUT touching the\n// write gate, the PATCH, or the verify refetch \u2014 so its verified_properties is null.\nreturn [{ json: { ...row,\n  hs_object_id: row.hs_object_id,\n  properties,\n  would_write: { ...properties },\n  outcome: result.outcome,\n  message: result.message,\n  dry_run: !(parsed.dry_run === false && hasWrite),\n}}];\n"
+      },
+      "id": "c00050000-0000-4000-8000-000000000000",
+      "name": "Build Review Decision",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i00060000-0000-4000-8000-000000000000",
+              "leftValue": "={{ $json.dry_run }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if00070000-0000-4000-8000-000000000000",
+      "name": "Review IF Dry Run",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "=https://api.hubapi.com/crm/v3/objects/companies/{{ $json.hs_object_id }}",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ properties: $json.properties }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
+      },
+      "id": "h00080000-0000-4000-8000-000000000000",
+      "name": "Review Decision Update",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1760,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/companies/search",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"hs_object_id\", operator: \"EQ\", value: $('Parse Review Decision').first().json.record_id } ] } ], properties: [\"hs_object_id\", \"name\", \"domain\", \"lv_enrichment_needs_review\", \"lv_icp_needs_review\", \"lv_enrichment_review_reason\", \"lv_enrichment_review_candidate_json\", \"lv_enrichment_review_approved\", \"lv_enrichment_reviewed_by\", \"lv_enrichment_reviewed_at\", \"lv_enrichment_provenance\", \"annualrevenue\", \"industry\", \"lv_anti_icp_flag\", \"lv_anti_icp_reason\", \"lv_content_type\", \"lv_country_region_normalized\", \"lv_employee_band\", \"lv_is_gambling_operator\", \"lv_is_hardware_vendor\", \"lv_org_type\", \"lv_produces_content\", \"lv_revenue_band\", \"lv_sponsorship_reliant\", \"numberofemployees\"], limit: 1 }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
+      },
+      "id": "h00090000-0000-4000-8000-000000000000",
+      "name": "Review Verify Fetch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1980,
+        460
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Build Review Response \u2014 the SINGLE node that shapes the response body. BOTH branches\n// route through it, so the client sees one contract regardless of path (D-19):\n//\n//   { outcome, message, would_write, verified_properties, verified }\n//\n// `verified_properties` holds the INDEPENDENTLY REFETCHED record's values for exactly the\n// `would_write` keys, read from `Review Verify Fetch` \u2014 a second HubSpot search issued\n// AFTER the PATCH, never the PATCH's own response body. HubSpot's PATCH echoes back the\n// record it just accepted, so comparing a write against its own echo proves the request\n// was well-formed and nothing else: precisely the \"an accepted response is not evidence\"\n// failure Phase 28 D-14 exists to prevent.\n//\n// It is null on the dry-run branch and on every non-writing outcome, and `verified` is\n// null wherever `verified_properties` is. A WRITTEN decision that arrives with\n// `verified_properties` null is a FAILURE for the client to report, never a success to\n// assume \u2014 which is why nothing here ever defaults `verified` to true. The client\n// re-derives the comparison itself; `verified` is a convenience, never the authority.\nconst d = $('Build Review Decision').first().json;\nconst wouldWrite = d.would_write || {};\n\nlet verified_properties = null;\nlet verified = null;\n\nif (d.dry_run !== true) {\n  const first = $input.first();\n  const env = (first && first.json) || {};\n  const rows = Array.isArray(env.results) ? env.results : (env.properties ? [env] : []);\n  const props = rows.length ? (rows[0].properties || {}) : null;\n  if (props) {\n    verified_properties = {};\n    for (const k of Object.keys(wouldWrite)) {\n      verified_properties[k] = props[k] === undefined ? null : props[k];\n    }\n    // HubSpot stores and returns every property as a string, so compare stringwise: a\n    // boolean or numeric intent must not read as a mismatch against its own stored form.\n    verified = Object.keys(wouldWrite).every(\n      (k) => String(verified_properties[k]) === String(wouldWrite[k]));\n  }\n}\n\nreturn [{ json: {\n  outcome: d.outcome,\n  message: d.message,\n  would_write: wouldWrite,\n  verified_properties,\n  verified,\n}}];\n"
+      },
+      "id": "c00100000-0000-4000-8000-000000000000",
+      "name": "Build Review Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {}
+      },
+      "id": "rw00110000-0000-4000-8000-000000000000",
+      "name": "Respond Review Decision",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        2420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## LV Review Decision \u2014 CLOUD (Phase 30 Plan 02, D-08e/D-19)\n`hubspot/review/decision`: ONE operator review decision, synchronously. The 15-minute `Review Trigger` loop in \"LV Scheduled Maintenance (Cloud)\" is untouched and stays as the backstop \u2014 this is a second path, not a replacement.\n\n**The caller cannot say what to write.** Only `object_type`, `record_id`, `decision`, `reason`, `reviewed_by` and `dry_run` are read; the patch is always computed from the record's own refetched state. `dry_run` defaults to TRUE when absent or malformed.\n\n**A rejection writes exactly one property** \u2014 `lv_enrichment_review_reason` \u2014 and never clears a review flag, so the record stays in the queue with a recorded decision (D-10 / REVIEW-05).\n\n**`Review Verify Fetch` is an INDEPENDENT refetch**, not HubSpot's PATCH echo. Comparing a write against its own echo proves only that the request was well-formed (Phase 28 D-14). Both branches return the same five keys: `{outcome, message, would_write, verified_properties, verified}`, with the last two `null` on the dry-run branch and on every non-writing outcome. A written decision whose `verified_properties` is null is a FAILURE, never a success.\n\n**Ships inactive and disarmed.** The single write node sits behind `Review Decision Update Write Gate`, which calls `_writeSafetyAllows(\"review\", ...)` \u2014 authorised by `ALLOW_HUBSPOT_REVIEW_WRITES` plus a non-empty `TEST_RECORD_*` allowlist, and by NEITHER dispatch constant (D-02). An empty allowlist denies every row.",
+        "height": 460,
+        "width": 540
+      },
+      "id": "s00120000-0000-4000-8000-000000000000",
+      "name": "Sticky Note 1",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        220,
+        720
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Drops any row the allowlist does not permit. An empty allowlist denies all.\nreturn $input.all().filter((it) => _writeSafetyAllows(\n  'review',\n  it.json.hs_object_id || (it.json.existingRecord && it.json.existingRecord.hs_object_id) || null,\n  (it.json.identity_keys && it.json.identity_keys.domain) || it.json.domain || null,\n));\n"
+      },
+      "id": "c00130000-0000-4000-8000-000000000000",
+      "name": "Review Decision Update Write Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1610,
+        460
+      ]
+    }
+  ],
+  "connections": {
+    "Review Decision Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Review Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Review Decision": {
+      "main": [
+        [
+          {
+            "node": "Review Fetch By Id",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Fetch By Id": {
+      "main": [
+        [
+          {
+            "node": "Review Extract Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Extract Record": {
+      "main": [
+        [
+          {
+            "node": "Build Review Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Review Decision": {
+      "main": [
+        [
+          {
+            "node": "Review IF Dry Run",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review IF Dry Run": {
+      "main": [
+        [
+          {
+            "node": "Build Review Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Review Decision Update Write Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Decision Update": {
+      "main": [
+        [
+          {
+            "node": "Review Verify Fetch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Verify Fetch": {
+      "main": [
+        [
+          {
+            "node": "Build Review Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Review Response": {
+      "main": [
+        [
+          {
+            "node": "Respond Review Decision",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Decision Update Write Gate": {
+      "main": [
+        [
+          {
+            "node": "Review Decision Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {},
+  "active": false
+}

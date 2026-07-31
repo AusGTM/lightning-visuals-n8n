@@ -20,6 +20,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Sequence
 
+import yaml
+
 ROOT = Path(__file__).resolve().parent.parent
 CODE = ROOT / "n8n" / "code"
 
@@ -5318,6 +5320,330 @@ def build_scheduled_maintenance_cloud():
     }
 
 
+# =============================================================================
+# REVIEW DECISION workflow (Phase 30 Plan 02) — `hubspot/review/decision`.
+#
+# The SYNCHRONOUS counterpart to the 15-minute review loop above, which stays exactly as
+# it is as a backstop (D-08e). That loop cannot satisfy Phase 28's confirm-then-verify
+# pattern: there is nothing to read back for up to 15 minutes. This endpoint takes one
+# operator decision, computes the exact property write, and either shows it (dry run) or
+# performs it and reads it back with an INDEPENDENT refetch.
+#
+# Its own file, not a branch bolted onto an existing workflow (D-20 / 28 D-14): a
+# responder sitting on a shared branch can fire on whichever branch arrives first and
+# corrupt another lane's response.
+# =============================================================================
+
+# The compare-and-set baseline 30-03's approve path needs is "every field reviewApply can
+# promote" = Object.keys(DEFAULT_COMPANY_POLICY), whose own source of truth is
+# config/field_policy.yaml's `companies` block (mergeCompanies.js:26), pinned by
+# tests/test_field_policy_conformance.py. DERIVED, never re-typed: a policy field added
+# later and not refetched here would come back `undefined` and read to reviewApply as a
+# manual edit, silently turning every such decision stale.
+_COMPANY_POLICY_FIELDS = tuple(sorted(
+    yaml.safe_load((ROOT / "config" / "field_policy.yaml").read_text())["companies"]))
+
+# The `lv_`-prefixed review family (config/hubspot_properties.yaml, D-08c) plus identity.
+# `domain` is not decoration: the write gate reads it for the allowlist check, so a lane
+# that does not FETCH it can never be allowed by TEST_RECORD_DOMAINS (BUG 24's exact
+# shape, on the sibling review lane). Both HubSpot searches in this workflow request the
+# same set, so `verified_properties` can always cover every key `would_write` may carry.
+REVIEW_DECISION_PROPERTIES_CSV = ",".join(dict.fromkeys(
+    ("hs_object_id", "name", "domain",
+     "lv_enrichment_needs_review", "lv_icp_needs_review",
+     "lv_enrichment_review_reason", "lv_enrichment_review_candidate_json",
+     "lv_enrichment_review_approved", "lv_enrichment_reviewed_by",
+     "lv_enrichment_reviewed_at", "lv_enrichment_provenance")
+    + _COMPANY_POLICY_FIELDS))
+
+REVIEW_PARSE_DECISION = r"""// Parse Review Decision — the ONLY place the request body is read (T-30-05).
+// SIX keys are accepted and nothing else: object_type, record_id, decision, reason,
+// reviewed_by, dry_run. No field name, no value, no patch: the caller cannot tell this
+// endpoint WHAT to write, only which record and which decision word. Any other key in the
+// body is IGNORED, never merged — an injected `properties`/`field`/`value` has no path
+// into the patch, which is always computed from the record's own refetched state.
+//
+// dry_run defaults to TRUE when absent or not a boolean (D-03): the fail-safe direction
+// is "show, do not write", so a malformed or truncated request previews rather than writes.
+const item = $input.first();
+const raw = (item && item.json) || {};
+// n8n's Webhook node nests the request under `body`; a directly-seeded item (tests, or an
+// Execute Workflow call) carries the fields at the top level.
+const body = (raw.body && typeof raw.body === "object" && !Array.isArray(raw.body)) ? raw.body : raw;
+
+// Digits-only, coerced to a string. Anything else is null, which fails the fetch closed
+// and returns "record not found" rather than searching on operator-supplied text.
+const rawId = (typeof body.record_id === "string" || typeof body.record_id === "number")
+  ? String(body.record_id).trim() : "";
+const record_id = /^[0-9]+$/.test(rawId) ? rawId : null;
+
+return [{ json: {
+  object_type: body.object_type === "contacts" ? "contacts" : "companies",
+  record_id,
+  decision: typeof body.decision === "string" ? body.decision : null,
+  // Passed through UNCOERCED so a wrong-typed reason is refused downstream rather than
+  // silently becoming an empty one; absent reads as empty (D-09).
+  reason: body.reason === undefined ? "" : body.reason,
+  reviewed_by: typeof body.reviewed_by === "string" ? body.reviewed_by : null,
+  dry_run: body.dry_run === false ? false : true,
+}}];
+"""
+
+REVIEW_EXTRACT_RECORD = r"""// Review Extract Record — ENRICH_EXTRACT_SEARCH_ROWS's envelope handling plus the one
+// thing a SYNCHRONOUS lane needs that the scheduled lanes do not: a zero-hit search must
+// still emit exactly ONE item. On a scheduled branch zero rows means "nothing to do" and
+// the branch simply ends; here it would mean nothing ever reaches
+// `Respond Review Decision` and the caller waits out a Cloudflare timeout instead of
+// being told the record was not found.
+const item = $input.first();
+const res = (item && item.json) || {};
+const rows = Array.isArray(res.results) ? res.results : (res.properties ? [res] : []);
+if (!rows.length) return [{ json: { hs_object_id: null, record_found: false } }];
+const r = rows[0];
+return [{ json: { ...(r.properties || {}), hs_object_id: r.id, record_found: true } }];
+"""
+
+# mergeCompanies + reviewApply are inlined but UNUSED on this plan's branches: 30-03's
+# approve path calls reviewApply() from this same node (D-08d — reuse it, never fork it)
+# and reviewApply requires DEFAULT_COMPANY_POLICY from mergeCompanies. Inlining them now
+# makes that a wrapper edit rather than a node rebuild.
+REVIEW_BUILD_DECISION = inline(
+    "taxonomy.generated.js", "mergeCompanies.js", "reviewApply.js", "reviewDecision.js") + r"""
+
+// --- n8n wrapper: Build Review Decision ---
+const parsed = $('Parse Review Decision').first().json;
+const first = $input.first();
+const row = (first && first.json) || {};
+
+let result;
+if (parsed.object_type !== "companies") {
+  // Companies only in this plan; contacts routing lands in 30-03. The fetch above already
+  // ran against companies, which is a harmless read — no write can follow a refusal.
+  result = { properties: {}, outcome: "refused",
+             message: "only company records are served by this endpoint yet" };
+} else {
+  result = buildReviewDecision({
+    decision: parsed.decision,
+    reason: parsed.reason,
+    reviewedBy: parsed.reviewed_by,
+    row,
+    nowIso: new Date().toISOString(),
+  });
+}
+
+const properties = result.properties || {};
+const hasWrite = Object.keys(properties).length > 0;
+
+// BUG 12/21/25 row-carry family: SPREAD the refetched row rather than constructing a
+// fresh object. `domain` lives on it and the write gate reads it for the allowlist check
+// — a gate reading a field its lane does not emit has already cost this repo two armed
+// windows. `properties`/`hs_object_id` are assigned after the spread so they still win.
+//
+// `dry_run` here is the ROUTING boolean `Review IF Dry Run` switches on, not an echo of
+// the request: it is the caller's dry_run OR "there is no write to perform". A refused /
+// not_flagged / unsupported outcome therefore reaches the response WITHOUT touching the
+// write gate, the PATCH, or the verify refetch — so its verified_properties is null.
+return [{ json: { ...row,
+  hs_object_id: row.hs_object_id,
+  properties,
+  would_write: { ...properties },
+  outcome: result.outcome,
+  message: result.message,
+  dry_run: !(parsed.dry_run === false && hasWrite),
+}}];
+"""
+
+REVIEW_BUILD_RESPONSE = r"""// Build Review Response — the SINGLE node that shapes the response body. BOTH branches
+// route through it, so the client sees one contract regardless of path (D-19):
+//
+//   { outcome, message, would_write, verified_properties, verified }
+//
+// `verified_properties` holds the INDEPENDENTLY REFETCHED record's values for exactly the
+// `would_write` keys, read from `Review Verify Fetch` — a second HubSpot search issued
+// AFTER the PATCH, never the PATCH's own response body. HubSpot's PATCH echoes back the
+// record it just accepted, so comparing a write against its own echo proves the request
+// was well-formed and nothing else: precisely the "an accepted response is not evidence"
+// failure Phase 28 D-14 exists to prevent.
+//
+// It is null on the dry-run branch and on every non-writing outcome, and `verified` is
+// null wherever `verified_properties` is. A WRITTEN decision that arrives with
+// `verified_properties` null is a FAILURE for the client to report, never a success to
+// assume — which is why nothing here ever defaults `verified` to true. The client
+// re-derives the comparison itself; `verified` is a convenience, never the authority.
+const d = $('Build Review Decision').first().json;
+const wouldWrite = d.would_write || {};
+
+let verified_properties = null;
+let verified = null;
+
+if (d.dry_run !== true) {
+  const first = $input.first();
+  const env = (first && first.json) || {};
+  const rows = Array.isArray(env.results) ? env.results : (env.properties ? [env] : []);
+  const props = rows.length ? (rows[0].properties || {}) : null;
+  if (props) {
+    verified_properties = {};
+    for (const k of Object.keys(wouldWrite)) {
+      verified_properties[k] = props[k] === undefined ? null : props[k];
+    }
+    // HubSpot stores and returns every property as a string, so compare stringwise: a
+    // boolean or numeric intent must not read as a mismatch against its own stored form.
+    verified = Object.keys(wouldWrite).every(
+      (k) => String(verified_properties[k]) === String(wouldWrite[k]));
+  }
+}
+
+return [{ json: {
+  outcome: d.outcome,
+  message: d.message,
+  would_write: wouldWrite,
+  verified_properties,
+  verified,
+}}];
+"""
+
+
+def build_review_decision_cloud():
+    """Phase 30 Plan 02 — `hubspot/review/decision`, one operator decision end to end.
+
+    Webhook (headerAuth, responseNode) -> Parse Review Decision -> Review Fetch By Id ->
+    Review Extract Record -> Build Review Decision -> Review IF Dry Run
+      true  -> Build Review Response
+      false -> Review Decision Update Write Gate -> Review Decision Update
+               -> Review Verify Fetch -> Build Review Response
+    -> Respond Review Decision.
+
+    Companies only; contacts and the approve path land in 30-03. The single write node is
+    gated on the `review` action, so it is authorised by ALLOW_HUBSPOT_REVIEW_WRITES plus
+    the shared TEST_RECORD_* allowlist and by NEITHER dispatch constant (D-02). Committed
+    disarmed and inactive.
+    """
+    nodes = []
+    y = 300
+    x = 220
+
+    # Native Header Auth on the trigger itself — same mechanism and same provisioned
+    # credential ("LV Enrichment Webhook") as the enrichment and status triggers, so one
+    # operator secret works against all three endpoints. No Code node ever reads it.
+    nodes.append({
+        "parameters": {"httpMethod": "POST", "path": "hubspot/review/decision",
+                       "responseMode": "responseNode", "authentication": "headerAuth",
+                       "options": {}},
+        "id": nid("w"), "name": "Review Decision Webhook",
+        "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [x, y],
+    })
+
+    x += 220
+    nodes.append(code_node("Parse Review Decision", REVIEW_PARSE_DECISION, x, y))
+
+    # Read by NODE NAME, never bare $json: this filter is evaluated on the item the parse
+    # node emitted, and the verify fetch below sits downstream of an HTTP response that
+    # has already replaced $json.
+    record_id_expr = "={{ $('Parse Review Decision').first().json.record_id }}"
+
+    x += 220
+    nodes.append(_hs_http_search_node(
+        "Review Fetch By Id", "company", x, y,
+        filter_groups=[[{"propertyName": "hs_object_id", "operator": "EQ",
+                         "value": record_id_expr}]],
+        properties_csv=REVIEW_DECISION_PROPERTIES_CSV, limit=1))
+
+    x += 220
+    nodes.append(code_node("Review Extract Record", REVIEW_EXTRACT_RECORD, x, y))
+
+    x += 220
+    nodes.append(code_node("Build Review Decision", REVIEW_BUILD_DECISION, x, y))
+
+    x += 220
+    nodes.append(_if_bool_node("Review IF Dry Run", "dry_run", x, y))
+
+    # Write branch, one row lower. `splice_write_gates` inserts the gate 150px left of the
+    # PATCH node and re-points the IF's false output at it.
+    wx, wy = x + 440, y + 160
+    nodes.append(_hs_http_patch_node("Review Decision Update", "companies", wx, wy))
+
+    # THE node that makes read-back verification real (D-19, Phase 28 D-14): a second,
+    # independent read of the record after the PATCH lands, with the same hs_object_id
+    # filter and the same property set as the pre-write fetch. It sits on the write branch
+    # ONLY, so a dry run never pays for it.
+    nodes.append(_hs_http_search_node(
+        "Review Verify Fetch", "company", wx + 220, wy,
+        filter_groups=[[{"propertyName": "hs_object_id", "operator": "EQ",
+                         "value": record_id_expr}]],
+        properties_csv=REVIEW_DECISION_PROPERTIES_CSV, limit=1))
+
+    rx = wx + 440
+    nodes.append(code_node("Build Review Response", REVIEW_BUILD_RESPONSE, rx, y))
+
+    # firstIncomingItem, not allIncomingItems: exactly one decision is adjudicated per
+    # request, so the client receives the contract object itself rather than a
+    # one-element array it would have to unwrap.
+    nodes.append({
+        "parameters": {"respondWith": "firstIncomingItem", "options": {}},
+        "id": nid("rw"), "name": "Respond Review Decision",
+        "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.1,
+        "position": [rx + 220, y],
+    })
+
+    conns = chain(["Review Decision Webhook", "Parse Review Decision", "Review Fetch By Id",
+                   "Review Extract Record", "Build Review Decision", "Review IF Dry Run"])
+    conns["Review IF Dry Run"] = {"main": [
+        # true: nothing to write (dry run, or a refused/not_flagged/unsupported outcome)
+        # -> straight to the response, never near the gate or the verify refetch.
+        [{"node": "Build Review Response", "type": "main", "index": 0}],
+        [{"node": "Review Decision Update", "type": "main", "index": 0}],   # false: write
+    ]}
+    conns.update(chain(["Review Decision Update", "Review Verify Fetch",
+                        "Build Review Response", "Respond Review Decision"]))
+
+    nodes.append({
+        "parameters": {"content": (
+            "## LV Review Decision — CLOUD (Phase 30 Plan 02, D-08e/D-19)\n"
+            "`hubspot/review/decision`: ONE operator review decision, synchronously. The "
+            "15-minute `Review Trigger` loop in \"LV Scheduled Maintenance (Cloud)\" is "
+            "untouched and stays as the backstop — this is a second path, not a "
+            "replacement.\n\n"
+            "**The caller cannot say what to write.** Only `object_type`, `record_id`, "
+            "`decision`, `reason`, `reviewed_by` and `dry_run` are read; the patch is "
+            "always computed from the record's own refetched state. `dry_run` defaults to "
+            "TRUE when absent or malformed.\n\n"
+            "**A rejection writes exactly one property** — `lv_enrichment_review_reason` "
+            "— and never clears a review flag, so the record stays in the queue with a "
+            "recorded decision (D-10 / REVIEW-05).\n\n"
+            "**`Review Verify Fetch` is an INDEPENDENT refetch**, not HubSpot's PATCH "
+            "echo. Comparing a write against its own echo proves only that the request "
+            "was well-formed (Phase 28 D-14). Both branches return the same five keys: "
+            "`{outcome, message, would_write, verified_properties, verified}`, with the "
+            "last two `null` on the dry-run branch and on every non-writing outcome. A "
+            "written decision whose `verified_properties` is null is a FAILURE, never a "
+            "success.\n\n"
+            "**Ships inactive and disarmed.** The single write node sits behind "
+            "`Review Decision Update Write Gate`, which calls `_writeSafetyAllows("
+            "\"review\", ...)` — authorised by `ALLOW_HUBSPOT_REVIEW_WRITES` plus a "
+            "non-empty `TEST_RECORD_*` allowlist, and by NEITHER dispatch constant "
+            "(D-02). An empty allowlist denies every row."
+        ), "height": 460, "width": 540},
+        "id": nid("s"), "name": "Sticky Note 1",
+        "type": "n8n-nodes-base.stickyNote", "typeVersion": 1,
+        "position": [220, y + 420],
+    })
+
+    # `review`, the action 30-01 added as a BRANCH inside the shared _writeSafetyAllows —
+    # never a second gate function.
+    splice_write_gates(nodes, conns, {"Review Decision Update": "review"})
+
+    return {
+        "id": "LVReviewDecisionCloud01",
+        "name": "LV Review Decision (Cloud)",
+        "nodes": nodes,
+        "connections": conns,
+        "settings": {},
+        # Same explicit intent marker every other committed Cloud workflow carries; the
+        # functional guarantee is deploy_n8n_workflows.py never POSTing to /activate.
+        "active": False,
+    }
+
+
 # ---- write ------------------------------------------------------------------
 
 # n8n's HubSpot node picks its credential TYPE from its own `authentication` parameter.
@@ -5398,6 +5724,11 @@ def main():
     status_cloud = ROOT / "n8n" / "wf_backend_status_cloud.json"
     status_cloud.write_text(json.dumps(_normalize_hubspot_auth(build_backend_status_cloud()), indent=2) + "\n")
     print(f"wrote {status_cloud.relative_to(ROOT)}")
+
+    _idc[0] = 0
+    review_cloud = ROOT / "n8n" / "wf_review_decision_cloud.json"
+    review_cloud.write_text(json.dumps(_normalize_hubspot_auth(build_review_decision_cloud()), indent=2) + "\n")
+    print(f"wrote {review_cloud.relative_to(ROOT)}")
 
 
 if __name__ == "__main__":

@@ -24,6 +24,8 @@ ACTIVE = [
     "wf_enrichment_cloud.json",
     "wf_enrichment_local.json",
     "wf_enrichment_local_live.json",
+    # Phase 30 Plan 02 — the synchronous review-decision endpoint.
+    "wf_review_decision_cloud.json",
     "wf_scheduled_maintenance_cloud.json",
 ]
 
