@@ -32,6 +32,9 @@ Not in scope: acting on what the sweep finds. Notices point at controls Phase 28
 - **D-02:** This makes **NOTICE-05 structural rather than promised**: the sweep calls only read
   endpoints, so it *cannot* burn credits, enable writes, or dispatch. The plan must keep it that
   way — the sweep must have no code path to a mutation or a dispatch, not merely avoid calling one.
+  — *Qualified by D-13 and D-19:* "read endpoints" includes exactly one bodyless POST (the n8n
+  status webhook, allowlisted by name), and the no-credit half is mediated by that endpoint's
+  behaviour rather than being structural on the client. The no-write half **is** structural.
 - **D-03:** The notice lands **where the operator already is**, rather than in a separate channel
   they would have to watch. — **Reversibility:** costly — moving to an n8n-side or cron-hosted
   sweep later means rebuilding both the scheduling and the delivery path.
@@ -103,8 +106,10 @@ Not in scope: acting on what the sweep finds. Notices point at controls Phase 28
   Phases 28 and 30 have not written yet**, instead of silently permitting them. The same allowlist
   is extended to the shipped skill body — a clean module graph invoked by a wide skill would pass a
   module-only guard while still violating the requirement.
-- **D-11 (an accepted, unmitigated gap — T-29-19):** **a sweep that stops running is
-  indistinguishable from a healthy backend.** Silence means healthy (D-08), so a dead sweep and a
+- **D-11 (an accepted, unmitigated gap — T-29-19):** **a sweep that stops *firing* is
+  indistinguishable from a healthy backend.** *(Scoped by D-15: a sweep that fires and cannot do its
+  job is a different, observable problem, and it is mitigated rather than accepted. Do not merge the
+  two.)* Silence means healthy (D-08), so a dead sweep and a
   well backend produce identical operator experience. D-08 locks the notice list to exactly five
   conditions, so a sixth (a heartbeat or dead-man's switch) was **not** smuggled in during
   planning. It is recorded as an accepted threat for a future requirement. **This is a real hole in
@@ -114,8 +119,131 @@ Not in scope: acting on what the sweep finds. Notices point at controls Phase 28
   — plus a step verifying no write and no credit consumption occurred. That verification is the
   observable counterpart to the static import guard.
 
+### Corrections from the 2026-07-31 plan check (D-13 … D-21)
+
+**These are decisions, not notes.** Each was found by checking a plan's instruction against the
+actual tree, and each was wrong in a way an executor would have had to resolve on their own — which
+is how a safety property gets quietly weakened. They are recorded here rather than only in the plans
+so they are not re-litigated. **Numbering continues from D-12; nothing above is renumbered**, since
+every plan cites these IDs.
+
+- **D-13 (the read-only guard allowlists exactly ONE non-GET call, by name).** 29-03 originally
+  required that no module in the sweep's import closure reference a non-GET HTTP verb. That cannot
+  pass: **Phase 27's read surface is half POST.** `backend_status.py:33` is
+  `def fetch_backend_status(config, transport=requests.post)` ("One POST"), `status.py:186-187` is
+  `full_report(..., post_transport=requests.post, ...)`, `status.py:19` imports `backend_status`, and
+  `render_text.py:28` imports `status`. 29-05 **requires** what that POST returns — provider balances
+  and review-backlog counts — so `requests.post` is necessarily in the closure. The executor's only
+  exits would have been to weaken the assertion (silently degrading the phase's headline safety
+  property) or hand-roll a second reader (which 29-03 forbids). **Decision:** the assertion
+  allowlists `backend_status.fetch_backend_status`'s POST to `webhook/hubspot/backend-status` **by
+  name** and fails on every other non-GET verb. A POST is a read here because the endpoint is an n8n
+  webhook (webhooks answer on POST), the request carries nothing — `backend_status.py:46` sends
+  `json={}` — and its chain has no write node, proven by
+  `tests/test_backend_status_wiring.py::test_endpoint_chain_contains_no_write_node`. **This follows a
+  precedent already set in this repo:** `tests/test_retry_reuses_dispatch.py` allowlists the same
+  function in `_EXPECTED_SEND_SHAPED` and keeps it honest with two compensating tests — no
+  `files=`/`data=`, and the `json=` body must remain the empty dict literal, asserted by AST. Mirror
+  that shape, do not invent a second convention, and remove the exemption rather than widening it if
+  that POST ever gains a body.
+
+- **D-14 (`is_stuck()` does not exist; use the shipped tri-state).** Four places in 29-03 named
+  "Phase 27's `is_stuck()`" and instructed verbatim reuse, including a precondition telling the
+  executor to **halt** if it were absent — which would have fired wrongly against a tree that is in
+  fact ready. Phase 27 shipped instead: `n8n_read.py:107` `stuck_threshold_minutes(config)` (config
+  key `stuck_execution_minutes`, already in `config/operator.local.example.json`), and `stuck`
+  computed inline at `n8n_read.py:150-169`, surfaced through `last_execution` and
+  `status.describe_workflow` as `last_run["stuck"]` / `last_run["stuck_threshold_minutes"]`. The
+  tri-state is good news, not an obstacle: 29-03's condition contract already asked for a
+  "boolean-or-unknown outcome". **Decision:** consume the shipped verdict, preserve all three states,
+  and never flatten `None` to `False` — per Phase 27 D-07b(i) `None` means *in flight with an
+  unreadable start time*, which fires its own "age unreadable" notice.
+
+- **D-15 (a sweep that cannot run must say so; silence is reserved for health).**
+  `status.py:189` and `:206` call `config_gate.require_capability(config, "status")`, which **raises
+  `ConfigError` before any transport is constructed**. No Phase 29 plan said what `sweep_entry` does
+  with that. In a scheduled routine with nobody watching, a raised exception produces **nothing** —
+  and D-08 defines nothing as healthy. A misconfigured sweep would therefore be indistinguishable
+  from a well backend: a live hole in exactly the NOTICE-03/04 pair. **Two decisions:**
+  (i) **`sweep` gets its own `CAPABILITY_KEYS` row**, requiring `n8n_url`, `n8n_api_key` **and**
+  `webhook_secret`. `config_gate.py:26-30` records that `control` was split from `status` on
+  precisely this reasoning (Phase 28 D-29) — a config that may read is not thereby one that may
+  mutate, and withholding a row is how "read-only plugin" stays expressible. The sweep earns one for
+  the mirror-image reason: it is the only capability that runs **unattended**, so an admin must be
+  able to decline it without disabling the operator's interactive status check. It needs all three
+  keys because, unlike `status` (which degrades to the half it can read), a sweep that reads only
+  half the conditions stays silent about the other half.
+  (ii) **`sweep_entry` catches `ConfigError` and emits an admin-attributed notice** naming the
+  missing keys — it never raises and never returns silence. The same rule applies one layer down: a
+  gather in which every read came back unavailable is also not silence. Zero fired conditions counts
+  as healthy only when the reads that would have fired them succeeded.
+  **This is NOT T-29-19.** T-29-19 is a sweep that stops *firing*, unobservable from inside and
+  correctly deferred to v0.7. This is a sweep that *does* fire and cannot do its job, which it can
+  observe and report. Do not merge them: doing so either promotes deferred scope or excuses a live
+  hole. Tracked as T-29-24, disposition **mitigate**. Note this adds no heartbeat — the notice fires
+  only on failure, so silence-when-healthy is untouched.
+
+- **D-16 (write-safety is a PAIR of flags, and `disagreement` is the signal, not noise).** 29-05
+  described the stuck-armed condition as reading "the write-safety flag", singular.
+  `status.py:23` `WRITE_SAFETY_FLAGS = ("ALLOW_HUBSPOT_RECORD_WRITES", "ALLOW_HUBSPOT_CREATE")` is a
+  pair declared over **different node subsets** (8 and 9), and `n8n_read.read_write_safety(body,
+  flag)` takes one flag at a time and returns `{value, nodes, disagreement}`. **Decision:** check
+  both flags, and treat a truthy `disagreement` as **firing** rather than as unknown. A partially
+  armed workflow is precisely the residue a crash between arm and disarm leaves — the case this
+  backstop exists for (Phase 28 D-03) — so swallowing it as "unknown, therefore quiet" would blind
+  the backstop to its own headline scenario.
+
+- **D-17 (detecting a swallowed maintenance failure needs `runData`, which costs an extra GET).**
+  D-08b's blind spot cannot be detected from the collection read: `recent_executions()` /
+  `last_execution()` objects carry `id`, `status`, `startedAt`, `stoppedAt` and **no run data**, so a
+  check written against them could never fire. **Decision:** use `n8n_read.get_execution` (which
+  fetches with `includeData=true`) plus `execution_errors.harvest_errors(execution)`
+  (`execution_errors.py:81`, already used this way at `:148`), which returns
+  `{available, reason, findings}` with every message already translated and attributed. The extra
+  per-execution GET is I/O, so it lives in `sweep_read.py`'s gather — widen that gather's documented
+  scope rather than reaching for a client from a condition module — and stays gated per
+  `get_execution`'s own T-27-18 rule: the maintenance workflow's most recent execution(s) only, never
+  every execution in a page. Unbounded, it would turn a cheap sweep into an expensive one on a
+  cadence.
+
+- **D-18 (the attribution helper exists; name it, do not hedge).** 29-03 and 29-05 both said to
+  "reuse Phase 27's attribution helper **if it exposes one**" and otherwise mirror its rules. It
+  exposes one: `error_table.translate(text)` → `{matched, cause, sentence, who_can_fix,
+  is_interpretation, raw}`. It imports only `re`, and D-05's guardrail lives **inside** it — an
+  unmatched cause attributes to `admin` unconditionally, so a caller that forgets the rule cannot
+  produce a wrong "you can fix this". **Decision:** import it. The hedge invited a second attribution
+  convention, and the failure mode of two conventions is the operator being told two different things
+  about the same error on two different surfaces. The cheapest guarantee that two surfaces agree is
+  that they call the same function.
+
+- **D-19 (the sweep's no-credit property is backend-mediated, not structural — say so in the
+  cadence).** Every sweep fire POSTs `hubspot/backend-status`, whose docstring records that it
+  "probes all three providers unconditionally" — it takes no request body, so it cannot know which
+  providers a caller cares about. These are **balance** endpoints, not match or enrich ones, so no
+  enrichment credits are consumed and D-02 holds. But it holds because of *what the backend endpoint
+  does*, not structurally on the client the way the import-graph guard is. **Decision:** 29-06's
+  cadence note states this rather than implying the sweep is free at any frequency, and the default
+  cadence is expressed in hours, not minutes. If a provider ever meters balance checks, cadence is
+  the only dial that limits the cost.
+
+- **D-20 (the timing measurement runs through the dotenv wrapper, verbatim).** A bare
+  `python scripts/...` from a fresh shell **silently sees no credentials** (HANDOFF §6) — it does not
+  error, it returns an empty result indistinguishable from "no executions to measure". The
+  consequence is a *provisional* bound recorded when a measured one was available, and D-06 forbids
+  guessing. **Decision:** 29-02 Task 3 carries the wrapper verbatim
+  (`.venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/enrichment_cost_ledger.py', run_name='__main__')" durations`), and "no credentials"
+  is a finding only once observed *through* it.
+
+- **D-21 (the maintenance search-node names, verbatim).** 29-RESEARCH.md abbreviates them, and the
+  abbreviations match no key in `runData`. The five, as they appear in the deployed JSON:
+  `SJ-1 Search (input-gap scan)`, `SJ-2 Search (stale refresh)`, `SJ-3 Search (requested poller)`,
+  `Dedupe Search (candidate contacts)`, `Review Search (approved=true)`. All five carry
+  `onError: continueRegularOutput`, so **Pitfall 1's substance is unchanged** — only the spelling was
+  wrong. Fixtures keyed on the abbreviations would pass while the live code found nothing.
+
 ### Claude's Discretion
-- Sweep cadence default and whether it is admin-configurable.
+- Sweep cadence default and whether it is admin-configurable — bounded by D-19: state the
+  all-three-providers probe per fire, and prefer hours over minutes.
 - Notification wording and grouping when several conditions fire at once.
 - Review-backlog threshold default.
 - Backoff schedule within the in-session watch.
