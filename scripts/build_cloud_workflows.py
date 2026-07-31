@@ -4544,6 +4544,18 @@ return [{ json: { ...body, balances } }];
 """
 
 
+# Awaiting-review ORs the two independent reasons a record needs a human. MODULE level,
+# not local to one builder: Phase 27's status surface COUNTS the queue with it and Phase
+# 30's queue read LISTS the queue with it. Two copies would let the count and the list
+# disagree about what "flagged" means — the operator would be told there are N to work and
+# handed a different set. Same reasoning as 30 D-25, which had to widen `not_flagged`
+# because the decision endpoint's predicate had already drifted from this one.
+AWAITING_REVIEW_GROUPS = [
+    [{"propertyName": "lv_enrichment_needs_review", "operator": "EQ", "value": "true"}],
+    [{"propertyName": "lv_icp_needs_review", "operator": "EQ", "value": "true"}],
+]
+
+
 def build_backend_status_cloud():
     """Phase 25 Plan 02 (D-14) + Phase 27 Plan 01 — `hubspot/backend-status`, full health.
 
@@ -4618,12 +4630,6 @@ def build_backend_status_cloud():
          {"propertyName": "lv_enrichment_status", "operator": "NEQ", "value": "complete"},
          {"propertyName": "lv_enrichment_status", "operator": "NEQ", "value": "needs_review"}],
     ]
-    # Awaiting-review ORs the two independent reasons a record needs a human.
-    AWAITING_REVIEW_GROUPS = [
-        [{"propertyName": "lv_enrichment_needs_review", "operator": "EQ", "value": "true"}],
-        [{"propertyName": "lv_icp_needs_review", "operator": "EQ", "value": "true"}],
-    ]
-
     x += 220
     hs_req_co = _hs_http_search_node(
         "HS Requested Search (Companies)", "company", x, y,
@@ -4811,7 +4817,12 @@ def _hs_search_json_body_expr(filter_groups, properties, limit):
     local-live variant. A filter value that is itself an n8n expression (`={{ ... }}`, e.g.
     reading another node by name) is unwrapped and interpolated as a raw JS expression —
     never re-stringified — so dynamic filters keep working inside the single top-level
-    expression block; a plain value is JSON-encoded as a JS literal."""
+    expression block; a plain value is JSON-encoded as a JS literal.
+
+    `limit` goes through the SAME unwrapping, so a caller-driven page size (30-04's queue
+    read) can read a clamped value from a parse node by name. An int renders identically to
+    the old `str(limit)` form (`json.dumps(100) == "100"`), so every existing call site is
+    byte-unchanged — proven by rebuild-diff, not by this sentence."""
     def render_value(v):
         if isinstance(v, str) and v.startswith("={{") and v.endswith("}}"):
             return v[3:-2].strip()
@@ -4831,7 +4842,7 @@ def _hs_search_json_body_expr(filter_groups, properties, limit):
     props_js = ", ".join(json.dumps(p) for p in properties)
     return (
         "={{ JSON.stringify({ filterGroups: [ " + groups_js + " ], "
-        "properties: [" + props_js + "], limit: " + str(limit) + " }) }}"
+        "properties: [" + props_js + "], limit: " + render_value(limit) + " }) }}"
     )
 
 
@@ -5380,6 +5391,82 @@ REVIEW_CONTACT_PROPERTIES_CSV = ",".join(dict.fromkeys(
     ("hs_object_id", "email", "firstname", "lastname", "jobtitle")
     + _REVIEW_FAMILY + ("lv_contact_enrichment_provenance",)))
 
+# The queue read's COMPANY property set (30-04). Identity + the shared review family + the
+# companies provenance blob + the ICP narrative an operator needs to judge a tier flag.
+# Deliberately NOT REVIEW_DECISION_PROPERTIES_CSV: that set carries every
+# config/field_policy.yaml `companies` key because reviewApply needs a compare-and-set
+# BASELINE. The queue compares nothing — the held candidate JSON already carries each
+# decision's own current and proposed value — so fetching the baseline for up to 100
+# records would be payload nobody reads.
+#
+# The four ICP names are the LIVE ones (config/hubspot_migration/baseline/
+# portal-schema-companies-post.json). `lv_icp_needs_review` is already in _REVIEW_FAMILY.
+REVIEW_QUEUE_PROPERTIES_CSV = ",".join(dict.fromkeys(
+    ("hs_object_id", "name", "domain") + _REVIEW_FAMILY
+    + ("lv_enrichment_provenance", "lv_icp_tier", "lv_icp_fit_score",
+       "lv_icp_score_breakdown", "lv_anti_icp_reason")))
+
+REVIEW_PARSE_QUEUE_REQUEST = r"""// Parse Review Queue Request — the ONLY place this branch reads the request body, and it
+// accepts TWO keys: object_type and limit. No filter, no property list, no record id and
+// no field name is caller-supplied (T-30-17); the search below is fully baked, so the
+// caller can choose WHICH object type's queue and HOW MANY, never WHAT is read.
+//
+// limit is clamped server-side to HubSpot CRM search's own maximum of 100 (T-30-19). A
+// missing, non-numeric, zero or negative value reads as the maximum rather than as zero —
+// a "0" that silently returned an empty page would be indistinguishable from an empty
+// queue, which is the one confusion this endpoint exists to prevent.
+const item = $input.first();
+const raw = (item && item.json) || {};
+// n8n's Webhook node nests the request under `body`; a directly-seeded item (tests, or an
+// Execute Workflow call) carries the fields at the top level.
+const body = (raw.body && typeof raw.body === "object" && !Array.isArray(raw.body)) ? raw.body : raw;
+
+const n = Number(body.limit);
+const limit = Number.isFinite(n) && n >= 1 ? Math.min(Math.floor(n), 100) : 100;
+
+return [{ json: {
+  object_type: body.object_type === "contacts" ? "contacts" : "companies",
+  limit,
+}}];
+"""
+
+REVIEW_QUEUE_ROWS = r"""// Review Queue Rows — the search envelope becomes ONE item carrying every row, never one
+// item per row. Two reasons, both structural:
+//
+//   1. D-22: `rows.map(...)` emits ZERO items on a zero-hit search. On a `responseNode`
+//      webhook that means nothing reaches the responder and the caller waits out the ~100s
+//      Cloudflare ceiling instead of being told the queue is empty. An empty queue is the
+//      NORMAL end state of this phase's work, so this lane meets that case constantly.
+//   2. `Respond Review Queue` is `firstIncomingItem` (D-24), so a per-row emission would
+//      return the FIRST record and silently drop the rest.
+//
+// It parses nothing (D-11). The held candidate JSON and the provenance blob are passed
+// through as the exact strings HubSpot returned; the client parses them, so what the
+// operator sees is what the CRM holds rather than this node's opinion of it.
+//
+// `total` is the search envelope's own count, which is the whole queue — `returned` is
+// this page. A page shorter than the total is therefore visibly a page (REVIEW-01) instead
+// of being mistaken for the end of the backlog.
+//
+// `search_ok` distinguishes an EMPTY queue from a FAILED search. HubSpot search nodes run
+// `onError: continueRegularOutput`, so a 401 or a 429 arrives here as an item with no
+// `results` array — which, treated as an envelope, would render as "0 flagged records" and
+// tell the operator their backlog was clear when it was never read.
+const item = $input.first();
+const res = (item && item.json) || {};
+const search_ok = Array.isArray(res.results);
+const rows = search_ok ? res.results : (res.properties ? [res] : []);
+const total = typeof res.total === "number" ? res.total : rows.length;
+
+return [{ json: {
+  object_type: $('Parse Review Queue Request').first().json.object_type,
+  search_ok: search_ok || Boolean(res.properties),
+  total,
+  returned: rows.length,
+  rows: rows.map((r) => ({ ...(r.properties || {}), hs_object_id: r.id })),
+}}];
+"""
+
 REVIEW_PARSE_DECISION = r"""// Parse Review Decision — the ONLY place the request body is read (T-30-05).
 // SIX keys are accepted and nothing else: object_type, record_id, decision, reason,
 // reviewed_by, dry_run. No field name, no value, no patch: the caller cannot tell this
@@ -5530,8 +5617,9 @@ return [{ json: {
 
 
 def build_review_decision_cloud():
-    """Phase 30 Plans 02+03 — `hubspot/review/decision`, one operator decision end to end,
-    on either object type.
+    """Phase 30 Plans 02+03+04 — the operator's two review endpoints: `hubspot/review/queue`
+    reads the flagged backlog, `hubspot/review/decision` adjudicates one record of it on
+    either object type.
 
     Webhook (headerAuth, responseNode) -> Parse Review Decision -> Review IF Contacts
       true  -> Review Contact Fetch By Id  ┐
@@ -5552,6 +5640,15 @@ def build_review_decision_cloud():
     The 15-minute `Review Trigger` loop in build_scheduled_maintenance_cloud() is
     deliberately untouched and remains the backstop for a record approved outside this
     conversation (D-08e/D-15).
+
+    Plan 04 adds a SECOND, read-only webhook on its own row and its own responder:
+
+      Review Queue Webhook -> Parse Review Queue Request -> Review Queue IF Contacts
+        true  -> Review Queue Contact Search ┐
+        false -> Review Queue Search         ┴-> Review Queue Rows -> Respond Review Queue
+
+    It shares no node with the decision branch — a responder fed by two independent request
+    paths returns one caller the other's body (28 D-14) — and no node on it can write.
     """
     nodes = []
     y = 300
@@ -5678,6 +5775,85 @@ def build_review_decision_cloud():
     conns["Review Contact Verify Fetch"] = {"main": [
         [{"node": "Build Review Response", "type": "main", "index": 0}]]}
 
+    # -- Plan 04: `hubspot/review/queue`, a SECOND webhook on this workflow ------------
+    #
+    # Its own webhook and its own responder, on its own row, sharing NOTHING downstream
+    # with the decision branch: `Respond to Webhook` fires on whichever branch reaches it
+    # first, so a responder with inbound edges from two independent request paths returns
+    # one caller the other caller's body (28 D-14, the same reason 25-02 built the status
+    # endpoint as its own file). Two branches in one workflow is fine; two branches into
+    # one responder is not.
+    #
+    # It lives here rather than as a detail mode on Phase 27's `hubspot/backend-status`
+    # (D-13/D-20): that surface is deliberately COUNT-only and its response shape is a
+    # shipped contract 27-03/27-04/27-05 and the plugin's status.py already read.
+    #
+    # NOT ONE NODE ON THIS BRANCH CAN WRITE. It is two searches, two Code nodes and a
+    # responder; nothing connects it to either PATCH or either write gate, and
+    # tests/n8n/reviewQueueEndpoint.test.mjs walks the graph forward from the webhook to
+    # assert exactly that, so a later miswiring fails a test rather than reaching HubSpot.
+    qy = y - 420
+    qx = 220
+    nodes.append({
+        "parameters": {"httpMethod": "POST", "path": "hubspot/review/queue",
+                       "responseMode": "responseNode", "authentication": "headerAuth",
+                       "options": {}},
+        "id": nid("w"), "name": "Review Queue Webhook",
+        "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [qx, qy],
+    })
+
+    qx += 220
+    nodes.append(code_node("Parse Review Queue Request", REVIEW_PARSE_QUEUE_REQUEST, qx, qy))
+
+    qx += 220
+    nodes.append(_if_bool_expr_node(
+        "Review Queue IF Contacts",
+        "$('Parse Review Queue Request').first().json.object_type === \"contacts\"", qx, qy))
+
+    # Page size is read from the parse node, where it was clamped to 100 — never from the
+    # request body, which this expression never touches.
+    queue_limit_expr = "={{ $('Parse Review Queue Request').first().json.limit }}"
+
+    # AWAITING_REVIEW_GROUPS, the module-level constant Phase 27's status surface COUNTS
+    # with. The list and the count must mean the same thing by construction: an operator
+    # told "7 awaiting review" and handed 5 records has no way to tell which number lied.
+    qx += 220
+    nodes.append(_hs_http_search_node(
+        "Review Queue Search", "company", qx, qy,
+        filter_groups=AWAITING_REVIEW_GROUPS,
+        properties_csv=REVIEW_QUEUE_PROPERTIES_CSV, limit=queue_limit_expr))
+
+    # The contacts set is REVIEW_CONTACT_PROPERTIES_CSV verbatim — identity, the same
+    # review family, and `lv_contact_enrichment_provenance`. A contact carries no `domain`
+    # and no candidate JSON (its only producer is the COMPANIES enrichment lane), so the
+    # client renders contacts from a different shape; sharing the constant is what keeps
+    # the queue and the decision endpoint reading the same contact.
+    nodes.append(_hs_http_search_node(
+        "Review Queue Contact Search", "contact", qx, qy - 160,
+        filter_groups=AWAITING_REVIEW_GROUPS,
+        properties_csv=REVIEW_CONTACT_PROPERTIES_CSV, limit=queue_limit_expr))
+
+    qx += 220
+    nodes.append(code_node("Review Queue Rows", REVIEW_QUEUE_ROWS, qx, qy))
+
+    qx += 220
+    nodes.append({
+        "parameters": {"respondWith": "firstIncomingItem", "options": {}},
+        "id": nid("rw"), "name": "Respond Review Queue",
+        "type": "n8n-nodes-base.respondToWebhook", "typeVersion": 1.1,
+        "position": [qx, qy],
+    })
+
+    conns.update(chain(["Review Queue Webhook", "Parse Review Queue Request",
+                        "Review Queue IF Contacts"]))
+    conns["Review Queue IF Contacts"] = {"main": [
+        [{"node": "Review Queue Contact Search", "type": "main", "index": 0}],  # true
+        [{"node": "Review Queue Search", "type": "main", "index": 0}],          # false
+    ]}
+    conns.update(chain(["Review Queue Search", "Review Queue Rows", "Respond Review Queue"]))
+    conns["Review Queue Contact Search"] = {"main": [
+        [{"node": "Review Queue Rows", "type": "main", "index": 0}]]}
+
     nodes.append({
         "parameters": {"content": (
             "## LV Review Decision — CLOUD (Phase 30 Plan 02, D-08e/D-19)\n"
@@ -5718,6 +5894,42 @@ def build_review_decision_cloud():
         "id": nid("s"), "name": "Sticky Note 1",
         "type": "n8n-nodes-base.stickyNote", "typeVersion": 1,
         "position": [220, y + 420],
+    })
+
+    nodes.append({
+        "parameters": {"content": (
+            "## LV Review Queue — READ ONLY (Phase 30 Plan 04, REVIEW-01)\n"
+            "`hubspot/review/queue`: ONE authenticated call returns the flagged backlog "
+            "with each record's stored conflict detail, so the client never holds a "
+            "HubSpot credential.\n\n"
+            "**Nothing on this branch writes.** Two searches, two Code nodes, one "
+            "responder — no PATCH, no write gate, no edge into the decision branch. "
+            "`tests/n8n/reviewQueueEndpoint.test.mjs` walks the graph forward from the "
+            "webhook and fails if that ever stops being true.\n\n"
+            "**The caller chooses which queue and how big a page, never what is read.** "
+            "Only `object_type` (defaulting to companies) and `limit` (clamped to 100) "
+            "are accepted; the filters and the property list are baked.\n\n"
+            "**It renders what is stored and recomputes nothing** (D-11). The held "
+            "candidate JSON and the provenance blob are returned as the exact strings "
+            "HubSpot holds — the client parses them. Which fields a decision on that "
+            "candidate would actually write is decided by `hubspot/review/decision`, "
+            "which drops `manual_protected` / `review_required` classes; the client reads "
+            "`config/field_policy.yaml` to show that in advance (D-06), because the "
+            "endpoint withholds those fields silently apart from a clause in `message`. "
+            "**That class filter is the DECISION endpoint's, and it does not describe the "
+            "15-minute `Apply Review` backstop, which allowlists by key (D-31, open).**\n\n"
+            "**One item out, always.** The response is an envelope — `{object_type, "
+            "search_ok, total, returned, rows}` — not one item per record: a zero-hit "
+            "search that emitted zero items would reach no responder at all and hang the "
+            "caller until Cloudflare 524s at ~100s (D-22), and an empty queue is this "
+            "phase's normal end state. `total` is the whole backlog and `returned` is this "
+            "page, so a truncated page is never read as an empty queue. `search_ok: false` "
+            "means the search itself failed (nodes run `onError: continueRegularOutput`) — "
+            "report it as a failure, never as an empty queue."
+        ), "height": 640, "width": 540},
+        "id": nid("s"), "name": "Sticky Note 2",
+        "type": "n8n-nodes-base.stickyNote", "typeVersion": 1,
+        "position": [220, qy - 700],
     })
 
     # `review`, the action 30-01 added as a BRANCH inside the shared _writeSafetyAllows —

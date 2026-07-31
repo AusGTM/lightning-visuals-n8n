@@ -320,11 +320,147 @@
     },
     {
       "parameters": {
+        "httpMethod": "POST",
+        "path": "hubspot/review/queue",
+        "responseMode": "responseNode",
+        "authentication": "headerAuth",
+        "options": {}
+      },
+      "id": "w00190000-0000-4000-8000-000000000000",
+      "name": "Review Queue Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        220,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Parse Review Queue Request \u2014 the ONLY place this branch reads the request body, and it\n// accepts TWO keys: object_type and limit. No filter, no property list, no record id and\n// no field name is caller-supplied (T-30-17); the search below is fully baked, so the\n// caller can choose WHICH object type's queue and HOW MANY, never WHAT is read.\n//\n// limit is clamped server-side to HubSpot CRM search's own maximum of 100 (T-30-19). A\n// missing, non-numeric, zero or negative value reads as the maximum rather than as zero \u2014\n// a \"0\" that silently returned an empty page would be indistinguishable from an empty\n// queue, which is the one confusion this endpoint exists to prevent.\nconst item = $input.first();\nconst raw = (item && item.json) || {};\n// n8n's Webhook node nests the request under `body`; a directly-seeded item (tests, or an\n// Execute Workflow call) carries the fields at the top level.\nconst body = (raw.body && typeof raw.body === \"object\" && !Array.isArray(raw.body)) ? raw.body : raw;\n\nconst n = Number(body.limit);\nconst limit = Number.isFinite(n) && n >= 1 ? Math.min(Math.floor(n), 100) : 100;\n\nreturn [{ json: {\n  object_type: body.object_type === \"contacts\" ? \"contacts\" : \"companies\",\n  limit,\n}}];\n"
+      },
+      "id": "c00200000-0000-4000-8000-000000000000",
+      "name": "Parse Review Queue Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "options": {},
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "combinator": "and",
+          "conditions": [
+            {
+              "id": "i00210000-0000-4000-8000-000000000000",
+              "leftValue": "={{ $('Parse Review Queue Request').first().json.object_type === \"contacts\" }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if00220000-0000-4000-8000-000000000000",
+      "name": "Review Queue IF Contacts",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        660,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/companies/search",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"lv_enrichment_needs_review\", operator: \"EQ\", value: \"true\" } ] }, { filters: [ { propertyName: \"lv_icp_needs_review\", operator: \"EQ\", value: \"true\" } ] } ], properties: [\"hs_object_id\", \"name\", \"domain\", \"lv_enrichment_needs_review\", \"lv_icp_needs_review\", \"lv_enrichment_review_reason\", \"lv_enrichment_review_candidate_json\", \"lv_enrichment_review_approved\", \"lv_enrichment_reviewed_by\", \"lv_enrichment_reviewed_at\", \"lv_enrichment_provenance\", \"lv_icp_tier\", \"lv_icp_fit_score\", \"lv_icp_score_breakdown\", \"lv_anti_icp_reason\"], limit: $('Parse Review Queue Request').first().json.limit }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
+      },
+      "id": "h00230000-0000-4000-8000-000000000000",
+      "name": "Review Queue Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        -120
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts/search",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"lv_enrichment_needs_review\", operator: \"EQ\", value: \"true\" } ] }, { filters: [ { propertyName: \"lv_icp_needs_review\", operator: \"EQ\", value: \"true\" } ] } ], properties: [\"hs_object_id\", \"email\", \"firstname\", \"lastname\", \"jobtitle\", \"lv_enrichment_needs_review\", \"lv_icp_needs_review\", \"lv_enrichment_review_reason\", \"lv_enrichment_review_candidate_json\", \"lv_enrichment_review_approved\", \"lv_enrichment_reviewed_by\", \"lv_enrichment_reviewed_at\", \"lv_contact_enrichment_provenance\"], limit: $('Parse Review Queue Request').first().json.limit }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
+      },
+      "id": "h00240000-0000-4000-8000-000000000000",
+      "name": "Review Queue Contact Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        880,
+        -280
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Review Queue Rows \u2014 the search envelope becomes ONE item carrying every row, never one\n// item per row. Two reasons, both structural:\n//\n//   1. D-22: `rows.map(...)` emits ZERO items on a zero-hit search. On a `responseNode`\n//      webhook that means nothing reaches the responder and the caller waits out the ~100s\n//      Cloudflare ceiling instead of being told the queue is empty. An empty queue is the\n//      NORMAL end state of this phase's work, so this lane meets that case constantly.\n//   2. `Respond Review Queue` is `firstIncomingItem` (D-24), so a per-row emission would\n//      return the FIRST record and silently drop the rest.\n//\n// It parses nothing (D-11). The held candidate JSON and the provenance blob are passed\n// through as the exact strings HubSpot returned; the client parses them, so what the\n// operator sees is what the CRM holds rather than this node's opinion of it.\n//\n// `total` is the search envelope's own count, which is the whole queue \u2014 `returned` is\n// this page. A page shorter than the total is therefore visibly a page (REVIEW-01) instead\n// of being mistaken for the end of the backlog.\n//\n// `search_ok` distinguishes an EMPTY queue from a FAILED search. HubSpot search nodes run\n// `onError: continueRegularOutput`, so a 401 or a 429 arrives here as an item with no\n// `results` array \u2014 which, treated as an envelope, would render as \"0 flagged records\" and\n// tell the operator their backlog was clear when it was never read.\nconst item = $input.first();\nconst res = (item && item.json) || {};\nconst search_ok = Array.isArray(res.results);\nconst rows = search_ok ? res.results : (res.properties ? [res] : []);\nconst total = typeof res.total === \"number\" ? res.total : rows.length;\n\nreturn [{ json: {\n  object_type: $('Parse Review Queue Request').first().json.object_type,\n  search_ok: search_ok || Boolean(res.properties),\n  total,\n  returned: rows.length,\n  rows: rows.map((r) => ({ ...(r.properties || {}), hs_object_id: r.id })),\n}}];\n"
+      },
+      "id": "c00250000-0000-4000-8000-000000000000",
+      "name": "Review Queue Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "firstIncomingItem",
+        "options": {}
+      },
+      "id": "rw00260000-0000-4000-8000-000000000000",
+      "name": "Respond Review Queue",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1320,
+        -120
+      ]
+    },
+    {
+      "parameters": {
         "content": "## LV Review Decision \u2014 CLOUD (Phase 30 Plan 02, D-08e/D-19)\n`hubspot/review/decision`: ONE operator review decision, synchronously. The 15-minute `Review Trigger` loop in \"LV Scheduled Maintenance (Cloud)\" is untouched and stays as the backstop \u2014 this is a second path, not a replacement.\n\n**The caller cannot say what to write.** Only `object_type`, `record_id`, `decision`, `reason`, `reviewed_by` and `dry_run` are read; the patch is always computed from the record's own refetched state. `dry_run` defaults to TRUE when absent or malformed.\n\n**A rejection writes exactly one property** \u2014 `lv_enrichment_review_reason` \u2014 and never clears a review flag, so the record stays in the queue with a recorded decision (D-10 / REVIEW-05).\n\n**`Review Verify Fetch` is an INDEPENDENT refetch**, not HubSpot's PATCH echo. Comparing a write against its own echo proves only that the request was well-formed (Phase 28 D-14). Both branches return the same five keys: `{outcome, message, would_write, verified_properties, verified}`, with the last two `null` on the dry-run branch and on every non-writing outcome. A written decision whose `verified_properties` is null is a FAILURE, never a success.\n\n**An approval** applies the record's OWN held candidate through `reviewApply`'s compare-and-set \u2014 a drifted record writes nothing and stays queued \u2014 drops any field whose policy class is `manual_protected` or `review_required`, and stamps a `source: \"human\"` entry per applied field into `lv_enrichment_provenance` (additive: other fields' entries survive).\n\n**Contacts** can be REJECTED here; an approve on a contact returns `no_candidate` and writes nothing, because no contact review candidate is ever produced in this deployment. Contacts carry no `domain`, so a contact can only be allowlisted by `TEST_RECORD_IDS` \u2014 arming with `TEST_RECORD_DOMAINS` alone denies it silently (D-23: no response at all).\n\n**Ships inactive and disarmed.** Both write nodes sit behind their own `... Write Gate`, which calls `_writeSafetyAllows(\"review\", ...)` \u2014 authorised by `ALLOW_HUBSPOT_REVIEW_WRITES` plus a non-empty `TEST_RECORD_*` allowlist, and by NEITHER dispatch constant (D-02). An empty allowlist denies every row.",
         "height": 700,
         "width": 540
       },
-      "id": "s00190000-0000-4000-8000-000000000000",
+      "id": "s00270000-0000-4000-8000-000000000000",
       "name": "Sticky Note 1",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -335,10 +471,25 @@
     },
     {
       "parameters": {
+        "content": "## LV Review Queue \u2014 READ ONLY (Phase 30 Plan 04, REVIEW-01)\n`hubspot/review/queue`: ONE authenticated call returns the flagged backlog with each record's stored conflict detail, so the client never holds a HubSpot credential.\n\n**Nothing on this branch writes.** Two searches, two Code nodes, one responder \u2014 no PATCH, no write gate, no edge into the decision branch. `tests/n8n/reviewQueueEndpoint.test.mjs` walks the graph forward from the webhook and fails if that ever stops being true.\n\n**The caller chooses which queue and how big a page, never what is read.** Only `object_type` (defaulting to companies) and `limit` (clamped to 100) are accepted; the filters and the property list are baked.\n\n**It renders what is stored and recomputes nothing** (D-11). The held candidate JSON and the provenance blob are returned as the exact strings HubSpot holds \u2014 the client parses them. Which fields a decision on that candidate would actually write is decided by `hubspot/review/decision`, which drops `manual_protected` / `review_required` classes; the client reads `config/field_policy.yaml` to show that in advance (D-06), because the endpoint withholds those fields silently apart from a clause in `message`. **That class filter is the DECISION endpoint's, and it does not describe the 15-minute `Apply Review` backstop, which allowlists by key (D-31, open).**\n\n**One item out, always.** The response is an envelope \u2014 `{object_type, search_ok, total, returned, rows}` \u2014 not one item per record: a zero-hit search that emitted zero items would reach no responder at all and hang the caller until Cloudflare 524s at ~100s (D-22), and an empty queue is this phase's normal end state. `total` is the whole backlog and `returned` is this page, so a truncated page is never read as an empty queue. `search_ok: false` means the search itself failed (nodes run `onError: continueRegularOutput`) \u2014 report it as a failure, never as an empty queue.",
+        "height": 640,
+        "width": 540
+      },
+      "id": "s00280000-0000-4000-8000-000000000000",
+      "name": "Sticky Note 2",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        220,
+        -820
+      ]
+    },
+    {
+      "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Drops any row the allowlist does not permit. An empty allowlist denies all.\nreturn $input.all().filter((it) => _writeSafetyAllows(\n  'review',\n  it.json.hs_object_id || (it.json.existingRecord && it.json.existingRecord.hs_object_id) || null,\n  (it.json.identity_keys && it.json.identity_keys.domain) || it.json.domain || null,\n));\n"
       },
-      "id": "c00200000-0000-4000-8000-000000000000",
+      "id": "c00290000-0000-4000-8000-000000000000",
       "name": "Review Decision Update Write Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -352,7 +503,7 @@
         "mode": "runOnceForAllItems",
         "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Drops any row the allowlist does not permit. An empty allowlist denies all.\nreturn $input.all().filter((it) => _writeSafetyAllows(\n  'review',\n  it.json.hs_object_id || (it.json.existingRecord && it.json.existingRecord.hs_object_id) || null,\n  (it.json.identity_keys && it.json.identity_keys.domain) || it.json.domain || null,\n));\n"
       },
-      "id": "c00210000-0000-4000-8000-000000000000",
+      "id": "c00300000-0000-4000-8000-000000000000",
       "name": "Review Contact Decision Update Write Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -532,6 +683,79 @@
         [
           {
             "node": "Build Review Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Queue Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Review Queue Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Review Queue Request": {
+      "main": [
+        [
+          {
+            "node": "Review Queue IF Contacts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Queue IF Contacts": {
+      "main": [
+        [
+          {
+            "node": "Review Queue Contact Search",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Review Queue Search",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Queue Search": {
+      "main": [
+        [
+          {
+            "node": "Review Queue Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Queue Rows": {
+      "main": [
+        [
+          {
+            "node": "Respond Review Queue",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Review Queue Contact Search": {
+      "main": [
+        [
+          {
+            "node": "Review Queue Rows",
             "type": "main",
             "index": 0
           }

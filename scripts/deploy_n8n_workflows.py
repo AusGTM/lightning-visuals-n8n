@@ -129,6 +129,15 @@ NODE_CREDENTIAL_MAP = {
     "Review Contact Fetch By Id": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "Review Contact Decision Update": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "Review Contact Verify Fetch": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    # Phase 30 Plan 04 — the READ-ONLY `hubspot/review/queue` branch on the same workflow.
+    # Its trigger binds the same shared webhook-secret credential as every other endpoint
+    # in this repo (one operator secret, four endpoints). The two searches reuse
+    # "LV HubSpot"; unbound they would 401 and, because HubSpot search nodes run
+    # `onError: continueRegularOutput`, the caller would be handed `search_ok: false`
+    # rather than a plausible-looking empty queue.
+    "Review Queue Webhook": {"cred_type": "httpHeaderAuth", "cred_name": "LV Enrichment Webhook"},
+    "Review Queue Search": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    "Review Queue Contact Search": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
 }
 
 
