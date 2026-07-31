@@ -265,6 +265,144 @@ def test_armed_requires_a_non_empty_expected_allowlist():
         verifier.verify(_enrichment(contact={}, company={}), "armed", expected_allowlist=None)
 
 
+# --- an armed expectation both windows can state (23-07 Task 2) ------------------------
+
+def _rb3_shape():
+    """RB-3 / 23-06 Section B: record writes AND create armed together, review writeback
+    still disabled, allowlist set to the canary domain."""
+    return [
+        _wf(
+            "LV Contact Ingest (Cloud template)",
+            _node("Decide Action", declares=("ALLOW_HUBSPOT_CREATE",), create="true"),
+            _node("Build Write Patch", writes="true", create="true", domains="australiagtm.com"),
+        ),
+        _wf(
+            "LV Enrichment (Cloud template)",
+            _node("Decide Action", writes="true", create="true", domains="australiagtm.com"),
+        ),
+    ]
+
+
+def _rb9_shape():
+    """RB-9 / 30-07: review writeback alone, allowlist a record id."""
+    return [
+        _wf(
+            "LV Review Decision (Cloud template)",
+            _node("Apply Review Decision", review="true", ids="9604614548"),
+        )
+    ]
+
+
+def test_the_23_06_window_passes_when_both_its_flags_are_named():
+    result = verifier.verify(
+        _rb3_shape(), "armed", expected_allowlist="australiagtm.com",
+        expected_armed=["ALLOW_HUBSPOT_RECORD_WRITES", "ALLOW_HUBSPOT_CREATE"],
+    )
+    assert result["ok"] is True, result["reasons"]
+    assert result["expected_armed"] == ["ALLOW_HUBSPOT_RECORD_WRITES", "ALLOW_HUBSPOT_CREATE"]
+
+
+def test_the_same_input_fails_when_only_one_of_its_flags_is_named():
+    """Naming a flag must never mean "ignore everything I did not name" — that deletes the
+    property the check exists for."""
+    result = verifier.verify(
+        _rb3_shape(), "armed", expected_allowlist="australiagtm.com",
+        expected_armed=["ALLOW_HUBSPOT_RECORD_WRITES"],
+    )
+    assert result["ok"] is False
+    assert any("ALLOW_HUBSPOT_CREATE" in r for r in result["reasons"])
+
+
+def test_the_30_07_window_passes_when_review_writes_is_named():
+    result = verifier.verify(
+        _rb9_shape(), "armed", expected_allowlist="9604614548",
+        expected_armed=["ALLOW_HUBSPOT_REVIEW_WRITES"],
+    )
+    assert result["ok"] is True, result["reasons"]
+
+
+def test_the_30_07_window_fails_under_the_default_expectation():
+    result = verifier.verify(_rb9_shape(), "armed", expected_allowlist="9604614548")
+    assert result["ok"] is False
+    assert any("ALLOW_HUBSPOT_REVIEW_WRITES" in r for r in result["reasons"])
+
+
+def test_a_named_flag_reading_disabled_fails_and_names_workflow_and_node():
+    workflows = [_wf("LV Review Decision (Cloud template)", _node("Apply Review Decision", ids="201"))]
+    result = verifier.verify(
+        workflows, "armed", expected_allowlist="201",
+        expected_armed=["ALLOW_HUBSPOT_REVIEW_WRITES"],
+    )
+    assert result["ok"] is False
+    reason = next(r for r in result["reasons"] if "ALLOW_HUBSPOT_REVIEW_WRITES" in r)
+    assert "LV Review Decision (Cloud template)" in reason and "Apply Review Decision" in reason
+
+
+def test_an_empty_allowlist_under_an_armed_expectation_is_its_own_finding():
+    """`_writeSafetyAllows()` returns false on an empty allowlist, so this state grants
+    NOTHING while every flag reads enabled — it must never read as a passing armed window."""
+    workflows = [_wf("LV Enrichment (Cloud template)", _node("Decide Action", writes="true"))]
+    result = verifier.verify(workflows, "armed", expected_allowlist="201")
+    assert result["ok"] is False
+    reason = next(r for r in result["reasons"] if "allowlist" in r)
+    assert "grants" in reason.lower()
+
+
+def test_an_unknown_expected_armed_flag_raises_rather_than_expecting_nothing():
+    with pytest.raises(ValueError, match="unknown expected-armed flag"):
+        verifier.verify(
+            _rb9_shape(), "armed", expected_allowlist="201",
+            expected_armed=["ALLOW_HUBSPOT_REVIEW_WRITE"],  # typo: no trailing S
+        )
+
+
+def test_an_allowlist_constant_is_not_an_expected_armed_flag():
+    with pytest.raises(ValueError, match="unknown expected-armed flag"):
+        verifier.verify(
+            _rb9_shape(), "armed", expected_allowlist="201", expected_armed=["TEST_RECORD_IDS"],
+        )
+
+
+def test_an_explicitly_empty_expected_armed_set_raises():
+    with pytest.raises(ValueError, match="at least one"):
+        verifier.verify(_rb9_shape(), "armed", expected_allowlist="201", expected_armed=[])
+
+
+def test_expect_armed_appears_in_the_cli_help(capsys):
+    with pytest.raises(SystemExit) as exc:
+        verifier.main(["--help"])
+    assert exc.value.code == 0
+    assert "--expect-armed" in capsys.readouterr().out
+
+
+def test_expect_armed_is_refused_under_the_disarmed_expectation(capsys):
+    with pytest.raises(SystemExit) as exc:
+        verifier.main(["--expect-armed", "ALLOW_HUBSPOT_CREATE"])
+    assert exc.value.code != 0
+    assert "--expect-armed" in capsys.readouterr().err
+
+
+def test_an_unknown_expect_armed_flag_is_refused_by_the_cli(capsys):
+    with pytest.raises(SystemExit) as exc:
+        verifier.main([
+            "--expectation", "armed", "--allowlist", "201",
+            "--expect-armed", "ALLOW_HUBSPOT_NONSENSE",
+        ])
+    assert exc.value.code != 0
+    assert "ALLOW_HUBSPOT_NONSENSE" in capsys.readouterr().err
+
+
+def test_the_armed_report_states_what_was_expected_as_well_as_what_was_found(capsys):
+    result = verifier.verify(
+        _rb9_shape(), "armed", expected_allowlist="9604614548",
+        expected_armed=["ALLOW_HUBSPOT_REVIEW_WRITES"],
+    )
+    verifier._print_report(result)
+    out = capsys.readouterr().out
+    assert "ALLOW_HUBSPOT_REVIEW_WRITES" in out
+    assert "9604614548" in out
+
+
 # --- unknown expectation refuses, never silently no-ops ---------------------------------
 
 def test_unknown_expectation_raises_from_verify():
