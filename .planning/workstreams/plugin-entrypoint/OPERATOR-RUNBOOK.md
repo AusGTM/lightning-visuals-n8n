@@ -110,8 +110,8 @@ would strand an armed backend, which is the failure mode this entire ceremony ex
 | RB-1 | **25-01** lists-scope + chunk timing | ✅ **yes — both probes** | none. `check_hubspot_list_scope.py` **built 2026-07-31**. Probe B is partly pre-measured — read the note in RB-1 before spending credits. **Releases 4 plans** |
 | RB-2 | **29-01** scheduled-routine host probe | ✅ **yes** | none — no dependencies, no code needed. **Unblocks 4 plans; joint highest leverage** |
 | RB-3 | **23-06** install + armed create canary | ⚠ Section A yes, Section B **NO** | **three confirmed defects** — see the block in RB-3. Section B cannot pass as written |
-| RB-4 | **27-05** dashboard same-URL check | ✅ **yes** | none — Phase 27 is code-complete; this is its last step |
-| RB-5 | **28-02** n8n semantics live gate | ✅ | `operator-claude-plugin/scripts/probe_n8n_semantics.py` **EXISTS** (28-02 Task 1). Commands corrected 2026-07-31 — the old ones named the wrong path and a `--workflow-id` flag argparse rejects. **Gates 28-03/04/05/06** |
+| RB-4 | **27-05** dashboard same-URL check | ✅ **yes** | none — 27-05 is BUILT (`27-05-SUMMARY.md` on disk). Phase 27's last step |
+| ~~RB-5~~ | ~~**28-02** n8n semantics live gate~~ | ✅ **DONE 2026-07-31** | Ran live against `1fXPuIabz3RsAHgn`. Round-trip `verified`, execute endpoint `405`, cadence reload confirmed on a running instance. Results in `28-FINDINGS.md`. **28-03 and 28-04 are built and committed as a result.** Nothing left here |
 | ~~RB-6~~ | ~~**28-04** five-triggers decision~~ | **withdrawn** | Already decided — D-25 / amendment #6. Checkpoint deleted, plan now autonomous. **Nothing for you to do.** |
 | RB-7 | **28-06** armed arm→dispatch→disarm canary | ❌ | behind 28-02 → 28-05. Now needs `ALLOW_N8N_ARM` too |
 | RB-8 | **29-06** live notice gate | ❌ | behind 29-01 → 29-03/04/05 |
@@ -120,10 +120,10 @@ would strand an armed backend, which is the failure mode this entire ceremony ex
 **Eight gates remain**, not nine — RB-6 is withdrawn. Two are partially done (RB-3's Section A,
 RB-4's plan built to its checkpoint).
 
-**What unblocks the most, in order:** **RB-2 (29-01)** and **RB-5 (28-02)** each release four plans
-and are the only things standing between the milestone and a fully autonomous finish of phases 28
-and 29. **RB-1 (25-01)** releases four more. **RB-3 and RB-4 unblock nothing** — each is its own
-phase's proof.
+**What unblocks the most, in order:** **RB-2 (29-01)** releases four plans and is now the single
+highest-leverage gate left — RB-5 was run on 2026-07-31 and its four (28-03/04/05/06) are already
+moving. **RB-1 (25-01)** drops the PROVISIONAL label off the chunk ceiling everywhere it appears.
+**RB-3 and RB-4 unblock nothing** — each is its own phase's proof.
 
 **Provisional sections.** RB-8 and RB-9 belong to phases 29 and 30, whose `gsd-plan-checker` has
 **not** run. **Script names, subcommands and flags there may change.** Re-read against the plan
@@ -556,10 +556,11 @@ not retry and do not adjust the plugin to compensate. Also record the raw webhoo
 
 ---
 
-# RB-4 · Plan 27-05 — Dashboard publishes to the same URL *(provisional)*
+# RB-4 · Plan 27-05 — Dashboard publishes to the same URL
 
-**Blocked:** 27-05 Tasks 1–2 must be built first. **Gates nothing.** Read-only throughout — nothing
-here turns a workflow on or off, starts a run, or changes a record.
+**READY.** 27-05 Tasks 1–2 are built (`27-05-SUMMARY.md` on disk); this is Task 3, the last step in
+Phase 27. **Gates nothing.** Read-only throughout — nothing here turns a workflow on or off, starts
+a run, or changes a record.
 
 Entirely Form 3 (Desktop Code tab). No shell commands, except restoring config in step 6.
 
