@@ -70,7 +70,7 @@ phase directories never collide with phases 20–22.**
   4. Every file the client adds lives under `operator-claude-plugin/`, with its own README and CHANGELOG, and no backend file is modified to make the client work — the client is replaceable without touching `n8n/`, `config/`, or the enrichment `src/` modules.
   5. With the endpoint URL or auth secret missing from admin-provisioned configuration (which lives outside the plugin source and is never committed), the plugin refuses before any network call and says in plain language what is not configured and who can fix it — the operator is never shown a key, asked to paste one, or left staring at a socket error.
 
-**Plans**: 5/6 plans executed
+**Plans**: 5/7 plans executed
 
 Plans:
 **Wave 1**
@@ -90,6 +90,10 @@ Plans:
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [ ] 23-06-PLAN.md — Manual gates: Desktop install/invocation, and one human-executed armed canary that creates a contact
+
+**Gap closure** *(no in-phase dependency — must land BEFORE 23-06 Section B resumes)*
+
+- [ ] 23-07-PLAN.md — Fix the armed/disarmed read-back: discovered coverage over every deployed workflow, an explicit expected-armed flag set, and both operator runbooks brought back into agreement (D-19)
 
 ### Phase 24: Non-Tabular Input Adapters
 
