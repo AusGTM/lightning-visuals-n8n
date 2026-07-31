@@ -111,6 +111,8 @@ classes, or replacing the HubSpot UI as a record-editing surface.
   is undecided — building against it would couple this phase to a contract that does not exist yet.
   The queue read lives in **this phase's own workflow** instead. The divergence is stated in
   30-04's objective rather than left implicit.
+  — **Its "Phase 27 is unbuilt" premise expired on 2026-07-31; see D-20 for the two standing grounds
+  that replace it. The decision itself is unchanged.**
 - **D-14 (the pinned flag assertion is widened deliberately, not incidentally):** `_OVERLAYABLE_FLAGS`
   goes from 4 names to 5 to admit `ALLOW_HUBSPOT_REVIEW_WRITES`. This is the opposite call from
   Phase 23's, which **reused** an existing flag precisely to avoid touching the pinned assertion —
@@ -120,6 +122,110 @@ classes, or replacing the HubSpot UI as a record-editing surface.
   `git diff --stat` on that file is an **acceptance criterion**. The 15-minute backstop loop is
   likewise retained under a `git diff --stat` guard on the maintenance workflow, so "we kept the
   backstop" is verified rather than asserted.
+
+### Corrections folded in after the plan-checker run (2026-07-31) — 4 blockers, 2 concerns
+
+**Why these exist:** `30-05` and `30-06` were written against Phase 23's `dispatch.py` idiom and
+never absorbed Phase 28's **D-33** and **D-34**, which were adopted *after* those plans were on
+disk. `30-01`, `30-03` and `30-07` passed the checker clean and are not touched by any of this.
+**A correction left only in a plan gets re-litigated — that is why they are here.**
+
+- **D-16 (review writeback gets its own plugin-side `ALLOW_*` kill switch — `ALLOW_REVIEW_SUBMIT`):**
+  Phase 28 **D-34** made gating uniform: *one `ALLOW_*` variable per dangerous capability, value must
+  read exactly `true`, checked before any transport is constructed, refusing in plain language that
+  names the variable and says an admin sets it.* `review_decision.py` is a new **mutating** client
+  module, and its only gate as originally planned was a `review_armed` boolean handed in from the
+  conversation — exactly the asymmetry D-34 abolishes. D-34's third property is the binding one:
+  the env gate is *"the gate that still holds when an agent, a test harness, or a scheduled routine
+  reaches the module by a path nobody anticipated"*, so the human arming step and the no-default
+  confirmation are **not** substitutes for it. Three load-bearing properties, carried over verbatim
+  from `ALLOW_N8N_ARM`:
+  1. **Semantics identical to `ALLOW_N8N_ARM` / `ALLOW_N8N_PROBE`.** Only the exact string `"true"`
+     proceeds; `""`, `"1"`, `"yes"`, `"TRUE"`, `"True"` all refuse. Two gates in one milestone that
+     disagree on what counts as "on" is worse than one gate.
+  2. **Checked before the transport is constructed**, so an unset variable leaves an empty call log.
+  3. **It gates submitting a decision, never any un-doing path** — the same way `ALLOW_N8N_ARM`
+     gates arming but never disarming. Nothing that records a reason, re-queues a record, or
+     otherwise walks a decision back may be blocked by it.
+  **Name collision that must not happen:** `ALLOW_HUBSPOT_REVIEW_WRITES` (D-08e, 30-01) is the
+  **backend baked constant** — a literal compiled into the workflow JSON, overlaid at deploy time by
+  `_OVERLAY_FLAG_SPEC`, and read by `_writeSafetyAllows()` inside n8n. `ALLOW_REVIEW_SUBMIT` is a
+  **plugin-side operator environment variable** read by Python on the operator's machine before a
+  request is built. They gate different things at different layers, in different processes, and
+  either one alone stops a write; reusing the name would make an operator believe setting one has
+  done the work of both. Both must be true for a review decision to reach HubSpot.
+
+- **D-17 (the transport parameter is the bare `requests` module — this is a send-shape guard, not a
+  style preference):** `30-05` and `30-06` originally told the executor to mirror `dispatch.py`'s
+  POST idiom. Live, `scripts/dispatch.py:26` is `transport=requests.post`, and
+  `operator-claude-plugin/tests/test_retry_reuses_dispatch.py` `rglob`s **every** plugin script,
+  including ones not yet written, flags any function whose `transport` parameter defaults to
+  `requests.post`/`requests.put` (`:129-143`), and allowlists exactly two functions in
+  `_EXPECTED_SEND_SHAPED` (`:192-195`) — `backend_status.py::fetch_backend_status` and
+  `dispatch.py::dispatch`. Mirroring `dispatch.py` therefore turns `fetch_queue`,
+  `preview_decision` and `submit_decision` into unexpected send-shaped functions and the suite goes
+  red — **and the nearest fix an executor reaches for is appending to the allowlist, which weakens
+  the guard that stands between a client path and `dispatch()`'s no-default `armed` parameter.**
+  Binding rule, identical to Phase 28 **D-28/D-33**: the `transport` parameter defaults to the
+  **bare `requests` module** and every call goes through `transport.post(...)` /
+  `getattr(transport, verb)(...)`. **Appending to `_EXPECTED_SEND_SHAPED` is forbidden**;
+  `git diff --stat` on `test_retry_reuses_dispatch.py` must be empty when this phase closes.
+  **This is not a dodge of the guard, and the distinction matters if anyone reopens it.** The guard
+  exists so that `dispatch()` stays the *only* function reachable with a send-shaped default, because
+  `dispatch()` is where the no-default `armed` parameter lives. A mutating module that stays off that
+  list does not thereby become ungated — it carries its own gates instead, which for
+  `review_decision.py` is D-16's `ALLOW_REVIEW_SUBMIT` plus the no-default session arm. This is the
+  identical call Phase 28 **D-28** made for `n8n_arming`, a module that writes an *enabled*
+  write-safety literal to a live workflow and is therefore strictly more dangerous than this one.
+
+- **D-18 (`review` is its own `config_gate` capability — the key does not exist today):** live,
+  `operator-claude-plugin/scripts/config_gate.py:28` `CAPABILITY_KEYS` is exactly `contact-upload`,
+  `status`, `control`, and `missing_keys` raises `ValueError(f"unknown capability: {capability!r}")`
+  for anything else. Routing a review refusal through `require_capability(cfg, "review")` as planned
+  would crash, and the tempting substitute — reusing `"contact-upload"` — is wrong for the same
+  reason **28 D-29** split `control` from `status`: *a config that may read the review queue is not
+  thereby one that may upload contacts.* So `30-05` adds
+  `"review": ("n8n_url", "webhook_secret")` to `CAPABILITY_KEYS` plus its `_CAPABILITY_DESCRIPTIONS`
+  row. Per **28 D-35**, adding a capability row is not a one-file change:
+  `operator-claude-plugin/tests/test_status_unknown.py` pins the exact capability set twice
+  (`:144-145` and `:153`) and both assertions must be updated in the same plan.
+
+- **D-19 (read-back verification means a refetch, not the write's own echo — this changes 30-02):**
+  `30-06`'s `verify_decision(intended, response)` was specified against *"the endpoint's post-write
+  record properties"*, invoking Phase 28 **D-14** (*a `200` from the backend is never reported as
+  success on its own*). But `30-02` specifies `Respond Review Decision` emitting only `would_write`
+  and `outcome`; the only post-write data available on that branch is HubSpot's own PATCH echo —
+  **the same response, not an independent re-read**, which is precisely what D-14 says is not
+  evidence. Resolution: `30-02` inserts a **post-PATCH refetch node** between the PATCH and the
+  response node, and writes down the response contract `30-06` consumes. The refetch is one extra
+  HubSpot search per *written* decision only — the dry-run branch never reaches it — which is a
+  trivial cost next to a phase whose entire purpose is a verified human decision.
+  **Response contract (both branches return the same keys; the client branches on `outcome`):**
+  `{outcome, message, would_write, verified_properties, verified}` — `would_write` is the patch the
+  backend computed, `verified_properties` is the refetched record's values for exactly the
+  `would_write` keys (`null` on the dry-run branch and on any non-writing outcome), and `verified`
+  is the backend's own key-by-key comparison. The client re-derives the comparison rather than
+  trusting `verified`, and an absent or `null` `verified_properties` on a written decision is
+  reported as **failed**, never as success.
+
+- **D-20 (30-04's separate-workflow rationale is restated; the decision itself is unchanged):**
+  `30-04` justified its own workflow with *"Phase 27 is not built yet."* Phase 27 is now
+  code-complete, so that sentence is false. **The decision survives on two standing grounds** and is
+  not reopened: Phase 27's status surface keeps its **count-only** role (its response shape is a
+  fixed contract several plans already consume), and **28 D-14** exists so that a responder does not
+  sit on a shared branch where it can corrupt another lane's responses — the same reasoning that
+  made 25-02 build the status endpoint as its own file. Reword, do not re-architect.
+
+- **D-21 (no `conftest.py` edit is needed — the fixture already exists):** `30-05` claimed the stub
+  transport had to be extended because *"today every call returns a fixed accepted-status body."*
+  That was already false: `operator-claude-plugin/tests/conftest.py:101` `_as_response` and `:142`
+  `stub_post_transport_factory` support scripted payloads, `(status, payload)` pairs and raised
+  exceptions. And once D-17 is applied the correct fixture is neither of those — it is
+  `conftest.py:238` **`stub_module_transport_factory`** (`_StubModuleTransport`, whose
+  `.get`/`.post`/`.put` share one ordered `calls` list and which exposes `verbs` and
+  `mutating_calls`), shipped by 28-01 for exactly this transport shape. `conftest.py` therefore
+  leaves this phase **unmodified**; a third stub would be redundant. Per **28 D-35**, a refusal
+  asserts `transport.mutating_calls == []`, not `len(calls) == 0`.
 
 ### Claude's Discretion
 - Queue ordering and how many conflicts are shown at once.
@@ -216,3 +322,6 @@ classes, or replacing the HubSpot UI as a record-editing surface.
 
 *Phase: 30-review-queue-triage*
 *Context gathered: 2026-07-30*
+*Corrections D-16…D-21 folded in 2026-07-31 from a `gsd-plan-checker` run (4 blockers, 2 concerns),
+after Phase 28's D-33/D-34 landed. Repair edited `30-02`, `30-04`, `30-05`, `30-06` only —
+`30-01` was executing concurrently and `30-01`/`30-03`/`30-07` passed clean.*
