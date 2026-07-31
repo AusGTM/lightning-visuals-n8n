@@ -139,10 +139,13 @@ def test_no_capability_refusal_ever_contains_a_configured_value(fake_config):
 def test_a_fully_configured_config_passes_every_capability(fake_config):
     # `control` joined the table in 28-01: the same two keys as `status`, kept a separate
     # row because a config that may read the backend is not thereby one that may mutate it.
-    for capability in ("contact-upload", "status", "control"):
+    # `review` joined in 30-05 on the same principle (30 D-18): the same two keys as
+    # `contact-upload`, kept separate because reading the review queue is not permission
+    # to upload contacts.
+    for capability in ("contact-upload", "status", "control", "review"):
         config_gate.require_capability(fake_config, capability)
     assert set(config_gate.usable_capabilities(fake_config)) == {
-        "contact-upload", "status", "control"}
+        "contact-upload", "status", "control", "review"}
 
 
 def test_the_status_capability_does_not_require_the_webhook_secret(fake_config):
@@ -150,6 +153,8 @@ def test_the_status_capability_does_not_require_the_webhook_secret(fake_config):
     costs the backend-supplied half, not the whole answer."""
     cfg = {k: v for k, v in fake_config.items() if k != "webhook_secret"}
     config_gate.require_capability(cfg, "status")
+    # Unchanged by 30-05's new `review` row, and re-checked rather than assumed: `review`
+    # requires the webhook secret too, so a config without it cannot read the queue either.
     assert set(config_gate.usable_capabilities(cfg)) == {"status", "control"}
 
 

@@ -159,6 +159,16 @@ Do this once, before the first upload:
 4. `operator.local.json` is gitignored — it is never committed, and the plugin never
    displays its contents back to you.
 
+Two optional keys, both safe to leave as they ship:
+
+- `hubspot_portal_id` — your HubSpot portal id. Used for one thing only: turning each
+  flagged record in the review queue into a clickable HubSpot link. Leave it out and the
+  queue shows the raw record id and says the link is missing, rather than guessing a URL.
+- `field_policy_path` — `null` uses the repo's own `config/field_policy.yaml`. The review
+  queue reads that file to *label* a field as protected before you decide anything about
+  it. It is a display lookup: the plugin never refuses a decision on its own, because the
+  backend is the one authority on what may be written.
+
 If something is missing or malformed, the skill refuses before making any network call
 and says in plain language what to fix — run the skill (or `/operator-claude-plugin:contact-upload`)
 and its first message names the exact problem and points back to step 1 above.

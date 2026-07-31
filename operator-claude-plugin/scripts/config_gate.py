@@ -28,16 +28,22 @@ _SETUP_HINT = (
 # Control needs the same two keys status needs but is a SEPARATE capability on purpose: a
 # config that may read the backend is not thereby one that may mutate it, so "read-only
 # plugin" stays expressible by withholding the row rather than by convention (D-29).
+# Review takes the same two keys contact-upload takes, and is a SEPARATE row for the same
+# reason control is separate from status (D-29): a config that may read the review queue is
+# not thereby one that may upload contacts, so a review-only config stays expressible by
+# withholding a row rather than by convention (30 D-18).
 CAPABILITY_KEYS = {
     "contact-upload": ("n8n_url", "webhook_secret"),
     "status": ("n8n_url", "n8n_api_key"),
     "control": ("n8n_url", "n8n_api_key"),
+    "review": ("n8n_url", "webhook_secret"),
 }
 
 _CAPABILITY_DESCRIPTIONS = {
     "contact-upload": "uploading contacts",
     "status": "the backend status check",
     "control": "turning workflows on or off",
+    "review": "reading the review queue",
 }
 
 

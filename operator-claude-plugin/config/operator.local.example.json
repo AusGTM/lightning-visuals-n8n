@@ -4,5 +4,7 @@
   "n8n_api_key": "<ask your admin — n8n Settings > n8n API; sent as the X-N8N-API-KEY header on read-only status calls, a DIFFERENT secret from webhook_secret, never a real value in this file>",
   "stuck_execution_minutes": 15,
   "dashboard_artifact_ttl_days": 30,
-  "column_mapping_path": null
+  "column_mapping_path": null,
+  "hubspot_portal_id": "<optional — your HubSpot portal id, used only to build a clickable record link in the review queue; without it the queue shows the raw record id>",
+  "field_policy_path": null
 }
