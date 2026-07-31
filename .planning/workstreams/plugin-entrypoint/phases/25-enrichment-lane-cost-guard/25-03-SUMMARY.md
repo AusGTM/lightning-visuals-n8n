@@ -209,16 +209,28 @@ property value is read or emitted (T-25-06 held). No write node, no gate, no all
 
 ## Test counts, with attribution
 
-| Suite | At my start | Now | Mine |
-|---|---|---|---|
-| pytest | 1370 passed, 1 skipped | **1446 passed, 1 skipped** | **+23** (`tests/test_enrichment_list_branch.py`) |
-| node   | 474 pass, 0 fail | **503 pass, 0 fail** | **+29** (`tests/n8n/listExpansion.test.mjs`) |
+Two siblings were committing throughout, so the running total moved four times. Only the **delta**
+is stable; it is measured per-file, not by subtraction.
 
-The remaining **+53 pytest** are **not mine** — siblings 25-04 and 25-05 committed
-(`7a57cab`, `9282b59`, `ab20917`, `1f7efbd`, `38e21a0`) between my baseline read and my first test
-run: 1370 → 1423 before I added a single test, then 1423 + 23 = 1446. Node was 474 throughout and
-474 + 29 = 503. Zero failures anywhere; the known `mergeContacts.test.mjs` 1 ms timestamp flake did
-not fire in any run.
+| Suite | At my start | Mine (measured per-file) | Total at my last read |
+|---|---|---|---|
+| pytest | 1370 passed, 1 skipped | **+23** — `tests/test_enrichment_list_branch.py` | 1450 passed, 1 skipped |
+| node   | 474 pass, 0 fail | **+29** — `tests/n8n/listExpansion.test.mjs` | 506 pass, 0 fail |
+
+Everything else is attributable and **not mine**:
+
+- **+53 pytest** from siblings 25-04 / 25-05, committed between my baseline read and my first test
+  run (`7a57cab`, `9282b59`, `ab20917`, `1f7efbd`, `38e21a0`): 1370 → **1423** before I wrote a
+  single test. 1423 + 23 = 1446.
+- **+4 pytest** from 25-04's still-uncommitted `operator-claude-plugin/tests/test_list_envelope_contract.py`
+  (verified directly: 4 passed). 1446 + 4 = **1450**.
+- **+3 node** from 25-04's still-uncommitted `tests/n8n/listEnvelopeContract.test.mjs` (verified
+  directly: 3 pass). 474 + 29 + 3 = **506**. That file appeared in `tests/n8n/` *after* my 503
+  reading, which is why the intermediate total differs — it is a sibling's file in a shared
+  directory, not a drift in mine.
+
+Zero failures in any run. The known `mergeContacts.test.mjs` 1 ms timestamp flake did not fire once;
+no test was re-run to obtain a green.
 
 ## Disarmed grep
 
