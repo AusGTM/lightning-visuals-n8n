@@ -518,14 +518,16 @@ test("the verify refetch is reachable ONLY from the write branch, and both branc
 
   assert.deepEqual(feeders("Review Verify Fetch"), ["Review Decision Update"],
     "a dry run must never pay for the refetch, and the refetch must follow the PATCH");
+  assert.deepEqual(feeders("Review Contact Verify Fetch"), ["Review Contact Decision Update"],
+    "the contacts lane reads back too — a write with no read-back reports null forever");
   assert.deepEqual(feeders("Build Review Response").sort(),
-    ["Review IF Dry Run", "Review Verify Fetch"]);
+    ["Review Contact Verify Fetch", "Review IF Dry Run", "Review Verify Fetch"]);
   assert.deepEqual(feeders("Respond Review Decision"), ["Build Review Response"],
     "one node shapes the response body on both branches");
 
   const [dryBranch, writeBranch] = WF.connections["Review IF Dry Run"].main;
   assert.deepEqual(dryBranch.map((c) => c.node), ["Build Review Response"]);
-  assert.deepEqual(writeBranch.map((c) => c.node), [GATE]);
+  assert.deepEqual(writeBranch.map((c) => c.node), ["Review IF Contact Write"]);
 
   // The verify fetch must read the record independently, not the PATCH's echo.
   const verify = WF.nodes.find((n) => n.name === "Review Verify Fetch");
@@ -533,4 +535,126 @@ test("the verify refetch is reachable ONLY from the write branch, and both branc
   assert.match(verify.parameters.url, /objects\/companies\/search$/);
   assert.match(verify.parameters.jsonBody, /propertyName:\s*"hs_object_id"/);
   assert.equal(WF.active, false);
+});
+
+// --- (g) the contacts lane (Plan 03) ----------------------------------------------------
+
+const CONTACT_GATE = "Review Contact Decision Update Write Gate";
+
+test("(g1) object_type routes the fetch: contacts to the contact search, everything else to the company one", () => {
+  const [contactBranch, companyBranch] = WF.connections["Review IF Contacts"].main;
+  assert.deepEqual(contactBranch.map((c) => c.node), ["Review Contact Fetch By Id"]);
+  assert.deepEqual(companyBranch.map((c) => c.node), ["Review Fetch By Id"]);
+
+  const contactFetch = WF.nodes.find((n) => n.name === "Review Contact Fetch By Id");
+  assert.match(contactFetch.parameters.url, /objects\/contacts\/search$/);
+  // The contacts blob is a DIFFERENT property from the companies one (D-08a).
+  assert.match(contactFetch.parameters.jsonBody, /lv_contact_enrichment_provenance/);
+  assert.equal(/lv_enrichment_provenance"/.test(contactFetch.parameters.jsonBody), false);
+  // Both lanes must fetch the same review family, or a decision would be possible on one
+  // object type and not the other.
+  for (const p of [P_NEEDS_REVIEW, P_ICP_NEEDS_REVIEW, P_REVIEW_REASON, P_CANDIDATE_JSON]) {
+    assert.match(contactFetch.parameters.jsonBody, new RegExp(p));
+  }
+
+  // Both fetches converge on ONE extract node and ONE decision node.
+  const feeders = (name) => Object.entries(WF.connections)
+    .filter(([, spec]) => (spec.main || []).some((o) => (o || []).some((c) => c.node === name)))
+    .map(([src]) => src).sort();
+  assert.deepEqual(feeders("Review Extract Record"),
+    ["Review Contact Fetch By Id", "Review Fetch By Id"]);
+});
+
+test("(g2) the write branch re-splits on object type, and BOTH PATCHes sit behind their own gate", () => {
+  const [contactWrite, companyWrite] = WF.connections["Review IF Contact Write"].main;
+  assert.deepEqual(contactWrite.map((c) => c.node), [CONTACT_GATE],
+    "the contacts PATCH is reachable only through a write gate");
+  assert.deepEqual(companyWrite.map((c) => c.node), [GATE]);
+  assert.deepEqual(WF.connections[CONTACT_GATE].main[0].map((c) => c.node),
+    ["Review Contact Decision Update"]);
+
+  const patch = WF.nodes.find((n) => n.name === "Review Contact Decision Update");
+  assert.match(patch.parameters.url, /objects\/contacts\//);
+  assert.equal(patch.parameters.method, "PATCH");
+});
+
+test("(g3) a contacts REJECTION works exactly as a company one, and the contacts gate reads the review constant", () => {
+  const contactRow = {
+    hs_object_id: "4242", record_found: true,
+    email: "person@example.com", firstname: "Pat", lastname: "Lee",
+    [P_NEEDS_REVIEW]: "true", [P_CANDIDATE_JSON]: "",
+  };
+  const { built } = drive({ ...REJECT_BODY, object_type: "contacts", dry_run: false },
+    contactRow);
+  assert.equal(built.outcome, "rejected");
+  assert.deepEqual(Object.keys(built.would_write), [P_REVIEW_REASON]);
+  assert.equal(built.dry_run, false, "non-vacuity: this row does reach the write branch");
+
+  assert.equal(runNode(jsCodeOf(CONTACT_GATE), [built], {}).length, 0,
+    "committed and disarmed");
+  // A contact carries no `domain`, so TEST_RECORD_IDS is the ONLY way to allowlist one.
+  assert.equal("domain" in built, false, "non-vacuity for the assertion below");
+  const armedByDomain = armConstants(jsCodeOf(CONTACT_GATE), {
+    ALLOW_HUBSPOT_REVIEW_WRITES: "true", TEST_RECORD_DOMAINS: "example.com",
+  });
+  assert.equal(runNode(armedByDomain, [built], {}).length, 0,
+    "a domain allowlist cannot reach a contact — the operator must use TEST_RECORD_IDS");
+  const armedById = armConstants(jsCodeOf(CONTACT_GATE), {
+    ALLOW_HUBSPOT_REVIEW_WRITES: "true", TEST_RECORD_IDS: "4242",
+  });
+  assert.equal(runNode(armedById, [built], {}).length, 1);
+
+  const dispatchArmed = armConstants(jsCodeOf(CONTACT_GATE), {
+    ALLOW_HUBSPOT_RECORD_WRITES: "true", ALLOW_HUBSPOT_CREATE: "true", TEST_RECORD_IDS: "4242",
+  });
+  assert.equal(runNode(dispatchArmed, [built], {}).length, 0,
+    "arming dispatch must never authorise a review write (D-02)");
+});
+
+test("(g4) a contacts APPROVE writes nothing and says why — no contact candidate is ever produced", () => {
+  const contactRow = {
+    hs_object_id: "4242", record_found: true, email: "person@example.com",
+    [P_NEEDS_REVIEW]: "true", [P_CANDIDATE_JSON]: "",
+  };
+  const { built } = drive(
+    { ...REJECT_BODY, object_type: "contacts", decision: "approve", dry_run: false },
+    contactRow);
+  assert.equal(built.outcome, "no_candidate");
+  assert.deepEqual(built.would_write, {});
+  assert.equal(built.dry_run, true, "nothing to write must never reach a write gate");
+
+  const out = respond(built, built);
+  assert.deepEqual(Object.keys(out).sort(), CONTRACT_KEYS);
+  assert.equal(out.verified_properties, null);
+  assert.equal(out.verified, null);
+});
+
+test("(g5) an APPROVE on a company routes through the endpoint's own inlined reviewApply", () => {
+  // The whole point of Plan 03: the committed node's jsCode, not just the module.
+  const { built } = drive({ ...REJECT_BODY, decision: "approve", dry_run: false });
+  assert.equal(built.outcome, "applied");
+  assert.equal(built.would_write.lv_org_type, "governing_body_league");
+  assert.equal(built.would_write[P_NEEDS_REVIEW], false, "an approval clears the queue");
+  assert.equal(typeof built.would_write[P_PROVENANCE], "string");
+  assert.equal(JSON.parse(built.would_write[P_PROVENANCE]).lv_org_type.source, "human");
+  assert.equal("domain" in built.would_write, false,
+    "the manual_protected guard is live in the committed node, not only in the module");
+});
+
+// --- (h) the 15-minute backstop is untouched (D-08e/D-15) --------------------------------
+
+test("(h) the scheduled maintenance workflow still carries its 15-minute review loop, wired in order", () => {
+  const MW = JSON.parse(fs.readFileSync(
+    path.join(ROOT, "n8n", "wf_scheduled_maintenance_cloud.json"), "utf8"));
+  const names = new Set(MW.nodes.map((n) => n.name));
+  for (const n of ["Review Trigger (15 min)", "Review Search (approved=true)",
+                   "Apply Review", "Review Apply Update"]) {
+    assert.ok(names.has(n), `the backstop node must still exist: ${n}`);
+  }
+  const next = (name) => (MW.connections[name].main[0] || []).map((c) => c.node);
+  assert.deepEqual(next("Review Trigger (15 min)"), ["Review Search (approved=true)"]);
+  assert.deepEqual(next("Review Search (approved=true)"), ["Review Extract Rows"]);
+  assert.deepEqual(next("Review Extract Rows"), ["Apply Review"]);
+  assert.ok(next("Apply Review").length, "Apply Review still feeds the loop's continuation");
+  assert.equal(MW.active, false);
 });

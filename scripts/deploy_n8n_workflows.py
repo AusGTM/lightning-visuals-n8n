@@ -121,6 +121,14 @@ NODE_CREDENTIAL_MAP = {
     "Review Fetch By Id": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "Review Decision Update": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "Review Verify Fetch": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    # Phase 30 Plan 03 — the contacts lane's three HubSpot nodes. Same credential, same
+    # failure mode if omitted: an unmapped node deploys UNBOUND and 401s only at
+    # activation. "Review Contact Verify Fetch" is the contacts read-back — unbound, a
+    # contacts write that actually landed would report `verified_properties: null`, which
+    # the client is required to treat as a failure (D-19).
+    "Review Contact Fetch By Id": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    "Review Contact Decision Update": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    "Review Contact Verify Fetch": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
 }
 
 
