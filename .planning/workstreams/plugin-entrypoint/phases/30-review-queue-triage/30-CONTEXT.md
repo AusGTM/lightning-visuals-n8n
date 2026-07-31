@@ -359,6 +359,39 @@ and 30-06.**
   inverse of the key-presence rule 30-03 established for asserting an absent provenance
   key.
 
+### Corrections folded in from executing 30-05 (2026-07-31)
+
+**Two facts the plan could not have known until the client existed. Both bind 30-06.**
+
+- **D-35 (`fetch_queue` has TWO failure modes, and only one of them raises):** the plan
+  says the fetch "returns the parsed rows plus the queue total", which describes only the
+  success path. A read that must never render a failure as an empty backlog (D-33) cannot
+  raise for every failure either — a traceback teaches the operator less than a reason. The
+  shipped contract mirrors `backend_status.fetch_backend_status`'s proven split:
+  **`config_gate.require_capability(cfg, "review")` RAISES `ConfigError`** for a
+  misconfiguration (that is the operator's own fix, named in plain language, and it happens
+  before any transport is constructed), while **every runtime failure degrades to
+  `{available: False, reason, rows: [], total: None}`** — `endpoint_unreachable`,
+  `http_<code>`, `unparseable_response`, `unrecognized_response_shape`, and
+  `hubspot_search_did_not_run` for `search_ok: false`. A caller that only checks
+  `rows == []` would read every one of those as "nothing needs review". **30-06 must use the
+  same split**, and its own `verified_properties: null` / empty-body cases (D-19, D-23) are
+  the same class of finding: a failure wearing an empty result's clothes.
+
+- **D-36 (the protected label is emitted per line AND scoped once per page, and the
+  provenance blob is not rendered at all):** two presentation rules that follow from D-31
+  and 30-04's handoff #4 rather than from taste, so they are recorded rather than left to
+  the next editor. (1) The page-level sentence explaining what PROTECTED *means* is emitted
+  **only when a field on that page is actually marked** — an unearned protection sentence on
+  every page trains the operator to skip the one that matters — and it names the
+  review-decision endpoint explicitly, because the 15-minute backstop does not apply the
+  class filter while D-31 is open. (2) `lv_enrichment_provenance` /
+  `lv_contact_enrichment_provenance` are fetched but **never rendered**: the blob is
+  kilobyte-scale and the held candidate already carries source, confidence, reason and
+  evidence URL per field, so rendering it would bury the decision in its own audit trail.
+  If a future plan needs provenance in the operator's view, it needs a summariser, not a
+  dump.
+
 ### Claude's Discretion
 - Queue ordering and how many conflicts are shown at once.
 - Wording of the conflict presentation and of the exact-write display.
@@ -458,7 +491,7 @@ and 30-06.**
 after Phase 28's D-33/D-34 landed. Repair edited `30-02`, `30-04`, `30-05`, `30-06` only —
 `30-01` was executing concurrently and `30-01`/`30-03`/`30-07` passed clean.*
 *D-22…D-25 folded in from executing `30-02`; D-26…D-30 from executing `30-03`;
-D-32…D-34 from executing `30-04` (all 2026-07-31).*
+D-32…D-34 from executing `30-04`; D-35…D-36 from executing `30-05` (all 2026-07-31).*
 
 ---
 
