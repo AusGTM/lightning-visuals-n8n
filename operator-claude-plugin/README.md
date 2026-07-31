@@ -279,6 +279,74 @@ URL, no secret and no record. It expires after **30 days** by default; change
 shorter, and set it to `0` to stop the link being reused at all. An expired pointer is
 deleted the next time the skill runs, and the next dashboard request mints a fresh link.
 
+## Working the review queue
+
+The enrichment pipeline holds a decision back whenever it isn't sure enough to write it.
+Ask "what needs review?", "what's waiting on me?", or "work the review queue" — or invoke
+`/operator-claude-plugin:review-triage`.
+
+The queue shows, per flagged record: what HubSpot holds now, what the pipeline wants to set
+instead, which source proposed it and how confident it was, why it was held back, an
+evidence link where there is one, and a link to the HubSpot record (that last one needs
+`hubspot_portal_id` in your config; without it you get the raw record id and a note saying
+why there's no link).
+
+**What it does not show.** It names the **one** source the pipeline resolved to. The full
+provider-by-provider disagreement is worked out during scoring and never stored, so a
+single source named on a line is not evidence that the providers agreed. That's a known
+limitation with a fix already scoped, not a bug.
+
+**Protected fields are labelled, and the backend is what enforces protection.** The client
+reads `config/field_policy.yaml` only to *label* a field before you decide about it — it
+never refuses a decision on its own, because the backend is the single authority on what
+may be written and a second opinion here would be a second authority that drifts. The label
+is scoped to the endpoint this plugin submits to; approving inside HubSpot instead goes
+through a separate 15-minute sweep that does not apply the same check.
+
+**Rejecting records your reason and leaves the record in the queue.** It does not clear,
+dismiss or remove anything. A review flag is never cleared without a recorded decision, so
+a rejected record is still flagged afterwards and still appears here.
+
+Every decision shows you the exact property write **before** it is sent — and that write is
+the backend's own computed patch, returned by a dry run, not a guess assembled here. After
+a write the record is **re-read** and you are told verified or failed. An accepted response
+is never, by itself, reported as success.
+
+### The two endpoints and the config it needs
+
+- `hubspot/review/queue` — reads the flagged backlog. Read-only.
+- `hubspot/review/decision` — adjudicates one record. This is the only one that can write.
+
+Both authenticate with the `webhook_secret` you already set up, as the
+`X-Enrichment-Secret` header, against the same `n8n_url`. Two optional keys shape the
+display only: `hubspot_portal_id` (the record link) and `field_policy_path` (`null` uses the
+repo's own `config/field_policy.yaml`). No new secret of any kind.
+
+### Three gates, and all three must be open
+
+A review decision reaches HubSpot only when every one of these is open. Any one closed and
+nothing is written:
+
+| Gate | Where it lives | Who opens it |
+|---|---|---|
+| `ALLOW_REVIEW_SUBMIT` | environment variable on the machine this plugin runs on, read by Python **before a request is even built** | an **administrator**, out of band |
+| The session arm | this conversation only, never written to disk | **you**, by saying "arm review writeback" |
+| `ALLOW_HUBSPOT_REVIEW_WRITES` + its record allowlist | a constant compiled into the n8n workflow, read **inside n8n** | an admin, by a **deploy** — not by this plugin |
+
+**The first and the third are different variables, in different processes, on different
+machines.** The names are similar and the similarity is the trap: setting one has not done
+the work of the other. `ALLOW_REVIEW_SUBMIT` must read exactly `true` — `1`, `yes`, `TRUE`
+and `True` are all "off", deliberately, so it matches every other switch in this system.
+
+**`ALLOW_REVIEW_SUBMIT` gates submitting a decision, and nothing else.** Previewing the
+exact write still works without it, and so does rejecting a record — recording a reason and
+leaving it queued. A kill switch that blocked those would strand a record mid-decision,
+which is the opposite of what it is for. Your review-writeback arm is also separate from
+the contact-upload arm: arming one does not arm the other, in either direction.
+
+The skill will never ask you to set any of these, or offer a way around them. If a gate is
+closed it says which one and who can open it.
+
 ## Layout
 
 ```text

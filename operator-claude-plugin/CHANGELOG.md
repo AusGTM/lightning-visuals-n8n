@@ -89,6 +89,34 @@ over the same n8n system, so its version says nothing about backend capability.
   `dashboard_artifact_ttl_days` (default 30) and collected on the next skill open. The whole
   surface reads: it turns nothing on or off, starts nothing, and writes to no record.
 
+- **Phase 30 — review-queue triage.** A `/operator-claude-plugin:review-triage` skill that turns
+  the records the pipeline flagged for a human into something a non-technical operator can
+  actually adjudicate in conversation: per record, what HubSpot holds now, what the pipeline
+  wants to set instead, which source proposed it and how sure it was, why it was held back, the
+  evidence link, and a link to the record. `scripts/review_queue.py` reads the backlog through
+  the new read-only `hubspot/review/queue` endpoint and `scripts/review_decision.py` adjudicates
+  one record through `hubspot/review/decision` — the client holds no HubSpot credential in
+  either direction. A failed search is reported as a failure and never rendered as an empty
+  backlog. Fields the policy marks protected are **labelled** before the operator decides, read
+  display-only from `config/field_policy.yaml`; the backend remains the single authority on what
+  may be written, and the label is scoped to the endpoint this client submits to. **Rejecting
+  records the operator's reason and leaves the record in the queue** — nothing is ever silently
+  cleared. Every decision shows the exact property write first, and that write is the backend's
+  own dry-run patch rather than a client-side reconstruction; after a write the record is
+  independently re-read and the result reported verified or failed, so an accepted HTTP response
+  is never reported as success on its own. Writing passes **three** independent gates, all of
+  which must be open: the `ALLOW_REVIEW_SUBMIT` environment variable an admin sets (exact string
+  `true`, checked before a request is even built, and gating *submitting* only — previewing and
+  rejecting stay reachable without it), a session arm the operator gives in conversation which is
+  never written to disk and is separate from the contact-upload arm in both directions, and the
+  backend's own `ALLOW_HUBSPOT_REVIEW_WRITES` constant plus its record allowlist, which a deploy
+  opens and this plugin cannot.
+
+  **Known limitation, deferred rather than fixed:** the queue names the one source the pipeline
+  resolved to, not the provider-by-provider disagreement behind it. That disagreement is computed
+  during scoring and never persisted, so no client can show it today; persisting it is a cheap
+  backend fast-follow and is recorded as deferred, not as a defect in this client.
+
 ### Planned
 
 Milestone v0.6, phases 25–30 — see `.planning/workstreams/plugin-entrypoint/ROADMAP.md`:
