@@ -11,6 +11,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import fs from "node:fs";
 import { createRequire } from "node:module";
+import { stripVerifiedAt } from "./verifiedAtStrip.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -195,7 +196,7 @@ test("mergeCompanies: confidenceByField absent is byte-identical to the Task 1 c
   const withEmptyMap = mergeCompanies({}, { lv_content_type: ["live_broadcast"] }, undefined,
     { source: "claude_web", confidence: 90, confidenceByField: {} });
   // Strip verified_at (a timestamp) before comparing, per the plan's "modulo the timestamp".
-  const strip = (r) => JSON.parse(JSON.stringify(r).replace(/"verified_at":"[^"]*"/g, '"verified_at":"_"'));
+  const strip = stripVerifiedAt;
   assert.deepEqual(strip(withoutOption), strip(withEmptyMap));
 });
 
@@ -238,7 +239,7 @@ test("TA-4/TS-1/criterion-5: fresh vs stale page_age move the composite score bu
 
   // 2. ...yet the PROMOTED value is identical, and both promote (TS-1: recency never gates
   //    a value out, never flips it to false — it only reorders). Same value in both merges.
-  const strip = (r) => JSON.parse(JSON.stringify(r).replace(/"verified_at":"[^"]*"/g, '"verified_at":"_"'));
+  const strip = stripVerifiedAt;
   const merge = (score) => mergeCompanies({}, { lv_org_type: score.lv_org_type.research.value },
     undefined, { source: "claude_web", confidence: 90 }).canonicalPatch;
   assert.equal(fresh.lv_org_type.research.value, stale.lv_org_type.research.value);
@@ -344,7 +345,7 @@ test("TA-4/TS-1 via the PRODUCTION confidenceByField path: fresh vs stale page_a
   assert.notEqual(fresh.composite, stale.composite,
     "the lanes must differ in composite score, or this proves nothing");
 
-  const strip = (r) => JSON.parse(JSON.stringify(r).replace(/"verified_at":"[^"]*"/g, '"verified_at":"_"'));
+  const strip = stripVerifiedAt;
   assert.deepEqual(strip(fresh.merged.canonicalPatch), strip(stale.merged.canonicalPatch));
   assert.equal(stale.merged.canonicalPatch[field], "broadcaster",
     "stale evidence still promotes through the production path — recency is bias, not a gate");

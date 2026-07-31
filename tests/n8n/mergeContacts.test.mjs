@@ -13,6 +13,7 @@ import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { createRequire } from "node:module";
+import { stripVerifiedAt } from "./verifiedAtStrip.mjs";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -63,7 +64,7 @@ test("mergeContacts: opts.confidenceByField:{} (present-but-empty) is byte-ident
     { source: "waterfall", confidence: 90 });
   const withEmptyMap = mergeContacts({}, { jobtitle: "VP Engineering" }, undefined,
     { source: "waterfall", confidence: 90, confidenceByField: {} });
-  const strip = (r) => JSON.parse(JSON.stringify(r).replace(/"verified_at":"[^"]*"/g, '"verified_at":"_"'));
+  const strip = stripVerifiedAt;
   assert.deepEqual(strip(withoutOption), strip(withEmptyMap));
 });
 
