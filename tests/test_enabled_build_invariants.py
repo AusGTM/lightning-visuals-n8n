@@ -212,9 +212,18 @@ def test_overlayable_flags_is_a_strict_subset_of_config_flag_defaults():
     from scripts.build_cloud_workflows import WRITE_SAFETY_DEFAULTS, _write_safety_const
 
     assert deploy._OVERLAYABLE_FLAGS < set(CONFIG_FLAG_DEFAULTS) | set(WRITE_SAFETY_DEFAULTS)
+    # This pin moved from FOUR names to five exactly once, on purpose (Phase 30 Plan 01).
+    # Phase 23 D-16a deliberately REUSED ALLOW_HUBSPOT_CREATE rather than move it; review
+    # writeback cannot do the same. Reusing ALLOW_HUBSPOT_RECORD_WRITES would collapse two
+    # intentionally-separate authorities into one — Phase 28's arm/dispatch/disarm cycle
+    # flips that flag, and nothing it arms may enable a review write (D-02) — and there is
+    # no pre-existing second gate on the review path to reuse the way the contact lane
+    # could reuse ALLOW_HUBSPOT_CREATE. So the review path gets its own overlayable
+    # constant, ALLOW_HUBSPOT_REVIEW_WRITES (D-08e). A SIXTH name still fails here.
     assert deploy._OVERLAYABLE_FLAGS == {
         "ALLOW_HUBSPOT_RECORD_WRITES",
         "ALLOW_HUBSPOT_CREATE",
+        "ALLOW_HUBSPOT_REVIEW_WRITES",
         "TEST_RECORD_IDS",
         "TEST_RECORD_DOMAINS",
     }
