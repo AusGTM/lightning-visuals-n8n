@@ -83,6 +83,19 @@ extending the backend where a requirement demands it.
 - **D-10:** Remaining balances come from the **n8n-side status endpoint, never from the client
   calling a provider directly**. A balance that cannot be read renders as **"unknown"**, and the
   warning says so rather than assuming headroom. Unknown is never displayed as zero or as healthy.
+- **D-10a (CORRECTION, live-verified 2026-07-31 during 25-05 — Apollo is not a credit pool at
+  all):** D-10 and 25-RESEARCH describe Apollo's unknown balance as a *permissions accident* — this
+  account's key is non-master, so the usage endpoint 403s. That framing is incomplete and would
+  mislead anyone who "fixes" it. Verified live today: with a master key,
+  `POST /api/v1/usage_stats/api_usage_stats` returns **HTTP 200 carrying per-endpoint rate limits**
+  — `limit` / `consumed` / `left_over` by day, hour and minute. That is **throughput headroom, not a
+  depleting credit balance**, and it is not comparable against a per-match credit estimate the way
+  Lusha's `credits.remaining` and ZoomInfo's balance are. Consequences: (1) Apollo's per-match credit
+  rate stays **unknown** in the rate table permanently — upgrading the key does not produce one;
+  (2) Apollo's verdict is **structurally** unknown, so the unknown branch is the *common* case for
+  this account and not an edge case, which is exactly why rendering it as zero would become a
+  standing false alarm; (3) do not model Apollo as a depleting pool anywhere downstream. Recorded in
+  `operator-claude-plugin/config/cost_rates.json`'s `apollo_per_match` citation.
 
 ### Chunking and dispatch
 - **D-11:** The **client splits** oversized batches. The preview shows the chunk count and rows per
@@ -91,8 +104,16 @@ extending the backend where a requirement demands it.
   responses are capped at roughly 100 seconds, and the enrichment workflow has **no
   `Split In Batches` node** — every record in a POST runs the full provider + Haiku + Sonnet chain
   before the response fires. Chunk size must therefore be derived from measured per-record
-  latency, not chosen as a round number. No batch-timing data exists in this repo yet, so the plan
-  needs a measurement task before fixing the default.
+  latency, not chosen as a round number. ~~No batch-timing data exists in this repo yet, so the plan
+  needs a measurement task before fixing the default.~~ **Superseded by D-11c.**
+- **D-11c (CORRECTION, 2026-07-31 — the timing measurement D-11a asked for already exists):**
+  `29-TIMING.md` derived real per-record enrichment wall-clock **free from n8n execution history**,
+  so no live measurement task is needed: **max 36.1 s/record, max single run 38.9 s**. Against
+  D-11a's ~100 s Cloudflare ceiling this is a hard, small number — a safe chunk is **2 records**,
+  with 3 already inside the timeout's variance band. This is not a round number anyone would have
+  picked and it is the single most consequential input to 25-06/25-07: it also makes D-15's
+  refuse-an-oversize-list rule bite far earlier than "500 members" suggests. **25-01's remaining
+  live work is therefore the lists-scope probe only** — its chunk-timing half is already answered.
 - **D-11b:** Because of the timeout ceiling, a **timeout must count as a failed chunk** for D-12's
   skip rule — the same as a non-2xx. Distinguishing "timed out but may have succeeded server-side"
   from "backend rejected it" is Phase 26's problem, not this phase's; here it is simply a failure
@@ -125,6 +146,46 @@ extending the backend where a requirement demands it.
   times independently — n8n response assembly, client comparison, and rendered preview text — and
   each test must assert the two produce **different output**. An assertion of the form "unreadable
   is falsy" **passes against the defect**, so that shape is explicitly banned in `25-VALIDATION.md`.
+
+### Corrections folded back from execution
+
+- **D-18 (the `armed`-has-no-default acceptance one-liner is broken on Python 3.14 — found
+  executing 25-04):** the shape used in 25-04's acceptance criteria walks
+  `vars(module).values()` and calls `inspect.signature(f)` on **every** callable before filtering
+  on `'armed'`. On this repo's `.venv` (3.14.5) that raises `ValueError: no signature found for
+  builtin type` for any bare `Exception` subclass — and so **fails identically against Phase 23's
+  already-shipped `dispatch.py`**, which defines `NotArmedError`. It is a defect in the check, not
+  in any module it checks. Do not add `__init__` boilerplate to exception classes to satisfy it.
+  Restrict the walk to functions instead:
+  ```
+  p=[f for _n,f in inspect.getmembers(mod,inspect.isfunction)
+     if inspect.getmodule(f) is mod and 'armed' in inspect.signature(f).parameters]
+  assert p and all(inspect.signature(f).parameters['armed'].default is inspect.Parameter.empty for f in p)
+  ```
+  25-04 additionally made this a permanent test rather than a one-time plan check
+  (`test_enrichment_envelope.py::test_no_function_in_this_module_gives_armed_a_default`), so it
+  runs every suite invocation. **25-06 must not copy the broken form** into its own criteria.
+
+- **D-19 (the list envelope's field names are a cross-plan contract, agreed here so 25-03 and
+  25-06 cannot drift):** 25-04's client sends, for a backend-resolved list,
+  `{"providers": [...], "list": "<name>", "objectType": "contacts"}` — flat, top-level `list` and
+  `objectType`, **no `events` array and no record count of any kind** (D-01, D-02). 25-03's
+  `IF List Input` branches on exactly that (a list identifier present, `events` absent) and its
+  HubSpot expressions read `$json.body.list` / `$json.body.objectType`. The record-ID form is
+  unchanged from the deployed contract: `{"providers": [...], "events": [{objectId, objectType}]}`,
+  carrying **only** those two per-event keys — the deployed parser's extra-key spread is a
+  direct-field test shim that does nothing for a record already in HubSpot and only widens what
+  crosses the boundary. No test on either side of the webhook can catch a mismatch in these names
+  alone, which is why they are recorded here rather than only in each plan's summary.
+
+- **D-20 (the chunk default ships provisional, and says so in the artifact):** 25-04 shipped
+  `max_records_per_chunk: 2` in the example config with its derivation (36.1 s/record measured
+  2026-07-31 from live execution history, +~25 % headroom, against the ~100 s Cloudflare ceiling)
+  **and** with the fact that every measured run was single-record, company-lane, and none a full
+  waterfall — probes B2/B3/B4 from 25-01 Task 2 remain outstanding. D-08's reasoning applies: a
+  number without its date and its confidence cannot be judged. **25-06 must read the ceiling from
+  config and must not hardcode a fallback `2`** — an absent key means the ceiling is unconfigured,
+  not that 2 is safe.
 
 ### Claude's Discretion
 - The chunk size threshold's default value and where it is configured.
