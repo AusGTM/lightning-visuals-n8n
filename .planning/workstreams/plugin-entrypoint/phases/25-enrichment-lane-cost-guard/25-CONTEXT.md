@@ -225,6 +225,50 @@ extending the backend where a requirement demands it.
   config and must not hardcode a fallback `2`** — an absent key means the ceiling is unconfigured,
   not that 2 is safe.
 
+- **D-19a (CORRECTION to D-19 — the list envelope is NESTED, and D-19's flat shape shipped and
+  broke the lane):** D-19 above records the client sending
+  `{"providers": [...], "list": "<name>", "objectType": "contacts"}` — flat. **That is wrong and
+  must not be restored.** `n8n/code/listExpansion.js` reads `isPlainObject(body.list)` and then
+  `body.list.name` / `body.list.objectType`. A bare string is non-null, so a flat envelope **passes**
+  the `IF List Input` gate and is then refused by *every* request with "the enrichment request named
+  no list" — the whole list lane dead, while both sides' suites stayed green because each tested only
+  its own half of a boundary neither crossed. The shipped shape is
+  `{"providers": [...], "list": {"name": "<name>", "objectType": "contacts"}}` with **no top-level
+  `objectType` sibling**, fixed in `13006fa` and now pinned from both sides by the same literal:
+  `operator-claude-plugin/tests/test_list_envelope_contract.py` (client produces) and
+  `tests/n8n/listEnvelopeContract.test.mjs` (backend accepts). D-02c's description was correct;
+  D-19's was not. This is the *first* of the two copy-of-one-contract bugs Phase 25 shipped in a day.
+
+- **D-20a (how 25-06 reads the ceiling, and why there is no third copy):** the second such bug was
+  the ceiling itself (`1196c57`) — backend `ENRICH_MAX_LIST_RECORDS`
+  (`scripts/build_cloud_workflows.py:3355`) and client `max_records_per_chunk`
+  (`operator-claude-plugin/config/operator.local.example.json`), both **2**, now pinned equal by
+  `tests/test_chunk_ceiling_contract.py`. 25-06 therefore reads the number through
+  `chunking.chunk_ceiling(config)` and **defines no fallback**: an absent key raises, naming the key
+  and saying the ceiling is a timeout bound rather than a preference. An AST test
+  (`test_no_fallback_ceiling_constant_exists_in_the_module`) fails if the shipped ceiling ever
+  reappears in `chunking.py` as a default argument or a module constant, so the third copy cannot be
+  added back by accident. The number remains **PROVISIONAL** — B4, the full-waterfall probe, has not
+  run — and every artifact that carries it carries that label.
+
+- **D-21 (a list is refused, never chunked — on BOTH sides):** 25-03 refuses any list whose
+  membership page carries a cursor or exceeds the ceiling (D-15a). 25-06's client planner mirrors
+  that rather than compensating for it: a list specification yields a **one-chunk plan whose record
+  count is the word `unknown`**, the ceiling is not applied to it, and there is **no client-side list
+  paginator**. Chunking applies to record-ID batches only. A client that split a list would be
+  splitting a count it does not have.
+
+- **D-22 (a non-2xx carrying a readable JSON body was invisible to the chunk loop, and is not now):**
+  `enrichment.dispatch_enrichment` returns the parsed body on a readable response and a
+  `{status_code, text}` shim only when `.json()` raises — so an HTTP 401/500 whose body parses fine
+  returns something a caller cannot distinguish from a success. Left alone, a chunk the backend
+  refused would have been recorded as sent, which is this milestone's recurring
+  partial-read-impersonating-a-healthy-one shape arriving through yet another door. 25-06 closes it
+  **without editing 25-04's module**: `chunking._StatusCapturingTransport` wraps the caller's
+  transport, records `status_code` and whether the body parsed, and classification reads those.
+  Failure is defined in exactly one place — non-2xx, transport exception including a timeout
+  (D-11b), or an unreadable body.
+
 ### Claude's Discretion
 - The chunk size threshold's default value and where it is configured.
 - Rate-table file format and how the measurement date is represented.
