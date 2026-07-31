@@ -43,6 +43,26 @@ extending the backend where a requirement demands it.
   `crm.lists.read`; (2) a decision on view resolution. If views remain unresolvable, **INGEST-04
   scopes down to lists + record IDs** and that reduction is recorded as a requirement amendment
   rather than silently dropped.
+- **D-02b (RESOLUTION of D-02a, 2026-07-31 — probed live, then built by 25-03):** both halves are
+  answered and neither should be re-litigated. **(1) `crm.lists.read` is GRANTED.** It was *denied*
+  (403) on the first probe of that day and granted after being added to the
+  `ausgtm-lightningvisuals-data` static-auth app's `requiredScopes` and **reinstalled** (`hs project
+  install-app` — uploading a scope change does not grant it, and rotating the token never would).
+  The existing access token kept working; no rotation. **(2) Views are refused** — `refuse-and-redirect`,
+  accepted amendment #7, with the exact operator sentence recorded in `25-BLOCKERS.md`. INGEST-04
+  scopes to **lists + record IDs**. `treat-view-as-list` is not merely rejected but *more* dangerous
+  now than when it was written: with lists genuinely resolving, a view name colliding with a real
+  list name enriches the wrong record set **with no error** (Pitfall 2). 25-03 encodes this
+  structurally rather than by string heuristic — `list` and `view` are **different top-level keys**
+  on the envelope, so a view can never reach the list endpoint by accident.
+- **D-02c (the backend list envelope — the contract 25-06 must reconcile against):** 25-03 ships
+  `{providers, list: {name, objectType}}` where `objectType` is `contacts` or `companies`, and
+  `{providers, view: {name}}` for the refusal path. Anything else with no `events` array takes the
+  **existing** parser path unchanged, which means a client that sends a *differently-named* list key
+  gets `Parse HubSpot Event`'s bare-event fallback: one unknown-object-type event, terminating as
+  unsupported with a clean 200 — a silent no-op, not an error. **That mismatch is the one failure
+  this branch cannot detect for itself, and closing it is 25-06's integration test**, not a backend
+  guard that would have to break the currently-accepted bare-event body shape to exist.
 
 ### Provider selection
 - **D-03:** Provider selection has an **admin-config default that is overridable per batch**. The
@@ -138,6 +158,24 @@ extending the backend where a requirement demands it.
   is honest. **Silently truncating would enrich an arbitrary subset and report success**, which is
   the worst available outcome. This is a real capability bound, recorded in `25-BLOCKERS.md` and
   `CHANGELOG.md` so an admin finds it without opening a plan.
+- **D-15a (CORRECTION to D-15's premise, 2026-07-31 — "oversize" is not a size, it is a page):**
+  D-15 reasons about a "500-member list", which implies the backend can *see* the list's size and
+  compare it. It usually cannot. The live probe found `has_paging_cursor=True` on a **102-member**
+  list, so the memberships endpoint pages at or below 102 and a single read returns a **page**, not
+  a list. 25-03 therefore refuses on a **paging cursor** as well as on a count — and refuses on the
+  cursor *even when the returned page is at or below the ceiling*, because with a cursor present the
+  returned length is a lower bound and treating it as the size is exactly the partial-result-
+  impersonating-a-whole-one failure this milestone has hit repeatedly (D-08, D-20, D-22, D-23, D-33).
+  **The cursor is not followed**, and that is a decision rather than an omission: the ceiling (2, per
+  D-11c) is two orders of magnitude below a page (102) and is bounded by the ~100 s response window,
+  so a cursor can only ever mean "far more than the ceiling". Enumerating the remaining pages would
+  spend N requests to reach a refusal one request already proves. Revisit only if the ceiling ever
+  exceeds a HubSpot membership page — which it cannot while the response window bounds it.
+- **D-15b (a zero-member list is a refusal, not a quiet success):** a list that resolves to zero
+  members would expand to zero events, and zero items into a `responseNode` webhook means **no
+  response at all** — a ~100 s hang until Cloudflare 524s (D-22). The expansion refuses instead, and
+  the gate downstream of it admits only a **non-empty** events array, so even a regressed expansion
+  node cannot put zero events into the enrichment chain.
 - **D-16 (the tabular lane's cost block is a stated zero WITH its reason, not an omitted block):**
   criterion 3 says *every* preview on *both* lanes. Contact-upload runs no provider and no model
   call, so zero is the true answer — and it renders through the **same shared helper** as the
