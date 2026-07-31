@@ -429,3 +429,37 @@ def test_the_module_writes_no_second_fetcher_or_put_filter():
     assert "def fetch_workflow" not in src
     assert "def put_body" not in src
     assert "def assert_only_allowlisted_change" not in src
+
+
+def test_main_refuses_cadence_reload_when_stdin_is_not_a_tty(
+        armed_probe, monkeypatch, capsys):
+    """Observed for real on 2026-07-31: run without a TTY, `_prompt_operator`'s input()
+    raised EOFError AFTER the interval had been changed and BEFORE the restore, leaving a
+    live schedule on the 2-minute probe interval. The wait itself is correct (D-07 forbids
+    a poll loop) — what is wrong is STARTING a bracket this process cannot close. Refuse
+    up front, and prove no config load and no network call happen behind the refusal."""
+    monkeypatch.setattr(probe.sys.stdin, "isatty", lambda: False, raising=False)
+
+    def _exploded(*a, **k):                      # nothing may run past the guard
+        raise AssertionError("refused runs must not touch config or the network")
+
+    monkeypatch.setattr(probe.config_gate, "load_config", _exploded)
+    monkeypatch.setattr(probe, "cadence_reload", _exploded)
+
+    rc = probe.main(["cadence_reload", "wf-1", "Review Trigger (15 min)"])
+
+    assert rc == 1
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["verdict"] == probe.REFUSED
+    assert "TTY" in payload["detail"]
+    assert "Nothing was attempted" in payload["detail"]
+
+
+def test_main_still_runs_cadence_reload_when_stdin_is_a_tty(armed_probe, monkeypatch):
+    """The guard must not break the real operator path it exists to protect."""
+    monkeypatch.setattr(probe.sys.stdin, "isatty", lambda: True, raising=False)
+    monkeypatch.setattr(probe.config_gate, "load_config", lambda: {"n8n_url": "x"})
+    monkeypatch.setattr(probe, "cadence_reload",
+                        lambda *a, **k: {"verdict": probe.n8n_control.VERIFIED})
+
+    assert probe.main(["cadence_reload", "wf-1", "Review Trigger (15 min)"]) == 0

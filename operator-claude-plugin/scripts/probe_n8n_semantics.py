@@ -413,6 +413,22 @@ def main(argv=None) -> int:
             child.add_argument("--wait-minutes", type=int, default=DEFAULT_WAIT_MINUTES)
     args = parser.parse_args(argv)
 
+    # Refuse BEFORE anything else when cadence_reload has no interactive stdin — earlier
+    # than the config load, because this refusal does not depend on config being valid.
+    # `_prompt_operator` blocks on input(), which raises EOFError when stdin is not a TTY
+    # (a pipe, a CI step, an agent harness) — and that raise lands AFTER the interval has
+    # been changed and BEFORE the restore, leaving a live schedule on the probe interval.
+    # Observed for real on 2026-07-31. The wait itself is the design (D-07 forbids a poll
+    # loop); what is wrong is STARTING a bracket this process cannot close.
+    if args.subcommand == "cadence_reload" and not sys.stdin.isatty():
+        print(json.dumps(_refusal(
+            "cadence_reload",
+            "refusing: stdin is not a TTY, so the operator prompt this probe waits on "
+            "would raise EOFError AFTER the interval was changed and BEFORE it was "
+            "restored — leaving a live schedule on the probe interval. Nothing was "
+            "attempted. Run this in a real terminal."), indent=2))
+        return 1
+
     try:
         config = config_gate.load_config()
     except config_gate.ConfigError as e:
