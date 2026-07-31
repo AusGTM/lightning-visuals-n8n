@@ -273,6 +273,56 @@ and 30-06.**
   strings `"true"`/`"false"`, so the check normalises rather than testing truthiness —
   `"false"` is a truthy JS string.
 
+### Corrections folded in from executing 30-03 (2026-07-31)
+
+**Five facts the plan could not have known until the approve path existed. All five bind
+30-04, 30-06 and 30-07.**
+
+- **D-26 (D-12's fix lands in `reviewDecision.js`, NOT inside `reviewApply.js` — and single
+  authority still holds):** `30-02`'s handoff said the `manual_protected` guard "belongs
+  inside `reviewApply` so D-05/D-07's single-authority rule holds". `30-03`'s own acceptance
+  criterion, and **D-15**, say `git diff --stat n8n/code/reviewApply.js` must be empty.
+  These cannot both be satisfied and the guard wins: `reviewApply` is **also** the
+  15-minute backstop's engine, so widening it changes that loop's behaviour under the very
+  guard that exists to prevent it. Single authority is preserved by construction instead —
+  the class check reads `DEFAULT_COMPANY_POLICY`'s own `class` values, the same object
+  `mergeCompanies` gates with, so there is still exactly one policy table and no second
+  authority to drift. **Do not "fix" this by moving the check into `reviewApply`.**
+
+- **D-27 (a contacts approve must never reach `reviewApply` — it would silently de-queue
+  the record):** `reviewApply`'s allowlist is the **company** policy's key set. Handed a
+  contact candidate it drops every contact field (`jobtitle`, `phone`, …) as
+  un-allowlisted, finds nothing stale, and returns its **clear patch** — blanking the
+  review flags and the candidate while writing no value at all. That is precisely the
+  silent de-queueing **REVIEW-05** forbids. `buildReviewDecision` therefore returns
+  `no_candidate` for a contacts approve **before** any engine call. `DEFAULT_CONTACT_POLICY`
+  and `lv_contact_enrichment_provenance` are named in the module header as what a future
+  contacts apply engine must use, rather than imported as unreachable ceremony.
+
+- **D-28 (every write lane needs its OWN read-back — three contacts nodes, not two):** the
+  plan named two credential-bearing contacts nodes (fetch + PATCH). A contacts
+  **rejection** does write, and `Review Verify Fetch` POSTs to the *companies* search URL,
+  so it cannot read a contact back. Without `Review Contact Verify Fetch`, a landed
+  contacts write reaches the responder with `verified_properties: null` — which **D-19**
+  requires the client to report as a FAILURE. A read-back is per lane, not per workflow.
+
+- **D-29 (a contact can only be allowlisted by `TEST_RECORD_IDS`):** `_writeSafetyAllows`
+  matches on `hs_object_id` or `domain`, and contacts have no `domain` property. Arming
+  with `TEST_RECORD_DOMAINS` alone therefore denies every contact — and per **D-23** that
+  denial produces **no response at all**, not a refusal message. Asserted in both
+  directions in the endpoint tests and stated in the workflow's sticky note. **30-07's
+  runbook must say this**, or the operator reads a silent timeout as a broken endpoint.
+
+- **D-30 (the outcome vocabulary grew to six and `unsupported` is retired):** the endpoint
+  now returns `rejected | applied | stale | no_candidate | not_flagged | refused`. Nothing
+  returns `unsupported` any more. Two of the new three are outcomes an operator will
+  routinely meet — `stale` (the record drifted since the candidate was frozen: nothing
+  written, still queued) and `no_candidate` (in the queue but holding nothing to promote,
+  which is every contact and every dedupe-flagged row). **30-06 must branch on all six**,
+  and an approval's `would_write` is a **multi-key patch** — canonical fields, the clear
+  patch, and a `lv_enrichment_provenance` JSON blob that can be kilobytes — not the
+  single-key patch a rejection produces.
+
 ### Claude's Discretion
 - Queue ordering and how many conflicts are shown at once.
 - Wording of the conflict presentation and of the exact-write display.
@@ -371,3 +421,4 @@ and 30-06.**
 *Corrections D-16…D-21 folded in 2026-07-31 from a `gsd-plan-checker` run (4 blockers, 2 concerns),
 after Phase 28's D-33/D-34 landed. Repair edited `30-02`, `30-04`, `30-05`, `30-06` only —
 `30-01` was executing concurrently and `30-01`/`30-03`/`30-07` passed clean.*
+*D-22…D-25 folded in from executing `30-02`; D-26…D-30 from executing `30-03` (both 2026-07-31).*
