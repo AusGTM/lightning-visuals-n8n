@@ -422,3 +422,42 @@ and 30-06.**
 after Phase 28's D-33/D-34 landed. Repair edited `30-02`, `30-04`, `30-05`, `30-06` only —
 `30-01` was executing concurrently and `30-01`/`30-03`/`30-07` passed clean.*
 *D-22…D-25 folded in from executing `30-02`; D-26…D-30 from executing `30-03` (both 2026-07-31).*
+
+---
+
+### D-31 — D-12's `manual_protected` hole is closed on ONE path, not two. **OPEN.**
+
+**Found by independent verification of 30-03's completion claim, 2026-07-31.** 30-03 reports the
+hole "closed"; that is true of the new endpoint and **not** of the pre-existing backstop. Both
+paths were read directly:
+
+| Path | Filter | `domain` (`manual_protected`) | `annualrevenue` (`review_required`) |
+|---|---|---|---|
+| Review-decision endpoint — `reviewDecision.js:76` `PROTECTED_CLASSES` | by **class** | dropped | dropped |
+| 15-minute backstop — `reviewApply.js:41` `allowedFields = Object.keys(DEFAULT_COMPANY_POLICY)` | by **key presence only** | **writable** | **writable** |
+
+`DEFAULT_COMPANY_POLICY` genuinely contains both (`mergeCompanies.js`: `domain →
+class: "manual_protected"`, `annualrevenue → class: "review_required"`), so allowlisting by key
+admits exactly the two fields the class filter exists to refuse.
+
+**Why this matters more than a cosmetic inconsistency:** the backstop is the path the *documented*
+review flow uses. Root `CLAUDE.md` §22.2 step 5 has RevOps approve by setting
+`lv_enrichment_review_approved = true` in HubSpot, which the scheduled `Review Trigger (15 min)` →
+`Review Search (approved=true)` → `Apply Review` chain then picks up. An operator following the
+documented process therefore takes the **unprotected** route, and the protection 30-03 added is
+bypassed without anyone doing anything unusual.
+
+**This is pre-existing, not a 30-03 regression.** `reviewApply` has always allowlisted by key.
+30-03 made the endpoint strictly safer and correctly refused to widen `reviewApply`, because that
+file is the backstop's engine and is pinned byte-identical by a deliberate guard — 30-02 had said
+the fix "belongs inside `reviewApply`", and the guard overrode it. **That was the right call under
+the constraints; it simply does not finish the job.**
+
+**Not resolvable inside Phase 30's current plan set** — it needs either a change to a guarded file
+that alters the 15-minute backstop's behaviour, or an accepted decision that the two paths enforce
+different policies. Both are operator decisions, not planner decisions. **Do not let a later plan
+quietly close this by editing `reviewApply.js`** — the guard is there so that change is deliberate
+and reviewed, and the empty-`git diff --stat` criteria in `30-03` must stay.
+
+**Until it is resolved, `30-07`'s canary must not be read as proving protected-field enforcement**
+— it exercises the endpoint path only.
