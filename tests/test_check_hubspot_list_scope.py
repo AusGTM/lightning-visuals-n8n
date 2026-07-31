@@ -6,6 +6,7 @@
 # LIVE-ONLY probe (lives in scripts/, no `test_` prefix -> pytest never collects it);
 # this file proves its pure classifier and its env gate, mirroring
 # tests/test_check_provider_credits.py.
+import ast
 import json
 import re
 from pathlib import Path
@@ -278,5 +279,16 @@ def test_script_source_never_interpolates_the_token_env_var_into_a_print():
 
 def test_the_script_calls_load_dotenv_nowhere():
     """Every live script here is run through the documented dotenv wrapper; a script that
-    loads .env itself makes the runbook's command a lie and hides a missing-creds skip."""
-    assert "load_dotenv" not in Path(probe.__file__).read_text()
+    loads .env itself makes the runbook's command a lie and hides a missing-creds skip.
+    Checked against the AST, not the raw text, so the wrapper command quoted in the
+    module docstring does not read as a call."""
+    tree = ast.parse(Path(probe.__file__).read_text())
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            assert getattr(node.func, "id", None) != "load_dotenv", (
+                f"check_hubspot_list_scope.py:{node.lineno}: calls load_dotenv()")
+            assert getattr(node.func, "attr", None) != "load_dotenv", (
+                f"check_hubspot_list_scope.py:{node.lineno}: calls load_dotenv()")
+        if isinstance(node, ast.ImportFrom):
+            assert all(alias.name != "load_dotenv" for alias in node.names), (
+                f"check_hubspot_list_scope.py:{node.lineno}: imports load_dotenv")
