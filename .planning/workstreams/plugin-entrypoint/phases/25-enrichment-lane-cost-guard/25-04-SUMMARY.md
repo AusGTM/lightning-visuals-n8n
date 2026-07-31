@@ -64,8 +64,23 @@ call log, with nothing leaving the machine.
 | `9282b59` | feat | `enrichment.py` + `test_enrichment_envelope.py` (26 tests) |
 | `1f7efbd` | docs | example config: full-waterfall default + provisional chunk ceiling, each with its consequence |
 
-Two sibling commits landed between them (`ab20917`, `38e21a0` — both 25-05's cost guard);
-neither touches this plan's region.
+| `0e70a2b` | docs | this SUMMARY |
+
+Four sibling commits interleaved with these (`ab20917`, `38e21a0`, `3f95e71` — 25-05's cost
+guard; `3c659fc` — 25-03's backend list branch). None touches this plan's code region.
+
+**One collision, recorded rather than rewritten.** `25-CONTEXT.md` is a surface 25-04 and
+25-05 both wrote to in the same working tree. My D-18/D-19/D-20 hunk was staged surgically
+(`git apply --cached` of that hunk alone, leaving the sibling's two hunks in the working
+tree — verified +40/-0 with no sibling text) when 25-05's `3f95e71` committed and swept the
+staged hunk into its own commit. **Content integrity was verified afterwards:** all three
+decisions are present and complete in HEAD, the sibling's own D-11a rewrite is also
+present, and the decision sequence reads D-01…D-20 unbroken. History was not rewritten —
+per HANDOFF §8, a wrong commit label is cheaper than rewriting shared history. So
+`25-CONTEXT.md`'s D-18/19/20 are **authored by 25-04 but attributed to `3f95e71`**.
+This is the second instance of exactly the failure mode HANDOFF §8 names: name the shared
+surface when briefing concurrent executors. `25-CONTEXT.md` belongs on that list beside
+`SKILL.md` and `README.md`.
 
 ## What was built
 
@@ -193,11 +208,19 @@ on every record-specification form).
 
 Baselines were re-verified at the start of this plan, not taken on trust.
 
-| Suite | Baseline (verified by me) | After | Delta | Attribution |
+| Suite | Baseline (verified by me) | Final | Delta | Attribution |
 |---|---|---|---|---|
-| plugin (`operator-claude-plugin/tests`) | **521** | **547** (excluding 25-05's files) | **+26** | all mine |
-| repo (`.venv/bin/python -m pytest -q`) | **1370 passed, 1 skipped** | **1423 passed, 1 skipped** | +53 | **+26 mine**, +27 from 25-05's `test_cost_guard.py` (landed in `ab20917`/`38e21a0` during this plan) |
-| node (`node --test tests/n8n/*.test.mjs`) | **474 pass / 0 fail** | **474 pass / 0 fail** | 0 | untouched — this plan changes no n8n artifact |
+| plugin (`operator-claude-plugin/tests`) | **521** | **574** | +53 | **+26 mine** (`test_enrichment_envelope.py`), +27 from 25-05's `test_cost_guard.py` |
+| repo (`.venv/bin/python -m pytest -q`) | **1370 passed, 1 skipped** | **1446 passed, 1 skipped** | +76 | **+26 mine**, +27 from 25-05, +23 from 25-03's `tests/test_enrichment_list_branch.py` |
+| node (`node --test tests/n8n/*.test.mjs`) | **474 pass / 0 fail** | **503 pass / 0 fail** | +29 | none mine — all 25-03's `tests/n8n/listExpansion.test.mjs`. This plan changes no n8n artifact. |
+
+My own contribution measured directly: `pytest operator-claude-plugin/tests/test_enrichment_envelope.py -q` → **26 passed**. Sibling files measured the
+same way for attribution: `test_cost_guard.py` → 27, `tests/test_enrichment_list_branch.py`
+→ 23, `listExpansion.test.mjs` → 29.
+
+An intermediate reading of 1423 was taken while 25-03's commit `3c659fc` was landing —
+re-measured after it settled rather than reported as-is. No suite was re-run to obtain a
+greener number.
 
 **One transient failure, not mine:** mid-plan,
 `test_cost_guard.py::test_an_unknown_estimate_against_a_readable_balance_is_still_unknown`
