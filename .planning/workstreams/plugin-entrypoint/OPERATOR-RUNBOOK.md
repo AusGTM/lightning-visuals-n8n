@@ -376,59 +376,15 @@ here for completeness; that file governs on any discrepancy.
 `TEST_RECORD_DOMAINS=australiagtm.com`. Arming `ALLOW_HUBSPOT_CREATE` is a **deliberate departure**
 from 22-OPERATOR-RUNBOOK.md, which forbade it — Phase 23's entire goal *is* the create path.
 
-### ⚠ Two defects found walking this runbook on 2026-07-31 — read before Section B
+### ⚠ One outstanding defect found walking this runbook on 2026-07-31 — read before Section B
 
-Both were found by the operator mid-window, and both were independently confirmed against the
-committed artifacts and the live instance. **Section B is not safe to run as originally written.**
-
-**Defect 1 — the read-back at Steps 1, 3b and 7 does not cover the lane being armed.**
-`scripts/verify_live_write_safety.py` hardcodes one workflow (`ENRICHMENT_WORKFLOW_NAME`, line 60)
-and two node names (`WRITE_DECISION_NODE_NAMES = ("Decide Action", "Decide Company Action")`, line
-64), and takes no workflow argument. Confirmed coverage: **2 of the 9 `ALLOW_HUBSPOT_CREATE` sites
-and 2 of the 8 `ALLOW_HUBSPOT_RECORD_WRITES` sites — and zero nodes in
-`LV Contact Ingest (Cloud template)`**, whose gates are named `HubSpot Update Write Gate` and
-`HubSpot Create Write Gate`. That is the lane this canary fires at.
-
-Consequence: **a `VERDICT: disarmed PASS` at Step 7 is not evidence the contact lane is disarmed.**
-Until the verifier is fixed, close the window by *also* confirming the contact lane directly:
-
-```bash
-.venv/bin/python -c "
-from dotenv import load_dotenv; load_dotenv()
-import os, re, requests
-base = os.getenv('N8N_URL','').rstrip('/'); key = os.getenv('N8N_API_KEY')
-r = requests.get(f'{base}/api/v1/workflows', headers={'X-N8N-API-KEY': key}, timeout=30); r.raise_for_status()
-for w in r.json()['data']:
-    d = requests.get(f\"{base}/api/v1/workflows/{w['id']}\", headers={'X-N8N-API-KEY': key}, timeout=30).json()
-    for n in d.get('nodes', []):
-        for flag, val in re.findall(r'(ALLOW_HUBSPOT_[A-Z_]+)\s*=\s*\"(true|false)\"', n.get('parameters',{}).get('jsCode','') or ''):
-            if val == 'true': print('ARMED:', w['name'], '|', n['name'], '|', flag)
-print('scan complete — any ARMED line above means the window is still open')
-"
-```
-
-Read-only. **Silence is the pass.** Any `ARMED:` line means the backend is still armed regardless of
-what the verifier reported.
-
-**Defect 3 — Step 3b is guaranteed to FAIL, and the runbook tells you not to fire on a fail.**
-Step 3 arms `ALLOW_HUBSPOT_RECORD_WRITES` **and** `ALLOW_HUBSPOT_CREATE`. Step 3b then runs
-`--expectation armed`, whose armed branch requires `ALLOW_HUBSPOT_RECORD_WRITES == "true"` and
-**every other write-enabling boolean to read `"false"`** — with the message *"canary scope is record
-writes only"*. There is no CLI flag to permit `CREATE`. So Step 3b reports FAIL for a backend that
-is armed exactly as Step 3 intended.
-
-This is **pre-existing and not caused by Phase 30** — the verifier was written for Phase 22's canary,
-whose scope deliberately excluded create. 23-06 departs from that on purpose, because Phase 23's
-entire goal *is* the create path. The runbook and the verifier encode two different definitions of
-"correctly armed", and nobody hit it until now because Section B never got past Step 1.
-
-**Until it is fixed, do not read Step 3b's FAIL as "the arming did not work".** Confirm the armed
-state with the all-workflow scan from Defect 1 instead, checking that exactly
-`ALLOW_HUBSPOT_RECORD_WRITES` and `ALLOW_HUBSPOT_CREATE` read `true`, that
-`ALLOW_HUBSPOT_REVIEW_WRITES` reads `false`, and that the allowlist is your domain and nothing else.
-The proper fix — an explicit "which flags do you expect armed" argument rather than a hardcoded
-scope — belongs with Defect 1's fix in `/gsd-plan-phase 23 --gaps --ws plugin-entrypoint`, since
-both are the same script.
+Three defects were found by the operator mid-window. **Two of them were in
+`scripts/verify_live_write_safety.py` and are FIXED** (plan 23-07): the read-back no longer names one
+workflow and two nodes — it discovers every node in every deployed workflow that declares a
+write-safety constant — and the armed expectation now takes an explicit `--expect-armed` set, so a
+backend armed as Step 3 arms it yields `armed PASS` instead of a guaranteed FAIL. The all-workflow
+shell workaround that used to live here is gone: the verifier does that scan itself, and prints its
+own coverage line. The third defect below is unrelated and still stands.
 
 **Defect 2 — 23-01's create-gate fix is committed but not deployed.** Confirmed live 2026-07-31:
 `LV Contact Ingest (Cloud template)` (`updatedAt` 2026-07-30) declares literals in only its two
@@ -448,9 +404,10 @@ DRY_RUN=false ALLOW_N8N_DEPLOY=true \
 .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/verify_live_write_safety.py', run_name='__main__')" --expectation disarmed
 ```
 
-Then re-run the Defect-1 scan above and confirm `LV Contact Ingest`'s `Decide Action` now declares
-`ALLOW_HUBSPOT_CREATE = "false"` — three CREATE sites in that workflow, not two. Only then proceed
-to Step 3.
+Step 2c's own report now lists every declaring node it found, grouped by workflow. Read it and
+confirm `LV Contact Ingest (Cloud template)`'s `Decide Action` appears with
+`ALLOW_HUBSPOT_CREATE='false'` — three CREATE sites in that workflow, not two. Only then proceed to
+Step 3.
 
 ### Section A — install and invoke (read-only, gates Section B)
 
@@ -480,6 +437,8 @@ pre-existing contact turns a create test into an update test.
 
 ```bash
 # Step 1 — disarmed baseline read-back → expect VERDICT: disarmed PASS
+# (covers EVERY declaring node in EVERY deployed workflow — the contact lane included.
+#  Read the `coverage:` line: a scan finding zero declaring nodes FAILS, it never passes.)
 .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/verify_live_write_safety.py', run_name='__main__')" --expectation disarmed
 
 # Step 2 — dry-run the deploy (arms nothing, shows the diff)
@@ -491,8 +450,15 @@ DRY_RUN=false ALLOW_N8N_DEPLOY=true \
   .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/deploy_n8n_workflows.py', run_name='__main__')"
 
 # Step 3b — ARMED read-back (required, distinct step) → expect VERDICT: armed PASS
-.venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/verify_live_write_safety.py', run_name='__main__')" --expectation armed --allowlist australiagtm.com
+.venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/verify_live_write_safety.py', run_name='__main__')" --expectation armed --allowlist australiagtm.com --expect-armed ALLOW_HUBSPOT_RECORD_WRITES,ALLOW_HUBSPOT_CREATE
 ```
+
+`--expect-armed` names exactly what Step 3 armed. It is **symmetric, not a filter**: every
+write-enabling boolean you do *not* name — here `ALLOW_HUBSPOT_REVIEW_WRITES` — is still asserted
+disabled in every declaring node of every deployed workflow. Omitting the argument means record
+writes alone, which would FAIL this window (create is armed), so a forgotten flag is a stricter
+verdict, never a permissive one. An empty allowlist is its own reported finding: `_writeSafetyAllows()`
+returns false on empty, so it would grant nothing while every flag read `true`.
 
 `ENABLE_BAKED_FLAGS` syntax: bare boolean kill switches take **no** `=value`;
 `TEST_RECORD_DOMAINS=australiagtm.com` supplies the allowlist. Multiple values within one flag
@@ -555,6 +521,8 @@ DRY_RUN=false ALLOW_N8N_DEPLOY=true \
   .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/deploy_n8n_workflows.py', run_name='__main__')"
 
 # Step 7 — disarmed read-back → expect VERDICT: disarmed PASS
+# This verdict now covers the contact lane's own write gates, so it IS evidence the lane
+# this canary fired at is disarmed. No separate all-workflow scan is needed any more.
 .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/verify_live_write_safety.py', run_name='__main__')" --expectation disarmed
 ```
 
@@ -826,10 +794,6 @@ the **entire blast radius.**
    and the backstop is the path the documented approve flow uses. Record what you observed; do not
    write "protected fields are protected" in the log.
 
-⚠ **`verify_live_write_safety.py` inspects NO node in the review workflow.** It hardcodes the
-enrichment workflow and two `Decide*` node names. Use §RB-3 Defect 1's all-workflow scan for this
-window's arm and disarm read-backs — the verifier alone cannot see the flag you are arming.
-
 ### THREE gates, all three must be open — verified against the shipped code 2026-07-31
 
 Any one closed stops the write, and they live in three different places:
@@ -877,9 +841,20 @@ allowlist). Prove the path with a rejection, then do the approval.
 DRY_RUN=false ALLOW_N8N_DEPLOY=true \
   ENABLE_BAKED_FLAGS="ALLOW_HUBSPOT_REVIEW_WRITES,TEST_RECORD_IDS=<RECORD_ID>" \
   .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/deploy_n8n_workflows.py', run_name='__main__')"
+
+# 3b — ARMED read-back (required before any decision) → expect VERDICT: armed PASS
+.venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/verify_live_write_safety.py', run_name='__main__')" --expectation armed --allowlist <RECORD_ID> --expect-armed ALLOW_HUBSPOT_REVIEW_WRITES
 ```
 
 **Confirm a non-zero rewrite count for the flag.** Zero means it refused and deployed nothing.
+
+Step 3b's read-back covers the review workflow — it discovers every node in every deployed workflow
+that declares a write-safety constant, so the flag you just armed is one it can see. `--expect-armed`
+is **symmetric**: naming `ALLOW_HUBSPOT_REVIEW_WRITES` asserts it reads enabled *and* asserts
+`ALLOW_HUBSPOT_RECORD_WRITES` and `ALLOW_HUBSPOT_CREATE` still read disabled everywhere — a review
+window that also armed dispatch is a widened blast radius and fails here. Omitting the argument
+means record writes alone and would FAIL this window, so a forgotten flag is the stricter verdict.
+**If Step 3b does not pass, do not take a decision.**
 
 4. **Activate** the review-decision workflow in n8n Cloud.
 5. From a Claude session with the plugin installed: open the review queue, confirm the chosen record
@@ -941,23 +916,25 @@ Kept so a section you read yesterday is not silently different today.
 | When | Change |
 |---|---|
 | 2026-07-31 | **Tenant pinned.** `N8N_EXPECTED_URL` = `https://alexherman.app.n8n.cloud`. Replaces the unfollowable "key must be Robert's, Alex's in `N8N_API_KEY_2`" check — `N8N_API_KEY_2` does not exist |
-| 2026-07-31 | **RB-3 gained three confirmed defects.** The read-back covers 2 of 9 flag sites and no contact-lane node; 23-01's fix is committed-but-undeployed; and Step 3b **fails on a correctly armed backend** because it rejects `CREATE`. Section B cannot pass as written |
+| 2026-07-31 | **RB-3 gained three confirmed defects**, of which **two are now fixed by plan 23-07** (read-back coverage; Step 3b rejecting a correctly armed backend). The remaining one — 23-01's fix committed but not deployed, with Steps 2b/2c inserted for it — still stands |
 | 2026-07-31 | **RB-4 became runnable** — Phase 27 is code-complete |
 | 2026-07-31 | **RB-5's probe variable is named** `ALLOW_N8N_PROBE`, and its credential source is settled as `config_gate.load_config()`, not shell `N8N_URL`/`N8N_API_KEY` |
 | 2026-07-31 | **RB-6 withdrawn** — the decision it asked for was already made (D-25 / amendment #6) |
 | 2026-07-31 | **Gating made uniform (D-34)** — one `ALLOW_*` per dangerous capability, value exactly `true`, checked before any transport. Added `ALLOW_N8N_ARM` (RB-7) and `ALLOW_REVIEW_SUBMIT` (RB-9) |
 | 2026-07-31 | **RB-1's Probe B partly pre-measured** — 36.1 s/record measured free from execution history, implying a chunk default of 1–2 and a likely 524 on the five-record probe |
 | 2026-07-31 | **RB-9 gained four changes** — two gates at different layers, a new step 6b, contacts allowlistable only by `TEST_RECORD_IDS`, and the D-31 caveat that it does not prove protected-field enforcement |
+| 2026-07-31 | **The read-back was fixed (plan 23-07, D-19).** `verify_live_write_safety.py` now scans EVERY deployed workflow and every node declaring a write-safety constant, and takes `--expect-armed FLAG,FLAG`. Two of RB-3's three defects and RB-9's ⚠ paragraph are gone with it; the all-workflow shell workaround is retired. RB-3's undeployed-23-01 finding stands |
 
-### Standing caveat — one script, three defects, two armed windows
+### Standing note — the read-back, after 23-07
 
-`scripts/verify_live_write_safety.py` is the read-back both RB-3 and RB-9 depend on, and it has
-three independent problems found by three separate routes today: it inspects **one workflow and two
-nodes** (2 of 9 `CREATE` sites, none in the contact lane, none in the review workflow); it **rejects
-a correctly armed window** whenever anything beyond `ALLOW_HUBSPOT_RECORD_WRITES` is armed; and it
-therefore cannot see `ALLOW_HUBSPOT_REVIEW_WRITES` at all.
+`scripts/verify_live_write_safety.py` is the read-back both RB-3 and RB-9 depend on. Since plan 23-07
+it **discovers** its own coverage — every node in every deployed workflow that declares a
+write-safety constant, so a workflow deployed or renamed later appears with no code edit — and it
+takes `--expect-armed FLAG,FLAG` so each window can state exactly what it armed. There is
+deliberately **no workflow-narrowing argument**: a scan that can be narrowed can be blind.
 
-**Until it is fixed, treat its verdict as necessary but not sufficient in every armed window**, and
-run RB-3 Defect 1's all-workflow scan alongside it. The fix is one coherent piece of work —
-a workflow argument, an expected-armed-flags argument, and no hardcoded scope — and routes to
-`/gsd-plan-phase 23 --gaps --ws plugin-entrypoint`.
+Read its `coverage:` line every time. **A scan that discovers zero declaring nodes FAILS** rather
+than reporting a disarmed pass, and an **empty allowlist under an armed expectation is its own
+finding** — `_writeSafetyAllows()` returns false on empty, so that state grants nothing while every
+flag reads `true`. Naming a flag never widens the check: every write-enabling boolean you do not
+name is still asserted disabled, everywhere it is declared.

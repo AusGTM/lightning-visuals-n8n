@@ -129,31 +129,21 @@ installed plugin.
 
 # SECTION B — the armed create canary (23-06 Task 2)
 
-> ## ⚠ STOP — two defects found walking this section on 2026-07-31
+> ## ⚠ STOP — one defect still outstanding from walking this section on 2026-07-31
 >
-> Both confirmed against the committed artifacts and the live instance. **Section B is not safe to
-> run exactly as written below.** Full detail and the replacement commands are in
-> `../../OPERATOR-RUNBOOK.md` §RB-3, "Two defects found walking this runbook".
+> Three defects were found here. **The two in `verify_live_write_safety.py` are FIXED** by plan
+> 23-07: the read-back now discovers every node in every deployed workflow that declares a
+> write-safety constant (the contact lane included), and `--expect-armed` lets Step 3b state the
+> record-writes-plus-create window Step 3 actually arms, so it no longer fails on a correctly armed
+> backend. The all-workflow shell workaround in `../../OPERATOR-RUNBOOK.md` §RB-3 is retired.
+> Steps 1, 3b and 7 below are the corrected commands.
 >
-> 1. **The read-back at Steps 1, 3b and 7 does not cover the lane this canary fires at.**
->    `verify_live_write_safety.py` hardcodes `LV Enrichment (Cloud template)` and the two
->    `Decide*` node names (lines 60 and 64) and takes no workflow argument — covering 2 of 9
->    CREATE sites, 2 of 8 RECORD_WRITES sites, and **zero nodes in
->    `LV Contact Ingest (Cloud template)`**. A `disarmed PASS` at Step 7 is therefore **not**
->    evidence the contact lane is disarmed. Run the all-workflow scan in §RB-3 as well; silence
->    is the pass.
-> 2. **Step 3b will FAIL even when arming worked.** Step 3 arms `ALLOW_HUBSPOT_RECORD_WRITES`
->    **and** `ALLOW_HUBSPOT_CREATE`, but `--expectation armed` requires every boolean *other than*
->    `ALLOW_HUBSPOT_RECORD_WRITES` to read `"false"` (*"canary scope is record writes only"*), and
->    there is no flag to permit create. Pre-existing: the verifier encodes Phase 22's canary scope,
->    which 23-06 deliberately departs from. **Do not read that FAIL as "arming did not work"** —
->    confirm with §RB-3's all-workflow scan instead. Fix belongs with defect 1; same script.
-> 3. **23-01's create-gate fix is committed but not deployed** (live `updatedAt` 2026-07-30
+> 1. **23-01's create-gate fix is committed but not deployed** (live `updatedAt` 2026-07-30
 >    declares literals in only the two write gates). Step 3 would push never-live-tested logic
 >    in the same action that arms writes. **Insert Steps 2b/2c from §RB-3** — a disarmed deploy
->    plus read-back — so "did the fix deploy" and "did arming work" stay separable.
->
-> Both route to `/gsd-plan-phase 23 --gaps --ws plugin-entrypoint` for the permanent fix.
+>    plus read-back — so "did the fix deploy" and "did arming work" stay separable. Step 2c's
+>    report lists every declaring node it found: confirm `LV Contact Ingest (Cloud template)`'s
+>    `Decide Action` now appears carrying `ALLOW_HUBSPOT_CREATE='false'`.
 
 ### Step 0 — confirm the canary does not already exist
 
@@ -171,7 +161,9 @@ Prove the starting state rather than assuming it:
 .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/verify_live_write_safety.py', run_name='__main__')" --expectation disarmed
 ```
 
-Confirm `VERDICT: disarmed PASS`.
+Confirm `VERDICT: disarmed PASS`, and read the `coverage:` line it prints — the verdict covers every
+node in every deployed workflow that declares a write-safety constant, so it speaks for the contact
+lane this canary fires at. **A scan finding zero declaring nodes FAILS** rather than passing quietly.
 
 ### Step 2 — dry-run the deploy
 
@@ -222,8 +214,16 @@ when written on 2026-07-31 and was **already wrong later the same day** — 30-0
 The deploy's exit code is **not** this proof:
 
 ```bash
-.venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/verify_live_write_safety.py', run_name='__main__')" --expectation armed --allowlist australiagtm.com
+.venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/verify_live_write_safety.py', run_name='__main__')" --expectation armed --allowlist australiagtm.com --expect-armed ALLOW_HUBSPOT_RECORD_WRITES,ALLOW_HUBSPOT_CREATE
 ```
+
+`--expect-armed` names exactly the two flags Step 3 armed, in the same comma-separated shape as
+`ENABLE_BAKED_FLAGS`. It is **symmetric, not a filter**: `ALLOW_HUBSPOT_REVIEW_WRITES` — which you
+did not name — is still asserted disabled in every declaring node of every deployed workflow, so a
+window that quietly widened past this canary's scope fails here. Omitting the argument means record
+writes alone and would FAIL this window, so forgetting it yields the stricter verdict rather than a
+permissive one. An empty allowlist is its own reported finding, never a pass:
+`_writeSafetyAllows()` returns false on empty, so it would grant nothing while every flag read `true`.
 
 Confirm `VERDICT: armed PASS` before firing. If it fails, **do not fire** — return to Step 3.
 
@@ -290,7 +290,9 @@ DRY_RUN=false ALLOW_N8N_DEPLOY=true \
 .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/verify_live_write_safety.py', run_name='__main__')" --expectation disarmed
 ```
 
-Confirm `VERDICT: disarmed PASS`. **The window is not closed until this passes.**
+Confirm `VERDICT: disarmed PASS`. **The window is not closed until this passes.** Since 23-07 this
+verdict genuinely covers `LV Contact Ingest (Cloud template)`'s own write gates, so it is evidence
+the lane you fired at is disarmed — no separate all-workflow scan is needed alongside it.
 
 ### Step 8 — clean up the canary
 

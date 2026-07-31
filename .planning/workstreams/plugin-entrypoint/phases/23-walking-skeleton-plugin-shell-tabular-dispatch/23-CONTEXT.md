@@ -162,6 +162,59 @@ Out of scope this phase: non-tabular adapters (Phase 24), the enrichment lane an
   Treat it as an early task, not a trailing one — otherwise the walking skeleton demonstrates a
   flow that stops short of its own goal.
 
+### The arm/disarm read-back — corrected mid-window, plan 23-07
+- **D-19 (three defects in `scripts/verify_live_write_safety.py`, found by three independent routes
+  on 2026-07-31; fixed as one coherent change):** this script is the read-back that closes an armed
+  window — in this repo a window is closed by an independent re-read, never by a deploy's exit code
+  (Phase 19's BUG 26). It was unfit for the two windows that depend on it, 23-06 Section B and 30-07.
+  - **Finding 1, found by the operator walking 23-06 Section B live:** it hardcoded one workflow
+    name and a two-name `Decide*` node tuple and took no workflow argument, so it inspected **2 of
+    the 11 declaring nodes** and **no node at all in `LV Contact Ingest (Cloud template)`** — the
+    lane the canary fires at. Its `disarmed PASS` was therefore not evidence that lane was disarmed:
+    a confident pass for something it never looked at.
+  - **Finding 2, found by reading Step 3b against the script:** the armed branch baked in Phase 22's
+    canary scope (record writes only, everything else must read disabled), so it reported **FAILURE
+    for a backend armed exactly as its own runbook intended** — 23-06 arms record writes *and*
+    create on purpose, because the create path is Phase 23's whole goal. A read-back that fails a
+    correct state trains an operator to fire through a failure, which is worse than no read-back.
+  - **Finding 3, found earlier by 30-01 and already fixed:** the checked boolean set was re-typed as
+    a literal list, so `ALLOW_HUBSPOT_REVIEW_WRITES` — added as the fifth overlay constant — was
+    invisible and an armed instance reported `disarmed PASS`. 30-01 replaced it with
+    `tuple(c for c in CHECKED_CONSTANTS if c not in ALLOWLIST_CONSTANTS)`. **23-07 preserves that
+    derivation rather than redoing it**, and grep-gates it so it cannot be re-hardcoded.
+- **D-19a (coverage is discovered, never listed):** the script fetches every deployed workflow,
+  re-fetches each by id for node detail, and inspects every node whose `jsCode` declares at least one
+  checked constant. A workflow deployed or renamed later appears with no code edit. It deliberately
+  carries **no workflow-selection or filter argument** — 27-04's D-07 no-allowlist reasoning applies:
+  the moment the scan can be narrowed, the read-back can go blind again, one flag at a time, which is
+  precisely the failure 23-06 found live. A scan discovering **zero** declaring nodes is an explicit
+  failure, never a quiet pass: a scan that matched nothing is otherwise indistinguishable from a
+  disarmed instance, and the vacuous pass is a shape this milestone has hit repeatedly.
+- **D-19b (a node is judged on what it declares):** the old rule required every inspected node to
+  declare all five constants. The contact lane's `Decide Action` declares **only**
+  `ALLOW_HUBSPOT_CREATE` — that is exactly what 23-01 built (D-16a/D-16b) — so the old rule would
+  report a legitimate node as broken on every run under discovery. Nothing is lost by dropping it:
+  which node declares what is pinned separately by `tests/test_write_gate_coverage.py` and by the
+  all-disabled scan over the committed artifacts. Every finding names **workflow then node**, because
+  two workflows contain a node named `Decide Action`.
+- **D-19c (`--expect-armed` is symmetric, not a filter):** the operator states which flags they
+  expect armed, in the same comma-separated shape they already type into `ENABLE_BAKED_FLAGS`. Naming
+  a flag says it must read enabled and says **nothing else** — every write-enabling boolean not named
+  is still asserted disabled, in every declaring node of every workflow. Weakening this into "ignore
+  what I did not name" would delete the property the check exists for. Omitting the argument keeps
+  Phase 22's exact meaning (record writes alone), so every pre-existing call site — including the
+  completed Phase 22 runbook's three invocations — stays correct, and an operator who forgets the
+  argument gets the **stricter** verdict, never a permissive one. An unknown or empty flag set raises
+  rather than expecting nothing. An **empty allowlist under an armed expectation is its own finding**:
+  `_writeSafetyAllows()` returns false on empty, so that state grants nothing while every flag reads
+  `true` — it must never read as a passing armed window.
+- **D-19d (a runbook command line and the CLI are one contract):** both operator runbooks were
+  updated in the same change. A runbook that tells an operator to work around behaviour that no
+  longer exists — or to pass a flag the script rejects — is the same defect class this fixes, and it
+  is executed verbatim by a human under time pressure inside an armed window. The script remains
+  read-only throughout: it arms nothing, deploys nothing, activates nothing and never touches
+  HubSpot, and its whole test suite runs with zero live network calls.
+
 ### Claude's Discretion
 - Exact slash-command name and skill trigger phrasing.
 - Python module layout inside `operator-claude-plugin/scripts/`, and which library reads XLSX.
