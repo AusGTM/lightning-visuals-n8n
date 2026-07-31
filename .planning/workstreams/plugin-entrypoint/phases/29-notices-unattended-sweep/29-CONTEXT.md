@@ -241,6 +241,35 @@ every plan cites these IDs.
   `onError: continueRegularOutput`, so **Pitfall 1's substance is unchanged** — only the spelling was
   wrong. Fixtures keyed on the abbreviations would pass while the live code found nothing.
 
+- **D-22 (the three provider states, as the deployed endpoint actually emits them).** Folded in by
+  29-02 after reading the artifacts. 29-RESEARCH Pitfall 5 says "Phase 27's endpoint already returns
+  `{configured: bool, credits: int|None, ...}` per provider" — **it does not**, and a fixture built
+  to that sentence would carry a `configured: false` balances row production never emits. What
+  `Build Credit Status` really emits (`scripts/build_cloud_workflows.py:4453-4471`) is one row per
+  **requested** provider, `{provider, configured, credits, unreadable, error, status}`, with
+  `configured` **hardcoded `true`** and `unreadable === (credits === null)`. So the three states are:
+  1. **numeric** — `credits` a number, `unreadable: false`;
+  2. **unknown** — `credits: null`, `unreadable: true`, plus a `credential_health` entry
+     `state: "refused"` (Apollo's 403-by-design). Never "exhausted", never "healthy";
+  3. **never probed** — **absent from `balances` entirely**, present in `credential_health` as
+     `{state: "unknown", reason: "not_configured"}` — `deriveSourceHealth`'s real `configured: false`
+     output (`n8n/code/backendStatus.js:37`).
+
+  Pitfall 5's substance is unchanged (unknown must never fire the exhausted notice); only the shape
+  was wrong. **29-05's `is_quota_exhausted` must therefore read `balances` for states 1 and 2 and
+  `credential_health` for state 3** — a provider missing from `balances` is not zero-credit, and
+  reading only `balances` would make state 3 invisible. Note also that the rendered plugin-side view
+  (`status.py::render_backend_status`) keeps only `{provider, credits}` from each balances row, so
+  the sweep must consume `fetch_backend_status()`'s raw `data`, not the rendered mapping.
+
+- **D-23 (the executions collection carries no `workflowData` on this tenant).** Found live by 29-02
+  Task 3. Every item in `/api/v1/executions` has `workflowData: undefined`, so a per-workflow filter
+  reading `workflowData.name` matches **nothing** and prints an empty table — indistinguishable from
+  "no executions to measure", the exact D-20 failure in a second guise. `enrichment_cost_ledger.py`'s
+  `list` mode already knew this and falls back to a `workflowId → name` map from the workflow
+  collection; `collect_durations()` now does the same, with a regression test. Any later code
+  filtering executions by workflow name must resolve through the workflow collection.
+
 ### Claude's Discretion
 - Sweep cadence default and whether it is admin-configurable — bounded by D-19: state the
   all-three-providers probe per fire, and prefer hours over minutes.
