@@ -111,7 +111,7 @@ would strand an armed backend, which is the failure mode this entire ceremony ex
 | RB-2 | **29-01** scheduled-routine host probe | ✅ **yes** | none — no dependencies, no code needed. **Unblocks 4 plans; joint highest leverage** |
 | RB-3 | **23-06** install + armed create canary | ⚠ Section A yes, Section B **NO** | **three confirmed defects** — see the block in RB-3. Section B cannot pass as written |
 | RB-4 | **27-05** dashboard same-URL check | ✅ **yes** | none — Phase 27 is code-complete; this is its last step |
-| RB-5 | **28-02** n8n semantics live gate | ❌ | `scripts/probe_n8n_semantics.py` still **MISSING** — built by 28-02 Task 1. **Gates 28-03/04/05/06** |
+| RB-5 | **28-02** n8n semantics live gate | ✅ | `operator-claude-plugin/scripts/probe_n8n_semantics.py` **EXISTS** (28-02 Task 1). Commands corrected 2026-07-31 — the old ones named the wrong path and a `--workflow-id` flag argparse rejects. **Gates 28-03/04/05/06** |
 | ~~RB-6~~ | ~~**28-04** five-triggers decision~~ | **withdrawn** | Already decided — D-25 / amendment #6. Checkpoint deleted, plan now autonomous. **Nothing for you to do.** |
 | RB-7 | **28-06** armed arm→dispatch→disarm canary | ❌ | behind 28-02 → 28-05. Now needs `ALLOW_N8N_ARM` too |
 | RB-8 | **29-06** live notice gate | ❌ | behind 29-01 → 29-03/04/05 |
@@ -565,13 +565,23 @@ Entirely Form 3 (Desktop Code tab). No shell commands, except restoring config i
 
 ---
 
-# RB-5 · Plan 28-02 — n8n semantics live gate *(provisional)*
+# RB-5 · Plan 28-02 — n8n semantics live gate
 
-**Blocked:** `scripts/probe_n8n_semantics.py` is built by 28-02 Task 1, and **Phase 28's checker has
-not run.** Subcommand names and the enabling env var below may change. **Gates 28-03, 28-04 → 28-05 → 28-06.**
+**READY.** `operator-claude-plugin/scripts/probe_n8n_semantics.py` **exists** (28-02 Task 1, `type="auto"`,
+built) and Phase 28's checker **has** run — twice, 2026-07-31. **Gates 28-03, 28-04 → 28-05 → 28-06.**
 
-**Precondition:** `N8N_URL` and `N8N_API_KEY` present, and `N8N_URL` matching `N8N_EXPECTED_URL` (or
-a genuine `.n8n.cloud` host) — **the probe refuses otherwise and makes no call.**
+> **The commands below were corrected 2026-07-31 — the previous ones could not run.** All three named
+> `scripts/probe_n8n_semantics.py` (the module lives under `operator-claude-plugin/scripts/`, so the
+> paste died on `FileNotFoundError`) and passed `--workflow-id <ID>`, which argparse rejects —
+> `workflow_id` is **positional**, and `cadence_reload`'s node name is a **second positional**. The
+> dotenv wrapper is also unnecessary here: this module takes credentials from
+> `config_gate.load_config()` and **has never read `N8N_URL` from the shell**. Verified by running
+> each corrected form with the gate **off** — it refuses and makes no call.
+
+**Precondition:** the plugin's own config supplies the instance URL and key via
+`config_gate.load_config()` — **not** shell `N8N_URL`/`N8N_API_KEY`. A missing or mismatched config
+makes the probe refuse with `"verdict": "refused"` **before any transport is constructed**. The
+`.env` shell vars are still used by the id-listing `curl` in Task 2, which is a separate command.
 
 `roundtrip` performs a **real PUT** (a genuine no-op: GET→PUT→GET changing nothing), which is why a
 human runs it. Neither subcommand can touch a write-safety constant — the module has no code path
@@ -592,10 +602,10 @@ committed JSON, so if any workflow round-trips cleanly it is this one.
 
 ```bash
 # no-op round-trip — expect verdict "verified", settings and connections identical before/after
-ALLOW_N8N_PROBE=true .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/probe_n8n_semantics.py', run_name='__main__')" roundtrip --workflow-id <ID>
+ALLOW_N8N_PROBE=true python3 operator-claude-plugin/scripts/probe_n8n_semantics.py roundtrip <ID>
 
 # execute-endpoint check — expect 404 or 405, confirming D-05a
-ALLOW_N8N_PROBE=true .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/probe_n8n_semantics.py', run_name='__main__')" execute_probe --workflow-id <ID>
+ALLOW_N8N_PROBE=true python3 operator-claude-plugin/scripts/probe_n8n_semantics.py execute_probe <ID>
 ```
 
 - **A schema rejection naming additional properties means the four-key filter is wrong** and 28-01
@@ -620,7 +630,7 @@ makes the reload observation meaningless.
    change is a small delta. **Confirm the choice against current provider-credit headroom first.**
 
 ```bash
-ALLOW_N8N_PROBE=true .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/probe_n8n_semantics.py', run_name='__main__')" cadence_reload --workflow-id <ID> --node "Review Trigger (15 min)"
+ALLOW_N8N_PROBE=true python3 operator-claude-plugin/scripts/probe_n8n_semantics.py cadence_reload <ID> "Review Trigger (15 min)"
 ```
 
 3. Watch reported execution start times over the bounded polling window. **New spacing** → the
