@@ -6,5 +6,13 @@
   "dashboard_artifact_ttl_days": 30,
   "column_mapping_path": null,
   "hubspot_portal_id": "<optional — your HubSpot portal id, used only to build a clickable record link in the review queue; without it the queue shows the raw record id>",
-  "field_policy_path": null
+  "field_policy_path": null,
+
+  "enrichment_providers": ["zoominfo", "apollo", "lusha"],
+  "_enrichment_providers_note": "THIS DEFAULT ENABLES EVERY PROVIDER ON EVERY ENRICHMENT BATCH. Three valid settings: the full waterfall (the list above), a named subset (e.g. [\"lusha\"]), or none ([]). You can override any of the three for a single batch — say the override when you ask for the batch, and the preview states the selection that batch will actually use before you approve it.",
+  "_enrichment_providers_cost_note": "Rough provider-credit burn per record on a first-time enrich, measured 2026-07-30: Lusha 1 credit per contact and 2 credits per company (0 credits when re-enriching a stored Lusha id); ZoomInfo about 1.08 credits per match; Apollo unknown — this account's key is not a master key, so its balance reads 403 and is reported as unknown, never as zero. Anthropic model spend measured at about $0.0686 per record (Phase 22 canary, 2026-07-30). Set this to [] to run a batch that burns no provider credits at all.",
+
+  "max_records_per_chunk": 2,
+  "_max_records_per_chunk_note": "PROVISIONAL — derived, not confirmed. Measured 2026-07-31 from the live tenant's execution history: 36.1 s per record worst case, plus about 25% headroom = 45 s per record, against the roughly 100 s Cloudflare response ceiling on an n8n Cloud webhook. floor(100 / 45) = 2. The enrichment workflow has no batching node, so every record in one POST runs the full provider + Haiku + Sonnet chain before the response fires.",
+  "_max_records_per_chunk_provenance_note": "What would confirm it, and has NOT been run: every measured run behind the 36.1 s figure was single-record and company-lane, and NONE was a full waterfall. The live multi-record and full-waterfall probes (25-01 Task 2, probes B2/B3/B4) are outstanding — B4 is the expensive path this ceiling has to survive. Treat 2 as a conservative placeholder carrying its measurement date, not as a settled number."
 }
