@@ -792,6 +792,42 @@ the **entire blast radius.**
 enrichment workflow and two `Decide*` node names. Use §RB-3 Defect 1's all-workflow scan for this
 window's arm and disarm read-backs — the verifier alone cannot see the flag you are arming.
 
+### THREE gates, all three must be open — verified against the shipped code 2026-07-31
+
+Any one closed stops the write, and they live in three different places:
+
+| # | Gate | Where it is read | How to open it |
+|---|---|---|---|
+| 1 | `ALLOW_REVIEW_SUBMIT` | **Python, your machine**, before a request exists | admin exports it in the shell the plugin runs in |
+| 2 | The session arm | the conversation, never written to disk | say **"arm review writeback"** |
+| 3 | `ALLOW_HUBSPOT_REVIEW_WRITES` + `TEST_RECORD_*` | **inside n8n**, a literal compiled into workflow JSON | deploy with `ENABLE_BAKED_FLAGS` |
+
+**Gate 1 accepts the exact string `true` and nothing else** — tested empirically: `True`, `TRUE`,
+`1`, `yes`, `""`, `" true"` and `"true "` all refuse. Same rule as `ALLOW_N8N_PROBE` and
+`ALLOW_N8N_ARM` (D-34), deliberately, so one rule covers every gate in this milestone.
+
+**Gate 2 is separate from the contact-dispatch arm in both directions.** Arming the upload does not
+arm review writeback, and vice versa.
+
+**Gate 1 gates *submitting* only.** A **reject** — which records a reason and leaves the record
+queued — proceeds with it unset, and `preview_decision` is unaffected by it entirely. A kill switch
+that blocked the un-doing path would be a trap. Gate 2 still applies to a rejection.
+
+### Two failure modes that look like something else
+
+- **An armed-but-not-allowlisted decision returns NO body at all**, and the client reports it
+  `failed`. **That silence means "not on the allowlist" — not "broken endpoint".** Check
+  `TEST_RECORD_IDS` before investigating anything else.
+- **Read the verdict from `verify_decision`, never from an HTTP status.** A mismatch names the
+  offending key; an *unreadable* read-back is a different finding and should be reported as such,
+  not merged into "failed".
+
+### Start with a reject
+
+**Reject is the safest first canary**: one property, the record stays queued, and it needs neither
+`ALLOW_REVIEW_SUBMIT` nor an approval's multi-key patch (it still needs gate 2 and the backend
+allowlist). Prove the path with a rejection, then do the approval.
+
 1. Choose **ONE** HubSpot test company currently flagged for review and holding a stored review
    candidate. Note its record id.
 

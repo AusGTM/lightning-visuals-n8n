@@ -19,15 +19,40 @@ mid-flight.
 | 26 Outcome reporting & retry | 3 | ✅ **COMPLETE** — amendment #4 closed, REQUIREMENTS.md reworded |
 | 27 Backend status surface | 5 | ✅ **CODE-COMPLETE** — 27-01…05 all built. Only **27-05 Task 3** (dashboard same-URL, operator-run) outstanding |
 | 28 Control actions | 6 | **checked twice** (5 blockers → repaired → 1 more → repaired). **28-01 DONE.** 28-02 is a human gate; 28-03/04 chain behind it; **28-05 serialized** behind the operator's `test_plugin_manifest.py` fix |
-| 29 Notices & sweep | 6 | checker run 2026-07-31. **29-02 is the only plan runnable now** (`depends_on: []`); 29-03/04 need 29-01 (human) |
-| 30 Review-queue triage | 7 | checker run 2026-07-31. **30-01…30-06 is a fully autonomous six-plan serial chain** — the largest block of unattended work left. Only 30-07 is human |
+| 29 Notices & sweep | 6 | checker run + repaired (3 blockers). **29-02 DONE.** 29-03/04 need 29-01 (human) |
+| 30 Review-queue triage | 7 | checker run + repaired (4 blockers). **30-01…30-06 ALL DONE.** Only **30-07** (armed canary, human) remains |
 
-**22 of 43 plans built. Three phases complete (24, 26, 27-code).**
+**30 of 43 plans built. Four phases complete or code-complete (24, 26, 27, 30-autonomous).**
 
-**Test baselines — CURRENT:** `1163 passed, 1 skipped` (pytest), `404 passed` (node), plugin suite
-`400 passed`. Milestone started at 709 pytest / 400 node; the handoff before this one read 919/400.
-**Node is 404, not 400** — the four extra are the Apollo sentinel tests merged from
-`fix/apollo-zero-revenue-band`. Any drop is a regression to investigate, not absorb.
+> ## ⚠ AUTONOMOUS WORK IS EXHAUSTED — everything remaining needs an operator
+>
+> As of 2026-07-31 there is **no plan left that an agent can execute**. Every unbuilt plan is either
+> a human gate or chained behind one. **The milestone's completion now depends entirely on the eight
+> gates in `OPERATOR-RUNBOOK.md`.**
+>
+> **Highest leverage, in order:**
+> 1. **29-01** (RB-2) — no dependencies, no code needed, runnable today. Releases 29-03/04/05/06.
+> 2. **28-02** (RB-5) — needs 28-02 Task 1 built first. Releases 28-03/04/05/06.
+> 3. **25-01** (RB-1) — needs 25-01 Task 1 built first. Releases 25-03/04/06/07.
+>
+> Those three unblock **twelve** plans between them. 23-06, 27-05 and 30-07 unblock nothing — each
+> is its own phase's proof.
+>
+> **Before walking either armed canary (23-06, 30-07), fix `verify_live_write_safety.py`.** Three
+> independent defects were found by three separate routes on 2026-07-31, and it is the read-back
+> **both** windows depend on. One coherent fix — a workflow argument, an expected-armed-flags
+> argument, no hardcoded scope. Routes to `/gsd-plan-phase 23 --gaps --ws plugin-entrypoint`.
+
+**Test baselines — CURRENT:** `1290 passed, 1 skipped` (pytest), `474 passed` (node), plugin suite
+`490 passed`. Milestone started at 709 pytest / 400 node; the handoff before this one read 919/400.
+**Node includes 4 Apollo sentinel tests** merged from `fix/apollo-zero-revenue-band` — not a
+regression signal. Any drop is a regression to investigate, not absorb.
+
+**Known flake, unfixed:** an intermittent **1 ms timestamp mismatch** in
+`tests/n8n/mergeContacts.test.mjs` (`lv_jobtitle_verified_at`, inside a `deepStrictEqual`). It is
+the signature of a wall clock read **twice** and compared for equality. One of this class was fixed
+today (`a0790cc`, ~25% failure rate, fixed by capturing once and reusing); this one remains.
+**Fix it the same way — never re-run until green.**
 Every n8n artifact is **disarmed** (`grep -c` → 0) and REQUIREMENTS.md coverage is intact at **49/49**.
 
 **Branch:** work is on **`feat/v0.6-plugin-entrypoint`**, not `master`. `master` is at `3e8dd1d`
