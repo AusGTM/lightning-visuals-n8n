@@ -392,6 +392,39 @@ and 30-06.**
   If a future plan needs provenance in the operator's view, it needs a summariser, not a
   dump.
 
+### Corrections folded in from executing 30-06 (2026-07-31)
+
+**Two facts the plan could not have known until the client existed. Both bind 30-07.**
+
+- **D-37 (an unarmed refusal cannot both "make no network call" and "return the preview's
+  `would_write`" — unless the preview is handed in):** 30-06's action text says
+  `submit_decision` "refuses before any network call when `review_armed` is false,
+  returning the preview's `would_write`", and its acceptance criterion says an unarmed
+  submit asserts `transport.mutating_calls == []`. `_StubModuleTransport.mutating_calls`
+  classifies by **verb**, so a dry-run POST issued from inside the refusal would land in
+  that list and fail the criterion — a dry run writes nothing, but it is still a `post`.
+  The two are jointly satisfiable only if the refusal restates a preview it did not fetch.
+  `submit_decision` therefore carries one optional keyword argument, `preview=None`, placed
+  after `review_armed` and before `transport` so the plan's positional order is untouched:
+  the skill hands back the envelope `preview_decision` already returned and the refusal
+  echoes its `would_write`. **An unarmed or env-refused submit performs no call of any
+  kind**, and with no preview supplied `would_write` is `None` rather than a guess.
+  Generalisable: a "show what you would have done" refusal takes the showing as an
+  argument; it does not go and fetch it, or the refusal becomes a request.
+
+- **D-38 (`ALLOW_REVIEW_SUBMIT`'s un-doing carve-out is scoped by DECISION WORD, and fails
+  closed):** D-16 property (c) says the switch gates submitting and never any un-doing
+  path, but the un-doing path here is not a separate function the way `disarm` is in Phase
+  28 — it is the same `submit_decision` call with `decision: "reject"`. The carve-out is
+  therefore a predicate on the decision word (`review_decision.is_undoing`), and it
+  recognises **only** `reject` (D-10's record-a-reason-and-stay-queued path, matching
+  `reviewDecision.js:172`'s two-word vocabulary). Anything else — `approve`, an unknown
+  word, a non-string — **is** gated, so the switch fails closed on input it does not
+  recognise rather than open. Two consequences worth stating: the env carve-out is **not**
+  a carve-out from the session arm (a rejection writes to HubSpot, so D-03 still applies to
+  it and an unarmed rejection refuses), and a future third decision word must be classified
+  deliberately in `UNDOING_DECISIONS` rather than inheriting a default.
+
 ### Claude's Discretion
 - Queue ordering and how many conflicts are shown at once.
 - Wording of the conflict presentation and of the exact-write display.
@@ -491,7 +524,8 @@ and 30-06.**
 after Phase 28's D-33/D-34 landed. Repair edited `30-02`, `30-04`, `30-05`, `30-06` only —
 `30-01` was executing concurrently and `30-01`/`30-03`/`30-07` passed clean.*
 *D-22…D-25 folded in from executing `30-02`; D-26…D-30 from executing `30-03`;
-D-32…D-34 from executing `30-04`; D-35…D-36 from executing `30-05` (all 2026-07-31).*
+D-32…D-34 from executing `30-04`; D-35…D-36 from executing `30-05`; D-37…D-38 from
+executing `30-06` (all 2026-07-31).*
 
 ---
 
