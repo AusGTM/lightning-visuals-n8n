@@ -68,11 +68,18 @@ def _call(transport, verb, index=0):
 
 def _every_subcommand(config, transport_factory, **kwargs):
     """Each probe entry point invoked once against its own fresh recorder."""
-    for name, args in (("roundtrip", ("wf-1",)),
-                       ("execute_probe", ("wf-1",)),
-                       ("cadence_reload", ("wf-1", NODE))):
+    for name, args, extra in (("roundtrip", ("wf-1",), {}),
+                              ("execute_probe", ("wf-1",), {}),
+                              ("cadence_reload", ("wf-1", NODE),
+                               {"wait_fn": _never_wait})):
         transport = transport_factory([])
-        yield name, getattr(probe, name)(*args, config, transport=transport, **kwargs), transport
+        yield (name,
+               getattr(probe, name)(*args, config, transport=transport, **extra, **kwargs),
+               transport)
+
+
+def _never_wait(_message):
+    raise AssertionError("a refused probe must never reach the operator's wait")
 
 
 # ---------------------------------------------------------------- the environment gate
@@ -264,9 +271,10 @@ def test_an_unexpected_status_is_inconclusive(armed_probe, fake_config,
 # -------------------------------------------------------------- cadence_reload (D-18/A1)
 
 def _cadence_transport(factory, *, prior=None, probed=None, restored=None,
-                       executions=None, active=True, polls=1):
-    """The whole cadence sequence scripted in order: pre-read, the change mutation's
-    five calls, `polls` polling reads, then the restore mutation's five."""
+                       executions=None, active=True, observes=True):
+    """The whole cadence sequence scripted in order: pre-read, the change mutation's five
+    calls, ONE executions read (the operator's wait supplies the elapsed window, so there
+    is no poll loop), then the restore mutation's five."""
     prior = prior if prior is not None else list(COMMITTED_INTERVAL)
     probed = probed if probed is not None else [{"field": "minutes", "minutesInterval": 2}]
     restored = restored if restored is not None else prior
@@ -275,16 +283,17 @@ def _cadence_transport(factory, *, prior=None, probed=None, restored=None,
         _workflow(active=active, interval=prior),      # apply_mutation's fresh fetch
         {}, {}, {},                                    # deactivate, put, activate
         _workflow(active=active, interval=probed),     # the change read-back
-        *[executions if executions is not None else _executions()] * polls,
+        # the single post-wait read — skipped entirely when the change did not verify
+        *([executions if executions is not None else _executions()] if observes else []),
         _workflow(active=active, interval=probed),     # restore's fresh fetch
         {}, {}, {},                                    # deactivate, put, activate
         _workflow(active=active, interval=restored),   # the restore read-back
     ])
 
 
-def _cadence(config, transport, **kwargs):
+def _cadence(config, transport, waits=None, **kwargs):
     return probe.cadence_reload("wf-1", NODE, config, transport=transport,
-                                window_minutes=1, poll_seconds=60, sleep=lambda _s: None,
+                                wait_fn=(waits if waits is not None else []).append,
                                 **kwargs)
 
 
@@ -307,7 +316,7 @@ def test_cadence_reload_refuses_when_the_named_node_is_not_there(
     transport = stub_module_transport_factory([_workflow(active=True)])
 
     result = probe.cadence_reload("wf-1", "No Such Trigger", fake_config,
-                                  transport=transport, sleep=lambda _s: None)
+                                  transport=transport, wait_fn=lambda _m: None)
 
     assert result["verdict"] == probe.REFUSED
     assert transport.mutating_calls == []
@@ -358,18 +367,41 @@ def test_cadence_reload_reports_the_observed_spacing_between_execution_starts(
     assert len(result["observed_starts"]) == 3
 
 
-def test_the_polling_window_is_bounded_by_construction(armed_probe, fake_config,
-                                                       stub_module_transport_factory):
-    """Not "bounded by a timeout somewhere" — the loop count is derived up front, so a
-    stalled clock cannot extend the window a short-intervalled schedule runs in."""
-    slept = []
-    transport = _cadence_transport(stub_module_transport_factory, polls=4)
+def test_the_wait_is_the_operators_and_the_observation_is_a_single_read(
+        armed_probe, fake_config, stub_module_transport_factory):
+    """`tests/test_report_sufficiency.py` forbids every plugin script from importing
+    `time`, calling `sleep()`, or containing a `while` (Phase 26 D-07). This module
+    satisfies that guard rather than being excused from it: the elapsed window comes from
+    the human already standing at this `blocking-human` checkpoint, and because n8n
+    retains execution history one read afterwards sees everything a poll loop would
+    have."""
+    waits = []
+    transport = _cadence_transport(stub_module_transport_factory)
 
-    probe.cadence_reload("wf-1", NODE, fake_config, transport=transport,
-                         window_minutes=2, poll_seconds=30, sleep=slept.append)
+    _cadence(fake_config, transport, waits=waits, wait_minutes=7)
 
-    assert len(slept) == 3, "4 polls over a 2-minute window at 30s spacing, 3 waits"
-    assert set(slept) == {30}
+    assert len(waits) == 1, "exactly one wait, between the change and the observation"
+    assert "7 minutes" in waits[0] and "2-minute interval" in waits[0]
+    executions_reads = [c for c in transport.calls
+                        if c["verb"] == "get" and c["url"].endswith("/api/v1/executions")]
+    assert len(executions_reads) == 1
+    assert executions_reads[0]["params"] == {"workflowId": "wf-1", "limit": 20}
+
+
+def test_no_wait_is_requested_when_the_change_itself_did_not_verify(
+        armed_probe, fake_config, stub_module_transport_factory):
+    """A change that did not take is not worth ten minutes of a person's time, and the
+    restore still has to run."""
+    waits = []
+    transport = _cadence_transport(stub_module_transport_factory,
+                                   probed=list(COMMITTED_INTERVAL),  # read-back unchanged
+                                   observes=False)
+
+    result = _cadence(fake_config, transport, waits=waits)
+
+    assert result["change_verdict"] == n8n_control.FAILED
+    assert waits == []
+    assert result["restore_verdict"] == n8n_control.VERIFIED
 
 
 # ------------------------------------------------------------------- structural guards
