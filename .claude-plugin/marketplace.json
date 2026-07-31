@@ -1,0 +1,17 @@
+{
+  "name": "lightning-visuals-operator",
+  "description": "The Lightning Visuals HubSpot enrichment operator plugin — load contacts, preview cost, dispatch, watch the backend, and triage the review queue, conversationally.",
+  "owner": {
+    "name": "Lightning Visuals"
+  },
+  "plugins": [
+    {
+      "name": "operator-claude-plugin",
+      "source": "./operator-claude-plugin",
+      "description": "Conversational front end for the n8n contact enrichment backend: load a contact spreadsheet, preview it with its provider-credit and token cost, and dispatch it to HubSpot. Also reports what the backend is doing and triages records waiting on a human. Read-only until you confirm a write.",
+      "author": {
+        "name": "Lightning Visuals"
+      }
+    }
+  ]
+}
