@@ -52,6 +52,12 @@ NODE_CREDENTIAL_MAP = {
     "HubSpot Fetch By Id": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot Create": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot Update": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    # Phase 25 Plan 03 (same gpt #9 lesson, third time): the two Lists API GETs of the
+    # list-resolution branch. These need `crm.lists.read`, granted on the
+    # ausgtm-lightningvisuals-data static-auth app 2026-07-31 and live-probed (25-BLOCKERS.md)
+    # — the SAME "LV HubSpot" credential object, no new credential.
+    "HubSpot List By Name": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    "HubSpot List Memberships": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot Company Search": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     # Phase 16.4 Task 2: companies mirror of "HubSpot Fetch By Id" above.
     "HubSpot Company Fetch By Id": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},

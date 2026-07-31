@@ -3331,6 +3331,88 @@ return parsed.events.map((event) => {
 ).replace("__PROVIDER_NAMES__", json.dumps(provider_registry.PROVIDER_NAMES))
 
 
+# ---- Phase 25 Plan 03: HubSpot list -> record events (INGEST-04, D-01/D-02/D-15) -------
+#
+# The plugin holds no HubSpot token (D-01), so it posts a list identifier verbatim and this
+# branch resolves it with the credential n8n already owns. The branch is ADDITIVE: it hangs
+# off a new IF on the webhook trigger whose FALSE lane is the existing edge into
+# `Parse HubSpot Event`, so a record-ID envelope takes exactly the path it took before.
+#
+# It has to sit UPSTREAM of `Parse HubSpot Event` rather than beside it: that node treats an
+# object with no `events` array as a single bare event, so an unexpanded list body would
+# resolve to one unknown-object-type event, terminate as unsupported and return a clean 200 —
+# a silent no-op, not an error (T-25-16).
+#
+# THE CEILING. `max_records_per_chunk` is derived in 25-BLOCKERS.md from live execution
+# timing (29-TIMING.md): ~36s per record against n8n Cloud's ~100s Cloudflare-enforced
+# response ceiling, with no `Split In Batches` node anywhere in this workflow, gives
+# floor(100/45) = 2. A list resolved on the BACKEND cannot be split by the CLIENT (D-02),
+# so the backend has to enforce the same bound client-side chunking enforces — and it
+# enforces it by REFUSING, never by truncating, because a truncated batch enriches an
+# arbitrary subset and reports success (D-15). The measurement is single-record and
+# company-lane; the full-waterfall probe (B4) has not been run, so this number is expected
+# to move and is deliberately declared in ONE place.
+ENRICH_MAX_LIST_RECORDS = 2
+
+_HS_LISTS_BASE = "https://api.hubapi.com/crm/v3/lists"
+
+# Object-type-id lookup inlined into the URL expression rather than added as a fifth prep
+# node. Fail-closed: an unrecognized object type falls through to the literal "unsupported"
+# path segment, which 404s, which `Expand List To Events` reads as "did not resolve" — never
+# as a default object type. ponytail: a lookup table in a URL template beats a node.
+_LIST_OBJECT_TYPE_ID_EXPR = (
+    '{{ {"contact":"0-1","contacts":"0-1","0-1":"0-1",'
+    '"company":"0-2","companies":"0-2","0-2":"0-2"}'
+    '[String((($json.body || $json).list || {}).objectType || "").toLowerCase().trim()]'
+    ' || "unsupported" }}'
+)
+_LIST_NAME_EXPR = (
+    '{{ encodeURIComponent(String((($json.body || $json).list || {}).name || "").trim()) }}'
+)
+ENRICH_LIST_BY_NAME_URL = (
+    f"={_HS_LISTS_BASE}/object-type-id/{_LIST_OBJECT_TYPE_ID_EXPR}/name/{_LIST_NAME_EXPR}"
+)
+
+# Asks for ONE MORE than the ceiling, so an oversize list comes back detectable rather than
+# invisible: at exactly `limit` a caller cannot tell "the whole list" from "the first page".
+ENRICH_LIST_MEMBERSHIPS_URL = (
+    f"={_HS_LISTS_BASE}/"
+    '{{ encodeURIComponent(String(($json.list || $json).listId || "")) }}'
+    f"/memberships?limit={ENRICH_MAX_LIST_RECORDS + 1}"
+)
+
+# Reads the caller's body and both HubSpot responses BY NODE NAME (never bare $json — an
+# upstream HTTP response has already replaced $json by the time this Code node runs, the
+# same identity-loss class the provider request bodies fix). Every read is guarded, so a
+# node that failed or never executed degrades to a refusal instead of throwing.
+ENRICH_EXPAND_LIST_TO_EVENTS = (
+    inline("listExpansion.js")
+    + r"""
+
+// --- n8n wrapper: Expand List To Events (Phase 25 Plan 03) ---
+function nodeFirstJson(name) {
+  try { const row = $(name).first(); return (row && row.json) || null; } catch (e) { return null; }
+}
+const MAX_LIST_RECORDS = __MAX_LIST_RECORDS__;
+const trigger = nodeFirstJson("Webhook Trigger") || {};
+const result = expandListToEvents({
+  body: trigger.body || trigger,
+  listResult: nodeFirstJson("HubSpot List By Name"),
+  membershipsResult: nodeFirstJson("HubSpot List Memberships"),
+  maxRecords: MAX_LIST_RECORDS,
+});
+if (result.refused) {
+  // Terminating item, NOT an exception: it carries the reason to the caller as a response.
+  // `events: []` is what `IF List Expanded` gates on, so a refusal can never be enriched.
+  return [{ json: { outcome: "refused", reason: result.reason, events: [] } }];
+}
+const envelope = { events: result.events };
+if (result.providers !== undefined) envelope.providers = result.providers;
+return [{ json: envelope }];
+"""
+).replace("__MAX_LIST_RECORDS__", str(ENRICH_MAX_LIST_RECORDS))
+
+
 # NOTE (Phase 13/16): this Cloud webhook template's companies branch is ported by Task 5
 # (Phase 16). Until then, and unlike build_enrichment_local_live(), the Claude web-research
 # nodes (Research Trigger Gate / Build Research Request / Claude Web Research / Validate
@@ -3542,6 +3624,43 @@ def build_enrichment_cloud():
         "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [x, y],
     }
     nodes.append(webhook)
+
+    # --- Phase 25 Plan 03: additive list-resolution branch (INGEST-04, D-01/D-02/D-15) ---
+    # Sits BETWEEN the trigger and Parse HubSpot Event. `IF List Input` is true only for a
+    # body that carries a `list` or `view` key AND no `events` array; every other body —
+    # a record-ID envelope, a bare HubSpot event array, a single bare event object — takes
+    # the false lane, which is the exact edge the trigger had before this branch existed.
+    ly = y - 300
+    lx = 330
+    nodes.append(_if_bool_expr_node(
+        "IF List Input",
+        '!Array.isArray(($json.body || $json).events) '
+        '&& ((($json.body || $json).list != null) || (($json.body || $json).view != null))',
+        lx, ly))
+    lx += 220
+    # Credential-bound GETs built with the SHARED httpRequest helper in its predefined
+    # HubSpot credential mode — the same provisioned "LV HubSpot" credential every other
+    # HubSpot node in this workflow uses. A Code node cannot hold that credential, and the
+    # whole workflow is guarded against $env/$vars.
+    # onError stays continueRegularOutput (the helper default): a 401/403/404 must arrive at
+    # the expansion node as an unreadable response it can REFUSE in plain language, not as a
+    # thrown execution that returns 500 with no explanation.
+    nodes.append(_http_node("HubSpot List By Name", ENRICH_LIST_BY_NAME_URL, lx, ly,
+                            auth="hubspot", method="GET"))
+    lx += 220
+    nodes.append(_http_node("HubSpot List Memberships", ENRICH_LIST_MEMBERSHIPS_URL, lx, ly,
+                            auth="hubspot", method="GET"))
+    lx += 220
+    nodes.append(code_node("Expand List To Events", ENRICH_EXPAND_LIST_TO_EVENTS, lx, ly))
+    lx += 220
+    # Gates on the EVENTS THEMSELVES rather than on a status flag: a refusal carries
+    # `events: []`, and so would a regressed expansion node that refused and expanded at the
+    # same time. Zero events therefore can never reach the enrichment chain — which also
+    # closes D-22 (zero items into a responseNode webhook = no response at all, and a ~100s
+    # hang until Cloudflare 524s).
+    nodes.append(_if_bool_expr_node(
+        "IF List Expanded",
+        "Array.isArray($json.events) && $json.events.length > 0", lx, ly))
 
     x += 220
     nodes.append(code_node("Parse HubSpot Event", ENRICH_PARSE_EVENT_CLOUD, x, y))
@@ -4118,6 +4237,34 @@ def build_enrichment_cloud():
     })
 
     conns = chain(["Webhook Trigger", "Parse HubSpot Event", "IF Object Type Supported"])
+    # Phase 25 Plan 03: the trigger's single edge to "Parse HubSpot Event" becomes the FALSE
+    # lane of "IF List Input". Nothing downstream of Parse HubSpot Event changes, and the
+    # record-ID path is byte-for-byte the path it was: Webhook -> (not a list) -> Parse.
+    conns.update(chain([
+        "Webhook Trigger", "IF List Input",
+    ]))
+    conns["IF List Input"] = {"main": [
+        [{"node": "HubSpot List By Name", "type": "main", "index": 0}],  # true: resolve it
+        [{"node": "Parse HubSpot Event", "type": "main", "index": 0}],   # false: today's path
+    ]}
+    conns.update(chain([
+        "HubSpot List By Name", "HubSpot List Memberships",
+        "Expand List To Events", "IF List Expanded",
+    ]))
+    # True: the expanded envelope re-enters the ordinary path at Parse HubSpot Event, in the
+    # SAME shape a record-ID envelope arrives in — the branch adds a producer of that shape,
+    # it does not fork the envelope contract.
+    #
+    # False (a refusal): straight to "Respond to Webhook", so the caller gets the reason as a
+    # response rather than a dangling execution. It deliberately does NOT route through
+    # "Build Response" — that node's first statement reads $('Parse HubSpot Event'), which on
+    # a refusal never executed, and its inbound edge set is pinned exactly by
+    # tests/test_remaining_credits_response.py as the enrichment terminals. A refusal burned
+    # no provider credit, so it has no remaining_credits to report.
+    conns["IF List Expanded"] = {"main": [
+        [{"node": "Parse HubSpot Event", "type": "main", "index": 0}],  # true: expanded
+        [{"node": "Respond to Webhook", "type": "main", "index": 0}],   # false: refused
+    ]}
     # Phase 16.1 Plan 02 (reviews C1): Parse HubSpot Event ALSO forks to the single-item
     # credit branch (Credit Request) — a parallel fan-out from the SAME output, not a
     # re-point of the existing IF Object Type Supported edge.
