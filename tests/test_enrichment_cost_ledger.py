@@ -386,3 +386,123 @@ def test_no_retired_v2_credit_arithmetic_anywhere_in_this_module():
     src = ledger.ROOT.joinpath("scripts", "enrichment_cost_ledger.py").read_text()
     for retired_figure in ("4.65", "2.5 credits"):
         assert retired_figure not in src, f"retired v2 credit arithmetic {retired_figure!r} leaked into the v3 ledger"
+
+
+# =============================================================================================
+# Phase 29 Plan 02 Task 2 — execution duration / record count / the `durations` summary.
+#
+# Unknown is never zero (the same rule Phase 25 D-10 and Phase 27 D-08 enforce for provider
+# balances, applied here to timing). A run still in flight has an UNKNOWN duration; folding it
+# in as 0 drags the measured bound down, which is the failure direction that produces a watch
+# giving up while a healthy run is still going.
+# =============================================================================================
+
+def _timed_execution(execution_id="e-1", started="2026-07-31T10:00:00.000Z",
+                     stopped="2026-07-31T10:00:45.000Z", **extra):
+    execution = {"id": execution_id, "workflowId": "wf-1", "status": "success",
+                 "startedAt": started, "workflowData": {"name": "LV Enrichment (Cloud template)"}}
+    if stopped is not None:
+        execution["stoppedAt"] = stopped
+    execution.update(extra)
+    return execution
+
+
+def _write_node_execution(counts: dict) -> dict:
+    """counts: write-node name -> number of output items (or None to omit the node)."""
+    run_data = {}
+    for name, count in counts.items():
+        if count is None:
+            continue
+        items = [{"json": {"hs_object_id": f"{i}"}} for i in range(count)]
+        run_data[name] = [{"executionStatus": "success", "data": {"main": [items]}}]
+    return {"data": {"resultData": {"runData": run_data}}}
+
+
+# --- duration ---------------------------------------------------------------------------------
+
+def test_duration_is_computed_from_a_well_formed_started_stopped_pair():
+    assert ledger.execution_duration_seconds(_timed_execution()) == pytest.approx(45.0)
+
+
+def test_duration_of_an_execution_with_no_stopped_at_is_unknown_and_not_zero():
+    duration = ledger.execution_duration_seconds(_timed_execution(stopped=None))
+    assert duration is None
+    assert duration != 0
+
+
+def test_duration_of_an_unparseable_timestamp_is_unknown_not_an_exception():
+    assert ledger.execution_duration_seconds(_timed_execution(started="not-a-timestamp")) is None
+    assert ledger.execution_duration_seconds(_timed_execution(stopped="")) is None
+    assert ledger.execution_duration_seconds("not-a-dict") is None
+
+
+# --- record count -----------------------------------------------------------------------------
+
+def test_record_count_sums_items_across_the_write_nodes():
+    execution = _write_node_execution({"HubSpot Update": 3, "HubSpot Create": 2})
+    assert ledger.execution_record_count(execution) == 5
+
+
+def test_record_count_is_unknown_when_no_write_node_appears_in_the_run_data():
+    execution = _write_node_execution({"Normalize + Score": 4})
+    count = ledger.execution_record_count(execution)
+    assert count is None
+    assert count != 0
+
+
+def test_record_count_of_a_write_node_that_ran_and_wrote_nothing_is_a_genuine_zero():
+    """Present-and-empty is 0; absent is unknown. Conflating them is the D-08 failure."""
+    assert ledger.execution_record_count(_write_node_execution({"HubSpot Update": 0})) == 0
+
+
+# --- summary ----------------------------------------------------------------------------------
+
+def _row(duration, records):
+    return {"execution_id": "e", "workflow": "w", "duration_seconds": duration,
+            "record_count": records}
+
+
+def test_summary_reports_the_number_of_executions_it_was_derived_from():
+    summary = ledger.summarize_durations([_row(40.0, 2), _row(60.0, 3)])
+    assert summary["sample_size"] == 2
+    assert summary["computed"] == 2
+
+
+def test_summary_counts_unknowns_separately_and_never_averages_them_in_as_zero():
+    summary = ledger.summarize_durations([_row(40.0, 2), _row(None, 2), _row(60.0, None)])
+    assert summary["sample_size"] == 3
+    assert summary["computed"] == 1            # only the first row yields a per-record rate
+    assert summary["unknown_duration"] == 1
+    assert summary["unknown_record_count"] == 1
+    assert summary["max_seconds_per_record"] == pytest.approx(20.0)
+    assert summary["max_duration_seconds"] == pytest.approx(60.0)
+
+
+def test_summary_of_nothing_computable_is_unknown_rather_than_a_zero_bound():
+    summary = ledger.summarize_durations([_row(None, None)])
+    assert summary["computed"] == 0
+    assert summary["max_seconds_per_record"] is None
+    assert summary["p95_seconds_per_record"] is None
+
+
+def test_summary_percentile_is_at_or_below_the_maximum():
+    rows = [_row(float(seconds), 1) for seconds in range(1, 21)]
+    summary = ledger.summarize_durations(rows)
+    assert summary["computed"] == 20
+    assert summary["p95_seconds_per_record"] <= summary["max_seconds_per_record"]
+    assert summary["max_seconds_per_record"] == pytest.approx(20.0)
+
+
+def test_print_durations_states_the_sample_size_and_the_unknown_counts(capsys):
+    ledger.print_durations([_row(40.0, 2), _row(None, 2)],
+                           ledger.summarize_durations([_row(40.0, 2), _row(None, 2)]))
+    out = capsys.readouterr().out
+    assert "sample size" in out.lower()
+    assert "unknown" in out.lower()
+
+
+def test_durations_mode_skips_without_credentials_rather_than_calling_n8n(capsys):
+    """The hermetic fixture strips N8N_URL/N8N_API_KEY and makes any real request raise —
+    so this asserts the credential gate fires BEFORE the transport, the same as list mode."""
+    assert ledger.main(["durations"]) == 0
+    assert "skipped (no n8n creds)" in capsys.readouterr().out
