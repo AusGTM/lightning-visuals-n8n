@@ -6,50 +6,59 @@
 
 ## Lists API scope
 
-**Probed:** 2026-07-31 · **Verdict: DENIED** · **HTTP 403**
+**Probed:** 2026-07-31 · **Verdict: GRANTED** · **HTTP 200** · **RESOLVED**
+
+```
+lists-scope: verdict=granted status=200 list_id=15
+  the list resolved, so the credential can read the Lists API.
+  memberships: status=200 member_count=102 has_paging_cursor=True
+```
+
+Run via `scripts/check_hubspot_list_scope.py` (25-01 Task 1) through the dotenv wrapper, against the
+real contacts list `New Targets.xlsx` (`0-1`, id 15). A nonsense-name run in the same session
+returned `granted / 404`, which is the other valid granted signal — an authorized request whose name
+simply missed.
+
+### It was denied first — keep that, it is the useful part
+
+The **first** probe of the day returned:
 
 ```
 lists-scope: verdict=denied status=403 list_id=None
   HubSpot refused the request itself: the credential is missing crm.lists.read.
 ```
 
-Run via `scripts/check_hubspot_list_scope.py` (25-01 Task 1) through the dotenv wrapper, against
-object type `0-2` (companies) with a deliberately non-existent list name. **The name is irrelevant
-to this verdict** — a 403 is HubSpot refusing the *request*, before it ever looks the name up. A 404
-would have meant granted-but-name-missed; that is not what came back.
-
-**This settles the Lists API only.** HubSpot saved views remain a separate concept with no public
-API, unprobed and unprobeable.
+A 403 is HubSpot refusing the **request**, before any name lookup — so the list name is irrelevant to
+that verdict, and reading it as "wrong name" would have been the opposite of the truth. The fix was
+**not** a UI toggle: this integration is an `hs` CLI **static-auth projects app**, so
+`crm.lists.read` had to be added to `src/app/app-hsmeta.json`'s `requiredScopes` in the
+`ausgtm-lightningvisuals-data` project, uploaded, and **reinstalled** — `hs project install-app`,
+whose consent screen is what actually grants it. Uploading a scope change does not grant it, and
+rotating the token never would. Confirmed by `hs project app-install-status`:
+`isInstalledWithCurrentScopes: true` with `crm.lists.read` in the authorized scope groups.
+**The existing access token kept working — no rotation.**
 
 ### What it means for INGEST-04
-
-INGEST-04 names "list, view, or record IDs". As of this probe:
 
 | Input type | Status |
 |---|---|
 | **record IDs** | ✅ works — no extra scope needed |
-| **lists** | ❌ **denied** — credential lacks `crm.lists.read` |
+| **lists** | ✅ **works as of 2026-07-31** — `crm.lists.read` granted |
 | **views** | ❌ no public API, and no evidence one exists |
 
-**Two of the three named input types are unavailable.** This is a materially larger gap than the
-amendment anticipated during planning, which assumed lists would work and only views would be
-dropped.
+Only views are dropped, which is **exactly the amendment anticipated during planning**. Amendment #7
+is therefore the small one, not the large one.
 
-### The decision this forces — OPERATOR INPUT REQUIRED
+### Design input for 25-03 / 25-04 — do not skip this
 
-Either:
+**`has_paging_cursor=True` on a 102-member list.** The memberships endpoint pages at or below 102,
+so a list read **must follow the cursor**. A client that reads one response and stops will silently
+enrich a truncated subset of any list larger than a page — a partial result that looks like a
+complete one, which is the failure shape this milestone has now hit five times (D-08, D-20, D-22,
+D-23, D-33). Treat a missing cursor-follow as a defect, not an optimisation.
 
-- **(A) Add `crm.lists.read` to the HubSpot app and re-probe.** Restores lists, leaving only views
-  dropped — the originally anticipated amendment #7. **Cost is not a UI toggle:** this repo's
-  HubSpot integration is an `hs` CLI **projects app, not a classic private app**, so a scope change
-  requires `hs project install-app` and a re-auth cycle. That is an operator task with a real
-  failure mode, not a checkbox.
-- **(B) Scope INGEST-04 down to record IDs only.** No HubSpot change. Amendment #7 becomes larger
-  than planned: both lists *and* views are dropped, and the enrichment lane accepts record IDs
-  alone.
-
-**Do not let a plan choose this silently.** 25-03 (backend) and 25-04 (client) both implement
-whichever branch is taken, and 25-07 applies the wording to REQUIREMENTS.md and ROADMAP criterion 1.
+Only one list exists in this portal today (`POST /crm/v3/lists/search` → 1 result), so list-heavy
+behaviour has exactly one live example to test against.
 
 ---
 
@@ -84,12 +93,24 @@ derived from partial data, and this file says so rather than presenting 2 as a s
 
 ## View resolution
 
-**Status: NOT YET DECIDED — blocked on the Lists-scope decision above.**
+**Decided: `refuse-and-redirect`** · 2026-07-31 · **This is accepted amendment #7.**
 
-The original three options (`refuse-and-redirect`, `discovery-spike`, `treat-view-as-list`) were
-framed assuming lists worked. With lists **denied**, `treat-view-as-list` is doubly rejected — it
-would resolve a view against an API this credential cannot call at all.
+**Rationale:** lists now work and record IDs always did, so the only unsupported input is a saved
+view — for which no public API exists, only a thorough absence of evidence. Refusing one input with
+an actionable next step is strictly better than shipping against an endpoint that may not exist.
 
-Record the choice here once the Lists-scope decision is made, naming the option, the date, one
-sentence of rationale, the exact operator-facing refusal sentence, and which plan implements it
-(25-03 backend, 25-04 client).
+**The exact operator-facing sentence the plugin uses when a view is named:**
+
+> "I can't resolve a HubSpot *view* — HubSpot doesn't expose views through its API. Save that view
+> as a **list** in HubSpot and give me the list name, or paste the record IDs directly."
+
+**Why the other two were rejected:**
+- `treat-view-as-list` — rejected on its face by 25-RESEARCH.md Pitfall 2: a view name colliding
+  with an unrelated list name enriches the wrong record set **with no error**. Now that lists
+  genuinely resolve, this option is *more* dangerous than when it was first written, not less.
+- `discovery-spike` — open-ended cost against an absence-of-evidence finding; anything found would
+  likely be internal/undocumented, trading a scope gap for a stability gap.
+
+**Implemented by:** 25-03 (backend) and 25-04 (client). **25-07** applies the wording to
+REQUIREMENTS.md INGEST-04 and ROADMAP criterion 1, recording it as amendment #7 — scoped to
+"list or record IDs", views refused with the sentence above.
