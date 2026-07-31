@@ -14,6 +14,7 @@ import copy
 import csv
 import json
 import sys
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import openpyxl
@@ -311,6 +312,256 @@ def extraction_artifact_factory(tmp_path):
 def extraction_artifact(extraction_artifact_factory):
     """A valid two-record prose extraction artifact written to tmp_path."""
     return extraction_artifact_factory()
+
+
+# =====================================================================================
+# Phase 29 Plan 02 Task 1 — sweep fixtures.
+#
+# Every payload shape the unattended sweep must reason about, INCLUDING the two that look
+# healthy and are not (29-RESEARCH Pitfalls 1 and 5). Built as plain data in the fixture
+# body, not committed JSON, so a reviewer reads the shape in the test source.
+#
+# Execution keys mirror the real `/api/v1/executions` objects (`id`, `workflowId`,
+# `status`, `startedAt`, `stoppedAt`, `finished`, `workflowData.name`) rather than a
+# convenient simplification — a fixture whose keys differ from production is a test that
+# passes while the code fails live.
+# =====================================================================================
+
+# The reference "now" every timing fixture is anchored to. Fixed, and passed into
+# `n8n_read.summarize_execution(..., now=)` by the tests — a fixture anchored to
+# wall-clock drifts across the stuck threshold depending on when the suite runs.
+SWEEP_NOW = datetime(2026, 7, 31, 12, 0, 0, tzinfo=timezone.utc)
+
+ENRICHMENT_WORKFLOW_ID = "wf-enrichment-cloud"
+ENRICHMENT_WORKFLOW_NAME = "LV Enrichment (Cloud template)"
+MAINTENANCE_WORKFLOW_ID = "wf-scheduled-maintenance-cloud"
+MAINTENANCE_WORKFLOW_NAME = "LV Scheduled Maintenance (Cloud)"
+
+# The five HubSpot-Search nodes in wf_scheduled_maintenance_cloud.json, VERBATIM as
+# deployed (29-CONTEXT D-21 — 29-RESEARCH.md abbreviates them and the abbreviations match
+# no key in `runData`). All five carry `onError: continueRegularOutput`, so any of them can
+# fail while the run still reports success — which is the whole point of the
+# `execution_maintenance_falsely_successful` fixture below.
+MAINTENANCE_SEARCH_NODES = (
+    "SJ-1 Search (input-gap scan)",
+    "SJ-2 Search (stale refresh)",
+    "SJ-3 Search (requested poller)",
+    "Dedupe Search (candidate contacts)",
+    "Review Search (approved=true)",
+)
+
+
+def _iso(moment):
+    return moment.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+
+def _execution(execution_id, *, status, started_minutes_ago, ran_for_seconds=None,
+               workflow_id=ENRICHMENT_WORKFLOW_ID, workflow_name=ENRICHMENT_WORKFLOW_NAME,
+               started_at=_iso):
+    """One executions-collection item, relative to SWEEP_NOW.
+
+    `ran_for_seconds=None` omits `stoppedAt` entirely — the key is ABSENT, the way n8n
+    leaves it for a run still in flight, never present-and-zero.
+    """
+    started = SWEEP_NOW - timedelta(minutes=started_minutes_ago)
+    execution = {
+        "id": execution_id,
+        "workflowId": workflow_id,
+        "status": status,
+        "startedAt": started_at(started),
+        "finished": status not in ("running", "new", "waiting"),
+        "workflowData": {"name": workflow_name},
+    }
+    if ran_for_seconds is not None:
+        execution["stoppedAt"] = _iso(started + timedelta(seconds=ran_for_seconds))
+    return execution
+
+
+@pytest.fixture
+def sweep_now():
+    """The fixed reference every timing fixture is built against."""
+    return SWEEP_NOW
+
+
+@pytest.fixture
+def executions_healthy():
+    """The no-notice baseline: recent, finished, every duration knowable."""
+    return [
+        _execution("e-101", status="success", started_minutes_ago=30, ran_for_seconds=42),
+        _execution("e-102", status="success", started_minutes_ago=95, ran_for_seconds=61),
+        _execution("e-103", status="success", started_minutes_ago=180, ran_for_seconds=38),
+    ]
+
+
+@pytest.fixture
+def executions_with_failure():
+    """One genuinely failed run on a named workflow, among healthy ones."""
+    return [
+        _execution("e-201", status="success", started_minutes_ago=20, ran_for_seconds=40),
+        _execution("e-202", status="error", started_minutes_ago=50, ran_for_seconds=12),
+    ]
+
+
+@pytest.fixture
+def executions_with_stuck():
+    """Both sides of the stuck threshold (default 15 min). A check that flags every
+    running execution fails against this fixture instead of passing trivially."""
+    return [
+        _execution("e-301", status="running", started_minutes_ago=45),
+        _execution("e-302", status="running", started_minutes_ago=2),
+    ]
+
+
+@pytest.fixture
+def execution_missing_stopped_at():
+    """In flight: `stoppedAt` absent, so the duration is UNKNOWN. Code treating the
+    absence as zero drags a measured bound down, which is the failure direction that
+    produces a watch giving up too early."""
+    return _execution("e-401", status="running", started_minutes_ago=7)
+
+
+@pytest.fixture
+def execution_unreadable_start():
+    """In flight with an unreadable `startedAt` — `summarize_execution` returns
+    `stuck: None`, the third state Phase 27 D-07b(i) forbids rounding to False."""
+    return _execution("e-402", status="running", started_minutes_ago=7,
+                      started_at=lambda _moment: "not-a-timestamp")
+
+
+def _search_node_run(*, failed=False):
+    """One NodeRun for a maintenance HubSpot-Search node, in the `data.main[0]` shape the
+    repo already walks (`enrichment_cost_ledger._node_output_items`)."""
+    if failed:
+        # `onError: continueRegularOutput` — the node records its error and the run
+        # carries on, so the EXECUTION still reports success.
+        return {"executionStatus": "error",
+                "error": {"message": "401 - HubSpot credential rejected"},
+                "data": {"main": [[]]}}
+    return {"executionStatus": "success", "error": None,
+            "data": {"main": [[{"json": {"total": 3}}]]}}
+
+
+@pytest.fixture
+def execution_maintenance_falsely_successful():
+    """D-08b: the run says healthy, the backend is not.
+
+    `status: success` on the scheduled-maintenance workflow while one of the five
+    `onError: continueRegularOutput` search nodes returned an error and no rows. This is
+    the shape that makes the sweep's blind spot testable — without it, "failed scheduled
+    run" gets built against execution status alone and silently misses every upstream
+    search failure (29-RESEARCH Pitfall 1).
+    """
+    execution = _execution("e-501", status="success", started_minutes_ago=12,
+                           ran_for_seconds=9, workflow_id=MAINTENANCE_WORKFLOW_ID,
+                           workflow_name=MAINTENANCE_WORKFLOW_NAME)
+    run_data = {name: [_search_node_run()] for name in MAINTENANCE_SEARCH_NODES}
+    run_data["SJ-1 Search (input-gap scan)"] = [_search_node_run(failed=True)]
+    execution["data"] = {"resultData": {"runData": run_data}}
+    return execution
+
+
+def _backend_status(*, balances, credential_health, counts):
+    """A `backend_status.fetch_backend_status()` result — `{available, reason, data}` with
+    `data` being the endpoint body `Build Full Status` emits."""
+    return {
+        "available": True,
+        "reason": None,
+        "data": {
+            "counts": counts,
+            "credential_health": credential_health,
+            "balances": balances,
+            "checked_at": _iso(SWEEP_NOW),
+        },
+    }
+
+
+def _balance(provider, credits, *, error=None, status=200):
+    """One `Build Credit Status` balances row, in the shape that node actually emits:
+    `configured` is hardcoded true for every REQUESTED provider, and `unreadable` is
+    exactly `credits is None` (29-CONTEXT D-22)."""
+    return {"provider": provider, "configured": True, "credits": credits,
+            "unreadable": credits is None, "error": error, "status": status}
+
+
+def _health(source, state, *, status=200, reason=None):
+    return {"source": source, "state": state, "status": status, "reason": reason}
+
+
+def _counts(companies_unresolved=2, companies_review=0, contacts_unresolved=4,
+            contacts_review=1):
+    return {
+        "companies_requested_unresolved": companies_unresolved,
+        "companies_awaiting_review": companies_review,
+        "contacts_requested_unresolved": contacts_unresolved,
+        "contacts_awaiting_review": contacts_review,
+    }
+
+
+@pytest.fixture
+def backend_status_healthy():
+    """Numeric balances well above any floor, nothing awaiting review. The zero here is a
+    genuine zero — nothing to review — not an unreadable count."""
+    return _backend_status(
+        balances=[_balance("lusha", 412), _balance("zoominfo", 1580)],
+        credential_health=[_health("lusha", "ok"), _health("zoominfo", "ok"),
+                           _health("hubspot", "ok")],
+        counts=_counts(companies_review=0, contacts_review=0),
+    )
+
+
+@pytest.fixture
+def backend_status_unknown_balance():
+    """Apollo's 403-by-design: `configured: true`, `credits: None`, `unreadable: true`,
+    credential health `refused`. Never "exhausted", never "healthy" (Pitfall 5).
+
+    The counts here are unreadable too (`null`, never `0`) — the endpoint's own STATUS-06
+    contract for a search that failed rather than returned nothing.
+    """
+    return _backend_status(
+        balances=[_balance("lusha", 412),
+                  _balance("apollo", None, error="http_403", status=403)],
+        credential_health=[_health("lusha", "ok"),
+                           _health("apollo", "refused", status=403, reason="http_403")],
+        counts=_counts(companies_unresolved=None, companies_review=None,
+                       contacts_unresolved=None, contacts_review=None),
+    )
+
+
+@pytest.fixture
+def backend_status_unconfigured_provider():
+    """The third provider state: never probed at all. Absent from `balances` entirely
+    (that node maps over the REQUESTED providers), present in credential_health as
+    `state: unknown, reason: not_configured` — `deriveSourceHealth`'s real
+    `configured: false` output (29-CONTEXT D-22)."""
+    return _backend_status(
+        balances=[_balance("lusha", 412)],
+        credential_health=[_health("lusha", "ok"),
+                           _health("apollo", "unknown", status=None,
+                                   reason="not_configured")],
+        counts=_counts(),
+    )
+
+
+@pytest.fixture
+def backend_status_exhausted():
+    """An EXPLICIT numeric balance at a floor — the only shape a quota-exhausted notice
+    may fire on."""
+    return _backend_status(
+        balances=[_balance("lusha", 0), _balance("zoominfo", 1580)],
+        credential_health=[_health("lusha", "ok"), _health("zoominfo", "ok")],
+        counts=_counts(),
+    )
+
+
+@pytest.fixture
+def backend_status_review_backlog():
+    """Review counts far above any plausible threshold, with everything else healthy — so
+    a backlog notice firing here is attributable to the backlog and nothing else."""
+    return _backend_status(
+        balances=[_balance("lusha", 412)],
+        credential_health=[_health("lusha", "ok"), _health("hubspot", "ok")],
+        counts=_counts(companies_review=137, contacts_review=284),
+    )
 
 
 @pytest.fixture(autouse=True)
