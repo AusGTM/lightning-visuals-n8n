@@ -236,15 +236,23 @@ Section A (install + invoke, 7 read-only observations) gates Section B (the arme
 Canary CSV prepared at `~/Desktop/lv-canary-23-06.csv` for
 `canary-23-06-20260731@australiagtm.com`. **Unblocks nothing downstream** — it is Phase 23's own proof.
 
-### 25-01 — lists-scope probe + chunk-timing measurement  ← HIGHER LEVERAGE
-**No runbook written yet.** Two live checkpoints:
-1. One live call verifying whether the HubSpot credential carries `crm.lists.read`.
-2. Measure real per-record wall-clock time to derive `max_records_per_chunk`.
-Plus a decision on whether saved-view resolution is feasible at all — if not, **INGEST-04 scopes
-down to lists + record IDs** and that becomes amendment #7.
+### 25-01 — mostly DONE. Probe A ran, the decision is made, only Probe B remains.
+- **Probe A (lists scope): DONE, GRANTED.** First run returned **403**; `crm.lists.read` was added
+  to `ausgtm-lightningvisuals-data`'s `requiredScopes` and **reinstalled** via `hs project
+  install-app` — uploading a scope does not grant it, and rotating the token never would. Re-probe:
+  `granted / 200`, list id 15 (`New Targets.xlsx`, contacts, 102 members). Token did not rotate.
+- **Task 3 (view resolution): DECIDED — `refuse-and-redirect`, amendment #7.** Applied by 25-07.
+- **Probe B (chunk timing): STILL OUTSTANDING.** 29-02 measured **36.1 s/record** free from
+  execution history, deriving a ceiling of **2** — but every measured run was single-record,
+  company-lane, and **none was a full waterfall**. **B4 is the only source for the expensive path**,
+  and until it runs the ceiling stays labelled PROVISIONAL in every artifact carrying it.
 
-**Blocks 25-03, 25-04, 25-06, 25-07 — and through them most of the milestone's back half.**
-Write it a runbook in the same form as 23-06's when the operator is ready.
+**No longer blocks anything** — 25-03/04/06/07 are all built. Everything is in `OPERATOR-RUNBOOK.md`
+§RB-1, including a verdict table (**200 and 404 both mean granted; 403 is the denial**).
+
+**One free live check to run alongside B4:** a single POST naming `New Targets.xlsx` should return
+the **oversize refusal** (102 members vs a ceiling of 2) — not a 200, not a hang. Zero writes, zero
+credits, and it exercises the one path 25-03 built but could not test live.
 
 ---
 
@@ -326,6 +334,20 @@ phase that mutates production, and its read-back verification depends on the sta
 ## 8. Working conventions that have been paying off
 
 - **Tell every executor about its concurrent siblings** and which filesystem region each owns.
+- **A CONTRACT HELD IN TWO PLACES NEEDS A TEST THAT READS BOTH.** This produced three real bugs on
+  2026-07-31, none visible to per-component testing:
+  - **The list envelope.** Client emitted flat `{"list": "<name>", "objectType": ...}`; backend reads
+    `isPlainObject(body.list)` then `.name`/`.objectType`. A string is non-null, so it **passed** the
+    `IF List Input` gate and was then refused by **every** request — the whole list lane dead while
+    both suites stayed green. Fixed `13006fa`; one literal now pinned from both sides.
+  - **The chunk ceiling**, declared in the backend builder and the client config with nothing forcing
+    agreement. Pinned `1196c57`.
+  - **The runbook's memorised rewrite counts** — 9/8 in the morning, 11/10/10 by afternoon. Both
+    runbooks now **derive** them at deploy time; a stale count makes a *correct* deploy look like a
+    misfire.
+  **Never write the same number or shape in two files without a test that fails when they diverge.**
+- **`<phase>-CONTEXT.md` is a shared surface too**, added the hard way: 25-05's commit swept 25-04's
+  staged hunk there. Name it alongside `SKILL.md`/`README.md` when briefing concurrent executors.
 - **The real shared surfaces are `SKILL.md` and `README.md`, not `conftest.py`.** Learned the hard
   way: 24-03 and 26-01 collided on `operator-claude-plugin/skills/contact-upload/SKILL.md` while
   both were uncommitted in the same working tree. Almost every plan from Phase 24 onward adds a
