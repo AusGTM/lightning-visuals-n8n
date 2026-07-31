@@ -317,7 +317,24 @@ option, date, one sentence of rationale, the exact operator-facing refusal sente
 # RB-2 · Plan 29-01 — Can a scheduled routine invoke this plugin's skill?
 
 **Gates 29-03, 29-04 → 29-05 → 29-06 (all of Phase 29). No dependencies — runnable today.**
-No commands beyond authoring one file. Nothing is armed and nothing is written.
+Nothing is armed and nothing is written.
+
+> **✅ The routine is already written — you do not author anything.** It ships at
+> `phases/29-notices-unattended-sweep/probe/`, with a README that assumes nothing about whose
+> machine it runs on. **Follow that README**, not the "author a routine" wording below, which
+> describes work already done.
+>
+> **The operator is not on the development machine**, so the probe folder covers the install too:
+> the plugin now has a marketplace manifest, so
+> `/plugin marketplace add <repo>` then `/plugin install operator-claude-plugin@lightning-visuals-operator`
+> works on a fresh machine. **Run `/operator-claude-plugin:backend-status` once before scheduling
+> anything** — if it does not resolve, the probe returns NO for a trivial reason and the cycle is
+> wasted.
+>
+> **Why this one cannot be automated:** a routine's cadence lives in the app's IndexedDB, not in
+> any file — verified, the routines folder holds `SKILL.md` and nothing else. There is no terminal
+> path to schedule one or make it fire, and the deliverable is a UI observation (did a banner
+> appear, was the output truncated) regardless.
 
 **Read first:** `29-RESEARCH.md` §"Pattern 2" and §"Pitfall 2" — finding the config flag set to
 `true` is **not** this task's answer. The flags (`coworkScheduledTasksEnabled`,
