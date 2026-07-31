@@ -287,6 +287,8 @@ node --test tests/n8n/*.test.mjs                                        -> 474 p
 |---|---|
 | `7b3fdee` | `test(28-02):` the failing spec (RED — module absent) |
 | `8a0763b` | `feat(28-02):` the probe module (GREEN) |
+| `3a07ecb` | `docs(28-02):` this summary |
+| `a9d9fb6` | `test(28-02):` the spec followed the module to the injected wait (deviation 1) |
 
 ## Self-Check: PASSED
 
