@@ -15,36 +15,42 @@ mid-flight.
 |---|---|---|
 | 23 Walking skeleton | 6 | 5 done. **23-06 operator window IN PROGRESS — Section A partial, Section B blocked on two live findings, see §4** |
 | 24 Non-tabular adapters | 3 | ✅ **COMPLETE** |
-| 25 Enrichment lane & cost guard | 7 | 25-02 done. **25-01 is a human checkpoint — see §4** |
+| 25 Enrichment lane & cost guard | 7 | ✅ **ALL 7 BUILT** — all four success criteria met. 25-01's Probe A ran live (**lists GRANTED**); **Probe B / B4 still outstanding**, so the chunk ceiling of 2 stays **PROVISIONAL** everywhere it appears |
 | 26 Outcome reporting & retry | 3 | ✅ **COMPLETE** — amendment #4 closed, REQUIREMENTS.md reworded |
 | 27 Backend status surface | 5 | ✅ **CODE-COMPLETE** — 27-01…05 all built. Only **27-05 Task 3** (dashboard same-URL, operator-run) outstanding |
 | 28 Control actions | 6 | **checked twice** (5 blockers → repaired → 1 more → repaired). **28-01 DONE.** 28-02 is a human gate; 28-03/04 chain behind it; **28-05 serialized** behind the operator's `test_plugin_manifest.py` fix |
 | 29 Notices & sweep | 6 | checker run + repaired (3 blockers). **29-02 DONE.** 29-03/04 need 29-01 (human) |
 | 30 Review-queue triage | 7 | checker run + repaired (4 blockers). **30-01…30-06 ALL DONE.** Only **30-07** (armed canary, human) remains |
 
-**30 of 43 plans built. Four phases complete or code-complete (24, 26, 27, 30-autonomous).**
+**34 of 43 plans built. Phases 24, 25, 26, 27 COMPLETE; 30 complete bar its canary.**
 
-> ## ⚠ AUTONOMOUS WORK IS EXHAUSTED — everything remaining needs an operator
+> ## ⚠ What is left, and why — read before concluding "nothing is runnable"
 >
-> As of 2026-07-31 there is **no plan left that an agent can execute**. Every unbuilt plan is either
-> a human gate or chained behind one. **The milestone's completion now depends entirely on the eight
-> gates in `OPERATOR-RUNBOOK.md`.**
+> **"Autonomous work is exhausted" was claimed twice on 2026-07-31 and was WRONG both times.**
+> Check before believing it. Two things make plans look blocked when they are not:
 >
-> **Highest leverage, in order:**
-> 1. **29-01** (RB-2) — no dependencies, no code needed, runnable today. Releases 29-03/04/05/06.
-> 2. **28-02** (RB-5) — needs 28-02 Task 1 built first. Releases 28-03/04/05/06.
-> 3. **25-01** (RB-1) — needs 25-01 Task 1 built first. Releases 25-03/04/06/07.
+> 1. **A plan marked `autonomous: false` can still have an autonomous Task 1.** 25-01 and 28-02 are
+>    human *gates*, but each builds a probe script first, and those Task 1s were runnable all along.
+>    Building them is what unblocked the operator.
+> 2. **An operator result can unblock a plan silently.** 25-03's precondition was literally "a
+>    granted verdict in `25-BLOCKERS.md`" — the moment Probe A returned granted, three plans became
+>    runnable with no other change.
 >
-> Those three unblock **twelve** plans between them. 23-06, 27-05 and 30-07 unblock nothing — each
-> is its own phase's proof.
+> **The inverse trap:** 28-03/28-04 *appear* runnable because 28-02 has a SUMMARY (written by its
+> Task-1 executor), but they need `28-FINDINGS.md`, which is 28-02's **human** Task 3 output and does
+> not exist. **Resolve dependencies against the artifact a plan actually reads, not against SUMMARY
+> presence.**
 >
-> **Before walking either armed canary (23-06, 30-07), fix `verify_live_write_safety.py`.** Three
-> independent defects were found by three separate routes on 2026-07-31, and it is the read-back
-> **both** windows depend on. One coherent fix — a workflow argument, an expected-armed-flags
-> argument, no hardcoded scope. Routes to `/gsd-plan-phase 23 --gaps --ws plugin-entrypoint`.
+> **Genuinely blocked right now:** 28-03/04/05/06 (need 28-02's live probe), 29-03/04/05/06 (need
+> 29-01's host probe), 30-07 (armed canary). **Highest-leverage gates: 29-01 and 28-02**, four plans
+> each.
+>
+> ✅ **`verify_live_write_safety.py` is FIXED** (plan 23-07). It now discovers rather than names —
+> 8 workflows / 11 declaring nodes, up from 2 — a zero-discovery scan fails, and `--expect-armed`
+> is symmetric. Both armed windows are unblocked on that axis.
 
-**Test baselines — CURRENT:** `1290 passed, 1 skipped` (pytest), `474 passed` (node), plugin suite
-`490 passed`. Milestone started at 709 pytest / 400 node; the handoff before this one read 919/400.
+**Test baselines — CURRENT:** `1529 passed, 1 skipped` (pytest), `506 passed` (node), plugin suite
+`654 passed`. Milestone started at 709 pytest / 400 node; the handoff before this one read 919/400.
 **Node includes 4 Apollo sentinel tests** merged from `fix/apollo-zero-revenue-band` — not a
 regression signal. Any drop is a regression to investigate, not absorb.
 
@@ -79,8 +85,8 @@ four uncommitted 23-06 files (listed in §1). Sanity-check, then proceed:
 ```bash
 git rev-parse --abbrev-ref HEAD                                      # expect feat/v0.6-plugin-entrypoint
 git status --porcelain | grep -v DS_Store | grep -v '^?? .claude/'   # expect ONLY the operator's 4 files
-.venv/bin/python -m pytest -q | tail -2                              # expect 1163 passed, 1 skipped
-node --test tests/n8n/*.test.mjs 2>&1 | grep -E '^. (pass|fail) '    # expect pass 404, fail 0
+.venv/bin/python -m pytest -q | tail -2                              # expect 1529 passed, 1 skipped
+node --test tests/n8n/*.test.mjs 2>&1 | grep -E '^. (pass|fail) '    # expect pass 506, fail 0
 grep -c 'ALLOW_HUBSPOT_[A-Z_]* = \\"true\\"' n8n/*.json              # expect 0 everywhere
 ```
 
@@ -89,13 +95,16 @@ mid-plan — re-run it rather than assuming it finished. This has happened twice
 times the code was committed and only the summary was orphaned, so check before re-running.
 
 **Next batch, in order:**
-1. **30-01 → 30-06** — the largest remaining autonomous block, a six-plan serial chain. Checker was
-   run 2026-07-31 immediately before execution; act on its findings first, and note that a finding
-   in a *later* plan may change how 30-01 must be built, since everything chains off it.
-2. **29-02** — the only Phase 29 plan runnable without a human (`depends_on: []`). 29-03/04 need
-   29-01, which is an operator probe.
-3. **28-03, 28-04** once 28-02's operator probe lands; **28-05 only after** the operator commits
-   `test_plugin_manifest.py` (it is serialized on that shared surface, by operator decision).
+1. **Re-check what is runnable** using the trap notes above — do not assume. As of this writing every
+   remaining plan is a human gate or chained behind one, but that has been wrong twice today.
+2. **28-03, 28-04** the moment 28-02's live probe produces `28-FINDINGS.md`; then 28-05 — but 28-05
+   is **serialized** behind the operator committing `test_plugin_manifest.py`, by operator decision.
+3. **29-03, 29-04** once 29-01's host probe answers; then 29-05, then 29-06.
+
+**A contract held in two places needs a test that reads both.** Phase 25 shipped this bug twice in
+one day — the list envelope (client flat, backend nested: the whole list lane refused every request
+while both suites stayed green) and the chunk ceiling (two copies of `2`). Both are now pinned by
+paired tests (`13006fa`, `1196c57`). Per-component testing cannot see either.
 
 **Do not re-run the phase checkers.** All 8 phases are checked. Re-checking is warranted only after
 a repair pass — which is itself a real source of drift, see §7b.
@@ -164,7 +173,7 @@ below was verified against deployed JSON or live probes. Do not "correct" them b
 
 ---
 
-## 3. Accepted requirement amendments (six)
+## 3. Accepted requirement amendments (seven)
 
 Each was surfaced explicitly and chosen. **None is silent drift. Do not revert them.**
 
@@ -176,6 +185,7 @@ Each was surfaced explicitly and chosen. **None is silent drift. Do not revert t
 | 4 | REPORT-02 | ICP-tier clause removed — HubSpot owns derived ICP outputs (Phase 15 "Approach C": `src/merge_policy.py:347`, `n8n/code/mergeCompanies.js:53`, `config/field_policy.yaml:97`). **Rewording is 26-02 Task 3, not yet executed** |
 | 5 | CONTROL-01 + Phase 28 criterion 1 | Off-cycle scheduled-scan execution dropped (no endpoint exists). Operator uses enable/disable + re-timing |
 | 6 | Mutation allowlist (CONTROL-03) | Widened by exactly one field: a Schedule Trigger node's `disabled` boolean, because `LV Scheduled Maintenance (Cloud)` has **five** Schedule Triggers so workflow-level on/off can't express per-job control |
+| 7 | INGEST-04 + ROADMAP criterion 1 | **Saved views refused**, scope is **lists + record IDs**. Applied by 25-07. Lists were **denied (403)** on first probe and are now **GRANTED** — `crm.lists.read` was added to the `ausgtm-lightningvisuals-data` static-auth app and **reinstalled** (`hs project install-app`; uploading a scope does not grant it, and rotating the token never would). Had the 403 stood, this would have been the *large* amendment dropping lists too. Refusal sentence lives once, as `enrichment.VIEW_REFUSAL` |
 
 ---
 
