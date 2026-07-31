@@ -27,10 +27,17 @@ Two expectations, exclusive:
   disarmed (default) — passes only when EVERY declaring node reads every write-enabling
     boolean it declares as "false" AND every allowlist constant it declares as "". A
     single still-enabled flag or a single leftover allowlist value anywhere fails.
-  armed --allowlist VALUE — passes only when record writes read enabled ("true") wherever
-    declared, every other write-enabling boolean still reads disabled ("false") wherever
-    declared, and the live allowlist (TEST_RECORD_IDS or TEST_RECORD_DOMAINS, whichever is
-    non-empty) reads exactly VALUE.
+  armed --allowlist VALUE [--expect-armed FLAG,FLAG] — symmetric: the named flags must
+    read enabled wherever they are declared, EVERY other write-enabling boolean must still
+    read disabled wherever it is declared, and the live allowlist (TEST_RECORD_IDS or
+    TEST_RECORD_DOMAINS, whichever is non-empty) must read exactly VALUE. Naming a flag
+    narrows nothing else. Omitting --expect-armed means record writes alone, which is
+    exactly what this script has always meant — an operator who forgets the argument gets
+    the STRICTER verdict, never a permissive one.
+
+An armed window whose allowlist reads empty is its own finding, not a pass:
+`_writeSafetyAllows()` returns false on an empty allowlist, so that state grants nothing
+while every flag reads enabled.
 
 A scan that discovers ZERO declaring nodes is a failure with an explicit reason, never a
 disarmed pass: a scan that matched nothing is otherwise indistinguishable from a disarmed
@@ -43,6 +50,8 @@ no credential value is ever constructed or printed here.
 Usage:
     python scripts/verify_live_write_safety.py                       # disarmed (default)
     python scripts/verify_live_write_safety.py --expectation armed --allowlist 9604614548
+    python scripts/verify_live_write_safety.py --expectation armed --allowlist australiagtm.com \
+        --expect-armed ALLOW_HUBSPOT_RECORD_WRITES,ALLOW_HUBSPOT_CREATE
     python scripts/verify_live_write_safety.py --json                # machine-readable verdict
 
 Live-only utility, same convention as its siblings: when n8n credentials are absent,
@@ -76,6 +85,11 @@ ALLOWLIST_CONSTANTS = ("TEST_RECORD_IDS", "TEST_RECORD_DOMAINS")
 # about would otherwise report a live artifact as "disarmed PASS", which is the exact
 # false-success this read-back exists to prevent.
 BOOLEAN_CONSTANTS = tuple(c for c in CHECKED_CONSTANTS if c not in ALLOWLIST_CONSTANTS)
+
+# What `--expectation armed` meant before an expected-armed set existed (Phase 22). Kept
+# as the default so every pre-23-07 call site — including the completed Phase 22 runbook's
+# command lines — keeps its exact meaning and still fails closed.
+DEFAULT_EXPECT_ARMED = ("ALLOW_HUBSPOT_RECORD_WRITES",)
 
 EXPECTATIONS = ("disarmed", "armed")
 
@@ -135,9 +149,33 @@ def _declaring_nodes(workflow: dict) -> list:
     return reports
 
 
-def verify(workflows, expectation: str, expected_allowlist: str = None) -> dict:
+def _resolve_expect_armed(expected_armed) -> tuple:
+    """`None` means the caller said nothing and gets Phase 22's meaning; an explicitly
+    empty collection is a mistake, not a request to expect nothing."""
+    if expected_armed is None:
+        return DEFAULT_EXPECT_ARMED
+    names = tuple(expected_armed)
+    if not names:
+        raise ValueError(
+            "the armed expectation requires at least one expected-armed flag; "
+            f"must be one or more of {BOOLEAN_CONSTANTS}"
+        )
+    unknown = [n for n in names if n not in BOOLEAN_CONSTANTS]
+    if unknown:
+        raise ValueError(
+            f"unknown expected-armed flag(s): {', '.join(repr(n) for n in unknown)}; "
+            f"must be one or more of {BOOLEAN_CONSTANTS}"
+        )
+    return names
+
+
+def verify(workflows, expectation: str, expected_allowlist: str = None, expected_armed=None) -> dict:
     """Pure — takes a LIST of already-fetched workflow dicts, returns a per-workflow
-    per-node report plus a pass/fail verdict. No network. Drives the entire offline suite."""
+    per-node report plus a pass/fail verdict. No network. Drives the entire offline suite.
+
+    The armed expectation is symmetric: naming a flag says it must read enabled, and says
+    nothing else — every write-enabling boolean NOT named is still asserted disabled, in
+    every declaring node of every workflow."""
     if expectation not in EXPECTATIONS:
         raise ValueError(f"unknown expectation {expectation!r}; must be one of {EXPECTATIONS}")
 
@@ -145,7 +183,7 @@ def verify(workflows, expectation: str, expected_allowlist: str = None) -> dict:
     if expectation == "armed":
         if not expected_allowlist:
             raise ValueError("the armed expectation requires a non-empty expected_allowlist")
-        armed_flags = ("ALLOW_HUBSPOT_RECORD_WRITES",)
+        armed_flags = _resolve_expect_armed(expected_armed)
 
     grouped = [
         {"name": wf.get("name") or "<unnamed workflow>", "nodes": _declaring_nodes(wf)}
@@ -225,6 +263,7 @@ def _print_report(result: dict) -> None:
     if result["expectation"] == "armed":
         print(f"expected allowlist: {result['expected_allowlist']!r}")
         print(f"expected armed: {', '.join(result['expected_armed'])}")
+        print("every other write-enabling boolean is asserted disabled wherever it is declared")
     print(
         f"coverage: {result['workflows_scanned']} workflow(s) fetched, "
         f"{result['declaring_nodes']} declaring node(s) found"
@@ -254,16 +293,33 @@ def main(argv=None) -> int:
                          help="which live state to check for (default: disarmed)")
     parser.add_argument("--allowlist", default=None,
                          help="expected allowlist value; required when --expectation=armed")
+    parser.add_argument("--expect-armed", default=None,
+                         help="comma-separated write-enabling flags expected ENABLED, same shape as "
+                              "ENABLE_BAKED_FLAGS. Every flag NOT named is still asserted disabled. "
+                              "Armed expectation only; defaults to ALLOW_HUBSPOT_RECORD_WRITES")
     parser.add_argument("--json", action="store_true", help="emit the verdict as one JSON object")
     args = parser.parse_args(argv)
 
     if args.expectation == "armed" and not args.allowlist:
         parser.error("--allowlist is required when --expectation=armed")
+    if args.expectation != "armed" and args.expect_armed:
+        parser.error("--expect-armed is only meaningful with --expectation=armed")
+
+    expected_armed = None
+    if args.expect_armed:
+        expected_armed = [f.strip() for f in args.expect_armed.split(",") if f.strip()]
+        # Validated BEFORE the credentials check, so a typo can never silently expect
+        # nothing and never spends a live request first.
+        try:
+            _resolve_expect_armed(expected_armed)
+        except ValueError as exc:
+            parser.error(str(exc))
+
     if not _has_n8n():
         print("skipped (no n8n creds): the n8n URL and API key must both be set to run this verifier.")
         return 0
 
-    result = verify(_fetch_all_live_workflows(), args.expectation, args.allowlist)
+    result = verify(_fetch_all_live_workflows(), args.expectation, args.allowlist, expected_armed)
 
     if args.json:
         print(json.dumps(result, indent=2))
