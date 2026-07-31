@@ -1,0 +1,67 @@
+{
+  "version": "lv-plugin-cost-rates-v1",
+  "measured_on": "2026-07-30",
+  "note": "Plugin-local copy of this repo's measured per-record rates (D-07/D-09). The values, dates and citations below are LITERALS copied in at implementation time from scripts/enrichment_cost_ledger.py's ESTIMATES table, the Phase 22 canary ledger and the Lusha v3 contract. Nothing in the plugin reads those paths at runtime: a runtime coupling to a planning path has already broken once in this repo. A `value` of null means the figure is genuinely unknown and must never be rendered as zero; a `value` of 0 is a real measured zero. Those two are different answers.",
+  "rates": {
+    "lusha_contacts_first_time_enrich": {
+      "value": 1,
+      "unit": "credits/contact",
+      "citation": "Lusha v3 contract sections 7-8, live probe 2026-07-30 (first-time contacts enrich). Flat 1 credit per contact for ANY field set — the v2-era 4.65-credit field bundling no longer applies.",
+      "confidence": "measured"
+    },
+    "lusha_companies_match": {
+      "value": 2,
+      "unit": "credits/company",
+      "citation": "Lusha v3 contract section 5, live probe 2026-07-30 (companies combined match+enrich call).",
+      "confidence": "measured"
+    },
+    "lusha_contacts_stored_id_reuse": {
+      "value": 0,
+      "unit": "credits/contact",
+      "citation": "Lusha v3 contract section 8 — 4/4 stored-id /contacts/enrich calls billed 0 credits. A real, measured zero, not an absence.",
+      "confidence": "measured"
+    },
+    "zoominfo_per_match": {
+      "value": 1.08,
+      "unit": "credits/match",
+      "citation": "Phase 22 research assumption A3 — a v2-era measurement carried forward; the v3 migration was Lusha-only and changed no ZoomInfo pricing.",
+      "confidence": "inferred (measured pre-v3, carried forward — re-measure if ZoomInfo pricing is ever re-probed)"
+    },
+    "apollo_per_match": {
+      "value": null,
+      "unit": "credits/match",
+      "citation": "No committed figure exists for this account. Apollo's usage endpoint (POST /api/v1/usage_stats/api_usage_stats) returns per-endpoint RATE LIMITS — limit/consumed/left_over by day, hour and minute — not a depleting credit pool, so even a successful read yields no per-match credit price. Confirmed live 2026-07-31 (HTTP 200 with the master key).",
+      "confidence": "unknown — Apollo does not expose a per-match credit cost for this account; do not substitute a guess"
+    },
+    "anthropic_usd_per_record": {
+      "value": 0.068624,
+      "unit": "USD/record (full provider + Haiku research + Sonnet judge chain)",
+      "citation": "Phase 22 armed canary cost ledger, executions 332 and 337, both 2026-07-30 — consistent across both fires. This is the all-in observed figure and the one the estimator multiplies by record count.",
+      "confidence": "measured"
+    },
+    "anthropic_research_model_input_per_mtok": {
+      "value": 1.0,
+      "unit": "USD/million input tokens (claude-haiku-4-5)",
+      "citation": "Phase 14 judge-wiring research, Model/Cost Analysis table (cross-checked twice against Anthropic's published catalog).",
+      "confidence": "measured"
+    },
+    "anthropic_research_model_output_per_mtok": {
+      "value": 5.0,
+      "unit": "USD/million output tokens (claude-haiku-4-5)",
+      "citation": "Phase 14 judge-wiring research, Model/Cost Analysis table.",
+      "confidence": "measured"
+    },
+    "anthropic_judge_model_input_per_mtok": {
+      "value": 2.0,
+      "unit": "USD/million input tokens (claude-sonnet-5) — INTRO pricing through 2026-08-31; 3.00 standard after",
+      "citation": "Phase 14 judge-wiring research, Model/Cost Analysis table.",
+      "confidence": "measured, time-bound — intro pricing expires 2026-08-31, re-check after that date"
+    },
+    "anthropic_judge_model_output_per_mtok": {
+      "value": 10.0,
+      "unit": "USD/million output tokens (claude-sonnet-5) — INTRO pricing through 2026-08-31; 15.00 standard after",
+      "citation": "Phase 14 judge-wiring research, Model/Cost Analysis table.",
+      "confidence": "measured, time-bound — intro pricing expires 2026-08-31, re-check after that date"
+    }
+  }
+}
