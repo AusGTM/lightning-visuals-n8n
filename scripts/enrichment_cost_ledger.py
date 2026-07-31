@@ -24,6 +24,11 @@ Subcommands:
              against the cited estimates baseline -> three printed blocks + a per-record
              figure, marked partial whenever any input was unknown.
   estimates  (Plan 03) Print the cited 2026-07-30 estimates baseline table.
+  durations  (29-02) Per recent execution of a named workflow: wall-clock duration
+             (stoppedAt - startedAt, data this ledger already fetched and never used),
+             the record count recovered from its write nodes, and the derived
+             seconds-per-record — plus a summary carrying the max and a high percentile,
+             with unknowns counted separately and never averaged in as zero. Reads only.
 
 Reuses `_has_n8n()`/`_base_url()`/`_n8n_headers()`/`_get_live_workflows()` from
 scripts/deploy_n8n_workflows.py for the token half, and imports
@@ -43,6 +48,7 @@ Usage:
     python scripts/enrichment_cost_ledger.py report --before snap1.json --after snap2.json \\
         --fixture tests/fixtures/n8n/execution_rundata_usage.json --record-count 1
     python scripts/enrichment_cost_ledger.py estimates
+    python scripts/enrichment_cost_ledger.py durations --limit 50
 """
 import argparse
 import json
@@ -501,10 +507,181 @@ def print_report(report: dict) -> None:
     print(f"  per-record USD ({report['record_count']} record(s)): {per_record_display}{partial_note}")
 
 
+# =====================================================================================
+# Phase 29 Plan 02 Task 2 — how long a run actually takes, per record (D-06a).
+#
+# `/api/v1/executions` has always returned both `startedAt` and `stoppedAt`; this ledger
+# only ever read `startedAt`. No new endpoint, no new HTTP path — `durations` reuses
+# `_list_executions()` and `_get_execution()`, so this module's standing no-write
+# guarantee is untouched (T-29-04). Prints ids, timestamps, counts and derived rates only
+# (T-29-05).
+#
+# Unknown is never zero, throughout: a run still in flight has an UNKNOWN duration, and
+# folding it in as 0 drags the measured bound down — the failure direction that produces a
+# watch giving up while a healthy run is still going.
+# =====================================================================================
+
+# The write nodes in wf_enrichment_cloud.json — how many records an execution actually
+# processed, recovered by counting their output items the same way extract_token_usage()
+# recovers token counters. Pinned by name; a rename shows up as an unknown count, never as
+# a silent zero.
+WRITE_NODE_NAMES = ("HubSpot Update", "HubSpot Create",
+                    "HubSpot Company Update", "HubSpot Company Create")
+
+DURATIONS_DEFAULT_WORKFLOW = "LV Enrichment (Cloud template)"
+
+
+def _parse_iso(value):
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def execution_duration_seconds(execution):
+    """Elapsed seconds, or None when either timestamp is absent or unparseable.
+
+    None means "still running, or the field genuinely was not populated" — NOT zero.
+    """
+    if not isinstance(execution, dict):
+        return None
+    started = _parse_iso(execution.get("startedAt"))
+    stopped = _parse_iso(execution.get("stoppedAt"))
+    if started is None or stopped is None:
+        return None
+    return (stopped - started).total_seconds()
+
+
+def execution_record_count(execution):
+    """How many records an execution wrote, summed over the write nodes present in its
+    run data — or None when none of them appears at all.
+
+    A write node PRESENT with zero output items is a genuine 0 (it ran and wrote nothing);
+    a write node ABSENT is unknown (this execution's run data does not say). Requires a
+    full execution payload (`includeData=true`); the collection endpoint carries no runData.
+    """
+    if not isinstance(execution, dict):
+        return None
+    data = execution.get("data")
+    result_data = data.get("resultData") if isinstance(data, dict) else None
+    run_data = result_data.get("runData") if isinstance(result_data, dict) else None
+    if not isinstance(run_data, dict):
+        return None
+
+    total = None
+    for node_name in WRITE_NODE_NAMES:
+        runs = run_data.get(node_name)
+        if not isinstance(runs, list):
+            continue
+        total = 0 if total is None else total
+        for run in runs:
+            total += len(_node_output_items(run))
+    return total
+
+
+def _percentile(values, fraction):
+    """Nearest-rank percentile over an already-sorted-able list. Small samples are the
+    normal case here, so no interpolation — the reported value is always one that was
+    actually observed."""
+    if not values:
+        return None
+    ordered = sorted(values)
+    index = max(0, min(len(ordered) - 1, int(round(fraction * len(ordered) + 0.5)) - 1))
+    return ordered[index]
+
+
+def summarize_durations(rows) -> dict:
+    """Pure over the per-execution rows. Unknowns are COUNTED, never averaged in as zero,
+    and the sample size is a reported field: a bound derived from two executions is not
+    the same claim as one derived from fifty, and the output must not present them alike.
+    """
+    rows = [row for row in rows if isinstance(row, dict)]
+    durations = [row.get("duration_seconds") for row in rows]
+    known_durations = [d for d in durations if isinstance(d, (int, float))]
+
+    per_record = []
+    unknown_duration = 0
+    unknown_records = 0
+    for row in rows:
+        duration = row.get("duration_seconds")
+        records = row.get("record_count")
+        if not isinstance(duration, (int, float)):
+            unknown_duration += 1
+            continue
+        if not isinstance(records, int) or records <= 0:
+            unknown_records += 1
+            continue
+        per_record.append(duration / records)
+
+    return {
+        "sample_size": len(rows),
+        "computed": len(per_record),
+        "unknown_duration": unknown_duration,
+        "unknown_record_count": unknown_records,
+        "max_duration_seconds": max(known_durations) if known_durations else None,
+        "max_seconds_per_record": max(per_record) if per_record else None,
+        "p95_seconds_per_record": _percentile(per_record, 0.95),
+    }
+
+
+def print_durations(rows, summary) -> None:
+    print("=== Per-execution durations ===")
+    for row in rows:
+        duration = row.get("duration_seconds")
+        records = row.get("record_count")
+        rate = (duration / records
+                if isinstance(duration, (int, float)) and isinstance(records, int) and records > 0
+                else None)
+        print(f"  id={row.get('execution_id')} workflow={row.get('workflow')!r} "
+              f"duration_s={'unknown' if duration is None else round(duration, 2)} "
+              f"records={'unknown' if records is None else records} "
+              f"s_per_record={'unknown' if rate is None else round(rate, 3)}")
+
+    print("=== Summary ===")
+    print(f"  sample size: {summary['sample_size']} execution(s); "
+          f"{summary['computed']} yielded a per-record rate")
+    print(f"  unknown duration: {summary['unknown_duration']}   "
+          f"unknown record count: {summary['unknown_record_count']}")
+    for key in ("max_duration_seconds", "max_seconds_per_record", "p95_seconds_per_record"):
+        value = summary[key]
+        print(f"  {key}: {'unknown' if value is None else round(value, 3)}")
+    if not summary["computed"]:
+        print("  NO MEASURED RATE — every execution read was unknown on one side or the "
+              "other. A bound chosen from this run is provisional, not measured (D-06).")
+
+
+def collect_durations(workflow_name=None, limit: int = 20) -> list:
+    """One row per recent execution: duration from the collection response, record count
+    from that execution's own run data. Read-only, two existing GET helpers, no new path.
+    """
+    rows = []
+    for execution in _list_executions(limit):
+        name = (execution.get("workflowData") or {}).get("name")
+        if workflow_name and name != workflow_name:
+            continue
+        try:
+            full = _get_execution(execution.get("id"))
+        except Exception:
+            full = None
+        rows.append({
+            "execution_id": execution.get("id"),
+            "workflow": name,
+            "status": execution.get("status"),
+            "duration_seconds": execution_duration_seconds(execution),
+            "record_count": execution_record_count(full) if full else None,
+        })
+    return rows
+
+
 def _parse_args(argv):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("mode", nargs="?", default="list",
-                         choices=["list", "extract", "capture", "credits", "diff", "report", "estimates"])
+                         choices=["list", "extract", "capture", "credits", "diff", "report",
+                                  "estimates", "durations"])
+    parser.add_argument("--workflow", default=DURATIONS_DEFAULT_WORKFLOW,
+                         help="durations mode: workflow name to measure ('' for all)")
     parser.add_argument("--execution-id", default=None)
     parser.add_argument("--limit", type=int, default=20)
     parser.add_argument("--json", action="store_true")
@@ -579,9 +756,17 @@ def main(argv=None) -> int:
             print(json.dumps(report, default=str))
         return 0
 
-    # list / extract / capture — Plan 01's token half, unchanged, still n8n-only.
+    # list / extract / capture / durations — n8n-only, reads only.
     if not _has_n8n():
         print("skipped (no n8n creds): the n8n URL and API key must both be set to run this ledger.")
+        return 0
+
+    if args.mode == "durations":
+        rows = collect_durations(args.workflow or None, args.limit)
+        summary = summarize_durations(rows)
+        print_durations(rows, summary)
+        if args.json:
+            print(json.dumps({"rows": rows, "summary": summary}, default=str))
         return 0
 
     if args.mode == "list":
