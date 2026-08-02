@@ -18,6 +18,10 @@ SKILL_PATH = PLUGIN_ROOT / "skills" / "contact-upload" / "SKILL.md"
 def test_manifest_parses_and_has_the_required_keys():
     data = json.loads(MANIFEST_PATH.read_text())
     assert {"name", "description", "version", "author"} <= set(data)
+    # `claude plugin validate` rejects a bare string here; asserting presence alone let
+    # that through and A1 caught it live (23-06 Section A).
+    assert isinstance(data["author"], dict), "author must be an object, not a string"
+    assert data["author"].get("name"), "author.name must be non-empty"
 
 
 def test_claude_plugin_directory_contains_only_the_manifest():

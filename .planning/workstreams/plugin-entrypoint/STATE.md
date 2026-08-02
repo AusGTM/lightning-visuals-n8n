@@ -4,12 +4,12 @@ milestone: v0.6
 milestone_name: Claude Plugin Entrypoint
 current_phase: 23
 current_phase_name: walking-skeleton-plugin-shell-tabular-dispatch
-current_plan: 05
+current_plan: 06
 status: executing
-stopped_at: 23-05 complete (wave 3) — adaptive display-only preview (preview.py), skill wording driving it, operator README setup/usage docs, PLUGIN-02 wording reconciled with D-05. 23-01 through 23-04 also complete.
-last_updated: "2026-07-31T21:15:00.000Z"
+stopped_at: 23-06 in progress (operator runbook RB-3). Config created; A1 passes after a plugin.json author-object fix; A6 behaviour verified at the gate. Tenant pinned via N8N_EXPECTED_URL. Section B Step 1 read-back PASS, but two findings hold Steps 2+ — the verifier covers only 2 of 8 flag sites and none in the contact lane, and 23-01 is committed-but-undeployed. A2-A5/A7 need Claude Desktop. 23-01 through 23-05 complete.
+last_updated: "2026-07-31T22:45:00.000Z"
 last_activity: 2026-07-31
-last_activity_desc: executed 23-05 (adaptive preview, skill/README docs, PLUGIN-02 reconciliation)
+last_activity_desc: walking OPERATOR-RUNBOOK RB-3 (23-06); fixed plugin.json author-object defect that failed `claude plugin validate`
 progress:
   total_phases: 8
   completed_phases: 0
@@ -23,9 +23,9 @@ progress:
 ## Current Position
 
 Phase: 23 — Walking Skeleton — Plugin Shell & Tabular Dispatch (executing)
-Plan: 23-01, 23-02, 23-03 complete (wave 1); 23-04 complete (wave 2, the tracer); 23-05 complete (wave 3)
-Status: 23-01 (contact-lane create gate fix), 23-02 (file-handoff smoke test), 23-03 (test scaffolding + network guard), 23-04 (config gate / tabular / disarmed dispatch / plugin shell), and 23-05 (adaptive preview, skill/README docs, PLUGIN-02 reconciliation) done
-Last activity: 2026-07-31 — executed 23-05
+Plan: 23-01 through 23-05 complete; **23-06 in progress** (operator-run, OPERATOR-RUNBOOK §RB-3)
+Status: 23-01 (contact-lane create gate fix), 23-02 (file-handoff smoke test), 23-03 (test scaffolding + network guard), 23-04 (config gate / tabular / disarmed dispatch / plugin shell), and 23-05 (adaptive preview, skill/README docs, PLUGIN-02 reconciliation) done. 23-06 Section A partially observed; Section B not started and currently blocked.
+Last activity: 2026-07-31 — walking RB-3 Section A
 
 ## Accepted requirement amendments (reconcile before each phase seals)
 
@@ -58,7 +58,7 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 ## Progress
 
 **Phases Complete:** 0 / 8
-**Current Plan:** 23-01, 23-02, 23-03, 23-04, 23-05 (all complete; 5/6 plans)
+**Current Plan:** 23-06 (operator window, in progress) — autonomous work is at 27-05
 
 ```
 [█░░░░░░░░░░░░░░░░░░░] 8%
@@ -66,11 +66,11 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 
 | Phase | Requirements | Status |
 |-------|--------------|--------|
-| 23. Walking Skeleton — Plugin Shell & Tabular Dispatch | 10 | Executing (23-01, 23-02, 23-03, 23-04, 23-05 done, 5/6 plans) |
+| 23. Walking Skeleton — Plugin Shell & Tabular Dispatch | 10 | Executing (23-01…23-05 done; 23-06 operator window in progress, 5/6 plans) |
 | 24. Non-Tabular Input Adapters | 8 | Executing (24-01 done, 1/3 plans) |
 | 25. Enrichment Lane & Cost Guard | 4 | Not started |
 | 26. Outcome Reporting & Safe Retry | 4 | Executing (26-01 done, 1/3 plans) |
-| 27. Backend Status Surface | 6 | Executing (27-01, 27-02, 27-03 done — waves 1-2) |
+| 27. Backend Status Surface | 6 | Executing (27-01, 27-02, 27-03, 27-04 done — 4/5 plans; 27-05 next) |
 | 28. Control Actions | 7 | Not started |
 | 29. Notices & Unattended Sweep | 5 | Not started |
 | 30. Review-Queue Triage | 5 | Not started |
@@ -236,6 +236,27 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
   the existing coverage was added instead, and both D-11 and the plan now record it so it
   cannot be re-litigated. STATUS-01 deliberately left Pending: the breadth is 27-04's.
 
+- **27-04 delivered the breadth, and STATUS-01 is now Complete.** `status.describe_all()`
+  reports **every** workflow the key can see with no allowlist (D-07) — a source-scanning
+  test fails if one is ever introduced — at a cost of two calls: the workflow collection
+  plus one bounded executions page grouped by workflow, with a filtered top-up read for any
+  workflow absent from that page (a bounded page is not history, and a failed top-up reports
+  `unknown`, never never-run). **"Stuck" is an execution-age verdict** on data the client
+  already holds (D-07b); no HubSpot lock state is touched, and the verdict is **tri-state** —
+  `None` means in flight with an unreadable start time and must never be flattened to
+  `False`, which would render an unjudgeable run as fine (folded into CONTEXT as D-07b(i)).
+  `execution_errors.harvest_errors()` reads failures out of **per-node output**, so a
+  provider 401 inside a run n8n reports `success` still surfaces (D-04b); identical findings
+  collapse per `(node, cause)` with a count, and every one goes through 27-02's
+  `error_table.translate()` — the module contains no `who_can_fix=` at all, so no caller can
+  blame the operator for an unrecognised signature. `render_text.py` and
+  `skills/backend-status/SKILL.md` give the plain-language answer; the skill states in its
+  first paragraph that it only reads. One correction folded into CONTEXT under **D-10**:
+  `describe_all()` uses a collection entry as the workflow body only when it carries a
+  `nodes` list and fetches the body otherwise — deleting that fallback would make
+  write-safety read `unknown` for every workflow at once. Repo suite 1065 passed / 1 skipped
+  (+72), node 400 unchanged, nothing under `n8n/` touched.
+
 **Todos / carried context:**
 
 - 24-03 must write `extraction.md`'s documented artifact schema example(s) such that a
@@ -253,7 +274,49 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 - Enrichment payloads must set `providers` explicitly; absent/unrecognized means no
   provider is enabled (the primary burn gate in `Parse HubSpot Event`).
 
-**Blockers:** None. Carried risks: (1) agent tooling is blocked from arming writes, so Phase 28's
+**Blockers:**
+
+- ~~**23-06 FINDING 1 — the armed-window read-back proves less than it appears to.**~~
+  **RESOLVED 2026-07-31 by plan 23-07.** `verify_live_write_safety.py` now **discovers** rather
+  than names: verified live, it scans **8 workflows / 11 declaring nodes** (was 2), a
+  zero-discovery scan **fails** instead of passing quietly, and `--expect-armed FLAG,FLAG` makes
+  the armed assertion symmetric — named flags must be enabled, everything else still asserted
+  disabled, so Phase 22's stricter meaning survives when the flag is omitted. **Do not re-derive
+  the "2 of 8" figure below; it is retired.** Original finding: the script hardcoded the workflow
+  name (`LV Enrichment (Cloud template)`) and node names (`Decide Action`,
+  `Decide Company Action`) with no workflow argument, covering 2 of the 8 live nodes declaring
+  the write-safety constants and **none in `LV Contact Ingest (Cloud template)`** — the lane
+  23-06's canary actually fires at, whose gates are `HubSpot Update Write Gate` /
+  `HubSpot Create Write Gate`. Step 7's "disarmed PASS" would have been reported without ever
+  inspecting the contact lane. Fix mirrored 27-04's D-07 no-allowlist reasoning: report every
+  workflow/node declaring an `_OVERLAY_FLAG_SPEC` constant.
+
+- **23-06 FINDING 2 — 23-01's create-gate fix is committed but not deployed.** Live
+  `LV Contact Ingest (Cloud template)` (`updatedAt` 2026-07-30) has a `Decide Action` node that
+  declares none of the four constants; the committed artifact's does. Section B Step 3 would
+  therefore deploy 23-01's never-live-tested logic **in the same action that arms writes**.
+  Recommended: insert a disarmed deploy + read-back between Steps 2 and 3, so "did the fix
+  deploy" and "did arming work" stay separable. **Never memorise a declaration count** — it was
+  9/8 on the morning of 2026-07-31 and CREATE 11 / RECORD_WRITES 10 / REVIEW_WRITES 10 across 11
+  nodes by that afternoon (30-01 added a constant to 8 nodes, 30-02 added a whole workflow). Both
+  runbooks now **derive** the expected rewrite count at deploy time; a stale figure makes a
+  *correct* deploy look like a misfire.
+
+- ~~**23-06 Section B cannot start: n8n instance/key ownership is unverified.**~~ **RESOLVED
+  2026-07-31** — Robert confirmed the key is his; `N8N_EXPECTED_URL` appended to `.env`, pinning
+  the tenant to an exact match. `N8N_API_KEY_2` remains absent, so both runbooks' claim that
+  Alex's key is retained there is stale and should be corrected. Original finding: `.env`'s `N8N_URL`
+  is `https://alexherman.app.n8n.cloud` (Alex's tenant), `N8N_EXPECTED_URL` is **unset**, and
+  `N8N_API_KEY_2` — which both runbooks describe as where Alex's key is retained — **does not
+  exist**, so the single `N8N_API_KEY` present cannot be attributed from the repo alone. The
+  wrong-instance guard does **not** catch this: `deploy_n8n_workflows.py::_instance_ok()` falls
+  back to "host ends with `.n8n.cloud`" when `N8N_EXPECTED_URL` is unset, which
+  `alexherman.app.n8n.cloud` satisfies. Both operator runbooks warn that a wrong key silently
+  deploys into the wrong project and that this has already cost one full deploy cycle. Robert
+  must confirm ownership, and `N8N_EXPECTED_URL` should be set to pin it, before any armed
+  deploy. This equally gates RB-5 (28-02), whose probe refuses unless the two URLs match.
+
+Carried risks: (1) agent tooling is blocked from arming writes, so Phase 28's
 armed path needs a human in the loop; (2) unattended sweep (NOTICE-03) depends on scheduling
 being available in the operator's Claude Desktop environment — verify before planning Phase 29
 rather than assuming; (3) the n8n-side status endpoint is new backend work landing inside a
@@ -261,6 +324,32 @@ milestone otherwise scoped as plugin-only.
 
 ## Session Continuity
 
-**Stopped At:** 23-05 (adaptive preview, skill/README docs, PLUGIN-02 reconciliation) complete. 23-01 through 23-04 also complete.
-**Resume File:** `.planning/workstreams/plugin-entrypoint/phases/23-walking-skeleton-plugin-shell-tabular-dispatch/23-05-SUMMARY.md`
-**Next Action:** Continue executing phase 23's remaining plan (23-06, wave 4 — the final plan closing out the phase)
+**Stopped At:** Two fronts, both accurate — the Current Position block at the top now reflects the operator front rather than being left stale.
+
+- **Operator front (active):** 23-06 Section A, walking `OPERATOR-RUNBOOK.md` §RB-3. Section B blocked, see Blockers.
+- **Autonomous front: 36 of 43 plans built.** Phases 24, 25, 26, 27 COMPLETE; 30 complete bar its
+  canary; 29-02 done. **Phase 28: 28-01, 28-02, 28-03, 28-04 all DONE** — RB-5's live gate ran
+  2026-07-31 and `28-FINDINGS.md` exists, which released 28-03 and 28-04; both are built and
+  committed (`a641119`, `c3ee663`).
+- **Remaining:** 28-05 (needs 28-03/04 — now met, but serialized behind the operator committing
+  `test_plugin_manifest.py`), 28-06 (armed canary), 29-01 (human host probe) → 29-03/04/05/06,
+  30-07 (armed canary), 23-06 §B, 25-01 Probe B4.
+- **Re-check runnability against the artifact each plan reads, never against SUMMARY presence**
+  (HANDOFF §1). "Nothing is runnable" was claimed and wrong twice on 2026-07-31, and RB-5's own
+  readiness row was wrong a third time — it reported the probe script MISSING when it existed
+  under `operator-claude-plugin/scripts/`.
+
+**Resume File:** `.planning/workstreams/plugin-entrypoint/phases/23-walking-skeleton-plugin-shell-tabular-dispatch/23-06-SUMMARY.md` (operator front) · `.../27-backend-status-surface/27-04-SUMMARY.md` (autonomous front)
+
+**Next Action:**
+**All remaining work is operator-gated.** Highest leverage first, all in `OPERATOR-RUNBOOK.md`:
+
+1. **RB-2 (29-01)** — no credentials, no code, pure observation. Releases 4 plans (29-03/04/05/06).
+2. **RB-5 (28-02)** — probe script built, commands paste-ready. Releases 4 plans (28-03/04/05/06);
+   28-05 is serialized behind the operator committing `test_plugin_manifest.py`.
+3. **RB-1 Probe B4** — the only source for the expensive full-waterfall path; until it runs the
+   chunk ceiling of 2 stays PROVISIONAL everywhere. Free rider: one POST naming `New Targets.xlsx`
+   should return the oversize refusal (102 members vs ceiling 2) — zero writes, zero credits, and
+   it exercises the one path 25-03 built but could not test live.
+4. **23-06 Section B** (armed create canary; Steps 2b/2c deploy 23-01 disarmed first) and
+   **30-07** (armed review-writeback canary). Both are their phase's own proof.
