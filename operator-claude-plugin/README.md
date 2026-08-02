@@ -149,9 +149,15 @@ reading as fact. **`unknown` is never rendered as zero and never as healthy**, o
 
 Do this once, before the first upload:
 
-1. In `operator-claude-plugin/config/`, copy `operator.local.example.json` to
-   `operator.local.json` (same directory). This filename is deliberately not a dotfile —
-   dotfiles are unreadable to this environment's tooling.
+1. **Say `/operator-claude-plugin:initialize`.** It tells you the full path to your
+   settings file, offers to put the template there, and lists exactly which values are
+   still needed. Run it again any time to check — it changes nothing when you are already
+   set up, and it never asks you for a secret.
+
+   *(Doing it by hand instead: in `operator-claude-plugin/config/`, copy
+   `operator.local.example.json` to `operator.local.json` in the same directory. That
+   filename is deliberately not a dotfile — dotfiles are unreadable to this environment's
+   tooling.)*
 2. Fill in its two values, both obtained from your n8n admin:
    - `n8n_url` — the `https://` address of your n8n Cloud instance.
    - `webhook_secret` — sent as the `X-Enrichment-Secret` header on every request; never

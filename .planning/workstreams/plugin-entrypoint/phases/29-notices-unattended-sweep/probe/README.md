@@ -26,9 +26,16 @@ In Claude Code:
 Or in Claude Desktop, use the plugin manager — that is the path PLUGIN-01 is written
 against and the one 23-06 A2 verified.
 
-Then do the one-time config in `operator-claude-plugin/README.md` § "One-time setup":
-copy `config/operator.local.example.json` to `config/operator.local.json` and fill in
-`n8n_url` and `webhook_secret` from your n8n admin.
+Then configure it — say:
+
+```
+/operator-claude-plugin:initialize
+```
+
+That prints the full path to the settings file (you are not expected to know where the
+plugin installed itself), offers to put the template in place, and names the values your
+n8n admin has to give you. It never asks you to type a secret into the conversation, and
+running it again just re-checks.
 
 **Check it worked** before scheduling anything — in a normal session run:
 
