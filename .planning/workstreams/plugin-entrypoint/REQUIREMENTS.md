@@ -192,8 +192,14 @@ above. This is why that endpoint has to exist.
 
 ### Backend control actions (CONTROL)
 
-- [ ] **CONTROL-01**: Operator can start a run now — either ingestion lane, or a scheduled scan
-      off-cycle — and is told it started and how its outcome will reach them
+- [ ] **CONTROL-01** **[AMENDED by 28-CONTEXT.md D-05a/D-05b/D-05c — the off-cycle
+      scheduled-scan clause is removed]**: Operator can start a run now — either ingestion lane
+      that is built (both are, as of 2026-07-31: contact upload and enrichment) — and is told it
+      started and how its outcome will reach them.
+      *Why the scan clause went: n8n Cloud has no endpoint to execute a workflow by id — probed
+      live against this tenant 2026-07-31, `405 {"message":"POST method not allowed"}`
+      (28-FINDINGS.md Q2); the upstream proposal is an open unmerged PR. Scheduled scans are
+      controlled through enable/disable and re-timing instead. Fifth accepted amendment.*
 
 - [ ] **CONTROL-02**: Operator can turn a workflow on or off
 - [ ] **CONTROL-03**: Operator can enable or disable a scheduled job and change its cadence,
@@ -205,8 +211,11 @@ above. This is why that endpoint has to exist.
 
 - [ ] **CONTROL-05**: Every backend-mutating action states its consequence in plain language,
       shows what will change, and requires explicit confirmation. Mutations are restricted to an
-      allowlist — write-safety flag overlay, schedule cadence, workflow active state — and any
-      other workflow-JSON change is refused
+      allowlist — write-safety flag overlay, Schedule Trigger cadence, a Schedule Trigger node's
+      `disabled` boolean, workflow active state — and any other workflow-JSON change is refused.
+      *The `disabled` item is D-25, the milestone's sixth accepted amendment (2026-07-31): five
+      Schedule Triggers share one workflow, so workflow-level on/off cannot express "disable a
+      scheduled job".*
 
 - [ ] **CONTROL-06**: After any mutation the plugin re-reads the backend and reports verified or
       failed. A `200` alone is never reported as success

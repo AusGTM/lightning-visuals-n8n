@@ -1,8 +1,14 @@
-"""Tests for the plugin manifest and its one skill (PLUGIN-01, D-02, D-14b).
+"""Tests for the plugin manifest and EVERY skill (PLUGIN-01, D-02, D-14b).
 
 Verifies the packaging shape a plugin skill already gets for free: it is both
-auto-triggered and slash-invocable as /operator-claude-plugin:contact-upload, with no
-separate commands/ directory duplicating that entry point.
+auto-triggered and slash-invocable, with no separate commands/ directory duplicating
+that entry point.
+
+Widened by 28-05 Task 2 from a hardcoded contact-upload path to a glob over
+skills/*/SKILL.md: the hardcoded form silently skipped every skill added after 23-04 —
+by widening day that was five of the six. The glob is asserted non-empty first, because
+a glob matching nothing passes vacuously, which is how this kind of widening quietly
+stops testing anything.
 """
 import json
 import re
@@ -12,7 +18,14 @@ import yaml
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 MANIFEST_PATH = PLUGIN_ROOT / ".claude-plugin" / "plugin.json"
-SKILL_PATH = PLUGIN_ROOT / "skills" / "contact-upload" / "SKILL.md"
+SKILL_PATHS = sorted(PLUGIN_ROOT.glob("skills/*/SKILL.md"))
+
+
+def test_the_skill_glob_is_not_vacuous():
+    assert len(SKILL_PATHS) >= 3, (
+        f"expected at least contact-upload, backend-status and backend-control; "
+        f"found {[p.parent.name for p in SKILL_PATHS]}"
+    )
 
 
 def test_manifest_parses_and_has_the_required_keys():
@@ -39,23 +52,33 @@ def test_no_commands_directory_exists():
     )
 
 
-def _skill_frontmatter() -> dict:
-    text = SKILL_PATH.read_text()
-    assert text.startswith("---"), "SKILL.md must open with YAML frontmatter"
+import pytest
+
+
+def _skill_frontmatter(path) -> dict:
+    text = path.read_text()
+    assert text.startswith("---"), f"{path.parent.name}: SKILL.md must open with YAML frontmatter"
     _, frontmatter, _ = text.split("---", 2)
     return yaml.safe_load(frontmatter)
 
 
-def test_skill_exists_with_parseable_frontmatter_carrying_name_and_description():
-    frontmatter = _skill_frontmatter()
+@pytest.mark.parametrize("skill_path", SKILL_PATHS, ids=lambda p: p.parent.name)
+def test_every_skill_has_parseable_frontmatter_carrying_name_and_description(skill_path):
+    frontmatter = _skill_frontmatter(skill_path)
     assert {"name", "description"} <= set(frontmatter)
+    assert frontmatter["name"] == skill_path.parent.name, (
+        "the frontmatter name must match the directory, or the slash invocation "
+        "documented in the description resolves to nothing"
+    )
 
 
-def test_skill_body_references_only_scripts_that_exist_on_disk():
-    text = SKILL_PATH.read_text()
+@pytest.mark.parametrize("skill_path", SKILL_PATHS, ids=lambda p: p.parent.name)
+def test_every_skill_references_only_scripts_that_exist_on_disk(skill_path):
+    text = skill_path.read_text()
     referenced = set(re.findall(r"scripts/(\w+\.py)", text))
-    assert referenced, "expected the skill body to reference at least one script"
+    assert referenced, f"{skill_path.parent.name}: expected at least one script reference"
     for script in referenced:
         assert (PLUGIN_ROOT / "scripts" / script).exists(), (
-            f"SKILL.md references scripts/{script}, which does not exist on disk"
+            f"{skill_path.parent.name}/SKILL.md references scripts/{script}, "
+            f"which does not exist on disk"
         )

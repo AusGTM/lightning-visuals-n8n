@@ -211,10 +211,10 @@ Plans:
 **Requirements**: CONTROL-01, CONTROL-02, CONTROL-03, CONTROL-04, CONTROL-05, CONTROL-06, CONTROL-07
 **Success Criteria** (what must be TRUE):
 
-  1. The operator can start either ingestion lane or run a scheduled scan off-cycle, and is told the run started and how its outcome will come back — no scripts, no terminal, no n8n UI.
+  1. The operator can start either built ingestion lane (both are: contact upload and enrichment), and is told the run started and how its outcome will come back — no scripts, no terminal, no n8n UI. *(Off-cycle scheduled-scan execution removed — no endpoint to execute a workflow by id exists; probed 405 on this tenant, 28-FINDINGS.md Q2. D-05a/b/c.)*
   2. The operator can turn a workflow on or off, and enable, disable, or re-time a scheduled job in plain terms ("check every 15 minutes" → "hourly") — cron syntax never appears.
   3. The operator can enable live writes for the current conversation only. It lapses when the conversation ends, is never inherited by a later session, and every status readout states plainly whether it is currently on.
-  4. Every mutation states its consequence before it happens ("this lets enrichment overwrite company fields in HubSpot"), shows what will change, and waits for explicit confirmation. The mutation set is allowlisted — write-safety flag overlay, Schedule Trigger cadence, workflow active state — and any other workflow-JSON change is refused rather than attempted.
+  4. Every mutation states its consequence before it happens ("this lets enrichment overwrite company fields in HubSpot"), shows what will change, and waits for explicit confirmation. The mutation set is allowlisted — write-safety flag overlay, Schedule Trigger cadence, a Schedule Trigger node's `disabled` boolean, workflow active state — and any other workflow-JSON change is refused rather than attempted. *(The `disabled` item is D-25, amendment #6: five Schedule Triggers share one workflow.)*
   5. After every mutation the plugin re-reads the backend and reports verified or failed. A `200` from n8n is never reported as success on its own, and the inverse action is stated at the moment the change lands.
 
 **Plans**: 6 plans
