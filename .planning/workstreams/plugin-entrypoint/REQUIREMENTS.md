@@ -136,15 +136,15 @@ above. This is why that endpoint has to exist.
       That permission is conversation-scoped (see CONTROL-04) and granted in chat, never by
       running a command
 
-- [ ] **DISPATCH-04**: A failed or partial dispatch is reported with the failing rows identified,
+- [x] **DISPATCH-04**: A failed or partial dispatch is reported with the failing rows identified,
       and is safe to retry without duplicating already-accepted rows
 
 ### Outcome reporting (REPORT)
 
-- [ ] **REPORT-01**: After dispatch, operator sees per-record outcome (accepted, matched,
+- [x] **REPORT-01**: After dispatch, operator sees per-record outcome (accepted, matched,
       created, needs_review, rejected) rather than a bare HTTP status
 
-- [ ] **REPORT-02** **[AMENDED by 26-CONTEXT.md D-10a / D-10b — the ICP-tier clause is removed]**:
+- [x] **REPORT-02** **[AMENDED by 26-CONTEXT.md D-10a / D-10b — the ICP-tier clause is removed]**:
       Operator sees enrichment results for dispatched records — per record, the needs-review flag
       — without leaving the session, with remaining credits taken from the enrichment response's
       own `remaining_credits` or the n8n-side status endpoint. *The fit score, the anti-ICP flag,
@@ -154,7 +154,7 @@ above. This is why that endpoint has to exist.
       neither a value nor a placeholder for one. Fourth accepted requirement amendment in this
       milestone.*
 
-- [ ] **REPORT-03**: Reporting degrades gracefully when the n8n run is still in flight, showing
+- [x] **REPORT-03**: Reporting degrades gracefully when the n8n run is still in flight, showing
       partial state and how to re-check
 
 ### Backend status and observability (STATUS)
@@ -167,11 +167,11 @@ above. This is why that endpoint has to exist.
       (expired credential, rate limit, exhausted quota, malformed record) and states whether the
       operator or an admin can fix it — never a bare status code or stack trace
 
-- [ ] **STATUS-03**: Provider credit balances and remaining headroom are visible to the operator,
+- [x] **STATUS-03**: Provider credit balances and remaining headroom are visible to the operator,
       retrieved through the n8n-side status endpoint rather than by the plugin holding provider
       credentials
 
-- [ ] **STATUS-04**: Runtime states that need a human are surfaced with counts: wedged runs (an
+- [x] **STATUS-04**: Runtime states that need a human are surfaced with counts: wedged runs (an
       execution still in `status = running` past a configured threshold, read from the n8n
       executions API), records queued but never processed, and records awaiting review.
       *Amended per 27-CONTEXT.md D-07a/D-07b/D-07d: the original wording
@@ -183,8 +183,11 @@ above. This is why that endpoint has to exist.
 - [ ] **STATUS-05**: Status appears as conversational text by default; on request the plugin
       publishes a dashboard Artifact carrying the same data, stamped with when it was fetched,
       and re-publishes to the same URL on refresh
+      *Built (27-05); deliberately unchecked. The cross-session same-URL behaviour is exactly
+      what RB-4's operator walk proves, and it has not been walked. Check this only on RB-4's
+      "approved".*
 
-- [ ] **STATUS-06**: Data the backend cannot supply is shown as explicitly unknown, never as zero
+- [x] **STATUS-06**: Data the backend cannot supply is shown as explicitly unknown, never as zero
       or healthy — a provider whose balance endpoint refuses access reads "unknown", not "0"
 
 ### Backend control actions (CONTROL)
@@ -330,9 +333,9 @@ duplicates. Phase numbering continues from the archived v0.5 milestone (ended at
 | DISPATCH-01 | Phase 23 | Complete |
 | DISPATCH-02 | Phase 25 | Complete |
 | DISPATCH-03 | Phase 23 | Complete |
-| DISPATCH-04 | Phase 26 | Pending |
+| DISPATCH-04 | Phase 26 | Complete |
 | REPORT-01 | Phase 26 | Complete |
-| REPORT-02 | Phase 26 | Pending |
+| REPORT-02 | Phase 26 | Complete |
 | REPORT-03 | Phase 26 | Complete |
 | STATUS-01 | Phase 27 | Complete |
 | STATUS-02 | Phase 27 | Complete |
@@ -364,3 +367,17 @@ duplicates. Phase numbering continues from the archived v0.5 milestone (ended at
 
 **Per-phase counts:** Phase 23 → 10, Phase 24 → 8, Phase 25 → 4, Phase 26 → 4, Phase 27 → 6,
 Phase 28 → 7, Phase 29 → 5, Phase 30 → 5.
+
+**Reconciliation sweep, 2026-07-31.** Checkboxes had lagged delivery in two directions; both are
+now corrected against SUMMARYs on disk, not against phase claims. What "Pending" means per group,
+so nobody re-derives it:
+
+- **STATUS-05** — built (27-05); stays Pending until RB-4's operator walk proves the
+  cross-session same-URL behaviour, which is the requirement's whole point.
+- **CONTROL-01…07** — the machinery is built and tested (28-01 pipeline, 28-02 findings,
+  28-03 arming, 28-04 cadence). Pending because the operator-facing surface is 28-05, unbuilt,
+  and the armed proof is 28-06. There is deliberately no conversational entry point yet.
+- **NOTICE-01…05** — blocked on RB-2 (29-01 host probe). Only 29-02 is built. Building notices
+  before the host is verified is what the probe exists to prevent.
+- **REVIEW-01…05** — built (30-01…06, all SUMMARYs on disk); Pending because 30-07's armed
+  canary is the phase's live proof. Flip these on the canary's "approved", not before.

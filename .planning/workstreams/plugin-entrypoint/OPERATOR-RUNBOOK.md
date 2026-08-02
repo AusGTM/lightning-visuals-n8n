@@ -102,8 +102,11 @@ would strand an armed backend, which is the failure mode this entire ceremony ex
 
 ## §0b — Readiness: what you can run today
 
-**Swept against the tree 2026-07-31, 11:00.** Suite at the time: **1214 pytest / 1 skipped, 474 node
-/ 0 fail, 414 plugin**. **24 of 43 plans built.** Every `n8n/*.json` disarmed (8 files, grep → 0).
+**Re-swept 2026-07-31, evening.** Suite now: **1635 pytest / 6 skipped, 506 node / 0 fail,
+760 plugin**. Every `n8n/*.json` disarmed (8 files, grep → 0). Remaining plans without a SUMMARY:
+28-05, 28-06, 29-01, 29-03…06, 30-07 — all human-gated or chained behind a gate.
+*(The 11:00 sweep read 1214/474/414 and 24 of 43 built; kept here so a mid-day snapshot of this
+file is not mistaken for drift.)*
 
 | § | Plan | Runnable now? | Blocker |
 |---|---|---|---|
