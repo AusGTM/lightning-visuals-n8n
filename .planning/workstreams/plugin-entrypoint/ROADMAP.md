@@ -54,6 +54,7 @@ phase directories never collide with phases 20–22.**
 - [ ] **Phase 28: Control Actions** - Run it, turn it on and off, reschedule it, and enable live writes for one conversation — all confirmed and read-back verified
 - [ ] **Phase 29: Notices & Unattended Sweep** - Runs report themselves when they settle, and a sweep speaks up when something needs a human while nobody is watching
 - [ ] **Phase 30: Review-Queue Triage** - Conflicts get resolved conversationally, with the decision written back as a human decision
+- [ ] **Phase 31: Enum Validation for Review Approvals** - Enum-bound candidates are validated against HubSpot's real option set before they are offered, refusals are explicit at every layer, and silence stops meaning two opposite things
 
 ## Phase Details
 
@@ -318,6 +319,21 @@ Plans:
 **Wave 7** *(blocked on Wave 6 completion)*
 
 - [ ] 30-07-PLAN.md — Admin runbook plus the one human-executed armed canary on a single allowlisted record, closed by a read-back-verified disarm
+
+### Phase 31: Enum Validation for Review Approvals
+
+**Goal**: A review approval can never carry a value HubSpot will refuse — enum-bound candidates are validated against the property's real option set before they are offered, and when something is refused, every layer says so explicitly instead of failing silently or lying.
+**Depends on**: Phase 30 (the review decision path this hardens) and Phase 25 (the enrichment staging that produces candidates)
+**Requirements**: REVIEW-02, REVIEW-05 (hardening); BUGS 28/29/30 from `.planning/todos/pending/2026-08-03-fix-bugs-28-30-enum-validation-for-review-approvals.md`
+**Success Criteria** (what must be TRUE):
+
+  1. A generated enum-options module (values AND labels, built from the HubSpot property schema snapshot, following the `taxonomy.generated.js` pattern) is the single source of truth for what HubSpot's enum properties accept, and a pinning test fails when the snapshot and the generated module drift.
+  2. Enrichment staging (`mergeCompanies.js`) never offers an approvable candidate whose value HubSpot's enum will refuse: exact case-insensitive label→value matches are normalized to the internal value (`Sports` → `SPORTS`); everything else stays staged-only with an explicit validation status naming why. NO general mapping layer — decided 2026-08-03.
+  3. `reviewDecision.js` validates enum-bound values in the shared patch path, so BOTH `dry_run` preview and apply refuse an invalid value explicitly, naming the value and the property — a preview can no longer answer `applied` for a write that would 400 (BUG 29).
+  4. The review write gate answers an explicit refusal body on an allowlist drop instead of dropping the row silently, so the client can distinguish "not allowlisted" from "workflow error" (BUG 30) — and OPERATOR-RUNBOOK RB-9's diagnostic advice is corrected to match.
+  5. Both sides of every touched contract are pinned by tests that read both sides (python + n8n), per the milestone's five-times-burned rule; committed workflow artifacts remain disarmed, and the fix reaches the live tenant only via a disarmed redeploy + bounce.
+
+**Plans**: TBD
 
 ## v0.6 Progress
 
