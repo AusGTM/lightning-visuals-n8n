@@ -1,7 +1,17 @@
 # 30-07 / RB-9 — the armed review canary
 
-**Status: PRE-FLIGHT SEEDED, CANARY NOT YET RUN.** Every verdict below is an observation or it is
-left blank. Nothing here may be filled in from expectation.
+**Status: RUN 2026-08-03, agent-driven end to end at the operator's instruction. Steps 1-7 and 9-10
+PASS. Step 8 (APPROVE) is BLOCKED by a product bug and is recorded as blocked, not passed.**
+
+**At a glance:** armed read-back **PASS** (review armed, dispatch pair still disabled) · both plugin
+gates proven to hold **alone, with zero requests built** · reject **verified** by independent re-read
+and the record correctly stayed queued · approve **failed closed** on a HubSpot 400 · window closed,
+**disarmed PASS** · **no other record touched**, on three independent lines of evidence.
+
+**The headline finding:** the pipeline stages provider free-text into `industry`, which is a HubSpot
+**enumeration**. Every approve of an `industry` candidate 400s, the preview cannot detect it, and the
+client reports it with the same `unparseable_response` it uses for a fail-closed allowlist drop — so
+the runbook's own diagnostic advice points the operator away from the real cause.
 
 ---
 
@@ -52,7 +62,7 @@ backstop is wrong and that is the more valuable finding.
 
 ---
 
-## The run — to be filled in by the operator
+## The run
 
 ### Step 2 — before snapshot — **DONE 2026-08-03T04:16:52Z**
 
@@ -170,49 +180,162 @@ cadence carrying `Review Apply Update Write Gate`, so **once `lv_enrichment_revi
 the backstop can apply it automatically within 15 minutes.** That is the documented approve path,
 not a fault — but it means the approve is not necessarily instantaneous or operator-triggered.
 
-### Step 5 — the queue read
-- Record appears in the queue: ☐
-- Conflict rendered in plain language:
-- Protected fields labelled:
 
-### Step 6 — decision to the exact-write display, writeback NOT armed
-- Property write shown: ☐  · states nothing was sent: ☐
+### Step 5 — the queue read — **PASS, with one defect found**
 
-### Step 6b — the plugin gate, proven independently
-- With `ALLOW_REVIEW_SUBMIT` **unset**, attempt the rejection.
-- Refusal names the variable: ☐ / verbatim text:
+Queue rendered `1 flagged, all shown below`, the record named, and the conflict in plain language:
 
-### Step 7 — REJECT
-- Verdict from `verify_decision` (never from an HTTP status):
-- Review reason holds the text: ☐
-- **Record is STILL queued** — needs-review flag and stored candidate unchanged: ☐
+```
+## Melbourne Racing Club
+Flagged because: industry: Refresh candidate requires review in MVP.
+- **industry**
+  - HubSpot holds now: SPORTS
+  - The pipeline wants to set: arts, entertainment, and recreation
+  - Proposed by: waterfall, confidence 85
+  - Held back because: Refresh candidate requires review in MVP.
+```
 
-### Step 8 — APPROVE
-- Verdict:
-- Candidate values now on the record: ☐
-- Review flags cleared: ☐
-- Provenance blob: entry per applied field naming a **human** source, `human_approved`, timestamp,
-  reason: ☐
-- **Previously recorded machine source still readable in that entry:** ☐
-- **Provenance entries for untouched fields intact:** ☐
-- Did the approve require the bounce predicted above? (yes / no — either answer is a finding):
+`held_decisions()` returned the single stored candidate intact.
 
-### Step 9 — close out (ORDER REVERSED from the runbook's original)
-- `LV Review Decision` deactivated **first**: ☐
-- Disarmed redeploy run: ☐
-- Three active workflows bounced: ☐
-- `verify_live_write_safety.py --expectation disarmed` verdict:
-- Live read-back confirms the review constant in its **disabled** form: ☐
-- `ALLOW_REVIEW_SUBMIT` unset: ☐
+**DEFECT — the HubSpot link renders broken.** `render_record` extracts `row.get("hs_object_id")` at
+its line 246 and then calls `link_lookup(row)` at line 247 — passing the **whole row**, not the id.
+`record_link(object_type, record_id, portal_id)` takes an **id**. The two do not compose, and the
+natural composition produces:
 
-### Step 10 — snapshot comparison
-- `canary_record_snapshot.py compare --snapshot <path>` output:
-- **Any record other than `9604614548` written → STOP and report. That is a gate failure.**
+```
+Open in HubSpot: https://app.hubspot.com/contacts/22617666/record/0-2/{'createdate': '2022-09-16…<entire row dict>
+```
 
-### D-31 caveat — do NOT write "protected fields are protected"
-`manual_protected` is filtered on the review-decision endpoint (`reviewDecision.js`, by class) but
-**not** on the 15-minute backstop (`reviewApply.js`, allowlists by key, leaving `domain` and
-`annualrevenue` writable) — and the backstop is the path the approve flow uses. Record what was
-observed, nothing wider.
+`record_link`'s own docstring says "A broken link is worse than no link" — and this is exactly that.
+`tests/test_review_queue.py:96` encodes the correct lambda
+(`lambda row: record_link(object_type, row.get("hs_object_id"), portal_id)`), but
+`skills/review-triage/SKILL.md:61` shows only `render_queue(rows, total, policy_lookup, link_lookup)`
+and **never defines what those lambdas must be**. So the tested side is right and the shipped
+instructions are silent — **the fifth instance of this milestone's recurring "a contract held in two
+places, tested on only one" defect** (HANDOFF §2 counted four).
 
-### Anything that did not behave as described — verbatim
+**Fix:** put the two lambda definitions verbatim into `review-triage/SKILL.md`. Not applied here — it
+would have changed the surface mid-canary.
+
+### Step 6 — preview with writeback NOT armed — **PASS**
+
+Ran with `ALLOW_REVIEW_SUBMIT` unset, confirming previews are ungated by design (D-03/D-05).
+
+| decision | outcome | would_write |
+|---|---|---|
+| reject | `rejected` | **1 key** — `lv_enrichment_review_reason` |
+| approve | `applied` | **8 keys** — `industry`, `lv_enrichment_needs_review`, `lv_enrichment_provenance`, `lv_enrichment_review_approved`, `lv_enrichment_review_candidate_json`, `lv_enrichment_review_reason`, `lv_enrichment_reviewed_at`, `lv_enrichment_reviewed_by` |
+
+Matches D-30 exactly. Nothing was sent.
+
+Worth noting: an **approve** sets `lv_enrichment_review_approved` to `False`. Presumably "no longer
+awaiting apply", but the naming reads backwards and an operator seeing the patch would reasonably
+misread it.
+
+### Step 6b — each gate proven ALONE — **PASS, stronger than asked**
+
+The runbook says to prove gate 1 with a **rejection**. That is wrong and contradicts its own gate
+table: `UNDOING_DECISIONS = ("reject",)` deliberately exempts reject from `ALLOW_REVIEW_SUBMIT`, so a
+rejection can never demonstrate that gate. **Gate 1 was proven with an approve instead.**
+
+A spy transport that raises if a request is even constructed was injected for both probes:
+
+| probe | env | session arm | decision | result | transport calls |
+|---|---|---|---|---|---|
+| 6b-i | `ALLOW_REVIEW_SUBMIT` **unset** | armed | approve | `submit_not_enabled`, message names `ALLOW_REVIEW_SUBMIT` | **0** |
+| 6b-ii | `ALLOW_REVIEW_SUBMIT=true` | **not armed** | approve | `not_armed` | **0** |
+
+**Zero calls in both cases** — not merely refused, but no request built at all.
+
+### Step 7 — REJECT — **PASS, and it proved the exemption live**
+
+Run deliberately with `ALLOW_REVIEW_SUBMIT` **unset**, to test the documented exemption rather than
+assume it.
+
+```
+outcome: rejected
+verified_properties: {'lv_enrichment_review_reason': 'RB-9 canary: rejecting the industry candidate; …'}
+VERDICT status: verified | mismatched: []
+"Confirmed: the record was re-read after the write and all 1 field(s) hold the approved values."
+```
+
+Record **still queued** afterwards: `total: 1`, `lv_enrichment_needs_review='true'`, candidate still
+stored. Exactly the required behaviour.
+
+**Finding — a rejection leaves no audit trail of who or when.** `lv_enrichment_reviewed_by` and
+`lv_enrichment_reviewed_at` remain `None` after a rejection, because D-30 restricts it to one key.
+The reason text is the only evidence a human acted. For a surface whose purpose is auditable human
+adjudication, that is a gap worth a decision.
+
+### Step 8 — APPROVE — **BLOCKED BY A PRODUCT BUG. Not a pass.**
+
+```
+available: False | reason: unparseable_response | outcome: None
+VERDICT status: failed
+```
+
+**Nothing landed** — the record was unchanged, `hs_lastmodifieddate` still the reject's 04:42:07.934Z.
+Fail-closed behaved correctly.
+
+**Root cause, established rather than guessed:**
+
+1. n8n execution **1173 = `error`** (not a silent gate drop). `execution_errors.py` named it:
+   node `Review Decision Update`, cause `malformed_record`, raw **`Bad request - please check your
+   parameters`** — a HubSpot 400.
+2. HubSpot's `industry` on companies is an **`enumeration` / `select` with 148 fixed options.**
+   `SPORTS` (the stored value) is a valid option. The staged candidate
+   **`arts, entertainment, and recreation` is not an option at all** — it is a provider display
+   label.
+3. All seven other keys in the approve patch validate clean against the live property schema
+   (`bool`, `string`, `datetime` as appropriate). **`industry` is the sole cause.**
+
+**So the enrichment pipeline stages provider free-text into a HubSpot enumeration property without
+mapping it to a valid option, and every approve of an `industry` candidate 400s.** The record was
+only ever safe because the non-clobber policy held it at `needs_review` — the approve path for this
+field cannot succeed as built.
+
+**The preview cannot catch it.** `preview_decision` returned `outcome: applied` with the invalid
+value, because the dry run computes the patch without validating against HubSpot's property schema.
+The operator is shown, and asked to approve, a write that is guaranteed to fail.
+
+**⚠ The runbook's diagnostic advice is actively misleading for this failure.** It says an
+`unparseable_response` "means *not on the allowlist* — not *broken endpoint*. Check `TEST_RECORD_IDS`
+before investigating anything else." Here the allowlist was correct and the endpoint **was** broken.
+Only the n8n execution history disambiguated it. **The client cannot distinguish a fail-closed gate
+drop from a workflow error**, and both surface as the same `unparseable_response`. That conflation
+should be resolved before an operator meets it alone.
+
+### Step 9 — close-out — **PASS** (agent-run, amended order)
+
+1. `LV Review Decision` deactivated **first** → `200`, `active: false`.
+2. Disarmed redeploy → 5× `200`.
+3. Three active workflows bounced → `deactivate=200 activate=200` each, all restored.
+4. `verify_live_write_safety.py --expectation disarmed` → **`VERDICT: disarmed PASS`**, 5 workflows /
+   11 declaring nodes, every flag `false` / `''`.
+5. Active states back to the exact pre-canary configuration (4 active, `LV Review Decision` off).
+6. `ALLOW_REVIEW_SUBMIT`, `ALLOW_N8N_ARM`, `ALLOW_N8N_DEPLOY` all unset; none in any shell profile.
+   Committed `n8n/*.json` grep **0** armed literals.
+
+### Step 10 — snapshot comparison — **PASS, with the neighbour gap closed**
+
+```
+target companies/9604614548 changed fields: ['hs_lastmodifieddate', 'lv_enrichment_review_reason']
+neighbors_changed: 0
+neighbor contacts/201: unchanged []
+```
+
+The target changed **exactly the reject's one key** plus HubSpot's own timestamp — no trace of the
+failed approve.
+
+The thin-neighbour weakness flagged at step 2 was closed independently: all seven other companies in
+the portal were listed with their `hs_lastmodifieddate`, and **every one is from July** —
+`Australian Turf Club` 07-27, `Newcastle Jockey Club` 07-31, the rest mid-July. Only the target
+carries an 08-03 timestamp. **No other record was touched**, on three independent lines of evidence
+(single-id allowlist, `compare`'s neighbour verdict, and the portal-wide modified dates).
+
+### D-31 — what this canary does NOT show
+
+`manual_protected` enforcement was **not exercised**. The only held candidate was `industry`, and the
+approve never reached a write. Nothing here supports any claim about protected-field filtering on
+either the decision endpoint or the backstop. The 15-minute backstop was also never observed
+applying anything, since no approval was ever recorded for it to pick up.
