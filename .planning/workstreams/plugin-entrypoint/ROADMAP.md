@@ -270,7 +270,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 29-05-PLAN.md — The remaining conditions: credential failure and exhausted quota as new judgment over existing data, failed scheduled run past its swallowed-error blind spot, review backlog, stuck-armed backstop; silence when healthy
+- [x] 29-05-PLAN.md — The remaining conditions: credential failure and exhausted quota as new judgment over existing data, failed scheduled run past its swallowed-error blind spot, review backlog, stuck-armed backstop; silence when healthy
 
 **Wave 4** *(blocked on Wave 3 completion)*
 

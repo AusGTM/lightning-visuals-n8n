@@ -72,7 +72,7 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 | 26. Outcome Reporting & Safe Retry | 4 | Executing (26-01 done, 1/3 plans) |
 | 27. Backend Status Surface | 6 | Executing (27-01, 27-02, 27-03, 27-04 done — 4/5 plans; 27-05 next) |
 | 28. Control Actions | 7 | Not started |
-| 29. Notices & Unattended Sweep | 5 | Executing (29-01, 29-02, 29-03, 29-04 done — 4/6 plans; 29-05 next) |
+| 29. Notices & Unattended Sweep | 5 | Executing (29-01, 29-02, 29-03, 29-04, 29-05 done — 5/6 plans; 29-06 next) |
 | 30. Review-Queue Triage | 5 | Not started |
 
 ## Accumulated Context
@@ -302,6 +302,26 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
   no-poll-loop guard needed a one-line named allowlist for `watch.py` — the module D-07
   always intended as the exception. Plugin suite 859 passed/5 skipped at completion.
 
+- **29-05 shipped the full condition set, after a prerequisite fix that unblocks all of
+  them:** the live `hubspot/backend-status` webhook answers array-wrapped (a one-element
+  list), and `backend_status.fetch_backend_status` only accepted a bare dict — every real
+  answer read `unrecognized_response_shape`, closing the long-standing HANDOFF §3 bug.
+  Fixed and pinned both shapes before any plan task. `sweep_conditions.py` then gained
+  quota-exhausted/credential-failure (D-08a's new judgment over Phase 27's credit-probe
+  data — a four-way quota outcome so unknown can never become exhausted), failed-run,
+  review-backlog, the maintenance workflow's swallowed-failure blind spot (D-08b, via one
+  gated `get_execution` + `harvest_errors` read per D-17), and stuck-armed (D-10, both
+  `status.WRITE_SAFETY_FLAGS` checked independently, a truthy `disagreement` firing
+  rather than being swallowed as unknown per D-16). `sweep_notify.py` now groups more
+  than one fired condition into a single delivery (most-actionable-first, capped, a
+  stated remainder count) and every notice carries the full `error_table` verdict
+  (`who_can_fix`, `is_interpretation`, `raw`), not just the attribution. Deviation: a
+  concurrent process sharing this (non-worktree-isolated) working tree absorbed Task 3's
+  commit into its own (`dfd1178`) — content verified byte-identical to what was authored
+  and tested; commit-boundary only, no functional impact (29-05-SUMMARY.md Deviations).
+  Plugin suite 882 passed/5 skipped, repo suite 1763 passed/6 skipped, node 550 passed —
+  all unchanged in count except the plugin suite's growth.
+
 **Todos / carried context:**
 
 - 24-03 must write `extraction.md`'s documented artifact schema example(s) such that a
@@ -372,12 +392,12 @@ milestone otherwise scoped as plugin-only.
 **Stopped At:** Two fronts, both accurate — the Current Position block at the top now reflects the operator front rather than being left stale.
 
 - **Operator front (active):** 23-06 Section A, walking `OPERATOR-RUNBOOK.md` §RB-3. Section B blocked, see Blockers.
-- **Autonomous front: 36 of 43 plans built.** Phases 24, 25, 26, 27 COMPLETE; 30 complete bar its
-  canary; 29-02 done. **Phase 28: 28-01, 28-02, 28-03, 28-04 all DONE** — RB-5's live gate ran
+- **Autonomous front: 37 of 43 plans built.** Phases 24, 25, 26, 27 COMPLETE; 30 complete bar its
+  canary; 29-05 done. **Phase 28: 28-01, 28-02, 28-03, 28-04 all DONE** — RB-5's live gate ran
   2026-07-31 and `28-FINDINGS.md` exists, which released 28-03 and 28-04; both are built and
   committed (`a641119`, `c3ee663`).
 - **Remaining:** 28-05 (needs 28-03/04 — now met, but serialized behind the operator committing
-  `test_plugin_manifest.py`), 28-06 (armed canary), 29-01/02/03/04 now DONE → 29-05/06 remain,
+  `test_plugin_manifest.py`), 28-06 (armed canary), 29-01/02/03/04/05 now DONE → 29-06 remains,
   30-07 (armed canary), 23-06 §B, 25-01 Probe B4.
 - **Re-check runnability against the artifact each plan reads, never against SUMMARY presence**
   (HANDOFF §1). "Nothing is runnable" was claimed and wrong twice on 2026-07-31, and RB-5's own

@@ -236,8 +236,11 @@ above. This is why that endpoint has to exist.
 - [ ] **NOTICE-03**: A scheduled sweep runs with no session open and pushes a notification when
       something needs a human: failed scheduled runs, credential or auth failure, exhausted
       quota, stuck locks, or a review backlog over a configured threshold
+      (29-05 implemented all five conditions; 29-06 ships the scheduled-routine wiring and the
+      live gate that proves a notice actually arrives with no session open — left Pending here
+      until that lands, per 29-06's own `requirements:` frontmatter also claiming this ID)
 
-- [ ] **NOTICE-04**: The sweep is silent when the backend is healthy, and every notice it does
+- [x] **NOTICE-04**: The sweep is silent when the backend is healthy, and every notice it does
       send states whether the operator or an admin can act on it
 
 - [ ] **NOTICE-05**: The sweep is read-only by construction — it burns no provider credits, enables
@@ -363,8 +366,8 @@ duplicates. Phase numbering continues from the archived v0.5 milestone (ended at
 | CONTROL-07 | Phase 28 | Pending |
 | NOTICE-01 | Phase 29 | Pending |
 | NOTICE-02 | Phase 29 | Pending |
-| NOTICE-03 | Phase 29 | Pending |
-| NOTICE-04 | Phase 29 | Pending |
+| NOTICE-03 | Phase 29 | Pending (conditions done 29-05; wiring 29-06) |
+| NOTICE-04 | Phase 29 | Complete |
 | NOTICE-05 | Phase 29 | Pending |
 | REVIEW-01 | Phase 30 | Pending |
 | REVIEW-02 | Phase 30 | Pending |
