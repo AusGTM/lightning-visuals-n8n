@@ -2,6 +2,10 @@
 shaping (REPORT-01, D-01, D-08, D-09, D-11) — plus the AST-based no-poll-loop guard
 (D-07) that turns "this phase never grows a watch" into a property the suite
 enforces rather than a promise the next plan can quietly break.
+
+D-07 named exactly where the loop belongs once it was built: Phase 29's watch.py
+(29-04). That module is the one deliberate exception to this guard — everything
+else in the plugin must still have no poll loop of its own.
 """
 import ast
 from pathlib import Path
@@ -182,8 +186,15 @@ def test_failing_rows_carry_reason_and_identity_or_ordinal_position(contact_exec
 # No poll loop grew here (D-07) — enforced by the suite, not just promised in prose.
 # =====================================================================================
 
+# The ONE deliberate exception (29-CONTEXT D-05/D-07): watch.py is where the bounded
+# in-session watch was built, precisely so it would be built once and nowhere else.
+# Widening this set is a decision, not a convenience — same discipline as
+# test_sweep_read_only.py's own allowlist.
+_POLL_LOOP_ALLOWED = {"watch.py"}
+
+
 def _plugin_source_files():
-    return sorted(p for p in SCRIPTS_DIR.glob("*.py"))
+    return sorted(p for p in SCRIPTS_DIR.glob("*.py") if p.name not in _POLL_LOOP_ALLOWED)
 
 
 def _imports_forbidden_module(tree, name):
