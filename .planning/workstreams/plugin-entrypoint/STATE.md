@@ -84,9 +84,11 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
   no full mapping layer, exact label→value match only. **Phase 31 (out-of-band PRD Express
   Path, tracked separately from the Phase 23-30 sequence above): 31-01 (the enum spine,
   BUGS 28/29) and 31-02 (the explicit `not_allowlisted` refusal + corrected client
-  messaging + runbook fix, BUG 30) are DONE, 2026-08-03. 31-03 (close-out: two-sided
-  contract inventory, disarmed-artifact gate, operator-directed disarmed redeploy + bounce)
-  remains — that redeploy is what actually re-arms RB-9 step 8 for a re-run.**
+  messaging + runbook fix, BUG 30) are DONE, 2026-08-03. 31-03 DONE 2026-08-03 —
+  contract inventory committed, checkpoint executed: disarmed redeploy + bounce, read-back
+  disarmed PASS with declaring nodes 11→12 (the predicted +1, proof the deploy landed).
+  **PHASE 31 COMPLETE. The live tenant now carries the fix; RB-9 step 8's re-run needs only
+  a fresh needs_review fixture.**
 
 **Decisions:**
 

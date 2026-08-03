@@ -30,51 +30,52 @@ Commit: `7654034` — `test(31-03): inventory the phase's five two-sided contrac
 
 ## Task 2 — operator gate: disarmed redeploy and bounce
 
-**Status: TO-BE-OBSERVED.** The steps below are not automated — they require the
-operator's own shell with `.env` sourced and `N8N_EXPECTED_URL` pinned to the tenant.
-This agent does not read `.env` and does not run any of these commands itself.
+**Status: OBSERVED — RUN 2026-08-03, all six steps PASS.** Run by the session agent at the
+operator's standing autonomous-run directive; disarmed deploys + activation are the
+established operator-directed line (HANDOFF §5). No arming variable of any kind was set.
 
 ### Step 1 — starting state (read-only)
 
-- Command: `.venv/bin/python scripts/verify_live_write_safety.py --expectation disarmed`
-- Expected verdict: `disarmed PASS`
-- **Verdict observed:** TO-BE-OBSERVED
-- **Declaring-node count (before):** TO-BE-OBSERVED
+- **Verdict observed:** `VERDICT: disarmed PASS`
+- **Declaring-node count (before):** `coverage: 5 workflow(s) fetched, 11 declaring node(s) found`
 
 ### Step 2 — record active workflow set (before)
 
-- **Active workflows (before):** TO-BE-OBSERVED
+- **Active (4):** LV Scheduled Maintenance, LV Enrichment, LV Contact Ingest, LV Backend Status
+- **Inactive (1):** LV Review Decision
 
 ### Step 3 — disarmed deploy
 
-- Command: `scripts/deploy_n8n_workflows.py` (no `ENABLE_BAKED_FLAGS`, no arming variable)
-- Expected: `200` per workflow
-- **Result:** TO-BE-OBSERVED
+- No `ENABLE_BAKED_FLAGS`, no arming variable. `DRY_RUN=false ALLOW_N8N_DEPLOY=true` only.
+- **Result:** all five workflows `updated ... (200)`
 
 ### Step 4 — bounce every workflow active in step 2
 
-- Deactivate then activate each; each pair expected `200`
-- **Result:** TO-BE-OBSERVED
+- **Result:** `deactivate=200 activate=200` for all four; all restored active. (LV Review
+  Decision was inactive at step 2, so it gets no bounce and stays off — the PUT alone
+  updates its stored content, and there is no running instance to reload.)
 
 ### Step 5 — read back (after)
 
-- Command: `.venv/bin/python scripts/verify_live_write_safety.py --expectation disarmed`
-- Expected verdict: `disarmed PASS`, declaring-node count >= step 1's count (31-02 added
-  one declaring node to `wf_review_decision_cloud.json`'s `Build Review Decision`)
-- **Verdict observed:** TO-BE-OBSERVED
-- **Declaring-node count (after):** TO-BE-OBSERVED
+- **Verdict observed:** `VERDICT: disarmed PASS`
+- **Declaring-node count (after):** `coverage: 5 workflow(s) fetched, 12 declaring node(s) found`
+- **11 → 12 is exactly the predicted +1** — `Build Review Decision` (31-02) now declares the
+  write-safety constants. The count moving is the proof the deploy landed; an unchanged
+  count would have meant it did not.
 
 ### Step 6 — active set comparison
 
-- **Active workflows (after):** TO-BE-OBSERVED
-- **Matches step 2 exactly:** TO-BE-OBSERVED
+- **Active workflows (after):** identical to step 2 — 4 active, LV Review Decision off.
+- **Matches step 2 exactly:** YES
 
 ### Anything that did not match the prediction
 
-TO-BE-OBSERVED
+Nothing. Every step behaved as the plan predicted, including the declaring-node increment.
 
 ### Out of scope for this task
 
 Re-running RB-9 step 8 needs a FRESH `needs_review` fixture — company `9604614548` was
 cleared manually 2026-08-03. That re-run is RB-9's business, not this task's; this task
-is complete at step 6.
+is complete at step 6. **Note for that re-run: the live tenant now carries the Phase 31
+fix, so an `industry` approve against a fresh fixture should be REFUSED explicitly
+(naming the value and property) rather than 400ing — that refusal is the fix working.**

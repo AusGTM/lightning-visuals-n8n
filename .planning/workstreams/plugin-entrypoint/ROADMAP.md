@@ -54,7 +54,7 @@ phase directories never collide with phases 20–22.**
 - [ ] **Phase 28: Control Actions** - Run it, turn it on and off, reschedule it, and enable live writes for one conversation — all confirmed and read-back verified
 - [ ] **Phase 29: Notices & Unattended Sweep** - Runs report themselves when they settle, and a sweep speaks up when something needs a human while nobody is watching
 - [ ] **Phase 30: Review-Queue Triage** - Conflicts get resolved conversationally, with the decision written back as a human decision
-- [ ] **Phase 31: Enum Validation for Review Approvals** - Enum-bound candidates are validated against HubSpot's real option set before they are offered, refusals are explicit at every layer, and silence stops meaning two opposite things
+- [x] **Phase 31: Enum Validation for Review Approvals** - Enum-bound candidates are validated against HubSpot's real option set before they are offered, refusals are explicit at every layer, and silence stops meaning two opposite things
 
 ## Phase Details
 
@@ -338,7 +338,7 @@ Plans:
 Plans:
 - [x] 31-01-PLAN.md — The enum spine: generated options module, the shared validator, refusal on the approve path (tracer) and at enrichment staging, plus the snapshot/policy currency pins
 - [x] 31-02-PLAN.md — BUG 30: an explicit `not_allowlisted` refusal body, the client's corrected `unparseable_response` meaning with a two-sided outcome pin, and RB-9's diagnostic advice
-- [ ] 31-03-PLAN.md — Close-out: the two-sided contract inventory, the disarmed-artifact gate, and the operator-directed disarmed redeploy + bounce
+- [x] 31-03-PLAN.md — Close-out: the two-sided contract inventory, the disarmed-artifact gate, and the operator-directed disarmed redeploy + bounce
 
 ## v0.6 Progress
 
