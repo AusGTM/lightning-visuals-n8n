@@ -5,6 +5,14 @@ description: Load a contact spreadsheet (CSV or XLSX) into HubSpot through the n
 
 # Contact Upload
 
+> **Where commands run:** every `python3 scripts/...` line below runs from the **plugin
+> root** — the directory that contains both `scripts/` and `skills/`, i.e. two levels up
+> from this SKILL.md. `cd` there first. When the plugin is installed (not a repo
+> checkout), that is the versioned plugin-cache directory this file lives under. Running
+> from anywhere else fails with `No such file or directory` — found live by the 29-01
+> headless probe, which lost a step to exactly this.
+
+
 This skill turns a spreadsheet into a `hubspot/contact-upload` request. It never maps
 columns, normalizes phone numbers, verifies emails, or resolves identity — n8n's
 `Map Columns` node and everything downstream of it in `wf_contact_ingest_cloud.json`

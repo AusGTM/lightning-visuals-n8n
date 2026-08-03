@@ -5,6 +5,14 @@ description: Work the queue of HubSpot records the enrichment pipeline flagged f
 
 # Review Triage
 
+> **Where commands run:** every `python3 scripts/...` line below runs from the **plugin
+> root** — the directory that contains both `scripts/` and `skills/`, i.e. two levels up
+> from this SKILL.md. `cd` there first. When the plugin is installed (not a repo
+> checkout), that is the versioned plugin-cache directory this file lives under. Running
+> from anywhere else fails with `No such file or directory` — found live by the 29-01
+> headless probe, which lost a step to exactly this.
+
+
 The pipeline holds a decision back when it is not sure enough to write it. This skill shows
 those held decisions, lets the operator adjudicate one, and reports what actually landed.
 

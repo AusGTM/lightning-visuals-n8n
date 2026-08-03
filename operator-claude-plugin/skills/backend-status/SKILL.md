@@ -5,6 +5,14 @@ description: Report what the HubSpot enrichment backend is doing — which workf
 
 # Backend Status
 
+> **Where commands run:** every `python3 scripts/...` line below runs from the **plugin
+> root** — the directory that contains both `scripts/` and `skills/`, i.e. two levels up
+> from this SKILL.md. `cd` there first. When the plugin is installed (not a repo
+> checkout), that is the versioned plugin-cache directory this file lives under. Running
+> from anywhere else fails with `No such file or directory` — found live by the 29-01
+> headless probe, which lost a step to exactly this.
+
+
 **This skill reads. It changes nothing.** It does not turn a workflow on or off, does not
 start, stop or cancel a run, does not retry anything, and writes to no HubSpot record.
 If the operator asks you to act on what you find here, say plainly that this surface can

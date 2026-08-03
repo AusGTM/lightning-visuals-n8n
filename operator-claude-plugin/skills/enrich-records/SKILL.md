@@ -5,6 +5,14 @@ description: Enrich companies or contacts that already exist in HubSpot, by reco
 
 # Enrich Records Already in HubSpot
 
+> **Where commands run:** every `python3 scripts/...` line below runs from the **plugin
+> root** — the directory that contains both `scripts/` and `skills/`, i.e. two levels up
+> from this SKILL.md. `cd` there first. When the plugin is installed (not a repo
+> checkout), that is the versioned plugin-cache directory this file lives under. Running
+> from anywhere else fails with `No such file or directory` — found live by the 29-01
+> headless probe, which lost a step to exactly this.
+
+
 This skill turns "enrich these records" into a `hubspot/enrichment/event` request. It
 structures nothing and uploads nothing: the records already exist in HubSpot, and the
 provider waterfall, web research, judge escalation, merge policy and scoring all live in

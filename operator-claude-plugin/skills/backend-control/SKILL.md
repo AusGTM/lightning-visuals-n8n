@@ -5,6 +5,14 @@ description: Turn backend workflows on or off, switch an individual scheduled jo
 
 # Backend Control
 
+> **Where commands run:** every `python3 scripts/...` line below runs from the **plugin
+> root** — the directory that contains both `scripts/` and `skills/`, i.e. two levels up
+> from this SKILL.md. `cd` there first. When the plugin is installed (not a repo
+> checkout), that is the versioned plugin-cache directory this file lives under. Running
+> from anywhere else fails with `No such file or directory` — found live by the 29-01
+> headless probe, which lost a step to exactly this.
+
+
 **This skill changes things.** Its whole shape is one rule: the operator is told exactly
 what will change, in plain language, and nothing mutates until they have said an explicit
 yes to that exact statement. Everything runs through `scripts/control_actions.py` — never
