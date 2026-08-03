@@ -33,9 +33,18 @@ SCRIPTS = PLUGIN_ROOT / "scripts"
 SWEEP_ENTRYPOINT = "sweep_entry"
 
 # THE allowlist. Widening it is a deliberate act with a human attached.
+#
+# 29-05 Task 2 adds `execution_errors` (sweep_read's new gated get_execution +
+# harvest_errors read for D-08b's swallowed-maintenance-failure detection, D-17).
+# `error_table` was ALREADY present (imported by sweep_notify since 29-03); execution_errors
+# imports it too, and it stays pure over already-fetched data either way — no write
+# reaches this closure through it. Read both modules before adding them: neither performs
+# I/O (execution_errors.harvest_errors walks an already-fetched execution payload;
+# error_table.translate is a standard-library regex lookup), so this widening is the
+# guard working as designed (D-10), not a regression.
 ALLOWED_MODULES = {
     "sweep_entry", "sweep_read", "sweep_conditions", "sweep_notify",
-    "config_gate", "n8n_read", "backend_status", "error_table",
+    "config_gate", "n8n_read", "backend_status", "error_table", "execution_errors",
 }
 
 WRITE_VERBS = {"post", "put", "patch", "delete"}
