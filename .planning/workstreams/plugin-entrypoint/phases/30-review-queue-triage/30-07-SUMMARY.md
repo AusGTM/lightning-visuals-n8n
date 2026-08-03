@@ -108,17 +108,67 @@ that one comparison plus the allowlist. **Before step 10, re-run the snapshot wi
 something to say. As captured, a write to any real company other than the target would go unnoticed
 by `compare`.
 
-### Step 3 — armed deploy, review writes only
-- Rewrite count for `ALLOW_HUBSPOT_REVIEW_WRITES` (**must be non-zero**; zero = refused, deployed nothing):
-- Bounce of the three active workflows run: ☐
+### Step 3 — armed deploy, review writes only — **DONE 2026-08-03T~04:2xZ**
 
-### Step 3b — armed read-back
-- `--expectation armed --allowlist 9604614548 --expect-armed ALLOW_HUBSPOT_REVIEW_WRITES`
-- Verdict (verbatim):
-- **If this does not pass, do not take a decision.**
+**Run by the agent at the operator's explicit second instruction.** The agent flagged that HANDOFF §5
+records arming as the one line kept agent-blocked; the operator reaffirmed. See the HANDOFF §5
+amendment — the invariant was changed deliberately, not eroded.
 
-### Step 4 — activate the review-decision workflow
-- Activated: ☐  · queue endpoint reachable afterwards (no longer 404): ☐
+```
+ENABLE_BAKED_FLAGS: ALLOW_HUBSPOT_REVIEW_WRITES -> "true" rewritten 10x in
+  ['LV Contact Ingest', 'LV Enrichment', 'LV Review Decision', 'LV Scheduled Maintenance']
+ENABLE_BAKED_FLAGS: TEST_RECORD_IDS -> "9604614548" rewritten 10x in (the same four)
+updated ... (200) x5
+```
+
+**Rewrite count 10×, non-zero.** Four declaring workflows — exactly the blast radius predicted
+above, no surprises.
+
+- **Bounce of the three active workflows: DONE.** `deactivate=200 activate=200` for Scheduled
+  Maintenance, Enrichment and Contact Ingest; all three restored active.
+
+> **Note on the prediction.** Prediction 2 (the approve would no-op without a bounce) can no longer
+> be cleanly falsified, because the mitigation was applied rather than withheld. Safety was chosen
+> over the experiment, deliberately. If the approve now lands, that is *consistent with* the
+> prediction but does not prove it; proving it would have required knowingly running an armed window
+> in a state believed broken.
+
+### Step 3b — armed read-back — **VERDICT: armed PASS**
+
+```
+expectation: armed
+expected allowlist: '9604614548'
+expected armed: ALLOW_HUBSPOT_REVIEW_WRITES
+every other write-enabling boolean is asserted disabled wherever it is declared
+coverage: 5 workflow(s) fetched, 11 declaring node(s) found
+  ... ALLOW_HUBSPOT_REVIEW_WRITES='true'  TEST_RECORD_IDS='9604614548'
+  ... ALLOW_HUBSPOT_RECORD_WRITES='false' ALLOW_HUBSPOT_CREATE='false'   (everywhere)
+VERDICT: armed PASS
+```
+
+**The symmetric assertion is the point:** review authority armed, the dispatch pair still disabled
+everywhere it is declared. The window is scoped, not widened.
+
+### Step 4 — activate the review-decision workflow — **DONE**
+
+- `POST /activate` → `200`; read-back confirms `active: true`.
+- Queue endpoint reachable afterwards: **yes** — `available: True`, `reason: None`,
+  `object_type: companies`, `total: 1`, `returned: 1`, the single row being **Melbourne Racing Club**.
+  The prior `http_404` was the workflow being off, as predicted.
+
+**Queue row shape, for whoever drives the decision:** the record id arrives as **`hs_object_id`**
+(`"9604614548"`), not `record_id` or `id`. The row also carries `domain` (`mrc.racing.com`),
+`lv_enrichment_review_candidate_json`, `lv_enrichment_review_reason` and the full
+`lv_enrichment_provenance` blob. The provenance shows the enrichment used **`claude_web`** with
+evidence URLs for `lv_content_type` and `lv_country_region_normalized`, and `waterfall` for
+`industry` and `lv_employee_band` — so RB-7 exercised the research lane too, which its own log did
+not record.
+
+**⚠ The armed window is now OPEN and stays open until step 9** — unlike RB-7's 54 s self-closing
+cycle. Blast radius is one record. `LV Scheduled Maintenance` is armed, active, and on a 15-minute
+cadence carrying `Review Apply Update Write Gate`, so **once `lv_enrichment_review_approved` is set,
+the backstop can apply it automatically within 15 minutes.** That is the documented approve path,
+not a fault — but it means the approve is not necessarily instantaneous or operator-triggered.
 
 ### Step 5 — the queue read
 - Record appears in the queue: ☐

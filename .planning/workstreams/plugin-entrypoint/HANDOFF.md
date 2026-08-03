@@ -97,8 +97,16 @@ permission-blocked to the agent — credentials only enter via the operator's `!
 ## 5. Safety invariants — unchanged, plus one
 
 - Committed artifacts disarmed (`grep -c 'ALLOW_HUBSPOT_[A-Z_]* = "true"' n8n/*.json` → 0).
-- No automated arm/deploy/activate/live-write. Disarmed deploys and activation have passed via the
-  python driver when operator-directed; ARMING remains the blocked line.
+- No **automated** arm/deploy/activate/live-write. Disarmed deploys and activation have passed via
+  the python driver when operator-directed. **AMENDED 2026-08-03:** arming is no longer an absolute
+  agent-blocked line — it is **operator-directed only, and only on a second explicit instruction
+  after the agent has named this invariant.** Precedent: RB-9 step 3, where the agent flagged the
+  rule, the operator reaffirmed, and the agent then ran the armed deploy bounded to
+  `TEST_RECORD_IDS=9604614548`. The conditions that made it acceptable, all of which should hold
+  next time: a single-record allowlist, a symmetric `--expect-armed` read-back proving the other
+  authorities stayed disabled, and a disarm path already demonstrated working the same day. **What
+  is still absolutely blocked: arming that is unattended, scheduled, inferred from an earlier
+  approval, or unbounded by a `TEST_RECORD_*` allowlist.**
 - **A window is not closed until the disarm read-back passes AND the bounce has run** — stored and
   running both.
 - The `ALLOW_*` gates all demand the literal `true`; disarm paths are never gated.
