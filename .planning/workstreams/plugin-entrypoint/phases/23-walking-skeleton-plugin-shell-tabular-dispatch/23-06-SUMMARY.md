@@ -207,3 +207,44 @@ surfaces as a refusal rather than a silent wrong-project write.
 
 **Not yet determined.** A1 passes only after the manifest fix above. A6's behaviour is observed
 at the gate. A2–A5 and A7 are unobserved, and Section B has not started.
+
+---
+
+## Section B — armed create canary: PASSED 2026-08-03, after finding two real defects
+
+**The proof:** contact `342770428400` (`canary-23-06-20260731@australiagtm.com`, Canary
+Twentythreesix, Australia GTM) created at `2026-08-03T01:52:28.977Z` by execution 1129 —
+two seconds after a single plugin-driven dispatch, inside an armed window bounded to
+`TEST_RECORD_DOMAINS=australiagtm.com`, closed immediately after with a full-coverage
+`disarmed PASS` (5 workflows / 11 nodes). Steps 2b/2c ran earlier the same day as the
+milestone-wide disarmed redeploy.
+
+**It took four sends, because the canary found what it exists to find:**
+
+1. **The stored-vs-running reload gap.** `deploy_n8n_workflows.py` PUTs but never
+   activates (its own line 25); `armed PASS` verifies STORED content while the RUNNING
+   webhook keeps executing pre-arm content. Runs 1122/1123 fired inside an "armed" window
+   whose running gates were still disarmed. **The ceremony now bounces
+   (deactivate→activate) after every arm AND every disarm** — a PUT-only disarm would
+   leave a running instance armed, which is the dangerous direction.
+2. **BUG 27.** After the bounce, run 1126 still refused: the create gate derived its
+   domain from `identity_keys.domain`/`json.domain` — fields Decide Action never emits —
+   and a net-new create has no `hs_object_id`, so `_writeSafetyAllows('create', null,
+   null)` denied every create regardless of arming. BUG 16 had fixed the id-half of this
+   exact shape for updates; the domain-half survived because nothing live-tested create
+   until this canary. Fixed at the splice point (domain from `properties.email`, CREATE
+   only — the unscoped version was itself caught by reviewDecisionEndpoint g3 handing
+   review gates a domain path 30-02 withheld). Pinned by three two-sided flow tests that
+   RUN Decide Action and feed its verbatim output to the gate (`22a3f2a`).
+3. Also observed: the plugin's thin-response reporting labels an unconfirmable send
+   `not_confirmed` and *guesses* the reason from its own (possibly stale) gate belief —
+   both failed sends were narrated as "write gated" on stale evidence. Queued for
+   Phase 26 follow-up: the reason field must be marked belief, not observation.
+
+**Run ledger:** 1122, 1123 (pre-bounce, stale running content) · 1126 (bounced, BUG 27)
+· 1129 (fixed gate — created). Zero duplicates across four sends — identity resolution
+held throughout. Step 8 (delete/mark the canary contact) is the operator's.
+
+**Phase 23 is COMPLETE.** Its walking skeleton has now proven every leg live: install,
+conversational trigger, preview, refusal, disarmed default, armed create, and the window
+ceremony that opens and provably closes.

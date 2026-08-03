@@ -11,6 +11,12 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ### Changed
 
+- The 23-06 armed create canary PASSED (2026-08-03): one plugin-driven dispatch created
+  the canary contact inside a domain-bounded armed window, closed with a verified
+  full-coverage disarm. On the way it surfaced the stored-vs-running reload gap (arm and
+  disarm ceremonies now bounce workflows) and BUG 27 (the create gate read fields Decide
+  Action never emits — fixed and pinned by two-sided flow tests).
+
 - The enrichment preview's chunk-ceiling caption no longer reads PROVISIONAL: probe B4
   ran the full waterfall live (2026-08-03, 37.44 s/record) and confirmed the ceiling of
   2 as a measured bound.
