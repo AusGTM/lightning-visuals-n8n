@@ -5163,8 +5163,30 @@ def _write_gate_js(action: str) -> str:
         "return $input.all().filter((it) => _writeSafetyAllows(\n"
         f"  {action!r},\n"
         "  it.json.hs_object_id || (it.json.existingRecord && it.json.existingRecord.hs_object_id) || null,\n"
-        "  (it.json.identity_keys && it.json.identity_keys.domain) || it.json.domain || null,\n"
-        "));\n"
+        # BUG 27 (found live by the 23-06 armed canary, runs 1122/1123/1126): the create
+        # path has NO hs_object_id and Decide Action emits neither `identity_keys` nor
+        # `domain` — so a net-new create evaluated _writeSafetyAllows('create', null, null)
+        # and was denied whatever the allowlist said. BUG 16 fixed the id-half of exactly
+        # this for updates; the domain-half survived because nothing live-tested create
+        # until the canary. The domain IS present — Decide Action's create branch emits
+        # `properties.email` — so derive it there as the last fallback.
+        + (
+            # The email-domain fallback applies to CREATE ONLY. A net-new create has no
+            # hs_object_id, so the domain is its sole allowlist path — but widening the
+            # same fallback to review gates would give contact review-writebacks a domain
+            # path that 30-02 deliberately withheld (contacts are TEST_RECORD_IDS-only
+            # there; reviewDecisionEndpoint.test.mjs g3 pins it, and caught exactly that
+            # over-widening when this fix was first written unscoped).
+            "  (it.json.identity_keys && it.json.identity_keys.domain) || it.json.domain\n"
+            "    || ((it.json.properties && it.json.properties.email && "
+            "String(it.json.properties.email).indexOf('@') !== -1) ? "
+            "String(it.json.properties.email).split('@').pop() : null)\n"
+            "    || ((it.json.email && String(it.json.email).indexOf('@') !== -1) ? "
+            "String(it.json.email).split('@').pop() : null),\n"
+            if action == "create" else
+            "  (it.json.identity_keys && it.json.identity_keys.domain) || it.json.domain || null,\n"
+        )
+        + "));\n"
     )
 
 

@@ -127,3 +127,54 @@ test("HubSpot Create Write Gate: a create-action row is dropped with an empty al
   assert.equal(passed.length, 1, "fully armed gate with a matching allowlist entry must pass the row");
   assert.equal(passed[0].action, "create");
 });
+
+// --- BUG 27: the create gate must pass DECIDE ACTION'S OWN OUTPUT --------------------
+// Found live by the 23-06 armed canary (runs 1122/1123/1126): the gate derived domain
+// from identity_keys.domain/json.domain — fields Decide Action never emits — so a
+// net-new create evaluated _writeSafetyAllows('create', null, null) and was denied
+// however armed the backend was. The earlier tests here fed the gate hand-shaped items,
+// which is exactly how the mismatch shipped: a contract held in two places needs a test
+// that reads both. This one RUNS Decide Action, then feeds its verbatim output to the
+// gate — the two node bodies can no longer disagree silently.
+
+function armedGateCode(wf) {
+  return jsCodeOf(wf, "HubSpot Create Write Gate")
+    .replace('const ALLOW_HUBSPOT_RECORD_WRITES = "false";',
+             'const ALLOW_HUBSPOT_RECORD_WRITES = "true";')
+    .replace(DISABLED_DECL, ENABLED_DECL)
+    .replace('const TEST_RECORD_DOMAINS = "";',
+             'const TEST_RECORD_DOMAINS = "australiagtm.com";');
+}
+
+function decideActionOutput(wf, email) {
+  const armedDecide = jsCodeOf(wf, "Decide Action").replace(DISABLED_DECL, ENABLED_DECL);
+  const row = { ...netNewRow(), email };
+  const out = runCode(armedDecide, [row]);
+  assert.equal(out.length, 1);
+  assert.equal(out[0].action, "create");
+  return out;
+}
+
+test("BUG 27: an armed create gate passes Decide Action's verbatim net-new output when the email domain is allowlisted", () => {
+  const wf = loadWorkflow();
+  const decided = decideActionOutput(wf, "canary-23-06-20260731@australiagtm.com");
+  assert.equal(decided[0].hs_object_id, null, "net-new has no id — domain is the only allowlist path");
+
+  const through = runCode(armedGateCode(wf), decided);
+  assert.equal(through.length, 1, "the canary's exact failure: armed + allowlisted domain must pass");
+});
+
+test("BUG 27 guard still binds: a non-allowlisted domain is dropped even when armed", () => {
+  const wf = loadWorkflow();
+  const decided = decideActionOutput(wf, "someone@elsewhere.example");
+  assert.equal(runCode(armedGateCode(wf), decided).length, 0);
+});
+
+test("BUG 27 guard still binds: disarmed drops the allowlisted row too", () => {
+  const wf = loadWorkflow();
+  const decided = decideActionOutput(wf, "canary-23-06-20260731@australiagtm.com");
+  const disarmedGate = jsCodeOf(wf, "HubSpot Create Write Gate")
+    .replace('const TEST_RECORD_DOMAINS = "";',
+             'const TEST_RECORD_DOMAINS = "australiagtm.com";');
+  assert.equal(runCode(disarmedGate, decided).length, 0);
+});
