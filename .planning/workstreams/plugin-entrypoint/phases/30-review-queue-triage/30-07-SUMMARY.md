@@ -54,9 +54,59 @@ backstop is wrong and that is the more valuable finding.
 
 ## The run — to be filled in by the operator
 
-### Step 2 — before snapshot
-- `canary_record_snapshot.py snapshot --label 30-07-review-canary --company-id 9604614548`
-- Snapshot path:
+### Step 2 — before snapshot — **DONE 2026-08-03T04:16:52Z**
+
+**The runbook's flag name is wrong.** There is no `--company-id`; the interface is `--target-id`
+plus `--target-object-type`. Command actually run:
+
+```bash
+.venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/canary_record_snapshot.py', run_name='__main__')" \
+  snapshot --label 30-07-review-canary --target-id 9604614548 --target-object-type companies
+```
+
+Artifact: `.planning/phases/22-armed-e2e-enrichment-canary/snapshots/30-07-review-canary-20260803T041652Z.json`
+(the script writes into Phase 22's snapshots directory by construction — not a mistake, just not
+where a Phase 30 reader will look for it).
+
+Also printed: `research_gate_will_fire: true` — `lv_produces_content` is blank.
+
+**Before-state of the review-relevant properties:**
+
+```
+lv_enrichment_needs_review           'true'
+lv_enrichment_status                 'needs_review'
+lv_enrichment_review_reason          'industry: Refresh candidate requires review in MVP.'
+lv_enrichment_review_candidate_json  [{"chosen_value":"arts, entertainment, and recreation",
+                                       "confidence":85,"current_value":"SPORTS","decision":"ne…}]
+lv_enrichment_provenance             {"industry":{"confidence":85,"source":"waterfall",
+                                       "validation_status":"human_review_required",
+                                       "value":"arts, e…}}
+lv_enrichment_review_approved        None
+lv_enrichment_reviewed_at            None
+lv_enrichment_reviewed_by            None
+
+lv_org_type                          'individual_club_team'   (verified_at 03:39:12.266Z)
+lv_content_type                      'live_broadcast'
+lv_country_region_normalized         'AU'
+lv_employee_band                     '201-500'
+lv_sponsorship_reliant               'true'
+lv_icp_fit_score                     '2'
+lv_icp_tier                          None
+lv_icp_score_breakdown               None
+lv_icp_needs_review                  None
+```
+
+**This makes step 8's provenance check exact.** After the approve, `industry`'s provenance entry must
+name a **human** source with `human_approved`, a timestamp and the reason — **and `"source":"waterfall"`
+with `confidence: 85` must still be readable inside that entry.** The three `reviewed_*` fields being
+`None` now means any value they hold afterwards came from this canary and nothing else.
+
+**⚠ Neighbour coverage is thin — step 10 will be weak as it stands.** The snapshot captured exactly
+**one** neighbour, `contacts/201`, whose `name` is `None`. "No other record was touched" rests on
+that one comparison plus the allowlist. **Before step 10, re-run the snapshot with several
+`--neighbor-company-id` values** (the other HubSpot test companies) so the neighbour verdict has
+something to say. As captured, a write to any real company other than the target would go unnoticed
+by `compare`.
 
 ### Step 3 — armed deploy, review writes only
 - Rewrite count for `ALLOW_HUBSPOT_REVIEW_WRITES` (**must be non-zero**; zero = refused, deployed nothing):

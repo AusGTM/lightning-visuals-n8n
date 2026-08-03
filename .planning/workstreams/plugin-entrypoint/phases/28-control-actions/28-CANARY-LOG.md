@@ -161,8 +161,12 @@ the current `SPORTS`. Held as a review candidate ("Refresh candidate requires re
 value untouched. **This is the non-clobber policy working on a real record**, which no stub test can
 demonstrate.
 
-No ICP score fields were written: the record landed `needs_review`, so tier/score promotion did not
-fire. That is correct behaviour, not a miss.
+**ICP outputs — corrected 2026-08-03 against the RB-9 before-snapshot.** The session reported "no ICP
+score fields written". That is not quite right: `lv_icp_fit_score` **was** written and reads `2`,
+while `lv_icp_tier`, `lv_icp_score_breakdown` and `lv_icp_needs_review` are all `None`. So the score
+promoted and the tier did not. Recorded as observed; whether a score without a tier is intended
+behaviour for a `needs_review` record is a question for Phase 30's triage, not a verdict this log
+should reach.
 
 **No other record touched.** Checked three ways: `950HPb7a1GgSAIyZ` has exactly one execution above
 the baseline (1152); the arm was bounded to one id with zero domains; and the disarm read-back shows
