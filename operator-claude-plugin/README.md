@@ -345,6 +345,83 @@ URL, no secret and no record. It expires after **30 days** by default; change
 shorter, and set it to `0` to stop the link being reused at all. An expired pointer is
 deleted the next time the skill runs, and the next dashboard request mints a fresh link.
 
+## After a dispatch: the in-session watch
+
+*(Audience: the operator. Nothing here needs an admin.)*
+
+After you arm and send a batch, the skill keeps watching that run until it settles and
+reports back on its own — per-record outcomes and the provider credit actually spent —
+rather than making you ask. It never simply goes quiet: if the run has not settled by a
+bound, you get a "still running, here's how to re-check" message instead of silence, so
+you can always tell the watch is still alive.
+
+That bound is `watch_bound_seconds` in `config/operator.local.json` — **600 seconds (10
+minutes)** by default, measured against real enrichment runs (32-39 s observed, with a
+roughly 15x headroom margin so a bound set too low doesn't train you to stop trusting a
+"still running" message at all). It scales up automatically for a multi-record batch and
+never scales down. **Raise it** if your backend is consistently slower than that and you
+keep seeing "still running" for runs that do in fact finish — that is the one symptom
+that means the default no longer fits your setup. No code change is needed, only the
+number in the config file.
+
+## The unattended sweep: notices with no session open
+
+*(Two audiences below, labelled separately — read only the one that's yours.)*
+
+Everything above only speaks while you have a conversation open. The sweep is different:
+it runs on its own schedule, with nobody watching, and only pushes a notification when
+something needs a human. **A healthy backend produces nothing at all** — no heartbeat, no
+"all clear", not even an empty report. Silence is the answer; if you never hear from the
+sweep, that is what it is supposed to do. It watches for exactly these conditions and
+nothing else:
+
+- a scheduled run that failed, including one that reported `success` while one of its own
+  read steps actually failed silently (every provider-facing node in this backend is
+  configured to carry on when it errors, so "the maintenance job says success" is not by
+  itself evidence of health);
+- a rejected credential or an auth failure on a provider;
+- a provider's quota exhausted;
+- a stuck lock — an execution that has been running longer than its configured threshold;
+- a review backlog past its configured threshold;
+- a **stuck-armed backend** — live-write permission left switched on with nothing actually
+  dispatching, the residue a crash between arming and disarming would leave behind.
+
+Every notice this produces states, in plain language, whether **you** can act on it or
+whether it needs your **admin** — the same rule the interactive status check uses. It is
+**read-only by construction, not merely by promise**: the sweep's code has no path to any
+write, start, stop, retry, dispatch, or arm — an automated test asserts that its entire
+import graph and the shipped `backend-sweep` skill body both name nothing beyond that
+read-only surface, and fails the build if either one ever grows a path to a mutation.
+
+### Installing the sweep is two steps, not one
+
+Installing this plugin does **not** install the sweep's schedule. That is deliberate and
+has to be a second, explicit step:
+
+1. **(Operator or admin, one-time)** Install the plugin as described in "One-time setup"
+   above. This ships the sweep's logic and the `backend-sweep` skill it runs through, but
+   nothing fires on its own yet.
+2. **(Admin only, one-time, on the operator's machine)** Follow
+   `skills/backend-sweep/SWEEP-CRON-TEMPLATE.md` to install a `cron` or `launchd` entry
+   that fires `claude -p` on a schedule with no session open. That file is a set of
+   terminal commands and a config file to save — an **admin** task, never something to
+   hand an operator. Skipping this step leaves a plugin that can run the sweep on demand
+   but never on its own, which from the operator's side looks exactly like a healthy
+   backend (both are silent) — so if notices are expected but never arrive, this step is
+   the first thing to check, not the backend.
+
+### The sweep's own config keys
+
+The sweep needs **all three** of `n8n_url`, `n8n_api_key`, and `webhook_secret` in
+`config/operator.local.json` — unlike the interactive status check, which still answers
+with just two of them and reports the missing half as unavailable. The sweep can't do
+that: with nobody watching to notice a half-answer, a sweep that can only read half its
+conditions would go quiet about the other half, and quiet is exactly the claim silence
+makes. So instead, a config missing any of the three produces its own notice — attributed
+to an **admin**, naming the missing key, never a value — rather than raising an error or
+returning nothing. That notice is not the backend being healthy; it is the sweep telling
+you it cannot check anything yet. Do not read the two as the same thing.
+
 ## Working the review queue
 
 The enrichment pipeline holds a decision back whenever it isn't sure enough to write it.

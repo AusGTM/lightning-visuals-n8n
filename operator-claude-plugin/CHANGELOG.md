@@ -135,6 +135,32 @@ over the same n8n system, so its version says nothing about backend capability.
   `dashboard_artifact_ttl_days` (default 30) and collected on the next skill open. The whole
   surface reads: it turns nothing on or off, starts nothing, and writes to no record.
 
+- **Phase 29 — notices: the in-session watch and the unattended sweep.** Two mechanisms
+  so the operator learns something needs them without asking. After a dispatch, `watch.py`
+  keeps polling until the run settles and reports back through Phase 26's own per-record
+  renderer plus the credit actually spent, bounded by a measured `watch_bound_seconds`
+  (600 s default) that never simply goes quiet — a run still in flight past the bound is
+  reported as still running with how to re-check, never silence.
+
+  With no session open, a new `backend-sweep` skill runs on a `cron`/`launchd`-triggered
+  headless `claude -p` fire (`skills/backend-sweep/SWEEP-CRON-TEMPLATE.md` — an explicit
+  second admin step after installing the plugin, never an implicit side effect of it) and
+  watches for exactly five conditions plus one backstop: a failed scheduled run including
+  one that silently swallowed a read failure behind a reported `success`, a rejected
+  credential, an exhausted provider quota, a stuck lock, a review backlog past its
+  threshold, and a stuck-armed backend left over from a crash between arming and
+  disarming. **A healthy fire produces nothing at all** — no heartbeat, no all-clear — and
+  every notice it does send is read-only by construction: an AST guard asserts the
+  sweep's entire import graph and the shipped skill body both name nothing beyond a
+  single allowlisted bodyless status read, and fails the build the moment either one
+  grows a path to a write, a dispatch, or an arm. A misconfigured sweep (missing any of
+  the three keys it needs) produces its own admin-attributed notice rather than raising
+  or going quiet, so an unconfigured sweep is never mistakable for a healthy backend.
+  Fixed a long-standing bug on the way: the live `hubspot/backend-status` endpoint
+  answers array-wrapped, and the client only accepted a bare object — every queue count
+  and provider balance the sweep and the status check both depend on was reading
+  `unknown` until this was unwrapped and pinned both ways with a regression test.
+
 - **Phase 30 — review-queue triage.** A `/operator-claude-plugin:review-triage` skill that turns
   the records the pipeline flagged for a human into something a non-technical operator can
   actually adjudicate in conversation: per record, what HubSpot holds now, what the pipeline
