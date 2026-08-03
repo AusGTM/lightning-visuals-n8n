@@ -77,6 +77,12 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 
 ## Accumulated Context
 
+### Pending Todos
+
+- `2026-08-03-fix-bugs-28-30-enum-validation-for-review-approvals` (major) — enum
+  validate-and-refuse for review approvals; blocks RB-9 step 8's re-run. Decision recorded:
+  no full mapping layer, exact label→value match only.
+
 **Decisions:**
 
 - Phase numbering starts at 23 — v0.5 ended at phase 22; continuing avoids phase-directory
