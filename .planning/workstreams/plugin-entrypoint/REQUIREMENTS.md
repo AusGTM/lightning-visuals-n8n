@@ -194,7 +194,7 @@ above. This is why that endpoint has to exist.
 
 ### Backend control actions (CONTROL)
 
-- [ ] **CONTROL-01** **[AMENDED by 28-CONTEXT.md D-05a/D-05b/D-05c — the off-cycle
+- [x] **CONTROL-01** **[AMENDED by 28-CONTEXT.md D-05a/D-05b/D-05c — the off-cycle
       scheduled-scan clause is removed]**: Operator can start a run now — either ingestion lane
       that is built (both are, as of 2026-07-31: contact upload and enrichment) — and is told it
       started and how its outcome will reach them.
@@ -203,15 +203,15 @@ above. This is why that endpoint has to exist.
       (28-FINDINGS.md Q2); the upstream proposal is an open unmerged PR. Scheduled scans are
       controlled through enable/disable and re-timing instead. Fifth accepted amendment.*
 
-- [ ] **CONTROL-02**: Operator can turn a workflow on or off
-- [ ] **CONTROL-03**: Operator can enable or disable a scheduled job and change its cadence,
+- [x] **CONTROL-02**: Operator can turn a workflow on or off
+- [x] **CONTROL-03**: Operator can enable or disable a scheduled job and change its cadence,
       expressed in plain terms ("check every 15 minutes" → "hourly"), not cron syntax
 
-- [ ] **CONTROL-04**: Operator can enable live writes for the current conversation only. The
+- [x] **CONTROL-04**: Operator can enable live writes for the current conversation only. The
       permission lapses when the conversation ends and is never inherited by a later session;
       status always states whether it is currently on
 
-- [ ] **CONTROL-05**: Every backend-mutating action states its consequence in plain language,
+- [x] **CONTROL-05**: Every backend-mutating action states its consequence in plain language,
       shows what will change, and requires explicit confirmation. Mutations are restricted to an
       allowlist — write-safety flag overlay, Schedule Trigger cadence, a Schedule Trigger node's
       `disabled` boolean, workflow active state — and any other workflow-JSON change is refused.
@@ -219,18 +219,18 @@ above. This is why that endpoint has to exist.
       Schedule Triggers share one workflow, so workflow-level on/off cannot express "disable a
       scheduled job".*
 
-- [ ] **CONTROL-06**: After any mutation the plugin re-reads the backend and reports verified or
+- [x] **CONTROL-06**: After any mutation the plugin re-reads the backend and reports verified or
       failed. A `200` alone is never reported as success
 
-- [ ] **CONTROL-07**: Every mutation is reversible in one step, and the plugin states how to
+- [x] **CONTROL-07**: Every mutation is reversible in one step, and the plugin states how to
       reverse it at the moment it is applied
 
 ### Notices and unattended monitoring (NOTICE)
 
-- [ ] **NOTICE-01**: After a dispatch, the plugin keeps watching until the run settles and reports
+- [x] **NOTICE-01**: After a dispatch, the plugin keeps watching until the run settles and reports
       back unprompted with per-record outcomes and the cost actually incurred
 
-- [ ] **NOTICE-02**: The in-session watch is bounded; a run that has not settled by then is
+- [x] **NOTICE-02**: The in-session watch is bounded; a run that has not settled by then is
       reported as still running with how to re-check — the watch never simply goes quiet
 
 - [ ] **NOTICE-03**: A scheduled sweep runs with no session open and pushes a notification when
@@ -243,27 +243,27 @@ above. This is why that endpoint has to exist.
 - [x] **NOTICE-04**: The sweep is silent when the backend is healthy, and every notice it does
       send states whether the operator or an admin can act on it
 
-- [ ] **NOTICE-05**: The sweep is read-only by construction — it burns no provider credits, enables
+- [x] **NOTICE-05**: The sweep is read-only by construction — it burns no provider credits, enables
       no writes, and dispatches nothing
 
 ### Review-queue triage (REVIEW)
 
-- [ ] **REVIEW-01**: Operator sees the needs-review queue with each record's conflict in plain
+- [x] **REVIEW-01**: Operator sees the needs-review queue with each record's conflict in plain
       language: the competing values, which source said what, evidence links, and a link to the
       HubSpot record
 
-- [ ] **REVIEW-02**: Operator can resolve a review conversationally and the plugin writes the
+- [~] **REVIEW-02**: Operator can resolve a review conversationally and the plugin writes the
       decision back, honoring the existing field-policy ownership classes — a `manual_protected`
       value is never overwritten by a review decision
 
-- [ ] **REVIEW-03**: Review writeback is gated by its own session-scoped confirmation, separate
+- [x] **REVIEW-03**: Review writeback is gated by its own session-scoped confirmation, separate
       from dispatch arming; while ungated it shows exactly what it would write and writes nothing
 
 - [ ] **REVIEW-04**: Every review decision stamps human source, timestamp, and the operator's
       stated reason into the existing source-metadata fields, so the audit trail shows a person
       decided it
 
-- [ ] **REVIEW-05**: Rejecting a record records the rejection reason and leaves it in the queue —
+- [x] **REVIEW-05**: Rejecting a record records the rejection reason and leaves it in the queue —
       review flags are never silently cleared
 
 ### Plugin packaging (PLUGIN)
@@ -357,23 +357,23 @@ duplicates. Phase numbering continues from the archived v0.5 milestone (ended at
 | STATUS-04 | Phase 27 | Complete |
 | STATUS-05 | Phase 27 | Complete |
 | STATUS-06 | Phase 27 | Complete |
-| CONTROL-01 | Phase 28 | Pending |
-| CONTROL-02 | Phase 28 | Pending |
-| CONTROL-03 | Phase 28 | Pending |
-| CONTROL-04 | Phase 28 | Pending |
-| CONTROL-05 | Phase 28 | Pending |
-| CONTROL-06 | Phase 28 | Pending |
-| CONTROL-07 | Phase 28 | Pending |
-| NOTICE-01 | Phase 29 | Pending |
-| NOTICE-02 | Phase 29 | Pending |
-| NOTICE-03 | Phase 29 | Pending (conditions done 29-05; wiring 29-06) |
-| NOTICE-04 | Phase 29 | Complete |
-| NOTICE-05 | Phase 29 | Pending |
-| REVIEW-01 | Phase 30 | Pending |
-| REVIEW-02 | Phase 30 | Pending |
-| REVIEW-03 | Phase 30 | Pending |
-| REVIEW-04 | Phase 30 | Pending |
-| REVIEW-05 | Phase 30 | Pending |
+| CONTROL-01 | Phase 28 | Complete (28-05; amended D-05a-c) |
+| CONTROL-02 | Phase 28 | Complete (RB-7 canary 2026-08-03) |
+| CONTROL-03 | Phase 28 | Complete (28-04; D-25 four-item allowlist) |
+| CONTROL-04 | Phase 28 | Complete (RB-7: arm->dispatch->disarm, exec 1152, 54.37s) |
+| CONTROL-05 | Phase 28 | Complete (RB-7: allowlist bounded to 1 record, verified) |
+| CONTROL-06 | Phase 28 | Complete (RB-7: both read-backs verified) |
+| CONTROL-07 | Phase 28 | Complete (28-05 choke point; RB-7 confirmation gate observed) |
+| NOTICE-01 | Phase 29 | Complete (29-04 bounded watch) |
+| NOTICE-02 | Phase 29 | Complete (29-04: two terminal reports, no third outcome) |
+| NOTICE-03 | Phase 29 | **BLOCKED** (RB-8: cron trigger cannot authenticate, fails silently) |
+| NOTICE-04 | Phase 29 | Complete (unit); live PARTIAL (RB-8 step 2) |
+| NOTICE-05 | Phase 29 | Complete (29-06 two-part install) |
+| REVIEW-01 | Phase 30 | Complete (RB-9 step 5: queue rendered, conflict plain-language) |
+| REVIEW-02 | Phase 30 | Partial — writeback proven (RB-9 reject; Phase 31 enum refusal). The `manual_protected` clause is UNEXERCISED (D-31) |
+| REVIEW-03 | Phase 30 | Complete (RB-9 step 6b: both gates proven alone, 0 requests built) |
+| REVIEW-04 | Phase 30 | **NOT DEMONSTRATED** (RB-9: a reject stamps neither reviewed_by nor reviewed_at; the approve that would stamp human source never landed) |
+| REVIEW-05 | Phase 30 | Complete (RB-9 step 7: reject recorded, record stayed queued) |
 | PLUGIN-01 | Phase 23 | Complete |
 | PLUGIN-02 | Phase 23 | Complete |
 | PLUGIN-03 | Phase 23 | Complete |

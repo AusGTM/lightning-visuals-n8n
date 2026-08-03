@@ -57,7 +57,7 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 
 ## Progress
 
-**Phases Complete:** 0 / 8
+**Phases Complete:** 6 / 9 (23, 24, 25, 26, 27, 31 — see table)
 **Current Plan:** 23-06 (operator window, in progress) — autonomous work is at 27-05
 
 ```
@@ -66,14 +66,15 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 
 | Phase | Requirements | Status |
 |-------|--------------|--------|
-| 23. Walking Skeleton — Plugin Shell & Tabular Dispatch | 10 | Executing (23-01…23-05 done; 23-06 operator window in progress, 5/6 plans) |
-| 24. Non-Tabular Input Adapters | 8 | Executing (24-01 done, 1/3 plans) |
-| 25. Enrichment Lane & Cost Guard | 4 | Not started |
-| 26. Outcome Reporting & Safe Retry | 4 | Executing (26-01 done, 1/3 plans) |
-| 27. Backend Status Surface | 6 | Executing (27-01, 27-02, 27-03, 27-04 done — 4/5 plans; 27-05 next) |
-| 28. Control Actions | 7 | Not started |
-| 29. Notices & Unattended Sweep | 5 | Executing (29-01, 29-02, 29-03, 29-04, 29-05 done — 5/6 plans; 29-06 next) |
-| 30. Review-Queue Triage | 5 | Not started |
+| 23. Walking Skeleton | 10 | **Complete** — RB-3 armed create canary passed (contact 342770428400, run 1129) |
+| 24. Non-Tabular Input Adapters | 8 | **Complete** |
+| 25. Enrichment Lane & Cost Guard | 4 | **Complete** — B4 measured 37.44 s, chunk ceiling 2 CONFIRMED |
+| 26. Outcome Reporting & Safe Retry | 4 | **Complete** (one open defect: thin-response reason is belief, not observation) |
+| 27. Backend Status Surface | 6 | **Complete** — RB-4 approved; dashboard same-URL proven cross-session |
+| 28. Control Actions | 7 | **Complete** — RB-7 armed canary passed 2026-08-03 (exec 1152, 54.37 s window, bounded to 1 record) |
+| 29. Notices & Unattended Sweep | 5 | **BLOCKED at seal** — 29-01…06 built; NOTICE-01/02/05 complete, NOTICE-04 live-partial, **NOTICE-03 fails: the cron trigger cannot authenticate and fails silently (RB-8)** |
+| 30. Review-Queue Triage | 5 | **Partial** — RB-9 ran: 8 of 9 steps pass. REVIEW-01/03/05 complete; REVIEW-02 partial (manual_protected unexercised, D-31); **REVIEW-04 not demonstrated** (no decision has ever stamped a human source) |
+| 31. Enum Validation for Review Approvals | — | **Complete** — planned, executed, and proven live (BUGS 28/29/30 closed; refusal observed against the real legacy candidate) |
 
 ## Accumulated Context
 
