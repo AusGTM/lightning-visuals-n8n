@@ -55,6 +55,7 @@ phase directories never collide with phases 20–22.**
 - [ ] **Phase 29: Notices & Unattended Sweep** - Runs report themselves when they settle, and a sweep speaks up when something needs a human while nobody is watching
 - [ ] **Phase 30: Review-Queue Triage** - Conflicts get resolved conversationally, with the decision written back as a human decision
 - [x] **Phase 31: Enum Validation for Review Approvals** - Enum-bound candidates are validated against HubSpot's real option set before they are offered, refusals are explicit at every layer, and silence stops meaning two opposite things
+- [ ] **Phase 32: LLM-Free Sweep Trigger** - The unattended sweep fires under real cron with no credentials and no LLM, and a trigger that cannot run says so loudly instead of impersonating a healthy backend
 
 ## Phase Details
 
@@ -339,6 +340,21 @@ Plans:
 - [x] 31-01-PLAN.md — The enum spine: generated options module, the shared validator, refusal on the approve path (tracer) and at enrichment staging, plus the snapshot/policy currency pins
 - [x] 31-02-PLAN.md — BUG 30: an explicit `not_allowlisted` refusal body, the client's corrected `unparseable_response` meaning with a two-sided outcome pin, and RB-9's diagnostic advice
 - [x] 31-03-PLAN.md — Close-out: the two-sided contract inventory, the disarmed-artifact gate, and the operator-directed disarmed redeploy + bounce
+
+### Phase 32: LLM-Free Sweep Trigger
+
+**Goal**: NOTICE-03 actually holds — the sweep reaches the operator with no session open, under the real cron host, with nothing in the trigger path that can silently die; and when the trigger itself cannot run, the operator is told instead of being shown what health looks like.
+**Depends on**: Phase 29 (the sweep it triggers; RB-8's failure is this phase's reason to exist)
+**Requirements**: NOTICE-03, NOTICE-05 (install docs change); todo `.planning/todos/pending/2026-08-03-sweep-cron-credentials-block-notice-03.md` (solution SETTLED AND PROVEN — do not relitigate)
+**Success Criteria** (what must be TRUE):
+
+  1. A shipped `sh` wrapper (in `skills/backend-sweep/`) runs `sweep_entry.py` directly, posts one `osascript` banner per notice, appends the full JSON to the log, and needs no LLM, no Anthropic credential, and nothing outside `/usr/bin:/bin` plus the named python — proven by the 2026-08-03 `env -i` and real-cron fires (22:54:21).
+  2. A trigger that cannot run is LOUD: non-zero exit AND a banner telling the operator the sweep itself is broken. "Never fired" and "healthy" are no longer indistinguishable.
+  3. `SWEEP-CRON-TEMPLATE.md` is rewritten around the wrapper: no `claude -p`, no prompt file, a documented venv step (the plugin's own `requirements.txt`), cadence reasoning retained.
+  4. `29-HOST-PROBE.md` D-01 is amended: the host is cron/launchd → the plugin's own Python. The amendment records WHY the original probe misled — it ran `claude -p` interactively, inheriting credentials the cron host never has (verification one layer from the claim).
+  5. The wrapper's contract with `sweep_entry.py`'s output shape is pinned by a two-sided test (the shell side read as text, the python side executed), and the plugin suite stays green.
+
+**Plans**: TBD
 
 ## v0.6 Progress
 
