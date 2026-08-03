@@ -21,14 +21,30 @@ send-shaped allowlist honest: the POST must carry no `files=`, no `data=`, and i
 fool it. The moment it can carry records it is a send, and it loses the exemption.
 
 Mirrors test_no_backend_imports.py's AST idiom — parse, never grep.
+
+29-06 Task 1 extends this file two ways:
+
+1. The same ALLOWED_MODULES allowlist is reused (never re-declared — a second copy is
+   the copy that drifts wider, per D-13's own warning) to bound the *shipped skill body*,
+   not just the module import graph. A clean module graph invoked by a skill whose prose
+   also names a dispatch/write capability would pass the import-only guard above and
+   still violate NOTICE-05 — T-29-20 names this exact hole.
+2. `SWEEP-CRON-TEMPLATE.md` is checked as text (no pytest harness can run cron) for the
+   §A1 invocation and the §A5 delivery mechanics, plus the D-19 cadence-cost note.
 """
 import ast
+import re
 from pathlib import Path
 
+import config_gate
 import pytest
+import sweep_entry
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS = PLUGIN_ROOT / "scripts"
+SWEEP_SKILL_DIR = PLUGIN_ROOT / "skills" / "backend-sweep"
+SWEEP_SKILL_PATH = SWEEP_SKILL_DIR / "SKILL.md"
+SWEEP_CRON_TEMPLATE_PATH = SWEEP_SKILL_DIR / "SWEEP-CRON-TEMPLATE.md"
 
 SWEEP_ENTRYPOINT = "sweep_entry"
 
@@ -180,3 +196,96 @@ def test_the_guard_flags_the_status_post_growing_a_body(tmp_path):
     assert status_post_payload_violations(bad), (
         "the compensating assertion failed to catch a payload-carrying status POST"
     )
+
+
+# --- 29-06 Task 1: the shipped skill body is bound by the SAME allowlist (T-29-20) ------
+
+_SCRIPT_REF = re.compile(r"scripts/([A-Za-z_][A-Za-z0-9_]*)\.py")
+
+
+def _skill_capabilities(text: str) -> set:
+    """Every first-party script a skill body names, by module name — the skill's own
+    'capability surface', read in the same terms the import-graph allowlist uses. A
+    skill that never mentions a script beyond the sweep entrypoint has nowhere else to
+    reach; a skill that also names, say, `scripts/control_actions.py` has widened its
+    reach past what the module guard above can see, since prose is not an import."""
+    return set(_SCRIPT_REF.findall(text))
+
+
+def test_the_sweep_skill_names_only_the_sweep_entrypoint():
+    assert SWEEP_SKILL_PATH.exists(), "skills/backend-sweep/SKILL.md was not shipped"
+    named = _skill_capabilities(SWEEP_SKILL_PATH.read_text())
+    assert named, "the skill body names no script at all — nothing for it to invoke"
+    assert named <= ALLOWED_MODULES, (
+        f"the skill body names capabilities outside the read-only allowlist: "
+        f"{sorted(named - ALLOWED_MODULES)} — a clean module graph invoked by a wide "
+        f"skill body still violates NOTICE-05 (T-29-20)"
+    )
+
+
+def test_the_skill_capability_check_flags_a_synthetic_wide_skill_body():
+    wide_body = (
+        "Run:\n\n    python3 scripts/sweep_entry.py\n\n"
+        "then dispatch anything pending with:\n\n    python3 scripts/control_actions.py\n"
+    )
+    named = _skill_capabilities(wide_body)
+    assert not named <= ALLOWED_MODULES, (
+        "the capability check failed to flag a skill body naming a write capability "
+        "outside the allowlist"
+    )
+
+
+# --- 29-06 Task 1: SWEEP-CRON-TEMPLATE.md, checked as text (no pytest can run cron) -----
+
+def test_sweep_cron_template_reproduces_the_a1_invocation_and_a5_delivery():
+    assert SWEEP_CRON_TEMPLATE_PATH.exists(), "SWEEP-CRON-TEMPLATE.md was not shipped"
+    text = SWEEP_CRON_TEMPLATE_PATH.read_text()
+
+    assert "claude -p" in text, "must invoke claude -p (29-HOST-PROBE.md §A1)"
+    assert '--allowedTools "Skill,Bash,Read,Glob,Grep"' in text, (
+        "must reproduce §A1's exact allowed-tools set verbatim, not an approximation"
+    )
+    assert re.search(r"[>]{1,2}\s*\"?\S*\.log", text), (
+        "must redirect stdout to a log file (§A5 — the banner is one line, the log "
+        "carries the untruncated detail)"
+    )
+    assert "osascript" in text, "must post the one-line banner via osascript (§A5)"
+    assert "empty" in text.lower(), (
+        "the banner must be gated on a non-empty notice list, not fired every run"
+    )
+
+
+def test_sweep_cron_template_states_the_cadence_mediated_no_credit_property():
+    text = SWEEP_CRON_TEMPLATE_PATH.read_text()
+    assert re.search(r"all three provider", text, re.I), (
+        "cadence note must state that each fire probes all three provider balance "
+        "endpoints via the backend (D-19)"
+    )
+    assert re.search(r"cadence is the only dial|cadence.{0,40}bound", text, re.I), (
+        "cadence note must state that cadence, not structure, bounds the sweep's cost "
+        "(D-19) — it must not read as free at any frequency"
+    )
+
+
+# --- 29-06 Task 1: the CLI entrypoint the skill invokes fails closed, never raises ------
+
+def test_the_cli_entrypoint_returns_a_notice_never_raises_when_config_load_fails():
+    """sweep_entry.py had no runnable CLI before this plan — the skill above needed one
+    to invoke, so `_cli_main` was added. D-15's rule applies one layer above
+    `run_sweep`'s own 'sweep' capability check: `config_gate.load_config` can raise
+    `ConfigError` before `run_sweep` ever gets a config dict (e.g. no n8n_url/
+    webhook_secret configured at all). That must be a notice too, never a traceback —
+    a traceback prints nothing into a cron wrapper's redirected log, which reads as
+    silence, and silence means healthy (D-08)."""
+    def _raise():
+        raise config_gate.ConfigError("boom: no config at all")
+
+    notices = sweep_entry._cli_main(load_config=_raise)
+    assert notices == [{
+        "condition": "sweep_not_configured",
+        "headline": "LV backend sweep: not configured — it is NOT watching",
+        "detail": ("boom: no config at all\nUntil this is fixed the sweep runs but "
+                   "cannot check anything, so silence from it means nothing."),
+        "who_can_fix": "admin",
+        "execution_id": None,
+    }]

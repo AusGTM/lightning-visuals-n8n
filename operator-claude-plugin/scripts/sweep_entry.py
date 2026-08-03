@@ -71,3 +71,40 @@ def run_sweep(config, get_transport=requests.get, post_transport=None, now=None)
         }]
 
     return sweep_notify.render(sweep_conditions.evaluate(gathered))
+
+
+def _cli_main(load_config=config_gate.load_config, get_transport=requests.get,
+              post_transport=None, now=None):
+    """What `python3 scripts/sweep_entry.py` prints (29-06 Task 1 — the skill this
+    plan ships needs a runnable entrypoint, and none existed before this plan; the
+    module had only ever been driven directly from tests). Isolated from `__main__`
+    so a test can drive it with an injected config loader — no subprocess, no touching
+    the real (gitignored) operator.local.json, no network risk, the same injection
+    discipline every transport in this closure already uses.
+
+    D-15's rule applies one layer above `run_sweep`'s own "sweep" capability check:
+    the base config load (`config_gate.load_config`) can raise `ConfigError` before
+    `run_sweep` ever gets a config dict to check at all (e.g. no `n8n_url` or
+    `webhook_secret` configured whatsoever). That must be a notice too, never a raised
+    traceback — with nobody watching, a traceback prints nothing to the log a cron
+    wrapper redirects into, which is silence, and silence means healthy (D-08).
+    """
+    try:
+        cfg = load_config()
+    except config_gate.ConfigError as refusal:
+        return [{
+            "condition": "sweep_not_configured",
+            "headline": "LV backend sweep: not configured — it is NOT watching",
+            "detail": (f"{refusal}\nUntil this is fixed the sweep runs but cannot "
+                       f"check anything, so silence from it means nothing."),
+            "who_can_fix": "admin",
+            "execution_id": None,
+        }]
+    return run_sweep(cfg, get_transport=get_transport, post_transport=post_transport,
+                     now=now)
+
+
+if __name__ == "__main__":
+    import json
+
+    print(json.dumps(_cli_main()))
