@@ -20,6 +20,15 @@ without disabling the operator's interactive status check. It requires all three
 n8n_url, n8n_api_key AND webhook_secret — because unlike `status`, which degrades to the
 half it can read, a sweep that can only read half the conditions stays quiet about the
 other half, and quiet is a claim.
+
+29-05 Task 3: the two notices above (config missing, sweep blind) are constructed here
+directly and never pass through `sweep_notify.render` — they stay one notice each,
+regardless of how many conditions later fire, because D-15's "a sweep that cannot run
+must say so" is a different claim from "several things are wrong" and must never be
+folded into the same grouping logic. Everything that DOES reach `sweep_notify.render`
+(zero, one, or several fired conditions) gets that module's silence/single/grouped
+behaviour: zero is `[]`, genuine silence (D-08, NOTICE-04); one renders as its own
+notice; several group into a single delivery rather than one banner per condition.
 """
 import requests
 

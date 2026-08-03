@@ -872,10 +872,34 @@ from RB-2, so a notice arriving somewhere *else* is recognised as a finding rath
 2. **Silence check FIRST.** Backend healthy, let it fire at least once. Confirm **nothing** arrives.
    **A heartbeat, an all-clear, or an empty report all FAIL this check** — NOTICE-04 requires silence,
    and a sweep that speaks when healthy is one the operator learns to ignore.
-3. **Notice check.** Make one condition genuinely true. **Cheapest safe lever: set the review-backlog
-   threshold below the current real backlog count**, so the condition fires on real data without
-   changing anything in the backend. **Do NOT manufacture a condition by breaking a credential or
-   arming the backend** — the sweep is being tested, not the backend's failure modes.
+3. **Notice check.** Make one condition genuinely true. **Do NOT manufacture a condition by breaking
+   a credential or arming the backend** — the sweep is being tested, not the backend's failure modes.
+
+   > **⚠ AMENDED 2026-08-03 — the prescribed lever does not work in the current state.** This step
+   > said "cheapest safe lever: set the review-backlog threshold below the current real backlog
+   > count". **The live backlog is ZERO** on all four counters, read from `hubspot/backend-status`
+   > at 08:12:23Z: `companies_requested_unresolved: 0`, `companies_awaiting_review: 0`,
+   > `contacts_requested_unresolved: 0`, `contacts_awaiting_review: 0`. No threshold can sit below
+   > zero, so lowering it fires nothing.
+   >
+   > **Use instead: re-seed one real review candidate**, the same way the Phase 31 canary did —
+   > write the pipeline's own verbatim stored candidate back onto test company `9604614548` (the
+   > fixture JSON is recoverable from the `30-07-review-canary-*` / `31-rb9-rerun-*` snapshots under
+   > `.planning/phases/22-armed-e2e-enrichment-canary/snapshots/`). That produces a genuine backlog
+   > of 1 out of the pipeline's own output, so a threshold of 0 fires on **real** data. It breaks
+   > nothing, arms nothing, and is reversible by clearing the same three properties. Clear it in
+   > step 5 alongside restoring the threshold.
+   >
+   > **Two live states worth checking the sweep against while you are here** — both are real right
+   > now and both are cases the honesty rules forbid misreporting:
+   > - Apollo's balance reads `unreadable: true`, `error: unrecognized_response_shape`. It must
+   >   **never** surface as "out of credits".
+   > - Lusha, Apollo and ZoomInfo all report `credential_health.state: unknown` with
+   >   `reason: no_response`. `unknown` is a real state distinct from invalid and must **never**
+   >   fire as broken.
+   >
+   > If the sweep stays silent on those two while firing on the seeded backlog, that is the
+   > strongest single observation this gate can make.
 4. Let it fire. Confirm the notice: arrives **in the place 29-01 recorded**; is legible at the
    observed length ceiling; states the cause in plain language; states whether the operator or an
    admin can act; and **contains no instruction to run a command or open a terminal.**
