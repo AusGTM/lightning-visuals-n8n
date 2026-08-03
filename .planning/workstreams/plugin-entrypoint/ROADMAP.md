@@ -333,7 +333,12 @@ Plans:
   4. The review write gate answers an explicit refusal body on an allowlist drop instead of dropping the row silently, so the client can distinguish "not allowlisted" from "workflow error" (BUG 30) — and OPERATOR-RUNBOOK RB-9's diagnostic advice is corrected to match.
   5. Both sides of every touched contract are pinned by tests that read both sides (python + n8n), per the milestone's five-times-burned rule; committed workflow artifacts remain disarmed, and the fix reaches the live tenant only via a disarmed redeploy + bounce.
 
-**Plans**: TBD
+**Plans:** 3 plans
+
+Plans:
+- [ ] 31-01-PLAN.md — The enum spine: generated options module, the shared validator, refusal on the approve path (tracer) and at enrichment staging, plus the snapshot/policy currency pins
+- [ ] 31-02-PLAN.md — BUG 30: an explicit `not_allowlisted` refusal body, the client's corrected `unparseable_response` meaning with a two-sided outcome pin, and RB-9's diagnostic advice
+- [ ] 31-03-PLAN.md — Close-out: the two-sided contract inventory, the disarmed-artifact gate, and the operator-directed disarmed redeploy + bounce
 
 ## v0.6 Progress
 
