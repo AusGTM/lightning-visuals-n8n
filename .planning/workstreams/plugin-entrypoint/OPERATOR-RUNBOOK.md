@@ -111,12 +111,12 @@ file is not mistaken for drift.)*
 | § | Plan | Runnable now? | Blocker |
 |---|---|---|---|
 | ~~RB-1~~ | ~~**25-01** lists-scope + chunk timing~~ | ✅ **DONE** | Probe A granted 2026-07-31; **B4 ran 2026-08-03: 37.44 s full waterfall, ceiling 2 CONFIRMED**. The oversize-refusal live check found the deployed enrichment workflow predates the committed list lane — folded into the disarmed-redeploy remediation (three reasons now). **Deploy DONE 2026-08-03**: list lane live, refusal verified verbatim, backend-status + review-decision workflows created. Fully closed |
-| RB-2 | **29-01** scheduled-routine host probe | ✅ **yes** | none — no dependencies, no code needed. **Unblocks 4 plans; joint highest leverage** |
+| ~~RB-2~~ | ~~**29-01** scheduled-routine host probe~~ | ✅ **ANSWERED 2026-08-03** | Host AMENDED (D-01) to cron/launchd → `claude -p` headless; Cloud Routines fail twice, harness cron is session-only. Verdicts in `29-HOST-PROBE.md` (§A2 is NO) |
 | ~~RB-3~~ | ~~**23-06** install + armed create canary~~ | ✅ **PASSED 2026-08-03** | Contact 342770428400 created by run 1129, window closed with disarmed PASS. Found + fixed live: the stored-vs-running reload gap (ceremonies now bounce) and BUG 27 (create gate read fields Decide Action never emits). **Phase 23 COMPLETE** |
 | ~~RB-4~~ | ~~**27-05** dashboard same-URL check~~ | ✅ **APPROVED 2026-08-03** | All steps pass; Phase 27 CLOSED, STATUS-05 checked. Found + fixed live: a session delivering the dashboard as a file attachment instead of publishing the Artifact |
 | ~~RB-5~~ | ~~**28-02** n8n semantics live gate~~ | ✅ **DONE 2026-07-31** | Ran live against `1fXPuIabz3RsAHgn`. Round-trip `verified`, execute endpoint `405`, cadence reload confirmed on a running instance. Results in `28-FINDINGS.md`. **28-03 and 28-04 are built and committed as a result.** Nothing left here |
 | ~~RB-6~~ | ~~**28-04** five-triggers decision~~ | **withdrawn** | Already decided — D-25 / amendment #6. Checkpoint deleted, plan now autonomous. **Nothing for you to do.** |
-| RB-7 | **28-06** armed arm→dispatch→disarm canary | ❌ | behind 28-02 → 28-05. Now needs `ALLOW_N8N_ARM` too |
+| RB-7 | **28-06** armed arm→dispatch→disarm canary | ✅ **YES — this is the next gate** | 28-05 shipped. Lane/workflow/record all resolved and preconditions checked 2026-08-03 — see RB-7's header table. Needs `ALLOW_N8N_ARM=true` in the invoking shell, and a plugin refresh first (cached SKILL.md files are stale) |
 | RB-8 | **29-06** live notice gate | ❌ | behind 29-01 → 29-03/04/05 |
 | RB-9 | **30-07** armed review canary | ❌ | behind 30-05/30-06 (30-01…04 built). Now needs `ALLOW_REVIEW_SUBMIT`; **four changes — read RB-9's header block** |
 
@@ -718,12 +718,56 @@ alongside the opposite decision.
 
 ---
 
-# RB-7 · Plan 28-06 — Armed arm→dispatch→disarm canary *(provisional)*
+# RB-7 · Plan 28-06 — Armed arm→dispatch→disarm canary
 
-**Blocked** behind 28-05. Phase 28 exit gate. **This is the only point in Phase 28 where a real
+**UNBLOCKED** — 28-05 shipped. Phase 28 exit gate. **This is the only point in Phase 28 where a real
 write-safety constant is set to its enabled literal on the live instance**, bounded by a
 `TEST_RECORD_*` allowlist to a single record. Every automated test behind it ran against a stubbed
 transport.
+
+### What was resolved before you start (2026-08-03, read-only)
+
+The choices this section left open are now made, and the preconditions an agent can check have been
+checked. Nothing below was armed, deployed, or written.
+
+| Item | Resolved value | How it was established |
+|---|---|---|
+| Lane | **enrichment** (step 1's preferred branch — Phase 25's dispatcher shipped) | `enrichment.dispatch_enrichment` present |
+| Target workflow | **`950HPb7a1GgSAIyZ`** — `LV Enrichment (Cloud template)`, `active=true` | live `GET /api/v1/workflows` |
+| Record allowlist | **`9604614548`** (one HubSpot **company** id) — the same test company Probe B4 and the Phase 22 canary used | 25-BLOCKERS.md B4, 23-07-SUMMARY |
+| `allow_create` | **false** — this is an update to an existing company, not a create | — |
+| Flag state BEFORE | **all five workflows disarmed**: `ALLOW_HUBSPOT_RECORD_WRITES='false'`, `ALLOW_HUBSPOT_CREATE='false'`, `ALLOW_HUBSPOT_REVIEW_WRITES='false'`, `TEST_RECORD_IDS=''`, `TEST_RECORD_DOMAINS=''` (2n on enrichment, 4n on maintenance, 3n create-nodes on contact ingest) | live read via `n8n_read.read_write_safety` |
+| `control` capability | **passes** against the installed `operator.local.json` | `config_gate.require_capability(cfg, "control")` |
+| Step 6's expected literal | plugin `_render_literal(True)` → `"true"`; deploy `_OVERLAY_FLAG_SPEC` enabled literal → `"true"`. **Identical by construction** — step 6 confirms it live, it is not expected to differ | source comparison |
+
+**The reload gap does NOT bite here.** `n8n_control.apply_mutation` brackets its PUT with
+deactivate → PUT → restore-prior-active, and `LV Enrichment` is active, so the arm's activate is what
+forces the running instance to reload the armed content — *before* its verify GET. The disarm goes
+through the same bracket. This is the path that was already correct on 2026-08-03; it was
+`deploy_n8n_workflows.py` (which never activates) that was not.
+
+**Expect one gap in the surface.** `plan_action(kind="arm_dispatch")` composes the proposal but does
+**not** build the dispatch — `execute_action` calls `proposal["dispatch_fn"]`, and neither
+`control_actions.py` nor `backend-control/SKILL.md` says who sets it. The plugin session's agent has
+to wire it. That is a real finding about the shipped surface; **record it in the canary log** rather
+than treating it as a mistake in this section. The wiring, for reference:
+
+```python
+import control_actions, enrichment, config_gate
+cfg = config_gate.load_config()
+envelope = enrichment.build_envelope(
+    {"record_ids": ["9604614548"], "object_type": "companies"},
+    enrichment.resolve_providers(None, cfg))
+proposal = control_actions.plan_action(
+    {"kind": "arm_dispatch", "workflow_id": "950HPb7a1GgSAIyZ",
+     "record_ids": ["9604614548"], "record_domains": [], "allow_create": False}, cfg)
+# show proposal["consequence"] — then, ONLY on an explicit yes:
+proposal["dispatch_fn"] = lambda: enrichment.dispatch_enrichment(envelope, True, cfg)
+result = control_actions.execute_action(proposal, "yes", cfg)
+```
+
+**Cost of one pass:** ~37 s of dispatch (B4's measured full waterfall), ~$0.07 Anthropic, and the
+enrichment lane's provider credits for one company (Lusha 2 cr/company).
 
 **Precondition:** the plugin's `operator.local.json` carries the `control` capability's keys
 (`n8n_url`, `n8n_api_key`); `N8N_EXPECTED_URL` is set and matches; **`ALLOW_N8N_ARM=true` is set for
@@ -739,11 +783,18 @@ never trap you with an armed backend. Unset it again as soon as the window close
 that still holds if an agent, a test harness, or a scheduled routine reaches the arming module by a
 path nobody anticipated.
 
-1. **Pick the lane.** Prefer the enrichment lane with a single HubSpot object id in the record
-   allowlist if Phase 25's enrichment dispatch is built; otherwise the contact lane with a single
-   disposable email domain. **Note which was used.**
+0. **Refresh the installed plugin first.** The plugin cache at
+   `~/.claude/plugins/cache/lightning-visuals-operator/operator-claude-plugin/0.1.0/` is a
+   snapshot: its `scripts/` match `3f575ec`, but **all five non-`backend-status` `SKILL.md` files are
+   stale** — they predate the "Where commands run" note. Update the plugin so the canary drives the
+   surface that is actually committed, then confirm `skills/backend-control/SKILL.md` opens with that
+   note.
+1. **The lane is enrichment** (resolved above): workflow `950HPb7a1GgSAIyZ`, record allowlist
+   `9604614548`, `allow_create=false`, no domains. Note it in the log as the lane used.
 2. **Record the flag state BEFORE**, read through Phase 27's status surface — **not** from local
-   config (D-04). Every declaration in the target workflow must read disabled.
+   config (D-04). Every declaration in the target workflow must read disabled. The 2026-08-03
+   read is in the table above; **re-read it yourself** rather than copying that table — the point of
+   the step is a fresh observation.
 3. Run the action **conversationally through the skill**, as an operator would. Confirm that before
    any confirmation is given, the consequence names what live writes permit **and** names the single
    record the grant is bounded to. **Decline once**, and confirm nothing was sent — the decline path
@@ -970,6 +1021,9 @@ Kept so a section you read yesterday is not silently different today.
 | 2026-07-31 | **RB-1's Probe B partly pre-measured** — 36.1 s/record measured free from execution history, implying a chunk default of 1–2 and a likely 524 on the five-record probe |
 | 2026-07-31 | **RB-9 gained four changes** — two gates at different layers, a new step 6b, contacts allowlistable only by `TEST_RECORD_IDS`, and the D-31 caveat that it does not prove protected-field enforcement |
 | 2026-07-31 | **The read-back was fixed (plan 23-07, D-19).** `verify_live_write_safety.py` now scans EVERY deployed workflow and every node declaring a write-safety constant, and takes `--expect-armed FLAG,FLAG`. Two of RB-3's three defects and RB-9's ⚠ paragraph are gone with it; the all-workflow shell workaround is retired. RB-3's undeployed-23-01 finding stands |
+| 2026-08-03 | **The stored-vs-running reload gap, found live under RB-3.** `deploy_n8n_workflows.py` PUTs but never activates, and n8n serves a RUNNING workflow's old content until a deactivate→activate bounce — so `verify_live_write_safety.py` (which reads STORED content) can report `armed PASS` while the running webhook is still disarmed. Every arm AND disarm now bounces. `n8n_control.apply_mutation` was already correct; the `ENABLE_BAKED_FLAGS` deploy path was not |
+| 2026-08-03 | **RB-7 de-provisionalised and unblocked.** Lane (enrichment), workflow (`950HPb7a1GgSAIyZ`), record (`9604614548`), `allow_create=false`, the live before-state, the `control` capability check and step 6's expected literal are all resolved in its header table. A new step 0 refreshes the installed plugin — the cached `SKILL.md` files are stale — and the `dispatch_fn` wiring gap in the shipped surface is documented there rather than left to be rediscovered mid-window |
+| 2026-08-03 | **RB-2 answered** — the sweep host is cron/launchd → `claude -p` headless (D-01 amendment); Cloud Routines and harness cron are both out. `29-HOST-PROBE.md` holds the verdicts |
 
 ### Standing note — the read-back, after 23-07
 
