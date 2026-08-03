@@ -1,145 +1,134 @@
 # v0.6 Handoff — Claude Plugin Entrypoint
 
-**Written:** 2026-08-03 (supersedes 2026-07-31) · **Milestone:** v0.6 · **Workstream:** `plugin-entrypoint`
+**Written:** 2026-08-04 (supersedes both 2026-08-03 handoffs) · **Milestone:** v0.6 · **Workstream:** `plugin-entrypoint`
 **Read this first on a fresh context.** Everything below was verified live; do not re-derive or
-"correct" it.
+"correct" it. The evidence trail is git history `3f575ec..94d32d5` plus the FINDINGS/SUMMARY files
+named per phase.
 
 ---
 
 ## 1. Where things stand
 
 **Branch `feat/v0.6-plugin-entrypoint`, fully pushed to `origin/master` (fast-forward), tree clean.**
-Suites: **1686 pytest / 6 skipped · 509 node · 811+ plugin** (all via `.venv/bin/python -m pytest`
-and `node --test tests/n8n/*.test.mjs` — FILE form). Every `n8n/*.json` disarmed (grep → 0), and —
-new — **the LIVE tenant is verified disarmed in both stored AND running content** (disarm + bounce +
-read-back, 2026-08-03).
+Suites: **1784 pytest / 6 skipped (root, includes plugin) · 550 node · 903 plugin-standalone** — via
+`.venv/bin/python -m pytest` and `node --test tests/n8n/*.test.mjs` (FILE form). Committed
+`n8n/*.json` disarmed (grep → 0). Live tenant verified **disarmed PASS** (5 workflows / 12 declaring
+nodes). Crontab empty. No gate variable set anywhere.
 
 | Phase | State |
 |---|---|
-| 23 | ✅ **COMPLETE incl. armed canary** — contact `342770428400` created by run 1129; found the reload gap + BUG 27 on the way |
-| 24, 25, 26 | ✅ COMPLETE (25 fully: Probe A granted, **B4 measured 37.44 s → ceiling 2 CONFIRMED**, oversize refusal verified live verbatim) |
-| 27 | ✅ **COMPLETE incl. RB-4 operator walk** — STATUS-05 checked; dashboard same-URL proven cross-session |
-| 28 | ✅ **COMPLETE incl. RB-7 armed canary (2026-08-03)** — arm→dispatch→disarm verified, execution 1152, 54.37 s window, bounded to one record |
-| 29 | 29-01 ✅ (host probe answered), 29-02 ✅, 29-03 ✅ (tracer + read-only guard). **29-04, 29-05, 29-06 are the remaining autonomous builds** |
-| 30 | 30-01…06 built. **RB-9 RUN 2026-08-03 — steps 1-7 and 9-10 PASS, step 8 (APPROVE) BLOCKED by BUG 28.** Window closed, disarmed PASS |
+| 23–27 | ✅ COMPLETE incl. their canaries (unchanged from prior handoff) |
+| 28 | ✅ **COMPLETE incl. RB-7 armed canary** — arm→dispatch→disarm verified, execution 1152, 54.37 s window, one record. CONTROL-01…07 sealed |
+| 29 | ✅ **COMPLETE via Phase 32** — NOTICE-01/02/04/05 complete; NOTICE-03 sealed by the LLM-free trigger |
+| 30 | ⚠ **PARTIAL** — RB-9 ran, 8/9 steps pass. REVIEW-01/03/05 sealed. **REVIEW-04 NOT DEMONSTRATED** (no decision has ever stamped a human source — see §4). REVIEW-02 partial (`manual_protected` clause unexercised, D-31) |
+| 31 | ✅ **COMPLETE incl. live canary re-run** — BUGS 28/29/30 closed; enum refusal observed against the real legacy candidate |
+| 32 | ✅ **COMPLETE incl. RB-8 re-run** — LLM-free sweep trigger proven under real cron (silence AND loud-failure), zero credits |
 
-**Remaining work, in order:** 29-04 (bounded watch) → 29-05 (five conditions; live shapes recorded
-in 29-05-PLAN header) → 29-06 (sweep skill + cron template) → RB-8 (29-06 live gate) → **BUG 28's
-enumeration mapping, which blocks RB-9 step 8 and must land before the approve path can be claimed
-working** → re-run RB-9 step 8 only. Then milestone seal: flip CONTROL/NOTICE/REVIEW checkboxes on
-canary evidence, reconcile STATE progress counts. **RB-7 and RB-9 have both run** — RB-9 passed
-every step except 8.
+**Remaining for the milestone seal — all Phase 30:**
+1. **REVIEW-04**: an approve that lands and stamps human source/timestamp/reason, with the prior
+   machine source still readable in the provenance entry. Now unblocked: Phase 31's fix means a
+   candidate carrying a **valid** enum value (or a non-enum field) will apply instead of 400ing.
+   Needs one seeded fixture with a valid value + one armed review window (RB-9 machinery, all
+   proven).
+2. **REVIEW-02's `manual_protected` clause** (D-31): probe that the decision endpoint filters
+   protected classes — remember `reviewApply.js`'s backstop allowlists by key and leaves `domain`/
+   `annualrevenue` writable; record what is observed, never "protected fields are protected".
+3. Then flip REVIEW-02/04, reconcile STATE, seal v0.6.
 
-## 2. THE TWO BIG LIVE FINDINGS OF 2026-08-03 — never un-learn these
+**Open todos (`.planning/todos/pending/`):** `sweep-lookback-has-no-time-window` (major — fixed
+100-row lookback re-notifies a fixed failure until displaced, no acknowledgement; same todo carries
+the id→name notice-naming gap). Plus two older known opens: Phase 26's thin-response reason field is
+belief-not-observation; the versioned-cache config orphan on version bump.
 
-1. **Stored vs running content (the reload gap).** `deploy_n8n_workflows.py` PUTs but never
-   activates (its line 25). n8n serves a RUNNING workflow's old content until a
-   deactivate→activate bounce. `verify_live_write_safety.py` reads STORED content, so `armed PASS`
-   ≠ the running webhook is armed — proven by runs 1122/1123 firing disarmed inside an "armed"
-   window. **Every arm AND disarm now bounces all active workflows**; the pastes in
-   OPERATOR-RUNBOOK RB-3 §B history show the exact form. `n8n_arming.armed_window` was already
-   correct (apply_mutation brackets); the ENABLE_BAKED_FLAGS deploy path was not.
-2. **BUG 27 (fixed `22a3f2a`).** The spliced create gate derived domain from
-   `identity_keys.domain`/`json.domain` — fields Decide Action never emits — so with no
-   `hs_object_id` a net-new create evaluated `_writeSafetyAllows('create', null, null)` and was
-   denied REGARDLESS of arming. Fix: domain from `properties.email`, **create-action only** — the
-   unscoped version handed review gates a domain path 30-02 deliberately withheld and
-   `reviewDecisionEndpoint g3` caught it. Pinned by two-sided flow tests that RUN Decide Action and
-   feed its verbatim output to the gate. **A contract held in two places needs a test that reads
-   both** — this was the fourth instance in the milestone.
+## 2. The four big live findings of 2026-08-03 (evening) — never un-learn
 
-## 3. Other facts established live this session
+1. **`claude -p` under cron cannot authenticate, and fails SILENTLY.** Expired token with empty
+   `refresh_token` + `node` off cron's PATH. The interactive host probe (29-01) missed it because it
+   inherited a live session's credentials — *verification one layer away from the claim*, same class
+   as the stored-vs-running reload gap. Fix shipped in Phase 32: the sweep trigger is now
+   `skills/backend-sweep/lv-sweep-run.sh`, deterministic sh, **no LLM anywhere in the unattended
+   path** (`sweep_entry.py` under `env -i` with zero credentials emits identical JSON). A trigger
+   that cannot run now exits non-zero AND banners. D-01 amended in `29-HOST-PROBE.md`.
+2. **HubSpot enums vs provider free-text (BUG 28 family, all FIXED).** `industry` is an enumeration
+   (148 options); providers speak NAICS-ish labels; the approve PATCH 400'd and the preview lied
+   (`applied`). Phase 31: generated enum module (`hubspotEnums.generated.js` from the schema
+   snapshot, `gen_hubspot_enums_js.py`), staging validate-and-refuse (exact case-insensitive
+   label→value match ONLY — full mapping layer explicitly rejected), shared-path refusal in
+   `reviewDecision.js` covering dry_run AND apply, explicit `not_allowlisted` body on gate drops
+   (BUG 30). Proven live: armed approve of the legacy candidate → explicit `refused` naming
+   value/property/closest-labels, zero n8n errors.
+3. **The backend-status array-unwrap bug is DEAD** (was "KNOWN OPEN" for a whole session). The
+   webhook answers `[{...}]`; the client now unwraps single-element lists, pinned both shapes
+   (29-05). Queue counts and balances read real values through the plugin.
+4. **Arming invariant AMENDED, not eroded.** Arming is operator-directed only, on a second explicit
+   instruction after the agent names the invariant, bounded by a single-record `TEST_RECORD_*`
+   allowlist, with a symmetric `--expect-armed` read-back. Unattended/scheduled/inferred/unbounded
+   arming stays absolutely blocked. Precedent: RB-9 step 3. Disarm is never gated.
 
-- **Phase 29 host AMENDED (D-01):** the sweep host is **cron/launchd → `claude -p` headless**
-  (probe: reached installed plugin, real data, osascript banner confirmed in Notification Centre).
-  Cloud Routines fail twice (403 repo access; secrets are local-only). Harness CronCreate is
-  session-only. Full verdicts: `29-HOST-PROBE.md` (§A1/§A2/§A5 — A2 is NO).
-- **Backend-status endpoint LIVE** (created + activated 2026-08-03; first answer recorded verbatim
-  in 29-05-PLAN header): real zero queues; balances lusha 3932 / zoominfo 9301 / apollo
-  `unreadable (unrecognized_response_shape)`; credential probes `no_response` (a real state
-  distinct from invalid — must degrade to unknown, never fire as broken).
-- **KNOWN OPEN BUG:** the plugin's `backend_status` reader reports `unrecognized_response_shape`
-  against the live endpoint — the webhook wraps its answer in an ARRAY (`[{...}]`) and the reader
-  expects the bare object. Client-side unwrap fix + test, unassigned. Until fixed, queue counts and
-  balances read `unknown` through the plugin (curl shows the real data).
-- **BUG 28 — `industry` approvals can never succeed (found live by RB-9, 2026-08-03).** HubSpot's
-  company `industry` is an **enumeration with 148 fixed options**. The pipeline stages the provider's
-  free-text label (`arts, entertainment, and recreation`) as the review candidate; `SPORTS` is a valid
-  option, that string is not one at all. The approve PATCH therefore returns **HubSpot 400 "Bad
-  request - please check your parameters"**, the n8n execution errors, and nothing lands. All other
-  keys in the approve patch validate clean — `industry` is the sole cause. **Provider values destined
-  for an enumeration property need mapping to valid options before they are staged.**
-- **BUG 29 — the preview cannot see BUG 28.** `preview_decision` returned `outcome: applied` for that
-  impossible write, because the dry run computes the patch without validating against HubSpot's
-  property schema. The operator is shown, and asked to approve, a write guaranteed to fail.
-- **BUG 30 — `unparseable_response` conflates two opposite states.** It is returned both for a
-  fail-closed allowlist drop (correct, nothing wrong) and for a workflow error (a real fault).
-  OPERATOR-RUNBOOK RB-9 tells the operator that silence "means *not on the allowlist* — not *broken
-  endpoint*" and to check `TEST_RECORD_IDS` "before investigating anything else" — which is exactly
-  wrong when the endpoint is the thing that broke. Only n8n execution history disambiguates them.
-- **BUG 31 — the review queue renders a broken HubSpot link.** `render_record` passes the whole row
-  to `link_lookup`, while `record_link` takes a record id, so the natural composition emits a URL with
-  the entire row dict in it. `tests/test_review_queue.py:96` encodes the correct lambda;
-  `skills/review-triage/SKILL.md` never defines it. **Fifth instance of "a contract held in two
-  places, tested on only one side."** Fix is a SKILL.md edit.
-- **KNOWN OPEN BUG (Phase 26):** the thin-response dispatch report labels unconfirmable sends
-  `not_confirmed` and *guesses* the reason from the session's possibly-stale gate belief — it
-  narrated the canary's gated sends as "write gated" from stale evidence. Reason field must be
-  marked belief, not observation.
-- **Installed-plugin realities:** config resolves into the VERSIONED cache path
-  (`~/.claude/plugins/cache/lightning-visuals-operator/operator-claude-plugin/0.1.0/config/operator.local.json`)
-  — a version bump orphans it (remediation queued), and — found live 2026-08-03 — a **same-version
-  reinstall DELETES it outright**, leaving only the example. Back it up before every reinstall.
-  Worse, **reinstalling the plugin does not refresh the marketplace clone** it copies from
-  (`~/.claude/plugins/marketplaces/lightning-visuals-operator`), which sat at `a60e3da` for five
-  commits while repeated uninstall/reinstall cycles re-copied the same stale snapshot. `plugin.json`
-  pins `"version": "0.1.0"` by hand and has never been bumped, so **the version number proves
-  nothing about freshness — verify by content.** Both traps and the shallow-clone fetch command are
-  written up in OPERATOR-RUNBOOK RB-7 step 0. Slash commands are not recognized in Claude
-  Code Desktop but conversational/skill dispatch works. **The cache was refreshed to HEAD on
-  2026-08-03 and the version-skew is resolved.** Marketplace install from
-  `AusGTM/lightning-visuals-n8n` works (manifest at repo root; validate BOTH from the COMMIT, not
-  the working tree — the author-object fix was once live-broken on master while the tree passed).
-- **All six skills carry a "Where commands run" note** (plugin root, not skill dir) and
-  backend-status carries "a file attachment is not a dashboard" — both from live misses.
-- **Chunk ceiling 2 is MEASURED** (B4 37.44 s full waterfall, +25% headroom, floor(100/46.8));
-  the pinning tests now FORBID the word PROVISIONAL and require the figure+date.
+## 3. Standing operational facts (hard-won, still true)
 
-## 4. RB-7 (28-06) — the next gate, how it runs
+- **Stored vs running:** every deploy (armed OR disarmed) needs a deactivate→activate bounce of
+  active workflows; `verify_live_write_safety.py` reads STORED content. `n8n_control.apply_mutation`
+  brackets correctly on its own.
+- **Armed-window arithmetic:** dispatch ~38.6 s (B4 37.44 s), arm+disarm overhead ≈15.8 s. At chunk
+  ceiling 2: ≈93 s vs the ~100 s webhook ceiling — tight, budget accordingly.
+- **`ALLOW_*` gates:** literal `true` only, must PREFIX the command (each `!` line is its own shell;
+  an export dies with its line; the refusal reads "it reads None").
+- **Plugin install traps (RB-7 step 0 has the full write-up):** reinstall never refreshes the
+  marketplace clone (fetch `--depth=1` + `reset --hard FETCH_HEAD` it yourself); a same-version
+  reinstall DELETES `config/operator.local.json` (back it up; a good copy also lives gitignored at
+  `operator-claude-plugin/config/operator.local.json` in the repo); `plugin.json`'s `0.1.0` is
+  hand-written — **verify by content, never by version**. Cache-refresh shortcut that preserves
+  config: `rsync -a --exclude='config/operator.local.json' <clone>/operator-claude-plugin/ <cache>/0.1.0/`.
+  ⚠ Cache last synced at `ebae5ad`; commits after it are docs-only EXCEPT the plugin
+  `CHANGELOG.md` gate note (`94d32d5`) — cosmetically stale in the cache, refresh before the next
+  operator session.
+- **Parallel executors share one working tree:** a bare `git commit` sweeps another process's staged
+  files (happened: `dfd1178`). **Always commit explicit paths.** Disjoint file ownership per
+  executor worked well twice.
+- **RB-9 endpoint facts:** queue row id arrives as `hs_object_id`; a fail-closed allowlist drop now
+  answers `not_allowlisted` (no longer conflated with a workflow error); read verdicts from
+  `verify_decision`, never HTTP. Rejects bypass `ALLOW_REVIEW_SUBMIT` by design (undoing); rejects
+  stamp NO reviewed_by/at (D-30 one-key) — part of why REVIEW-04 is open.
+- **Sweep facts:** conditions honest on live data (Apollo `unreadable` ≠ out of credits; credential
+  `unknown` ≠ broken — both observed silent). Healthy = exactly one stamped log line, nothing else.
+  n8n executions API has NO workflow-name field — notices say "an unnamed workflow" until the
+  lookback todo lands the id→name read.
+- **Test-record registry:** company `9604614548` (Melbourne Racing Club) — resolved state, `industry`
+  = `SPORTS`, review flags clear, reject reason retained as audit; the pipeline-produced legacy
+  candidate is reproducible verbatim from `.planning/phases/22-armed-e2e-enrichment-canary/snapshots/`.
+  Contact `342770428400` — RB-3's created canary; operator delete/mark still outstanding.
+- **Tooling:** `.env` is agent-blocked (dotenv wrapper loads it inside python runs; hand the
+  operator `!` lines for anything needing it directly). `--ws plugin-entrypoint` on every gsd-tools
+  call. Hand-edit STATE.md, never `state.update-progress`. rtk wrapper breaks `npx`. GSD phase
+  planning for NEW phases: register in ROADMAP (hand-edit both the list and a `### Phase N` detail
+  block) → CONTEXT.md via PRD-express from a todo → planner (opus) → checker (sonnet) → executors
+  (sonnet) — this flow ran cleanly twice (31, 32).
 
-Drives the 28-05 surface end to end under `ALLOW_N8N_ARM=true`: `plan_action` → operator "yes" →
-`execute_action` with a real `dispatch_fn` inside `n8n_arming.armed_window` (which brackets
-correctly). Closing gate: re-run `test_control_disarmed_artifacts.py` + live disarmed read-back.
-Read 28-06-PLAN.md first and expect §7b-class staleness (it was written before 28-05 existed as
-built, before the bounce lesson, and before BUG 27). The operator pastes `!`-prefixed one-liners in
-Claude Code Desktop; each `!` line is its own shell (re-source `.env` inside every line; `.env` is
-permission-blocked to the agent — credentials only enter via the operator's `!` lines).
+## 4. Why REVIEW-04 is genuinely undemonstrated (do not round up)
 
-## 5. Safety invariants — unchanged, plus one
+The requirement: every decision stamps human source + timestamp + reason. Observed: a **reject**
+writes exactly one key (`lv_enrichment_review_reason`) and stamps neither `reviewed_by` nor
+`reviewed_at`; the only **approve** ever attempted was first blocked by BUG 28, then (correctly)
+refused by Phase 31's fix. So no decision on this system has ever written a human provenance entry.
+The near-miss to avoid repeating: this was briefly marked Complete during the seal and caught only
+by re-reading the requirement text against the canary logs. The seal is where overclaims become
+permanent.
 
-- Committed artifacts disarmed (`grep -c 'ALLOW_HUBSPOT_[A-Z_]* = "true"' n8n/*.json` → 0).
-- No **automated** arm/deploy/activate/live-write. Disarmed deploys and activation have passed via
-  the python driver when operator-directed. **AMENDED 2026-08-03:** arming is no longer an absolute
-  agent-blocked line — it is **operator-directed only, and only on a second explicit instruction
-  after the agent has named this invariant.** Precedent: RB-9 step 3, where the agent flagged the
-  rule, the operator reaffirmed, and the agent then ran the armed deploy bounded to
-  `TEST_RECORD_IDS=9604614548`. The conditions that made it acceptable, all of which should hold
-  next time: a single-record allowlist, a symmetric `--expect-armed` read-back proving the other
-  authorities stayed disabled, and a disarm path already demonstrated working the same day. **What
-  is still absolutely blocked: arming that is unattended, scheduled, inferred from an earlier
-  approval, or unbounded by a `TEST_RECORD_*` allowlist.**
-- **A window is not closed until the disarm read-back passes AND the bounce has run** — stored and
-  running both.
-- The `ALLOW_*` gates all demand the literal `true`; disarm paths are never gated.
-- Step 8 outstanding: operator deletes/marks canary contact `342770428400`.
+## 5. Safety invariants
 
-## 6. Sections retained from the 2026-07-31 handoff — still true, read there if needed
+- Committed artifacts disarmed (`grep -c 'ALLOW_HUBSPOT_[A-Z_]* = "true"' n8n/*.json` → 0);
+  closing gate `operator-claude-plugin/tests/test_control_disarmed_artifacts.py` (note the path —
+  older docs say `tests/`).
+- A window is not closed until the disarm read-back passes AND the bounce has run — stored and
+  running both. Close order for review windows: deactivate `LV Review Decision` FIRST, then
+  disarmed redeploy, then bounce actives, then read back.
+- Arming per §2.4. Disarm paths never gated. The sweep is read-only by import-graph proof
+  (`test_sweep_read_only.py`), and its trigger contains no credential that can expire.
+- Tenant pin `N8N_EXPECTED_URL=https://alexherman.app.n8n.cloud`; portal 22617666.
 
-The previous handoff's §2 verified-facts table (lock property absent, provenance blob convention,
-`lv_`-prefixed review props, Decide Action emits no email, multipart field `data`, canonical 7
-props, ~100 s Cloudflare ceiling, `enable_baked_flags` cannot disarm, providers
-`onError: continueRegularOutput`, tenant pin `N8N_EXPECTED_URL=https://alexherman.app.n8n.cloud`),
-its §3 seven amendments (plus #5/#6 now closed in artifacts by 28-05), §6 tooling gotchas (dotenv
-wrapper, `--ws plugin-entrypoint`, hand-edit STATE.md, unreliable decision-coverage gate), and §8
-conventions (tell executors about siblings; SKILL.md/README are shared surfaces; verify agent
-claims independently) — all stand. Git history `22a3f2a^..HEAD` carries today's evidence trail.
+## 6. Resume point
+
+**Next concrete task:** Phase 30's close (REVIEW-04 + D-31 probe, §1). It re-uses RB-9's proven
+machinery end to end; the only new artifact is a valid-value review fixture. Then milestone seal.
+Everything else is green and pushed.
