@@ -900,6 +900,53 @@ Record all six results in `29-06-SUMMARY.md`, **including anything that surfaced
 **Blocked** behind 30-06 (30-01…30-04 are built; 30-05 in flight). Phase 30 exit gate. One record is
 the **entire blast radius.**
 
+### Resolved before you start (2026-08-03, read-only)
+
+**The canary record is `9604614548` — Melbourne Racing Club, a company.** RB-7's armed enrichment
+produced it: the pipeline itself flagged the record `needs_review` and held a real provider-vs-CRM
+conflict (`industry`: provider `arts, entertainment, and recreation` against the stored `SPORTS`).
+That is a better canary than a manufactured one, and it satisfies step 1 without further setup.
+Because it is a **company**, the `TEST_RECORD_IDS`-only rule in point 3 below is satisfied by the id
+that is already in hand.
+
+**The review endpoints are currently unreachable, and that is expected.** Both
+`hubspot/review/queue` and `hubspot/review/decision` live in `LV Review Decision (Cloud)`, which is
+**inactive** — so a queue read returns `http_404` until step 4 activates it. A 404 here is the
+workflow being off, not a broken endpoint. Do not debug it.
+
+### ⚠ FIFTH thing, added 2026-08-03 — THE RELOAD GAP APPLIES TO THIS SECTION
+
+`ENABLE_BAKED_FLAGS` overlays every workflow in the deploy set, and
+`ALLOW_HUBSPOT_REVIEW_WRITES` is declared in **four**, of which **three are ACTIVE**:
+
+| Workflow | Active | Declaring nodes |
+|---|---|---|
+| `LV Scheduled Maintenance (Cloud)` | **ACTIVE** | 4 — includes `Review Apply Update Write Gate`, **which hosts the 15-minute approve backstop** |
+| `LV Enrichment (Cloud template)` | **ACTIVE** | 2 |
+| `LV Contact Ingest (Cloud template)` | **ACTIVE** | 2 |
+| `LV Review Decision (Cloud)` | inactive | 2 |
+
+`deploy_n8n_workflows.py` **PUTs but never activates** (its line 25), so after step 3 the three
+active workflows keep serving their OLD, disarmed bodies until they are bounced. Two consequences,
+both of which will otherwise be misread:
+
+1. **Step 3b will report `armed PASS` while three running instances are still disarmed.** It reads
+   STORED content. This is precisely the false confidence that burned RB-3 on 2026-08-03.
+2. **Step 8's APPROVE will probably do nothing.** The documented approve flow goes through the
+   15-minute backstop in `reviewApply.js`, which lives in `LV Scheduled Maintenance` — active, and
+   confirmed running on a 15-minute cadence (ticks observed at 03:30, 03:45, 04:00Z). Its running
+   body will still be disarmed, so the approve will look like a broken approve rather than a stale
+   reload.
+
+**Therefore: bounce every active workflow immediately after step 3, and again after step 9.** A
+deactivate→activate on each is what forces the running instance to reload. Step 4 already does this
+for `LV Review Decision` by activating it from cold — that one is fine; the other three are not.
+
+**Step 9's order is also wrong and must be reversed.** As written it redeploys disarmed and *then*
+deactivates, which leaves a window where the running review-decision webhook is still armed while
+stored content reads disarmed. **Deactivate `LV Review Decision` FIRST, then redeploy disarmed, then
+bounce the three active workflows, then run the disarmed read-back.**
+
 ### Read before running — four things changed under this section
 
 1. **TWO gates now, at different layers, and both must be open.**
