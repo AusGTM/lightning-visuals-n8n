@@ -354,7 +354,11 @@ Plans:
   4. `29-HOST-PROBE.md` D-01 is amended: the host is cron/launchd → the plugin's own Python. The amendment records WHY the original probe misled — it ran `claude -p` interactively, inheriting credentials the cron host never has (verification one layer from the claim).
   5. The wrapper's contract with `sweep_entry.py`'s output shape is pinned by a two-sided test (the shell side read as text, the python side executed), and the plugin suite stays green.
 
-**Plans**: TBD
+**Plans**: 2 plans
+
+Plans:
+- [ ] 32-01-PLAN.md — ship `lv-sweep-run.sh` + its two-sided contract test, rewrite `SWEEP-CRON-TEMPLATE.md` around it, amend D-01, update README/CHANGELOG/STATE (wave 1, autonomous)
+- [ ] 32-02-PLAN.md — rewrite RB-8 for the new trigger, run it live as the phase exit gate, record the observed outcome (wave 2, blocking human checkpoint)
 
 ## v0.6 Progress
 
