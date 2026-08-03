@@ -353,10 +353,21 @@ const REJECT_BODY = {
   reviewed_by: "revops@example.com",
 };
 
-/** webhook item -> Parse Review Decision -> Build Review Decision. Returns both. */
-function drive(body, row) {
+/** webhook item -> Parse Review Decision -> Build Review Decision. Returns both.
+ *
+ * `precheckConstants`, if given, arms `Build Review Decision`'s OWN write-safety
+ * constants first (Phase 31 Plan 02, BUG 30 — the pre-check now declares and consults the
+ * same constants the write gate does, so a live deploy's ENABLE_BAKED_FLAGS rewrites BOTH
+ * nodes together; a test exercising "arm review writes + a matching allowlist" must arm
+ * both to represent a state the deploy can actually produce). Omitted/undefined leaves the
+ * pre-check disarmed, exactly as before this phase — every call site that does not pass it
+ * is unaffected. */
+function drive(body, row, precheckConstants) {
   const [parsed] = runNode(jsCodeOf("Parse Review Decision"), [{ body }], {});
-  const [built] = runNode(jsCodeOf("Build Review Decision"), [row || flaggedRow()],
+  const precheckJs = precheckConstants
+    ? armConstants(jsCodeOf("Build Review Decision"), precheckConstants)
+    : jsCodeOf("Build Review Decision");
+  const [built] = runNode(precheckJs, [row || flaggedRow()],
     { "Parse Review Decision": [parsed] });
   return { parsed, built };
 }
@@ -385,16 +396,36 @@ test("(a2) a non-writing outcome routes to the response even when dry_run is exp
 // --- (b)/(c)/(d) the gate, in both arming directions -----------------------------------
 
 test("(b) a real rejection through the COMMITTED (disarmed) gate yields zero items", () => {
+  // Phase 31 Plan 02 (BUG 30): `Build Review Decision` now runs the SAME allowlist check
+  // the gate does, so a disarmed real rejection now refuses at the pre-check and never
+  // reaches the write branch at all — see tests/n8n/reviewAllowlistRefusal.test.mjs for
+  // that behavior in full. This test's remaining job is narrower and still real: prove the
+  // GATE NODE ITSELF, independent of the pre-check, still denies an unauthorised write when
+  // handed one — the write gate is unchanged and remains the sole final authority (T-31-06).
   const { built } = drive({ ...REJECT_BODY, dry_run: false });
-  assert.equal(built.dry_run, false, "non-vacuity: this row does reach the write branch");
-  assert.equal(built.hs_object_id, "789");
-  assert.equal(built.domain, "exampleracing.example",
-    "row-carry: the gate's domain allowlist can only work if the row still carries domain");
-  assert.equal(runNode(jsCodeOf(GATE), [built], {}).length, 0);
+  assert.equal(built.outcome, "not_allowlisted",
+    "the pre-check now refuses before the gate is ever reached");
+  assert.equal(built.dry_run, true);
+
+  // Hand-shaped as `Build Review Decision` WOULD have emitted it had the pre-check
+  // permitted the write (same hs_object_id/domain/properties an authorised request
+  // produces) — this is what isolates the gate's own fail-closed behavior from the
+  // pre-check's.
+  const wouldHaveReached = {
+    hs_object_id: "789", domain: "exampleracing.example",
+    properties: { [P_REVIEW_REASON]: REJECT_BODY.reason },
+  };
+  assert.equal(runNode(jsCodeOf(GATE), [wouldHaveReached], {}).length, 0);
 });
 
 test("(c) the SAME row passes with ONLY ALLOW_HUBSPOT_REVIEW_WRITES armed + a matching allowlist", () => {
-  const { built } = drive({ ...REJECT_BODY, dry_run: false });
+  // Phase 31 Plan 02: the pre-check declares the same constants the gate does, so a live
+  // deploy's ENABLE_BAKED_FLAGS arms both together — arm the pre-check here too, or the row
+  // never gets past it to exercise the gate at all.
+  const { built } = drive({ ...REJECT_BODY, dry_run: false }, undefined, {
+    ALLOW_HUBSPOT_REVIEW_WRITES: "true", TEST_RECORD_IDS: "789",
+  });
+  assert.notEqual(built.outcome, "not_allowlisted");
   const armed = armConstants(jsCodeOf(GATE), {
     ALLOW_HUBSPOT_REVIEW_WRITES: "true", TEST_RECORD_IDS: "789",
   });
@@ -458,8 +489,13 @@ function respond(built, verifyItem) {
     { "Build Review Decision": [built] })[0];
 }
 
+// Phase 31 Plan 02: these two response-contract tests exercise a WRITTEN decision, which
+// now requires the pre-check to be armed too (it is the same authority the gate is, and a
+// live deploy arms both together — see the note on `drive()`).
+const PRECHECK_ARMED_789 = { ALLOW_HUBSPOT_REVIEW_WRITES: "true", TEST_RECORD_IDS: "789" };
+
 test("(f1) a written decision whose refetch matches would_write: verified true, properties populated", () => {
-  const { built } = drive({ ...REJECT_BODY, dry_run: false });
+  const { built } = drive({ ...REJECT_BODY, dry_run: false }, undefined, PRECHECK_ARMED_789);
   const out = respond(built, verifyEnvelope({ [P_REVIEW_REASON]: REJECT_BODY.reason }));
 
   assert.deepEqual(Object.keys(out).sort(), CONTRACT_KEYS);
@@ -469,7 +505,7 @@ test("(f1) a written decision whose refetch matches would_write: verified true, 
 });
 
 test("(f2) a written decision whose refetch still holds pre-write content: verified false, and the key is visible", () => {
-  const { built } = drive({ ...REJECT_BODY, dry_run: false });
+  const { built } = drive({ ...REJECT_BODY, dry_run: false }, undefined, PRECHECK_ARMED_789);
   const out = respond(built, verifyEnvelope({ [P_REVIEW_REASON]: "an older reason" }));
 
   assert.deepEqual(Object.keys(out).sort(), CONTRACT_KEYS);
@@ -584,8 +620,11 @@ test("(g3) a contacts REJECTION works exactly as a company one, and the contacts
     email: "person@example.com", firstname: "Pat", lastname: "Lee",
     [P_NEEDS_REVIEW]: "true", [P_CANDIDATE_JSON]: "",
   };
+  // Phase 31 Plan 02: the pre-check must be armed too, matching what a live deploy would
+  // arm together, or the row refuses at the pre-check before ever reaching this test's own
+  // gate-arming matrix below.
   const { built } = drive({ ...REJECT_BODY, object_type: "contacts", dry_run: false },
-    contactRow);
+    contactRow, { ALLOW_HUBSPOT_REVIEW_WRITES: "true", TEST_RECORD_IDS: "4242" });
   assert.equal(built.outcome, "rejected");
   assert.deepEqual(Object.keys(built.would_write), [P_REVIEW_REASON]);
   assert.equal(built.dry_run, false, "non-vacuity: this row does reach the write branch");
@@ -616,9 +655,12 @@ test("(g4) a contacts APPROVE writes nothing and says why — no contact candida
     hs_object_id: "4242", record_found: true, email: "person@example.com",
     [P_NEEDS_REVIEW]: "true", [P_CANDIDATE_JSON]: "",
   };
+  // Phase 31 Plan 02: arm the pre-check too — `no_candidate` is the CONTACTS-specific
+  // refusal this test pins, distinct from `not_allowlisted`, and the row must clear the
+  // allowlist check first to reach it.
   const { built } = drive(
     { ...REJECT_BODY, object_type: "contacts", decision: "approve", dry_run: false },
-    contactRow);
+    contactRow, { ALLOW_HUBSPOT_REVIEW_WRITES: "true", TEST_RECORD_IDS: "4242" });
   assert.equal(built.outcome, "no_candidate");
   assert.deepEqual(built.would_write, {});
   assert.equal(built.dry_run, true, "nothing to write must never reach a write gate");
@@ -630,8 +672,10 @@ test("(g4) a contacts APPROVE writes nothing and says why — no contact candida
 });
 
 test("(g5) an APPROVE on a company routes through the endpoint's own inlined reviewApply", () => {
-  // The whole point of Plan 03: the committed node's jsCode, not just the module.
-  const { built } = drive({ ...REJECT_BODY, decision: "approve", dry_run: false });
+  // The whole point of Plan 03: the committed node's jsCode, not just the module. Phase 31
+  // Plan 02 additionally requires the pre-check armed to reach the write branch at all.
+  const { built } = drive({ ...REJECT_BODY, decision: "approve", dry_run: false },
+    undefined, PRECHECK_ARMED_789);
   assert.equal(built.outcome, "applied");
   assert.equal(built.would_write.lv_org_type, "governing_body_league");
   assert.equal(built.would_write[P_NEEDS_REVIEW], false, "an approval clears the queue");

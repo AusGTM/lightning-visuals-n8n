@@ -175,6 +175,21 @@ function runNode(jsCode, seedItems, nodeOutputs) {
   return (fn($input, $) || []).map((it) => (it && it.json !== undefined ? it.json : it));
 }
 
+/** The EXACT literal swap enable_baked_flags() performs, with a match assertion so a
+ * drift in how the builder spells a constant fails here rather than passing vacuously. */
+function armConstants(jsCode, constants) {
+  let out = jsCode;
+  for (const [name, value] of Object.entries(constants)) {
+    const from = `const ${name} = "";`;
+    const fromFalse = `const ${name} = "false";`;
+    const decl = out.includes(fromFalse) ? fromFalse : from;
+    assert.ok(out.includes(decl),
+      `committed jsCode must carry the disabled ${name} declaration verbatim`);
+    out = out.replace(decl, `const ${name} = ${JSON.stringify(value)};`);
+  }
+  return out;
+}
+
 const P_NEEDS_REVIEW = "lv_enrichment_needs_review";
 const P_ICP_NEEDS_REVIEW = "lv_icp_needs_review";
 const P_CANDIDATE_JSON = "lv_enrichment_review_candidate_json";
@@ -193,9 +208,17 @@ function industryFlaggedRow() {
   };
 }
 
-function driveDecision(body, row) {
+/** `precheckConstants`, if given, arms `Build Review Decision`'s OWN write-safety
+ * constants first (Phase 31 Plan 02, BUG 30 — the pre-check now runs the SAME allowlist
+ * check the write gate does, so a real submit must clear it before the enum guard below it
+ * is ever reached; omitted leaves the pre-check disarmed, which now refuses with
+ * `not_allowlisted` before any enum-specific outcome can surface). */
+function driveDecision(body, row, precheckConstants) {
   const [parsed] = runNode(jsCodeOf(WF_DECISION, "Parse Review Decision"), [{ body }], {});
-  const [built] = runNode(jsCodeOf(WF_DECISION, "Build Review Decision"), [row],
+  const precheckJs = precheckConstants
+    ? armConstants(jsCodeOf(WF_DECISION, "Build Review Decision"), precheckConstants)
+    : jsCodeOf(WF_DECISION, "Build Review Decision");
+  const [built] = runNode(precheckJs, [row],
     { "Parse Review Decision": [parsed] });
   return { parsed, built };
 }
@@ -220,7 +243,12 @@ test("(FLOW a) approving the live industry candidate is refused on PREVIEW (dry_
 
 test("(FLOW b) approving the live industry candidate is refused IDENTICALLY on the real submit (dry_run: false)", () => {
   const row = industryFlaggedRow();
-  const { built } = driveDecision({ ...APPROVE_BODY, dry_run: false }, row);
+  // Phase 31 Plan 02: arm the pre-check's allowlist so the row clears BUG 30's earlier
+  // gate and reaches the enum guard this test actually pins — otherwise every disarmed
+  // real submit now refuses `not_allowlisted` first, which is a DIFFERENT (and correct)
+  // refusal, not the one under test here.
+  const { built } = driveDecision({ ...APPROVE_BODY, dry_run: false }, row,
+    { ALLOW_HUBSPOT_REVIEW_WRITES: "true", TEST_RECORD_IDS: "9604614548" });
   assert.equal(built.outcome, "refused");
   assert.deepEqual(built.would_write, {});
   // hasWrite is false (empty properties), so dry_run resolves true regardless of the
@@ -239,7 +267,8 @@ test("(FLOW c) a valid candidate on the same endpoint still applies (no regressi
     industry: "SPORTS", [P_NEEDS_REVIEW]: "true", [P_ICP_NEEDS_REVIEW]: "false",
     [P_CANDIDATE_JSON]: candidateJson,
   };
-  const { built } = driveDecision({ ...APPROVE_BODY, record_id: "789", dry_run: false }, row);
+  const { built } = driveDecision({ ...APPROVE_BODY, record_id: "789", dry_run: false }, row,
+    { ALLOW_HUBSPOT_REVIEW_WRITES: "true", TEST_RECORD_IDS: "789" });
   assert.equal(built.outcome, "applied");
   assert.equal(built.properties.industry, "SPORTS");
 });

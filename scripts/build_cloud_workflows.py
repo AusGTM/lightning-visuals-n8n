@@ -5704,6 +5704,11 @@ return [{ json: { ...(r.properties || {}), hs_object_id: r.id, record_found: tru
 # DEFAULT_COMPANY_POLICY from mergeCompanies, which reviewDecision also consults for the
 # ownership CLASS check that closes D-12. hubspotEnums.generated/hubspotEnums are inlined
 # because reviewApply (Phase 31) requires them for its own enum guard.
+# WRITE_SAFETY_GATE_JS is inlined too (Phase 31 Plan 02, BUG 30) so this node can compute
+# the SAME _writeSafetyAllows("review", ...) verdict the spliced `Review Decision Update
+# Write Gate` applies further downstream, and answer an explicit `not_allowlisted` refusal
+# BEFORE that gate silently drops the row. The spliced gate is UNCHANGED and still runs —
+# this is an earlier, louder answer in front of it, never a replacement for it.
 REVIEW_BUILD_DECISION = inline(
     "taxonomy.generated.js", "hubspotEnums.generated.js", "hubspotEnums.js",
     "mergeCompanies.js", "reviewApply.js", "reviewDecision.js") + r"""
@@ -5718,9 +5723,22 @@ REVIEW_BUILD_DECISION = inline(
 // COMPANY policy's key set — handing it a contact candidate would drop every field as
 // un-allowlisted and then clear the review flags anyway, de-queueing a record with nothing
 // written. Contacts REJECT works exactly as companies does.
+""" + WRITE_SAFETY_GATE_JS + r"""
 const parsed = $('Parse Review Decision').first().json;
 const first = $input.first();
 const row = (first && first.json) || {};
+
+// ALLOWLIST PRE-CHECK (Phase 31 Plan 02, BUG 30). Same authority the committed gate uses,
+// same two input fields the spliced non-create gate resolves to on THIS lane: `Review
+// Extract Record` emits a flattened row carrying exactly `hs_object_id` and `domain` (never
+// `existingRecord` or `identity_keys`), so those are the fields to read here too. A preview
+// (`dry_run` anything other than the literal `false`) must keep showing the patch the
+// operator is being asked to approve, so it stays writeAllowed regardless of the allowlist
+// — the real gate, not this pre-check, is what withholds a write later if a preview caller
+// ever flips to a real submit.
+const writeAllowed = (parsed.dry_run !== false)
+  ? true
+  : _writeSafetyAllows("review", row.hs_object_id, row.domain);
 
 const result = buildReviewDecision({
   objectType: parsed.object_type,
@@ -5729,6 +5747,7 @@ const result = buildReviewDecision({
   reviewedBy: parsed.reviewed_by,
   row,
   nowIso: new Date().toISOString(),
+  writeAllowed,
 });
 
 const properties = result.properties || {};

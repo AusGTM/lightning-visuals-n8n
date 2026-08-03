@@ -9,14 +9,20 @@
 //
 // CONSUMER CONTRACT: `Build Review Decision` (scripts/build_cloud_workflows.py) calls
 //
-//   buildReviewDecision({ objectType, decision, reason, reviewedBy, row, nowIso })
+//   buildReviewDecision({ objectType, decision, reason, reviewedBy, row, nowIso, writeAllowed })
 //     -> { properties, outcome, message }
 //
 // where `row` is the freshly-refetched HubSpot record already flattened by
 // `Review Extract Record` ({ ...record.properties, hs_object_id, record_found }), and
 // `properties` is put straight onto the row for the shared credential-bound PATCH node.
 // `outcome` is one of:
-//   rejected | applied | stale | no_candidate | not_flagged | refused.
+//   rejected | applied | stale | no_candidate | not_flagged | refused | not_allowlisted.
+//
+// `writeAllowed` (Phase 31 Plan 02, BUG 30): the wrapper's own `_writeSafetyAllows("review",
+// ...)` verdict, computed from the SAME baked constants the committed write gate reads,
+// passed in so this module can answer an explicit refusal BEFORE the gate silently drops
+// the row. Only the literal `false` refuses — omitted (every existing caller, every
+// existing test) behaves exactly as before this phase.
 //
 // D-10 / REVIEW-05 — THE LOAD-BEARING RULE: a rejection RECORDS THE REASON AND NOTHING
 // ELSE. It never clears lv_enrichment_needs_review or lv_icp_needs_review, never blanks
@@ -192,6 +198,20 @@ function buildReviewDecision(input) {
     return {
       properties: {}, outcome: "not_flagged",
       message: "record is not in the review queue — nothing to decide",
+    };
+  }
+
+  // ALLOWLIST GUARD (Phase 31 Plan 02, BUG 30): checked here, BEFORE the reject branch, so
+  // a reject and an approve refuse IDENTICALLY when the record is not permitted — the
+  // committed write gate drops both the same way, and an endpoint that answered `rejected`
+  // for a write the gate would silently drop would be the same lie BUG 29 closed for
+  // approve. `not_allowlisted` is a distinct outcome from `refused`: never collapse them.
+  if (inp.writeAllowed === false) {
+    return {
+      properties: {}, outcome: "not_allowlisted",
+      message: "this record is not on the backend's TEST_RECORD_* allowlist, so nothing was "
+        + "sent to HubSpot and the record is unchanged — an administrator adds records to "
+        + "that allowlist at deploy time",
     };
   }
 
