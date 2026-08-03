@@ -79,3 +79,31 @@ cleared manually 2026-08-03. That re-run is RB-9's business, not this task's; th
 is complete at step 6. **Note for that re-run: the live tenant now carries the Phase 31
 fix, so an `industry` approve against a fresh fixture should be REFUSED explicitly
 (naming the value and property) rather than 400ing — that refusal is the fix working.**
+
+---
+
+## RB-9 step 8 re-run — the fix proven live, 2026-08-03
+
+**All probes PASS.** Fixture: MRC `9604614548` re-seeded with its VERBATIM pre-fix legacy
+candidate (recovered from the 30-07 snapshot) — deliberately the wild-data case the staging
+guard can no longer produce but the endpoint must still survive.
+
+| Probe | Pre-fix behaviour | Post-fix observed |
+|---|---|---|
+| UNARMED dry_run approve (BUG 29) | `outcome: applied` for an impossible write | **`outcome: refused`**, `would_write: []`, message names the value, the property, `148 options`, and closest labels (`arts and crafts, entertainment, performing arts`) |
+| ARMED approve (BUG 28) | HubSpot 400, n8n execution `error` (1173) | **`outcome: refused`** with the same explicit message; `verify_decision` → `not_written`; every review-workflow execution `success` (1204-1208, zero errors) |
+| Reject (regression) | worked | still works — `rejected` / `verified` / `mismatched: []`, record stayed queued with candidate intact |
+| Blast radius | — | `neighbors_changed: 0`; target changed only the review fields + timestamp |
+
+**Armed window:** deploy rewrote both flags **11×** (the 31-02 declaring node included),
+all five workflows bounced, `armed PASS` at 12 declaring nodes. Closed in the amended
+order (deactivate review wf → disarmed redeploy → bounce 4 actives → `disarmed PASS`,
+12 nodes). Gate variables all unset after.
+
+**Fixture cleared:** MRC returned to resolved state (`needs_review: false`, candidate
+empty, `industry: SPORTS`, reject reason retained as audit).
+
+**BUGS 28, 29, 30 are closed on live evidence, not just tests.** BUG 30's
+`not_allowlisted` body was proven by the two-sided suite rather than live (hitting it live
+needs a flagged record outside the allowlist — a second fixture for no additional
+information).
