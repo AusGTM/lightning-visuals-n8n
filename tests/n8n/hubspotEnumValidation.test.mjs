@@ -95,14 +95,29 @@ test("enumRefusalMessage omits the hint clause when nothing scores", () => {
 });
 
 // --- reviewApply given the live industry candidate ------------------------------------
-
+//
+// Hand-crafted in the EXACT producer shape (mergeCompanies.js decisions[] entry, per
+// reviewApply.js's own CONSUMER CONTRACT comment) rather than derived by calling
+// mergeCompanies() itself: post-Task-2, mergeCompanies never manufactures a needs_review
+// decision for an enum-invalid value (it stages it instead — see the STAGING section
+// below). A stored candidate holding an invalid value can therefore only exist as
+// T-31-02 describes: written before this guard existed, or hand-edited directly in
+// HubSpot. reviewApply's OWN guard must still refuse it regardless of how it got there —
+// that is precisely what these fixtures exercise.
 function industryCandidateJson(existingIndustry, candidateIndustryValue, opts) {
-  const existing = { industry: existingIndustry };
-  const candidate = { industry: candidateIndustryValue };
-  const { decisions } = mergeCompanies(existing, candidate, undefined, opts);
-  const needsReview = decisions.filter((d) => d.decision === "needs_review");
-  assert.ok(needsReview.length > 0, "fixture must actually produce a needs_review decision");
-  return stableStringify(needsReview);
+  const entry = {
+    field: "industry",
+    current_value: existingIndustry,
+    chosen_value: candidateIndustryValue,
+    source_provider: (opts && opts.source) || "zoominfo",
+    decision: "needs_review",
+    confidence: (opts && opts.confidence) || 90,
+    reason: "Refresh candidate requires review in MVP.",
+    validation_status: "human_review_required",
+    evidence_url: null,
+    verified_at: "2026-08-03T00:00:00.000Z",
+  };
+  return stableStringify([entry]);
 }
 
 test("reviewApply: a stored candidate carrying the live industry value returns empty patches with a populated invalid", () => {

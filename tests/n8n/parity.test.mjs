@@ -233,7 +233,7 @@ test("mergeContacts: email not canonical, blank phone filled, jobtitle conflict 
 });
 
 // --- mergeCompanies -----------------------------------------------------------
-test("mergeCompanies: domain never canonical, ICP fields promote, present industry -> review", () => {
+test("mergeCompanies: domain never canonical, ICP fields promote, present industry -> stage (unmappable label)", () => {
   const existing = { domain: "racingnsw.com.au", industry: "Sports", lv_org_type: "" };
   const candidate = {
     domain: "racingnsw.com.au",
@@ -252,9 +252,13 @@ test("mergeCompanies: domain never canonical, ICP fields promote, present indust
   assert.equal(canonicalPatch.lv_org_type, "governing_body_league");
   // lv_revenue_band (system_owned, 85>=75) -> promote
   assert.equal(canonicalPatch.lv_revenue_band, "50-500M");
-  // present industry (stale_refreshable) -> needs_review, not promoted
+  // present industry (stale_refreshable) would have gated to needs_review, but
+  // "Sports & Entertainment" is not an exact case-insensitive match for any HubSpot
+  // industry option (Phase 31, BUG 28's enum guard) — it is forced to stage_only instead,
+  // never offered as an approvable review candidate.
   assert.ok(!("industry" in canonicalPatch));
-  assert.equal(decisions.find((d) => d.field === "industry").decision, "needs_review");
+  assert.equal(decisions.find((d) => d.field === "industry").decision, "stage_only");
+  assert.equal(provenance.industry.validation_status, "rejected");
 
   // Phase 15: every candidate field has ONE provenance entry (no flat staging/metadata
   // keys) — {source, confidence, verified_at, validation_status, value}.

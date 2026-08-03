@@ -22,6 +22,9 @@
 // is deliberately NOT duplicated here.
 
 const { EVIDENCE_GATED_ORG_TYPES } = require("./taxonomy.generated");
+// Phase 31 (BUG 28): staging never offers an unmappable enum candidate for review — see
+// the ENUM GUARD comments inline below and n8n/code/hubspotEnums.js for the validator.
+const { normalizeEnumValue } = require("./hubspotEnums");
 
 // Default companies field policy (source of truth: config/field_policy.yaml `companies`).
 // lv_org_type's gated set is NOT hand-typed here (spec TX-4) — it derives from
@@ -182,7 +185,7 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
   const decisions = [];
 
   for (const field of Object.keys(candidateRow)) {
-    const value = candidateRow[field];
+    let value = candidateRow[field];
     if (_isBlank(value)) continue; // nothing to merge
 
     const currentValue = existingProps[field];
@@ -193,6 +196,15 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
     // confidence and the confidence that made the decision can never disagree.
     const confidence = confidenceByField[field] != null ? confidenceByField[field] : flatConfidence;
 
+    // ENUM GUARD (Phase 31, BUG 28): run BEFORE the gate, so the gate's evidence check,
+    // canonicalPatch, the provenance entry and the decision record all see whichever value
+    // would actually be written. An exact case-insensitive label match (e.g. "Sports" ->
+    // "SPORTS") normalizes `value` in place; an unmappable value leaves `value` as the
+    // ORIGINAL provider string (nothing lost — it stays readable in provenance) and is
+    // handled below, after the gate has spoken.
+    const enumCheck = normalizeEnumValue(field, value);
+    if (enumCheck.ok) value = enumCheck.value;
+
     const gate = _gate(field, currentValue, confidence, fieldPol, evidenceUrl, value);
     let decision = gate.decision;
 
@@ -200,8 +212,16 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
     // the manual_protected class + the 95 threshold already prevent it, but this holds
     // regardless of policy edits). Mirrors the mergeContacts email guard.
     if (field === "domain" && decision === "promote") decision = "stage_only";
+    // ENUM GUARD cont'd: a value HubSpot's enum will refuse is NEVER offered for review —
+    // it stays staged (never needs_review, never promote), whatever the gate decided,
+    // because no human approval can make an invalid enum value valid.
+    if (!enumCheck.ok) decision = "stage_only";
 
-    const validationStatus = _statusFor(decision);
+    let validationStatus = _statusFor(decision);
+    // The registered validation-status vocabulary (CLAUDE.md §6.1) already has `rejected`
+    // — deterministic, not derived from `decision` like every other status here, so the
+    // refusal reads as a refusal rather than an ordinary stage_only.
+    if (!enumCheck.ok) validationStatus = "rejected";
 
     // ONE provenance entry per field — replaces the old flat metadataPatch/stagingPatch.
     const entry = { source, confidence, verified_at: verifiedAt,
@@ -228,7 +248,7 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
       source_provider: source,
       decision,
       confidence,
-      reason: gate.reason,
+      reason: enumCheck.ok ? gate.reason : enumCheck.reason,
       validation_status: validationStatus,
       evidence_url: _isBlank(evidenceUrl) ? null : evidenceUrl,
       verified_at: verifiedAt,

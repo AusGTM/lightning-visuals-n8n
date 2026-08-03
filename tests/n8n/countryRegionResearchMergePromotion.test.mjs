@@ -89,10 +89,17 @@ test("(d) EDGE: a null region value produces no key, control field still promote
 });
 
 test("(e) EDGE: an unlisted region value ('Freedonia') that slipped past Validate Research Output " +
-     "would still promote here (Merge Company trusts research_candidate.data — the guard lives upstream, " +
-     "proven by researchRequestCountryRegionContract.test.mjs)", () => {
+     "is now caught by Merge Company's OWN enum guard (Phase 31, BUG 28) — staged, never promoted", () => {
+  // Superseded by Phase 31: Merge Company now DOES re-validate every enum-bound candidate
+  // (n8n/code/hubspotEnums.js), so an unmappable value is a second line of defense rather
+  // than relying solely on Validate Research Output upstream — the exact defense-in-depth
+  // T-31-02 (31-01-PLAN.md threat register) exists for: a value that slips past the
+  // upstream guard must still never reach canonicalPatch or the review queue.
   const out = runMergeCompany(MERGE_COMPANY_BODY, row("Freedonia", 90));
-  assert.equal(out.merge.canonicalPatch.lv_country_region_normalized, "Freedonia",
-    "Merge Company itself does not re-validate the enum — this is why the guard must live in " +
-    "Validate Research Output, not here");
+  assert.ok(!("lv_country_region_normalized" in out.merge.canonicalPatch),
+    "an unmappable region value must never reach canonicalPatch");
+  const decision = out.merge.decisions.find((d) => d.field === "lv_country_region_normalized");
+  assert.equal(decision.decision, "stage_only",
+    "an unmappable enum value stages, it is never offered for human review");
+  assert.equal(out.merge.provenance.lv_country_region_normalized.validation_status, "rejected");
 });
