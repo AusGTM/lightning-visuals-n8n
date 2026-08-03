@@ -117,7 +117,7 @@ file is not mistaken for drift.)*
 | ~~RB-5~~ | ~~**28-02** n8n semantics live gate~~ | ✅ **DONE 2026-07-31** | Ran live against `1fXPuIabz3RsAHgn`. Round-trip `verified`, execute endpoint `405`, cadence reload confirmed on a running instance. Results in `28-FINDINGS.md`. **28-03 and 28-04 are built and committed as a result.** Nothing left here |
 | ~~RB-6~~ | ~~**28-04** five-triggers decision~~ | **withdrawn** | Already decided — D-25 / amendment #6. Checkpoint deleted, plan now autonomous. **Nothing for you to do.** |
 | RB-7 | **28-06** armed arm→dispatch→disarm canary | ✅ **YES — this is the next gate** | 28-05 shipped. Lane/workflow/record all resolved and preconditions checked 2026-08-03 — see RB-7's header table. Needs `ALLOW_N8N_ARM=true` in the invoking shell, and a plugin refresh first (cached SKILL.md files are stale) |
-| RB-8 | **29-06** live notice gate | ❌ | behind 29-01 → 29-03/04/05 |
+| RB-8 | **32-02** live notice gate — wrapper re-run | ✅ YES — this is the exit gate | 32-01 shipped the LLM-free `lv-sweep-run.sh` trigger; this is RB-8's re-run against it, comparable step-by-step to the 2026-08-03 FAIL under `claude -p` |
 | RB-9 | **30-07** armed review canary | ❌ | behind 30-05/30-06 (30-01…04 built). Now needs `ALLOW_REVIEW_SUBMIT`; **four changes — read RB-9's header block** |
 
 **Eight gates remain**, not nine — RB-6 is withdrawn. Two are partially done (RB-3's Section A,
@@ -128,9 +128,9 @@ highest-leverage gate left — RB-5 was run on 2026-07-31 and its four (28-03/04
 moving. **RB-1 (25-01)** drops the PROVISIONAL label off the chunk ceiling everywhere it appears.
 **RB-3 and RB-4 unblock nothing** — each is its own phase's proof.
 
-**Provisional sections.** RB-8 and RB-9 belong to phases 29 and 30, whose `gsd-plan-checker` has
-**not** run. **Script names, subcommands and flags there may change.** Re-read against the plan
-before running.
+**Provisional sections.** RB-9 belongs to phase 30, whose `gsd-plan-checker` has **not** run.
+**Script names, subcommands and flags there may change.** Re-read against the plan before running.
+RB-8 now points at plan 32-02, not 29-06 — its provisional marker is dropped below.
 
 RB-5 and RB-7 are **no longer provisional** — Phase 28 was checked twice on 2026-07-31 (5 blockers
 then 1, all repaired) and its commands here are current. RB-6 is withdrawn entirely.
@@ -860,53 +860,84 @@ state. **Record any step that did not behave as described, verbatim.**
 
 ---
 
-# RB-8 · Plan 29-06 — Live notice gate *(provisional)*
+# RB-8 · Plan 32-02 — Live notice gate, the wrapper re-run
 
-**Blocked** behind 29-04/05. Phase 29 exit gate. Read-only — no arming, no writes.
+Phase 32 exit gate. Read-only throughout — no arming, no deploy, no write to HubSpot or n8n. The
+only mutations are machine-local (a temporary crontab line, a temporary interpreter argument),
+and both are reverted at the end.
 
-**Read first:** `SCHEDULED-ROUTINE-TEMPLATE.md` (Task 1's output), and `29-HOST-PROBE.md` Section 2
-from RB-2, so a notice arriving somewhere *else* is recognised as a finding rather than missed.
+**This is a re-run, not a new gate.** RB-8 was run once already, on 2026-08-03 against the old
+`claude -p` cron trigger, and its central claim FAILED: the cron fire produced no sweep and no
+notice, **silently** (`29-06-FINDINGS.md`). Phase 32 replaced that trigger with a deterministic
+`sh` wrapper (`lv-sweep-run.sh`) that runs `sweep_entry.py` directly — no LLM, no Anthropic
+credential, nothing in the path that can expire. This re-run keeps the same six-step spine so the
+two runs are comparable line for line. Sealing NOTICE-03 on source review alone would repeat the
+exact mistake the first run made — a verification performed one layer away from the claim.
 
-1. **Install:** copy `SCHEDULED-ROUTINE-TEMPLATE.md` to `~/Documents/Claude/Scheduled/<name>/SKILL.md`
-   and enable it.
-2. **Silence check FIRST.** Backend healthy, let it fire at least once. Confirm **nothing** arrives.
-   **A heartbeat, an all-clear, or an empty report all FAIL this check** — NOTICE-04 requires silence,
-   and a sweep that speaks when healthy is one the operator learns to ignore.
-3. **Notice check.** Make one condition genuinely true. **Do NOT manufacture a condition by breaking
-   a credential or arming the backend** — the sweep is being tested, not the backend's failure modes.
+**Read first:** `SWEEP-CRON-TEMPLATE.md` (the shipped install text — follow it verbatim), and
+`29-06-FINDINGS.md` (the original run, for the step-by-step comparison).
 
-   > **⚠ AMENDED 2026-08-03 — the prescribed lever does not work in the current state.** This step
-   > said "cheapest safe lever: set the review-backlog threshold below the current real backlog
-   > count". **The live backlog is ZERO** on all four counters, read from `hubspot/backend-status`
-   > at 08:12:23Z: `companies_requested_unresolved: 0`, `companies_awaiting_review: 0`,
-   > `contacts_requested_unresolved: 0`, `contacts_awaiting_review: 0`. No threshold can sit below
-   > zero, so lowering it fires nothing.
-   >
-   > **Use instead: re-seed one real review candidate**, the same way the Phase 31 canary did —
-   > write the pipeline's own verbatim stored candidate back onto test company `9604614548` (the
-   > fixture JSON is recoverable from the `30-07-review-canary-*` / `31-rb9-rerun-*` snapshots under
-   > `.planning/phases/22-armed-e2e-enrichment-canary/snapshots/`). That produces a genuine backlog
-   > of 1 out of the pipeline's own output, so a threshold of 0 fires on **real** data. It breaks
-   > nothing, arms nothing, and is reversible by clearing the same three properties. Clear it in
-   > step 5 alongside restoring the threshold.
-   >
-   > **Two live states worth checking the sweep against while you are here** — both are real right
-   > now and both are cases the honesty rules forbid misreporting:
-   > - Apollo's balance reads `unreadable: true`, `error: unrecognized_response_shape`. It must
-   >   **never** surface as "out of credits".
-   > - Lusha, Apollo and ZoomInfo all report `credential_health.state: unknown` with
-   >   `reason: no_response`. `unknown` is a real state distinct from invalid and must **never**
-   >   fire as broken.
-   >
-   > If the sweep stays silent on those two while firing on the seeded backlog, that is the
-   > strongest single observation this gate can make.
-4. Let it fire. Confirm the notice: arrives **in the place 29-01 recorded**; is legible at the
-   observed length ceiling; states the cause in plain language; states whether the operator or an
-   admin can act; and **contains no instruction to run a command or open a terminal.**
-5. **Restore the threshold** to its documented default.
-6. Confirm from n8n's execution history and the provider credit balances that the sweep's firings
-   performed **no write** and consumed **no provider credits.** The import-graph guard proves no code
-   path exists; this proves none was taken.
+1. **Install: from the shipped template, verbatim.** Create the venv per Step 1 of
+   `SWEEP-CRON-TEMPLATE.md`, then install the crontab (or launchd) line calling `lv-sweep-run.sh`
+   with its three positional arguments — plugin root, venv python, log path — exactly as printed
+   there. **Install the shipped text exactly; an approximate invocation is the failure class this
+   gate exists to catch.** Record whether the crontab was empty beforehand, so the revert in step
+   5 is provably clean. A short test cadence (e.g. `*/2` or `*/5`) may be substituted for the
+   shipped `0 */4` for the gate window; restoring it is part of step 5.
+
+2. **Silence check — carry forward the reason it was PARTIAL, and ring-fence it.** Let a real
+   cron fire land with no session open. Check `~/Library/Logs/lv-backend-sweep.log`.
+   - Healthy → exactly one stamped line, no banner.
+   - Notices → the count, the full JSON, one banner per headline.
+   - **Either outcome PASSES this criterion. Producing nothing at all is the old failure and
+     FAILS it.**
+   - `recent_executions` reads a **fixed page of 100 executions with no time window**
+     (`EXECUTIONS_PAGE_LIMIT`, `n8n_read.py`). Check the live window's id range first: while
+     execution **1173** (the pre-Phase-31 review approve that returned HubSpot 400) remains
+     inside it, the sweep will keep firing on it and full silence is unobservable. **Record step
+     2 as PARTIAL for that reason alone — it is a separate, already-filed defect**
+     (`.planning/todos/pending/2026-08-03-sweep-lookback-has-no-time-window`), **not a failure of
+     this phase's trigger.** Do not conflate the two, and do not attempt to clear 1173.
+
+3. **Step 2b — the loud-failure proof, and it is a first-class criterion.** Point the crontab
+   line's second argument (the interpreter) at one that does NOT have this plugin's
+   `requirements.txt` installed — the system `python3` is the measured example — and let one fire
+   land. Expected: a banner saying the sweep could not run, a non-zero exit, and a failure line in
+   the log. This is the half the 2026-08-03 design never had: a trigger that could not run looked
+   exactly like a healthy backend. **Restore the correct venv-python argument immediately after
+   observing this** — it is a one-argument change to the crontab line, so do it now rather than
+   leaving it to be remembered at step 5.
+
+4. **Notice check and quality — unchanged in intent.** If a real errored execution is present,
+   prefer it over any seeded condition, exactly as the first run did. If the backlog is genuinely
+   zero and a condition must be manufactured, the 2026-08-03 amendment still stands: the
+   prescribed "lower the threshold" lever does not work against a zero backlog — re-seed one real
+   review candidate onto test company `9604614548` instead (fixture recoverable from the
+   `30-07-review-canary-*` / `31-rb9-rerun-*` snapshots under
+   `.planning/phases/22-armed-e2e-enrichment-canary/snapshots/`), and clear it in step 5. Keep the
+   two live honesty traps in view while here: Apollo's `unreadable` balance must **never** read as
+   out of credits; `credential_health.state: unknown` must **never** fire as broken. Confirm the
+   original seven step-4 criteria, plus one new one:
+   - arrives in the place 29-01 recorded
+   - legible at the observed length ceiling
+   - states the cause in plain language
+   - states whether the operator or an admin can act
+   - contains no instruction to run a command or open a terminal
+   - declares its own read-only nature
+   - honest about inference (never dresses a guess as a fact)
+   - **NEW: arrived with no session open** — evidenced by the log timestamp against a cron fire
+     time, not a manual invocation.
+
+5. **Restore.** Three things, not one: the temporary cadence (back to the shipped `0 */4`), the
+   interpreter argument (back to the correct venv python — should already be done per step 2b,
+   confirm here), and the crontab line itself (removed if the gate was run on a temporary
+   schedule). Clear any seeded review candidate from step 4.
+
+6. **No writes, no credits — unchanged.** Confirm from n8n's execution history and the provider
+   credit balances that the sweep's firings performed **no write** and consumed **no provider
+   credits**, exactly as the first run's step 6 did. `test_sweep_read_only.py` is still the
+   structural half — the import-graph guard proves no write path exists; this proves none was
+   taken.
 
 ```bash
 set -a; . ./.env; set +a
@@ -914,8 +945,10 @@ curl -sS "$N8N_URL/api/v1/executions?limit=20" -H "X-N8N-API-KEY: $N8N_API_KEY" 
   | python3 -c "import sys,json; [print(e['id'], e.get('workflowId'), e.get('startedAt'), e.get('status')) for e in json.load(sys.stdin)['data']]"
 ```
 
-Record all six results in `29-06-SUMMARY.md`, **including anything that surfaced differently from what
-29-01 predicted.**
+Record everything observed — the verbatim log lines, the fire timestamps, whether a banner
+appeared for both the notice path and the broken-trigger path, and anything that surfaced
+differently from what Phase 32 predicted — in `32-02-FINDINGS.md`. A surprise is the most
+valuable thing this gate can produce; report it rather than smoothing it.
 
 ---
 
@@ -1114,7 +1147,7 @@ confirmed disarmed state.
 | RB-5 | 28-02 | "approved" + roundtrip verdict + settings/connections comparison + execute-endpoint status code; then execution spacing + restore verdict + 28-FINDINGS.md written |
 | ~~RB-6~~ | ~~28-04~~ | **withdrawn — nothing to reply** |
 | RB-7 | 28-06 | "approved" + both read-back verdicts + armed-window duration + only-allowlisted-record confirmation + disarmed-after-redeploy confirmation |
-| RB-8 | 29-06 | The six results |
+| RB-8 | 32-02 | The verbatim log lines observed, the fire timestamps, whether both banners appeared (notice path AND the deliberately broken-interpreter path), and any divergence from what Phase 32 predicted |
 | RB-9 | 30-07 | "approved" + the record id + the confirmed disarmed read-back + the step-6b refusal + whether the record was a company or a contact |
 
 ---
