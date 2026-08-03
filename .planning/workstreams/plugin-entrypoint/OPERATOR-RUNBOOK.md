@@ -778,6 +778,13 @@ The plugin reads credentials from `operator.local.json` only — **never** from 
 `N8N_API_KEY` shell variables. The deploy-script steps below are the exception: `deploy_n8n_workflows.py`
 is a repo script and does read the shell environment.
 
+**`ALLOW_N8N_ARM` must be on the same command line as the arming call.** `_arm_gate()` reads
+`os.environ` inside the process that arms, and in this setup **each `!` line is its own shell** — an
+`export` on one line is gone by the next. Prefix the invocation instead:
+`ALLOW_N8N_ARM=true python3 -c "..."`. An `export` in a previous line produces the refusal
+"`ALLOW_N8N_ARM` is not set to exactly 'true' (it reads None)", which reads like a missing variable
+rather than a lost shell.
+
 **On `ALLOW_N8N_ARM` (D-34):** it gates arming and **not** disarming, so unsetting it mid-window can
 never trap you with an armed backend. Unset it again as soon as the window closes — it is the gate
 that still holds if an agent, a test harness, or a scheduled routine reaches the arming module by a
