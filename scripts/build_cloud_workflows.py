@@ -2311,7 +2311,11 @@ return $input.all().map((it, i) => {
 # emitted string is unchanged.
 ENRICH_APPLY_JUDGE_VERDICT = _enrich_apply_judge_verdict_js()
 
-ENRICH_MERGE_CO = inline("taxonomy.generated.js", "mergeCompanies.js") + r"""
+# hubspotEnums.generated.js + hubspotEnums.js are inlined ahead of mergeCompanies.js
+# (Phase 31): mergeCompanies() now requires ./hubspotEnums for its own enum guard, so any
+# node inlining it without the validator throws at runtime inside n8n.
+ENRICH_MERGE_CO = inline(
+    "taxonomy.generated.js", "hubspotEnums.generated.js", "hubspotEnums.js", "mergeCompanies.js") + r"""
 
 // --- n8n wrapper: mergeCompanies(existingRecord, winners) non-clobber ---
 // lv_org_type / lv_produces_content resolve via Claude web research (see the Research
@@ -2492,7 +2496,8 @@ return $input.all().map((it) => {
 # lv_icp_tier/lv_anti_icp_flag/lv_recommended_motion — mergeCompanies.js's
 # DEFAULT_COMPANY_POLICY has no score_output/veto_output entries for those (they were
 # removed in Phase 15), so this node cannot emit them even if it tried.
-ENRICH_DECIDE_CO_CLOUD = inline("taxonomy.generated.js", "mergeCompanies.js") + r"""
+ENRICH_DECIDE_CO_CLOUD = inline(
+    "taxonomy.generated.js", "hubspotEnums.generated.js", "hubspotEnums.js", "mergeCompanies.js") + r"""
 
 // --- n8n wrapper (companies): Decide Company Action — CLOUD variant ---
 """ + WRITE_SAFETY_GATE_JS + r"""
@@ -4926,7 +4931,9 @@ return report.to_review_ids.map((id) => ({
 """
 
 # reviewApply.js's consumer contract is documented on the module itself — see its header.
-ENRICH_APPLY_REVIEW = inline("taxonomy.generated.js", "mergeCompanies.js", "reviewApply.js") + r"""
+ENRICH_APPLY_REVIEW = inline(
+    "taxonomy.generated.js", "hubspotEnums.generated.js", "hubspotEnums.js",
+    "mergeCompanies.js", "reviewApply.js") + r"""
 
 // --- n8n wrapper: Apply Review — Extract Search Rows already flattened id + properties,
 // so the row itself IS the freshly-refetched compare-and-set baseline. ---
@@ -4944,7 +4951,12 @@ return $input.all().map((it) => {
   // Review Search's property list, but it died here, two nodes before the gate: the row-carry
   // family (BUG 12/21) landing between a fix and the thing it was meant to enable. Spread the
   // row; `properties` and the result keys are assigned after, so they still win.
-  return { json: { ...row, hs_object_id: row.hs_object_id, ...result, properties } };
+  // Phase 31 (BUG 28/29): `stale` alone used to route "Review IF Stale" — an invalid-enum
+  // result (empty canonicalPatch/clearPatch, non-empty `invalid`) is NOT stale, so it fell
+  // to the apply branch and PATCHed an empty body. `review_skip` covers BOTH reasons
+  // nothing should be written: reviewApply reported stale, OR the assembled patch is empty.
+  const review_skip = result.stale === true || Object.keys(properties).length === 0;
+  return { json: { ...row, hs_object_id: row.hs_object_id, ...result, properties, review_skip } };
 });
 """
 
@@ -5389,7 +5401,10 @@ def build_scheduled_maintenance_cloud():
     apply_review = code_node("Apply Review", ENRICH_APPLY_REVIEW, x4, y4)
     nodes.append(apply_review)
     x4 += 220
-    if_stale = _if_bool_node("Review IF Stale", "stale", x4, y4)
+    # Phase 31 (BUG 28/29): switched from `stale` to `review_skip`, which also covers an
+    # invalid-enum result (Apply Review's own comment) — a result that is not stale but
+    # whose assembled patch is empty must skip the write branch just the same.
+    if_stale = _if_bool_node("Review IF Stale", "review_skip", x4, y4)
     nodes.append(if_stale)
     x4 += 220
     # A stale row (compare-and-set mismatch) skips BOTH the patch and the clear — nothing
@@ -5687,9 +5702,11 @@ return [{ json: { ...(r.properties || {}), hs_object_id: r.id, record_found: tru
 # mergeCompanies + reviewApply are inlined because reviewDecision.js's approve branch CALLS
 # reviewApply (D-08d — reuse it, never fork it) and reviewApply requires
 # DEFAULT_COMPANY_POLICY from mergeCompanies, which reviewDecision also consults for the
-# ownership CLASS check that closes D-12.
+# ownership CLASS check that closes D-12. hubspotEnums.generated/hubspotEnums are inlined
+# because reviewApply (Phase 31) requires them for its own enum guard.
 REVIEW_BUILD_DECISION = inline(
-    "taxonomy.generated.js", "mergeCompanies.js", "reviewApply.js", "reviewDecision.js") + r"""
+    "taxonomy.generated.js", "hubspotEnums.generated.js", "hubspotEnums.js",
+    "mergeCompanies.js", "reviewApply.js", "reviewDecision.js") + r"""
 
 // --- n8n wrapper: Build Review Decision ---
 // ONE decision node for both object types: the row arriving here has already been fetched

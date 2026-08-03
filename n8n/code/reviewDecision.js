@@ -28,6 +28,13 @@
 // FAIL-CLOSED: never throws, never does I/O, requires nothing outside n8n/code/. Anything
 // unrecognised is `refused` with EMPTY properties.
 //
+// ENUM GUARD (Phase 31, BUG 28/29, REVIEW-05): on approve, reviewApply also refuses any
+// held field whose value HubSpot's enum will not accept (n8n/code/hubspotEnums.js). That
+// refusal reuses the SAME `refused` outcome word and EMPTY properties, so the wrapper's
+// dry_run resolution treats it exactly like every other non-writing outcome — the preview
+// and the real submit return the identical refusal, naming the property and the value.
+//
+
 // CONTACTS: reject works identically to companies (the whole `lv_` review family exists on
 // both objects). APPROVE on a contact always resolves to `no_candidate` and writes nothing,
 // and that is CORRECT, not a stub: `lv_enrichment_review_candidate_json` has exactly one
@@ -221,6 +228,19 @@ function buildReviewDecision(input) {
       message: "the record changed since this candidate was created, so nothing was "
              + "written and it stays queued — " + applied.reason,
     };
+  }
+  // ENUM GUARD (Phase 31, BUG 28/29, REVIEW-05): reviewApply refused one or more held
+  // fields because their value is not one HubSpot's enum accepts. Reuse the EXISTING
+  // `refused` outcome word (the client already treats it as non-writing) rather than
+  // inventing a second one. `properties` stays EMPTY here, so the wrapper's `hasWrite`
+  // below is false and `dry_run` resolves true regardless of the caller's request — the
+  // row routes straight to `Build Review Response` on BOTH the preview and the real
+  // submit, which is what makes them return the identical refusal (BUG 29's fix).
+  if (applied.invalid && applied.invalid.length > 0) {
+    const message = "one or more fields hold a value HubSpot would refuse, so nothing was "
+      + "written and the record stays queued — "
+      + applied.invalid.map((i) => i.reason).join(" ");
+    return { properties: {}, outcome: "refused", message };
   }
   // reviewApply's fail-closed path: an unreadable candidate yields empty patches with a
   // reason. Its clear patch is never empty on a real apply, so an empty one here means the
