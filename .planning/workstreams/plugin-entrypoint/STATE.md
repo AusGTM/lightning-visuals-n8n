@@ -72,7 +72,7 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 | 26. Outcome Reporting & Safe Retry | 4 | Executing (26-01 done, 1/3 plans) |
 | 27. Backend Status Surface | 6 | Executing (27-01, 27-02, 27-03, 27-04 done — 4/5 plans; 27-05 next) |
 | 28. Control Actions | 7 | Not started |
-| 29. Notices & Unattended Sweep | 5 | Not started |
+| 29. Notices & Unattended Sweep | 5 | Executing (29-01, 29-02, 29-03, 29-04 done — 4/6 plans; 29-05 next) |
 | 30. Review-Queue Triage | 5 | Not started |
 
 ## Accumulated Context
@@ -286,6 +286,22 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
   encoded the old "gate-only-armed" assumption were updated, not left broken (31-02-SUMMARY
   Deviations). Full suite: node 550 pass (was 540), pytest 1697 passed/6 skipped (was 1689).
 
+- **29-04 built the bounded in-session watch** — `operator-claude-plugin/scripts/watch.py`'s
+  `poll_until_settled()` is a pure function of an injected clock/reader with exactly two
+  `return` statements, each producing a full report (`build_settled_report` /
+  `build_still_running_report`); "returns nothing" is not reachable. The bound defaults to
+  the measured `600s` from `29-TIMING.md` (`watch_bound_seconds` in the committed config
+  template), scaling per-record for a known multi-record dispatch. The settled report
+  renders through the lane-matched Phase 26 renderer (never a third convention), adds a
+  provider-credit delta that reports `unknown`/`"partial"` rather than a substituted zero
+  when either end of the pre/post balance pair is unreadable, and inherits D-10a/D-10b's
+  no-ICP rule and D-14's no-email-is-not-retryable wording for free. The still-running
+  report states its run-handle correlation is by timing, not an execution id (D-12). The
+  unprompted-delivery bonus (29-HOST-PROBE A2 = NO) changes only a `delivery_mode` label,
+  proven identical either way. Deviation: `test_report_sufficiency.py`'s pre-existing D-07
+  no-poll-loop guard needed a one-line named allowlist for `watch.py` — the module D-07
+  always intended as the exception. Plugin suite 859 passed/5 skipped at completion.
+
 **Todos / carried context:**
 
 - 24-03 must write `extraction.md`'s documented artifact schema example(s) such that a
@@ -361,7 +377,7 @@ milestone otherwise scoped as plugin-only.
   2026-07-31 and `28-FINDINGS.md` exists, which released 28-03 and 28-04; both are built and
   committed (`a641119`, `c3ee663`).
 - **Remaining:** 28-05 (needs 28-03/04 — now met, but serialized behind the operator committing
-  `test_plugin_manifest.py`), 28-06 (armed canary), 29-01 (human host probe) → 29-03/04/05/06,
+  `test_plugin_manifest.py`), 28-06 (armed canary), 29-01/02/03/04 now DONE → 29-05/06 remain,
   30-07 (armed canary), 23-06 §B, 25-01 Probe B4.
 - **Re-check runnability against the artifact each plan reads, never against SUMMARY presence**
   (HANDOFF §1). "Nothing is runnable" was claimed and wrong twice on 2026-07-31, and RB-5's own

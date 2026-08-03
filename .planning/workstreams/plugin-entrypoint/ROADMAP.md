@@ -266,7 +266,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [ ] 29-03-PLAN.md — Tracer: one condition end to end (read → classify → attribute → notice), plus NOTICE-05's import-graph guard proven to bite (D-02a)
-- [ ] 29-04-PLAN.md — The bounded in-session watch: two terminal reports and no third, per-record outcomes and cost actually incurred (D-05a, D-07)
+- [x] 29-04-PLAN.md — The bounded in-session watch: two terminal reports and no third, per-record outcomes and cost actually incurred (D-05a, D-07)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
