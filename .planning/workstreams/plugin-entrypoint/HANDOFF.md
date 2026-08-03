@@ -21,7 +21,7 @@ read-back, 2026-08-03).
 | 27 | ✅ **COMPLETE incl. RB-4 operator walk** — STATUS-05 checked; dashboard same-URL proven cross-session |
 | 28 | 28-01…05 built. **RB-7 (28-06 armed canary) is THE NEXT GATE** |
 | 29 | 29-01 ✅ (host probe answered), 29-02 ✅, 29-03 ✅ (tracer + read-only guard). **29-04, 29-05, 29-06 are the remaining autonomous builds** |
-| 30 | 30-01…06 built; 30-07 (RB-9 armed review canary) remains |
+| 30 | 30-01…06 built. **RB-9 RUN 2026-08-03 — steps 1-7 and 9-10 PASS, step 8 (APPROVE) BLOCKED by BUG 28.** Window closed, disarmed PASS |
 
 **Remaining work, in order:** RB-7 (operator, via the 28-05 surface, `ALLOW_N8N_ARM`) → my 29-04
 (bounded watch) → 29-05 (five conditions; live shapes recorded in 29-05-PLAN header) → 29-06 (sweep
@@ -61,6 +61,26 @@ reconcile STATE progress counts.
   against the live endpoint — the webhook wraps its answer in an ARRAY (`[{...}]`) and the reader
   expects the bare object. Client-side unwrap fix + test, unassigned. Until fixed, queue counts and
   balances read `unknown` through the plugin (curl shows the real data).
+- **BUG 28 — `industry` approvals can never succeed (found live by RB-9, 2026-08-03).** HubSpot's
+  company `industry` is an **enumeration with 148 fixed options**. The pipeline stages the provider's
+  free-text label (`arts, entertainment, and recreation`) as the review candidate; `SPORTS` is a valid
+  option, that string is not one at all. The approve PATCH therefore returns **HubSpot 400 "Bad
+  request - please check your parameters"**, the n8n execution errors, and nothing lands. All other
+  keys in the approve patch validate clean — `industry` is the sole cause. **Provider values destined
+  for an enumeration property need mapping to valid options before they are staged.**
+- **BUG 29 — the preview cannot see BUG 28.** `preview_decision` returned `outcome: applied` for that
+  impossible write, because the dry run computes the patch without validating against HubSpot's
+  property schema. The operator is shown, and asked to approve, a write guaranteed to fail.
+- **BUG 30 — `unparseable_response` conflates two opposite states.** It is returned both for a
+  fail-closed allowlist drop (correct, nothing wrong) and for a workflow error (a real fault).
+  OPERATOR-RUNBOOK RB-9 tells the operator that silence "means *not on the allowlist* — not *broken
+  endpoint*" and to check `TEST_RECORD_IDS` "before investigating anything else" — which is exactly
+  wrong when the endpoint is the thing that broke. Only n8n execution history disambiguates them.
+- **BUG 31 — the review queue renders a broken HubSpot link.** `render_record` passes the whole row
+  to `link_lookup`, while `record_link` takes a record id, so the natural composition emits a URL with
+  the entire row dict in it. `tests/test_review_queue.py:96` encodes the correct lambda;
+  `skills/review-triage/SKILL.md` never defines it. **Fifth instance of "a contract held in two
+  places, tested on only one side."** Fix is a SKILL.md edit.
 - **KNOWN OPEN BUG (Phase 26):** the thin-response dispatch report labels unconfirmable sends
   `not_confirmed` and *guesses* the reason from the session's possibly-stale gate belief — it
   narrated the canary's gated sends as "write gated" from stale evidence. Reason field must be
