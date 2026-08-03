@@ -120,6 +120,15 @@ housekeeping, not an answer to their question.
       **Publish that HTML as an Artifact verbatim.** Do not rewrite it, do not summarise
       it, and do not build your own page from the text answer.
 
+      **A file attachment is not a dashboard.** The deliverable of this step is the
+      published Artifact's URL — the stable link the operator can bookmark and find
+      again from a new conversation. If you did not call the Artifact tool, you have
+      not done this step: sharing the HTML as a file skips the remembered identifier,
+      breaks the same-URL promise below, and leaves the expired-pointer housekeeping
+      unrun. (This exact miss happened in live UAT, 2026-08-03 — a session rendered
+      the HTML and attached it as a file, and every cross-session property silently
+      vanished.)
+
       - If step 1 returned an `artifact_id`, **update that Artifact** rather than
         creating one, so the operator's bookmarked link still works.
       - If it returned nothing, create a new one and then remember it:
