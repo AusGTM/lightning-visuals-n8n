@@ -266,3 +266,84 @@ test("(FLOW f) the scheduled-maintenance Review IF Stale node switches on review
   const field = node.parameters.conditions.conditions[0].leftValue;
   assert.match(field, /review_skip/);
 });
+
+// =====================================================================================
+// (3) STAGING — n8n/code/mergeCompanies.js (Task 2): an unmappable enum candidate is
+// staged, never offered for review.
+// =====================================================================================
+
+test("STAGING: an unmappable industry candidate on a company with a stored industry stages, does not need_review", () => {
+  const r = mergeCompanies({ industry: "SPORTS" }, { industry: LIVE_INDUSTRY_VALUE },
+    undefined, { source: "waterfall", confidence: 85 });
+  const d = r.decisions.find((x) => x.field === "industry");
+
+  assert.equal(d.decision, "stage_only");
+  assert.notEqual(d.decision, "needs_review");
+  assert.deepEqual(r.canonicalPatch, {});
+});
+
+test("STAGING: the refused field's provenance carries validation_status rejected and the ORIGINAL provider string", () => {
+  const r = mergeCompanies({ industry: "SPORTS" }, { industry: LIVE_INDUSTRY_VALUE },
+    undefined, { source: "waterfall", confidence: 85 });
+  assert.equal(r.provenance.industry.validation_status, "rejected");
+  assert.equal(r.provenance.industry.value, LIVE_INDUSTRY_VALUE,
+    "the raw provider string must survive in provenance even though it never promotes");
+});
+
+test("STAGING: the matching decisions[] entry carries the refusal message as its reason", () => {
+  const r = mergeCompanies({ industry: "SPORTS" }, { industry: LIVE_INDUSTRY_VALUE },
+    undefined, { source: "waterfall", confidence: 85 });
+  const d = r.decisions.find((x) => x.field === "industry");
+  assert.match(d.reason, /industry/);
+  assert.match(d.reason, new RegExp(LIVE_INDUSTRY_VALUE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+});
+
+test("STAGING: a candidate industry of Sports still promotes with SPORTS", () => {
+  const r = mergeCompanies({}, { industry: "Sports" }, undefined,
+    { source: "waterfall", confidence: 85 });
+  assert.deepEqual(r.canonicalPatch, { industry: "SPORTS" });
+});
+
+test("STAGING: the refused field never stamps a cache-key datetime and never reaches canonicalPatch", () => {
+  // lv_org_type is one of the two cache-keyed fields (COMPANY_CACHE_KEY_FIELDS).
+  const r = mergeCompanies({ lv_org_type: "broadcaster" },
+    { lv_org_type: "not_a_real_org_type" }, undefined,
+    { source: "claude_web", confidence: 90, evidence: { lv_org_type: "https://x.example" } });
+  assert.deepEqual(r.canonicalPatch, {});
+  assert.deepEqual(r.cacheKeys, {});
+});
+
+const LV_ENUM_PROMOTION_CASES = [
+  ["lv_org_type", "governing_body_league",
+    { source: "claude_web", confidence: 90, evidence: { lv_org_type: "https://x.example" } }],
+  ["lv_content_type", ["live_broadcast", "streaming"], { source: "claude_web", confidence: 90 }],
+  ["lv_revenue_band", "5-50M", { source: "zoominfo", confidence: 90 }],
+  ["lv_employee_band", "201-500", { source: "zoominfo", confidence: 90 }],
+  ["lv_country_region_normalized", "AU", { source: "zoominfo", confidence: 90 }],
+];
+
+for (const [field, value, opts] of LV_ENUM_PROMOTION_CASES) {
+  test(`STAGING: ${field} still promotes with an unchanged value today`, () => {
+    const r = mergeCompanies({}, { [field]: value }, undefined, opts);
+    assert.deepEqual(r.canonicalPatch, { [field]: value });
+  });
+}
+
+const NON_ENUM_FIELD_CASES = [
+  ["domain", "exampleracing.example"],
+  ["numberofemployees", 220],
+  ["annualrevenue", 65000000],
+  ["lv_produces_content", true],
+  ["lv_sponsorship_reliant", true],
+];
+
+for (const [field, value] of NON_ENUM_FIELD_CASES) {
+  test(`STAGING: non-enum-bound field ${field} is untouched by the enum guard`, () => {
+    const before = mergeCompanies({}, { [field]: value }, undefined,
+      { source: "waterfall", confidence: 90,
+        evidence: field === "lv_produces_content" ? { lv_produces_content: "https://x.example" } : {} });
+    const d = before.decisions.find((x) => x.field === field);
+    assert.equal(d.chosen_value, value,
+      `${field}'s decision value must be exactly what was passed in`);
+  });
+}
