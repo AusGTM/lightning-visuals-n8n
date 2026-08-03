@@ -19,15 +19,16 @@ read-back, 2026-08-03).
 | 23 | ✅ **COMPLETE incl. armed canary** — contact `342770428400` created by run 1129; found the reload gap + BUG 27 on the way |
 | 24, 25, 26 | ✅ COMPLETE (25 fully: Probe A granted, **B4 measured 37.44 s → ceiling 2 CONFIRMED**, oversize refusal verified live verbatim) |
 | 27 | ✅ **COMPLETE incl. RB-4 operator walk** — STATUS-05 checked; dashboard same-URL proven cross-session |
-| 28 | 28-01…05 built. **RB-7 (28-06 armed canary) is THE NEXT GATE** |
+| 28 | ✅ **COMPLETE incl. RB-7 armed canary (2026-08-03)** — arm→dispatch→disarm verified, execution 1152, 54.37 s window, bounded to one record |
 | 29 | 29-01 ✅ (host probe answered), 29-02 ✅, 29-03 ✅ (tracer + read-only guard). **29-04, 29-05, 29-06 are the remaining autonomous builds** |
 | 30 | 30-01…06 built. **RB-9 RUN 2026-08-03 — steps 1-7 and 9-10 PASS, step 8 (APPROVE) BLOCKED by BUG 28.** Window closed, disarmed PASS |
 
-**Remaining work, in order:** RB-7 (operator, via the 28-05 surface, `ALLOW_N8N_ARM`) → my 29-04
-(bounded watch) → 29-05 (five conditions; live shapes recorded in 29-05-PLAN header) → 29-06 (sweep
-skill + cron template) → RB-8 (29-06 live gate) → RB-9 (30-07; `LV Review Decision` is deployed,
-inactive, waiting). Then milestone seal: flip CONTROL/NOTICE/REVIEW checkboxes on canary evidence,
-reconcile STATE progress counts.
+**Remaining work, in order:** 29-04 (bounded watch) → 29-05 (five conditions; live shapes recorded
+in 29-05-PLAN header) → 29-06 (sweep skill + cron template) → RB-8 (29-06 live gate) → **BUG 28's
+enumeration mapping, which blocks RB-9 step 8 and must land before the approve path can be claimed
+working** → re-run RB-9 step 8 only. Then milestone seal: flip CONTROL/NOTICE/REVIEW checkboxes on
+canary evidence, reconcile STATE progress counts. **RB-7 and RB-9 have both run** — RB-9 passed
+every step except 8.
 
 ## 2. THE TWO BIG LIVE FINDINGS OF 2026-08-03 — never un-learn these
 
@@ -95,8 +96,8 @@ reconcile STATE progress counts.
   pins `"version": "0.1.0"` by hand and has never been bumped, so **the version number proves
   nothing about freshness — verify by content.** Both traps and the shallow-clone fetch command are
   written up in OPERATOR-RUNBOOK RB-7 step 0. Slash commands are not recognized in Claude
-  Code Desktop but conversational/skill dispatch works. The installed 0.1.0 predates 28-05 —
-  version-skew: its sessions still claim on/off control "does not exist". Marketplace install from
+  Code Desktop but conversational/skill dispatch works. **The cache was refreshed to HEAD on
+  2026-08-03 and the version-skew is resolved.** Marketplace install from
   `AusGTM/lightning-visuals-n8n` works (manifest at repo root; validate BOTH from the COMMIT, not
   the working tree — the author-object fix was once live-broken on master while the tree passed).
 - **All six skills carry a "Where commands run" note** (plugin root, not skill dir) and
