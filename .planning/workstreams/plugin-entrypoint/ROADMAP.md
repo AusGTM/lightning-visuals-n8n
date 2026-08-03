@@ -55,7 +55,7 @@ phase directories never collide with phases 20–22.**
 - [ ] **Phase 29: Notices & Unattended Sweep** - Runs report themselves when they settle, and a sweep speaks up when something needs a human while nobody is watching
 - [ ] **Phase 30: Review-Queue Triage** - Conflicts get resolved conversationally, with the decision written back as a human decision
 - [x] **Phase 31: Enum Validation for Review Approvals** - Enum-bound candidates are validated against HubSpot's real option set before they are offered, refusals are explicit at every layer, and silence stops meaning two opposite things
-- [ ] **Phase 32: LLM-Free Sweep Trigger** - The unattended sweep fires under real cron with no credentials and no LLM, and a trigger that cannot run says so loudly instead of impersonating a healthy backend
+- [x] **Phase 32: LLM-Free Sweep Trigger** - The unattended sweep fires under real cron with no credentials and no LLM, and a trigger that cannot run says so loudly instead of impersonating a healthy backend
 
 ## Phase Details
 
@@ -358,7 +358,7 @@ Plans:
 
 Plans:
 - [x] 32-01-PLAN.md — ship `lv-sweep-run.sh` + its two-sided contract test, rewrite `SWEEP-CRON-TEMPLATE.md` around it, amend D-01, update README/CHANGELOG/STATE (wave 1, autonomous)
-- [ ] 32-02-PLAN.md — rewrite RB-8 for the new trigger, run it live as the phase exit gate, record the observed outcome (wave 2, blocking human checkpoint)
+- [x] 32-02-PLAN.md — rewrite RB-8 for the new trigger, run it live as the phase exit gate, record the observed outcome (wave 2, blocking human checkpoint)
 
 ## v0.6 Progress
 
