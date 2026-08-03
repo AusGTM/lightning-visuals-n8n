@@ -24,8 +24,12 @@ the write:
      constant from 30-01: a literal compiled into the workflow JSON, overlaid at deploy
      time, read by `_writeSafetyAllows()` inside n8n, in a different process on a
      different machine. **It is not the variable in (1) despite the similar name.**
-     Setting one has not done the work of the other, and an armed-but-not-allowlisted
-     decision returns NO body at all (D-23) — which `verify_decision` reports as failed.
+     Setting one has not done the work of the other. **Corrected 2026-08-03, Phase 31 Plan
+     02 (BUG 30):** an armed-but-not-allowlisted decision no longer returns NO body — it
+     answers an explicit `not_allowlisted` outcome naming the allowlist, which
+     `verify_decision` reports as `not_written`, not `failed`. A response that genuinely
+     fails to parse now means the WORKFLOW ITSELF errored, not the allowlist — see the
+     `unparseable_response` handling below.
 
 `ALLOW_REVIEW_SUBMIT` (D-16, Phase 28 D-34) is this module's env kill switch, carried over
 from `ALLOW_N8N_ARM` without variation:
@@ -85,8 +89,12 @@ SUBMIT_ENV_VALUE = "true"
 DEFAULT_REVIEWED_BY = "operator (unnamed)"
 
 # The endpoint's full outcome vocabulary (D-30). `unsupported` is retired.
+# `not_allowlisted` added Phase 31 Plan 02, 2026-08-03 (BUG 30): the explicit refusal an
+# allowlist drop now answers instead of an empty body — see review_decision.py's docstring
+# gate 3 and `operator-claude-plugin/tests/test_review_outcome_parity.py`, which pins this
+# tuple against BOTH n8n/code/reviewDecision.js and the committed workflow JSON as text.
 WRITING_OUTCOMES = ("applied", "rejected")
-NON_WRITING_OUTCOMES = ("stale", "no_candidate", "not_flagged", "refused")
+NON_WRITING_OUTCOMES = ("stale", "no_candidate", "not_flagged", "refused", "not_allowlisted")
 OUTCOMES = WRITING_OUTCOMES + NON_WRITING_OUTCOMES
 
 # The un-doing decisions the env kill switch must never block (D-16 property (c)). A
@@ -175,10 +183,13 @@ def _post_decision(config, body, transport) -> dict:
     try:
         payload = response.json()
     except Exception:
-        # An armed-but-not-allowlisted decision returns NO body at all: the write gate
-        # drops the row and nothing reaches the responder (D-23). Fail-closed and correct
-        # — no write happened — but it is not an outcome payload, and it must never be
-        # distinguished from a rejected write.
+        # CORRECTED Phase 31 Plan 02, 2026-08-03 (BUG 30 — this exact wrong turn misled the
+        # live RB-9 run): an allowlist drop no longer returns an empty body — it answers an
+        # explicit `not_allowlisted` outcome (see WRITING/NON_WRITING_OUTCOMES above). A
+        # body that fails to parse as JSON here therefore means the WORKFLOW ITSELF failed
+        # to run to completion, not that the record was refused. n8n execution history is
+        # where that failure is diagnosed — TEST_RECORD_IDS is no longer the first place to
+        # look for an unparseable response.
         return _unavailable("unparseable_response")
 
     # ONE dict, never `body[0]`: this endpoint responds with `firstIncomingItem` because
@@ -271,13 +282,29 @@ def verify_decision(intended, response) -> dict:
 
     if not response.get("available"):
         reason = response.get("reason") or "no_response"
-        return _verdict(
-            "failed", response,
-            response.get("message") or
-            "The decision could not be confirmed: the backend answered with "
-            f"`{reason}`. Nothing here proves whether a write landed, so treat it as not "
-            "landed and check the record in HubSpot before deciding again.",
-        )
+        # `unparseable_response` / `no_response` (Phase 31 Plan 02, 2026-08-03, BUG 30):
+        # these two reasons mean the WORKFLOW ITSELF failed to answer, not that the record
+        # was refused — a genuine allowlist drop now comes back as `not_allowlisted`
+        # instead. Point at n8n execution history, never at TEST_RECORD_IDS. Every other
+        # reason keeps the generic wording; nothing here interpolates a header, secret, or
+        # transport exception text.
+        if reason in ("unparseable_response", "no_response"):
+            unavailable_message = (
+                "The decision could not be confirmed: the backend answered with "
+                f"`{reason}`. This means the workflow itself failed to run to completion — "
+                "it is NOT the allowlist; a record that is genuinely not on the allowlist "
+                "now comes back as `not_allowlisted` instead. Check n8n execution history "
+                "for the failing node and its error. Nothing here proves whether a write "
+                "landed, so treat it as not landed and check the record in HubSpot before "
+                "deciding again."
+            )
+        else:
+            unavailable_message = (
+                "The decision could not be confirmed: the backend answered with "
+                f"`{reason}`. Nothing here proves whether a write landed, so treat it as "
+                "not landed and check the record in HubSpot before deciding again."
+            )
+        return _verdict("failed", response, response.get("message") or unavailable_message)
 
     outcome = response.get("outcome")
     endpoint_message = response.get("message")

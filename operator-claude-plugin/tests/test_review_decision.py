@@ -421,9 +421,11 @@ def test_every_non_writing_outcome_is_surfaced_verbatim_not_translated_into_succ
 
 
 def test_every_endpoint_outcome_has_a_handling_branch():
-    """All six of D-30's outcomes, and nothing resolves to an unhandled state."""
+    """D-30's six outcomes plus `not_allowlisted` (Phase 31 Plan 02, BUG 30), and nothing
+    resolves to an unhandled state."""
     assert set(review_decision.OUTCOMES) == {
-        "applied", "rejected", "stale", "no_candidate", "not_flagged", "refused"}
+        "applied", "rejected", "stale", "no_candidate", "not_flagged", "refused",
+        "not_allowlisted"}
     assert "unsupported" not in review_decision.OUTCOMES
 
     for outcome in review_decision.OUTCOMES:
