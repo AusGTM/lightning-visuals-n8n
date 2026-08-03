@@ -991,12 +991,21 @@ that blocked the un-doing path would be a trap. Gate 2 still applies to a reject
 
 ### Two failure modes that look like something else
 
-- **An armed-but-not-allowlisted decision returns NO body at all**, and the client reports it
-  `failed`. **That silence means "not on the allowlist" — not "broken endpoint".** Check
-  `TEST_RECORD_IDS` before investigating anything else.
+- **CORRECTED 2026-08-03 (Phase 31 Plan 02, BUG 30).** An un-allowlisted decision now comes back as
+  `outcome: not_allowlisted` with a message naming the allowlist, and the client reports it
+  `not_written`, never `failed`. **An empty or unreadable body is therefore NOT the allowlist** — it
+  means the *workflow itself* errored, and n8n execution history is where the cause is. (Before this
+  phase, an allowlist drop returned no body at all and was indistinguishable from a broken endpoint —
+  that gap is what misled RB-9's own run, below.)
 - **Read the verdict from `verify_decision`, never from an HTTP status.** A mismatch names the
   offending key; an *unreadable* read-back is a different finding and should be reported as such,
   not merged into "failed".
+- **CORRECTED 2026-08-03 (Phase 31 Plan 02, BUGS 28/29).** A review approval carrying a value
+  HubSpot's enumeration will not accept — e.g. an `industry` candidate that is a raw provider label,
+  not one of the 148 accepted options — now comes back as `outcome: refused`, naming the property and
+  the offending value, on BOTH the preview and the real submit. Previously it 400'd inside the
+  workflow only on a real submit, and the preview claimed `outcome: applied` for a write that was
+  guaranteed to fail — this is the defect RB-9 step 8 found live.
 
 ### Start with a reject
 
@@ -1005,11 +1014,14 @@ that blocked the un-doing path would be a trap. Gate 2 still applies to a reject
 allowlist). Prove the path with a rejection, then do the approval.
 
 1. Choose **ONE** HubSpot test company currently flagged for review and holding a stored review
-   candidate. Note its record id.
+   candidate. Note its record id. **The RB-9 canary record (`9604614548`) was cleared manually on
+   2026-08-03** (its reject stands; `industry` now reads `SPORTS`) — it is no longer `needs_review`
+   and cannot be reused as-is. A fresh `needs_review` fixture is needed: one enrichment run against a
+   test company holding a conflicting staged value produces one.
 
 ```bash
-# 2 — capture the before state
-.venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/canary_record_snapshot.py', run_name='__main__')" snapshot --label 30-07-review-canary --company-id <RECORD_ID>
+# 2 — capture the before state. The script's own flags: --target-id plus --target-object-type.
+.venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/canary_record_snapshot.py', run_name='__main__')" snapshot --label 30-07-review-canary --target-id <RECORD_ID> --target-object-type companies
 
 # 3 — deploy ARMED for review writes only, one record in the allowlist
 DRY_RUN=false ALLOW_N8N_DEPLOY=true \
@@ -1101,6 +1113,7 @@ Kept so a section you read yesterday is not silently different today.
 | 2026-08-03 | **The stored-vs-running reload gap, found live under RB-3.** `deploy_n8n_workflows.py` PUTs but never activates, and n8n serves a RUNNING workflow's old content until a deactivate→activate bounce — so `verify_live_write_safety.py` (which reads STORED content) can report `armed PASS` while the running webhook is still disarmed. Every arm AND disarm now bounces. `n8n_control.apply_mutation` was already correct; the `ENABLE_BAKED_FLAGS` deploy path was not |
 | 2026-08-03 | **RB-7 de-provisionalised and unblocked.** Lane (enrichment), workflow (`950HPb7a1GgSAIyZ`), record (`9604614548`), `allow_create=false`, the live before-state, the `control` capability check and step 6's expected literal are all resolved in its header table. A new step 0 refreshes the installed plugin — the cached `SKILL.md` files are stale — and the `dispatch_fn` wiring gap in the shipped surface is documented there rather than left to be rediscovered mid-window |
 | 2026-08-03 | **RB-2 answered** — the sweep host is cron/launchd → `claude -p` headless (D-01 amendment); Cloud Routines and harness cron are both out. `29-HOST-PROBE.md` holds the verdicts |
+| 2026-08-03 | **RB-9's diagnostic advice corrected (Phase 31 Plan 02, BUGS 28/29/30 — found live by RB-9 step 8).** An un-allowlisted decision now answers `not_allowlisted` explicitly instead of an empty body, so silence no longer means "check the allowlist" — it means the workflow errored and n8n execution history is where to look. An enum-invalid review candidate (e.g. `industry`) now answers `refused` naming the property and value, on both preview and real submit, instead of 400ing inside the workflow on submit only. Step 2's snapshot command corrected to the script's real flags, `--target-id` and `--target-object-type` |
 
 ### Standing note — the read-back, after 23-07
 

@@ -337,7 +337,7 @@ Plans:
 
 Plans:
 - [x] 31-01-PLAN.md — The enum spine: generated options module, the shared validator, refusal on the approve path (tracer) and at enrichment staging, plus the snapshot/policy currency pins
-- [ ] 31-02-PLAN.md — BUG 30: an explicit `not_allowlisted` refusal body, the client's corrected `unparseable_response` meaning with a two-sided outcome pin, and RB-9's diagnostic advice
+- [x] 31-02-PLAN.md — BUG 30: an explicit `not_allowlisted` refusal body, the client's corrected `unparseable_response` meaning with a two-sided outcome pin, and RB-9's diagnostic advice
 - [ ] 31-03-PLAN.md — Close-out: the two-sided contract inventory, the disarmed-artifact gate, and the operator-directed disarmed redeploy + bounce
 
 ## v0.6 Progress
