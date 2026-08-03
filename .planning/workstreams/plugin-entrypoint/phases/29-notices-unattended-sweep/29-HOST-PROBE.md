@@ -13,6 +13,24 @@ where that scheduler's UI is not visible. Four candidate hosts were examined; on
 
 ## A1 — can a scheduled, unattended invocation reach this plugin's skill and return REAL data?
 
+> **⚠ SUPERSEDED 2026-08-03 (Phase 32, RB-8) — this verdict is amended, not retracted.** The
+> host below is no longer what 29-03…06's trigger runs on. It is now **cron/launchd → the
+> plugin's own Python**, via `skills/backend-sweep/lv-sweep-run.sh` (32-01) — no `claude -p`,
+> no Anthropic credential, no LLM in the path at all.
+>
+> **Why this probe misled:** it was run from an interactive shell, which inherits a live
+> session's credentials and PATH. That proved `claude -p` works *headlessly*; it did not
+> prove it works *unattended under cron*, which is what NOTICE-03 actually requires. RB-8
+> (`29-06-FINDINGS.md`) fired this exact trigger under real cron and it failed silently — an
+> expired credential with no refresh, `node` absent from cron's PATH.
+>
+> **This is the same class of error as the stored-vs-running reload gap:** a verification
+> performed one layer away from the thing it claimed to verify. See `29-06-FINDINGS.md` for
+> the verbatim failure and Phase 32 (`32-01-PLAN.md` / `32-01-SUMMARY.md`) for the
+> replacement. The verdict below is preserved as the dated record of what was actually
+> observed on 2026-08-03 — read it as "headless `claude -p` works interactively," not as
+> "the cron trigger works."
+
 **YES — on the host `headless claude -p`** (the thing a macOS cron/launchd job runs).
 
 Probe: `claude -p "<probe prompt>" --allowedTools "Skill,Bash,Read,Glob,Grep"`, cwd `$HOME`
@@ -50,6 +68,11 @@ END OF PROBE OUTPUT
 has plugin + config + secrets, can notify); different scheduler. This is an explicit amendment,
 not drift — 29-03…06 build against the headless host.
 
+> **⚠ SUPERSEDED 2026-08-03 (Phase 32) — this host is itself amended.** RB-8 proved the
+> headless-`claude -p` host fails silently under real cron (credential expiry, `node` off
+> PATH). D-01's host is amended a second time, to **cron/launchd → the plugin's own Python**
+> via `lv-sweep-run.sh` — no LLM, no credential. See the amendment at the head of §A1.
+
 ## A2 — does Desktop chat report back unprompted mid-conversation?
 
 **NOT OBSERVED → treated as NO**, exactly as 29-01 Task 2 prescribes (an unverified capability
@@ -79,7 +102,10 @@ operator's config — remediation queued, not yet designed.
 
 ## What 29-03…06 may rely on
 
-1. Headless `claude -p` reaches the installed plugin's skills with real backend data. (A1)
+1. ~~Headless `claude -p` reaches the installed plugin's skills with real backend data. (A1)~~
+   **SUPERSEDED 2026-08-03 (Phase 32):** the trigger is now `lv-sweep-run.sh` running
+   `sweep_entry.py` directly against the plugin's own Python — no `claude -p`, no LLM in the
+   path. See the amendment at the head of §A1.
 2. `osascript` notifications reach the operator's Notification Centre. (A5)
 3. Full detail goes to a log; the banner is one line. (A5)
 4. No unprompted mid-conversation reporting exists — bounded watch only. (A2 = NO)

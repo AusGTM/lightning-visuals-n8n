@@ -27,6 +27,12 @@ Plan: 23-01 through 23-05 complete; **23-06 in progress** (operator-run, OPERATO
 Status: 23-01 (contact-lane create gate fix), 23-02 (file-handoff smoke test), 23-03 (test scaffolding + network guard), 23-04 (config gate / tabular / disarmed dispatch / plugin shell), and 23-05 (adaptive preview, skill/README docs, PLUGIN-02 reconciliation) done. 23-06 Section A partially observed; Section B not started and currently blocked.
 Last activity: 2026-07-31 — walking RB-3 Section A
 
+**2026-08-03 addendum (autonomous front):** Phase 32 (llm-free-sweep-trigger) plan 32-01 —
+the LLM-free sweep wrapper (`lv-sweep-run.sh`), its two-sided contract test, the rewritten
+`SWEEP-CRON-TEMPLATE.md`, and the amended `29-HOST-PROBE.md` D-01 — is built and committed.
+The phase is gated on 32-02: the live RB-8 re-run against the new trigger. NOTICE-03 in
+REQUIREMENTS.md stays **BLOCKED** until that live gate passes.
+
 ## Accepted requirement amendments (reconcile before each phase seals)
 
 Five places where a locked decision or a verified research finding diverges from the written
@@ -407,6 +413,11 @@ milestone otherwise scoped as plugin-only.
 - **Remaining:** 28-05 (needs 28-03/04 — now met, but serialized behind the operator committing
   `test_plugin_manifest.py`), 28-06 (armed canary), 29-01/02/03/04/05 now DONE → 29-06 remains,
   30-07 (armed canary), 23-06 §B, 25-01 Probe B4.
+- **2026-08-03: Phase 32 (llm-free-sweep-trigger) plan 32-01 built.** Replaces the cron
+  trigger's `claude -p` invocation (RB-8's silent failure, `29-06-FINDINGS.md`) with
+  `lv-sweep-run.sh`, a deterministic LLM-free wrapper, pinned two-sided against
+  `sweep_entry.py`'s real output. Gated on 32-02 (the live RB-8 re-run) before NOTICE-03
+  can seal.
 - **Re-check runnability against the artifact each plan reads, never against SUMMARY presence**
   (HANDOFF §1). "Nothing is runnable" was claimed and wrong twice on 2026-07-31, and RB-5's own
   readiness row was wrong a third time — it reported the probe script MISSING when it existed

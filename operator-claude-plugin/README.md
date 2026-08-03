@@ -403,12 +403,18 @@ has to be a second, explicit step:
    nothing fires on its own yet.
 2. **(Admin only, one-time, on the operator's machine)** Follow
    `skills/backend-sweep/SWEEP-CRON-TEMPLATE.md` to install a `cron` or `launchd` entry
-   that fires `claude -p` on a schedule with no session open. That file is a set of
-   terminal commands and a config file to save — an **admin** task, never something to
-   hand an operator. Skipping this step leaves a plugin that can run the sweep on demand
-   but never on its own, which from the operator's side looks exactly like a healthy
-   backend (both are silent) — so if notices are expected but never arrive, this step is
-   the first thing to check, not the backend.
+   that fires the shipped wrapper, `skills/backend-sweep/lv-sweep-run.sh`, on a schedule
+   with no session open — it runs `scripts/sweep_entry.py` directly against a python
+   interpreter the admin creates for it, no LLM and no Anthropic credential anywhere in
+   the path. That file is a set of terminal commands and a one-time virtualenv to create
+   — an **admin** task, never something to hand an operator. Skipping this step leaves a
+   plugin that can run the sweep on demand but never on its own.
+
+   A trigger that is installed but cannot run is no longer silent about it: it exits
+   non-zero and posts a banner naming the sweep itself as broken. A trigger that was
+   never installed is still silent — nothing runs, so nothing can announce that it
+   didn't — which is exactly why this step is the first thing to check when notices are
+   expected but never arrive, not the backend.
 
 ### The sweep's own config keys
 
@@ -503,6 +509,10 @@ operator-claude-plugin/
     SKILL.md               # the conversation contract: state target, resolve file, preview, approve, arm, dispatch
   skills/enrich-records/
     SKILL.md               # the enrichment lane: records or list, providers, cost, chunk plan, approve, arm, dispatch
+  skills/backend-sweep/
+    SKILL.md               # the unattended sweep's own conversational entry point (on-demand)
+    SWEEP-CRON-TEMPLATE.md # admin-only: install the schedule that fires the sweep unattended
+    lv-sweep-run.sh         # the LLM-free trigger the schedule calls: runs sweep_entry.py directly
   scripts/
     config_gate.py         # load/validate operator.local.json; refuses before any network call
     tabular.py              # read CSV/XLSX headers+rows verbatim; convert XLSX to CSV bytes for the wire

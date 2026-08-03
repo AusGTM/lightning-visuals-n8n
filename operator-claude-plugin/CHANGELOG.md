@@ -11,6 +11,20 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ### Changed
 
+- The unattended sweep's trigger no longer runs through an LLM (2026-08-03, Phase 32).
+  RB-8 proved the previous `claude -p`-based cron/launchd trigger fails **silently**
+  under real cron (an expired credential with no refresh, `node` absent from cron's
+  PATH) — measured fact: `scripts/sweep_entry.py` run under `env -i` with zero
+  credentials produces the byte-identical notice JSON, exit 0, so the LLM was never
+  load-bearing. The trigger is now `skills/backend-sweep/lv-sweep-run.sh`, a
+  deterministic `sh` wrapper that runs `sweep_entry.py` directly: no LLM, no Anthropic
+  credential, nothing in the path that can expire. Every failure path (bad arguments,
+  the python failing to run, output it cannot parse) now exits non-zero **and** posts a
+  banner naming the sweep itself as broken — the old trigger's only failure mode was a
+  silent one. Install cost: the schedule needs a python with this plugin's own
+  `requirements.txt` installed, documented as part of the sweep's two-part admin install
+  in `SWEEP-CRON-TEMPLATE.md`.
+
 - The 23-06 armed create canary PASSED (2026-08-03): one plugin-driven dispatch created
   the canary contact inside a domain-bounded armed window, closed with a verified
   full-coverage disarm. On the way it surfaced the stored-vs-running reload gap (arm and
