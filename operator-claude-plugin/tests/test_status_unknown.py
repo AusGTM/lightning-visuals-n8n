@@ -142,10 +142,12 @@ def test_a_fully_configured_config_passes_every_capability(fake_config):
     # `review` joined in 30-05 on the same principle (30 D-18): the same two keys as
     # `contact-upload`, kept separate because reading the review queue is not permission
     # to upload contacts.
-    for capability in ("contact-upload", "status", "control", "review"):
+    # `sweep` joined in 29-03 (D-15): the only capability that runs unattended, its
+    # own row so an admin can decline it without disabling interactive status.
+    for capability in ("contact-upload", "status", "control", "review", "sweep"):
         config_gate.require_capability(fake_config, capability)
     assert set(config_gate.usable_capabilities(fake_config)) == {
-        "contact-upload", "status", "control", "review"}
+        "contact-upload", "status", "control", "review", "sweep"}
 
 
 def test_the_status_capability_does_not_require_the_webhook_secret(fake_config):

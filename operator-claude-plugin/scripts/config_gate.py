@@ -37,6 +37,11 @@ CAPABILITY_KEYS = {
     "status": ("n8n_url", "n8n_api_key"),
     "control": ("n8n_url", "n8n_api_key"),
     "review": ("n8n_url", "webhook_secret"),
+    # The sweep runs UNATTENDED (29-03, D-15) — its own row so an admin can decline to
+    # enable it without disabling the interactive status check. All three keys on
+    # purpose: `status` degrades to the half it can read, but a sweep that can only read
+    # half the conditions stays quiet about the other half, and quiet is a claim.
+    "sweep": ("n8n_url", "n8n_api_key", "webhook_secret"),
 }
 
 _CAPABILITY_DESCRIPTIONS = {
@@ -44,6 +49,7 @@ _CAPABILITY_DESCRIPTIONS = {
     "status": "the backend status check",
     "control": "turning workflows on or off",
     "review": "reading the review queue",
+    "sweep": "the unattended backend sweep",
 }
 
 
