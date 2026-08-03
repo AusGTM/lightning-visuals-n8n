@@ -67,10 +67,43 @@ be a genuine surprise.
 - Plugin updated: ☐ / verdict:
 - `skills/backend-control/SKILL.md` opens with the "Where commands run" note: ☐
 
-### Step 2 — flag state BEFORE, re-read fresh (do not copy the table above)
+### Step 2 — flag state BEFORE, re-read fresh — **DONE 2026-08-03T03:27:46Z**
+
+**A. Phase 27 status surface, target workflow** (`python3 scripts/status.py 950HPb7a1GgSAIyZ`):
+
 ```
-(paste the read-back output)
+LV Enrichment (Cloud template)   active: true
+  ALLOW_HUBSPOT_RECORD_WRITES = "false"  nodes: [Decide Action, Decide Company Action]  disagreement: null
+  ALLOW_HUBSPOT_CREATE        = "false"  nodes: [Decide Action, Decide Company Action]  disagreement: null
+  last_run: 1116  success  2026-08-03T01:11:53.127Z → 01:11:55.846Z   in_flight: false  stuck: false
 ```
+
+The same call's `backend` block returned `"available": false, "reason":
+"unrecognized_response_shape"` with every count `unknown` — **the known open client-side bug** (the
+webhook array-wraps its answer; curl shows real data). Recorded so it is not read as a sick backend.
+
+**B. Full-tenant flag inventory**, all five overlayable flags, every deployed workflow. `(Nn)` =
+declaring-node count; no `disagreement` on any flag in any workflow:
+
+```
+Cj83mOgrIm59oxcX  active=True   'LV Backend Status (Cloud template)'   — no declarations
+AwbBeShdPgV48eiY  active=True   'LV Contact Ingest (Cloud template)'
+      RECORD_WRITES='false'(2n)  CREATE='false'(3n)  REVIEW_WRITES='false'(2n)  IDS=''(2n)  DOMAINS=''(2n)
+950HPb7a1GgSAIyZ  active=True   'LV Enrichment (Cloud template)'        <-- TARGET
+      RECORD_WRITES='false'(2n)  CREATE='false'(2n)  REVIEW_WRITES='false'(2n)  IDS=''(2n)  DOMAINS=''(2n)
+WBJwoZOo63wzeP69  active=False  'LV Review Decision (Cloud)'
+      RECORD_WRITES='false'(2n)  CREATE='false'(2n)  REVIEW_WRITES='false'(2n)  IDS=''(2n)  DOMAINS=''(2n)
+1fXPuIabz3RsAHgn  active=True   'LV Scheduled Maintenance (Cloud)'
+      RECORD_WRITES='false'(4n)  CREATE='false'(4n)  REVIEW_WRITES='false'(4n)  IDS=''(4n)  DOMAINS=''(4n)
+```
+
+**C. Execution baseline — the line that makes "nothing was sent" checkable.**
+Highest execution id at 03:27:48Z is **1147**. Ids 1144–1147 are `Cj83mOgrIm59oxcX` (LV Backend
+Status) and are this read's own `status.py` calls, not backend activity. The target workflow
+`950HPb7a1GgSAIyZ` has had **no execution since 1116** (01:11:53Z).
+
+> **Therefore: any execution on `950HPb7a1GgSAIyZ` with an id above 1147 belongs to this canary.
+> The decline path must produce none.**
 
 ### Step 3 — the decline path
 - Consequence sentence shown before any confirmation, **verbatim**:
