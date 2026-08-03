@@ -790,12 +790,35 @@ never trap you with an armed backend. Unset it again as soon as the window close
 that still holds if an agent, a test harness, or a scheduled routine reaches the arming module by a
 path nobody anticipated.
 
-0. **Refresh the installed plugin first.** The plugin cache at
-   `~/.claude/plugins/cache/lightning-visuals-operator/operator-claude-plugin/0.1.0/` is a
-   snapshot: its `scripts/` match `3f575ec`, but **all five non-`backend-status` `SKILL.md` files are
-   stale** — they predate the "Where commands run" note. Update the plugin so the canary drives the
-   surface that is actually committed, then confirm `skills/backend-control/SKILL.md` opens with that
-   note.
+0. **Refresh the installed plugin first — and read the two traps below, both hit live on
+   2026-08-03.** The plugin cache at
+   `~/.claude/plugins/cache/lightning-visuals-operator/operator-claude-plugin/0.1.0/` must match
+   HEAD before the canary runs, or it drives a surface other than the one that is committed.
+
+   **Trap 1 — reinstalling the plugin does NOT refresh the marketplace.** The plugin is copied from
+   a *separate* clone at `~/.claude/plugins/marketplaces/lightning-visuals-operator`, and that clone
+   never fetches on a plugin reinstall. It sat at `a60e3da` (28-05) for five commits while every
+   uninstall/reinstall faithfully re-copied the same stale snapshot. **`plugin.json`'s
+   `"version": "0.1.0"` is hand-written and has never been bumped, so the version number cannot tell
+   you whether the content is current — verify by content, never by version.** Update the
+   marketplace first; the clone is shallow, so a plain `pull` tends to fail where this works:
+
+   ```bash
+   git -C ~/.claude/plugins/marketplaces/lightning-visuals-operator fetch --depth=1 origin master \
+     && git -C ~/.claude/plugins/marketplaces/lightning-visuals-operator reset --hard FETCH_HEAD
+   ```
+
+   **Trap 2 — the reinstall DELETES `config/operator.local.json`.** Not orphans it (that is the
+   known version-bump behaviour) — *deletes* it, on a same-version reinstall, leaving only
+   `operator.local.example.json`. **Back the file up before every reinstall.** On 2026-08-03 it was
+   recoverable only because an equivalent gitignored copy happened to exist at
+   `operator-claude-plugin/config/operator.local.json` in the repo checkout; the tuning keys the
+   operator had added to the cache copy (`enrichment_providers`, `max_records_per_chunk`,
+   `dashboard_artifact_ttl_days`, `hubspot_portal_id`) were not in it and had to be re-supplied.
+
+   Then confirm by content: `skills/backend-control/SKILL.md` opens with the "Where commands run"
+   note, `scripts/preview_enrichment.py` no longer contains the word `PROVISIONAL`, and
+   `config_gate.require_capability(cfg, "sweep")` resolves instead of raising "unknown capability".
 1. **The lane is enrichment** (resolved above): workflow `950HPb7a1GgSAIyZ`, record allowlist
    `9604614548`, `allow_create=false`, no domains. Note it in the log as the lane used.
 2. **Record the flag state BEFORE**, read through Phase 27's status surface — **not** from local

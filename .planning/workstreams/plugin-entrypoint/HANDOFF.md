@@ -67,7 +67,14 @@ reconcile STATE progress counts.
   marked belief, not observation.
 - **Installed-plugin realities:** config resolves into the VERSIONED cache path
   (`~/.claude/plugins/cache/lightning-visuals-operator/operator-claude-plugin/0.1.0/config/operator.local.json`)
-  — a version bump orphans it (remediation queued). Slash commands are not recognized in Claude
+  — a version bump orphans it (remediation queued), and — found live 2026-08-03 — a **same-version
+  reinstall DELETES it outright**, leaving only the example. Back it up before every reinstall.
+  Worse, **reinstalling the plugin does not refresh the marketplace clone** it copies from
+  (`~/.claude/plugins/marketplaces/lightning-visuals-operator`), which sat at `a60e3da` for five
+  commits while repeated uninstall/reinstall cycles re-copied the same stale snapshot. `plugin.json`
+  pins `"version": "0.1.0"` by hand and has never been bumped, so **the version number proves
+  nothing about freshness — verify by content.** Both traps and the shallow-clone fetch command are
+  written up in OPERATOR-RUNBOOK RB-7 step 0. Slash commands are not recognized in Claude
   Code Desktop but conversational/skill dispatch works. The installed 0.1.0 predates 28-05 —
   version-skew: its sessions still claim on/off control "does not exist". Marketplace install from
   `AusGTM/lightning-visuals-n8n` works (manifest at repo root; validate BOTH from the COMMIT, not
