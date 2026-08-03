@@ -274,7 +274,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 29-06-PLAN.md — Ship it: the sweep skill, the scheduled-routine template, the two-part install docs, and one live gate proving a notice arrives with no session open
+- [~] 29-06-PLAN.md — Ship it: the sweep skill, the scheduled-routine template, the two-part install docs, and one live gate proving a notice arrives with no session open
 
 ### Phase 30: Review-Queue Triage
 

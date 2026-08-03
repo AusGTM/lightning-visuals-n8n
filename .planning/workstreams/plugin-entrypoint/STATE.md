@@ -79,6 +79,13 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 
 ### Pending Todos
 
+- `2026-08-03-sweep-cron-credentials-block-notice-03` (**blocker**) — the shipped cron trigger
+  cannot authenticate under cron (expired token, empty refresh_token) and `node` is off cron's
+  PATH; the failure is SILENT. **Blocks NOTICE-03 and Phase 29's seal.** Found by RB-8 live.
+- `2026-08-03-sweep-lookback-has-no-time-window` (major) — a fixed 100-row execution lookback with
+  no time bound re-notifies an already-fixed failure until 100 newer executions displace it; plus
+  the notice cannot name the failing workflow.
+
 - `2026-08-03-fix-bugs-28-30-enum-validation-for-review-approvals` (major) — enum
   validate-and-refuse for review approvals; blocks RB-9 step 8's re-run. Decision recorded:
   no full mapping layer, exact label→value match only. **Phase 31 (out-of-band PRD Express
