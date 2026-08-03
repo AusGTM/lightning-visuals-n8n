@@ -3349,9 +3349,10 @@ return parsed.events.map((event) => {
 # floor(100/45) = 2. A list resolved on the BACKEND cannot be split by the CLIENT (D-02),
 # so the backend has to enforce the same bound client-side chunking enforces — and it
 # enforces it by REFUSING, never by truncating, because a truncated batch enriches an
-# arbitrary subset and reports success (D-15). The measurement is single-record and
-# company-lane; the full-waterfall probe (B4) has not been run, so this number is expected
-# to move and is deliberately declared in ONE place.
+# arbitrary subset and reports success (D-15). CONFIRMED 2026-08-03: probe B4 ran the
+# full waterfall live (lusha+apollo+zoominfo, one company record) in 37.44 s — worst case
+# 37.44, +25% headroom = 46.8, floor(100/46.8) = 2. The ceiling held on the expensive
+# path and is no longer provisional. Still deliberately declared in ONE place.
 ENRICH_MAX_LIST_RECORDS = 2
 
 _HS_LISTS_BASE = "https://api.hubapi.com/crm/v3/lists"

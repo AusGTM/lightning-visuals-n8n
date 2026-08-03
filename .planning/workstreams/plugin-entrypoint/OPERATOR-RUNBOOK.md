@@ -110,7 +110,7 @@ file is not mistaken for drift.)*
 
 | § | Plan | Runnable now? | Blocker |
 |---|---|---|---|
-| RB-1 | **25-01** lists-scope + chunk timing | ✅ **yes — both probes** | none. `check_hubspot_list_scope.py` **built 2026-07-31**. Probe B is partly pre-measured — read the note in RB-1 before spending credits. **Releases 4 plans** |
+| ~~RB-1~~ | ~~**25-01** lists-scope + chunk timing~~ | ✅ **DONE** | Probe A granted 2026-07-31; **B4 ran 2026-08-03: 37.44 s full waterfall, ceiling 2 CONFIRMED**. The oversize-refusal live check found the deployed enrichment workflow predates the committed list lane — folded into the disarmed-redeploy remediation (three reasons now). Nothing left here but that deploy |
 | RB-2 | **29-01** scheduled-routine host probe | ✅ **yes** | none — no dependencies, no code needed. **Unblocks 4 plans; joint highest leverage** |
 | RB-3 | **23-06** install + armed create canary | ⚠ Section A yes, Section B **NO** | **three confirmed defects** — see the block in RB-3. Section B cannot pass as written |
 | RB-4 | **27-05** dashboard same-URL check | ✅ **yes** | none — 27-05 is BUILT (`27-05-SUMMARY.md` on disk). Phase 27's last step |
@@ -288,7 +288,22 @@ you accept a default sized on incomplete data, and say so in the findings.
 Batches`** — every record runs the full provider+Haiku+Sonnet chain before the response fires. A 524
 means you found the ceiling, which is itself the measurement.
 
-**Derive:** `seconds_per_record` = worst case observed; `max_records_per_chunk = max(1, floor(60 / seconds_per_record))`.
+**Derive** with the method the shipped artifacts use (not the earlier `floor(60/s)` line, which
+disagreed with every artifact carrying the number): worst case observed + 25% headroom, against the
+~100 s ceiling — `max_records_per_chunk = max(1, floor(100 / (worst_case * 1.25)))`.
+
+> **✅ B4 RAN — 2026-08-03.** One full-waterfall record (lusha+apollo+zoominfo): **37.44 s,
+> HTTP 200**. Worst case 37.44 → +25% = 46.8 → floor(100/46.8) = **2, CONFIRMED**. PROVISIONAL is
+> stripped from every artifact carrying the ceiling; B2/B3 can only lower per-record time, so they
+> cannot move the ceiling and are not required.
+>
+> **The same-day oversize-refusal check FOUND A DEPLOY GAP instead:** the live enrichment workflow
+> answered `[{"object_type":"unsupported","remaining_credits":[]}]` to a list envelope — the exact
+> T-25-16 signature of a workflow with NO list-expansion node. **The deployed enrichment workflow
+> predates the committed list lane.** The whole list lane (and its oversize refusal) is unreachable
+> live until a disarmed redeploy, which the tenant now needs for THREE reasons: this, the
+> backend-status 404, and 23-01's undeployed create gate. One deploy fixes all three; re-run the
+> refusal check after it.
 
 ### Decision — how a HubSpot "view" input is handled
 

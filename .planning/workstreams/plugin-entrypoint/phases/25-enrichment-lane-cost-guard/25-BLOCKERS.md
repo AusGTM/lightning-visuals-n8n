@@ -114,3 +114,22 @@ an actionable next step is strictly better than shipping against an endpoint tha
 **Implemented by:** 25-03 (backend) and 25-04 (client). **25-07** applies the wording to
 REQUIREMENTS.md INGEST-04 and ROADMAP criterion 1, recording it as amendment #7 — scoped to
 "list or record IDs", views refused with the sentence above.
+
+
+---
+
+## Probe B4 — run 2026-08-03 (RB-1 closure)
+
+One full-waterfall record (providers `lusha, apollo, zoominfo`, company `9604614548`):
+**37.44 s, HTTP 200.** Worst case observed is now 37.44 s (was 36.1 s from free history);
++25% headroom = 46.8 s/record against the ~100 s ceiling → `floor(100/46.8)` = **2**.
+**The ceiling of 2 is CONFIRMED on the expensive path and is no longer provisional.**
+B2/B3 (multi-record, no providers) remain unrun; they can only lower per-record time and
+so cannot move the ceiling — not required.
+
+**Same-day finding:** the live oversize-refusal check answered
+`[{"object_type":"unsupported","remaining_credits":[]}]` — T-25-16's exact signature of a
+workflow with no list-expansion node. **The deployed enrichment workflow predates the
+committed list lane**, so the oversize refusal (and the entire list lane) is unreachable
+live until a disarmed redeploy. Re-run the refusal check after that deploy: expected
+answer is the refusal naming 102 members against the ceiling of 2.

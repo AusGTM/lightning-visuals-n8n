@@ -57,17 +57,19 @@ def test_neither_ceiling_is_zero_or_negative():
     assert _client_ceiling() >= 1
 
 
-def test_the_client_ceiling_still_carries_its_provisional_provenance():
-    """The number is derived, not measured end-to-end — it must not lose that label.
-
-    25-BLOCKERS.md records that every run behind the 36.1 s/record figure was
-    single-record and company-lane, and that the full-waterfall probe (B4) has not run.
-    A bare integer with no provenance reads as settled, which D-06 forbids.
+def test_the_client_ceiling_carries_its_measured_provenance():
+    """D-06 cuts both ways. While B4 was unrun, this pinned the PROVISIONAL label so a
+    derivation could not read as a measurement. B4 ran 2026-08-03 (37.44 s, one
+    full-waterfall record) and confirmed the ceiling — so now the note must carry the
+    measurement's date and figure, and must NOT still call the number provisional,
+    which would misstate it in the other direction. A bare integer with no provenance
+    reads as settled by fiat either way.
     """
     config = json.loads(CLIENT_CONFIG.read_text())
     notes = " ".join(
         str(v) for k, v in config.items() if k.startswith("_max_records_per_chunk")
     )
-    assert notes, "the provisional/provenance notes beside max_records_per_chunk are gone"
-    assert "PROVISIONAL" in notes.upper()
-    assert "B4" in notes or "full-waterfall" in notes.lower() or "full waterfall" in notes.lower()
+    assert notes, "the provenance notes beside max_records_per_chunk are gone"
+    assert "PROVISIONAL" not in notes.upper()
+    assert "CONFIRMED" in notes.upper()
+    assert "37.44" in notes and "B4" in notes

@@ -266,11 +266,15 @@ def test_a_batch_at_or_below_the_ceiling_still_shows_a_one_chunk_plan():
     assert "3" in block
 
 
-def test_the_chunk_ceiling_is_labelled_provisional():
-    """D-06/D-20: presenting a derivation as a measurement is forbidden, and the
-    full-waterfall probe (B4) has not run."""
+def test_the_chunk_ceiling_is_presented_as_measured_not_provisional():
+    """D-06/D-20's rule cuts both ways: presenting a derivation as a measurement was
+    forbidden while B4 was unrun, and presenting a measurement as provisional after
+    B4 ran (2026-08-03, 37.44 s full waterfall) would misstate it in the other
+    direction. The date and figure travel with the claim."""
     block = _preview(IDS_SPEC, ceiling=2)["blocks"]["chunks"]
-    assert "PROVISIONAL" in block
+    assert "PROVISIONAL" not in block
+    assert "measured" in block
+    assert "37.44" in block
 
 
 def test_the_chunk_block_is_rendered_from_the_plan_dispatch_will_iterate():

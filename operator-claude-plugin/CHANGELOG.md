@@ -9,6 +9,12 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+### Changed
+
+- The enrichment preview's chunk-ceiling caption no longer reads PROVISIONAL: probe B4
+  ran the full waterfall live (2026-08-03, 37.44 s/record) and confirmed the ceiling of
+  2 as a measured bound.
+
 ### Added
 
 - Directory established as the home for the operator-facing client, separate from the n8n

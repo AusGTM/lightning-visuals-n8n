@@ -280,9 +280,9 @@ def chunks_block(plan, ceiling=None):
     )
     if isinstance(ceiling, int):
         text += (
-            f" The per-request ceiling of {ceiling} is **PROVISIONAL**: it is derived "
-            f"from single-record, company-lane timings against the backend's ~100 s "
-            f"response window, and the full-waterfall probe has not been run."
+            f" The per-request ceiling of {ceiling} is a measured bound: the "
+            f"full-waterfall probe (B4, 2026-08-03) ran one record in 37.44 s against "
+            f"the backend's ~100 s response window."
         )
     return text
 
