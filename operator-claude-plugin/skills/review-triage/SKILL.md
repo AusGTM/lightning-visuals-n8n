@@ -61,6 +61,17 @@ written, and a second opinion here would be a second authority that drifts from 
    review_queue.render_queue(rows, total, policy_lookup, link_lookup)
    ```
 
+   The two lookups are **exactly** these — `link_lookup` takes the whole **row** and must
+   extract `hs_object_id` itself, because `render_record` passes it the row, while
+   `record_link` takes an **id**. Composing them any other way renders a broken URL with
+   the entire row dict in it (found live, RB-9 step 5):
+
+   ```python
+   policy_lookup = lambda field: review_queue.policy_class(object_type, field)
+   link_lookup = lambda row: review_queue.record_link(
+       object_type, row.get("hs_object_id"), config.get("hubspot_portal_id"))
+   ```
+
    `total` greater than `returned` means this is a page, not the whole backlog — the
    rendering already says so. Companies and contacts are separate fetches; if the operator
    asks "what needs review" without saying which, show both.
