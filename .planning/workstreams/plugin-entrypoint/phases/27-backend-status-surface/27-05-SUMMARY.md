@@ -275,3 +275,28 @@ All four created files exist on disk (`scripts/artifact_store.py`,
 `scripts/render_dashboard.py`, `tests/test_artifact_store.py`, `tests/test_dashboard_parity.py`);
 all four task commit hashes (`32f372a`, `23bb787`, `d082c9a`, `f1db7a1`) verified present in
 `git log`.
+
+
+---
+
+## RB-4 operator walk — APPROVED 2026-08-03 (Task 3 closed; Phase 27 complete)
+
+Observed live in Claude Code Desktop, installed plugin (marketplace, versioned cache):
+
+1. Text-first: status arrives as prose, no dashboard, unknown-never-zero honoured against a
+   real 404 (backend-status endpoint undeployed — separate remediation, not an RB-4 failure).
+2/3. Dashboard published on request; refresh in-conversation kept the URL, stamp moved.
+4. **Brand-new conversation, valid pointer: same URL** (`095a33d5-…`) — the cross-session
+   property STATUS-05 exists for, observed directly. State file unchanged after the update.
+6. TTL 0 → the skill's own collect removed the expired pointer and a fresh Artifact minted
+   and was remembered — the full expiry lifecycle, driven by the skill's steps.
+7. Read-only throughout; every session said so unprompted.
+
+**Finding (fixed same day):** one session hand-ran `render_dashboard.py` and delivered the
+HTML as a *file attachment* — no Artifact, no saved id, no collect; every cross-session
+property silently gone while looking like a delivered dashboard. The skill now states "a
+file attachment is not a dashboard" with the dated miss as evidence, and the installed copy
+was synced. Retest passed through the skill's own steps.
+
+**Known skew, queued:** the installed 0.1.0 plugin predates 28-05, so its sessions still say
+workflow on/off "does not exist yet". Version-bump/reinstall remediation is on the board.

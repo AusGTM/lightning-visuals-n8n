@@ -113,7 +113,7 @@ file is not mistaken for drift.)*
 | ~~RB-1~~ | ~~**25-01** lists-scope + chunk timing~~ | ✅ **DONE** | Probe A granted 2026-07-31; **B4 ran 2026-08-03: 37.44 s full waterfall, ceiling 2 CONFIRMED**. The oversize-refusal live check found the deployed enrichment workflow predates the committed list lane — folded into the disarmed-redeploy remediation (three reasons now). Nothing left here but that deploy |
 | RB-2 | **29-01** scheduled-routine host probe | ✅ **yes** | none — no dependencies, no code needed. **Unblocks 4 plans; joint highest leverage** |
 | RB-3 | **23-06** install + armed create canary | ⚠ Section A yes, Section B **NO** | **three confirmed defects** — see the block in RB-3. Section B cannot pass as written |
-| RB-4 | **27-05** dashboard same-URL check | ✅ **yes** | none — 27-05 is BUILT (`27-05-SUMMARY.md` on disk). Phase 27's last step |
+| ~~RB-4~~ | ~~**27-05** dashboard same-URL check~~ | ✅ **APPROVED 2026-08-03** | All steps pass; Phase 27 CLOSED, STATUS-05 checked. Found + fixed live: a session delivering the dashboard as a file attachment instead of publishing the Artifact |
 | ~~RB-5~~ | ~~**28-02** n8n semantics live gate~~ | ✅ **DONE 2026-07-31** | Ran live against `1fXPuIabz3RsAHgn`. Round-trip `verified`, execute endpoint `405`, cadence reload confirmed on a running instance. Results in `28-FINDINGS.md`. **28-03 and 28-04 are built and committed as a result.** Nothing left here |
 | ~~RB-6~~ | ~~**28-04** five-triggers decision~~ | **withdrawn** | Already decided — D-25 / amendment #6. Checkpoint deleted, plan now autonomous. **Nothing for you to do.** |
 | RB-7 | **28-06** armed arm→dispatch→disarm canary | ❌ | behind 28-02 → 28-05. Now needs `ALLOW_N8N_ARM` too |

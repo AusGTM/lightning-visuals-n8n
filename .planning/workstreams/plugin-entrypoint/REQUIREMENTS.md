@@ -180,12 +180,14 @@ above. This is why that endpoint has to exist.
       status value. "Queued" is a bare count; no request timestamp is stored, so it can never be
       age-based (D-07c). Third accepted requirement amendment in this milestone.*
 
-- [ ] **STATUS-05**: Status appears as conversational text by default; on request the plugin
+- [x] **STATUS-05**: Status appears as conversational text by default; on request the plugin
       publishes a dashboard Artifact carrying the same data, stamped with when it was fetched,
       and re-publishes to the same URL on refresh
-      *Built (27-05); deliberately unchecked. The cross-session same-URL behaviour is exactly
-      what RB-4's operator walk proves, and it has not been walked. Check this only on RB-4's
-      "approved".*
+      *RB-4 walked and approved 2026-08-03: text-first, same URL across refresh AND across a
+      new conversation with a valid pointer, fresh mint after TTL expiry via the skill's own
+      collect step, unknown-never-zero shown live against a real 404. The walk also caught a
+      session delivering the dashboard as a file attachment — now a hardened skill
+      instruction carrying its dated evidence.*
 
 - [x] **STATUS-06**: Data the backend cannot supply is shown as explicitly unknown, never as zero
       or healthy — a provider whose balance endpoint refuses access reads "unknown", not "0"
@@ -350,7 +352,7 @@ duplicates. Phase numbering continues from the archived v0.5 milestone (ended at
 | STATUS-02 | Phase 27 | Complete |
 | STATUS-03 | Phase 27 | Complete |
 | STATUS-04 | Phase 27 | Complete |
-| STATUS-05 | Phase 27 | Pending |
+| STATUS-05 | Phase 27 | Complete |
 | STATUS-06 | Phase 27 | Complete |
 | CONTROL-01 | Phase 28 | Pending |
 | CONTROL-02 | Phase 28 | Pending |
@@ -381,8 +383,6 @@ Phase 28 → 7, Phase 29 → 5, Phase 30 → 5.
 now corrected against SUMMARYs on disk, not against phase claims. What "Pending" means per group,
 so nobody re-derives it:
 
-- **STATUS-05** — built (27-05); stays Pending until RB-4's operator walk proves the
-  cross-session same-URL behaviour, which is the requirement's whole point.
 - **CONTROL-01…07** — the machinery is built and tested (28-01 pipeline, 28-02 findings,
   28-03 arming, 28-04 cadence). Pending because the operator-facing surface is 28-05, unbuilt,
   and the armed proof is 28-06. There is deliberately no conversational entry point yet.
