@@ -165,6 +165,39 @@ def test_fetch_backend_status_degrades_rather_than_raising(fake_config,
         assert result["data"] is None
 
 
+def test_fetch_backend_status_accepts_the_bare_dict_shape(
+        fake_config, stub_post_transport_factory):
+    """Pinned alongside the array-wrapped test below so a future n8n change in either
+    direction is caught."""
+    result = backend_status.fetch_backend_status(
+        fake_config, transport=stub_post_transport_factory([BACKEND_BODY]))
+    assert result["available"] is True
+    assert result["data"] == BACKEND_BODY
+
+
+def test_fetch_backend_status_unwraps_the_live_array_wrapped_shape(
+        fake_config, stub_post_transport_factory):
+    """The live `hubspot/backend-status` webhook answers array-wrapped — a one-element
+    list, n8n's normal firstIncomingItem behaviour (verified live 2026-08-03). The
+    prerequisite bug fix this test pins: a bare-dict-only check rejected every real
+    answer."""
+    result = backend_status.fetch_backend_status(
+        fake_config, transport=stub_post_transport_factory([[BACKEND_BODY]]))
+    assert result["available"] is True
+    assert result["data"] == BACKEND_BODY
+
+
+def test_fetch_backend_status_rejects_shapes_that_are_neither(
+        fake_config, stub_post_transport_factory):
+    """Unwrapping is narrow: an empty list, a multi-element list and a non-dict element
+    all stay `unrecognized_response_shape`, same as before the fix."""
+    for scripted in ([], [BACKEND_BODY, BACKEND_BODY], ["not-a-dict"], [123]):
+        result = backend_status.fetch_backend_status(
+            fake_config, transport=stub_post_transport_factory([scripted]))
+        assert result["available"] is False
+        assert result["reason"] == "unrecognized_response_shape"
+
+
 def test_fetch_backend_status_never_echoes_the_secret_in_its_reason(
         fake_config, stub_post_transport_factory):
     result = backend_status.fetch_backend_status(

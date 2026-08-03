@@ -10,6 +10,13 @@ Auth is `X-Enrichment-Secret` — the webhook secret, NOT the `X-N8N-API-KEY` th
 API reads take. Both live at the same base URL, so crossing them yields a 401 that looks
 like a configuration problem (T-27-13).
 
+The live endpoint answers ARRAY-WRAPPED — a one-element list, n8n's normal
+`firstIncomingItem` behaviour (verified live 2026-08-03) — so a bare-dict-only check
+rejected every real answer. A single-element list unwraps to its element before the
+dict check; an empty list, a multi-element list, or a non-dict element is still
+`unrecognized_response_shape`. The n8n side is not changed — other consumers of this
+webhook may rely on the wrapping.
+
 A failure here degrades to an unavailable result with a reason. It never raises and
 never returns an empty-but-successful-looking mapping: one dead endpoint must not take
 the whole status answer down (T-27-14), and a blank that reads as healthy is exactly the
@@ -57,6 +64,11 @@ def fetch_backend_status(config: dict, transport=requests.post) -> dict:
         body = response.json()
     except Exception:
         return _unavailable("unparseable_response")
+
+    if isinstance(body, list):
+        if len(body) != 1 or not isinstance(body[0], dict):
+            return _unavailable("unrecognized_response_shape")
+        body = body[0]
 
     if not isinstance(body, dict):
         return _unavailable("unrecognized_response_shape")
