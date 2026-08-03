@@ -81,7 +81,12 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 
 - `2026-08-03-fix-bugs-28-30-enum-validation-for-review-approvals` (major) — enum
   validate-and-refuse for review approvals; blocks RB-9 step 8's re-run. Decision recorded:
-  no full mapping layer, exact label→value match only.
+  no full mapping layer, exact label→value match only. **Phase 31 (out-of-band PRD Express
+  Path, tracked separately from the Phase 23-30 sequence above): 31-01 (the enum spine,
+  BUGS 28/29) and 31-02 (the explicit `not_allowlisted` refusal + corrected client
+  messaging + runbook fix, BUG 30) are DONE, 2026-08-03. 31-03 (close-out: two-sided
+  contract inventory, disarmed-artifact gate, operator-directed disarmed redeploy + bounce)
+  remains — that redeploy is what actually re-arms RB-9 step 8 for a re-run.**
 
 **Decisions:**
 
@@ -262,6 +267,22 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
   `nodes` list and fetches the body otherwise — deleting that fallback would make
   write-safety read `unknown` for every workflow at once. Repo suite 1065 passed / 1 skipped
   (+72), node 400 unchanged, nothing under `n8n/` touched.
+
+- **Phase 31 Plan 02 (2026-08-03) closed BUG 30** — the review-decision endpoint's
+  `Build Review Decision` node now runs the same `_writeSafetyAllows("review", ...)` check
+  the spliced write gate applies and answers an explicit `outcome: "not_allowlisted"`
+  refusal before the row ever reaches the gate (which is unchanged and proven, by a new
+  agreement-matrix test, never to disagree with the pre-check). The plugin client
+  (`review_decision.py`) now treats `not_allowlisted` as non-writing and reports it
+  `not_written`; an `unparseable_response`/`no_response` now correctly means the workflow
+  itself failed, pointing the operator at n8n execution history rather than
+  `TEST_RECORD_IDS` — the exact wrong turn RB-9 took live. Two-sided pin:
+  `operator-claude-plugin/tests/test_review_outcome_parity.py` reads
+  `n8n/code/reviewDecision.js` AND the committed `wf_review_decision_cloud.json` as text
+  against `review_decision.OUTCOMES`. OPERATOR-RUNBOOK RB-9 corrected to match (diagnostic
+  advice, snapshot script flags, canary-record-cleared note). Nine pre-existing tests that
+  encoded the old "gate-only-armed" assumption were updated, not left broken (31-02-SUMMARY
+  Deviations). Full suite: node 550 pass (was 540), pytest 1697 passed/6 skipped (was 1689).
 
 **Todos / carried context:**
 
