@@ -133,3 +133,20 @@ workflow with no list-expansion node. **The deployed enrichment workflow predate
 committed list lane**, so the oversize refusal (and the entire list lane) is unreachable
 live until a disarmed redeploy. Re-run the refusal check after that deploy: expected
 answer is the refusal naming 102 members against the ceiling of 2.
+
+
+## Refusal check CLOSED — 2026-08-03, post disarmed redeploy
+
+The redeploy (created LV Backend Status + LV Review Decision, updated the three existing;
+read-back disarmed PASS over 5 workflows / 11 nodes) put the list lane live. Re-run verbatim:
+
+    [{"outcome":"refused","reason":"The list \"New Targets.xlsx\" is larger than this
+    backend can enrich in one request — the limit is 2 record(s) per request, measured
+    against the ~100s webhook response ceiling. HubSpot returned only the first page of
+    its members, so the full list is larger than one response and its true size is
+    unknown from here. Nothing was enriched. Send record IDs instead, in batches of 2 or
+    fewer.","events":[]}]
+
+Refused, zero enriched, ceiling + measurement basis named, and honestly paginated (it does
+not claim 102 when it saw one page). The oversize path 25-03 built is verified live. RB-1
+is fully closed.
