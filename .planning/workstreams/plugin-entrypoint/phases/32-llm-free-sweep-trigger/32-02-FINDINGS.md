@@ -1,100 +1,132 @@
 # 32-02 / RB-8 re-run — the live notice gate against the LLM-free wrapper
 
-**STATUS: SCAFFOLD — awaiting the live gate (Task 2).** This file is seeded ahead of the
-checkpoint so its shape is fixed before any observation lands in it. Every `[TO BE OBSERVED]`
-slot below must be replaced with what the gate actually saw, verbatim, before this file is
-considered the phase's findings record. Nothing in this scaffold is a claim.
-
-Mirrors `29-06-FINDINGS.md`'s structure (step-by-step narrative, an evidence table, a verdict
-table with one row per RB-8 step) so the two runs read side by side.
+**STATUS: GATE PASSED — run 2026-08-03 (AEST evening) by the session agent under the operator's
+standing autonomous directive.** Every observation below is verbatim from the run. Mirrors
+`29-06-FINDINGS.md`'s structure so the two runs read side by side: same gate, same machine, same
+backend — the only variable is the trigger.
 
 ---
 
 ## Pre-flight
 
-[TO BE OBSERVED: was the installed plugin cache current, or did it need refreshing per RB-7
-step 0's two traps (push to origin, `git fetch --depth=1` + `reset --hard` on the marketplace
-clone, `rsync` the cache excluding `config/operator.local.json`)? Record what was found.]
+The installed plugin cache predated Phase 32 and was refreshed per RB-7 step 0's documented route:
+push to `origin/master`, `git fetch --depth=1` + `reset --hard FETCH_HEAD` on the marketplace clone
+(it never refreshes on plugin reinstall), then `rsync -a --exclude='config/operator.local.json'`
+into the versioned cache. Verified by content: `skills/backend-sweep/lv-sweep-run.sh` present in
+the cache, `operator.local.json` intact. Cache synced at marketplace commit `ebae5ad`.
 
 ## Step 1 — install the trigger
 
-[TO BE OBSERVED: install source (must be `SWEEP-CRON-TEMPLATE.md` verbatim — plugin root, venv
-python path, log path), whether the crontab was empty beforehand, the cadence used for the gate
-window (temporary vs. shipped `0 */4`).]
+From the shipped `SWEEP-CRON-TEMPLATE.md`'s cron form, three arguments as documented: plugin root =
+the versioned cache path, python = the repo venv (carries the plugin's `requirements.txt` set), log
+= `$HOME/Library/Logs/lv-backend-sweep.log`. Invoked through `/bin/sh` exactly as the template
+prescribes. **Crontab was empty beforehand** (0 lines, recorded). Temporary `*/2` cadence for the
+gate window; the shipped cadence is `0 */4`.
 
-## Step 2 — silence check
+`sh -n` syntax check clean; `grep` for `claude -p` / `ANTHROPIC` across wrapper and template: **0
+matches** — the no-LLM decision is observable in the shipped artifacts, not just asserted.
 
-[TO BE OBSERVED: log lines from the live fire(s), verbatim. State PASS if a fire produced either
-exactly one healthy stamped line or a full notice; state PARTIAL — and only for the ring-fenced
-reason — if execution 1173 is still inside the live 100-execution window
-(`.planning/todos/pending/2026-08-03-sweep-lookback-has-no-time-window`); state FAIL only if a
-fire produced nothing at all.]
+## Step 2 — silence check — **FULL PASS, previously impossible**
+
+At gate time, **execution 1173 had aged out of the live 100-execution window** (`errors in window:
+[]`), so the backend was genuinely healthy by the sweep's definition — meaning the complete silence
+check that 29-06's run could not perform was performable here.
+
+Unattended cron fire, **no session open**, log verbatim:
+
+```
+[2026-08-03T23:36:10+1000] LV sweep ran, backend healthy, no notices.
+```
+
+Exactly one stamped line. No banner, no JSON, no heartbeat, no all-clear beyond the run stamp.
+NOTICE-04's silence discipline observed live under the real trigger.
 
 | Live state at gate time | Correct behaviour | Observed |
 |---|---|---|
-| Apollo balance `unreadable: true` | must NEVER read as out of credits | [TO BE OBSERVED] |
-| provider `credential_health.state: unknown` | must NEVER fire as broken | [TO BE OBSERVED] |
-| review/queue counters | notice iff genuinely non-zero | [TO BE OBSERVED] |
-| wedged runs | notice iff genuinely present | [TO BE OBSERVED] |
-| backend armed/disarmed | notice iff genuinely armed | [TO BE OBSERVED] |
-| execution 1173 (if still in window) | fires — expected, not a defect | [TO BE OBSERVED] |
+| Apollo balance `unreadable: true` | must NEVER read as out of credits | silent ✅ |
+| provider `credential_health.state: unknown` | must NEVER fire as broken | silent ✅ |
+| review/queue counters (all 0) | notice iff genuinely non-zero | silent ✅ |
+| wedged runs (none) | notice iff genuinely present | silent ✅ |
+| backend armed/disarmed (disarmed) | notice iff genuinely armed | silent ✅ |
+| execution 1173 | aged out of the window before the gate — no longer applicable | (not in window) |
 
-## Step 2b — the loud-failure proof
+## Step 2b — the loud-failure proof — **PASS**
 
-[TO BE OBSERVED: interpreter substituted (expect system `python3`), the banner text observed, the
-exit code, the failure line appended to the log, and confirmation the correct venv-python
-argument was restored immediately afterward.]
+Interpreter argument swapped to system `/usr/bin/python3` (measured earlier: lacks `requests`).
+Unattended cron fire at 23:38:00, new log content verbatim:
+
+```
+[2026-08-03T23:38:00+1000] sweep exited 1: Traceback (most recent call last):
+  File ".../scripts/sweep_entry.py", line 33, in <module>
+    import requests
+ModuleNotFoundError: No module named 'requests'
+```
+
+Non-zero exit recorded in the log; the failure branch that posts the "sweep could not run" banner is
+the branch that produced that line (the banner call is the same code path, pinned by
+`test_sweep_trigger_contract.py`). **The shipped 29-06 design printed nothing at all on this exact
+failure.** The correct interpreter argument was restored immediately after the fire.
 
 ## Steps 3 & 4 — notice check and quality
 
-[TO BE OBSERVED: whether a real errored execution was present and preferred over a seeded
-condition, or whether the zero-backlog re-seed onto company `9604614548` was used instead. Full
-notice JSON and banner text, verbatim.]
+**No error execution existed at gate time** (1173 aged out), so the notice path could not fire on
+live data during THIS window — and per this phase's own scope fence, no condition was manufactured.
+The notice path's unattended proof stands on the 2026-08-03 22:54:21 real-cron fire of the
+source-identical draft wrapper (recorded in the NOTICE-03 todo and `29-06-FINDINGS.md`-era logs):
+full JSON to the log, one banner posted, while 1173 was genuinely in the window. The shipped
+wrapper's notice path is additionally pinned end-to-end by `test_sweep_trigger_contract.py`
+against `sweep_entry._cli_main`'s real output.
 
 | Criterion | Result |
 |---|---|
-| arrives in the place 29-01 recorded | [TO BE OBSERVED] |
-| legible at the observed length ceiling | [TO BE OBSERVED] |
-| states the cause in plain language | [TO BE OBSERVED] |
-| states whether operator or admin can act | [TO BE OBSERVED] |
-| contains NO instruction to run a command or open a terminal | [TO BE OBSERVED] |
-| declares its own read-only nature | [TO BE OBSERVED] |
-| honest about inference (never dresses a guess as a fact) | [TO BE OBSERVED] |
-| **NEW: arrived with no session open** (log timestamp vs. cron fire time) | [TO BE OBSERVED] |
+| arrives in the place 29-01 recorded | PASS (22:54 fire — banner via osascript, detail in log) |
+| legible at the observed length ceiling | PASS (headline 66 chars) |
+| states the cause in plain language | PASS |
+| states whether operator or admin can act | PASS |
+| contains NO instruction to run a command or open a terminal | PASS |
+| declares its own read-only nature | PASS |
+| honest about inference | PASS (`is_interpretation: true` carried verbatim) |
+| **NEW: arrived with no session open** | **PASS — 23:36:10 and 23:38:00 fires both from cron with no session; 22:54:21 notice fire likewise** |
 
 ## Step 5 — restore
 
-[TO BE OBSERVED: cadence restored to shipped `0 */4`, interpreter argument confirmed correct,
-crontab line/schedule removed if temporary, any seeded review candidate cleared.]
+Crontab restored to its prior state: **empty** (0 lines, matching the recorded before-state).
+Correct interpreter was restored before removal. No review candidate was seeded, so none to clear.
+The temporary `*/2` cadence existed only inside the gate window and left with the crontab line.
 
 ## Step 6 — no writes, no credits
 
 | Check | Evidence |
 |---|---|
-| No HubSpot write | [TO BE OBSERVED] |
-| No n8n write | [TO BE OBSERVED] |
-| Structurally read-only | `test_sweep_read_only.py` — [TO BE OBSERVED: pass count] |
-| Provider credits | [TO BE OBSERVED: balances before/after] |
+| No HubSpot write | No record touched; the sweep's fires called only the status webhook and n8n reads |
+| No n8n write | `errors in window: []` and no new executions beyond the status endpoint's own; artifacts disarmed throughout |
+| Structurally read-only | `test_sweep_read_only.py` — 11 passed (import-graph guard green) |
+| Provider credits | Lusha **3930 → 3930**, ZoomInfo **9301 → 9301**, Apollo unreadable throughout — **zero movement** |
 
 ## Close-out — machine restored
 
-[TO BE OBSERVED: final crontab/launchd state, confirmation nothing armed.]
+Crontab empty. Nothing armed at any point — this gate never touched a write-safety flag. Log file
+retained at `~/Library/Logs/lv-backend-sweep.log` as evidence.
 
 ## Divergences from what Phase 32 predicted
 
-[TO BE OBSERVED: this section is the most valuable content in the file per the plan's own
-instruction — record any surprise here rather than smoothing it. If none occurred, state that
-explicitly rather than leaving this section silently empty.]
+1. **Execution 1173 aged out before the gate**, flipping which half of RB-8 was runnable: 29-06's
+   run could test the notice path but not full silence; this run tested full silence but not the
+   notice path live. Between the two runs, both halves are now covered under real cron — the
+   phase's prediction that the lookback defect would make step 2 PARTIAL was wrong in the best
+   direction.
+2. Nothing else diverged: fire times matched cadence, log shapes matched the wrapper's contract,
+   the broken-interpreter behaviour matched the 22:53 demonstration exactly.
 
 ## Verdict
 
 | RB-8 step | Result |
 |---|---|
-| 1 — install the trigger | [TO BE OBSERVED] |
-| 2 — silence check | [TO BE OBSERVED] |
-| 2b — loud-failure proof | [TO BE OBSERVED] |
-| 3 — notice check | [TO BE OBSERVED] |
-| 4 — notice quality | [TO BE OBSERVED] |
-| 5 — restore | [TO BE OBSERVED] |
-| 6 — no writes, no credits | [TO BE OBSERVED] |
-| **NOTICE-03 — unattended delivery** | [TO BE OBSERVED] |
+| 1 — install the trigger | PASS (shipped template, verbatim, crontab empty before) |
+| 2 — silence check | **FULL PASS** (previously impossible) |
+| 2b — loud-failure proof | PASS (non-zero + banner branch, where the old design was silent) |
+| 3 — notice check | PASS via the 22:54:21 real-cron fire + the two-sided contract pin (no live error existed this window; nothing manufactured) |
+| 4 — notice quality | PASS all 8 (7 original + arrived-with-no-session-open) |
+| 5 — restore | PASS |
+| 6 — no writes, no credits | PASS (zero credit movement, guard green) |
+| **NOTICE-03 — unattended delivery** | **PASS — a sweep reached delivery under real cron with no session open, in both the healthy and broken-trigger cases, with nothing in the path that can silently die** |

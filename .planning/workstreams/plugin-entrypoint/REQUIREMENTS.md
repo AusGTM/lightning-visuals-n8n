@@ -233,7 +233,7 @@ above. This is why that endpoint has to exist.
 - [x] **NOTICE-02**: The in-session watch is bounded; a run that has not settled by then is
       reported as still running with how to re-check — the watch never simply goes quiet
 
-- [ ] **NOTICE-03**: A scheduled sweep runs with no session open and pushes a notification when
+- [x] **NOTICE-03**: A scheduled sweep runs with no session open and pushes a notification when
       something needs a human: failed scheduled runs, credential or auth failure, exhausted
       quota, stuck locks, or a review backlog over a configured threshold
       (29-05 implemented all five conditions; 29-06 ships the scheduled-routine wiring and the
@@ -366,8 +366,8 @@ duplicates. Phase numbering continues from the archived v0.5 milestone (ended at
 | CONTROL-07 | Phase 28 | Complete (28-05 choke point; RB-7 confirmation gate observed) |
 | NOTICE-01 | Phase 29 | Complete (29-04 bounded watch) |
 | NOTICE-02 | Phase 29 | Complete (29-04: two terminal reports, no third outcome) |
-| NOTICE-03 | Phase 29 | **BLOCKED** (RB-8: cron trigger cannot authenticate, fails silently) |
-| NOTICE-04 | Phase 29 | Complete (unit); live PARTIAL (RB-8 step 2) |
+| NOTICE-03 | Phase 29 | **Complete** (Phase 32 / RB-8 re-run: unattended cron fires 23:36:10 + 23:38:00, silence and loud-failure both observed; notice path proven 22:54:21) |
+| NOTICE-04 | Phase 29 | Complete (unit + live: full silence check observed under real cron, Phase 32 gate) |
 | NOTICE-05 | Phase 29 | Complete (29-06 two-part install) |
 | REVIEW-01 | Phase 30 | Complete (RB-9 step 5: queue rendered, conflict plain-language) |
 | REVIEW-02 | Phase 30 | Partial — writeback proven (RB-9 reject; Phase 31 enum refusal). The `manual_protected` clause is UNEXERCISED (D-31) |

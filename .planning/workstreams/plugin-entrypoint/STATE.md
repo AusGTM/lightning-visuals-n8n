@@ -63,7 +63,7 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 
 ## Progress
 
-**Phases Complete:** 6 / 9 (23, 24, 25, 26, 27, 31 — see table)
+**Phases Complete:** 9 / 10 (23-29 via 32, 31, 32; Phase 30 partial — see table)
 **Current Plan:** 23-06 (operator window, in progress) — autonomous work is at 27-05
 
 ```
@@ -78,17 +78,17 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 | 26. Outcome Reporting & Safe Retry | 4 | **Complete** (one open defect: thin-response reason is belief, not observation) |
 | 27. Backend Status Surface | 6 | **Complete** — RB-4 approved; dashboard same-URL proven cross-session |
 | 28. Control Actions | 7 | **Complete** — RB-7 armed canary passed 2026-08-03 (exec 1152, 54.37 s window, bounded to 1 record) |
-| 29. Notices & Unattended Sweep | 5 | **BLOCKED at seal** — 29-01…06 built; NOTICE-01/02/05 complete, NOTICE-04 live-partial, **NOTICE-03 fails: the cron trigger cannot authenticate and fails silently (RB-8)** |
+| 29. Notices & Unattended Sweep | 5 | **Complete via Phase 32** — NOTICE-01/02/04/05 complete; NOTICE-03 sealed by the LLM-free trigger (RB-8 re-run passed) |
 | 30. Review-Queue Triage | 5 | **Partial** — RB-9 ran: 8 of 9 steps pass. REVIEW-01/03/05 complete; REVIEW-02 partial (manual_protected unexercised, D-31); **REVIEW-04 not demonstrated** (no decision has ever stamped a human source) |
 | 31. Enum Validation for Review Approvals | — | **Complete** — planned, executed, and proven live (BUGS 28/29/30 closed; refusal observed against the real legacy candidate) |
+| 32. LLM-Free Sweep Trigger | — | **Complete** — wrapper shipped + two-sided pinned; RB-8 re-run PASSED under real cron (silence, loud-failure, zero credits) |
 
 ## Accumulated Context
 
 ### Pending Todos
 
-- `2026-08-03-sweep-cron-credentials-block-notice-03` (**blocker**) — the shipped cron trigger
-  cannot authenticate under cron (expired token, empty refresh_token) and `node` is off cron's
-  PATH; the failure is SILENT. **Blocks NOTICE-03 and Phase 29's seal.** Found by RB-8 live.
+- ~~`2026-08-03-sweep-cron-credentials-block-notice-03`~~ — **RESOLVED by Phase 32** (LLM-free
+  trigger; RB-8 re-run passed 2026-08-03). Moved to completed.
 - `2026-08-03-sweep-lookback-has-no-time-window` (major) — a fixed 100-row execution lookback with
   no time bound re-notifies an already-fixed failure until 100 newer executions displace it; plus
   the notice cannot name the failing workflow.

@@ -24,6 +24,7 @@ over the same n8n system, so its version says nothing about backend capability.
   silent one. Install cost: the schedule needs a python with this plugin's own
   `requirements.txt` installed, documented as part of the sweep's two-part admin install
   in `SWEEP-CRON-TEMPLATE.md`.
+- The live RB-8 gate re-ran against that trigger the same day and **PASSED**: unattended cron fires with no session open (23:36:10 healthy — exactly one stamped line, no banner; 23:38:00 broken-interpreter — non-zero exit and the could-not-run banner branch, where the old design printed nothing), full silence check observed for the first time, zero provider-credit movement. NOTICE-03 is sealed on that evidence.
 
 - The 23-06 armed create canary PASSED (2026-08-03): one plugin-driven dispatch created
   the canary contact inside a domain-bounded armed window, closed with a verified
