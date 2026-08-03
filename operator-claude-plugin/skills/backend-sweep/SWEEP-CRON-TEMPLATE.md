@@ -8,68 +8,65 @@ the operator to run themselves.
 ## What this installs, and why it is a second step
 
 Installing this plugin does **not** install this trigger. The plugin ships the sweep's
-*logic* (`scripts/sweep_entry.py`, the `backend-sweep` skill); this file is the *trigger*
-that fires it on a schedule with no session open — a machine-local `cron`/`launchd` entry
-running `claude -p` headlessly. That entry lives outside the plugin's own packaging (it is
-not a git-tracked file the plugin ships), so it has to be installed on purpose, by an
-admin, as an explicit second step. A plugin installed without this step is a sweep that
-never fires — silently, because a sweep that never fires and a healthy backend look
-identical from the operator's side (this is a known, accepted gap, tracked separately;
-this file's job is only to make sure the trigger gets installed, not to close that gap).
+*logic* (`scripts/sweep_entry.py`, the `backend-sweep` skill) and the trigger that fires it
+unattended: a shipped `sh` wrapper, `skills/backend-sweep/lv-sweep-run.sh`, that runs
+`sweep_entry.py` directly — no LLM, no Anthropic credential, nothing in the path that can
+expire. That wrapper still needs a schedule pointed at it, and a schedule lives outside the
+plugin's own packaging (it is not a git-tracked file the plugin ships), so it has to be
+installed on purpose, by an admin, as an explicit second step.
 
-This reproduces the exact invocation `29-HOST-PROBE.md` §A1 confirmed working — a
-different, approximate invocation is the failure that probe existed to prevent — and the
-delivery mechanics §A5 recorded: a one-line macOS Notification Center banner via
+This reproduces the trigger proven live under real cron on 2026-08-03 with no session
+open, replacing an earlier design that shelled a headless LLM invocation on a schedule and
+failed there **silently** — see `29-HOST-PROBE.md`'s dated amendment for why that earlier
+design's own host probe missed the failure, and `29-06-FINDINGS.md` for the verbatim errors
+(an expired credential with no refresh, `node` absent from cron's PATH). The delivery
+mechanics §A5 recorded still hold: a one-line macOS Notification Center banner via
 `osascript`, with full detail redirected to a log file, because the banner budget is one
 short line and the log is where the rest survives.
 
-## Step 1 — save the sweep prompt
+## Step 1 — create the interpreter the wrapper runs
 
-Save this exact text to `~/.claude/lv-sweep-prompt.txt` (create the `~/.claude/`
-directory first if it does not already exist):
+The wrapper needs a python with this plugin's own dependencies installed. The system
+`python3` on macOS does not have `requests`, so a schedule pointed at it fails on import —
+measured, not assumed. Create a dedicated virtualenv on the operator's machine and install
+this plugin's `requirements.txt` into it (the same three packages the README's "One-time
+setup" step 3 names — `requests`, `PyYAML`, `openpyxl`):
 
-```text
-Run the operator-claude-plugin's backend-sweep skill now, and use no other tool beyond
-what that skill's own steps call for. It returns a JSON list of notice objects, or an
-empty list.
-
-If the list is empty: print exactly one line — "LV sweep ran, backend healthy, no
-notices." — and stop there. Do not print anything else, do not summarize the backend's
-state, and do not add a healthy-report line of your own. Silence is the answer; the one
-line above is only a run stamp proving the cron fired, not a report.
-
-If the list is NOT empty: print the full JSON list first, so the redirected log keeps
-every notice's complete detail untruncated. Then, for every notice in that list, run
-exactly one command:
-
-osascript -e 'display notification "<notice headline, verbatim>" with title "LV Backend Sweep"'
-
-using that notice's own headline text exactly as given, with no rewording and no
-combining more than one notice into a single line. Post one notification per notice.
-
-Never run any command other than the skill's own read, the one-line run stamp above, or
-the osascript call above. This is a read-only, unattended sweep: no write to HubSpot, no
-write to n8n, no dispatch, no arm, ever — if anything here looks like it would write,
-stop and do not run it.
+```bash
+python3 -m venv ~/.lv-sweep-venv
+~/.lv-sweep-venv/bin/pip install -r "[plugin-root]/requirements.txt"
 ```
+
+Record the absolute path to that venv's `bin/python` (`~/.lv-sweep-venv/bin/python` above) —
+that is the interpreter the schedule below names. This failure mode is loud now (an import
+error, in the log, with a banner), but it is still one step cheaper to avoid than to
+diagnose after the fact.
 
 ## Step 2 — install the schedule
 
-Pick whichever of the two your platform prefers. Both reproduce the same invocation.
+Pick whichever of the two your platform prefers. Both call the same wrapper with the same
+three arguments, in this order: the plugin root, the venv python from Step 1, and the log
+path.
 
 ### Option A — cron
 
-Run `crontab -e` and add this line (fill in the two bracketed paths first — find the
-`claude` binary with `which claude`):
+Run `crontab -e` and add this line (fill in `[plugin-root]` and `[venv-python]` first):
 
 ```cron
-0 */4 * * * cd "$HOME" && [path-to-claude-binary] -p "$(cat "$HOME/.claude/lv-sweep-prompt.txt")" --allowedTools "Skill,Bash,Read,Glob,Grep" >> "$HOME/Library/Logs/lv-backend-sweep.log" 2>&1
+0 */4 * * * /bin/sh "[plugin-root]/skills/backend-sweep/lv-sweep-run.sh" "[plugin-root]" "[venv-python]" "$HOME/Library/Logs/lv-backend-sweep.log"
 ```
+
+Invoking through `/bin/sh` explicitly is deliberate: it does not depend on the executable
+bit surviving a marketplace clone or an `rsync`. Do not "simplify" it away to a bare path.
+The wrapper writes its own log (every stamp and notice line lands at the fourth argument
+above), so no shell redirection is required on this line — cron's own stderr may still be
+appended with `>>` if you want a second belt-and-braces record.
 
 ### Option B — launchd
 
 Save as `~/Library/LaunchAgents/com.lightningvisuals.backend-sweep.plist` (fill in
-`[path-to-claude-binary]`), then load it with `launchctl load ~/Library/LaunchAgents/com.lightningvisuals.backend-sweep.plist`:
+`[plugin-root]` and `[venv-python]`), then load it with `launchctl load
+~/Library/LaunchAgents/com.lightningvisuals.backend-sweep.plist`:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -80,29 +77,35 @@ Save as `~/Library/LaunchAgents/com.lightningvisuals.backend-sweep.plist` (fill 
   <string>com.lightningvisuals.backend-sweep</string>
   <key>ProgramArguments</key>
   <array>
-    <string>[path-to-claude-binary]</string>
-    <string>-p</string>
-    <string>PROMPT_PLACEHOLDER</string>
-    <string>--allowedTools</string>
-    <string>Skill,Bash,Read,Glob,Grep</string>
+    <string>/bin/sh</string>
+    <string>[plugin-root]/skills/backend-sweep/lv-sweep-run.sh</string>
+    <string>[plugin-root]</string>
+    <string>[venv-python]</string>
+    <string>/Users/[operator-home-directory]/Library/Logs/lv-backend-sweep.log</string>
   </array>
-  <key>WorkingDirectory</key>
-  <string>/Users/[operator-home-directory]</string>
   <key>StartInterval</key>
   <integer>14400</integer>
-  <key>StandardOutPath</key>
-  <string>/Users/[operator-home-directory]/Library/Logs/lv-backend-sweep.log</string>
-  <key>StandardErrorPath</key>
-  <string>/Users/[operator-home-directory]/Library/Logs/lv-backend-sweep.log</string>
 </dict>
 </plist>
 ```
 
-`launchd`'s `ProgramArguments` array cannot run a shell `$(cat ...)` substitution the way
-cron can — replace `PROMPT_PLACEHOLDER` with the literal contents of
-`~/.claude/lv-sweep-prompt.txt` from Step 1, pasted in as one XML string value. Prefer
-Option A (cron) unless your platform already manages other launchd agents; it needs no
-manual copy-paste of the prompt text into a second file.
+The wrapper writes its own log through the fourth `ProgramArguments` entry above, so no
+`StandardOutPath` / `StandardErrorPath` key is required (either may still be added for
+launchd's own stderr). Prefer Option A (cron) unless your platform already manages other
+launchd agents.
+
+## A trigger that cannot run is now loud — and what still stays silent
+
+**If the trigger runs and cannot complete, it says so.** `lv-sweep-run.sh` posts a banner
+naming itself as broken and exits non-zero on every failure path — the wrong number of
+arguments, the python failing to run at all, or output it cannot parse. Broken and healthy
+are no longer indistinguishable the way the earlier, silently-failing headless-LLM design
+left them.
+
+**A trigger that was never installed is still silent** — nothing runs, so nothing can post
+a banner about not running. That residual case is honest, and it is exactly why Step 2
+above exists: if notices are expected but never arrive, checking whether the schedule was
+ever installed is the first thing to do, not the backend.
 
 ## Cadence: every 4 hours, and why
 
@@ -124,15 +127,20 @@ operator; do not lower it below what this reasoning assumes without re-reading i
 
 ## Confirming it fired
 
-Check `~/Library/Logs/lv-backend-sweep.log` after the next scheduled time passes. A
-healthy fire prints exactly the one run-stamp line from the prompt above; nothing else
-appearing in the log on a healthy day is itself a signal something is misconfigured
-upstream (the prompt, the skill, or the cron entry itself), not that the sweep found nine
-things wrong.
+Check `~/Library/Logs/lv-backend-sweep.log` after the next scheduled time passes:
+
+- A **healthy** fire appends exactly one stamped line — `LV sweep ran, backend healthy, no
+  notices.` — and nothing else.
+- A fire **with notices** appends the notice count, the full JSON (untruncated), and one
+  line per banner posted. The banner is gated on that notice list being non-empty — an
+  empty list is the healthy case above, and posts no banner at all.
+- A **broken** trigger appends a failure line, and by the time you open the log you have
+  already seen a banner naming the sweep itself as broken.
 
 ## Uninstalling
 
 Cron: `crontab -e` and delete the line. Launchd: `launchctl unload
 ~/Library/LaunchAgents/com.lightningvisuals.backend-sweep.plist` then delete the plist
-file. Either way, deleting `~/.claude/lv-sweep-prompt.txt` is optional — an admin re-running
-Step 1 later can just overwrite it.
+file. Nothing else needs removing — `lv-sweep-run.sh` is a tracked file the plugin ships,
+not something either step above created on the operator's machine beyond the venv and the
+schedule entry itself.

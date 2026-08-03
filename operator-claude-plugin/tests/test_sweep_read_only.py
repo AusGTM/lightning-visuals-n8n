@@ -30,7 +30,9 @@ Mirrors test_no_backend_imports.py's AST idiom — parse, never grep.
    also names a dispatch/write capability would pass the import-only guard above and
    still violate NOTICE-05 — T-29-20 names this exact hole.
 2. `SWEEP-CRON-TEMPLATE.md` is checked as text (no pytest harness can run cron) for the
-   §A1 invocation and the §A5 delivery mechanics, plus the D-19 cadence-cost note.
+   trigger invocation and the §A5 delivery mechanics, plus the D-19 cadence-cost note.
+   32-01 rewrote the invocation this file pins from the LLM-based §A1 trigger (proven
+   by RB-8 to fail silently under real cron) to the LLM-free `lv-sweep-run.sh` wrapper.
 """
 import ast
 import re
@@ -237,22 +239,36 @@ def test_the_skill_capability_check_flags_a_synthetic_wide_skill_body():
 
 # --- 29-06 Task 1: SWEEP-CRON-TEMPLATE.md, checked as text (no pytest can run cron) -----
 
-def test_sweep_cron_template_reproduces_the_a1_invocation_and_a5_delivery():
+def test_sweep_cron_template_reproduces_the_wrapper_invocation_and_a5_delivery():
+    """Rewritten 2026-08-03 (32-01, RB-8). The assertions this test carried before this
+    date REQUIRED `claude -p` and `--allowedTools` — exactly the invocation RB-8 proved
+    fails silently under real cron (an expired credential with no refresh, `node`
+    absent from cron's PATH; `29-06-FINDINGS.md`). That invocation is no longer correct
+    to ship, so this test is inverted: it now asserts the NEW wrapper invocation
+    (`lv-sweep-run.sh`, run through `/bin/sh`, LLM-free) is present, and that the OLD
+    LLM invocation is ABSENT, so the removal cannot silently regress back to the
+    trigger that failed."""
     assert SWEEP_CRON_TEMPLATE_PATH.exists(), "SWEEP-CRON-TEMPLATE.md was not shipped"
     text = SWEEP_CRON_TEMPLATE_PATH.read_text()
 
-    assert "claude -p" in text, "must invoke claude -p (29-HOST-PROBE.md §A1)"
-    assert '--allowedTools "Skill,Bash,Read,Glob,Grep"' in text, (
-        "must reproduce §A1's exact allowed-tools set verbatim, not an approximation"
+    assert "lv-sweep-run.sh" in text, "must invoke the shipped wrapper, not an LLM"
+    assert "/bin/sh" in text, "must invoke the wrapper through /bin/sh explicitly"
+    assert "[plugin-root]" in text and "[venv-python]" in text, (
+        "must name the wrapper's three positional arguments (plugin root, python, log)"
     )
-    assert re.search(r"[>]{1,2}\s*\"?\S*\.log", text), (
-        "must redirect stdout to a log file (§A5 — the banner is one line, the log "
-        "carries the untruncated detail)"
+    assert ".log" in text, (
+        "must still name a log path (§A5 — the banner is one line, the log carries "
+        "the untruncated detail)"
     )
     assert "osascript" in text, "must post the one-line banner via osascript (§A5)"
     assert "empty" in text.lower(), (
         "the banner must be gated on a non-empty notice list, not fired every run"
     )
+
+    assert "claude -p" not in text, (
+        "the old LLM invocation must be gone — RB-8 proved it fails silently under cron"
+    )
+    assert "--allowedTools" not in text, "the old tool-permission flag must be gone too"
 
 
 def test_sweep_cron_template_states_the_cadence_mediated_no_credit_property():
