@@ -375,7 +375,25 @@ Plans:
   5. Every path is pinned at the ENTRYPOINT layer against an isolated plugin root: resolution order, the one-time sibling migration, the `0600` mode, and the durable pointer surviving a simulated version bump. Asserting on the resolver function alone is what shipped the 0.6.1 and 0.6.2 defects in opposite directions.
   6. Nothing regresses: the legacy same-install path still resolves, the plugin suite stays green, and no secret value ever reaches a log line or a refusal message.
 
-**Plans**: TBD (planner decides)
+**Plans**: 4 plans
+
+Plans:
+
+**Wave 1**
+
+- [ ] 33-01-PLAN.md — Tracer: durable config home resolved through one shared module, steps 1–4, pinned at the CLI against a fake HOME
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 33-02-PLAN.md — Step 5: the one-time sibling scan, atomic 0600 write, and verify-then-delete behind a one-way decision gate
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 33-03-PLAN.md — The dashboard pointer gets identical treatment (STATUS-05 across an update), and `initialize` reports the real resolved path
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 33-04-PLAN.md — Doc truth sweep, plugin 0.7.0 release cut, and RB-10: one real migration observed on this host
 
 
 ## v0.6 Progress
