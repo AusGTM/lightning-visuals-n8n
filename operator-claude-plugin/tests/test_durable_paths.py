@@ -145,3 +145,79 @@ def test_atomic_write_0600_leaves_no_leftover_entries_when_os_replace_fails(tmp_
 
     assert not target.exists()
     assert list(target.parent.iterdir()) == []
+
+
+# --- "nothing anywhere yet" — the state every NEW operator starts in ----------------
+#
+# RB-10 (2026-08-04) found both resolvers returned the LEGACY path when the file existed
+# nowhere, so a first-ever pointer or config was written into the versioned install
+# directory and stranded by the next update. Every existing test seeded the durable file
+# before asserting — including two whose fixtures were changed to pre-create it precisely
+# BECAUSE the bare call fell through. That fallthrough was the bug; the fixture hid it.
+
+def _fake_home(tmp_path, monkeypatch, durable_paths=None):
+    """A fake HOME *and* an empty install root.
+
+    Both halves matter. Without the empty PLUGIN_ROOT this test resolves to the REPO
+    checkout's own `config/operator.local.json`, which really does exist — step 4 then
+    returns legacy correctly and the test fails for a reason that is not the bug. That is
+    the trap 33-03 fell into: it read the same failure as an environment quirk and seeded
+    the durable file to get past it, which hid the fallthrough RB-10 later found live.
+    Point PLUGIN_ROOT at an empty directory instead, so "nothing in this install" is
+    actually true.
+    """
+    home = tmp_path / "home"
+    (home / ".claude" / "plugins" / "data").mkdir(parents=True)
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.delenv("LV_OPERATOR_CONFIG", raising=False)
+    monkeypatch.delenv("CLAUDE_PLUGIN_DATA", raising=False)
+    if durable_paths is not None:
+        empty_install = tmp_path / "empty-install"
+        empty_install.mkdir()
+        monkeypatch.setattr(durable_paths, "PLUGIN_ROOT", empty_install)
+    return home
+
+
+def test_a_first_ever_config_is_written_to_the_durable_home_not_the_install_dir(
+        tmp_path, monkeypatch):
+    """No config in the durable home, none in this install, none in any sibling — a brand
+    new operator. The resolved path is where `initialize --create` will write it."""
+    import importlib
+    import durable_paths
+    importlib.reload(durable_paths)
+    _fake_home(tmp_path, monkeypatch, durable_paths)
+
+    resolved = durable_paths.resolve_config_path()
+    assert durable_paths.PLUGIN_ROOT not in resolved.parents, (
+        "a first-ever config must not be born inside the versioned install directory")
+    assert resolved.parent == durable_paths.durable_dir()
+
+
+def test_a_first_ever_pointer_is_written_to_the_durable_home_not_the_install_dir(
+        tmp_path, monkeypatch):
+    """The exact RB-10 case: no `state/` in any install, so nothing to migrate."""
+    import importlib
+    import durable_paths
+    importlib.reload(durable_paths)
+    _fake_home(tmp_path, monkeypatch, durable_paths)
+
+    resolved = durable_paths.resolve_state_path()
+    assert durable_paths.PLUGIN_ROOT not in resolved.parents
+    assert resolved.parent == durable_paths.durable_dir()
+
+
+def test_an_uncreatable_durable_home_degrades_to_legacy_rather_than_raising(
+        tmp_path, monkeypatch):
+    """CONTEXT.md's degrade-never-strand rule. A resolver that raises here would make the
+    plugin refuse to work because migration is impossible — the opposite of the intent."""
+    import importlib
+    import durable_paths
+    importlib.reload(durable_paths)
+    _fake_home(tmp_path, monkeypatch, durable_paths)
+
+    def _boom(*a, **k):
+        raise OSError("read-only")
+    monkeypatch.setattr(durable_paths.Path, "mkdir", _boom)
+
+    resolved = durable_paths.resolve_config_path()
+    assert resolved == durable_paths.PLUGIN_ROOT / "config" / durable_paths.CONFIG_FILENAME

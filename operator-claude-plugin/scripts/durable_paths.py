@@ -178,6 +178,26 @@ def durable_dir() -> Path:
     return Path.home() / ".claude" / "plugins" / "data" / PLUGIN_ID
 
 
+def _writable_durable(target: Path, legacy: Path) -> Path:
+    """Where a file that does not exist ANYWHERE yet should be WRITTEN.
+
+    The durable home, so a first-ever config or pointer is not born inside the versioned
+    install directory and stranded by the next update. Found by RB-10 (2026-08-04): both
+    resolvers used to end `return legacy`, which was invisible to every test because each
+    one seeded the durable file first — so "nothing anywhere", the state every new operator
+    starts in, was the one case never covered.
+
+    Degrades to `legacy` when the durable home cannot be created (read-only HOME, odd
+    permissions). CONTEXT.md's rule stands: the plugin must still WORK from wherever it can,
+    never refuse because migration is impossible.
+    """
+    try:
+        target.parent.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return legacy
+    return target
+
+
 def resolve_config_path(explicit: str | Path | None = None, allow_migration: bool = True) -> Path:
     """The single config-resolution authority. See module docstring for the order.
 
@@ -208,7 +228,7 @@ def resolve_config_path(explicit: str | Path | None = None, allow_migration: boo
         if migrated is not None:
             return migrated
 
-    return legacy
+    return _writable_durable(durable, legacy)
 
 
 def resolve_state_path(explicit: str | Path | None = None, allow_migration: bool = True) -> Path:
@@ -245,4 +265,4 @@ def resolve_state_path(explicit: str | Path | None = None, allow_migration: bool
         if migrated is not None:
             return migrated
 
-    return legacy
+    return _writable_durable(durable, legacy)

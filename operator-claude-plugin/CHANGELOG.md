@@ -16,6 +16,32 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-08-04
+
+### Fixed
+
+- **A first-ever settings file or dashboard link is no longer created inside the install
+  folder.** Found live by RB-10, the release gate for 0.7.0 — the migration itself worked
+  perfectly (config moved up, `0600`, verified, source removed, no permission prompt), but
+  creating a dashboard immediately afterwards wrote its pointer to
+  `0.7.1/state/dashboard_artifact.json`: the exact location 0.7.0 exists to stop using.
+
+  Both resolvers ended with "fall back to the install folder" when the file existed
+  nowhere. An operator who already had settings was rescued by the migration step just
+  before it; an operator creating something for the **first time** — every new operator,
+  and anyone's first dashboard — got the old stranding behaviour back. They now resolve to
+  the durable home as the write target, degrading to the install folder only when the
+  durable home cannot be created, so the plugin still works on a read-only HOME rather than
+  refusing.
+
+  **Why the tests missed it, recorded because the pattern keeps recurring:** every existing
+  test seeded the durable file before asserting, so "nothing anywhere yet" was never
+  exercised. Two of those fixtures were changed *during* 0.7.0 to pre-create the file,
+  because the bare call fell through in a dev checkout — that fallthrough was the defect,
+  and adjusting the fixture to get past it hid it for one release. The new tests point
+  `PLUGIN_ROOT` at an empty directory instead, so the premise is actually true, and were
+  confirmed to fail against the reverted fix.
+
 ## [0.7.1] - 2026-08-04
 
 ### Fixed
