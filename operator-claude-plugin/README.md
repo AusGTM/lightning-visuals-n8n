@@ -502,28 +502,40 @@ closed it says which one and who can open it.
 operator-claude-plugin/
   README.md               # this file
   CHANGELOG.md            # changes to this client only; backend changes live in the root CHANGELOG
+  UAT.md                  # operator acceptance walkthrough — every step conversational, pass criteria observable
   requirements.txt        # this plugin's own dependencies — openpyxl, requests, PyYAML
   .claude-plugin/
     plugin.json           # plugin manifest
-  skills/contact-upload/
-    SKILL.md               # the conversation contract: state target, resolve file, preview, approve, arm, dispatch
-  skills/enrich-records/
-    SKILL.md               # the enrichment lane: records or list, providers, cost, chunk plan, approve, arm, dispatch
-  skills/backend-sweep/
-    SKILL.md               # the unattended sweep's own conversational entry point (on-demand)
-    SWEEP-CRON-TEMPLATE.md # admin-only: install the schedule that fires the sweep unattended
-    lv-sweep-run.sh         # the LLM-free trigger the schedule calls: runs sweep_entry.py directly
+  skills/
+    initialize/            # setup + setup-check: template placement, named missing values, idempotent re-run
+    contact-upload/        # the ingestion contract: state target, resolve input, preview, approve, arm, dispatch
+    enrich-records/        # the enrichment lane: records or list, providers, cost, chunk plan, approve, arm, dispatch
+    backend-status/        # plain-language read of what the backend is doing, text or dashboard artifact
+    backend-control/       # run-now / on-off / cadence over the allowlisted mutations, confirmed and read-back verified
+    review-triage/         # the review queue: render conflicts, adjudicate one record, gated writeback
+    backend-sweep/
+      SKILL.md             # the sweep's conversational entry point (on-demand)
+      SWEEP-CRON-TEMPLATE.md  # admin-only: install the schedule that fires the sweep unattended
+      lv-sweep-run.sh      # the LLM-free trigger the schedule calls: runs sweep_entry.py directly
   scripts/
     config_gate.py         # load/validate operator.local.json; refuses before any network call
-    tabular.py              # read CSV/XLSX headers+rows verbatim; convert XLSX to CSV bytes for the wire
-    preview.py              # adaptive, display-only preview (reads config/column_mapping.yaml as a lookup only)
-    preview_enrichment.py   # the enrichment preview: records, providers, cost, chunk plan — and the cost block both lanes share
-    cost_guard.py           # dated rate table, batch estimate, balance read, tri-state verdict
-    chunking.py             # the chunk plan the preview shows and dispatch sends, unchanged
-    enrichment.py           # provider resolution, the enrichment envelope, the one enrichment POST
-    dispatch.py             # the one POST to hubspot/contact-upload; armed has no default
+    init_check.py          # what initialize verifies and reports
+    # ingestion lane
+    tabular.py extraction.py preview.py dispatch.py report.py error_table.py
+    # enrichment lane
+    preview_enrichment.py enrichment.py chunking.py cost_guard.py report_enrichment.py
+    # status surface
+    status.py backend_status.py n8n_read.py executions_client.py execution_errors.py
+    render_text.py render_dashboard.py artifact_store.py
+    # control actions
+    control_actions.py n8n_control.py n8n_arming.py n8n_cadence.py probe_n8n_semantics.py
+    # notices + sweep
+    watch.py sweep_entry.py sweep_read.py sweep_conditions.py sweep_notify.py
+    # review triage
+    review_queue.py review_decision.py
   config/
     operator.local.example.json  # tracked template — copy to operator.local.json (gitignored) per setup above
+    cost_rates.json        # dated cost-rate table the previews price from
   tests/                   # this plugin's own test suite, run under the repo's .venv
 ```
 

@@ -158,8 +158,10 @@ over the same n8n system, so its version says nothing about backend capability.
   reported as still running with how to re-check, never silence.
 
   With no session open, a new `backend-sweep` skill runs on a `cron`/`launchd`-triggered
-  headless `claude -p` fire (`skills/backend-sweep/SWEEP-CRON-TEMPLATE.md` — an explicit
-  second admin step after installing the plugin, never an implicit side effect of it) and
+  fire (originally a headless `claude -p` invocation — **superseded by the deterministic
+  LLM-free wrapper in the Phase 32 entry above**; `skills/backend-sweep/SWEEP-CRON-TEMPLATE.md`
+  is an explicit second admin step after installing the plugin, never an implicit side
+  effect of it) and
   watches for exactly five conditions plus one backstop: a failed scheduled run including
   one that silently swallowed a read failure behind a reported `success`, a rejected
   credential, an exhausted provider quota, a stuck lock, a review backlog past its
@@ -204,24 +206,25 @@ over the same n8n system, so its version says nothing about backend capability.
   during scoring and never persisted, so no client can show it today; persisting it is a cheap
   backend fast-follow and is recorded as deferred, not as a defect in this client.
 
-### Planned
+### Verified
 
-Milestone v0.6, phases 25–30 — see `.planning/workstreams/plugin-entrypoint/ROADMAP.md`:
-
-- **25** Enrichment lane on existing records + cost guard (credit/token estimate, chunking)
-- **26** Per-record outcome reporting and safe retry without duplicates
-- **27** Backend status surface: n8n-side health endpoint, plain-language read, dashboard artifact
-- **28** Control actions: run now, workflow on/off, schedule cadence, conversation-scoped arming
-- **29** Notices: in-session run watch and unattended sweep that speaks up only when needed
-- **30** Review-queue triage with gated writeback, stamped as a human decision
+- **Milestone v0.6 sealed 2026-08-04 — 49/49 requirements complete** (`.planning/MILESTONES.md`).
+  The RB-9 close proved the last two live: an armed one-record review window (allowlist
+  `9604614548` only) landed a valid-enum **approve** — the record's provenance now carries a
+  `source: human` / `human_approved` entry with timestamp, the operator's reason verbatim, and
+  `superseded_source` preserving the machine attribution it replaced (REVIEW-04); the same
+  decision's `manual_protected` candidate field was **withheld by the decision endpoint on both
+  preview and real submit** and left unchanged on independent re-read (REVIEW-02 / D-31 —
+  endpoint path only; the 15-minute backstop allowlists by key and was not probed). Window
+  closed disarmed with read-back PASS, `neighbors_changed: 0`. No client code changed — this
+  entry records verification, not behaviour.
 
 ### Notes
 
-- No implementation files yet; this directory is documentation-only until phase 23.
-- Known constraint carried from planning: agent tooling in this repo is blocked from performing
-  arming writes, so the armed path needs a human executing it even though the operator-facing
-  design is a yes/no in chat.
-- Known dependency: the credit figures the cost guard needs cannot be read by this client
-  directly (it holds no provider credentials), so they arrive through the n8n-side status
-  endpoint. Phase 25 builds the credit-only slice; phase 27 grows the same endpoint to full
-  health.
+- Arming is **operator-directed only** (amended 2026-08-03): a second explicit instruction after
+  the invariant is named, bounded by a single-record `TEST_RECORD_*` allowlist, verified by a
+  symmetric `--expect-armed` read-back. Unattended, scheduled, inferred, or unbounded arming
+  stays absolutely blocked. Disarm paths are never gated.
+- Known dependency (by design): the credit figures the cost guard needs cannot be read by this
+  client directly (it holds no provider credentials); they arrive through the n8n-side
+  `hubspot/backend-status` endpoint.

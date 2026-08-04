@@ -3,9 +3,10 @@
 **For the operator, in Claude Desktop.** No terminal, no n8n, no HubSpot admin. Every step is
 something you say; the pass criteria are things you can see.
 
-**Cost:** sessions 1–4 and 6 cost **nothing** — the plugin is disarmed by default and every
+**Cost:** sessions 1–4, 6, 7 and 8 cost **nothing** — the plugin is disarmed by default and every
 dispatch stops at a preview you can abort (DISPATCH-03, PREVIEW-04). Only session 5 spends
-money, and it says so before it does.
+money, and it says so before it does. (In session 7, only ask to "run now" a workflow the
+steps name as safe — running the enrichment workflow spends provider credits.)
 
 **If any step fails, stop and report it.** A step that "sort of worked" is a fail — write down
 what you saw instead. The point of UAT is to find the gap between what was promised and what
@@ -126,28 +127,53 @@ a success.
 | 6.2 | Look for a HubSpot link | Present if the portal id is configured; if not, it says the link is missing rather than guessing a URL |
 | 6.3 | Resolve one conversationally | It asks for a **separate confirmation** before writing back — approving a review is not covered by any earlier approval |
 | 6.4 | Reject one | The rejection **reason is recorded** and the record **stays in the queue** |
-| 6.5 | After any decision | It stamps that a **human** made it, with timestamp and reason |
+| 6.5 | After an approve lands | It stamps that a **human** made it, with timestamp and your reason — and the record's history still shows what the machine had said before you overrode it |
+| 6.6 | If a held value includes a **protected** field (e.g. `domain`) | It is **labelled protected and withheld** — the approve applies the other fields and says which one it withheld. The protected field never changes |
+| 6.7 | If the backend refuses | The refusal **names the gate** — "not on the allowlist", "not a value HubSpot accepts" — never a bare failure or an empty answer |
 
 **Fail if:** a review writes back without its own confirmation step (REVIEW-03).
 
-*Covers REVIEW-01/02/03/04/05.*
+**Note:** an approve that actually lands needs the backend opened by an admin first (a
+deploy-time write flag plus a record allowlist, and an environment variable on your machine).
+Without that, steps 6.1–6.3 and 6.7 still work — the preview shows the exact write and the
+submit refuses naming what is closed. That refusal is a **pass**, not a fail.
+
+*Covers REVIEW-01/02/03/04/05 — proven live 2026-08-04 (RB-9 close).*
 
 ---
 
-## Not in this UAT, and why
+## Session 7 — controlling the backend
 
-Two capabilities are **not testable yet**. Do not mark them pass or fail — there is nothing to
-exercise.
+| # | Do | Pass when |
+|---|---|---|
+| 7.1 | Ask to turn a scheduled workflow **off**, then **on** again | Each change asks for its own confirmation first, then reports the new state **read back from the backend**, not assumed |
+| 7.2 | Ask to change a schedule's cadence | You see current cadence and proposed cadence **before** confirming; afterwards the new cadence is read back |
+| 7.3 | Ask for something outside the allowlist (e.g. "edit the workflow's nodes", "change a credential") | It refuses and says that is an **admin task**, not a plugin action |
+| 7.4 | Ask to arm live writes without the admin having opened the backend | It refuses **naming the closed gate** and who opens it — it never pretends to be armed |
+| 7.5 | After any mutation | Backend status reflects it — the two answers agree |
 
-- **Turning workflows on/off, changing schedules, arming live writes (CONTROL-01…07).** The
-  machinery is built and tested (`n8n_arming.py`, `n8n_cadence.py`), but the operator-facing
-  wording is plan **28-05**, which is not built. There is no conversational way in yet, by
-  design — the surface lands with its confirmation language or not at all.
-- **Unattended notices (NOTICE-01…05).** Blocked on the RB-2 host probe: whether a scheduled
-  routine can reach this plugin at all is still an open question, and building notices on an
-  unverified host is what that probe exists to prevent.
+**Fail if:** a mutation happens without its own confirmation, or a state change is reported
+from memory rather than read back.
 
-Both are honest gaps in v0.6, not UAT failures.
+*Covers CONTROL-01…07 — the armed dispatch path itself was proven in RB-7 (admin-audited).*
+
+---
+
+## Session 8 — notices
+
+| # | Do | Pass when |
+|---|---|---|
+| 8.1 | After approving a send (session 5), stay in the conversation | When the run settles it **reports itself** — you did not have to ask |
+| 8.2 | Run the sweep on demand (`/operator-claude-plugin:backend-sweep`) | It reports **only what needs a human** — or says the backend is healthy and reports nothing else |
+| 8.3 | Ask what the unattended schedule would have said | Same answer as 8.2 — the on-demand run is exactly what the next unattended fire would report |
+
+**Unattended firing is an admin install** (a `cron`/`launchd` entry per
+`skills/backend-sweep/SWEEP-CRON-TEMPLATE.md` — terminal commands, so not part of *operator*
+UAT). If notices are expected but never arrive, the first thing to check is whether that
+schedule was ever installed — an uninstalled trigger is silent; an installed-but-broken one
+now announces itself.
+
+*Covers NOTICE-01…05 — the unattended path was proven under real cron 2026-08-03 (RB-8).*
 
 ---
 

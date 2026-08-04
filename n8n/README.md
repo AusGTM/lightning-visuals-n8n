@@ -368,3 +368,26 @@ identical.
 | Providers | 3 real **HTTP** nodes (Lusha/Apollo/ZoomInfo) | **Provider Waterfall (MOCK)** Code node (fixture shapes) |
 | Routing | **Switch** + **IF** nodes | per-item `action` field; `Decide Action` echoes the dry-run payload |
 | Writes | HubSpot **Create/Update** (gated) | **Decide Action** ECHOES PATCH/POST; no write |
+
+## Other Cloud workflows (v0.6)
+
+Two later workflows share the same build pipeline (`scripts/build_cloud_workflows.py`), the same
+credential binding, and the same disarmed-at-rest posture; they were added for the v0.6 operator
+plugin and are documented here so this README's inventory matches `n8n/*.json` on disk.
+
+| File | Purpose |
+| ---- | ------- |
+| `wf_backend_status_cloud.json` | **`hubspot/backend-status`** — read-only backend health: workflows and their active states, recent executions, review-queue counts, provider credit balances (usage endpoints only, never a data endpoint). A value that cannot be read reports an explicit unreadable marker, never zero. Active at rest. |
+| `wf_review_decision_cloud.json` | **`hubspot/review/queue`** (read-only backlog) + **`hubspot/review/decision`** (synchronous adjudication; `n8n/code/reviewDecision.js` calling the same `reviewApply` engine the 15-minute backstop uses). Approve promotes the held candidate, clears the flags, and writes a human provenance entry (`source: human`, `human_approved`, timestamp, reason, `superseded_source`); reject records the reason and leaves the record queued; `manual_protected`/`review_required` classes are withheld on this endpoint. **Ships and rests inactive** — activated only inside audited review windows. |
+
+**Enum guard (Phase 31).** Every candidate value bound for an enum-backed HubSpot company
+property passes `n8n/code/hubspotEnums.js` over the generated option data
+(`hubspotEnums.generated.js`, from the schema snapshot via `scripts/gen_hubspot_enums_js.py`) —
+at enrichment staging AND on both review paths. Exact case-insensitive label→value match only;
+anything else is refused explicitly (naming property, value, and closest accepted labels), never
+mapped by guesswork. Preview and real submit return the identical refusal.
+
+**Deploy note.** `scripts/deploy_n8n_workflows.py` PUTs but never activates. n8n keeps serving a
+running workflow's pre-PUT content until a deactivate→activate bounce, so every deploy — armed
+or disarmed — must bounce all active workflows before any read-back verdict is trusted
+(`scripts/verify_live_write_safety.py` reads STORED content).
