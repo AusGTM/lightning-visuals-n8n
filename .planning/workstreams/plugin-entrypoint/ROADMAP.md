@@ -416,7 +416,7 @@ Plans:
 Plans:
 **Wave 1** *(the two halves are independent — Half B's engine needs no widened alias, Half A needs no client change)*
 
-- [ ] 34-01-PLAN.md — Half B tracer: `header_suggest.py` + its CLI — `Ph.` suggested with its column's values, `Full Name` refused, nothing rewritten without a per-header yes, pinned at the CLI subprocess layer
+- [x] 34-01-PLAN.md — Half B tracer: `header_suggest.py` + its CLI — `Ph.` suggested with its column's values, `Full Name` refused, nothing rewritten without a per-header yes, pinned at the CLI subprocess layer
 - [ ] 34-02-PLAN.md — Half A: `e-mail address` / `org.` / `linkedin profile` widened in all three alias tables, rebuilt, deployed disarmed, every live workflow bounced
 
 **Wave 2** *(blocked on Wave 1 — the e2e walk asserts `Org.` maps, which only Half A makes true)*

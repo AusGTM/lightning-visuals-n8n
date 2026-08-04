@@ -1,31 +1,45 @@
 ---
 gsd_state_version: 1.0
 milestone: v0.6
-milestone_name: Claude Plugin Entrypoint
-current_phase: 23
-current_phase_name: walking-skeleton-plugin-shell-tabular-dispatch
-current_plan: 06
+milestone_name: Progress
+current_phase: 34
+current_phase_name: Header Mapping Tolerance
+current_plan: 2
 status: executing
-stopped_at: 23-06 in progress (operator runbook RB-3). Config created; A1 passes after a plugin.json author-object fix; A6 behaviour verified at the gate. Tenant pinned via N8N_EXPECTED_URL. Section B Step 1 read-back PASS, but two findings hold Steps 2+ — the verifier covers only 2 of 8 flag sites and none in the contact lane, and 23-01 is committed-but-undeployed. A2-A5/A7 need Claude Desktop. 23-01 through 23-05 complete.
-last_updated: "2026-08-04T00:00:00.000Z"
+stopped_at: 23-06 in progress (operator runbook RB-3). Config created; A1 passes after a plugin.json author-object fix; A6 behaviour verified at the gate. Tenant pinned via N8N_EXPECTED_URL. Section B Step 1 read-back PASS, but two findings hold Steps 2+ — the verifier covers only 2 of 8 flag sites and none in the contact lane, and 23-01 is committed-but-undeployed. A2-A5/A7 need Claude Desktop. 23-01 through 23-05 complete. Phase 34 plan 01 (Half B engine, header_suggest.py) complete.
+last_updated: "2026-08-04T23:19:13+10:00"
 last_activity: 2026-08-04
-last_activity_desc: Phase 33 plan 03 (durable-operator-state) built — dashboard pointer delegates to durable_paths (STATUS-05 across an update), initialize reports the real resolved path
+last_activity_desc: Phase 34 plan 01 complete — header_suggest.py Half B engine (suggest/refuse/confirm/correct)
 progress:
-  total_phases: 8
-  completed_phases: 0
-  total_plans: 6
-  completed_plans: 4
-  percent: 8
+  total_phases: 12
+  completed_phases: 7
+  total_plans: 57
+  completed_plans: 49
+  percent: 58
 ---
 
 # Project State
 
 ## Current Position
 
-Phase: 23 — Walking Skeleton — Plugin Shell & Tabular Dispatch (executing)
-Plan: 23-01 through 23-05 complete; **23-06 in progress** (operator-run, OPERATOR-RUNBOOK §RB-3)
-Status: 23-01 (contact-lane create gate fix), 23-02 (file-handoff smoke test), 23-03 (test scaffolding + network guard), 23-04 (config gate / tabular / disarmed dispatch / plugin shell), and 23-05 (adaptive preview, skill/README docs, PLUGIN-02 reconciliation) done. 23-06 Section A partially observed; Section B not started and currently blocked.
-Last activity: 2026-07-31 — walking RB-3 Section A
+Phase: 34 (Header Mapping Tolerance) — EXECUTING
+Plan: 1 of 4 complete (Half B engine); 2 of 4 next (Half A alias widening)
+Status: Executing Phase 34
+Last activity: 2026-08-04 — Phase 34 plan 01 complete
+
+**2026-08-04 — Phase 34 plan 01 complete.** `operator-claude-plugin/scripts/header_suggest.py`
+built: `suggest_headers()` proposes a canonical prop via `difflib` against the 7 canonical props
+only (reusing `preview._normalize_header`/`preview._load_aliases`, never a second normalizer or
+YAML read), carrying `sample_values` so a confirmation isn't a rubber-stamp; a dedicated
+`REFUSE_NAME_SHAPES` pre-check refuses `Full Name` and its variants before `difflib` ever runs,
+proven to hold at any cutoff (not by cutoff tuning — measured, `"full name"` outscores `"ph."`'s
+own correct answer). `apply_confirmed_corrections()` writes a header-row-only corrected file
+under `scratch/`, guarded by a canonical-target allowlist and a repeated name-shape refusal, both
+checked before any file is opened for writing. Every property proven at the CLI subprocess layer
+against an isolated plugin root. Plugin suite 989 passed/5 skipped (960 baseline + 29 new); repo
+suite 1870 passed/6 skipped; node 553 pass; `git status --short operator-claude-plugin/scratch`
+empty. Commits `bfe202d`/`579c75b`/`aa89521`. Plans 34-02 (alias widening), 34-03 (skill wiring),
+34-04 (release) remain.
 
 **2026-08-03 addendum (autonomous front):** Phase 32 (llm-free-sweep-trigger) plan 32-01 —
 the LLM-free sweep wrapper (`lv-sweep-run.sh`), its two-sided contract test, the rewritten
@@ -98,7 +112,7 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 ## Progress
 
 **Phases Complete:** 10 / 10 — Phase 30 closed 2026-08-04 (RB-9 close: REVIEW-04 demonstrated, D-31 endpoint probe recorded)
-**Current Plan:** 23-06 (operator window, in progress) — autonomous work is at 27-05
+**Current Plan:** Phase 34 plan 2 of 4 (plan 1 — Half B engine — complete)
 
 ```
 [█░░░░░░░░░░░░░░░░░░░] 8%
@@ -123,6 +137,7 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 
 - ~~`2026-08-03-sweep-cron-credentials-block-notice-03`~~ — **RESOLVED by Phase 32** (LLM-free
   trigger; RB-8 re-run passed 2026-08-03). Moved to completed.
+
 - `2026-08-03-sweep-lookback-has-no-time-window` (major) — a fixed 100-row execution lookback with
   no time bound re-notifies an already-fixed failure until 100 newer executions displace it; plus
   the notice cannot name the failing workflow.
@@ -510,14 +525,17 @@ milestone otherwise scoped as plugin-only.
   canary; 29-05 done. **Phase 28: 28-01, 28-02, 28-03, 28-04 all DONE** — RB-5's live gate ran
   2026-07-31 and `28-FINDINGS.md` exists, which released 28-03 and 28-04; both are built and
   committed (`a641119`, `c3ee663`).
+
 - **Remaining:** 28-05 (needs 28-03/04 — now met, but serialized behind the operator committing
   `test_plugin_manifest.py`), 28-06 (armed canary), 29-01/02/03/04/05 now DONE → 29-06 remains,
   30-07 (armed canary), 23-06 §B, 25-01 Probe B4.
+
 - **2026-08-03: Phase 32 (llm-free-sweep-trigger) plan 32-01 built.** Replaces the cron
   trigger's `claude -p` invocation (RB-8's silent failure, `29-06-FINDINGS.md`) with
   `lv-sweep-run.sh`, a deterministic LLM-free wrapper, pinned two-sided against
   `sweep_entry.py`'s real output. Gated on 32-02 (the live RB-8 re-run) before NOTICE-03
   can seal.
+
 - **Re-check runnability against the artifact each plan reads, never against SUMMARY presence**
   (HANDOFF §1). "Nothing is runnable" was claimed and wrong twice on 2026-07-31, and RB-5's own
   readiness row was wrong a third time — it reported the probe script MISSING when it existed
@@ -531,9 +549,11 @@ milestone otherwise scoped as plugin-only.
 1. **RB-2 (29-01)** — no credentials, no code, pure observation. Releases 4 plans (29-03/04/05/06).
 2. **RB-5 (28-02)** — probe script built, commands paste-ready. Releases 4 plans (28-03/04/05/06);
    28-05 is serialized behind the operator committing `test_plugin_manifest.py`.
+
 3. **RB-1 Probe B4** — the only source for the expensive full-waterfall path; until it runs the
    chunk ceiling of 2 stays PROVISIONAL everywhere. Free rider: one POST naming `New Targets.xlsx`
    should return the oversize refusal (102 members vs ceiling 2) — zero writes, zero credits, and
    it exercises the one path 25-03 built but could not test live.
+
 4. **23-06 Section B** (armed create canary; Steps 2b/2c deploy 23-01 disarmed first) and
    **30-07** (armed review-writeback canary). Both are their phase's own proof.
