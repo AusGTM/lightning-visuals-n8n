@@ -16,6 +16,31 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.7.3] - 2026-08-04
+
+### Fixed
+
+- **Prose, JSON, URL and screenshot ingestion were dead on every installed copy.**
+  `config/column_mapping.yaml` existed only at the repository root and was never packaged
+  with the plugin, so an install with no repo beside it resolved to nothing. `preview.py`
+  degraded quietly (column labels unavailable), but `extraction.py` **refused outright**
+  with `mapping_unavailable` — the canonical-prop allowlist cannot be built without that
+  file, and it correctly declines to run on an empty allowlist rather than validating
+  against nothing.
+
+  The file now ships inside the plugin and is preferred over the repo copy, which stays in
+  the resolution order for dev checkouts and as the drift oracle. A new test pins the two
+  **byte-identical**: the backend's `Map Columns` node reads the repo copy, so a drifted
+  plugin copy would mean the preview labels and the extraction allowlist describe a
+  contract the backend does not implement.
+
+  **Found by an operator walking UAT session 2 against the 0.7.2 install.** It had been
+  recorded days earlier as a *minor, display-only* packaging gap, on the strength of
+  `preview.py`'s graceful degradation — the second consumer was never checked. Both
+  conclusions came from reading one caller and generalising, which is the same mistake
+  shape as the 0.6.1 and 0.7.2 defects: the behaviour was verified one layer away from
+  where it mattered.
+
 ## [0.7.2] - 2026-08-04
 
 ### Fixed

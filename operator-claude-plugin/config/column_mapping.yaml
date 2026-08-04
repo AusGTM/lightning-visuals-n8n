@@ -1,0 +1,45 @@
+# config/column_mapping.yaml
+#
+# One source of truth for Phase 6 ingestion:
+#   aliases:           lowercased/trimmed source header -> canonical HubSpot contact prop
+#   required_identity: the reject rule (email OR firstname+lastname+company)
+# Header lookup is case-insensitive and whitespace-collapsed (see column_mapper.map_row).
+
+aliases:
+  # email
+  email: email
+  "email address": email
+  "e-mail": email
+  # firstname
+  firstname: firstname
+  "first name": firstname
+  fname: firstname
+  "given name": firstname
+  # lastname
+  lastname: lastname
+  "last name": lastname
+  surname: lastname
+  # jobtitle
+  jobtitle: jobtitle
+  "job title": jobtitle
+  title: jobtitle
+  position: jobtitle
+  # linkedin_url
+  linkedin_url: linkedin_url
+  linkedin: linkedin_url
+  "linkedin url": linkedin_url
+  li: linkedin_url
+  # phone
+  phone: phone
+  mobile: phone
+  tel: phone
+  # company
+  company: company
+  organization: company
+  organisation: company
+  account: company
+
+required_identity:
+  any_of:
+    - [email]
+    - [firstname, lastname, company]

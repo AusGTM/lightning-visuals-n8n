@@ -4,7 +4,8 @@ Builds the operator-facing preview: what will be sent, what will be dropped, and
 much there is — before a single byte goes over the wire (D-07/D-08/D-09/D-10,
 PREVIEW-01, PREVIEW-04).
 
-This is the ONLY place in the plugin that reads config/column_mapping.yaml, and it is a
+This module OWNS the one rule for FINDING config/column_mapping.yaml (extraction.py
+calls resolve_mapping_path too). Its own use of the contents is a
 read-only DISPLAY LOOKUP: labelling headers for the operator, never transforming a row.
 The wire payload (tabular.to_csv_bytes) is built straight from the file `read_table` and
 this module both read unchanged — this module never feeds it anything derived from the
@@ -19,6 +20,15 @@ from tabular import read_table, to_csv_bytes
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 REPO_ROOT = PLUGIN_ROOT.parent
+# Shipped INSIDE the plugin package, so an installed copy with no repo beside it can still
+# resolve it. Until 0.7.3 only the REPO_ROOT path existed, which meant every real install
+# resolved to nothing: preview labels silently went unavailable and extraction REFUSED
+# outright (`mapping_unavailable`), blocking every non-tabular adapter. Found by an operator
+# walking UAT session 2 on the 0.7.2 install.
+PLUGIN_MAPPING_PATH = PLUGIN_ROOT / "config" / "column_mapping.yaml"
+# The repo copy stays in the order as a dev-checkout convenience and as the drift oracle:
+# test_column_mapping_shipped.py pins the two byte-identical, because two copies of a
+# backend contract is exactly the second-source-of-truth this milestone avoids elsewhere.
 DEFAULT_MAPPING_PATH = REPO_ROOT / "config" / "column_mapping.yaml"
 
 LEAD_ROWS = 10
@@ -36,13 +46,15 @@ def _normalize_header(header: str) -> str:
 
 def resolve_mapping_path(mapping_path=None):
     """The one rule for finding config/column_mapping.yaml: an explicit path argument,
-    then the repo's config/column_mapping.yaml, then None (unavailable). Shared by this
+    then the plugin's own shipped copy, then the repo's (dev checkouts), then None (unavailable). Shared by this
     module's display-only labelling and extraction.py's canonical-prop/identity-group
     derivation, so exactly one rule for finding that file exists in the plugin — callers
     decide whether "unavailable" degrades gracefully (this module's labels) or is a hard
     error (extraction.py's validation allowlist)."""
     if mapping_path is not None:
         return Path(mapping_path)
+    if PLUGIN_MAPPING_PATH.exists():
+        return PLUGIN_MAPPING_PATH
     if DEFAULT_MAPPING_PATH.exists():
         return DEFAULT_MAPPING_PATH
     return None
