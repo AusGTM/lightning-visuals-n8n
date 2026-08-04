@@ -327,9 +327,13 @@ greyed out through ten phases of shipped work).
    git -C ~/.claude/plugins/marketplaces/lightning-visuals-operator reset --hard FETCH_HEAD
    ```
 
-**Two traps around installing the result.** A same-version reinstall DELETES
-`config/operator.local.json` — back it up first. And the install cache is versioned by
-directory (`cache/lightning-visuals-operator/operator-claude-plugin/<version>/`), so updating
-to a NEW version lands in a NEW directory that carries no config at all: copy
-`operator.local.json` across after updating, or the operator's first action post-update is an
-unconfigured refusal.
+**Both traps described in earlier versions of this file are gone as of `0.7.0`.** A
+same-version reinstall no longer destroys the operator's settings — they live outside the
+versioned install directory entirely, at
+`~/.claude/plugins/data/operator-claude-plugin-lightning-visuals-operator/`, so a reinstall
+has nothing of the operator's to overwrite there. And updating to a new version no longer
+strands them either: the first resolution after an update finds the newest previous
+install's copy, moves it into that same durable home at file permission `0600`, and removes
+the copy it moved from — automatically, with no operator action. An operator updating from
+a version before `0.7.0` gets this migration for free on their first use of the plugin after
+updating.

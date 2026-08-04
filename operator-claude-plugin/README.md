@@ -150,14 +150,16 @@ reading as fact. **`unknown` is never rendered as zero and never as healthy**, o
 Do this once, before the first upload:
 
 1. **Say `/operator-claude-plugin:initialize`.** It tells you the full path to your
-   settings file, offers to put the template there, and lists exactly which values are
-   still needed. Run it again any time to check — it changes nothing when you are already
-   set up, and it never asks you for a secret.
+   settings file — the exact location depends on which of three resolution paths applies
+   on your machine, so this is the only reliable way to know it — offers to put the
+   template there, and lists exactly which values are still needed. Run it again any time
+   to check — it changes nothing when you are already set up, and it never asks you for a
+   secret.
 
-   *(Doing it by hand instead: in `operator-claude-plugin/config/`, copy
-   `operator.local.example.json` to `operator.local.json` in the same directory. That
-   filename is deliberately not a dotfile — dotfiles are unreadable to this environment's
-   tooling.)*
+   *(Doing it by hand instead: the template lives at
+   `operator-claude-plugin/config/operator.local.example.json`; copy it to the path
+   `/operator-claude-plugin:initialize` reports. That filename is deliberately not a
+   dotfile — dotfiles are unreadable to this environment's tooling.)*
 2. Fill in its two values, both obtained from your n8n admin:
    - `n8n_url` — the `https://` address of your n8n Cloud instance.
    - `webhook_secret` — sent as the `X-Enrichment-Secret` header on every request; never
@@ -168,6 +170,12 @@ Do this once, before the first upload:
    against, these already import with no install step.
 4. `operator.local.json` is gitignored — it is never committed, and the plugin never
    displays its contents back to you.
+
+Your settings file survives a plugin update — it lives outside this plugin's versioned
+install folder entirely, at
+`~/.claude/plugins/data/operator-claude-plugin-lightning-visuals-operator/`. An update
+moves it there for you automatically the first time you use the plugin afterward; there
+is nothing to copy by hand.
 
 Two optional keys, both safe to leave as they ship:
 
@@ -341,7 +349,7 @@ anything.
 What it remembers is one identifier and the time it was saved, in
 `operator-claude-plugin/state/dashboard_artifact.json` — never committed, and carrying no
 URL, no secret and no record. It expires after **30 days** by default; change
-`dashboard_artifact_ttl_days` in `config/operator.local.json` to make that longer or
+`dashboard_artifact_ttl_days` in `operator.local.json` to make that longer or
 shorter, and set it to `0` to stop the link being reused at all. An expired pointer is
 deleted the next time the skill runs, and the next dashboard request mints a fresh link.
 
@@ -355,7 +363,7 @@ rather than making you ask. It never simply goes quiet: if the run has not settl
 bound, you get a "still running, here's how to re-check" message instead of silence, so
 you can always tell the watch is still alive.
 
-That bound is `watch_bound_seconds` in `config/operator.local.json` — **600 seconds (10
+That bound is `watch_bound_seconds` in `operator.local.json` — **600 seconds (10
 minutes)** by default, measured against real enrichment runs (32-39 s observed, with a
 roughly 15x headroom margin so a bound set too low doesn't train you to stop trusting a
 "still running" message at all). It scales up automatically for a multi-record batch and
@@ -419,7 +427,7 @@ has to be a second, explicit step:
 ### The sweep's own config keys
 
 The sweep needs **all three** of `n8n_url`, `n8n_api_key`, and `webhook_secret` in
-`config/operator.local.json` — unlike the interactive status check, which still answers
+`operator.local.json` — unlike the interactive status check, which still answers
 with just two of them and reports the missing half as unavailable. The sweep can't do
 that: with nobody watching to notice a half-answer, a sweep that can only read half its
 conditions would go quiet about the other half, and quiet is exactly the claim silence
@@ -518,6 +526,7 @@ operator-claude-plugin/
       SWEEP-CRON-TEMPLATE.md  # admin-only: install the schedule that fires the sweep unattended
       lv-sweep-run.sh      # the LLM-free trigger the schedule calls: runs sweep_entry.py directly
   scripts/
+    durable_paths.py       # resolves where operator state (config, dashboard pointer) actually lives
     config_gate.py         # load/validate operator.local.json; refuses before any network call
     init_check.py          # what initialize verifies and reports
     # ingestion lane

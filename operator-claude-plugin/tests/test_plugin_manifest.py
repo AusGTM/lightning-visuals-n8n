@@ -82,3 +82,19 @@ def test_every_skill_references_only_scripts_that_exist_on_disk(skill_path):
             f"{skill_path.parent.name}/SKILL.md references scripts/{script}, "
             f"which does not exist on disk"
         )
+
+
+def test_no_shipped_document_instructs_a_manual_config_copy():
+    """REQUIREMENTS.md's Out-of-Scope line: 'Terminal instructions to the operator are a
+    requirement failure.' The code stopped needing a hand-copy of operator.local.json
+    between install directories in 33-02 (the sibling-scan migration); this is the second
+    side of that pin — a doc that still tells the operator to do it by hand is as much a
+    defect as code that requires it.
+    """
+    for name in ("README.md", "CHANGELOG.md"):
+        text = (PLUGIN_ROOT / name).read_text()
+        assert "operator.local.json across" not in text, (
+            f"{name} still instructs the operator to move operator.local.json by hand "
+            f"between install directories — the durable-home migration (33-02) makes "
+            f"this both false and unnecessary"
+        )

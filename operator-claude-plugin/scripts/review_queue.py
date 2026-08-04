@@ -250,7 +250,7 @@ def render_record(row: dict, policy_lookup, link_lookup) -> str:
     lines.append(
         f"Open in HubSpot: {link}" if link else
         f"HubSpot record id {_show(record_id)} — no link, because `hubspot_portal_id` is "
-        "not set in config/operator.local.json."
+        "not set in operator.local.json."
     )
     if row.get(_REASON_KEY):
         lines.append(f"Flagged because: {_show(row.get(_REASON_KEY))}")

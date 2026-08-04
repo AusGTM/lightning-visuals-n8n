@@ -63,7 +63,7 @@ capability; claiming it here would be a guess dressed as a report.
    If the object type is anything other than contacts or companies, ask — do not guess.
 
 3. **Resolve the provider selection.** The admin default lives in
-   `config/operator.local.json` as `enrichment_providers` and ships as the **full
+   `operator.local.json` as `enrichment_providers` and ships as the **full
    waterfall**, so saying nothing enables every provider. The operator can override it for
    this batch only: a list of provider names, `"all"`, or `"none"`. Nothing is written to
    the config file — an override applies to this batch and no other.
