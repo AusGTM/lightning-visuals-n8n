@@ -50,9 +50,9 @@ Do this **before** the happy path. A tool that fails badly is worse than one tha
 
 | # | Do | Pass when | Result |
 |---|---|---|---|
-| 1.1 | Temporarily blank `webhook_secret` in the settings file, then ask to upload contacts | It refuses in **plain language**, names the missing setting, and does **not** show a stack trace | UNTESTED |
-| 1.2 | Same state — ask for backend status | Status still works. A missing upload secret must not break the status answer | UNTESTED |
-| 1.3 | Restore the secret | Both work again | UNTESTED |
+| 1.1 | Temporarily blank `webhook_secret` in the settings file, then ask to upload contacts | It refuses in **plain language**, names the missing setting, and does **not** show a stack trace | **PASS** — UAT 2026-08-04: named `webhook_secret` + path, no trace, scoped to upload |
+| 1.2 | Same state — ask for backend status | Status still works. A missing upload secret must not break the status answer | **FAIL** — UAT 2026-08-04: whole status read refused; `status.py` opens with `load_config()`, which demands a key the status capability does not need (todo `2026-08-04-load-config-over-refuses-status`) |
+| 1.3 | Restore the secret | Both work again | **PASS** — UAT 2026-08-04: upload previewed 3 rows, status returned the full picture |
 
 **Fail if:** it says the plugin is "broken" or refuses everything when only one setting is
 missing. Over-refusing is a defect (PLUGIN-03).
@@ -88,7 +88,7 @@ in this list (STRUCT-04).
 | 3.2 | Read the cost line | An estimated **provider-credit and token cost**, with the date its rates were measured | UNTESTED |
 | 3.3 | Try a batch bigger than the chunk size | It shows you the **chunking plan** before sending | UNTESTED |
 | 3.4 | Say no / abort | **Nothing is sent and nothing is spent.** Ask for backend status afterwards to confirm no run started | UNTESTED |
-| 3.5 | Check what it says about credits | If a balance is unknown it says **unknown** — never `0`, never "healthy" | UNTESTED |
+| 3.5 | Check what it says about credits | If a balance is unknown it says **unknown** — never `0`, never "healthy" | **PASS** — UAT 2026-08-04: Apollo read `unknown` with "not zero, provider didn't answer"; Lusha 3930 / ZoomInfo 9301 real |
 
 **Fail if:** aborting still costs something, or an unknown balance renders as zero.
 
