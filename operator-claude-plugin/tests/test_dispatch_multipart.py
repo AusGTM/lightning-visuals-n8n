@@ -11,6 +11,7 @@ import io
 
 import pytest
 
+import config_gate
 import tabular
 from dispatch import DispatchError, NotArmedError, dispatch
 
@@ -123,3 +124,17 @@ def test_transport_exception_becomes_a_plain_language_dispatch_error_not_the_raw
     with pytest.raises(DispatchError) as exc:
         dispatch(str(sample_csv), True, fake_config, transport=_raising_transport)
     assert "real-secret-value" not in str(exc.value)
+
+
+def test_missing_webhook_secret_refuses_before_the_transport_is_touched_even_when_armed(
+    sample_csv, fake_config, stub_transport
+):
+    """Regression guard for the load-config-over-refusal fix: `load_config()` no longer
+    enforces `webhook_secret` for every caller, so `dispatch()` must guard its own
+    transmit path itself — otherwise a secret-less config would reach
+    `config["webhook_secret"]` (KeyError) or send an empty secret header."""
+    cfg = {k: v for k, v in fake_config.items() if k != "webhook_secret"}
+    with pytest.raises(config_gate.ConfigError) as exc:
+        dispatch(str(sample_csv), True, cfg, transport=stub_transport)
+    assert "webhook_secret" in str(exc.value)
+    assert stub_transport.calls == []

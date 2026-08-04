@@ -25,6 +25,7 @@ import json
 
 import requests
 
+import config_gate
 from dispatch import DispatchError, NotArmedError  # one arming error for the whole plugin
 
 ENRICHMENT_PATH = "webhook/hubspot/enrichment/event"
@@ -204,6 +205,11 @@ def dispatch_enrichment(envelope, armed, config, transport=requests):
     not. Never a per-record outcome claim: reading the response per record is Phase 26's
     job.
     """
+    # load_config() only enforces n8n_url (the universal minimum) — this is the guard
+    # that stops a webhook_secret-less config from reaching the transmit path below
+    # (mirrors review_queue.fetch_queue()'s require_capability call).
+    config_gate.require_capability(config, "enrichment")
+
     if not armed:
         raise NotArmedError(
             "Live writes are off for this conversation — nothing was sent. Say the "
@@ -237,8 +243,6 @@ def dispatch_enrichment(envelope, armed, config, transport=requests):
 
 if __name__ == "__main__":
     import sys
-
-    import config_gate
 
     if len(sys.argv) not in (3, 4) or sys.argv[2] not in ("armed", "disarmed"):
         print(json.dumps({

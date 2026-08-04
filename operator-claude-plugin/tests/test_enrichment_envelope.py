@@ -12,6 +12,7 @@ import json
 
 import pytest
 
+import config_gate
 import enrichment
 
 
@@ -183,6 +184,21 @@ def test_disarmed_dispatch_raises_and_the_transport_records_zero_calls(
     with pytest.raises(enrichment.NotArmedError):
         enrichment.dispatch_enrichment(_envelope(), False, fake_config, transport=transport)
     assert transport.calls == [], "the request must not exist at all when disarmed"
+
+
+def test_missing_webhook_secret_refuses_before_the_transport_is_touched_even_when_armed(
+    fake_config, stub_module_transport_factory
+):
+    """Regression guard for the load-config-over-refusal fix: `load_config()` no longer
+    enforces `webhook_secret` for every caller, so `dispatch_enrichment()` must guard its
+    own transmit path itself — otherwise a secret-less config would reach
+    `config["webhook_secret"]` (KeyError) or send an empty secret header."""
+    cfg = {k: v for k, v in fake_config.items() if k != "webhook_secret"}
+    transport = stub_module_transport_factory()
+    with pytest.raises(config_gate.ConfigError) as exc:
+        enrichment.dispatch_enrichment(_envelope(), True, cfg, transport=transport)
+    assert "webhook_secret" in str(exc.value)
+    assert transport.calls == []
 
 
 def test_dispatch_with_no_armed_argument_at_all_raises_a_type_error(

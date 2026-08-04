@@ -24,6 +24,11 @@ class DispatchError(Exception):
 
 
 def dispatch(file_path, armed, config, transport=requests.post):
+    # load_config() only enforces n8n_url (the universal minimum) — this is the guard
+    # that stops a webhook_secret-less config from reaching the transmit path below
+    # (mirrors review_queue.fetch_queue()'s require_capability call).
+    config_gate.require_capability(config, "contact-upload")
+
     if not armed:
         raise NotArmedError(
             "Live writes are off for this conversation — nothing was sent. Say the "
@@ -69,7 +74,8 @@ if __name__ == "__main__":
 
     try:
         _result = dispatch(_file_path, _armed, _cfg)
-    except (NotArmedError, DispatchError, tabular.UnsupportedFileError, OSError) as _e:
+    except (config_gate.ConfigError, NotArmedError, DispatchError,
+            tabular.UnsupportedFileError, OSError) as _e:
         print(json.dumps({"ok": False, "error": str(_e)}))
         raise SystemExit(1)
 

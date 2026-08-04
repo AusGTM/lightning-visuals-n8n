@@ -32,11 +32,16 @@ _SETUP_HINT = (
 # reason control is separate from status (D-29): a config that may read the review queue is
 # not thereby one that may upload contacts, so a review-only config stays expressible by
 # withholding a row rather than by convention (30 D-18).
+# Enrichment takes the same two keys contact-upload takes and is its own row for the same
+# reason: it POSTs to a different webhook path than contact-upload (SKILL.md: "different
+# path from the contact-upload lane"), so reusing the contact-upload row would refuse an
+# enrich request with "uploading contacts" wording, which is wrong.
 CAPABILITY_KEYS = {
     "contact-upload": ("n8n_url", "webhook_secret"),
     "status": ("n8n_url", "n8n_api_key"),
     "control": ("n8n_url", "n8n_api_key"),
     "review": ("n8n_url", "webhook_secret"),
+    "enrichment": ("n8n_url", "webhook_secret"),
     # The sweep runs UNATTENDED (29-03, D-15) — its own row so an admin can decline to
     # enable it without disabling the interactive status check. All three keys on
     # purpose: `status` degrades to the half it can read, but a sweep that can only read
@@ -49,6 +54,7 @@ _CAPABILITY_DESCRIPTIONS = {
     "status": "the backend status check",
     "control": "turning workflows on or off",
     "review": "reading the review queue",
+    "enrichment": "enriching records",
     "sweep": "the unattended backend sweep",
 }
 
@@ -66,6 +72,12 @@ def load_config(path: str | Path | None = None) -> dict:
 
     Defaults to the real operator config path; tests pass an explicit ``path`` instead
     of touching the real (gitignored) file.
+
+    Enforces only `n8n_url` — the one key every capability in `CAPABILITY_KEYS` needs.
+    Anything else (`webhook_secret`, `n8n_api_key`) is capability-specific and is gated by
+    `require_capability()` at the entrypoint or library function that actually needs it,
+    not here: a global check on a key only some capabilities use is the over-refusal
+    PLUGIN-03 forbids (a blank `webhook_secret` used to take down the whole status read).
     """
     cfg_path = Path(path) if path is not None else DEFAULT_CONFIG_PATH
 
@@ -85,9 +97,6 @@ def load_config(path: str | Path | None = None) -> dict:
         raise ConfigError(f"'n8n_url' is not configured. {_SETUP_HINT}")
     if not str(n8n_url).startswith("https://"):
         raise ConfigError(f"'n8n_url' must be an https:// URL. {_SETUP_HINT}")
-
-    if not cfg.get("webhook_secret"):
-        raise ConfigError(f"'webhook_secret' is not configured. {_SETUP_HINT}")
 
     return cfg
 

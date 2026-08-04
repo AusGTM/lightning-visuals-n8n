@@ -142,12 +142,15 @@ def test_a_fully_configured_config_passes_every_capability(fake_config):
     # `review` joined in 30-05 on the same principle (30 D-18): the same two keys as
     # `contact-upload`, kept separate because reading the review queue is not permission
     # to upload contacts.
+    # `enrichment` joined with the load-config-over-refusal fix: the same two keys as
+    # `contact-upload`, kept separate because it POSTs to a different webhook path and a
+    # shared row would refuse an enrich request with contact-upload's wording.
     # `sweep` joined in 29-03 (D-15): the only capability that runs unattended, its
     # own row so an admin can decline it without disabling interactive status.
-    for capability in ("contact-upload", "status", "control", "review", "sweep"):
+    for capability in ("contact-upload", "status", "control", "review", "enrichment", "sweep"):
         config_gate.require_capability(fake_config, capability)
     assert set(config_gate.usable_capabilities(fake_config)) == {
-        "contact-upload", "status", "control", "review", "sweep"}
+        "contact-upload", "status", "control", "review", "enrichment", "sweep"}
 
 
 def test_the_status_capability_does_not_require_the_webhook_secret(fake_config):
@@ -196,6 +199,36 @@ def test_fetch_backend_status_sends_nothing_without_a_secret(fake_config):
         raise AssertionError("an unauthenticated request was constructed")
 
     assert backend_status.fetch_backend_status(cfg, transport=_never_called)["available"] is False
+
+
+def test_load_config_then_status_report_crosses_the_real_entrypoint_gate(
+        tmp_path, fake_config, stub_get_transport_factory):
+    """Regression for the over-refusal bug: status.py's own entrypoint is
+    `config_gate.load_config()` followed by `status.status_report()`/`full_report()`
+    (see status.py `__main__`). The prior bug was in `load_config()` itself — a test that
+    hand-builds the config dict and calls `status_report()` directly never crosses that
+    line, which is exactly how this shipped uncaught. This test goes through the real
+    file-reading entrypoint the operator actually reaches."""
+    cfg_path = tmp_path / "operator.local.json"
+    cfg_path.write_text(json.dumps({
+        k: v for k, v in fake_config.items() if k != "webhook_secret"
+    } | {"webhook_secret": ""}))
+
+    cfg = config_gate.load_config(cfg_path)
+
+    get_transport = stub_get_transport_factory([
+        {"id": "wf-1", "name": "LV Contact Ingest (Cloud template)", "active": True, "nodes": []},
+        {"data": []},
+    ])
+
+    def _never_called(*args, **kwargs):
+        raise AssertionError("the backend endpoint must not be called without a secret")
+
+    report = status.status_report(cfg, "wf-1", get_transport=get_transport,
+                                  post_transport=_never_called)
+    assert report["workflow"]["active"] is True
+    assert report["backend"]["available"] is False
+    assert report["backend"]["reason"] == "webhook_secret_not_configured"
 
 
 # --- the committed template -------------------------------------------------------------
