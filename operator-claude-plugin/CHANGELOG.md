@@ -16,6 +16,53 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-08-05
+
+### Added
+
+- **A header the alias table does not recognise is now worked out with you, not guessed at
+  and not dead-ended.** Before the preview, the plugin sorts every header into four
+  outcomes: the ones that map, the ones it can propose a match for, the ones it refuses,
+  and the ones it can only report as dropped.
+
+  A proposal is shown with **that column's own values beside it**, and you confirm **one
+  header at a time**. A single batched yes is not a confirmation and is not accepted as
+  one. This is deliberate rather than fussy: `Ph.` scores as a near-match for `phone`, but
+  `photo` scores *higher* against `phone` than `Ph.` does — so a confirmation made without
+  seeing what is in the column would be a rubber stamp, and the one thing this feature must
+  never do is put image URLs into a phone field.
+
+  Declining costs nothing: the header stays as it is and the backend drops it, which is the
+  honest outcome. Nothing is ever renamed silently.
+
+- **A `Full Name` column is refused with its reason named, not split.** This system
+  deliberately has no name-splitter. Splitting on whitespace would mangle a surname
+  carrying a particle — "van der Berg" would become separate fragments instead of one
+  field — so the plugin says so and offers you the two things that actually work: split the
+  column yourself, or send the file without it. It does not offer a split it cannot do
+  correctly.
+
+  The refusal runs *before* the matcher is ever consulted. That ordering is the whole
+  mechanism: "full name" scores higher against `fname` than "ph." does against `phone`, so
+  no matching threshold could ever separate them.
+
+### Changed
+
+- **Three more headers now read with nothing typed:** `E-mail Address`, `Org.` and
+  `LinkedIn Profile`. Against the spreadsheet that failed UAT 2.2, four of seven headers
+  now map deterministically where two did before.
+
+  This half is not client-only — the alias table lives in the backend too, and the widened
+  prediction here is only true once the backend is redeployed and its running workflows
+  bounced. The backend change is recorded in the repository-root `CHANGELOG.md`; a new test
+  pins the client's copy of the table equal to the backend's so the preview can never
+  confidently promise a mapping the backend will not perform.
+
+- **The corrected file is the one file.** When you confirm a header, the plugin writes a
+  corrected copy, previews *that*, and sends *that* — so what you approve is provably the
+  bytes that go on the wire. Your original file is never modified, and the corrected copy is
+  deleted with the rest of the scratch artifacts when the batch ends.
+
 ## [0.7.3] - 2026-08-04
 
 ### Fixed
