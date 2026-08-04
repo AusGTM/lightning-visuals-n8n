@@ -70,14 +70,38 @@ def test_four_headers_now_map_deterministically_where_two_did_before():
 # --- Half B: suggest, refuse, report -------------------------------------------------
 
 
-def test_full_name_is_refused_with_a_reason_naming_the_header(sample_suggest):
-    """Membership in `refusals` and a reason that names the column — deliberately NOT a
-    suggestion of any kind. No test in this file may assert a suggestion for Full Name:
+def test_full_name_is_routed_to_the_reviewed_splitter_never_to_the_matcher(sample_suggest):
+    """Membership in `splittable` and a reason that names the column — deliberately NOT a
+    fuzzy suggestion. No test in this file may assert a `suggestions` entry for Full Name:
     a test of that shape pins exactly the plausible-but-wrong behaviour the ordering
-    pre-check exists to forbid."""
-    refusal = _entry(sample_suggest, "refusals", "Full Name")
-    assert refusal["reason"]
-    assert "Full Name" in refusal["reason"]
+    pre-check exists to forbid.
+
+    Superseded the flat refusal on 2026-08-05 by operator decision — the column is offered
+    to the per-row splitter the operator reviews. What did NOT change: it never becomes a
+    one-header-to-one-prop guess."""
+    entry = _entry(sample_suggest, "splittable", "Full Name")
+    assert entry["reason"]
+    assert "Full Name" in entry["reason"]
+    assert "name_split.py" in entry["next_command"]
+
+
+def test_the_three_uat_name_shapes_land_in_their_intended_buckets():
+    """The sample carries one name per risk shape so a UAT walk demonstrates all three:
+    a particle surname that must stay whole, a three-part name that cannot be resolved
+    without a person, and a single word that cannot be assigned to either field."""
+    from name_split import propose_split
+
+    particle = propose_split("Jan van der Berg")
+    assert (particle["firstname"], particle["lastname"]) == ("Jan", "van der Berg")
+    assert particle["confidence"] == "high"
+
+    three_part = propose_split("Maria Jane Santos")
+    assert three_part["confidence"] == "low"
+    assert "middle name" in three_part["reason"]
+
+    single = propose_split("Cher")
+    assert single["lastname"] is None
+    assert single["confidence"] == "low"
 
 
 def test_ph_is_suggested_as_phone_and_needs_confirmation(sample_suggest):

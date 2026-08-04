@@ -57,6 +57,19 @@ NAME_REFUSAL_REASON = (
     "columns yourself, or send the file without it."
 )
 
+# Superseded NAME_REFUSAL_REASON as the operator-facing sentence on 2026-08-05. The
+# constant above is kept because `apply_confirmed_corrections` still refuses to map a
+# name-shaped header onto a single canonical prop — that guess is still wrong and still
+# unreachable. What is offered instead is a per-row split the operator reviews, which is
+# a data transform and therefore never a backend rule and never an index.
+NAME_SPLIT_REASON = (
+    '"{header}" holds two fields in one column (a full name), so it cannot map to a '
+    "single property. It can be split into first and last name locally, one row at a "
+    "time for you to check before anything is written — worth checking rather than "
+    'assuming, because a surname carrying a particle ("van der Berg") is one field, not '
+    "two, and only you can tell a middle name from a two-word surname."
+)
+
 
 class HeaderSuggestError(Exception):
     """Raised for a confirmed target outside the canonical props, or a confirmed
@@ -101,6 +114,7 @@ def suggest_headers(headers, rows=None, mapping_path=None):
           "mapped": [{"header", "canonical"}],
           "suggestions": [{"header", "suggestion", "score", "sample_values"}],
           "refusals": [{"header", "reason", "sample_values"}],
+          "splittable": [{"header", "reason", "sample_values", "next_command"}],
           "unresolved": [{"header", "sample_values"}],
           "needs_confirmation": bool,
         }
@@ -117,6 +131,7 @@ def suggest_headers(headers, rows=None, mapping_path=None):
         "mapped": [],
         "suggestions": [],
         "refusals": [],
+        "splittable": [],
         "unresolved": [],
         "needs_confirmation": False,
     }
@@ -142,11 +157,19 @@ def suggest_headers(headers, rows=None, mapping_path=None):
         # name in the file. Running this check first is what makes that unreachable; a
         # tuned cutoff cannot (34-RESEARCH.md Pitfall 1).
         if normalized in REFUSE_NAME_SHAPES:
-            result["refusals"].append(
+            # Still never a fuzzy match to a single canonical prop — that is the guess
+            # this pre-check exists to make unreachable, and it stays unreachable. What
+            # changed (operator decision 2026-08-05) is what happens NEXT: instead of a
+            # flat refusal, the column is offered to the reviewed splitter, which
+            # proposes first/last PER ROW for the operator to check before anything is
+            # written. Refusing outright was stricter than the suggest-and-confirm
+            # pattern sitting immediately next to it.
+            result["splittable"].append(
                 {
                     "header": h,
-                    "reason": NAME_REFUSAL_REASON.format(header=h),
+                    "reason": NAME_SPLIT_REASON.format(header=h),
                     "sample_values": sample_values,
+                    "next_command": f'python3 scripts/name_split.py <path> --propose "{h}"',
                 }
             )
             continue

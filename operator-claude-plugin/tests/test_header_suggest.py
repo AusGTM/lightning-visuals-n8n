@@ -219,20 +219,21 @@ def test_header_suggest_reuses_previews_normalizer_and_never_reparses_the_yaml()
     assert "def _normalize" not in source
 
 
-# --- Task 2: Full Name is refused with its reason named, before the matcher ever
-# sees it ---------------------------------------------------------------------------
+# --- Task 2: a name column never reaches the matcher; it is routed to the reviewed
+# splitter instead (operator decision 2026-08-05, superseding the flat refusal) -------
 
 
-def test_full_name_is_refused_not_suggested():
+def test_full_name_is_routed_to_the_splitter_never_to_the_matcher():
     result = hs.suggest_headers(["Full Name"])
     assert result["suggestions"] == []
-    assert len(result["refusals"]) == 1
+    assert len(result["splittable"]) == 1
     assert result["needs_confirmation"] is False
 
-    refusal = result["refusals"][0]
-    assert refusal["header"] == "Full Name"
-    assert refusal["reason"]
-    assert "Full Name" in refusal["reason"]
+    entry = result["splittable"][0]
+    assert entry["header"] == "Full Name"
+    assert entry["reason"]
+    assert "Full Name" in entry["reason"]
+    assert "name_split.py" in entry["next_command"]
 
 
 @pytest.mark.parametrize(
@@ -240,18 +241,18 @@ def test_full_name_is_refused_not_suggested():
     ["Full Name", "FULLNAME", "full_name", "Name", "Contact Name", "Person Name",
      "  FULL   Name "],
 )
-def test_every_name_shape_and_casing_whitespace_variant_is_refused(header):
+def test_every_name_shape_and_casing_whitespace_variant_is_routed_to_the_splitter(header):
     result = hs.suggest_headers([header])
     assert result["suggestions"] == []
-    assert len(result["refusals"]) == 1
+    assert len(result["splittable"]) == 1
 
 
-def test_refusal_carries_sample_values_like_every_other_entry():
+def test_splittable_entry_carries_sample_values_like_every_other_entry():
     result = hs.suggest_headers(
         ["Full Name"], rows=[["Amy Adams"], ["Ben Baker"], ["Cara Cruz"], ["Dan Diaz"]]
     )
-    refusal = result["refusals"][0]
-    assert refusal["sample_values"] == ["Amy Adams", "Ben Baker", "Cara Cruz"]
+    entry = result["splittable"][0]
+    assert entry["sample_values"] == ["Amy Adams", "Ben Baker", "Cara Cruz"]
 
 
 def test_needs_confirmation_is_false_when_the_only_unrecognised_header_is_full_name():
@@ -268,7 +269,7 @@ def test_no_cutoff_can_make_full_name_produce_a_suggestion(monkeypatch):
     monkeypatch.setattr(hs, "SUGGEST_CUTOFF", 0.1)
     result = hs.suggest_headers(["Full Name"])
     assert result["suggestions"] == []
-    assert len(result["refusals"]) == 1
+    assert len(result["splittable"]) == 1
 
 
 # --- Task 3: nothing is rewritten without a confirmation, and nothing arbitrary can

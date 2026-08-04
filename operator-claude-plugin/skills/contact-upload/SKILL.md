@@ -78,10 +78,44 @@ be sent, and — only when explicitly armed — send it.
      Never invent suggestions from a table that could not be read.
    - **`mapped`** — nothing to say. Step 3's preview already shows every mapping.
    - **`refusals`** — relay the `reason` field **verbatim**. Do not paraphrase it into
-     something softer, do not offer a workaround the reason does not name, and above all
-     do not offer to split the column yourself: there is no name-splitter in this system,
-     which is the entire content of the refusal. Same register as the backend's own
-     `enumRefusalMessage` — a refusal that names its reason, not an error.
+     something softer and do not offer a workaround the reason does not name. Same
+     register as the backend's own `enumRefusalMessage` — a refusal that names its
+     reason, not an error.
+   - **`splittable`** — a full-name column. It cannot map to one property, but it CAN be
+     split locally, per row, for the operator to review. Say so and run the
+     `next_command` the entry gives you:
+
+     ```
+     python3 scripts/name_split.py <path> --propose "Full Name"
+     ```
+
+     Show the proposals as a table — `raw`, proposed `firstname`, proposed `lastname` —
+     and put the `needs_attention` rows **first**, each with its `reason`. Those are the
+     ones only a person can settle: a single word that could be a given name or a
+     surname, or three parts where a middle name and a two-word surname look identical.
+     A surname carrying a particle (`van der Berg`) comes back `high` confidence and
+     whole — say that plainly so the operator can see the splitter is not naively cutting
+     on whitespace.
+
+     The operator may correct any row. When they are done, write the resolved pairs to a
+     JSON file (a list of `[firstname, lastname]`, **one per data row, in file order**)
+     and apply them:
+
+     ```
+     python3 scripts/name_split.py <path> --apply "Full Name" --resolved <resolved.json>
+     ```
+
+     The returned `split_path` carries `firstname`/`lastname` columns in place of the
+     original, and becomes the path you carry forward — feed it to step 2b's
+     `--confirm` pass if other headers still need correcting, then to step 3.
+
+     Three rules. The splitter **never** applies its own proposals — `--apply` writes only
+     what the operator resolved, which is why the resolved list is an argument and not
+     something the tool re-derives. It refuses a resolved list whose length does not match
+     the data rows, because a misaligned split silently attaches one person's surname to
+     another person's row and cannot be spotted in the output. And this split is a local,
+     reviewed data transform for THIS file only: it is never sent to the backend as a
+     rule, never stored, and `Map Columns` still has no name-splitter.
    - **`suggestions`** — **one confirmation per header, each answered before the next is
      asked.** Show the header, the proposed canonical prop, and that header's
      `sample_values` in the same breath. The sample values are the point: a header like
@@ -275,7 +309,8 @@ be sent, and — only when explicitly armed — send it.
 10. **Clean up.** If this batch came from `extraction.md`, delete the scratch artifact
     you wrote once the batch ends — whether it was dispatched or the operator declined.
     Delete the corrected file step 2b wrote the same way, for the same reason: same
-    scratch directory, same end-of-batch rule, dispatched or declined alike.
+    scratch directory, same end-of-batch rule, dispatched or declined alike. That covers
+    both artifacts 2b can produce — the header-corrected copy and any split-name copy.
     Provenance is scoped to this session and to the operator's decision in the moment;
     it is not a durable record, the scratch directory is gitignored so it never reaches
     history, and deleting the file is what keeps it from outliving the conversation on
