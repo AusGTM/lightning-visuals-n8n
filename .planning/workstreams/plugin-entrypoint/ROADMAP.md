@@ -56,6 +56,7 @@ phase directories never collide with phases 20–22.**
 - [x] **Phase 30: Review-Queue Triage** - Conflicts get resolved conversationally, with the decision written back as a human decision
 - [x] **Phase 31: Enum Validation for Review Approvals** - Enum-bound candidates are validated against HubSpot's real option set before they are offered, refusals are explicit at every layer, and silence stops meaning two opposite things
 - [x] **Phase 32: LLM-Free Sweep Trigger** - The unattended sweep fires under real cron with no credentials and no LLM, and a trigger that cannot run says so loudly instead of impersonating a healthy backend
+- [ ] **Phase 33: Durable Operator State** - Config and the dashboard pointer survive a plugin update on their own, so an operator never runs a terminal command to keep working after installing a new version
 
 ## Phase Details
 
@@ -359,6 +360,23 @@ Plans:
 Plans:
 - [x] 32-01-PLAN.md — ship `lv-sweep-run.sh` + its two-sided contract test, rewrite `SWEEP-CRON-TEMPLATE.md` around it, amend D-01, update README/CHANGELOG/STATE (wave 1, autonomous)
 - [x] 32-02-PLAN.md — rewrite RB-8 for the new trigger, run it live as the phase exit gate, record the observed outcome (wave 2, blocking human checkpoint)
+
+### Phase 33: Durable Operator State
+
+**Goal**: An operator who updates the plugin keeps working with no terminal step. Both pieces of per-operator state — the config that holds their credentials and the dashboard Artifact pointer that makes STATUS-05 true — live outside the versioned install directory, migrate themselves once from wherever they are now, and leave no credential copy behind in a dead install.
+**Depends on**: Phase 23 (config_gate, the resolution point), Phase 27 (artifact_store, the dashboard pointer)
+**Requirements**: PLUGIN-02 (config setup is a one-time operator step), PLUGIN-03 (name what is broken and who fixes it), STATUS-05 (same dashboard URL across sessions — currently resting on a pointer that no install directory holds); Out-of-Scope line "Operator-run commands, scripts, or config files … Terminal instructions to the operator are a requirement failure"
+**Success Criteria** (what must be TRUE):
+
+  1. Config resolves from a version-independent home and survives an update with NO operator action: explicit path argument, then `LV_OPERATOR_CONFIG`, then the durable home, then the same-install legacy path, then — once — the newest sibling install's config, which is migrated up. The sibling scan is what makes the update that INTRODUCES durability free; without it this phase's own release costs one hand-copy.
+  2. The dashboard Artifact pointer gets the identical treatment. `artifact_store.DEFAULT_STATE_PATH` currently sits in `PLUGIN_ROOT/state/`, so STATUS-05's cross-session guarantee has been silently false since the first update — no install directory on this machine holds a pointer.
+  3. A migrated config is written `0600`, and the dead install's copy is removed after the new one is verified readable. Three stale install directories currently each hold a full copy of `webhook_secret` and `n8n_api_key`.
+  4. `initialize` reports the REAL resolved path (durable home, not `PLUGIN_ROOT/config/`) and says nothing about migration having happened unless it happened. Migration runs at config RESOLUTION, not only in `initialize` — an operator who never types `/initialize` must not lose config on their next update.
+  5. Every path is pinned at the ENTRYPOINT layer against an isolated plugin root: resolution order, the one-time sibling migration, the `0600` mode, and the durable pointer surviving a simulated version bump. Asserting on the resolver function alone is what shipped the 0.6.1 and 0.6.2 defects in opposite directions.
+  6. Nothing regresses: the legacy same-install path still resolves, the plugin suite stays green, and no secret value ever reaches a log line or a refusal message.
+
+**Plans**: TBD (planner decides)
+
 
 ## v0.6 Progress
 
