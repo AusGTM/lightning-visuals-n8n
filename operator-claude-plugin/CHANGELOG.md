@@ -16,6 +16,29 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-08-04
+
+### Fixed
+
+- **A spreadsheet with no rows in it now says so, instead of previewing a healthy-looking
+  zero.** Found by the autonomous UAT sweep of step 2.6. An unsupported file type already
+  refused cleanly, but an empty `.csv` previewed as `0 rows` with no error and no
+  explanation — and the cost block reported it as "a real, explainable zero", which reads
+  as reassurance about a file that could not be read. The documented flow then carried on
+  to ask for approval and offer the arming phrase for a batch containing nothing.
+
+  The skill now stops at the preview when `row_count` is 0, names the causes an operator
+  can actually act on (an empty file, a header row with no data under it, an export of the
+  wrong sheet), distinguishes "headers present, no rows" from "nothing at all" by checking
+  what parsed, and asks for a different file. It does not ask for approval and does not
+  offer the arming phrase — the same rule 0.6.2 applied to a config that cannot send:
+  never invite a decision that cannot be honoured.
+
+  Nothing could ever have been damaged by this — sending zero rows writes nothing. The
+  defect was that "your file could not be read" and "everything is fine, nothing to send"
+  were presented identically, which is the same silence-means-healthy shape NOTICE-04 and
+  the sweep's own design exist to prevent.
+
 ## [0.7.0] - 2026-08-04
 
 ### Changed

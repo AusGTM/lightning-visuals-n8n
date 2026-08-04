@@ -98,6 +98,18 @@ be sent, and — only when explicitly armed — send it.
    ambiguity block — one list of every uncertain cell in the batch, presented once,
    never one interruption per row.
 
+   **If `row_count` is 0, STOP at the preview — do not continue to step 4.** A file that
+   parsed but carried no data rows and a file that is fine but has nothing to send look
+   identical in the numbers, and the cost block will cheerfully report a "real, explainable
+   zero" for a file that could not be read. Say plainly that no rows were found, and name
+   what usually causes it so the operator can act: an empty file, a file with only a header
+   row, an export of the wrong sheet, or a sheet whose data starts below some other content.
+   Check `headers` and say which case it looks like — headers present with no rows is a
+   different mistake from no headers at all. Then ask for a different file. **Do not ask for
+   approval and do not offer the arming phrase**: there is nothing to approve, and inviting a
+   decision that cannot matter wastes it. (Same reasoning as the `can_send: false` branch in
+   step 1.)
+
 4. **Ask for approval.** If the operator declines, STOP here — nothing is sent, and
    nothing beyond reading the file has happened. Declining costs nothing beyond that one
    read.
