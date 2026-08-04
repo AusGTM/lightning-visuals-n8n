@@ -4,6 +4,7 @@ Every test passes an explicit path so the real (gitignored) operator config is n
 touched.
 """
 import json
+import os
 
 import pytest
 
@@ -105,29 +106,57 @@ def test_no_configerror_message_ever_contains_the_secret_value(tmp_path):
 # refusing where the skill still needed a verdict). The layer the operator reaches is
 # the layer under test here.
 
-def _run_cli(config_json, tmp_path):
+def _run_cli(config_json, tmp_path, env=None, durable_config=None):
     """Run scripts/config_gate.py as the skill runs it — as a real subprocess, against an
     ISOLATED plugin root so the operator's own gitignored config is never read.
 
-    config_gate derives its config path from its own file location
-    (`PLUGIN_ROOT/config/operator.local.json`), so a throwaway root is built by copying the
-    module — it imports nothing from its siblings — into `<tmp>/scripts/`.
+    config_gate imports durable_paths, so both modules are copied into the throwaway
+    `scripts/` directory — config_gate no longer "imports nothing from its siblings", and
+    a single-file copy would make every durable-home test die on ImportError.
+
+    A fake `HOME` (`tmp_path / "home"`) is what redirects `Path.home()`-based resolution
+    at the PROCESS boundary, not the Python-object boundary — the same lesson this
+    harness's own history already recorded: its first version silently read the
+    operator's REAL config because `runpy` discarded a path override. Monkeypatching
+    `Path.home` in-process, or patching an attribute on an in-process `durable_paths`
+    import, would be vulnerable to the identical class of bug the moment `config_gate.py`
+    runs as a fresh subprocess that re-imports the module — isolation has to hold where
+    the subprocess actually looks, not where the test happens to be running.
+
+    `durable_config`, when given, is written to this fake home's durable directory
+    (`~/.claude/plugins/data/operator-claude-plugin-lightning-visuals-operator/operator.local.json`).
+
+    The subprocess `env` is built from a literal dict (`PATH` + the fake `HOME`, plus any
+    caller overrides) — NEVER `{**os.environ, ...}` — so the real `HOME` can never reach
+    the subprocess and no durable-home test can pass for the wrong reason.
     """
     import shutil
     import subprocess
     import sys
     from pathlib import Path
 
-    real = Path(__file__).resolve().parent.parent / "scripts" / "config_gate.py"
+    scripts_dir = Path(__file__).resolve().parent.parent / "scripts"
     root = tmp_path / "plugin"
     (root / "scripts").mkdir(parents=True)
     (root / "config").mkdir()
-    shutil.copyfile(real, root / "scripts" / "config_gate.py")
+    shutil.copyfile(scripts_dir / "config_gate.py", root / "scripts" / "config_gate.py")
+    shutil.copyfile(scripts_dir / "durable_paths.py", root / "scripts" / "durable_paths.py")
     if config_json is not None:
         (root / "config" / "operator.local.json").write_text(json.dumps(config_json))
 
+    fake_home = tmp_path / "home"
+    if durable_config is not None:
+        durable_dir = (fake_home / ".claude" / "plugins" / "data"
+                       / "operator-claude-plugin-lightning-visuals-operator")
+        durable_dir.mkdir(parents=True, exist_ok=True)
+        (durable_dir / "operator.local.json").write_text(json.dumps(durable_config))
+    else:
+        fake_home.mkdir(parents=True, exist_ok=True)
+
+    run_env = {"PATH": os.environ.get("PATH", ""), "HOME": str(fake_home), **(env or {})}
+
     return subprocess.run([sys.executable, "config_gate.py"], capture_output=True,
-                          text=True, cwd=str(root / "scripts"))
+                          text=True, cwd=str(root / "scripts"), env=run_env)
 
 
 def test_cli_reports_can_send_true_when_the_upload_lane_is_configured(tmp_path, fake_config):
@@ -168,6 +197,42 @@ def test_cli_refuses_outright_when_the_universal_key_is_missing(tmp_path, fake_c
     assert payload["ok"] is False
     assert "n8n_url" in payload["error"]
     assert "can_send" not in payload
+
+
+# --- durable-home resolution, pinned at the CLI entrypoint (33-01) -----------------
+#
+# Every assertion here drives config_gate.py as a subprocess against a fake HOME —
+# never load_config() directly — per criterion 5: the 0.6.1 and 0.6.2 defects both
+# shipped invisibly to tests that called the resolver function in-process.
+
+def test_cli_durable_home_is_read_when_the_installs_own_config_is_empty(tmp_path, fake_config):
+    proc = _run_cli(None, tmp_path, durable_config=fake_config)
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is True
+    assert payload["target"] == "https://fake-tenant.n8n.cloud/webhook/hubspot/contact-upload"
+
+
+def test_cli_legacy_same_install_path_still_resolves_when_durable_home_is_empty(
+        tmp_path, fake_config):
+    """Today's behaviour, unchanged (33-01 criterion 6): an operator with no durable-home
+    file and a config in the same install's config/ directory sees the same result as
+    before this phase."""
+    proc = _run_cli(fake_config, tmp_path)
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is True
+    assert payload["target"] == "https://fake-tenant.n8n.cloud/webhook/hubspot/contact-upload"
+
+
+def test_cli_durable_home_wins_when_both_are_present(tmp_path, fake_config):
+    legacy_cfg = {**fake_config, "n8n_url": "https://legacy-install.n8n.cloud"}
+    durable_cfg = {**fake_config, "n8n_url": "https://durable-home.n8n.cloud"}
+    proc = _run_cli(legacy_cfg, tmp_path, durable_config=durable_cfg)
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is True
+    assert payload["target"] == "https://durable-home.n8n.cloud/webhook/hubspot/contact-upload"
 
 
 def test_skill_documents_the_can_send_contract():

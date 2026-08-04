@@ -57,7 +57,7 @@ def _key_state(cfg, key):
 
 def inspect(config_path=None) -> dict:
     """The whole setup picture, as data. No secret ever enters the return value."""
-    path = config_path or config_gate.DEFAULT_CONFIG_PATH
+    path = config_path or config_gate.config_path()
     example = config_gate.PLUGIN_ROOT / "config" / config_gate.EXAMPLE_CONFIG_NAME
 
     report = {
@@ -105,7 +105,7 @@ def inspect(config_path=None) -> dict:
 def create_from_example(config_path=None) -> dict:
     """Put the example file in place. Never overwrites an existing config — the operator's
     filled-in values are not this command's to destroy."""
-    path = config_path or config_gate.DEFAULT_CONFIG_PATH
+    path = config_path or config_gate.config_path()
     example = config_gate.PLUGIN_ROOT / "config" / config_gate.EXAMPLE_CONFIG_NAME
 
     if path.exists():

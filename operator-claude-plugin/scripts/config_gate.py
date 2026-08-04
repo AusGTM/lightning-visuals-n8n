@@ -7,16 +7,25 @@ in plain language rather than letting a raw parser/socket error reach the operat
 import json
 from pathlib import Path
 
+import durable_paths
+
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_CONFIG_PATH = PLUGIN_ROOT / "config" / "operator.local.json"
 EXAMPLE_CONFIG_NAME = "operator.local.example.json"
 
 WEBHOOK_PATH = "webhook/hubspot/contact-upload"
 
 _SETUP_HINT = (
-    f"Copy config/{EXAMPLE_CONFIG_NAME} to config/operator.local.json and fill it in "
-    "once — the n8n_url and webhook_secret values come from your n8n admin."
+    f"The n8n_url and webhook_secret values come from your n8n admin — "
+    f"{EXAMPLE_CONFIG_NAME} shows the shape, and /operator-claude-plugin:initialize "
+    "prints the exact path to put them at."
 )
+
+
+def config_path() -> Path:
+    """Where the operator's config actually is, resolved fresh on every call (not a
+    module-level constant) — 33-02's migration can create the durable file mid-run."""
+    return durable_paths.resolve_config_path()
+
 
 # What each capability needs, rather than one global all-or-nothing gate: a plugin
 # missing the read-only API key can still upload contacts, and saying "broken" when one
@@ -79,7 +88,7 @@ def load_config(path: str | Path | None = None) -> dict:
     not here: a global check on a key only some capabilities use is the over-refusal
     PLUGIN-03 forbids (a blank `webhook_secret` used to take down the whole status read).
     """
-    cfg_path = Path(path) if path is not None else DEFAULT_CONFIG_PATH
+    cfg_path = Path(path) if path is not None else config_path()
 
     if not cfg_path.exists():
         raise ConfigError(f"Configuration file not found at {cfg_path}. {_SETUP_HINT}")
@@ -132,7 +141,7 @@ def require_capability(cfg: dict, capability: str) -> None:
     raise ConfigError(
         f"{_CAPABILITY_DESCRIPTIONS.get(capability, capability)} needs "
         f"{', '.join(repr(key) for key in missing)}, which is not configured. Add it to "
-        f"config/operator.local.json — config/{EXAMPLE_CONFIG_NAME} shows the shape, and "
+        f"operator.local.json — {EXAMPLE_CONFIG_NAME} shows the shape, and "
         f"your n8n admin has the value. {remainder}"
     )
 

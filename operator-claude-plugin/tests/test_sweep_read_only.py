@@ -60,9 +60,15 @@ SWEEP_ENTRYPOINT = "sweep_entry"
 # I/O (execution_errors.harvest_errors walks an already-fetched execution payload;
 # error_table.translate is a standard-library regex lookup), so this widening is the
 # guard working as designed (D-10), not a regression.
+#
+# 33-01 adds `durable_paths` — `config_gate.load_config()` now resolves its default path
+# through it. It performs no I/O beyond `Path.exists()` checks (no open/write/delete
+# anywhere in the module), so it cannot be a write vector; the compensating
+# write-verb-site assertion below still catches it if that ever changes.
 ALLOWED_MODULES = {
     "sweep_entry", "sweep_read", "sweep_conditions", "sweep_notify",
     "config_gate", "n8n_read", "backend_status", "error_table", "execution_errors",
+    "durable_paths",
 }
 
 WRITE_VERBS = {"post", "put", "patch", "delete"}
