@@ -57,7 +57,7 @@ phase directories never collide with phases 20–22.**
 - [x] **Phase 31: Enum Validation for Review Approvals** - Enum-bound candidates are validated against HubSpot's real option set before they are offered, refusals are explicit at every layer, and silence stops meaning two opposite things
 - [x] **Phase 32: LLM-Free Sweep Trigger** - The unattended sweep fires under real cron with no credentials and no LLM, and a trigger that cannot run says so loudly instead of impersonating a healthy backend
 - [x] **Phase 33: Durable Operator State** - Config and the dashboard pointer survive a plugin update on their own, so an operator never runs a terminal command to keep working after installing a new version
-- [ ] **Phase 34: Header Mapping Tolerance** - A spreadsheet whose headers the backend does not recognise is corrected with the operator, not silently guessed at and not dead-ended
+- [x] **Phase 34: Header Mapping Tolerance** - A spreadsheet whose headers the backend does not recognise is corrected with the operator, not silently guessed at and not dead-ended
 
 ## Phase Details
 
@@ -417,15 +417,15 @@ Plans:
 **Wave 1** *(the two halves are independent — Half B's engine needs no widened alias, Half A needs no client change)*
 
 - [x] 34-01-PLAN.md — Half B tracer: `header_suggest.py` + its CLI — `Ph.` suggested with its column's values, `Full Name` refused, nothing rewritten without a per-header yes, pinned at the CLI subprocess layer
-- [ ] 34-02-PLAN.md — Half A: `e-mail address` / `org.` / `linkedin profile` widened in all three alias tables, rebuilt, deployed disarmed, every live workflow bounced
+- [x] 34-02-PLAN.md — Half A: `e-mail address` / `org.` / `linkedin profile` widened in all three alias tables, rebuilt, deployed disarmed, every live workflow bounced
 
 **Wave 2** *(blocked on Wave 1 — the e2e walk asserts `Org.` maps, which only Half A makes true)*
 
-- [ ] 34-03-PLAN.md — contact-upload SKILL.md step 2b, the `22-messy-headers.csv` acceptance walk, and the corrected-path-is-what-is-sent guard
+- [x] 34-03-PLAN.md — contact-upload SKILL.md step 2b, the `22-messy-headers.csv` acceptance walk, and the corrected-path-is-what-is-sent guard
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 34-04-PLAN.md — STATE.md amendment 6, UAT 2.2 marked fixed-awaiting-walk, `0.8.0` cut with the version bumped in the same commit
+- [x] 34-04-PLAN.md — STATE.md amendment 6, UAT 2.2 marked fixed-awaiting-walk, `0.8.0` cut with the version bumped in the same commit
 
 
 ## v0.6 Progress
@@ -450,6 +450,7 @@ the operator can act on it without leaving the conversation.
 | 29. Notices & Unattended Sweep | all | Complete | 2026-08-03 (via Phase 32, RB-8 re-run) |
 | 30. Review-Queue Triage | 7/7 | Complete | 2026-08-04 (RB-9 close: REVIEW-04 + D-31 probe) |
 | 33. Durable Operator State | 4/4 | Complete | 2026-08-04 (RB-10 walked: migration proven, pointer defect found + fixed in 0.7.2) |
+| 34. Header Mapping Tolerance | 4/4 | Complete — awaiting operator UAT 2.2 re-walk | 2026-08-05 (0.8.0; backend deployed + 4 workflows bounced, running Map Columns verified) |
 
 ## Coverage
 

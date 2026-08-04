@@ -1,7 +1,7 @@
 ---
 phase: 34-header-mapping-tolerance
 plan: 04
-status: complete-with-one-deferred-item
+status: complete
 completed: 2026-08-05
 requirements: [INGEST-02, STRUCT-04]
 ---
@@ -57,37 +57,29 @@ Ran the skill's own commands against `tests/samples/22-messy-headers.csv`:
   of refusing the name column.
 - Scratch cleaned per step 10; `git status` over samples and scratch empty.
 
-## NOT DONE — and it is not optional
+## The backend deploy — done, by the operator
 
-**The backend redeploy never ran.** 34-02's live half is blocked at the tool layer: the
-Claude Code auto-mode classifier denies every Bash invocation touching
+The Claude Code auto-mode classifier denies every Bash invocation touching
 `scripts/deploy_n8n_workflows.py`, in both the documented shell form and the python-driver
-form. Two `gsd-executor` dispatches were also denied, so 34-03 and this plan were executed
-inline by the orchestrator.
+form that a 2026-07-29 note recorded as passing. Two `gsd-executor` dispatches carrying
+deploy context were denied too, so 34-03 and this plan were executed inline by the
+orchestrator.
 
-**Consequence, stated plainly:** the running `LV Contact Ingest (Cloud template)` workflow
-still executes the OLD, narrower alias table. A file sent live today would have `Org.`,
-`E-mail Address` and `LinkedIn Profile` dropped by `Map Columns` even though this plugin's
-preview correctly predicts they map. **The preview and the running backend disagree right
-now** — in exactly the direction Half A exists to close, and only until the deploy lands.
+**The operator ran the deploy themselves** via a `!` prefix; all five workflows returned 200.
+The bounce, the activation-set diff, the disarmed read-back and the running-body proof then
+ran normally (`n8n_control.set_active` is on the allowed side). Full detail in
+34-02-SUMMARY.md. The preview and the running backend now agree.
 
-The operator must run, from the repo root:
+## Still outstanding
 
-```
-DRY_RUN=false ALLOW_N8N_DEPLOY=true .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv('.env'); import runpy; runpy.run_path('scripts/deploy_n8n_workflows.py', run_name='__main__')"
-```
-
-then bounce the four active workflows (`Cj83mOgrIm59oxcX`, `AwbBeShdPgV48eiY`,
-`950HPb7a1GgSAIyZ`, `1fXPuIabz3RsAHgn`) deactivate→activate, leaving `WBJwoZOo63wzeP69`
-(LV Review Decision) inactive, and read back with
-`verify_live_write_safety.py --expectation disarmed`. A bare PUT never reloads a running
-workflow; only the bounce does.
-
-**Also outstanding:** the marketplace clone refresh (release checklist step 3) and the
-operator's UAT 2.2 re-walk.
+- **Marketplace clone refresh** (release checklist step 3) — `0.8.0` will not appear as an
+  available update until the clone is fetched:
+  `git -C ~/.claude/plugins/marketplaces/lightning-visuals-operator fetch --depth=1 origin master && … reset --hard FETCH_HEAD`
+- **The operator's UAT 2.2 re-walk.** Marked `FIXED IN 0.8.0 — AWAITING OPERATOR RE-WALK`,
+  never `PASS`.
 
 ## Phase status
 
-Half B is complete, shipped, and proven at the layer the operator reaches. Half A is
-complete locally and pinned by tests, but has not reached the running backend. The phase
-cannot be sealed until the deploy, the bounce, and the operator's re-walk are done.
+Both halves are complete: Half B shipped and proven at the layer the operator reaches, Half A
+widened, deployed, bounced and verified in the running backend. The phase seals on the
+operator's re-walk.

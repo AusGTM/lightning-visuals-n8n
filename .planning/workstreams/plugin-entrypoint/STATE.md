@@ -4,28 +4,53 @@ milestone: v0.6
 milestone_name: Progress
 current_phase: 34
 current_phase_name: Header Mapping Tolerance
-current_plan: 2
-status: executing
-stopped_at: 23-06 in progress (operator runbook RB-3). Config created; A1 passes after a plugin.json author-object fix; A6 behaviour verified at the gate. Tenant pinned via N8N_EXPECTED_URL. Section B Step 1 read-back PASS, but two findings hold Steps 2+ — the verifier covers only 2 of 8 flag sites and none in the contact lane, and 23-01 is committed-but-undeployed. A2-A5/A7 need Claude Desktop. 23-01 through 23-05 complete. Phase 34 plan 01 (Half B engine, header_suggest.py) complete.
-last_updated: "2026-08-04T23:19:13+10:00"
-last_activity: 2026-08-04
-last_activity_desc: Phase 34 plan 01 complete — header_suggest.py Half B engine (suggest/refuse/confirm/correct)
+current_plan: 4
+status: complete
+stopped_at: 23-06 in progress (operator runbook RB-3). Config created; A1 passes after a plugin.json author-object fix; A6 behaviour verified at the gate. Tenant pinned via N8N_EXPECTED_URL. Section B Step 1 read-back PASS, but two findings hold Steps 2+ — the verifier covers only 2 of 8 flag sites and none in the contact lane, and 23-01 is committed-but-undeployed. A2-A5/A7 need Claude Desktop. 23-01 through 23-05 complete. Phase 34 COMPLETE (all 4 plans; 0.8.0 released, backend deployed and bounced).
+last_updated: "2026-08-05T06:20:00+10:00"
+last_activity: 2026-08-05
+last_activity_desc: Phase 34 COMPLETE — plugin 0.8.0, backend deployed + bounced, awaiting operator UAT 2.2 re-walk
 progress:
   total_phases: 12
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 57
-  completed_plans: 49
-  percent: 58
+  completed_plans: 53
+  percent: 63
 ---
 
 # Project State
 
 ## Current Position
 
-Phase: 34 (Header Mapping Tolerance) — EXECUTING
-Plan: 1 of 4 complete (Half B engine); 2 of 4 next (Half A alias widening)
-Status: Executing Phase 34
-Last activity: 2026-08-04 — Phase 34 plan 01 complete
+Phase: 34 (Header Mapping Tolerance) — COMPLETE, awaiting the operator's UAT 2.2 re-walk
+Plan: 4 of 4 complete
+Status: Phase 34 shipped as plugin `0.8.0`; backend deployed and bounced
+Last activity: 2026-08-05 — Phase 34 complete
+
+**2026-08-05 — PHASE 34 COMPLETE (both halves, backend live).** Plugin `0.8.0` cut with the
+version bumped in the same commit as the CHANGELOG.
+
+Half A: `e-mail address`, `org.` and `linkedin profile` widened in all three alias tables
+(`config/column_mapping.yaml`, the plugin's byte-identical shipped copy, and
+`n8n/code/columnMap.js`), guarded by `tests/n8n/columnMapAliasParity.test.mjs` — written and
+green BEFORE any alias moved, because the two tables agree by hand, not by construction, and
+widening one alone would make the preview confidently promise a mapping the backend does not
+perform. The operator ran the disarmed deploy (the classifier denies it to agents in both the
+shell and python-driver forms); the four active workflows were then bounced deactivate→activate,
+each verdict from an independent second read, `LV Review Decision` untouched and still inactive.
+A GET of the live `LV Contact Ingest` `Map Columns` node confirms all three aliases in the
+RUNNING body. `verify_live_write_safety.py --expectation disarmed` → `VERDICT: disarmed PASS`.
+
+Half B: step 2b in `contact-upload/SKILL.md` — one confirmation per header, that column's own
+`sample_values` shown beside it, a batched yes explicitly not accepted. `Full Name` refused with
+its reason named. The corrected file is the one path previewed AND dispatched, proven on the
+recorded multipart body rather than the path argument.
+
+Against `22-messy-headers.csv`: 4 of 7 headers now map with nothing typed (2 before), `Ph.` is
+suggested, `Full Name` refused, `Notes` honestly dropped. Suites: plugin 1002/5, repo 1883/6,
+node 553, arming grep 0. **UAT 2.2 is marked `FIXED IN 0.8.0 — AWAITING OPERATOR RE-WALK`, not
+PASS** — the fix is verified; the pass is the operator's to observe. Marketplace clone refresh
+also outstanding.
 
 **2026-08-04 — Phase 34 plan 01 complete.** `operator-claude-plugin/scripts/header_suggest.py`
 built: `suggest_headers()` proposes a canonical prop via `difflib` against the 7 canonical props

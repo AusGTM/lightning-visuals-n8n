@@ -86,19 +86,14 @@ executed inline by the orchestrator instead — the workflow's own documented fa
 `Agent` is unavailable. Task order, commit protocol, and red-check discipline were
 followed unchanged.
 
-## Live-dependent assertion, explicitly deferred
+## Live-dependent assertion — RESOLVED same day
 
-**34-02's live half has not run.** The disarmed deploy to n8n Cloud is blocked at the tool
-layer and is waiting on the operator. Everything asserted here is CLIENT-side and valid
-now, because the plugin's preview reads the local `config/column_mapping.yaml`, which is
-widened.
-
-What is NOT yet true: the running backend still executes the OLD, narrower alias table.
-Until the deploy and the bounce of the four active workflows land, a file sent live would
-have `Org.`, `E-mail Address` and `LinkedIn Profile` dropped by `Map Columns` even though
-this plugin's preview correctly predicts they map. **The preview and the running backend
-currently disagree** — in the direction Half A exists to close, and only for as long as the
-deploy is pending.
+At the time this summary was first written, 34-02's live half had not run and the preview
+and the running backend disagreed. **That gap is now closed.** The operator ran the disarmed
+deploy, the four active workflows were bounced deactivate→activate (each verified by an
+independent second read), and a GET of the live `LV Contact Ingest` workflow's `Map Columns`
+node confirms `"e-mail address"`, `"org."` and `"linkedin profile"` are all present in the
+running body, with `active: True`. Read-back: `VERDICT: disarmed PASS`. See 34-02-SUMMARY.md.
 
 ## Next
 
