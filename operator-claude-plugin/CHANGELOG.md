@@ -16,6 +16,43 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-08-04
+
+### Fixed
+
+- **A blank `webhook_secret` no longer takes down the whole backend-status answer.** Found by
+  operator UAT (step 1.2) on the installed 0.6.0 build: `config_gate.load_config()` enforced the
+  union of every capability's keys, and every status entrypoint opens with it, so the capability
+  matrix the module is built around — where `status` needs only `n8n_url` + `n8n_api_key` — was
+  never consulted. Asking what the backend was doing returned a blanket "`webhook_secret` is not
+  configured" refusal instead of the workflow and execution half it could read perfectly well.
+  That is the over-refusal PLUGIN-03 forbids ("a dead provider credential does not present as
+  total failure").
+
+  `load_config()` now enforces only `n8n_url`, the one key every capability needs. Capability-
+  specific keys are gated by `require_capability()` at the layer that actually needs them:
+  `dispatch.dispatch()` and `dispatch_enrichment()` gained their own guards, mirroring the ones
+  `review_queue.fetch_queue()`, `review_decision`, `control_actions` and `run_sweep` already had —
+  so loosening the shared gate removed no protection from any transmit path. Verified by reverting
+  only the source files and reconfirming the failures, and by exercising each entrypoint against a
+  config with the secret blanked.
+
+  **Side effect worth knowing:** `require_capability()`'s "Everything else still works: …" line is
+  now reachable. It never was — `load_config()` raised before any caller got there — so every
+  refusal an operator has ever seen omitted the one sentence that says what they can still do.
+
+  **Why the test suite missed it:** the degradation was pinned by calling `status.full_report(cfg)`
+  with a hand-built dict, which never crosses `load_config()`. The function layer degraded
+  correctly; the CLI layer an operator reaches refused first. Tests now drive the entrypoint.
+
+### Added
+
+- `enrichment` capability row (`n8n_url`, `webhook_secret`). The enrichment lane previously had no
+  row of its own and would have borrowed `contact-upload`'s, refusing an enrich request with
+  "uploading contacts" wording. Its own row follows the same principle as `control` and `review`
+  (D-29): same keys as another capability is not the same capability. Visible in
+  `/operator-claude-plugin:initialize`, which now lists "enriching records" alongside the rest.
+
 ## [0.6.0] - 2026-08-04
 
 First released version of this client. Everything below shipped across milestone v0.6
