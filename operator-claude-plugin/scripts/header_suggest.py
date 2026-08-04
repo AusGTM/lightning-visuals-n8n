@@ -36,16 +36,26 @@ SCRATCH_DIR = Path(__file__).resolve().parent.parent / "scratch"
 SUGGEST_CUTOFF = 0.5
 
 # Normalized name-splitting header shapes: this system deliberately has no
-# name-splitter, so none of these may ever reach the fuzzy matcher (task 2 wires the
-# pre-check in; the membership is final as of this commit). Kept a small, named,
-# greppable constant rather than a pattern — a regex chasing every name-shaped header
-# starts refusing headers that are genuinely single-field.
+# name-splitter, so none of these may ever reach the fuzzy matcher. Kept a small,
+# named, greppable constant rather than a pattern — a regex chasing every name-shaped
+# header starts refusing headers that are genuinely single-field.
 REFUSE_NAME_SHAPES = frozenset(
     {"full name", "fullname", "full_name", "name", "contact name", "person name"}
 )
 
-# Task 2 writes this sentence.
-NAME_REFUSAL_REASON = ""
+# One operator-facing sentence, in the same register as hubspotEnums.js's
+# enumRefusalMessage: names the header, says the column carries two fields in one,
+# says this system deliberately has no name-splitter, names the concrete failure a
+# splitter would produce on a surname carrying a particle, and gives the operator the
+# two things they can do instead. Never offers a split — that would be exactly the
+# guess this refusal exists to prevent.
+NAME_REFUSAL_REASON = (
+    '"{header}" holds two fields in one column (a full name), and this system '
+    "deliberately has no name-splitter: splitting it on whitespace would mangle a "
+    'surname carrying a particle, turning "van der Berg" into separate fragments '
+    "instead of one field. Split the column into separate first-name and last-name "
+    "columns yourself, or send the file without it."
+)
 
 
 class HeaderSuggestError(Exception):
@@ -122,11 +132,24 @@ def suggest_headers(headers, rows=None, mapping_path=None):
             result["mapped"].append({"header": h, "canonical": canonical})
             continue
 
-        # Task 2 inserts the name-shape refusal pre-check HERE, before difflib is ever
-        # consulted (REFUSE_NAME_SHAPES / NAME_REFUSAL_REASON above). Order matters:
-        # measured, "full name" scores 0.588 against "lastname" — HIGHER than "ph."
-        # scores against its own correct answer (0.5) — so no cutoff below can
-        # separate the two cases; only a pre-check that runs first can.
+        # This refusal pre-check runs BEFORE difflib is ever consulted — not as a
+        # tighter cutoff. Order matters and is the entire point: measured, "full name"
+        # scores 0.588 against "lastname", HIGHER than "ph." scores against its own
+        # correct answer (0.5). Any cutoff generous enough to surface the UAT
+        # criterion's own "ph." example already surfaces a directionally-correct,
+        # factually-wrong answer for "full name" — the shape of suggestion an operator
+        # confirms without reading closely, which then silently discards half of every
+        # name in the file. Running this check first is what makes that unreachable; a
+        # tuned cutoff cannot (34-RESEARCH.md Pitfall 1).
+        if normalized in REFUSE_NAME_SHAPES:
+            result["refusals"].append(
+                {
+                    "header": h,
+                    "reason": NAME_REFUSAL_REASON.format(header=h),
+                    "sample_values": sample_values,
+                }
+            )
+            continue
 
         matches = difflib.get_close_matches(normalized, props, n=1, cutoff=SUGGEST_CUTOFF)
         if matches:

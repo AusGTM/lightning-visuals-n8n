@@ -217,3 +217,55 @@ def test_header_suggest_reuses_previews_normalizer_and_never_reparses_the_yaml()
     assert "preview._normalize_header" in source
     assert "yaml" not in source
     assert "def _normalize" not in source
+
+
+# --- Task 2: Full Name is refused with its reason named, before the matcher ever
+# sees it ---------------------------------------------------------------------------
+
+
+def test_full_name_is_refused_not_suggested():
+    result = hs.suggest_headers(["Full Name"])
+    assert result["suggestions"] == []
+    assert len(result["refusals"]) == 1
+    assert result["needs_confirmation"] is False
+
+    refusal = result["refusals"][0]
+    assert refusal["header"] == "Full Name"
+    assert refusal["reason"]
+    assert "Full Name" in refusal["reason"]
+
+
+@pytest.mark.parametrize(
+    "header",
+    ["Full Name", "FULLNAME", "full_name", "Name", "Contact Name", "Person Name",
+     "  FULL   Name "],
+)
+def test_every_name_shape_and_casing_whitespace_variant_is_refused(header):
+    result = hs.suggest_headers([header])
+    assert result["suggestions"] == []
+    assert len(result["refusals"]) == 1
+
+
+def test_refusal_carries_sample_values_like_every_other_entry():
+    result = hs.suggest_headers(
+        ["Full Name"], rows=[["Amy Adams"], ["Ben Baker"], ["Cara Cruz"], ["Dan Diaz"]]
+    )
+    refusal = result["refusals"][0]
+    assert refusal["sample_values"] == ["Amy Adams", "Ben Baker", "Cara Cruz"]
+
+
+def test_needs_confirmation_is_false_when_the_only_unrecognised_header_is_full_name():
+    result = hs.suggest_headers(["Email Address", "Full Name"])
+    assert result["needs_confirmation"] is False
+    assert result["suggestions"] == []
+
+
+def test_no_cutoff_can_make_full_name_produce_a_suggestion(monkeypatch):
+    """The regression this constant exists to prevent: assert the ORDERING property
+    directly, not only its consequence. At SUGGEST_CUTOFF=0.1 — a cutoff at which
+    every canonical prop matches everything — Full Name still yields zero suggestions.
+    This fails if the pre-check is ever moved after the difflib call."""
+    monkeypatch.setattr(hs, "SUGGEST_CUTOFF", 0.1)
+    result = hs.suggest_headers(["Full Name"])
+    assert result["suggestions"] == []
+    assert len(result["refusals"]) == 1
