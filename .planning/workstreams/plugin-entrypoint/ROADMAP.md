@@ -411,7 +411,21 @@ Plans:
   6. The scope amendment is recorded as entry 6 in STATE.md's "Accepted requirement amendments" table: suggestion with per-header confirmation is permitted in the client; silent client-side column mapping remains excluded. A scope line that moves silently is how the next reader concludes the exclusion never meant anything.
   7. Suites stay green (plugin 960/5, python 1841/6, node 550, disarmed-artifact gate 0), the plugin version is bumped in the same commit as the CHANGELOG cut, and the marketplace clone is refreshed. UAT 2.2 is re-walked and re-marked BY THE OPERATOR — a verified fix and an observed pass are different claims.
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+**Wave 1** *(the two halves are independent — Half B's engine needs no widened alias, Half A needs no client change)*
+
+- [ ] 34-01-PLAN.md — Half B tracer: `header_suggest.py` + its CLI — `Ph.` suggested with its column's values, `Full Name` refused, nothing rewritten without a per-header yes, pinned at the CLI subprocess layer
+- [ ] 34-02-PLAN.md — Half A: `e-mail address` / `org.` / `linkedin profile` widened in all three alias tables, rebuilt, deployed disarmed, every live workflow bounced
+
+**Wave 2** *(blocked on Wave 1 — the e2e walk asserts `Org.` maps, which only Half A makes true)*
+
+- [ ] 34-03-PLAN.md — contact-upload SKILL.md step 2b, the `22-messy-headers.csv` acceptance walk, and the corrected-path-is-what-is-sent guard
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 34-04-PLAN.md — STATE.md amendment 6, UAT 2.2 marked fixed-awaiting-walk, `0.8.0` cut with the version bumped in the same commit
 
 
 ## v0.6 Progress
