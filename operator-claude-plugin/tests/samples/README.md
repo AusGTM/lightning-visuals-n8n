@@ -21,12 +21,37 @@ looks like, so the walk produces a verdict rather than a vibe.
 | Step | File | What it exercises |
 |---|---|---|
 | 2.1 | `21-prose-and-signature.txt` | Freeform prose + an email signature. Three people at three orgs, with **deliberate gaps**: Dan has no email or phone, "Wen" has a first name and no title, and the signature block is the sender (not a prospect). |
-| 2.2 | `22-messy-headers.csv` | Headers the backend must map without renaming: `Full Name`, `E-mail Address`, `Ph.`, `Org.`, `Position`, `LinkedIn Profile`. Row 4 has **no name at all**. |
+| 2.2 | `22-messy-headers.csv` **and** `clean-uat-contacts.csv` | Two CSVs on purpose — see "The two 2.2 files" below. The messy one exposes a real gap; the clean one is the one to demo. |
 | 2.3 | `23-foreign-shape.json` | A badge-scanner export in a foreign shape — nested `badge`/`contact`/`employer` objects, `role_title: null`, an empty `social: {}`, and a person with `family: null`. |
 | 2.4 | `24-url-step.md` | Instructions — this step needs a **real** public page, since the point is a live fetch. |
 | 2.5 | `25-team-page-to-screenshot.html` | Open in a browser, screenshot it, hand the image to the skill. Four people; one has **no email**, one has **no contact details at all**, one is `R. Fontaine` with **no first name**. |
 | 2.6 | `26-empty.csv`, `26-photo-no-text.pdf` | The two unreadable shapes: a zero-byte file, and a valid PDF whose only content is an image — **no extractable text**. |
 | 2.7 | *(all of the above)* | Not a separate file. Every sample carries absent fields on purpose; 2.7 is the check that they came back **empty**. |
+
+## The two 2.2 files, and why both exist
+
+**`clean-uat-contacts.csv` — use this one in a client demo.** All 7 contact headers map
+(`Email Address → email`, `Phone → phone`, `Company → company`, `LinkedIn → linkedin_url`, …).
+Only `Notes` drops, correctly — it is not a contact field. It still carries the gaps that matter:
+row 2 has no email, row 3 has almost nothing, so 2.7 and the `needs_review` routing are both
+visible without the preview being a wall of red.
+
+**`22-messy-headers.csv` — the adversarial one. It currently FAILS, and that is a real finding,
+not a broken sample.** Its headers are taken verbatim from UAT 2.2's own wording (`E-mail
+Address`, `Ph.`). Neither alias exists in `config/column_mapping.yaml`: the table has
+`email address` and `e-mail` but not the hyphenated combination, and `phone`/`mobile`/`tel` but
+not `ph.`. Six of seven headers drop.
+
+The plugin handles this correctly — it predicts the drop per header and refuses to present the
+file as send-ready, rather than sending four rows that would all land `needs_review` carrying only
+a job title. **The requirement and the mapping disagree; the code does not.** Tracked as
+`.planning/todos/pending/2026-08-04-uat-22-names-aliases-the-mapping-lacks.md` and being fixed in
+Phase 34 (widen the unambiguous aliases, add suggest-and-confirm for the genuinely ambiguous ones).
+
+Keep both. The messy file is what caught the gap, and it is the regression guard once Phase 34
+lands — after it, `E-mail Address` and `Org.` should map, while `Ph.` should still ASK rather than
+guess (it could be a photo column) and `Full Name` should still refuse (there is no name-splitter,
+by design).
 
 ## What each step should produce
 

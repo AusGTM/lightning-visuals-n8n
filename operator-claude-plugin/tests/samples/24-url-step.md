@@ -65,11 +65,11 @@ POSITIVE-CASE URL: ______________________________________________
 
 ### Tried and rejected — recorded so nobody re-tries them
 
-| URL | Result |
-|---|---|
-| `https://www.racingvictoria.com.au/about-us/our-people/executive-team` | **HTTP 404** |
-| `https://www.racingnsw.com.au/about-racing-nsw/racing-nsw-staff/` | **HTTP 404** |
-| `https://www.mrc.racing.com/about-us/contact-us` | **fetch refused** — the host would not serve the request |
+| URL                                                                      | Result                                                          |
+| ------------------------------------------------------------------------ | --------------------------------------------------------------- |
+| `https://www.racingvictoria.com.au/about-us/our-people/executive-team` | **HTTP 404**                                              |
+| `https://www.racingnsw.com.au/about-racing-nsw/racing-nsw-staff/`      | **HTTP 404**                                              |
+| `https://www.mrc.racing.com/about-us/contact-us`                       | **fetch refused** — the host would not serve the request |
 
 These were guesses at deep paths and all three failed. Noted rather than deleted: the useful
 finding is that ANZ racing bodies do not reliably publish a staff page at a predictable URL, so
