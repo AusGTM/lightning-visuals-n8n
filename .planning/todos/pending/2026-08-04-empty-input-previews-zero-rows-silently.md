@@ -3,6 +3,7 @@ created: 2026-08-04T07:10:00.000Z
 title: An empty spreadsheet previews as 0 rows with no explanation and nothing stops the send
 area: operator-claude-plugin
 severity: minor
+scheduled: "plugin 0.7.1 — tack-on release AFTER Phase 33 ships as 0.7.0 (operator decision 2026-08-04)"
 files:
   - operator-claude-plugin/scripts/preview.py
   - operator-claude-plugin/skills/contact-upload/SKILL.md:79
@@ -45,7 +46,14 @@ than waved through.
 
 ## Solution
 
-TBD, cheapest first:
+**SCHEDULED: plugin 0.7.1, as a tack-on immediately after Phase 33 ships as 0.7.0.** Do NOT apply
+this before 0.7.0 is cut and pushed — a fix sitting in the tree when the 0.7.0 version bump lands
+ships inside 0.7.0 and makes the 0.7.1 cut meaningless. Order is: Phase 33 executes -> 0.7.0
+bump + CHANGELOG cut + push + clone refresh -> THEN this fix -> 0.7.1 bump + cut + push.
+
+Option 1 (skill-only) is the chosen shape unless execution surfaces a reason against it.
+
+Cheapest first:
 
 1. **Skill-only:** add a zero-row branch to `SKILL.md` step 3 — when `row_count` is 0, say the file
    parsed but carried no data rows, name the likely causes (empty file, header row only, wrong
