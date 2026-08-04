@@ -58,6 +58,7 @@ phase directories never collide with phases 20–22.**
 - [x] **Phase 32: LLM-Free Sweep Trigger** - The unattended sweep fires under real cron with no credentials and no LLM, and a trigger that cannot run says so loudly instead of impersonating a healthy backend
 - [x] **Phase 33: Durable Operator State** - Config and the dashboard pointer survive a plugin update on their own, so an operator never runs a terminal command to keep working after installing a new version
 - [x] **Phase 34: Header Mapping Tolerance** - A spreadsheet whose headers the backend does not recognise is corrected with the operator, not silently guessed at and not dead-ended
+- [ ] **Phase 35: URL Structured-Representation Fallback** - A page whose HTML yields nothing is retried against the site's own structured representation before the plugin gives up
 
 ## Phase Details
 
@@ -426,6 +427,25 @@ Plans:
 **Wave 3** *(blocked on Wave 2)*
 
 - [x] 34-04-PLAN.md — STATE.md amendment 6, UAT 2.2 marked fixed-awaiting-walk, `0.8.0` cut with the version bumped in the same commit
+
+
+### Phase 35: URL Structured-Representation Fallback
+
+**Goal**: A public URL whose HTML converts to nothing usable is retried — bounded, same-host, and visibly — against the structured representation the site itself publishes, before the plugin reports it cannot read the page.
+**Depends on**: Phase 24 (the URL adapter this extends), Phase 34 (the propose-then-confirm shape it reuses)
+**Requirements**: INGEST-05 (public URL → contact/company data extracted), INGEST-06 (clear, actionable outcome when an input cannot be used), STRUCT-03 (provenance per row), STRUCT-04 (never invent)
+**Success Criteria** (what must be TRUE):
+
+  1. `https://gctc.com.au/board-of-directors/` — whose HTML truncates after `<title>` on every page of the host — yields its **9 directors** through the operator-facing path, walked live, not merely unit-tested. Measured 2026-08-05: the HTML gives 0 people, `wp-json/wp/v2/pages?slug=board-of-directors` gives all 9.
+  2. The ladder fires ONLY on "fetched, nothing usable" — never on a tool error. `url_not_allowed` still short-circuits to the existing named refusal, because escalating past a refusal turns a fence into a suggestion.
+  3. Every candidate URL is same-host and the number of follow-up fetches is capped, both pinned by tests. A sitemap can list thousands of URLs; an uncapped ladder is a crawler, and a crawler is out of scope.
+  4. The operator sees the candidate URLs before they are fetched — the same propose-then-act shape Phase 34 established for headers.
+  5. Provenance on every row names the URL actually fetched, not the pretty one the operator pasted. A row sourced from `wp-json` says so.
+  6. The "likely a client-rendered page" phrasing is gone unless something evidences it. The contract currently hands the model that conclusion and the live walk repeated it back to the operator while the content was in fact server-side available. The final give-up message names what was tried, in order.
+  7. No scraping library, no headless browser, no user-agent or viewport control, no authenticated fetch. The REQUIREMENTS.md exclusions are NOT amended by this phase — a JSON path the site serves anonymously to `web_fetch` is none of those things.
+  8. Suites green (plugin 1022/5, python 1903/6, node 553, arming gate 0), version bumped in the same commit as the CHANGELOG cut, merged to master, marketplace clone refreshed.
+
+**Plans**: TBD
 
 
 ## v0.6 Progress
