@@ -51,7 +51,7 @@ Do this **before** the happy path. A tool that fails badly is worse than one tha
 | # | Do | Pass when | Result |
 |---|---|---|---|
 | 1.1 | Temporarily blank `webhook_secret` in the settings file, then ask to upload contacts | It refuses in **plain language**, names the missing setting, and does **not** show a stack trace | **PASS** — UAT 2026-08-04: named `webhook_secret` + path, no trace, scoped to upload |
-| 1.2 | Same state — ask for backend status | Status still works. A missing upload secret must not break the status answer | **FAIL** — UAT 2026-08-04: whole status read refused; `status.py` opens with `load_config()`, which demands a key the status capability does not need (todo `2026-08-04-load-config-over-refuses-status`) |
+| 1.2 | Same state — ask for backend status | Status still works. A missing upload secret must not break the status answer | **FAIL (2026-08-04) → FIXED same day, awaiting re-walk** — whole status read refused; root cause `load_config()` enforcing every capability's keys (debug session `load-config-over-refusal`, fix `f57b964`). Re-verified at the CLI layer, but no operator has re-walked this step in conversation — do not mark PASS until someone does |
 | 1.3 | Restore the secret | Both work again | **PASS** — UAT 2026-08-04: upload previewed 3 rows, status returned the full picture |
 
 **Fail if:** it says the plugin is "broken" or refuses everything when only one setting is
@@ -85,9 +85,9 @@ in this list (STRUCT-04).
 | # | Do | Pass when | Result |
 |---|---|---|---|
 | 3.1 | Take any batch to the point of sending | You see the **exact payload** and the **row count** before anything is sent | **PASS** — RB-3 (exact payload shown, nothing sent unarmed) |
-| 3.2 | Read the cost line | An estimated **provider-credit and token cost**, with the date its rates were measured | UNTESTED |
-| 3.3 | Try a batch bigger than the chunk size | It shows you the **chunking plan** before sending | UNTESTED |
-| 3.4 | Say no / abort | **Nothing is sent and nothing is spent.** Ask for backend status afterwards to confirm no run started | UNTESTED |
+| 3.2 | Read the cost line | An estimated **provider-credit and token cost**, with the date its rates were measured | **PASS** — UAT 2026-08-04: per-provider credit estimate + $0.21 Anthropic, rates dated 2026-07-30 with age stated; Apollo headroom explicitly *not confirmed* |
+| 3.3 | Try a batch bigger than the chunk size | It shows you the **chunking plan** before sending | **PASS** — UAT 2026-08-04: 3 records → 2 chunks (2 then 1), ceiling stated as a measured bound |
+| 3.4 | Say no / abort | **Nothing is sent and nothing is spent.** Ask for backend status afterwards to confirm no run started | **PASS** — UAT 2026-08-04: batch left unarmed (disarmed default *is* the abort); status confirmed no run started, nothing spent |
 | 3.5 | Check what it says about credits | If a balance is unknown it says **unknown** — never `0`, never "healthy" | **PASS** — UAT 2026-08-04: Apollo read `unknown` with "not zero, provider didn't answer"; Lusha 3930 / ZoomInfo 9301 real |
 
 **Fail if:** aborting still costs something, or an unknown balance renders as zero.
