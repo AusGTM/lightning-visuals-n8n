@@ -181,7 +181,38 @@ def apply_confirmed_corrections(path, confirmed, scratch_dir=SCRATCH_DIR, mappin
     Mirrors extraction.write_dispatch_csv's SCRATCH_DIR + csv.writer idiom without
     importing it: that function takes rows-of-dicts and enforces a canonical header;
     this one changes header STRINGS only and must not restructure anything.
+
+    Both guards below run BEFORE any file is opened for writing, so a refused call
+    leaves the filesystem untouched.
     """
+    # Guard 1 (V5, T-34-04): every confirmed VALUE must be a canonical prop. Mirrors
+    # write_dispatch_csv's own `extra = sorted(set(row.keys()) - allowed)` allowlist —
+    # an allowlist checked before the write, not a filter applied during it. Without
+    # this, `confirmed` is an arbitrary operator-typed string written straight into a
+    # header row the backend then reads: a second mapping authority wearing a
+    # canonical-looking label.
+    props = canonical_props(mapping_path)
+    if props is None:
+        raise HeaderSuggestError(
+            "the backend's alias/mapping config could not be resolved — with no "
+            "canonical set to validate a confirmed target against, there is no safe "
+            "write."
+        )
+    bad_targets = sorted(set(confirmed.values()) - set(props))
+    if bad_targets:
+        raise HeaderSuggestError(
+            f"{bad_targets} is not among the canonical props this backend accepts: "
+            f"{props}. Nothing was written."
+        )
+
+    # Guard 2 (T-34-05): repeat suggest_headers' own name-shape refusal here too.
+    # The suggester and the writer are separate entry points — the CLI accepts
+    # --confirm for any header the operator names — so a refusal enforced in only
+    # one of them is a refusal an operator can walk straight past.
+    for h in confirmed:
+        if preview._normalize_header(h) in REFUSE_NAME_SHAPES:
+            raise HeaderSuggestError(NAME_REFUSAL_REASON.format(header=h))
+
     headers, rows = read_table(path)
     corrected = [confirmed.get(h, h) for h in headers]
 

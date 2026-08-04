@@ -269,3 +269,120 @@ def test_no_cutoff_can_make_full_name_produce_a_suggestion(monkeypatch):
     result = hs.suggest_headers(["Full Name"])
     assert result["suggestions"] == []
     assert len(result["refusals"]) == 1
+
+
+# --- Task 3: nothing is rewritten without a confirmation, and nothing arbitrary can
+# be written --------------------------------------------------------------------------
+
+THREE_UNRECOGNISED_HEADERS = ["Ph.", "Org.", "Notes"]
+THREE_UNRECOGNISED_ROWS = [
+    ["555-0100", "Acme Inc", "vip"],
+    ["555-0101", "Widgets Co", ""],
+]
+
+
+def test_cli_with_no_confirm_writes_nothing_for_a_file_with_three_unrecognised_headers(
+    tmp_path,
+):
+    returncode, payload, root, _source = _run_header_cli(
+        tmp_path, _csv_bytes(THREE_UNRECOGNISED_HEADERS, THREE_UNRECOGNISED_ROWS)
+    )
+    assert returncode == 0, payload
+    scratch = root / "scratch"
+    assert not scratch.exists() or list(scratch.glob("*")) == []
+
+
+def test_cli_confirm_rewrites_only_the_named_header_org_passes_through_unchanged(
+    tmp_path,
+):
+    returncode, payload, root, source_path = _run_header_cli(
+        tmp_path,
+        _csv_bytes(THREE_UNRECOGNISED_HEADERS, THREE_UNRECOGNISED_ROWS),
+        "Ph.=phone",
+    )
+    assert returncode == 0, payload
+    corrected = Path(payload["corrected_path"])
+    header_line = corrected.read_text().splitlines()[0]
+    assert header_line == "phone,Org.,Notes"
+
+
+def test_corrected_data_rows_equal_the_source_rows_cell_for_cell(tmp_path):
+    returncode, payload, root, source_path = _run_header_cli(
+        tmp_path,
+        _csv_bytes(THREE_UNRECOGNISED_HEADERS, THREE_UNRECOGNISED_ROWS),
+        "Ph.=phone",
+    )
+    assert returncode == 0, payload
+    corrected = Path(payload["corrected_path"])
+    assert (
+        corrected.read_text().splitlines()[1:]
+        == source_path.read_text().splitlines()[1:]
+    )
+
+
+def test_cli_confirm_to_a_non_canonical_target_is_refused_and_writes_nothing(tmp_path):
+    returncode, payload, root, _source = _run_header_cli(
+        tmp_path,
+        _csv_bytes(THREE_UNRECOGNISED_HEADERS, THREE_UNRECOGNISED_ROWS),
+        "Ph.=photo_url",
+    )
+    assert returncode == 1
+    assert payload["ok"] is False
+    assert "photo_url" in payload["error"]
+    for prop in ("email", "phone", "company"):
+        assert prop in payload["error"]  # the accepted props are listed too
+
+    scratch = root / "scratch"
+    assert not scratch.exists() or list(scratch.glob("*")) == []
+
+
+def test_cli_confirm_of_a_name_shaped_header_is_refused_and_writes_nothing(tmp_path):
+    headers = ["Full Name", "Email Address"]
+    rows = [["Amy Adams", "amy@example.com"]]
+    returncode, payload, root, _source = _run_header_cli(
+        tmp_path, _csv_bytes(headers, rows), "Full Name=firstname"
+    )
+    assert returncode == 1
+    assert payload["ok"] is False
+    assert "Full Name" in payload["error"]
+
+    scratch = root / "scratch"
+    assert not scratch.exists() or list(scratch.glob("*")) == []
+
+
+def test_apply_confirmed_corrections_raises_when_the_mapping_is_unavailable(tmp_path):
+    path = tmp_path / "contacts.csv"
+    _write_csv(path, ["Ph."], [["555-0100"]])
+    with pytest.raises(hs.HeaderSuggestError):
+        hs.apply_confirmed_corrections(
+            str(path), {"Ph.": "phone"}, mapping_path="/no/such/file.yaml"
+        )
+
+
+def test_apply_confirmed_corrections_raises_for_non_canonical_target_no_write(tmp_path):
+    path = tmp_path / "contacts.csv"
+    _write_csv(path, ["Ph."], [["555-0100"]])
+    scratch = tmp_path / "scratch"
+    with pytest.raises(hs.HeaderSuggestError):
+        hs.apply_confirmed_corrections(str(path), {"Ph.": "photo_url"}, scratch_dir=scratch)
+    assert not scratch.exists()
+
+
+def test_apply_confirmed_corrections_raises_for_name_shaped_source_header_no_write(
+    tmp_path,
+):
+    path = tmp_path / "contacts.csv"
+    _write_csv(path, ["Full Name"], [["Amy Adams"]])
+    scratch = tmp_path / "scratch"
+    with pytest.raises(hs.HeaderSuggestError):
+        hs.apply_confirmed_corrections(str(path), {"Full Name": "firstname"}, scratch_dir=scratch)
+    assert not scratch.exists()
+
+
+def test_git_status_short_shows_no_writes_to_the_real_plugin_scratch_directory():
+    """The whole test suite above never writes into the real plugin's scratch/
+    directory — every write goes through an isolated root's own scratch_dir. This is
+    a structural sanity check, not a substitute for the `git status --short
+    operator-claude-plugin/scratch` command the plan's own <verification> runs."""
+    real_scratch = SCRIPTS_DIR.parent / "scratch"
+    assert not real_scratch.exists() or list(real_scratch.glob("*")) == []
