@@ -9,7 +9,7 @@ status: complete
 stopped_at: 23-06 in progress (operator runbook RB-3). Config created; A1 passes after a plugin.json author-object fix; A6 behaviour verified at the gate. Tenant pinned via N8N_EXPECTED_URL. Section B Step 1 read-back PASS, but two findings hold Steps 2+ — the verifier covers only 2 of 8 flag sites and none in the contact lane, and 23-01 is committed-but-undeployed. A2-A5/A7 need Claude Desktop. 23-01 through 23-05 complete. Phase 34 COMPLETE (all 4 plans; 0.8.0 released, backend deployed and bounced).
 last_updated: "2026-08-05T06:20:00+10:00"
 last_activity: 2026-08-05
-last_activity_desc: Phase 34 COMPLETE — plugin 0.8.0, backend deployed + bounced, awaiting operator UAT 2.2 re-walk
+last_activity_desc: Phase 34 SEALED — plugin 0.9.0 (reviewed name split), UAT 2.2 walked PASS by the operator
 progress:
   total_phases: 12
   completed_phases: 8
@@ -22,9 +22,9 @@ progress:
 
 ## Current Position
 
-Phase: 34 (Header Mapping Tolerance) — COMPLETE, awaiting the operator's UAT 2.2 re-walk
+Phase: 34 (Header Mapping Tolerance) — COMPLETE and SEALED (UAT 2.2 walked PASS 2026-08-05)
 Plan: 4 of 4 complete
-Status: Phase 34 shipped as plugin `0.8.0`; backend deployed and bounced
+Status: Phase 34 shipped as plugin `0.9.0`; backend deployed and bounced; UAT 2.2 PASS
 Last activity: 2026-08-05 — Phase 34 complete
 
 **2026-08-05 — PHASE 34 COMPLETE (both halves, backend live).** Plugin `0.8.0` cut with the
@@ -48,9 +48,10 @@ recorded multipart body rather than the path argument.
 
 Against `22-messy-headers.csv`: 4 of 7 headers now map with nothing typed (2 before), `Ph.` is
 suggested, `Full Name` refused, `Notes` honestly dropped. Suites: plugin 1002/5, repo 1883/6,
-node 553, arming grep 0. **UAT 2.2 is marked `FIXED IN 0.8.0 — AWAITING OPERATOR RE-WALK`, not
-PASS** — the fix is verified; the pass is the operator's to observe. Marketplace clone refresh
-also outstanding.
+node 553, arming grep 0. **UAT 2.2 walked PASS by the operator on 2026-08-05 against `0.9.0`** — the mark was held at
+`fixed-awaiting-walk` until they observed it, which is the whole method. `0.9.0` added the
+reviewed per-row name split (amendment 6a) after the walk showed the flat `Full Name` refusal
+was stricter than the suggest-and-confirm pattern beside it. Marketplace clone refreshed.
 
 **2026-08-04 — Phase 34 plan 01 complete.** `operator-claude-plugin/scripts/header_suggest.py`
 built: `suggest_headers()` proposes a canonical prop via `difflib` against the 7 canonical props

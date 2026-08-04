@@ -450,7 +450,7 @@ the operator can act on it without leaving the conversation.
 | 29. Notices & Unattended Sweep | all | Complete | 2026-08-03 (via Phase 32, RB-8 re-run) |
 | 30. Review-Queue Triage | 7/7 | Complete | 2026-08-04 (RB-9 close: REVIEW-04 + D-31 probe) |
 | 33. Durable Operator State | 4/4 | Complete | 2026-08-04 (RB-10 walked: migration proven, pointer defect found + fixed in 0.7.2) |
-| 34. Header Mapping Tolerance | 4/4 | Complete — awaiting operator UAT 2.2 re-walk | 2026-08-05 (0.8.0; backend deployed + 4 workflows bounced, running Map Columns verified) |
+| 34. Header Mapping Tolerance | 4/4 | Complete | 2026-08-05 (0.9.0; backend deployed + 4 workflows bounced, running Map Columns verified; **UAT 2.2 walked PASS**) |
 
 ## Coverage
 
