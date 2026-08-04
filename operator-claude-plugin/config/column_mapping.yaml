@@ -10,6 +10,7 @@ aliases:
   email: email
   "email address": email
   "e-mail": email
+  "e-mail address": email
   # firstname
   firstname: firstname
   "first name": firstname
@@ -29,6 +30,7 @@ aliases:
   linkedin: linkedin_url
   "linkedin url": linkedin_url
   li: linkedin_url
+  "linkedin profile": linkedin_url
   # phone
   phone: phone
   mobile: phone
@@ -38,6 +40,7 @@ aliases:
   organization: company
   organisation: company
   account: company
+  "org.": company
 
 required_identity:
   any_of:

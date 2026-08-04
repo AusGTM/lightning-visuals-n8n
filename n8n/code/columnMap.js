@@ -12,6 +12,7 @@ const ALIASES = {
   "email": "email",
   "email address": "email",
   "e-mail": "email",
+  "e-mail address": "email",
   // firstname
   "firstname": "firstname",
   "first name": "firstname",
@@ -31,6 +32,7 @@ const ALIASES = {
   "linkedin": "linkedin_url",
   "linkedin url": "linkedin_url",
   "li": "linkedin_url",
+  "linkedin profile": "linkedin_url",
   // phone
   "phone": "phone",
   "mobile": "phone",
@@ -40,6 +42,7 @@ const ALIASES = {
   "organization": "company",
   "organisation": "company",
   "account": "company",
+  "org.": "company",
 };
 
 function _normHeader(header) {
