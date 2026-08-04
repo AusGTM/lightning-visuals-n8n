@@ -63,7 +63,7 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 
 ## Progress
 
-**Phases Complete:** 9 / 10 (23-29 via 32, 31, 32; Phase 30 partial — see table)
+**Phases Complete:** 10 / 10 — Phase 30 closed 2026-08-04 (RB-9 close: REVIEW-04 demonstrated, D-31 endpoint probe recorded)
 **Current Plan:** 23-06 (operator window, in progress) — autonomous work is at 27-05
 
 ```
@@ -79,7 +79,7 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 | 27. Backend Status Surface | 6 | **Complete** — RB-4 approved; dashboard same-URL proven cross-session |
 | 28. Control Actions | 7 | **Complete** — RB-7 armed canary passed 2026-08-03 (exec 1152, 54.37 s window, bounded to 1 record) |
 | 29. Notices & Unattended Sweep | 5 | **Complete via Phase 32** — NOTICE-01/02/04/05 complete; NOTICE-03 sealed by the LLM-free trigger (RB-8 re-run passed) |
-| 30. Review-Queue Triage | 5 | **Partial** — RB-9 ran: 8 of 9 steps pass. REVIEW-01/03/05 complete; REVIEW-02 partial (manual_protected unexercised, D-31); **REVIEW-04 not demonstrated** (no decision has ever stamped a human source) |
+| 30. Review-Queue Triage | 5 | **Complete** — RB-9 close 2026-08-04 (armed window #2): valid-enum approve landed on `9604614548`; REVIEW-04 demonstrated (human source/timestamp/reason stamped, `superseded_source: waterfall` readable); REVIEW-02 complete via D-31 endpoint probe (`domain` withheld on preview AND submit; backstop path NOT probed — allowlists by key, `domain`/`annualrevenue` writable there); disarmed close PASS, neighbors 0 |
 | 31. Enum Validation for Review Approvals | — | **Complete** — planned, executed, and proven live (BUGS 28/29/30 closed; refusal observed against the real legacy candidate) |
 | 32. LLM-Free Sweep Trigger | — | **Complete** — wrapper shipped + two-sided pinned; RB-8 re-run PASSED under real cron (silence, loud-failure, zero credits) |
 

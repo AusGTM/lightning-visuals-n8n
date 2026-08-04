@@ -20,20 +20,15 @@ nodes). Crontab empty. No gate variable set anywhere.
 | 23–27 | ✅ COMPLETE incl. their canaries (unchanged from prior handoff) |
 | 28 | ✅ **COMPLETE incl. RB-7 armed canary** — arm→dispatch→disarm verified, execution 1152, 54.37 s window, one record. CONTROL-01…07 sealed |
 | 29 | ✅ **COMPLETE via Phase 32** — NOTICE-01/02/04/05 complete; NOTICE-03 sealed by the LLM-free trigger |
-| 30 | ⚠ **PARTIAL** — RB-9 ran, 8/9 steps pass. REVIEW-01/03/05 sealed. **REVIEW-04 NOT DEMONSTRATED** (no decision has ever stamped a human source — see §4). REVIEW-02 partial (`manual_protected` clause unexercised, D-31) |
+| 30 | ✅ **COMPLETE — RB-9 close 2026-08-04 (armed window #2)**. Valid-enum approve landed on `9604614548`: REVIEW-04 demonstrated (provenance `source: human`, `human_approved`, timestamp, operator reason, `superseded_source: waterfall` readable; `reviewed_by`/`reviewed_at` stamped). REVIEW-02 sealed via the D-31 endpoint probe (`domain` withheld on preview AND submit, unchanged on re-read; backstop path NOT probed — still allowlists by key). Evidence: 30-07-SUMMARY.md "RB-9 CLOSE" section |
 | 31 | ✅ **COMPLETE incl. live canary re-run** — BUGS 28/29/30 closed; enum refusal observed against the real legacy candidate |
 | 32 | ✅ **COMPLETE incl. RB-8 re-run** — LLM-free sweep trigger proven under real cron (silence AND loud-failure), zero credits |
 
-**Remaining for the milestone seal — all Phase 30:**
-1. **REVIEW-04**: an approve that lands and stamps human source/timestamp/reason, with the prior
-   machine source still readable in the provenance entry. Now unblocked: Phase 31's fix means a
-   candidate carrying a **valid** enum value (or a non-enum field) will apply instead of 400ing.
-   Needs one seeded fixture with a valid value + one armed review window (RB-9 machinery, all
-   proven).
-2. **REVIEW-02's `manual_protected` clause** (D-31): probe that the decision endpoint filters
-   protected classes — remember `reviewApply.js`'s backstop allowlists by key and leaves `domain`/
-   `annualrevenue` writable; record what is observed, never "protected fields are protected".
-3. Then flip REVIEW-02/04, reconcile STATE, seal v0.6.
+**Milestone SEALED 2026-08-04.** All three remaining items done in the RB-9 close: the REVIEW-04
+approve landed (human provenance stamped, machine source readable), the D-31 endpoint probe was
+recorded as observed (endpoint withholds `manual_protected`; backstop path explicitly NOT proven),
+REVIEW-02/04 flipped, STATE reconciled 10/10, MILESTONES.md carries the v0.6 entry. Closing gates
+at seal: 1784 pytest / 550 node / armed-literal grep 0 / live disarmed PASS.
 
 **Open todos (`.planning/todos/pending/`):** `sweep-lookback-has-no-time-window` (major — fixed
 100-row lookback re-notifies a fixed failure until displaced, no acknowledgement; same todo carries
@@ -129,6 +124,7 @@ permanent.
 
 ## 6. Resume point
 
-**Next concrete task:** Phase 30's close (REVIEW-04 + D-31 probe, §1). It re-uses RB-9's proven
-machinery end to end; the only new artifact is a valid-value review fixture. Then milestone seal.
-Everything else is green and pushed.
+**v0.6 is sealed (2026-08-04).** No open milestone work. Remaining opens are the carried todos
+(§1): sweep lookback time-window + id→name notice naming, Phase 26 thin-response reason, the
+versioned-cache config orphan — plus the contact `342770428400` operator delete/mark and the
+plugin-cache refresh noted in §3. Next milestone starts from `/gsd-new-milestone`.

@@ -252,14 +252,14 @@ above. This is why that endpoint has to exist.
       language: the competing values, which source said what, evidence links, and a link to the
       HubSpot record
 
-- [~] **REVIEW-02**: Operator can resolve a review conversationally and the plugin writes the
+- [x] **REVIEW-02**: Operator can resolve a review conversationally and the plugin writes the
       decision back, honoring the existing field-policy ownership classes — a `manual_protected`
       value is never overwritten by a review decision
 
 - [x] **REVIEW-03**: Review writeback is gated by its own session-scoped confirmation, separate
       from dispatch arming; while ungated it shows exactly what it would write and writes nothing
 
-- [ ] **REVIEW-04**: Every review decision stamps human source, timestamp, and the operator's
+- [x] **REVIEW-04**: Every review decision stamps human source, timestamp, and the operator's
       stated reason into the existing source-metadata fields, so the audit trail shows a person
       decided it
 
@@ -370,9 +370,9 @@ duplicates. Phase numbering continues from the archived v0.5 milestone (ended at
 | NOTICE-04 | Phase 29 | Complete (unit + live: full silence check observed under real cron, Phase 32 gate) |
 | NOTICE-05 | Phase 29 | Complete (29-06 two-part install) |
 | REVIEW-01 | Phase 30 | Complete (RB-9 step 5: queue rendered, conflict plain-language) |
-| REVIEW-02 | Phase 30 | Partial — writeback proven (RB-9 reject; Phase 31 enum refusal). The `manual_protected` clause is UNEXERCISED (D-31) |
+| REVIEW-02 | Phase 30 | Complete (RB-9 close 2026-08-04: armed approve applied `industry` while the DECISION ENDPOINT withheld the `manual_protected` `domain` candidate — "withheld as protected by field policy: domain" on preview AND submit, `domain` unchanged on re-read. Scope: this proves the endpoint path only; `reviewApply.js`'s 15-min backstop still allowlists by key and leaves `domain`/`annualrevenue` writable — D-31 observed, not "protected everywhere") |
 | REVIEW-03 | Phase 30 | Complete (RB-9 step 6b: both gates proven alone, 0 requests built) |
-| REVIEW-04 | Phase 30 | **NOT DEMONSTRATED** (RB-9: a reject stamps neither reviewed_by nor reviewed_at; the approve that would stamp human source never landed) |
+| REVIEW-04 | Phase 30 | **Complete** (RB-9 close 2026-08-04: armed approve on `9604614548` landed — provenance entry `source: human`, `validation_status: human_approved`, `verified_at` stamped, operator reason verbatim, `superseded_source: waterfall` (prior machine source readable), untouched entries byte-intact; `lv_enrichment_reviewed_by`/`reviewed_at` stamped. Reject remains one-key by design, D-30) |
 | REVIEW-05 | Phase 30 | Complete (RB-9 step 7: reject recorded, record stayed queued) |
 | PLUGIN-01 | Phase 23 | Complete |
 | PLUGIN-02 | Phase 23 | Complete |

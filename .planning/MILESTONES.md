@@ -1,5 +1,21 @@
 # Milestones
 
+## v0.6 Claude Plugin Entrypoint (Shipped: 2026-08-04)
+
+**Phases completed:** 10 phases (23–32), workstream `plugin-entrypoint`
+
+**Key accomplishments:**
+
+- Shipped `operator-claude-plugin/`: a conversational front door over the n8n backend — tabular + non-tabular ingestion (prose, foreign JSON, URLs, screenshots), enrichment lane with cost guard, per-record outcome reporting with safe retry, backend status surface, allowlisted control actions, notices + unattended sweep, and review-queue triage. 49/49 requirements complete.
+- Every dangerous capability behind a uniform `ALLOW_*` gate (exact-string `true`, D-34), session arms separate from env gates, single-record `TEST_RECORD_*` allowlists, and symmetric `--expect-armed` read-backs. Committed workflow artifacts always disarmed; every arm/disarm bounces active workflows (stored-vs-running gap, proven live).
+- Phase 31 (inserted): HubSpot enum validate-and-refuse across staging AND both review paths — preview and submit return identical explicit refusals; `not_allowlisted` distinct from workflow error (BUGS 28/29/30 closed on live evidence).
+- Phase 32 (inserted): LLM-free unattended sweep trigger — deterministic sh wrapper under real cron, zero credentials, loud on its own failure; NOTICE-03 sealed by RB-8 re-run (`claude -p` under cron fails silently — never reintroduce).
+- Armed canaries RB-3/7/8/9 all passed with single-record blast radius. RB-9 close (2026-08-04) demonstrated REVIEW-04 live: a human approve stamped `source: human` / `human_approved` / timestamp / reason with the superseded machine source readable, and the D-31 probe recorded the decision endpoint withholding a `manual_protected` field (backstop path explicitly not proven).
+
+**Closeout:** REQUIREMENTS 49/49 complete; STATE 10/10 phases; closing gates 1784 pytest / 550 node / armed-literal grep 0 / live tenant disarmed PASS. Carried opens (tracked in HANDOFF/todos): sweep lookback time-window + workflow-name notices, Phase 26 thin-response reason, versioned-cache config orphan, RB-3 canary contact cleanup. No milestone git tag (semver-release-tag namespace precedent from v0.3/v0.4).
+
+---
+
 ## v0.4 Reachability & Verification Debt (Shipped: 2026-07-29)
 
 **Phases completed:** 3 phases, 6 plans, 17 tasks

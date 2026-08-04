@@ -46,14 +46,14 @@ phase directories never collide with phases 20–22.**
 - Integer phases (23, 24, …): Planned milestone work
 - Decimal phases (23.1, 23.2): Urgent insertions (marked INSERTED)
 
-- [ ] **Phase 23: Walking Skeleton — Plugin Shell & Tabular Dispatch** - A spreadsheet goes in conversationally, an approved preview goes out to `hubspot/contact-upload`, and nothing sends unless armed
-- [ ] **Phase 24: Non-Tabular Input Adapters** - Prose, foreign JSON, public URLs, and web-page screenshots become canonical rows with provenance — or a named error
-- [ ] **Phase 25: Enrichment Lane & Cost Guard** - Existing HubSpot records can be enriched, and no batch launches without a cost estimate and a chunking plan
-- [ ] **Phase 26: Outcome Reporting & Safe Retry** - Per-record outcomes replace bare HTTP statuses, and a partial failure is re-sendable without duplicates
-- [ ] **Phase 27: Backend Status Surface** - An n8n-side health endpoint plus a plain-language read of what the backend is doing, in text or as a dashboard
-- [ ] **Phase 28: Control Actions** - Run it, turn it on and off, reschedule it, and enable live writes for one conversation — all confirmed and read-back verified
-- [ ] **Phase 29: Notices & Unattended Sweep** - Runs report themselves when they settle, and a sweep speaks up when something needs a human while nobody is watching
-- [ ] **Phase 30: Review-Queue Triage** - Conflicts get resolved conversationally, with the decision written back as a human decision
+- [x] **Phase 23: Walking Skeleton — Plugin Shell & Tabular Dispatch** - A spreadsheet goes in conversationally, an approved preview goes out to `hubspot/contact-upload`, and nothing sends unless armed
+- [x] **Phase 24: Non-Tabular Input Adapters** - Prose, foreign JSON, public URLs, and web-page screenshots become canonical rows with provenance — or a named error
+- [x] **Phase 25: Enrichment Lane & Cost Guard** - Existing HubSpot records can be enriched, and no batch launches without a cost estimate and a chunking plan
+- [x] **Phase 26: Outcome Reporting & Safe Retry** - Per-record outcomes replace bare HTTP statuses, and a partial failure is re-sendable without duplicates
+- [x] **Phase 27: Backend Status Surface** - An n8n-side health endpoint plus a plain-language read of what the backend is doing, in text or as a dashboard
+- [x] **Phase 28: Control Actions** - Run it, turn it on and off, reschedule it, and enable live writes for one conversation — all confirmed and read-back verified
+- [x] **Phase 29: Notices & Unattended Sweep** - Runs report themselves when they settle, and a sweep speaks up when something needs a human while nobody is watching
+- [x] **Phase 30: Review-Queue Triage** - Conflicts get resolved conversationally, with the decision written back as a human decision
 - [x] **Phase 31: Enum Validation for Review Approvals** - Enum-bound candidates are validated against HubSpot's real option set before they are offered, refusals are explicit at every layer, and silence stops meaning two opposite things
 - [x] **Phase 32: LLM-Free Sweep Trigger** - The unattended sweep fires under real cron with no credentials and no LLM, and a trigger that cannot run says so loudly instead of impersonating a healthy backend
 
@@ -295,31 +295,31 @@ Plans:
 Plans:
 **Wave 1**
 
-- [ ] 30-01-PLAN.md — Review writeback gets its own backend arming flag, separate from dispatch arming in both directions, and the pinned four-name overlayable set is deliberately widened to five
+- [x] 30-01-PLAN.md — Review writeback gets its own backend arming flag, separate from dispatch arming in both directions, and the pinned four-name overlayable set is deliberately widened to five
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 30-02-PLAN.md — Tracer: one rejection end to end — webhook, refetch, decision module, dry-run preview, disarmed write gate, single-property PATCH
+- [x] 30-02-PLAN.md — Tracer: one rejection end to end — webhook, refetch, decision module, dry-run preview, disarmed write gate, single-property PATCH
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 30-03-PLAN.md — Approve through the existing `reviewApply` compare-and-set, stamped as a human decision in the provenance blob; contacts routed through the same endpoint
+- [x] 30-03-PLAN.md — Approve through the existing `reviewApply` compare-and-set, stamped as a human decision in the provenance blob; contacts routed through the same endpoint
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 30-04-PLAN.md — `hubspot/review/queue`: one authenticated, provably read-only call returning the flagged backlog with its stored conflict detail
+- [x] 30-04-PLAN.md — `hubspot/review/queue`: one authenticated, provably read-only call returning the flagged backlog with its stored conflict detail
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 30-05-PLAN.md — Client: plain-language conflict rendering, display-only field-policy labelling, HubSpot record links
+- [x] 30-05-PLAN.md — Client: plain-language conflict rendering, display-only field-policy labelling, HubSpot record links
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 30-06-PLAN.md — Client: session-scoped review arm, the backend's own exact-write display, read-back verification, and the review-triage skill
+- [x] 30-06-PLAN.md — Client: session-scoped review arm, the backend's own exact-write display, read-back verification, and the review-triage skill
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 30-07-PLAN.md — Admin runbook plus the one human-executed armed canary on a single allowlisted record, closed by a read-back-verified disarm
+- [x] 30-07-PLAN.md — Admin runbook plus the one human-executed armed canary on a single allowlisted record, closed by a read-back-verified disarm
 
 ### Phase 31: Enum Validation for Review Approvals
 
@@ -373,14 +373,14 @@ the operator can act on it without leaving the conversation.
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 23. Walking Skeleton — Plugin Shell & Tabular Dispatch | 5/6 | In Progress|  |
-| 24. Non-Tabular Input Adapters | 0/? | Not started | - |
-| 25. Enrichment Lane & Cost Guard | 0/? | Not started | - |
-| 26. Outcome Reporting & Safe Retry | 0/? | Not started | - |
-| 27. Backend Status Surface | 0/? | Not started | - |
-| 28. Control Actions | 0/? | Not started | - |
-| 29. Notices & Unattended Sweep | 0/? | Not started | - |
-| 30. Review-Queue Triage | 0/? | Not started | - |
+| 23. Walking Skeleton — Plugin Shell & Tabular Dispatch | 7/7 | Complete | 2026-08-03 (RB-3 armed canary) |
+| 24. Non-Tabular Input Adapters | all | Complete | 2026-07-31 |
+| 25. Enrichment Lane & Cost Guard | all | Complete | 2026-08-01 (B4 measured) |
+| 26. Outcome Reporting & Safe Retry | all | Complete | 2026-07-31 |
+| 27. Backend Status Surface | all | Complete | 2026-08-03 (RB-4) |
+| 28. Control Actions | all | Complete | 2026-08-03 (RB-7 armed canary) |
+| 29. Notices & Unattended Sweep | all | Complete | 2026-08-03 (via Phase 32, RB-8 re-run) |
+| 30. Review-Queue Triage | 7/7 | Complete | 2026-08-04 (RB-9 close: REVIEW-04 + D-31 probe) |
 
 ## Coverage
 

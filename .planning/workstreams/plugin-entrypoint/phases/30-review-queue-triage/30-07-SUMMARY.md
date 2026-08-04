@@ -339,3 +339,89 @@ carries an 08-03 timestamp. **No other record was touched**, on three independen
 approve never reached a write. Nothing here supports any claim about protected-field filtering on
 either the decision endpoint or the backstop. The 15-minute backstop was also never observed
 applying anything, since no approval was ever recorded for it to pick up.
+
+---
+
+## RB-9 CLOSE — 2026-08-04: REVIEW-04 demonstrated, D-31 probed (armed window #2)
+
+**Run by the session agent; arming reaffirmed by the operator on a second explicit instruction
+after the invariant was named (HANDOFF §2.4 pattern, AskUserQuestion record in session).**
+Everything below is live-observed. Suites untouched; no code changed — this window consumed only
+proven machinery.
+
+### The fixture (new artifact, seeded direct-to-HubSpot on the registered test record)
+
+Company `9604614548` (Melbourne Racing Club), before-snapshot
+`30-07-review04-canary-20260803T233608Z.json`. Seeded `lv_enrichment_needs_review=true` plus a
+two-decision candidate:
+
+1. `industry`: `current_value "SPORTS"` (matched live), `chosen_value "ENTERTAINMENT"` — a **valid**
+   HubSpot enum value, so Phase 31's guard passes it (the thing BUG 28 made impossible before).
+2. `domain`: `current_value "mrc.racing.com"`, `chosen_value "d31-probe.invalid"` — the D-31 probe:
+   `manual_protected`, must be withheld by the decision endpoint.
+
+Fixture proven against the shipped module BEFORE seeding (`sanity_review04_fixture.js` run against
+`n8n/code/reviewDecision.js` verbatim: outcome `applied`, `domain` withheld, human provenance with
+`superseded_source: "waterfall"` — all assertions pass).
+
+### The window
+
+- Armed deploy: `ALLOW_HUBSPOT_REVIEW_WRITES` + `TEST_RECORD_IDS=9604614548`, **11× rewrites each**.
+- Read-back: `--expectation armed --allowlist 9604614548 --expect-armed ALLOW_HUBSPOT_REVIEW_WRITES`
+  → **`VERDICT: armed PASS`**; `ALLOW_HUBSPOT_RECORD_WRITES` and `ALLOW_HUBSPOT_CREATE` read
+  `false` on every declaring node (symmetric assertion held — dispatch never armed).
+- All 4 active workflows bounced (deactivate=200/activate=200); `LV Review Decision` activated cold.
+- Queue read: record rendered with the seeded candidate (execution 1369/1370).
+- **Step 6b re-proven**: with `ALLOW_REVIEW_SUBMIT` unset, submit refused `submit_not_enabled`
+  naming the variable, "no request was even built".
+- Preview (ungated): `outcome: applied`, message **"applied 1 field(s) as a human decision:
+  industry; withheld as protected by field policy: domain"** — `would_write` contains NO `domain`.
+- **Armed approve** (`ALLOW_REVIEW_SUBMIT=true` prefix + session arm, reviewed_by
+  `robert.li@australiagtm.com`): submit `outcome: applied`, backend `verified: true`
+  (executions 1371/1372, both `success`, zero n8n errors).
+
+### REVIEW-04 evidence — independent HubSpot re-read
+
+- `industry` → `ENTERTAINMENT` (the candidate value, applied).
+- Review flags cleared, candidate blanked; `lv_enrichment_reviewed_by` =
+  `robert.li@australiagtm.com`; `lv_enrichment_reviewed_at` = `2026-08-03T23:54:33.898Z`.
+- `lv_enrichment_provenance.industry`:
+  `source: "human"`, `confidence: 100`, `validation_status: "human_approved"`,
+  `verified_at: "2026-08-03T23:54:33.898Z"`, `reason:` the operator's text verbatim,
+  **`superseded_source: "waterfall"`** — the prior machine attribution readable in the entry.
+- Untouched provenance entries (`lv_content_type`, `lv_country_region_normalized`,
+  `lv_employee_band`, `lv_org_type`, `lv_sponsorship_reliant`) carried intact;
+  `lv_org_type.source` still `claude_web`.
+
+**Every clause of REVIEW-04 observed on a live decision.** The reject path remains one-key by
+design (D-30) — REVIEW-04 is satisfied by the approve stamping provenance; the 2026-08-03
+"NOT DEMONSTRATED" verdict is superseded by this run.
+
+### D-31 — what was observed (endpoint path only)
+
+The **decision endpoint** withheld the `manual_protected` `domain` candidate on BOTH preview and
+real submit (same message), and the re-read shows `domain` unchanged (`mrc.racing.com`). The
+allowlist compare-and-set did not go stale (`current_value` matched live for both fields), so the
+withhold is attributable to `PROTECTED_CLASSES` filtering in `reviewDecision.js`, not to a refusal
+upstream. **Scope limit stands:** `reviewApply.js`'s 15-minute backstop allowlists by key and
+leaves `domain`/`annualrevenue` writable — this run says nothing about that path. Recorded as
+observed; NOT "protected fields are protected".
+
+### Close-out (amended order) and blast radius
+
+1. `LV Review Decision` deactivated FIRST (200).
+2. Disarmed redeploy → 5× 200. 3. All 4 actives bounced 200/200. 4. Read-back →
+   **`VERDICT: disarmed PASS`** (every flag `false`/`''`). Active set restored exactly.
+3. Gate variables were per-command prefixes only; nothing persisted. Crontab untouched.
+4. `industry` restored to `SPORTS` by direct PATCH (the demo value was canary-only; SPORTS is
+   correct — noted, not hidden).
+5. Snapshot compare: target changed only
+   `hs_lastmodifieddate, lv_enrichment_provenance, lv_enrichment_review_approved,
+   lv_enrichment_review_reason, lv_enrichment_reviewed_at, lv_enrichment_reviewed_by` —
+   `industry` absent because restored; **`neighbors_changed: 0`**. One record was the entire
+   blast radius. Note: the approve's clear patch blanked the retained 31-canary reject reason
+   (`lv_enrichment_review_reason` → `""`); that audit text survives in the before-snapshot and in
+   git history.
+
+**RB-9 reply line: approved · record `9604614548` (company) · disarmed read-back PASS ·
+step-6b refusal observed · REVIEW-04 and the D-31 endpoint probe both recorded above.**
