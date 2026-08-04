@@ -445,7 +445,12 @@ Plans:
   7. No scraping library, no headless browser, no user-agent or viewport control, no authenticated fetch. The REQUIREMENTS.md exclusions are NOT amended by this phase — a JSON path the site serves anonymously to `web_fetch` is none of those things.
   8. Suites green (plugin 1022/5, python 1903/6, node 553, arming gate 0), version bumped in the same commit as the CHANGELOG cut, merged to master, marketplace clone refreshed.
 
-**Plans**: TBD
+**Plans:** 3 plans
+
+Plans:
+- [ ] 35-01-PLAN.md — the candidate ladder: `scripts/url_fallback.py` (rung order, same-host check, fetch cap, give-up message, CLI) plus the `extraction.md` URL-adapter rewrite that escalates on fetched-but-empty and terminates on a tool error *(wave 1)*
+- [ ] 35-02-PLAN.md — the fences pinned: provenance naming the URL actually fetched, an AST import-set guard proving no scraping/browser/HTTP capability was introduced, and contract tests tying `extraction.md`'s quoted cap and branch placement to the module *(wave 2)*
+- [ ] 35-03-PLAN.md — walk `https://gctc.com.au/board-of-directors/` live for its 9 directors, then cut `0.10.0` (bump + CHANGELOG in one commit), push to master, refresh the marketplace clone *(wave 3)*
 
 
 ## v0.6 Progress
