@@ -381,7 +381,7 @@ Plans:
 
 **Wave 1**
 
-- [ ] 33-01-PLAN.md — Tracer: durable config home resolved through one shared module, steps 1–4, pinned at the CLI against a fake HOME
+- [x] 33-01-PLAN.md — Tracer: durable config home resolved through one shared module, steps 1–4, pinned at the CLI against a fake HOME
 
 **Wave 2** *(blocked on Wave 1)*
 

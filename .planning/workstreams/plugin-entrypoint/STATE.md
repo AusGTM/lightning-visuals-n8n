@@ -7,9 +7,9 @@ current_phase_name: walking-skeleton-plugin-shell-tabular-dispatch
 current_plan: 06
 status: executing
 stopped_at: 23-06 in progress (operator runbook RB-3). Config created; A1 passes after a plugin.json author-object fix; A6 behaviour verified at the gate. Tenant pinned via N8N_EXPECTED_URL. Section B Step 1 read-back PASS, but two findings hold Steps 2+ — the verifier covers only 2 of 8 flag sites and none in the contact lane, and 23-01 is committed-but-undeployed. A2-A5/A7 need Claude Desktop. 23-01 through 23-05 complete.
-last_updated: "2026-07-31T22:45:00.000Z"
-last_activity: 2026-07-31
-last_activity_desc: walking OPERATOR-RUNBOOK RB-3 (23-06); fixed plugin.json author-object defect that failed `claude plugin validate`
+last_updated: "2026-08-04T00:00:00.000Z"
+last_activity: 2026-08-04
+last_activity_desc: Phase 33 plan 01 (durable-operator-state) built — durable_paths.py, config_gate/init_check wired through it, resolution order pinned at the CLI subprocess
 progress:
   total_phases: 8
   completed_phases: 0
@@ -32,6 +32,13 @@ the LLM-free sweep wrapper (`lv-sweep-run.sh`), its two-sided contract test, the
 `SWEEP-CRON-TEMPLATE.md`, and the amended `29-HOST-PROBE.md` D-01 — is built and committed.
 The phase is gated on 32-02: the live RB-8 re-run against the new trigger. NOTICE-03 in
 REQUIREMENTS.md stays **BLOCKED** until that live gate passes.
+
+**2026-08-04 addendum (autonomous front):** Phase 33 (durable-operator-state) plan 33-01 —
+the tracer: `durable_paths.py`'s shared resolver, `config_gate`/`init_check` wired through
+it, resolution order pinned at the CLI subprocess against a fake `HOME` — is built,
+tested (12 new tests, plugin suite 923/5), and committed. 33-02 (the sibling-scan
+migration), 33-03 (dashboard-pointer wiring), and 33-04 (doc sweep + release cut + RB-10)
+remain.
 
 ## Accepted requirement amendments (reconcile before each phase seals)
 
@@ -335,6 +342,21 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
   and tested; commit-boundary only, no functional impact (29-05-SUMMARY.md Deviations).
   Plugin suite 882 passed/5 skipped, repo suite 1763 passed/6 skipped, node 550 passed —
   all unchanged in count except the plugin suite's growth.
+
+- **33-01 built the phase's tracer: `durable_paths.py` as the single config-resolution
+  authority.** `resolve_config_path()`/`resolve_state_path()` implement steps 1–4 (explicit
+  path arg, `LV_OPERATOR_CONFIG`, durable home, same-install legacy) with step 5 (33-02's
+  sibling-scan migration) left as a marked insertion point, not stubbed. `config_gate.py`'s
+  frozen `DEFAULT_CONFIG_PATH` constant is gone, replaced by `config_path()` resolved fresh
+  on every call; `init_check.py` reads the same function instead of its own copy. Every
+  behaviour is pinned by driving `config_gate.py` as a subprocess against a fake `HOME`
+  (`_run_cli` extended with `env=`/`durable_config=`, built from a literal dict, never
+  `{**os.environ}`) — the durable home wins over the legacy path, `LV_OPERATOR_CONFIG` wins
+  over the durable home, a mistyped override names its own path, and no secret leaks on any
+  refusal branch. One necessary out-of-plan fix: `test_sweep_read_only.py`'s read-only
+  import-closure allowlist needed `durable_paths` added (config_gate now imports it; it
+  performs no I/O beyond `.exists()` checks). Plugin suite 923 passed/5 skipped (+12 from
+  911 baseline), repo suite 1804 passed/6 skipped (+12), node 550 unchanged.
 
 **Todos / carried context:**
 
