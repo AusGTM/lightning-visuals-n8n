@@ -235,6 +235,61 @@ def test_cli_durable_home_wins_when_both_are_present(tmp_path, fake_config):
     assert payload["target"] == "https://durable-home.n8n.cloud/webhook/hubspot/contact-upload"
 
 
+# --- the whole resolution order pinned, including the refusal (33-01 Task 2) -------
+
+def test_cli_lv_operator_config_beats_a_populated_durable_home(tmp_path, fake_config):
+    """Resolution step 2 (admin escape hatch) outranks step 3 (durable home)."""
+    durable_cfg = {**fake_config, "n8n_url": "https://durable-home.n8n.cloud"}
+    override_cfg = {**fake_config, "n8n_url": "https://override.n8n.cloud"}
+    override_path = tmp_path / "override" / "operator.local.json"
+    override_path.parent.mkdir(parents=True)
+    override_path.write_text(json.dumps(override_cfg))
+
+    proc = _run_cli(None, tmp_path, durable_config=durable_cfg,
+                    env={"LV_OPERATOR_CONFIG": str(override_path)})
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is True
+    assert payload["target"] == "https://override.n8n.cloud/webhook/hubspot/contact-upload"
+
+
+def test_cli_lv_operator_config_naming_a_missing_path_refuses_naming_that_path_durable(
+        tmp_path, fake_config):
+    """An admin who mistypes the override must see their own typo, not a silent
+    fall-through to the durable home (PLUGIN-03's 'name what is broken')."""
+    durable_cfg = {**fake_config, "n8n_url": "https://durable-home.n8n.cloud"}
+    typo_path = tmp_path / "does" / "not" / "exist" / "operator.local.json"
+
+    proc = _run_cli(None, tmp_path, durable_config=durable_cfg,
+                    env={"LV_OPERATOR_CONFIG": str(typo_path)})
+    assert proc.returncode == 1
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is False
+    assert str(typo_path) in payload["error"]
+
+
+def test_cli_refuses_with_no_config_anywhere_durable_naming_a_path_and_the_example(tmp_path):
+    proc = _run_cli(None, tmp_path)
+    assert proc.returncode == 1
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is False
+    assert "operator.local.json" in payload["error"]
+    assert "operator.local.example.json" in payload["error"]
+
+
+def test_cli_no_secret_leaks_on_a_refusal_branch_reading_the_durable_home(tmp_path):
+    """Generalizes test_no_configerror_message_ever_contains_the_secret_value from the
+    function layer to the process layer (T-33-02): a refusal that DID read a config
+    carrying a real secret must still never print it, on either stream."""
+    sentinel = "sentinel-secret-should-never-leak-zx91"
+    bad_cfg = {"n8n_url": "not-https", "webhook_secret": sentinel}
+
+    proc = _run_cli(None, tmp_path, durable_config=bad_cfg)
+    assert proc.returncode == 1
+    assert sentinel not in proc.stdout
+    assert sentinel not in proc.stderr
+
+
 def test_skill_documents_the_can_send_contract():
     """Two-sided: the CLI emits `can_send`, and the skill body must act on it. A field no
     skill reads is a field that silently stops mattering."""
