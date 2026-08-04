@@ -22,10 +22,13 @@ that gains a capability must not need this file edited to keep telling the truth
 """
 import argparse
 import json
+import os
 import shutil
 import sys
+from pathlib import Path
 
 import config_gate
+import durable_paths
 
 # The example ships angle-bracket placeholders ("https://<your-subdomain>.n8n.cloud").
 # A file full of those exists but is NOT configured, and reporting it as configured is the
@@ -55,6 +58,25 @@ def _key_state(cfg, key):
     return "filled"
 
 
+def _config_location(path) -> str:
+    """One of `durable`, `env`, `legacy` — which of `durable_paths`' resolution
+    branches produced `path`. Imports `durable_paths` directly rather than reaching
+    through `config_gate`, since this is about WHERE the path resolved from, the same
+    question `durable_paths` is the single authority for (33-CONTEXT.md's
+    second-source-of-truth rule).
+
+    `env` outranks the others: an admin-set `LV_OPERATOR_CONFIG` is checked
+    regardless of where it happens to point. `durable` is next — the resolved path's
+    parent is the durable directory. Everything else, including the legacy
+    same-install `config/` path, is `legacy`.
+    """
+    if os.environ.get("LV_OPERATOR_CONFIG"):
+        return "env"
+    if Path(path).parent == durable_paths.durable_dir():
+        return "durable"
+    return "legacy"
+
+
 def inspect(config_path=None) -> dict:
     """The whole setup picture, as data. No secret ever enters the return value."""
     path = config_path or config_gate.config_path()
@@ -62,6 +84,7 @@ def inspect(config_path=None) -> dict:
 
     report = {
         "config_path": str(path),
+        "config_location": _config_location(path),
         "example_path": str(example),
         "exists": path.exists(),
         "keys": {},
@@ -122,6 +145,15 @@ def create_from_example(config_path=None) -> dict:
                       "not secrets, and still need filling in"}
 
 
+_LOCATION_REASSURANCE = {
+    "durable": ("These settings live outside the plugin's install folder, so a "
+               "plugin update keeps them."),
+    "legacy": ("These settings live in this version's own folder and will move to "
+              "the durable home by themselves the next time the plugin is updated."),
+    "env": "An administrator has pointed the plugin at this path.",
+}
+
+
 def render(report: dict) -> str:
     """Plain language for the operator. Names keys and paths; never a value."""
     lines = []
@@ -130,6 +162,16 @@ def render(report: dict) -> str:
     if report["status"] == STATUS_READY:
         lines.append("Setup is complete — nothing to do.")
         lines.append(f"Your settings file: {path}")
+        # 33-03: one line naming what the resolved LOCATION means, never a claim that
+        # a migration happened. init_check reads a resolved path; it has no way to
+        # know whether THIS process moved anything, and inventing a report it cannot
+        # substantiate is worse than staying quiet (criterion 4, D-1's silent-no-op
+        # contract). Satisfied by never mentioning migration at all — not by
+        # describing its absence — and phrased as reassurance per CONTEXT's Specific
+        # Ideas, never as an instruction to do anything.
+        reassurance = _LOCATION_REASSURANCE.get(report.get("config_location"))
+        if reassurance:
+            lines.append(reassurance)
         lines.append("")
         lines.append("Everything is configured:")
         for name, row in sorted(report["capabilities"].items()):

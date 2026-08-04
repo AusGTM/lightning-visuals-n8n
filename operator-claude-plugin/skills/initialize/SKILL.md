@@ -29,8 +29,10 @@ Read its output back to the operator in your own words. It prints one of four st
 
 **Already set up.** Say so plainly and stop. Do not offer to re-do it, do not print the
 file's contents, do not suggest they verify the values — there is nothing to check that
-this command has not already checked. Tell them what they can now do (upload contacts, ask
-for backend status, triage the review queue) and end there.
+this command has not already checked. Also relay the settings-file location line
+`init_check.py` printed — it is reassurance about the settings surviving a plugin update,
+not something the operator needs to act on. Tell them what they can now do (upload
+contacts, ask for backend status, triage the review queue) and end there.
 
 **No settings file yet.** Offer to put the template in place:
 
@@ -55,7 +57,9 @@ Give them, in this order:
 
 1. **The full path** to the settings file, exactly as `init_check.py` printed it. Do not
    paraphrase it or describe it as "in the config folder" — the whole reason this skill
-   exists is that they cannot be expected to know where the plugin was installed.
+   exists is that they cannot be expected to know where the plugin was installed. That
+   path is now version-independent — the same reason the instruction insists on relaying
+   it verbatim in the first place hasn't changed, it just now also survives an update.
 2. **Which values are still needed**, by name, and that both come from **their n8n admin**:
    - `n8n_url` — the `https://` address of the n8n instance.
    - `webhook_secret` — the shared secret the backend checks on every request.

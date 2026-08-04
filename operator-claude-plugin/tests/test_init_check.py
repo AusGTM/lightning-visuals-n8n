@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 
 import config_gate
+import durable_paths
 import init_check
 
 SECRET = "sk-super-secret-value-that-must-never-be-printed"
@@ -158,3 +159,88 @@ def test_capability_rows_come_from_config_gate_not_a_copy(config_path):
     assert set(report["capabilities"]) == set(config_gate.CAPABILITY_KEYS)
     source = Path(init_check.__file__).read_text()
     assert "contact-upload" not in source, "capability names must not be hardcoded here"
+
+
+# --- config_location: where the settings actually resolved from — 33-03 Task 3 ----------
+#
+# Every test here isolates HOME under tmp_path (never the operator's real ~/.claude) and
+# calls init_check.inspect() with NO explicit path, so resolution runs the real
+# durable_paths chain exactly as an operator's session would.
+
+def test_config_location_is_env_when_lv_operator_config_is_set(tmp_path, monkeypatch):
+    override = tmp_path / "override" / "operator.local.json"
+    override.parent.mkdir(parents=True)
+    _write(override, n8n_url="https://real.n8n.cloud", webhook_secret=SECRET, n8n_api_key="k")
+    monkeypatch.setenv("LV_OPERATOR_CONFIG", str(override))
+
+    report = init_check.inspect()
+
+    assert report["config_location"] == "env"
+    assert report["config_path"] == str(override)
+
+
+def test_config_location_is_durable_when_the_config_lives_in_the_durable_home(
+        tmp_path, monkeypatch):
+    monkeypatch.delenv("LV_OPERATOR_CONFIG", raising=False)
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    durable_dir = fake_home / ".claude" / "plugins" / "data" / durable_paths.PLUGIN_ID
+    durable_dir.mkdir(parents=True)
+    durable_cfg = durable_dir / "operator.local.json"
+    _write(durable_cfg, n8n_url="https://real.n8n.cloud", webhook_secret=SECRET, n8n_api_key="k")
+
+    report = init_check.inspect()
+
+    assert report["config_location"] == "durable"
+    assert report["config_path"] == str(durable_cfg)
+
+
+def test_config_location_is_legacy_when_the_config_lives_in_the_installs_own_config_dir(
+        tmp_path, monkeypatch):
+    """Neither the env override nor the durable home — the pre-33-01 location, still a
+    legitimate resolution result (a fresh install with nothing yet migrated up)."""
+    monkeypatch.delenv("LV_OPERATOR_CONFIG", raising=False)
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+
+    fake_root = tmp_path / "plugin"
+    (fake_root / "config").mkdir(parents=True)
+    legacy_cfg = fake_root / "config" / "operator.local.json"
+    _write(legacy_cfg, n8n_url="https://real.n8n.cloud", webhook_secret=SECRET, n8n_api_key="k")
+    monkeypatch.setattr(durable_paths, "PLUGIN_ROOT", fake_root)
+
+    report = init_check.inspect()
+
+    assert report["config_location"] == "legacy"
+    assert report["config_path"] == str(legacy_cfg)
+
+
+def test_render_on_a_ready_config_names_the_resolved_path(config_path):
+    _write(config_path, n8n_url="https://real.n8n.cloud", webhook_secret=SECRET, n8n_api_key="k")
+
+    report = init_check.inspect(config_path)
+    rendered = init_check.render(report)
+
+    assert str(config_path) in rendered
+
+
+def test_rendered_output_for_a_durable_config_never_mentions_migration(tmp_path, monkeypatch):
+    """The honest, testable form of criterion 4's 'says nothing about migration having
+    happened unless it happened' — init_check has no way to know whether THIS process
+    moved anything, so it never claims it, on any branch, in any casing."""
+    monkeypatch.delenv("LV_OPERATOR_CONFIG", raising=False)
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    durable_dir = fake_home / ".claude" / "plugins" / "data" / durable_paths.PLUGIN_ID
+    durable_dir.mkdir(parents=True)
+    durable_cfg = durable_dir / "operator.local.json"
+    _write(durable_cfg, n8n_url="https://real.n8n.cloud", webhook_secret=SECRET, n8n_api_key="k")
+
+    report = init_check.inspect()
+    rendered = init_check.render(report)
+
+    assert report["config_location"] == "durable"
+    assert "migrat" not in rendered.lower()
