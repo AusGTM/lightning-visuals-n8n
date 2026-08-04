@@ -119,8 +119,9 @@ file is not mistaken for drift.)*
 | RB-7 | **28-06** armed arm→dispatch→disarm canary | ✅ **YES — this is the next gate** | 28-05 shipped. Lane/workflow/record all resolved and preconditions checked 2026-08-03 — see RB-7's header table. Needs `ALLOW_N8N_ARM=true` in the invoking shell, and a plugin refresh first (cached SKILL.md files are stale) |
 | RB-8 | **32-02** live notice gate — wrapper re-run | ✅ YES — this is the exit gate | 32-01 shipped the LLM-free `lv-sweep-run.sh` trigger; this is RB-8's re-run against it, comparable step-by-step to the 2026-08-03 FAIL under `claude -p` |
 | RB-9 | **30-07** armed review canary | ❌ | behind 30-05/30-06 (30-01…04 built). Now needs `ALLOW_REVIEW_SUBMIT`; **four changes — read RB-9's header block** |
+| RB-10 | **33-04** durable state release gate — real migration | ✅ YES — this is the exit gate | Plugin `0.7.0` committed (33-04). Answers Research Open Question 1 live: does writing into `~/.claude/plugins/data/<id>/` raise a "sensitive location" permission prompt? Not reproduced during research — MEDIUM confidence, settled here by observation |
 
-**Eight gates remain**, not nine — RB-6 is withdrawn. Two are partially done (RB-3's Section A,
+**Nine gates remain**, not ten — RB-6 is withdrawn. Two are partially done (RB-3's Section A,
 RB-4's plan built to its checkpoint).
 
 **What unblocks the most, in order:** **RB-2 (29-01)** releases four plans and is now the single
@@ -1136,6 +1137,114 @@ confirmed disarmed state.
 
 ---
 
+# RB-10 · Plan 33-04 — Refresh the clone, update, and observe one real migration
+
+**READY.** Phase 33's release gate. Plugin `0.7.0` is committed (`33-04-SUMMARY.md`) but the
+marketplace clone has not been refreshed, so nothing has reached the installed copy yet. Config
+and the dashboard pointer now resolve from
+`~/.claude/plugins/data/operator-claude-plugin-lightning-visuals-operator/`, and the first
+resolution after an update is supposed to migrate them up from the newest previous install —
+0600, verified byte-for-byte, source removed only after that verification. This gate is where
+that claim meets a real update on a real machine for the first time.
+
+**Two things need a human, not one.** The clone refresh is release-checklist step 4 and the
+clone never fetches on its own (§0's standing rule). And Research Open Question 1 is still open:
+a closed-as-not-planned upstream issue (anthropics/claude-code#41156) reports that writes into
+`~/.claude/plugins/data/<id>/` raise a "sensitive location" permission confirmation at the
+Bash-tool layer, even under `bypassPermissions` — **not reproduced during 33-RESEARCH.md,
+MEDIUM confidence.** A migration that stops to ask is a terminal step by another name, so this is
+observed here, not assumed.
+
+**Do not perform any migration against your real state anywhere but here, and do not shortcut
+the backup in Step 0.** This is the one run where an unproven delete path touches a live
+`webhook_secret` and `n8n_api_key`.
+
+**Absolute rule, restated because it is the one thing that would invalidate this gate: if a
+permission prompt fires in Step 3, that IS the finding.** Do not change a permission setting, do
+not edit `settings.json`, and do not add a hook to suppress it. The mitigation already built for
+exactly this case is `LV_OPERATOR_CONFIG` (the admin escape hatch in `durable_paths.py`'s
+resolution order) plus the untouched legacy fallback — record the prompt verbatim and stop; the
+next step is a decision about the chosen storage location, never a workaround around the guard.
+
+### Step 0 — record the before state, and back up the live config
+
+Form 3, plus one Form-1-shaped read:
+
+```bash
+ls -la ~/.claude/plugins/cache/lightning-visuals-operator/operator-claude-plugin/
+ls -la ~/.claude/plugins/data/
+```
+
+Note which install directories exist under `cache/.../operator-claude-plugin/` and confirm no
+`operator-claude-plugin-lightning-visuals-operator` directory yet exists under `data/`. Copy
+`operator.local.json` from the **newest** install directory that holds one to somewhere **outside
+`~/.claude/`** as a safety net — this costs nothing and is the one precaution that makes Step 3's
+delete path recoverable if `_migrate_once`'s verify-then-delete does not behave as tested.
+
+### Step 1 — push and refresh the clone
+
+Release-checklist step 3 and 4, run here rather than by the executor per this plan's own
+constraint (the orchestrator does not push or refresh the clone on its own):
+
+```bash
+git push origin master
+
+git -C ~/.claude/plugins/marketplaces/lightning-visuals-operator fetch --depth=1 origin master
+git -C ~/.claude/plugins/marketplaces/lightning-visuals-operator reset --hard FETCH_HEAD
+```
+
+### Step 2 — update the plugin
+
+Form 3. Open the Claude Desktop plugin manager and confirm the **Update** button is actually
+offered for `operator-claude-plugin`. **A greyed-out button here is itself the finding** — it
+means the version bump or the clone refresh did not land, not that there is nothing to update.
+Trace which of the two before treating this as done.
+
+### Step 3 — trigger one resolution, in a NEW conversation
+
+Form 3. Say `/operator-claude-plugin:initialize`. **Watch for a permission-confirmation dialog
+before doing anything else.** Record verbatim: whether one appeared, its exact wording, whether
+it blocked the skill from completing, and whether declining or ignoring it left the plugin
+working or hanging. This is the live answer to Open Question 1 — see the absolute rule above if
+one fires.
+
+### Step 4 — read the outcome
+
+`initialize` should report the settings file at the durable path and say the settings live
+outside the install folder — never mentioning migration by name (33-03's own rule for that
+branch). Then confirm on disk:
+
+```bash
+ls -l ~/.claude/plugins/data/operator-claude-plugin-lightning-visuals-operator/operator.local.json
+```
+
+- Mode reads `600`.
+- Contents match the Step 0 backup, byte for byte.
+- The previous install directory's copy of `operator.local.json` is **gone**.
+- The **current** (`0.7.0`) install directory holds no `config/operator.local.json` of its own —
+  it should never have had one; a hit here means the sibling scan found the wrong source.
+
+**If the migration did not happen**, record which of the five resolution steps it stopped at
+(`durable_paths.py`'s own docstring numbers them 1–5). `initialize` naming a path inside the new
+install directory means the sibling scan found nothing to migrate; naming the previous install's
+path means the copy-verify-delete sequence itself did not complete.
+
+### Step 5 — the dashboard pointer
+
+Form 3. Ask for backend status, then ask for a dashboard. Note the Artifact URL. **In a
+brand-new conversation**, ask for the dashboard again. Same URL confirms STATUS-05 holds across
+this update — the guarantee the 0.7.0 CHANGELOG entry names as silently broken since the
+plugin's first-ever update, now fixed by the same durable-home mechanism as Step 4.
+
+### Where the outcome is written
+
+`.planning/workstreams/plugin-entrypoint/phases/33-durable-operator-state/33-FINDINGS.md`,
+verbatim — including a clean run with no prompt. A "nothing happened, it just worked" result is
+still the finding this gate exists to produce; do not skip writing it down because there was
+nothing dramatic to report.
+
+---
+
 ## Resume signals — what to reply with
 
 | § | Plan | Reply with |
@@ -1149,6 +1258,7 @@ confirmed disarmed state.
 | RB-7 | 28-06 | "approved" + both read-back verdicts + armed-window duration + only-allowlisted-record confirmation + disarmed-after-redeploy confirmation |
 | RB-8 | 32-02 | The verbatim log lines observed, the fire timestamps, whether both banners appeared (notice path AND the deliberately broken-interpreter path), and any divergence from what Phase 32 predicted |
 | RB-9 | 30-07 | "approved" + the record id + the confirmed disarmed read-back + the step-6b refusal + whether the record was a company or a contact |
+| RB-10 | 33-04 | Whether the Update button was offered; whether a permission prompt fired in Step 3 (verbatim wording if so); the migrated file's mode and byte-for-byte match against the Step 0 backup; whether the dashboard URL matched across the brand-new conversation; or "blocked" + which of the five resolution steps it stopped at |
 
 ---
 
@@ -1171,6 +1281,7 @@ Kept so a section you read yesterday is not silently different today.
 | 2026-08-03 | **RB-7 de-provisionalised and unblocked.** Lane (enrichment), workflow (`950HPb7a1GgSAIyZ`), record (`9604614548`), `allow_create=false`, the live before-state, the `control` capability check and step 6's expected literal are all resolved in its header table. A new step 0 refreshes the installed plugin — the cached `SKILL.md` files are stale — and the `dispatch_fn` wiring gap in the shipped surface is documented there rather than left to be rediscovered mid-window |
 | 2026-08-03 | **RB-2 answered** — the sweep host is cron/launchd → `claude -p` headless (D-01 amendment); Cloud Routines and harness cron are both out. `29-HOST-PROBE.md` holds the verdicts |
 | 2026-08-03 | **RB-9's diagnostic advice corrected (Phase 31 Plan 02, BUGS 28/29/30 — found live by RB-9 step 8).** An un-allowlisted decision now answers `not_allowlisted` explicitly instead of an empty body, so silence no longer means "check the allowlist" — it means the workflow errored and n8n execution history is where to look. An enum-invalid review candidate (e.g. `industry`) now answers `refused` naming the property and value, on both preview and real submit, instead of 400ing inside the workflow on submit only. Step 2's snapshot command corrected to the script's real flags, `--target-id` and `--target-object-type` |
+| 2026-08-04 | **RB-10 added (Phase 33 exit gate).** Plugin `0.7.0` moves the operator's settings and dashboard pointer to a durable home outside the versioned install folder, with a one-time sibling-scan migration on first resolution after an update. RB-10 is the first live update-and-migrate on a real machine, and the live answer to Research Open Question 1 (does the migration write trip a Bash-tool "sensitive location" permission prompt?) — not reproduced during research, MEDIUM confidence, settled by observation here rather than by more reading |
 
 ### Standing note — the read-back, after 23-07
 
