@@ -143,9 +143,23 @@ def describe_target(cfg: dict) -> str:
 
 
 if __name__ == "__main__":
+    # The contact-upload lane's preflight. It reports SEND-READINESS rather than refusing:
+    # previewing needs no secret and is genuinely useful without one (the same reasoning
+    # review_decision.py:217 applies to its own dry run — "gating the preview would remove
+    # the display the arm exists to protect"). But an operator who cannot send must be told
+    # so BEFORE they read a preview and reach for the arming phrase, which is what happened
+    # in the UAT 1.2 re-walk. So: `ok` stays true when the config loads, and `can_send`
+    # carries the capability verdict separately.
     try:
         _cfg = load_config()
     except ConfigError as _e:
         print(json.dumps({"ok": False, "error": str(_e)}))
         raise SystemExit(1)
-    print(json.dumps({"ok": True, "target": describe_target(_cfg)}))
+
+    try:
+        require_capability(_cfg, "contact-upload")
+        _can_send, _blocked = True, None
+    except ConfigError as _e:
+        _can_send, _blocked = False, str(_e)
+    print(json.dumps({"ok": True, "target": describe_target(_cfg),
+                      "can_send": _can_send, "send_blocked_reason": _blocked}))

@@ -35,6 +35,17 @@ be sent, and — only when explicitly armed — send it.
    dispatch is currently **disarmed** for this conversation. Say this even if the
    operator only asked a question, before doing anything else.
 
+   **Then read `"can_send"`.** When it is `false`, this config can read and preview but
+   **cannot send at all** — a key it needs is unset. Say so in this same first message,
+   relaying `"send_blocked_reason"` exactly as given (it names the key, the file, and who
+   has the value). Then carry on and build the preview normally: previewing costs nothing
+   and showing the operator their own file parsed is useful even when sending is
+   unavailable. But for the rest of this conversation, **do not offer the arming phrase
+   and do not ask whether to send** — there is nothing to arm, and inviting an operator to
+   arm a send that will be refused wastes their decision. Step 5's arming paragraph is
+   skipped entirely; step 6 is unreachable. If they ask to send anyway, repeat the reason
+   and name the admin as the person who can fix it.
+
 2. **Resolve the input file.** If the operator has attached a file in this session, try
    reading it at whatever path the attachment resolves to, inside a single try/except.
    If that is unavailable, ask the operator to `@mention` the spreadsheet by name (the
@@ -91,7 +102,8 @@ be sent, and — only when explicitly armed — send it.
    nothing beyond reading the file has happened. Declining costs nothing beyond that one
    read.
 
-5. **Check arming.** Disarmed is the default and the state of every new conversation.
+5. **Check arming.** Skip this step entirely when step 1 reported `"can_send": false` —
+   see there. Otherwise: disarmed is the default and the state of every new conversation.
    Say plainly that sending is off, and that the operator can turn it on for this
    conversation only by saying: **"arm the upload"**. This state is never written to
    disk — it exists only as the `armed` flag passed to the one dispatch call below, for

@@ -94,3 +94,89 @@ def test_no_configerror_message_ever_contains_the_secret_value(tmp_path):
     with pytest.raises(ConfigError) as exc:
         load_config(cfg_path)
     assert "super-secret-value" not in str(exc.value)
+
+
+# --- the CLI entrypoint, not the function beneath it -------------------------------
+#
+# The upload lane's preflight is `python3 scripts/config_gate.py` (contact-upload
+# SKILL.md step 1), and these drive that ENTRYPOINT as a subprocess. Asserting on
+# `load_config()` alone is what let two defects ship this week: the over-refusal (the
+# CLI refused where the function degraded) and then its own loose end (the CLI stopped
+# refusing where the skill still needed a verdict). The layer the operator reaches is
+# the layer under test here.
+
+def _run_cli(config_json, tmp_path):
+    """Run scripts/config_gate.py as the skill runs it — as a real subprocess, against an
+    ISOLATED plugin root so the operator's own gitignored config is never read.
+
+    config_gate derives its config path from its own file location
+    (`PLUGIN_ROOT/config/operator.local.json`), so a throwaway root is built by copying the
+    module — it imports nothing from its siblings — into `<tmp>/scripts/`.
+    """
+    import shutil
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    real = Path(__file__).resolve().parent.parent / "scripts" / "config_gate.py"
+    root = tmp_path / "plugin"
+    (root / "scripts").mkdir(parents=True)
+    (root / "config").mkdir()
+    shutil.copyfile(real, root / "scripts" / "config_gate.py")
+    if config_json is not None:
+        (root / "config" / "operator.local.json").write_text(json.dumps(config_json))
+
+    return subprocess.run([sys.executable, "config_gate.py"], capture_output=True,
+                          text=True, cwd=str(root / "scripts"))
+
+
+def test_cli_reports_can_send_true_when_the_upload_lane_is_configured(tmp_path, fake_config):
+    proc = _run_cli(fake_config, tmp_path)
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is True
+    assert payload["can_send"] is True
+    assert payload["send_blocked_reason"] is None
+
+
+def test_cli_still_answers_ok_without_a_webhook_secret_but_says_it_cannot_send(
+        tmp_path, fake_config):
+    """The UAT 1.2 re-walk finding, pinned. Previewing needs no secret, so the preflight
+    must NOT refuse — but it must tell the skill that sending is impossible, or the
+    operator is invited to arm a send that dispatch() will refuse."""
+    cfg = {k: v for k, v in fake_config.items() if k != "webhook_secret"}
+    proc = _run_cli(cfg, tmp_path)
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+
+    assert payload["ok"] is True, "a loadable config is still ok — previewing works"
+    assert payload["target"], "the operator is still told where this lane would send"
+    assert payload["can_send"] is False
+    reason = payload["send_blocked_reason"]
+    assert "webhook_secret" in reason, "names the missing key"
+    assert "operator.local.json" in reason, "names where to fix it"
+    assert fake_config["webhook_secret"] not in proc.stdout, "never echoes a secret"
+
+
+def test_cli_refuses_outright_when_the_universal_key_is_missing(tmp_path, fake_config):
+    """`n8n_url` is the one key every capability needs, so its absence is still a hard
+    refusal with a non-zero exit — not a can_send verdict."""
+    cfg = {k: v for k, v in fake_config.items() if k != "n8n_url"}
+    proc = _run_cli(cfg, tmp_path)
+    assert proc.returncode == 1
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is False
+    assert "n8n_url" in payload["error"]
+    assert "can_send" not in payload
+
+
+def test_skill_documents_the_can_send_contract():
+    """Two-sided: the CLI emits `can_send`, and the skill body must act on it. A field no
+    skill reads is a field that silently stops mattering."""
+    from pathlib import Path
+    skill = (Path(__file__).resolve().parent.parent
+             / "skills" / "contact-upload" / "SKILL.md").read_text()
+    assert "can_send" in skill, "step 1 must read the send-readiness verdict"
+    assert "send_blocked_reason" in skill, "and relay the reason it carries"
+    assert "do not offer the arming phrase" in skill, \
+        "an operator who cannot send must not be invited to arm"

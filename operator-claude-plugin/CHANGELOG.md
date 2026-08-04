@@ -16,6 +16,31 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-08-04
+
+### Fixed
+
+- **An operator who cannot send is told so before they read a preview, not after.** Loose end of
+  0.6.1, found by re-walking the same UAT step that produced it. Loosening `load_config()` also
+  opened the upload lane's step-1 preflight (`config_gate.py`'s `__main__`), which had been
+  refusing a secret-less config purely as a side effect of the shared gate. With that gone, asking
+  to upload rendered a full preview and closed with *"say **arm the upload**"* — an invitation to
+  arm a send `dispatch()` would then refuse. Nothing could be sent at any point (that guard landed
+  in 0.6.1 and was verified), so this was a misleading flow rather than a safety hole.
+
+  The preflight now reports **send-readiness instead of refusing**: `can_send` plus a
+  `send_blocked_reason` naming the missing key, the file, and who has the value. Previewing still
+  works without a webhook secret — showing an operator their own file parsed costs nothing and is
+  useful even when sending is unavailable, the same reasoning the review lane already applies to
+  its dry run. But when `can_send` is false the skill states it in its first message and **never
+  offers the arming phrase**, because inviting a decision that cannot be honoured wastes it.
+
+  Pinned by tests that drive the **CLI entrypoint as a subprocess against an isolated plugin
+  root** — the layer the operator actually reaches. Asserting on `load_config()` alone is what let
+  both this and the 0.6.1 defect ship: in one direction the CLI refused where the function
+  degraded, in the other it stopped refusing where the skill still needed a verdict. The new tests
+  were confirmed to fail against a mutated verdict before being kept.
+
 ## [0.6.1] - 2026-08-04
 
 ### Fixed

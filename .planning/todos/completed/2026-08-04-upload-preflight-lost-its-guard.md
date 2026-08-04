@@ -3,6 +3,8 @@ created: 2026-08-04T06:20:00.000Z
 title: Upload skill's step-1 preflight no longer refuses a secret-less config — it previews and invites arming
 area: operator-claude-plugin
 severity: minor
+resolved: 2026-08-04
+resolved_by: "0.6.2 — option 2: preflight reports can_send instead of refusing"
 files:
   - operator-claude-plugin/scripts/config_gate.py:136
   - operator-claude-plugin/skills/contact-upload/SKILL.md:27
@@ -56,3 +58,21 @@ unconfigured install can do.
 Whichever lands: pin it at the entrypoint layer (run the CLI / the skill's step-1 command against
 a secret-less config), not by asserting on `load_config()` alone. That is the rule this whole
 defect family exists to teach.
+
+## Resolution (2026-08-04, v0.6.2)
+
+**Option 2 chosen by the operator.** `config_gate.py`'s `__main__` now emits `can_send` and
+`send_blocked_reason` alongside `ok`/`target`; contact-upload `SKILL.md` step 1 relays the reason
+and suppresses the arming invitation (step 5 is skipped, step 6 unreachable) when `can_send` is
+false. Previewing stays ungated.
+
+Pinned at the entrypoint layer by four tests in `test_config_gate.py` that run the CLI as a
+subprocess against an isolated plugin root (copying `config_gate.py` into a throwaway
+`PLUGIN_ROOT`, so the operator's gitignored config is never read — the first harness attempt did
+read it, via `runpy` discarding the path override, and was rewritten). Includes a two-sided test
+asserting `SKILL.md` actually consumes `can_send`, so the field cannot silently stop mattering.
+
+Revert-and-reconfirm: mutating the verdict to always-true failed
+`test_cli_still_answers_ok_without_a_webhook_secret_but_says_it_cannot_send` and nothing else.
+
+Suites: plugin 911/5 (was 907/5), full python 1792/6, node 550, disarmed gate 0.
