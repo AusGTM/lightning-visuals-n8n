@@ -1,0 +1,27 @@
+{
+  "exportedFrom": "EventBadgeScanner v3",
+  "exportedAt": "2026-08-04T09:00:00+10:00",
+  "attendees": [
+    {
+      "badge": { "given": "Priya", "family": "Raman" },
+      "contact": { "work_email": "priya.raman@southerncrossracing.example", "mobile": "+61 3 9012 3344" },
+      "employer": { "trading_name": "Southern Cross Racing Club", "web": "southerncrossracing.example" },
+      "role_title": "Head of Broadcast Operations",
+      "social": { "li": "linkedin.com/in/priya-raman-example" }
+    },
+    {
+      "badge": { "given": "Tomas", "family": "Bergstrom" },
+      "contact": { "work_email": "t.bergstrom@northpointstadium.example" },
+      "employer": { "trading_name": "Northpoint Stadium Group" },
+      "role_title": null,
+      "social": {}
+    },
+    {
+      "badge": { "given": "Wen", "family": null },
+      "contact": {},
+      "employer": { "trading_name": "Harbourline Broadcasting" },
+      "role_title": "Studio Manager",
+      "social": {}
+    }
+  ]
+}
