@@ -389,7 +389,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 33-03-PLAN.md — The dashboard pointer gets identical treatment (STATUS-05 across an update), and `initialize` reports the real resolved path
+- [x] 33-03-PLAN.md — The dashboard pointer gets identical treatment (STATUS-05 across an update), and `initialize` reports the real resolved path
 
 **Wave 4** *(blocked on Wave 3)*
 

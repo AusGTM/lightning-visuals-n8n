@@ -9,7 +9,7 @@ status: executing
 stopped_at: 23-06 in progress (operator runbook RB-3). Config created; A1 passes after a plugin.json author-object fix; A6 behaviour verified at the gate. Tenant pinned via N8N_EXPECTED_URL. Section B Step 1 read-back PASS, but two findings hold Steps 2+ — the verifier covers only 2 of 8 flag sites and none in the contact lane, and 23-01 is committed-but-undeployed. A2-A5/A7 need Claude Desktop. 23-01 through 23-05 complete.
 last_updated: "2026-08-04T00:00:00.000Z"
 last_activity: 2026-08-04
-last_activity_desc: Phase 33 plan 02 (durable-operator-state) built — sibling-scan migration (verify-then-delete), sweep kept read-only via allow_migration
+last_activity_desc: Phase 33 plan 03 (durable-operator-state) built — dashboard pointer delegates to durable_paths (STATUS-05 across an update), initialize reports the real resolved path
 progress:
   total_phases: 8
   completed_phases: 0
@@ -47,6 +47,14 @@ threaded through the whole resolution chain, keeping `sweep_entry` structurally
 read-only; `test_sweep_read_only.py` gained a filesystem-write AST guard to close the
 HTTP-verb guard's blind spot. 33-03 (dashboard-pointer wiring) and 33-04 (doc sweep +
 release cut + RB-10) remain.
+
+**2026-08-04 addendum (autonomous front):** Phase 33 plan 33-03 — `artifact_store.state_path()`
+now delegates to `durable_paths.resolve_state_path()` (the pointer is no longer a second
+hardcoded location), STATUS-05 is proven true again across a simulated version bump at the
+CLI subprocess layer, and `/operator-claude-plugin:initialize` names the resolved settings
+path's location (durable/legacy/env) without ever claiming a migration happened — is built,
+tested (9 new tests, plugin suite 947/5), and committed. 33-04 (doc sweep + release cut +
+RB-10) remains.
 
 ## Accepted requirement amendments (reconcile before each phase seals)
 
@@ -389,6 +397,33 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
   control proving the identical layout DOES migrate when allowed, so the abstention is
   meaningful). Plugin suite 938 passed/5 skipped (+15 from 923 baseline), repo suite 1819
   passed/6 skipped (+15), node 550 unchanged.
+
+- **33-03 gave the dashboard pointer the identical treatment the config got and closed
+  the loop on `initialize`.** `artifact_store.state_path()` now returns
+  `durable_paths.resolve_state_path()` instead of a hardcoded `PLUGIN_ROOT/state/`
+  constant — `DEFAULT_STATE_PATH` is gone. The three "where the file lives" tests were
+  retargeted, not deleted: the dotfile test narrowed to `path.name` only (D-04 was
+  always about the filename, never a dot-prefixed ancestor — the plugin's own install
+  root already sits under `~/.claude/plugins/cache/`), the inside-plugin test replaced
+  with its exact negation, and the `git check-ignore` test replaced with an
+  outside-the-repo assertion (strictly stronger — `git check-ignore` errors on a path
+  outside the working tree, which is exactly where the durable home resolves to). Both
+  retargeted tests isolate via `CLAUDE_PLUGIN_DATA` pointed at a `tmp_path` directory
+  rather than touching real `~/.claude`, needed because a bare repo checkout has no
+  version-named siblings to migrate from and would otherwise resolve to the legacy
+  path regardless of the code being correct. STATUS-05 — "a brand-new conversation
+  lands on the SAME dashboard URL" — is proven true again across a SIMULATED VERSION
+  BUMP, driven at the CLI subprocess layer (`_run_store`, mirroring
+  `test_config_gate.py::_run_cli`, copying `artifact_store.py` +`config_gate.py` +
+  `durable_paths.py` for the `__main__` import chain): a pointer saved from `0.6.2` is
+  read back from `0.7.0` with no `state/` of its own, via the same sibling-scan
+  migration 33-02 built — not a special case for the pointer. `init_check.py` gained
+  `config_location` (`env`/`durable`/`legacy`) and one reassurance line in the
+  already-set-up branch naming what that location means for the operator; a code
+  comment records why migration is never mentioned on any branch (criterion 4 — the
+  check reads a resolved path and has no way to know whether it moved anything).
+  Plugin suite 947 passed/5 skipped (+9 from 938 baseline), repo suite 1828 passed/6
+  skipped (+9), node 550 unchanged.
 
 **Todos / carried context:**
 
