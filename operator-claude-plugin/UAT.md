@@ -50,8 +50,8 @@ Do this **before** the happy path. A tool that fails badly is worse than one tha
 
 | # | Do | Pass when | Result |
 |---|---|---|---|
-| 1.1 | Temporarily blank `webhook_secret` in the settings file, then ask to upload contacts | It refuses in **plain language**, names the missing setting, and does **not** show a stack trace | **PASS** — UAT 2026-08-04: named `webhook_secret` + path, no trace, scoped to upload |
-| 1.2 | Same state — ask for backend status | Status still works. A missing upload secret must not break the status answer | **FAIL (2026-08-04) → FIXED same day, awaiting re-walk** — whole status read refused; root cause `load_config()` enforcing every capability's keys (debug session `load-config-over-refusal`, fix `f57b964`). Re-verified at the CLI layer, but no operator has re-walked this step in conversation — do not mark PASS until someone does |
+| 1.1 | Temporarily blank `webhook_secret` in the settings file, then ask to upload contacts | It refuses in **plain language**, names the missing setting, and does **not** show a stack trace | **PASS on 0.6.0 · BEHAVIOUR CHANGED on 0.6.1 — re-walk needed.** The 0.6.1 re-walk previewed the file and invited arming instead of refusing: the skill's step-1 preflight (`config_gate.py` `__main__`) lost its guard when `load_config()` was loosened. Refusal now arrives only at dispatch. See todo `2026-08-04-upload-preflight-lost-its-guard` |
+| 1.2 | Same state — ask for backend status | Status still works. A missing upload secret must not break the status answer | **PASS** — re-walked 2026-08-04 on 0.6.1 after fix `f57b964`: workflow/execution half answered (5 workflows, gates read off), backend half reported `webhook_secret_not_configured`, queue counts stated as *unknown, not zero* |
 | 1.3 | Restore the secret | Both work again | **PASS** — UAT 2026-08-04: upload previewed 3 rows, status returned the full picture |
 
 **Fail if:** it says the plugin is "broken" or refuses everything when only one setting is
