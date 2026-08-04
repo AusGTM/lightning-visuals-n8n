@@ -23,6 +23,15 @@ arrived, not to get a clean sheet.
 - **FAIL** — record it with what you saw instead of the pass criterion. None outstanding at
   pre-fill: every defect found by the canaries (BUGS 26–30 families) was fixed and re-proven.
 
+- **FUNCTIONAL PASS (self-assessed)** — verified 2026-08-04 by driving the library or CLI
+  directly, or by a named test that pins exactly this criterion. It proves the machinery behaves
+  as the criterion requires; it does **not** prove an operator saw it in conversation. Treated as
+  weaker evidence than PASS deliberately — a fair number of this milestone's defects lived
+  precisely in the gap between "the function is right" and "the operator's path reaches it".
+- **PENDING OPERATOR WALK** — the criterion governs in-conversation model behaviour (extraction,
+  phrasing), which no CLI probe can settle. The enforceable half is pinned by tests; the rest
+  needs a person.
+
 An operator walk of the UNTESTED rows is still the point of this document — the pre-filled
 PASSes save re-walking what a canary already proved, nothing more.
 
@@ -33,9 +42,9 @@ PASSes save re-walking what a canary already proved, nothing more.
 | # | Do | Pass when | Result |
 |---|---|---|---|
 | 0.1 | `/plugin marketplace add AusGTM/lightning-visuals-n8n` then `/plugin install operator-claude-plugin@lightning-visuals-operator` | It installs without you editing any file or knowing any path | **PASS** — installed live 2026-08-03 (RB-7 step 0) |
-| 0.2 | `/operator-claude-plugin:initialize` | It tells you the **full path** to your settings file and names which values you still need | UNTESTED |
-| 0.3 | Let it put the template in place, then fill in `n8n_url` and `webhook_secret` from your n8n admin | It never asks you to type a secret **into the chat** | UNTESTED |
-| 0.4 | `/operator-claude-plugin:initialize` again | Says setup is complete and changes nothing. Running it twice is safe | UNTESTED |
+| 0.2 | `/operator-claude-plugin:initialize` | It tells you the **full path** to your settings file and names which values you still need | **FUNCTIONAL PASS** (self-assessed 2026-08-04, CLI) — `init_check.py` prints the absolute config path and per-capability readiness; operator walk not required to see it |
+| 0.3 | Let it put the template in place, then fill in `n8n_url` and `webhook_secret` from your n8n admin | It never asks you to type a secret **into the chat** | **FUNCTIONAL PASS** (self-assessed) — `initialize/SKILL.md:63` instructs "they type these into the file, **not to you**"; `test_no_rendered_output_or_report_ever_contains_a_secret_value` pins that no output echoes a secret |
+| 0.4 | `/operator-claude-plugin:initialize` again | Says setup is complete and changes nothing. Running it twice is safe | **FUNCTIONAL PASS** (self-assessed, CLI) — two consecutive runs returned byte-identical output; nothing written |
 
 **Fail if:** it says you are set up while a value is still the template placeholder, or it asks
 you to paste a secret into the conversation.
@@ -65,13 +74,13 @@ Each is a fresh message. Use your own data or anything realistic.
 
 | # | Do | Pass when | Result |
 |---|---|---|---|
-| 2.1 | Paste an email signature or a few lines of prose with names and companies | Rows come back, and it says **where each value came from** | UNTESTED |
+| 2.1 | Paste an email signature or a few lines of prose with names and companies | Rows come back, and it says **where each value came from** | PENDING OPERATOR WALK — extraction happens in-conversation, so no CLI probe can settle it. `test_extraction_contract.py` pins that the documented examples validate and carry their ambiguity |
 | 2.2 | Give it a CSV or XLSX with messy headers (`E-mail Address`, `Ph.`) | Reads them without you renaming anything first | **PASS** — 23-02 file-handoff + RB-3 live dispatch |
-| 2.3 | Give it JSON in some other shape | Translated into contact rows | UNTESTED |
-| 2.4 | Give it a public URL | Contact/company data extracted from the page | UNTESTED |
-| 2.5 | Paste one or more screenshots of a page | Rows extracted from the image, same provenance rules | UNTESTED |
-| 2.6 | Give it something unreadable — an empty file, a PDF of a photo | A **clear, actionable** error. Never a silent drop, never zero rows with no explanation | UNTESTED |
-| 2.7 | Look at any row where a field was absent in your source | It is **empty** — not guessed, not filled from the company name | UNTESTED |
+| 2.3 | Give it JSON in some other shape | Translated into contact rows | PENDING OPERATOR WALK — same as 2.1 (contract pinned, extraction itself is in-conversation) |
+| 2.4 | Give it a public URL | Contact/company data extracted from the page | PENDING OPERATOR WALK — same as 2.1; `test_extraction_md_states_the_fetch_failed_and_nothing_usable_outcomes_separately` pins that a failed fetch and an empty result are distinct outcomes |
+| 2.5 | Paste one or more screenshots of a page | Rows extracted from the image, same provenance rules | PENDING OPERATOR WALK — same as 2.1; `test_screenshot_example_artifact_collapses_to_one_row_with_one_carried_ambiguity` pins the overlapping-screenshot rule |
+| 2.6 | Give it something unreadable — an empty file, a PDF of a photo | A **clear, actionable** error. Never a silent drop, never zero rows with no explanation | **SPLIT — unsupported type PASSES, empty file FAILS** (self-assessed, live probe). A `.pdf` refuses cleanly (`UnsupportedFileError: Unsupported file extension: .pdf`). An **empty `.csv` returns `row_count: 0` with no error and no explanation**, and `SKILL.md` has no zero-row branch — so "file unreadable" and "nothing to send" are indistinguishable. Todo `2026-08-04-empty-input-previews-zero-rows-silently` |
+| 2.7 | Look at any row where a field was absent in your source | It is **empty** — not guessed, not filled from the company name | PENDING OPERATOR WALK — the no-invention rule governs model output, not library output. `extraction.py` is the enforceable half and its contract tests pass |
 
 **Fail if:** any value appears that was not in your input. Invention is the most serious defect
 in this list (STRUCT-04).
@@ -122,8 +131,8 @@ a session, and it is why the state file exists.
 |---|---|---|---|
 | 5.1 | Take a **small** batch (2–3 rows) to preview and approve it | It required an explicit approval — a live send is never the default (DISPATCH-03) | **PASS** — RB-3 (execution 1129) |
 | 5.2 | Watch what comes back | **Per-record outcome**: accepted, matched, created, failed — row by row | **PASS** — RB-3 (verified per-record report) |
-| 5.3 | If any row failed | The **failing rows are identified**, and you are told what to do about them | UNTESTED |
-| 5.4 | If the run is still going | It says so and shows partial results — it does not hang or pretend to be done | UNTESTED |
+| 5.3 | If any row failed | The **failing rows are identified**, and you are told what to do about them | **FUNCTIONAL PASS** (self-assessed) — `test_build_enrichment_report_failing_rows_include_blocked_skipped_and_needs_review` itemises each failing row; `test_report_sufficiency.py` pins that a create/update row is NOT reported confirmed when HubSpot produced zero items (the failure-as-success guard) |
+| 5.4 | If the run is still going | It says so and shows partial results — it does not hang or pretend to be done | **FUNCTIONAL PASS** (self-assessed) — `test_unsettled_at_the_bound_returns_still_running_with_handle_and_recheck` plus `test_settles_before_the_bound_returns_a_settled_report`: two terminal shapes, never a third |
 | 5.5 | Check the records in HubSpot | They match what the report said | **PASS** — RB-3 (created contact confirmed in HubSpot) |
 
 **Fail if:** the report is a summary count with no per-row detail, or a failure is reported as
@@ -138,7 +147,7 @@ a success.
 | # | Do | Pass when | Result |
 |---|---|---|---|
 | 6.1 | Ask to see records waiting on a human | Each one's conflict is in **plain language** — what disagrees, and what each source said | **PASS** — RB-9 step 5 |
-| 6.2 | Look for a HubSpot link | Present if the portal id is configured; if not, it says the link is missing rather than guessing a URL | UNTESTED |
+| 6.2 | Look for a HubSpot link | Present if the portal id is configured; if not, it says the link is missing rather than guessing a URL | **FUNCTIONAL PASS** (self-assessed, live) — `record_link()` returns the real URL with the portal id configured (`22617666`) and **`None` rather than a guessed URL** when portal id or record id is missing. The "says the link is missing" half is unexercised here because the portal id IS configured |
 | 6.3 | Resolve one conversationally | It asks for a **separate confirmation** before writing back — approving a review is not covered by any earlier approval | **PASS** — RB-9 step 6 |
 | 6.4 | Reject one | The rejection **reason is recorded** and the record **stays in the queue** | **PASS** — RB-9 step 7 |
 | 6.5 | After an approve lands | It stamps that a **human** made it, with timestamp and your reason — and the record's history still shows what the machine had said before you overrode it | **PASS** — RB-9 close 2026-08-04 (human provenance stamped, machine source readable) |
@@ -162,7 +171,7 @@ submit refuses naming what is closed. That refusal is a **pass**, not a fail.
 |---|---|---|---|
 | 7.1 | Ask to turn a scheduled workflow **off**, then **on** again | Each change asks for its own confirmation first, then reports the new state **read back from the backend**, not assumed | **PASS** — RB-5 (on/off roundtrip) |
 | 7.2 | Ask to change a schedule's cadence | You see current cadence and proposed cadence **before** confirming; afterwards the new cadence is read back | **PASS** — RB-5 (cadence change, execution spacing measured) |
-| 7.3 | Ask for something outside the allowlist (e.g. "edit the workflow's nodes", "change a credential") | It refuses and says that is an **admin task**, not a plugin action | UNTESTED |
+| 7.3 | Ask for something outside the allowlist (e.g. "edit the workflow's nodes", "change a credential") | It refuses and says that is an **admin task**, not a plugin action | **FUNCTIONAL PASS** (self-assessed, live) — refusal names the boundary ("does not change workflow structure, nodes, or credentials") and points at the admin |
 | 7.4 | Ask to arm live writes without the admin having opened the backend | It refuses **naming the closed gate** and who opens it — it never pretends to be armed | **PASS** — RB-9 step 6b (refusal names the closed gate, zero requests) |
 | 7.5 | After any mutation | Backend status reflects it — the two answers agree | **PASS** — RB-5 (before/after read-back comparison) |
 
@@ -177,7 +186,7 @@ from memory rather than read back.
 
 | # | Do | Pass when | Result |
 |---|---|---|---|
-| 8.1 | After approving a send (session 5), stay in the conversation | When the run settles it **reports itself** — you did not have to ask | UNTESTED |
+| 8.1 | After approving a send (session 5), stay in the conversation | When the run settles it **reports itself** — you did not have to ask | **FUNCTIONAL PASS** (self-assessed) — `test_watch_settle_reporting.py` pins that a settled run renders the same counts as the report directly and never re-renders a second outcome shape |
 | 8.2 | Run the sweep on demand (`/operator-claude-plugin:backend-sweep`) | It reports **only what needs a human** — or says the backend is healthy and reports nothing else | **PASS** — RB-8 (notice path + healthy silence, real cron) |
 | 8.3 | Ask what the unattended schedule would have said | Same answer as 8.2 — the on-demand run is exactly what the next unattended fire would report | **PASS** — RB-8 (wrapper emits byte-identical JSON to the on-demand run) |
 
