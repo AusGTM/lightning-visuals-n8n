@@ -610,10 +610,16 @@ only "old approach vs current approach" in scope is internal:
 **If this table is empty:** N/A — see rows above; all are low-risk, bounded judgment calls
 already narrowed by measurement, not open technical unknowns.
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> Both resolved at planning, each in favour of its own recommendation. Q1 → 34-03 places the
+> suggest-and-confirm step before the first preview render, so the operator only ever sees the
+> corrected preview. Q2 → 34-01 uses the direct-import + fixture convention for the pure-logic
+> assertions, and reserves the subprocess harness for the operator-layer property (no header
+> rewritten without confirmation), which is what CONTEXT.md §5.1 was actually protecting.
 
 1. **Where does the per-header confirmation loop live in SKILL.md — before or interleaved
-   with step 3's existing preview render?**
+   with step 3's existing preview render?** — **RESOLVED: before the first preview (34-03).**
    - What we know: the existing preview step (`skills/contact-upload/SKILL.md` step 3) already
      shows `header_labels` with `dropped: true` flagged per header; Half B needs to intercept
      exactly those dropped headers before offering them to the operator as sendable-or-not.
@@ -630,7 +636,8 @@ already narrowed by measurement, not open technical unknowns.
 
 2. **Should the "no header rewritten without confirmation" test (definition-of-done item 3)
    be a subprocess-CLI test (`_run_cli`-style) or a direct-import pytest, given the two
-   different existing conventions in this codebase?**
+   different existing conventions in this codebase?** — **RESOLVED: both, split by what each
+   proves (34-01).**
    - What we know: `test_config_gate.py::_run_cli` (`operator-claude-plugin/tests/
      test_config_gate.py:110`) drives `config_gate.py` as a real subprocess against a fake
      `HOME` specifically because that module's behavior depends on OS-level path resolution
