@@ -12,7 +12,10 @@ broken pointer is indistinguishable in effect from no pointer, and must not prod
 error the operator has to read.
 """
 import json
+import os
+import shutil
 import subprocess
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -277,3 +280,111 @@ def test_the_store_exposes_exactly_load_save_and_collect():
               and getattr(getattr(artifact_store, name), "__module__", None)
               == "artifact_store"}
     assert public == {"load", "save", "collect", "state_path"}
+
+
+# --- entrypoint (subprocess), across a simulated version bump — 33-03 Task 2 --------
+#
+# Every test above calls load()/save() with an explicit path=, which is exactly the
+# unit-level style criterion 5 identifies as insufficient for DEFAULT-path behaviour —
+# and default-path behaviour is the entire subject of this phase (33-CONTEXT.md's own
+# lesson, learned twice already this week: pin behaviour at the layer the operator
+# actually reaches). These drive artifact_store.py's __main__ as a real subprocess.
+
+
+def _run_store(argv, tmp_path, home=None, version="0.7.0"):
+    """Run scripts/artifact_store.py as the skill runs it — a real subprocess against
+    an isolated plugin-cache layout, mirroring test_config_gate.py::_run_cli.
+
+    `artifact_store`'s `__main__` imports `config_gate`, which imports `durable_paths`
+    — so all THREE modules are copied into the throwaway `<version>/scripts/`
+    directory. A one- or two-module copy dies on ImportError the moment the subprocess
+    re-imports config_gate.
+
+    `home` lets two calls share ONE fake HOME across different version directories —
+    that sharing is the whole point of the version-bump test below. Defaults to a
+    fresh `tmp_path / "home"` when omitted.
+
+    The subprocess env is a literal dict (`PATH` + the fake `HOME`), never
+    `{**os.environ, ...}` — the same reason `_run_cli` builds it that way: the real
+    `HOME` must never reach the subprocess, or a durable-home test could pass for the
+    wrong reason.
+    """
+    scripts_dir = Path(__file__).resolve().parent.parent / "scripts"
+    fake_home = home if home is not None else tmp_path / "home"
+    fake_home.mkdir(parents=True, exist_ok=True)
+
+    version_dir = (fake_home / ".claude" / "plugins" / "cache" / "lightning-visuals-operator"
+                   / "operator-claude-plugin" / version)
+    (version_dir / "scripts").mkdir(parents=True, exist_ok=True)
+    for module in ("artifact_store.py", "config_gate.py", "durable_paths.py"):
+        shutil.copyfile(scripts_dir / module, version_dir / "scripts" / module)
+
+    run_env = {"PATH": os.environ.get("PATH", ""), "HOME": str(fake_home)}
+
+    return subprocess.run([sys.executable, "artifact_store.py", *argv],
+                          capture_output=True, text=True,
+                          cwd=str(version_dir / "scripts"), env=run_env)
+
+
+def _durable_state_target(home):
+    return (home / ".claude" / "plugins" / "data"
+           / "operator-claude-plugin-lightning-visuals-operator" / "dashboard_artifact.json")
+
+
+def test_durable_home_lets_a_newer_version_load_what_an_older_version_saved(tmp_path):
+    """STATUS-05's cross-session guarantee — "a brand-new conversation lands on the
+    SAME dashboard URL, not a second one" — proven across a SIMULATED PLUGIN UPDATE.
+    This was silently false since the first update before this phase: no install
+    directory on the operator's machine held a pointer (33-CONTEXT.md's measured
+    finding). 0.6.2 saves; 0.7.0 — a different install directory with no state/ of its
+    own — reads the same identifier back, because 0.7.0's own resolution runs the
+    sibling-scan migration (33-02) against 0.6.2's legacy pointer, exactly as it
+    already does for the config."""
+    home = tmp_path / "home"
+    save_proc = _run_store(["save", "dash-abc"], tmp_path, home=home, version="0.6.2")
+    assert save_proc.returncode == 0, save_proc.stderr
+
+    load_proc = _run_store(["load"], tmp_path, home=home, version="0.7.0")
+    assert load_proc.returncode == 0, load_proc.stderr
+    payload = json.loads(load_proc.stdout)
+    assert payload["artifact_id"] == "dash-abc"
+
+
+def test_durable_load_on_a_fresh_home_with_nothing_anywhere_is_null_not_an_error(tmp_path):
+    """A missing pointer is not an error — the ordinary first-ever-open case."""
+    proc = _run_store(["load"], tmp_path)
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is True
+    assert payload["artifact_id"] is None
+
+
+def test_durable_collect_with_no_config_present_still_runs_and_exits_zero(tmp_path):
+    """The pointer is local state; a missing config must not stop collection — the
+    status skill's own step 1 is what refuses in plain language, not this one."""
+    proc = _run_store(["collect"], tmp_path)
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is True
+
+
+def test_durable_save_lands_in_the_durable_directory_not_either_version_directory(tmp_path):
+    """Positive statement of where the pointer goes once the durable home is already
+    established (here, by the same migration test 1 above exercises). A future
+    refactor that quietly puts it back under `PLUGIN_ROOT/state/` fails loudly HERE
+    rather than in an operator's next session."""
+    home = tmp_path / "home"
+    _run_store(["save", "dash-first"], tmp_path, home=home, version="0.6.2")
+    _run_store(["load"], tmp_path, home=home, version="0.7.0")  # migrates 0.6.2's pointer up
+
+    proc = _run_store(["save", "dash-second"], tmp_path, home=home, version="0.7.0")
+    assert proc.returncode == 0, proc.stderr
+
+    durable_target = _durable_state_target(home)
+    assert durable_target.exists()
+    assert json.loads(durable_target.read_text())["artifact_id"] == "dash-second"
+
+    for version in ("0.6.2", "0.7.0"):
+        version_state = (home / ".claude" / "plugins" / "cache" / "lightning-visuals-operator"
+                         / "operator-claude-plugin" / version / "state" / "dashboard_artifact.json")
+        assert not version_state.exists(), f"the pointer must not be sitting in {version}'s own directory"
