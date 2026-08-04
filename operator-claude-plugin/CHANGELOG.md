@@ -7,7 +7,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 client is versioned independently of the backend — it is one of potentially several front ends
 over the same n8n system, so its version says nothing about backend capability.
 
+> **Releasing this client means bumping `.claude-plugin/plugin.json`'s `version` in the SAME
+> commit as the CHANGELOG entry.** Claude Desktop decides whether to offer an update purely by
+> comparing that string against the installed copy's — an unbumped version means the Update
+> button stays greyed out no matter what shipped, and a stale marketplace clone means even a
+> bumped one is invisible until the clone is fetched. Both halves are required. See the
+> release checklist at the bottom of this file.
+
 ## [Unreleased]
+
+## [0.6.0] - 2026-08-04
+
+First released version of this client. Everything below shipped across milestone v0.6
+(phases 23–32, sealed 2026-08-04, 49/49 requirements). The `0.1.0` it replaces was a
+hand-written placeholder that never moved during development, so no operator was ever
+offered an update; this is the first version string that means anything.
 
 ### Changed
 
@@ -228,3 +242,32 @@ over the same n8n system, so its version says nothing about backend capability.
 - Known dependency (by design): the credit figures the cost guard needs cannot be read by this
   client directly (it holds no provider credentials); they arrive through the n8n-side
   `hubspot/backend-status` endpoint.
+
+---
+
+## Release checklist — how a change reaches an installed operator
+
+Four steps. Skipping any one leaves the operator running old code while every doc says
+otherwise; this is written down because it has already caught us once (the Update button sat
+greyed out through ten phases of shipped work).
+
+1. **Bump `.claude-plugin/plugin.json`'s `version`** in the same commit as the CHANGELOG
+   entry, following semver against *this client's* surface — not the backend's milestone
+   number, which is a different thing that happens to match at 0.6.0. Claude Desktop compares
+   only this string; equal strings mean no update is offered, whatever the content says.
+2. **Cut the CHANGELOG section**: `## [Unreleased]` stays on top and empty, the shipped work
+   moves under `## [<version>] - <date>`.
+3. **Push to the branch the marketplace clone tracks** (`master`).
+4. **Refresh the marketplace clone** — it never fetches on its own, and a reinstall re-copies
+   from whatever it already holds:
+   ```
+   git -C ~/.claude/plugins/marketplaces/lightning-visuals-operator fetch --depth=1 origin master
+   git -C ~/.claude/plugins/marketplaces/lightning-visuals-operator reset --hard FETCH_HEAD
+   ```
+
+**Two traps around installing the result.** A same-version reinstall DELETES
+`config/operator.local.json` — back it up first. And the install cache is versioned by
+directory (`cache/lightning-visuals-operator/operator-claude-plugin/<version>/`), so updating
+to a NEW version lands in a NEW directory that carries no config at all: copy
+`operator.local.json` across after updating, or the operator's first action post-update is an
+unconfigured refusal.
