@@ -62,11 +62,65 @@ be sent, and — only when explicitly armed — send it.
    validator's accepted rows, continue at step 3 below with those rows in place of a
    read file — everything from the preview onward is identical either way.
 
+2b. **Check the headers before you preview.** (Lettered, not renumbered — this file
+   cross-references its own step numbers in eight places, and renumbering ten steps to
+   insert one is a large diff whose entire risk is a stale pointer. Leave it lettered.)
+
+   ```
+   python3 scripts/header_suggest.py <path>
+   ```
+
+   This reads the same `config/column_mapping.yaml` the preview does and sorts every
+   header into four lists. Branch on them:
+
+   - **`available: false`** — say plainly that header checking is unavailable and go
+     straight to step 3, exactly as step 3 already handles `mapping_available: false`.
+     Never invent suggestions from a table that could not be read.
+   - **`mapped`** — nothing to say. Step 3's preview already shows every mapping.
+   - **`refusals`** — relay the `reason` field **verbatim**. Do not paraphrase it into
+     something softer, do not offer a workaround the reason does not name, and above all
+     do not offer to split the column yourself: there is no name-splitter in this system,
+     which is the entire content of the refusal. Same register as the backend's own
+     `enumRefusalMessage` — a refusal that names its reason, not an error.
+   - **`suggestions`** — **one confirmation per header, each answered before the next is
+     asked.** Show the header, the proposed canonical prop, and that header's
+     `sample_values` in the same breath. The sample values are the point: a header like
+     `Ph.` could be a phone column or a photo column, and an operator who has not seen
+     what is in it is being asked to rubber-stamp. **A single batched yes covering
+     several headers is not a confirmation and must not be accepted as one.** Declining
+     costs nothing — the header stays as it is and the backend drops it, which is the
+     honest outcome.
+   - **`unresolved`** — say the backend will drop that column, and that this is a
+     reported outcome rather than a failure. Do not offer a guess.
+
+   Then, **only** when the operator has said yes to at least one header, run one
+   invocation carrying every confirmed header:
+
+   ```
+   python3 scripts/header_suggest.py <path> --confirm "Ph.=phone" --confirm "SRC=canonical"
+   ```
+
+   Two constraints. The path is always the **original** file, never a previously
+   corrected one — running the correction against its own output is how a two-round
+   session rewrites a header twice. And the returned `corrected_path` becomes **the**
+   path for step 3 and every step after it: one path, previewed and dispatched, so what
+   the operator approves is provably what is sent. If the operator confirmed nothing,
+   carry the original path forward unchanged.
+
+   The boundary this whole step lives inside: the client corrects the header row of the
+   file it sends and nothing else. It maps no data, writes no canonical-prop value into
+   any row, and the backend's `Map Columns` node stays the single authority on what a
+   header means.
+
 3. **Build and show the preview.**
 
    ```
    python3 scripts/preview.py <path>
    ```
+
+   The path to preview is `corrected_path` when step 2b produced one, otherwise the
+   original. This preview is the operator's view of the real mapping prediction — the
+   re-preview that makes an approval mean something.
 
    This reads the file once and reads `config/column_mapping.yaml` only as a read-only
    lookup for labelling — it never changes what gets sent. The file goes over the wire
@@ -220,6 +274,8 @@ be sent, and — only when explicitly armed — send it.
 
 10. **Clean up.** If this batch came from `extraction.md`, delete the scratch artifact
     you wrote once the batch ends — whether it was dispatched or the operator declined.
+    Delete the corrected file step 2b wrote the same way, for the same reason: same
+    scratch directory, same end-of-batch rule, dispatched or declined alike.
     Provenance is scoped to this session and to the operator's decision in the moment;
     it is not a durable record, the scratch directory is gitignored so it never reaches
     history, and deleting the file is what keeps it from outliving the conversation on
