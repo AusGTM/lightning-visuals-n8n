@@ -1,6 +1,6 @@
 """29-03 Task 2 — NOTICE-05's enforcement: the sweep has NO code path to a mutation.
 
-Two independent assertions, allowlist-first (fails closed on anything new):
+Three independent assertions, allowlist-first (fails closed on anything new):
 
 1. The transitive first-party import closure of `sweep_entry` is a subset of an explicit
    module allowlist. A new import fails until a human deliberately adds it — which is
@@ -10,6 +10,16 @@ Two independent assertions, allowlist-first (fails closed on anything new):
    `webhook/hubspot/backend-status` (D-13). Every other write verb, module- or
    session-level, fails — so an allowlisted module that later grows a write is still
    caught.
+3. (33-02) The only FILESYSTEM write call sites reachable anywhere in that closure are
+   the two named functions inside `durable_paths.py` that implement the durable-home
+   migration (`_atomic_write_0600`, `_migrate_once`) — never anywhere else. This catches
+   what assertion 2 structurally cannot: `open(...,"w")`, `os.replace`, `Path.unlink`,
+   `os.chmod` are not HTTP verbs, so `WRITE_VERBS` was always blind to them. The sweep's
+   own default config loader (`sweep_entry._load_config_no_migration`) resolves with
+   `allow_migration=False`, so even though these two write-capable functions exist in
+   the closure's source text (durable_paths.py is shared with the interactive
+   resolvers, which DO migrate), a behavioral test below proves the sweep's actual run
+   never reaches them.
 
 WHY A POST IS A READ HERE (D-13, so the next reader does not re-derive it): the endpoint
 is an n8n webhook and n8n webhooks answer on POST; the request carries no records and no
@@ -61,10 +71,16 @@ SWEEP_ENTRYPOINT = "sweep_entry"
 # error_table.translate is a standard-library regex lookup), so this widening is the
 # guard working as designed (D-10), not a regression.
 #
-# 33-01 adds `durable_paths` — `config_gate.load_config()` now resolves its default path
-# through it. It performs no I/O beyond `Path.exists()` checks (no open/write/delete
-# anywhere in the module), so it cannot be a write vector; the compensating
-# write-verb-site assertion below still catches it if that ever changes.
+# 33-01 added `durable_paths` on the (now superseded) grounds that it performed no I/O
+# beyond `Path.exists()`. 33-02 gave it real filesystem writes (the sibling-scan
+# migration): copying a sibling install's config into the durable home at 0600 and then
+# DELETING the sibling's copy. That is no longer true, and the `FS_WRITE_VERBS` /
+# `DURABLE_PATHS_WRITE_FUNCTIONS` assertions below are what makes this widened comment
+# honest instead of stale — the write calls exist in this module's source (shared with
+# the interactive resolvers, which must be able to migrate), but the sweep's own default
+# loader (`sweep_entry._load_config_no_migration`) resolves with `allow_migration=False`,
+# so its actual run never reaches them. See the behavioral test at the bottom of this
+# file for the proof that isn't just "the source text says so."
 ALLOWED_MODULES = {
     "sweep_entry", "sweep_read", "sweep_conditions", "sweep_notify",
     "config_gate", "n8n_read", "backend_status", "error_table", "execution_errors",
@@ -75,6 +91,21 @@ WRITE_VERBS = {"post", "put", "patch", "delete"}
 
 # (module, verb) pairs permitted in the closure — exactly one (D-13).
 ALLOWED_VERB_SITES = {("backend_status", "post")}
+
+# 33-02: filesystem write verbs. HTTP verbs (above) cannot see `open(...,"w")`,
+# `os.replace`, `Path.unlink`, or `os.chmod` — a plain attribute-access scan for these
+# names is the same technique WRITE_VERBS already uses, applied to a different
+# vocabulary. `fdopen` is included because `_atomic_write_0600` opens its temp file via
+# `os.fdopen(fd, "w")`, not the `open()` builtin.
+FS_WRITE_VERBS = {"replace", "unlink", "chmod", "fdopen"}
+
+# The narrow, named exception: filesystem writes are permitted ONLY inside these two
+# functions of `durable_paths.py` — the migration write and the verify-then-delete —
+# never anywhere else in the closure. `durable_paths_write_call_confinement()` below
+# checks this at function granularity, not just module granularity, so a write call
+# added anywhere ELSE in durable_paths.py (or in any other allowlisted module) still
+# fails closed.
+DURABLE_PATHS_WRITE_FUNCTIONS = {"_atomic_write_0600", "_migrate_once"}
 
 
 def _first_party_imports(path: Path, scripts_dir: Path):
@@ -116,6 +147,50 @@ def write_verb_sites(modules, scripts_dir: Path):
             if isinstance(node, ast.Attribute) and node.attr in WRITE_VERBS:
                 sites.add((module, node.attr))
     return sites
+
+
+def fs_write_verb_sites(modules, scripts_dir: Path):
+    """(module, verb) for every attribute access to a filesystem write verb in the
+    given modules — the same technique as `write_verb_sites`, applied to
+    `FS_WRITE_VERBS` instead of HTTP verbs.
+
+    `.replace` is narrowed to `os.replace(...)` specifically (the qualifier must be the
+    bare name `os`): unqualified `.replace` is also the ordinary `str`/`datetime` method
+    (e.g. `n8n_read.py`'s `started.replace(tzinfo=...)`), and treating every occurrence
+    as a filesystem write would make this guard too noisy to mean anything. `unlink`,
+    `chmod` and `fdopen` are not narrowed the same way — they are rare enough in this
+    codebase (verified: `unlink` appears nowhere else in scripts/ reachable from the
+    sweep) that a false positive there is a real signal worth reading, not noise.
+    """
+    sites = set()
+    for module in modules:
+        tree = ast.parse((scripts_dir / f"{module}.py").read_text())
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Attribute) or node.attr not in FS_WRITE_VERBS:
+                continue
+            if node.attr == "replace" and not (
+                isinstance(node.value, ast.Name) and node.value.id == "os"
+            ):
+                continue
+            sites.add((module, node.attr))
+    return sites
+
+
+def durable_paths_write_call_confinement(scripts_dir: Path):
+    """Which top-level functions in durable_paths.py contain a filesystem write verb.
+    Must equal exactly `DURABLE_PATHS_WRITE_FUNCTIONS` — not a subset, not a superset —
+    so a write call added to any OTHER function (including a resolver itself, which
+    would mean the migration gate had been bypassed) is caught by name, not merely by
+    module."""
+    tree = ast.parse((scripts_dir / "durable_paths.py").read_text())
+    housing = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef):
+            for inner in ast.walk(node):
+                if isinstance(inner, ast.Attribute) and inner.attr in FS_WRITE_VERBS:
+                    housing.add(node.name)
+                    break
+    return housing
 
 
 def status_post_payload_violations(path: Path):
@@ -166,6 +241,94 @@ def test_the_only_reachable_write_verb_is_the_named_status_post():
 
 def test_the_allowlisted_post_is_still_bodyless():
     assert status_post_payload_violations(SCRIPTS / "backend_status.py") == []
+
+
+def test_the_only_reachable_filesystem_writes_are_the_named_migration_functions():
+    """33-02: the compensating assertion the blocking constraint requires — WRITE_VERBS
+    is HTTP-shaped and structurally cannot see `open`/`replace`/`unlink`/`chmod`. This
+    is the same allowlist-first discipline as the HTTP-verb guard, applied to a
+    filesystem vocabulary, with the narrow named exception being function-scoped
+    (`DURABLE_PATHS_WRITE_FUNCTIONS`) rather than module-scoped — a write call added
+    anywhere else in durable_paths.py, or in any other module in the closure, fails."""
+    closure = transitive_closure(SWEEP_ENTRYPOINT, SCRIPTS)
+    sites = fs_write_verb_sites(closure, SCRIPTS)
+    modules_with_writes = {module for module, _verb in sites}
+    assert modules_with_writes <= {"durable_paths"}, (
+        f"filesystem write verb(s) outside durable_paths.py: "
+        f"{sorted(sites - fs_write_verb_sites({'durable_paths'}, SCRIPTS))}"
+    )
+
+    housing = durable_paths_write_call_confinement(SCRIPTS)
+    assert housing == DURABLE_PATHS_WRITE_FUNCTIONS, (
+        f"filesystem writes are housed in {sorted(housing)}, expected exactly "
+        f"{sorted(DURABLE_PATHS_WRITE_FUNCTIONS)} — a write call outside the named "
+        f"migration functions (or the migration gaining a new one) must be reviewed"
+    )
+
+
+def test_the_guard_flags_a_filesystem_write_outside_the_named_functions(tmp_path):
+    scripts = _mini_graph(
+        tmp_path,
+        "import helper\n",
+        helper="import os\n\ndef go(path):\n    os.unlink(path)\n")
+    sites = fs_write_verb_sites({"entry", "helper"}, scripts)
+    assert sites == {("helper", "unlink")}, "the guard failed to see a filesystem write"
+
+
+def test_the_sweep_does_not_migrate_even_when_a_sibling_holds_a_config(tmp_path, monkeypatch):
+    """The behavioral proof the static guards above cannot provide on their own: the
+    write-capable code exists in durable_paths.py's source (shared with the interactive
+    resolvers), so a purely syntactic scan can only confine WHERE it lives, not prove
+    the sweep's actual run never gets there. This drives `sweep_entry._cli_main()` with
+    its REAL default loader (no injected `load_config=`) against a fake HOME where a
+    migration is genuinely available, and proves it does not happen — then, as a
+    control, proves the identical layout DOES migrate when `allow_migration=True`, so
+    the abstention above is meaningful and not just "nothing was there anyway"."""
+    import config_gate
+    import durable_paths
+
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setenv("HOME", str(fake_home))
+    monkeypatch.delenv("CLAUDE_PLUGIN_DATA", raising=False)
+    monkeypatch.delenv("LV_OPERATOR_CONFIG", raising=False)
+
+    cache_root = tmp_path / "cache"
+    sibling = cache_root / "0.6.1" / "config"
+    sibling.mkdir(parents=True)
+    sibling_config = sibling / "operator.local.json"
+    sibling_config.write_text(
+        '{"n8n_url": "https://sibling.example", "n8n_api_key": "k", '
+        '"webhook_secret": "s"}'
+    )
+    current = cache_root / "0.6.2"
+    (current / "config").mkdir(parents=True)  # current install's own config/, empty
+
+    monkeypatch.setattr(durable_paths, "PLUGIN_ROOT", current)
+
+    durable_target = (fake_home / ".claude" / "plugins" / "data"
+                      / durable_paths.PLUGIN_ID / "operator.local.json")
+
+    notices = sweep_entry._cli_main()
+
+    assert not durable_target.exists(), (
+        "the sweep must never write the durable home — it resolved read-only"
+    )
+    assert sibling_config.exists(), (
+        "the sweep must never delete a sibling's config — it never reached the "
+        "migration step at all"
+    )
+    assert notices and notices[0]["condition"] == "sweep_not_configured", (
+        "with migration disabled and nothing else configured, the sweep must report "
+        "sweep_not_configured — loud, not a silent all-clear"
+    )
+
+    # Control: the identical layout DOES migrate when migration is allowed — proving
+    # the scenario above was genuinely capable of migrating, not vacuous.
+    migrated_path = durable_paths.resolve_config_path(allow_migration=True)
+    assert migrated_path == durable_target
+    assert durable_target.exists()
+    assert not sibling_config.exists()
 
 
 # --- proof the guard bites (synthetic modules, never edited production code) ------------

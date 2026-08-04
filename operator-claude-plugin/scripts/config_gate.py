@@ -21,10 +21,15 @@ _SETUP_HINT = (
 )
 
 
-def config_path() -> Path:
+def config_path(allow_migration: bool = True) -> Path:
     """Where the operator's config actually is, resolved fresh on every call (not a
-    module-level constant) — 33-02's migration can create the durable file mid-run."""
-    return durable_paths.resolve_config_path()
+    module-level constant) — 33-02's migration can create the durable file mid-run.
+
+    `allow_migration=False` skips the sibling-scan-and-migrate step entirely — used by
+    the unattended sweep (`sweep_entry._load_config_no_migration`), which must never
+    perform the irreversible delete that step's migration can trigger with nobody
+    watching (test_sweep_read_only.py's filesystem-write guard)."""
+    return durable_paths.resolve_config_path(allow_migration=allow_migration)
 
 
 # What each capability needs, rather than one global all-or-nothing gate: a plugin
@@ -76,7 +81,7 @@ class ConfigError(Exception):
     """
 
 
-def load_config(path: str | Path | None = None) -> dict:
+def load_config(path: str | Path | None = None, allow_migration: bool = True) -> dict:
     """Load and validate the plugin's local config.
 
     Defaults to the real operator config path; tests pass an explicit ``path`` instead
@@ -87,8 +92,10 @@ def load_config(path: str | Path | None = None) -> dict:
     `require_capability()` at the entrypoint or library function that actually needs it,
     not here: a global check on a key only some capabilities use is the over-refusal
     PLUGIN-03 forbids (a blank `webhook_secret` used to take down the whole status read).
+
+    `allow_migration=False` resolves read-only — see `config_path()`.
     """
-    cfg_path = Path(path) if path is not None else config_path()
+    cfg_path = Path(path) if path is not None else config_path(allow_migration=allow_migration)
 
     if not cfg_path.exists():
         raise ConfigError(f"Configuration file not found at {cfg_path}. {_SETUP_HINT}")

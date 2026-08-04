@@ -73,7 +73,30 @@ def run_sweep(config, get_transport=requests.get, post_transport=None, now=None)
     return sweep_notify.render(sweep_conditions.evaluate(gathered))
 
 
-def _cli_main(load_config=config_gate.load_config, get_transport=requests.get,
+def _load_config_no_migration():
+    """The sweep's default config loader — read-only resolution, no sibling scan, no
+    migration write, no delete (33-02).
+
+    `config_gate.load_config`'s default (`allow_migration=True`) can, when nothing else
+    resolves, copy a sibling install's config into the durable home and then DELETE the
+    sibling's copy — the one irreversible operation in this plugin (verify-then-delete
+    of a file holding `webhook_secret`/`n8n_api_key`). That is fine for an interactive
+    resolution a human is present for; it must never happen on a cron fire with nobody
+    watching. If the durable home has not been populated yet (no interactive run has
+    migrated), this surfaces as the existing `sweep_not_configured` notice below —
+    loud, not silent, consistent with this project's failure-visibility design —
+    rather than the sweep silently doing the migration itself.
+
+    See test_sweep_read_only.py for the compensating guards: the closure's
+    filesystem-write call sites are confined to `durable_paths._atomic_write_0600` and
+    `durable_paths._migrate_once` (never anywhere else), and a behavioral test proves a
+    sweep run does not perform the migration even when a sibling holds a config it
+    could otherwise adopt.
+    """
+    return config_gate.load_config(allow_migration=False)
+
+
+def _cli_main(load_config=_load_config_no_migration, get_transport=requests.get,
               post_transport=None, now=None):
     """What `python3 scripts/sweep_entry.py` prints (29-06 Task 1 — the skill this
     plan ships needs a runnable entrypoint, and none existed before this plan; the

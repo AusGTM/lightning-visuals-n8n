@@ -119,6 +119,51 @@ def _newest_sibling_holding(relative: Path) -> Path | None:
     return None
 
 
+def _migrate_once(relative: Path, target: Path) -> Path | None:
+    """Copy the newest sibling's `relative` file up to `target`, verify the copy reads
+    back byte-for-byte, and only THEN delete the sibling's copy. Returns `target` on
+    success; `None` on "nothing to migrate" or any `OSError` along the way — the
+    caller falls back to whatever it already had (an unwritable durable home must
+    leave the plugin working from where it read, never refusing).
+
+    The operator confirmed this shape explicitly at 33-02's checkpoint (verify then
+    delete, in the same resolution) — three stale install directories on this
+    machine already hold full copies of `webhook_secret`/`n8n_api_key`, and every
+    future update adds another unless migration cleans up behind itself.
+
+    Guarded against deleting the CURRENT install's own copy TWICE: once inside
+    `_newest_sibling_holding` (by construction, so the current install is never even a
+    candidate), and again here, independently, immediately before the one call in this
+    whole plugin that destroys a live credential file. Two code paths disagreeing
+    about "which install is current" is exactly the failure mode 33-RESEARCH.md names
+    for this operation (Pitfall 3) — a second check costs one line and closes it.
+    """
+    try:
+        source_dir = _newest_sibling_holding(relative)
+        if source_dir is None:
+            return None
+
+        source_file = source_dir / relative
+        text = source_file.read_text(encoding="utf-8")
+
+        _atomic_write_0600(target, text)
+
+        if target.read_text(encoding="utf-8") != text:
+            return None  # unverified copy — do not delete the only good source
+
+        if source_dir.resolve() == PLUGIN_ROOT.resolve():
+            # Unreachable given _newest_sibling_holding's own exclusion; kept as an
+            # independent, load-bearing guard rather than a formality.
+            return None
+
+        with contextlib.suppress(OSError):
+            source_file.unlink()
+
+        return target
+    except OSError:
+        return None
+
+
 def durable_dir() -> Path:
     """Where per-operator state lives, independent of which install directory is running.
 
@@ -157,16 +202,11 @@ def resolve_config_path(explicit: str | Path | None = None, allow_migration: boo
 
     if allow_migration:
         try:
-            # Task 1: copy only, from the newest sibling that holds one. Task 3
-            # replaces this with `_migrate_once`, which also verifies the copy and
-            # deletes the sibling's source — deliberately not done here yet.
-            source_dir = _newest_sibling_holding(Path("config") / CONFIG_FILENAME)
-            if source_dir is not None:
-                text = (source_dir / "config" / CONFIG_FILENAME).read_text(encoding="utf-8")
-                _atomic_write_0600(durable, text)
-                return durable
+            migrated = _migrate_once(Path("config") / CONFIG_FILENAME, durable)
         except OSError:
-            pass
+            migrated = None
+        if migrated is not None:
+            return migrated
 
     return legacy
 
@@ -199,13 +239,10 @@ def resolve_state_path(explicit: str | Path | None = None, allow_migration: bool
 
     if allow_migration:
         try:
-            # Task 1: copy only — see the identical comment in resolve_config_path.
-            source_dir = _newest_sibling_holding(Path("state") / STATE_FILENAME)
-            if source_dir is not None:
-                text = (source_dir / "state" / STATE_FILENAME).read_text(encoding="utf-8")
-                _atomic_write_0600(durable, text)
-                return durable
+            migrated = _migrate_once(Path("state") / STATE_FILENAME, durable)
         except OSError:
-            pass
+            migrated = None
+        if migrated is not None:
+            return migrated
 
     return legacy

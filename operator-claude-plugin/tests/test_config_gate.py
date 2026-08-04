@@ -5,6 +5,7 @@ touched.
 """
 import json
 import os
+import stat
 
 import pytest
 
@@ -106,7 +107,7 @@ def test_no_configerror_message_ever_contains_the_secret_value(tmp_path):
 # refusing where the skill still needed a verdict). The layer the operator reaches is
 # the layer under test here.
 
-def _run_cli(config_json, tmp_path, env=None, durable_config=None):
+def _run_cli(config_json, tmp_path, env=None, durable_config=None, versions=None, current=None):
     """Run scripts/config_gate.py as the skill runs it — as a real subprocess, against an
     ISOLATED plugin root so the operator's own gitignored config is never read.
 
@@ -126,6 +127,16 @@ def _run_cli(config_json, tmp_path, env=None, durable_config=None):
     `durable_config`, when given, is written to this fake home's durable directory
     (`~/.claude/plugins/data/operator-claude-plugin-lightning-visuals-operator/operator.local.json`).
 
+    `versions` (33-02), when given, replaces the single-install layout with a MULTI-
+    version cache layout — a dict of version string -> config payload dict, or `None`
+    for a version directory holding no local config — so the sibling-scan migration can
+    be exercised. Each version gets its own `scripts/` (both modules copied in) and
+    `config/`. `current` names which version directory the subprocess actually runs
+    from — this is what `durable_paths.PLUGIN_ROOT` resolves to inside that subprocess,
+    since it's computed from `__file__`, and the other version directories become its
+    scan-visible siblings. Every pre-existing call keeps working unchanged: `versions`
+    defaults to `None`, which keeps the original single-`root/"plugin"` layout.
+
     The subprocess `env` is built from a literal dict (`PATH` + the fake `HOME`, plus any
     caller overrides) — NEVER `{**os.environ, ...}` — so the real `HOME` can never reach
     the subprocess and no durable-home test can pass for the wrong reason.
@@ -136,13 +147,27 @@ def _run_cli(config_json, tmp_path, env=None, durable_config=None):
     from pathlib import Path
 
     scripts_dir = Path(__file__).resolve().parent.parent / "scripts"
-    root = tmp_path / "plugin"
-    (root / "scripts").mkdir(parents=True)
-    (root / "config").mkdir()
-    shutil.copyfile(scripts_dir / "config_gate.py", root / "scripts" / "config_gate.py")
-    shutil.copyfile(scripts_dir / "durable_paths.py", root / "scripts" / "durable_paths.py")
-    if config_json is not None:
-        (root / "config" / "operator.local.json").write_text(json.dumps(config_json))
+
+    if versions is not None:
+        cache_root = tmp_path / "cache"
+        for version, payload in versions.items():
+            version_dir = cache_root / version
+            (version_dir / "scripts").mkdir(parents=True)
+            (version_dir / "config").mkdir()
+            shutil.copyfile(scripts_dir / "config_gate.py", version_dir / "scripts" / "config_gate.py")
+            shutil.copyfile(scripts_dir / "durable_paths.py", version_dir / "scripts" / "durable_paths.py")
+            if payload is not None:
+                (version_dir / "config" / "operator.local.json").write_text(json.dumps(payload))
+        run_cwd = cache_root / current / "scripts"
+    else:
+        root = tmp_path / "plugin"
+        (root / "scripts").mkdir(parents=True)
+        (root / "config").mkdir()
+        shutil.copyfile(scripts_dir / "config_gate.py", root / "scripts" / "config_gate.py")
+        shutil.copyfile(scripts_dir / "durable_paths.py", root / "scripts" / "durable_paths.py")
+        if config_json is not None:
+            (root / "config" / "operator.local.json").write_text(json.dumps(config_json))
+        run_cwd = root / "scripts"
 
     fake_home = tmp_path / "home"
     if durable_config is not None:
@@ -156,7 +181,7 @@ def _run_cli(config_json, tmp_path, env=None, durable_config=None):
     run_env = {"PATH": os.environ.get("PATH", ""), "HOME": str(fake_home), **(env or {})}
 
     return subprocess.run([sys.executable, "config_gate.py"], capture_output=True,
-                          text=True, cwd=str(root / "scripts"), env=run_env)
+                          text=True, cwd=str(run_cwd), env=run_env)
 
 
 def test_cli_reports_can_send_true_when_the_upload_lane_is_configured(tmp_path, fake_config):
@@ -288,6 +313,120 @@ def test_cli_no_secret_leaks_on_a_refusal_branch_reading_the_durable_home(tmp_pa
     assert proc.returncode == 1
     assert sentinel not in proc.stdout
     assert sentinel not in proc.stderr
+
+
+# --- 33-02 Task 3: the sibling-scan migration, pinned at the CLI subprocess layer -----
+#
+# `_run_cli(..., versions=..., current=...)` builds a multi-version cache layout so the
+# migration this phase adds can be driven exactly as an operator's real update triggers
+# it — never by calling `durable_paths._migrate_once` in-process.
+
+def _durable_target(tmp_path):
+    return (tmp_path / "home" / ".claude" / "plugins" / "data"
+           / "operator-claude-plugin-lightning-visuals-operator" / "operator.local.json")
+
+
+def test_cli_migrates_the_newest_sibling_up_to_the_durable_home(tmp_path, fake_config):
+    """Simulated update: an older version holds the config, the current version holds
+    none. One run must leave the durable home holding it at 0600 with the sibling's
+    values, and ONLY THEN remove the sibling's copy — assertions ordered to mirror the
+    production sequence (copy, verify mode/contents, delete) per 33-RESEARCH.md."""
+    sibling_cfg = {**fake_config, "n8n_url": "https://sibling-install.n8n.cloud"}
+    proc = _run_cli(None, tmp_path, versions={"0.6.1": sibling_cfg, "0.6.2": None},
+                    current="0.6.2")
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["ok"] is True
+    assert payload["target"] == "https://sibling-install.n8n.cloud/webhook/hubspot/contact-upload"
+
+    durable_target = _durable_target(tmp_path)
+    assert durable_target.exists()
+    assert stat.S_IMODE(durable_target.stat().st_mode) == 0o600
+
+    migrated = json.loads(durable_target.read_text(encoding="utf-8"))
+    assert migrated["n8n_url"] == sibling_cfg["n8n_url"]
+    assert migrated["webhook_secret"] == sibling_cfg["webhook_secret"]
+
+    sibling_config_path = tmp_path / "cache" / "0.6.1" / "config" / "operator.local.json"
+    assert not sibling_config_path.exists(), "sibling's copy must be gone only after the copy is verified above"
+
+
+def test_cli_never_scans_or_touches_anything_when_the_current_install_already_has_a_config(
+        tmp_path, fake_config):
+    """The invariant that matters most (33-RESEARCH.md Pitfall 3): a current install
+    that ALSO holds a legacy config stops resolution at step 4 — no sibling scan runs
+    at all, so both the current install's own copy and the older sibling's copy must
+    survive the run untouched."""
+    sibling_cfg = {**fake_config, "n8n_url": "https://sibling-install.n8n.cloud"}
+    current_cfg = {**fake_config, "n8n_url": "https://current-install.n8n.cloud"}
+    proc = _run_cli(None, tmp_path,
+                    versions={"0.6.1": sibling_cfg, "0.6.2": current_cfg},
+                    current="0.6.2")
+    assert proc.returncode == 0, proc.stderr
+    payload = json.loads(proc.stdout)
+    assert payload["target"] == "https://current-install.n8n.cloud/webhook/hubspot/contact-upload"
+
+    current_config_path = tmp_path / "cache" / "0.6.2" / "config" / "operator.local.json"
+    sibling_config_path = tmp_path / "cache" / "0.6.1" / "config" / "operator.local.json"
+    assert current_config_path.exists(), "the current install's own config must never be touched"
+    assert sibling_config_path.exists(), "no scan ran, so the sibling's copy is untouched too"
+    assert not _durable_target(tmp_path).exists(), "step 4 wins before the durable home is ever written"
+
+
+def test_cli_second_run_against_the_same_home_is_silent_and_touches_nothing(tmp_path, fake_config):
+    """D-1's idempotence contract: once the durable home holds the file, a later run
+    must not print migration language and must not touch the file's mtime."""
+    sibling_cfg = {**fake_config, "n8n_url": "https://sibling-install.n8n.cloud"}
+    first = _run_cli(None, tmp_path, versions={"0.6.1": sibling_cfg, "0.6.2": None},
+                     current="0.6.2")
+    assert first.returncode == 0, first.stderr
+
+    durable_target = _durable_target(tmp_path)
+    mtime_before = durable_target.stat().st_mtime
+
+    second = _run_cli(None, tmp_path)  # plain single-install layout, same fake HOME
+    assert second.returncode == 0, second.stderr
+    assert durable_target.stat().st_mtime == mtime_before
+    for stream in (second.stdout, second.stderr):
+        assert "migrat" not in stream.lower(), "a silent no-op must never mention migration"
+
+
+def test_cli_a_further_version_bump_resolves_via_the_durable_home_with_no_new_migration(
+        tmp_path, fake_config):
+    """Simulated second version bump: after 0.6.2 has already migrated 0.6.1's config
+    up, a THIRD version directory (0.7.0) with no local config of its own must resolve
+    straight through the durable home — no sibling scan, no second migration."""
+    sibling_cfg = {**fake_config, "n8n_url": "https://sibling-install.n8n.cloud"}
+    first = _run_cli(None, tmp_path, versions={"0.6.1": sibling_cfg, "0.6.2": None},
+                     current="0.6.2")
+    assert first.returncode == 0, first.stderr
+
+    second = _run_cli(None, tmp_path, versions={"0.7.0": None}, current="0.7.0")
+    assert second.returncode == 0, second.stderr
+    payload = json.loads(second.stdout)
+    assert payload["target"] == "https://sibling-install.n8n.cloud/webhook/hubspot/contact-upload"
+
+
+def test_cli_exits_zero_and_reads_the_local_config_when_the_durable_home_is_unwritable(
+        tmp_path, fake_config):
+    """CONTEXT's degrade-never-refuse instruction: an unwritable durable home must never
+    turn into a refusal (PLUGIN-03's over-refusal this phase must not reintroduce). The
+    current install's own config is present, so resolution never needs to WRITE the
+    durable home at all — proving that an unwritable durable directory can never be
+    the reason a working config stops resolving."""
+    fake_home = tmp_path / "home"
+    durable_dir = (fake_home / ".claude" / "plugins" / "data"
+                   / "operator-claude-plugin-lightning-visuals-operator")
+    durable_dir.mkdir(parents=True)
+    durable_dir.chmod(0o500)
+    try:
+        proc = _run_cli(fake_config, tmp_path)
+        assert proc.returncode == 0, proc.stderr
+        payload = json.loads(proc.stdout)
+        assert payload["ok"] is True
+        assert payload["target"] == "https://fake-tenant.n8n.cloud/webhook/hubspot/contact-upload"
+    finally:
+        durable_dir.chmod(0o700)
 
 
 def test_skill_documents_the_can_send_contract():
