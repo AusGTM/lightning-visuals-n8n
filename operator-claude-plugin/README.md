@@ -4,11 +4,12 @@ A conversational **front end and control panel** for the n8n enrichment backend 
 repository. It lets a non-technical operator load contacts, trigger enrichment, watch runs,
 change schedules, and resolve review conflicts — from a chat window, without opening n8n.
 
-> **Status: both dispatch lanes implemented.** Phase 23 shipped the plugin shell and the
-> spreadsheet-to-`hubspot/contact-upload` lane; Phase 25 added the enrichment lane for
-> records already in HubSpot, and the cost guard that covers both. Remaining surfaces
-> (control, notices, review triage) land across the rest of milestone v0.6; see
-> `.planning/workstreams/plugin-entrypoint/ROADMAP.md`.
+> **Status: complete.** Milestone v0.6 sealed 2026-08-04 — all 49 requirements, every surface
+> shipped: both dispatch lanes, the cost guard, backend status and its dashboard, control
+> actions, notices and the unattended sweep, and review-queue triage. Phase 33 (plugin `0.7.0`)
+> followed, moving operator settings and the dashboard pointer out of the versioned install
+> folder so both survive an update. See `.planning/workstreams/plugin-entrypoint/ROADMAP.md`
+> for the phase trail and `CHANGELOG.md` for what each release changed.
 
 ---
 
