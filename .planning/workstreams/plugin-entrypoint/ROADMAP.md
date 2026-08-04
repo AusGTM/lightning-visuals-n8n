@@ -385,7 +385,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1)*
 
-- [ ] 33-02-PLAN.md — Step 5: the one-time sibling scan, atomic 0600 write, and verify-then-delete behind a one-way decision gate
+- [x] 33-02-PLAN.md — Step 5: the one-time sibling scan, atomic 0600 write, and verify-then-delete behind a one-way decision gate
 
 **Wave 3** *(blocked on Wave 2)*
 

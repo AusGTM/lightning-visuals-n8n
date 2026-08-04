@@ -9,7 +9,7 @@ status: executing
 stopped_at: 23-06 in progress (operator runbook RB-3). Config created; A1 passes after a plugin.json author-object fix; A6 behaviour verified at the gate. Tenant pinned via N8N_EXPECTED_URL. Section B Step 1 read-back PASS, but two findings hold Steps 2+ — the verifier covers only 2 of 8 flag sites and none in the contact lane, and 23-01 is committed-but-undeployed. A2-A5/A7 need Claude Desktop. 23-01 through 23-05 complete.
 last_updated: "2026-08-04T00:00:00.000Z"
 last_activity: 2026-08-04
-last_activity_desc: Phase 33 plan 01 (durable-operator-state) built — durable_paths.py, config_gate/init_check wired through it, resolution order pinned at the CLI subprocess
+last_activity_desc: Phase 33 plan 02 (durable-operator-state) built — sibling-scan migration (verify-then-delete), sweep kept read-only via allow_migration
 progress:
   total_phases: 8
   completed_phases: 0
@@ -36,9 +36,17 @@ REQUIREMENTS.md stays **BLOCKED** until that live gate passes.
 **2026-08-04 addendum (autonomous front):** Phase 33 (durable-operator-state) plan 33-01 —
 the tracer: `durable_paths.py`'s shared resolver, `config_gate`/`init_check` wired through
 it, resolution order pinned at the CLI subprocess against a fake `HOME` — is built,
-tested (12 new tests, plugin suite 923/5), and committed. 33-02 (the sibling-scan
-migration), 33-03 (dashboard-pointer wiring), and 33-04 (doc sweep + release cut + RB-10)
-remain.
+tested (12 new tests, plugin suite 923/5), and committed.
+
+**2026-08-04 addendum (autonomous front):** Phase 33 plan 33-02 — the sibling-scan
+migration (`_migrate_once`: copy, verify byte-for-byte, delete only then, per the
+operator's own checkpoint decision) — is built, tested (15 new tests, plugin suite
+938/5), and committed. A blocking constraint found after planning (the sweep inheriting
+a code path to the same irreversible delete) was resolved by an `allow_migration` flag
+threaded through the whole resolution chain, keeping `sweep_entry` structurally
+read-only; `test_sweep_read_only.py` gained a filesystem-write AST guard to close the
+HTTP-verb guard's blind spot. 33-03 (dashboard-pointer wiring) and 33-04 (doc sweep +
+release cut + RB-10) remain.
 
 ## Accepted requirement amendments (reconcile before each phase seals)
 
@@ -357,6 +365,30 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
   import-closure allowlist needed `durable_paths` added (config_gate now imports it; it
   performs no I/O beyond `.exists()` checks). Plugin suite 923 passed/5 skipped (+12 from
   911 baseline), repo suite 1804 passed/6 skipped (+12), node 550 unchanged.
+
+- **33-02 built the sibling-scan migration and closed a risk the plan's own checkpoint
+  decision opened.** `durable_paths.py` gained `_atomic_write_0600` (tempfile-in-target's-
+  own-dir + chmod 0600 + fsync + `os.replace`), `_newest_sibling_holding` (newest sibling
+  install that actually holds the file, excluded by resolved-path equality, filtered
+  before the version sort so a stray `.DS_Store` can't crash it with a `TypeError`), and
+  `_migrate_once` (verify-then-delete: copy, read the durable copy back and match it
+  byte-for-byte, only then unlink the sibling's copy — the operator's own checkpoint
+  answer, `delete-immediately`). Both resolvers call it as resolution step 5. Because that
+  delete is irreversible and lands in a module (`durable_paths.py`) `config_gate` imports —
+  which puts it in `sweep_entry`'s transitive closure — a new `allow_migration` flag
+  (default `True`) was threaded through `resolve_config_path`/`resolve_state_path` and
+  `config_gate.config_path`/`load_config`, and `sweep_entry` gained a dedicated default
+  loader (`_load_config_no_migration`) that always resolves read-only: the unattended
+  sweep never scans, writes, or deletes, even when a migration is genuinely available: it
+  reports the existing `sweep_not_configured` notice instead. `test_sweep_read_only.py`'s
+  compensating write-verb guard was HTTP-verb-shaped (`post`/`put`/`patch`/`delete`) and
+  structurally blind to `open`/`os.replace`/`Path.unlink`/`os.chmod` — extended with a
+  parallel filesystem-write AST scan (narrowed so bare `.replace()` doesn't false-positive
+  against `n8n_read.py`'s `datetime.replace(tzinfo=...)`), a function-level confinement
+  check, and a behavioral test proving the sweep's actual run never migrates (with a
+  control proving the identical layout DOES migrate when allowed, so the abstention is
+  meaningful). Plugin suite 938 passed/5 skipped (+15 from 923 baseline), repo suite 1819
+  passed/6 skipped (+15), node 550 unchanged.
 
 **Todos / carried context:**
 
