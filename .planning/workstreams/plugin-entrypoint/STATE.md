@@ -83,7 +83,7 @@ RB-10) remains.
 
 ## Accepted requirement amendments (reconcile before each phase seals)
 
-Five places where a locked decision or a verified research finding diverges from the written
+Six places where a locked decision or a verified research finding diverges from the written
 requirement. Each was surfaced explicitly and chosen deliberately — none is a silent drift.
 
 | # | Requirement | Amendment | Source |
@@ -93,6 +93,7 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 | 3 | STATUS-04 + Phase 27 criterion 4 | "Stuck lock" redefined as a long-running execution. `enrichment_lock_until` does not exist and `lv_enrichment_status` is never set to `running` | Phase 27 D-07a–d |
 | 4 | REPORT-02 | ICP-tier clause removed entirely. HubSpot owns the derived ICP outputs per Phase 15 Approach C; the backend has nothing to read back and a placeholder would imply otherwise | Phase 26 D-10a / D-10b |
 | 5 | CONTROL-01 + Phase 28 criterion 1 | Off-cycle scheduled-scan execution dropped. No n8n API endpoint exists (upstream PR #20304 unmerged). Operator controls scans via enable/disable and re-timing instead | Phase 28 D-05a–c |
+| 6 | REQUIREMENTS.md Out of Scope — "Re-implementing column mapping, phone/email normalization, verification, or dedupe — these live in n8n and must stay single-source-of-truth" | Header-alias **suggestion** with per-header operator confirmation is permitted in the client. **Silent client-side column mapping remains excluded.** The backend's `Map Columns` stays the single authority on what a header means; the client only helps the operator produce a file the backend can read, and never rewrites a header without an explicit yes | Phase 34 (operator decision 2026-08-04, from UAT 2.2's failure; 34-CONTEXT.md §4) |
 
 ## Backend changes v0.6 requires (not client-only)
 
