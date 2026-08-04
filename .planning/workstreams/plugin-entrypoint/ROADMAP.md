@@ -396,6 +396,23 @@ Plans:
 
 - [x] 33-04-PLAN.md — Doc truth sweep, plugin 0.7.0 release cut, and RB-10: one real migration observed on this host
 
+### Phase 34: Header Mapping Tolerance
+
+**Goal**: A spreadsheet whose headers the backend does not recognise is corrected with the operator, not silently guessed at and not dead-ended. Unambiguous near-misses map deterministically; the genuinely ambiguous tail is suggested and confirmed per header; what cannot be honestly resolved is refused with its reason named.
+**Depends on**: Phase 23 (preview + `Map Columns` contract), Phase 33 (0.7.3 shipped `column_mapping.yaml`, which is what made the mismatch visible at all)
+**Requirements**: INGEST-02 (CSV/XLSX read without pre-cleaning the headers — the requirement UAT 2.2 fails against), INGEST-06 (clear, actionable error when an input cannot be used), STRUCT-01 (canonical contact props only — `Map Columns` accepts the payload unchanged), STRUCT-04 (ambiguity is flagged for operator confirmation, never resolved by guessing), PREVIEW-01 (the operator sees the exact payload before anything is sent)
+**Success Criteria** (what must be TRUE):
+
+  1. `config/column_mapping.yaml` and `n8n/code/columnMap.js` are pinned equal by a test that passes against today's two copies BEFORE any alias moves. The two agree by hand, not by construction — `build_cloud_workflows.py` does not generate one from the other, so widening one alone makes the preview predict a mapping the backend will not perform. A confidently wrong preview is worse than today's honest mismatch.
+  2. The unambiguous near-misses map in BOTH files: `e-mail address`, `org.`, `linkedin profile`. These are lookups, not judgment. The backend is rebuilt, redeployed disarmed, and every active workflow bounced — a bare PUT never reloads a running workflow, and a read-back only proves stored content.
+  3. `Ph.` is suggested, never assumed. The operator confirms each non-exact match individually; the plugin then corrects the header row of the file it sends and re-previews so the real mapping prediction is visible before approval. `Ph.` could plausibly be a photo column — confirmation is load-bearing, not ceremonial.
+  4. `Full Name` is refused with its reason named, not split. Splitting a name is a data transform, and this system deliberately has no name-splitter; a refusal that says so beats a guess that mangles "van der Berg".
+  5. No header is ever rewritten without an explicit operator yes, proven by a test at the layer the operator reaches — the CLI driven as a subprocess against an isolated plugin root, not the mapping function in isolation. The client never maps data; the backend's `Map Columns` stays the single authority on what a header means.
+  6. The scope amendment is recorded as entry 6 in STATE.md's "Accepted requirement amendments" table: suggestion with per-header confirmation is permitted in the client; silent client-side column mapping remains excluded. A scope line that moves silently is how the next reader concludes the exclusion never meant anything.
+  7. Suites stay green (plugin 960/5, python 1841/6, node 550, disarmed-artifact gate 0), the plugin version is bumped in the same commit as the CHANGELOG cut, and the marketplace clone is refreshed. UAT 2.2 is re-walked and re-marked BY THE OPERATOR — a verified fix and an observed pass are different claims.
+
+**Plans**: TBD
+
 
 ## v0.6 Progress
 
