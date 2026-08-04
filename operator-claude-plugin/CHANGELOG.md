@@ -16,6 +16,36 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-08-04
+
+### Changed
+
+- **Your settings and your dashboard link now survive a plugin update.** Both used to
+  resolve to a path inside this plugin's own versioned install folder, so a version bump
+  moved the folder and stranded whatever was in it — an operator's first action after
+  updating was an unconfigured refusal, and a bookmarked dashboard link stopped
+  resolving. Both now resolve to one durable home outside any install folder:
+  `~/.claude/plugins/data/operator-claude-plugin-lightning-visuals-operator/`. The first
+  time you use the plugin after an update, it finds your newest previous install's copy,
+  moves it into that durable home at file permission `0600`, verifies it byte-for-byte,
+  and only then removes the copy it moved from — automatically, with nothing for you to
+  do. `/operator-claude-plugin:initialize` now names the real, resolved path instead of
+  a location inside the install folder.
+- **The unattended sweep never performs this migration.** It always resolves your
+  settings read-only, so a scheduled sweep firing against a freshly updated install
+  before you have opened the plugin yourself reports the existing `sweep_not_configured`
+  notice — loud, by design — rather than moving your credentials on your behalf with
+  nobody watching.
+
+### Fixed
+
+- **The dashboard's same-link guarantee (STATUS-05) is true again.** It had been
+  silently false since this plugin's very first update: the dashboard pointer lived
+  inside the versioned install folder, so every update landed in a folder with no
+  pointer in it, and asking for the dashboard again minted a new link instead of
+  returning the one you'd bookmarked. Fixed by the same durable-home change above — the
+  pointer resolves through the identical mechanism your settings file now does.
+
 ## [0.6.2] - 2026-08-04
 
 ### Fixed
