@@ -108,7 +108,7 @@ RB-10) remains.
 
 ## Accepted requirement amendments (reconcile before each phase seals)
 
-Six places where a locked decision or a verified research finding diverges from the written
+Six places (one with a later extension) where a locked decision or a verified research finding diverges from the written
 requirement. Each was surfaced explicitly and chosen deliberately — none is a silent drift.
 
 | # | Requirement | Amendment | Source |
@@ -119,6 +119,7 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 | 4 | REPORT-02 | ICP-tier clause removed entirely. HubSpot owns the derived ICP outputs per Phase 15 Approach C; the backend has nothing to read back and a placeholder would imply otherwise | Phase 26 D-10a / D-10b |
 | 5 | CONTROL-01 + Phase 28 criterion 1 | Off-cycle scheduled-scan execution dropped. No n8n API endpoint exists (upstream PR #20304 unmerged). Operator controls scans via enable/disable and re-timing instead | Phase 28 D-05a–c |
 | 6 | REQUIREMENTS.md Out of Scope — "Re-implementing column mapping, phone/email normalization, verification, or dedupe — these live in n8n and must stay single-source-of-truth" | Header-alias **suggestion** with per-header operator confirmation is permitted in the client. **Silent client-side column mapping remains excluded.** The backend's `Map Columns` stays the single authority on what a header means; the client only helps the operator produce a file the backend can read, and never rewrites a header without an explicit yes | Phase 34 (operator decision 2026-08-04, from UAT 2.2's failure; 34-CONTEXT.md §4) |
+| 6a | Extends amendment 6 — it said the client transforms header STRINGS only, never data | One **reviewed, per-row, this-file-only data transform** is permitted: splitting a full-name column into `firstname`/`lastname`. The splitter proposes per row with a confidence and a named reason, the operator resolves every row, and `apply_name_split` writes ONLY the operator's resolved values — it has no splitter of its own to fall back on and refuses a resolved list that does not match the row count. **It is never sent to the backend as a rule, never stored, never indexed**, and `Map Columns` still has no name-splitter. Rationale: refusing outright was stricter than the suggest-and-confirm pattern immediately beside it, and produced rows that failed the identity rule for want of a split the operator could have made in one turn | Phase 34 follow-up (operator decision 2026-08-05, during the UAT 2.2 re-walk; shipped in plugin `0.9.0`) |
 
 ## Backend changes v0.6 requires (not client-only)
 

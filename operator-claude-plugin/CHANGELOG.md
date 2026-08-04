@@ -16,6 +16,41 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-08-05
+
+### Added
+
+- **A full-name column can now be split into first and last name — with you checking it,
+  row by row.** `0.8.0` refused these outright. That was stricter than the behaviour
+  sitting right next to it (an unrecognised header gets *proposed* and confirmed), and it
+  left rows failing the identity rule for want of a split you could have made in one turn.
+
+  You get a table: the original value, the proposed first and last name, and a confidence.
+  The rows the tool cannot settle are listed **first**, each saying what is ambiguous about
+  it — a single word that could be a given name or a surname, or three parts where a middle
+  name and a two-word surname are indistinguishable. You correct anything you like, and
+  only then is a file written.
+
+  A surname carrying a particle stays whole: `Jan van der Berg` splits to `Jan` +
+  `van der Berg`, not `Jan` + `van`. That mangling was the reason the old version refused,
+  and it is now handled rather than avoided.
+
+- **The splitter has no splitter of its own at write time.** `--apply` writes exactly the
+  pairs you resolved and nothing else, so a split you never saw cannot reach a file. It
+  refuses outright if the number of resolved names does not match the number of rows —
+  a misaligned split attaches one person's surname to another person's row and is invisible
+  in the output, so it is blocked rather than reported.
+
+### Changed
+
+- **This is a local, this-file-only transform.** It is never sent to the backend as a rule,
+  never stored, and never indexed. `Map Columns` in n8n still has no name-splitter, and a
+  name column still never becomes a one-header-to-one-property guess.
+
+- **The UAT sample now carries all three name shapes** so a walkthrough demonstrates them:
+  a particle surname that must stay whole, a three-part name that needs a person, and a
+  single word that cannot be assigned to either field.
+
 ## [0.8.0] - 2026-08-05
 
 ### Added
