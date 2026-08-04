@@ -124,7 +124,20 @@ permanent.
 
 ## 6. Resume point
 
-**v0.6 is sealed (2026-08-04).** No open milestone work. Remaining opens are the carried todos
-(§1): sweep lookback time-window + id→name notice naming, Phase 26 thin-response reason, the
-versioned-cache config orphan — plus the contact `342770428400` operator delete/mark and the
-plugin-cache refresh noted in §3. Next milestone starts from `/gsd-new-milestone`.
+**v0.6 is sealed (2026-08-04). Phase 33 shipped after it (plugin 0.7.0-0.7.3).**
+
+**NEXT: Phase 34 — Header Mapping Tolerance.** Full self-contained handover at
+`.planning/workstreams/plugin-entrypoint/phases/34-header-mapping-tolerance/34-CONTEXT.md` — read
+that first, it assumes no prior context. In one line: UAT 2.2 fails because the alias table lacks
+the two headers the criterion names (`E-mail Address`, `Ph.`), and the fix is BOTH a widened
+deterministic alias set (backend, two hand-maintained copies that must be pinned equal FIRST) and a
+suggest-and-confirm fuzzy fallback in the client (modelled on Phase 31's `_hintLabels` — suggests,
+never decides). Needs a recorded scope amendment as STATE.md entry #6.
+
+Current live state: plugin **0.7.3** installed and active; config + dashboard pointer in the
+durable home and surviving updates; suites **960 plugin / 1841 python / 550 node**; disarmed gate 0;
+tenant disarmed; tree clean and pushed.
+
+Other open work is listed in §9 of that context file — the sweep's versioned crontab path (major),
+the enrichment throughput levers (measured, awaiting a decision), and the UAT rows still needing an
+operator walk (2.4, 2.5, 1.1).

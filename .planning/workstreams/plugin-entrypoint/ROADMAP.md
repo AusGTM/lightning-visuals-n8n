@@ -57,6 +57,7 @@ phase directories never collide with phases 20–22.**
 - [x] **Phase 31: Enum Validation for Review Approvals** - Enum-bound candidates are validated against HubSpot's real option set before they are offered, refusals are explicit at every layer, and silence stops meaning two opposite things
 - [x] **Phase 32: LLM-Free Sweep Trigger** - The unattended sweep fires under real cron with no credentials and no LLM, and a trigger that cannot run says so loudly instead of impersonating a healthy backend
 - [x] **Phase 33: Durable Operator State** - Config and the dashboard pointer survive a plugin update on their own, so an operator never runs a terminal command to keep working after installing a new version
+- [ ] **Phase 34: Header Mapping Tolerance** - A spreadsheet whose headers the backend does not recognise is corrected with the operator, not silently guessed at and not dead-ended
 
 ## Phase Details
 
