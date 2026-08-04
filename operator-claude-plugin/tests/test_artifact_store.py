@@ -217,24 +217,57 @@ def test_the_collection_step_deletes_a_malformed_file(state_file):
 
 def test_the_resolved_state_path_is_not_a_dotfile(state_file):
     """Phase 23 D-04: a dotfile is unreadable to tooling in this environment, so this is
-    an environment constraint rather than a naming preference."""
+    an environment constraint rather than a naming preference — and it is a constraint
+    on the FILENAME, not on every ancestor directory. Before 33-03 this asserted no
+    PATH PART started with a dot, which held only because the pointer lived inside
+    `PLUGIN_ROOT/state/`; the durable home is `~/.claude/plugins/data/...`, which is
+    itself under a dot directory, and the plugin's own install root already sits under
+    `~/.claude/plugins/cache/` — a dot-prefixed ancestor was never what D-04 was
+    protecting against, and narrowing to `path.name` is the only form of this
+    assertion that can be true both before and after this phase's move."""
     path = Path(artifact_store.state_path())
     assert not path.name.startswith(".")
-    for part in path.parts:
-        assert not part.startswith("."), part
 
 
-def test_the_resolved_state_path_sits_inside_the_plugin_directory():
-    assert PLUGIN_ROOT in Path(artifact_store.state_path()).parents
+def _point_at_a_fake_durable_home(monkeypatch, tmp_path):
+    """Isolation for the two location tests below: `CLAUDE_PLUGIN_DATA` is
+    `durable_paths.durable_dir()`'s own env override, so setting it is enough to make
+    `state_path()` resolve to a durable directory deterministically — WITHOUT touching
+    this machine's real `~/.claude` (critical constraint: every test builds isolated
+    state under `tmp_path`, never the operator's real state). Needed because in a bare
+    repo checkout `PLUGIN_ROOT.parent` holds no version-named siblings to migrate and
+    the real `~/.claude/plugins/data/...` does not exist either, so an un-isolated call
+    would fall through resolution to the legacy path and assert the opposite of what
+    these tests exist to prove."""
+    fake_durable = tmp_path / "durable"
+    fake_durable.mkdir()
+    (fake_durable / "dashboard_artifact.json").write_text("{}")
+    monkeypatch.setenv("CLAUDE_PLUGIN_DATA", str(fake_durable))
 
 
-def test_the_resolved_state_path_is_ignored_by_version_control():
-    result = subprocess.run(
-        ["git", "check-ignore", "-q", str(artifact_store.state_path())],
-        cwd=REPO_ROOT, capture_output=True)
-    assert result.returncode == 0, (
-        "the state file must be gitignored — a committed pointer is a tampering surface "
-        "(T-27-24)")
+def test_the_resolved_state_path_sits_outside_the_plugin_directory(monkeypatch, tmp_path):
+    """This is the exact inverse of what this test asserted before 33-03 — and that is
+    the point: a pointer living inside `PLUGIN_ROOT` (the versioned install directory)
+    is exactly what made STATUS-05 silently false since the first plugin update, since
+    every update discards its predecessor's install directory whole. Asserting the
+    negative here means a future refactor that quietly puts the pointer back under
+    `PLUGIN_ROOT/state/` fails loudly in this test rather than in an operator's next
+    session."""
+    _point_at_a_fake_durable_home(monkeypatch, tmp_path)
+    assert PLUGIN_ROOT not in Path(artifact_store.state_path()).parents
+
+
+def test_the_resolved_state_path_is_outside_the_repository_working_tree(monkeypatch, tmp_path):
+    """Before 33-03 this shelled out to `git check-ignore`, which asserted the state
+    path was gitignored (T-27-24) — but `git check-ignore` ERRORS on a path outside the
+    working tree entirely, which is exactly where the durable home now resolves to.
+    Asserting the path is outside `REPO_ROOT` is strictly stronger than asserting it is
+    gitignored: a file git cannot see at all cannot be committed by any accident that a
+    `.gitignore` entry alone would only prevent by convention (a stray `git add -f`
+    still works on a gitignored-but-present file; it cannot work on a file that isn't
+    under the repo root at all)."""
+    _point_at_a_fake_durable_home(monkeypatch, tmp_path)
+    assert REPO_ROOT not in Path(artifact_store.state_path()).parents
 
 
 def test_the_store_exposes_exactly_load_save_and_collect():

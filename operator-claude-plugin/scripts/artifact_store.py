@@ -24,8 +24,9 @@ import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import durable_paths
+
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_STATE_PATH = PLUGIN_ROOT / "state" / "dashboard_artifact.json"
 
 TTL_CONFIG_KEY = "dashboard_artifact_ttl_days"
 DEFAULT_TTL_DAYS = 30
@@ -36,8 +37,19 @@ STAMP_FIELD = "saved_at"
 
 
 def state_path() -> Path:
-    """Where the pointer lives. Gitignored, non-dotfile, inside the plugin."""
-    return DEFAULT_STATE_PATH
+    """Where the pointer lives — resolved fresh on every call (33-02's migration can
+    create the durable file mid-run, so this can never be a module-level constant).
+
+    Delegates to `durable_paths.resolve_state_path()`, the SAME single authority
+    `config_gate.config_path()` uses for the credentials file (33-CONTEXT.md's
+    "second-source-of-truth pattern this milestone avoids everywhere else"). The
+    pointer now lives in the durable home so it survives a plugin update — this is
+    what makes STATUS-05's cross-session guarantee ("a brand-new conversation lands on
+    the SAME dashboard URL") actually hold ACROSS versions, not only within one. Before
+    this delegation the pointer lived at `PLUGIN_ROOT/state/`, which every update
+    abandons, so the guarantee was silently false from the first update onward.
+    """
+    return durable_paths.resolve_state_path()
 
 
 def _resolve(path) -> Path:
@@ -97,6 +109,13 @@ def save(artifact_id: str, config: dict | None = None, path=None, **extra) -> No
     `**extra` exists only to refuse: the plausible next commit is `save(id, url=...)`,
     and silently persisting it is how a two-field store becomes a general one (D-09b,
     T-27-22).
+
+    Writes with plain `write_text`, not `durable_paths._atomic_write_0600` — a
+    deliberate decision, not an oversight (33-03 Task 1). The pointer holds an
+    identifier and a timestamp, no secret, so the 0600-mode window the config's atomic
+    write closes is not a concern here. And `_read()` already treats a half-written
+    file the same as no file at all, which is the same effect `_atomic_write_0600`
+    would produce — so the atomicity window has no observable consequence either way.
     """
     if extra:
         raise ValueError(
