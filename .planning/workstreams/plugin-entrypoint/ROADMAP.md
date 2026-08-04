@@ -56,7 +56,7 @@ phase directories never collide with phases 20–22.**
 - [x] **Phase 30: Review-Queue Triage** - Conflicts get resolved conversationally, with the decision written back as a human decision
 - [x] **Phase 31: Enum Validation for Review Approvals** - Enum-bound candidates are validated against HubSpot's real option set before they are offered, refusals are explicit at every layer, and silence stops meaning two opposite things
 - [x] **Phase 32: LLM-Free Sweep Trigger** - The unattended sweep fires under real cron with no credentials and no LLM, and a trigger that cannot run says so loudly instead of impersonating a healthy backend
-- [ ] **Phase 33: Durable Operator State** - Config and the dashboard pointer survive a plugin update on their own, so an operator never runs a terminal command to keep working after installing a new version
+- [x] **Phase 33: Durable Operator State** - Config and the dashboard pointer survive a plugin update on their own, so an operator never runs a terminal command to keep working after installing a new version
 
 ## Phase Details
 
@@ -393,7 +393,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3)*
 
-- [ ] 33-04-PLAN.md — Doc truth sweep, plugin 0.7.0 release cut, and RB-10: one real migration observed on this host
+- [x] 33-04-PLAN.md — Doc truth sweep, plugin 0.7.0 release cut, and RB-10: one real migration observed on this host
 
 
 ## v0.6 Progress
@@ -417,6 +417,7 @@ the operator can act on it without leaving the conversation.
 | 28. Control Actions | all | Complete | 2026-08-03 (RB-7 armed canary) |
 | 29. Notices & Unattended Sweep | all | Complete | 2026-08-03 (via Phase 32, RB-8 re-run) |
 | 30. Review-Queue Triage | 7/7 | Complete | 2026-08-04 (RB-9 close: REVIEW-04 + D-31 probe) |
+| 33. Durable Operator State | 4/4 | Complete | 2026-08-04 (RB-10 walked: migration proven, pointer defect found + fixed in 0.7.2) |
 
 ## Coverage
 

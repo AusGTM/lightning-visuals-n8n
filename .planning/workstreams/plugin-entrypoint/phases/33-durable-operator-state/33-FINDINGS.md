@@ -160,9 +160,32 @@ untested in both resolvers.
 **Fixed in `0.7.2`.** Resolvers now return the durable path as the write target when nothing exists,
 degrading to legacy only when the durable home cannot be created.
 
-## Step 5's second half — NOT COMPLETED
+## Step 5 — COMPLETED on the re-walk, `0.7.2`
 
-The cross-conversation dashboard check was not walked. The skill *asserted* "Link stays the same on
-refresh — even from a new conversation", but that is the skill's claim, not an observation, and
-given the defect it would have held only within `0.7.1`. Re-walk after `0.7.2` with the stale
-pointer cleared.
+Walked after installing `0.7.2` (sha `d990230`) and removing the stranded `0.7.1` pointer, so the
+run began with **no pointer anywhere** — the exact case that produced the defect.
+
+| Check | Observed |
+|---|---|
+| First conversation created a dashboard | `50956da1-432a-4dad-a7ba-8afb7e2acc57` |
+| Pointer location | **durable home** — `data/…/dashboard_artifact.json`, 103 B |
+| Any install directory holding a pointer | **none** — all five clean (`0.1.0`, `0.6.1`, `0.6.2`, `0.7.1`, `0.7.2`) |
+| Brand-new conversation | loaded the existing pointer, **updated the artifact in place, same URL** |
+
+**STATUS-05 is proven for the first time.** The earlier RB-4 pass demonstrated same-URL *within* a
+version; this demonstrates it for a first-ever pointer, written to a location that survives an
+update. The distinction is the whole point of Phase 33, and it is the reason the pointer half was
+not marked closed on the URL match alone — a matching URL inside one version is consistent with
+both the fixed and the broken build. The file's LOCATION is the discriminating evidence, and that
+is what was checked.
+
+Incidental observation, working as intended: the second conversation detected that another session
+had republished the artifact and overwrote it with a fresher render rather than failing or forking
+the URL — correct for a page that is machine-rendered from live data.
+
+## RB-10 verdict
+
+**PASSED, with one defect found and fixed mid-gate.** Open Question 1 answered (no prompt).
+Migration proven on real state. The pointer fallthrough was caught here and nowhere else — not by
+the planner, the plan-checker, three executors, or 956 passing tests — and is fixed in `0.7.2` with
+red-checked coverage of the case that was missing.

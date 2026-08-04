@@ -33,7 +33,18 @@ the LLM-free sweep wrapper (`lv-sweep-run.sh`), its two-sided contract test, the
 The phase is gated on 32-02: the live RB-8 re-run against the new trigger. NOTICE-03 in
 REQUIREMENTS.md stays **BLOCKED** until that live gate passes.
 
-**2026-08-04 addendum (autonomous front):** Phase 33 (durable-operator-state) plan 33-01 —
+**2026-08-04 — PHASE 33 COMPLETE (RB-10 walked).** All four plans executed and the release gate
+walked on the real machine. Config and the dashboard pointer now live in
+`~/.claude/plugins/data/operator-claude-plugin-lightning-visuals-operator/`. RB-10 answered
+Research Open Question 1 by observation — **no permission prompt fires** on writes into that
+directory — and proved the migration live (0600, byte-verified, source removed). It also FOUND A
+DEFECT nothing else caught: both resolvers fell back to the install folder when the file existed
+nowhere, so a first-ever pointer or config was still stranded. Fixed in `0.7.2`. STATUS-05 is
+proven for the first time — a first-ever pointer landed in the durable home and a brand-new
+conversation resolved to the same URL. Releases: `0.7.0` (the phase), `0.7.1` (UAT 2.6 empty-input
+branch), `0.7.2` (the RB-10 defect). Findings: `33-FINDINGS.md`.
+
+**Superseded in-progress note:** Phase 33 (durable-operator-state) plan 33-01 —
 the tracer: `durable_paths.py`'s shared resolver, `config_gate`/`init_check` wired through
 it, resolution order pinned at the CLI subprocess against a fake `HOME` — is built,
 tested (12 new tests, plugin suite 923/5), and committed.
