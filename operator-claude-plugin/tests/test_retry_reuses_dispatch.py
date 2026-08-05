@@ -152,12 +152,69 @@ def _calls_requests_send_verb_directly(func_def) -> bool:
     return False
 
 
+def _has_bare_requests_module_transport_default(func_def) -> bool:
+    """True if this function's OWN `transport` parameter defaults to the bare
+    `requests` MODULE (an `ast.Name` whose `id` is `requests`) rather than an
+    attribute like `requests.post` — `enrichment.py`'s
+    `dispatch_enrichment(..., transport=requests)` shape, invisible to
+    `_has_send_shaped_transport_default` because that default is not an
+    `ast.Attribute`. Reuses the same positional/keyword-only default-pairing logic
+    rather than duplicating the zip arithmetic."""
+    args = func_def.args
+    positional_defaulted = (
+        list(zip(args.args[len(args.args) - len(args.defaults):], args.defaults))
+        if args.defaults else []
+    )
+    kwonly_defaulted = list(zip(args.kwonlyargs, args.kw_defaults or []))
+    for arg, default in positional_defaulted + kwonly_defaulted:
+        if (
+            arg.arg == "transport"
+            and isinstance(default, ast.Name)
+            and default.id == "requests"
+        ):
+            return True
+    return False
+
+
+def _calls_transport_send_verb(func_def) -> bool:
+    """True if this function's body contains an `ast.Call` whose `func` is an
+    `ast.Attribute` with `.attr` in `_SEND_CALL_ATTRS` and whose `.value` is an
+    `ast.Name` equal to THIS function's own `transport` parameter name — e.g.
+    `transport.post(...)` inside a function whose `transport` parameter is named
+    `transport`. Binding to the parameter's own name (rather than any `.post` call
+    anywhere in the body) is what keeps a read-only fetcher that happens to call some
+    OTHER object's `.post` out of the set."""
+    transport_param = next(
+        (a.arg for a in func_def.args.args + func_def.args.kwonlyargs if a.arg == "transport"),
+        None,
+    )
+    if transport_param is None:
+        return False
+    for inner in ast.walk(func_def):
+        if (
+            isinstance(inner, ast.Call)
+            and isinstance(inner.func, ast.Attribute)
+            and inner.func.attr in _SEND_CALL_ATTRS
+            and isinstance(inner.func.value, ast.Name)
+            and inner.func.value.id == transport_param
+        ):
+            return True
+    return False
+
+
 def _send_shaped_function_names(tree):
     return [
         node.name
         for node in ast.walk(tree)
         if isinstance(node, ast.FunctionDef)
-        and (_has_send_shaped_transport_default(node) or _calls_requests_send_verb_directly(node))
+        and (
+            _has_send_shaped_transport_default(node)
+            or _calls_requests_send_verb_directly(node)
+            or (
+                _has_bare_requests_module_transport_default(node)
+                and _calls_transport_send_verb(node)
+            )
+        )
     ]
 
 
@@ -189,9 +246,38 @@ def test_scan_found_at_least_one_plugin_source_file():
 # the request carries no records at all. It is a read wearing a POST's clothes, so it is
 # allowlisted here rather than gated on arming — and the allowlist is kept honest by
 # test_the_allowlisted_status_post_carries_no_record_payload below.
+# `enrichment.py`'s `dispatch_enrichment` is the enrichment lane's single send. Its
+# `armed` parameter has no default and it raises `NotArmedError` before a transport is
+# ever constructed (test_dispatch_enrichment_armed_parameter_carries_no_default,
+# below), so it is listed here because the guard can now SEE it — not because it is
+# exempt from anything the other two entries above are held to. Until the two helpers
+# above existed, this function's `transport=requests` default (the bare module, not an
+# attribute) was invisible to every predicate this guard had: not
+# `_has_send_shaped_transport_default` (its default is not an `ast.Attribute`), not
+# `_calls_requests_send_verb_directly` (its body calls `transport.post`, not
+# `requests.post`). This guard's own failure message — "a second dispatch path would
+# let a retry bypass the arming gate" — was therefore NOT TRUE of the code it guarded,
+# because a second dispatch path already existed and this guard could not see it.
+#
+# Closing that hole also makes the guard SEE two functions that were ALREADY
+# module-shaped (`transport=requests`, body calls `transport.post`) and already
+# documented as deliberately outside this guard's radar — `review_queue.py::fetch_queue`
+# (its own docstring, D-17/Phase 28 D-28/D-33: "never transport=requests.post ... this
+# module must never join that list" — written when the guard genuinely could not see it)
+# and `probe_n8n_semantics.py::execute_probe` (a human-supervised, arming-lifecycle-gated
+# diagnostic probe, never an operator-facing verb). Neither sends a HubSpot record: the
+# review-queue POST body is `{object_type, limit}` only (a query, not a write — the
+# retryable thing this guard protects), and `execute_probe`'s POST carries no body at all
+# and exists to observe whether n8n's execute endpoint responds, gated by its own
+# `_gate()` check. Both are allowlisted here for the same reason as the status read
+# above: a read (or, for execute_probe, a bodyless existence check) wearing a send verb's
+# clothes, now correctly visible instead of accidentally invisible.
 _EXPECTED_SEND_SHAPED = [
     ("backend_status.py", ["fetch_backend_status"]),
     ("dispatch.py", ["dispatch"]),
+    ("enrichment.py", ["dispatch_enrichment"]),
+    ("probe_n8n_semantics.py", ["execute_probe"]),
+    ("review_queue.py", ["fetch_queue"]),
 ]
 
 
@@ -264,6 +350,27 @@ def test_dispatch_armed_parameter_still_carries_no_default():
     assert "armed" not in defaulted_positional_names | kwonly_defaulted_names, (
         "dispatch()'s `armed` parameter must never gain a default — a forgotten "
         "argument on retry must raise, never silently send (T-26-11)."
+    )
+
+
+def test_dispatch_enrichment_armed_parameter_still_carries_no_default():
+    tree = _parse(SCRIPTS_DIR / "enrichment.py")
+    dispatch_def = next(
+        node for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "dispatch_enrichment"
+    )
+    args = dispatch_def.args
+    positional = args.args
+    num_defaults = len(args.defaults)
+    defaulted_positional_names = (
+        {a.arg for a in positional[len(positional) - num_defaults:]} if num_defaults else set()
+    )
+    kwonly_defaulted_names = {
+        a.arg for a, d in zip(args.kwonlyargs, args.kw_defaults) if d is not None
+    }
+    assert "armed" not in defaulted_positional_names | kwonly_defaulted_names, (
+        "dispatch_enrichment()'s `armed` parameter must never gain a default — a "
+        "forgotten argument on retry must raise, never silently send."
     )
 
 
