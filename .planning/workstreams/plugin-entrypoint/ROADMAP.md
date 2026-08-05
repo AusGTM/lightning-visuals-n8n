@@ -471,7 +471,14 @@ Plans:
   7. An oversize `events` array is refused whole with a reason; nothing is enriched. Refuse, never truncate.
   8. `grep -c 'ALLOW_HUBSPOT_[A-Z_]* = "true"' n8n/*.json` → 0. Suites green (plugin 1052/5, python 1933/6, node 553). Rebuilt, deployed disarmed, every active workflow bounced, read back.
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 36-01-PLAN.md — lane stamp + lane-filtered adapters (Finding A), the pure `matchProposal.js` module, and the ingest `.invalid` sentinel (Finding B)
+- [ ] 36-02-PLAN.md — the MEDIUM match lane: `IF Has Email` / `IF Name Searchable` / `HubSpot Name Search` / `Adapt Name Search`, credential map, and the unmatchable-row skip
+- [ ] 36-03-PLAN.md — `mode` threaded from the envelope, row-carrying terminal markers, and the oversize/empty `events` refusal
+- [ ] 36-04-PLAN.md — `action:"proposed"` ahead of the write gate on both object types, plus the cloud Lusha identity widening
+- [ ] 36-05-PLAN.md — offline gates, operator-run disarmed deploy checkpoint, bounce and disarmed read-back
 
 ### Phase 37: Enrich Before Ingest
 
