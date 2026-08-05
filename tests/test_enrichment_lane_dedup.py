@@ -133,3 +133,59 @@ def test_company_gate_does_not_carry_the_same_guard():
     doc = _load(CLOUD_WF)
     code = _strip_comments(_node(doc, "Company Gate")["parameters"]["jsCode"])
     assert "lastName" not in code
+
+
+# --- Phase 36-03, Task 3: refuse an oversize or empty events array whole (D-15/D-22) ----
+
+def test_parse_hubspot_event_refuses_oversize_events_array_whole():
+    doc = _load(CLOUD_WF)
+    code = _strip_comments(_node(doc, "Parse HubSpot Event")["parameters"]["jsCode"])
+    assert re.search(r'outcome:\s*"refused"', code), (
+        "Parse HubSpot Event must emit a refused terminating item, never a thrown "
+        "exception or a silent partial map"
+    )
+    assert re.search(r"events\.length\s*>\s*MAX_EVENTS", code), (
+        "the ceiling comparison must be strictly greater-than — exactly-at-the-limit "
+        "must be accepted, never refused"
+    )
+    assert not re.search(r"events\.length\s*>=\s*MAX_EVENTS", code), (
+        "must never regress to a >= comparison, which would refuse the exactly-at-limit "
+        "case PREVIEW-03 requires to be accepted"
+    )
+
+
+def test_parse_hubspot_event_refuses_empty_events_array_too():
+    doc = _load(CLOUD_WF)
+    code = _strip_comments(_node(doc, "Parse HubSpot Event")["parameters"]["jsCode"])
+    assert re.search(r"events\.length\s*===\s*0", code), (
+        "an empty events array must be refused with its own reason rather than emitting "
+        "zero items into a responseNode webhook (the D-22 Cloudflare 524 hang)"
+    )
+
+
+def test_parse_hubspot_event_ceiling_literal_matches_the_single_builder_declaration():
+    """No second ceiling constant may be declared — the refusal must read the SAME
+    ENRICH_MAX_LIST_RECORDS the list lane already declares exactly once."""
+    import sys
+
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import build_cloud_workflows as builder  # noqa: E402
+
+    doc = _load(CLOUD_WF)
+    code = _node(doc, "Parse HubSpot Event")["parameters"]["jsCode"]
+    assert f"const MAX_EVENTS = {builder.ENRICH_MAX_LIST_RECORDS};" in code
+
+
+def test_refusal_reaches_build_response_via_the_existing_unsupported_object_type_edge():
+    """No new nodes or edges: object_type:"unknown" on the refusal item routes it through
+    the pre-existing "IF Object Type Supported" false lane, exactly like a genuine
+    unsupported object type does."""
+    doc = _load(CLOUD_WF)
+    code = _strip_comments(_node(doc, "Parse HubSpot Event")["parameters"]["jsCode"])
+    assert code.count('object_type: "unknown"') == 2, (
+        "both refusal branches (oversize and empty) must route through the existing "
+        "unsupported-object-type false lane"
+    )
+    conns = doc["connections"]
+    assert conns["IF Object Type Supported"]["main"][1][0]["node"] == "Unsupported Object Type"
+    assert conns["Unsupported Object Type"]["main"][0][0]["node"] == "Build Response"

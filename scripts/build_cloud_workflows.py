@@ -3354,6 +3354,39 @@ function normalizeObjectType(input) {
 const PROVIDER_NAMES = __PROVIDER_NAMES__;
 const body = $json.body ?? $json;
 const parsed = parseWebhookBody(body);
+// Phase 36-03 Task 3 (36-CONTEXT.md sec7 step 6, D-15/D-22): refuse an oversize or empty
+// events array WHOLE, never truncate, never hang. In-node here rather than a separate
+// node (unlike Expand List To Events, whose separate-node placement guards against a
+// MISSING events array being masked by parseWebhookBody's bare-event fallback): an
+// oversized or empty array still IS an array, so that fallback never masks either case,
+// and a separate node buys nothing extra. Mirrors ENRICH_EXPAND_LIST_TO_EVENTS's
+// refusal-as-terminating-item shape: a single item carrying outcome:"refused" and a
+// reason, never a thrown exception (a throw risks the Cloudflare 524, D-22) and never a
+// partial map (D-15 — refuse whole, never truncate). object_type:"unknown" routes the
+// refusal through the existing "IF Object Type Supported" false edge to "Unsupported
+// Object Type" -> "Build Response", so the reason reaches the caller as a 200 with zero
+// new nodes or edges.
+const MAX_EVENTS = __MAX_LIST_RECORDS__;
+if (parsed.events.length > MAX_EVENTS) {
+  return [{ json: {
+    outcome: "refused",
+    reason: `Request carries ${parsed.events.length} events, more than this backend can ` +
+      `enrich in one request — the limit is ${MAX_EVENTS} record(s) per request. ` +
+      `Nothing was enriched. Send fewer records per request, in batches of ${MAX_EVENTS} ` +
+      `or fewer.`,
+    events: [],
+    object_type: "unknown",
+  } }];
+}
+if (parsed.events.length === 0) {
+  return [{ json: {
+    outcome: "refused",
+    reason: "Request carries an empty events array — nothing to enrich. Send at " +
+      "least one event.",
+    events: [],
+    object_type: "unknown",
+  } }];
+}
 return parsed.events.map((event) => {
   const providersRaw = parsed.providers ?? event.providers;
   const { provider_enabled, providers_requested } = resolveEnabledProviders(providersRaw, PROVIDER_NAMES);
@@ -3409,6 +3442,12 @@ return parsed.events.map((event) => {
 # 37.44, +25% headroom = 46.8, floor(100/46.8) = 2. The ceiling held on the expensive
 # path and is no longer provisional. Still deliberately declared in ONE place.
 ENRICH_MAX_LIST_RECORDS = 2
+
+# Task 3's events-array-size refusal lives inside ENRICH_PARSE_EVENT_CLOUD (defined
+# above, before this ceiling is known) — a second, deferred placeholder substitution on
+# the SAME single declaration, not a second constant.
+ENRICH_PARSE_EVENT_CLOUD = ENRICH_PARSE_EVENT_CLOUD.replace(
+    "__MAX_LIST_RECORDS__", str(ENRICH_MAX_LIST_RECORDS))
 
 _HS_LISTS_BASE = "https://api.hubapi.com/crm/v3/lists"
 
