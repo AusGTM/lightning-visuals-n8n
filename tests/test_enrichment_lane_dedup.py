@@ -109,3 +109,27 @@ def test_all_three_contact_adapters_stamp_a_match_verdict():
     for name in ("Adapt Search", "Adapt Fetch By Id", "Adapt Name Search"):
         code = _node(doc, name)["parameters"]["jsCode"]
         assert "summarizeMatch" in code, f"{name} must call summarizeMatch"
+
+
+# --- Phase 36 Plan 02, Task 3: Enrichment Gate — never burn 3 provider calls on an -----
+# --- unmatchable row --------------------------------------------------------------------
+
+def test_enrichment_gate_skips_a_row_with_no_email_no_linkedin_and_no_name_plus_company():
+    doc = _load(CLOUD_WF)
+    code = _strip_comments(_node(doc, "Enrichment Gate")["parameters"]["jsCode"])
+    assert "linkedin_url" in code and "lastName" in code and "companyName" in code, (
+        "Enrichment Gate must guard on all three identity keys (email is already read "
+        "via REQUIRED/decideAction — the new guard names the other two plus the "
+        "email/linkedin/name+company skip predicate)"
+    )
+    assert re.search(r'action\s*=\s*"skip"', code), (
+        "Enrichment Gate's new guard must assign the skip action"
+    )
+
+
+def test_company_gate_does_not_carry_the_same_guard():
+    """36-CONTEXT.md §7 step 8 is contacts-only — the companies gate deliberately gets
+    NO equivalent rule."""
+    doc = _load(CLOUD_WF)
+    code = _strip_comments(_node(doc, "Company Gate")["parameters"]["jsCode"])
+    assert "lastName" not in code

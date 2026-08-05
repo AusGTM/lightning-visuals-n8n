@@ -977,6 +977,16 @@ return $input.all().map((it) => {
   // lives in the wrapper, never in the frozen module. row.lookup_failed is undefined
   // for LOCAL/LOCAL-LIVE (their Adapt Search never sets it) — a no-op there.
   if (row.lookup_failed === true && action === "create") action = "skip";
+  // Phase 36 Plan 02, Task 3 (36-CONTEXT.md §7 step 8): a row with no email, no
+  // linkedin_url, and not both a surname and a company name has no identity ANY of the
+  // three providers can match on — never burn three provider calls (Lusha/Apollo/
+  // ZoomInfo) on a row that can only ever return zero candidates. Same condition
+  // laneOf() reports as lane "none" and summarizeMatch() reports as tier "unknown" — the
+  // gate here is the cost control, the tier is the honesty; the two must never disagree.
+  // Companies (ENRICH_CO_GATE) deliberately get NO equivalent rule — 36-CONTEXT.md §7
+  // step 8 is contacts-only (36-RESEARCH.md §C).
+  const ik = row.identity_keys || {};
+  if (!ik.email && !ik.linkedin_url && !(ik.lastName && ik.companyName)) action = "skip";
   return { json: { ...row, gate, action } };
 });
 """
