@@ -195,3 +195,124 @@ def test_refused_reason_is_none_for_ordinary_per_row_items():
 
 def test_refused_reason_is_none_for_an_empty_list():
     assert preingest.refused_reason([]) is None
+
+
+# =====================================================================================
+# Task 2: match_batch
+# =====================================================================================
+
+def _plan_of(n_rows, ceiling):
+    spec = preingest.build_rows_spec(_rows(n_rows))
+    return chunking.plan_chunks(spec, ceiling)
+
+
+def _item(row_id, tier="none"):
+    return {"row_id": row_id, "mode": "propose", "action": "proposed",
+            "match": {"tier": tier, "candidates": []}}
+
+
+def test_match_batch_issues_exactly_two_calls_in_plan_order(
+        fake_config, stub_post_transport_factory):
+    plan = _plan_of(4, ceiling=2)  # two chunks of two rows
+    responses = [
+        [_item("row-1"), _item("row-2")],
+        [_item("row-3"), _item("row-4")],
+    ]
+    stub = stub_post_transport_factory(responses=list(responses))
+
+    outcome = preingest.match_batch(plan, fake_config, transport=stub)
+
+    assert len(stub.calls) == 2
+    assert not outcome.unchecked_row_ids
+    assert outcome.failed_batch is None
+
+
+def test_a_chunk_whose_transport_raises_does_not_stop_the_run(
+        fake_config, stub_post_transport_factory):
+    plan = _plan_of(4, ceiling=2)
+    stub = stub_post_transport_factory(responses=[
+        RuntimeError("dead endpoint"),
+        [_item("row-3"), _item("row-4")],
+    ])
+
+    outcome = preingest.match_batch(plan, fake_config, transport=stub)
+
+    assert len(stub.calls) == 2, "the second chunk must still be called"
+    assert outcome.unchecked_row_ids == {"row-1", "row-2"}
+
+
+def test_partition_unchecked_ids_and_response_row_ids_cover_the_plan_with_no_overlap(
+        fake_config, stub_post_transport_factory):
+    plan = _plan_of(4, ceiling=2)
+    stub = stub_post_transport_factory(responses=[
+        RuntimeError("dead endpoint"),
+        [_item("row-3"), _item("row-4")],
+    ])
+
+    outcome = preingest.match_batch(plan, fake_config, transport=stub)
+
+    response_row_ids = {item["row_id"] for item in outcome.responses}
+    all_row_ids = {f"row-{i}" for i in range(1, 5)}
+    assert outcome.unchecked_row_ids | response_row_ids == all_row_ids
+    assert outcome.unchecked_row_ids & response_row_ids == set()
+
+
+def test_the_backends_whole_batch_refusal_marks_the_whole_chunk_unchecked_with_its_own_reason(
+        fake_config, stub_post_transport_factory):
+    plan = _plan_of(2, ceiling=2)  # one chunk
+    refusal = [{"outcome": "refused", "reason": "Request carries 2 events, more than "
+                "this backend can enrich in one request", "events": [],
+                "object_type": "unknown"}]
+    stub = stub_post_transport_factory(responses=[refusal])
+
+    outcome = preingest.match_batch(plan, fake_config, transport=stub)
+
+    assert outcome.unchecked_row_ids == {"row-1", "row-2"}
+    assert any("Request carries 2 events" in reason for reason in outcome.failure_reasons)
+
+
+def test_the_outcomes_failed_batch_resends_through_plan_chunks_as_the_original_rows(
+        fake_config, stub_post_transport_factory):
+    plan = _plan_of(4, ceiling=2)
+    stub = stub_post_transport_factory(responses=[
+        RuntimeError("dead endpoint"),
+        [_item("row-3"), _item("row-4")],
+    ])
+
+    outcome = preingest.match_batch(plan, fake_config, transport=stub)
+
+    resend_plan = chunking.plan_chunks(outcome.failed_batch, ceiling=2)
+    resent_ids = [row["row_id"] for chunk in resend_plan.chunks for row in chunk["rows"]]
+    assert resent_ids == ["row-1", "row-2"]
+
+
+def test_when_nothing_fails_unchecked_is_empty_and_failed_batch_is_absent(
+        fake_config, stub_post_transport_factory):
+    plan = _plan_of(2, ceiling=2)
+    stub = stub_post_transport_factory(responses=[[_item("row-1"), _item("row-2")]])
+
+    outcome = preingest.match_batch(plan, fake_config, transport=stub)
+
+    assert outcome.unchecked_row_ids == frozenset()
+    assert outcome.failed_batch is None
+
+
+def test_match_batch_never_catches_or_imports_not_armed_error_there_is_nothing_to_arm():
+    """`fetch_matches`/`match_batch` never raise `NotArmedError` in the first place —
+    there is no `armed` parameter anywhere in this module — so nothing here should
+    ever import or catch it."""
+    import ast
+
+    tree = ast.parse((PLUGIN_ROOT / "scripts" / "preingest.py").read_text())
+    imported_names = {
+        alias.asname or alias.name
+        for node in ast.walk(tree) if isinstance(node, ast.ImportFrom)
+        for alias in node.names
+    }
+    caught_names = {
+        name.id
+        for node in ast.walk(tree) if isinstance(node, ast.ExceptHandler)
+        for name in ([node.type] if isinstance(node.type, ast.Name) else [])
+    }
+    assert "NotArmedError" not in imported_names
+    assert "NotArmedError" not in caught_names

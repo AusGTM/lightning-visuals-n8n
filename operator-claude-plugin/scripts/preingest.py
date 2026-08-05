@@ -11,8 +11,11 @@ The one rule that makes the whole flow safe: every row is joined to its verdict 
 shift every later row onto the wrong person's verdict, and nothing downstream could
 detect it (37-CONTEXT §12, §7).
 """
+from dataclasses import dataclass, field
+
 import requests
 
+import chunking
 import config_gate
 import enrichment
 from dispatch import DispatchError
@@ -131,3 +134,78 @@ def fetch_matches(chunk, config, transport=requests.post):
     if isinstance(body, list):
         return body
     return [body]
+
+
+@dataclass(frozen=True)
+class MatchOutcome:
+    """One batch's match verdicts, mirroring `chunking.DispatchOutcome`'s shape.
+
+    `unchecked_row_ids` names every row id a chunk failure or backend refusal
+    prevented from being looked at — this is `unchecked`, never `unmatched`:
+    "we did not find one" and "we could not look" are different answers, and
+    reporting one as the other would send the operator to spend money enriching a
+    contact HubSpot may already hold.
+
+    `failed_batch` is None when nothing failed — present/absent, not an empty
+    container, mirroring `chunking.DispatchOutcome.failed_batch`.
+    """
+
+    responses: tuple = field(default_factory=tuple)
+    unchecked_row_ids: frozenset = field(default_factory=frozenset)
+    failure_reasons: tuple = field(default_factory=tuple)
+    failed_batch: dict = None
+
+
+def match_batch(plan, config, transport=requests.post):
+    """Send every chunk of a rows plan, in plan order, one at a time — mirrors
+    `chunking.dispatch_plan`'s sequential, skip-a-failing-chunk contract, without
+    arming: there is nothing to arm, since `fetch_matches` takes no `armed`
+    parameter, and `NotArmedError` can never be raised here so it is never caught
+    here.
+
+    Failure is defined in ONE place, inside `fetch_matches` itself: a transport
+    exception, a non-2xx status, or an unreadable body all become `DispatchError`
+    there. `chunking._StatusCapturingTransport` is not reused here — it wraps a
+    MODULE-shaped transport (`transport.post(...)`), and `fetch_matches`'s transport
+    is attribute-shaped (`transport(...)`, a bare callable) by design (see its own
+    docstring), so the two wrapper shapes do not fit each other. Capturing the status
+    inside `fetch_matches`'s own return, rather than writing a second
+    status-capturing wrapper for a different transport shape, is the simpler of the
+    two options the plan allows.
+
+    The backend's whole-batch refusal (`refused_reason`) is handled the same way as
+    a `DispatchError`: the whole chunk becomes `unchecked`, carrying the backend's own
+    reason, and is never zipped against the chunk's row ids — it carries no join key,
+    and there is exactly one of it regardless of how many rows were sent.
+    """
+    responses = []
+    unchecked = set()
+    failure_reasons = []
+    failed_chunks = []
+
+    for chunk in plan.chunks:
+        chunk_row_ids = {row["row_id"] for row in chunk.get("rows", [])}
+
+        try:
+            items = fetch_matches(chunk, config, transport=transport)
+        except DispatchError as exc:
+            unchecked |= chunk_row_ids
+            failure_reasons.append(str(exc))
+            failed_chunks.append(chunk)
+            continue
+
+        reason = refused_reason(items)
+        if reason is not None:
+            unchecked |= chunk_row_ids
+            failure_reasons.append(reason)
+            failed_chunks.append(chunk)
+            continue
+
+        responses.extend(items)
+
+    return MatchOutcome(
+        responses=tuple(responses),
+        unchecked_row_ids=frozenset(unchecked),
+        failure_reasons=tuple(failure_reasons),
+        failed_batch=chunking.failed_batch(failed_chunks),
+    )

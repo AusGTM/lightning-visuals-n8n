@@ -280,15 +280,19 @@ def test_scan_found_at_least_one_plugin_source_file():
 # match POST reads HubSpot search results, writes nothing and spends nothing (an
 # explicit empty provider selection is sent), so it is a read wearing a POST's clothes —
 # allowlisted rather than armed, and it carries no `armed` parameter at all, so there is
-# nothing to gate. The two keeper tests below stop this being a rubber stamp: one
-# asserts no call anywhere in `preingest.py` can carry a multipart or form payload, and
-# one asserts the four-key lookup allowlist every match request is pinned to
+# nothing to gate. `match_batch` (Task 2) also carries the same
+# `transport=requests.post` default (it threads the parameter straight through to
+# `fetch_matches`, never calling `requests.post` itself), so the same predicate that
+# flags `fetch_matches` flags it too — both are the same allowlisted read, not two
+# exemptions. The two keeper tests below stop this being a rubber stamp: one asserts no
+# call anywhere in `preingest.py` can carry a multipart or form payload, and one
+# asserts the four-key lookup allowlist every match request is pinned to
 # (`enrichment.MATCH_LOOKUP_KEYS`) cannot silently widen.
 _EXPECTED_SEND_SHAPED = [
     ("backend_status.py", ["fetch_backend_status"]),
     ("dispatch.py", ["dispatch"]),
     ("enrichment.py", ["dispatch_enrichment"]),
-    ("preingest.py", ["fetch_matches"]),
+    ("preingest.py", ["fetch_matches", "match_batch"]),
     ("probe_n8n_semantics.py", ["execute_probe"]),
     ("review_queue.py", ["fetch_queue"]),
 ]
