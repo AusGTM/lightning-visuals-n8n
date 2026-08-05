@@ -163,9 +163,14 @@ def test_parse_hubspot_event_refuses_empty_events_array_too():
     )
 
 
-def test_parse_hubspot_event_ceiling_literal_matches_the_single_builder_declaration():
-    """No second ceiling constant may be declared — the refusal must read the SAME
-    ENRICH_MAX_LIST_RECORDS the list lane already declares exactly once."""
+def test_parse_hubspot_event_ceiling_literals_match_the_two_builder_declarations():
+    """Phase 36-06 (37-CONTEXT.md §13 operator ruling) deliberately made this test's
+    original premise false: a single ceiling literal named MAX_EVENTS no longer exists.
+    The write ceiling's B4 derivation (37.44 s/record full waterfall) does not apply to a
+    return-only request, which runs zero provider calls — so the ceiling was split in two.
+    This amendment (not a delete, not a silent reword) proves neither literal can drift
+    from its single Python declaration, and that the write path specifically did NOT
+    widen alongside the new propose path."""
     import sys
 
     sys.path.insert(0, str(ROOT / "scripts"))
@@ -173,7 +178,38 @@ def test_parse_hubspot_event_ceiling_literal_matches_the_single_builder_declarat
 
     doc = _load(CLOUD_WF)
     code = _node(doc, "Parse HubSpot Event")["parameters"]["jsCode"]
-    assert f"const MAX_EVENTS = {builder.ENRICH_MAX_LIST_RECORDS};" in code
+    assert f"const MAX_WRITE_EVENTS = {builder.ENRICH_MAX_LIST_RECORDS};" in code
+    assert f"const MAX_PROPOSE_EVENTS = {builder.ENRICH_MAX_PROPOSE_RECORDS};" in code
+    assert builder.ENRICH_MAX_LIST_RECORDS == 2, (
+        "the write ceiling must not have widened alongside the new propose ceiling"
+    )
+
+
+def test_parse_hubspot_event_selects_ceiling_by_mode_before_the_size_comparison():
+    """The selection must be genuinely mode-driven and must sit before the
+    `events.length >` comparison — mirrors 36-04's source-order proof idiom for the
+    write guard."""
+    doc = _load(CLOUD_WF)
+    code = _strip_comments(_node(doc, "Parse HubSpot Event")["parameters"]["jsCode"])
+    selection_idx = code.index("isReturnOnly(parsed.mode)")
+    comparison_idx = code.index("parsed.events.length >")
+    assert selection_idx < comparison_idx, (
+        "the mode-driven ceiling selection must appear before the size comparison, "
+        "or parsed.mode would not exist yet / the comparison would already be moot"
+    )
+
+
+def test_parse_hubspot_event_declares_exactly_one_return_only_predicate():
+    """Exactly ONE isReturnOnly() exists in the node — a hand-rolled second copy is a
+    second thing that can drift, and drift here means a typo'd mode writes to HubSpot
+    (D-15's fail-safe asymmetry)."""
+    doc = _load(CLOUD_WF)
+    code = _strip_comments(_node(doc, "Parse HubSpot Event")["parameters"]["jsCode"])
+    assert code.count("function isReturnOnly(") == 1
+    assert code.count('!== "write"') == 1, (
+        "the write-literal comparison that forms isReturnOnly()'s body must occur "
+        "exactly once — a second occurrence means a hand-rolled second predicate"
+    )
 
 
 def test_refusal_reaches_build_response_via_the_existing_unsupported_object_type_edge():
