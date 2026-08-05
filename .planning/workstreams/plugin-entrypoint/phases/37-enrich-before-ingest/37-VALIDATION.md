@@ -26,13 +26,14 @@ created: 2026-08-05
 | **Full suite command** | `.venv/bin/python -m pytest -q` · `node --test tests/n8n/*.test.mjs` |
 | **Estimated runtime** | ~120 seconds for all suites |
 
-**Baselines, corrected for Phase 36** (37-CONTEXT.md §11's numbers are stale — they predate it):
+**Baselines, corrected through Phase 36 plan 06** (37-CONTEXT.md §11's numbers predate the whole
+of Phase 36; the intermediate figures recorded here before 36-06 landed are also superseded):
 
 | Suite | 37-CONTEXT.md §11 says | Actual current baseline |
 |---|---|---|
-| `.venv/bin/python -m pytest -q` | 1933 / 6 | **1960 passed / 6 skipped** |
+| `.venv/bin/python -m pytest -q` | 1933 / 6 | **1962 passed / 6 skipped** |
 | `.venv/bin/python -m pytest operator-claude-plugin/tests/ -q` | 1052 / 5 | **1052 / 5** (unchanged — Phase 36 was backend-only) |
-| `node --test tests/n8n/*.test.mjs` | 553 | **609** |
+| `node --test tests/n8n/*.test.mjs` | 553 | **617** |
 | `grep -c 'ALLOW_HUBSPOT_[A-Z_]* = "true"' n8n/*.json` | 0 | **0** |
 
 Command forms are exact. System python lacks the deps; the `node --test` directory form is broken on
@@ -120,22 +121,26 @@ Task IDs filled by the planner; the DoD → proof mapping below is the contract 
 
 ---
 
-## Open decision affecting one task only
+## Match request ceiling — CLOSED
 
-**Match request ceiling.** Phase 36 shipped an unconditional `events.length > 2` refusal in
-`Parse HubSpot Event` (`scripts/build_cloud_workflows.py:3414-3425`), checked *before* `mode` is read —
-so a match/propose call is capped at 2 rows. 37-CONTEXT.md §4.2 instructs shipping a larger measured
-`max_rows_per_match_request`, and §12 lists match inheriting the waterfall's 2 under **rejected**.
-Awaiting the operator's ruling. Isolate this to one task so either resolution is a small change:
+**Resolved.** 37-CONTEXT.md §13's ruling made the backend guard mode-aware, and that edit has
+LANDED: `ENRICH_MAX_PROPOSE_RECORDS = 20` in `scripts/build_cloud_workflows.py` (36-06), selected
+against `ENRICH_MAX_LIST_RECORDS = 2` on the return-only predicate. The client half is plan 37-01
+Task 2 and nothing else.
 
-- **If the ceiling stays 2:** ship `max_rows_per_match_request: 2` with a provenance note pointing at
-  the shared guard (not an independent measurement) plus a cross-repo pin like
-  `test_chunk_ceiling_contract.py`.
-- **If the guard becomes mode-aware:** that edit lives in Phase 36's builder, not here; this phase's
-  config key then carries the measured value 37-CONTEXT.md §4.2 asks for.
+The client ships `max_rows_per_match_request` **equal to that constant by construction** — the
+value is read out of the builder by the same regex the pin test uses, never computed from an
+independent client-side latency formula. An earlier draft of this plan derived 25 from its own
+assumed per-row timings against a backend that refuses above 20; the pin would have failed on
+first run. Two files deriving one bound by two routes is the drift this closes.
 
-Either way the key stays separate from `max_records_per_chunk` — a match refusal must not print
-waterfall wording.
+The value stays marked **PROVISIONAL**: 20 is the backend's own conservative bound, not an
+observed latency. The first live propose run (37-09's walk) measures per-row wall clock, and a
+measured raise moves both numbers together, **backend first** — which is why the pin is `<=`
+rather than `==`, so the correct intermediate commit is not red.
+
+The key stays separate from `max_records_per_chunk` — a match refusal must not print
+waterfall-timing wording that is untrue of a call running two HubSpot searches.
 
 ---
 
