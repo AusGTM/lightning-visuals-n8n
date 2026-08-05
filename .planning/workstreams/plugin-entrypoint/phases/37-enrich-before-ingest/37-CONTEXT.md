@@ -278,3 +278,40 @@ the rule forbids, and it makes a dedupe problem later) · client-side fuzzy matc
 downloaded HubSpot mirror (no credential, second identity authority) · reusing `max_records_per_chunk`
 for match (2 rows per search request) · putting the gate only in the new flow (the extraction lane has
 the same dead-end today).
+
+---
+
+## 13. Amendment — operator, 2026-08-05 (second session, recorded verbatim in intent)
+
+**Governing addition:** *"at the end of an enrichment cycle there shouldn't be an unenriched contact
+or company, and if there is due to a break in the enrichment batch, there should be a way to resume
+idempotently."* HubSpot-as-queue is the **intended** design for enrichment state, not a fallback —
+do not build boundaries that close it off.
+
+Both of these are IN SCOPE for this phase ("belt and suspenders — implement both"):
+
+**(a) Run manifest + idempotent resume (pre-ingest).** Client-side state today is conversational and
+evaporates on a broken batch; re-running re-spends provider credits on rows already enriched. Fix:
+persist a run manifest mapping `row_id → terminal verdict` (matched / enriched / held / unchecked)
+as its own artifact under `durable_paths.resolve_state_path` — NOT inside `artifact_store.py`, whose
+field-refusal is deliberate and stays. Resume = skip rows holding a terminal verdict, re-request only
+the rest. `row_id` is client-generated, stable, echoed verbatim by the backend, never interpreted —
+it is the idempotency key. The manifest never stores an arming grant (Phase 23 D-11 holds: the grant
+lives only in the turn).
+
+**(b) Post-ingest handoff to the HubSpot queue.** Once ingested rows have object ids, set
+`enrichment_requested = true` on the created records so the existing scheduled poller
+(CLAUDE.md §13.2/§19) sweeps anything the pre-ingest pass could not finish — same move this phase
+already makes for confirmed-match ids via `enrich-records`, extended to created records. This is what
+actually guarantees no record ends a cycle unenriched; §12's stub-record rejection stands, but its
+cost is now bounded: pre-ingest exclusion is temporary, not terminal.
+
+**Ceiling ruling (closes the open decision in 37-VALIDATION.md):** the unconditional
+`events.length > 2` refusal in `Parse HubSpot Event` is an unnecessarily strict boundary when applied
+to `mode:"propose"` — the 2 was derived from full-waterfall timing (37.44 s/record) and a match call
+runs zero provider calls. Make the guard **mode-aware in Phase 36 before its deploy** (one deploy,
+not two): `return_only` requests get their own ceiling; write-path requests keep 2. The match
+ceiling's number must be **earned by a live probe** (B4's shape: measured latency + headroom against
+the ~100 s Cloudflare bound) at the first live propose run — ship a conservative provisional value
+with the derivation in the comment, replace it with the measured one, same discipline as the 37.44 s
+note.
