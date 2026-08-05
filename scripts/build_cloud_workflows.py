@@ -405,6 +405,15 @@ return $input.all().map((it) => {
     if (row.email) properties.email = row.email;
     if (row.firstname) properties.firstname = row.firstname;
     if (row.lastname) properties.lastname = row.lastname;
+    // 37-CONTEXT.md §13(b) / operator's option-b ruling (resolves 37-07's checkpoint):
+    // stamp the poller's work-queue flag so a freshly created contact is swept by the
+    // already-deployed 15-minute scheduled poller with no further operator action. This
+    // is a work-queue flag the poller searches for, NOT a write gate — it grants no
+    // permission and opens no write path (ALLOW_HUBSPOT_CREATE above already gates this
+    // whole branch). Create branch ONLY for the same reason the identity seeds above are:
+    // an update targets a record whose enrichment state the operator may already have
+    // curated, and re-flagging it would re-queue work that was deliberately finished.
+    properties.lv_enrichment_requested = "true";
   }
   return { json: {
     action,

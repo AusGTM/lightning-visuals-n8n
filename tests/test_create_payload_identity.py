@@ -90,6 +90,43 @@ def test_the_identity_seed_is_guarded_by_the_create_branch(const, lane, prop):
             )
 
 
+# =====================================================================================
+# 37-CONTEXT.md §13(b) — the enrichment handoff stamp (NOT the BUG 19 identity rule).
+#
+# A create-outcome contact must be stamped `lv_enrichment_requested = "true"` so the
+# already-deployed 15-minute scheduled poller sweeps it. This is a work-queue flag the
+# poller searches for, not a write gate — see 36-07-PLAN.md <not_arming>.
+# =====================================================================================
+
+_QUEUE_FLAG_PROP = "lv_enrichment_requested"
+
+
+def test_the_create_body_carries_the_enrichment_handoff_flag():
+    """DECIDE_CLOUD's create branch must assign the queue flag onto the payload it sends
+    to HubSpot — reusing `_assigns_identity_on_create`'s assignment-target discipline so a
+    mention in a comment or a top-level display echo cannot satisfy this."""
+    src = B.DECIDE_CLOUD
+    assert _assigns_identity_on_create(src, _QUEUE_FLAG_PROP), (
+        "DECIDE_CLOUD never assigns the queue flag onto `properties`/`patch` — a created "
+        "contact will never be swept by the scheduled poller (37-CONTEXT.md §13(b))."
+    )
+
+
+def test_the_handoff_flag_assignment_sits_inside_the_create_block():
+    """Character-index pin (the source-order-by-index idiom 36-04 established): the
+    assignment must fall strictly between the create block's `if` and the `return
+    { json: {` that follows it. Outside the block, an update payload would carry the
+    flag and re-queue records the operator already curated."""
+    src = B.DECIDE_CLOUD
+    i = src.index('if (action === "create")')
+    j = src.index("return { json: {", i)
+    k = src.index(f"properties.{_QUEUE_FLAG_PROP}")
+    assert i < k < j, (
+        f"`properties.{_QUEUE_FLAG_PROP} =` (offset {k}) must sit inside the create-only "
+        f"block (if at {i}, return at {j})."
+    )
+
+
 def test_the_policy_classes_that_motivated_bug_19_are_unchanged():
     """Anchor the design, not just the fix. The seed is only coherent while `domain`/`email`
     stay manual_protected (never promoted by candidates). If someone reclassifies them, the
