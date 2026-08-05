@@ -59,6 +59,8 @@ phase directories never collide with phases 20–22.**
 - [x] **Phase 33: Durable Operator State** - Config and the dashboard pointer survive a plugin update on their own, so an operator never runs a terminal command to keep working after installing a new version
 - [x] **Phase 34: Header Mapping Tolerance** - A spreadsheet whose headers the backend does not recognise is corrected with the operator, not silently guessed at and not dead-ended
 - [x] **Phase 35: URL Structured-Representation Fallback** - A page whose HTML yields nothing is retried against the site's own structured representation before the plugin gives up
+- [ ] **Phase 36: Enrichment Propose Mode & Match Lane** - The enrichment lane can return an enriched row instead of writing one, and can match a row against HubSpot by name+company as well as by email
+- [ ] **Phase 37: Enrich Before Ingest** - A sparse contact is completed and matched BEFORE it reaches HubSpot, and a row still missing an email is held back rather than sent to evaporate
 
 ## Phase Details
 
@@ -451,6 +453,43 @@ Plans:
 - [x] 35-01-PLAN.md — the candidate ladder: `scripts/url_fallback.py` (rung order, same-host check, fetch cap, give-up message, CLI) plus the `extraction.md` URL-adapter rewrite that escalates on fetched-but-empty and terminates on a tool error *(wave 1)* — complete 2026-08-05, see 35-01-SUMMARY.md
 - [x] 35-02-PLAN.md — the fences pinned: provenance naming the URL actually fetched, an AST import-set guard proving no scraping/browser/HTTP capability was introduced, and contract tests tying `extraction.md`'s quoted cap and branch placement to the module *(wave 2)* — complete 2026-08-05, see 35-02-SUMMARY.md
 - [ ] 35-03-PLAN.md — walk `https://gctc.com.au/board-of-directors/` live for its 9 directors, then cut `0.10.0` (bump + CHANGELOG in one commit), push to master, refresh the marketplace clone *(wave 3)*
+
+
+### Phase 36: Enrichment Propose Mode & Match Lane
+
+**Goal**: `hubspot/enrichment/event` gains one declared mode and one extra search lane, so a row that is not yet in HubSpot can be matched against it and enriched, with the merged properties RETURNED rather than written.
+**Depends on**: Phase 25 (the enrichment lane this extends)
+**Requirements**: DISPATCH-02 (enrichment POSTs to `hubspot/enrichment/event`), STRUCT-02 (identity rule), STRUCT-04 (never invent), PREVIEW-03 (batches above a configured size are chunked — the refusal half)
+**Success Criteria** (what must be TRUE):
+
+  1. A `mode:"propose"` request returns merged `properties` and a `match` verdict per row with `row_id` echoed, and **writes nothing** — proven regardless of `WRITE_SAFETY_DEFAULTS`. `action:"proposed"` matches neither `IF Create` nor `IF Enrich`, and the propose branch reads no `ALLOW_*` constant, so the feature cannot be re-armed by flipping a flag.
+  2. `mode` absent behaves byte-identically to today. No existing caller changes. A `mode` value that is neither absent nor `"write"` returns proposals — a typo can never write.
+  3. Match tiers are honest: `email EQ` → HIGH auto; `lastname EQ` + `company CONTAINS_TOKEN` → MEDIUM proposal; no hit → `none`; **a failed search → `unknown`, never `none`**. `CONTAINS_TOKEN`, not `CONTAINS` — HubSpot CRM v3 has no `CONTAINS` operator and a bare one is a guaranteed 400.
+  4. A MEDIUM candidate is **re-verified by value** — lastname equal case-insensitively AND company sharing a token — so a fuzzy search hit on the wrong surname yields zero candidates. This is the difference between a proposal and a guess.
+  5. **A mixed-lane batch emits each row exactly once.** Verified latent bug: `Adapt Search` and `Adapt Fetch By Id` both read `$('Build Identity').all()` and index-align, so a batch with one emailed and one emailless row would have both adapters emit both rows — duplicate provider calls and double credit burn. `Build Identity` stamps `lane` once and each adapter filters to its own.
+  6. An emailless row in the INGEST lane no longer manufactures a batch-wide `lookup_failed`. Today its filter value is `undefined`, the key is dropped, HubSpot 400s, `onError` swallows it, and the flag is stamped on every row — demoting sibling rows' `create` to `review`.
+  7. An oversize `events` array is refused whole with a reason; nothing is enriched. Refuse, never truncate.
+  8. `grep -c 'ALLOW_HUBSPOT_[A-Z_]* = "true"' n8n/*.json` → 0. Suites green (plugin 1052/5, python 1933/6, node 553). Rebuilt, deployed disarmed, every active workflow bounced, read back.
+
+**Plans**: TBD
+
+### Phase 37: Enrich Before Ingest
+
+**Goal**: The operator chooses the order and enrich-first is the default — a sparse contact is matched against HubSpot, enriched, previewed, and only then ingested. A row still missing an email after all that is held back and named, never sent to evaporate.
+**Depends on**: Phase 36 (the propose mode and match lane this calls), Phase 34 (the propose-then-confirm shape it reuses)
+**Requirements**: INGEST-02, STRUCT-01, STRUCT-02, STRUCT-04, PREVIEW-01, PREVIEW-02, PREVIEW-03, DISPATCH-03
+**Success Criteria** (what must be TRUE):
+
+  1. The 9 Gold Coast Turf Club directors — names, roles, company, **no emails**, the live case that exposed this — walk extract → match → confirm → enrich → enriched preview → ingest, and **every row that reaches HubSpot carries an email**.
+  2. A row still emailless after the waterfall is **held and named, never sent**. `write_dispatch_csv` raises and the file is not created. No force flag: the way to send a held row is to give it an email. The gate sits at the choke point every non-file batch already routes through, so it fixes the existing extraction lane too — verified, that lane accepts emailless rows today and they evaporate.
+  3. Matches are proposed one per turn with the candidate's own fields shown in the same breath, two or more candidates are ambiguous and never auto-picked, and `apply_match_decisions` refuses a decision naming an unproposed row or a candidate outside that row's own set.
+  4. Enrichment results join rows **by `row_id`, never by position** — a waterfall that drops one row would otherwise shift every subsequent row's enrichment onto the wrong person, unspottably.
+  5. A match chunk that fails is reported as `unchecked`, not `unmatched`. "We did not find one" and "we could not look" are different answers.
+  6. **Two arming phrases, structurally uncollapsible**: the enriched preview must land in the operator's turn before the ingest arm can be spoken, so the two `armed` arguments are necessarily in different turns. A combined phrase would grant the HubSpot write before the operator can see what they are approving.
+  7. The AST arming guard is amended deliberately for the unarmed match POST, with keeper tests bounding its body keys — **and the module-shaped hole is closed**, since `dispatch_enrichment(transport=requests)` has never been visible to it and the guard's own failure message is currently untrue of the code it guards.
+  8. Suites green; version bumped in the same commit as the CHANGELOG cut; merged to master; marketplace clone refreshed.
+
+**Plans**: TBD
 
 
 ## v0.6 Progress

@@ -124,20 +124,42 @@ permanent.
 
 ## 6. Resume point
 
-**v0.6 is sealed (2026-08-04). Phase 33 shipped after it (plugin 0.7.0-0.7.3).**
+**v0.6 sealed 2026-08-04. Since then: Phase 33 (0.7.x), Phase 34 (0.9.0), Phase 35 (0.10.0) all
+COMPLETE. UAT session 2 is 7/7 PASS.**
 
-**NEXT: Phase 34 — Header Mapping Tolerance.** Full self-contained handover at
-`.planning/workstreams/plugin-entrypoint/phases/34-header-mapping-tolerance/34-CONTEXT.md` — read
-that first, it assumes no prior context. In one line: UAT 2.2 fails because the alias table lacks
-the two headers the criterion names (`E-mail Address`, `Ph.`), and the fix is BOTH a widened
-deterministic alias set (backend, two hand-maintained copies that must be pinned equal FIRST) and a
-suggest-and-confirm fuzzy fallback in the client (modelled on Phase 31's `_hintLabels` — suggests,
-never decides). Needs a recorded scope amendment as STATE.md entry #6.
+**NEXT: Phase 36, then Phase 37 — they are two halves of one capability and 37 depends on 36.**
 
-Current live state: plugin **0.7.3** installed and active; config + dashboard pointer in the
-durable home and surviving updates; suites **960 plugin / 1841 python / 550 node**; disarmed gate 0;
-tenant disarmed; tree clean and pushed.
+Self-contained handovers, each assuming no prior context — read the one you are starting:
+- `.planning/workstreams/plugin-entrypoint/phases/36-enrichment-propose-mode/36-CONTEXT.md` (backend)
+- `.planning/workstreams/plugin-entrypoint/phases/37-enrich-before-ingest/37-CONTEXT.md` (client)
 
-Other open work is listed in §9 of that context file — the sweep's versioned crontab path (major),
-the enrichment throughput levers (measured, awaiting a decision), and the UAT rows still needing an
-operator walk (2.4, 2.5, 1.1).
+**In one line:** a contact row with names + company but **no email dead-ends completely and
+silently** — the ingest lane resolves identity by email only, so the row becomes `ambiguous` →
+`review` → a bare Set node, leaving **no HubSpot record and no object id**, which means it cannot be
+enriched later either. Measured live on 9 GCTC directors. The operator's decision: enrich-first
+becomes the DEFAULT, a contact must be as complete as possible BEFORE ingest, and a row still
+missing an email is held back rather than sent to evaporate.
+
+**Phase 36 (backend)** adds an explicit `mode:"propose"` to `hubspot/enrichment/event` (returns the
+merged properties, never enters the write path) plus a `lastname + company CONTAINS_TOKEN` match
+lane. It also fixes two verified live bugs found while exploring: mixed-lane row duplication (both
+adapters read `$('Build Identity').all()`), and the ingest lane manufacturing a batch-wide
+`lookup_failed` from an emailless row, which demotes sibling rows' `create` to `review`.
+
+**Phase 37 (client)** adds `preingest.py`, the ingest gate at `write_dispatch_csv` (raises — and it
+fixes the existing extraction lane, which accepts emailless rows today), rows-chunking, the enriched
+preview, and a new `enrich-before-ingest` skill. Two arming phrases stay, structurally uncollapsible.
+
+Run `/gsd-plan-phase 36 --ws plugin-entrypoint` then `/gsd-execute-phase 36 --ws plugin-entrypoint`,
+and only then the same pair for 37.
+
+Current live state: plugin **0.10.0** on master, marketplace clone refreshed; backend deployed and
+bounced with the widened alias table live; suites **1052 plugin / 1933 python / 553 node**; disarmed
+gate 0; tenant disarmed (4 active, LV Review Decision inactive); tree clean and pushed.
+
+Other open work, none absorbed into 36/37: the sweep's versioned crontab path (**major** — three
+version bumps shipped in two days, each leaving it stale), the enrichment throughput levers
+(measured, awaiting a decision), the sweep lookback window, UAT 1.1 needing a re-walk on 0.6.2's
+changed behaviour, and two findings logged during Phase 35 — `web_fetch`'s summarising model does not
+return stable casing (so "verbatim" is not reliably verbatim), and a login wall lands in the
+nothing-usable branch so the URL ladder fires on it (harmless, capped, same-host).
