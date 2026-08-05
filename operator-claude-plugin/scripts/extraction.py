@@ -511,6 +511,49 @@ def validate(artifact: dict, mapping_path=None) -> ExtractionResult:
     )
 
 
+def hold_emailless(rows: list) -> tuple:
+    """Partition `rows` into `(sendable, held)`. The deployed ingest lane resolves a
+    contact by email only (37-CONTEXT.md §4.1) — a row with no usable `email` produces
+    no HubSpot write and no object id, and therefore cannot be enriched later either,
+    since both enrichment entry points need an existing id. Held here rather than sent
+    and left to silently fail.
+
+    A firstname+lastname+company row still satisfies `column_mapping.yaml`'s
+    `required_identity.any_of` and is still a valid EXTRACTION row — valid to extract,
+    valid to match, valid to enrich. It is only invalid to INGEST. Extraction identity
+    and ingest identity are different questions; this function answers the second one
+    only and never touches `has_identity`'s rule.
+
+    Presence is decided by `_present` — the same trimming predicate `has_identity` uses
+    — so the two can never disagree about what counts as an empty email cell.
+
+    Returns `(sendable, held)`: `sendable` is every row whose `email` is present, in
+    input order. `held` is one entry per remaining row, each
+    `{"index": int, "row": dict, "reason": str}` naming the row's original position (in
+    `rows`, not `sendable`), the row itself, and why it is held. Every input row appears
+    in exactly one of the two outputs; neither list mutates an input row; no file is
+    written.
+    """
+    sendable: list = []
+    held: list = []
+    for i, row in enumerate(rows):
+        if _present(row.get("email")):
+            sendable.append(row)
+        else:
+            held.append(
+                {
+                    "index": i,
+                    "row": row,
+                    "reason": (
+                        "no usable email — the deployed ingest lane resolves a contact "
+                        "by email only, so this row would reach HubSpot as no write "
+                        "and no object id, silently"
+                    ),
+                }
+            )
+    return sendable, held
+
+
 def write_dispatch_csv(rows, out_path, mapping_path=None) -> None:
     """Write dispatch-ready CSV bytes to `out_path` for Phase 23's dispatch.py to POST.
     `rows` is a list of flat dicts (canonical prop -> value); the header is every
