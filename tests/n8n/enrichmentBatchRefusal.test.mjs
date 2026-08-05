@@ -86,3 +86,46 @@ test("mode absent, 3 events: refused, one terminating item, zero enriched, reaso
   assert.equal(rows[0].outcome, "refused");
   assert.equal(rows[0].events.length, 0);
 });
+
+// --- Task 2: the boundary matrix — 20 vs 21, 2 vs 3, empty in both modes --------------
+
+test("mode:propose, exactly 20 events (the propose ceiling): accepted, 20 rows, none refused", () => {
+  const rows = runParseHubSpotEvent({ mode: "propose", events: makeEvents(20) });
+  assert.equal(rows.length, 20);
+  for (const r of rows) assert.notEqual(r.outcome, "refused");
+});
+
+test("mode:propose, 21 events (one over): refused whole, one item, empty events, reason names 21 and 20", () => {
+  const rows = runParseHubSpotEvent({ mode: "propose", events: makeEvents(21) });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].outcome, "refused");
+  assert.equal(rows[0].events.length, 0);
+  assert.match(rows[0].reason, /21/, "reason must name the actual count");
+  assert.match(rows[0].reason, /the limit is 20 record/, "reason must quote its OWN (propose) ceiling, never the write ceiling");
+});
+
+test("mode:write (explicit), exactly 2 events: accepted, 2 rows — old ceiling still holds when mode is stated", () => {
+  const rows = runParseHubSpotEvent({ mode: "write", events: makeEvents(2) });
+  assert.equal(rows.length, 2);
+  for (const r of rows) assert.notEqual(r.outcome, "refused");
+});
+
+test("mode:write (explicit), 3 events: refused, reason names the write ceiling (2)", () => {
+  const rows = runParseHubSpotEvent({ mode: "write", events: makeEvents(3) });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].outcome, "refused");
+  assert.match(rows[0].reason, /the limit is 2 record/, "reason must quote the write ceiling, never the propose ceiling");
+});
+
+test("mode:propose, empty events array: refused with the empty-array reason, not swallowed by the size branch", () => {
+  const rows = runParseHubSpotEvent({ mode: "propose", events: [] });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].outcome, "refused");
+  assert.match(rows[0].reason, /empty/i);
+});
+
+test("a typo mode (\"proprose\"), 3 events: accepted — unrecognised mode gets the return-only ceiling, never the writer's", () => {
+  const rows = runParseHubSpotEvent({ mode: "proprose", events: makeEvents(3) });
+  assert.equal(rows.length, 3);
+  for (const r of rows) assert.notEqual(r.outcome, "refused");
+});
