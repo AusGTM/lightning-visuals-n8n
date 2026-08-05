@@ -1123,7 +1123,9 @@ return $input.all().map((it) => {
 # the result's top-level `id` (HubSpot's v3 API always returns it, independent of the
 # requested `properties` list) so HubSpot Update has a real target instead of the
 # previously-hardcoded, never-set contact_id.
-ENRICH_ADAPT_SEARCH = r"""// Adapt Search -> existingRecord — CLOUD variant.
+ENRICH_ADAPT_SEARCH = inline("matchProposal.js") + r"""
+
+// Adapt Search -> existingRecord — CLOUD variant.
 // Maps the real HubSpot search node output (per row, same order) into the
 // existingRecord shape enrichmentGate expects. 0 results => {} => CREATE.
 // Phase 36 (Finding A): filtered to the "email" lane BEFORE index-aligning against
@@ -1136,7 +1138,11 @@ return rows.map((it, i) => {
   const item = search[i];
   const failed = !item || item.error || (item.json && item.json.error);
   if (failed) {
-    return { json: { ...row, existingRecord: {}, lookup_failed: true } };
+    // Phase 36 Plan 02: every lane stamps a `match` verdict, even on a lookup failure —
+    // the response's `match.tier` must be honest about "could not look" (unknown), not
+    // silently absent.
+    const match = summarizeMatch({ lane: "email", lookupFailed: true });
+    return { json: { ...row, existingRecord: {}, lookup_failed: true, match } };
   }
   const res = item.json || {};
   let existingRecord = {};
@@ -1150,7 +1156,8 @@ return rows.map((it, i) => {
   } else if (res.id) {
     existingRecord = res;
   }
-  return { json: { ...row, existingRecord, lookup_failed: false } };
+  const match = summarizeMatch({ lane: "email", existingRecord, lookupFailed: false });
+  return { json: { ...row, existingRecord, lookup_failed: false, match } };
 });
 """
 
@@ -3582,7 +3589,7 @@ ENRICH_CONTACT_SEARCH_PROPERTIES_CSV = (
 # properties do not exist in portal 22617666 and HubSpot silently drops unknown names).
 ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV = ENRICH_CONTACT_SEARCH_PROPERTIES_CSV + ",company,lv_linkedin_url"
 
-ENRICH_ADAPT_FETCH_BY_ID_CONTACT = inline("adaptFetchById.js") + r"""
+ENRICH_ADAPT_FETCH_BY_ID_CONTACT = inline("adaptFetchById.js", "matchProposal.js") + r"""
 
 // --- n8n wrapper: adapt "HubSpot Fetch By Id" -> existingRecord + backfilled identity_keys ---
 // Mirrors ENRICH_ADAPT_SEARCH's row-recovery idiom EXACTLY (bd682a2 bug class, review
@@ -3599,7 +3606,44 @@ return rows.map((it, i) => {
   const row = it.json;
   const { existingRecord, lookup_failed, fetch_diagnostic } = adaptFetchByIdResult(fetched[i]);
   const identity_keys = backfillIdentityKeys(row.object_type || "contacts", existingRecord, row.identity_keys);
-  return { json: { ...row, existingRecord, lookup_failed, fetch_diagnostic, identity_keys } };
+  // Phase 36 Plan 02: every lane stamps a `match` verdict, so a tier reaches the
+  // response for every lane including this one.
+  const match = summarizeMatch({ lane: "fetch_by_id", existingRecord, lookupFailed: lookup_failed });
+  return { json: { ...row, existingRecord, lookup_failed, fetch_diagnostic, identity_keys, match } };
+});
+"""
+
+# ---- Phase 36 Plan 02, Task 2: the MEDIUM match-lane adapter -----------------
+#
+# Mirrors ENRICH_ADAPT_SEARCH's three-line opening + row-recovery idiom EXACTLY (same
+# bd682a2 bug class — the pre-hop row is recovered BY NODE NAME, $json/$input are never
+# read here). A MEDIUM candidate is a PROPOSAL, never an auto-match (36-CONTEXT.md §6:
+# tier "medium" carries `auto: false`) — `existingRecord` stays the empty-object literal
+# on EVERY path below, success included, so a fuzzy CONTAINS_TOKEN hit can never become
+# an auto-matched update target. `auto: false` means the CALLER judges the candidate;
+# writing it into `existingRecord` would hand the gate a confirmation it never received.
+ENRICH_ADAPT_NAME_SEARCH = inline("matchProposal.js") + r"""
+
+// --- n8n wrapper: adapt "HubSpot Name Search" -> match proposal (never existingRecord) ---
+const rows = $('Build Identity').all().filter((it) => it.json.lane === "name");
+const search = $('HubSpot Name Search').all();
+return rows.map((it, i) => {
+  const row = it.json;
+  const item = search[i];
+  const failed = !item || item.error || (item.json && item.json.error);
+  if (failed) {
+    const match = summarizeMatch({ lane: "name", lookupFailed: true });
+    return { json: { ...row, existingRecord: {}, lookup_failed: true, match } };
+  }
+  const res = item.json || {};
+  const results = Array.isArray(res.results) ? res.results : [];
+  // mediumCandidates re-verifies every hit BY VALUE (case-insensitive lastname equality
+  // AND company token overlap) — CONTAINS_TOKEN is fuzzy by design; a hit surviving the
+  // server-side filter is not yet a verified match (the BUG 22b lesson, applied
+  // prophylactically here — never trust that the search already filtered).
+  const candidates = mediumCandidates(results, row.identity_keys);
+  const match = summarizeMatch({ lane: "name", existingRecord: {}, lookupFailed: false, candidates });
+  return { json: { ...row, existingRecord: {}, lookup_failed: false, match } };
 });
 """
 
@@ -3844,10 +3888,7 @@ def build_enrichment_cloud():
         properties_csv=ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV,
     )
     nodes.append(hs_name_search)
-    # "Adapt Name Search" (the Code node that reads this search's output) is built
-    # further down, alongside its ENRICH_ADAPT_NAME_SEARCH constant — the row it occupies
-    # is reserved here so both land on the same visual row as the rest of this lane.
-    adapt_name_search_x = adapt_search_x
+    nodes.append(code_node("Adapt Name Search", ENRICH_ADAPT_NAME_SEARCH, adapt_search_x, mby))
 
     # Phase 16.1 (reviews A1): a SINGLE `action != "skip"` dispatch lane feeds the
     # provider gate chain — replaces the old Route Action switch, whose create+enrich

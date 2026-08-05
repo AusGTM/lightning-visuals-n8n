@@ -74,3 +74,38 @@ def test_local_live_adapt_search_carries_the_same_lane_filter():
     code = _strip_comments(_node(doc, "Adapt Search")["parameters"]["jsCode"])
     assert 'lane === "email"' in code
     assert not re.search(r"\$\('Build Identity'\)\.all\(\)\s*;", code)
+
+
+# --- Phase 36 Plan 02, Task 2: Adapt Name Search — a proposal, never an auto-match ------
+
+def test_adapt_name_search_exists_and_calls_mediumcandidates_and_summarizematch():
+    doc = _load(CLOUD_WF)
+    node = _node(doc, "Adapt Name Search")
+    assert node["type"] == "n8n-nodes-base.code"
+    code = node["parameters"]["jsCode"]
+    assert 'lane === "name"' in code
+    assert "mediumCandidates" in code
+    assert "summarizeMatch" in code
+
+
+def test_adapt_name_search_never_assigns_a_non_empty_existingrecord_on_the_success_path():
+    """The success-path `existingRecord` assignment must be the empty-object literal —
+    a MEDIUM candidate is a PROPOSAL (36-CONTEXT.md §6: tier "medium" carries
+    `auto: false`), never an auto-matched update target."""
+    doc = _load(CLOUD_WF)
+    code = _strip_comments(_node(doc, "Adapt Name Search")["parameters"]["jsCode"])
+    assignments = re.findall(r"existingRecord:\s*(\{\}|[^,}]+)", code)
+    assert assignments, "no existingRecord assignment found at all"
+    assert all(a.strip() == "{}" for a in assignments), (
+        f"Adapt Name Search must only ever assign the empty-object literal to "
+        f"existingRecord, found: {assignments}"
+    )
+
+
+def test_all_three_contact_adapters_stamp_a_match_verdict():
+    """Every lane stamps a `match` verdict onto its row, so a tier reaches the response
+    for every lane including the unsearchable one (36-CONTEXT.md §7 step 1)."""
+    doc = _load(CLOUD_WF)
+    for name in ("Adapt Search", "Adapt Fetch By Id", "Adapt Name Search"):
+        code = _node(doc, name)["parameters"]["jsCode"]
+        assert "summarizeMatch" in code, f"{name} must call summarizeMatch"
