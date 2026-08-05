@@ -8,6 +8,7 @@ of any kind (it builds strings; `web_fetch` is a model-invoked server tool this 
 cannot and does not call), so the autouse `no_network` guard in conftest.py is satisfied
 by construction, not by a stub.
 """
+import ast
 import json
 import shutil
 import subprocess
@@ -24,6 +25,7 @@ from url_fallback import (
 )
 
 SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
+URL_FALLBACK_PATH = SCRIPTS_DIR / "url_fallback.py"
 
 ACCEPTANCE_URL = "https://gctc.com.au/board-of-directors/"
 ACCEPTANCE_FIRST_CANDIDATE = "https://gctc.com.au/wp-json/wp/v2/pages?slug=board-of-directors"
@@ -214,3 +216,119 @@ def test_cli_filter_mode_refuses_an_off_host_url(tmp_path):
     reason = parsed["refused"][0]["reason"]
     assert "evil.example" in reason
     assert "gctc.com.au" in reason
+
+
+# --- the import-set guard: the exclusions are proven, not promised (T-35-06) --------------
+#
+# REQUIREMENTS.md's Out of Scope list excludes user-agent obfuscation, viewport emulation,
+# any anti-bot-detection technique, authenticated/paywalled scraping, and driving a browser
+# — and this phase does not amend that list. That exclusion is only real if it is checked:
+# a module that grows an HTTP client, a scraper, or a browser driver one phase later crosses
+# the line silently, because the prose fence lives in a different file from the code. Parsed
+# with `ast`, never grepped — the module's own docstring and comments legitimately discuss
+# what it does not do (see the module docstring above `MAX_FOLLOWUP_FETCHES`), and a text
+# grep over the source would make those comments self-invalidating.
+
+# The pure-stdlib import surface url_fallback.py is allowed to have, by ROOT module name.
+# A subset check against this explicit allowlist means a new import fails by default rather
+# than passing by omission — widening it is a deliberate act with a human attached.
+ALLOWED_ROOT_IMPORTS = {"json", "sys", "pathlib", "urllib"}
+
+# Exact dotted import names that must never appear, checked independently of the root
+# allowlist above — this is what stops `urllib` (needed for `urllib.parse`) from being a
+# back door for `urllib.request`, which is the one urllib submodule that opens a real
+# network connection. Also covers non-stdlib scraping/browser/shell capabilities by name.
+FORBIDDEN_DOTTED_IMPORTS = {
+    "requests", "httpx", "selenium", "playwright", "puppeteer", "bs4",
+    "subprocess", "socket", "http.client", "urllib.request",
+}
+
+
+def _import_names(path):
+    """Every import in `path`: `(roots, dotted)` — `roots` is the top-level module name
+    for every `Import`/`ImportFrom` (what a coarse allowlist check sees), `dotted` is the
+    full dotted module named by an `ImportFrom` (what a granular per-submodule check
+    needs, since `from urllib.request import urlopen` and `from urllib.parse import
+    urlsplit` share a root but not a dotted name)."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    roots, dotted = set(), set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                roots.add(alias.name.split(".")[0])
+                dotted.add(alias.name)
+        elif isinstance(node, ast.ImportFrom) and node.module and node.level == 0:
+            roots.add(node.module.split(".")[0])
+            dotted.add(node.module)
+    return roots, dotted
+
+
+def _main_guard_descendants(tree):
+    """Every AST node inside an `if __name__ == "__main__":` block (recursively) — the
+    one place url_fallback.py may legitimately touch the filesystem, because it reads a
+    local JSON file the model itself already wrote to scratch. That is not a fetch."""
+    descendants = set()
+    for node in ast.walk(tree):
+        if (
+            isinstance(node, ast.If)
+            and isinstance(node.test, ast.Compare)
+            and isinstance(node.test.left, ast.Name)
+            and node.test.left.id == "__name__"
+        ):
+            for inner in ast.walk(node):
+                descendants.add(inner)
+    return descendants
+
+
+def _open_calls_outside_main(path):
+    """`Call` nodes naming the builtin `open`, excluding any inside the `__main__`
+    guard (see `_main_guard_descendants`)."""
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    guarded = _main_guard_descendants(tree)
+    return [
+        node
+        for node in ast.walk(tree)
+        if node not in guarded
+        and isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "open"
+    ]
+
+
+def test_url_fallback_import_set_is_a_subset_of_the_pure_stdlib_allowlist():
+    """The exclusion is only real if it is checked: a later phase adding an HTTP client,
+    scraper, or browser driver to url_fallback.py must fail this test by default, not
+    pass by omission. This is also why the autouse `no_network` guard in conftest.py
+    needs no seam here — nothing in this module's import set can reach the network."""
+    roots, _dotted = _import_names(URL_FALLBACK_PATH)
+    assert roots <= ALLOWED_ROOT_IMPORTS, (
+        f"url_fallback.py imports {sorted(roots - ALLOWED_ROOT_IMPORTS)}, outside the "
+        f"pure-stdlib allowlist {sorted(ALLOWED_ROOT_IMPORTS)} — before widening this "
+        f"allowlist, confirm the new import performs no network I/O and does not "
+        f"reintroduce a scraping/browser capability REQUIREMENTS.md excludes"
+    )
+
+
+def test_url_fallback_never_imports_a_named_forbidden_capability():
+    """The granular check `ALLOWED_ROOT_IMPORTS` alone cannot make: `urllib` is allowed
+    (for `urllib.parse`), but `urllib.request` specifically — the one urllib submodule
+    that can open a real network connection — must fail here by exact dotted name,
+    never slip through because its root happens to be on the allowlist above."""
+    _roots, dotted = _import_names(URL_FALLBACK_PATH)
+    offending = dotted & FORBIDDEN_DOTTED_IMPORTS
+    assert not offending, (
+        f"url_fallback.py imports {sorted(offending)} — each of these would let this "
+        f"module fetch, scrape, drive a browser, or shell out, which REQUIREMENTS.md's "
+        f"Out of Scope list forbids"
+    )
+
+
+def test_url_fallback_calls_open_only_inside_the_main_guard():
+    """The one legitimate filesystem touch is inside `if __name__ == "__main__":`,
+    reading a local file the model already wrote — never anywhere else in the module."""
+    offenders = _open_calls_outside_main(URL_FALLBACK_PATH)
+    assert not offenders, (
+        "url_fallback.py calls open() outside the __main__ guard — this module must "
+        "perform no I/O beyond reading a local file the model itself wrote, and only "
+        "from its CLI entrypoint"
+    )
