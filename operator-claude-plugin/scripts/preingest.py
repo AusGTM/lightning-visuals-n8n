@@ -20,10 +20,29 @@ import config_gate
 import enrichment
 from dispatch import DispatchError
 
+# The six keys the backend's own `mediumCandidates()` ships (n8n/code/matchProposal.js)
+# — this IS Phase 36's information-disclosure control (T-36-04), and this module must
+# not widen it client-side. `hs_object_id` is the id key; this endpoint carries no
+# record-modification timestamp field at all.
+CANDIDATE_KEYS = ("hs_object_id", "firstname", "lastname", "email", "jobtitle", "company")
+
+_TIER_HIGH = "high"
+_TIER_MEDIUM = "medium"
+_TIER_NONE = "none"
+# _TIER_UNKNOWN is not named separately: every tier this backend can ship that is not
+# one of the three above buckets as unchecked below — the same "no allow-list of a
+# third state" asymmetry n8n/code/matchProposal.js's own isReturnOnly() uses.
+
 
 class RowSpecError(Exception):
     """Raised when a rows list cannot become a matchable spec — empty, or a row that
     already carries a `row_id` of its own."""
+
+
+class ClassifyError(Exception):
+    """Raised when a response cannot be classified safely — today, only a duplicated
+    `row_id`: a duplicate means the join is not a function, and there is no safe
+    choice between the two candidate verdicts."""
 
 
 def build_rows_spec(rows):
@@ -209,3 +228,104 @@ def match_batch(plan, config, transport=requests.post):
         failure_reasons=tuple(failure_reasons),
         failed_batch=chunking.failed_batch(failed_chunks),
     )
+
+
+def classify_matches(rows, response, unchecked_row_ids=None):
+    """Bucket every row into exactly one of four named groups — auto-matched,
+    proposed, unmatched, unchecked — joined to its own verdict by `row_id`, never by
+    position (37-CONTEXT §12). Pure: no network, no file, no config read.
+
+    Walks the INPUT rows, not the response: walking the rows is what makes a
+    response item missing for some row detectable; walking the response instead
+    would make a silently-dropped row invisible.
+
+    `unchecked_row_ids` (typically `MatchOutcome.unchecked_row_ids` from
+    `match_batch`) is a pre-seeded unchecked set, so a row whose chunk never got a
+    response is bucketed the same way as a row the backend explicitly could not look
+    up — one state, two causes, both named `unchecked`.
+
+    Exactly four tiers, and nothing branches on `action`. The backend's write-path-only
+    match-review action fires only in the branch where the return-only predicate is
+    false, and this client always sends the propose mode, so every response it ever
+    receives carries the same "proposed" action, MEDIUM rows included (verified in
+    36-04-SUMMARY.md). This function deliberately has no handler for that action, no
+    fifth bucket for it, and no branch on `action` at all: a branch that can never be
+    taken reads as coverage while being dead, and the day it stops being dead is the
+    day this client started sending the write mode — a different bug entirely.
+
+    A duplicated `row_id` in the response raises `ClassifyError` rather than letting
+    the later item overwrite the earlier — there is no safe choice between the two.
+    A response item whose `row_id` matches no input row is reported (in the
+    `unknown_response_row_ids` key) but never attached to any row.
+    """
+    index = {}
+    for item in response:
+        if not isinstance(item, dict):
+            continue
+        row_id = item.get("row_id")
+        if row_id is None:
+            continue
+        if row_id in index:
+            raise ClassifyError(
+                f"The response carries two items for row {row_id!r} — a duplicate "
+                "id means the join is not a function, and there is no safe choice "
+                "between the two."
+            )
+        index[row_id] = item
+
+    seeded_unchecked = set(unchecked_row_ids or ())
+    known_row_ids = {row["row_id"] for row in rows}
+    unknown_response_row_ids = sorted(set(index) - known_row_ids)
+
+    auto_matched, proposed, unmatched, unchecked = [], [], [], []
+
+    for row in rows:
+        row_id = row["row_id"]
+
+        if row_id in seeded_unchecked:
+            unchecked.append({"row_id": row_id, "row": row})
+            continue
+
+        item = index.get(row_id)
+        if item is None:
+            unchecked.append({"row_id": row_id, "row": row})
+            continue
+
+        match = item.get("match") or {}
+        tier = match.get("tier")
+
+        if tier == _TIER_HIGH:
+            auto_matched.append({
+                "row_id": row_id, "row": row, "hs_object_id": item.get("hs_object_id"),
+            })
+        elif tier == _TIER_MEDIUM:
+            # The six-key projection is the backend's own information disclosure
+            # control from Phase 36 (T-36-04) — never widened client-side. No
+            # sorting, ranking, or pre-selection: the backend deliberately does not
+            # sort candidates either, because ordering would imply a ranking neither
+            # side is entitled to assert.
+            candidates = [
+                {key: candidate.get(key) for key in CANDIDATE_KEYS}
+                for candidate in (match.get("candidates") or [])
+                if isinstance(candidate, dict)
+            ]
+            proposed.append({
+                "row_id": row_id,
+                "row": row,
+                "candidates": candidates,
+                "ambiguous": len(candidates) > 1,
+            })
+        elif tier == _TIER_NONE:
+            unmatched.append({"row_id": row_id, "row": row})
+        else:
+            # The unknown tier (or any unrecognized value) — "we could not look",
+            # never "no record exists".
+            unchecked.append({"row_id": row_id, "row": row})
+
+    return {
+        "auto_matched": auto_matched,
+        "proposed": proposed,
+        "unmatched": unmatched,
+        "unchecked": unchecked,
+        "unknown_response_row_ids": unknown_response_row_ids,
+    }

@@ -316,3 +316,155 @@ def test_match_batch_never_catches_or_imports_not_armed_error_there_is_nothing_t
     }
     assert "NotArmedError" not in imported_names
     assert "NotArmedError" not in caught_names
+
+
+# =====================================================================================
+# Task 3: classify_matches
+# =====================================================================================
+
+_MEDIUM_CANDIDATE = {
+    "hs_object_id": "12345", "firstname": "Jane", "lastname": "Doe",
+    "email": "jane@x.com", "jobtitle": "Director", "company": "GCTC",
+}
+
+
+def _rows_and_ids(n):
+    spec = preingest.build_rows_spec(_rows(n))
+    return spec["rows"]
+
+
+def test_high_tier_buckets_auto_matched_and_carries_hs_object_id():
+    rows = _rows_and_ids(1)
+    response = [{
+        "row_id": rows[0]["row_id"], "action": "proposed", "hs_object_id": "999",
+        "match": {"tier": "high"},
+    }]
+    result = preingest.classify_matches(rows, response)
+    assert len(result["auto_matched"]) == 1
+    assert result["auto_matched"][0]["hs_object_id"] == "999"
+    assert not result["proposed"] and not result["unmatched"] and not result["unchecked"]
+
+
+def test_medium_tier_buckets_proposed_with_candidates_carried_through():
+    rows = _rows_and_ids(1)
+    response = [{
+        "row_id": rows[0]["row_id"], "action": "proposed",
+        "match": {"tier": "medium", "candidates": [_MEDIUM_CANDIDATE]},
+    }]
+    result = preingest.classify_matches(rows, response)
+    assert len(result["proposed"]) == 1
+    assert result["proposed"][0]["candidates"] == [_MEDIUM_CANDIDATE]
+    assert result["proposed"][0]["ambiguous"] is False
+
+
+def test_two_or_more_medium_candidates_is_ambiguous_and_none_is_pre_selected():
+    rows = _rows_and_ids(1)
+    other = {**_MEDIUM_CANDIDATE, "hs_object_id": "67890"}
+    response = [{
+        "row_id": rows[0]["row_id"], "action": "proposed",
+        "match": {"tier": "medium", "candidates": [_MEDIUM_CANDIDATE, other]},
+    }]
+    result = preingest.classify_matches(rows, response)
+    entry = result["proposed"][0]
+    assert entry["ambiguous"] is True
+    assert len(entry["candidates"]) == 2
+    assert "selected" not in entry and "preferred" not in entry
+
+
+def test_none_tier_buckets_unmatched():
+    rows = _rows_and_ids(1)
+    response = [{"row_id": rows[0]["row_id"], "action": "proposed", "match": {"tier": "none"}}]
+    result = preingest.classify_matches(rows, response)
+    assert len(result["unmatched"]) == 1
+
+
+def test_unknown_tier_buckets_unchecked_never_unmatched():
+    rows = _rows_and_ids(1)
+    response = [{"row_id": rows[0]["row_id"], "action": "proposed", "match": {"tier": "unknown"}}]
+    result = preingest.classify_matches(rows, response)
+    assert len(result["unchecked"]) == 1
+    assert not result["unmatched"]
+
+
+def test_a_row_id_absent_from_the_response_buckets_unchecked_never_dropped():
+    rows = _rows_and_ids(3)
+    response = [
+        {"row_id": rows[0]["row_id"], "action": "proposed", "match": {"tier": "none"}},
+        {"row_id": rows[2]["row_id"], "action": "proposed", "match": {"tier": "none"}},
+    ]
+    result = preingest.classify_matches(rows, response)
+    assert len(result["unchecked"]) == 1
+    assert result["unchecked"][0]["row_id"] == rows[1]["row_id"]
+    assert len(result["unmatched"]) == 2
+
+
+def test_a_response_item_matching_no_input_row_is_reported_never_attached():
+    rows = _rows_and_ids(1)
+    response = [
+        {"row_id": rows[0]["row_id"], "action": "proposed", "match": {"tier": "none"}},
+        {"row_id": "row-does-not-exist", "action": "proposed", "match": {"tier": "high"}},
+    ]
+    result = preingest.classify_matches(rows, response)
+    assert result["unknown_response_row_ids"] == ["row-does-not-exist"]
+    assert len(result["auto_matched"]) == 0
+
+
+def test_two_response_items_with_the_same_row_id_is_a_refusal_not_last_one_wins():
+    rows = _rows_and_ids(1)
+    response = [
+        {"row_id": rows[0]["row_id"], "action": "proposed", "match": {"tier": "none"}},
+        {"row_id": rows[0]["row_id"], "action": "proposed", "match": {"tier": "high"}},
+    ]
+    with pytest.raises(preingest.ClassifyError):
+        preingest.classify_matches(rows, response)
+
+
+def test_the_four_bucket_sizes_sum_to_the_input_row_count():
+    rows = _rows_and_ids(4)
+    response = [
+        {"row_id": rows[0]["row_id"], "action": "proposed", "match": {"tier": "high"}, "hs_object_id": "1"},
+        {"row_id": rows[1]["row_id"], "action": "proposed",
+         "match": {"tier": "medium", "candidates": [_MEDIUM_CANDIDATE]}},
+        {"row_id": rows[2]["row_id"], "action": "proposed", "match": {"tier": "none"}},
+        # rows[3] absent from the response entirely -> unchecked
+    ]
+    result = preingest.classify_matches(rows, response)
+    total = sum(len(result[bucket]) for bucket in
+                ("auto_matched", "proposed", "unmatched", "unchecked"))
+    assert total == len(rows)
+
+
+def test_a_proposed_candidates_key_set_is_exactly_the_six_shipped_names():
+    rows = _rows_and_ids(1)
+    response = [{
+        "row_id": rows[0]["row_id"], "action": "proposed",
+        "match": {"tier": "medium", "candidates": [_MEDIUM_CANDIDATE]},
+    }]
+    result = preingest.classify_matches(rows, response)
+    candidate = result["proposed"][0]["candidates"][0]
+    assert set(candidate) == set(preingest.CANDIDATE_KEYS)
+    assert "lastmodifieddate" not in candidate
+
+
+def test_lastmodifieddate_appears_nowhere_in_preingest_source():
+    source = (PLUGIN_ROOT / "scripts" / "preingest.py").read_text()
+    assert "lastmodifieddate" not in source
+
+
+def test_needs_match_review_appears_nowhere_in_preingest_source():
+    """Deliberately unhandled — write-path-only action, never sent by this client
+    (which always requests mode:"propose"). See preingest.classify_matches's
+    docstring and 37-03-SUMMARY.md."""
+    source = (PLUGIN_ROOT / "scripts" / "preingest.py").read_text()
+    assert "needs_match_review" not in source
+
+
+def test_classify_matches_respects_a_pre_seeded_unchecked_set_from_match_batch():
+    rows = _rows_and_ids(2)
+    response = [{"row_id": rows[1]["row_id"], "action": "proposed", "match": {"tier": "none"}}]
+    result = preingest.classify_matches(
+        rows, response, unchecked_row_ids={rows[0]["row_id"]},
+    )
+    assert len(result["unchecked"]) == 1
+    assert result["unchecked"][0]["row_id"] == rows[0]["row_id"]
+    assert len(result["unmatched"]) == 1
