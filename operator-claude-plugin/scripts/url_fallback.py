@@ -42,10 +42,11 @@ def plan_ladder(pasted_url):
     """The ordered candidate ladder for `pasted_url`.
 
     Returns `{"pasted_url", "host", "cap", "candidates", "notes"}`. `candidates` is
-    `[{"url", "rung", "why"}, ...]` in the locked order from 35-CONTEXT.md §3. This task
-    (35-01 Task 1) implements rung 1 only — the WordPress-REST pages-by-slug lookup, the
-    URL measured live to return all 9 directors for the acceptance case. Later tasks add
-    the remaining rungs (posts-by-slug, then the two sitemap rungs) to this same function.
+    `[{"url", "rung", "why"}, ...]` in the locked order from 35-CONTEXT.md §3: WordPress
+    REST pages-by-slug, then posts-by-slug, then the two same-host sitemap rungs. A
+    slug-less URL (the site root, or a path with no final segment) skips the two
+    WordPress-REST rungs — there is no slug to look up — but still offers both sitemap
+    rungs, since those address the whole host rather than one page.
     """
     parts = urlsplit(pasted_url)
     host = parts.netloc
@@ -61,11 +62,27 @@ def plan_ladder(pasted_url):
             "rung": 1,
             "why": "The WordPress REST representation of the same page, if the site runs WordPress.",
         })
+        candidates.append({
+            "url": f"{scheme}://{host}/wp-json/wp/v2/posts?slug={slug}",
+            "rung": 2,
+            "why": "The same page filed as a WordPress post rather than a page.",
+        })
     else:
         notes.append(
             "The pasted URL has no path slug (it points at the site root, or a path "
             "with no final segment), so the WordPress-REST rungs cannot be built."
         )
+
+    candidates.append({
+        "url": f"{scheme}://{host}/sitemap.xml",
+        "rung": 3,
+        "why": "The site's general sitemap, which may list an individual profile page for this content.",
+    })
+    candidates.append({
+        "url": f"{scheme}://{host}/wp-sitemap.xml",
+        "rung": 4,
+        "why": "WordPress's own default sitemap path, in case the general one is not served.",
+    })
 
     return {
         "pasted_url": pasted_url,
@@ -76,12 +93,100 @@ def plan_ladder(pasted_url):
     }
 
 
+def same_host(pasted_url, candidate_url):
+    """True only when `candidate_url` is on exactly `pasted_url`'s host: netloc (host and
+    port together), case-folded. A `www.` variant is a DIFFERENT netloc and is refused —
+    the deliberate strictness is the safe side of the line, because the alternative is a
+    rule that has to guess which host variants are "really" the same site. Scheme is not
+    required to match (http vs. https is not a different host)."""
+    return urlsplit(pasted_url).netloc.casefold() == urlsplit(candidate_url).netloc.casefold()
+
+
+def filter_candidates(pasted_url, urls, already_fetched=0):
+    """The guard every candidate URL must pass before it may be fetched.
+
+    This is the guard on sitemap-derived candidates SPECIFICALLY: those URLs come out of
+    fetched page content, which is attacker-influenceable data (a page can list any URL
+    it likes), so a candidate is never fetched without passing through here first.
+
+    Returns `{"accepted", "refused", "cap", "budget_remaining"}`. `refused` entries are
+    `{"url", "reason"}`. Checks run in this order — scheme, then host, then budget — so
+    an off-host URL is refused for being off-host rather than for exhausting a budget it
+    was never entitled to spend in the first place.
+    """
+    pasted_host = urlsplit(pasted_url).netloc
+    budget_remaining = max(MAX_FOLLOWUP_FETCHES - already_fetched, 0)
+
+    accepted = []
+    refused = []
+    for url in urls:
+        scheme = urlsplit(url).scheme
+        if scheme not in ("http", "https"):
+            refused.append({
+                "url": url,
+                "reason": f"{scheme or '(no scheme)'!r} is not an http or https URL — refusing to fetch it.",
+            })
+            continue
+        if not same_host(pasted_url, url):
+            refused.append({
+                "url": url,
+                "reason": (
+                    f"{urlsplit(url).netloc} is not the pasted URL's host "
+                    f"({pasted_host}) — refusing to follow it off-host."
+                ),
+            })
+            continue
+        if len(accepted) >= budget_remaining:
+            refused.append({
+                "url": url,
+                "reason": (
+                    f"the follow-up fetch cap ({MAX_FOLLOWUP_FETCHES}) is exhausted "
+                    f"({already_fetched} already spent this run)."
+                ),
+            })
+            continue
+        accepted.append(url)
+
+    return {
+        "accepted": accepted,
+        "refused": refused,
+        "cap": MAX_FOLLOWUP_FETCHES,
+        "budget_remaining": budget_remaining,
+    }
+
+
 if __name__ == "__main__":
+    import pathlib
+
     _args = sys.argv[1:]
     try:
         if not _args:
-            raise ValueError("usage: url_fallback.py <url>")
-        print(json.dumps({"ok": True, **plan_ladder(_args[0])}))
+            raise ValueError(
+                "usage: url_fallback.py <url> | "
+                "url_fallback.py <url> --filter <urls.json> [--already-fetched N]"
+            )
+        _pasted, _rest = _args[0], _args[1:]
+
+        _filter_path = None
+        _already_fetched = 0
+        _i = 0
+        while _i < len(_rest):
+            _a = _rest[_i]
+            if _a == "--filter" and _i + 1 < len(_rest):
+                _filter_path, _i = _rest[_i + 1], _i + 2
+            elif _a == "--already-fetched" and _i + 1 < len(_rest):
+                _already_fetched, _i = int(_rest[_i + 1]), _i + 2
+            else:
+                raise ValueError(f"unrecognized argument: {_a!r}")
+
+        if _filter_path:
+            _urls = json.loads(pathlib.Path(_filter_path).read_text(encoding="utf-8"))
+            print(json.dumps({
+                "ok": True,
+                **filter_candidates(_pasted, _urls, already_fetched=_already_fetched),
+            }))
+        else:
+            print(json.dumps({"ok": True, **plan_ladder(_pasted)}))
     except Exception as _e:
         print(json.dumps({"ok": False, "error": str(_e)}))
         raise SystemExit(1)

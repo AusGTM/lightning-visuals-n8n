@@ -122,7 +122,10 @@ def test_filter_candidates_refuses_an_off_host_url_naming_both_hosts():
 
 
 def test_filter_candidates_accepts_up_to_the_cap_and_refuses_the_remainder():
-    urls = [f"https://gctc.com.au/page-{i}" for i in range(MAX_FOLLOWUP_FETCHES + 1)]
+    # Six literal same-host URLs against a cap of 5 (the <behavior> spec's own numbers,
+    # not derived from MAX_FOLLOWUP_FETCHES) — deriving the URL count from the constant
+    # would make this test track a raised cap instead of catching one.
+    urls = [f"https://gctc.com.au/page-{i}" for i in range(6)]
     result = filter_candidates(ACCEPTANCE_URL, urls, already_fetched=0)
     assert len(result["accepted"]) == MAX_FOLLOWUP_FETCHES
     assert len(result["refused"]) == 1
@@ -130,10 +133,10 @@ def test_filter_candidates_accepts_up_to_the_cap_and_refuses_the_remainder():
 
 
 def test_filter_candidates_already_fetched_reduces_the_accepted_count():
+    # Two literal URLs, already_fetched=4 (the <behavior> spec's own numbers) — accepts
+    # exactly one of the two, because only one fetch remains in the budget of 5.
     urls = [f"https://gctc.com.au/page-{i}" for i in range(2)]
-    result = filter_candidates(
-        ACCEPTANCE_URL, urls, already_fetched=MAX_FOLLOWUP_FETCHES - 1
-    )
+    result = filter_candidates(ACCEPTANCE_URL, urls, already_fetched=4)
     assert len(result["accepted"]) == 1
 
 
