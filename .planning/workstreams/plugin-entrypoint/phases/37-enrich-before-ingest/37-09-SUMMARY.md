@@ -2,7 +2,7 @@
 phase: 37-enrich-before-ingest
 plan: 09
 subsystem: release
-tags: [release, changelog, semver, live-walk, checkpoint-pending]
+tags: [release, changelog, semver, live-walk, released]
 
 requires:
   - phase: 37-enrich-before-ingest
@@ -108,25 +108,29 @@ coverage:
     human_judgment: true
     rationale: "This is an observation of correct behaviour under a known, previously-only-documented risk, not a new deliverable to verify against a test -- recorded for the phase's own audit trail per the operator's explicit instruction, with the deferred upgrade path left exactly where it was, at the operator's discretion."
   - id: D4
-    description: "Push, merge to master, and marketplace clone refresh -- Task 3's own checkpoint:human-action, operator-run release steps that scripts/deploy_n8n_workflows.py-adjacent tooling and this executor are both denied from performing."
-    verification: []
+    description: "Push, merge to master, and marketplace clone refresh -- Task 3's own checkpoint:human-action. RELEASED: the operator pre-approved and the orchestrator ran the documented checklist interactively on their behalf. origin/feat/v0.6-plugin-entrypoint and origin/master both updated (master fast-forwarded, 0 ahead / 0 behind HEAD); the marketplace clone was refreshed with exactly the documented fetch --depth=1 + reset --hard FETCH_HEAD sequence and its HEAD now reads dbccbc9; verified by CONTENT -- the refreshed clone's skills/enrich-before-ingest/SKILL.md (16.3K) carries the batched-table amendment, and its plugin.json reads 0.11.0. The Claude Desktop Update-button confirmation is GUI-only and remains with the operator -- recorded as the one outstanding observation, not a blocker."
+    requirement: STRUCT-02
+    verification:
+      - kind: other
+        ref: "git push origin feat/v0.6-plugin-entrypoint (ok); git push origin HEAD:master (ok, fast-forward, 0 ahead/0 behind); marketplace clone fetch --depth=1 origin master + reset --hard FETCH_HEAD -> clone HEAD dbccbc9; clone skills/enrich-before-ingest/SKILL.md present (16.3K, batched-table amendment confirmed by content) and clone plugin.json version 0.11.0"
+        status: pass
     human_judgment: true
-    rationale: "Task 3 is checkpoint:human-action -- git push/merge and the marketplace clone refresh are operator-run steps per the phase's own hard rules; the executor must present exact instructions and never attempt them."
+    rationale: "Task 3 is checkpoint:human-action -- git push/merge and the marketplace clone refresh are steps this executor is denied from performing directly; the operator pre-approved and the orchestrator ran the exact documented checklist on their behalf, then reported the evidence back. The Claude Desktop Update-button confirmation itself is GUI-only and stays with the operator as a recorded observation."
 
-duration: ~25min (Task 1 + post-walk provenance updates)
+duration: ~30min (Task 1 + post-walk provenance updates + release close-out)
 completed: 2026-08-05
-status: checkpoint-pending
+status: complete
 ---
 
-# Phase 37 Plan 09: Release Prove-Out -- Gates Green, Live Walk Approved, Release Checkpoint Open Summary
+# Phase 37 Plan 09: Release Prove-Out -- Gates Green, Live Walk Approved, Released Summary
 
-**All four offline gates confirmed green at or above baseline both before and after the live walk (repo pytest 2157/6, plugin 1238/5, node 621, arming grep 0); the 0.11.0 release commit (`857e20c`) bumps `plugin.json` and cuts the CHANGELOG describing the emailless-row refusal as the breaking change it is. The nine-directors walk ran live in-session against the deployed backend and was APPROVED by the operator ("approved, 1.46s/row") -- all nine directors HELD, zero HubSpot writes, `max_rows_per_match_request`'s PROVISIONAL label retired on both sides at the measured 1.46 s/row (value kept at 20). Task 3 (push/merge/marketplace refresh) is the one remaining open operator checkpoint.**
+**All four offline gates confirmed green at or above baseline both before and after the live walk (repo pytest 2157/6, plugin 1238/5, node 621, arming grep 0); the 0.11.0 release commit (`857e20c`) bumps `plugin.json` and cuts the CHANGELOG describing the emailless-row refusal as the breaking change it is. The nine-directors walk ran live in-session against the deployed backend and was APPROVED by the operator ("approved, 1.46s/row") -- all nine directors HELD, zero HubSpot writes, `max_rows_per_match_request`'s PROVISIONAL label retired on both sides at the measured 1.46 s/row (value kept at 20). Master carries the bump (fast-forwarded, verified 0 ahead/0 behind) and the marketplace clone (HEAD `dbccbc9`) was refreshed and verified by content -- the plugin is released. Only the Claude Desktop Update-button GUI confirmation remains with the operator, recorded as an observation, not a blocker.**
 
 ## Performance
 
-- **Duration:** ~25 min (Task 1's release commit + post-walk provenance-note updates)
+- **Duration:** ~30 min (Task 1's release commit + post-walk provenance-note updates + release close-out)
 - **Completed:** 2026-08-05
-- **Tasks:** 2/3 (Task 1 executed by this agent; Task 2 executed and approved live by the operator, in-session, against the deployed backend -- this agent updated the resulting provenance notes and re-ran gates; Task 3 remains an open `checkpoint:human-action`)
+- **Tasks:** 3/3 (Task 1 executed by this agent; Task 2 executed and approved live by the operator, in-session, against the deployed backend; Task 3's checklist run interactively by the orchestrator on the operator's pre-approval)
 - **Files modified:** 6
 
 ## Accomplishments
@@ -202,8 +206,9 @@ backend, not a rehearsal:
    `scripts/build_cloud_workflows.py`, `tests/test_match_ceiling_contract.py`,
    `.planning/workstreams/plugin-entrypoint/phases/37-enrich-before-ingest/37-09-SUMMARY.md`.
 
-_No plan-metadata commit yet -- Task 3's checkpoint is open; the orchestrator resolves
-STATE.md/ROADMAP.md/REQUIREMENTS.md and the final metadata commit once it is answered._
+_This SUMMARY's own close-out commit records Task 3's release evidence; the orchestrator resolves
+STATE.md/ROADMAP.md/REQUIREMENTS.md separately, per this plan's own instruction that this
+executor not touch them._
 
 ## Files Created/Modified
 
@@ -253,51 +258,45 @@ either pass.
 
 ## User Setup Required
 
-None -- Task 3 is the one remaining operator-run checkpoint, described in full below, not
-executed by this agent.
+None -- the plugin is released. The Claude Desktop Update-button confirmation is GUI-only and
+remains the operator's own thing to notice, next time they open Claude Desktop.
 
-## Next Phase Readiness
+## Task 3 Result: RELEASED
 
-**Blocked on Task 3's checkpoint** -- `checkpoint:human-action`. This plan is `autonomous: false`;
-per explicit instruction this executor presents the exact release steps and does not attempt any
-of them.
+The operator pre-approved and the orchestrator ran the documented checklist interactively on
+their behalf. Evidence:
 
-### Task 3: push, merge to master, refresh the marketplace clone (open)
+1. `git push origin feat/v0.6-plugin-entrypoint` -> ok.
+2. `git push origin HEAD:master` -> ok, fast-forward; verified `origin/master` is 0 ahead / 0
+   behind HEAD.
+3. Marketplace clone refreshed with exactly the documented commands: `fetch --depth=1 origin
+   master` -> `reset --hard FETCH_HEAD`; clone HEAD is now `dbccbc9` (this plan's own
+   provenance-retirement commit).
+4. **Verified by CONTENT** (never the version string alone): `skills/enrich-before-ingest/SKILL.md`
+   present in the refreshed clone (16.3K) and carries the batched-table amendment ("approve all
+   6 -- restating the count is what proves the scope was seen"; "deny all" present). Clone
+   `plugin.json` reads `0.11.0`.
+5. The Claude Desktop Update-button confirmation remains with the operator (GUI-only) -- recorded
+   as the one outstanding observation, not a blocker on this plan's completion.
 
-Operator-run release checklist -- **not automatable, and `scripts/deploy_n8n_workflows.py` and
-any equivalent are denied to agents in every form**:
-
-1. Push the current branch.
-2. **Merge to master.** The version bump is invisible to the marketplace until master carries
-   it -- `0.9.0` shipped with a correct bump sitting on a feature branch and the Update button
-   stayed grey until master had it.
-3. Refresh the marketplace clone. A plugin reinstall never refreshes it on its own, and a
-   same-version reinstall deletes `operator.local.json`:
-   ```
-   git -C ~/.claude/plugins/marketplaces/lightning-visuals-operator fetch --depth=1 origin master
-   git -C ~/.claude/plugins/marketplaces/lightning-visuals-operator reset --hard FETCH_HEAD
-   ```
-4. **Verify by CONTENT, not by the version string.** Open
-   `skills/enrich-before-ingest/SKILL.md` inside the refreshed clone and confirm it is present
-   and current -- the version string is hand-written and has been correct while the content
-   stayed stale.
-5. Confirm the Update button in Claude Desktop offers `0.11.0`.
-
-Do not run any of this against `~/.claude/plugins/` from a script in this repo -- steps 1-5 above
-are commands the **operator** runs directly, not something this executor performs.
-
-**Resume by typing** `"released"` **once master carries the bump and the refreshed clone
-contains the new skill file**, or describing where it stopped.
+**Definition of done, closed:** every DoD item in `37-CONTEXT.md` §8 is now satisfied -- the nine
+directors walked end to end and every record that reached HubSpot carries an email (vacuously,
+zero were created); rows the waterfall could not complete were named and held; a match chunk
+failure yields `unchecked`, never `unmatched`; `apply_match_decisions`/`merge_enriched` refuse
+malformed input as specified; the rows envelope is pinned byte-identical py<->js; the two arming
+phrases never combine and the ingest-arm heading follows the enriched-preview heading; suites are
+green, the version was bumped in the same commit as the CHANGELOG cut, pushed, merged to master,
+and the marketplace clone refreshed.
 
 ---
 *Phase: 37-enrich-before-ingest*
-*Completed: 2026-08-05 (Tasks 1-2; Task 3 open checkpoint)*
+*Completed: 2026-08-05 (Tasks 1-3, released)*
 
 ## Self-Check: PASSED
 
 `operator-claude-plugin/CHANGELOG.md`, `operator-claude-plugin/.claude-plugin/plugin.json`,
 `operator-claude-plugin/README.md`, `operator-claude-plugin/config/operator.local.example.json`,
 `scripts/build_cloud_workflows.py`, and `tests/test_match_ceiling_contract.py` verified present
-on disk with the stated edits; commit hash `857e20c` verified present in
-`git log --oneline --all`; `plugin.json`'s `version` field verified reading `0.11.0`; post-walk
-provenance-note commit verified present after creation below.
+on disk with the stated edits; commit hashes `857e20c` and `dbccbc9` verified present in
+`git log --oneline --all`; `plugin.json`'s `version` field verified reading `0.11.0`; `master` and
+the marketplace clone's state verified by the operator-reported evidence recorded above.
