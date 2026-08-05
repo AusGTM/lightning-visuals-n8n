@@ -17,8 +17,17 @@ if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
 
 import extraction  # noqa: E402
+import url_fallback  # noqa: E402
 
 EXTRACTION_MD = PLUGIN_ROOT / "skills" / "contact-upload" / "extraction.md"
+
+# The literal bullet headings the URL adapter's two outcomes split on. Structural, not a
+# grep over keywords — a heading rename fails the one helper below rather than breaking
+# every placement assertion separately and silently.
+URL_ADAPTER_HEADING = "## Adapter: a public URL (INGEST-05)"
+NEXT_ADAPTER_HEADING = "## Adapter: operator-supplied screenshots (INGEST-07)"
+FETCH_FAILED_HEADING = "**Fetch failed (a tool-level error).**"
+NOTHING_USABLE_HEADING = "**Fetched but nothing usable.**"
 
 
 def _extraction_md_text() -> str:
@@ -31,6 +40,26 @@ def _fenced_json_blocks(text: str) -> list[dict]:
     extraction.md's example is exactly what this test re-checks against the real validator."""
     blocks = re.findall(r"```json\s*\n(.*?)```", text, re.DOTALL)
     return [json.loads(block) for block in blocks]
+
+
+def _url_adapter_regions():
+    """The URL adapter's full text, and its two outcome-bullet regions ("Fetch failed" vs
+    "Fetched but nothing usable"), sliced structurally at the literal bullet headings.
+    The single shared slice every placement assertion below reads off — if a heading is
+    ever renamed, this helper is the one place the suite fails, rather than each
+    assertion re-deriving the split and breaking in a different, quieter way."""
+    text = _extraction_md_text()
+    start = text.index(URL_ADAPTER_HEADING)
+    end = text.index(NEXT_ADAPTER_HEADING, start)
+    adapter_text = text[start:end]
+
+    fetch_failed_start = adapter_text.index(FETCH_FAILED_HEADING)
+    nothing_usable_start = adapter_text.index(NOTHING_USABLE_HEADING, fetch_failed_start)
+
+    tool_error_region = adapter_text[fetch_failed_start:nothing_usable_start]
+    nothing_usable_region = adapter_text[nothing_usable_start:]
+
+    return adapter_text, tool_error_region, nothing_usable_region
 
 
 def test_extraction_md_exists_and_is_addressed_to_claude_as_instructions():
@@ -122,3 +151,73 @@ def test_extraction_md_states_the_no_automated_screenshot_capture_fence():
     text = _extraction_md_text()
     assert "capture" in text.lower()
     assert "web_fetch" in text
+
+
+# --- Phase 35 Plan 02 Task 3: the URL adapter and url_fallback.py are two hand-maintained
+# sides of one contract with no compiler between them. Each test below pins one bound
+# that a later edit could silently drift past.
+
+
+def test_url_adapter_names_the_url_fallback_script_by_path():
+    adapter_text, _tool_error, _nothing_usable = _url_adapter_regions()
+    assert "scripts/url_fallback.py" in adapter_text
+
+
+def test_url_fallback_py_is_named_only_in_the_nothing_usable_region_never_in_tool_error():
+    """T-35-08: the escalation instruction drifting onto the tool-error branch in a
+    later edit. 35-CONTEXT.md's decision is explicit that the ladder runs on the
+    fetched-but-empty branch ONLY, never on a tool error — escalating past a refusal
+    turns a fence into a suggestion. This fails the moment url_fallback.py is named
+    before the 'Fetched but nothing usable' bullet starts."""
+    _adapter_text, tool_error_region, nothing_usable_region = _url_adapter_regions()
+    assert "url_fallback.py" not in tool_error_region, (
+        "url_fallback.py must not be named in the tool-error region — the ladder does "
+        "not run on a tool error"
+    )
+    assert "url_fallback.py" in nothing_usable_region
+
+
+def test_tool_error_region_states_that_branch_ends_there():
+    _adapter_text, tool_error_region, _nothing_usable = _url_adapter_regions()
+    assert "ladder" in tool_error_region.lower()
+    assert "does not run" in tool_error_region.lower()
+
+
+def test_url_adapter_quotes_the_same_cap_url_fallback_enforces():
+    """T-35-09: the operator is quoted a cap that does not match the enforced cap. The
+    number extraction.md shows the operator is imported from url_fallback.py here, never
+    typed into this test — the same drift class Phase 34's columnMapAliasParity.test.mjs
+    guards one layer down, where two alias tables agree by hand instead of by
+    construction.
+
+    Pinned to the actual cap-quoting phrase, not a bare `str(cap) in text` substring
+    check: this section also contains `(INGEST-06)`, so a bare digit search on cap=6
+    passes by coincidence on an unrelated requirement ID rather than on genuine
+    cap-quoting text — caught by this plan's own mandated red-check. Whitespace is
+    normalized before matching because markdown line-wraps the phrase across lines."""
+    adapter_text, _tool_error, _nothing_usable = _url_adapter_regions()
+    normalized = " ".join(adapter_text.split())
+    expected = f"at most {url_fallback.MAX_FOLLOWUP_FETCHES} follow-up fetches"
+    assert expected in normalized
+
+
+def test_url_adapter_states_the_same_host_bound():
+    adapter_text, _tool_error, _nothing_usable = _url_adapter_regions()
+    assert "same-host" in adapter_text.lower() or "same host" in adapter_text.lower()
+
+
+def test_url_adapter_states_the_no_same_url_retry_rule():
+    adapter_text, _tool_error, _nothing_usable = _url_adapter_regions()
+    assert "do not re-fetch the same url" in adapter_text.lower()
+
+
+def test_client_rendered_verdict_is_nowhere_in_extraction_md():
+    """T-35-10: the unevidenced 'likely a client-rendered page' verdict returning and
+    being repeated to an operator as fact. Live evidence (35-CONTEXT.md Section 2): the
+    contract handed the model that conclusion, the Desktop run repeated it verbatim to
+    the operator, and the wp-json probe proved it wrong — the content was server-side
+    available the whole time, at a URL url_fallback.py itself can build. The fix is not
+    a better guess; it is no guess, checked against the whole file, not just the section
+    the verdict used to live in."""
+    text = _extraction_md_text()
+    assert "client-rendered" not in text.lower()

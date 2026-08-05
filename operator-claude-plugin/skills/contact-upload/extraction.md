@@ -193,8 +193,8 @@ generic "couldn't get that page" loses the distinction the operator needs:
   byte-identical content and a tighter prompt changes nothing. Instead:
 
   1. Run `python3 scripts/url_fallback.py <the URL the operator pasted>` and show the operator
-     every candidate URL it prints, in order, with the cap it names — before fetching any of
-     them.
+     every candidate URL it prints, in order, with the cap it names (at most 5 follow-up
+     fetches total, across the whole ladder, not per rung) — before fetching any of them.
   2. Fetch only the candidates the operator approves, in the order shown, stopping at the first
      one that yields people.
   3. If a sitemap candidate's content is itself a list of page URLs, write that list to a file
