@@ -12,10 +12,10 @@ last_activity: 2026-08-05
 last_activity_desc: Phase 35 plan 02 complete — provenance/import-guard/contract-pin tests built; a genuine cap-parity test bug (coincidental digit match on INGEST-06) caught live by the plan's own red-check and fixed
 progress:
   total_phases: 12
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 57
-  completed_plans: 53
-  percent: 63
+  completed_plans: 56
+  percent: 67
 ---
 
 # Project State

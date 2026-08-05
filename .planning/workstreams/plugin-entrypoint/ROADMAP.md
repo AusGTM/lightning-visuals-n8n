@@ -58,7 +58,7 @@ phase directories never collide with phases 20–22.**
 - [x] **Phase 32: LLM-Free Sweep Trigger** - The unattended sweep fires under real cron with no credentials and no LLM, and a trigger that cannot run says so loudly instead of impersonating a healthy backend
 - [x] **Phase 33: Durable Operator State** - Config and the dashboard pointer survive a plugin update on their own, so an operator never runs a terminal command to keep working after installing a new version
 - [x] **Phase 34: Header Mapping Tolerance** - A spreadsheet whose headers the backend does not recognise is corrected with the operator, not silently guessed at and not dead-ended
-- [ ] **Phase 35: URL Structured-Representation Fallback** - A page whose HTML yields nothing is retried against the site's own structured representation before the plugin gives up
+- [x] **Phase 35: URL Structured-Representation Fallback** - A page whose HTML yields nothing is retried against the site's own structured representation before the plugin gives up
 
 ## Phase Details
 
@@ -476,6 +476,7 @@ the operator can act on it without leaving the conversation.
 | 30. Review-Queue Triage | 7/7 | Complete | 2026-08-04 (RB-9 close: REVIEW-04 + D-31 probe) |
 | 33. Durable Operator State | 4/4 | Complete | 2026-08-04 (RB-10 walked: migration proven, pointer defect found + fixed in 0.7.2) |
 | 34. Header Mapping Tolerance | 4/4 | Complete | 2026-08-05 (0.9.0; backend deployed + 4 workflows bounced, running Map Columns verified; **UAT 2.2 walked PASS**) |
+| 35. URL Structured-Representation Fallback | 3/3 | Complete | 2026-08-05 (0.10.0; gctc.com.au walked live — 0 people from HTML, 9 directors from rung 1; tool-error branch runs no ladder) |
 
 ## Coverage
 
