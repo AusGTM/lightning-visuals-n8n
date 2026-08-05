@@ -183,3 +183,8 @@ None - no external service configuration required.
 ---
 *Phase: 37-enrich-before-ingest*
 *Completed: 2026-08-05*
+
+## Self-Check: PASSED
+
+All 9 files created/modified by this plan verified present on disk; all 4 commit hashes
+(`19d00ff`, `2fe94cb`, `5d3edcd`, `b762a3b`) verified present in `git log --oneline --all`.
