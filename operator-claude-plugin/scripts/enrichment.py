@@ -58,6 +58,24 @@ _OBJECT_TYPES = {
     "company": "companies", "companies": "companies", "0-2": "companies",
 }
 
+# The frozen lookup allowlist for a rows envelope's per-event projection. These are the
+# ONLY row fields that cross the boundary on a rows/match envelope, because they are the
+# only ones the backend's `Build Identity` reads into `identity_keys` and the only ones
+# the match search filters on (37-CONTEXT §7). Widening this tuple widens what leaves the
+# operator's machine — a row's `phone`, `jobtitle` and `linkedin_url` never cross it.
+MATCH_LOOKUP_KEYS = ("email", "firstname", "lastname", "company")
+
+
+def _lookup_value(row, key):
+    """A row's value for `key`, normalized to `None` when absent, `None`, or a string
+    that strips to empty — never the string `"None"`."""
+    value = row.get(key)
+    if value is None:
+        return None
+    if isinstance(value, str) and not value.strip():
+        return None
+    return value
+
 
 class ProviderSelectionError(Exception):
     """Raised when a selection names a provider the backend does not recognize.
@@ -143,11 +161,21 @@ def build_envelope(spec, providers):
     `spec` is one of:
       {"record_ids": [...], "object_type": "companies"}  -> an events array
       {"list": "<name>", "object_type": "contacts"}      -> the identifier, verbatim
+      {"rows": [...], "object_type": "contacts"}         -> a `mode: "propose"` events array
       {"view": "<name>"}                                 -> refused (amendment #7)
 
     A list identifier is carried through untouched: the client does not resolve it, does
     not count it, and does not fabricate a count (D-01, D-02). Every form carries
     `providers`.
+
+    A ROWS FORM DESCRIBES RECORDS THAT ARE NOT IN HUBSPOT (37-CONTEXT §5). Because of
+    that, `mode: "propose"` is set inside this branch only — never read from `spec`,
+    never accepted as a parameter — so the backend's write mode is structurally
+    unreachable from a rows form rather than being a caller's responsibility to withhold.
+    Only `MATCH_LOOKUP_KEYS` cross the boundary per row; every other row key (`phone`,
+    `jobtitle`, `linkedin_url`) is dropped, because those are the only fields the
+    backend's `Build Identity` reads into `identity_keys` and the match search filters
+    on.
 
     THE LIST ENVELOPE IS NESTED, and it has to be (D-19). `n8n/code/listExpansion.js`
     reads `isPlainObject(body.list)` and then `body.list.name` / `body.list.objectType`.
@@ -172,6 +200,29 @@ def build_envelope(spec, providers):
             "name": spec["list"],
             "objectType": normalize_object_type(spec.get("object_type")),
         }
+        return envelope
+
+    if "rows" in spec:
+        rows = spec["rows"]
+        if not isinstance(rows, (list, tuple)) or not rows:
+            raise RecordSpecError(
+                "No rows were given, so there is nothing to match or enrich. Provide at "
+                "least one row."
+            )
+        object_type = normalize_object_type(spec.get("object_type"))
+        events = []
+        for row in rows:
+            if not isinstance(row, dict) or not str(row.get("row_id") or "").strip():
+                raise RecordSpecError(
+                    "A row without a `row_id` can never be matched back to its response "
+                    "— `row_id` is the join key every downstream verdict is keyed on."
+                )
+            event = {"row_id": str(row["row_id"]), "objectType": object_type}
+            for key in MATCH_LOOKUP_KEYS:
+                event[key] = _lookup_value(row, key)
+            events.append(event)
+        envelope["mode"] = "propose"
+        envelope["events"] = events
         return envelope
 
     if "record_ids" in spec:
