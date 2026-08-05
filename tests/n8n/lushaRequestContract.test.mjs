@@ -110,9 +110,20 @@ test("Lusha Enrich body: omits email key when identity_keys.email is null, keeps
   assert.deepEqual(Object.keys(body.contacts[0]).sort(), ["linkedinUrl"]);
 });
 
-test("Lusha Enrich body: neither email nor linkedin_url present -> empty contacts array (skip-not-retry, never a malformed element)", () => {
+// Phase 36-04 Task 3 (36-CONTEXT.md §4 decision 3): this test's premise is DELIBERATELY
+// reversed here — it used to pin "no email/linkedin -> empty contacts" for a
+// name+company+domain identity, back when this node sent only the narrow email/linkedin
+// set. The whole point of the propose lane (Phase 36) is a row with a name and a company
+// and no email; the cloud Lusha request now sends the same six-key identity set
+// lushaContactBody() supports, so this exact identity now produces a real request, not a
+// skip. See the rewritten history comment on the "Lusha Enrich" node build for the full
+// reversal reasoning.
+test("Lusha Enrich body: name+company+domain identity with no email/linkedin now enriches (Phase 36-04 reversal)", () => {
   const body = buildBody({ firstName: "X", lastName: "Y", companyName: "Z", domain: "z.com" }, ["email"]);
-  assert.deepEqual(body, { contacts: [] });
+  assert.deepEqual(body, {
+    contacts: [{ firstName: "X", lastName: "Y", companyName: "Z", companyDomain: "z.com" }],
+    reveal: ["emails"],
+  });
 });
 
 test("Lusha Enrich body: still reads identity by node name (Enrichment Gate), never bare $json", () => {
@@ -137,6 +148,27 @@ const PARITY_MATRIX = [
   { identity: { email: "a@b.com" }, missing: ["email", "mobilephone"] },
   { identity: { linkedin_url: "https://linkedin.com/in/a" }, missing: ["jobtitle"] },
   { identity: {}, missing: ["mobilephone"] },
+  // Phase 36-04 Task 3 (36-CONTEXT.md §4 decision 3): widened matrix. The cloud
+  // expression now mirrors lushaContactBody()'s OWN emptiness check exactly
+  // (Object.keys(contact).length === 0) rather than a hand-picked subset of OR clauses —
+  // that is what gives total parity across every combination below, not just these five.
+  // name+company-only (no email, no linkedin) — the core propose-lane case.
+  { identity: { lastName: "Doe", companyName: "Gold Coast Turf Club" }, missing: ["email"] },
+  // domain-only.
+  { identity: { domain: "goldcoastturfclub.example" }, missing: ["email", "mobilephone"] },
+  // name+company+domain together.
+  {
+    identity: { firstName: "Jane", lastName: "Doe", companyName: "Gold Coast Turf Club", domain: "gctc.example" },
+    missing: ["email"],
+  },
+  // A first-name-only identity: lushaContactBody() has no field-pairing requirement, so
+  // even a lone firstName produces a non-empty request (a partial name is arguably not a
+  // real identity, but that judgment belongs to an EARLIER gate — Enrichment Gate's own
+  // skip logic — not to this expression, which exists only to mirror the module exactly).
+  { identity: { firstName: "Jane" }, missing: [] },
+  // Empty identity — the pre-existing "no identity at all" no-op case, still asserted
+  // through the parity matrix rather than only the standalone test above it.
+  { identity: {}, missing: [] },
 ];
 
 test("Lusha Enrich body: CLOUD expression output deep-equals lushaContactBody() for a matrix of inputs (anti-drift)", () => {

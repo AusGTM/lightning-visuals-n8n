@@ -4059,14 +4059,26 @@ def build_enrichment_cloud():
     # expression's output deep-equals the shared module's for a matrix of inputs, which
     # is what keeps the two from silently diverging.
     #
-    # History: this CLOUD node deliberately keeps sending the NARROW identity set
-    # (email + linkedinUrl only) that was live-confirmed for it pre-migration against the
-    # retired v2 endpoint (firstName/lastName/companyName/companyDomain/domain/
-    # phoneNumber/jobTitle all 400'd there). The LOCAL-LIVE builder and the dry-run
-    # harness send the broader name+company set they already sent. That split predates
-    # this migration and is carried forward deliberately, not silently unified — see
-    # docs/LUSHA-V3-CONTRACT.md's accepted-properties table (§3) for what would decide
-    # whether it can be unified later.
+    # History (SUPERSEDED — reversed 2026-08-05 for Phase 36, see below): this CLOUD node
+    # used to deliberately keep sending the NARROW identity set (email + linkedinUrl
+    # only), live-confirmed for it pre-migration against the retired v2 endpoint
+    # (firstName/lastName/companyName/companyDomain/domain/phoneNumber/jobTitle all
+    # 400'd there). The LOCAL-LIVE builder and the dry-run harness sent the broader
+    # name+company set they already sent, and that split predated this migration and was
+    # carried forward deliberately, not silently unified.
+    #
+    # Reversal (36-CONTEXT.md §4 decision 3): docs/LUSHA-V3-CONTRACT.md §3 confirms v3
+    # accepts the full six-key identity set on THIS endpoint (search-and-enrich) — the
+    # narrow set was never a v3 constraint, only a carried-forward v2 scar. The
+    # LOCAL-LIVE builder already sends the broad set today, so this node was the one
+    # outlier. v3 bills roughly one flat credit per contact regardless of how many
+    # identity fields are sent (docs/LUSHA-V3-CONTRACT.md §7), so the wider identity
+    # costs nothing extra. Reversed because the whole point of the propose lane
+    # (Phase 36) is a row that has a name and a company and no email — the case this
+    # narrow set silently dropped. The expression below is still a hand-written mirror
+    # of the module, not a require() of it — n8n expressions cannot import a module —
+    # and tests/n8n/lushaRequestContract.test.mjs is still the only thing keeping them
+    # equal; its parity matrix now covers the widened field set.
     # Plan 04 Task 2b: when the row's existingRecord already carries a stored
     # lusha_contact_id, the CONFIRMED-FREE stored-id path takes over — POST
     # /v3/contacts/enrich, body {ids:[storedId], reveal} (§8.1: a genuinely different
@@ -4095,7 +4107,11 @@ def build_enrichment_cloud():
             "const c = {}; "
             "if (id.email) c.email = id.email; "
             "if (id.linkedin_url) c.linkedinUrl = id.linkedin_url; "
-            "const hasIdentity = !!(c.email || c.linkedinUrl); "
+            "if (id.firstName) c.firstName = id.firstName; "
+            "if (id.lastName) c.lastName = id.lastName; "
+            "if (id.companyName) c.companyName = id.companyName; "
+            "if (id.domain) c.companyDomain = id.domain; "
+            "const hasIdentity = Object.keys(c).length > 0; "
             "return JSON.stringify(hasIdentity ? { contacts: [c], reveal } : { contacts: [] }); "
             "})() }}"
         ))
