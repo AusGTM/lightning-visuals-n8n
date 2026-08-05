@@ -342,27 +342,43 @@ def assemble_preview(spec, providers, plan, estimate, verdicts,
 if __name__ == "__main__":
     import sys
     from datetime import date
+    from pathlib import Path
 
     import config_gate
 
     if len(sys.argv) not in (2, 3):
         print(json.dumps({
             "ok": False,
-            "error": "usage: preview_enrichment.py <spec-json> [providers-json]",
+            "error": (
+                "usage: preview_enrichment.py <spec-json-or-path-to-spec-file> "
+                "[providers-json]"
+            ),
         }))
         raise SystemExit(1)
 
     try:
-        _spec = json.loads(sys.argv[1])
+        # A rows spec (Phase 37) can carry 200+ rows — too large for argv. If
+        # argv[1] names a FILE THAT EXISTS, read the spec from it; otherwise treat
+        # it as a JSON literal, exactly as before. Guarded on existence rather than
+        # shape: a JSON literal that happens to also name a real path is not a case
+        # worth handling, and a mistyped path falls through to the literal parser,
+        # which names the actual bad text — more useful than a file-not-found.
+        _spec_arg = sys.argv[1]
+        _spec_text = (
+            Path(_spec_arg).read_text(encoding="utf-8")
+            if Path(_spec_arg).exists()
+            else _spec_arg
+        )
+        _spec = json.loads(_spec_text)
         _override = json.loads(sys.argv[2]) if len(sys.argv) == 3 else None
         _cfg = config_gate.load_config()
         _providers = enrichment.resolve_providers(_override, _cfg)
         _ceiling = chunking.chunk_ceiling(_cfg)
         _plan = chunking.plan_chunks(_spec, _ceiling)
         _table = cost_guard.load_rates()
-    except (json.JSONDecodeError, config_gate.ConfigError, cost_guard.CostRateError,
-            chunking.ChunkPlanError, enrichment.ProviderSelectionError,
-            enrichment.RecordSpecError) as _e:
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError, config_gate.ConfigError,
+            cost_guard.CostRateError, chunking.ChunkPlanError,
+            enrichment.ProviderSelectionError, enrichment.RecordSpecError) as _e:
         print(json.dumps({"ok": False, "error": str(_e)}))
         raise SystemExit(1)
 

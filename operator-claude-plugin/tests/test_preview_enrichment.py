@@ -14,13 +14,22 @@ than passing trivially:
 Every function under test is pure, so nothing here needs a transport — but the autouse
 `no_network` guard is in force regardless.
 """
+import json
+import os
 import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
 
 import chunking
 import cost_guard
 import enrichment
 import preview_enrichment
 from preview import build_preview, tabular_cost_block
+
+SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
+CONFIG_DIR = Path(__file__).resolve().parent.parent / "config"
 
 IDS_SPEC = {"record_ids": ["101", "102", "103"], "object_type": "companies"}
 LIST_SPEC = {"list": "Named Targets", "object_type": "contacts"}
@@ -410,3 +419,87 @@ def test_cost_block_is_identical_for_a_rows_spec_and_a_record_id_spec_of_equal_s
     rows_block = _preview(rows_spec_companies, providers=["lusha"])["blocks"]["cost"]
     ids_block = _preview(IDS_SPEC, providers=["lusha"])["blocks"]["cost"]
     assert rows_block == ids_block
+
+
+# ------------------------------------------------------ 37-05 Task 2: file-path argv
+#
+# A real subprocess against an ISOLATED plugin root (non-negotiable 1) — never the
+# in-process function — for anything about what the operator's CLI call actually does.
+# The WHOLE scripts/ tree is copied: preview_enrichment imports chunking/cost_guard/
+# enrichment, and its __main__ path also imports config_gate, so a selective copy would
+# die on ImportError, same lesson as `_run_header_cli`.
+
+
+def _run_preview_cli(tmp_path, spec_arg, providers_arg=None, ceiling=2):
+    """Isolated plugin root + a literal env dict with a fake HOME — the operator's own
+    gitignored config is never read (non-negotiable 5). `config/cost_rates.json` is the
+    plugin's own committed rate table, copied verbatim; `operator.local.json` is written
+    fresh here, carrying no webhook_secret, so `cost_guard.fetch_balances` degrades to
+    "unavailable" locally rather than attempting a real network call.
+    """
+    root = tmp_path / "plugin"
+    shutil.copytree(SCRIPTS_DIR, root / "scripts")
+    (root / "config").mkdir(parents=True)
+    shutil.copyfile(CONFIG_DIR / "cost_rates.json", root / "config" / "cost_rates.json")
+    (root / "config" / "operator.local.json").write_text(json.dumps({
+        "n8n_url": "https://fake-tenant.n8n.cloud",
+        "max_records_per_chunk": ceiling,
+    }))
+
+    fake_home = tmp_path / "home"
+    fake_home.mkdir(parents=True, exist_ok=True)
+    run_env = {"PATH": os.environ.get("PATH", ""), "HOME": str(fake_home)}
+
+    argv = [sys.executable, str(root / "scripts" / "preview_enrichment.py"), spec_arg]
+    if providers_arg is not None:
+        argv.append(providers_arg)
+
+    proc = subprocess.run(argv, capture_output=True, text=True, env=run_env)
+    parsed = json.loads(proc.stdout) if proc.stdout.strip() else None
+    return proc.returncode, parsed, proc.stdout
+
+
+def test_a_200_row_spec_file_is_read_and_previewed_with_the_expected_chunk_count(tmp_path):
+    rows = [{"row_id": f"row-{i}", "email": f"p{i}@x.com"} for i in range(200)]
+    spec_path = tmp_path / "spec.json"
+    spec_path.write_text(json.dumps({"rows": rows, "object_type": "contacts"}))
+
+    returncode, parsed, stdout = _run_preview_cli(tmp_path, str(spec_path), ceiling=2)
+
+    assert returncode == 0, stdout
+    assert parsed["ok"] is True
+    assert parsed["preview"]["chunk_count"] == 100  # 200 rows / ceiling 2
+    assert parsed["preview"]["record_count"] == 200
+
+
+def test_the_json_literal_form_still_works_as_a_subprocess(tmp_path):
+    literal = json.dumps({"record_ids": ["1", "2", "3"], "object_type": "companies"})
+    returncode, parsed, stdout = _run_preview_cli(tmp_path, literal, ceiling=2)
+
+    assert returncode == 0, stdout
+    assert parsed["ok"] is True
+    assert parsed["preview"]["record_count"] == 3
+
+
+def test_a_mistyped_path_falls_through_to_the_literal_parser_naming_the_bad_text(tmp_path):
+    """A path that does not exist is NOT a file-not-found case — it is treated as a
+    JSON literal, so the error names the actual bad text rather than a new failure
+    class the operator has never seen from this CLI before."""
+    returncode, parsed, stdout = _run_preview_cli(tmp_path, "/no/such/spec/file.json")
+
+    assert returncode != 0
+    assert parsed["ok"] is False
+    assert "error" in parsed
+    assert "Traceback" not in stdout
+
+
+def test_a_malformed_spec_file_produces_the_same_structured_error_never_a_traceback(tmp_path):
+    spec_path = tmp_path / "bad_spec.json"
+    spec_path.write_text("{not valid json")
+
+    returncode, parsed, stdout = _run_preview_cli(tmp_path, str(spec_path))
+
+    assert returncode != 0
+    assert parsed["ok"] is False
+    assert isinstance(parsed["error"], str) and parsed["error"]
+    assert "Traceback" not in stdout
