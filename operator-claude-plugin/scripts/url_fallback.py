@@ -155,6 +155,32 @@ def filter_candidates(pasted_url, urls, already_fetched=0):
     }
 
 
+def give_up_message(pasted_url, attempts):
+    """The final give-up paragraph: what was tried, in order, and NOTHING about why the
+    page was empty.
+
+    The rule this function enforces: it reports what was tried and draws no conclusion
+    about the cause. The previous version of this contract handed the model a rendering
+    verdict ("likely a client-rendered page this tool cannot execute"); the live GCTC
+    walk (35-CONTEXT.md §2) repeated that verdict back to the operator, and it was
+    wrong — the content was server-side available the whole time, at a URL this very
+    module can build. `attempts` is `[{"url", "outcome"}, ...]`, the model's own record
+    of what it tried after the pasted URL fetched but came back empty.
+    """
+    lines = [f"Could not find usable contact or company data at {pasted_url}."]
+    if attempts:
+        lines.append("Also tried, in this order:")
+        for attempt in attempts:
+            lines.append(f"- {attempt['url']} — {attempt['outcome']}")
+    else:
+        lines.append("No follow-up candidate was attempted.")
+    lines.append(
+        "Next step: supply a different page for this content, paste the content "
+        "directly, or hand over a screenshot of it."
+    )
+    return "\n".join(lines)
+
+
 if __name__ == "__main__":
     import pathlib
 
@@ -163,11 +189,13 @@ if __name__ == "__main__":
         if not _args:
             raise ValueError(
                 "usage: url_fallback.py <url> | "
-                "url_fallback.py <url> --filter <urls.json> [--already-fetched N]"
+                "url_fallback.py <url> --filter <urls.json> [--already-fetched N] | "
+                "url_fallback.py <url> --attempted <attempted.json>"
             )
         _pasted, _rest = _args[0], _args[1:]
 
         _filter_path = None
+        _attempted_path = None
         _already_fetched = 0
         _i = 0
         while _i < len(_rest):
@@ -176,6 +204,8 @@ if __name__ == "__main__":
                 _filter_path, _i = _rest[_i + 1], _i + 2
             elif _a == "--already-fetched" and _i + 1 < len(_rest):
                 _already_fetched, _i = int(_rest[_i + 1]), _i + 2
+            elif _a == "--attempted" and _i + 1 < len(_rest):
+                _attempted_path, _i = _rest[_i + 1], _i + 2
             else:
                 raise ValueError(f"unrecognized argument: {_a!r}")
 
@@ -185,6 +215,9 @@ if __name__ == "__main__":
                 "ok": True,
                 **filter_candidates(_pasted, _urls, already_fetched=_already_fetched),
             }))
+        elif _attempted_path:
+            _attempts = json.loads(pathlib.Path(_attempted_path).read_text(encoding="utf-8"))
+            print(json.dumps({"ok": True, "message": give_up_message(_pasted, _attempts)}))
         else:
             print(json.dumps({"ok": True, **plan_ladder(_pasted)}))
     except Exception as _e:
