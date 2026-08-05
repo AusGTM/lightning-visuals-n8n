@@ -14,8 +14,8 @@ affects: [37-08]
 
 actuals:
   tokens: 10800
-  tasks: 1
-  commits: 1
+  tasks: 2
+  commits: 2
 
 tech-stack:
   added: []
@@ -61,21 +61,21 @@ coverage:
         status: pass
     human_judgment: false
 
-duration: ~25min (Task 1 only -- paused at the Task 2 checkpoint)
-completed: null
-status: partial-checkpoint-pending
+duration: ~25min (Task 1) + checkpoint resolution
+completed: 2026-08-05
+status: complete
 ---
 
 # Phase 37 Plan 07: queue_handoff_ids -- Landed Ids Off the Ledger, Never the Report Rows Summary
 
-**Task 1 shipped and committed: `report.queue_handoff_ids` reads the reconciled ledger plus HubSpot Create's own write-node output to return every id a contact-upload run actually landed, at any batch size, never guessing a placeholder id. Task 2 is a blocking `checkpoint:decision` on the transport that sets `lv_enrichment_requested` -- execution paused here awaiting the operator's choice.**
+**`report.queue_handoff_ids` reads the reconciled ledger plus HubSpot Create's own write-node output to return every id a contact-upload run actually landed, at any batch size, never guessing a placeholder id. Task 2's transport decision resolved to option-b, delegated to and already landed in Phase 36 plan 36-07: the poller handoff is automatic at create time, no client code and no third arming phrase.**
 
 ## Performance
 
-- **Duration:** ~25 min (Task 1 only)
-- **Completed:** in progress -- paused at checkpoint
-- **Tasks:** 1/2 (Task 2 is the blocking decision checkpoint, not yet resolved)
-- **Files modified:** 2 (1 created, 1 modified)
+- **Duration:** ~25 min (Task 1) + checkpoint resolution (Task 2 resolved by delegation, no additional client execution time)
+- **Completed:** 2026-08-05
+- **Tasks:** 2/2 (Task 2 resolved as a decision + delegation, not a code task in this plan)
+- **Files modified:** 2 (1 created, 1 modified) -- Task 2 touched no file in this plan; its resolution landed entirely in 36-07
 
 ## Accomplishments
 
@@ -106,8 +106,13 @@ status: partial-checkpoint-pending
 ## Task Commits
 
 1. **Task 1: queue_handoff_ids -- the ids that actually landed, read off the ledger** - `7d6fa28` (feat)
+2. **Task 2: choose the transport that sets `lv_enrichment_requested`** - decision only,
+   no commit in THIS plan. Resolved to **option-b**, delegated to and landed in Phase 36
+   plan 36-07: `bed5ee4` (feat, the stamp itself), `2455e70` (test, the two negative
+   pins), `fef4bf4` (docs, 36-07's own SUMMARY).
 
-_No separate plan-metadata commit yet -- this SUMMARY and STATE.md updates are for the orchestrator to commit per `final_commit` once the checkpoint resolves and the phase concludes._
+_No separate plan-metadata commit for Task 1 alone -- this SUMMARY carries both tasks'
+resolution, committed once, per `final_commit`._
 
 ## Files Created/Modified
 
@@ -154,51 +159,94 @@ restored code and full suites were re-verified green before committing.
 
 ## Issues Encountered
 
-None for Task 1.
+None.
 
 ## User Setup Required
 
-**Task 2's checkpoint is a decision, not a setup step -- see below.**
+None -- no external service configuration required. The poller handoff is
+automatic at create time (see Task 2 resolution below); no operator action, no
+arming phrase.
 
-## CHECKPOINT: Task 2 -- choose the transport that sets `lv_enrichment_requested`
+## Task 2 Resolution: `lv_enrichment_requested` transport -- option-b, delegated and landed
 
-Execution paused here. Task 2 is `type="checkpoint:decision" gate="blocking"` and
-is not resolved. The full checkpoint state (options, evidence, awaiting) is
-returned in the executor's structured reply to the orchestrator, not restated in
-full here to avoid drift between two copies of the same decision -- see the
-executor's `CHECKPOINT REACHED` response for this run.
+The operator selected **option-b**: stamp `lv_enrichment_requested = "true"` in the
+ingest lane's own create payload (backend, `scripts/build_cloud_workflows.py`),
+rather than option-a (hand created ids to `enrich-records`, spending credits
+immediately behind a third arming phrase) or option-c (report ids, operator
+flags them in HubSpot by hand).
 
-In short: `queue_handoff_ids` (Task 1) produces the created/updated ids. Nothing
-in this plan wires them to any transport that sets
-`lv_enrichment_requested = true` -- that choice is the operator's, among:
+**Rationale (recorded verbatim from the operator's decision):**
+- **Zero run-time credits.** The stamp costs nothing when the row is created --
+  it queues a flag, it does not enrich. The existing 15-minute scheduled poller
+  (already deployed, already sweeping `lv_org_type`/`lv_produces_content` gaps)
+  picks the flag up on its own schedule.
+- **No third arming phrase.** Option-a would have added a third grant in the
+  same conversation turn right after the arming and preview grants, weakening
+  §6's two-phrase design (each phrase should guard one distinct irreversible
+  action at the moment it happens). Option-b needs no grant at all -- the
+  operator never says a word about it.
+- **Matches §13(b)'s stated mechanism exactly.** 37-CONTEXT.md's governing
+  amendment names "set `enrichment_requested = true` on the created records ...
+  so the existing scheduled poller sweeps" as the intended fix -- option-b IS
+  that fix, not an approximation of it.
 
-- **option-a** -- hand created ids to the existing `enrich-records` lane (zero
-  backend change, spends credits immediately, adds a third arming phrase).
-- **option-b** -- set the property in the ingest lane's create payload
-  (`scripts/build_cloud_workflows.py`, backend work riding Phase 36's
-  already-scheduled deploy, costs nothing at run time, needs no arming).
-- **option-c** -- report the ids and let the operator flag them in HubSpot
-  manually (no code, but reintroduces the non-technical-operator failure mode
-  v0.6 exists to remove).
+**This is backend work in a client-scoped phase**, so per the checkpoint's own
+`resume-signal` it was handed to the Phase 36 amendment riding its
+already-scheduled deploy, not executed inside this plan. It has since **landed**:
+
+- `bed5ee4` (feat, 36-07) -- `DECIDE_CLOUD`'s create-only branch now stamps
+  `properties.lv_enrichment_requested = "true"` on a created contact's payload
+  (string `"true"`, matching the poller's `EQ` filter). Lives inside the branch
+  already gated by `ALLOW_HUBSPOT_CREATE` -- a work-queue flag, not a second
+  write gate. Regenerated `n8n/wf_contact_ingest_cloud.json` (only artifact
+  that moved).
+- `2455e70` (test, 36-07) -- two negative pins beside 36-07 Task 1's own tests:
+  exactly one `lv_enrichment_requested = "true"` assignment (a second, hoisted
+  above the create branch, would re-queue already-enriched records on every
+  update), and the unprefixed `enrichment_requested` spelling is never assigned
+  onto the payload -- the same trap this plan's own Task 1 guarded against
+  client-side (T-37-31), now pinned backend-side too.
+- `fef4bf4` (docs, 36-07) -- 36-07's own SUMMARY.md.
+
+**Standing backstop:** 36-07's cons (every created contact gets queued,
+including ones pre-ingest already fully enriched, relying on the poller's own
+staleness gate to decide whether to act) is accepted per the checkpoint's own
+threat register (T-37-30, disposition `accept`) -- the poller already applies
+that same staleness gate to every other queued record. Live verification of
+that gating behavior is deferred to 37-09's operator walk-through, not this
+plan.
+
+**For 37-08 (skill wording), explicitly:** the poller handoff is **automatic**
+at create time. The skill text must say so plainly and must NOT describe a
+third arming phrase, a confirmation step, or any operator action for the
+handoff itself -- none exists. `queue_handoff_ids` (this plan's Task 1) remains
+available for a future direct-enrichment path (option-a's lane) should that
+ever be revisited, but nothing in the current skill flow calls it.
 
 ## Next Phase Readiness
 
-- Suite counts after Task 1 (all baselines held or exceeded by exactly the 8
-  new tests): `operator-claude-plugin/tests/ -q` -> 1215 passed, 5 skipped
-  (baseline post-37-05: 1207/5); repo-root `.venv/bin/python -m pytest -q` ->
-  2130 passed, 6 skipped (baseline 2122/6); `node --test tests/n8n/*.test.mjs`
-  -> 621 pass, unchanged; `grep -c 'ALLOW_HUBSPOT_[A-Z_]* = "true"' n8n/*.json`
-  -> 0 for every file.
-- `queue_handoff_ids` is ready for 37-08's skill wording once Task 2 resolves
-  which transport calls it.
-- Blocked on the Task 2 decision -- cannot proceed to a final phase commit or
-  STATE.md/ROADMAP.md update until the operator selects a transport.
+- Quick gates re-run after the 36-07 delegation landed:
+  `.venv/bin/python -m pytest operator-claude-plugin/tests/test_queue_handoff.py -q`
+  -> 8 passed; `grep -c 'ALLOW_HUBSPOT_[A-Z_]* = "true"' n8n/*.json` -> 0 for
+  every file.
+- Full suite counts as of Task 1's own commit (unaffected by 36-07, which
+  touched no file this plan owns): `operator-claude-plugin/tests/ -q` -> 1215
+  passed, 5 skipped (baseline post-37-05: 1207/5); repo-root
+  `.venv/bin/python -m pytest -q` -> 2130 passed, 6 skipped at Task 1's commit,
+  2134/6 after 36-07's own +4 tests landed on top (per the coordinator's
+  reported current baseline); `node --test tests/n8n/*.test.mjs` -> 621 pass,
+  unchanged throughout.
+- `queue_handoff_ids` and the now-automatic poller handoff are both ready for
+  37-08's skill wording.
+- No blockers. Plan complete.
 
 ---
 *Phase: 37-enrich-before-ingest*
-*Completed: pending Task 2 checkpoint resolution*
+*Completed: 2026-08-05*
 
 ## Self-Check: PASSED
 
 `operator-claude-plugin/tests/test_queue_handoff.py` verified present on disk;
-commit hash `7d6fa28` verified present in `git log --oneline --all`.
+commit hashes `7d6fa28` (this plan's Task 1), `bed5ee4`/`2455e70`/`fef4bf4`
+(36-07's delegated Task 2 resolution) all verified present in
+`git log --oneline --all`.
