@@ -5,6 +5,8 @@ import csv
 import sys
 from pathlib import Path
 
+import pytest
+
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 SCRIPTS_DIR = PLUGIN_ROOT / "scripts"
 if str(SCRIPTS_DIR) not in sys.path:
@@ -53,10 +55,36 @@ def test_validate_two_record_artifact_all_accepted_zero_rejected_with_provenance
         assert record["provenance"]["locator"]
 
 
-def test_write_dispatch_csv_header_matches_canonical_props_and_round_trips(tmp_path, extraction_artifact):
+# Phase 37 §10: this case was flipped deliberately. It used to assert that Ben's row
+# (no email, firstname+lastname+company only — a valid EXTRACTION row per
+# required_identity.any_of) was written to the dispatch CSV with an empty email cell.
+# That assertion described the LIVE BUG this phase exists to close: nine Gold Coast Turf
+# Club directors extracted this way, uploaded with an empty email cell, and evaporated in
+# HubSpot with no write and no object id, because the deployed ingest lane resolves a
+# contact by email only. The row is still valid to extract, match, and enrich — only
+# invalid to INGEST — so write_dispatch_csv now refuses it outright instead of writing it.
+def test_write_dispatch_csv_refuses_the_emailless_row_and_leaves_no_file(tmp_path, extraction_artifact):
     artifact = extraction.load_artifact(extraction_artifact)
     result = extraction.validate(artifact)
-    rows = [record["row"] for record in result.accepted]
+    rows = [record["row"] for record in result.accepted]  # Amy has an email, Ben does not
+
+    out_path = tmp_path / "dispatch.csv"
+
+    with pytest.raises(extraction.ExtractionError):
+        extraction.write_dispatch_csv(rows, out_path)
+
+    assert not out_path.exists()  # a refused call leaves the disk exactly as it found it
+
+
+# The header-and-ordering coverage the flipped test above no longer exercises (since it now
+# asserts a refusal, not a written file) — same fixture rows, filtered to the email-bearing
+# one only, so the round-trip assertion the flip replaced is not quietly lost.
+def test_write_dispatch_csv_header_matches_canonical_props_and_round_trips_for_email_bearing_rows(
+    tmp_path, extraction_artifact
+):
+    artifact = extraction.load_artifact(extraction_artifact)
+    result = extraction.validate(artifact)
+    rows = [record["row"] for record in result.accepted if record["row"].get("email")]
 
     out_path = tmp_path / "dispatch.csv"
     extraction.write_dispatch_csv(rows, out_path)
@@ -67,13 +95,7 @@ def test_write_dispatch_csv_header_matches_canonical_props_and_round_trips(tmp_p
         written_rows = list(reader)
 
     assert header == sorted(extraction.canonical_props())
-    assert len(written_rows) == 2
+    assert len(written_rows) == 1
 
     email_idx = header.index("email")
-    firstname_idx = header.index("firstname")
-    company_idx = header.index("company")
-
     assert written_rows[0][email_idx] == "amy@example.com"
-    assert written_rows[1][email_idx] == ""  # Ben's row carries no email — empty cell
-    assert written_rows[1][firstname_idx] == "Ben"
-    assert written_rows[1][company_idx] == "Widgets Co"

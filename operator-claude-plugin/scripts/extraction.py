@@ -564,6 +564,16 @@ def write_dispatch_csv(rows, out_path, mapping_path=None) -> None:
     including a `provenance` key smuggled in by a caller that forgot to strip it — raises
     rather than widening the header, so the strip is structural, not a runtime filter
     someone can forget to call.
+
+    It is also the STRUCT-02 email-gate enforcement site: a row with no usable `email`
+    RAISES rather than being written with an empty email cell. A return value (a
+    filtered list) is something a caller can ignore; the failure this guards against —
+    a row silently disappearing once it reaches HubSpot — must be loud at the call
+    site. A caller that wants to separate and report held rows first should call
+    `hold_emailless(rows)` and pass only its `sendable` half here.
+
+    Both guards below run BEFORE `out_path` is opened, so a refused call leaves the
+    filesystem untouched — not even an empty file is created.
     """
     header = canonical_props(mapping_path)
     allowed = set(header)
@@ -575,6 +585,14 @@ def write_dispatch_csv(rows, out_path, mapping_path=None) -> None:
                 "non_canonical_key_in_row",
                 f"Row {i} carries key(s) outside the canonical set and cannot be "
                 f"written to the dispatch CSV: {extra}",
+            )
+        if not _present(row.get("email")):
+            raise ExtractionError(
+                "emailless_row_cannot_ingest",
+                f"Row {i} has no usable email — the deployed ingest lane resolves a "
+                "contact by email only, so this row would reach HubSpot as no write "
+                "and no object id. Call hold_emailless(rows) first to separate and "
+                "report rows like this one, then pass only its 'sendable' half here.",
             )
 
     out_path = Path(out_path)
