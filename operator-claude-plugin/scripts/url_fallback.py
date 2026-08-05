@@ -194,20 +194,21 @@ if __name__ == "__main__":
             )
         _pasted, _rest = _args[0], _args[1:]
 
+        # A `for enumerate` scan, not a `while` loop — matching name_split.py's __main__
+        # shape, and required by this suite's own guard (test_report_sufficiency.py
+        # D-07): no plugin script may contain a `while` loop, full stop, because that
+        # guard exists to keep the one bounded watch loop in watch.py the only one in
+        # the plugin. A three-flag argv scan has no need for one anyway.
         _filter_path = None
         _attempted_path = None
         _already_fetched = 0
-        _i = 0
-        while _i < len(_rest):
-            _a = _rest[_i]
+        for _i, _a in enumerate(_rest):
             if _a == "--filter" and _i + 1 < len(_rest):
-                _filter_path, _i = _rest[_i + 1], _i + 2
+                _filter_path = _rest[_i + 1]
             elif _a == "--already-fetched" and _i + 1 < len(_rest):
-                _already_fetched, _i = int(_rest[_i + 1]), _i + 2
+                _already_fetched = int(_rest[_i + 1])
             elif _a == "--attempted" and _i + 1 < len(_rest):
-                _attempted_path, _i = _rest[_i + 1], _i + 2
-            else:
-                raise ValueError(f"unrecognized argument: {_a!r}")
+                _attempted_path = _rest[_i + 1]
 
         if _filter_path:
             _urls = json.loads(pathlib.Path(_filter_path).read_text(encoding="utf-8"))
