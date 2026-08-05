@@ -670,7 +670,8 @@ Traceability table lives in `REQUIREMENTS.md`.
   4. The enriched preview names unanswered rows as their own group, after held rows.
   5. Suites green above current baselines (repo 2157/6, plugin 1238/5, node 621); arming grep 0. Backend untouched — Build Response first-arrival stays deferred, with the corrected analysis (intra-batch skew, not skip-vs-waterfall) recorded.
 
-**Plans:** 1 plan
+**Plans:** 1/1 plans executed
 
 Plans:
-- [ ] 38-01-PLAN.md — `unanswered` as its own group through merge, preview and manifest, plus one re-request pass over the existing dispatch path
+
+- [x] 38-01-PLAN.md — `unanswered` as its own group through merge, preview and manifest, plus one re-request pass over the existing dispatch path
