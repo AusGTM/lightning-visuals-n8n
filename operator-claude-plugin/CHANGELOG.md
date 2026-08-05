@@ -16,6 +16,49 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-08-05
+
+### Added
+
+- **A page whose content comes back empty is no longer a dead end.** Plenty of club and
+  association sites are built so that their visible text doesn't survive being converted to
+  plain text — you get the page title and nothing else. Previously that ended the attempt.
+
+  Now the plugin offers to try the structured representation the site itself publishes of
+  that same page. You see every candidate address **before** any of them is fetched, in
+  order, with the limit named — at most 5 follow-up fetches across the whole attempt, never
+  off the site you gave it. It stops at the first one that returns people.
+
+  Measured on a real page during acceptance: the ordinary fetch returned **0 people**; the
+  first candidate returned **all 9 directors**, and the attempt stopped there.
+
+- **Where a row came from is now recorded exactly.** If a row was read from a page's
+  structured representation rather than the address you pasted, the record names that
+  address in full, plus where in the response it sat. An audit trail pointing at a page that
+  visibly contains nothing would be wrong by omission — someone checking it would fetch the
+  page, see nothing, and reasonably conclude the row was made up.
+
+### Changed
+
+- **The plugin no longer tells you why a page came back empty.** It used to say the page was
+  "likely rendered with JavaScript". That explanation was built into its instructions, it was
+  repeated to an operator during testing, and it was **wrong** — the content was available
+  the whole time, just not in the form first requested. It now reports only what it actually
+  observed: the fetch succeeded and the content carried nothing extractable.
+
+- **It no longer retries the same address.** Fetches are cached for about 15 minutes, so a
+  second attempt at the same address reads identical content — asking differently changes
+  nothing. That retry has been removed in favour of the candidates above.
+
+### Unchanged, deliberately
+
+No scraping library, no browser automation, no user-agent or viewport control, no
+authenticated or paywalled page. A structured address the site serves anonymously is none of
+those things — it is the same anonymous fetch pointed at a different path the site publishes
+itself. An address that fails outright still stops at the existing refusal; the fallback runs
+only when a fetch **succeeded** and carried nothing, because escalating past a refusal would
+turn a fence into a suggestion.
+
 ## [0.9.0] - 2026-08-05
 
 ### Added
