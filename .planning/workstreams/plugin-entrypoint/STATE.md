@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v0.6
 milestone_name: Progress
-current_phase: 34
-current_phase_name: Header Mapping Tolerance
-current_plan: 4
-status: complete
-stopped_at: 23-06 in progress (operator runbook RB-3). Config created; A1 passes after a plugin.json author-object fix; A6 behaviour verified at the gate. Tenant pinned via N8N_EXPECTED_URL. Section B Step 1 read-back PASS, but two findings hold Steps 2+ — the verifier covers only 2 of 8 flag sites and none in the contact lane, and 23-01 is committed-but-undeployed. A2-A5/A7 need Claude Desktop. 23-01 through 23-05 complete. Phase 34 COMPLETE (all 4 plans; 0.8.0 released, backend deployed and bounced).
-last_updated: "2026-08-05T06:20:00+10:00"
+current_phase: 35
+current_phase_name: URL Structured-Representation Fallback
+current_plan: 1
+status: in_progress
+stopped_at: 35-01 complete — the deterministic candidate-URL ladder (scripts/url_fallback.py: plan_ladder, same_host, filter_candidates, give_up_message, CLI) and extraction.md's URL-adapter rewrite (nothing-usable escalates, fetch-failed states it does not). 35-02 (provenance + import-guard + contract tests) and 35-03 (the live walk + release) remain. 23-06 operator-front items (RB-3 etc.) still open, unchanged by this phase.
+last_updated: "2026-08-05T10:20:00+10:00"
 last_activity: 2026-08-05
-last_activity_desc: Phase 34 SEALED — plugin 0.9.0 (reviewed name split), UAT 2.2 walked PASS by the operator
+last_activity_desc: Phase 35 plan 01 complete — url_fallback.py ladder built and TDD-pinned; extraction.md's nothing-usable branch escalates instead of terminating
 progress:
   total_phases: 12
   completed_phases: 8
@@ -22,10 +22,40 @@ progress:
 
 ## Current Position
 
-Phase: 34 (Header Mapping Tolerance) — COMPLETE and SEALED (UAT 2.2 walked PASS 2026-08-05)
-Plan: 4 of 4 complete
-Status: Phase 34 shipped as plugin `0.9.0`; backend deployed and bounced; UAT 2.2 PASS
-Last activity: 2026-08-05 — Phase 34 complete
+Phase: 35 (URL Structured-Representation Fallback) — IN PROGRESS
+Plan: 1 of 3 complete (35-01 done; 35-02, 35-03 remain)
+Status: `scripts/url_fallback.py` built and TDD-pinned (20 new tests); extraction.md's URL
+adapter rewritten so "fetched but nothing usable" escalates through it instead of
+terminating with the now-disproven "likely client-rendered" verdict. No live walk yet —
+that is 35-03's job. No release cut yet.
+Last activity: 2026-08-05 — Phase 35 plan 01 complete
+
+**2026-08-05 — PHASE 35 PLAN 01 COMPLETE.** `operator-claude-plugin/scripts/url_fallback.py`
+built: `plan_ladder` (the 4-rung candidate ladder — wp-json pages-by-slug, posts-by-slug,
+`/sitemap.xml`, `/wp-sitemap.xml`, locked order per 35-CONTEXT.md §3), `same_host`
+(scheme-tolerant, `www.`-variant-strict netloc equality), `filter_candidates` (the guard on
+sitemap-derived, attacker-influenceable candidate URLs — refuses off-host/non-http(s)/
+over-cap in that order, each reason naming its own specifics), `give_up_message` (composes
+the final paragraph from `{url, outcome}` pairs only — structurally cannot repeat a
+rendering verdict it was never given). Zero I/O: no `requests`/`urllib.request`/
+`subprocess`/scraping library, confirmed by grep and by satisfying the autouse
+`no_network` test guard by construction. The acceptance URL
+(`https://gctc.com.au/board-of-directors/`) produces
+`https://gctc.com.au/wp-json/wp/v2/pages?slug=board-of-directors` as its first candidate —
+the exact URL measured live 2026-08-05 to return all 9 directors — pinned at both the
+direct-import and CLI-subprocess layers. `extraction.md`'s "Fetched but nothing usable"
+branch now names `scripts/url_fallback.py`, explains the 15-minute fetch cache (why a
+same-URL retry is never suggested), and walks the propose→approve→filter→give-up flow;
+"Fetch failed" states in its own text that the ladder does not run on a tool error; the
+"likely a client-rendered page" phrasing is gone (`grep -c 'client-rendered'` → 0). Two
+deviations: a D-07 while-loop guard violation in the CLI's argv scan (rewritten as
+`name_split.py`'s `for enumerate` shape), and two untracked/gitignored debug artifacts
+left in `scratch/` by the live UAT 2.4 walk (removed — pre-existing, blocked full-suite
+green, touched no tracked file). Suites: plugin 1042/5 (1022 baseline + 20 new), repo
+1923/6 (1903 baseline + 20 new), node 553 unchanged, arming grep 0. Commits `ae45c4b`
+through `b13c2bf` (7 total, RED/GREEN per task). 35-02 (provenance naming the URL actually
+fetched, an AST import-set guard, contract tests tying extraction.md's cap/branch wording
+to the module) and 35-03 (the live operator-facing walk + `0.10.0` release cut) remain.
 
 **2026-08-05 — PHASE 34 COMPLETE (both halves, backend live).** Plugin `0.8.0` cut with the
 version bumped in the same commit as the CHANGELOG.
