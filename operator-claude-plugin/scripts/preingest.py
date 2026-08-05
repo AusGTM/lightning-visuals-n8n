@@ -18,7 +18,10 @@ import requests
 import chunking
 import config_gate
 import enrichment
+import extraction
+import preview
 from dispatch import DispatchError
+from tabular import read_table
 
 # The six keys the backend's own `mediumCandidates()` ships (n8n/code/matchProposal.js)
 # — this IS Phase 36's information-disclosure control (T-36-04), and this module must
@@ -329,3 +332,274 @@ def classify_matches(rows, response, unchecked_row_ids=None):
         "unchecked": unchecked,
         "unknown_response_row_ids": unknown_response_row_ids,
     }
+
+
+class MatchDecisionError(Exception):
+    """Raised when a `resolved` decision set cannot be applied at all: a decision
+    naming a row that was never proposed, or a candidate id that is not among that
+    row's OWN proposed candidates. This is the pure-function form of
+    `header_suggest.apply_confirmed_corrections`'s guard-before-open rule (see its
+    "both guards run BEFORE any file is opened" comment) — there is no file here to
+    leave half-written, but there is a caller who would otherwise act on a
+    half-applied decision set. Every entry in `resolved` is checked against both
+    guards in one pass, BEFORE any of them is applied, so a call that raises here has
+    applied nothing at all."""
+
+
+# The sentinel a `resolved` entry uses to decline a proposal — never a real HubSpot
+# object id (the backend's own candidate ids are numeric strings), so it can never
+# collide with a genuine candidate.
+DECLINE_MATCH = "decline"
+
+
+def apply_match_decisions(classified, resolved):
+    """Turn the operator's per-row decisions into an updated classification.
+
+    `resolved` maps a `row_id` from `classified["proposed"]` to either one of that
+    row's own candidate `hs_object_id`s (confirming the match) or `DECLINE_MATCH`
+    (declining it). A proposed row absent from `resolved` stays in `proposed`,
+    unresolved — never defaulted either way; the function never picks a candidate on
+    the operator's behalf (the ambiguous-row property this exists to preserve).
+
+    A confirmed row moves into `auto_matched`, carrying the chosen candidate's
+    `hs_object_id` and `confirmed: True` — this is the ONLY thing a MEDIUM proposal
+    becomes a decision (37-CONTEXT §4's `apply_match_decisions` key link). A declined
+    row moves into `unmatched`, so it is picked up by enrichment like any other
+    no-match row.
+
+    Pure — no I/O, no network. Returns a NEW classification; `classified` and its own
+    list/dict values are never mutated in place, so a refused call (raise) leaves the
+    caller's own copy exactly as it was. `apply_match_decisions(classified, {})`
+    returns a value equal to `classified`.
+    """
+    proposed_by_id = {entry["row_id"]: entry for entry in classified["proposed"]}
+
+    # Validation pass — every entry in `resolved` is checked against both guards
+    # BEFORE anything below is built. See MatchDecisionError's docstring for why this
+    # must be a separate pass rather than folded into the apply loop below: an entry
+    # validated only as it is applied lets an earlier valid entry take effect before
+    # a later invalid one is even seen, which is exactly the half-applied set this
+    # guards against.
+    for row_id, decision in resolved.items():
+        entry = proposed_by_id.get(row_id)
+        if entry is None:
+            raise MatchDecisionError(
+                f"Row {row_id!r} was never proposed as a match — there is no "
+                "candidate set to decide against. Nothing was applied."
+            )
+        if decision == DECLINE_MATCH:
+            continue
+        candidate_ids = {c.get("hs_object_id") for c in entry.get("candidates", [])}
+        if decision not in candidate_ids:
+            raise MatchDecisionError(
+                f"Row {row_id!r}'s decision names candidate {decision!r}, which is "
+                "not among that row's own proposed candidates "
+                f"({sorted(cid for cid in candidate_ids if cid is not None)}). A "
+                "decision cannot select a HubSpot record this row was never shown "
+                "for. Nothing was applied."
+            )
+
+    # Apply pass — reached only once every entry above has passed both guards. Every
+    # list below is a FRESH copy; nothing from `classified` is appended to in place.
+    auto_matched = list(classified["auto_matched"])
+    proposed = []
+    unmatched = list(classified["unmatched"])
+
+    for entry in classified["proposed"]:
+        row_id = entry["row_id"]
+        if row_id not in resolved:
+            proposed.append(entry)
+            continue
+        decision = resolved[row_id]
+        if decision == DECLINE_MATCH:
+            unmatched.append({"row_id": row_id, "row": entry["row"]})
+        else:
+            auto_matched.append({
+                "row_id": row_id, "row": entry["row"], "hs_object_id": decision,
+                "confirmed": True,
+            })
+
+    return {
+        "auto_matched": auto_matched,
+        "proposed": proposed,
+        "unmatched": unmatched,
+        "unchecked": list(classified["unchecked"]),
+        "unknown_response_row_ids": list(classified["unknown_response_row_ids"]),
+    }
+
+
+class MergeError(Exception):
+    """Raised when a response set cannot be merged safely — today, only a duplicated
+    `row_id`. Two items claiming one row means the join is not a function, and there
+    is no safe choice between them; picking either would be a guess about which run
+    actually produced which. Nothing is merged when this raises."""
+
+
+@dataclass(frozen=True)
+class MergeResult:
+    """One merge's outcome, mirroring `MatchOutcome`'s payload-plus-report shape.
+    `rows` is ready to hand straight to `extraction.hold_emailless` /
+    `write_dispatch_csv` — every other field REPORTS a way the join could have
+    strayed, rather than silently absorbing it."""
+
+    rows: tuple = field(default_factory=tuple)
+    unknown_response_row_ids: tuple = field(default_factory=tuple)
+    dropped_property_keys: tuple = field(default_factory=tuple)
+    conflicts: tuple = field(default_factory=tuple)
+    unenriched_row_ids: tuple = field(default_factory=tuple)
+
+
+def _present(value) -> bool:
+    """Mirrors `extraction._present`'s trim-then-check rule, kept local rather than
+    imported so this module never reaches into another module's private name."""
+    return value is not None and str(value).strip() != ""
+
+
+def merge_enriched(rows, responses):
+    """Join `responses` onto `rows` by `row_id` — the ONLY join key, never position.
+    Pure: no I/O, no config read.
+
+    A waterfall response that was dropped, reordered, or duplicated is the central
+    data-integrity risk this whole phase exists to close: a positional zip would
+    shift every subsequent row's enrichment onto the wrong person, and nothing
+    downstream could detect it (37-CONTEXT §12). Indexing the responses by `row_id`
+    FIRST — refusing a duplicate id at index-build time, before a single row is
+    walked — is what makes that structurally unreachable rather than merely
+    untested.
+
+    Walks the ROWS, not the responses, so a row with no matching response is
+    detectable (`unenriched_row_ids`) rather than silently absent from the output —
+    distinguishable from a row whose response carried an empty `properties` map,
+    which is walked normally and simply has nothing to fill.
+
+    Each response's `properties` map is filtered to `extraction.canonical_props()`
+    before anything is written — a key outside that set is dropped and reported by
+    row and name (`dropped_property_keys`), never widened onto the row. A widened row
+    would otherwise raise at `write_dispatch_csv` much later, with a message about
+    canonical keys rather than about enrichment; catching it here keeps the cause
+    visible where it happened.
+
+    Fill-not-overwrite: a `properties` value only fills a key the row currently holds
+    empty or absent. A DIFFERING value for a key the row already holds non-empty is
+    never written — it is recorded in `conflicts` instead. The spreadsheet is the
+    operator's own assertion about their own data; silently replacing it with a
+    vendor's guess is a change they would have no way to notice.
+
+    Never mutates an input row — every merged row is a fresh dict.
+    """
+    index = {}
+    for item in responses:
+        row_id = item.get("row_id") if isinstance(item, dict) else None
+        if row_id is None:
+            continue
+        if row_id in index:
+            raise MergeError(
+                f"The response carries two items for row {row_id!r} — a duplicate "
+                "id means the join is not a function, and there is no safe choice "
+                "between the two. Nothing was merged."
+            )
+        index[row_id] = item
+
+    known_row_ids = {row["row_id"] for row in rows}
+    unknown_response_row_ids = sorted(set(index) - known_row_ids)
+
+    allowed_keys = set(extraction.canonical_props())
+
+    merged_rows = []
+    dropped_property_keys = []
+    conflicts = []
+    unenriched_row_ids = []
+
+    for row in rows:
+        row_id = row["row_id"]
+        merged = dict(row)
+        item = index.get(row_id)
+
+        if item is None:
+            unenriched_row_ids.append(row_id)
+            merged_rows.append(merged)
+            continue
+
+        for key, value in (item.get("properties") or {}).items():
+            if key not in allowed_keys:
+                dropped_property_keys.append({"row_id": row_id, "key": key})
+                continue
+            current = merged.get(key)
+            if _present(current):
+                if str(value).strip() != str(current).strip():
+                    conflicts.append({
+                        "row_id": row_id, "field": key,
+                        "kept": current, "provider_value": value,
+                    })
+                continue
+            merged[key] = value
+
+        merged_rows.append(merged)
+
+    return MergeResult(
+        rows=tuple(merged_rows),
+        unknown_response_row_ids=tuple(unknown_response_row_ids),
+        dropped_property_keys=tuple(dropped_property_keys),
+        conflicts=tuple(conflicts),
+        unenriched_row_ids=tuple(unenriched_row_ids),
+    )
+
+
+class RowsFromTableError(Exception):
+    """Raised when a table cannot become canonical-keyed rows: the mapping file could
+    not be resolved. Never degrades to unmapped rows — `preview.label_headers`
+    returns `available: False` in that case, which would silently produce rows with
+    no canonical keys at all and fail much later at `write_dispatch_csv` with an
+    unrelated message. Raised here instead, naming the missing mapping, the same way
+    `extraction.py` treats it as a hard error."""
+
+
+def rows_from_table(path, mapping_path=None):
+    """Read a CSV/XLSX file into canonical-keyed rows, through
+    `preview.label_headers`'s EXACT alias lookup only — the single mapping authority
+    this function is allowed to consult (37-CONTEXT §4). `preview.py`'s own docstring
+    (preview.py:39-44) forbids adding fuzzy matching to `label_headers`, because a
+    smarter matcher there would mislabel a column the backend really does map — this
+    function must not smuggle that back in by adding a second lookup of its own.
+    Fuzzy suggestion already exists, in `header_suggest.py`, where the operator
+    confirms it per header; this function proposes nothing and confirms nothing, it
+    only maps what the table already, exactly, says.
+
+    Reads with `tabular.read_table` — no second parser. Read-only end to end: the
+    source file's bytes are identical before and after this call.
+
+    A header the alias table does not recognise is dropped from every ROW (its
+    column's values reach no row) but never silently from the CALLER — it is named,
+    by its original header string, in the returned `dropped_headers` list.
+
+    Refuses, naming the missing mapping, rather than degrading: an unresolved mapping
+    (`resolve_mapping_path` returning `None`, or `label_headers` reporting
+    `available: False`) would otherwise silently produce rows carrying no canonical
+    keys at all.
+
+    Returns `{"rows": [{canonical_prop: value, ...}, ...], "dropped_headers": [...]}`.
+    """
+    headers, table_rows = read_table(path)
+
+    resolved_mapping = preview.resolve_mapping_path(mapping_path)
+    label_result = preview.label_headers(headers, resolved_mapping)
+    if resolved_mapping is None or not label_result["available"]:
+        raise RowsFromTableError(
+            "config/column_mapping.yaml could not be resolved — with no alias table "
+            "to map headers against, there is no safe way to build canonical rows."
+        )
+
+    canonical_headers = [label["canonical"] for label in label_result["labels"]]
+    dropped_headers = [
+        label["header"] for label in label_result["labels"] if label["dropped"]
+    ]
+
+    rows = []
+    for data_row in table_rows:
+        row = {}
+        for canonical, value in zip(canonical_headers, data_row):
+            if canonical is not None:
+                row[canonical] = value
+        rows.append(row)
+
+    return {"rows": rows, "dropped_headers": dropped_headers}

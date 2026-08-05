@@ -468,3 +468,119 @@ def test_classify_matches_respects_a_pre_seeded_unchecked_set_from_match_batch()
     assert len(result["unchecked"]) == 1
     assert result["unchecked"][0]["row_id"] == rows[0]["row_id"]
     assert len(result["unmatched"]) == 1
+
+
+# =====================================================================================
+# 37-04 Task 1: apply_match_decisions
+# =====================================================================================
+
+_CAND_A = {**_MEDIUM_CANDIDATE, "hs_object_id": "111"}
+_CAND_B = {**_MEDIUM_CANDIDATE, "hs_object_id": "222"}
+
+
+def _classified_with_one_proposed(n_candidates=1):
+    rows = _rows_and_ids(1)
+    candidates = [_CAND_A, _CAND_B][:n_candidates]
+    response = [{
+        "row_id": rows[0]["row_id"], "action": "proposed",
+        "match": {"tier": "medium", "candidates": candidates},
+    }]
+    return preingest.classify_matches(rows, response), rows[0]["row_id"]
+
+
+def test_confirming_a_proposals_own_candidate_moves_it_to_auto_matched_with_that_id():
+    classified, row_id = _classified_with_one_proposed()
+    result = preingest.apply_match_decisions(classified, {row_id: "111"})
+
+    assert not result["proposed"]
+    confirmed = [e for e in result["auto_matched"] if e["row_id"] == row_id]
+    assert len(confirmed) == 1
+    assert confirmed[0]["hs_object_id"] == "111"
+
+
+def test_declining_a_proposal_moves_it_to_unmatched():
+    classified, row_id = _classified_with_one_proposed()
+    result = preingest.apply_match_decisions(
+        classified, {row_id: preingest.DECLINE_MATCH}
+    )
+
+    assert not result["proposed"]
+    assert any(e["row_id"] == row_id for e in result["unmatched"])
+    assert not any(e["row_id"] == row_id for e in result["auto_matched"])
+
+
+def test_a_proposed_row_absent_from_resolved_stays_proposed_and_unresolved():
+    classified, row_id = _classified_with_one_proposed()
+    result = preingest.apply_match_decisions(classified, {})
+
+    assert len(result["proposed"]) == 1
+    assert result["proposed"][0]["row_id"] == row_id
+
+
+def test_a_decision_naming_a_row_that_was_never_proposed_raises_naming_the_row():
+    classified, _row_id = _classified_with_one_proposed()
+    with pytest.raises(preingest.MatchDecisionError) as exc:
+        preingest.apply_match_decisions(classified, {"row-does-not-exist": "111"})
+    assert "row-does-not-exist" in str(exc.value)
+
+
+def test_a_decision_naming_a_foreign_candidate_id_raises_naming_row_and_candidate():
+    classified, row_id = _classified_with_one_proposed()
+    with pytest.raises(preingest.MatchDecisionError) as exc:
+        preingest.apply_match_decisions(classified, {row_id: "999-not-a-candidate"})
+    message = str(exc.value)
+    assert row_id in message
+    assert "999-not-a-candidate" in message
+
+
+def test_all_or_nothing_one_invalid_entry_means_no_valid_entry_takes_effect():
+    rows = _rows_and_ids(2)
+    response = [
+        {"row_id": rows[0]["row_id"], "action": "proposed",
+         "match": {"tier": "medium", "candidates": [_CAND_A]}},
+        {"row_id": rows[1]["row_id"], "action": "proposed",
+         "match": {"tier": "medium", "candidates": [_CAND_B]}},
+    ]
+    classified = preingest.classify_matches(rows, response)
+    original_auto_matched_len = len(classified["auto_matched"])
+    original_proposed_len = len(classified["proposed"])
+
+    resolved = {
+        rows[0]["row_id"]: "111",              # valid
+        rows[1]["row_id"]: "not-a-candidate",   # invalid
+    }
+
+    with pytest.raises(preingest.MatchDecisionError):
+        preingest.apply_match_decisions(classified, resolved)
+
+    # The valid entry (rows[0]) must not have taken effect anywhere, and the
+    # caller's own classified dict must be untouched.
+    assert len(classified["auto_matched"]) == original_auto_matched_len
+    assert len(classified["proposed"]) == original_proposed_len
+    assert not any(e["row_id"] == rows[0]["row_id"] for e in classified["auto_matched"])
+
+
+def test_an_ambiguous_row_is_resolvable_only_by_naming_one_of_its_own_candidates():
+    classified, row_id = _classified_with_one_proposed(n_candidates=2)
+    assert classified["proposed"][0]["ambiguous"] is True
+
+    result = preingest.apply_match_decisions(classified, {row_id: "222"})
+    confirmed = [e for e in result["auto_matched"] if e["row_id"] == row_id]
+    assert confirmed[0]["hs_object_id"] == "222"
+
+
+def test_apply_match_decisions_with_empty_resolved_returns_a_classification_equal_to_input():
+    classified, _row_id = _classified_with_one_proposed()
+    result = preingest.apply_match_decisions(classified, {})
+    assert result == classified
+
+
+def test_apply_match_decisions_does_not_mutate_the_input_classification():
+    classified, row_id = _classified_with_one_proposed()
+    snapshot_proposed = list(classified["proposed"])
+    snapshot_auto_matched = list(classified["auto_matched"])
+
+    preingest.apply_match_decisions(classified, {row_id: "111"})
+
+    assert classified["proposed"] == snapshot_proposed
+    assert classified["auto_matched"] == snapshot_auto_matched
