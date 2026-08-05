@@ -11,6 +11,7 @@ import pytest
 
 import extraction
 import preingest
+from dispatch import NotArmedError
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 SAMPLES_DIR = PLUGIN_ROOT / "tests" / "samples"
@@ -220,6 +221,122 @@ def test_every_merged_row_key_is_in_canonical_props_or_row_id():
     allowed = set(extraction.canonical_props()) | {"row_id"}
     for row in result.rows:
         assert set(row) <= allowed
+
+
+# =====================================================================================
+# Phase 38 Plan 01 Task 3: rerequest_unanswered — one re-request pass, through the
+# dispatch path that already exists.
+# =====================================================================================
+
+
+def _rerequest_config(fake_config, ceiling=10):
+    return {**fake_config, "max_records_per_chunk": ceiling}
+
+
+def test_rerequest_unanswered_dispatches_one_pass_and_narrows_the_unanswered_set(
+        fake_config, stub_module_transport_factory):
+    rows = _rows(2)
+    merge_report = preingest.merge_enriched(rows, [])  # neither row answered
+    assert len(merge_report.unanswered) == 2
+
+    transport = stub_module_transport_factory(responses=[
+        [_response(rows[0]["row_id"], {"email": "answered@x.com"})],
+    ])
+
+    result = preingest.rerequest_unanswered(
+        rows, merge_report, ["zoominfo"], True, _rerequest_config(fake_config),
+        transport=transport,
+    )
+
+    assert len(transport.calls) == 1, "one re-request pass, and no more"
+    assert len(result.unanswered) == 1
+    assert result.unanswered[0]["row_id"] == rows[1]["row_id"]
+    merged = {r["row_id"]: r for r in result.rows}
+    assert merged[rows[0]["row_id"]]["email"] == "answered@x.com"
+
+
+def test_rerequest_unanswered_with_nothing_unanswered_dispatches_nothing(
+        fake_config, stub_module_transport_factory):
+    rows = _rows(1)
+    merge_report = preingest.merge_enriched(rows, [_response(rows[0]["row_id"], {})])
+    assert merge_report.unanswered == ()
+
+    transport = stub_module_transport_factory()
+    result = preingest.rerequest_unanswered(
+        rows, merge_report, ["zoominfo"], True, _rerequest_config(fake_config),
+        transport=transport,
+    )
+
+    assert transport.calls == []
+    assert result is merge_report
+
+
+def test_rerequest_unanswered_without_armed_is_a_type_error(
+        fake_config, stub_module_transport_factory):
+    rows = _rows(1)
+    merge_report = preingest.merge_enriched(rows, [])
+    with pytest.raises(TypeError):
+        preingest.rerequest_unanswered(
+            rows, merge_report, ["zoominfo"],
+            config=_rerequest_config(fake_config),
+            transport=stub_module_transport_factory(),
+        )
+
+
+def test_rerequest_unanswered_with_armed_false_raises_and_dispatches_nothing(
+        fake_config, stub_module_transport_factory):
+    rows = _rows(1)
+    merge_report = preingest.merge_enriched(rows, [])
+    transport = stub_module_transport_factory()
+
+    with pytest.raises(NotArmedError):
+        preingest.rerequest_unanswered(
+            rows, merge_report, ["zoominfo"], False, _rerequest_config(fake_config),
+            transport=transport,
+        )
+    assert transport.calls == [], "the re-request is not a way around the arming grant"
+
+
+def test_rerequest_unanswered_request_bodies_carry_the_original_row_ids(
+        fake_config, stub_module_transport_factory):
+    rows = _rows(3)
+    merge_report = preingest.merge_enriched(rows, [_response(rows[0]["row_id"], {})])
+    unanswered_ids = {rows[1]["row_id"], rows[2]["row_id"]}
+    assert {e["row_id"] for e in merge_report.unanswered} == unanswered_ids
+
+    transport = stub_module_transport_factory()
+    preingest.rerequest_unanswered(
+        rows, merge_report, ["zoominfo"], True, _rerequest_config(fake_config),
+        transport=transport,
+    )
+
+    sent_ids = {
+        event["row_id"]
+        for call in transport.calls
+        for event in call["json"]["events"]
+    }
+    assert sent_ids == unanswered_ids, (
+        "the re-request must reuse the ORIGINAL row_id values — a fresh mint would "
+        "orphan every verdict the first pass recorded"
+    )
+
+
+def test_a_failed_rerequest_chunk_leaves_its_rows_unanswered_with_reason_intact(
+        fake_config, stub_module_transport_factory):
+    rows = _rows(1)
+    merge_report = preingest.merge_enriched(rows, [])
+    transport = stub_module_transport_factory(responses=[(500, {"message": "boom"})])
+
+    result = preingest.rerequest_unanswered(
+        rows, merge_report, ["zoominfo"], True, _rerequest_config(fake_config),
+        transport=transport,
+    )
+
+    assert len(result.unanswered) == 1
+    assert result.unanswered[0]["row_id"] == rows[0]["row_id"]
+    assert result.unanswered[0]["reason"] == preingest.UNANSWERED_REASON, (
+        "a re-request chunk failure must never become a fabricated verdict"
+    )
 
 
 # =====================================================================================

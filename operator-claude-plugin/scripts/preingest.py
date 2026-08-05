@@ -567,6 +567,88 @@ def merge_enriched(rows, responses):
     )
 
 
+def rerequest_unanswered(rows, merge_report, providers, armed, config, transport=requests):
+    """One re-request pass over `merge_report.unanswered`, dispatched through the SAME
+    `chunking.dispatch_plan` -> `enrichment.dispatch_enrichment` path the first pass
+    used. No new send path exists here — see the comment on the `dispatch_plan` call
+    below, and `test_retry_reuses_dispatch.py`'s `_EXPECTED_SEND_SHAPED`, which this
+    function must leave unchanged (T-38-03).
+
+    Returns `merge_report` unchanged, with no plan built and no call made, when there
+    is nothing unanswered — the whole point of this function is a re-request, and a
+    re-request over nothing is not one.
+
+    **Exactly once.** There is no loop, no retry counter and no recursion in this
+    function's body. A silent retry loop against a backend that truncates under load
+    turns one honest gap into an unbounded spend the operator never approved (T-38-04);
+    the honest report of a row still unanswered after this one pass is a better outcome
+    than a second guess at it.
+
+    `armed` is threaded straight through as a required positional with no default,
+    mirroring every other caller of `dispatch_plan`/`dispatch_enrichment` — the grant
+    covers the batch it was spoken for, and this pass is part of that batch's
+    execution, not a fresh one asking again on its own authority (T-38-03). A falsy
+    `armed` raises `NotArmedError` from that existing gate before anything is sent.
+
+    Reuses the unanswered rows' OWN `row_id` values for the re-request — `build_rows_spec`
+    is deliberately never called here: it mints a fresh id per row and refuses one that
+    already carries one, which is exactly right for a first pass and exactly wrong for
+    this one. The ids are the join key every verdict the first pass recorded is keyed
+    on; re-minting them would orphan all of it (T-38-05).
+
+    Returns a `MergeResult` over the FULL original `rows` — a complete picture, not a
+    fragment the caller has to stitch onto `merge_report` itself. A row the re-request
+    answered drops out of `unanswered` automatically (via a second `merge_enriched`
+    call, scoped to the re-requested rows only); a row it did not keeps its entry and
+    its true reason, never a fabricated one — including a row whose own chunk failed
+    outright, since a failed chunk simply carries no response item, the same "item is
+    None" branch `merge_enriched` already handles.
+    """
+    unanswered_entries = tuple(merge_report.unanswered)
+    if not unanswered_entries:
+        return merge_report
+
+    retry_rows = [entry["row"] for entry in unanswered_entries]
+    spec = {"rows": retry_rows, "object_type": "contacts"}
+    plan = chunking.plan_chunks(spec, chunking.chunk_ceiling(config))
+
+    # No `transport.post`/`.put` call anywhere in this function's own body — `transport`
+    # is only ever handed on to `dispatch_plan`, which is what keeps this function
+    # invisible to `test_retry_reuses_dispatch.py`'s bare-module-default predicate: that
+    # guard flags a function only when it BOTH defaults `transport` to the bare
+    # `requests` module AND calls `transport.post`/`.put` directly in its own body: this
+    # function does the first and not the second.
+    outcome = chunking.dispatch_plan(plan, providers, armed, config, transport=transport)
+
+    new_items = []
+    for body in outcome.responses:
+        # The deployed webhook answers array-wrapped, a one-element list — n8n's normal
+        # firstIncomingItem behaviour, the same shape `fetch_matches` already
+        # normalizes for this same endpoint. Accept both.
+        new_items.extend(body if isinstance(body, list) else [body])
+
+    retry_result = merge_enriched(retry_rows, new_items)
+
+    retry_by_id = {row["row_id"]: row for row in retry_result.rows}
+    answered_by_id = {row["row_id"]: row for row in merge_report.rows}
+    merged_rows = tuple(
+        retry_by_id.get(row["row_id"], answered_by_id.get(row["row_id"]))
+        for row in rows
+    )
+
+    return MergeResult(
+        rows=merged_rows,
+        unknown_response_row_ids=(
+            tuple(merge_report.unknown_response_row_ids) + retry_result.unknown_response_row_ids
+        ),
+        dropped_property_keys=(
+            tuple(merge_report.dropped_property_keys) + retry_result.dropped_property_keys
+        ),
+        conflicts=tuple(merge_report.conflicts) + retry_result.conflicts,
+        unanswered=retry_result.unanswered,
+    )
+
+
 class RowsFromTableError(Exception):
     """Raised when a table cannot become canonical-keyed rows: the mapping file could
     not be resolved. Never degrades to unmapped rows — `preview.label_headers`
