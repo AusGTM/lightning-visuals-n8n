@@ -13,9 +13,10 @@ enrichment waterfall (provider calls + Haiku + Sonnet, measured 37.44 s/record) 
 call in the path, and is bounded by `ENRICH_MAX_PROPOSE_RECORDS` — a much larger,
 still-conservative number. Reusing `max_records_per_chunk` for match would make a match
 refusal print waterfall-timing wording that is untrue of the call that raised it
-(37-CONTEXT §4 point 2's explicit prohibition). The assertion that will change when the
-first live propose probe lands is the PROVISIONAL marker on this key's provenance note —
-never the separation between the two keys.
+(37-CONTEXT §4 point 2's explicit prohibition). The first live propose probe landed
+2026-08-05 (37-09's operator checkpoint, 1.46 s/row) — the PROVISIONAL marker on this
+key's provenance note is retired accordingly; the separation between the two keys never
+changes.
 
 This file reads the config and the builder source as DATA, not as an import: the plugin
 must not import from the repo-root `scripts/` package and vice versa (PLUGIN-04), so a
@@ -81,18 +82,26 @@ def test_neither_ceiling_is_zero_or_negative():
     assert _client_ceiling() >= 1
 
 
-def test_the_match_ceilings_provenance_note_carries_the_provisional_marker():
+def test_the_match_ceilings_provenance_note_carries_its_measured_provenance():
+    """Mirrors `test_chunk_ceiling_contract.py::test_the_client_ceiling_carries_its_measured_provenance`:
+    while the first live propose probe was unrun, this pinned the PROVISIONAL label so a
+    derivation could not read as a measurement. That probe ran 2026-08-05 (37-09's operator
+    checkpoint, live 9-row walk: 13.16 s / 9 rows = 1.46 s/row) — so now the note must carry
+    the measurement's figure and must NOT still call the number provisional, which would
+    misstate it in the other direction. Amended deliberately alongside the provenance note
+    itself, not silenced: the walk that retires this label is exactly the one this test used
+    to require be named."""
     config = _client_config()
     notes = " ".join(
         str(v) for k, v in config.items() if k.startswith("_max_rows_per_match_request")
     )
     assert notes, "the provenance notes beside max_rows_per_match_request are gone"
-    assert "PROVISIONAL" in notes.upper(), (
-        "20 is the backend's own conservative propose-mode bound, not a measurement — "
-        "the label must say so until a live propose run measures it"
+    assert "PROVISIONAL" not in notes.upper(), (
+        "the first live propose probe ran 2026-08-05 (1.46 s/row) — the note must no "
+        "longer call this number provisional now that it is backed by a measurement"
     )
-    assert "probe" in notes.lower() or "live propose run" in notes.lower(), (
-        "the note must name the probe that retires the provisional label"
+    assert "MEASURED" in notes.upper() and "1.46" in notes, (
+        "the note must carry the measurement itself, not just retire the provisional label"
     )
 
 

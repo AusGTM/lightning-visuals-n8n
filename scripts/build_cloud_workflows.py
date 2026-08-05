@@ -3510,13 +3510,14 @@ ENRICH_MAX_LIST_RECORDS = 2
 # probe B4 measured the FULL WATERFALL (lusha+apollo+zoominfo, one company record) at
 # 37.44 s/record. A return-only (`mode:"propose"`) request runs ZERO provider calls —
 # its per-row cost is two HubSpot search POSTs. Applying the waterfall's ceiling to it is
-# an unnecessarily strict boundary. No in-repo measurement of a propose row exists yet,
-# so this number is ASSUMED, not measured: worst case 4 s/row, +25% headroom = 5 s/row
-# against n8n Cloud's ~100 s Cloudflare-enforced response ceiling, giving
-# floor(100/5) = 20.
-# PROVISIONAL — replace with measured value
-# Earn the real number with a B4-shaped probe at the FIRST live propose run and rewrite
-# this comment with the measurement and its date, the same way the 37.44 s note above was
+# an unnecessarily strict boundary. Originally ASSUMED (worst case 4 s/row, +25% headroom
+# = 5 s/row against the ~100 s Cloudflare ceiling, floor(100/5) = 20) with no in-repo
+# measurement. MEASURED 2026-08-05: the live 9-director propose walk (37-09's operator
+# checkpoint) took 13.16 s for 9 rows = 1.46 s/row — well inside the 5 s/row assumption,
+# so the derived ceiling only grows from here (floor(100 / (1.46*1.25)) ≈ 54). 20 is kept
+# as-is rather than raised, since raising it is a separate deliberate decision, not a
+# consequence of this measurement — the PROVISIONAL label is retired because the number
+# is now bounded by an actual measurement, the same way the 37.44 s note above was
 # promoted from provisional to confirmed.
 ENRICH_MAX_PROPOSE_RECORDS = 20
 
