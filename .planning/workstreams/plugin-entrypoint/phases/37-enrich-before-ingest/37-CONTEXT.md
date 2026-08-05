@@ -315,3 +315,18 @@ ceiling's number must be **earned by a live probe** (B4's shape: measured latenc
 the ~100 s Cloudflare bound) at the first live propose run — ship a conservative provisional value
 with the derivation in the comment, replace it with the measured one, same discipline as the 37.44 s
 note.
+
+**Confirmation format amendment (operator, 2026-08-05, at 37-08's read-through — the read's only
+correction; the other three judgments passed):** §5.3's one-proposal-per-turn is superseded by a
+**batched numbered table**. The invariant that survives is the real one: each decision individually
+expressed, with the candidate's evidence AND the row's own values side-by-side in the same table row.
+Rules: answers are per-item labeled with a constrained vocabulary — `approve` / `deny` /
+`pick <label>` / `email: <address>`; ambiguous rows carry candidate sub-labels (`3a`, `3b`) and take
+only `pick`; unanswered rows stay **pending and are restated**, never defaulted; `deny all` is
+allowed (a wrong deny costs one credit); **a bare `approve all` is NOT** — a wrong approve silently
+evaporates the true row (the original nine-directors bug, per row), so bulk approval must name its
+scope (`approve 1-4, 7`, or `approve all 6` restating the count). One bad line refuses the whole
+table (the applier's existing all-or-nothing) and the refusal names the offending line.
+Copy/edit/reupload of the table is the named upgrade path, not built now — the chunk ceiling caps
+proposals at ~20 per turn. `apply_match_decisions` is already batch-shaped; this is a skill-text and
+contract-test change only.
