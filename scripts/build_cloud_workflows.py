@@ -195,6 +195,14 @@ ADAPT_SEARCH_RESULTS = r"""// Adapt Search Results — CLOUD variant.
 // filter fixed. Match by VALUE instead: a hit counts only if the candidate's own email
 // equals this row's normalized email — order-independent, multi-row safe, and immune to
 // an unfiltered search (100 wrong contacts contribute zero hits).
+//
+// Phase 36 Finding B (36-CONTEXT.md §5B): `lookup_failed` below is declared OUTSIDE the
+// per-row loop, so ONE failed search item stamps the whole batch. That used to be
+// reachable by a legitimate emailless row (the `.invalid` sentinel on `HubSpot Search by
+// Email`'s filter value fixes that upstream). Now that a legitimate row can no longer
+// manufacture this flag, the scope is deliberate: it can only be set by a genuine
+// HubSpot search failure, where fail-closed on the whole batch is the correct answer.
+// This scope is intentionally NOT narrowed to per-row here — out of scope for this fix.
 const rows = $('Normalize Phone').all();
 const search = $('HubSpot Search by Email').all();
 const candidates = [];
@@ -637,12 +645,23 @@ return $input.all().map((it) => ({
     # envelope branch already parses that shape. Same "LV HubSpot" credential via its
     # existing NODE_CREDENTIAL_MAP entry (cred_type hubspotAppToken binds identically on
     # an httpRequest node — the BUG 10 mechanism).
+    # Phase 36 Finding B (36-CONTEXT.md §5B): an emailless row left this filter value
+    # `undefined`. `JSON.stringify` drops an `undefined` object key, so HubSpot received
+    # a filter with no `value` at all, rejected it, and `onError: continueRegularOutput`
+    # (the BUG 22 transport, above) swallowed the rejection into the ITEM rather than
+    # throwing. `ADAPT_SEARCH_RESULTS` below then stamped that one row's failure onto
+    # `lookup_failed` for the WHOLE batch (its scope is declared outside the per-row
+    # loop), demoting every sibling row's `create` action to `review` — this feature's
+    # own re-upload path breaking on its own emailless output. The RFC 2606 `.invalid`
+    # sentinel can never be a real address, so HubSpot now returns 200 with zero hits
+    # instead of rejecting the filter, and `lookup_failed` stays false.
     hs_search = _http_node(
         "HubSpot Search by Email",
         "https://api.hubapi.com/crm/v3/objects/contacts/search", x, y,
         auth="hubspot",
         json_body=("={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: "
-                   "\"email\", operator: \"EQ\", value: ($json.email_normalized || $json.email) } ] } ], "
+                   "\"email\", operator: \"EQ\", value: ($json.email_normalized || $json.email || "
+                   "\"no-email@invalid.invalid\") } ] } ], "
                    "properties: [\"email\", \"firstname\", \"lastname\", \"jobtitle\", \"phone\", "
                    "\"mobilephone\", \"hs_object_id\"], limit: 10 }) }}"),
     )

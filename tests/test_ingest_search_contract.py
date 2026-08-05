@@ -51,6 +51,21 @@ def test_search_by_email_is_a_filtered_envelope_returning_httprequest():
         "the adapter matches by candidate email — the search must request that property"
 
 
+def test_search_by_email_filter_falls_back_to_an_invalid_sentinel_for_an_emailless_row():
+    """Phase 36 Finding B (36-CONTEXT.md §5B). For an emailless row the filter value used
+    to be `undefined`, which JSON.stringify drops from the object — HubSpot then rejected
+    the filter, onError swallowed it into the item, and Adapt Search Results' batch-wide
+    `lookup_failed` demoted every SIBLING row's `create` action to `review`. An RFC 2606
+    `.invalid` sentinel can never be a real address, so the search now returns 200 with
+    zero hits instead of a rejected filter."""
+    node = _node("HubSpot Search by Email")
+    body = node["parameters"]["jsonBody"]
+    assert "no-email@invalid.invalid" in body
+    # The pinned prefix (BUG 22a) must survive verbatim — the sentinel is APPENDED, not a
+    # restructure of the existing fallback chain.
+    assert "$json.email_normalized || $json.email" in body
+
+
 def test_adapter_matches_hits_by_email_value_never_by_item_index():
     """BUG 22b. Value-match survives an unfiltered search (100 wrong contacts contribute
     zero hits) and is order-independent for multi-row uploads; index alignment is neither."""
