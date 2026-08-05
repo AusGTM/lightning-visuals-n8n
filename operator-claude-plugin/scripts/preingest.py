@@ -19,7 +19,9 @@ import chunking
 import config_gate
 import enrichment
 import extraction
+import preview
 from dispatch import DispatchError
+from tabular import read_table
 
 # The six keys the backend's own `mediumCandidates()` ships (n8n/code/matchProposal.js)
 # — this IS Phase 36's information-disclosure control (T-36-04), and this module must
@@ -541,3 +543,63 @@ def merge_enriched(rows, responses):
         conflicts=tuple(conflicts),
         unenriched_row_ids=tuple(unenriched_row_ids),
     )
+
+
+class RowsFromTableError(Exception):
+    """Raised when a table cannot become canonical-keyed rows: the mapping file could
+    not be resolved. Never degrades to unmapped rows — `preview.label_headers`
+    returns `available: False` in that case, which would silently produce rows with
+    no canonical keys at all and fail much later at `write_dispatch_csv` with an
+    unrelated message. Raised here instead, naming the missing mapping, the same way
+    `extraction.py` treats it as a hard error."""
+
+
+def rows_from_table(path, mapping_path=None):
+    """Read a CSV/XLSX file into canonical-keyed rows, through
+    `preview.label_headers`'s EXACT alias lookup only — the single mapping authority
+    this function is allowed to consult (37-CONTEXT §4). `preview.py`'s own docstring
+    (preview.py:39-44) forbids adding fuzzy matching to `label_headers`, because a
+    smarter matcher there would mislabel a column the backend really does map — this
+    function must not smuggle that back in by adding a second lookup of its own.
+    Fuzzy suggestion already exists, in `header_suggest.py`, where the operator
+    confirms it per header; this function proposes nothing and confirms nothing, it
+    only maps what the table already, exactly, says.
+
+    Reads with `tabular.read_table` — no second parser. Read-only end to end: the
+    source file's bytes are identical before and after this call.
+
+    A header the alias table does not recognise is dropped from every ROW (its
+    column's values reach no row) but never silently from the CALLER — it is named,
+    by its original header string, in the returned `dropped_headers` list.
+
+    Refuses, naming the missing mapping, rather than degrading: an unresolved mapping
+    (`resolve_mapping_path` returning `None`, or `label_headers` reporting
+    `available: False`) would otherwise silently produce rows carrying no canonical
+    keys at all.
+
+    Returns `{"rows": [{canonical_prop: value, ...}, ...], "dropped_headers": [...]}`.
+    """
+    headers, table_rows = read_table(path)
+
+    resolved_mapping = preview.resolve_mapping_path(mapping_path)
+    label_result = preview.label_headers(headers, resolved_mapping)
+    if resolved_mapping is None or not label_result["available"]:
+        raise RowsFromTableError(
+            "config/column_mapping.yaml could not be resolved — with no alias table "
+            "to map headers against, there is no safe way to build canonical rows."
+        )
+
+    canonical_headers = [label["canonical"] for label in label_result["labels"]]
+    dropped_headers = [
+        label["header"] for label in label_result["labels"] if label["dropped"]
+    ]
+
+    rows = []
+    for data_row in table_rows:
+        row = {}
+        for canonical, value in zip(canonical_headers, data_row):
+            if canonical is not None:
+                row[canonical] = value
+        rows.append(row)
+
+    return {"rows": rows, "dropped_headers": dropped_headers}

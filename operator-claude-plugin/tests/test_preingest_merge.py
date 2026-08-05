@@ -1,6 +1,9 @@
 """Tests for `preingest.py`'s post-match lane (Phase 37 Plan 04):
 
 Task 2: `merge_enriched` (join by `row_id`, refuse a duplicate, ignore an unknown).
+
+Task 3: `rows_from_table` (one mapping authority — `preview.label_headers`'s exact
+alias lookup — read-only).
 """
 from pathlib import Path
 
@@ -188,3 +191,63 @@ def test_every_merged_row_key_is_in_canonical_props_or_row_id():
     allowed = set(extraction.canonical_props()) | {"row_id"}
     for row in result.rows:
         assert set(row) <= allowed
+
+
+# =====================================================================================
+# Task 3: rows_from_table
+# =====================================================================================
+
+def test_exact_alias_headers_produce_one_canonical_row_per_data_row_in_file_order():
+    result = preingest.rows_from_table(SAMPLES_DIR / "clean-uat-contacts.csv")
+
+    assert len(result["rows"]) == 3
+    assert result["rows"][0]["email"] == "alice@example.com"
+    assert result["rows"][0]["firstname"] == "Alice"
+    assert result["rows"][1]["firstname"] == "Bob"
+
+
+def test_a_header_the_alias_table_does_not_recognise_is_dropped_and_reported():
+    result = preingest.rows_from_table(SAMPLES_DIR / "clean-uat-contacts.csv")
+
+    assert "Notes" in result["dropped_headers"]
+    for row in result["rows"]:
+        assert "notes" not in row and "Notes" not in row
+
+
+def test_a_header_merely_similar_to_an_alias_does_not_map():
+    # 22-messy-headers.csv's "Ph." is close to "phone" under difflib but is not an
+    # exact alias — must be dropped, never fuzzy-mapped.
+    result = preingest.rows_from_table(SAMPLES_DIR / "22-messy-headers.csv")
+
+    assert "Ph." in result["dropped_headers"]
+    for row in result["rows"]:
+        assert "phone" not in row
+
+
+def test_case_and_whitespace_variants_of_an_alias_still_map():
+    # "Org." is an exact alias for "company" (case/whitespace-normalized).
+    result = preingest.rows_from_table(SAMPLES_DIR / "22-messy-headers.csv")
+
+    assert result["rows"][0]["company"] == "Southern Cross Racing Club"
+
+
+def test_the_source_files_bytes_are_identical_before_and_after():
+    path = SAMPLES_DIR / "clean-uat-contacts.csv"
+    before = path.read_bytes()
+
+    preingest.rows_from_table(path)
+
+    assert path.read_bytes() == before
+
+
+def test_a_headers_only_file_with_no_data_rows_returns_an_empty_row_list():
+    result = preingest.rows_from_table(SAMPLES_DIR / "26-empty.csv")
+    assert result["rows"] == []
+
+
+def test_when_the_mapping_file_cannot_be_resolved_it_refuses():
+    with pytest.raises(preingest.RowsFromTableError):
+        preingest.rows_from_table(
+            SAMPLES_DIR / "clean-uat-contacts.csv",
+            mapping_path="/nonexistent/column_mapping.yaml",
+        )
