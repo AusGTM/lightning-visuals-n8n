@@ -338,3 +338,75 @@ def test_a_view_is_refused_before_any_preview_is_built():
         assert str(exc) == enrichment.VIEW_REFUSAL
     else:
         raise AssertionError("a saved view must be refused, not previewed")
+
+
+# ------------------------------------------------------------- 37-05 Task 1: rows branch
+
+ROWS_SPEC = {
+    "rows": [{"row_id": "row-1", "email": "a@x.com"},
+              {"row_id": "row-2", "email": "b@x.com"},
+              {"row_id": "row-3", "email": "c@x.com"}],
+    "object_type": "contacts",
+}
+
+_IDS_RECORDS_BLOCK_LITERAL = (
+    "**Records:** 3 companies, named by ID. Nothing is structured or "
+    "uploaded — these already exist in HubSpot."
+)
+_LIST_RECORDS_BLOCK_LITERAL = (
+    '**Records:** the HubSpot list "Named Targets" (contacts) — record count: '
+    "**unknown**. The backend resolves the list and counts it; I do not, so "
+    "no number is shown here rather than a fabricated one."
+)
+
+
+def test_a_rows_spec_records_block_states_the_rows_are_not_in_hubspot_yet():
+    block = _preview(ROWS_SPEC)["blocks"]["records"]
+    assert "3" in block
+    assert "not" in block
+    assert "in HubSpot yet" in block
+    assert "nothing is created" in block.lower()
+
+
+def test_a_rows_spec_records_block_never_carries_the_already_exist_claim():
+    """The rows branch and the named-IDs branch make opposite claims about the same
+    field position — a rendering regression would smuggle one into the other."""
+    block = _preview(ROWS_SPEC)["blocks"]["records"]
+    assert "already exist" not in block
+
+
+def test_a_record_ids_records_block_is_byte_identical_to_before():
+    """Asserted against a literal, not by eye — a regression in an untouched branch
+    is exactly what an added sibling branch risks."""
+    block = _preview(IDS_SPEC)["blocks"]["records"]
+    assert block == _IDS_RECORDS_BLOCK_LITERAL
+
+
+def test_a_list_records_block_is_byte_identical_to_before():
+    block = _preview(LIST_SPEC)["blocks"]["records"]
+    assert block == _LIST_RECORDS_BLOCK_LITERAL
+
+
+def test_a_rows_spec_with_a_noninteger_count_renders_unknown_never_a_numeral_or_zero():
+    plan = chunking.ChunkPlan(chunks=(), row_counts=(), record_count=chunking.UNKNOWN)
+    block = preview_enrichment.records_block(ROWS_SPEC, plan)
+    assert re.search(r"\d", block) is None
+    assert "unknown" in block
+    assert "0" not in block
+
+
+def test_assemble_preview_over_a_rows_spec_produces_all_four_blocks_in_order():
+    result = _preview(ROWS_SPEC)
+    assert list(result["blocks"]) == ["records", "providers", "cost", "chunks"]
+    for name in ("records", "providers", "cost", "chunks"):
+        assert result["blocks"][name].strip()
+
+
+def test_cost_block_is_identical_for_a_rows_spec_and_a_record_id_spec_of_equal_size():
+    """`cost_guard.estimate_batch` prices a bare integer count and never reads a
+    record id, so the cost path is genuinely shared between the two spec forms —
+    same object_type and count, so nothing else could account for a difference."""
+    rows_spec_companies = {**ROWS_SPEC, "object_type": "companies"}
+    rows_block = _preview(rows_spec_companies, providers=["lusha"])["blocks"]["cost"]
+    ids_block = _preview(IDS_SPEC, providers=["lusha"])["blocks"]["cost"]
+    assert rows_block == ids_block

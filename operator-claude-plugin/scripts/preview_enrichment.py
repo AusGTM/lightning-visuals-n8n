@@ -9,7 +9,11 @@ Four blocks, in the order the decision needs them:
    identifier with the count stated as backend-resolved. For a list the count is the word
    `unknown`, NEVER `0` and never a guess: the client does not resolve a list and does not
    count one (D-02, D-21). A preview built on something it cannot read must not render as
-   "0 records" or "nothing to do".
+   "0 records" or "nothing to do". A rows spec (Phase 37's pre-ingest batch) prices through
+   this SAME block unchanged: `cost_guard.estimate_batch` prices a bare integer count and
+   never reads a record id, so a rows batch of N and a record-id batch of N cost-price
+   identically — only `records_block` (below) needs its own branch, to say the opposite of
+   the ids branch's "already exist in HubSpot" claim.
 2. **Which providers** — stated explicitly on every render, including the full-waterfall
    and the empty selections. The shipped default is permissive, which is exactly what makes
    the display mandatory rather than optional (D-06).
@@ -77,6 +81,26 @@ def records_block(spec, plan):
             f"**{UNKNOWN}**. The backend resolves the list and counts it; I do not, so "
             f"no number is shown here rather than a fabricated one."
         )
+
+    # A rows spec (Phase 37) and an ids/list spec make DELIBERATELY OPPOSITE claims
+    # about the same field position: a rows spec's rows are not HubSpot records
+    # yet ("nothing is created by enriching them"), while an ids/list spec's
+    # records already exist there. Both claims are true of their own spec form —
+    # collapsing them into one sentence would make one of them a lie in the
+    # operator's most consequential display.
+    if spec.get("rows") is not None:
+        count = getattr(plan, "record_count", UNKNOWN)
+        if not isinstance(count, int):
+            return (
+                f"**Records:** record count: **{UNKNOWN}** — this batch could not be "
+                f"counted, which is not the same as it being empty."
+            )
+        object_type = spec.get("object_type") or "contacts"
+        return (
+            f"**Records:** {count} {object_type}, from a source file. These rows are "
+            f"**not** in HubSpot yet — nothing is created there by enriching them."
+        )
+
     count = getattr(plan, "record_count", UNKNOWN)
     if not isinstance(count, int):
         return (
