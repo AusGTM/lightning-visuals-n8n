@@ -472,7 +472,7 @@ Plans:
   7. An oversize `events` array is refused whole with a reason; nothing is enriched. Refuse, never truncate.
   8. `grep -c 'ALLOW_HUBSPOT_[A-Z_]* = "true"' n8n/*.json` → 0. Suites green (plugin 1052/5, python 1933/6, node 553). Rebuilt, deployed disarmed, every active workflow bounced, read back.
 
-**Plans**: 5/7 plans executed
+**Plans**: 7/7 plans executed
 
 Plans:
 **Wave 1**
@@ -493,7 +493,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 36-05-PLAN.md — offline gates, operator-run disarmed deploy checkpoint, bounce and disarmed read-back
+- [x] 36-05-PLAN.md — offline gates, operator-run disarmed deploy checkpoint, bounce and disarmed read-back
 
 **Wave 6** *(amendment, 2026-08-05 — depends on Wave 4; must land BEFORE 36-05's deploy fires, so the tenant takes the corrected ceiling in ONE deploy, not two)*
 
@@ -501,7 +501,7 @@ Plans:
 
 **Wave 7** *(amendment, 2026-08-05 — resolves 37-07's blocking transport checkpoint with the operator's option-b; must also land before 36-05's deploy fires)*
 
-- [ ] 36-07-PLAN.md — the ingest lane's CREATE payload stamps `lv_enrichment_requested = "true"` so the existing 15-minute poller sweeps freshly created contacts (create-only; not arming)
+- [x] 36-07-PLAN.md — the ingest lane's CREATE payload stamps `lv_enrichment_requested = "true"` so the existing 15-minute poller sweeps freshly created contacts (create-only; not arming)
 
 **Cross-cutting constraints:**
 
