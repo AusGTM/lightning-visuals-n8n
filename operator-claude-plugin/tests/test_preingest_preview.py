@@ -98,6 +98,104 @@ def test_a_real_emailless_row_is_held_by_the_real_predicate_with_no_stub():
     assert "email" in result["held_rows"][0]["reason"]
 
 
+# --------------------------------------------- unanswered rows are their own group (T-38-01)
+
+
+def _unanswered_entry(row_id, row, reason=None):
+    return {"row_id": row_id, "row": row, "reason": reason or preingest.UNANSWERED_REASON}
+
+
+def test_a_two_row_chunk_answered_with_one_item_puts_row_2_in_unanswered_never_held():
+    rows = [_row("row-1", firstname="Amy", email="amy@x.com"),
+            _row("row-2", firstname="Ben", email="ben@x.com")]
+    merge_report = preingest.MergeResult(
+        rows=(
+            _merged("row-1", firstname="Amy", email="amy@x.com", jobtitle="CEO"),
+            _merged("row-2", firstname="Ben", email="ben@x.com"),
+        ),
+        unanswered=(_unanswered_entry("row-2", _merged("row-2", firstname="Ben", email="ben@x.com")),),
+    )
+
+    result = preingest.render_enriched_preview(rows, merge_report)
+
+    assert result["unanswered_count"] == 1
+    assert {entry["row_id"] for entry in result["unanswered_rows"]} == {"row-2"}
+    assert {entry["row_id"] for entry in result["held_rows"]} == set()
+    assert {entry["row_id"] for entry in result["send_rows"]} == {"row-1"}
+
+
+def test_an_unanswered_row_with_no_email_is_never_held_for_it_the_live_bug_pinned():
+    rows = [_row("row-1", firstname="Amy", email="amy@x.com"),
+            _row("row-2", firstname="Ben")]  # no email at all
+    merge_report = preingest.MergeResult(
+        rows=(
+            _merged("row-1", firstname="Amy", email="amy@x.com"),
+            _merged("row-2", firstname="Ben"),
+        ),
+        unanswered=(_unanswered_entry("row-2", _merged("row-2", firstname="Ben")),),
+    )
+
+    result = preingest.render_enriched_preview(rows, merge_report)
+
+    assert {entry["row_id"] for entry in result["held_rows"]} == set(), (
+        "an unanswered row with no email must never land in held — the reason would "
+        "be a fabricated claim about the row's data standing in for a claim about "
+        "the response"
+    )
+    assert {entry["row_id"] for entry in result["unanswered_rows"]} == {"row-2"}
+
+
+def test_an_unanswered_row_with_a_source_email_is_still_unanswered_not_sent():
+    rows = [_row("row-1", email="ben@x.com")]
+    merge_report = preingest.MergeResult(
+        rows=(_merged("row-1", email="ben@x.com"),),
+        unanswered=(_unanswered_entry("row-1", _merged("row-1", email="ben@x.com")),),
+    )
+
+    result = preingest.render_enriched_preview(rows, merge_report)
+
+    assert result["unanswered_count"] == 1
+    assert {entry["row_id"] for entry in result["send_rows"]} == set()
+
+
+def test_no_entry_in_unanswered_rows_carries_the_no_email_reason():
+    rows = [_row("row-1", firstname="Ben")]
+    merge_report = preingest.MergeResult(
+        rows=(_merged("row-1", firstname="Ben"),),
+        unanswered=(_unanswered_entry("row-1", _merged("row-1", firstname="Ben")),),
+    )
+
+    result = preingest.render_enriched_preview(rows, merge_report)
+
+    for entry in result["unanswered_rows"]:
+        assert "no usable email" not in entry["reason"]
+        assert entry["reason"] == preingest.UNANSWERED_REASON
+
+
+def test_send_count_plus_held_count_plus_unanswered_count_equals_total():
+    rows = [_row(f"row-{i}", firstname=f"Person{i}", email=f"p{i}@x.com" if i % 2 else "")
+            for i in range(1, 8)]
+    merge_report = preingest.MergeResult(
+        rows=tuple(_merged(row["row_id"], **{k: v for k, v in row.items() if k != "row_id"})
+                   for row in rows),
+        unanswered=(
+            _unanswered_entry("row-3", _merged("row-3", firstname="Person3", email="")),
+            _unanswered_entry("row-6", _merged("row-6", firstname="Person6", email="")),
+        ),
+    )
+
+    result = preingest.render_enriched_preview(rows, merge_report)
+
+    assert result["send_count"] + result["held_count"] + result["unanswered_count"] == result["total"]
+
+
+def test_a_batch_with_no_unanswered_rows_says_so_explicitly():
+    rows = [_row("row-1", email="a@x.com")]
+    result = preingest.render_enriched_preview(rows)
+    assert result["unanswered_count"] == 0
+    assert "No rows are unanswered" in result["unanswered_statement"]
+
+
 # ------------------------------------------------- held rows are never sampled (T-37-21)
 
 
@@ -137,6 +235,25 @@ def test_a_held_batch_larger_than_the_adaptive_threshold_still_names_every_row()
     assert result["held_count"] == 25
     assert len(result["held_rows"]) == 25
     assert isinstance(result["held_rows"], list)  # never the leading/trailing shape
+
+
+def test_an_unanswered_batch_larger_than_the_adaptive_threshold_still_names_every_row():
+    """T-38-06: `unanswered_rows` must never pass through `preview._adaptive_sample`
+    either — a sampled-out unanswered row is a person nobody is told about."""
+    rows = [_row(f"row-{i}", email=f"p{i}@x.com") for i in range(1, 26)]
+    merge_report = preingest.MergeResult(
+        rows=tuple(_merged(row["row_id"], email=row["email"]) for row in rows),
+        unanswered=tuple(
+            _unanswered_entry(row["row_id"], _merged(row["row_id"], email=row["email"]))
+            for row in rows
+        ),
+    )
+
+    result = preingest.render_enriched_preview(rows, merge_report)
+
+    assert result["unanswered_count"] == 25
+    assert len(result["unanswered_rows"]) == 25
+    assert isinstance(result["unanswered_rows"], list)  # never the leading/trailing shape
 
 
 # ------------------------------------------------------------- both boundaries (behavior)

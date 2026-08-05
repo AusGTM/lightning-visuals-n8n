@@ -435,18 +435,37 @@ class MergeError(Exception):
     actually produced which. Nothing is merged when this raises."""
 
 
+# The operator-facing sentence for a row no response item ever named — a frozen
+# constant, not an inline string, so the merge layer and the render layer cannot drift
+# into two phrasings of the same fact (mirrors `enrichment.VIEW_REFUSAL`'s own reason).
+# It names the truth and nothing else: no verdict was received for this row because the
+# backend answered before this row's result arrived, so nothing is known about what
+# enrichment would have found — never a claim about the row's own data (T-38-01).
+UNANSWERED_REASON = (
+    "no verdict was received for this row — the backend answered before this row's "
+    "result arrived, so nothing is known about what enrichment would have found"
+)
+
+
 @dataclass(frozen=True)
 class MergeResult:
     """One merge's outcome, mirroring `MatchOutcome`'s payload-plus-report shape.
     `rows` is ready to hand straight to `extraction.hold_emailless` /
     `write_dispatch_csv` — every other field REPORTS a way the join could have
-    strayed, rather than silently absorbing it."""
+    strayed, rather than silently absorbing it.
+
+    `unanswered` is one entry per row no response item named — `{"row_id", "row",
+    "reason"}`, mirroring `extraction.hold_emailless`'s held-entry shape so a caller
+    that renders one can render the other. This is NOT a row with nothing to add (that
+    is a row whose response carried an empty `properties` map, walked normally); it is
+    a row the backend never answered for at all, and conflating the two is exactly the
+    fabrication this field exists to prevent (T-38-01)."""
 
     rows: tuple = field(default_factory=tuple)
     unknown_response_row_ids: tuple = field(default_factory=tuple)
     dropped_property_keys: tuple = field(default_factory=tuple)
     conflicts: tuple = field(default_factory=tuple)
-    unenriched_row_ids: tuple = field(default_factory=tuple)
+    unanswered: tuple = field(default_factory=tuple)
 
 
 def _present(value) -> bool:
@@ -468,9 +487,12 @@ def merge_enriched(rows, responses):
     untested.
 
     Walks the ROWS, not the responses, so a row with no matching response is
-    detectable (`unenriched_row_ids`) rather than silently absent from the output —
+    detectable (`unanswered`) rather than silently absent from the output —
     distinguishable from a row whose response carried an empty `properties` map,
-    which is walked normally and simply has nothing to fill.
+    which is walked normally and simply has nothing to fill. In the operator's terms:
+    a row the backend never answered for is not a row with nothing to add — it is a
+    row nothing is known about at all, and that difference is the whole point of the
+    group (T-38-01).
 
     Each response's `properties` map is filtered to `extraction.canonical_props()`
     before anything is written — a key outside that set is dropped and reported by
@@ -508,7 +530,7 @@ def merge_enriched(rows, responses):
     merged_rows = []
     dropped_property_keys = []
     conflicts = []
-    unenriched_row_ids = []
+    unanswered = []
 
     for row in rows:
         row_id = row["row_id"]
@@ -516,7 +538,7 @@ def merge_enriched(rows, responses):
         item = index.get(row_id)
 
         if item is None:
-            unenriched_row_ids.append(row_id)
+            unanswered.append({"row_id": row_id, "row": merged, "reason": UNANSWERED_REASON})
             merged_rows.append(merged)
             continue
 
@@ -541,7 +563,7 @@ def merge_enriched(rows, responses):
         unknown_response_row_ids=tuple(unknown_response_row_ids),
         dropped_property_keys=tuple(dropped_property_keys),
         conflicts=tuple(conflicts),
-        unenriched_row_ids=tuple(unenriched_row_ids),
+        unanswered=tuple(unanswered),
     )
 
 
@@ -624,6 +646,20 @@ def _held_statement(total, held_count):
     return f"{held_count} of {total} rows are held back and will not be sent."
 
 
+def _unanswered_statement(total, unanswered_count):
+    """The unanswered counterpart to `_held_statement`'s both-boundaries treatment
+    (T-38-01) — when nothing is unanswered, say so explicitly rather than omitting the
+    section, same reason `_held_statement` names a batch at both boundaries."""
+    if unanswered_count == 0:
+        return "No rows are unanswered here — the backend returned a verdict for every row."
+    if unanswered_count == total:
+        return (
+            f"All {total} rows in this batch are unanswered. The backend returned no "
+            f"verdict for any of them."
+        )
+    return f"{unanswered_count} of {total} rows are unanswered and will be re-requested."
+
+
 def render_enriched_preview(rows, merge_report=None):
     """The post-enrichment, pre-ingest render (37-CONTEXT §5 step 6) — the
     operator's one look at exactly what will reach HubSpot before "arm the
@@ -638,19 +674,27 @@ def render_enriched_preview(rows, merge_report=None):
     fill a previously-blank email) — never re-derived here. `write_dispatch_csv`
     refuses on that exact same predicate; a second one in this render could
     disagree with the gate, and the operator would grant the second arming on a
-    display that does not match what the gate actually does next.
+    display that does not match what the gate actually does next. As of T-38-01
+    the gate is asked only about rows the backend actually ANSWERED for — an
+    unanswered row is partitioned out first, so this does not weaken the
+    one-predicate guarantee: `hold_emailless` remains the sole source of the
+    SEND/HELD split, it is simply never asked a question about a row it has no
+    evidence for.
 
     Ordering mirrors `report.build_contact_report`: counts first, every held row
-    in FULL — the adaptive-sample rule applies only to the SEND rows, reusing
+    in FULL, then every unanswered row in FULL, then the sampled send rows — the
+    adaptive-sample rule applies only to the SEND rows, reusing
     `preview._adaptive_sample` rather than inventing a fourth sampling
-    convention. A held row that got sampled out of a large batch would be a
-    person nobody is told about.
+    convention. A held or unanswered row that got sampled out of a large batch
+    would be a person nobody is told about (T-38-06).
 
     Returns structured data, not rendered markdown — `preview.build_extracted_preview`'s
     precedent: the skill owns the rendering.
     """
     merged_rows = list(merge_report.rows) if merge_report is not None else list(rows)
     conflicts = tuple(getattr(merge_report, "conflicts", None) or ())
+    unanswered_entries = tuple(getattr(merge_report, "unanswered", None) or ())
+    unanswered_row_ids = {entry["row_id"] for entry in unanswered_entries}
 
     original_by_id = {row.get("row_id"): row for row in rows}
 
@@ -677,11 +721,26 @@ def render_enriched_preview(rows, merge_report=None):
             "source": "the enrichment waterfall" if enriched_values else None,
         }
 
-    sendable, held = extraction.hold_emailless(merged_rows)
+    # Unanswered rows are partitioned OUT before the gate is ever called (T-38-01)
+    # — this is the fix: handing the gate every merged row, unanswered included,
+    # is what let an unanswered row with no email land in `held` carrying the
+    # gate's no-email reason, a claim about the row's data standing in for a claim
+    # about the response.
+    answered_rows = [row for row in merged_rows if row.get("row_id") not in unanswered_row_ids]
+
+    sendable, held = extraction.hold_emailless(answered_rows)
 
     held_rows = [
         {**_row_view(entry["row"]), "verdict": "HELD", "reason": entry["reason"]}
         for entry in held
+    ]
+
+    # Never sampled — same rule the held rows already follow, same reason
+    # (T-38-06): the reason is taken from the constant, never from the entry's own
+    # `reason`, so a caller cannot smuggle a fabricated reason through this render.
+    unanswered_rows = [
+        {**_row_view(entry["row"]), "verdict": "UNANSWERED", "reason": UNANSWERED_REASON}
+        for entry in unanswered_entries
     ]
 
     send_views = [
@@ -691,15 +750,19 @@ def render_enriched_preview(rows, merge_report=None):
 
     total = len(merged_rows)
     held_count = len(held)
+    unanswered_count = len(unanswered_entries)
 
     return {
         "total": total,
         "send_count": len(sendable),
         "held_count": held_count,
         "held_rows": held_rows,
+        "unanswered_count": unanswered_count,
+        "unanswered_rows": unanswered_rows,
         "adaptive": adaptive,
         "send_rows": send_rows,
         "conflicts": conflicts,
         "held_statement": _held_statement(total, held_count),
+        "unanswered_statement": _unanswered_statement(total, unanswered_count),
         "nothing_reached_hubspot": _NOTHING_REACHED_HUBSPOT,
     }

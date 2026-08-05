@@ -23,6 +23,10 @@ def _rows(n):
     ])["rows"]
 
 
+def _unanswered_ids(result):
+    return {entry["row_id"] for entry in result.unanswered}
+
+
 def _response(row_id, properties=None):
     return {
         "action": "enriched", "object_type": "contacts", "hs_object_id": None,
@@ -117,20 +121,45 @@ def test_removing_the_middle_response_item_does_not_shift_the_trailing_rows():
     assert merged[rows[0]["row_id"]]["email"] == "first@x.com"
     assert "email" not in merged[rows[1]["row_id"]]
     assert merged[rows[2]["row_id"]]["email"] == "third@x.com"
-    assert rows[1]["row_id"] in result.unenriched_row_ids
+    assert rows[1]["row_id"] in _unanswered_ids(result)
 
 
-def test_a_row_with_no_matching_response_keeps_its_values_and_is_marked_unenriched():
+def test_a_row_with_no_matching_response_keeps_its_values_and_is_marked_unanswered():
     rows = _rows(2)
     responses = [_response(rows[0]["row_id"], {})]
 
     result = preingest.merge_enriched(rows, responses)
 
-    assert rows[1]["row_id"] in result.unenriched_row_ids
-    assert rows[0]["row_id"] not in result.unenriched_row_ids, (
+    assert rows[1]["row_id"] in _unanswered_ids(result)
+    assert rows[0]["row_id"] not in _unanswered_ids(result), (
         "a row whose response carried an empty properties map is distinguishable "
         "from a row with no response at all"
     )
+
+
+def test_an_unanswered_entry_carries_row_id_row_and_the_true_reason():
+    rows = _rows(2)
+    responses = [_response(rows[0]["row_id"], {})]
+
+    result = preingest.merge_enriched(rows, responses)
+
+    assert len(result.unanswered) == 1
+    entry = result.unanswered[0]
+    assert entry["row_id"] == rows[1]["row_id"]
+    assert entry["row"]["row_id"] == rows[1]["row_id"]
+    assert entry["reason"] == preingest.UNANSWERED_REASON
+
+
+def test_an_unanswered_row_that_carries_a_source_email_is_still_unanswered():
+    # An unanswered row is excluded from the sendable set even when it has an email —
+    # we do not know what the waterfall would have added, so it is never guessed at.
+    rows = _rows(2)
+    rows[1]["email"] = "has-email@x.com"
+    responses = [_response(rows[0]["row_id"], {})]
+
+    result = preingest.merge_enriched(rows, responses)
+
+    assert rows[1]["row_id"] in _unanswered_ids(result)
 
 
 def test_a_properties_key_outside_canonical_props_is_dropped_and_reported():
