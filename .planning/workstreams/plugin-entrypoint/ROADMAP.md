@@ -449,7 +449,7 @@ Plans:
 
 Plans:
 - [x] 35-01-PLAN.md — the candidate ladder: `scripts/url_fallback.py` (rung order, same-host check, fetch cap, give-up message, CLI) plus the `extraction.md` URL-adapter rewrite that escalates on fetched-but-empty and terminates on a tool error *(wave 1)* — complete 2026-08-05, see 35-01-SUMMARY.md
-- [ ] 35-02-PLAN.md — the fences pinned: provenance naming the URL actually fetched, an AST import-set guard proving no scraping/browser/HTTP capability was introduced, and contract tests tying `extraction.md`'s quoted cap and branch placement to the module *(wave 2)*
+- [x] 35-02-PLAN.md — the fences pinned: provenance naming the URL actually fetched, an AST import-set guard proving no scraping/browser/HTTP capability was introduced, and contract tests tying `extraction.md`'s quoted cap and branch placement to the module *(wave 2)* — complete 2026-08-05, see 35-02-SUMMARY.md
 - [ ] 35-03-PLAN.md — walk `https://gctc.com.au/board-of-directors/` live for its 9 directors, then cut `0.10.0` (bump + CHANGELOG in one commit), push to master, refresh the marketplace clone *(wave 3)*
 
 

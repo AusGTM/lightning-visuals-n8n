@@ -4,12 +4,12 @@ milestone: v0.6
 milestone_name: Progress
 current_phase: 35
 current_phase_name: URL Structured-Representation Fallback
-current_plan: 1
+current_plan: 2
 status: in_progress
-stopped_at: 35-01 complete — the deterministic candidate-URL ladder (scripts/url_fallback.py: plan_ladder, same_host, filter_candidates, give_up_message, CLI) and extraction.md's URL-adapter rewrite (nothing-usable escalates, fetch-failed states it does not). 35-02 (provenance + import-guard + contract tests) and 35-03 (the live walk + release) remain. 23-06 operator-front items (RB-3 etc.) still open, unchanged by this phase.
-last_updated: "2026-08-05T10:20:00+10:00"
+stopped_at: 35-02 complete — provenance now names the URL actually fetched, an AST import-set guard proves url_fallback.py's exclusions by construction, and 7 new contract tests pin extraction.md's cap/branch/host wording against the module. 35-03 (the live walk + release) remains. 23-06 operator-front items (RB-3 etc.) still open, unchanged by this phase.
+last_updated: "2026-08-05T10:25:00+10:00"
 last_activity: 2026-08-05
-last_activity_desc: Phase 35 plan 01 complete — url_fallback.py ladder built and TDD-pinned; extraction.md's nothing-usable branch escalates instead of terminating
+last_activity_desc: Phase 35 plan 02 complete — provenance/import-guard/contract-pin tests built; a genuine cap-parity test bug (coincidental digit match on INGEST-06) caught live by the plan's own red-check and fixed
 progress:
   total_phases: 12
   completed_phases: 8
@@ -23,12 +23,38 @@ progress:
 ## Current Position
 
 Phase: 35 (URL Structured-Representation Fallback) — IN PROGRESS
-Plan: 1 of 3 complete (35-01 done; 35-02, 35-03 remain)
-Status: `scripts/url_fallback.py` built and TDD-pinned (20 new tests); extraction.md's URL
-adapter rewritten so "fetched but nothing usable" escalates through it instead of
-terminating with the now-disproven "likely client-rendered" verdict. No live walk yet —
-that is 35-03's job. No release cut yet.
-Last activity: 2026-08-05 — Phase 35 plan 01 complete
+Plan: 2 of 3 complete (35-01, 35-02 done; 35-03 remains)
+Status: `scripts/url_fallback.py` built, TDD-pinned, and now also import-set-guarded (its
+"cannot reach the network" claim is proven by AST, not promised in a docstring).
+extraction.md's URL adapter carries provenance/named-empty bullets, a same-host-bound
+sentence, and a literal cap-quoting phrase, all pinned against the module by 7 contract
+tests. No live walk yet — that is 35-03's job. No release cut yet.
+Last activity: 2026-08-05 — Phase 35 plan 02 complete
+
+**2026-08-05 — PHASE 35 PLAN 02 COMPLETE.** `extraction.md`'s URL adapter gained a
+**Provenance locator** bullet (a ladder-sourced row names the URL it actually came from —
+e.g. the wp-json endpoint — not the pretty page URL the operator pasted) and a **Named
+empty outcome** bullet (an exhausted ladder is `url_fallback.py`'s give-up message,
+relayed as a named result, per INGEST-06). All four adapters now carry the same bolded
+`**Provenance locator:**` bullet shape — the screenshot adapter's was reformatted from
+unbolded, line-wrapped prose. `url_fallback.py`'s "no network I/O" claim is now an AST
+guard: a coarse root-import allowlist (`{json, sys, pathlib, urllib}`) plus a granular
+exact-dotted-name forbidden check (catches `urllib.request` specifically, since the coarse
+check alone cannot distinguish it from the allowlisted `urllib.parse`) — both layers
+red-checked live. `test_extraction_contract.py` gained 7 structural pins: the script named
+by path, the escalation instruction confined to the "nothing usable" region (never the
+tool-error region, via a shared `_url_adapter_regions()` slicing helper), the cap the
+operator is quoted imported from `MAX_FOLLOWUP_FETCHES` rather than typed in, the
+same-host bound and no-same-URL-retry rule both named in prose, and the disproven
+"client-rendered" verdict asserted absent from the whole file. **A genuine bug was caught
+by the plan's own mandated red-check:** the first draft of the cap-parity test
+(`str(cap) in text`) passed at cap=6 by coincidentally matching the unrelated
+`(INGEST-06)` requirement ID a few lines below the cap sentence — fixed by pinning to the
+literal phrase `"at most {cap} follow-up fetches"` and amending `extraction.md`'s prose to
+actually state the number. Suites: plugin 1052/5 (1042 baseline + 10 new), repo 1933/6
+(1923 baseline + 10 new), node 553 unchanged, arming grep 0. Commits `9e13890`, `e52a94d`,
+`42ff387`. 35-03 (the live operator-facing walk of the acceptance URL + `0.10.0` release
+cut) remains.
 
 **2026-08-05 — PHASE 35 PLAN 01 COMPLETE.** `operator-claude-plugin/scripts/url_fallback.py`
 built: `plan_ladder` (the 4-rung candidate ladder — wp-json pages-by-slug, posts-by-slug,
@@ -588,6 +614,10 @@ milestone otherwise scoped as plugin-only.
   `test_plugin_manifest.py`), 28-06 (armed canary), 29-01/02/03/04/05 now DONE → 29-06 remains,
   30-07 (armed canary), 23-06 §B, 25-01 Probe B4.
 
+- **2026-08-05: Phase 35 (url-structured-fallback) plan 35-02 built.** Provenance,
+  import-set guard, and contract-pin tests — see Current Position above. 35-03 (live
+  walk + `0.10.0` release) remains.
+
 - **2026-08-03: Phase 32 (llm-free-sweep-trigger) plan 32-01 built.** Replaces the cron
   trigger's `claude -p` invocation (RB-8's silent failure, `29-06-FINDINGS.md`) with
   `lv-sweep-run.sh`, a deterministic LLM-free wrapper, pinned two-sided against
@@ -599,7 +629,7 @@ milestone otherwise scoped as plugin-only.
   readiness row was wrong a third time — it reported the probe script MISSING when it existed
   under `operator-claude-plugin/scripts/`.
 
-**Resume File:** `.planning/workstreams/plugin-entrypoint/phases/23-walking-skeleton-plugin-shell-tabular-dispatch/23-06-SUMMARY.md` (operator front) · `.../27-backend-status-surface/27-04-SUMMARY.md` (autonomous front)
+**Resume File:** `.planning/workstreams/plugin-entrypoint/phases/23-walking-skeleton-plugin-shell-tabular-dispatch/23-06-SUMMARY.md` (operator front) · `.../35-url-structured-fallback/35-02-SUMMARY.md` (autonomous front)
 
 **Next Action:**
 **All remaining work is operator-gated.** Highest leverage first, all in `OPERATOR-RUNBOOK.md`:
