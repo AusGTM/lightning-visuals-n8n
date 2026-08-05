@@ -17,6 +17,7 @@ from pathlib import Path
 from url_fallback import (
     MAX_FOLLOWUP_FETCHES,
     filter_candidates,
+    give_up_message,
     plan_ladder,
     same_host,
     slug_of,
@@ -146,6 +147,32 @@ def test_filter_candidates_refuses_a_non_http_scheme_with_its_own_reason():
     assert "http" in result["refused"][0]["reason"].lower()
 
 
+# --- give_up_message: what was tried, in order, and no verdict about why -----------------
+
+
+def test_give_up_message_names_attempts_in_the_order_supplied():
+    first = {"url": "https://gctc.com.au/wp-json/wp/v2/pages?slug=board-of-directors",
+             "outcome": "empty result set"}
+    second = {"url": "https://gctc.com.au/sitemap.xml", "outcome": "404"}
+    message = give_up_message(ACCEPTANCE_URL, [first, second])
+    assert message.index(first["url"]) < message.index(second["url"])
+    assert first["outcome"] in message
+    assert second["outcome"] in message
+
+
+def test_give_up_message_draws_no_rendering_verdict():
+    message = give_up_message(ACCEPTANCE_URL, [])
+    assert "javascript" not in message.lower()
+    assert "client-rendered" not in message.lower()
+    assert "cannot execute" not in message.lower()
+
+
+def test_give_up_message_with_no_attempts_still_names_the_pasted_url():
+    message = give_up_message(ACCEPTANCE_URL, [])
+    assert ACCEPTANCE_URL in message
+    assert "no follow-up" in message.lower()
+
+
 # --- the CLI layer must not disagree with the function -------------------------------------
 
 
@@ -155,6 +182,23 @@ def test_cli_prints_the_same_first_candidate_and_cap_as_the_function(tmp_path):
     assert parsed["ok"] is True
     assert parsed["candidates"][0]["url"] == ACCEPTANCE_FIRST_CANDIDATE
     assert parsed["cap"] == MAX_FOLLOWUP_FETCHES
+
+
+def test_cli_attempted_mode_matches_the_function(tmp_path):
+    attempted_file = tmp_path / "attempted.json"
+    attempted_file.write_text(
+        json.dumps([{"url": ACCEPTANCE_FIRST_CANDIDATE, "outcome": "empty result set"}]),
+        encoding="utf-8",
+    )
+    returncode, parsed = _run_url_cli(
+        tmp_path, ACCEPTANCE_URL, "--attempted", str(attempted_file)
+    )
+    assert returncode == 0
+    assert parsed["ok"] is True
+    assert parsed["message"] == give_up_message(
+        ACCEPTANCE_URL,
+        [{"url": ACCEPTANCE_FIRST_CANDIDATE, "outcome": "empty result set"}],
+    )
 
 
 def test_cli_filter_mode_refuses_an_off_host_url(tmp_path):
