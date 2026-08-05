@@ -518,8 +518,21 @@ Plans:
   6. **Two arming phrases, structurally uncollapsible**: the enriched preview must land in the operator's turn before the ingest arm can be spoken, so the two `armed` arguments are necessarily in different turns. A combined phrase would grant the HubSpot write before the operator can see what they are approving.
   7. The AST arming guard is amended deliberately for the unarmed match POST, with keeper tests bounding its body keys — **and the module-shaped hole is closed**, since `dispatch_enrichment(transport=requests)` has never been visible to it and the guard's own failure message is currently untrue of the code it guards.
   8. Suites green; version bumped in the same commit as the CHANGELOG cut; merged to master; marketplace clone refreshed.
+  9. *(§13 amendment, operator 2026-08-05)* A broken batch resumes idempotently: a run manifest maps `row_id` to a terminal verdict under the durable home, and a re-run re-spends nothing on rows already carrying one. The manifest is its own artifact — `artifact_store.py`'s field refusal, which keeps the arming grant off disk, is not widened.
+  10. *(§13 amendment)* After ingest, the records that landed are handed to the HubSpot queue the scheduled poller already sweeps, so pre-ingest exclusion is temporary rather than terminal and no contact ends a cycle unenriched.
 
-**Plans**: TBD
+**Plans:** 9 plans
+
+Plans:
+- [ ] 37-01-PLAN.md — the rows envelope pinned py↔js, the match ceiling, and the arming guard's module-shaped blind spot
+- [ ] 37-02-PLAN.md — the ingest gate raises: `hold_emailless` + `write_dispatch_csv` refusal before any file is opened
+- [ ] 37-03-PLAN.md — the unarmed match lane: ids once, one POST the guard can see, four outcome groups
+- [ ] 37-04-PLAN.md — decisions and merges joined by id: `apply_match_decisions`, `merge_enriched`, `rows_from_table`
+- [ ] 37-05-PLAN.md — the two previews: a rows-spec cost block, a spec-file CLI, and the enriched preview
+- [ ] 37-06-PLAN.md — run manifest + idempotent resume (§13a)
+- [ ] 37-07-PLAN.md — post-ingest handoff to the HubSpot queue (§13b), with the transport as an operator decision
+- [ ] 37-08-PLAN.md — `skills/enrich-before-ingest/SKILL.md` and the two-arming-phrase contract test
+- [ ] 37-09-PLAN.md — gates, release cut, the nine-directors live walk, merge to master
 
 ## v0.6 Progress
 
