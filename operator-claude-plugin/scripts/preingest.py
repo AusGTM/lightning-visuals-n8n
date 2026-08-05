@@ -603,3 +603,103 @@ def rows_from_table(path, mapping_path=None):
         rows.append(row)
 
     return {"rows": rows, "dropped_headers": dropped_headers}
+
+
+_NOTHING_REACHED_HUBSPOT = (
+    "Nothing here has reached HubSpot yet — this is the last look before "
+    '"arm the upload" grants the write.'
+)
+
+
+def _held_statement(total, held_count):
+    """Names the batch at both boundaries (37-CONTEXT §5 step 6) — an omitted
+    section is indistinguishable from a batch nobody checked."""
+    if held_count == 0:
+        return "No rows are held back here — every row in this batch is sendable."
+    if held_count == total:
+        return (
+            f"All {total} rows in this batch are held back. Sending it as it stands "
+            f"would write nothing to HubSpot."
+        )
+    return f"{held_count} of {total} rows are held back and will not be sent."
+
+
+def render_enriched_preview(rows, merge_report=None):
+    """The post-enrichment, pre-ingest render (37-CONTEXT §5 step 6) — the
+    operator's one look at exactly what will reach HubSpot before "arm the
+    upload" can be spoken. Pure: no network, no file write, no config read.
+
+    `rows` are the SOURCE-supplied rows (pre-merge); `merge_report` is the
+    `MergeResult` `merge_enriched(rows, responses)` returned. When `merge_report`
+    is omitted, `rows` are rendered as their own merged form (nothing enriched).
+
+    The SEND/HELD verdict is computed by calling `extraction.hold_emailless` over
+    the rows as they will actually be sent (the MERGED rows, since enrichment can
+    fill a previously-blank email) — never re-derived here. `write_dispatch_csv`
+    refuses on that exact same predicate; a second one in this render could
+    disagree with the gate, and the operator would grant the second arming on a
+    display that does not match what the gate actually does next.
+
+    Ordering mirrors `report.build_contact_report`: counts first, every held row
+    in FULL — the adaptive-sample rule applies only to the SEND rows, reusing
+    `preview._adaptive_sample` rather than inventing a fourth sampling
+    convention. A held row that got sampled out of a large batch would be a
+    person nobody is told about.
+
+    Returns structured data, not rendered markdown — `preview.build_extracted_preview`'s
+    precedent: the skill owns the rendering.
+    """
+    merged_rows = list(merge_report.rows) if merge_report is not None else list(rows)
+    conflicts = tuple(getattr(merge_report, "conflicts", None) or ())
+
+    original_by_id = {row.get("row_id"): row for row in rows}
+
+    def _row_view(merged_row):
+        row_id = merged_row.get("row_id")
+        original = original_by_id.get(row_id, {})
+        source_values = {
+            key: value for key, value in original.items()
+            if key != "row_id" and _present(value)
+        }
+        enriched_values = {
+            key: value for key, value in merged_row.items()
+            if key != "row_id" and _present(value) and not _present(original.get(key))
+        }
+        return {
+            "row_id": row_id,
+            "source_values": source_values,
+            "enriched_values": enriched_values,
+            # ponytail: the enrichment response `merge_enriched` consumes carries
+            # one flat `properties` map per row — no per-provider attribution
+            # reaches this layer. "the enrichment waterfall" is the honest,
+            # aggregate source name; naming an individual provider here would be
+            # a guess this module has no evidence for.
+            "source": "the enrichment waterfall" if enriched_values else None,
+        }
+
+    sendable, held = extraction.hold_emailless(merged_rows)
+
+    held_rows = [
+        {**_row_view(entry["row"]), "verdict": "HELD", "reason": entry["reason"]}
+        for entry in held
+    ]
+
+    send_views = [
+        {**_row_view(row), "verdict": "SEND", "reason": None} for row in sendable
+    ]
+    adaptive, send_rows = preview._adaptive_sample(send_views)
+
+    total = len(merged_rows)
+    held_count = len(held)
+
+    return {
+        "total": total,
+        "send_count": len(sendable),
+        "held_count": held_count,
+        "held_rows": held_rows,
+        "adaptive": adaptive,
+        "send_rows": send_rows,
+        "conflicts": conflicts,
+        "held_statement": _held_statement(total, held_count),
+        "nothing_reached_hubspot": _NOTHING_REACHED_HUBSPOT,
+    }
