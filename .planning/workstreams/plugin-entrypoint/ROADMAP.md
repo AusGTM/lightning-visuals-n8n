@@ -656,3 +656,21 @@ Traceability table lives in `REQUIREMENTS.md`.
 - **Out of scope, do not plan phases for:** anti-bot-detection or user-agent spoofing for URL
   ingestion, authenticated/paywalled scraping, automated screenshot capture, company-object
   ingestion, scheduled/unattended runs, and write-back of corrections from the plugin.
+
+### Phase 38: Unanswered Rows — Truncation Honesty
+
+**Goal**: A row whose row_id appears in no enrichment response item is reported as `unanswered` — never mislabelled `held/no-email` — treated as non-terminal by the run manifest, and automatically re-requested once.
+**Depends on**: Phase 37 (the preingest/manifest surface this extends)
+**Requirements**: STRUCT-04 (never invent — a fabricated "no usable email" reason is an invented value), STRUCT-02 (separated and reported)
+**Success Criteria** (what must be TRUE):
+
+  1. A two-row chunk answering with one item yields `unanswered:[row-2]` — never a held/no-email verdict for the silent row. The reason names the truth: "no verdict received for this row".
+  2. The run manifest treats `unanswered` as non-terminal (like `unchecked`): resume re-requests it; terminal verdicts are untouched.
+  3. One automatic re-request pass for unanswered rows runs at end of batch — a fresh smaller chunk, exactly once, never a loop.
+  4. The enriched preview names unanswered rows as their own group, after held rows.
+  5. Suites green above current baselines (repo 2157/6, plugin 1238/5, node 621); arming grep 0. Backend untouched — Build Response first-arrival stays deferred, with the corrected analysis (intra-batch skew, not skip-vs-waterfall) recorded.
+
+**Plans:** 1 plan
+
+Plans:
+- [ ] 38-01-PLAN.md — `unanswered` as its own group through merge, preview and manifest, plus one re-request pass over the existing dispatch path
