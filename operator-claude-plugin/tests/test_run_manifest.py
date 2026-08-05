@@ -3,6 +3,8 @@
 Task 1: the manifest file itself — its own artifact, its own schema, its own refusal,
 beside the dashboard pointer and never inside `artifact_store.py`.
 
+Task 2: `rows_to_resume` — skip what completed, re-request what did not.
+
 Isolation mirrors `test_artifact_store.py`: `CLAUDE_PLUGIN_DATA` pointed at a `tmp_path`,
 never real `~/.claude`. Most tests pass an explicit `path=` (the unit-level style used
 throughout this suite); the two location tests below isolate via the env var instead,
@@ -15,6 +17,7 @@ import pytest
 
 import artifact_store
 import durable_paths
+import preingest
 import run_manifest
 
 # =====================================================================================
@@ -218,4 +221,127 @@ def test_the_module_exposes_no_fourth_verb():
     public = {name for name in vars(run_manifest)
               if not name.startswith("_") and inspect.isfunction(getattr(run_manifest, name))
               and getattr(run_manifest, name).__module__ == "run_manifest"}
-    assert public == {"manifest_path", "save", "load"}
+    assert public == {"manifest_path", "save", "load", "rows_to_resume"}
+
+
+# =====================================================================================
+# Task 2: rows_to_resume
+# =====================================================================================
+
+
+def _row(row_id, email=None):
+    row = {"row_id": row_id, "firstname": "First", "lastname": "Doe", "company": "GCTC"}
+    if email is not None:
+        row["email"] = email
+    return row
+
+
+def test_a_row_verdicted_matched_or_enriched_is_excluded():
+    rows = [_row("row-1"), _row("row-2")]
+    manifest = {"row-1": "matched", "row-2": "enriched"}
+
+    result = run_manifest.rows_to_resume(rows, manifest)
+
+    assert result.rows == ()
+    assert {entry["row_id"] for entry in result.skipped} == {"row-1", "row-2"}
+
+
+def test_a_row_verdicted_unchecked_is_included_we_could_not_look_is_a_reason_to_look_again():
+    rows = [_row("row-1")]
+    manifest = {"row-1": "unchecked"}
+
+    result = run_manifest.rows_to_resume(rows, manifest)
+
+    assert result.rows == (rows[0],)
+    assert result.skipped == ()
+
+
+def test_a_held_row_without_an_email_stays_excluded_and_is_reported_still_held():
+    rows = [_row("row-1")]  # no email
+    manifest = {"row-1": "held"}
+
+    result = run_manifest.rows_to_resume(rows, manifest)
+
+    assert result.rows == ()
+    assert result.still_held == ({"row_id": "row-1", "verdict": "held"},)
+
+
+def test_a_held_row_that_now_carries_an_email_is_included():
+    rows = [_row("row-1", email="now@example.com")]
+    manifest = {"row-1": "held"}
+
+    result = run_manifest.rows_to_resume(rows, manifest)
+
+    assert result.rows == (rows[0],)
+    assert result.still_held == ()
+
+
+def test_a_row_absent_from_the_manifest_is_included():
+    rows = [_row("row-1")]
+    result = run_manifest.rows_to_resume(rows, {})
+    assert result.rows == (rows[0],)
+
+
+def test_an_empty_or_absent_manifest_means_every_row_is_included():
+    rows = [_row("row-1"), _row("row-2"), _row("row-3")]
+
+    assert run_manifest.rows_to_resume(rows, {}).rows == tuple(rows)
+    assert run_manifest.rows_to_resume(rows, None).rows == tuple(rows)
+
+
+def test_over_25_rows_with_18_recorded_enriched_it_resumes_7_and_names_18_skipped():
+    rows = [_row(f"row-{i}") for i in range(1, 26)]
+    manifest = {f"row-{i}": "enriched" for i in range(1, 19)}
+
+    result = run_manifest.rows_to_resume(rows, manifest)
+
+    assert len(result.rows) == 7
+    assert len(result.skipped) == 18
+    resumed_ids = {row["row_id"] for row in result.rows}
+    assert resumed_ids == {f"row-{i}" for i in range(19, 26)}
+
+
+def test_rows_to_resume_preserves_original_order():
+    rows = [_row("row-1"), _row("row-2"), _row("row-3")]
+    manifest = {"row-2": "matched"}
+
+    result = run_manifest.rows_to_resume(rows, manifest)
+
+    assert [row["row_id"] for row in result.rows] == ["row-1", "row-3"]
+
+
+def test_rows_to_resume_is_pure_and_performs_no_file_read(tmp_path, monkeypatch):
+    """No disk access at all — even pointing manifest_path() somewhere that would raise
+    if touched must not affect the result, since this function takes an ALREADY-LOADED
+    manifest."""
+    def _explode():
+        raise AssertionError("rows_to_resume must never read the manifest from disk")
+
+    monkeypatch.setattr(run_manifest, "load", _explode)
+
+    rows = [_row("row-1")]
+    result = run_manifest.rows_to_resume(rows, {"row-1": "matched"})
+    assert result.rows == ()
+
+
+# =====================================================================================
+# Task 2: build_rows_spec id stability is what makes the whole resume work
+# =====================================================================================
+
+
+def test_build_rows_spec_ids_are_stable_so_a_manifest_from_the_first_call_still_filters_the_second():
+    input_rows = [
+        {"firstname": "Jane", "lastname": "Doe", "company": "GCTC"},
+        {"firstname": "Ben", "lastname": "Baker", "company": "Widgets Co"},
+    ]
+
+    first = preingest.build_rows_spec(input_rows)
+    second = preingest.build_rows_spec(input_rows)
+
+    first_ids = [row["row_id"] for row in first["rows"]]
+    second_ids = [row["row_id"] for row in second["rows"]]
+    assert first_ids == second_ids
+
+    manifest = {first_ids[0]: "matched"}
+    result = run_manifest.rows_to_resume(second["rows"], manifest)
+    assert [row["row_id"] for row in result.rows] == [second_ids[1]]

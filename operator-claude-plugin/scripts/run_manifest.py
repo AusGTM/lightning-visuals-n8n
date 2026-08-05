@@ -47,6 +47,7 @@ the same reasoning `artifact_store.py` and `durable_paths.py` already carry for 
 files they own.
 """
 import json
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -177,3 +178,73 @@ def load(path=None) -> dict:
             return {}
         cleaned[row_id] = verdict
     return cleaned
+
+
+@dataclass(frozen=True)
+class ResumeResult:
+    """One resume decision's outcome, mirroring `MatchOutcome`/`MergeResult`'s
+    payload-plus-report shape from `preingest.py`. `rows` is ready to hand straight to
+    `chunking.plan_chunks`/`preingest.match_batch` — every other field REPORTS why a
+    row was left out, so a resume tells the operator "18 of 25 already done" rather
+    than silently showing a smaller batch."""
+
+    rows: tuple = field(default_factory=tuple)
+    skipped: tuple = field(default_factory=tuple)
+    still_held: tuple = field(default_factory=tuple)
+
+
+def _present(value) -> bool:
+    """Mirrors `preingest._present`'s trim-then-check rule, kept local rather than
+    imported — this module never reaches into another module's private name."""
+    return value is not None and str(value).strip() != ""
+
+
+def rows_to_resume(rows, manifest):
+    """The subset of `rows` that still needs work, in original order, plus a report of
+    what was left out and why. Pure: takes an already-loaded manifest (`load()`'s
+    return), performs no file read itself — mirroring how `chunking.plan_chunks` takes
+    an already-read ceiling rather than reading config itself.
+
+    A row verdicted `matched` or `enriched` is done and excluded.
+
+    A row verdicted `unchecked` is INCLUDED — "we could not look" is a reason to look
+    again, not an answer about the row. `unchecked` is terminal for the RUN that
+    recorded it (that run is over) but not an answer about the row itself; skipping it
+    on resume would leave a contact unenriched at the end of the cycle for the sole
+    reason that a chunk timed out once, which is the outcome 37-CONTEXT §13a's
+    governing addition exists to prevent.
+
+    A row verdicted `held` is excluded not because it completed but because sending it
+    would fail identically — the ingest gate holds any row without an email, and
+    nothing about a resume changes that. It is re-included the moment it gains an
+    email, which is the only thing that changes its outcome, and is reported in
+    `still_held` when it stays excluded so the operator sees a count that has not
+    moved rather than a row that silently vanished.
+
+    A row absent from the manifest (or when the manifest is empty/absent entirely) is
+    included — a resume with no manifest is just a run.
+    """
+    manifest = manifest or {}
+    to_resume, skipped, still_held = [], [], []
+
+    for row in rows:
+        row_id = row.get("row_id")
+        verdict = manifest.get(row_id)
+
+        if verdict in (MATCHED, ENRICHED):
+            skipped.append({"row_id": row_id, "verdict": verdict})
+            continue
+
+        if verdict == HELD:
+            if _present(row.get("email")):
+                to_resume.append(row)
+            else:
+                still_held.append({"row_id": row_id, "verdict": verdict})
+            continue
+
+        # verdict is UNCHECKED, or the row is absent from the manifest entirely
+        # (verdict is None) — both are re-requested.
+        to_resume.append(row)
+
+    return ResumeResult(rows=tuple(to_resume), skipped=tuple(skipped),
+                        still_held=tuple(still_held))
