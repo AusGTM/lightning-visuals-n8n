@@ -3700,6 +3700,33 @@ return rows.map((it, i) => {
 });
 """
 
+# ---- Phase 36-03 Task 2: two terminal markers become row-carrying Code nodes ----------
+#
+# Both were n8n-nodes-base.set (typeVersion 3.4). A Set v3.4 emits ONLY its assigned key
+# (BUG 12's class — see ENRICH_SET_DQ_JS above, the precedent this mirrors), so a
+# HIGH-matched fresh row terminating at either one would return an uncorrelatable reply
+# with no `row_id` — and `row_id` is the join key here, because `event_id` is meaningless
+# for an id-less row (36-CONTEXT.md sec7 step 5). Node NAMES stay identical so every
+# connection edge and NODE_CREDENTIAL_MAP key still resolves; only the type/parameters
+# change. Their tests/test_row_carry.py ROW_REPLACING_BY_DESIGN waivers are retired in the
+# SAME commit as this change (test_every_row_replacing_entry_is_still_a_real_node_
+# somewhere fails on a stale waiver naming a node that is no longer a Set node anywhere).
+ENRICH_UNSUPPORTED_OBJECT_TYPE_JS = r"""// Unsupported Object Type — row-carrying terminal marker.
+// Was a Set node (BUG 12 class): spreads the row so a caller's row_id survives to Build
+// Response instead of being silently dropped.
+return $input.all().map((it) => ({
+  json: { ...it.json, object_type: "unsupported" },
+}));
+"""
+
+ENRICH_SKIP_NOOP_JS = r"""// Skip (NoOp) — row-carrying terminal marker.
+// Was a Set node (BUG 12 class): spreads the row so a HIGH-matched fresh row that gets
+// skipped here still returns a correlatable reply carrying row_id.
+return $input.all().map((it) => ({
+  json: { ...it.json, action: "skip" },
+}));
+"""
+
 
 def build_enrichment_cloud():
     nodes = []
@@ -3772,13 +3799,8 @@ def build_enrichment_cloud():
     if_object_type_supported = _if_not_equal_node(
         "IF Object Type Supported", "object_type", "unknown", x, y)
     nodes.append(if_object_type_supported)
-    set_unsupported = {
-        "parameters": {"assignments": {"assignments": [
-            {"id": nid("a"), "name": "object_type", "value": "unsupported", "type": "string"}
-        ]}, "options": {}},
-        "id": nid("r"), "name": "Unsupported Object Type",
-        "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [x, y + 260]}
-    nodes.append(set_unsupported)
+    nodes.append(code_node(
+        "Unsupported Object Type", ENRICH_UNSUPPORTED_OBJECT_TYPE_JS, x, y + 260))
 
     x += 220
     route_by_type = {
@@ -3915,13 +3937,7 @@ def build_enrichment_cloud():
     # left in place (a generic helper, unused here now) in case another builder needs it.
     x += 220
     nodes.append(_if_not_equal_node("IF Provider Processing Needed", "action", "skip", x, y))
-    set_skip = {
-        "parameters": {"assignments": {"assignments": [
-            {"id": nid("a"), "name": "action", "value": "skip", "type": "string"}
-        ]}, "options": {}},
-        "id": nid("r"), "name": "Skip (NoOp)",
-        "type": "n8n-nodes-base.set", "typeVersion": 3.4, "position": [x, y + 160]}
-    nodes.append(set_skip)
+    nodes.append(code_node("Skip (NoOp)", ENRICH_SKIP_NOOP_JS, x, y + 160))
 
     # Provider waterfall (Phase 16.1: gated — each provider sits behind its own
     # `IF <provider> Enabled` gate with a bypass that rejoins the chain, emitted by the

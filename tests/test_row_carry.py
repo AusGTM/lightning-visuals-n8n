@@ -28,12 +28,13 @@ WORKFLOWS = sorted((ROOT / "n8n").glob("wf_*_cloud.json"))
 # deliberate decision with a reason, not a waiver — a new Set node is row-carrying until
 # someone justifies adding it here.
 ROW_REPLACING_BY_DESIGN = {
-    # Emits the single marker `Build Response` turns into the webhook reply for an
-    # unsupported object type. Carrying the inbound row would leak event internals into
-    # the HTTP response.
-    "Unsupported Object Type": "terminal marker consumed whole by Build Response",
-    # Same shape for the skipped-enrichment branch: the reply IS {action: "skip"}.
-    "Skip (NoOp)": "terminal marker consumed whole by Build Response",
+    # Phase 36-03 Task 2: "Unsupported Object Type" and "Skip (NoOp)" (wf_enrichment_
+    # cloud.json) were exempted here as "terminal marker consumed whole by Build
+    # Response" — WRONG for the same reason as every other entry removed from this dict:
+    # a row terminating at either one still needs to return its caller-supplied `row_id`
+    # (the join key; `event_id` is meaningless for an id-less row). Both are now
+    # row-carrying n8n-nodes-base.code nodes under their original names — see
+    # ENRICH_UNSUPPORTED_OBJECT_TYPE_JS / ENRICH_SKIP_NOOP_JS in build_cloud_workflows.py.
     # "Set Config" was exempted here as "head-of-chain config seed, no upstream row
     # exists" — WRONG, and instructively so (BUG 21): the webhook's BINARY was upstream,
     # and the Set node dropped it, so the uploaded CSV never reached Extract From File and
