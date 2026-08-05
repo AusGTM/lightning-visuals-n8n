@@ -122,4 +122,16 @@ function summarizeMatch(input) {
   return { tier: "unknown", auto: false, reason: "no searchable identity — the row has no email, object id, or name+company pair", candidates: [] };
 }
 
-module.exports = { laneOf, mediumCandidates, summarizeMatch };
+// isReturnOnly(mode) — the propose-mode write-guard predicate (36-CONTEXT.md §6/§4
+// decision 1). Deliberately NOT an allow-list of mode names: two states, no third.
+// `mode` absent/null or the write literal (case- and whitespace-insensitive) is `false`
+// (today's write behaviour, byte-identical); every other value — including a typo — is
+// `true` (return-only). That asymmetry is the fail-safe: an unrecognised value can only
+// ever fail TOWARD returning proposals, never toward writing. String() never throws, so
+// this never throws for any input.
+function isReturnOnly(mode) {
+  if (mode === undefined || mode === null) return false;
+  return String(mode).trim().toLowerCase() !== "write";
+}
+
+module.exports = { laneOf, mediumCandidates, summarizeMatch, isReturnOnly };

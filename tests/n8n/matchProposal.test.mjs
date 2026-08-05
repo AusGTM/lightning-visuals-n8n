@@ -11,7 +11,7 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const { laneOf, mediumCandidates, summarizeMatch } = require(path.join(ROOT, "n8n/code/matchProposal.js"));
+const { laneOf, mediumCandidates, summarizeMatch, isReturnOnly } = require(path.join(ROOT, "n8n/code/matchProposal.js"));
 
 // --- fetch_by_id: object_id present, no email — mirrors IF Bare Event's true branch ------
 
@@ -222,6 +222,59 @@ test("a failed search AND a never-run search are BOTH unknown, distinguishable f
   const b = summarizeMatch({ lane: "none" });
   assert.equal(a.tier, "unknown");
   assert.equal(b.tier, "unknown");
+});
+
+// ============================================================================================
+// Phase 36 Plan 04, Task 1: isReturnOnly — the two-state write-guard predicate. Not an
+// allow-list of mode names: `mode` is either the write literal (case/whitespace-
+// insensitive) or it is return-only, with no third state. A typo therefore fails safe
+// toward returning proposals, never toward writing (36-CONTEXT.md §6).
+// ============================================================================================
+
+test("mode absent (undefined) is false — today's behaviour, byte-identical", () => {
+  assert.equal(isReturnOnly(undefined), false);
+});
+
+test("mode null is false — same as absent", () => {
+  assert.equal(isReturnOnly(null), false);
+});
+
+test('mode "write" is false', () => {
+  assert.equal(isReturnOnly("write"), false);
+});
+
+test('mode "WRITE" is false — case-insensitive', () => {
+  assert.equal(isReturnOnly("WRITE"), false);
+});
+
+test('mode " Write " is false — whitespace-insensitive', () => {
+  assert.equal(isReturnOnly(" Write "), false);
+});
+
+test('mode "propose" is true', () => {
+  assert.equal(isReturnOnly("propose"), true);
+});
+
+test('a typo mode "proprose" is true — fails safe toward returning proposals, not writing', () => {
+  assert.equal(isReturnOnly("proprose"), true);
+});
+
+test("an empty string mode is true", () => {
+  assert.equal(isReturnOnly(""), true);
+});
+
+test("mode as the number 0 is true", () => {
+  assert.equal(isReturnOnly(0), true);
+});
+
+test("mode as an empty object is true", () => {
+  assert.equal(isReturnOnly({}), true);
+});
+
+test("isReturnOnly never throws for any input", () => {
+  for (const v of [undefined, null, "write", "propose", 0, {}, [], Symbol("x"), () => {}]) {
+    assert.doesNotThrow(() => isReturnOnly(v));
+  }
 });
 
 test("auto is true for exactly one tier: high", () => {

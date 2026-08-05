@@ -1265,7 +1265,9 @@ return $input.all().map((it) => ({
 """
 
 # CLOUD: compute action + property patch; IF nodes route to real HubSpot write.
-ENRICH_DECIDE_CLOUD = r"""// Decide Action — CLOUD variant.
+ENRICH_DECIDE_CLOUD = inline("matchProposal.js") + r"""
+
+// Decide Action — CLOUD variant.
 // Computes action + the HubSpot property patch from the scored+merged winners.
 // The IF nodes route create -> HubSpot Create, enrich -> HubSpot Update — GATED by the
 // write-safety check below (Task 6, review #9): an activated-but-not-write-enabled
@@ -1293,19 +1295,40 @@ function _buildContactPatch(merge) {
 """ + WRITE_SAFETY_GATE_JS + r"""
 return $input.all().map((it) => {
   const row = it.json;
+  // Phase 36-04 Task 1 (36-CONTEXT.md §4 decision 1/§6): computed once per row from the
+  // shared two-state predicate — never a third mode name, never an ALLOW_* constant.
+  const returnOnly = isReturnOnly(row.mode);
   const properties = { ..._buildContactPatch(row.merge), ...(row.lusha_ids || {}) };
   const hs_object_id = (row.existingRecord && row.existingRecord.hs_object_id) || null;
   const id = row.identity_keys || {};
   const domain = id.domain;
-  if (row.action === "create" && id.email) {
+  if (row.action === "create" && id.email && !returnOnly) {
     // BUG 19: canonicalPatch never carries email (manual_protected — an UPDATE rule), so
     // an unseeded create writes a contact the by-email search can never find, and every
     // later run creates another. Keyed on row.action (pre-gate): a write_blocked create
     // sends nothing, and an enrich must never receive this seed (that IS the clobber the
-    // policy exists to prevent).
+    // policy exists to prevent). Also gated on !returnOnly (36-CONTEXT.md §6): a propose
+    // response's `properties` carries only what the waterfall discovered — the caller's
+    // own identity must never be echoed back as if it were a finding.
     properties.email = id.email;
   }
   let action = row.action;
+  if (returnOnly) {
+    // Phase 36-04 Task 1 (36-CONTEXT.md §4 decision 1): set BEFORE _writeSafetyAllows,
+    // unconditionally on the mode predicate alone — no ALLOW_* constant is read on this
+    // branch. That ordering IS the safety property: propose mode's no-write guarantee
+    // cannot be re-armed by flipping a write-safety flag. "proposed" matches neither
+    // "IF Create" (=="create") nor "IF Enrich" (=="enrich"), so the row exits via
+    // "IF Enrich"'s existing false lane into "Build Response" — no new edge needed.
+    action = "proposed";
+  } else if (action === "create" && row.match && row.match.tier === "medium") {
+    // A MEDIUM match is a proposal the caller has not judged — `auto` is false by
+    // contract (matchProposal.js summarizeMatch). Auto-creating against it would
+    // duplicate the very candidate mediumCandidates() just surfaced. Like "proposed",
+    // "needs_match_review" matches neither IF Create nor IF Enrich and exits via
+    // IF Enrich's false lane.
+    action = "needs_match_review";
+  }
   if ((action === "create" || action === "enrich") &&
       !_writeSafetyAllows(action, hs_object_id, domain)) {
     action = "write_blocked";
@@ -1320,6 +1343,9 @@ return $input.all().map((it) => {
     object_type: row.object_type || "contacts",
     hs_object_id,
     gap_flag: row.gap_flag === true,
+    row_id: row.row_id ?? null,
+    mode: row.mode ?? null,
+    match: row.match ?? summarizeMatch({ lane: row.lane }),
     properties
   }};
 });

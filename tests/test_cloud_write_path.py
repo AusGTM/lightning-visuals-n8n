@@ -241,3 +241,61 @@ def test_normalize_score_nodes_extract_lusha_record_id():
     company_code = _node(doc, "Normalize + Score Company")["parameters"]["jsCode"]
     assert "lushaRecordId(" in company_code
     assert "lusha_company_id" in company_code
+
+
+# --- (e) Phase 36-04 Task 1: propose mode — action:"proposed" set BEFORE the write gate ---
+#
+# `_strip_comments` mirrors tests/test_enrichment_lane_dedup.py's helper: a comment
+# naming a token must not satisfy a structural guard that proves the CODE does something.
+# NOTE: `_writeSafetyAllows(` as a bare substring also matches the FUNCTION DECLARATION
+# (`function _writeSafetyAllows(action, hsObjectId, domain) {`), which is inlined ahead of
+# the map body and therefore always precedes any assignment inside it — a naive
+# `.index("_writeSafetyAllows(")` finds the declaration, not the call, and the ordering
+# assertion would be meaningless. `!_writeSafetyAllows(` is unique to the guarded CALL
+# site (the declaration is never negated), so that is what these tests locate.
+
+def _strip_comments(js: str) -> str:
+    return "\n".join(line for line in js.split("\n") if not line.strip().startswith("//"))
+
+
+def test_proposed_action_assignment_precedes_the_write_safety_call():
+    doc = _load()
+    code = _strip_comments(_node(doc, "Decide Action")["parameters"]["jsCode"])
+    proposed_at = code.index('action = "proposed"')
+    call_at = code.index("!_writeSafetyAllows(")
+    assert proposed_at < call_at, (
+        f"Decide Action: action:\"proposed\" assignment (index {proposed_at}) must precede "
+        f"the _writeSafetyAllows call (index {call_at}) — that ordering is what guarantees "
+        "propose mode's no-write property does not depend on any ALLOW_* flag"
+    )
+
+
+def test_decide_action_returns_row_id_mode_and_match():
+    doc = _load()
+    code = _node(doc, "Decide Action")["parameters"]["jsCode"]
+    assert "isReturnOnly" in code
+    assert "needs_match_review" in code
+    for field in ("row_id:", "mode:", "match:"):
+        assert field in code, f"Decide Action does not return {field.rstrip(':')}"
+
+
+def test_decide_action_email_seed_is_guarded_by_return_only():
+    """BUG 19's create-time email seed must never fire on the propose (return-only) path —
+    a propose response's `properties` carries only what the waterfall discovered."""
+    doc = _load()
+    code = _strip_comments(_node(doc, "Decide Action")["parameters"]["jsCode"])
+    seed_line = next(
+        line for line in code.split("\n") if 'row.action === "create" && id.email' in line
+    )
+    assert "!returnOnly" in seed_line, (
+        f"Decide Action's email seed is not gated on !returnOnly: {seed_line!r}"
+    )
+
+
+def test_decide_action_medium_tier_never_creates():
+    """DoD 4/T-36-17: a MEDIUM match (a proposal, unverified) must never produce
+    action:"create" — the caller judges candidates and re-submits with an object id."""
+    doc = _load()
+    code = _strip_comments(_node(doc, "Decide Action")["parameters"]["jsCode"])
+    assert 'row.match.tier === "medium"' in code
+    assert 'action = "needs_match_review"' in code

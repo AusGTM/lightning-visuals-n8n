@@ -210,3 +210,20 @@ def test_dedupe_lane_emits_only_allowlisted_property_keys():
         f"allowlist {_DEDUPE_LANE_ALLOWED_PROPERTY_KEYS} — a new key here is a new, "
         f"unreviewed HubSpot write surface on a lane dedupeSweep.js documents as CLASSIFY ONLY"
     )
+
+
+# Phase 36-04 Task 1 (T-36-16/T-36-17) — companion to the ordering assertion in
+# tests/test_cloud_write_path.py: proving the assignment precedes the gate call is not
+# enough on its own — this proves the return-only action strings ("proposed",
+# "needs_match_review") are structurally UNMATCHABLE by either write router, so a propose
+# row cannot reach a write node even if some future edit broke the ordering guarantee.
+
+def test_decide_action_return_only_strings_never_match_a_write_router():
+    wf = json.loads((ROOT / "n8n" / "wf_enrichment_cloud.json").read_text())
+    nodes = {n["name"]: n for n in wf["nodes"]}
+    routed = json.dumps(nodes["IF Create"]["parameters"]) + json.dumps(nodes["IF Enrich"]["parameters"])
+    for action_string in ("proposed", "needs_match_review"):
+        assert action_string not in routed, (
+            f"{action_string!r} appears in IF Create/IF Enrich's own conditions — a propose "
+            "or needs-match-review row could structurally reach a write node"
+        )
