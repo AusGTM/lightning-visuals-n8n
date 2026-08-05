@@ -50,12 +50,17 @@ def config_path(allow_migration: bool = True) -> Path:
 # reason: it POSTs to a different webhook path than contact-upload (SKILL.md: "different
 # path from the contact-upload lane"), so reusing the contact-upload row would refuse an
 # enrich request with "uploading contacts" wording, which is wrong.
+# Match takes the same two keys enrichment takes — it POSTs to the SAME webhook path — but
+# is its own row for the same reason: match spends nothing and writes nothing (37-CONTEXT
+# §7), and a refusal that printed enrichment wording ("enriching records") would tell the
+# operator they were about to spend money on a call that spends none.
 CAPABILITY_KEYS = {
     "contact-upload": ("n8n_url", "webhook_secret"),
     "status": ("n8n_url", "n8n_api_key"),
     "control": ("n8n_url", "n8n_api_key"),
     "review": ("n8n_url", "webhook_secret"),
     "enrichment": ("n8n_url", "webhook_secret"),
+    "match": ("n8n_url", "webhook_secret"),
     # The sweep runs UNATTENDED (29-03, D-15) — its own row so an admin can decline to
     # enable it without disabling the interactive status check. All three keys on
     # purpose: `status` degrades to the half it can read, but a sweep that can only read
@@ -69,6 +74,7 @@ _CAPABILITY_DESCRIPTIONS = {
     "control": "turning workflows on or off",
     "review": "reading the review queue",
     "enrichment": "enriching records",
+    "match": "looking up existing HubSpot matches",
     "sweep": "the unattended backend sweep",
 }
 

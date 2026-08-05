@@ -40,12 +40,16 @@ def test_empty_webhook_secret_does_not_raise_status_still_needs_it_only(tmp_path
 
 def test_empty_webhook_secret_still_refuses_contact_upload_by_name(tmp_path):
     """The corollary this fix must not break: capabilities that DO need `webhook_secret`
-    (contact-upload, review, enrichment, sweep) still refuse — just at the capability
-    layer instead of the blanket `load_config()` layer."""
+    (contact-upload, review, enrichment, match, sweep) still refuse — just at the
+    capability layer instead of the blanket `load_config()` layer.
+
+    This test is NOT capability-name-agnostic — it iterates a hardcoded tuple, so
+    `preingest.fetch_matches`'s new `"match"` capability (37-03) is added here rather
+    than covered automatically (37-RESEARCH.md Open Question 1)."""
     cfg_path = tmp_path / "operator.local.json"
     cfg_path.write_text(json.dumps({"n8n_url": "https://fake.n8n.cloud", "webhook_secret": ""}))
     cfg = load_config(cfg_path)
-    for capability in ("contact-upload", "review", "enrichment"):
+    for capability in ("contact-upload", "review", "enrichment", "match"):
         with pytest.raises(ConfigError) as exc:
             require_capability(cfg, capability)
         assert "webhook_secret" in str(exc.value)

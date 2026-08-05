@@ -147,10 +147,15 @@ def test_a_fully_configured_config_passes_every_capability(fake_config):
     # shared row would refuse an enrich request with contact-upload's wording.
     # `sweep` joined in 29-03 (D-15): the only capability that runs unattended, its
     # own row so an admin can decline it without disabling interactive status.
-    for capability in ("contact-upload", "status", "control", "review", "enrichment", "sweep"):
+    # `match` joined in 37-03: the same two keys as `enrichment`, kept separate
+    # because it POSTs to the same webhook path but spends nothing, and a shared row
+    # would refuse a match request with enrichment's "enriching records" wording.
+    for capability in (
+        "contact-upload", "status", "control", "review", "enrichment", "match", "sweep",
+    ):
         config_gate.require_capability(fake_config, capability)
     assert set(config_gate.usable_capabilities(fake_config)) == {
-        "contact-upload", "status", "control", "review", "enrichment", "sweep"}
+        "contact-upload", "status", "control", "review", "enrichment", "match", "sweep"}
 
 
 def test_the_status_capability_does_not_require_the_webhook_secret(fake_config):

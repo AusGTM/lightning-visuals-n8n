@@ -272,10 +272,23 @@ def test_scan_found_at_least_one_plugin_source_file():
 # `_gate()` check. Both are allowlisted here for the same reason as the status read
 # above: a read (or, for execute_probe, a bodyless existence check) wearing a send verb's
 # clothes, now correctly visible instead of accidentally invisible.
+#
+# `preingest.py`'s `fetch_matches` (Phase 37) is written attribute-shaped
+# (`transport=requests.post`, dispatch.py's exact shape) so it IS visible to
+# `_is_requests_send_attribute` and lands on this allowlist deliberately — never
+# module-shaped to slip past the guard (37-CONTEXT §7/§12 explicitly forbids that). The
+# match POST reads HubSpot search results, writes nothing and spends nothing (an
+# explicit empty provider selection is sent), so it is a read wearing a POST's clothes —
+# allowlisted rather than armed, and it carries no `armed` parameter at all, so there is
+# nothing to gate. The two keeper tests below stop this being a rubber stamp: one
+# asserts no call anywhere in `preingest.py` can carry a multipart or form payload, and
+# one asserts the four-key lookup allowlist every match request is pinned to
+# (`enrichment.MATCH_LOOKUP_KEYS`) cannot silently widen.
 _EXPECTED_SEND_SHAPED = [
     ("backend_status.py", ["fetch_backend_status"]),
     ("dispatch.py", ["dispatch"]),
     ("enrichment.py", ["dispatch_enrichment"]),
+    ("preingest.py", ["fetch_matches"]),
     ("probe_n8n_semantics.py", ["execute_probe"]),
     ("review_queue.py", ["fetch_queue"]),
 ]
@@ -392,3 +405,61 @@ def test_no_module_defines_or_persists_a_previously_sent_row_store():
         "ledger of what was previously sent/accepted would be a second dedupe "
         "authority that can drift from the backend's."
     )
+
+
+# =====================================================================================
+# 37-03 Task 1: the two keepers that stop preingest.py's allowlist entry above from
+# becoming a rubber stamp. Both parse with `ast` rather than grepping, same idiom as the
+# rest of this file, so a docstring mentioning `files=`/`data=` cannot false-positive and
+# a formatting change cannot fool the second one.
+# =====================================================================================
+
+# The same two names test_the_allowlisted_status_post_carries_no_record_payload already
+# forbids — a match request can never carry a multipart file (dispatch.py's shape) or a
+# form body.
+_FORBIDDEN_PAYLOAD_KWARGS = {"files", "data"}
+
+
+def test_the_allowlisted_match_post_carries_no_multipart_or_form_payload():
+    """Keeper one. `fetch_matches` may stay exempt from the arming gate only for as
+    long as nothing in `preingest.py` can carry a record payload."""
+    tree = _parse(SCRIPTS_DIR / "preingest.py")
+    offenders = sorted({
+        kw.arg
+        for node in ast.walk(tree) if isinstance(node, ast.Call)
+        for kw in node.keywords
+        if kw.arg in _FORBIDDEN_PAYLOAD_KWARGS
+    })
+    assert not offenders, (
+        f"preingest.py now passes {offenders} on a call — the match POST can carry "
+        "records and must not stay exempt from the arming gate."
+    )
+
+
+def test_match_lookup_keys_stays_the_frozen_four():
+    """Keeper two. `enrichment.MATCH_LOOKUP_KEYS` is the allowlist every match
+    request's body is projected through — parsed by AST, not imported, so this test
+    fails even if some other code path shadowed or reassigned the name at runtime."""
+    tree = _parse(SCRIPTS_DIR / "enrichment.py")
+    assign = next(
+        node for node in tree.body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(t, ast.Name) and t.id == "MATCH_LOOKUP_KEYS" for t in node.targets)
+    )
+    assert isinstance(assign.value, (ast.Tuple, ast.List)), (
+        "MATCH_LOOKUP_KEYS must be a literal tuple/list of string constants, not an "
+        "expression this guard cannot read statically."
+    )
+    values = [elt.value for elt in assign.value.elts if isinstance(elt, ast.Constant)]
+    assert len(values) == len(assign.value.elts), (
+        "MATCH_LOOKUP_KEYS must contain only string literal constants."
+    )
+    assert tuple(values) == ("email", "firstname", "lastname", "company"), (
+        f"MATCH_LOOKUP_KEYS changed to {tuple(values)} — a match request would widen "
+        "or narrow what crosses the boundary per row."
+    )
+    for richer_prop in ("phone", "jobtitle", "linkedin_url"):
+        assert richer_prop not in values, (
+            f"{richer_prop!r} must never appear in MATCH_LOOKUP_KEYS — it is a richer "
+            "contact prop the match lookup does not need and must not send."
+        )
