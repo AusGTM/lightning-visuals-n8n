@@ -518,6 +518,7 @@ operator-claude-plugin/
   skills/
     initialize/            # setup + setup-check: template placement, named missing values, idempotent re-run
     contact-upload/        # the ingestion contract: state target, resolve input, preview, approve, arm, dispatch
+    enrich-before-ingest/  # default for rows with no email: match against HubSpot, confirm, enrich, enriched preview, two arms, then upload
     enrich-records/        # the enrichment lane: records or list, providers, cost, chunk plan, approve, arm, dispatch
     backend-status/        # plain-language read of what the backend is doing, text or dashboard artifact
     backend-control/       # run-now / on-off / cadence over the allowlisted mutations, confirmed and read-back verified

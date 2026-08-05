@@ -16,6 +16,68 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-08-05
+
+### Added
+
+- **New skill: `enrich-before-ingest`.** This is now the default way to load a contact list
+  that has no email column — the exact shape of the case that motivated it: nine directors of
+  a club, extracted from a board page with names, roles and a company, and no email address
+  anywhere. Previously every one of those nine rows evaporated silently on upload. Now the
+  flow is: extract, match each row against HubSpot before spending anything, confirm what the
+  match found, enrich only what is still unmatched, read an enriched preview, then upload —
+  and a row still without an email at the end is held and named, never silently dropped.
+
+  The flow asks you to arm it **twice, at two different moments** — once before the
+  enrichment spend, once before the HubSpot write — because those are two different
+  irreversible actions and the second arm is your response to the enriched preview sitting
+  between them. A single combined phrase would grant the write before you had seen what you
+  were approving, so the two cannot be said together, and saying both up front still gets you
+  asked again for the second one when its moment arrives.
+
+  Matching against HubSpot reports exactly four outcomes, by name: **auto-matched** (an exact
+  email hit), **proposed** (a same-surname, same-company candidate you confirm one row at a
+  time, never batched), **unmatched** (no candidate at all — this row goes to enrichment), and
+  **unchecked** — a chunk the search itself could not complete. "We did not find one" and "we
+  could not look" are different answers, and this flow never collapses the second into the
+  first.
+
+  A confirmed match with no email is not a dead end either: it now has a HubSpot object id,
+  which is what the existing `enrich-records` skill needs, and the flow hands those ids to it
+  directly.
+
+- **Idempotent resume for a broken enrichment batch.** A run now persists a small manifest —
+  which row reached which terminal outcome (matched, enriched, held, or a chunk that could not
+  be checked) — beside the existing dashboard state, at the same restrictive file permission.
+  If a batch is interrupted partway, resuming it re-requests only the rows that are still open;
+  a row already matched or already enriched is skipped, so a broken run never re-spends
+  provider credit re-enriching a row it already finished. The manifest never stores an arming
+  grant — that still lives only in the conversation turn that grants it — and any entry shaped
+  like one causes the whole manifest to be refused rather than partially trusted.
+
+- **Records created by an upload now queue themselves for the backend's own enrichment
+  sweep**, with no action from you and no third arming phrase. This closes the loop for any
+  row this flow could not enrich before ingest (or that a resumed batch left held-then-filled) —
+  the already-deployed 15-minute poller picks it up on its own schedule the same way it already
+  does for everything else it queues.
+
+### Changed
+
+- **A contact row with no email address is no longer written to the outgoing HubSpot upload
+  file. This is a breaking change**, not a bug fix, for anyone whose workflow depended on that
+  row going out with a blank email cell: HubSpot's own identity resolution only recognises
+  email, so a blank cell was never actually reaching a real record — it dead-ended into an
+  unreachable `needs_review` state with no way back. The refusal now happens loudly, before the
+  file is written at all, naming the row and explaining why: the only way to send a held row is
+  to give it an email.
+
+### Test coverage
+
+- One existing extraction test changed its own assertion on purpose, to match the change above:
+  it used to assert that a row with an empty email cell (the exact shape of the live bug) was
+  written into the upload file, and now asserts that the write is refused instead. This is the
+  intended behaviour change, recorded here rather than silently overwritten.
+
 ## [0.10.0] - 2026-08-05
 
 ### Added
