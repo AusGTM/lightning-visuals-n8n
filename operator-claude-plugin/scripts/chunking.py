@@ -90,23 +90,27 @@ class DispatchOutcome:
     responses: tuple = field(default_factory=tuple)
 
 
-def chunk_ceiling(config):
-    """The configured maximum records per POST. No fallback — see fact 1 above."""
-    value = (config or {}).get(CEILING_KEY)
+def chunk_ceiling(config, key=CEILING_KEY):
+    """The configured maximum records per POST for `key`. No fallback — see fact 1
+    above. `key` defaults to the write-path ceiling (`CEILING_KEY`); passing
+    `key="max_rows_per_match_request"` reads the match lane's own ceiling with the
+    identical no-fallback refusal, naming that key in every message it raises rather
+    than the module constant."""
+    value = (config or {}).get(key)
     if value is None:
         raise ChunkPlanError(
-            f"`{CEILING_KEY}` is not set in the operator config, so I don't know how "
+            f"`{key}` is not set in the operator config, so I don't know how "
             f"many records one request may carry. Copy that key across from "
             f"config/operator.local.example.json — the ceiling is a timeout bound, not "
             f"a preference, so I won't guess one."
         )
     if isinstance(value, bool) or not isinstance(value, int):
         raise ChunkPlanError(
-            f"`{CEILING_KEY}` must be a whole number of records — got {value!r}."
+            f"`{key}` must be a whole number of records — got {value!r}."
         )
     if value < 1:
         raise ChunkPlanError(
-            f"`{CEILING_KEY}` is {value}, which would send nothing at all. It must be at "
+            f"`{key}` is {value}, which would send nothing at all. It must be at "
             f"least 1."
         )
     return value
@@ -133,6 +137,24 @@ def plan_chunks(spec, ceiling):
     if not isinstance(ceiling, int) or isinstance(ceiling, bool) or ceiling < 1:
         raise ChunkPlanError(
             f"A chunk ceiling must be at least 1 record — got {ceiling!r}."
+        )
+
+    if "rows" in spec:
+        rows = spec["rows"]
+        if not isinstance(rows, (list, tuple)) or not rows:
+            raise ChunkPlanError(
+                "No rows were given, so there is nothing to match or enrich and "
+                "nothing to plan. Provide at least one row."
+            )
+        object_type = spec.get("object_type")
+        chunks = tuple(
+            {"rows": list(rows[start:start + ceiling]), "object_type": object_type}
+            for start in range(0, len(rows), ceiling)
+        )
+        return ChunkPlan(
+            chunks=chunks,
+            row_counts=tuple(len(chunk["rows"]) for chunk in chunks),
+            record_count=len(rows),
         )
 
     record_ids = spec.get("record_ids")
@@ -253,6 +275,12 @@ def failed_batch(chunks):
         return None
     if len(chunks) == 1 and chunks[0].get("list"):
         return dict(chunks[0])
+
+    if "rows" in chunks[0]:
+        rows = [row for chunk in chunks for row in chunk.get("rows", [])]
+        if not rows:
+            return dict(chunks[0])
+        return {"rows": rows, "object_type": chunks[0].get("object_type")}
 
     record_ids = [
         record_id for chunk in chunks for record_id in chunk.get("record_ids", [])

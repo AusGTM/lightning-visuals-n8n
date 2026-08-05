@@ -92,6 +92,31 @@ def test_a_non_integer_ceiling_raises():
 
 
 # ----------------------------------------------------------------------------------
+# The `key` parameter: match reads its own ceiling with the identical no-fallback rule.
+# ----------------------------------------------------------------------------------
+
+def test_chunk_ceiling_with_no_key_argument_behaves_exactly_as_today():
+    assert chunking.chunk_ceiling({"max_records_per_chunk": 3}) == 3
+    with pytest.raises(chunking.ChunkPlanError):
+        chunking.chunk_ceiling({})
+
+
+def test_chunk_ceiling_reads_the_match_key_and_it_is_larger_than_the_write_ceiling():
+    config = json.loads(CONFIG_EXAMPLE.read_text())
+    match_ceiling = chunking.chunk_ceiling(config, key="max_rows_per_match_request")
+    write_ceiling = chunking.chunk_ceiling(config)
+    assert match_ceiling > write_ceiling
+
+
+def test_chunk_ceiling_with_the_match_key_absent_raises_naming_that_key():
+    with pytest.raises(chunking.ChunkPlanError) as excinfo:
+        chunking.chunk_ceiling({}, key="max_rows_per_match_request")
+    message = str(excinfo.value)
+    assert "max_rows_per_match_request" in message
+    assert "max_records_per_chunk" not in message
+
+
+# ----------------------------------------------------------------------------------
 # The split itself.
 # ----------------------------------------------------------------------------------
 
@@ -189,6 +214,67 @@ def test_a_list_plan_ignores_the_ceiling_because_the_backend_enforces_its_own():
     for ceiling in (1, 2, 50):
         plan = chunking.plan_chunks({"list": "L", "object_type": "contacts"}, ceiling)
         assert plan.chunk_count == 1
+
+
+# ----------------------------------------------------------------------------------
+# A rows spec: `plan_chunks` splits `spec["rows"]` the same way it splits
+# `spec["record_ids"]` — positional, not a rewrite.
+# ----------------------------------------------------------------------------------
+
+def rows(count, start=1):
+    return [{"row_id": f"r{n}"} for n in range(start, start + count)]
+
+
+def test_a_rows_spec_splits_positionally_at_the_ceiling():
+    plan = chunking.plan_chunks(
+        {"rows": rows(3), "object_type": "contacts"}, 2
+    )
+    assert plan.row_counts == (2, 1)
+    assert plan.record_count == 3
+    assert [c["object_type"] for c in plan.chunks] == ["contacts", "contacts"]
+    assert all("rows" in c for c in plan.chunks)
+
+
+def test_a_rows_spec_chunk_never_exceeds_the_ceiling():
+    plan = chunking.plan_chunks({"rows": rows(7), "object_type": "contacts"}, 3)
+    assert all(len(c["rows"]) <= 3 for c in plan.chunks)
+    assert plan.row_counts == (3, 3, 1)
+
+
+def test_an_empty_rows_list_raises_rather_than_planning_a_chunk():
+    with pytest.raises(chunking.ChunkPlanError):
+        chunking.plan_chunks({"rows": [], "object_type": "contacts"}, 2)
+
+
+def test_the_concatenation_of_every_rows_chunk_is_the_input_sequence_exactly():
+    original = rows(23)
+    plan = chunking.plan_chunks(
+        {"rows": original, "object_type": "contacts"}, 4
+    )
+    flattened = [row for chunk in plan.chunks for row in chunk["rows"]]
+    assert flattened == original
+
+
+def test_a_failed_rows_batch_rebuilds_one_rows_spec_excluding_successful_chunks():
+    """Mirrors the record_ids `failed_batch` rebuild exactly, direct on the pure
+    function — a rows-shaped chunk concatenation, keeping original order and holding
+    no row from a chunk that succeeded."""
+    plan = chunking.plan_chunks({"rows": rows(6), "object_type": "contacts"}, 2)
+    # Chunks 0 and 2 succeeded; only the middle chunk (r3, r4) failed.
+    batch = chunking.failed_batch([plan.chunks[1]])
+    assert batch == {
+        "rows": [{"row_id": "r3"}, {"row_id": "r4"}],
+        "object_type": "contacts",
+    }
+
+
+def test_a_failed_rows_batch_keeps_original_order_across_non_adjacent_chunks():
+    plan = chunking.plan_chunks({"rows": rows(6), "object_type": "contacts"}, 2)
+    # First and last chunks failed; the middle one succeeded.
+    batch = chunking.failed_batch([plan.chunks[0], plan.chunks[2]])
+    assert batch["rows"] == [
+        {"row_id": "r1"}, {"row_id": "r2"}, {"row_id": "r5"}, {"row_id": "r6"}
+    ]
 
 
 # ----------------------------------------------------------------------------------
