@@ -113,14 +113,20 @@ def contact_row_ledger(execution):
 # Reconciling "decided" against "written" (Pattern 2 / Pitfall 3 / T-26-01).
 # =====================================================================================
 
-def _write_node_produced_output(run_data, node_name):
+def _write_node_items(run_data, node_name):
+    """The write node's own output items — the authoritative "this landed" list, since
+    an item only exists here because HubSpot Create/Update actually returned it.
+    Absent entirely (the write-safety gate filtered every row before the node ever
+    ran) yields [], same conclusion as "ran with zero items"."""
     runs = run_data.get(node_name)
     first_run = runs[0] if isinstance(runs, list) and runs else None
     if first_run is None:
-        # Absent entirely: the write-safety gate filtered every row before the write
-        # node ever ran. Same conclusion as "ran with zero items" — never confirmed.
-        return False
-    return len(_node_output_items(first_run)) > 0
+        return []
+    return _node_output_items(first_run)
+
+
+def _write_node_produced_output(run_data, node_name):
+    return len(_write_node_items(run_data, node_name)) > 0
 
 
 def reconcile(ledger, run_data):
@@ -287,6 +293,96 @@ def build_contact_report(execution, handle):
         "adaptive": adaptive,
         "handle": handle,
     }
+
+
+# =====================================================================================
+# queue_handoff_ids (37-CONTEXT §13b) — post-ingest handoff to the scheduled poller.
+#
+# The deployed property the poller searches is `lv_enrichment_requested`, WITH the
+# `lv_` prefix (scripts/build_cloud_workflows.py's SJ-1/SJ-2 "Set Requested" nodes and
+# its scheduled-jobs search filters, all three occurrences). The unprefixed name in
+# the repo-root CLAUDE.md §4.1 is the generic design document, not the deployed
+# schema — writing it would succeed, set a property nothing reads, and report success
+# next to an unenriched record. This module does not write the property (no network
+# call lives here); it only returns the ids a caller hands to whichever transport the
+# 37-07 checkpoint selects.
+# =====================================================================================
+
+def queue_handoff_ids(execution):
+    """The HubSpot object ids of the rows `hubspot/contact-upload` actually landed,
+    partitioned by how they landed: `created` (a brand-new HubSpot record) versus
+    `updated_matched` (an existing record HubSpot confirmed the update against).
+
+    Built on `contact_row_ledger` + `reconcile` — the same two calls
+    `build_contact_report` makes — and NEVER on `build_contact_report(...)["rows"]`.
+    That field is deliberately `None` above `SMALL_BATCH_THRESHOLD` (D-08/D-09: a
+    large batch shows counts plus failures, never every successful row), so a handoff
+    built on it would silently return nothing for exactly the large batches that most
+    need queueing.
+
+    `created` ids are read straight from `HubSpot Create`'s OWN output items, not from
+    `Decide Action`'s ledger row: a `create` action has no HubSpot id yet at decision
+    time (the record doesn't exist until the write), so `_row_identity` can never
+    resolve one for it. The write node's own output is the one place a real,
+    HubSpot-confirmed id for a created row exists, and every item present there landed
+    (Pitfall 3 / T-26-01's same discipline `reconcile()` already applies).
+
+    `updated_matched` ids come from `_row_identity` on the reconciled row, since an
+    update targets an EXISTING record whose id was already known before the write. A
+    row whose identity still falls back to `_row_identity`'s `row N` placeholder (no
+    usable `contact_id`/`hs_object_id`) is excluded and reported rather than queued —
+    that placeholder is a display string, and sending it as a record id would target a
+    record that does not exist (T-37-29).
+
+    Any row labelled `needs_review`, `rejected` or `not_confirmed` — no confirmed
+    HubSpot footprint — is excluded and reported, never queued.
+
+    Mirrors `build_contact_report`'s unknown-is-not-zero discipline: an execution that
+    is not a mapping, or whose status is outside `SETTLED_STATUSES`, yields empty
+    partitions and raises nothing. Performs no network call and no file write.
+    """
+    run_data = _run_data(execution)
+    if run_data is None:
+        return {"created": [], "updated_matched": [], "excluded": []}
+
+    if execution.get("status") not in SETTLED_STATUSES:
+        return {"created": [], "updated_matched": [], "excluded": []}
+
+    ledger, _ = contact_row_ledger(execution)
+    reconciled = reconcile(ledger, run_data)
+
+    updated_ids = []
+    excluded = []
+    for i, row in enumerate(reconciled, start=1):
+        label = _label_for_row(row)
+        if label == "created":
+            # Landed ids for this label come from HubSpot Create's own output below —
+            # never from this per-row loop.
+            continue
+        if label == "updated_matched":
+            identity = _row_identity(row, i)
+            if identity == f"row {i}":
+                excluded.append({
+                    "row_number": i,
+                    "reported_label": label,
+                    "reason": "identity fell back to the row-N placeholder — no confirmed HubSpot id",
+                })
+                continue
+            updated_ids.append(identity)
+            continue
+        excluded.append({
+            "row_number": i,
+            "reported_label": label,
+            "reason": row.get("reason") or "no confirmed HubSpot footprint",
+        })
+
+    created_ids = [
+        item["json"]["id"]
+        for item in _write_node_items(run_data, WRITE_NODE_FOR_ACTION["create"])
+        if isinstance(item, dict) and isinstance(item.get("json"), dict) and item["json"].get("id")
+    ]
+
+    return {"created": created_ids, "updated_matched": updated_ids, "excluded": excluded}
 
 
 # =====================================================================================
