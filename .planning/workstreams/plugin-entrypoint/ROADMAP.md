@@ -472,7 +472,7 @@ Plans:
   7. An oversize `events` array is refused whole with a reason; nothing is enriched. Refuse, never truncate.
   8. `grep -c 'ALLOW_HUBSPOT_[A-Z_]* = "true"' n8n/*.json` → 0. Suites green (plugin 1052/5, python 1933/6, node 553). Rebuilt, deployed disarmed, every active workflow bounced, read back.
 
-**Plans**: 5/6 plans executed
+**Plans**: 5/7 plans executed
 
 Plans:
 **Wave 1**
@@ -499,6 +499,10 @@ Plans:
 
 - [x] 36-06-PLAN.md — mode-aware batch ceiling: `ENRICH_MAX_PROPOSE_RECORDS` (provisional 20) for return-only requests, write path unchanged at 2
 
+**Wave 7** *(amendment, 2026-08-05 — resolves 37-07's blocking transport checkpoint with the operator's option-b; must also land before 36-05's deploy fires)*
+
+- [ ] 36-07-PLAN.md — the ingest lane's CREATE payload stamps `lv_enrichment_requested = "true"` so the existing 15-minute poller sweeps freshly created contacts (create-only; not arming)
+
 **Cross-cutting constraints:**
 
 - `grep -c 'ALLOW_HUBSPOT_[A-Z_]* = \"true\"' n8n/*.json` reports 0 for every file.
@@ -521,26 +525,26 @@ Plans:
   9. *(§13 amendment, operator 2026-08-05)* A broken batch resumes idempotently: a run manifest maps `row_id` to a terminal verdict under the durable home, and a re-run re-spends nothing on rows already carrying one. The manifest is its own artifact — `artifact_store.py`'s field refusal, which keeps the arming grant off disk, is not widened.
   10. *(§13 amendment)* After ingest, the records that landed are handed to the HubSpot queue the scheduled poller already sweeps, so pre-ingest exclusion is temporary rather than terminal and no contact ends a cycle unenriched.
 
-**Plans:** 9 plans
+**Plans:** 6/9 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 37-01-PLAN.md — the rows envelope pinned py↔js, the match ceiling, and the arming guard's module-shaped blind spot
-- [ ] 37-02-PLAN.md — the ingest gate raises: `hold_emailless` + `write_dispatch_csv` refusal before any file is opened
+- [x] 37-01-PLAN.md — the rows envelope pinned py↔js, the match ceiling, and the arming guard's module-shaped blind spot
+- [x] 37-02-PLAN.md — the ingest gate raises: `hold_emailless` + `write_dispatch_csv` refusal before any file is opened
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 37-03-PLAN.md — the unarmed match lane: ids once, one POST the guard can see, four outcome groups
+- [x] 37-03-PLAN.md — the unarmed match lane: ids once, one POST the guard can see, four outcome groups
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 37-04-PLAN.md — decisions and merges joined by id: `apply_match_decisions`, `merge_enriched`, `rows_from_table`
-- [ ] 37-06-PLAN.md — run manifest + idempotent resume (§13a)
+- [x] 37-04-PLAN.md — decisions and merges joined by id: `apply_match_decisions`, `merge_enriched`, `rows_from_table`
+- [x] 37-06-PLAN.md — run manifest + idempotent resume (§13a)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 37-05-PLAN.md — the two previews: a rows-spec cost block, a spec-file CLI, and the enriched preview
+- [x] 37-05-PLAN.md — the two previews: a rows-spec cost block, a spec-file CLI, and the enriched preview
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
