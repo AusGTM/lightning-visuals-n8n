@@ -102,18 +102,50 @@ whatever seven columns happened to be in the source file.
      answer from "we did not find one" — an unchecked row has not been ruled out of
      anything.
 
-3. **Confirm one proposed match at a time.** For each row in `proposed`, show the
-   operator the row itself alongside every one of its own candidates — this endpoint
-   ships exactly six fields per candidate: the HubSpot object id, first name, last
-   name, email, job title, and company. There is no record-modification timestamp on
-   this endpoint at all; do not ask for one, imply one exists, or invent one to make
-   the comparison feel more complete.
+3. **Confirm the proposed matches — one numbered table, one line per decision.**
+   (Amended 2026-08-05 at this skill's own read-through — 37-CONTEXT.md §13's
+   confirmation-format amendment supersedes one-proposal-per-turn. The invariant
+   that survives is the real one: each decision is still individually expressed,
+   with the candidate's evidence and the row's own values side by side.)
 
-   Two or more candidates for one row is ambiguous: show all of them, pick none for
-   the operator, and say so. A batched yes covering several rows at once is not a
-   confirmation and must not be accepted as one — each row gets its own turn.
+   Render every proposed row from this chunk as **one numbered markdown table**: row
+   label, then the row's own firstname/lastname/company/email, then the candidate's
+   six fields — the HubSpot object id, first name, last name, email, job title, and
+   company (this endpoint ships exactly those six; there is no record-modification
+   timestamp on it at all, and none should be asked for, implied, or invented). A row
+   with two or more candidates is ambiguous: give it one table line per candidate,
+   sub-labelled `3a`, `3b`, and so on under its own row number.
 
-   Apply what the operator decides:
+   Answers are per-item and the vocabulary is fixed — nothing outside these four
+   forms is accepted:
+
+   - `<label>. approve` — confirm this row against its one candidate.
+   - `<label>. deny` — decline this row; it moves to the unmatched, enrich-first path.
+   - `<label>. pick <sub-label>` — for an ambiguous row only, e.g. `3. pick 3b`. An
+     ambiguous row takes **only** `pick`; `approve`/`deny` on its own row label is
+     refused, because there is no single candidate for a bare approve to mean.
+   - `<label>. email: <address>` — a row-data correction, not a match decision: give
+     this row the email it is missing, right here, so it does not fall to the ingest
+     gate as a held row for no email later.
+
+   Denying the whole table is fine as a blanket action — `deny all` is accepted, and
+   the cost of getting it wrong is one row re-checked. Approving is different: a
+   bare blanket approval, with no scope named, is refused outright — guessing what
+   "all" means and approving the wrong candidate against it silently evaporates the
+   true row (treated as already in HubSpot, never created — this is the original
+   nine-directors failure, one row at a time). Bulk approval must name its scope
+   explicitly every time: `approve 1-4, 7`, or, to approve literally every row in the
+   table, `approve all 6` — restating the count is what proves the scope was seen,
+   not assumed.
+
+   Any row nobody answered this turn stays **pending** and is **restated** in full
+   next turn — never defaulted either way, in either direction. A single malformed
+   answer line refuses the **whole** table before anything is applied (the same
+   all-or-nothing guard `apply_match_decisions` already runs), and the refusal names
+   the offending line so the operator knows exactly what to fix and resend — not the
+   whole table blind.
+
+   Turn the answered lines into decisions and apply them in one call:
 
    ```python
    resolved = {"row-4": "101452", "row-9": preingest.DECLINE_MATCH}
@@ -122,7 +154,12 @@ whatever seven columns happened to be in the source file.
 
    A confirmed row moves into the auto-matched group, carrying the chosen candidate's
    object id. A declined row moves into the unmatched group and is enriched like any
-   other no-match row. A row the operator has not yet answered stays proposed.
+   other no-match row. A row still pending stays proposed and is shown again.
+
+   Copy/edit/reupload of the whole table — so an operator could answer it outside
+   the chat turn and paste the result back — is a named upgrade path, not built here;
+   the chunk ceiling already caps a proposal batch at roughly twenty rows, which is
+   what keeps one table readable in a single turn.
 
 4. **Preview the cost of enriching everything still unmatched.** Resolve providers
    the same way `enrich-records` step 3 does — the admin default is the full

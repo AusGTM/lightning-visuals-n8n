@@ -213,6 +213,65 @@ def test_no_last_modified_field_is_implied_on_the_match_candidate_endpoint():
     assert "lastmodifieddate" not in _text().lower()
 
 
+# ---------------------------------------------------------------------------------
+# 37-CONTEXT.md sec 13's confirmation-format amendment (2026-08-05, at this skill's
+# own read-through): one-proposal-per-turn is superseded by a batched numbered table.
+# These pins are ADDITIVE -- every pin above this point stays exactly as it was.
+# ---------------------------------------------------------------------------------
+
+CONFIRMATION_VERBS = (
+    "`<label>. approve`",
+    "`<label>. deny`",
+    "`<label>. pick <sub-label>`",
+    "`<label>. email: <address>`",
+)
+
+
+def test_the_confirmation_vocabulary_is_pinned_to_exactly_four_verbs():
+    body = _normalized(_text())
+    for verb in CONFIRMATION_VERBS:
+        assert verb in body, f"expected the constrained verb {verb!r} in SKILL.md"
+
+
+def test_deny_all_is_offered():
+    assert "`deny all`" in _normalized(_text())
+
+
+def test_bare_approve_all_never_appears_without_a_trailing_count_or_scope():
+    """The literal phrase 'approve all' may appear ONLY immediately followed by a
+    count/scope form (e.g. 'approve all 6') -- a bare 'approve all' with no scope is
+    exactly the mistake the amendment forbids: guessing what "all" means and
+    approving the wrong candidate against it silently evaporates the true row (the
+    original nine-directors bug, one row at a time)."""
+    body = _normalized(_text())
+    matches = list(re.finditer(r"approve all", body, re.IGNORECASE))
+    assert matches, "expected at least one 'approve all' (scoped) example in SKILL.md"
+    for match in matches:
+        tail = body[match.end():match.end() + 6]
+        assert re.match(r"\s*\d", tail), (
+            f"found a bare 'approve all' with no trailing count/scope at character "
+            f"offset {match.start()}: {body[max(0, match.start() - 20):match.end() + 20]!r}"
+        )
+
+
+def test_a_pending_row_is_restated_never_defaulted():
+    body = _normalized(_text()).lower()
+    assert "pending" in body
+    assert "restated" in body
+    assert "never defaulted" in body
+
+
+def test_ambiguous_rows_are_restricted_to_pick():
+    body = _normalized(_text()).lower()
+    assert "takes only" in body
+
+
+def test_one_bad_line_refuses_the_whole_table_naming_the_offending_line():
+    body = _normalized(_text()).lower()
+    assert "refuses the whole table" in body
+    assert "names the offending line" in body
+
+
 def test_the_skill_states_the_grant_never_outlives_its_turn_and_arms_no_other_lane():
     body = _normalized(_text()).lower()
     assert "never outlives" in body or "never written to disk" in body
