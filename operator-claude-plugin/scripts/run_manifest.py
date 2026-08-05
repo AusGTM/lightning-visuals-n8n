@@ -16,9 +16,9 @@ deliberately keeps off disk. Widening `artifact_store.py` once makes widening it
 arguable. This module gets its OWN schema and its OWN refusal instead.
 
 Schema: a run id, a timestamp, and a map of `row_id -> verdict`. A verdict is exactly
-one of four words — `matched`, `enriched`, `held`, `unchecked` — anything else is a
-rejection, not a widening. `save()` also refuses any verdict-map key or value whose
-name suggests an arming grant, a live-write permission, a secret, or an API key: Phase
+one of five words — `matched`, `enriched`, `held`, `unchecked`, `unanswered` — anything
+else is a rejection, not a widening. `save()` also refuses any verdict-map key or value
+whose name suggests an arming grant, a live-write permission, a secret, or an API key: Phase
 23 D-11 holds here too — the grant exists only as a call argument, for one turn, and a
 grant read back off disk on a later run would be a live send nobody authorised in that
 conversation.
@@ -61,14 +61,19 @@ RUN_ID_FIELD = "run_id"
 STAMP_FIELD = "saved_at"
 VERDICTS_FIELD = "verdicts"
 
-# The four words a verdict may be, and no others (37-CONTEXT §13a). `matched`/`enriched`
-# are genuinely done; `held` and `unchecked` are terminal for the RUN that recorded them
-# but not permanent for the ROW — a resume re-requests both under the right condition.
+# The five words a verdict may be, and no others (37-CONTEXT §13a, T-38-02 for the
+# fifth). `matched`/`enriched` are genuinely done; `held`, `unchecked` and `unanswered`
+# are terminal for the RUN that recorded them but not permanent for the ROW — a resume
+# re-requests all three under the right condition. `unanswered` joins `unchecked` on
+# that same non-terminal-for-the-ROW footing: the run ended without a verdict for that
+# row (a two-row chunk answered with one item, say), which is a reason to ask again,
+# not a reason to stop asking.
 MATCHED = "matched"
 ENRICHED = "enriched"
 HELD = "held"
 UNCHECKED = "unchecked"
-ALLOWED_VERDICTS = frozenset({MATCHED, ENRICHED, HELD, UNCHECKED})
+UNANSWERED = "unanswered"
+ALLOWED_VERDICTS = frozenset({MATCHED, ENRICHED, HELD, UNCHECKED, UNANSWERED})
 
 # Phase 23 D-11: the arming grant exists only as a call argument, for one turn — never
 # read back off disk on a later run, or it becomes a live send nobody authorised in that
@@ -86,7 +91,7 @@ _FORBIDDEN_NAME_MARKERS = (
 
 class ManifestError(Exception):
     """Raised when a verdict map cannot be persisted safely — a verdict outside the
-    four allowed words, or a key/value whose name suggests the one thing this module
+    five allowed words, or a key/value whose name suggests the one thing this module
     must never hold on disk (see module docstring, Phase 23 D-11)."""
 
 
@@ -114,7 +119,7 @@ def save(run_id, verdicts, path=None) -> None:
     a save that raises leaves the previous manifest (if any) untouched, mirroring
     `apply_match_decisions`' validate-then-apply discipline in `preingest.py`.
 
-    `verdicts` maps `row_id -> one of the four allowed words`. Any other value raises,
+    `verdicts` maps `row_id -> one of the five allowed words`. Any other value raises,
     and any key or value whose name suggests an arming grant, a live-write permission,
     a secret, or an API key raises too — see module docstring.
     """
@@ -136,7 +141,7 @@ def save(run_id, verdicts, path=None) -> None:
         if verdict not in ALLOWED_VERDICTS:
             raise ManifestError(
                 f"row {row_id!r} carries verdict {verdict!r}, which is not one of the "
-                f"four allowed words ({sorted(ALLOWED_VERDICTS)}). Nothing was written."
+                f"five allowed words ({sorted(ALLOWED_VERDICTS)}). Nothing was written."
             )
 
     target = Path(path) if path is not None else manifest_path()
@@ -153,7 +158,7 @@ def load(path=None) -> dict:
     resume against — missing, unreadable, malformed, half-written, or schema-mismatched
     all degrade to the SAME empty result rather than raising (see module docstring).
 
-    A manifest carrying even ONE bad entry (a verdict outside the four words, or a
+    A manifest carrying even ONE bad entry (a verdict outside the five words, or a
     non-string key) degrades whole, not partially: a truncated verdict map read as
     partially complete would skip rows that were never enriched, which is the exact
     failure this module exists to prevent. Degrading to a full run costs money;
@@ -214,6 +219,12 @@ def rows_to_resume(rows, manifest):
     reason that a chunk timed out once, which is the outcome 37-CONTEXT §13a's
     governing addition exists to prevent.
 
+    A row verdicted `unanswered` is INCLUDED too, on this exact same branch — same
+    reason, one layer down (T-38-02, the live case this word exists for): a two-row
+    chunk that came back carrying only one item leaves the other row's verdict
+    `unanswered`, and that is a reason to ask again, not a reason to stop asking. It is
+    not written to a second branch, so the two can never drift apart.
+
     A row verdicted `held` is excluded not because it completed but because sending it
     would fail identically — the ingest gate holds any row without an email, and
     nothing about a resume changes that. It is re-included the moment it gains an
@@ -242,8 +253,9 @@ def rows_to_resume(rows, manifest):
                 still_held.append({"row_id": row_id, "verdict": verdict})
             continue
 
-        # verdict is UNCHECKED, or the row is absent from the manifest entirely
-        # (verdict is None) — both are re-requested.
+        # verdict is UNCHECKED, UNANSWERED, or the row is absent from the manifest
+        # entirely (verdict is None) — all three are re-requested, the same decision
+        # for the same reason (T-38-02): none of them is an answer about the row.
         to_resume.append(row)
 
     return ResumeResult(rows=tuple(to_resume), skipped=tuple(skipped),

@@ -76,11 +76,37 @@ def test_save_writes_at_mode_0600(tmp_path):
     assert mode == 0o600
 
 
-def test_save_refuses_a_verdict_outside_the_four_allowed_words(tmp_path):
+def test_save_refuses_a_verdict_outside_the_five_allowed_words(tmp_path):
     target = tmp_path / "run_manifest.json"
     with pytest.raises(run_manifest.ManifestError):
         run_manifest.save("run-abc", {"row-1": "definitely_not_a_verdict"}, path=target)
     assert not target.exists()
+
+
+# =====================================================================================
+# Task 2 (Phase 38 Plan 01): `unanswered` is a fifth, non-terminal-for-the-row word
+# =====================================================================================
+
+
+def test_allowed_verdicts_holds_five_words_including_unanswered():
+    assert len(run_manifest.ALLOWED_VERDICTS) == 5
+    assert run_manifest.UNANSWERED in run_manifest.ALLOWED_VERDICTS
+    assert run_manifest.UNANSWERED == "unanswered"
+
+
+def test_save_then_load_round_trips_an_unanswered_verdict(tmp_path):
+    target = tmp_path / "run_manifest.json"
+    verdicts = {"r1": "unanswered"}
+
+    run_manifest.save("run-abc", verdicts, path=target)
+
+    assert run_manifest.load(path=target) == verdicts
+
+
+def test_looks_forbidden_is_false_for_unanswered():
+    # The forbidden-marker check is deliberately broad substring matching, so every
+    # new verdict word needs one line confirming it does not collide.
+    assert run_manifest._looks_forbidden(run_manifest.UNANSWERED) is False
 
 
 def test_save_refuses_an_arming_shaped_verdict_and_writes_nothing(tmp_path):
@@ -258,6 +284,36 @@ def test_a_row_verdicted_unchecked_is_included_we_could_not_look_is_a_reason_to_
 
     assert result.rows == (rows[0],)
     assert result.skipped == ()
+
+
+def test_a_row_verdicted_unanswered_is_included_on_the_same_branch_as_unchecked():
+    rows = [_row("row-1")]
+    manifest = {"row-1": "unanswered"}
+
+    result = run_manifest.rows_to_resume(rows, manifest)
+
+    assert result.rows == (rows[0],)
+    assert result.skipped == ()
+    assert result.still_held == ()
+
+
+def test_the_three_terminal_verdicts_partition_exactly_as_before_a_fifth_word_existed():
+    """Rows verdicted matched/enriched/held behave exactly as they did before
+    `unanswered` was added — asserted, not assumed, alongside a row carrying the
+    new word in the same manifest."""
+    rows = [_row("row-1"), _row("row-2"), _row("row-3"), _row("row-4")]
+    manifest = {
+        "row-1": "matched",
+        "row-2": "enriched",
+        "row-3": "held",  # no email -> still_held
+        "row-4": "unanswered",
+    }
+
+    result = run_manifest.rows_to_resume(rows, manifest)
+
+    assert {row["row_id"] for row in result.rows} == {"row-4"}
+    assert {entry["row_id"] for entry in result.skipped} == {"row-1", "row-2"}
+    assert {entry["row_id"] for entry in result.still_held} == {"row-3"}
 
 
 def test_a_held_row_without_an_email_stays_excluded_and_is_reported_still_held():
