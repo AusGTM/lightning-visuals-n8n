@@ -127,6 +127,40 @@ def test_the_handoff_flag_assignment_sits_inside_the_create_block():
     )
 
 
+def test_the_handoff_flag_is_stamped_exactly_once():
+    """The update path must stay clean. A second occurrence is the shape this failure
+    takes: someone "helpfully" hoists the stamp above the create branch so it applies to
+    every action, and every matched record on every future upload gets re-queued —
+    silently spending provider credits on records that were already enriched. One
+    occurrence, inside the create block, is the whole guarantee."""
+    src = B.DECIDE_CLOUD
+    assert src.count(f'properties.{_QUEUE_FLAG_PROP} = "true";') == 1, (
+        f"`properties.{_QUEUE_FLAG_PROP} = \"true\";` must appear exactly once in "
+        f"DECIDE_CLOUD — a second occurrence outside the create block would re-queue "
+        f"already-enriched records on every update."
+    )
+
+
+def test_the_unprefixed_spelling_is_never_assigned():
+    """The deployed property is `lv_enrichment_requested`; the repo-root design doc uses
+    the unprefixed `enrichment_requested` for the same concept, and the two are not
+    interchangeable — the poller searches for the prefixed one only.
+
+    This must be an assignment-target assertion (`properties.enrichment_requested =`),
+    not a bare substring search: the prefixed name CONTAINS the unprefixed one as a
+    substring (`lv_enrichment_requested` ends in `enrichment_requested`), so a naive
+    `"enrichment_requested" not in src` check would fail against CORRECT code, and
+    someone would "fix" it by deleting the test. The assignment form is naturally
+    anchored: `properties.lv_enrichment_requested =` does not contain
+    `properties.enrichment_requested =` as a substring. This trap already cost this repo
+    once on the client side (37-07-SUMMARY.md D3 hit the same ambiguity)."""
+    src = B.DECIDE_CLOUD
+    assert "properties.enrichment_requested =" not in src, (
+        "DECIDE_CLOUD assigns the unprefixed spelling onto the payload — the poller's "
+        "EQ filter reads `lv_enrichment_requested` and will never match this record."
+    )
+
+
 def test_the_policy_classes_that_motivated_bug_19_are_unchanged():
     """Anchor the design, not just the fix. The seed is only coherent while `domain`/`email`
     stay manual_protected (never promoted by candidates). If someone reclassifies them, the
