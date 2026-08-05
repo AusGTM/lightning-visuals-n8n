@@ -16,6 +16,20 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.11.1] - 2026-08-05
+
+### Fixed
+
+- **A row the backend never answered is now reported as `unanswered`, never as held for
+  "no usable email".** Observed live on the nine-directors walk: a two-row enrichment chunk
+  came back with only one row's verdict (the backend's response fires on first arrival), and
+  the silent row was mislabelled with a reason about its data when the truth was about the
+  response. `unanswered` is its own group in the enriched preview (after held rows, never
+  sampled away), the run manifest treats it as non-terminal so a resume re-requests it, and
+  one automatic re-request pass runs at the end of the batch — exactly once, never a loop.
+  An unanswered row with a source email stays unanswered rather than being promoted to SEND:
+  sending it would write a partially-enriched contact, which the governing rule forbids.
+
 ## [0.11.0] - 2026-08-05
 
 ### Added
