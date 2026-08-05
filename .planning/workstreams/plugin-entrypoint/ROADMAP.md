@@ -342,6 +342,7 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
+
 - [x] 31-01-PLAN.md — The enum spine: generated options module, the shared validator, refusal on the approve path (tracer) and at enrichment staging, plus the snapshot/policy currency pins
 - [x] 31-02-PLAN.md — BUG 30: an explicit `not_allowlisted` refusal body, the client's corrected `unparseable_response` meaning with a two-sided outcome pin, and RB-9's diagnostic advice
 - [x] 31-03-PLAN.md — Close-out: the two-sided contract inventory, the disarmed-artifact gate, and the operator-directed disarmed redeploy + bounce
@@ -362,6 +363,7 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
+
 - [x] 32-01-PLAN.md — ship `lv-sweep-run.sh` + its two-sided contract test, rewrite `SWEEP-CRON-TEMPLATE.md` around it, amend D-01, update README/CHANGELOG/STATE (wave 1, autonomous)
 - [x] 32-02-PLAN.md — rewrite RB-8 for the new trigger, run it live as the phase exit gate, record the observed outcome (wave 2, blocking human checkpoint)
 
@@ -430,7 +432,6 @@ Plans:
 
 - [x] 34-04-PLAN.md — STATE.md amendment 6, UAT 2.2 marked fixed-awaiting-walk, `0.8.0` cut with the version bumped in the same commit
 
-
 ### Phase 35: URL Structured-Representation Fallback
 
 **Goal**: A public URL whose HTML converts to nothing usable is retried — bounded, same-host, and visibly — against the structured representation the site itself publishes, before the plugin reports it cannot read the page.
@@ -450,10 +451,10 @@ Plans:
 **Plans:** 3 plans
 
 Plans:
+
 - [x] 35-01-PLAN.md — the candidate ladder: `scripts/url_fallback.py` (rung order, same-host check, fetch cap, give-up message, CLI) plus the `extraction.md` URL-adapter rewrite that escalates on fetched-but-empty and terminates on a tool error *(wave 1)* — complete 2026-08-05, see 35-01-SUMMARY.md
 - [x] 35-02-PLAN.md — the fences pinned: provenance naming the URL actually fetched, an AST import-set guard proving no scraping/browser/HTTP capability was introduced, and contract tests tying `extraction.md`'s quoted cap and branch placement to the module *(wave 2)* — complete 2026-08-05, see 35-02-SUMMARY.md
 - [ ] 35-03-PLAN.md — walk `https://gctc.com.au/board-of-directors/` live for its 9 directors, then cut `0.10.0` (bump + CHANGELOG in one commit), push to master, refresh the marketplace clone *(wave 3)*
-
 
 ### Phase 36: Enrichment Propose Mode & Match Lane
 
@@ -474,11 +475,29 @@ Plans:
 **Plans**: 5 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 36-01-PLAN.md — lane stamp + lane-filtered adapters (Finding A), the pure `matchProposal.js` module, and the ingest `.invalid` sentinel (Finding B)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 36-02-PLAN.md — the MEDIUM match lane: `IF Has Email` / `IF Name Searchable` / `HubSpot Name Search` / `Adapt Name Search`, credential map, and the unmatchable-row skip
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 36-03-PLAN.md — `mode` threaded from the envelope, row-carrying terminal markers, and the oversize/empty `events` refusal
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 36-04-PLAN.md — `action:"proposed"` ahead of the write gate on both object types, plus the cloud Lusha identity widening
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 36-05-PLAN.md — offline gates, operator-run disarmed deploy checkpoint, bounce and disarmed read-back
+
+**Cross-cutting constraints:**
+
+- `grep -c 'ALLOW_HUBSPOT_[A-Z_]* = \"true\"' n8n/*.json` reports 0 for every file.
 
 ### Phase 37: Enrich Before Ingest
 
@@ -497,7 +516,6 @@ Plans:
   8. Suites green; version bumped in the same commit as the CHANGELOG cut; merged to master; marketplace clone refreshed.
 
 **Plans**: TBD
-
 
 ## v0.6 Progress
 

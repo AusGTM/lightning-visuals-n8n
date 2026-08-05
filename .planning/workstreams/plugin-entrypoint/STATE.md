@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v0.6
 milestone_name: Progress
-current_phase: 35
-current_phase_name: URL Structured-Representation Fallback
-current_plan: 2
-status: in_progress
-stopped_at: 35-02 complete — provenance now names the URL actually fetched, an AST import-set guard proves url_fallback.py's exclusions by construction, and 7 new contract tests pin extraction.md's cap/branch/host wording against the module. 35-03 (the live walk + release) remains. 23-06 operator-front items (RB-3 etc.) still open, unchanged by this phase.
-last_updated: "2026-08-05T10:25:00+10:00"
+current_phase: 36
+current_phase_name: Enrichment Propose Mode & Match Lane
+current_plan: Phase 36 plan 0 of 5 — planned, not yet executing
+status: ready_to_execute
+stopped_at: Phase 36 PLANNED — 5 plans across 5 strictly serial waves (every plan edits scripts/build_cloud_workflows.py, so files_modified overlap forces the ordering). Research verified every 36-CONTEXT.md claim against current source; plan-checker returned VERIFICATION PASSED with zero issues against 12 phase-specific hard rules. Wave order honours CONTEXT §13 — the lane stamp (Finding A) and the ingest .invalid sentinel (Finding B) land in wave 1 as independently-revertable live bug fixes, and nothing before wave 4 changes an existing caller. Phase 37 (the client half) depends on this landing first. 23-06 operator-front items (RB-3 etc.) still open, unchanged.
+last_updated: "2026-08-05T14:55:00+10:00"
 last_activity: 2026-08-05
-last_activity_desc: Phase 35 plan 02 complete — provenance/import-guard/contract-pin tests built; a genuine cap-parity test bug (coincidental digit match on INGEST-06) caught live by the plan's own red-check and fixed
+last_activity_desc: Phase 36 planned — 5 plans, 5 waves, checker passed
 progress:
-  total_phases: 12
+  total_phases: 15
   completed_phases: 9
-  total_plans: 57
+  total_plans: 65
   completed_plans: 56
   percent: 67
 ---
@@ -22,7 +22,29 @@ progress:
 
 ## Current Position
 
-Phase: 35 (URL Structured-Representation Fallback) — IN PROGRESS
+Phase: 36 (Enrichment Propose Mode & Match Lane) — PLANNED, ready to execute
+Plan: 0 of 5 complete — 5 plans across 5 strictly serial waves
+Status: research verified every 36-CONTEXT.md claim against current source (zero claims
+failed); gsd-plan-checker returned VERIFICATION PASSED with no issues against 12
+phase-specific hard rules. Wave order honours CONTEXT §13: the `lane` stamp (Finding A,
+mixed-lane duplication) and the ingest `.invalid` sentinel (Finding B, manufactured
+batch-wide `lookup_failed`) land in wave 1 as independently-revertable live bug fixes;
+nothing before wave 4 changes an existing caller. Phase 37 (client half) waits on this.
+Last activity: 2026-08-05 — Phase 36 planned
+
+**GATE OVERRIDE, 2026-08-05 (Phase 36 planning).** The decision-coverage gate returned
+`passed: false, reason: "could-not-parse", total: 0, uncovered: []` — the documented
+false-negative shape for this repo, not a real gap: `36-CONTEXT.md` states its four locked
+decisions as prose under §4 rather than as `- **D-NN:**` bullets, so the parser extracts
+nothing to check. Verified substantively instead — all four map to plans: propose mode →
+36-04, match tiers → 36-01/36-02, Lusha widening → 36-04, oversize-`events` refusal →
+36-03. Recorded here so verify-phase can re-surface it rather than inheriting a silent pass.
+
+---
+
+### Prior position (Phase 35, complete)
+
+Phase: 35 (URL Structured-Representation Fallback) — COMPLETE
 Plan: 2 of 3 complete (35-01, 35-02 done; 35-03 remains)
 Status: `scripts/url_fallback.py` built, TDD-pinned, and now also import-set-guarded (its
 "cannot reach the network" claim is proven by AST, not promised in a docstring).
