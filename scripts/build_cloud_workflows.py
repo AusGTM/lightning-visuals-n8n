@@ -3367,6 +3367,11 @@ return parsed.events.map((event) => {
     occurred_at: event.occurredAt || new Date().toISOString(),
     provider_enabled,
     providers_requested,
+    // Phase 36-03 (36-CONTEXT.md sec6): mode read at the envelope level exactly like
+    // providers above, with the same per-event fallback. The two-state write-guard
+    // predicate is applied downstream at Decide Action, not here — this only threads the
+    // value onto the row so it rides the `...event` spread below to every later hop.
+    mode: parsed.mode ?? event.mode ?? null,
     // MINIMUM-scope shim (Task 6, documented per the plan's own budget carve-out):
     // Build Identity/Build Company Identity still read direct body fields (email/
     // domain/...) rather than fetching the record fresh by object_id — restructuring

@@ -6,7 +6,7 @@
 // into Code nodes via the builder's inline() (Code nodes cannot require() siblings).
 //
 // parseWebhookBody(body)
-//   -> { events, providers }
+//   -> { events, providers, mode }
 //   Explicit payload contract (reviews A4): a bare HubSpot event array carries no
 //   top-level `providers` slot; an envelope `{ providers, events: [...] }` object carries
 //   the caller's selection at the envelope level. A single bare event object (neither an
@@ -15,6 +15,11 @@
 //   wrapper additionally falls back to `event.providers` per-event when this returns
 //   undefined (`parsed.providers ?? event.providers`), covering the same single-event case
 //   without double logic.
+//   `mode` (Phase 36-03, 36-CONTEXT.md sec6): read at the envelope level with the IDENTICAL
+//   idiom as `providers` — absent means today's behaviour byte-identically, `"write"` means
+//   today's behaviour explicitly, and any other value is return-only (a typo can never
+//   write). Two states, never an allow-list: `mode != null && String(mode).toLowerCase()
+//   !== "write"`. That predicate is applied downstream at Decide Action, not here.
 //
 // resolveEnabledProviders(raw, allNames)
 //   -> { provider_enabled: { <name>: boolean, ... }, providers_requested: [...] }
@@ -35,7 +40,8 @@ function parseWebhookBody(body) {
     ? body
     : (body && Array.isArray(body.events) ? body.events : [body]);
   const providers = (body && !Array.isArray(body)) ? body.providers : undefined;
-  return { events, providers };
+  const mode = (body && !Array.isArray(body)) ? body.mode : undefined;
+  return { events, providers, mode };
 }
 
 function resolveEnabledProviders(raw, allNames) {

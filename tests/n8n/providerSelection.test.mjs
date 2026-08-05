@@ -110,6 +110,66 @@ test("A4: a single bare event object carrying its OWN providers field surfaces i
   assert.deepEqual(providers, ["zoominfo"]);
 });
 
+// --- parseWebhookBody mode extraction (Phase 36-03, 36-CONTEXT.md sec6) -------------
+// mode is read at the ENVELOPE level exactly as providers already is — same guard, same
+// undefined default. It is NOT an allow-list: any non-"write" value is return-only.
+
+test("mode: an envelope {mode, events:[...]} surfaces mode at the top level", () => {
+  const body = { mode: "propose", events: [{ objectId: 1 }] };
+  const { events, providers, mode } = parseWebhookBody(body);
+  assert.deepEqual(events, body.events);
+  assert.equal(providers, undefined);
+  assert.equal(mode, "propose");
+});
+
+test("mode: an envelope with no mode key -> mode undefined", () => {
+  const body = { events: [{ objectId: 1 }] };
+  const { mode } = parseWebhookBody(body);
+  assert.equal(mode, undefined);
+});
+
+test("mode: a bare array body -> mode undefined (bare arrays carry no envelope fields)", () => {
+  const body = [{ objectId: 1 }, { objectId: 2 }];
+  const { events, mode } = parseWebhookBody(body);
+  assert.equal(events, body);
+  assert.equal(mode, undefined);
+});
+
+test("mode: an explicit mode:\"write\" round-trips", () => {
+  const body = { mode: "write", events: [{ objectId: 1 }] };
+  const { mode } = parseWebhookBody(body);
+  assert.equal(mode, "write");
+});
+
+test("mode: null body -> mode undefined, no throw", () => {
+  const { events, providers, mode } = parseWebhookBody(null);
+  assert.deepEqual(events, [null]);
+  assert.equal(providers, undefined);
+  assert.equal(mode, undefined);
+});
+
+test("mode: undefined body -> mode undefined, no throw", () => {
+  const { events, providers, mode } = parseWebhookBody(undefined);
+  assert.deepEqual(events, [undefined]);
+  assert.equal(providers, undefined);
+  assert.equal(mode, undefined);
+});
+
+test("mode: a single bare event object carrying its own mode field surfaces it, matching how providers already behaves for a single bare event", () => {
+  const body = { mode: "propose" };
+  const { events, mode } = parseWebhookBody(body);
+  assert.deepEqual(events, [body]);
+  assert.equal(mode, "propose");
+});
+
+test("mode: events/providers outputs are byte-identical to before for a mode-carrying envelope", () => {
+  const body = { mode: "propose", providers: ["lusha"], events: [{ objectId: 1 }, { objectId: 2 }] };
+  const { events, providers, mode } = parseWebhookBody(body);
+  assert.deepEqual(events, body.events);
+  assert.deepEqual(providers, ["lusha"]);
+  assert.equal(mode, "propose");
+});
+
 // --- extractCredits -------------------------------------------------------------------
 
 test("extractCredits: lusha valid 200 body -> credits.remaining", () => {
