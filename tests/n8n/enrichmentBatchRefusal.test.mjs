@@ -71,3 +71,18 @@ test("a bare event array (not an envelope), length 1, is not refused — parseWe
   assert.equal(rows.length, 1);
   assert.notEqual(rows[0].outcome, "refused");
 });
+
+// --- Phase 36-06 (37-CONTEXT.md §13 ceiling ruling): mode-aware ceiling selection ------
+
+test("mode:propose, 3 events: NOT refused, 3 rows emitted (the new capability)", () => {
+  const rows = runParseHubSpotEvent({ mode: "propose", events: makeEvents(3) });
+  assert.equal(rows.length, 3);
+  for (const r of rows) assert.notEqual(r.outcome, "refused");
+});
+
+test("mode absent, 3 events: refused, one terminating item, zero enriched, reason names the write ceiling (the guarantee)", () => {
+  const rows = runParseHubSpotEvent({ events: makeEvents(3) });
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].outcome, "refused");
+  assert.equal(rows[0].events.length, 0);
+});

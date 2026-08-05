@@ -3386,7 +3386,7 @@ def _route_action_switch(name, x, y):
 # level; a per-event `.providers` field is honoured as a fallback when the envelope
 # itself carries none (`parsed.providers ?? event.providers`).
 ENRICH_PARSE_EVENT_CLOUD = (
-    inline("providerSelection.js")
+    inline("providerSelection.js", "matchProposal.js")
     + r"""
 
 // --- n8n wrapper: normalize event array + resolve providers (reviews A4) ---
@@ -3411,7 +3411,16 @@ const parsed = parseWebhookBody(body);
 // refusal through the existing "IF Object Type Supported" false edge to "Unsupported
 // Object Type" -> "Build Response", so the reason reaches the caller as a 200 with zero
 // new nodes or edges.
-const MAX_EVENTS = __MAX_LIST_RECORDS__;
+// Phase 36-06 (37-CONTEXT.md §13 ceiling ruling): parsed.mode is read at the ENVELOPE
+// level only (parseWebhookBody's contract) — an envelope that carries no top-level mode
+// but whose individual events each carry one falls through to the write ceiling. That is
+// fail-closed and correct: the row-level `parsed.mode ?? event.mode` fallback used below
+// (and at Decide Action) is about which mode a ROW runs in; this is about how long the
+// WHOLE request may take, and the stricter bound is the safe answer when the envelope
+// itself has not declared its mode.
+const MAX_WRITE_EVENTS = __MAX_LIST_RECORDS__;
+const MAX_PROPOSE_EVENTS = __MAX_PROPOSE_RECORDS__;
+const MAX_EVENTS = isReturnOnly(parsed.mode) ? MAX_PROPOSE_EVENTS : MAX_WRITE_EVENTS;
 if (parsed.events.length > MAX_EVENTS) {
   return [{ json: {
     outcome: "refused",
@@ -3488,11 +3497,26 @@ return parsed.events.map((event) => {
 # path and is no longer provisional. Still deliberately declared in ONE place.
 ENRICH_MAX_LIST_RECORDS = 2
 
+# Phase 36-06 (37-CONTEXT.md §13 ceiling ruling): the write ceiling above is 2 because
+# probe B4 measured the FULL WATERFALL (lusha+apollo+zoominfo, one company record) at
+# 37.44 s/record. A return-only (`mode:"propose"`) request runs ZERO provider calls —
+# its per-row cost is two HubSpot search POSTs. Applying the waterfall's ceiling to it is
+# an unnecessarily strict boundary. No in-repo measurement of a propose row exists yet,
+# so this number is ASSUMED, not measured: worst case 4 s/row, +25% headroom = 5 s/row
+# against n8n Cloud's ~100 s Cloudflare-enforced response ceiling, giving
+# floor(100/5) = 20.
+# PROVISIONAL — replace with measured value
+# Earn the real number with a B4-shaped probe at the FIRST live propose run and rewrite
+# this comment with the measurement and its date, the same way the 37.44 s note above was
+# promoted from provisional to confirmed.
+ENRICH_MAX_PROPOSE_RECORDS = 20
+
 # Task 3's events-array-size refusal lives inside ENRICH_PARSE_EVENT_CLOUD (defined
 # above, before this ceiling is known) — a second, deferred placeholder substitution on
 # the SAME single declaration, not a second constant.
 ENRICH_PARSE_EVENT_CLOUD = ENRICH_PARSE_EVENT_CLOUD.replace(
-    "__MAX_LIST_RECORDS__", str(ENRICH_MAX_LIST_RECORDS))
+    "__MAX_LIST_RECORDS__", str(ENRICH_MAX_LIST_RECORDS)
+).replace("__MAX_PROPOSE_RECORDS__", str(ENRICH_MAX_PROPOSE_RECORDS))
 
 _HS_LISTS_BASE = "https://api.hubapi.com/crm/v3/lists"
 
