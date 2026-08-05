@@ -525,7 +525,7 @@ Plans:
   9. *(§13 amendment, operator 2026-08-05)* A broken batch resumes idempotently: a run manifest maps `row_id` to a terminal verdict under the durable home, and a re-run re-spends nothing on rows already carrying one. The manifest is its own artifact — `artifact_store.py`'s field refusal, which keeps the arming grant off disk, is not widened.
   10. *(§13 amendment)* After ingest, the records that landed are handed to the HubSpot queue the scheduled poller already sweeps, so pre-ingest exclusion is temporary rather than terminal and no contact ends a cycle unenriched.
 
-**Plans:** 6/9 plans executed
+**Plans:** 9/9 plans executed
 
 Plans:
 **Wave 1**
@@ -548,15 +548,15 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 37-07-PLAN.md — post-ingest handoff to the HubSpot queue (§13b), with the transport as an operator decision
+- [x] 37-07-PLAN.md — post-ingest handoff to the HubSpot queue (§13b), with the transport as an operator decision
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 37-08-PLAN.md — `skills/enrich-before-ingest/SKILL.md` and the two-arming-phrase contract test
+- [x] 37-08-PLAN.md — `skills/enrich-before-ingest/SKILL.md` and the two-arming-phrase contract test
 
 **Wave 7** *(blocked on Wave 6 completion)*
 
-- [ ] 37-09-PLAN.md — gates, release cut, the nine-directors live walk, merge to master
+- [x] 37-09-PLAN.md — gates, release cut, the nine-directors live walk, merge to master
 
 ## v0.6 Progress
 
