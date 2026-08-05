@@ -911,24 +911,30 @@ function _writeSafetyAllows(action, hsObjectId, domain) {
 # ---- shared inlined Code-node bodies (Cloud + local both use these) ----------
 
 # Build identity search keys from the trigger payload (email/domain/linkedin).
-ENRICH_BUILD_IDENTITY = inline("normalizeEmail.js") + r"""
+ENRICH_BUILD_IDENTITY = inline("normalizeEmail.js", "matchProposal.js") + r"""
 
 // --- n8n wrapper: normalise the incoming identity into HubSpot search keys ---
 return $input.all().map((it) => {
   const row = it.json;
   const email = normalizeEmailBasic(row.email);
+  const identity_keys = {
+    email,
+    domain: row.domain || (email ? email.split("@")[1] : null),
+    linkedin_url: row.linkedin_url || null,
+    // Name+company let the providers match when no email is in hand (the common
+    // pre-enrichment case). ZoomInfo/Apollo accept firstName+lastName+companyName.
+    firstName: row.firstname || row.first_name || null,
+    lastName: row.lastname || row.last_name || null,
+    companyName: row.company || row.companyName || null,
+  };
   return { json: { ...row,
     object_type: row.object_type || "contacts",
-    identity_keys: {
-      email,
-      domain: row.domain || (email ? email.split("@")[1] : null),
-      linkedin_url: row.linkedin_url || null,
-      // Name+company let the providers match when no email is in hand (the common
-      // pre-enrichment case). ZoomInfo/Apollo accept firstName+lastName+companyName.
-      firstName: row.firstname || row.first_name || null,
-      lastName: row.lastname || row.last_name || null,
-      companyName: row.company || row.companyName || null,
-    },
+    identity_keys,
+    // 36-CONTEXT.md §5A: each adapter filters to ITS OWN lane before index-aligning
+    // against its own HTTP node — this one stamped field is the single source of
+    // truth plan 36-02's match-lane routing IFs read too, so routing and filtering
+    // provably cannot disagree.
+    lane: laneOf({ object_id: row.object_id, identity_keys }),
   }};
 });
 """
@@ -1101,7 +1107,10 @@ return $input.all().map((it) => {
 ENRICH_ADAPT_SEARCH = r"""// Adapt Search -> existingRecord — CLOUD variant.
 // Maps the real HubSpot search node output (per row, same order) into the
 // existingRecord shape enrichmentGate expects. 0 results => {} => CREATE.
-const rows = $('Build Identity').all();
+// Phase 36 (Finding A): filtered to the "email" lane BEFORE index-aligning against
+// "HubSpot Search" — a mixed-lane batch would otherwise emit every OTHER lane's rows
+// here too, duplicating provider calls and responses (36-CONTEXT.md §5A).
+const rows = $('Build Identity').all().filter((it) => it.json.lane === "email");
 const search = $('HubSpot Search').all();
 return rows.map((it, i) => {
   const row = it.json;
@@ -3562,7 +3571,10 @@ ENRICH_ADAPT_FETCH_BY_ID_CONTACT = inline("adaptFetchById.js") + r"""
 // REPLACED the current item with its own response by the time this Code node runs — the
 // pre-hop row is recovered BY NODE NAME, never the current item ($json/$input are never
 // read here).
-const rows = $('Build Identity').all();
+// Phase 36 (Finding A): filtered to the "fetch_by_id" lane BEFORE index-aligning against
+// "HubSpot Fetch By Id" — the mixed-lane duplication sibling of ENRICH_ADAPT_SEARCH's fix
+// (36-CONTEXT.md §5A).
+const rows = $('Build Identity').all().filter((it) => it.json.lane === "fetch_by_id");
 const fetched = $('HubSpot Fetch By Id').all();
 return rows.map((it, i) => {
   const row = it.json;
