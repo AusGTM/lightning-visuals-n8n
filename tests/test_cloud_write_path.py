@@ -299,3 +299,47 @@ def test_decide_action_medium_tier_never_creates():
     code = _strip_comments(_node(doc, "Decide Action")["parameters"]["jsCode"])
     assert 'row.match.tier === "medium"' in code
     assert 'action = "needs_match_review"' in code
+
+
+# --- (f) Phase 36-04 Task 2: propose mode on the companies branch — the same guard ---
+
+def test_proposed_action_assignment_precedes_the_write_safety_call_companies():
+    doc = _load()
+    code = _strip_comments(_node(doc, "Decide Company Action")["parameters"]["jsCode"])
+    proposed_at = code.index('action = "proposed"')
+    call_at = code.index("!_writeSafetyAllows(")
+    assert proposed_at < call_at, (
+        f"Decide Company Action: action:\"proposed\" assignment (index {proposed_at}) must "
+        f"precede the _writeSafetyAllows call (index {call_at}) — a propose envelope naming "
+        "objectType:\"company\" must not write either"
+    )
+
+
+def test_decide_company_action_returns_row_id_mode_and_match():
+    doc = _load()
+    code = _node(doc, "Decide Company Action")["parameters"]["jsCode"]
+    assert "isReturnOnly" in code
+    for field in ("row_id:", "mode:", "match:"):
+        assert field in code, f"Decide Company Action does not return {field.rstrip(':')}"
+
+
+def test_decide_company_action_has_no_medium_tier_guard():
+    """Task 2 (36-CONTEXT.md §7 step 4): companies has no match lane, so no companies row
+    can ever carry a medium tier — the needs_match_review demotion is contacts-only."""
+    doc = _load()
+    code = _node(doc, "Decide Company Action")["parameters"]["jsCode"]
+    assert "needs_match_review" not in code
+
+
+def test_decide_company_action_create_seed_is_guarded_by_return_only():
+    """The companies mirror of BUG 19's email-seed guard: domain/name are seeded on
+    create ONLY when not return-only, so a propose response never echoes the caller's
+    own identity back as if it were a discovered field."""
+    doc = _load()
+    code = _strip_comments(_node(doc, "Decide Company Action")["parameters"]["jsCode"])
+    seed_line = next(
+        line for line in code.split("\n") if 'row.action === "create"' in line
+    )
+    assert "!returnOnly" in seed_line, (
+        f"Decide Company Action's create seed is not gated on !returnOnly: {seed_line!r}"
+    )

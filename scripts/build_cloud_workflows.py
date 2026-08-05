@@ -2568,12 +2568,17 @@ return $input.all().map((it) => {
 # DEFAULT_COMPANY_POLICY has no score_output/veto_output entries for those (they were
 # removed in Phase 15), so this node cannot emit them even if it tried.
 ENRICH_DECIDE_CO_CLOUD = inline(
-    "taxonomy.generated.js", "hubspotEnums.generated.js", "hubspotEnums.js", "mergeCompanies.js") + r"""
+    "taxonomy.generated.js", "hubspotEnums.generated.js", "hubspotEnums.js", "mergeCompanies.js",
+    "matchProposal.js") + r"""
 
 // --- n8n wrapper (companies): Decide Company Action — CLOUD variant ---
 """ + WRITE_SAFETY_GATE_JS + r"""
 return $input.all().map((it) => {
   const row = it.json;
+  // Phase 36-04 Task 2 (36-CONTEXT.md §7 step 4): a propose envelope with
+  // objectType:"company" must not write either — the same shared predicate the
+  // contacts branch uses (Task 1), not a second one.
+  const returnOnly = isReturnOnly(row.mode);
   const merge = row.merge;
   const decisions = (merge && merge.decisions) || [];
   const needsReview = decisions.filter((d) => d.decision === "needs_review");
@@ -2599,16 +2604,27 @@ return $input.all().map((it) => {
   const hs_object_id = (row.existingRecord && row.existingRecord.hs_object_id) || null;
   const id = row.identity_keys || {};
   const domain = id.domain;
-  if (row.action === "create") {
+  if (row.action === "create" && !returnOnly) {
     // BUG 19 (confirmed live on a throwaway, 2026-07-29): canonicalPatch never carries
     // domain (manual_protected — an UPDATE rule) and name is in no policy at all, so an
     // unseeded create wrote name=None/domain=None and the domain-EQ search that had just
     // decided "create" returned total=0 against it — unbounded re-creation. Seed on the
     // create branch ONLY; on enrich this would be the exact clobber the policy prevents.
+    // Also gated on !returnOnly (36-CONTEXT.md §6): a propose response's `properties`
+    // carries only what the waterfall discovered, never the caller's own identity.
     if (id.domain) properties.domain = id.domain;
     if (id.companyName) properties.name = id.companyName;
   }
   let action = row.action;
+  if (returnOnly) {
+    // Phase 36-04 Task 2 (36-CONTEXT.md §7 step 4): set BEFORE _writeSafetyAllows,
+    // unconditionally on the mode predicate alone — no ALLOW_* constant is read on this
+    // branch. A propose envelope naming objectType:"company" must not write either.
+    // No medium-tier guard here: the companies branch has no match lane (Task 1's is
+    // contacts-only), so no companies row can ever carry a medium tier — there is
+    // nothing to demote.
+    action = "proposed";
+  }
   if ((action === "create" || action === "enrich") &&
       !_writeSafetyAllows(action, hs_object_id, domain)) {
     action = "write_blocked";
@@ -2626,6 +2642,9 @@ return $input.all().map((it) => {
     hs_object_id,
     gap_flag: row.gap_flag === true,
     needs_review: needsReview.length > 0,
+    row_id: row.row_id ?? null,
+    mode: row.mode ?? null,
+    match: row.match ?? summarizeMatch({ lane: row.lane }),
     properties,
   }};
 });
