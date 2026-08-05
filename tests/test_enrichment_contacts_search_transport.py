@@ -160,6 +160,37 @@ def test_node_body_preserves_the_original_filter_semantics(name):
 
 # --- REACH-04: no native HubSpot node remains in this lane -------------------------------
 
+# --- Phase 36 Plan 02: HubSpot Name Search shares HubSpot Search's transport shape -----
+
+def test_hubspot_name_search_uses_contains_token_never_the_bare_operator():
+    """HubSpot CRM v3's string-operator vocabulary is closed and has no bare `CONTAINS` —
+    a bare one is a guaranteed 400 that only surfaces against the live tenant. Asserted
+    directly against the node's own jsonBody string (not a re-`json.dumps()`'d copy of the
+    whole document, which double-encodes this field's embedded quotes and would make a
+    substring check like this misfire)."""
+    doc = _load()
+    body = _node(doc, "HubSpot Name Search")["parameters"]["jsonBody"]
+    assert 'operator: "CONTAINS_TOKEN"' in body
+    operators = re.findall(r'operator:\s*"([A-Z_]+)"', body)
+    assert "CONTAINS" not in operators, operators
+
+
+def test_hubspot_name_search_has_shape_parity_with_hubspot_search():
+    """The new match-lane search node must use the SAME credential-bound httpRequest
+    transport as the existing email-EQ search — never a native n8n HubSpot node
+    (BUG 10 / BUG 23)."""
+    doc = _load()
+    email_search = _node(doc, "HubSpot Search")
+    name_search = _node(doc, "HubSpot Name Search")
+    assert name_search["type"] == email_search["type"]
+    assert name_search["typeVersion"] == email_search["typeVersion"]
+    assert name_search.get("onError") == email_search.get("onError")
+    for key in ("authentication", "nodeCredentialType", "method", "url"):
+        assert name_search["parameters"].get(key) == email_search["parameters"].get(key), (
+            f"HubSpot Name Search.{key} diverges from HubSpot Search.{key}"
+        )
+
+
 def test_no_native_hubspot_node_remains_in_enrichment_contacts_lane():
     """The offline harness (tests/n8n/bareEventChainFlow.test.mjs) models every
     HTTP-typed step as exactly ONE item — faithful only for the envelope transport. A

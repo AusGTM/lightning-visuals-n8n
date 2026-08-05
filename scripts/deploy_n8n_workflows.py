@@ -50,6 +50,10 @@ NODE_CREDENTIAL_MAP = {
     # Phase 16.4 Task 1 (gpt #9 lesson repeated deliberately): the new fetch-by-objectId
     # search node — an unmapped HubSpot node deploys UNBOUND and silently 401s at runtime.
     "HubSpot Fetch By Id": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    # Phase 36 Plan 02, Task 1 — same lesson, fifth time: the MEDIUM match-lane search
+    # node. Registered in the SAME commit as the node's creation in
+    # scripts/build_cloud_workflows.py, per this repo's own convention.
+    "HubSpot Name Search": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot Create": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot Update": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     # Phase 25 Plan 03 (same gpt #9 lesson, third time): the two Lists API GETs of the

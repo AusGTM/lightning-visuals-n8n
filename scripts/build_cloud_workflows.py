@@ -3798,6 +3798,57 @@ def build_enrichment_cloud():
     nodes.append(code_node(
         "Adapt Fetch By Id", ENRICH_ADAPT_FETCH_BY_ID_CONTACT, adapt_search_x, fby))
 
+    # Phase 36 Plan 02 (36-CONTEXT.md §7 step 3): the MEDIUM match lane — a row with a
+    # surname and a company but no email (the common case for a board-page/roster extract
+    # with no contact emails at all). Additive THIRD row below the fetch-by-id row above,
+    # so none of the existing nodes move `position`. Only "IF Bare Event"'s FALSE edge
+    # re-points, to "IF Has Email" below — its TRUE edge (-> "HubSpot Fetch By Id") is
+    # untouched, and the companies branch's "IF Company Bare Event" is left alone entirely
+    # (36-CONTEXT.md's wire contract and build plan describe contacts only).
+    mby = fby + 200
+    if_has_email = _if_bool_expr_node(
+        "IF Has Email",
+        # Routes on the SAME `lane` field "Build Identity" stamped (Plan 01's laneOf) —
+        # never a re-derived predicate. Two spellings of one routing decision is how a row
+        # gets routed to one lane and filtered into another (36-CONTEXT.md key_links).
+        '$(\'Build Identity\').item.json.lane === "email"',
+        build_identity_x, mby,
+    )
+    nodes.append(if_has_email)
+    if_name_searchable = _if_bool_expr_node(
+        "IF Name Searchable",
+        '$(\'Build Identity\').item.json.lane === "name"',
+        build_identity_x + 220, mby,
+    )
+    nodes.append(if_name_searchable)
+    # lastname EQ + company CONTAINS_TOKEN, ANDed in one filter group (both must match).
+    # CONTAINS_TOKEN, never the bare "CONTAINS": HubSpot CRM v3's string-operator
+    # vocabulary is closed (EQ/NEQ/LT/LTE/GT/GTE/BETWEEN/IN/NOT_IN/HAS_PROPERTY/
+    # NOT_HAS_PROPERTY/CONTAINS_TOKEN/NOT_CONTAINS_TOKEN) and does not define a bare
+    # substring-match operator — using it would be a guaranteed 400 that only surfaces
+    # against the live tenant. This operator choice is [ASSUMED] offline (36-RESEARCH.md
+    # §B.2 / Assumption A1: no in-repo HubSpot search-operator contract doc exists, unlike
+    # docs/LUSHA-V3-CONTRACT.md) — the offline proof here is structural (this builder
+    # emits CONTAINS_TOKEN and never the bare form, asserted by this plan's tests); the
+    # semantic proof is the first live propose run, alongside the Lusha-widening canary.
+    # properties_csv is the FETCH-BY-ID list, not the plain search list: mediumCandidates
+    # re-verifies a hit against `company`, which the plain search CSV omits.
+    hs_name_search = _hs_http_search_node(
+        "HubSpot Name Search", "contact", hs_search_x, mby,
+        filter_groups=[[
+            {"propertyName": "lastname", "operator": "EQ",
+             "value": "={{ $json.identity_keys.lastName }}"},
+            {"propertyName": "company", "operator": "CONTAINS_TOKEN",
+             "value": "={{ $json.identity_keys.companyName }}"},
+        ]],
+        properties_csv=ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV,
+    )
+    nodes.append(hs_name_search)
+    # "Adapt Name Search" (the Code node that reads this search's output) is built
+    # further down, alongside its ENRICH_ADAPT_NAME_SEARCH constant — the row it occupies
+    # is reserved here so both land on the same visual row as the rest of this lane.
+    adapt_name_search_x = adapt_search_x
+
     # Phase 16.1 (reviews A1): a SINGLE `action != "skip"` dispatch lane feeds the
     # provider gate chain — replaces the old Route Action switch, whose create+enrich
     # outputs BOTH fed the waterfall entry directly, double-executing the gate chain +
@@ -4328,9 +4379,30 @@ def build_enrichment_cloud():
     conns.update(chain(["Build Identity", "IF Bare Event"]))
     conns["IF Bare Event"] = {"main": [
         [{"node": "HubSpot Fetch By Id", "type": "main", "index": 0}],  # true: bare event
-        [{"node": "HubSpot Search", "type": "main", "index": 0}],       # false: existing lane
+        # Phase 36 Plan 02: false lane re-points to the match-lane cascade's entry point
+        # (was "HubSpot Search" directly — tests/test_fetch_by_id_topology.py's pinned
+        # assertion amended to match, per 36-CONTEXT.md §10). The email lane's own
+        # downstream chain (HubSpot Search -> Adapt Search -> Enrichment Gate) is
+        # unchanged; "IF Has Email"'s true branch below reconnects to it.
+        [{"node": "IF Has Email", "type": "main", "index": 0}],
     ]}
     conns.update(chain(["HubSpot Fetch By Id", "Adapt Fetch By Id", "Enrichment Gate"]))
+    # Phase 36 Plan 02: the match-lane cascade. "IF Has Email" routes the email lane back
+    # onto the existing, unmodified "HubSpot Search" chain; its false lane tries the name
+    # lane next. "IF Name Searchable"'s false lane (no searchable identity at all) goes
+    # straight to "Enrichment Gate" — this is that node's FOURTH inbound branch (the same
+    # documented, not-hard-determinism property "Build Response" already carries,
+    # 36-CONTEXT.md §12 Risk 1); the row arriving there carries no `existingRecord` by
+    # design, and Task 3's gate rule turns it into a skip before any provider call.
+    conns["IF Has Email"] = {"main": [
+        [{"node": "HubSpot Search", "type": "main", "index": 0}],       # true: email lane
+        [{"node": "IF Name Searchable", "type": "main", "index": 0}],   # false
+    ]}
+    conns["IF Name Searchable"] = {"main": [
+        [{"node": "HubSpot Name Search", "type": "main", "index": 0}],  # true: name lane
+        [{"node": "Enrichment Gate", "type": "main", "index": 0}],      # false: unmatchable
+    ]}
+    conns.update(chain(["HubSpot Name Search", "Adapt Name Search", "Enrichment Gate"]))
     conns.update(chain(["HubSpot Search", "Adapt Search",
                         "Enrichment Gate", "IF Provider Processing Needed"]))
     # Phase 16.1 (reviews A1): a SINGLE lane feeds the provider gate chain — the

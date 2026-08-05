@@ -86,6 +86,11 @@ BRANCHES = {
         "resource": "contact",
         "properties_csv": ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV,
         "url": "https://api.hubapi.com/crm/v3/objects/contacts/search",
+        # Phase 36 Plan 02: the contacts match-lane cascade (IF Has Email -> IF Name
+        # Searchable -> HubSpot Name Search -> Adapt Name Search) now sits between
+        # "IF Bare Event" and "HubSpot Search" — the false lane targets the cascade's
+        # entry point, not "HubSpot Search" directly anymore.
+        "false_lane_target": "IF Has Email",
     },
     "companies": {
         "identity_builder": "Build Company Identity",
@@ -97,6 +102,9 @@ BRANCHES = {
         "resource": "company",
         "properties_csv": ENRICH_COMPANY_SEARCH_PROPERTIES_CSV,
         "url": "https://api.hubapi.com/crm/v3/objects/companies/search",
+        # Phase 36 Plan 02 (36-CONTEXT.md §7 step 3): the match lane is contacts-only —
+        # the companies branch has no equivalent cascade, so its false lane is unchanged.
+        "false_lane_target": "HubSpot Company Search",
     },
 }
 
@@ -113,9 +121,27 @@ def test_gate_exists_and_true_false_lanes_target_fetch_and_search_respectively(b
     assert true_branch[0]["node"] == cfg["fetch_node"], (
         f"{cfg['gate_if']} true lane must target {cfg['fetch_node']!r}"
     )
-    assert false_branch[0]["node"] == cfg["search_node"], (
-        f"{cfg['gate_if']} false lane must target {cfg['search_node']!r} (the existing lane, unmoved)"
+    # Phase 36 Plan 02 (36-CONTEXT.md §10): deliberately amended, not silenced. Contacts'
+    # false lane no longer targets "HubSpot Search" directly — the match-lane cascade
+    # (IF Has Email -> IF Name Searchable -> HubSpot Name Search -> Adapt Name Search)
+    # was inserted between "IF Bare Event" and "HubSpot Search". Companies has no match
+    # lane (36-CONTEXT.md §7 step 3 scopes it to contacts only), so its false lane is
+    # untouched — false_lane_target equals search_node for that branch.
+    assert false_branch[0]["node"] == cfg["false_lane_target"], (
+        f"{cfg['gate_if']} false lane must target {cfg['false_lane_target']!r}"
     )
+
+
+# --- the amendment above cannot hide a severed edge: search_node stays reachable --------
+
+@pytest.mark.parametrize("branch", ["contacts", "companies"])
+def test_search_node_is_still_reachable_from_the_gate_if(branch):
+    """Companion to the false-lane amendment: proves the cascade re-point did not sever
+    the path to `search_node`, only insert nodes in front of it (contacts) — or, for
+    companies, that nothing changed at all."""
+    cfg = BRANCHES[branch]
+    doc = _load()
+    assert cfg["search_node"] in _reachable_from(doc, cfg["gate_if"])
 
 
 # --- gate is immediately downstream of its identity builder (placement, pinned) --------
