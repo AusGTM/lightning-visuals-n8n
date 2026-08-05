@@ -4,33 +4,33 @@ milestone: v0.6
 milestone_name: Progress
 current_phase: 36
 current_phase_name: Enrichment Propose Mode & Match Lane
-current_plan: Phase 36 plan 0 of 5 — planned, not yet executing
-status: ready_to_execute
-stopped_at: Phase 36 PLANNED — 5 plans across 5 strictly serial waves (every plan edits scripts/build_cloud_workflows.py, so files_modified overlap forces the ordering). Research verified every 36-CONTEXT.md claim against current source; plan-checker returned VERIFICATION PASSED with zero issues against 12 phase-specific hard rules. Wave order honours CONTEXT §13 — the lane stamp (Finding A) and the ingest .invalid sentinel (Finding B) land in wave 1 as independently-revertable live bug fixes, and nothing before wave 4 changes an existing caller. Phase 37 (the client half) depends on this landing first. 23-06 operator-front items (RB-3 etc.) still open, unchanged.
-last_updated: "2026-08-05T14:55:00+10:00"
+current_plan: 5
+status: blocked_on_operator
+stopped_at: Phase 36 — plans 36-01 through 36-04 COMPLETE and committed; 36-05 is PAUSED at its blocking human-action checkpoint. All offline gates green (repo pytest 1960/6 from a 1933/6 baseline, plugin 1052/5 unchanged, node 609 from 553, arming grep 0, builder idempotent, zero operator-claude-plugin paths touched). DoD items 1-8 proven offline; item 9 (deploy disarmed, bounce, read back) is what the checkpoint exists to close. The deploy one-liner is denied to agents by the permission classifier and must be run by the operator via `!`; after they confirm, the agent handles the bounce (n8n_control.set_active) and the disarmed read-back. Resume by sending the deploy output to the paused 36-05 executor. ORIGINAL PLANNING NOTE — 5 plans across 5 strictly serial waves (every plan edits scripts/build_cloud_workflows.py, so files_modified overlap forces the ordering). Research verified every 36-CONTEXT.md claim against current source; plan-checker returned VERIFICATION PASSED with zero issues against 12 phase-specific hard rules. Wave order honours CONTEXT §13 — the lane stamp (Finding A) and the ingest .invalid sentinel (Finding B) land in wave 1 as independently-revertable live bug fixes, and nothing before wave 4 changes an existing caller. Phase 37 (the client half) depends on this landing first. 23-06 operator-front items (RB-3 etc.) still open, unchanged.
+last_updated: "2026-08-05T05:12:10.878Z"
 last_activity: 2026-08-05
-last_activity_desc: Phase 36 planned — 5 plans, 5 waves, checker passed
+last_activity_desc: Phase 36 execution started
 progress:
   total_phases: 15
   completed_phases: 9
   total_plans: 65
   completed_plans: 56
-  percent: 67
+  percent: 60
 ---
 
 # Project State
 
 ## Current Position
 
-Phase: 36 (Enrichment Propose Mode & Match Lane) — PLANNED, ready to execute
-Plan: 0 of 5 complete — 5 plans across 5 strictly serial waves
-Status: research verified every 36-CONTEXT.md claim against current source (zero claims
-failed); gsd-plan-checker returned VERIFICATION PASSED with no issues against 12
+Phase: 36 (Enrichment Propose Mode & Match Lane) — EXECUTING
+Plan: 1 of 5
+Status: Executing Phase 36. Research verified every 36-CONTEXT.md claim against current
+source (zero claims failed); gsd-plan-checker returned VERIFICATION PASSED with no issues against 12
 phase-specific hard rules. Wave order honours CONTEXT §13: the `lane` stamp (Finding A,
 mixed-lane duplication) and the ingest `.invalid` sentinel (Finding B, manufactured
 batch-wide `lookup_failed`) land in wave 1 as independently-revertable live bug fixes;
 nothing before wave 4 changes an existing caller. Phase 37 (client half) waits on this.
-Last activity: 2026-08-05 — Phase 36 planned
+Last activity: 2026-08-05 — Phase 36 execution started
 
 **GATE OVERRIDE, 2026-08-05 (Phase 36 planning).** The decision-coverage gate returned
 `passed: false, reason: "could-not-parse", total: 0, uncovered: []` — the documented
@@ -218,7 +218,7 @@ requirement. Each was surfaced explicitly and chosen deliberately — none is a 
 ## Progress
 
 **Phases Complete:** 10 / 10 — Phase 30 closed 2026-08-04 (RB-9 close: REVIEW-04 demonstrated, D-31 endpoint probe recorded)
-**Current Plan:** Phase 34 plan 2 of 4 (plan 1 — Half B engine — complete)
+**Current Plan:** 1
 
 ```
 [█░░░░░░░░░░░░░░░░░░░] 8%

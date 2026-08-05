@@ -472,24 +472,24 @@ Plans:
   7. An oversize `events` array is refused whole with a reason; nothing is enriched. Refuse, never truncate.
   8. `grep -c 'ALLOW_HUBSPOT_[A-Z_]* = "true"' n8n/*.json` → 0. Suites green (plugin 1052/5, python 1933/6, node 553). Rebuilt, deployed disarmed, every active workflow bounced, read back.
 
-**Plans**: 5 plans
+**Plans**: 4/5 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 36-01-PLAN.md — lane stamp + lane-filtered adapters (Finding A), the pure `matchProposal.js` module, and the ingest `.invalid` sentinel (Finding B)
+- [x] 36-01-PLAN.md — lane stamp + lane-filtered adapters (Finding A), the pure `matchProposal.js` module, and the ingest `.invalid` sentinel (Finding B)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 36-02-PLAN.md — the MEDIUM match lane: `IF Has Email` / `IF Name Searchable` / `HubSpot Name Search` / `Adapt Name Search`, credential map, and the unmatchable-row skip
+- [x] 36-02-PLAN.md — the MEDIUM match lane: `IF Has Email` / `IF Name Searchable` / `HubSpot Name Search` / `Adapt Name Search`, credential map, and the unmatchable-row skip
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 36-03-PLAN.md — `mode` threaded from the envelope, row-carrying terminal markers, and the oversize/empty `events` refusal
+- [x] 36-03-PLAN.md — `mode` threaded from the envelope, row-carrying terminal markers, and the oversize/empty `events` refusal
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 36-04-PLAN.md — `action:"proposed"` ahead of the write gate on both object types, plus the cloud Lusha identity widening
+- [x] 36-04-PLAN.md — `action:"proposed"` ahead of the write gate on both object types, plus the cloud Lusha identity widening
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
