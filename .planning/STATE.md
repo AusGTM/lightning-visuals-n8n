@@ -4,7 +4,7 @@ milestone: v0.7
 milestone_name: HubSpot Scoring Engine Remediation
 current_phase: 39
 current_phase_name: Path Decision & Fit-Score Verification
-status: verifying
+status: phase_complete
 stopped_at: Completed 39-04-PLAN.md (path decision recorded — fix-the-four-workflow-chain-in-place)
 last_updated: "2026-08-06T04:01:42.659Z"
 last_activity: 2026-08-06
@@ -21,9 +21,9 @@ progress:
 
 ## Current Position
 
-Phase: 39 (Path Decision & Fit-Score Verification) — COMPLETE
-Plan: 39-01, 39-02, 39-03, 39-04 complete (4 of 4)
-Status: Phase complete — ready for verification
+Phase: 39 of 42 — COMPLETE (verification passed 14/14, 2026-08-06)
+Next: Phase 40 (Scoring Engine, Veto & Parity Remediation) — ready to plan on the fix-in-place path
+Status: Phase 39 sealed — run /gsd-discuss-phase 40 or /gsd-plan-phase 40
 Last activity: 2026-08-06 — 39-04 complete (39-DECISION.md — path decision recorded)
 Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39-path-decision-fit-score-verification/39-DECISION.md`
 

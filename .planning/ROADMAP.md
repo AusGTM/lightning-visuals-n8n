@@ -21,7 +21,7 @@ milestone starts at Phase 39.
 - Integer phases (39, 40, 41, 42): Planned milestone work.
 - Decimal phases (e.g. 40.1): Reserved for urgent insertions if needed later.
 
-- [ ] **Phase 39: Path Decision & Fit-Score Verification** - Operator verifies Sales Hub Pro fit-score availability in-portal and records the remediation path (fix-in-place vs lead-scoring-tool rebuild) with rationale
+- [x] **Phase 39: Path Decision & Fit-Score Verification** (completed 2026-08-06) - Operator verifies Sales Hub Pro fit-score availability in-portal and records the remediation path (fix-in-place vs lead-scoring-tool rebuild) with rationale
 - [ ] **Phase 40: Scoring Engine, Veto & Parity Remediation** - The rubric scores and vetoes correctly inside HubSpot on the chosen path, with a parity harness landing alongside each fix
 - [ ] **Phase 41: Validation Data Import & End-to-End Proof** - The 66 web-researched companies land as a real scoreable population and prove the engine fires automatically at small volume
 - [ ] **Phase 42: Scoring Artifact Cleanup & Reconciliation** - Superseded scoring artifacts are archived (not deleted) and the property config reconciles clean against the live portal
@@ -181,7 +181,7 @@ Phases execute in numeric order: 39 → 40 → 41 → 42 → 43
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 39. Path Decision & Fit-Score Verification | 4/4 | In Progress|  |
+| 39. Path Decision & Fit-Score Verification | 4/4 | Complete | 2026-08-06 |
 | 40. Scoring Engine, Veto & Parity Remediation | 0/TBD | Not started | - |
 | 41. Validation Data Import & End-to-End Proof | 0/TBD | Not started | - |
 | 42. Scoring Artifact Cleanup & Reconciliation | 0/TBD | Not started | - |
