@@ -22,12 +22,12 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 - [x] **ENGINE-02**: `lv_produces_content=true` contributes +20 to the score. (F1 — term
   absent from every component, workflow, and formula.)
 
-- [ ] **ENGINE-03**: Scoring reads the canonical `lv_country_region_normalized` and
+- [x] **ENGINE-03**: Scoring reads the canonical `lv_country_region_normalized` and
   `lv_revenue_band` properties the pipeline actually writes — never native free-text
   `country` or never-written `annualrevenue`. (F2/F3 — current triggers watch properties
   enrichment can never drive.)
 
-- [ ] **ENGINE-04**: Revenue decay fires −5/−15/−30/−50 per rubric, with exact boundary
+- [x] **ENGINE-04**: Revenue decay fires −5/−15/−30/−50 per rubric, with exact boundary
   values (500M, 750M, 1B, 1.2B) landing in the rubric-correct band. (F10 boundary overlap —
   750M scored −5 live, rubric −15.)
 
@@ -124,8 +124,8 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 | DECIDE-01 | Phase 39 | Complete |
 | ENGINE-01 | Phase 40 | Pending |
 | ENGINE-02 | Phase 40 | Complete |
-| ENGINE-03 | Phase 40 | Pending |
-| ENGINE-04 | Phase 40 | Pending |
+| ENGINE-03 | Phase 40 | Complete |
+| ENGINE-04 | Phase 40 | Complete |
 | ENGINE-05 | Phase 40 | Complete |
 | ENGINE-06 | Phase 40 | Complete |
 | ENGINE-07 | Phase 40 | Pending |

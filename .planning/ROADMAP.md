@@ -106,7 +106,7 @@ VETO-01, VETO-02, VETO-03, PARITY-01, PARITY-02
      scratch scenarios (AU-string veto, tier lag, gambling conflation, boundary overlap) encoded
      as named regression cases — this is the standing drift guard, since every defect above was
      invisible in the HubSpot UI.
-**Plans**: 4/7 plans executed
+**Plans**: 5/7 plans executed
 
 Plans:
 **Wave 1**
@@ -121,7 +121,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 40-05-PLAN.md — Geography and revenue flows retargeted to canonical inputs; the HubSpot veto branch deleted (ENGINE-03, ENGINE-04)
+- [x] 40-05-PLAN.md — Geography and revenue flows retargeted to canonical inputs; the HubSpot veto branch deleted (ENGINE-03, ENGINE-04)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 

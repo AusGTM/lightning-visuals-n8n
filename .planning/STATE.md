@@ -5,16 +5,16 @@ milestone_name: HubSpot Scoring Engine Remediation
 current_phase: 40
 current_phase_name: Scoring Engine, Veto & Parity Remediation
 status: executing
-stopped_at: Completed 40-04-PLAN.md
-last_updated: "2026-08-06T08:25:00.000Z"
-last_activity: 2026-08-06
-last_activity_desc: 40-04 complete (produces_content_score/gambling_score components added, two new mapper flows live, lv_icp_fit_score extended to five terms — ENGINE-02/ENGINE-05 closed; discovered and worked around a HubSpot Properties-API gap where the default-0 stamp on new companies has no API equivalent, fixed via a createdate enrollment branch)
+stopped_at: Completed 40-05-PLAN.md
+last_updated: "2026-08-07T09:00:00.000Z"
+last_activity: 2026-08-07
+last_activity_desc: 40-05 complete (Geography and Annual Revenue flows retargeted to lv_country_region_normalized/lv_revenue_band, closing F2/F3/ENGINE-03; Geography flow's veto branch deleted, completing D-01's handover — n8n pipeline is now the sole writer of lv_anti_icp_flag/lv_anti_icp_reason; nine-band revenue table matches the rubric exactly, closing F10/ENGINE-04; Task 3 checkpoint auto-resolved per operator pre-approval, stale-flag population measured at zero)
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 11
-  completed_plans: 8
-  percent: 20
+  completed_plans: 9
+  percent: 82
 ---
 
 # Project State
@@ -22,15 +22,15 @@ progress:
 ## Current Position
 
 Phase: 40 (Scoring Engine, Veto & Parity Remediation) — EXECUTING
-Next: Phase 40 remaining plans (40-05 revenue boundary, 40-06 tier/veto workflow, 40-07 backfill mechanism — waves 2+). **40-05 should not delete the Geography flow's veto branch until the two blockers below are resolved and a live write is confirmed landing (see Decisions).**
-Status: Executing Phase 40 — Plans 01-04 complete
-Last activity: 2026-08-06 — 40-04 complete (produces_content_score/gambling_score components added, two new mapper flows live-validated and enabled, lv_icp_fit_score extended to a five-term formula — ENGINE-02/ENGINE-05 closed; see Decisions for the default-0-stamp API-gap workaround)
+Next: Phase 40 remaining plans (40-06 tier/veto workflow, 40-07 backfill mechanism — waves 2+).
+Status: Executing Phase 40 — Plans 01-05 complete
+Last activity: 2026-08-07 — 40-05 complete (Geography/Annual Revenue flows retargeted to canonical properties, veto branch deleted — D-01 handover complete, n8n pipeline is the sole veto writer; ENGINE-03/ENGINE-04 closed; stale-flag population measured at zero)
 Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39-path-decision-fit-score-verification/39-DECISION.md`
 
 ## Session
 
-**Last session:** 2026-08-06T08:23:00.000Z
-**Stopped at:** Completed 40-04-PLAN.md
+**Last session:** 2026-08-07T09:00:00.000Z
+**Stopped at:** Completed 40-05-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -45,6 +45,7 @@ Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39
 | Phase 40 P02 | 22min | 3 tasks | 3 files |
 | Phase 40 P03 | 66min | 3 tasks | 9 files |
 | Phase 40 P04 | 25min | 3 tasks | 6 files |
+| Phase 40 P05 | 75min | 3 tasks | 4 files |
 
 ## Decisions
 
@@ -66,7 +67,12 @@ Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39
 - [Phase 40-03]: VETO-01/VETO-02 left unmarked in REQUIREMENTS.md — code is fully verified (offline+live-webhook-execution) but the plan's own bar (a live PATCH landing on a real record) could not be met due to the two blockers above.
 - [Phase 40-04]: The other three `*_score` components' default-0-on-creation stamp is not reproducible via the CRM v3 Properties API (`defaultValue` silently dropped on POST and PATCH, `numberDisplayHint` PATCH also had no effect) — live-probed three ways before concluding this. Live-confirmed via a reversible formula spike that this matters: `lv_icp_fit_score`'s `calculation_equation` formula blanks entirely when one referenced term is null, not treats it as 0. Fixed by giving `produces_content_score`/`gambling_score`'s new mapper flows a second enrollment branch on `createdate` known, feeding the existing default branch — stays inside the API-only D-05/D-08 path, no portal-UI needed. Does not retroactively affect any of the 712 pre-existing companies (per 40-01's enrollment-requires-a-future-event finding).
 - [Phase 40-04]: `lv_icp_fit_score` extended from 3 to 5 terms (`+ produces_content_score + gambling_score`) via a single clean PATCH (no 400, no portal-UI fallback). ENGINE-02 and ENGINE-05 closed. The remaining gap to ENGINE-01's 80/A total is exactly 40-05's geography/revenue retarget, unchanged by this plan.
+- [Phase 40-05]: **Blocker resolved before this plan started** — `VETO-WRITE-EVIDENCE.md` (2026-08-06/07) live-proves both WINDOWS.md #2 (ALLOW_HUBSPOT_RECORD_WRITES) and #3 (SJ-3 dispatch) are fixed: a real HubSpot PATCH landed `lv_anti_icp_flag="true"` via the scheduled-arm companion, independently re-verified, window disarmed after. This satisfied the precondition the old blocker below (now cleared) was guarding.
+- [Phase 40-05]: Both Geography (4626722240) and Annual Revenue (4626722237) flows retargeted to their canonical trigger properties (`lv_country_region_normalized`, `lv_revenue_band`) and the Geography flow's veto branch deleted — D-01 complete, n8n pipeline is now the sole writer of `lv_anti_icp_flag`/`lv_anti_icp_reason`, guarded by a permanent conformance test scanning every archived flow. ENGINE-03/ENGINE-04 closed.
+- [Phase 40-05]: Live-discovered two HubSpot Automation v4 API limits not previously documented: (1) converting an action's `type` from `LIST_BRANCH` to `STATIC_BRANCH` via PUT 400s — worked around by keeping `LIST_BRANCH` and editing its `MULTISTRING IS_EQUAL_TO` filter content instead, staying on the API-only path with no portal-UI fallback needed; (2) a flow's PUT rejects reintroducing any `actionId` that existed in an earlier revision of that same flow but is absent from the current PUT body, even with no orphans and unique targets — resolved by using ids never before used by that flow. See `PORTAL-FACTS.md`'s Plan 05 section for full detail.
+- [Phase 40-05]: Task 3's blocking checkpoint auto-resolved per operator pre-approval (2026-08-07), citing `VETO-WRITE-EVIDENCE.md`. Read-only measurement performed instead of the checkpoint's real-record-refresh step: stale `lv_anti_icp_flag=true` population is **zero** across all 711 companies (not "unknown" as originally framed) — no company in this portal has ever had the flag written by any source, consistent with `ALLOW_HUBSPOT_RECORD_WRITES` having been false for the whole phase until the one now-deleted disposable exception.
+- [Phase 40-05]: `tests/test_scoring_parity.py::test_f4_au_string_is_not_vetoed` corrected (Rule 1) to assert `lv_anti_icp_flag != "true"` rather than `== "false"` — a direct, in-scope consequence of D-01's completion (HubSpot no longer writes the flag at all, so a bare disposable patch leaves it `None`, not `"false"`). Matches this plan's own Task 1 acceptance bar verbatim.
 
 ### Blockers
 
-- 40-05 must not delete the Geography flow's veto branch until ALLOW_HUBSPOT_RECORD_WRITES is enabled/rebuilt/redeployed AND SJ-3's dispatch defect (Missing node to start execution, LV Enrichment lacks an Execute Workflow Trigger) is fixed — both pre-existing, both block proving a live write lands. See 40-03-SUMMARY.md.
+None open.
