@@ -150,12 +150,17 @@ def test_a_fully_configured_config_passes_every_capability(fake_config):
     # `match` joined in 37-03: the same two keys as `enrichment`, kept separate
     # because it POSTs to the same webhook path but spends nothing, and a shared row
     # would refuse a match request with enrichment's "enriching records" wording.
+    # `scheduled-arm` joined with the fix-40 scheduled-arm companion (WINDOWS.md #2): the
+    # same three keys as `sweep`, its own row for the same reason `sweep` has one (D-29)
+    # — it also runs unattended, and a shared row would refuse it with sweep's wording.
     for capability in (
         "contact-upload", "status", "control", "review", "enrichment", "match", "sweep",
+        "scheduled-arm",
     ):
         config_gate.require_capability(fake_config, capability)
     assert set(config_gate.usable_capabilities(fake_config)) == {
-        "contact-upload", "status", "control", "review", "enrichment", "match", "sweep"}
+        "contact-upload", "status", "control", "review", "enrichment", "match", "sweep",
+        "scheduled-arm"}
 
 
 def test_the_status_capability_does_not_require_the_webhook_secret(fake_config):

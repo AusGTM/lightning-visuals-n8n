@@ -66,6 +66,13 @@ CAPABILITY_KEYS = {
     # purpose: `status` degrades to the half it can read, but a sweep that can only read
     # half the conditions stays quiet about the other half, and quiet is a claim.
     "sweep": ("n8n_url", "n8n_api_key", "webhook_secret"),
+    # WINDOWS.md #2's scheduled-arm companion (fix-40 ad-hoc, scheduled_arm.py) — its own
+    # row for the same reason `sweep` has one (D-29): it runs unattended too, and needs
+    # BOTH `n8n_api_key` (read SJ-3's matched batch off n8n's execution history, arm/
+    # disarm the write-safety gate) AND `webhook_secret` (the same external dispatch POST
+    # `enrichment`'s row already gates) — a config that may only read (`control`/`status`)
+    # is not thereby one that may also arm and dispatch.
+    "scheduled-arm": ("n8n_url", "n8n_api_key", "webhook_secret"),
 }
 
 _CAPABILITY_DESCRIPTIONS = {
@@ -76,6 +83,7 @@ _CAPABILITY_DESCRIPTIONS = {
     "enrichment": "enriching records",
     "match": "looking up existing HubSpot matches",
     "sweep": "the unattended backend sweep",
+    "scheduled-arm": "the scheduled-arm companion (SJ-3 poller write window)",
 }
 
 
