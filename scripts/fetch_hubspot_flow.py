@@ -5,7 +5,7 @@ Phase 40 Plan 01 (D-05) — GET, strip, and archive one or more HubSpot Automati
 flow definitions to `config/hubspot_flows/{flow_id}-{slug}.{label}.json`.
 
 Every subsequent flow edit this phase (40-01 Task 2, 40-04, 40-05, 40-06) starts from a
-live GET of this shape, not a repo read — the four flows exist only in the HubSpot portal
+live GET of this shape, not a repo read — the flows exist only in the HubSpot portal
 (40-RESEARCH.md Anti-Patterns). `createdAt`, `updatedAt`, and `dataSources` are popped
 before writing: PUT is replace-not-merge and these are the documented round-trip poison
 fields (Pitfall 1). Sorted keys + stable indent make the `.before.json`/`.after.json` diff
@@ -38,14 +38,17 @@ DEFAULT_OUT_DIR = ROOT / "config" / "hubspot_flows"
 # scripts/snapshot_hubspot_schema.py / scripts/probe_scoring_recalc_latency.py.
 EXPECTED_PORTAL_ID = "22617666"
 
-# HANDOVER-2026-08-06-icp-scoring.md §10.1 — the four company scoring flows this phase
-# remediates. Module constant, no CLI override for the slug mapping (the --flow-id list
-# is the operator-facing override surface; slugs stay tied to these four known ids).
+# HANDOVER-2026-08-06-icp-scoring.md §10.1 — the six company scoring flows this phase
+# remediates (four original + two added by 40-04: produces-content, gambling). Module
+# constant, no CLI override for the slug mapping (the --flow-id list is the
+# operator-facing override surface; slugs stay tied to these known ids).
 FLOW_SLUGS = {
     "4626124224": "org-type-score",
     "4626722240": "geography-score",
     "4626722237": "annual-revenue-score",
     "4625147345": "wf1-set-icp-tier",
+    "4634822079": "produces-content-score",
+    "4634822085": "gambling-score",
 }
 
 # PUT is replace-not-merge (40-RESEARCH.md Pitfall 1) — these round-trip poison fields
