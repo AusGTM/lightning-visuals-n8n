@@ -105,9 +105,11 @@ def assert_branch_wiring(doc):
         ["Respond to Webhook"],
     ]
 
-    # The parser is fed by exactly the two lanes and nothing else.
+    # The parser is fed by exactly these three lanes and nothing else. fix(40) /
+    # WINDOWS.md #3 added "Execute Workflow Trigger" as a second entry point (SJ-3's
+    # dispatch target) feeding the parser directly, alongside the two list-branch lanes.
     assert _inbound_edges(doc, "Parse HubSpot Event") == [
-        ("IF List Expanded", 0), ("IF List Input", 1),
+        ("Execute Workflow Trigger", 0), ("IF List Expanded", 0), ("IF List Input", 1),
     ]
 
 

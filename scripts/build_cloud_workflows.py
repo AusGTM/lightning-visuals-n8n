@@ -3899,6 +3899,24 @@ def build_enrichment_cloud():
     }
     nodes.append(webhook)
 
+    # WINDOWS.md #3 / fix(40): a SECOND entry point, additive — n8n's "Execute Workflow"
+    # (call another workflow) mode requires the CALLED workflow to expose an Execute
+    # Workflow Trigger node; this workflow's only entry point used to be the Webhook
+    # Trigger above, so SJ-3's dispatch (an executeWorkflow node in "each" mode, see
+    # _execute_workflow_node) errored live with "Missing node to start execution"
+    # (n8n executions 1891/1893, 40-03-SUMMARY.md). "passthrough" means each dispatched
+    # item's json arrives here UNCHANGED — Parse HubSpot Event already reads
+    # `$json.body ?? $json`, so a bare event-shaped item (no `.body` wrapper) parses
+    # identically to a genuine webhook body. Feeds "Parse HubSpot Event" directly,
+    # bypassing the list-resolution branch below (SJ-3 dispatches single-record events,
+    # never a `{list:...}` envelope).
+    nodes.append({
+        "parameters": {"inputSource": "passthrough"},
+        "id": nid("ewt"), "name": "Execute Workflow Trigger",
+        "type": "n8n-nodes-base.executeWorkflowTrigger", "typeVersion": 1.1,
+        "position": [x, y - 260],
+    })
+
     # --- Phase 25 Plan 03: additive list-resolution branch (INGEST-04, D-01/D-02/D-15) ---
     # Sits BETWEEN the trigger and Parse HubSpot Event. `IF List Input` is true only for a
     # body that carries a `list` or `view` key AND no `events` array; every other body —
@@ -4564,6 +4582,11 @@ def build_enrichment_cloud():
     })
 
     conns = chain(["Webhook Trigger", "Parse HubSpot Event", "IF Object Type Supported"])
+    # fix(40) / WINDOWS.md #3: the Execute Workflow Trigger's ONLY edge — straight into
+    # "Parse HubSpot Event", same as the Webhook Trigger's record-ID path. A dedicated
+    # inbound source, not a re-point of any existing edge.
+    conns["Execute Workflow Trigger"] = {
+        "main": [[{"node": "Parse HubSpot Event", "type": "main", "index": 0}]]}
     # Phase 25 Plan 03: the trigger's single edge to "Parse HubSpot Event" becomes the FALSE
     # lane of "IF List Input". Nothing downstream of Parse HubSpot Event changes, and the
     # record-ID path is byte-for-byte the path it was: Webhook -> (not a list) -> Parse.
@@ -5224,6 +5247,26 @@ const rows = Array.isArray(res.results) ? res.results : (res.properties ? [res] 
 return rows.map((r) => ({ json: { ...(r.properties || {}), hs_object_id: r.id } }));
 """
 
+# fix(40) / WINDOWS.md #3: ENRICH_EXTRACT_SEARCH_ROWS's `{...properties, hs_object_id}`
+# shape (shared by SJ-1/SJ-3/dedupe/review) is NOT what "LV Enrichment (Cloud
+# template)"'s Parse HubSpot Event expects (objectId/objectType/subscriptionType — the
+# same shape a genuine HubSpot private-app webhook event carries). SJ-3 is the only one
+# of those four branches that dispatches into enrichment, so this reshape is SJ-3-only —
+# reshaping ENRICH_EXTRACT_SEARCH_ROWS itself would change the other three branches'
+# contract for no reason. One event per matched company; "company.propertyChange" +
+# "lv_enrichment_requested" mirror what actually changed to make SJ-3's search match it.
+ENRICH_SJ3_BUILD_DISPATCH_EVENT = r"""// SJ-3 Build Dispatch Event — reshape Extract Rows'
+// {...properties, hs_object_id} into the event shape Parse HubSpot Event parses (see
+// ENRICH_PARSE_EVENT_CLOUD: event.objectId/objectType/subscriptionType/occurredAt).
+return $input.all().map((it) => ({ json: {
+  objectId: it.json.hs_object_id,
+  objectType: "company",
+  subscriptionType: "company.propertyChange",
+  propertyName: "lv_enrichment_requested",
+  occurredAt: new Date().toISOString(),
+} }));
+"""
+
 ENRICH_SJ2_EPOCH_CUTOFF = r"""// SJ-2 epoch-ms cutoff — HubSpot's LT operator on a datetime property expects epoch
 // MILLISECONDS, not an ISO date string (16-RESEARCH.md Deliverable 5).
 return [{ json: { cutoff_ms: Date.now() - 180 * 86400000 } }];
@@ -5593,12 +5636,18 @@ def build_scheduled_maintenance_cloud():
     x += 220
     nodes.append(code_node("SJ-3 Extract Rows", ENRICH_EXTRACT_SEARCH_ROWS, x, y))
     x += 220
+    # fix(40) / WINDOWS.md #3: reshape into an event Parse HubSpot Event can read, since
+    # the enrichment workflow's new Execute Workflow Trigger entry point (build_enrichment_
+    # cloud) receives each dispatched item's json UNCHANGED (passthrough) — see
+    # ENRICH_SJ3_BUILD_DISPATCH_EVENT's own comment for why this is SJ-3-only.
+    nodes.append(code_node("SJ-3 Build Dispatch Event", ENRICH_SJ3_BUILD_DISPATCH_EVENT, x, y))
+    x += 220
     sj3_dispatch = _execute_workflow_node(
         "SJ-3 Dispatch To Enrichment", x, y, "LVenrichmentCloud01", "LV Enrichment (Cloud template)")
     nodes.append(sj3_dispatch)
 
     conns.update(chain([sj3_trigger["name"], sj3_search["name"], "SJ-3 Extract Rows",
-                        sj3_dispatch["name"]]))
+                        "SJ-3 Build Dispatch Event", sj3_dispatch["name"]]))
 
     # --- SJ-1: hourly input-gap scan (Task 2) ------------------------------------------
     # Three single-filter OR'd groups (Pitfall 3) — "any input unresolved", never AND.
