@@ -26,24 +26,23 @@ correct — see 40-03-SUMMARY.md's Live Validation Findings); both block **every
 through this pipeline, not just the veto fields.
 
 1. **All HubSpot record writes are globally disabled in the currently deployed build —
-   STILL OPEN (WINDOWS.md #2).** `scripts/build_cloud_workflows.py`'s `WRITE_SAFETY_DEFAULTS`
-   bakes `ALLOW_HUBSPOT_RECORD_WRITES = "false"` into every build this repo has ever
-   produced — this is not an env var, it is a Python-source literal compiled into the Code
-   node at build time. A live webhook-triggered run against a disposable company on
-   2026-08-06 confirmed the Decide Company Action node computes
-   `lv_anti_icp_flag`/`lv_anti_icp_reason` correctly (as quoted strings) but returns
-   `"action":"write_blocked"` and never PATCHes HubSpot. **No enrichment run — poller or
-   webhook — can write to a real company record until this is armed.** Investigated
-   2026-08-06 (ad-hoc fix-40 between 40-04 and 40-05): permanently flipping the build-time
-   default is NOT a simple flag flip — `ALLOW_HUBSPOT_RECORD_WRITES` is a load-bearing
-   safety invariant across THREE systems (`scripts/deploy_n8n_workflows.py`'s
-   `ENABLE_BAKED_FLAGS` deploy-time overlay, `operator-claude-plugin`'s
-   `arm_for_dispatch()`/`armed_window` arm-verify-disarm cycle from Phase 28, and
-   `scripts/verify_live_write_safety.py`'s dedicated live-state verifier); a spike that
-   flipped the default broke 64 tests across both packages and was reverted. This is a Rule
-   4 architectural decision requiring explicit operator sign-off, not something an
-   automated fix session should push through. **Two scoped arm mechanisms already exist and
-   need no code change:**
+   STILL OPEN (WINDOWS.md #2), now with a scoped companion for the scheduled path.**
+   `scripts/build_cloud_workflows.py`'s `WRITE_SAFETY_DEFAULTS` bakes
+   `ALLOW_HUBSPOT_RECORD_WRITES = "false"` into every build this repo has ever produced —
+   this is not an env var, it is a Python-source literal compiled into the Code node at
+   build time, and it is **still `"false"` today — this remains true by design, per the
+   operator's explicit "no permanent flip" instruction (2026-08-06 ad-hoc scheduled-arm
+   build step).** A live webhook-triggered run against a disposable company on 2026-08-06
+   confirmed the Decide Company Action node computes `lv_anti_icp_flag`/`lv_anti_icp_reason`
+   correctly (as quoted strings) but returns `"action":"write_blocked"` when nothing has
+   armed a window first. Investigated 2026-08-06 (ad-hoc fix-40 between 40-04 and 40-05):
+   permanently flipping the build-time default is NOT a simple flag flip —
+   `ALLOW_HUBSPOT_RECORD_WRITES` is a load-bearing safety invariant across THREE systems
+   (`scripts/deploy_n8n_workflows.py`'s `ENABLE_BAKED_FLAGS` deploy-time overlay,
+   `operator-claude-plugin`'s `arm_for_dispatch()`/`armed_window` arm-verify-disarm cycle
+   from Phase 28, and `scripts/verify_live_write_safety.py`'s dedicated live-state
+   verifier); a spike that flipped the default broke 64 tests across both packages and was
+   reverted. **Three scoped arm mechanisms now exist and need no further code change:**
    - `operator-claude-plugin`'s `arm_for_dispatch()`/`armed_window` arms writes for exactly
      one manual dispatch, scoped to the record ids/domains in that dispatch, then disarms
      automatically — usable **today**, via the `enrich-records` skill, to run the refresh
@@ -51,12 +50,32 @@ through this pipeline, not just the veto fields.
    - `scripts/deploy_n8n_workflows.py`'s
      `ENABLE_BAKED_FLAGS=ALLOW_HUBSPOT_RECORD_WRITES,TEST_RECORD_IDS=<id>` deploy-time
      overlay, for a scripted canary against one record.
+   - **NEW (2026-08-06 ad-hoc): `operator-claude-plugin/scripts/scheduled_arm.py`** — the
+     scheduled-poller companion this section previously said did not exist. It reads the
+     `hs_object_id`s SJ-3 most recently matched off n8n's own execution history (no
+     HubSpot credential needed — D-05), arms `armed_window` bounded to exactly that batch,
+     dispatches the SAME batch itself via the existing external webhook path
+     (`enrichment.dispatch_enrichment`, the same mechanism `enrich-records` uses), then
+     disarms — guaranteed, even when the dispatch fails. It does **not** intercept SJ-3's
+     own in-n8n `SJ-3 Dispatch To Enrichment` node (n8n gives no way to fire a workflow on
+     demand, and SJ-3's search->dispatch runs inside one execution with no external hook
+     point) — instead it gives the poller's identified backlog a working, windowed write
+     path on the SAME record-matching criteria and a comparable cadence. See the module's
+     own docstring for the full investigation, including why an in-n8n placement (nodes
+     spliced into `LV Scheduled Maintenance` itself) was investigated and rejected.
 
-   **Neither covers the autonomous SJ-1/SJ-2/SJ-3 scheduled poller** — nothing arms a
-   write window around a cron tick. A persistent write path for the scheduled refresh
-   procedure below (step 3), and for 40-05's veto-branch deletion, requires an operator
-   decision between building a new bounded "scheduled arm" companion job or the
-   permanent-flip refactor (both out of this fix session's scope).
+   **Running it:** requires `n8n_api_key` AND `webhook_secret` in `operator.local.json`
+   (the `scheduled-arm` capability row) and, in the cron's own shell only, `ALLOW_N8N_ARM=true`
+   — never set by an automated session. One cycle:
+   ```bash
+   ALLOW_N8N_ARM=true python3 operator-claude-plugin/scripts/scheduled_arm.py
+   ```
+   Schedule it (cron, launchd, or any external scheduler) on a cadence comparable to SJ-3's
+   own 15-minute trigger; each invocation is one bounded arm/dispatch/disarm cycle, never a
+   loop. `tests/test_scheduled_arm.py` (22 tests, offline) covers the batch-read, arm
+   scoping, and guaranteed-disarm-on-failure behavior; no live deploy of any n8n workflow
+   is required for this companion to work — it operates against the enrichment workflow's
+   write-safety Code node exactly as already deployed since 40-03.
 2. **SJ-3 (the 15-minute requested-enrichment poller) could not dispatch to enrichment at
    all — FIXED, pending deploy (WINDOWS.md #3).** Its `SJ-3 Dispatch To Enrichment` node
    calls `LV Enrichment (Cloud template)` via n8n's Execute-Workflow "call another
@@ -104,21 +123,30 @@ current inputs:
 3. Wait for the existing 15-minute scheduled poller
    (`LV Scheduled Maintenance (Cloud)` → the requested-enrichment poll job,
    CLAUDE.md §19.1) to pick the record up. Latency is **up to 15 minutes**, not
-   immediate. Once WINDOWS.md #3's fix is deployed and bounced, the poller successfully
-   *dispatches* to enrichment again — but the dispatched run still needs the write gate
-   armed (WINDOWS.md #2, still open) to actually PATCH the record. Until an operator
-   decision resolves #2 for the scheduled path, step 3 will reliably *reach* Decide
-   Company Action but the write itself will be `"action":"write_blocked"` unless armed by
-   one of the two scoped mechanisms in Known Blockers above.
+   immediate. WINDOWS.md #3's fix is deployed and bounced, so the poller successfully
+   *dispatches* to enrichment — but SJ-3's own in-n8n dispatch still needs the write gate
+   armed (WINDOWS.md #2, still open — no permanent flip) to actually PATCH the record, and
+   nothing arms that specific in-n8n dispatch on its own. **If the `scheduled_arm.py`
+   companion (see Known Blockers §1) is running on a cron**, it independently discovers
+   this same record in SJ-3's own most-recently-matched batch and re-dispatches it through
+   its own armed window — the write lands via the companion's cycle even though SJ-3's own
+   internal dispatch still reports `write_blocked`. **If the companion is not running**,
+   step 3 will reliably *reach* Decide Company Action on the poller's own tick but the
+   write itself will stay `"action":"write_blocked"` until armed by one of the three
+   scoped mechanisms in Known Blockers above (the companion is the only one of the three
+   that requires no operator action per record).
 4. The poller triggers a normal enrichment run against the record, which reaches the
    Decide Company Action node and recomputes both veto fields from the record's current
    (now-corrected) inputs — clearing the flag if no hard veto still fires, or updating the
    reason string if a different veto now applies.
 
-No script, no manual PATCH, and no direct HubSpot workflow edit is needed or supported
-for this refresh — routing correction through the same enrichment path the pipeline
-already owns is what keeps HubSpot and the parity oracle from drifting apart (D-01's
-whole point).
+No PER-RECORD script, no manual PATCH, and no direct HubSpot workflow edit is needed or
+supported for this refresh — the operator's own steps are always just 1-2 above. (The
+`scheduled_arm.py` companion is cron infrastructure an admin runs continuously in the
+background, not a per-record tool; it exists to make step 3 actually write once the
+poller's own tick reaches it, not to replace steps 1-2.) Routing correction through the
+same enrichment path the pipeline already owns is what keeps HubSpot and the parity
+oracle from drifting apart (D-01's whole point).
 
 ## Pre-existing stale flags on the 712 (F4)
 
