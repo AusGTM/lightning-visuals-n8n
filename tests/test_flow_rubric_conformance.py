@@ -13,6 +13,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from src.normalizer import normalize_revenue_band
+
 ROOT = Path(__file__).resolve().parent.parent
 RUBRIC_PATH = ROOT / "config" / "icp_scoring.yaml"
 FLOWS_DIR = ROOT / "config" / "hubspot_flows"
@@ -187,6 +189,164 @@ def test_gambling_flow_matches_rubric(flow_path):
         f"{flow_path}: must write only gambling_score (T-40-15), "
         f"found {written_property_names(flow)}"
     )
+
+
+def find_list_branch_action(flow: dict, property_name: str):
+    """Returns the LIST_BRANCH action whose listBranches filter on property_name via
+    a single-AND-group MULTISTRING filter (40-05's geography/revenue mapper shape),
+    or None if the flow has no such branch."""
+    for a in flow["actions"]:
+        if a.get("type") != "LIST_BRANCH":
+            continue
+        for lb in a.get("listBranches", []):
+            for ab in lb["filterBranch"].get("filterBranches", []):
+                for f in ab.get("filters", []):
+                    if f.get("property") == property_name:
+                        return a
+    return None
+
+
+def extract_list_branch_multistring_scores(flow: dict, property_name: str) -> dict:
+    """Walks a LIST_BRANCH action keyed on property_name (40-05's geography/revenue
+    mapper shape: one listBranch per single-value MULTISTRING IS_EQUAL_TO filter,
+    each routing to its own SINGLE_CONNECTION target) and returns
+    {branch_value: int(points)}, plus '__default__' for the defaultBranch target
+    (every value not named by any listBranch, including empty/absent)."""
+    actions_by_id = {a["actionId"]: a for a in flow["actions"]}
+    branch_action = find_list_branch_action(flow, property_name)
+    scores = {}
+    for lb in branch_action["listBranches"]:
+        target = actions_by_id[lb["connection"]["nextActionId"]]
+        points = int(target["fields"]["value"]["staticValue"])
+        for ab in lb["filterBranch"].get("filterBranches", []):
+            for f in ab.get("filters", []):
+                if f.get("property") != property_name:
+                    continue
+                for v in f["operation"].get("values", []):
+                    scores[v] = points
+    default_target = actions_by_id[branch_action["defaultBranch"]["nextActionId"]]
+    scores["__default__"] = int(default_target["fields"]["value"]["staticValue"])
+    return scores
+
+
+@pytest.mark.parametrize("flow_path", _after_json_paths())
+def test_geography_flow_matches_rubric(flow_path):
+    """40-05 (ENGINE-03) — geography_score's mapper flow branch table must equal
+    config/icp_scoring.yaml's base_score.geography: AU/NZ/ANZ (the canonical enum
+    values only) -> 10, every other value including Other/Unknown/empty/absent -> 0
+    (the rubric's non_anz/unknown buckets). Also guards against F4's class of bug:
+    the branch values must never be a spelling-variant list (Australia/Aus/New
+    Zealand) reintroduced instead of the canonical enum."""
+    flow = load_flow(flow_path)
+    if not _is_flow(flow):
+        pytest.skip(f"{flow_path} is not a flow archive")
+    if find_list_branch_action(flow, "lv_country_region_normalized") is None:
+        pytest.skip(f"{flow_path} has no lv_country_region_normalized LIST_BRANCH action")
+
+    rubric = load_rubric()["base_score"]["geography"]
+    scores = extract_list_branch_multistring_scores(flow, "lv_country_region_normalized")
+
+    for region in ("AU", "NZ", "ANZ"):
+        assert scores.get(region) == rubric[region], (
+            f"{flow_path}: branch '{region}' scores {scores.get(region)}, "
+            f"rubric says {rubric[region]}"
+        )
+    assert scores["__default__"] == rubric["non_anz"] == rubric["unknown"], (
+        f"{flow_path}: default branch scores {scores['__default__']}, "
+        f"rubric says non_anz={rubric['non_anz']} unknown={rubric['unknown']}"
+    )
+    spelling_variants = {"Australia", "Aus", "New Zealand"}
+    present = spelling_variants & (set(scores.keys()) - {"__default__"})
+    assert not present, (
+        f"{flow_path}: branch values include spelling variants {present} "
+        "instead of the canonical enum only (F4's exact bug shape)"
+    )
+    assert written_property_names(flow) == {"geography_score"}, (
+        f"{flow_path}: must write only geography_score, found {written_property_names(flow)}"
+    )
+
+
+REVENUE_BAND_KEYS = (
+    "<1M", "1-5M", "5-50M", "50-500M", "500-750M", "750M-1B", "1B-1.2B", "1.2B+", "unknown",
+)
+
+
+@pytest.mark.parametrize("flow_path", _after_json_paths())
+def test_revenue_flow_matches_rubric(flow_path):
+    """40-05 (ENGINE-04) — annual_revenue_score's mapper flow branch table must equal
+    config/icp_scoring.yaml's base_score.revenue_band exactly: the set of branch keys
+    must equal the nine rubric keys (not a subset — a missing band silently scores 0),
+    each mapped to the configured points, including the 750M-1B=-15/500-750M=-5 pair
+    F10 inverted live."""
+    flow = load_flow(flow_path)
+    if not _is_flow(flow):
+        pytest.skip(f"{flow_path} is not a flow archive")
+    if find_list_branch_action(flow, "lv_revenue_band") is None:
+        pytest.skip(f"{flow_path} has no lv_revenue_band LIST_BRANCH action")
+
+    rubric = load_rubric()["base_score"]["revenue_band"]
+    scores = extract_list_branch_multistring_scores(flow, "lv_revenue_band")
+    branch_keys = set(scores.keys()) - {"__default__"}
+
+    assert branch_keys == set(REVENUE_BAND_KEYS) == set(rubric.keys()), (
+        f"{flow_path}: branch keys {sorted(branch_keys)} must equal the nine rubric "
+        f"revenue_band keys {sorted(rubric.keys())} exactly"
+    )
+    for band, points in rubric.items():
+        assert scores[band] == points, (
+            f"{flow_path}: band '{band}' scores {scores[band]}, rubric says {points}"
+        )
+    assert scores["__default__"] == 0, (
+        f"{flow_path}: default branch scores {scores['__default__']}, expected 0"
+    )
+    assert written_property_names(flow) == {"annual_revenue_score"}, (
+        f"{flow_path}: must write only annual_revenue_score, found {written_property_names(flow)}"
+    )
+
+
+VETO_PROPERTY_NAMES = {"lv_anti_icp_flag", "lv_anti_icp_reason"}
+
+
+@pytest.mark.parametrize("flow_path", _after_json_paths())
+def test_no_archived_flow_writes_veto_properties(flow_path):
+    """D-01 permanent guard (T-40-17's mitigation) — once 40-03's n8n pipeline became
+    the sole writer of the veto fields, no HubSpot workflow may ever write
+    lv_anti_icp_flag or lv_anti_icp_reason again. Scans every archived .after.json
+    flow's SINGLE_CONNECTION actions; this is the repo-wide guard that HubSpot never
+    silently reclaims veto ownership in a future edit."""
+    flow = load_flow(flow_path)
+    if not _is_flow(flow):
+        pytest.skip(f"{flow_path} is not a flow archive")
+    written = written_property_names(flow)
+    offenders = written & VETO_PROPERTY_NAMES
+    assert not offenders, (
+        f"{flow_path} writes {offenders} — HubSpot must never write the veto again (D-01)"
+    )
+
+
+def test_revenue_boundary_contract_offline():
+    """40-05 Task 2 (ENGINE-04's boundary contract) — asserted offline against
+    src/normalizer.py, since after the retarget HubSpot never sees a raw dollar
+    figure: normalize_revenue_band's exact boundaries at 500M/750M/1B/1.2B, composed
+    with the rubric, must yield -5/-15/-30/-50 respectively. F10 lived at exactly the
+    750M/500M pair (750M scored -5 live instead of -15) -- this pins all four."""
+    rubric = load_rubric()["base_score"]["revenue_band"]
+    boundaries = {
+        500_000_000: "500-750M",
+        750_000_000: "750M-1B",
+        1_000_000_000: "1B-1.2B",
+        1_200_000_000: "1.2B+",
+    }
+    for dollars, expected_band in boundaries.items():
+        band = normalize_revenue_band(dollars)
+        assert band == expected_band, (
+            f"normalize_revenue_band({dollars}) = {band!r}, expected {expected_band!r}"
+        )
+        assert rubric[band] == rubric[expected_band]
+    assert rubric["500-750M"] == -5
+    assert rubric["750M-1B"] == -15
+    assert rubric["1B-1.2B"] == -30
+    assert rubric["1.2B+"] == -50
 
 
 FIT_SCORE_PROPERTY_PATH = FLOWS_DIR / "lv_icp_fit_score-property.after.json"

@@ -1,0 +1,122 @@
+{
+  "actions": [
+    {
+      "actionId": "1",
+      "defaultBranch": {
+        "edgeType": "STANDARD",
+        "nextActionId": "3"
+      },
+      "listBranches": [
+        {
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "2"
+          },
+          "filterBranch": {
+            "filterBranchOperator": "OR",
+            "filterBranchType": "OR",
+            "filterBranches": [
+              {
+                "filterBranchOperator": "AND",
+                "filterBranchType": "AND",
+                "filterBranches": [],
+                "filters": [
+                  {
+                    "filterType": "PROPERTY",
+                    "operation": {
+                      "includeObjectsWithNoValueSet": false,
+                      "operationType": "MULTISTRING",
+                      "operator": "IS_EQUAL_TO",
+                      "values": [
+                        "AU",
+                        "NZ",
+                        "ANZ"
+                      ]
+                    },
+                    "property": "lv_country_region_normalized"
+                  }
+                ]
+              }
+            ],
+            "filters": []
+          }
+        }
+      ],
+      "type": "LIST_BRANCH"
+    },
+    {
+      "actionId": "2",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "geography_score",
+        "value": {
+          "staticValue": "10",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "3",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "geography_score",
+        "value": {
+          "staticValue": "0",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    }
+  ],
+  "blockedDates": [],
+  "crmObjectCreationStatus": "COMPLETE",
+  "customProperties": {},
+  "enrollmentCriteria": {
+    "eventFilterBranches": [
+      {
+        "eventTypeId": "4-655002",
+        "filterBranchOperator": "AND",
+        "filterBranchType": "UNIFIED_EVENTS",
+        "filterBranches": [],
+        "filters": [
+          {
+            "filterType": "PROPERTY",
+            "operation": {
+              "includeObjectsWithNoValueSet": false,
+              "operationType": "STRING",
+              "operator": "IS_EQUAL_TO",
+              "value": "lv_country_region_normalized"
+            },
+            "property": "hs_name"
+          },
+          {
+            "filterType": "PROPERTY",
+            "operation": {
+              "includeObjectsWithNoValueSet": false,
+              "operationType": "ALL_PROPERTY",
+              "operator": "IS_KNOWN"
+            },
+            "property": "hs_value"
+          }
+        ],
+        "operator": "HAS_COMPLETED"
+      }
+    ],
+    "listMembershipFilterBranches": [],
+    "shouldReEnroll": true,
+    "type": "EVENT_BASED"
+  },
+  "flowType": "WORKFLOW",
+  "id": "4626722240",
+  "isEnabled": true,
+  "name": "Geography Score",
+  "nextAvailableActionId": "6",
+  "objectTypeId": "0-2",
+  "revisionId": "13",
+  "startActionId": "1",
+  "timeWindows": [],
+  "type": "PLATFORM_FLOW"
+}

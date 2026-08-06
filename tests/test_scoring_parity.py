@@ -404,6 +404,14 @@ def test_tier_on_flag_change_without_score_change():
 
 @live
 def test_f4_au_string_is_not_vetoed():
+    # 40-05: after D-01's veto-branch deletion, HubSpot no longer writes
+    # lv_anti_icp_flag at all -- only the n8n pipeline does, and a bare disposable
+    # patch here never triggers a pipeline run. The flag reads None, not "false".
+    # This test's own bar is the plan's Task 1 acceptance criterion verbatim: "not
+    # equal to 'true'" (the F4 regression case: an AU company must never be
+    # vetoed by a stale spelling-variant branch), not a literal "false" -- asserting
+    # "false" would require an architecture (HubSpot writes the flag) this plan
+    # deliberately removed.
     with disposable_company() as company_id:
         patch_record("companies", company_id, {
             "lv_org_type": "broadcaster",
@@ -413,7 +421,7 @@ def test_f4_au_string_is_not_vetoed():
         }, dry_run=False)
         settle(company_id, "lv_anti_icp_flag")
         props = fetch_for_parity(company_id)
-        assert props.get("lv_anti_icp_flag") == "false"
+        assert props.get("lv_anti_icp_flag") != "true"
         assert props.get("geography_score") == "10"
 
 
