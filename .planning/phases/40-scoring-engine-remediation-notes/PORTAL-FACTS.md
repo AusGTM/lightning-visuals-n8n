@@ -267,3 +267,100 @@ now also asserts the archived after-formula names all five component properties
 (`test_fit_score_formula_references_all_five_components`), and the flow-branch tests were
 hardened with an `_is_flow()` guard so a non-flow snapshot (this property archive) in the
 same glob-matched directory doesn't false-fail them.
+
+## Plan 05 — geography/revenue retarget and the D-01 veto handover completion
+
+**Precondition confirmed before Task 1 started:** `VETO-WRITE-EVIDENCE.md` (2026-08-06/07)
+live-proves both WINDOWS.md #2 and #3 resolved — a real HubSpot PATCH landed
+`lv_anti_icp_flag="true"` via the scheduled-arm companion, independently re-verified, and
+the write window was disarmed afterward. `STATE.md`'s blocker text predating that evidence
+is now stale (the blocker itself is cleared, not the note describing it).
+
+### Task 1 — Geography flow (4626722240) retargeted, veto branch deleted
+
+Enrollment moved from native `country` (`HAS_COMPLETED`) to `lv_country_region_normalized`
+known. The branch action stayed `LIST_BRANCH` type (an attempted `LIST_BRANCH` ->
+`STATIC_BRANCH` conversion 400'd — see the API-limit note below); only its filter content
+changed, to a single `MULTISTRING IS_EQUAL_TO` branch matching exactly `["AU", "NZ",
+"ANZ"]` -> `geography_score=10`, default (`Other`/`Unknown`/empty/absent) -> `0`. The old
+veto action (`lv_anti_icp_flag="true"` on the default path) is gone from the actions array
+entirely — confirmed by a live re-GET (`written props: {'geography_score'}`, no other
+property) and by `tests/test_flow_rubric_conformance.py::test_no_archived_flow_writes_veto_properties`.
+
+Live-validated on disposables (all deleted 204): `AU` -> `geography_score=10`,
+`lv_anti_icp_flag` stayed `null` (not `"true"` — the F4 regression case); `NZ` -> `10`;
+`ANZ` -> `10`; `US` -> `0`; a disposable with only native `country="Australia"` set stayed
+at `geography_score=0`, confirming the trigger moved off the native property.
+
+Final `GET /automation/v4/flows/4626722240`: `isEnabled=true`, `revisionId=13`.
+
+### Task 2 — Annual Revenue flow (4626722237) retargeted, nine exact bands
+
+Enrollment moved from native `annualrevenue` to `lv_revenue_band` known. The five
+`NUMBER_RANGED IS_BETWEEN` branches (F10's inclusive-overlap defect) are replaced by nine
+`MULTISTRING IS_EQUAL_TO` branches, one per rubric band exactly: `<1M` 0, `1-5M` 0, `5-50M`
+10, `50-500M` 10, `500-750M` -5, `750M-1B` -15, `1B-1.2B` -30, `1.2B+` -50, `unknown` 0.
+Numeric range matching is now structurally impossible on this flow (string equality has no
+overlap), and the boundary contract lives entirely upstream in
+`src/normalizer.normalize_revenue_band` (unchanged; already correct — 750000000 already
+banded to `"750M-1B"` before this plan).
+
+Final `GET /automation/v4/flows/4626722237`: `isEnabled=true`, `revisionId=22`.
+
+**Two API-limit findings, live-discovered this plan (not previously documented):**
+
+1. **`LIST_BRANCH` -> `STATIC_BRANCH` action-type conversion 400s.** Both flows were
+   originally `LIST_BRANCH`; the plan's own text anticipated a `STATIC_BRANCH`-shaped
+   retarget (mirroring the org-type-score flow), but a direct PUT converting action 1's
+   `type` field failed with an opaque `FLOW_UPDATE_BAD_REQUEST` on both flows. Resolution:
+   kept the action type `LIST_BRANCH`, and used its filter mechanism (`MULTISTRING
+   IS_EQUAL_TO` with an exact value list, one value per branch on the revenue flow, three
+   values in one branch on the geography flow) to get exact-match semantics without a
+   type conversion. This stays fully within the API-only D-05/D-08 path — no portal-UI
+   fallback was needed for either flow, resolving Task 2's flagged A1 risk without
+   invoking D-05's fallback clause.
+2. **A flow's PUT rejects any `actionId` that existed in an earlier revision of that same
+   flow but is absent from the current PUT body**, even if the id is not referenced by
+   anything else in the payload and even with unique per-branch targets and no orphans.
+   Action ids are apparently tracked server-side across a flow's revision history, not
+   just validated within the current request. Every revenue-flow target action in the
+   shipped 9-band edit uses a fresh id (`101`-`110`) never previously used by that flow,
+   to avoid the collision. This explains several intermediate 400s during isolation
+   testing that initially looked like duplicate-target or branch-count limits; those
+   turned out not to be real constraints once fresh ids were used.
+
+### Task 3 — veto ownership handover confirmed, stale-flag population measured
+
+**Checkpoint auto-resolved per operator pre-approval (2026-08-07)**, citing
+`VETO-WRITE-EVIDENCE.md` as the satisfied handover precondition (veto-write path
+live-validated, WINDOWS.md #2/#3 resolved). Per the pre-approval, this plan performed the
+read-only stale-flag measurement the checkpoint calls for and did **not** perform the
+checkpoint's step 4 (refreshing one real company through the operator path) — that
+real-record mutation is explicitly replaced by the measurement under the pre-approval.
+
+**Portal-wide veto-writer scan (code):** `tests/test_flow_rubric_conformance.py`'s
+`test_no_archived_flow_writes_veto_properties` passes for every archived `.after.json`
+under `config/hubspot_flows/` — zero flows write `lv_anti_icp_flag` or
+`lv_anti_icp_reason`. Both retargeted flows (4626722240, 4626722237) confirmed enabled
+with their canonical triggers via live `GET` (above).
+
+**Stale-flag population, measured 2026-08-07 (read-only `POST
+/crm/v3/objects/companies/search`, portal 22617666):**
+
+| Query | Result |
+|---|---|
+| `lv_anti_icp_flag` `EQ` `"true"` | **0** |
+| `lv_anti_icp_flag` `HAS_PROPERTY` (any value at all, true or false) | **0** |
+| `lv_anti_icp_flag` `EQ` `"true"` AND `lv_country_region_normalized` `IN` `["AU","NZ","ANZ"]` (the F4-contradicted subset) | **0** |
+| Total companies (sanity check, `name` `HAS_PROPERTY`) | 711 |
+
+**Interpretation:** the accepted D-02 stale population is **zero**, not "unknown" as
+40-CONTEXT.md's original framing anticipated. This is consistent with 40-03-SUMMARY.md's
+finding that `ALLOW_HUBSPOT_RECORD_WRITES` was baked `"false"` in every build prior to the
+one exception in `VETO-WRITE-EVIDENCE.md` (a single disposable company, since deleted) — no
+real company in this portal has ever had the veto branch actually fire and land a write.
+The old Geography flow's veto branch existed and was live-enabled for the whole phase, but
+nothing in this portal's write history ever exercised it against a real record. There is
+no F4-contradicted subset to refresh, and no backlog for Phase 41's backfill to inherit on
+this specific field — D-02's acceptance is trivially satisfied (there is nothing stale to
+accept).
