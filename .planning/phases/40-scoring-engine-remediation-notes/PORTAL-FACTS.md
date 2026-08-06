@@ -515,3 +515,32 @@ deliberate, reviewed diff against a named assertion, not a silent regression —
 live fix (add a `defaultBranch` on action `3` routing to a no-op terminal, or verify the
 self-correction empirically on disposables) stays open as a Phase 41+ follow-up, tracked
 here rather than attempted without credentials.
+
+## 40-REVIEW.md WR-04 — two of five mapper flows pre-seed on `createdate`, three do not (known, documented inconsistency)
+
+Confirmed by direct read: `gambling-score.after.json` and
+`produces-content-score.after.json` (both created by 40-04) enroll on `createdate
+IS_KNOWN` in addition to their own property change, so every newly created company gets
+`gambling_score`/`produces_content_score` stamped to `0` immediately. The three flows from
+the original four (`org-type-score`, `geography-score`, `annual-revenue-score`) enroll
+**only** on their own `lv_*` property changing — a brand-new company gets no
+`org_type_score`/`geography_score`/`annual_revenue_score` until enrichment actually
+populates those inputs.
+
+**Why this is currently harmless:** the calculated `lv_icp_fit_score` formula blanks
+entirely if *any* referenced component term is null (Plan 07's own finding above), so this
+asymmetry doesn't change the overall score's blank/non-blank state regardless of which 2
+of the 5 component terms are pre-seeded to 0 vs. left null.
+
+**Why it's not being live-PUT-normalized in this remediation pass:** same credential
+constraint as WR-02 — no live HubSpot token available in this sandbox to run a D-07
+round-trip on any of the five flows, and this asymmetry has no live behavioral impact
+today (confirmed by the formula's null-propagation, not assumed). It becomes worth fixing
+if the formula is ever changed to tolerate a subset of blank terms (e.g. `SUM` instead of
+implicit-null-propagation) — at that point the `createdate` trigger should be made
+consistent across all five flows (either add it everywhere or remove it from the two that
+have it), decided by whichever behavior the new formula semantics call for. Locked in as a
+named regression guard
+(`test_mapper_flow_createdate_enrollment_is_currently_two_of_five` in
+`tests/test_flow_rubric_conformance.py`) so a silent drift to a different split doesn't
+happen unnoticed.

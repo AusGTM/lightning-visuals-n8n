@@ -543,11 +543,11 @@ def test_wf1_d_is_written_only_on_the_veto_guarded_branch(flow_path):
 
 
 # ----------------------------------------------------------------------------------
-# 40-REVIEW.md WR-02 — documented, not-yet-fixed edge (PORTAL-FACTS.md has the full
-# rationale for why this is locked in as a regression guard rather than live-PUT
+# 40-REVIEW.md WR-02/WR-04 — documented, not-yet-fixed edges (PORTAL-FACTS.md has the
+# full rationale for why these are locked in as regression guards rather than live-PUT
 # changed in this pass: no HUBSPOT_PRIVATE_APP_TOKEN available to run a D-07 round-trip
-# here, and it is currently behaviorally harmless per the analysis there). This test
-# exists so a future silent shape change is caught and reviewed deliberately.
+# here, and both are currently behaviorally harmless per the analysis below). These
+# tests exist so a future silent shape change is caught and reviewed deliberately.
 # ----------------------------------------------------------------------------------
 
 @pytest.mark.parametrize("flow_path", _after_json_paths())
@@ -594,3 +594,42 @@ def test_wf1_score_ladder_action_has_no_default_branch_documented_race(flow_path
         f"{flow_path}: veto action {veto_action['actionId']!r} unexpectedly lost its "
         "defaultBranch (the sibling comparison WR-02 relies on)"
     )
+
+
+def _mapper_flow_enrolls_on_createdate(flow: dict) -> bool:
+    return any(
+        f["operation"].get("value") == "createdate"
+        for branch in flow["enrollmentCriteria"]["eventFilterBranches"]
+        for f in branch["filters"]
+        if f["property"] == "hs_name"
+    )
+
+
+def test_mapper_flow_createdate_enrollment_is_currently_two_of_five():
+    """WR-04 — exactly gambling-score and produces-content-score (40-04's two flows)
+    enroll on 'createdate IS_KNOWN' in addition to their own property change; the
+    other three component mapper flows (org-type, geography, annual-revenue) enroll
+    only on their own property. See PORTAL-FACTS.md's 'WR-04' section: this asymmetry
+    is currently harmless because the calculated lv_icp_fit_score formula blanks on
+    any null component term regardless of which 2-of-5 terms are pre-seeded to 0. This
+    is a locked-in snapshot of the current (inconsistent) state, not an endorsement --
+    if a future change normalizes all five flows one way or the other, update this
+    assertion and PORTAL-FACTS.md's WR-04 section together."""
+    mapper_paths = {
+        "gambling-score": FLOWS_DIR / "gambling-score.after.json",
+        "produces-content-score": FLOWS_DIR / "produces-content-score.after.json",
+        "org-type-score": FLOWS_DIR / "4626124224-org-type-score.after.json",
+        "geography-score": FLOWS_DIR / "4626722240-geography-score.after.json",
+        "annual-revenue-score": FLOWS_DIR / "4626722237-annual-revenue-score.after.json",
+    }
+    enrolls_on_createdate = {
+        name: _mapper_flow_enrolls_on_createdate(load_flow(path))
+        for name, path in mapper_paths.items()
+    }
+    assert enrolls_on_createdate == {
+        "gambling-score": True,
+        "produces-content-score": True,
+        "org-type-score": False,
+        "geography-score": False,
+        "annual-revenue-score": False,
+    }, f"createdate enrollment mix changed: {enrolls_on_createdate}"
