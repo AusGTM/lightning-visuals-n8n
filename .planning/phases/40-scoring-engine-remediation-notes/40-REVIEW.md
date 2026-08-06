@@ -37,6 +37,10 @@ findings:
   info: 1
   total: 5
 status: issues_found
+fixed_at: 2026-08-07T00:00:00Z
+fix_status: partial
+fixed_findings: [WR-01, WR-02, WR-03, WR-04]
+remaining_findings: [IN-01]
 ---
 
 # Phase 40: Code Review Report
@@ -45,6 +49,35 @@ status: issues_found
 **Depth:** standard
 **Files Reviewed:** 25 (24 read in full; `tests/fixtures/companies_jscode_frozen.json` exceeds the 256KB single-read limit and was not opened — it is a generated fixture snapshot, not hand-authored logic, so this is noted as a coverage gap rather than worked around)
 **Status:** issues_found
+
+## Fix Summary (2026-08-07)
+
+All four Warning findings (WR-01 through WR-04) fixed and committed atomically. IN-01
+is out of scope (observational, no fix requested) and remains open below, unchanged.
+
+| Finding | Outcome | Commit |
+| --- | --- | --- |
+| WR-01 | fixed (code fix; live re-archive deferred) | `35b6d11` |
+| WR-02 | fixed (documented + locked as offline test; live flow edit deferred) | `e34569a` |
+| WR-03 | fixed | `22a2b44` |
+| WR-04 | fixed (documented + locked as offline test; live flow edit deferred) | `48a60f8` |
+| IN-01 | not fixed (out of scope, observational) | — |
+
+WR-01, WR-02, and WR-04 each had a live-HubSpot-flow-edit option in their review-provided
+Fix guidance; none was executed in this fix pass because this sandbox has no
+`HUBSPOT_PRIVATE_APP_TOKEN` (confirmed: unset, no `.env` present in the fixer's isolated
+worktree) and no network access to the HubSpot portal. Per the review's own explicit
+instruction ("honest deferral beats a botched flow PUT"), each of these three findings
+was resolved via the safe, credential-free path instead: WR-01 got the code fix (the
+`FLOW_SLUGS` map itself) with the live re-archive step noted as pending; WR-02 and WR-04
+got PORTAL-FACTS.md documentation plus a new named offline conformance test in
+`tests/test_flow_rubric_conformance.py` that locks in the current, known state so a
+future silent change is caught. All three retain an explicit next step in
+PORTAL-FACTS.md for whoever next has live portal credentials.
+
+Full test suite (`.venv/bin/python -m pytest -q`, run inside this fixer's isolated
+worktree, using the main checkout's `.venv`) green after all four fixes: 2303 passed,
+118 skipped.
 
 ## Summary
 
@@ -74,6 +107,13 @@ operational visibility and future-maintainability.
 ## Warnings
 
 ### WR-01: `fetch_hubspot_flow.py`'s `FLOW_SLUGS` map omits the two flows 40-04 itself created
+
+**Outcome: fixed** (commit `35b6d11`) — `4634822079`/`4634822085` added to `FLOW_SLUGS`.
+Live re-archive (running `fetch_hubspot_flow.py` to produce convention-named
+`.before`/`.after` files for both flows) is **deferred**: no `HUBSPOT_PRIVATE_APP_TOKEN`
+or network access available in this fix pass's sandbox. The code fix alone already
+closes the default-archival gap the finding describes; the re-archive is a follow-up for
+whoever next has live credentials.
 
 **File:** `scripts/fetch_hubspot_flow.py:44-49`
 **Issue:** `FLOW_SLUGS` hard-codes exactly four flow ids (org-type, geography,
@@ -111,6 +151,16 @@ baseline is wanted) so both flows get a properly-named, reproducibly-generated a
 
 ### WR-02: WF1's score-ladder branch (action `"3"`) has no `defaultBranch`, unlike every sibling branch action in this phase, and the blank-score race it implies is untested
 
+**Outcome: fixed** (commit `e34569a`) — took the review's own honest-deferral option: no
+live flow edit (no HubSpot credentials available in this sandbox to run the D-07
+disable/edit/PUT/re-enable round-trip), instead added a named offline regression test
+(`test_wf1_score_ladder_action_has_no_default_branch_documented_race` in
+`tests/test_flow_rubric_conformance.py`) that locks in the current lack of a
+`defaultBranch` on action `"3"` so a future silent shape change is caught, plus a
+PORTAL-FACTS.md section ("WR-02") recording the race's rationale, why it's
+self-correcting, and the Phase 41+ follow-up (add a no-op `defaultBranch`, or validate
+the self-correction live on disposables once credentials are available).
+
 **File:** `config/hubspot_flows/4625147345-wf1-set-icp-tier.after.json:43-170`
 **Issue:** Action `"2"` (the veto check) has a `defaultBranch` (→ action `"3"`).
 Action `"1"` in `4626124224-org-type-score.after.json`, action `"1"` in
@@ -147,6 +197,12 @@ state once the components do land.
 
 ### WR-03: `run_scoring_parity.py`'s verdict string understates the sample size when a read fails alongside successes
 
+**Outcome: fixed** (commit `22a2b44`) — the `FAIL` verdict's denominator now uses
+`len(sample_ids)` instead of `assertions_executed`, matching the review's suggested fix
+verbatim. Added a regression test
+(`test_run_scoring_parity_verdict_denominator_counts_failed_fetches`) with a mixed
+raise+success sample asserting the verdict reads "1 of 2", not "1 of 1".
+
 **File:** `scripts/run_scoring_parity.py:120-201`
 **Issue:** In `build_report()`, a company whose `fetch_fn` raises is appended to
 `mismatches` and `real_findings` but **not** to `comparisons` (the `continue` at line
@@ -176,6 +232,14 @@ both numbers explicitly — "assertions_executed=2 (1 of 3 sampled companies fai
 fetch)").
 
 ### WR-04: Two of the five component mapper flows enroll on `createdate`, three do not — an unexplained, untested inconsistency
+
+**Outcome: fixed** (commit `48a60f8`) — same honest-deferral treatment as WR-02: no live
+flow edit (no credentials available), instead added a named offline test
+(`test_mapper_flow_createdate_enrollment_is_currently_two_of_five`) that locks in the
+current 2-of-5 split so a future silent drift is caught, plus a PORTAL-FACTS.md section
+("WR-04") recording why it's currently harmless (the calculated formula blanks on any
+null term regardless of pre-seeding) and the condition (formula semantics change) that
+would make normalizing the five flows worth doing.
 
 **File:** `config/hubspot_flows/gambling-score.after.json:54-116`,
 `config/hubspot_flows/produces-content-score.after.json:54-116` vs.
