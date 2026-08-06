@@ -39,10 +39,36 @@ default, armed only inside a deliberate, audited window against allowlisted test
 
 **Scope fence that still holds:** the pipeline writes ICP *inputs* and their provenance. The
 derived outputs (`lv_icp_fit_score`, `lv_icp_tier`, `lv_anti_icp_flag`, `lv_anti_icp_reason`,
-`lv_recommended_motion`) are HubSpot-side and their calculation is still the literal `1 + 1`
-placeholder. Authoring it is downstream work. Supersedes CLAUDE.md §29.
+`lv_recommended_motion`) are HubSpot-side. A partial HubSpot-side implementation exists (four
+workflows + calculated property, built 2026-08-04) but carries ten validated defects — see
+`HANDOVER-2026-08-06-icp-scoring.md` §10. Remediating it is milestone v0.7. Supersedes CLAUDE.md §29.
 
-## Current Milestone: v0.5 Lusha v3 & Armed Enrichment
+## Current Milestone: v0.7 HubSpot Scoring Engine Remediation
+
+**Goal:** The ICP rubric executes correctly inside HubSpot (the scoring engine stays
+HubSpot-resident) — a textbook Tier-A record (governing body + content + ANZ + mid-market)
+scores 80 and grades A; the ten validated defects (F1–F10, HANDOVER-2026-08-06-icp-scoring.md
+§10) are remediated; vetoes set AND clear with reason strings; and a parity guard asserts
+HubSpot's live scores against `src/icp_scoring.py`.
+
+**Target features:**
+- Decision phase first: verify company fit-score availability on Sales Hub Pro, then commit to
+  fix-the-workflow-chain-in-place vs lead-scoring-tool rebuild (requirements path-neutral until then)
+- Scoring engine remediation per chosen path: content term (+20), input rewiring to canonical
+  `lv_*` properties, symmetric veto with `lv_anti_icp_reason`, revenue boundary fixes,
+  gambling deduction on `lv_is_gambling_operator`, regulator points, missing hard vetoes
+- Import the 66 web-researched companies (49 high-confidence) from the ICP validation analysis
+  as scoreable validation population — zero provider spend
+- Parity/regression harness: `src/icp_scoring.py` as oracle; worked examples + F4/F7/F9/F10
+  scratch scenarios as fixtures
+- Retire/reconcile orphan scoring artifacts per the path decision
+
+**Key context:** full-712 backfill trigger deferred beyond v0.7. Phase numbering continues at 39
+(global sequence). The `milestone` workstream's v0.5 Phase 22 armed canary remains pending and is
+a dependency, not part of this milestone. HubSpot portal 22617666 (ap1); `automation` scope now
+granted to the private app.
+
+## Parallel Milestone (in-flight workstream): v0.5 Lusha v3 & Armed Enrichment
 
 **Goal:** Migrate Lusha to v3 before the 2026-11-18 sunset with selective-reveal cost control, and prove the full enrichment pipeline (providers + Haiku research + Sonnet judge) live with writes armed.
 
