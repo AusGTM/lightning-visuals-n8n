@@ -479,3 +479,39 @@ This record's `lv_produces_content` being `null` (unknown, not enriched) puts it
 in the oracle's documented `Needs Review` divergence (compute_icp_score downgrades tier
 when `lv_org_type` is known but `lv_produces_content` is null and no veto fired) — Task 3
 classifies this as the accepted divergence 40-02 flagged, not a defect.
+
+## 40-REVIEW.md WR-02 — WF1 score-ladder action `"3"` has no `defaultBranch` (known, documented edge)
+
+Confirmed by direct read of `config/hubspot_flows/4625147345-wf1-set-icp-tier.after.json`:
+action `"2"` (veto check) has a top-level `defaultBranch` key; action `"3"` (the four-way
+score ladder, `>=70`/`[40,69]`/`[15,39]`/`<15`) does not. `extract_wf1_score_ladder()` in
+`tests/test_flow_rubric_conformance.py` treats the `<15` `listBranches` entry as filling a
+"default" role in its own return value, but that is this repo's test-side convenience
+label, not HubSpot's actual `defaultBranch` fallback — a genuinely blank
+`lv_icp_fit_score` reaching action `3` matches none of the four `IS_GREATER_THAN_OR_EQUAL_
+TO`/`IS_BETWEEN`/`IS_LESS_THAN` filters (all require a value) and, with no `defaultBranch`
+to fall through to, action `3` writes nothing that pass.
+
+**Why this is a live, reachable state, not just a theoretical one:** WF1 enrolls on
+either `lv_anti_icp_flag` OR `lv_icp_fit_score` becoming known
+(`test_wf1_enrollment_includes_score_and_veto_flag`), and the n8n pipeline writes
+`lv_anti_icp_flag`/`lv_anti_icp_reason` in the same PATCH as the canonical scoring inputs
+while the five component-score mapper flows the calculated `lv_icp_fit_score` formula
+depends on are separate, asynchronously-triggered flows that can still be settling. A
+company enrolled on the flag-known trigger before all five components have landed falls
+through action `2`'s `defaultBranch` into action `3` with a blank score.
+
+**Why this is not being live-PUT-fixed in this remediation pass:** the state is
+self-correcting — once the five components settle and `lv_icp_fit_score` itself becomes
+known, WF1 re-enrolls (`shouldReEnroll: true`) and re-evaluates with a real number, so no
+company is left with a stale/wrong tier, only a transient one-pass no-op. This sandbox
+also has no live HubSpot credentials available (`HUBSPOT_PRIVATE_APP_TOKEN` unset), so a
+D-07 disable-edit-PUT-reenable round-trip cannot be executed or validated on disposables
+here — attempting one blind would violate D-07's own "validate live before trusting it"
+discipline. Honest deferral: this edge is now machine-documented
+(`test_wf1_score_ladder_action_has_no_default_branch_documented_race` in
+`tests/test_flow_rubric_conformance.py`) so a future change to this action's shape is a
+deliberate, reviewed diff against a named assertion, not a silent regression — and the
+live fix (add a `defaultBranch` on action `3` routing to a no-op terminal, or verify the
+self-correction empirically on disposables) stays open as a Phase 41+ follow-up, tracked
+here rather than attempted without credentials.

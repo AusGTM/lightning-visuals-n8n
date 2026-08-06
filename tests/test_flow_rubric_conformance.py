@@ -540,3 +540,57 @@ def test_wf1_d_is_written_only_on_the_veto_guarded_branch(flow_path):
         f"{flow_path}: the score-only ladder writes D on branch(es) {score_only_d_branches} "
         "-- D must be reachable only through the veto-guarded branch (F8)"
     )
+
+
+# ----------------------------------------------------------------------------------
+# 40-REVIEW.md WR-02 — documented, not-yet-fixed edge (PORTAL-FACTS.md has the full
+# rationale for why this is locked in as a regression guard rather than live-PUT
+# changed in this pass: no HUBSPOT_PRIVATE_APP_TOKEN available to run a D-07 round-trip
+# here, and it is currently behaviorally harmless per the analysis there). This test
+# exists so a future silent shape change is caught and reviewed deliberately.
+# ----------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("flow_path", _after_json_paths())
+def test_wf1_score_ladder_action_has_no_default_branch_documented_race(flow_path):
+    """WR-02 — action '3' (the lv_icp_fit_score ladder) has no top-level
+    'defaultBranch' key, unlike action '2' (the veto check) in the same flow and unlike
+    action '1' in every geography/revenue/org-type mapper flow. A genuinely blank
+    lv_icp_fit_score reaching this action matches none of the four named branches and,
+    with no defaultBranch to fall through to, writes nothing that pass -- see
+    PORTAL-FACTS.md's 'WR-02' section for why this is a real but self-correcting race
+    (WF1 re-enrolls once the score itself becomes known) and not being live-edited in
+    this pass. If this assertion ever needs to flip (a defaultBranch is added), update
+    PORTAL-FACTS.md's WR-02 note in the same change."""
+    flow = load_flow(flow_path)
+    if not _is_flow(flow) or find_list_branch_action(flow, "lv_anti_icp_flag") is None:
+        pytest.skip(f"{flow_path} is not WF1")
+
+    score_ladder_action = next(
+        a for a in flow["actions"]
+        if a.get("type") == "LIST_BRANCH"
+        and any(
+            f.get("property") == "lv_icp_fit_score"
+            for lb in a.get("listBranches", [])
+            for ab in lb["filterBranch"].get("filterBranches", [])
+            for f in ab.get("filters", [])
+        )
+    )
+    assert "defaultBranch" not in score_ladder_action, (
+        f"{flow_path}: action {score_ladder_action['actionId']!r} now has a "
+        "defaultBranch -- WR-02's documented race is fixed, update PORTAL-FACTS.md's "
+        "WR-02 section and this assertion together"
+    )
+    veto_action = next(
+        a for a in flow["actions"]
+        if a.get("type") == "LIST_BRANCH"
+        and any(
+            f.get("property") == "lv_anti_icp_flag"
+            for lb in a.get("listBranches", [])
+            for ab in lb["filterBranch"].get("filterBranches", [])
+            for f in ab.get("filters", [])
+        )
+    )
+    assert "defaultBranch" in veto_action, (
+        f"{flow_path}: veto action {veto_action['actionId']!r} unexpectedly lost its "
+        "defaultBranch (the sibling comparison WR-02 relies on)"
+    )
