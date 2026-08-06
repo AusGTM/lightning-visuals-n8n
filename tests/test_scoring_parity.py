@@ -284,7 +284,11 @@ def test_gambling_deducts_20_without_veto():
         props = fetch_for_parity(company_id)
         assert props.get("org_type_score") == "20"
         assert props.get("gambling_score") == "-20"
-        assert props.get("lv_anti_icp_flag") == "false"
+        # 40-05/D-01: HubSpot no longer writes lv_anti_icp_flag at all (the n8n pipeline
+        # is the sole writer), and a bare disposable patch here never triggers a
+        # pipeline run -- the field reads None, not "false". Same correction pattern
+        # 40-05 already applied to test_f4_au_string_is_not_vetoed.
+        assert props.get("lv_anti_icp_flag") != "true"
 
 
 @live

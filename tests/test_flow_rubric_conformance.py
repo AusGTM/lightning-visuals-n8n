@@ -487,3 +487,56 @@ def test_wf1_score_ladder_thresholds_match_rubric(flow_path):
         f"{flow_path}: fall-through (below {tier_rules['C']['min_score']}) must write "
         f"Unscored, got {ladder.get('__default__')!r} (F8's exact defect shape if this is 'D')"
     )
+
+
+def _wf1_written_tier_values(flow: dict) -> set:
+    """Every distinct lv_icp_tier value any SINGLE_CONNECTION action in this flow can
+    write."""
+    return {
+        a["fields"]["value"]["staticValue"]
+        for a in flow["actions"]
+        if a.get("type") == "SINGLE_CONNECTION"
+        and a["fields"]["property_name"] == "lv_icp_tier"
+    }
+
+
+@pytest.mark.parametrize("flow_path", _after_json_paths())
+def test_wf1_writable_tier_values_exactly_five(flow_path):
+    """Permanent regression guard (Task 3) — the complete set of lv_icp_tier values
+    WF1 can ever write is exactly A, B, C, D and Unscored. Needs Review is
+    deliberately absent: src/icp_scoring.py can emit it (the confidence-downgrade
+    branch when lv_org_type/lv_produces_content is missing), but no HubSpot workflow
+    in this phase models that branch and no Phase 40 requirement asks for one --
+    REQUIREMENTS.md lists the review-queue policy as an explicitly deferred future
+    requirement, and 40-02's parity harness records this exact divergence as an
+    accepted, documented assumption (not a gap to "fix" by adding an option here)."""
+    flow = load_flow(flow_path)
+    if not _is_flow(flow) or find_list_branch_action(flow, "lv_anti_icp_flag") is None:
+        pytest.skip(f"{flow_path} is not WF1")
+
+    assert _wf1_written_tier_values(flow) == {"A", "B", "C", "D", "Unscored"}, (
+        f"{flow_path}: writable tier values {_wf1_written_tier_values(flow)} must be "
+        "exactly {'A', 'B', 'C', 'D', 'Unscored'}"
+    )
+
+
+@pytest.mark.parametrize("flow_path", _after_json_paths())
+def test_wf1_d_is_written_only_on_the_veto_guarded_branch(flow_path):
+    """Direct F8 regression guard (Task 3) — this is the assertion that would have
+    caught F8 when it was introduced: D must be reachable through exactly one path,
+    the LIST_BRANCH keyed on lv_anti_icp_flag, and the score-band ladder (keyed on
+    lv_icp_fit_score alone) must never write D on any branch, including the
+    fall-through."""
+    flow = load_flow(flow_path)
+    if not _is_flow(flow) or find_list_branch_action(flow, "lv_anti_icp_flag") is None:
+        pytest.skip(f"{flow_path} is not WF1")
+
+    veto_op, veto_tier = extract_wf1_veto_branch(flow)
+    assert veto_tier == "D"
+
+    score_ladder = extract_wf1_score_ladder(flow)
+    score_only_d_branches = [bound for bound, tier in score_ladder.items() if tier == "D"]
+    assert not score_only_d_branches, (
+        f"{flow_path}: the score-only ladder writes D on branch(es) {score_only_d_branches} "
+        "-- D must be reachable only through the veto-guarded branch (F8)"
+    )
