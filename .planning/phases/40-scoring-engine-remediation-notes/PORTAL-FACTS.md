@@ -130,3 +130,77 @@ revenue-boundary edits (needed for F10's revenue-branch fix in 40-05) are equall
 API-editable — remains genuinely open; this verdict covers `STATIC_BRANCH`/static-value
 edits only. 40-05 should still treat its first `IS_BETWEEN` edit as its own early
 validation gate, not assume this verdict extends to it.
+
+## Components after 40-04
+
+All five `lv_icp_fit_score` component properties, confirmed live (portal 22617666,
+`GET /crm/v3/properties/companies/{name}`):
+
+| name | type | fieldType | groupName | schema `defaultValue` |
+|---|---|---|---|---|
+| `org_type_score` | number | number | `companyinformation` | `null` |
+| `geography_score` | number | number | `companyinformation` | `null` |
+| `annual_revenue_score` | number | number | `companyinformation` | `null` |
+| `produces_content_score` | number | number | `companyinformation` | `null` |
+| `gambling_score` | number | number | `companyinformation` | `null` |
+
+`produces_content_score` and `gambling_score` were net-new (`404` before this plan's
+Task 1); both created via `POST /crm/v3/properties/companies` with a body that
+byte-for-byte mirrors `org_type_score`'s `type`/`fieldType`/`groupName` (`name`,
+`label`, `type: number`, `fieldType: number`, `groupName: companyinformation`).
+
+### Default-value-generation finding (Task 1 deviation — read before touching this again)
+
+**The `PROPERTY_DEFAULT_VALUE`/`default-value-generation` stamp `org_type_score`,
+`geography_score`, and `annual_revenue_score` carry on every freshly created company is
+NOT reproducible via the CRM v3 Properties API.** Live-probed this session, in order:
+
+1. `POST /crm/v3/properties/companies` with `defaultValue: "0"` in the create body — `201`,
+   but the response (and every subsequent `GET`) omits `defaultValue` entirely. A fresh
+   disposable company's `propertiesWithHistory` shows an empty history list for that
+   property (no `PROPERTY_DEFAULT_VALUE` entry), not `0`.
+2. `PATCH /crm/v3/properties/companies/{name}` with `defaultValue: "0"` on an
+   already-created property — same result: `200`, field silently dropped, no stamp.
+3. `PATCH` with `numberDisplayHint: "unformatted"` (the one schema-level difference a
+   full-key diff of `org_type_score` vs. the newly created properties surfaced) — `200`,
+   applied, but still no stamp on a fresh disposable.
+
+**Conclusion:** whatever produced the three original components' default-0 behavior is
+either a legacy artifact of how those three were created (HANDOVER's note that a
+now-removed `calculation_score`-type mechanism preceded this architecture) or a
+portal-UI-only setting with no API-exposed equivalent in this API version. Confirmed
+**not** an API create/update-time option for a plain `number`/`number` property in this
+portal.
+
+**Why this matters, live-verified (not theoretical):** `lv_icp_fit_score`'s
+`calculation_equation` formula does not treat a missing/null referenced property as `0`
+— it returns blank. Reversible spike this session: temporarily appended
+`+ gambling_score` to the live formula (`gambling_score` was null on every disposable at
+that point, nothing else changed), created a disposable with no properties set, and
+`lv_icp_fit_score` read back `None` instead of the `0` a 3-term-only formula gives today.
+Formula reverted immediately (`PATCH` back to the original 3-term string, re-confirmed
+via `GET`) — no net change to the live property. **One null term blanks the entire sum.**
+This is exactly the risk Task 1's own acceptance criteria flagged ("An empty component
+rather than 0 would break the calculated sum in Task 3, so this check is not ceremony")
+— now confirmed as a real, live-reproduced failure mode, not a hypothetical one.
+
+**Resolution (Rule 2 auto-fix, carried into Task 2):** since the property-schema route is
+unavailable via API, the default-0 write for `produces_content_score`/`gambling_score` is
+achieved the same way every other write in this phase is achieved — an
+Automation v4 flow, D-05/D-08's proven mechanism — rather than reaching for portal-UI
+hand-editing (D-05's fallback clause exists for API-*rejected* edits; this is an
+API-*unsupported schema feature*, and a flow-based equivalent stays fully within the
+API-only path). Each of the two new mapper flows (Task 2) carries a **second**
+`eventFilterBranches` entry enrolling on `createdate` known (the same
+`eventTypeId: "4-655002"` UNIFIED_EVENTS type every other property-keyed enrollment in
+this portal already uses, just filtered on `hs_name = "createdate"` instead of the
+mapper's own input property), feeding into the same `STATIC_BRANCH` action. At company
+creation the driving input (`lv_produces_content` / `lv_is_gambling_operator`) is unset,
+so the branch falls to its existing "any other value including empty" default action,
+which already writes `0` — no new action, no new branch, only a second way to enroll into
+the one that exists. `shouldReEnroll: true` plus HubSpot's confirmed (40-01 D-05 verdict)
+"enrollment requires a genuine future property-change event, not existing state" behavior
+means this does **not** retroactively fire for any of the 712 pre-existing companies
+(`createdate` was set for all of them long before this flow existed) — only future company
+creations get the write. 40-07's backfill (D-10) remains the mechanism for the 712;
+this closes the same gap for every company created *after* this plan lands.
