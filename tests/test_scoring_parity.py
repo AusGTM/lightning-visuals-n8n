@@ -438,6 +438,18 @@ def test_f10_boundary_overlap():
     test_revenue_boundary_bands("750M-1B", REVENUE_BAND_POINTS["750M-1B"])
 
 
+def test_run_scoring_parity_zero_assertion_guard_offline():
+    """scripts/run_scoring_parity.py's false-green guard (T-40-05), proven offline: an
+    empty sample must never report success. build_report() takes no network path when
+    sample_ids is empty, so this needs no portal and no credentials."""
+    import scripts.run_scoring_parity as parity_script
+
+    report, exit_code = parity_script.build_report([])
+    assert exit_code != 0
+    assert report["assertions_executed"] == 0
+    assert "zero assertions" in report["verdict"]
+
+
 def test_parity_02_named_case_completeness():
     """Collection-time guard, runs offline so it can never be skipped away: PARITY-02
     requires F4/F7/F9/F10 encoded as named, selectable regression cases. This makes that
