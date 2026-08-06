@@ -17,6 +17,11 @@ from scripts.probe_scoring_tool_availability import (  # noqa: E402
     main,
 )
 from src.hubspot_client import delete_record  # noqa: E402
+from scripts.probe_scoring_recalc_latency import (  # noqa: E402
+    median_latency,
+    classify_latency_band,
+    find_score_property_name,
+)
 
 
 def test_classify_account_info_documented_shape_has_no_tier_field():
@@ -130,3 +135,62 @@ def test_delete_record_live_calls_requests_delete_and_returns_response(monkeypat
     response = delete_record("companies", "789", dry_run=False)
     assert calls["url"] == "https://api.hubapi.com/crm/v3/objects/companies/789"
     assert response.status_code == 204
+
+
+# --- Phase 39 Plan 03 Task 2: pure latency helpers ------------------------------------
+
+def test_median_latency_odd_count():
+    assert median_latency([10.0, 12.0, 14.0]) == 12.0
+
+
+def test_median_latency_resists_one_noisy_sample():
+    assert median_latency([5.0, 100.0, 6.0]) == 6.0
+
+
+def test_median_latency_empty_raises():
+    import pytest
+    with pytest.raises(ValueError):
+        median_latency([])
+
+
+def test_classify_latency_band_a_low():
+    assert classify_latency_band(1.0) == "a"
+
+
+def test_classify_latency_band_a_inclusive_upper_edge():
+    assert classify_latency_band(600.0) == "a"
+
+
+def test_classify_latency_band_b_just_above_a():
+    assert classify_latency_band(600.1) == "b"
+
+
+def test_classify_latency_band_b_inclusive_upper_edge():
+    assert classify_latency_band(3600.0) == "b"
+
+
+def test_classify_latency_band_c_just_above_b():
+    assert classify_latency_band(3600.1) == "c"
+
+
+def test_classify_latency_band_none_is_c():
+    assert classify_latency_band(None) == "c"
+
+
+def test_classify_latency_band_negative_raises():
+    import pytest
+    with pytest.raises(ValueError):
+        classify_latency_band(-1.0)
+
+
+def test_find_score_property_name_none_when_absent():
+    results = [{"name": "x", "fieldType": "text"}]
+    assert find_score_property_name(results) is None
+
+
+def test_find_score_property_name_found():
+    results = [
+        {"name": "x", "fieldType": "text"},
+        {"name": "hs_lead_score", "fieldType": "calculation_score"},
+    ]
+    assert find_score_property_name(results) == "hs_lead_score"
