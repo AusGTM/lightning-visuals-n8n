@@ -184,6 +184,29 @@ def _run_one_sample(record_id: str, score_property_name: str, pre_flip_value, fl
     return None
 
 
+def _teardown_delete(record_id: str) -> bool:
+    """Best-effort delete with one retry (WR-02 fix). Never raises — a raising
+    delete_record() call inside a `finally` block would replace whatever exception
+    triggered teardown, hiding the real failure from the operator. Logs the record_id
+    loudly on failure so the disposable company can still be found and deleted manually."""
+    for attempt in (1, 2):
+        try:
+            response = delete_record("companies", record_id, dry_run=False)
+            ok = getattr(response, "status_code", None) == 204
+            print(f"teardown: delete company {record_id} -> "
+                  f"{'204' if ok else getattr(response, 'status_code', response)} "
+                  f"(attempt {attempt})")
+            if ok:
+                return True
+        except Exception as exc:
+            print(f"teardown attempt {attempt} FAILED for {record_id}: {exc}")
+        if attempt == 1:
+            time.sleep(POLL_INTERVAL_SECONDS)
+    print(f"teardown FAILED for {record_id} after 2 attempts — company may still exist "
+          f"live, delete it manually.")
+    return False
+
+
 def main(argv=None) -> int:
     if not _has_credentials():
         print("skipped (no credentials): HUBSPOT_PRIVATE_APP_TOKEN must be set to run "
@@ -277,10 +300,9 @@ def main(argv=None) -> int:
     finally:
         # Guaranteed teardown — runs even if the block above raised or was interrupted.
         # A disposable ZZ-SCORING-TEST-DELETE-ME-* company must never survive a crash.
-        response = delete_record("companies", record_id, dry_run=False)
-        deleted_ok = getattr(response, "status_code", None) == 204
-        print(f"teardown: delete company {record_id} -> "
-              f"{'204' if deleted_ok else getattr(response, 'status_code', response)}")
+        # _teardown_delete never raises, so it cannot mask whatever exception (if any)
+        # triggered this finally block (WR-02).
+        deleted_ok = _teardown_delete(record_id)
 
     if not deleted_ok:
         print(f"FAIL: teardown did not return 204 for disposable company {record_id} — "
