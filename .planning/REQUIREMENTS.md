@@ -64,11 +64,11 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 
 ### Parity & Regression
 
-- [ ] **PARITY-01**: A parity harness recomputes expected scores via `compute_icp_score`
+- [x] **PARITY-01**: A parity harness recomputes expected scores via `compute_icp_score`
   and asserts them against HubSpot's live scores for fixtures plus a real-record sample.
   (Every F-defect was invisible in the HubSpot UI; this is the standing drift guard.)
 
-- [ ] **PARITY-02**: The F4/F7/F9/F10 scratch scenarios (AU-string veto, tier lag, gambling
+- [x] **PARITY-02**: The F4/F7/F9/F10 scratch scenarios (AU-string veto, tier lag, gambling
   conflation, boundary overlap) are encoded as named regression cases in the harness.
 
 ### Cleanup
@@ -132,8 +132,8 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 | VETO-01 | Phase 40 | Pending |
 | VETO-02 | Phase 40 | Pending |
 | VETO-03 | Phase 40 | Pending |
-| PARITY-01 | Phase 40 | Pending |
-| PARITY-02 | Phase 40 | Pending |
+| PARITY-01 | Phase 40 | Complete |
+| PARITY-02 | Phase 40 | Complete |
 | DATA-01 | Phase 41 | Pending |
 | DATA-02 | Phase 41 | Pending |
 | CLEAN-01 | Phase 42 | Pending |

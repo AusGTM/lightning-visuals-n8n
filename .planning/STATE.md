@@ -5,16 +5,16 @@ milestone_name: HubSpot Scoring Engine Remediation
 current_phase: 40
 current_phase_name: Scoring Engine, Veto & Parity Remediation
 status: executing
-stopped_at: 40-01 complete (org-type mapper fixed live, D-05 API path proven)
-last_updated: "2026-08-06T06:25:00.000Z"
+stopped_at: Completed 40-02-PLAN.md
+last_updated: "2026-08-06T06:38:24.069Z"
 last_activity: 2026-08-06
-last_activity_desc: 40-01 complete — org-type mapper live-fixed, D-05 round-trip verdict PROVEN
+last_activity_desc: "40-02 complete (standing parity harness landed — offline oracle-vs-rubric tier + live tier with every ENGINE/VETO requirement as a named -k selector + read-only sweep wrapper with a false-green guard)"
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 11
-  completed_plans: 5
-  percent: 45
+  completed_plans: 6
+  percent: 20
 ---
 
 # Project State
@@ -22,15 +22,15 @@ progress:
 ## Current Position
 
 Phase: 40 (Scoring Engine, Veto & Parity Remediation) — EXECUTING
-Next: Phase 40 remaining plans (40-04 scoring formula/content term, 40-05 revenue boundary, 40-06 tier/veto workflow, 40-07 backfill/parity — waves 2+)
-Status: Executing Phase 40 — Plan 01 complete
-Last activity: 2026-08-06 — 40-01 complete (org-type mapper live-fixed: regulator 0->5, gambling_operator -20->0; D-05 API path PROVEN for STATIC_BRANCH edits)
+Next: Phase 40 remaining plans (40-03 veto ownership/pipeline, 40-04 scoring formula/content term, 40-05 revenue boundary, 40-06 tier/veto workflow — waves 2+)
+Status: Executing Phase 40 — Plans 01-02 complete
+Last activity: 2026-08-06 — 40-02 complete (standing parity harness: tests/scoring_fixtures.py, tests/test_scoring_parity.py offline+live tiers with all ENGINE/VETO -k selectors + PARITY-02 F4/F7/F9/F10 named cases, scripts/run_scoring_parity.py read-only sweep with a false-green guard)
 Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39-path-decision-fit-score-verification/39-DECISION.md`
 
 ## Session
 
-**Last session:** 2026-08-06T06:25:00.000Z
-**Stopped at:** Completed 40-01-PLAN.md
+**Last session:** 2026-08-06T06:38:24.062Z
+**Stopped at:** Completed 40-02-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -42,6 +42,7 @@ Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39
 | Phase 39 P03 | 8min | 3 tasks | 3 files |
 | Phase 39 P04 | 15min | 1 tasks | 4 files |
 | Phase 40 P01 | 27min | 2 tasks | 9 files |
+| Phase 40 P02 | 22min | 3 tasks | 3 files |
 
 ## Decisions
 
@@ -56,3 +57,4 @@ Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39
 - [Phase 39-02]: Task 2's in-portal walkthrough was performed by the orchestrator driving the operator's own logged-in Chrome session, at the operator's live delegation — deviation from D-01's "operator drives it," recorded in VERIFICATION-NOTE.md's header; portal state/screenshots are authentic.
 - [Phase ?]: [Phase 39-04]: Path verdict recorded: fix-the-four-workflow-chain-in-place (39-DECISION.md), decided on operator hard requirement to reuse lv_icp_fit_score/lv_icp_tier — availability gate resolved AVAILABLE but was not the deciding factor.
 - [Phase ?]: [Phase 39-04]: Tasks 1 (armed recalc-latency probe) and 2 (band-c checkpoint) skipped as moot per operator override — D-04 gate applies only to the lead-scoring-tool path, which is not chosen. Documented as deviations in 39-DECISION.md's Process note.
+- [Phase ?]: [Phase 40-02]: Live parity harness landed (PARITY-01/PARITY-02) — tests/scoring_fixtures.py + tests/test_scoring_parity.py + scripts/run_scoring_parity.py. All named -k selectors ready for 40-03..40-06; live tests intentionally RED until owning plans land.
