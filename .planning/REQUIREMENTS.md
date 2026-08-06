@@ -77,6 +77,26 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
   (`scripts/snapshot_hubspot_schema.py` run first), and `config/hubspot_properties.yaml`
   reconciles clean against the live portal.
 
+### Pipeline Hygiene (validated 2026-08-06, PIPELINE-DEFECTS-VALIDATION.md)
+
+- [ ] **PIPE-01**: lv_enrichment_needs_review is written as the STRING "true"/"false", never a
+  JS boolean, at every writer — HubSpot EQ filters match strings only; the identical class was
+  fixed for lv_enrichment_requested in 36-07. (LIVE defect: shallow-spread-with-no-coercion.)
+
+- [ ] **PIPE-02**: The dormant veto path in mergeCompanies.js is hardened at its one shared fix
+  site: veto-class fields carry a real min_confidence (not 0) and string coercion, so if
+  pipeline-owned vetoes ever return they are born guarded. (P2+P4: latent, unreachable today —
+  the repo test proving the candidate path dead is extended, not weakened.)
+
+- [ ] **PIPE-03**: lv_icp_score_breakdown has a producer — the Phase 40 parity harness (which
+  already recomputes via compute_icp_score) emits and writes the breakdown JSON for the records
+  it checks, so a challenged tier can explain itself. Truncated at the property limit, stamped
+  with rubric version.
+
+- [ ] **PIPE-04**: lv_closed_lost_reason is consumed — a report artifact aggregates loss
+  reasons against the current rubric version and surfaces them at review time. Consumption
+  only; rubric weight changes stay behind the REQ-signoff-gate.
+
 ## Future Requirements (deferred beyond v0.7)
 
 - Full-712 input-coverage backfill trigger — re-enrollment mechanism for existing companies
@@ -117,5 +137,9 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 | DATA-01 | Phase 41 | Pending |
 | DATA-02 | Phase 41 | Pending |
 | CLEAN-01 | Phase 42 | Pending |
+| PIPE-01 | Phase 43 | Pending |
+| PIPE-02 | Phase 43 | Pending |
+| PIPE-03 | Phase 43 | Pending |
+| PIPE-04 | Phase 43 | Pending |
 
 Coverage: 16/16 v0.7 requirements mapped. No orphans.

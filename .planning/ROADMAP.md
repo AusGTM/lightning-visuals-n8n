@@ -144,10 +144,40 @@ leaving orphaned schema behind.
      between the config file and HubSpot's actual schema.
 **Plans**: TBD
 
+### Phase 43: Pipeline Scoring Hygiene & Explainability
+
+**Goal**: The pipeline-side residue of the 2026-08-06 scoring audit is closed — the one LIVE
+defect (lv_enrichment_needs_review written as a boolean the HubSpot filters can never match),
+the shared latent veto site, a producer for the score breakdown, and first consumption of the
+closed-lost feedback signal. Validated evidence:
+.planning/phases/40-scoring-engine-remediation-notes/PIPELINE-DEFECTS-VALIDATION.md
+(P1 revenue units and P3 research-lane row loss were exercised and DISPROVEN — already fixed;
+they are deliberately absent here.)
+**Depends on**: Phase 40 (the parity harness PIPE-03 rides on)
+**Requirements**: PIPE-01, PIPE-02, PIPE-03, PIPE-04
+**Success Criteria** (what must be TRUE):
+
+  1. Every writer of lv_enrichment_needs_review in the generated JSON emits the string
+     "true"/"false" — a structural test pins it (the 36-07 idiom: exactly-string, anchored
+     grep, red-checked) and an EQ-filter fixture proves the filter now matches.
+
+  2. mergeCompanies.js veto-class fields carry a non-zero min_confidence and string coercion
+     at the single shared fix site; the existing dead-path test is extended to prove the
+     hardening without resurrecting the path.
+
+  3. The parity harness writes lv_icp_score_breakdown (rubric-versioned, property-limit
+     truncated) for every record it checks — a challenged tier can name its components.
+
+  4. A loss-reason report aggregates lv_closed_lost_reason against the rubric version;
+     consumption only, no weight changes (REQ-signoff-gate stands).
+
+  5. Suites green above baselines; arming grep 0; no n8n JSON hand-edits — builder only.
+**Plans**: TBD
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 39 → 40 → 41 → 42
+Phases execute in numeric order: 39 → 40 → 41 → 42 → 43
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
