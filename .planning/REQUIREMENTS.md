@@ -15,7 +15,7 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 
 ### Scoring Engine (path-neutral outcomes)
 
-- [ ] **ENGINE-01**: A company with `lv_org_type=governing_body_league`,
+- [x] **ENGINE-01**: A company with `lv_org_type=governing_body_league`,
   `lv_produces_content=true`, region AU, revenue band 50-500M scores **80** and grades **A**
   entirely inside HubSpot — no pipeline scoring code. (Today: 60/B via native inputs; F1.)
 
@@ -122,7 +122,7 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | DECIDE-01 | Phase 39 | Complete |
-| ENGINE-01 | Phase 40 | Pending |
+| ENGINE-01 | Phase 40 | Complete |
 | ENGINE-02 | Phase 40 | Complete |
 | ENGINE-03 | Phase 40 | Complete |
 | ENGINE-04 | Phase 40 | Complete |

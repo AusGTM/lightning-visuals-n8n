@@ -5,32 +5,32 @@ milestone_name: HubSpot Scoring Engine Remediation
 current_phase: 40
 current_phase_name: Scoring Engine, Veto & Parity Remediation
 status: executing
-stopped_at: Completed 40-06-PLAN.md
-last_updated: "2026-08-07T10:15:00.000Z"
+stopped_at: Completed 40-07-PLAN.md
+last_updated: "2026-08-07T11:10:00.000Z"
 last_activity: 2026-08-07
-last_activity_desc: 40-06 complete (WF1 tier flow retargeted and rebranched — below-15 branch now writes Unscored instead of D closing F8/ENGINE-07, and WF1 enrolls on lv_anti_icp_flag as well as lv_icp_fit_score closing F7/VETO-03; lv_icp_tier enum given an Unscored option; permanent offline regression guards added; a pre-existing stale test assertion left over from D-01's veto handover corrected)
+last_activity_desc: 40-07 complete (Phase 40 CLOSED — ENGINE-01 proven live end to end, 80/A off canonical inputs only; batch_update_companies + D-10 component-seeding backfill built and proven on the portal's entire canonical-input-populated real-record population (n=1, Melbourne Racing Club); committed PARITY-01 verdict parity-report-final.json, PASS with 1 documented Needs Review divergence, 0 real findings; VETO-01/VETO-02 confirmed empirically still blocked on the pipeline write-gate arming gate, out of this plan's scope)
 progress:
   total_phases: 5
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 11
-  completed_plans: 10
-  percent: 91
+  completed_plans: 11
+  percent: 100
 ---
 
 # Project State
 
 ## Current Position
 
-Phase: 40 (Scoring Engine, Veto & Parity Remediation) — EXECUTING
-Next: Phase 40 remaining plan (40-07 backfill mechanism).
-Status: Executing Phase 40 — Plans 01-06 complete
-Last activity: 2026-08-07 — 40-06 complete (WF1 retargeted/rebranched: below-15 branch writes Unscored not D closing F8/ENGINE-07; enrolls on lv_anti_icp_flag as a second trigger closing F7/VETO-03; lv_icp_tier enum given an Unscored option; permanent offline regression guards locking both fixes)
+Phase: 40 (Scoring Engine, Veto & Parity Remediation) — COMPLETE
+Next: Phase 41 (portfolio-wide backfill + data import, DATA-01/DATA-02) — not yet planned.
+Status: Phase 40 complete — all 7 plans done (01-07)
+Last activity: 2026-08-07 — 40-07 complete (Phase 40 closed): ENGINE-01 live-proven (80/A entirely inside HubSpot off canonical inputs — org_type_score=40, produces_content_score=20, geography_score=10, annual_revenue_score=10, gambling_score=0); D-10 backfill mechanism (`scripts/backfill_seed_company_scores.py`) built, gated, and proven on the real-record sample (Melbourne Racing Club, id 9604614548 — the entire population of companies portal-wide carrying any canonical lv_* input); PARITY-01 verdict committed (`parity-report-final.json`, PASS with 1 documented Needs Review divergence, 0 real findings, assertions_executed=1); full live fixture tier 56/56 passed excluding the 5 veto_set/veto_clear cases, which are empirically confirmed blocked on the pre-existing VETO-01/VETO-02 pipeline write-gate arming gate (not a regression, not this plan's scope — WINDOWS.md id 5)
 Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39-path-decision-fit-score-verification/39-DECISION.md`
 
 ## Session
 
-**Last session:** 2026-08-07T10:15:00.000Z
-**Stopped at:** Completed 40-06-PLAN.md
+**Last session:** 2026-08-07T11:10:00.000Z
+**Stopped at:** Completed 40-07-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -47,6 +47,7 @@ Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39
 | Phase 40 P04 | 25min | 3 tasks | 6 files |
 | Phase 40 P05 | 75min | 3 tasks | 4 files |
 | Phase 40 P06 | 55min | 3 tasks | 5 files |
+| Phase 40 P07 | ~60min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -76,7 +77,11 @@ Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39
 - [Phase 40-06]: `lv_icp_tier` enum given a fifth option, `Unscored` (`config/hubspot_flows/lv_icp_tier-property.{before,after}.json`), live-validated on a disposable before WF1 was touched — A/B/C/D preserved verbatim, no `Needs Review` option added (deferred, per REQUIREMENTS.md).
 - [Phase 40-06]: WF1 (4625147345) retargeted and rebranched — below-15 branch writes `Unscored` instead of `D` (F8/ENGINE-07 closed: `D` is now reachable only through the veto-guarded branch); enrollment criteria extended with `lv_anti_icp_flag` known as a second trigger (F7/VETO-03 closed: a flag flip alone moves the tier, live-validated both directions on a fixed B-band total with the score held constant); veto branch filter corrected from `BOOL true` to `STRING "true"` (D-04) after live-discovering `lv_anti_icp_flag` is a `booleancheckbox` property with string-valued options. Live parity: 70/69/40/39/15/14/-20 all graded to the correct tier, `-20` landing `Unscored` not `D`.
 - [Phase 40-06]: `tests/test_scoring_parity.py::test_gambling_deducts_20_without_veto` corrected (Rule 1) to assert `lv_anti_icp_flag != "true"` rather than `== "false"` — the same stale-assertion class 40-05 already fixed once in this file, surfaced by this plan's own `<verification>` selector.
+- [Phase 40-07]: **Phase 40 CLOSED.** ENGINE-01 live-proven end to end — a disposable with `lv_org_type=governing_body_league`, `lv_produces_content=true`, `lv_country_region_normalized=AU`, `lv_revenue_band=50-500M` reads `org_type_score=40`, `produces_content_score=20`, `geography_score=10`, `annual_revenue_score=10`, `gambling_score=0`, summing to `lv_icp_fit_score=80`, `lv_icp_tier=A` — entirely inside HubSpot, off canonical inputs only, closing the phase's headline requirement.
+- [Phase 40-07]: D-10's backfill mechanism built (`scripts/backfill_seed_company_scores.py`, `batch_update_companies` in `src/hubspot_client.py`) and proven on the real-record sample. Portfolio-wide measurement found exactly **one** company anywhere in the portal (711 total) carries any canonical `lv_*` scoring input — Melbourne Racing Club, id `9604614548` — confirming the 712-population backfill is genuinely Phase 41's job, not deferred prematurely. Armed run seeded its five components; settled live to `lv_icp_fit_score=15`, `lv_icp_tier=C` in ~11s.
+- [Phase 40-07]: PARITY-01 verdict committed (`.planning/phases/40-scoring-engine-remediation-notes/parity-report-final.json`): `assertions_executed=1`, `PASS` with 1 documented `Needs Review` divergence (40-02's flagged assumption — score and veto state agree with the oracle exactly; only the tier label diverges because HubSpot's live `lv_icp_tier` enum has no `Needs Review` value) and 0 real findings. `scripts/run_scoring_parity.py`'s flag comparison corrected (Rule 1, third instance of the same defect class 40-05/40-06 each fixed once in the pytest live tier) to boolean-equivalence instead of raw string equality — a never-enriched real record reads `lv_anti_icp_flag=None`, not `"false"`.
+- [Phase 40-07]: **VETO-01/VETO-02 confirmed still open, empirically, not fixed by this plan.** Full live fixture tier: 56/56 non-veto-arming tests passed. The 5 excluded cases (`test_veto_set_all_three_hard_vetoes` ×3, `test_veto_set_multiple_reasons_join`, `test_veto_clear_after_correction`) fail because setting veto-input properties alone never dispatches the n8n pipeline under this portal's actually-configured webhook subscriptions — VETO-WRITE-EVIDENCE.md's own proof required the SJ-3 poller plus a bounded `scheduled_arm.py` write-gate arm, an operational/security action outside this plan's `<action>` text and explicit scope per 40-03/40-05/40-06 precedent. Also fixed WINDOWS.md #4 (Rule 1, pre-existing open bug): `test_veto_clear_after_correction` patched `enrichment_requested` instead of the real SJ-3 poller-search property `lv_enrichment_requested` — corrected, though the test still fails at its earlier veto-setting assertion for the same structural reason as the other four. New WINDOWS.md entry (id 5, open) records this gate for Phase 41/future-phase visibility.
 
 ### Blockers
 
-None open.
+None open (VETO-01/VETO-02 remain open requirements, not blockers — Phase 40 met its own scope; see WINDOWS.md id 5 and Decisions above).

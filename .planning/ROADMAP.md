@@ -106,7 +106,7 @@ VETO-01, VETO-02, VETO-03, PARITY-01, PARITY-02
      scratch scenarios (AU-string veto, tier lag, gambling conflation, boundary overlap) encoded
      as named regression cases — this is the standing drift guard, since every defect above was
      invisible in the HubSpot UI.
-**Plans**: 6/7 plans executed
+**Plans**: 7/7 plans executed — Phase 40 COMPLETE
 
 Plans:
 **Wave 1**
@@ -129,7 +129,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 40-07-PLAN.md — Backfill mechanism proven on a capped sample, and the committed end-to-end parity verdict (ENGINE-01, PARITY-01)
+- [x] 40-07-PLAN.md — Backfill mechanism proven on a capped sample, and the committed end-to-end parity verdict (ENGINE-01, PARITY-01)
 
 ### Phase 41: Validation Data Import & End-to-End Proof
 
