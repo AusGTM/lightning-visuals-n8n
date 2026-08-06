@@ -1,0 +1,32 @@
+{
+  "endpoint": "GET /account-info/v3/details",
+  "status": 200,
+  "body": {
+    "portalId": 22617666,
+    "accountType": "STANDARD",
+    "timeZone": "Australia/Brisbane",
+    "companyCurrency": "AUD",
+    "additionalCurrencies": [
+      "USD"
+    ],
+    "utcOffset": "+10:00",
+    "utcOffsetMilliseconds": 36000000,
+    "uiDomain": "app-ap1.hubspot.com",
+    "dataHostingLocation": "ap1"
+  },
+  "note": "This endpoint's documented schema carries portal identity and locale only (portalId/accountType/timeZone/companyCurrency/uiDomain/dataHostingLocation). Absence of a tier field is expected and is not a signal about entitlement.",
+  "has_tier_field": false,
+  "portal_id": 22617666,
+  "ui_domain": "app-ap1.hubspot.com",
+  "data_hosting_location": "ap1",
+  "tier_keys_checked": [
+    "hubTier",
+    "subscriptionTier",
+    "productTier",
+    "hubs",
+    "products",
+    "addOns"
+  ],
+  "probed_at_utc": "2026-08-06T03:46:33.663270+00:00",
+  "expected_portal_id": "22617666"
+}

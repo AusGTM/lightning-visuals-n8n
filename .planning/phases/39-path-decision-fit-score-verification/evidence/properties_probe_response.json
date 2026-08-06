@@ -1,0 +1,9 @@
+{
+  "endpoint": "GET /crm/v3/properties/companies",
+  "status": 200,
+  "total_properties": 270,
+  "calculation_score_properties_found": [],
+  "note": "Empty list is inconclusive \u2014 score properties only appear here AFTER the operator builds one in-portal; absence does not mean unavailable.",
+  "probed_at_utc": "2026-08-06T03:46:33.663270+00:00",
+  "expected_portal_id": "22617666"
+}
