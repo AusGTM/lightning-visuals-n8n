@@ -106,7 +106,16 @@ VETO-01, VETO-02, VETO-03, PARITY-01, PARITY-02
      scratch scenarios (AU-string veto, tier lag, gambling conflation, boundary overlap) encoded
      as named regression cases — this is the standing drift guard, since every defect above was
      invisible in the HubSpot UI.
-**Plans**: TBD
+**Plans**: 7 plans (5 waves)
+
+Plans:
+- [ ] 40-01-PLAN.md — Tracer: flow fetch/PUT tooling, four flow definitions archived, portal facts recorded, and the org-type point table fixed end-to-end (ENGINE-05, ENGINE-06)
+- [ ] 40-02-PLAN.md — Parity harness: offline oracle tier, live-gated fixture tier, F4/F7/F9/F10 named regression cases, read-only sweep wrapper with a false-green guard (PARITY-01, PARITY-02)
+- [ ] 40-03-PLAN.md — Veto ownership onto the n8n pipeline, with the P2/P4 latent bugs closed first (VETO-01, VETO-02)
+- [ ] 40-04-PLAN.md — The two missing components: `produces_content_score` and `gambling_score` properties, mapper flows, and the five-term calculated formula (ENGINE-02, ENGINE-05)
+- [ ] 40-05-PLAN.md — Geography and revenue flows retargeted to canonical inputs; the HubSpot veto branch deleted (ENGINE-03, ENGINE-04)
+- [ ] 40-06-PLAN.md — WF1 tier ladder: sub-15 grades Unscored, and a flag change alone moves the tier (ENGINE-07, VETO-03)
+- [ ] 40-07-PLAN.md — Backfill mechanism proven on a capped sample, and the committed end-to-end parity verdict (ENGINE-01, PARITY-01)
 
 ### Phase 41: Validation Data Import & End-to-End Proof
 
