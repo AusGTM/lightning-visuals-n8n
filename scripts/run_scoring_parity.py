@@ -174,8 +174,8 @@ def build_report(sample_ids, fetch_fn=fetch_for_parity):
         exit_code = 1
     elif real_findings:
         verdict = (
-            f"FAIL: {len(real_findings)} of {assertions_executed} sampled companies "
-            "diverge from the oracle with a real finding (not the documented Needs "
+            f"FAIL: {len(real_findings)} of {len(sample_ids)} sampled companies "
+            "diverge from the oracle or could not be checked (not the documented Needs "
             "Review divergence)."
         )
         exit_code = 1

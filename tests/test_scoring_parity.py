@@ -524,6 +524,35 @@ def test_run_scoring_parity_real_score_mismatch_is_never_absorbed_as_divergence(
     assert classification == "real_finding"
 
 
+def test_run_scoring_parity_verdict_denominator_counts_failed_fetches():
+    """WR-03 fix: a company whose fetch_fn raises is counted in the numerator
+    (real_findings) but was excluded from assertions_executed, so the old verdict text
+    ("N of {assertions_executed} sampled companies diverge") silently dropped the very
+    row that failed to fetch from its own denominator. The denominator must be the full
+    sample size (len(sample_ids)), not the post-filter comparisons count."""
+    import scripts.run_scoring_parity as parity_script
+
+    def stub_fetch(company_id):
+        if company_id == "raises":
+            raise RuntimeError("boom")
+        return {
+            "lv_org_type": "governing_body_league",
+            "lv_produces_content": True,
+            "lv_country_region_normalized": "AU",
+            "lv_revenue_band": "5-50M",
+            "lv_icp_fit_score": "80",
+            "lv_icp_tier": "A",
+            "lv_anti_icp_flag": "false",
+        }
+
+    report, exit_code = parity_script.build_report(["raises", "ok-1"], fetch_fn=stub_fetch)
+    assert exit_code == 1
+    assert report["assertions_executed"] == 1  # unchanged: only successful fetches
+    assert len(report["real_findings"]) == 1
+    assert "1 of 2 sampled companies" in report["verdict"]
+    assert "1 of 1 sampled companies" not in report["verdict"]
+
+
 def test_parity_02_named_case_completeness():
     """Collection-time guard, runs offline so it can never be skipped away: PARITY-02
     requires F4/F7/F9/F10 encoded as named, selectable regression cases. This makes that
