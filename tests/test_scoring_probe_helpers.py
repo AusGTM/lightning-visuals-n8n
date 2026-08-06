@@ -16,6 +16,7 @@ from scripts.probe_scoring_tool_availability import (  # noqa: E402
     find_score_properties,
     main,
 )
+from src.hubspot_client import delete_record  # noqa: E402
 
 
 def test_classify_account_info_documented_shape_has_no_tier_field():
@@ -81,3 +82,51 @@ def test_main_wrong_portal_refuses_and_makes_no_http_call(monkeypatch, capsys):
     monkeypatch.setattr("requests.get", _fail)
     assert main() == 1
     assert "REFUSED" in capsys.readouterr().out
+
+
+# --- Phase 39 Plan 03 Task 1: delete_record() -----------------------------------------
+
+def test_delete_record_dry_run_default_makes_no_network_call_and_prints_no_auth(monkeypatch, capsys):
+    def _fail(*a, **kw):
+        raise AssertionError("no HTTP call should be made in dry-run")
+
+    monkeypatch.setattr("requests.delete", _fail)
+    result = delete_record("companies", "789")  # dry_run defaults to True
+    out = capsys.readouterr().out
+    assert result == {"dry_run": True}
+    assert '"method": "DELETE"' in out
+    assert "https://api.hubapi.com/crm/v3/objects/companies/789" in out
+    assert "Authorization" not in out
+    assert "Bearer" not in out
+
+
+def test_delete_record_dry_run_explicit_true_matches_default(monkeypatch, capsys):
+    def _fail(*a, **kw):
+        raise AssertionError("no HTTP call should be made in dry-run")
+
+    monkeypatch.setattr("requests.delete", _fail)
+    result = delete_record("companies", "789", dry_run=True)
+    assert result == {"dry_run": True}
+
+
+def test_delete_record_live_calls_requests_delete_and_returns_response(monkeypatch):
+    calls = {}
+
+    class _FakeResponse:
+        status_code = 204
+
+        def raise_for_status(self):
+            pass
+
+    def _fake_delete(url, headers=None, timeout=None):
+        calls["url"] = url
+        calls["headers"] = headers
+        calls["timeout"] = timeout
+        return _FakeResponse()
+
+    monkeypatch.setattr("requests.delete", _fake_delete)
+    monkeypatch.setenv("HUBSPOT_PRIVATE_APP_TOKEN", "fake-token")
+
+    response = delete_record("companies", "789", dry_run=False)
+    assert calls["url"] == "https://api.hubapi.com/crm/v3/objects/companies/789"
+    assert response.status_code == 204
