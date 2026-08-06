@@ -85,18 +85,52 @@ def _select_sample_ids() -> list:
     return [r["id"] for r in result.get("results", [])]
 
 
+def _flag_matches(live_value, expected_flag: bool) -> bool:
+    """Phase 40-07 (Rule 1 -- bug fix, third instance of the same defect class 40-05 and
+    40-06 each fixed once in tests/test_scoring_parity.py's live pytest assertions): since
+    D-01's veto handover, no HubSpot workflow writes lv_anti_icp_flag -- only the n8n
+    pipeline does. A real company this sweep has never run through the pipeline reads
+    None, not the string "false". A literal string-equality comparison against
+    str(expected_flag).lower() therefore reports a mismatch on every never-enriched
+    record, which is not what "diverges from the oracle" should mean. Compare boolean
+    equivalence instead: anything other than the literal string "true" is treated as
+    False, matching the pytest module's own `!= "true"` correction pattern."""
+    return (str(live_value) == "true") == expected_flag
+
+
+def _classify_mismatch(live_triple: dict, expected_triple: dict, expected_result) -> str:
+    """PARITY-01/Task 3: the oracle's documented `Needs Review` divergence (40-02's
+    flagged assumption, restated in this module's own header) -- compute_icp_score
+    downgrades tier to 'Needs Review' when lv_org_type is unknown or lv_produces_content
+    is null and no veto fired, with score >= 15. HubSpot's live lv_icp_tier enum has no
+    'Needs Review' value (only A/B/C/D/Unscored) -- WF1 grades strictly off the numeric
+    score+veto ladder, so a live tier of A/B/C/D against an oracle 'Needs Review' is an
+    accepted, documented divergence, not a defect -- PROVIDED the score and veto state
+    themselves agree. Any other disagreement (score itself diverges, or veto state
+    itself diverges) is a real finding, never silently absorbed into this classification."""
+    if expected_triple["lv_icp_tier"] != "Needs Review":
+        return "real_finding"
+    if str(live_triple.get("lv_icp_fit_score")) != expected_triple["lv_icp_fit_score"]:
+        return "real_finding"
+    if not _flag_matches(live_triple.get("lv_anti_icp_flag"), expected_result.anti_icp_flag):
+        return "real_finding"
+    return "documented_needs_review_divergence"
+
+
 def build_report(sample_ids, fetch_fn=fetch_for_parity):
     """The comparison core, offline-testable with an empty sample_ids or a stubbed
     fetch_fn — no network call is reachable when sample_ids is empty. Returns
     (report_dict, exit_code)."""
     comparisons = []
     mismatches = []
+    real_findings = []
 
     for company_id in sample_ids:
         try:
             props = fetch_fn(company_id)
         except Exception as exc:  # noqa: BLE001 -- one bad record must not sink the sweep
             mismatches.append({"company_id": company_id, "error": str(exc)})
+            real_findings.append({"company_id": company_id, "error": str(exc)})
             continue
 
         expected = expected_for(props)
@@ -110,17 +144,25 @@ def build_report(sample_ids, fetch_fn=fetch_for_parity):
             "lv_icp_tier": str(expected.tier),
             "lv_anti_icp_flag": str(expected.anti_icp_flag).lower(),
         }
-        # HubSpot returns every property as a string; coerce both sides before comparing.
-        match = all(str(live_triple[k]) == expected_triple[k] for k in live_triple)
+        # HubSpot returns every property as a string; coerce score/tier before comparing.
+        # The flag uses boolean-equivalence comparison (_flag_matches), not string
+        # equality -- see its docstring for why.
+        score_match = str(live_triple["lv_icp_fit_score"]) == expected_triple["lv_icp_fit_score"]
+        tier_match = str(live_triple["lv_icp_tier"]) == expected_triple["lv_icp_tier"]
+        flag_match = _flag_matches(live_triple["lv_anti_icp_flag"], expected.anti_icp_flag)
+        match = score_match and tier_match and flag_match
         record = {
             "company_id": company_id,
             "live": live_triple,
             "expected": expected_triple,
             "match": match,
         }
-        comparisons.append(record)
         if not match:
+            record["classification"] = _classify_mismatch(live_triple, expected_triple, expected)
+            if record["classification"] != "documented_needs_review_divergence":
+                real_findings.append(record)
             mismatches.append(record)
+        comparisons.append(record)
 
     assertions_executed = len(comparisons)
     if assertions_executed == 0:
@@ -130,9 +172,20 @@ def build_report(sample_ids, fetch_fn=fetch_for_parity):
             "mismatch, or every read raised."
         )
         exit_code = 1
-    elif mismatches:
-        verdict = f"FAIL: {len(mismatches)} of {assertions_executed} sampled companies diverge from the oracle."
+    elif real_findings:
+        verdict = (
+            f"FAIL: {len(real_findings)} of {assertions_executed} sampled companies "
+            "diverge from the oracle with a real finding (not the documented Needs "
+            "Review divergence)."
+        )
         exit_code = 1
+    elif mismatches:
+        verdict = (
+            f"PASS (with {len(mismatches)} documented Needs Review divergence(s)): "
+            f"{assertions_executed} sampled companies checked, every mismatch is the "
+            "accepted oracle-vs-live-enum divergence (40-02), zero real findings."
+        )
+        exit_code = 0
     else:
         verdict = f"PASS: {assertions_executed} sampled companies match the oracle."
         exit_code = 0
@@ -143,6 +196,7 @@ def build_report(sample_ids, fetch_fn=fetch_for_parity):
         "sample_ids": list(sample_ids),
         "comparisons": comparisons,
         "mismatches": mismatches,
+        "real_findings": real_findings,
         "assertions_executed": assertions_executed,
         "verdict": verdict,
     }

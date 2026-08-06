@@ -1,0 +1,44 @@
+{
+  "rubric_version": "lv-icp-v0.1",
+  "checked_at_utc": "2026-08-06T22:37:40.788220+00:00",
+  "sample_ids": [
+    "9604614548"
+  ],
+  "comparisons": [
+    {
+      "company_id": "9604614548",
+      "live": {
+        "lv_icp_fit_score": "15",
+        "lv_icp_tier": "C",
+        "lv_anti_icp_flag": null
+      },
+      "expected": {
+        "lv_icp_fit_score": "15",
+        "lv_icp_tier": "Needs Review",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": false,
+      "classification": "documented_needs_review_divergence"
+    }
+  ],
+  "mismatches": [
+    {
+      "company_id": "9604614548",
+      "live": {
+        "lv_icp_fit_score": "15",
+        "lv_icp_tier": "C",
+        "lv_anti_icp_flag": null
+      },
+      "expected": {
+        "lv_icp_fit_score": "15",
+        "lv_icp_tier": "Needs Review",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": false,
+      "classification": "documented_needs_review_divergence"
+    }
+  ],
+  "real_findings": [],
+  "assertions_executed": 1,
+  "verdict": "PASS (with 1 documented Needs Review divergence(s)): 1 sampled companies checked, every mismatch is the accepted oracle-vs-live-enum divergence (40-02), zero real findings."
+}

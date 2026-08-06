@@ -376,9 +376,13 @@ def test_veto_clear_after_correction():
 
         # D-01/D-02: the flag is owned and cleared by the n8n pipeline, not a HubSpot
         # workflow — correcting the input alone isn't enough. The operator-documented
-        # refresh path is enrichment_requested + the 15-min poller (D-02).
+        # refresh path is lv_enrichment_requested + the 15-min SJ-3 poller (D-02).
+        # WINDOWS.md #4 (Rule 1 fix, this plan): the poller's actual search property is
+        # lv_enrichment_requested (VETO-WRITE-EVIDENCE.md's live-proven trigger), not
+        # enrichment_requested -- the latter is never read by SJ-3 Extract Rows, so this
+        # patch was a silent no-op that could never have triggered a poller pickup.
         patch_record("companies", company_id, {"lv_country_region_normalized": "AU"}, dry_run=False)
-        patch_record("companies", company_id, {"enrichment_requested": "true"}, dry_run=False)
+        patch_record("companies", company_id, {"lv_enrichment_requested": "true"}, dry_run=False)
         settle(company_id, "lv_anti_icp_flag", timeout=900, interval=15)
         cleared = fetch_for_parity(company_id)
         assert cleared.get("lv_anti_icp_flag") == "false"
@@ -460,6 +464,64 @@ def test_run_scoring_parity_zero_assertion_guard_offline():
     assert exit_code != 0
     assert report["assertions_executed"] == 0
     assert "zero assertions" in report["verdict"]
+
+
+# --------------------------------------------------------------------------------------
+# 40-07 Task 3: scripts/run_scoring_parity.py's flag-comparison Rule 1 fix (the third
+# instance of the None-vs-"false" defect class 40-05/40-06 each fixed once in this
+# module's live pytest assertions) and the documented Needs-Review-divergence classifier.
+# Offline, no network -- build_report() takes a stubbed fetch_fn.
+# --------------------------------------------------------------------------------------
+
+def test_run_scoring_parity_flag_matches_treats_none_as_not_vetoed():
+    import scripts.run_scoring_parity as parity_script
+
+    assert parity_script._flag_matches(None, False) is True
+    assert parity_script._flag_matches("false", False) is True
+    assert parity_script._flag_matches("true", True) is True
+    assert parity_script._flag_matches(None, True) is False
+    assert parity_script._flag_matches("true", False) is False
+
+
+def test_run_scoring_parity_classifies_needs_review_as_documented_divergence():
+    import scripts.run_scoring_parity as parity_script
+
+    def stub_fetch(_company_id):
+        # lv_produces_content unset -> oracle downgrades to Needs Review at score 15.
+        # Live values mirror what a real HubSpot record shows after the backfill seeds
+        # its components and WF1 grades strictly off the numeric ladder (no Needs Review
+        # enum value exists live) -- score agrees, tier is the live-enum "C", flag is
+        # never written (null, not "false").
+        return {
+            "lv_org_type": "individual_club_team",
+            "lv_country_region_normalized": "AU",
+            "lv_icp_fit_score": "15",
+            "lv_icp_tier": "C",
+            "lv_anti_icp_flag": None,
+        }
+
+    report, exit_code = parity_script.build_report(["stub-1"], fetch_fn=stub_fetch)
+    assert exit_code == 0
+    assert report["assertions_executed"] == 1
+    assert report["real_findings"] == []
+    assert report["mismatches"][0]["classification"] == "documented_needs_review_divergence"
+    assert "PASS" in report["verdict"]
+
+
+def test_run_scoring_parity_real_score_mismatch_is_never_absorbed_as_divergence():
+    """A live score that genuinely disagrees with the oracle must surface as a real
+    finding, never silently classified as the Needs Review divergence just because the
+    tier also happens to differ."""
+    import scripts.run_scoring_parity as parity_script
+
+    live_triple = {"lv_icp_fit_score": "999", "lv_icp_tier": "C", "lv_anti_icp_flag": None}
+    expected_triple = {"lv_icp_fit_score": "15", "lv_icp_tier": "Needs Review", "lv_anti_icp_flag": "false"}
+
+    class _FakeResult:
+        anti_icp_flag = False
+
+    classification = parity_script._classify_mismatch(live_triple, expected_triple, _FakeResult())
+    assert classification == "real_finding"
 
 
 def test_parity_02_named_case_completeness():
