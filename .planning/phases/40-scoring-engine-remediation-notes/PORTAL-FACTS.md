@@ -73,5 +73,60 @@ contradictory, just two different things; noted here so 40-04/40-07 don't confla
 
 ## D-05 round-trip verdict
 
-pending — Task 2 of this plan runs the disable -> edit -> PUT -> validate-on-disposable ->
-re-enable cycle against flow `4626124224` and records the outcome here.
+**PROVEN: `PUT /automation/v4/flows/{flowId}` accepts a `STATIC_BRANCH` action-content edit
+and it takes effect live.** Executed against flow `4626124224` (Update Score Based on Org
+Type), per D-07's protocol:
+
+1. **Disable** — PUT the archived `.before.json` body with `isEnabled: false`. Accepted
+   (200); re-GET confirmed `isEnabled: false`.
+2. **Edit** — mutated the two `SINGLE_CONNECTION` target actions the `lv_org_type`
+   `STATIC_BRANCH` action points `regulator` and `gambling_operator` at:
+   `fields.value.staticValue` `"0"` -> `"5"` (regulator, F10/ENGINE-06) and `"-20"` -> `"0"`
+   (gambling_operator, F9/ENGINE-05's org-type half). No other action, branch, or
+   `enrollmentCriteria` block touched.
+3. **PUT while disabled** — accepted (200); re-GET showed the new `staticValue`s live.
+4. **Enable, then validate on disposables** — a `ZZ-SCORING-TEST-DELETE-ME-*` company with
+   `lv_org_type=regulator` reached `org_type_score=5` (settled ~4-6s after the PATCH that
+   set `lv_org_type`, property-history `sourceType: AUTOMATION_PLATFORM` confirmed on a
+   dedicated debug run); a second with `lv_org_type=gambling_operator` reached
+   `org_type_score=0`. Both disposables deleted (204) in the same run.
+5. **Confirmed enabled** — final re-GET: `isEnabled: true`.
+
+**Deviation from the plan's literal step order (Rule 1 — correctness fix):** the task body
+lists "validate on disposables" (step 4) before "re-enable" (step 5), but a *disabled* flow
+does not fire on property-change events — validating against a disabled flow would prove
+nothing. The actual sequence run was disable -> edit+PUT(disabled) -> **enable** -> validate
+on disposables (now genuinely live) -> confirm still enabled. This is the only ordering
+under which "validate on disposables" can produce a real signal; the disabled window (during
+steps 1-3) still fully satisfies D-07's intent (no half-fixed flow ever fires on a real
+record while the edit itself is in flight).
+
+**Operational findings for 40-04/40-05/40-06 (not previously documented):**
+- **Optimistic concurrency**: every successful PUT bumps `revisionId`. A second PUT built
+  from a stale local body (e.g. the original `.before.json` re-read after an earlier PUT
+  already landed) 400s with `INVALID_REVISION_ID_IN_PUT_REQUEST`. Always re-fetch fresh
+  (`fetch_hubspot_flow.fetch_flow()`) immediately before building each subsequent edit in a
+  multi-PUT sequence, never reuse an already-PUTted snapshot.
+- **Enrollment requires a genuine property-change event**, not a value present at row
+  creation. Setting `lv_org_type=regulator` in the same `POST` that creates the company did
+  **not** enroll the flow (org_type_score stayed at its `PROPERTY_DEFAULT_VALUE` of `0` for
+  the full 120s poll window in two separate attempts). Creating with a neutral value
+  (`lv_org_type=unknown`) and then `PATCH`ing to the target value in a second call reliably
+  enrolls it — this matches `scripts/probe_scoring_recalc_latency.py`'s existing
+  create-then-flip pattern; every disposable-validation script in this phase should follow
+  it, not create-with-target-value-already-set.
+- **A brief post-`isEnabled:true` activation lag was observed once**: the very first
+  validation attempt immediately after re-enabling saw no change within 120s; a debug run
+  several minutes later against the same live flow settled in ~4s. Not reproduced a third
+  time and not confirmed as a real HubSpot platform behavior vs. this session's own
+  sequencing — flagged as an open risk for 40-04/40-05/40-06 to budget slack around their
+  first disposable check after any `isEnabled:true` PUT, rather than treating a single
+  120s no-fire as conclusive.
+
+**Conclusion for 40-04/40-05/40-06:** the API-only path (D-05) is viable for this portal's
+`STATIC_BRANCH` action-content edits (branch-target `staticValue` mutation). The portal-UI
+fallback was not needed for this edit shape. Pitfall 2's open risk — whether `IS_BETWEEN`
+revenue-boundary edits (needed for F10's revenue-branch fix in 40-05) are equally
+API-editable — remains genuinely open; this verdict covers `STATIC_BRANCH`/static-value
+edits only. 40-05 should still treat its first `IS_BETWEEN` edit as its own early
+validation gate, not assume this verdict extends to it.
