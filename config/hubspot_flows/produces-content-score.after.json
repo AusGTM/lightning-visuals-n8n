@@ -1,0 +1,127 @@
+{
+  "actions": [
+    {
+      "actionId": "1",
+      "defaultBranch": {
+        "edgeType": "STANDARD",
+        "nextActionId": "3"
+      },
+      "inputValue": {
+        "propertyName": "lv_produces_content",
+        "type": "OBJECT_PROPERTY"
+      },
+      "staticBranches": [
+        {
+          "branchValue": "true",
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "2"
+          }
+        }
+      ],
+      "type": "STATIC_BRANCH"
+    },
+    {
+      "actionId": "2",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "produces_content_score",
+        "value": {
+          "staticValue": "20",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "3",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "produces_content_score",
+        "value": {
+          "staticValue": "0",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    }
+  ],
+  "blockedDates": [],
+  "crmObjectCreationStatus": "COMPLETE",
+  "customProperties": {},
+  "enrollmentCriteria": {
+    "eventFilterBranches": [
+      {
+        "eventTypeId": "4-655002",
+        "filterBranchOperator": "AND",
+        "filterBranchType": "UNIFIED_EVENTS",
+        "filterBranches": [],
+        "filters": [
+          {
+            "filterType": "PROPERTY",
+            "operation": {
+              "includeObjectsWithNoValueSet": false,
+              "operationType": "STRING",
+              "operator": "IS_EQUAL_TO",
+              "value": "lv_produces_content"
+            },
+            "property": "hs_name"
+          },
+          {
+            "filterType": "PROPERTY",
+            "operation": {
+              "includeObjectsWithNoValueSet": false,
+              "operationType": "ALL_PROPERTY",
+              "operator": "IS_KNOWN"
+            },
+            "property": "hs_value"
+          }
+        ],
+        "operator": "HAS_COMPLETED"
+      },
+      {
+        "eventTypeId": "4-655002",
+        "filterBranchOperator": "AND",
+        "filterBranchType": "UNIFIED_EVENTS",
+        "filterBranches": [],
+        "filters": [
+          {
+            "filterType": "PROPERTY",
+            "operation": {
+              "includeObjectsWithNoValueSet": false,
+              "operationType": "STRING",
+              "operator": "IS_EQUAL_TO",
+              "value": "createdate"
+            },
+            "property": "hs_name"
+          },
+          {
+            "filterType": "PROPERTY",
+            "operation": {
+              "includeObjectsWithNoValueSet": false,
+              "operationType": "ALL_PROPERTY",
+              "operator": "IS_KNOWN"
+            },
+            "property": "hs_value"
+          }
+        ],
+        "operator": "HAS_COMPLETED"
+      }
+    ],
+    "listMembershipFilterBranches": [],
+    "shouldReEnroll": true,
+    "type": "EVENT_BASED"
+  },
+  "flowType": "WORKFLOW",
+  "id": "4634822079",
+  "isEnabled": true,
+  "name": "Update Produces Content Score",
+  "nextAvailableActionId": "4",
+  "objectTypeId": "0-2",
+  "revisionId": "2",
+  "startActionId": "1",
+  "timeWindows": [],
+  "type": "PLATFORM_FLOW"
+}

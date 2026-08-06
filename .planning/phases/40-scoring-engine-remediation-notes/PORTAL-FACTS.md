@@ -204,3 +204,33 @@ means this does **not** retroactively fire for any of the 712 pre-existing compa
 (`createdate` was set for all of them long before this flow existed) — only future company
 creations get the write. 40-07's backfill (D-10) remains the mechanism for the 712;
 this closes the same gap for every company created *after* this plan lands.
+
+## Task 2 — new mapper flows
+
+| Flow ID | Name | Trigger property | writes | isEnabled (final GET) |
+|---|---|---|---|---|
+| `4634822079` | Update Produces Content Score | `lv_produces_content` known, or `createdate` known | `produces_content_score` (true->20, else->0) | `true` |
+| `4634822085` | Update Gambling Score | `lv_is_gambling_operator` known, or `createdate` known | `gambling_score` (true->-20, else->0) | `true` |
+
+Both created via `POST /automation/v4/flows` with `isEnabled: false`, validated live, then
+enabled via `PUT` (re-GET confirmed `isEnabled: true` at task end). Archived at
+`config/hubspot_flows/produces-content-score.after.json` /
+`config/hubspot_flows/gambling-score.after.json`.
+
+**Live validation (all on disposable `ZZ-SCORING-TEST-DELETE-ME-*` companies, all deleted
+204 in a `finally` block):**
+- Brand-new company, nothing set: `produces_content_score=0`, `gambling_score=0` within
+  60s of creation (the `createdate`-branch fix from Task 1's finding, confirmed working).
+- `lv_produces_content=true` -> `produces_content_score=20` (~5.8s); `=false` -> `0`
+  (~5.8s).
+- `lv_is_gambling_operator=true` -> `gambling_score=-20` (~5.9s), `lv_anti_icp_flag`
+  stayed `null` (never set by this flow); `=false` -> `0` (~5.8s).
+- Ordering backstop: on a fourth disposable, `lv_is_gambling_operator`,
+  `lv_produces_content`, `lv_org_type` written in that reverse order — all three
+  components (`gambling_score=-20`, `produces_content_score=20`, `org_type_score=40`)
+  settled to the correct values regardless of write order (sampled observation per the
+  must-have's backstop marker, not a guarantee).
+
+The gambling flow's action list writes only `gambling_score` — no other action in either
+flow touches any other property (verified by `tests/test_flow_rubric_conformance.py`'s
+`written_property_names()` assertion, T-40-15's offline guard).
