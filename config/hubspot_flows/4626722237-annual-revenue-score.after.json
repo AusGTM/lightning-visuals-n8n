@@ -1,0 +1,480 @@
+{
+  "actions": [
+    {
+      "actionId": "1",
+      "defaultBranch": {
+        "edgeType": "STANDARD",
+        "nextActionId": "110"
+      },
+      "listBranches": [
+        {
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "101"
+          },
+          "filterBranch": {
+            "filterBranchOperator": "OR",
+            "filterBranchType": "OR",
+            "filterBranches": [
+              {
+                "filterBranchOperator": "AND",
+                "filterBranchType": "AND",
+                "filterBranches": [],
+                "filters": [
+                  {
+                    "filterType": "PROPERTY",
+                    "operation": {
+                      "includeObjectsWithNoValueSet": false,
+                      "operationType": "MULTISTRING",
+                      "operator": "IS_EQUAL_TO",
+                      "values": [
+                        "<1M"
+                      ]
+                    },
+                    "property": "lv_revenue_band"
+                  }
+                ]
+              }
+            ],
+            "filters": []
+          }
+        },
+        {
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "102"
+          },
+          "filterBranch": {
+            "filterBranchOperator": "OR",
+            "filterBranchType": "OR",
+            "filterBranches": [
+              {
+                "filterBranchOperator": "AND",
+                "filterBranchType": "AND",
+                "filterBranches": [],
+                "filters": [
+                  {
+                    "filterType": "PROPERTY",
+                    "operation": {
+                      "includeObjectsWithNoValueSet": false,
+                      "operationType": "MULTISTRING",
+                      "operator": "IS_EQUAL_TO",
+                      "values": [
+                        "1-5M"
+                      ]
+                    },
+                    "property": "lv_revenue_band"
+                  }
+                ]
+              }
+            ],
+            "filters": []
+          }
+        },
+        {
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "103"
+          },
+          "filterBranch": {
+            "filterBranchOperator": "OR",
+            "filterBranchType": "OR",
+            "filterBranches": [
+              {
+                "filterBranchOperator": "AND",
+                "filterBranchType": "AND",
+                "filterBranches": [],
+                "filters": [
+                  {
+                    "filterType": "PROPERTY",
+                    "operation": {
+                      "includeObjectsWithNoValueSet": false,
+                      "operationType": "MULTISTRING",
+                      "operator": "IS_EQUAL_TO",
+                      "values": [
+                        "5-50M"
+                      ]
+                    },
+                    "property": "lv_revenue_band"
+                  }
+                ]
+              }
+            ],
+            "filters": []
+          }
+        },
+        {
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "104"
+          },
+          "filterBranch": {
+            "filterBranchOperator": "OR",
+            "filterBranchType": "OR",
+            "filterBranches": [
+              {
+                "filterBranchOperator": "AND",
+                "filterBranchType": "AND",
+                "filterBranches": [],
+                "filters": [
+                  {
+                    "filterType": "PROPERTY",
+                    "operation": {
+                      "includeObjectsWithNoValueSet": false,
+                      "operationType": "MULTISTRING",
+                      "operator": "IS_EQUAL_TO",
+                      "values": [
+                        "50-500M"
+                      ]
+                    },
+                    "property": "lv_revenue_band"
+                  }
+                ]
+              }
+            ],
+            "filters": []
+          }
+        },
+        {
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "105"
+          },
+          "filterBranch": {
+            "filterBranchOperator": "OR",
+            "filterBranchType": "OR",
+            "filterBranches": [
+              {
+                "filterBranchOperator": "AND",
+                "filterBranchType": "AND",
+                "filterBranches": [],
+                "filters": [
+                  {
+                    "filterType": "PROPERTY",
+                    "operation": {
+                      "includeObjectsWithNoValueSet": false,
+                      "operationType": "MULTISTRING",
+                      "operator": "IS_EQUAL_TO",
+                      "values": [
+                        "500-750M"
+                      ]
+                    },
+                    "property": "lv_revenue_band"
+                  }
+                ]
+              }
+            ],
+            "filters": []
+          }
+        },
+        {
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "106"
+          },
+          "filterBranch": {
+            "filterBranchOperator": "OR",
+            "filterBranchType": "OR",
+            "filterBranches": [
+              {
+                "filterBranchOperator": "AND",
+                "filterBranchType": "AND",
+                "filterBranches": [],
+                "filters": [
+                  {
+                    "filterType": "PROPERTY",
+                    "operation": {
+                      "includeObjectsWithNoValueSet": false,
+                      "operationType": "MULTISTRING",
+                      "operator": "IS_EQUAL_TO",
+                      "values": [
+                        "750M-1B"
+                      ]
+                    },
+                    "property": "lv_revenue_band"
+                  }
+                ]
+              }
+            ],
+            "filters": []
+          }
+        },
+        {
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "107"
+          },
+          "filterBranch": {
+            "filterBranchOperator": "OR",
+            "filterBranchType": "OR",
+            "filterBranches": [
+              {
+                "filterBranchOperator": "AND",
+                "filterBranchType": "AND",
+                "filterBranches": [],
+                "filters": [
+                  {
+                    "filterType": "PROPERTY",
+                    "operation": {
+                      "includeObjectsWithNoValueSet": false,
+                      "operationType": "MULTISTRING",
+                      "operator": "IS_EQUAL_TO",
+                      "values": [
+                        "1B-1.2B"
+                      ]
+                    },
+                    "property": "lv_revenue_band"
+                  }
+                ]
+              }
+            ],
+            "filters": []
+          }
+        },
+        {
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "108"
+          },
+          "filterBranch": {
+            "filterBranchOperator": "OR",
+            "filterBranchType": "OR",
+            "filterBranches": [
+              {
+                "filterBranchOperator": "AND",
+                "filterBranchType": "AND",
+                "filterBranches": [],
+                "filters": [
+                  {
+                    "filterType": "PROPERTY",
+                    "operation": {
+                      "includeObjectsWithNoValueSet": false,
+                      "operationType": "MULTISTRING",
+                      "operator": "IS_EQUAL_TO",
+                      "values": [
+                        "1.2B+"
+                      ]
+                    },
+                    "property": "lv_revenue_band"
+                  }
+                ]
+              }
+            ],
+            "filters": []
+          }
+        },
+        {
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "109"
+          },
+          "filterBranch": {
+            "filterBranchOperator": "OR",
+            "filterBranchType": "OR",
+            "filterBranches": [
+              {
+                "filterBranchOperator": "AND",
+                "filterBranchType": "AND",
+                "filterBranches": [],
+                "filters": [
+                  {
+                    "filterType": "PROPERTY",
+                    "operation": {
+                      "includeObjectsWithNoValueSet": false,
+                      "operationType": "MULTISTRING",
+                      "operator": "IS_EQUAL_TO",
+                      "values": [
+                        "unknown"
+                      ]
+                    },
+                    "property": "lv_revenue_band"
+                  }
+                ]
+              }
+            ],
+            "filters": []
+          }
+        }
+      ],
+      "type": "LIST_BRANCH"
+    },
+    {
+      "actionId": "101",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "annual_revenue_score",
+        "value": {
+          "staticValue": "0",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "102",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "annual_revenue_score",
+        "value": {
+          "staticValue": "0",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "103",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "annual_revenue_score",
+        "value": {
+          "staticValue": "10",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "104",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "annual_revenue_score",
+        "value": {
+          "staticValue": "10",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "105",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "annual_revenue_score",
+        "value": {
+          "staticValue": "-5",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "106",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "annual_revenue_score",
+        "value": {
+          "staticValue": "-15",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "107",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "annual_revenue_score",
+        "value": {
+          "staticValue": "-30",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "108",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "annual_revenue_score",
+        "value": {
+          "staticValue": "-50",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "109",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "annual_revenue_score",
+        "value": {
+          "staticValue": "0",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "110",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "annual_revenue_score",
+        "value": {
+          "staticValue": "0",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    }
+  ],
+  "blockedDates": [],
+  "crmObjectCreationStatus": "COMPLETE",
+  "customProperties": {},
+  "enrollmentCriteria": {
+    "eventFilterBranches": [
+      {
+        "eventTypeId": "4-655002",
+        "filterBranchOperator": "AND",
+        "filterBranchType": "UNIFIED_EVENTS",
+        "filterBranches": [],
+        "filters": [
+          {
+            "filterType": "PROPERTY",
+            "operation": {
+              "includeObjectsWithNoValueSet": false,
+              "operationType": "STRING",
+              "operator": "IS_EQUAL_TO",
+              "value": "lv_revenue_band"
+            },
+            "property": "hs_name"
+          },
+          {
+            "filterType": "PROPERTY",
+            "operation": {
+              "includeObjectsWithNoValueSet": false,
+              "operationType": "ALL_PROPERTY",
+              "operator": "IS_KNOWN"
+            },
+            "property": "hs_value"
+          }
+        ],
+        "operator": "HAS_COMPLETED"
+      }
+    ],
+    "listMembershipFilterBranches": [],
+    "shouldReEnroll": true,
+    "type": "EVENT_BASED"
+  },
+  "flowType": "WORKFLOW",
+  "id": "4626722237",
+  "isEnabled": true,
+  "name": "Annual Revenue Score",
+  "nextAvailableActionId": "111",
+  "objectTypeId": "0-2",
+  "revisionId": "22",
+  "startActionId": "1",
+  "timeWindows": [],
+  "type": "PLATFORM_FLOW"
+}
