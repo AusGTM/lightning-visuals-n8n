@@ -98,6 +98,30 @@ def test_company_canonical_patch_never_contains_a_derived_icp_output_field():
         )
 
 
+def test_merge_companies_veto_policy_entries_carry_a_real_min_confidence():
+    """D-04 / P2 (PIPELINE-DEFECTS-VALIDATION.md): DEFAULT_COMPANY_POLICY's
+    lv_anti_icp_flag/lv_anti_icp_reason entries are dead-candidate-path policy (see
+    test_company_canonical_patch_never_contains_a_derived_icp_output_field above), but
+    min_confidence: 0 made _gate()'s `confidence < minConfidence` check unreachable
+    (confidence is never negative) — any future accidental candidate would auto-promote
+    a veto at any confidence. Guards the fix at its one shared site so a future edit back
+    to 0 fails the suite instead of silently reopening P2."""
+    text = (ROOT / "n8n" / "code" / "mergeCompanies.js").read_text()
+    import re
+
+    for field in ("lv_anti_icp_flag", "lv_anti_icp_reason"):
+        m = re.search(rf'{field}:\s*\{{[^}}]*min_confidence:\s*(-?\d+)', text)
+        assert m, f"could not find a min_confidence entry for {field} in mergeCompanies.js"
+        assert int(m.group(1)) >= 80, (
+            f"{field}'s min_confidence dropped below 80 — this reopens P2 "
+            "(a future candidate for this dead policy path would auto-promote at low confidence)"
+        )
+    assert "min_confidence: 0" not in text, (
+        "min_confidence: 0 still appears in mergeCompanies.js (acceptance criteria: "
+        "neither veto entry may declare it anywhere in the file)"
+    )
+
+
 def test_decide_company_action_cloud_is_the_review_loop_producer():
     """review consensus #2 — mergeCompanies' canonicalPatch (mergeCompanies.js:209-211,
     VERIFIED) holds ONLY promote decisions; needs_review decisions are otherwise dropped.

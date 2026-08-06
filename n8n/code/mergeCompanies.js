@@ -57,8 +57,16 @@ const DEFAULT_COMPANY_POLICY = {
   // these derived outputs. Removed from policy so either falls to the default
   // non-promoting policy (fill_blank_only) if it ever appears in a candidate, never
   // "score_output".
-  lv_anti_icp_flag:        { class: "veto_output",       min_confidence: 0 },
-  lv_anti_icp_reason:      { class: "veto_output",       min_confidence: 0 },
+  // 80 (D-04 / P2): these two entries are NOT on a live path after D-01 — the veto is
+  // derived directly in ENRICH_DECIDE_CO_CLOUD from already-merged fields, never supplied
+  // to mergeCompanies() as a candidate. They stay declared here only so a future
+  // accidental candidate is born guarded: 0 made _gate()'s `confidence < minConfidence`
+  // check unreachable (confidence is never negative), which is exactly what let P2
+  // promote a veto at confidence 5 with no defensible provenance. 80 matches the already-
+  // gated inputs the veto derives from (lv_is_hardware_vendor at 85,
+  // lv_country_region_normalized at its own threshold above).
+  lv_anti_icp_flag:        { class: "veto_output",       min_confidence: 80 },
+  lv_anti_icp_reason:      { class: "veto_output",       min_confidence: 80 },
 };
 
 function _isBlank(v) {
