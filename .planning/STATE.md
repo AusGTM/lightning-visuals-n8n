@@ -5,33 +5,33 @@ milestone_name: HubSpot Scoring Engine Remediation
 current_phase: 39
 current_phase_name: Path Decision & Fit-Score Verification
 status: verifying
-stopped_at: Completed 39-02-PLAN.md (availability evidence + verification note + coverage matrix)
-last_updated: "2026-08-06T03:55:11Z"
+stopped_at: Completed 39-04-PLAN.md (path decision recorded — fix-the-four-workflow-chain-in-place)
+last_updated: "2026-08-06T04:01:42.659Z"
 last_activity: 2026-08-06
-last_activity_desc: 39-02 complete (availability evidence + verification note + coverage matrix); 39-04 is the only plan remaining
+last_activity_desc: 39-04 complete (39-DECISION.md — path decision recorded)
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 25
 ---
 
 # Project State
 
 ## Current Position
 
-Phase: 39 (Path Decision & Fit-Score Verification) — EXECUTING
-Plan: 39-01, 39-02, 39-03 complete (3 of 4); 39-04 depends on all three
-Status: Executing Phase 39 — only the decision record (39-04) remains
-Last activity: 2026-08-06 — 39-02 complete (availability evidence + verification note + coverage matrix)
+Phase: 39 (Path Decision & Fit-Score Verification) — COMPLETE
+Plan: 39-01, 39-02, 39-03, 39-04 complete (4 of 4)
+Status: Phase complete — ready for verification
+Last activity: 2026-08-06 — 39-04 complete (39-DECISION.md — path decision recorded)
 Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39-path-decision-fit-score-verification/39-DECISION.md`
 
 ## Session
 
-**Last session:** 2026-08-06T03:55:11Z
-**Stopped at:** Completed 39-02-PLAN.md (availability evidence + verification note + coverage matrix)
-**Resume file:** .planning/phases/39-path-decision-fit-score-verification/39-04-PLAN.md
+**Last session:** 2026-08-06T04:01:42.654Z
+**Stopped at:** Completed 39-04-PLAN.md (path decision recorded — fix-the-four-workflow-chain-in-place)
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -40,6 +40,7 @@ Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39
 | Phase 39 P01 | 25min | 3 tasks | 3 files |
 | Phase 39 P02 | 12min | 3 tasks | 8 files |
 | Phase 39 P03 | 8min | 3 tasks | 3 files |
+| Phase 39 P04 | 15min | 1 tasks | 4 files |
 
 ## Decisions
 
@@ -49,3 +50,5 @@ Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39
 - [Phase ?]: 39-03: DECIDE-01 left unmarked in REQUIREMENTS.md — spans all 4 plans, completes only when 39-DECISION.md lands in 39-04.
 - [Phase 39-02]: Availability verdict AVAILABLE (company fit-score confirmed on Sales Hub Pro, portal 22617666) — but operator overrode CONTEXT.md D-05's lead-scoring-tool preference mid-plan, locking the path to fix-the-four-workflow-chain-in-place on an lv_icp_fit_score architecture-reuse requirement the lead-scoring tool cannot satisfy. Full decision record still lands in 39-04's 39-DECISION.md.
 - [Phase 39-02]: Task 2's in-portal walkthrough was performed by the orchestrator driving the operator's own logged-in Chrome session, at the operator's live delegation — deviation from D-01's "operator drives it," recorded in VERIFICATION-NOTE.md's header; portal state/screenshots are authentic.
+- [Phase ?]: [Phase 39-04]: Path verdict recorded: fix-the-four-workflow-chain-in-place (39-DECISION.md), decided on operator hard requirement to reuse lv_icp_fit_score/lv_icp_tier — availability gate resolved AVAILABLE but was not the deciding factor.
+- [Phase ?]: [Phase 39-04]: Tasks 1 (armed recalc-latency probe) and 2 (band-c checkpoint) skipped as moot per operator override — D-04 gate applies only to the lead-scoring-tool path, which is not chosen. Documented as deviations in 39-DECISION.md's Process note.

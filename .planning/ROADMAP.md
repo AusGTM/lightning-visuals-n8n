@@ -151,7 +151,7 @@ Phases execute in numeric order: 39 → 40 → 41 → 42
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 39. Path Decision & Fit-Score Verification | 3/4 | In Progress|  |
+| 39. Path Decision & Fit-Score Verification | 4/4 | In Progress|  |
 | 40. Scoring Engine, Veto & Parity Remediation | 0/TBD | Not started | - |
 | 41. Validation Data Import & End-to-End Proof | 0/TBD | Not started | - |
 | 42. Scoring Artifact Cleanup & Reconciliation | 0/TBD | Not started | - |
