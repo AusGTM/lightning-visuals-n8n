@@ -188,12 +188,267 @@ def test_disposable_company_fixture_asserts_portal_before_creating(monkeypatch):
 
 
 # --------------------------------------------------------------------------------------
-# Live tier placeholder (Task 1) — the full named regression-case tier lands in Task 2.
-# This exists so Task 1's own verify command already exercises the skip-when-unset path
-# end to end, per this task's own acceptance criteria ("reports at least one skipped
-# test"). Task 2 supersedes it with real, named live cases.
+# Live tier — behind RUN_LIVE_PARITY only (D-13: no offline substitute for veto cases;
+# every test here drives a real disposable company through the real HubSpot flow chain).
+# These are expected to FAIL until their owning plan lands (40-03 veto cases, 40-04
+# produces_content/gambling, 40-05 geography/revenue, 40-06 tier) — that is the intended
+# state of this task, not a defect in it.
 # --------------------------------------------------------------------------------------
 
 @live
-def test_live_gate_configured_placeholder():
-    assert os.getenv("RUN_LIVE_PARITY") == "true"
+def test_engine_01_au_governing_body_scores_80_tier_a():
+    with disposable_company() as company_id:
+        patch_record("companies", company_id, {
+            "lv_org_type": "governing_body_league",
+            "lv_produces_content": "true",
+            "lv_country_region_normalized": "AU",
+            "lv_revenue_band": "50-500M",
+        }, dry_run=False)
+        settle(company_id, "lv_icp_tier")
+        props = fetch_for_parity(company_id)
+        assert props.get("lv_icp_fit_score") == "80"
+        assert props.get("lv_icp_tier") == "A"
+
+
+@live
+def test_produces_content_contributes_20():
+    with disposable_company() as company_id:
+        patch_record("companies", company_id, {
+            "lv_org_type": "broadcaster",
+            "lv_country_region_normalized": "AU",
+            "lv_revenue_band": "5-50M",
+        }, dry_run=False)
+        settle(company_id, "lv_icp_fit_score")
+        without_content = fetch_for_parity(company_id)
+
+        patch_record("companies", company_id, {"lv_produces_content": "true"}, dry_run=False)
+        settle(company_id, "lv_icp_fit_score")
+        with_content = fetch_for_parity(company_id)
+
+        delta = (
+            int(with_content.get("lv_icp_fit_score") or 0)
+            - int(without_content.get("lv_icp_fit_score") or 0)
+        )
+        assert delta == 20
+        assert with_content.get("produces_content_score") == "20"
+
+
+@live
+def test_engine_03_native_inputs_move_nothing():
+    with disposable_company() as company_id:
+        patch_record("companies", company_id, {
+            "country": "Australia",
+            "annualrevenue": "10000000",
+        }, dry_run=False)
+        settle(company_id, "geography_score")
+        native_only = fetch_for_parity(company_id)
+        assert native_only.get("geography_score") in (None, "0", 0)
+        assert native_only.get("annual_revenue_score") in (None, "0", 0)
+
+        patch_record("companies", company_id, {
+            "lv_country_region_normalized": "AU",
+            "lv_revenue_band": "5-50M",
+        }, dry_run=False)
+        settle(company_id, "geography_score")
+        canonical = fetch_for_parity(company_id)
+        assert canonical.get("geography_score") == "10"
+        assert canonical.get("annual_revenue_score") == "10"
+
+
+@live
+@pytest.mark.parametrize("band,points", sorted(REVENUE_BAND_POINTS.items()))
+def test_revenue_boundary_bands(band, points):
+    with disposable_company() as company_id:
+        patch_record("companies", company_id, {
+            "lv_org_type": "broadcaster",
+            "lv_produces_content": "true",
+            "lv_country_region_normalized": "AU",
+            "lv_revenue_band": band,
+        }, dry_run=False)
+        settle(company_id, "annual_revenue_score")
+        props = fetch_for_parity(company_id)
+        assert props.get("annual_revenue_score") == str(points)
+
+
+@live
+def test_gambling_deducts_20_without_veto():
+    with disposable_company() as company_id:
+        patch_record("companies", company_id, {
+            "lv_org_type": "broadcaster",
+            "lv_produces_content": "true",
+            "lv_country_region_normalized": "AU",
+            "lv_revenue_band": "5-50M",
+            "lv_is_gambling_operator": "true",
+        }, dry_run=False)
+        settle(company_id, "lv_icp_fit_score")
+        props = fetch_for_parity(company_id)
+        assert props.get("org_type_score") == "20"
+        assert props.get("gambling_score") == "-20"
+        assert props.get("lv_anti_icp_flag") == "false"
+
+
+@live
+@pytest.mark.parametrize("org_type,points", sorted(ORG_TYPE_POINTS.items()))
+def test_org_type_sweep(org_type, points):
+    with disposable_company() as company_id:
+        patch_record("companies", company_id, {"lv_org_type": org_type}, dry_run=False)
+        settle(company_id, "org_type_score")
+        props = fetch_for_parity(company_id)
+        assert props.get("org_type_score") == str(points)
+
+
+@live
+def test_f8_sub15_no_veto_is_unscored():
+    # org_type "other" (0) + content True (20) + AU (10) + 1.2B+ (-50) = -20: genuinely
+    # below 15 with none of the three hard-veto inputs set (D-03/ENGINE-07).
+    with disposable_company() as company_id:
+        patch_record("companies", company_id, {
+            "lv_org_type": "other",
+            "lv_produces_content": "true",
+            "lv_country_region_normalized": "AU",
+            "lv_revenue_band": "1.2B+",
+        }, dry_run=False)
+        settle(company_id, "lv_icp_tier")
+        props = fetch_for_parity(company_id)
+        assert props.get("lv_icp_tier") == "Unscored"
+        assert props.get("lv_icp_tier") != "D"
+
+
+@live
+@pytest.mark.parametrize("veto_props,reason_key", [
+    ({"lv_country_region_normalized": "US"}, "non_anz"),
+    ({"lv_produces_content": "false"}, "no_content"),
+    ({"lv_is_hardware_vendor": "true"}, "hardware_vendor"),
+])
+def test_veto_set_all_three_hard_vetoes(veto_props, reason_key):
+    base = {
+        "lv_org_type": "broadcaster",
+        "lv_produces_content": "true",
+        "lv_country_region_normalized": "AU",
+        "lv_revenue_band": "5-50M",
+    }
+    base.update(veto_props)
+    with disposable_company() as company_id:
+        patch_record("companies", company_id, base, dry_run=False)
+        settle(company_id, "lv_anti_icp_flag")
+        props = fetch_for_parity(company_id)
+        assert props.get("lv_anti_icp_flag") == "true"
+        assert props.get("lv_anti_icp_reason") == HARD_VETOES[reason_key]["reason"]
+        assert props.get("lv_icp_tier") == "D"
+
+
+@live
+def test_veto_set_multiple_reasons_join():
+    with disposable_company() as company_id:
+        patch_record("companies", company_id, {
+            "lv_org_type": "broadcaster",
+            "lv_produces_content": "false",
+            "lv_country_region_normalized": "US",
+            "lv_is_hardware_vendor": "true",
+            "lv_revenue_band": "5-50M",
+        }, dry_run=False)
+        settle(company_id, "lv_anti_icp_flag")
+        props = fetch_for_parity(company_id)
+        expected_reason = "; ".join([
+            HARD_VETOES["non_anz"]["reason"],
+            HARD_VETOES["no_content"]["reason"],
+            HARD_VETOES["hardware_vendor"]["reason"],
+        ])
+        assert props.get("lv_anti_icp_reason") == expected_reason
+
+
+@live
+def test_veto_clear_after_correction():
+    with disposable_company() as company_id:
+        patch_record("companies", company_id, {
+            "lv_org_type": "broadcaster",
+            "lv_produces_content": "true",
+            "lv_country_region_normalized": "US",
+            "lv_revenue_band": "5-50M",
+        }, dry_run=False)
+        settle(company_id, "lv_anti_icp_flag")
+        vetoed = fetch_for_parity(company_id)
+        assert vetoed.get("lv_anti_icp_flag") == "true"
+
+        # D-01/D-02: the flag is owned and cleared by the n8n pipeline, not a HubSpot
+        # workflow — correcting the input alone isn't enough. The operator-documented
+        # refresh path is enrichment_requested + the 15-min poller (D-02).
+        patch_record("companies", company_id, {"lv_country_region_normalized": "AU"}, dry_run=False)
+        patch_record("companies", company_id, {"enrichment_requested": "true"}, dry_run=False)
+        settle(company_id, "lv_anti_icp_flag", timeout=900, interval=15)
+        cleared = fetch_for_parity(company_id)
+        assert cleared.get("lv_anti_icp_flag") == "false"
+        assert cleared.get("lv_anti_icp_reason") in (None, "")
+        assert cleared.get("lv_icp_tier") != "D"
+
+
+@live
+def test_tier_on_flag_change_without_score_change():
+    with disposable_company() as company_id:
+        patch_record("companies", company_id, {
+            "lv_org_type": "broadcaster",
+            "lv_produces_content": "true",
+            "lv_country_region_normalized": "AU",
+            "lv_revenue_band": "5-50M",
+        }, dry_run=False)
+        settle(company_id, "lv_icp_fit_score")
+        before = fetch_for_parity(company_id)
+        score_before = before.get("lv_icp_fit_score")
+
+        patch_record("companies", company_id, {"lv_anti_icp_flag": "true"}, dry_run=False)
+        settle(company_id, "lv_icp_tier")
+        after = fetch_for_parity(company_id)
+        assert after.get("lv_icp_fit_score") == score_before
+        assert after.get("lv_icp_tier") == "D"
+
+
+@live
+def test_f4_au_string_is_not_vetoed():
+    with disposable_company() as company_id:
+        patch_record("companies", company_id, {
+            "lv_org_type": "broadcaster",
+            "lv_produces_content": "true",
+            "lv_country_region_normalized": "AU",
+            "lv_revenue_band": "5-50M",
+        }, dry_run=False)
+        settle(company_id, "lv_anti_icp_flag")
+        props = fetch_for_parity(company_id)
+        assert props.get("lv_anti_icp_flag") == "false"
+        assert props.get("geography_score") == "10"
+
+
+@live
+def test_f7_tier_lag():
+    # Thin alias: F7's live signature is exactly the flag-change/no-score-change race
+    # this test already asserts.
+    test_tier_on_flag_change_without_score_change()
+
+
+@live
+def test_f9_gambling_conflation():
+    # Thin alias: F9's live signature is exactly the gambling deduction/no-veto
+    # separation this test already asserts.
+    test_gambling_deducts_20_without_veto()
+
+
+@live
+def test_f10_boundary_overlap():
+    # Thin alias: F10's live signature is exactly the 750M-1B boundary case within the
+    # revenue-boundary sweep.
+    test_revenue_boundary_bands("750M-1B", REVENUE_BAND_POINTS["750M-1B"])
+
+
+def test_parity_02_named_case_completeness():
+    """Collection-time guard, runs offline so it can never be skipped away: PARITY-02
+    requires F4/F7/F9/F10 encoded as named, selectable regression cases. This makes that
+    mechanically true rather than a claim — if any of the four names disappears from this
+    module, this test fails."""
+    import sys
+
+    this_module = sys.modules[__name__]
+    test_names = [name for name in dir(this_module) if name.startswith("test_")]
+    for token in ("f4", "f7", "f9", "f10"):
+        assert any(token in name for name in test_names), (
+            f"no test function name contains {token!r} — PARITY-02's named regression "
+            "case for this defect is missing"
+        )
