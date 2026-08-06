@@ -449,3 +449,33 @@ Live parity selectors named in the plan's Task 2 acceptance criteria
 tier_on_flag_change or f7"`) — all 3 pass, unmodified (40-02 had already written
 `test_f8_sub15_no_veto_is_unscored` and `test_tier_on_flag_change_without_score_change`
 against exactly this shape; `test_f7_tier_lag` is that same test's named alias).
+
+## Plan 07 Task 2 — real-record backfill sample, measured population
+
+**Portfolio-wide canonical-input population, measured live (read-only `HAS_PROPERTY`
+search per field, 2026-08-07):** across all 711 companies, exactly **one** carries any
+canonical `lv_*` scoring input at all — `lv_produces_content`, `lv_revenue_band`,
+`lv_is_gambling_operator` and `lv_is_hardware_vendor` are populated on **zero** real
+companies, `lv_org_type` and `lv_country_region_normalized` on **one** (the same record).
+This is the expected shape given enrichment writes have been disarmed for essentially the
+whole portal history (STATE.md's `ALLOW_HUBSPOT_RECORD_WRITES` note) — Phase 41's
+portfolio enrichment is what populates the other 710.
+
+That one record — **Melbourne Racing Club, id `9604614548`** — is the entire real-record
+sample this plan's backfill script (`scripts/backfill_seed_company_scores.py`) selects by
+default (union of `HAS_PROPERTY` across the five canonical inputs, per D-10's "at least
+one populated" selection rule) and the entire sample Task 3's PARITY-01 verdict checks,
+per D-09's stated overlap. Before this plan: `lv_org_type=individual_club_team`,
+`lv_country_region_normalized=AU`, all five components null, `lv_icp_fit_score=""`
+(blank, not 0 — the calculated formula blanks on any null term, per Task 1's earlier
+finding). Seeded components: `org_type_score=5`, `geography_score=10`,
+`annual_revenue_score=0`, `produces_content_score=0`, `gambling_score=0` (sum 15).
+Settled live within ~11s: `lv_icp_fit_score=15`, `lv_icp_tier=C`, `lv_anti_icp_flag`
+stayed `null` (never written — no HubSpot workflow writes it post-D-01, and this backfill
+run never triggered a pipeline enrollment). No veto fired (produces_content is `null`, not
+`false` — the no-content veto only fires on an explicit `false`).
+
+This record's `lv_produces_content` being `null` (unknown, not enriched) puts it squarely
+in the oracle's documented `Needs Review` divergence (compute_icp_score downgrades tier
+when `lv_org_type` is known but `lv_produces_content` is null and no veto fired) — Task 3
+classifies this as the accepted divergence 40-02 flagged, not a defect.
