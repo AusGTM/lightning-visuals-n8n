@@ -41,9 +41,20 @@ phase is path-shaped by this decision, so it must land before Phase 40 is planne
   2. A path decision (fix-existing-workflow-chain vs lead-scoring-tool rebuild) is recorded
      with rationale in `.planning` (Key Decisions / STATE.md), and it gates how Phase 40 is
      planned.
-  3. If the lead-scoring tool is unavailable on this hub tier, the fallback decision (custom
-     equation properties, per HANDOVER §5) is explicitly recorded instead of left implicit.
-**Plans**: TBD
+  3. If the lead-scoring tool is unavailable on this hub tier, the fallback decision is
+     explicitly recorded instead of left implicit. **Superseded by 39-CONTEXT.md D-06:** the
+     pre-committed fallback is fix-the-four-workflow-chain-in-place, not custom equation
+     properties (those stay rejected per HANDOVER §5).
+**Plans**: 4 plans
+
+Plans:
+- [ ] 39-01-PLAN.md — Branch setup (D-09) + tracer: end-to-end availability probe with unit-tested classifiers
+- [ ] 39-02-PLAN.md — Live API evidence + operator in-portal walkthrough + VERIFICATION-NOTE.md + COVERAGE.md
+- [ ] 39-03-PLAN.md — `delete_record()` primitive + two-key-gated disposable-company recalc-latency probe
+- [ ] 39-04-PLAN.md — Armed latency run, band-c review gate, and 39-DECISION.md + ROADMAP/STATE pointers
+
+**Path decision:** pending — will be recorded in
+`.planning/phases/39-path-decision-fit-score-verification/39-DECISION.md`
 
 ### Phase 40: Scoring Engine, Veto & Parity Remediation
 **Goal**: The ICP rubric executes correctly and symmetrically inside HubSpot on the path
