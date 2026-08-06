@@ -92,6 +92,14 @@ def _after_json_paths() -> list:
     return sorted(glob.glob(str(FLOWS_DIR / "*.after.json")))
 
 
+def _is_flow(doc: dict) -> bool:
+    """Distinguishes an Automation v4 flow archive from a property-definition
+    snapshot (both live in config/hubspot_flows/*.after.json, e.g. 40-04 Task 3's
+    lv_icp_fit_score-property.after.json) — flows have an "actions" list, property
+    snapshots don't."""
+    return "actions" in doc
+
+
 def test_rubric_loads():
     rubric = load_rubric()
     assert "base_score" in rubric
@@ -101,6 +109,8 @@ def test_rubric_loads():
 @pytest.mark.parametrize("flow_path", _after_json_paths())
 def test_org_type_flow_matches_rubric(flow_path):
     flow = load_flow(flow_path)
+    if not _is_flow(flow):
+        pytest.skip(f"{flow_path} is not a flow archive")
     has_org_type_branch = any(
         a.get("type") == "STATIC_BRANCH"
         and a.get("inputValue", {}).get("propertyName") == "lv_org_type"
@@ -129,6 +139,8 @@ def test_produces_content_flow_matches_rubric(flow_path):
     equal config/icp_scoring.yaml's base_score.produces_content: true -> 20,
     everything else (including "false"/empty/absent) -> 0."""
     flow = load_flow(flow_path)
+    if not _is_flow(flow):
+        pytest.skip(f"{flow_path} is not a flow archive")
     if find_static_branch_action(flow, "lv_produces_content") is None:
         pytest.skip(f"{flow_path} has no lv_produces_content STATIC_BRANCH action")
 
@@ -156,6 +168,8 @@ def test_gambling_flow_matches_rubric(flow_path):
     lv_anti_icp_flag or lv_org_type — so the deduction stays independent of both
     the veto and the org-type branch (F9's original defect, T-40-15)."""
     flow = load_flow(flow_path)
+    if not _is_flow(flow):
+        pytest.skip(f"{flow_path} is not a flow archive")
     if find_static_branch_action(flow, "lv_is_gambling_operator") is None:
         pytest.skip(f"{flow_path} has no lv_is_gambling_operator STATIC_BRANCH action")
 
@@ -173,3 +187,29 @@ def test_gambling_flow_matches_rubric(flow_path):
         f"{flow_path}: must write only gambling_score (T-40-15), "
         f"found {written_property_names(flow)}"
     )
+
+
+FIT_SCORE_PROPERTY_PATH = FLOWS_DIR / "lv_icp_fit_score-property.after.json"
+
+FIT_SCORE_COMPONENT_NAMES = (
+    "org_type_score",
+    "geography_score",
+    "annual_revenue_score",
+    "produces_content_score",
+    "gambling_score",
+)
+
+
+def test_fit_score_formula_references_all_five_components():
+    """40-04 Task 3 (D-06) — lv_icp_fit_score's archived post-PATCH calculationFormula
+    must name all five component properties. Fails loudly if a term is dropped,
+    reconstructed, or misspelled rather than extended from the fetched syntax."""
+    if not FIT_SCORE_PROPERTY_PATH.exists():
+        pytest.skip(f"{FIT_SCORE_PROPERTY_PATH} not archived yet")
+
+    with FIT_SCORE_PROPERTY_PATH.open() as f:
+        after = json.load(f)
+
+    formula = after["calculationFormula"]
+    for name in FIT_SCORE_COMPONENT_NAMES:
+        assert name in formula, f"calculationFormula '{formula}' is missing '{name}'"

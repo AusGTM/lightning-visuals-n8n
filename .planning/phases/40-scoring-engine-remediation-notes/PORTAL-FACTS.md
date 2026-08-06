@@ -234,3 +234,36 @@ enabled via `PUT` (re-GET confirmed `isEnabled: true` at task end). Archived at
 The gambling flow's action list writes only `gambling_score` — no other action in either
 flow touches any other property (verified by `tests/test_flow_rubric_conformance.py`'s
 `written_property_names()` assertion, T-40-15's offline guard).
+
+## Task 3 — lv_icp_fit_score formula extended to five terms
+
+**Went through the API — no portal-UI fallback needed.** `PATCH
+/crm/v3/properties/companies/lv_icp_fit_score` with only `calculationFormula` in the
+body returned `200` on the first attempt (Pitfall 3's documented 400-error history did
+not reproduce in this portal). New formula, the exact fetched 3-term string extended by
+two terms, same token/operator style:
+
+```
+org_type_score + geography_score + annual_revenue_score + produces_content_score + gambling_score
+```
+
+Snapshots: `config/hubspot_flows/lv_icp_fit_score-property.before.json` /
+`.after.json`. A `200` alone was not treated as proof (Pitfall 3's warning sign) — live
+validation on disposables:
+- A brand-new disposable with only `lv_produces_content=true` set reached
+  `lv_icp_fit_score=20` in ~6s (the content term alone, isolated from the other four —
+  all of which read `0` on a fresh company per Task 2's `createdate`-branch fix).
+- A second disposable with the full ENGINE-01 input set
+  (`lv_org_type=governing_body_league`, `lv_produces_content=true`,
+  `lv_country_region_normalized=AU`, `lv_revenue_band=50-500M`) read
+  `org_type_score=40`, `produces_content_score=20`, `geography_score=0`,
+  `annual_revenue_score=0` (the geography/revenue flows still read native
+  `country`/`annualrevenue`, unset on this disposable — 40-05's retarget, not yet done),
+  `gambling_score=0`, summing to `lv_icp_fit_score=60`. Per the plan, the 80/A total is
+  40-05/40-07's job, not asserted here — only the individual component values.
+
+Both disposables deleted (204) in a `finally` block. `tests/test_flow_rubric_conformance.py`
+now also asserts the archived after-formula names all five component properties
+(`test_fit_score_formula_references_all_five_components`), and the flow-branch tests were
+hardened with an `_is_flow()` guard so a non-flow snapshot (this property archive) in the
+same glob-matched directory doesn't false-fail them.

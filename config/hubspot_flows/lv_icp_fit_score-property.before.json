@@ -1,0 +1,29 @@
+{
+  "archived": false,
+  "calculated": true,
+  "calculationFormula": "org_type_score + geography_score + annual_revenue_score",
+  "createdAt": "2026-07-17T08:20:55.049Z",
+  "createdUserId": "93450314",
+  "dataSensitivity": "non_sensitive",
+  "description": "",
+  "displayOrder": -1,
+  "externalOptions": false,
+  "fieldType": "calculation_equation",
+  "formField": false,
+  "groupName": "companyinformation",
+  "hasUniqueValue": false,
+  "hidden": false,
+  "label": "ICP Fit Score",
+  "modificationMetadata": {
+    "archivable": true,
+    "readOnlyDefinition": false,
+    "readOnlyValue": true
+  },
+  "name": "lv_icp_fit_score",
+  "numberDisplayHint": "formatted",
+  "options": [],
+  "showCurrencySymbol": false,
+  "type": "number",
+  "updatedAt": "2026-08-06T08:06:50.803Z",
+  "updatedUserId": "87581729"
+}
