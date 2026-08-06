@@ -38,7 +38,7 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 - [x] **ENGINE-06**: Every org-type point value matches `config/icp_scoring.yaml`,
   including regulator = 5. (F10 — regulator currently 0.)
 
-- [ ] **ENGINE-07**: A score below 15 without a veto does not grade D. (F8 — low fit
+- [x] **ENGINE-07**: A score below 15 without a veto does not grade D. (F8 — low fit
   currently conflated with disqualify.)
 
 ### Veto Machinery
@@ -50,7 +50,7 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 - [ ] **VETO-02**: Correcting the veto condition clears the flag and reason — no one-way
   latch. (F6 — validated: Australia restored, flag stayed true, tier stuck D.)
 
-- [ ] **VETO-03**: A flag change updates `lv_icp_tier` without requiring an unrelated score
+- [x] **VETO-03**: A flag change updates `lv_icp_tier` without requiring an unrelated score
   change. (F7 — tier currently recomputes only on score movement.)
 
 ### Data Coverage
@@ -128,10 +128,10 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 | ENGINE-04 | Phase 40 | Complete |
 | ENGINE-05 | Phase 40 | Complete |
 | ENGINE-06 | Phase 40 | Complete |
-| ENGINE-07 | Phase 40 | Pending |
+| ENGINE-07 | Phase 40 | Complete |
 | VETO-01 | Phase 40 | Pending |
 | VETO-02 | Phase 40 | Pending |
-| VETO-03 | Phase 40 | Pending |
+| VETO-03 | Phase 40 | Complete |
 | PARITY-01 | Phase 40 | Complete |
 | PARITY-02 | Phase 40 | Complete |
 | DATA-01 | Phase 41 | Pending |

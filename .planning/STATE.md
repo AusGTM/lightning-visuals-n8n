@@ -5,16 +5,16 @@ milestone_name: HubSpot Scoring Engine Remediation
 current_phase: 40
 current_phase_name: Scoring Engine, Veto & Parity Remediation
 status: executing
-stopped_at: Completed 40-05-PLAN.md
-last_updated: "2026-08-07T09:00:00.000Z"
+stopped_at: Completed 40-06-PLAN.md
+last_updated: "2026-08-07T10:15:00.000Z"
 last_activity: 2026-08-07
-last_activity_desc: 40-05 complete (Geography and Annual Revenue flows retargeted to lv_country_region_normalized/lv_revenue_band, closing F2/F3/ENGINE-03; Geography flow's veto branch deleted, completing D-01's handover — n8n pipeline is now the sole writer of lv_anti_icp_flag/lv_anti_icp_reason; nine-band revenue table matches the rubric exactly, closing F10/ENGINE-04; Task 3 checkpoint auto-resolved per operator pre-approval, stale-flag population measured at zero)
+last_activity_desc: 40-06 complete (WF1 tier flow retargeted and rebranched — below-15 branch now writes Unscored instead of D closing F8/ENGINE-07, and WF1 enrolls on lv_anti_icp_flag as well as lv_icp_fit_score closing F7/VETO-03; lv_icp_tier enum given an Unscored option; permanent offline regression guards added; a pre-existing stale test assertion left over from D-01's veto handover corrected)
 progress:
   total_phases: 5
   completed_phases: 1
   total_plans: 11
-  completed_plans: 9
-  percent: 82
+  completed_plans: 10
+  percent: 91
 ---
 
 # Project State
@@ -22,15 +22,15 @@ progress:
 ## Current Position
 
 Phase: 40 (Scoring Engine, Veto & Parity Remediation) — EXECUTING
-Next: Phase 40 remaining plans (40-06 tier/veto workflow, 40-07 backfill mechanism — waves 2+).
-Status: Executing Phase 40 — Plans 01-05 complete
-Last activity: 2026-08-07 — 40-05 complete (Geography/Annual Revenue flows retargeted to canonical properties, veto branch deleted — D-01 handover complete, n8n pipeline is the sole veto writer; ENGINE-03/ENGINE-04 closed; stale-flag population measured at zero)
+Next: Phase 40 remaining plan (40-07 backfill mechanism).
+Status: Executing Phase 40 — Plans 01-06 complete
+Last activity: 2026-08-07 — 40-06 complete (WF1 retargeted/rebranched: below-15 branch writes Unscored not D closing F8/ENGINE-07; enrolls on lv_anti_icp_flag as a second trigger closing F7/VETO-03; lv_icp_tier enum given an Unscored option; permanent offline regression guards locking both fixes)
 Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39-path-decision-fit-score-verification/39-DECISION.md`
 
 ## Session
 
-**Last session:** 2026-08-07T09:00:00.000Z
-**Stopped at:** Completed 40-05-PLAN.md
+**Last session:** 2026-08-07T10:15:00.000Z
+**Stopped at:** Completed 40-06-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -46,6 +46,7 @@ Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39
 | Phase 40 P03 | 66min | 3 tasks | 9 files |
 | Phase 40 P04 | 25min | 3 tasks | 6 files |
 | Phase 40 P05 | 75min | 3 tasks | 4 files |
+| Phase 40 P06 | 55min | 3 tasks | 5 files |
 
 ## Decisions
 
@@ -72,6 +73,9 @@ Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39
 - [Phase 40-05]: Live-discovered two HubSpot Automation v4 API limits not previously documented: (1) converting an action's `type` from `LIST_BRANCH` to `STATIC_BRANCH` via PUT 400s — worked around by keeping `LIST_BRANCH` and editing its `MULTISTRING IS_EQUAL_TO` filter content instead, staying on the API-only path with no portal-UI fallback needed; (2) a flow's PUT rejects reintroducing any `actionId` that existed in an earlier revision of that same flow but is absent from the current PUT body, even with no orphans and unique targets — resolved by using ids never before used by that flow. See `PORTAL-FACTS.md`'s Plan 05 section for full detail.
 - [Phase 40-05]: Task 3's blocking checkpoint auto-resolved per operator pre-approval (2026-08-07), citing `VETO-WRITE-EVIDENCE.md`. Read-only measurement performed instead of the checkpoint's real-record-refresh step: stale `lv_anti_icp_flag=true` population is **zero** across all 711 companies (not "unknown" as originally framed) — no company in this portal has ever had the flag written by any source, consistent with `ALLOW_HUBSPOT_RECORD_WRITES` having been false for the whole phase until the one now-deleted disposable exception.
 - [Phase 40-05]: `tests/test_scoring_parity.py::test_f4_au_string_is_not_vetoed` corrected (Rule 1) to assert `lv_anti_icp_flag != "true"` rather than `== "false"` — a direct, in-scope consequence of D-01's completion (HubSpot no longer writes the flag at all, so a bare disposable patch leaves it `None`, not `"false"`). Matches this plan's own Task 1 acceptance bar verbatim.
+- [Phase 40-06]: `lv_icp_tier` enum given a fifth option, `Unscored` (`config/hubspot_flows/lv_icp_tier-property.{before,after}.json`), live-validated on a disposable before WF1 was touched — A/B/C/D preserved verbatim, no `Needs Review` option added (deferred, per REQUIREMENTS.md).
+- [Phase 40-06]: WF1 (4625147345) retargeted and rebranched — below-15 branch writes `Unscored` instead of `D` (F8/ENGINE-07 closed: `D` is now reachable only through the veto-guarded branch); enrollment criteria extended with `lv_anti_icp_flag` known as a second trigger (F7/VETO-03 closed: a flag flip alone moves the tier, live-validated both directions on a fixed B-band total with the score held constant); veto branch filter corrected from `BOOL true` to `STRING "true"` (D-04) after live-discovering `lv_anti_icp_flag` is a `booleancheckbox` property with string-valued options. Live parity: 70/69/40/39/15/14/-20 all graded to the correct tier, `-20` landing `Unscored` not `D`.
+- [Phase 40-06]: `tests/test_scoring_parity.py::test_gambling_deducts_20_without_veto` corrected (Rule 1) to assert `lv_anti_icp_flag != "true"` rather than `== "false"` — the same stale-assertion class 40-05 already fixed once in this file, surfaced by this plan's own `<verification>` selector.
 
 ### Blockers
 

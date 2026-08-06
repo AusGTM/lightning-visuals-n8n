@@ -106,7 +106,7 @@ VETO-01, VETO-02, VETO-03, PARITY-01, PARITY-02
      scratch scenarios (AU-string veto, tier lag, gambling conflation, boundary overlap) encoded
      as named regression cases — this is the standing drift guard, since every defect above was
      invisible in the HubSpot UI.
-**Plans**: 5/7 plans executed
+**Plans**: 6/7 plans executed
 
 Plans:
 **Wave 1**
@@ -125,7 +125,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 40-06-PLAN.md — WF1 tier ladder: sub-15 grades Unscored, and a flag change alone moves the tier (ENGINE-07, VETO-03)
+- [x] 40-06-PLAN.md — WF1 tier ladder: sub-15 grades Unscored, and a flag change alone moves the tier (ENGINE-07, VETO-03)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
@@ -206,6 +206,6 @@ Phases execute in numeric order: 39 → 40 → 41 → 42 → 43
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 39. Path Decision & Fit-Score Verification | 4/4 | Complete | 2026-08-06 |
-| 40. Scoring Engine, Veto & Parity Remediation | 4/7 | In Progress|  |
+| 40. Scoring Engine, Veto & Parity Remediation | 6/7 | In Progress|  |
 | 41. Validation Data Import & End-to-End Proof | 0/TBD | Not started | - |
 | 42. Scoring Artifact Cleanup & Reconciliation | 0/TBD | Not started | - |
