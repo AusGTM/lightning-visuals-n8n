@@ -7,6 +7,21 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Phase 39 (v0.7) — scoring-remediation path decision, sealed 2026-08-06.** Company fit-score
+  availability on Sales Hub Pro verified **in-portal** (Lead Scoring app renders; company + fit
+  score offered; Contacts locked behind Marketing Hub) with evidence on disk — 2 read-only API
+  probe JSONs, 4 portal screenshots, and a re-checkable attestation
+  (`.planning/phases/39-path-decision-fit-score-verification/evidence/`). **Path decided:
+  fix-the-four-workflow-chain-in-place** (`39-DECISION.md`): operator hard requirement that the
+  score keep landing in `lv_icp_fit_score`/`lv_icp_tier` and reuse the existing architecture —
+  the lead-scoring tool's auto-generated `hubspotDefined` score property cannot write there, so
+  the tool was not adopted despite availability. New assets: `delete_record()` in
+  `src/hubspot_client.py`; `scripts/probe_scoring_tool_availability.py` (disarmed-by-default,
+  read-only, portal-guarded); `scripts/probe_scoring_recalc_latency.py` (two-key-gated
+  disposable-company harness, built but never armed — moot for the decision, kept for Phase 40);
+  25 unit tests. Post-execution code review fixed 1 Critical (sample-loop no-op writes would
+  have faked a "recalc never fires" verdict) + 3 Warnings. Branch: `feat/v0.6-plugin-entrypoint`
+  fast-forwarded into `master`; v0.7 work continues on `feat/v0.7-scoring-remediation`.
 - Repository structure: README, CHANGELOG, proprietary LICENSE; docs reorganised into `docs/{business,architecture,reviews}`.
 - **`operator-claude-plugin/`** — directory for the operator-facing client (planned, milestone v0.6),
   with its own README and independently-versioned CHANGELOG. Documented as a *suggested default thin
