@@ -106,7 +106,7 @@ VETO-01, VETO-02, VETO-03, PARITY-01, PARITY-02
      scratch scenarios (AU-string veto, tier lag, gambling conflation, boundary overlap) encoded
      as named regression cases — this is the standing drift guard, since every defect above was
      invisible in the HubSpot UI.
-**Plans**: 3/7 plans executed
+**Plans**: 4/7 plans executed
 
 Plans:
 **Wave 1**
@@ -117,7 +117,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 40-04-PLAN.md — The two missing components: `produces_content_score` and `gambling_score` properties, mapper flows, and the five-term calculated formula (ENGINE-02, ENGINE-05)
+- [x] 40-04-PLAN.md — The two missing components: `produces_content_score` and `gambling_score` properties, mapper flows, and the five-term calculated formula (ENGINE-02, ENGINE-05)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -206,6 +206,6 @@ Phases execute in numeric order: 39 → 40 → 41 → 42 → 43
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 39. Path Decision & Fit-Score Verification | 4/4 | Complete | 2026-08-06 |
-| 40. Scoring Engine, Veto & Parity Remediation | 3/7 | In Progress|  |
+| 40. Scoring Engine, Veto & Parity Remediation | 4/7 | In Progress|  |
 | 41. Validation Data Import & End-to-End Proof | 0/TBD | Not started | - |
 | 42. Scoring Artifact Cleanup & Reconciliation | 0/TBD | Not started | - |

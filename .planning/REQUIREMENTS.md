@@ -19,7 +19,7 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
   `lv_produces_content=true`, region AU, revenue band 50-500M scores **80** and grades **A**
   entirely inside HubSpot — no pipeline scoring code. (Today: 60/B via native inputs; F1.)
 
-- [ ] **ENGINE-02**: `lv_produces_content=true` contributes +20 to the score. (F1 — term
+- [x] **ENGINE-02**: `lv_produces_content=true` contributes +20 to the score. (F1 — term
   absent from every component, workflow, and formula.)
 
 - [ ] **ENGINE-03**: Scoring reads the canonical `lv_country_region_normalized` and
@@ -31,7 +31,7 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
   values (500M, 750M, 1B, 1.2B) landing in the rubric-correct band. (F10 boundary overlap —
   750M scored −5 live, rubric −15.)
 
-- [ ] **ENGINE-05**: Gambling deduction (−20) is driven by `lv_is_gambling_operator`,
+- [x] **ENGINE-05**: Gambling deduction (−20) is driven by `lv_is_gambling_operator`,
   independent of org type, and never sets the veto flag. (F9 — currently wired as
   org-type points; `lv_is_gambling_operator` referenced by nothing.)
 
@@ -123,10 +123,10 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 |-------------|-------|--------|
 | DECIDE-01 | Phase 39 | Complete |
 | ENGINE-01 | Phase 40 | Pending |
-| ENGINE-02 | Phase 40 | Pending |
+| ENGINE-02 | Phase 40 | Complete |
 | ENGINE-03 | Phase 40 | Pending |
 | ENGINE-04 | Phase 40 | Pending |
-| ENGINE-05 | Phase 40 | Pending |
+| ENGINE-05 | Phase 40 | Complete |
 | ENGINE-06 | Phase 40 | Complete |
 | ENGINE-07 | Phase 40 | Pending |
 | VETO-01 | Phase 40 | Pending |
