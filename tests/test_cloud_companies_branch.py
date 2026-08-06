@@ -11,10 +11,12 @@ import sys
 from collections import deque
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from build_cloud_workflows import ENRICH_MERGE_CO  # noqa: E402
+from build_cloud_workflows import ENRICH_DECIDE_CO_CLOUD, ENRICH_MERGE_CO  # noqa: E402
 
 WORKFLOW_PATH = ROOT / "n8n" / "wf_enrichment_cloud.json"
 
@@ -120,6 +122,66 @@ def test_merge_companies_veto_policy_entries_carry_a_real_min_confidence():
         "min_confidence: 0 still appears in mergeCompanies.js (acceptance criteria: "
         "neither veto entry may declare it anywhere in the file)"
     )
+
+
+def _hard_veto_reasons():
+    cfg = yaml.safe_load((ROOT / "config" / "icp_scoring.yaml").read_text())
+    hv = cfg["hard_vetoes"]
+    return hv["non_anz"]["reason"], hv["no_content"]["reason"], hv["hardware_vendor"]["reason"]
+
+
+def _decide_company_action_jscode():
+    doc = _load()
+    node = next(n for n in doc["nodes"] if n["name"] == "Decide Company Action")
+    return node["parameters"]["jsCode"]
+
+
+def test_decide_company_action_derives_both_veto_fields_via_regionkey_and_boolish():
+    """D-01 (40-03): the veto is derived in ENRICH_DECIDE_CO_CLOUD from already-merged
+    fields, not supplied as a mergeCompanies() candidate (40-RESEARCH.md Pitfall 4)."""
+    for token in ("_regionKey", "_boolish",
+                  "properties.lv_anti_icp_flag", "properties.lv_anti_icp_reason"):
+        assert token in ENRICH_DECIDE_CO_CLOUD, f"ENRICH_DECIDE_CO_CLOUD missing {token!r}"
+    code = _decide_company_action_jscode()
+    for token in ("_regionKey", "_boolish",
+                  "properties.lv_anti_icp_flag", "properties.lv_anti_icp_reason"):
+        assert token in code, f"built Decide Company Action jsCode missing {token!r}"
+
+
+def test_veto_fields_never_enter_enrich_merge_co_candidate_lists():
+    """40-RESEARCH.md names this as the phase's most likely wrong turn: adding the veto
+    fields to ENRICH_MERGE_CO's candidate lists instead of deriving them in Decide."""
+    assert '"lv_anti_icp_flag"' not in ENRICH_MERGE_CO
+    assert '"lv_anti_icp_reason"' not in ENRICH_MERGE_CO
+
+
+def test_decide_company_action_veto_reason_strings_match_the_rubric_yaml_verbatim():
+    """Anti-drift guard: the three reason strings ported into the JS must be character-
+    for-character equal to config/icp_scoring.yaml's hard_vetoes.*.reason — this is what
+    tests/test_scoring_parity.py's veto_set cases assert against live HubSpot state."""
+    non_anz, no_content, hardware = _hard_veto_reasons()
+    code = _decide_company_action_jscode()
+    for reason in (non_anz, no_content, hardware):
+        assert reason in code, (
+            f"reason string {reason!r} (from config/icp_scoring.yaml) not found verbatim "
+            "in the built Decide Company Action jsCode"
+        )
+
+
+def test_decide_company_action_veto_flag_assignment_is_a_quoted_string_literal():
+    """D-04 / P4: a bare JS boolean written to lv_anti_icp_flag would silently break every
+    HubSpot EQ filter/view/trigger reading it (the 36-07 precedent). Assert the assignment
+    is a quoted string literal, not a bare boolean expression."""
+    code = _decide_company_action_jscode()
+    assert 'properties.lv_anti_icp_flag = vetoReasons.length > 0 ? "true" : "false";' in code
+    assert "properties.lv_anti_icp_flag = true;" not in code
+    assert "properties.lv_anti_icp_flag = false;" not in code
+
+
+def test_decide_company_action_veto_reason_join_separator_matches_the_oracle():
+    """Matches src/icp_scoring.py's `"; ".join(anti_reasons)` exactly."""
+    code = _decide_company_action_jscode()
+    assert 'vetoReasons.join("; ")' in code
 
 
 def test_decide_company_action_cloud_is_the_review_loop_producer():

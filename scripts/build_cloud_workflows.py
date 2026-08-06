@@ -2600,6 +2600,39 @@ return $input.all().map((it) => {
     }
   }
 
+  // D-01 (40-03): lv_anti_icp_flag/lv_anti_icp_reason are derived HERE, not supplied as a
+  // mergeCompanies() candidate (40-RESEARCH.md Pitfall 4 — the veto derives from three
+  // already-merged fields on the same row, only known after mergeCompanies() has run, not
+  // a provider-supplied candidate). Direct JS port of src/icp_scoring.py:84-97's hard-veto
+  // block — field names, comparison semantics (produces_content is False, not falsy;
+  // is_hardware_vendor truthy) and reason-string order must stay byte-identical to the
+  // oracle, since tests/test_scoring_parity.py asserts live state against it. Recomputed
+  // from current inputs on every run (VETO-02: not a latch by construction).
+  function _regionKey(v) {
+    return (v === "AU" || v === "NZ" || v === "ANZ") ? v : "non_anz";
+  }
+  function _boolish(v) {
+    if (typeof v === "boolean") return v;
+    if (v === "true") return true;
+    if (v === "false") return false;
+    return null;
+  }
+  const existing = row.existingRecord || {};
+  const region = _regionKey(properties.lv_country_region_normalized ?? existing.lv_country_region_normalized);
+  const producesContent = _boolish(properties.lv_produces_content ?? existing.lv_produces_content);
+  const isHardwareVendor = _boolish(properties.lv_is_hardware_vendor ?? existing.lv_is_hardware_vendor);
+
+  const vetoReasons = [];
+  if (region === "non_anz") vetoReasons.push("Non-ANZ geography");
+  if (producesContent === false) vetoReasons.push("No broadcast or streaming content");
+  if (isHardwareVendor === true) vetoReasons.push("Hardware/AV/LED vendor, not sports-media buyer");
+
+  // D-04 / P4: string literals, never bare JS booleans — HubSpot EQ filters compare
+  // strings (the 36-07 precedent for lv_enrichment_requested). The BUG-27 loop below only
+  // joins arrays, so an unstringified boolean here would ship straight to the PATCH body.
+  properties.lv_anti_icp_flag = vetoReasons.length > 0 ? "true" : "false";
+  properties.lv_anti_icp_reason = vetoReasons.length > 0 ? vetoReasons.join("; ") : "";
+
   if (needsReview.length > 0) {
     properties.lv_enrichment_needs_review = true;
     properties.lv_enrichment_status = "needs_review";
