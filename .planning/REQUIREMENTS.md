@@ -35,7 +35,7 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
   independent of org type, and never sets the veto flag. (F9 — currently wired as
   org-type points; `lv_is_gambling_operator` referenced by nothing.)
 
-- [ ] **ENGINE-06**: Every org-type point value matches `config/icp_scoring.yaml`,
+- [x] **ENGINE-06**: Every org-type point value matches `config/icp_scoring.yaml`,
   including regulator = 5. (F10 — regulator currently 0.)
 
 - [ ] **ENGINE-07**: A score below 15 without a veto does not grade D. (F8 — low fit
@@ -127,7 +127,7 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 | ENGINE-03 | Phase 40 | Pending |
 | ENGINE-04 | Phase 40 | Pending |
 | ENGINE-05 | Phase 40 | Pending |
-| ENGINE-06 | Phase 40 | Pending |
+| ENGINE-06 | Phase 40 | Complete |
 | ENGINE-07 | Phase 40 | Pending |
 | VETO-01 | Phase 40 | Pending |
 | VETO-02 | Phase 40 | Pending |

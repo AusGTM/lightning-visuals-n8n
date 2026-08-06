@@ -2,36 +2,36 @@
 gsd_state_version: 1.0
 milestone: v0.7
 milestone_name: HubSpot Scoring Engine Remediation
-current_phase: 39
-current_phase_name: Path Decision & Fit-Score Verification
-status: phase_complete
-stopped_at: Phase 40 context gathered
-last_updated: "2026-08-06T05:11:25.565Z"
+current_phase: 40
+current_phase_name: Scoring Engine, Veto & Parity Remediation
+status: executing
+stopped_at: 40-01 complete (org-type mapper fixed live, D-05 API path proven)
+last_updated: "2026-08-06T06:25:00.000Z"
 last_activity: 2026-08-06
-last_activity_desc: 39-04 complete (39-DECISION.md — path decision recorded)
+last_activity_desc: 40-01 complete — org-type mapper live-fixed, D-05 round-trip verdict PROVEN
 progress:
   total_phases: 5
   completed_phases: 1
-  total_plans: 4
-  completed_plans: 4
-  percent: 20
+  total_plans: 11
+  completed_plans: 5
+  percent: 45
 ---
 
 # Project State
 
 ## Current Position
 
-Phase: 39 of 42 — COMPLETE (verification passed 14/14, 2026-08-06)
-Next: Phase 40 (Scoring Engine, Veto & Parity Remediation) — ready to plan on the fix-in-place path
-Status: Phase 39 sealed — run /gsd-discuss-phase 40 or /gsd-plan-phase 40
-Last activity: 2026-08-06 — 39-04 complete (39-DECISION.md — path decision recorded)
+Phase: 40 (Scoring Engine, Veto & Parity Remediation) — EXECUTING
+Next: Phase 40 remaining plans (40-04 scoring formula/content term, 40-05 revenue boundary, 40-06 tier/veto workflow, 40-07 backfill/parity — waves 2+)
+Status: Executing Phase 40 — Plan 01 complete
+Last activity: 2026-08-06 — 40-01 complete (org-type mapper live-fixed: regulator 0->5, gambling_operator -20->0; D-05 API path PROVEN for STATIC_BRANCH edits)
 Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39-path-decision-fit-score-verification/39-DECISION.md`
 
 ## Session
 
-**Last session:** 2026-08-06T05:11:25.559Z
-**Stopped at:** Phase 40 context gathered
-**Resume file:** .planning/phases/40-scoring-engine-remediation-notes/40-CONTEXT.md
+**Last session:** 2026-08-06T06:25:00.000Z
+**Stopped at:** Completed 40-01-PLAN.md
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -41,9 +41,13 @@ Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39
 | Phase 39 P02 | 12min | 3 tasks | 8 files |
 | Phase 39 P03 | 8min | 3 tasks | 3 files |
 | Phase 39 P04 | 15min | 1 tasks | 4 files |
+| Phase 40 P01 | 27min | 2 tasks | 9 files |
 
 ## Decisions
 
+- [Phase 40-01]: D-05 round-trip verdict PROVEN — `PUT /automation/v4/flows/{id}` accepts STATIC_BRANCH action-content edits live; no portal-UI fallback needed for this edit shape. IS_BETWEEN edits (40-05) remain unverified.
+- [Phase 40-01]: Corrected D-07's literal step order — validate-on-disposable must run while the flow is enabled, not disabled (a disabled flow never fires). Documented in PORTAL-FACTS.md for 40-04/40-05/40-06 to follow.
+- [Phase 40-01]: ENGINE-06 fully closed; ENGINE-05 only half-closed (org-type branch no longer double-deducts gambling, but the real lv_is_gambling_operator-driven -20 component is still 40-04's work — do not mark ENGINE-05 complete until then).
 - [Phase ?]: Task 1 checkpoint resolved: merge-then-cut (operator, 2026-08-06) — feat/v0.6-plugin-entrypoint merged into master via --ff-only, feat/v0.7-scoring-remediation cut from master (D-09).
 - [Phase ?]: git push origin master skipped this session (sandbox denied it) — local master is ahead of origin/master; push deferred to operator/orchestrator.
 - [Phase ?]: 39-03: FLIP_PROPERTY_NAME chosen as lv_org_type (taxonomy-controlled, matches 39-04's example criterion) since the plan left the concrete flip property unspecified.
