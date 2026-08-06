@@ -1,0 +1,55 @@
+{
+  "archived": false,
+  "calculated": false,
+  "createdAt": "2026-07-17T08:21:46.973Z",
+  "createdUserId": "93450314",
+  "dataSensitivity": "non_sensitive",
+  "description": "",
+  "displayOrder": -1,
+  "externalOptions": false,
+  "fieldType": "select",
+  "formField": true,
+  "groupName": "companyinformation",
+  "hasUniqueValue": false,
+  "hidden": false,
+  "label": "ICP Tier",
+  "modificationMetadata": {
+    "archivable": true,
+    "readOnlyDefinition": false,
+    "readOnlyValue": false
+  },
+  "name": "lv_icp_tier",
+  "options": [
+    {
+      "description": "",
+      "displayOrder": 0,
+      "hidden": false,
+      "label": "A",
+      "value": "A"
+    },
+    {
+      "description": "",
+      "displayOrder": 1,
+      "hidden": false,
+      "label": "B",
+      "value": "B"
+    },
+    {
+      "description": "",
+      "displayOrder": 2,
+      "hidden": false,
+      "label": "C",
+      "value": "C"
+    },
+    {
+      "description": "",
+      "displayOrder": 3,
+      "hidden": false,
+      "label": "D",
+      "value": "D"
+    }
+  ],
+  "type": "enumeration",
+  "updatedAt": "2026-07-17T08:21:46.973Z",
+  "updatedUserId": "93450314"
+}

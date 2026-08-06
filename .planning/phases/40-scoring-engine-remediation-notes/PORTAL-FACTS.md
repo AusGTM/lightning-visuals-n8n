@@ -364,3 +364,25 @@ nothing in this portal's write history ever exercised it against a real record. 
 no F4-contradicted subset to refresh, and no backlog for Phase 41's backfill to inherit on
 this specific field — D-02's acceptance is trivially satisfied (there is nothing stale to
 accept).
+
+## Plan 06 Task 1 — `lv_icp_tier` enum option added
+
+Re-confirmed live (`GET /crm/v3/properties/companies/lv_icp_tier`, 2026-08-07): `Unscored`
+was still **absent**, matching 40-01's original read verbatim — only `A`, `B`, `C`, `D`.
+
+`PATCH /crm/v3/properties/companies/lv_icp_tier` sent with the full existing four-option
+array plus one new option (`value`/`label` both `Unscored`, `displayOrder: 4`, continuing
+the existing 0-3 sequence, `hidden: false`) — the complete array, not a partial diff, per
+the plan's own warning that a partial options PATCH replaces rather than appends. `200` on
+the first attempt. Snapshots: `config/hubspot_flows/lv_icp_tier-property.before.json` /
+`.after.json`. The after-snapshot's options list confirms `A`, `B`, `C`, `D` survived
+verbatim (unchanged label/displayOrder) alongside the new fifth option.
+
+**Live validation:** a disposable `ZZ-SCORING-TEST-DELETE-ME-*` company (id `280246734318`)
+had `lv_icp_tier` directly `PATCH`ed to `"Unscored"` and read back as exactly `"Unscored"`,
+not empty — the enum change took. Deleted (204) immediately after.
+
+No `Needs Review` option was added (per the plan's explicit prohibition — no HubSpot
+workflow in this phase writes it, and REQUIREMENTS.md defers the review-queue policy).
+
+Task 2 (WF1's retarget/rebranch to actually write `Unscored`) is cleared to proceed.
