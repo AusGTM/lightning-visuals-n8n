@@ -1,0 +1,313 @@
+{
+  "actions": [
+    {
+      "actionId": "2",
+      "defaultBranch": {
+        "edgeType": "STANDARD",
+        "nextActionId": "3"
+      },
+      "listBranches": [
+        {
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "8"
+          },
+          "filterBranch": {
+            "filterBranchOperator": "OR",
+            "filterBranchType": "OR",
+            "filterBranches": [
+              {
+                "filterBranchOperator": "AND",
+                "filterBranchType": "AND",
+                "filterBranches": [],
+                "filters": [
+                  {
+                    "filterType": "PROPERTY",
+                    "operation": {
+                      "includeObjectsWithNoValueSet": false,
+                      "operationType": "STRING",
+                      "operator": "IS_EQUAL_TO",
+                      "value": "true"
+                    },
+                    "property": "lv_anti_icp_flag"
+                  }
+                ]
+              }
+            ],
+            "filters": []
+          }
+        }
+      ],
+      "type": "LIST_BRANCH"
+    },
+    {
+      "actionId": "3",
+      "listBranches": [
+        {
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "4"
+          },
+          "filterBranch": {
+            "filterBranchOperator": "OR",
+            "filterBranchType": "OR",
+            "filterBranches": [
+              {
+                "filterBranchOperator": "AND",
+                "filterBranchType": "AND",
+                "filterBranches": [],
+                "filters": [
+                  {
+                    "filterType": "PROPERTY",
+                    "operation": {
+                      "includeObjectsWithNoValueSet": false,
+                      "operationType": "NUMBER",
+                      "operator": "IS_GREATER_THAN_OR_EQUAL_TO",
+                      "value": 70.0
+                    },
+                    "property": "lv_icp_fit_score"
+                  }
+                ]
+              }
+            ],
+            "filters": []
+          }
+        },
+        {
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "5"
+          },
+          "filterBranch": {
+            "filterBranchOperator": "OR",
+            "filterBranchType": "OR",
+            "filterBranches": [
+              {
+                "filterBranchOperator": "AND",
+                "filterBranchType": "AND",
+                "filterBranches": [],
+                "filters": [
+                  {
+                    "filterType": "PROPERTY",
+                    "operation": {
+                      "includeObjectsWithNoValueSet": false,
+                      "lowerBound": 40,
+                      "operationType": "NUMBER_RANGED",
+                      "operator": "IS_BETWEEN",
+                      "upperBound": 69
+                    },
+                    "property": "lv_icp_fit_score"
+                  }
+                ]
+              }
+            ],
+            "filters": []
+          }
+        },
+        {
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "6"
+          },
+          "filterBranch": {
+            "filterBranchOperator": "OR",
+            "filterBranchType": "OR",
+            "filterBranches": [
+              {
+                "filterBranchOperator": "AND",
+                "filterBranchType": "AND",
+                "filterBranches": [],
+                "filters": [
+                  {
+                    "filterType": "PROPERTY",
+                    "operation": {
+                      "includeObjectsWithNoValueSet": false,
+                      "lowerBound": 15,
+                      "operationType": "NUMBER_RANGED",
+                      "operator": "IS_BETWEEN",
+                      "upperBound": 39
+                    },
+                    "property": "lv_icp_fit_score"
+                  }
+                ]
+              }
+            ],
+            "filters": []
+          }
+        },
+        {
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "7"
+          },
+          "filterBranch": {
+            "filterBranchOperator": "OR",
+            "filterBranchType": "OR",
+            "filterBranches": [
+              {
+                "filterBranchOperator": "AND",
+                "filterBranchType": "AND",
+                "filterBranches": [],
+                "filters": [
+                  {
+                    "filterType": "PROPERTY",
+                    "operation": {
+                      "includeObjectsWithNoValueSet": false,
+                      "operationType": "NUMBER",
+                      "operator": "IS_LESS_THAN",
+                      "value": 15.0
+                    },
+                    "property": "lv_icp_fit_score"
+                  }
+                ]
+              }
+            ],
+            "filters": []
+          }
+        }
+      ],
+      "type": "LIST_BRANCH"
+    },
+    {
+      "actionId": "4",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "lv_icp_tier",
+        "value": {
+          "staticValue": "A",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "5",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "lv_icp_tier",
+        "value": {
+          "staticValue": "B",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "6",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "lv_icp_tier",
+        "value": {
+          "staticValue": "C",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "7",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "lv_icp_tier",
+        "value": {
+          "staticValue": "Unscored",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "8",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "lv_icp_tier",
+        "value": {
+          "staticValue": "D",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    }
+  ],
+  "blockedDates": [],
+  "crmObjectCreationStatus": "COMPLETE",
+  "customProperties": {},
+  "enrollmentCriteria": {
+    "eventFilterBranches": [
+      {
+        "eventTypeId": "4-655002",
+        "filterBranchOperator": "AND",
+        "filterBranchType": "UNIFIED_EVENTS",
+        "filterBranches": [],
+        "filters": [
+          {
+            "filterType": "PROPERTY",
+            "operation": {
+              "includeObjectsWithNoValueSet": false,
+              "operationType": "STRING",
+              "operator": "IS_EQUAL_TO",
+              "value": "lv_anti_icp_flag"
+            },
+            "property": "hs_name"
+          },
+          {
+            "filterType": "PROPERTY",
+            "operation": {
+              "includeObjectsWithNoValueSet": false,
+              "operationType": "ALL_PROPERTY",
+              "operator": "IS_KNOWN"
+            },
+            "property": "hs_value"
+          }
+        ],
+        "operator": "HAS_COMPLETED"
+      },
+      {
+        "eventTypeId": "4-655002",
+        "filterBranchOperator": "AND",
+        "filterBranchType": "UNIFIED_EVENTS",
+        "filterBranches": [],
+        "filters": [
+          {
+            "filterType": "PROPERTY",
+            "operation": {
+              "includeObjectsWithNoValueSet": false,
+              "operationType": "STRING",
+              "operator": "IS_EQUAL_TO",
+              "value": "lv_icp_fit_score"
+            },
+            "property": "hs_name"
+          },
+          {
+            "filterType": "PROPERTY",
+            "operation": {
+              "includeObjectsWithNoValueSet": false,
+              "operationType": "ALL_PROPERTY",
+              "operator": "IS_KNOWN"
+            },
+            "property": "hs_value"
+          }
+        ],
+        "operator": "HAS_COMPLETED"
+      }
+    ],
+    "listMembershipFilterBranches": [],
+    "shouldReEnroll": true,
+    "type": "EVENT_BASED"
+  },
+  "flowType": "WORKFLOW",
+  "id": "4625147345",
+  "isEnabled": true,
+  "name": "WF1 Set ICP Tier based on ICP Score",
+  "nextAvailableActionId": "9",
+  "objectTypeId": "0-2",
+  "revisionId": "22",
+  "startActionId": "2",
+  "timeWindows": [],
+  "type": "PLATFORM_FLOW"
+}

@@ -386,3 +386,66 @@ No `Needs Review` option was added (per the plan's explicit prohibition — no H
 workflow in this phase writes it, and REQUIREMENTS.md defers the review-queue policy).
 
 Task 2 (WF1's retarget/rebranch to actually write `Unscored`) is cleared to proceed.
+
+## Plan 06 Task 2 — WF1 (4625147345) retargeted and rebranched
+
+**Went through the API — no portal-UI fallback needed.** Followed D-07's corrected
+protocol (PORTAL-FACTS.md's own note above): fetch fresh -> disable+edit in one PUT ->
+re-GET confirms disabled -> re-enable via a second PUT -> re-GET confirms enabled ->
+validate live on disposables (now genuinely live) -> archive `.after.json`.
+
+Three changes to the archived body, diffed and confirmed minimal (no branch dropped,
+T-40-03):
+
+1. **Enrollment** — a second `eventFilterBranches` entry added, identical shape to the
+   existing `lv_icp_fit_score` HAS_COMPLETED trigger but filtered on `hs_name =
+   "lv_anti_icp_flag"` (the same pattern 40-04's `createdate` second-trigger used).
+   `shouldReEnroll` was already `true`. No D-05 portal-UI fallback needed — the API
+   accepted a second enrollment criterion on the first PUT.
+2. **Veto branch filter (action 2)** — `operationType` changed `BOOL` -> `STRING`,
+   `value` changed the JSON boolean `true` -> the string `"true"`, per D-04 (the
+   pipeline writes the flag as a quoted string; HubSpot EQ filters compare strings).
+   Live-discovered this portal's actual `lv_anti_icp_flag` property is `type: bool`,
+   `fieldType: booleancheckbox` with options `value: "true"`/`"false"` (both strings)
+   — consistent with a STRING filter comparison being the correct match, not BOOL.
+3. **Fall-through branch (action 7, the `<15` branch)** — `staticValue` changed `"D"`
+   -> `"Unscored"` (F8/D-03/ENGINE-07). No other branch, action, or `nextActionId`
+   touched — the score ladder's structure (>=70/40-69/15-39/<15) and the veto branch's
+   structure are otherwise byte-identical to `.before.json`.
+
+Diff against `.before.json`: exactly the three changes above (`+43 -15 ~6` lines,
+entirely accounted for by the enrollment-branch addition, the one filter-operation
+replacement, and the one staticValue edit) — no branch, action, or `nextActionId`
+dropped.
+
+**Live validation, all on disposable `ZZ-SCORING-TEST-DELETE-ME-*` companies (all
+deleted 204 in a `finally` block), composing `lv_icp_fit_score` through its five
+writable component properties (the calculated property itself can't be set
+directly):**
+
+| Component total | `lv_icp_fit_score` | `lv_icp_tier` |
+|---|---|---|
+| 70 | 70 | A |
+| 69 | 69 | B |
+| 40 | 40 | B |
+| 39 | 39 | C |
+| 15 | 15 | C |
+| 14 | 14 | **Unscored** |
+| -20 (gambling-only deduction, no veto input set) | -20 | **Unscored** (not D — the exact F8 regression case) |
+
+VETO-03 flag-flip, both directions, on one disposable at a fixed B-band total (org 20 +
+geo 10 + rev 10 = 40): `lv_anti_icp_flag="true"` -> tier D within settle time,
+`lv_icp_fit_score` unchanged (40 before and after); `lv_anti_icp_flag="false"` -> tier
+restored to B, `lv_icp_fit_score` still 40. Score never moved either direction — the
+flag alone drove the tier both ways.
+
+Final `GET /automation/v4/flows/4625147345`: `isEnabled=true`, `revisionId=22`. All six
+company scoring flows (four original + 40-04's two) confirmed `isEnabled=true` on a
+final live GET sweep. No `ZZ-SCORING-TEST-DELETE-ME-*` company survived any validation
+run in this task.
+
+Live parity selectors named in the plan's Task 2 acceptance criteria
+(`RUN_LIVE_PARITY=true pytest tests/test_scoring_parity.py -k "f8_sub15 or
+tier_on_flag_change or f7"`) — all 3 pass, unmodified (40-02 had already written
+`test_f8_sub15_no_veto_is_unscored` and `test_tier_on_flag_change_without_score_change`
+against exactly this shape; `test_f7_tier_lag` is that same test's named alias).

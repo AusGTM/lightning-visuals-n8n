@@ -373,3 +373,117 @@ def test_fit_score_formula_references_all_five_components():
     formula = after["calculationFormula"]
     for name in FIT_SCORE_COMPONENT_NAMES:
         assert name in formula, f"calculationFormula '{formula}' is missing '{name}'"
+
+
+# ----------------------------------------------------------------------------------
+# 40-06 (ENGINE-07/VETO-03) — WF1 "Set ICP Tier" tier-ladder conformance.
+# WF1's shape differs from the geography/revenue mapper flows above: its two
+# LIST_BRANCH actions compare directly against a single value (STRING/NUMBER/
+# NUMBER_RANGED), not a MULTISTRING "values" list, so it gets its own extractors
+# rather than reusing extract_list_branch_multistring_scores.
+# ----------------------------------------------------------------------------------
+
+def _tier_ladder_target_value(flow: dict, target_action_id: str) -> str:
+    actions_by_id = {a["actionId"]: a for a in flow["actions"]}
+    return actions_by_id[target_action_id]["fields"]["value"]["staticValue"]
+
+
+def extract_wf1_veto_branch(flow: dict):
+    """Returns (filter_operation_dict, written_tier_value) for the LIST_BRANCH action
+    keyed on lv_anti_icp_flag, or None if the flow has no such branch."""
+    branch_action = find_list_branch_action(flow, "lv_anti_icp_flag")
+    if branch_action is None:
+        return None
+    lb = branch_action["listBranches"][0]
+    filt = lb["filterBranch"]["filterBranches"][0]["filters"][0]
+    tier_value = _tier_ladder_target_value(flow, lb["connection"]["nextActionId"])
+    return filt["operation"], tier_value
+
+
+def extract_wf1_score_ladder(flow: dict) -> dict:
+    """Walks the LIST_BRANCH action keyed on lv_icp_fit_score and returns
+    {lower_bound: tier_value} for each NUMBER_RANGED/NUMBER branch, plus the
+    fall-through branch's tier under '__default__' (WF1 has no defaultBranch on this
+    action -- the fourth listBranch, IS_LESS_THAN 15, plays that role)."""
+    branch_action = find_list_branch_action(flow, "lv_icp_fit_score")
+    ladder = {}
+    for lb in branch_action["listBranches"]:
+        filt = lb["filterBranch"]["filterBranches"][0]["filters"][0]
+        op = filt["operation"]
+        tier_value = _tier_ladder_target_value(flow, lb["connection"]["nextActionId"])
+        if op["operator"] == "IS_LESS_THAN":
+            ladder["__default__"] = tier_value
+        else:
+            ladder[op.get("lowerBound", op.get("value"))] = tier_value
+    return ladder
+
+
+def _wf1_enrollment_hs_names(flow: dict) -> set:
+    return {
+        f["operation"]["value"]
+        for branch in flow["enrollmentCriteria"]["eventFilterBranches"]
+        for f in branch["filters"]
+        if f["property"] == "hs_name"
+    }
+
+
+@pytest.mark.parametrize("flow_path", _after_json_paths())
+def test_wf1_enrollment_includes_score_and_veto_flag(flow_path):
+    """VETO-03/F7 — WF1 must enroll on both lv_icp_fit_score known and
+    lv_anti_icp_flag known, so a flag change alone re-enrolls a company whose score
+    has not moved."""
+    flow = load_flow(flow_path)
+    if not _is_flow(flow) or find_list_branch_action(flow, "lv_anti_icp_flag") is None:
+        pytest.skip(f"{flow_path} is not WF1")
+
+    hs_names = _wf1_enrollment_hs_names(flow)
+    assert {"lv_icp_fit_score", "lv_anti_icp_flag"} <= hs_names, (
+        f"{flow_path}: enrollment criteria {sorted(hs_names)} must include both "
+        "lv_icp_fit_score and lv_anti_icp_flag"
+    )
+    assert flow["enrollmentCriteria"]["shouldReEnroll"] is True
+
+
+@pytest.mark.parametrize("flow_path", _after_json_paths())
+def test_wf1_veto_branch_compares_string_true_and_writes_d(flow_path):
+    """D-04 — the pipeline writes lv_anti_icp_flag as the quoted string "true", and
+    HubSpot EQ filters compare strings, so WF1's veto branch must compare against the
+    string "true", not a BOOL literal. The branch it guards must write D."""
+    flow = load_flow(flow_path)
+    if not _is_flow(flow) or find_list_branch_action(flow, "lv_anti_icp_flag") is None:
+        pytest.skip(f"{flow_path} is not WF1")
+
+    result = extract_wf1_veto_branch(flow)
+    op, tier_value = result
+    assert op["operationType"] == "STRING", f"{flow_path}: veto filter must be STRING, got {op['operationType']}"
+    assert op["operator"] == "IS_EQUAL_TO"
+    assert op["value"] == "true", f"{flow_path}: veto filter must compare to the string 'true', got {op['value']!r}"
+    assert tier_value == "D", f"{flow_path}: veto branch must write D, got {tier_value!r}"
+
+
+@pytest.mark.parametrize("flow_path", _after_json_paths())
+def test_wf1_score_ladder_thresholds_match_rubric(flow_path):
+    """ENGINE-07/F8 — the score-band ladder's thresholds must equal
+    config/icp_scoring.yaml tier_rules' A/B/C min_score values (70/40/15), read from
+    the rubric rather than hard-coded here, and the fall-through branch (below 15)
+    must write Unscored, not D."""
+    flow = load_flow(flow_path)
+    if not _is_flow(flow) or find_list_branch_action(flow, "lv_icp_fit_score") is None:
+        pytest.skip(f"{flow_path} is not WF1")
+
+    tier_rules = load_rubric()["tier_rules"]
+    ladder = extract_wf1_score_ladder(flow)
+
+    assert ladder.get(tier_rules["A"]["min_score"]) == "A", (
+        f"{flow_path}: score ladder at {tier_rules['A']['min_score']} must write A, got {ladder}"
+    )
+    assert ladder.get(tier_rules["B"]["min_score"]) == "B", (
+        f"{flow_path}: score ladder at {tier_rules['B']['min_score']} must write B, got {ladder}"
+    )
+    assert ladder.get(tier_rules["C"]["min_score"]) == "C", (
+        f"{flow_path}: score ladder at {tier_rules['C']['min_score']} must write C, got {ladder}"
+    )
+    assert ladder.get("__default__") == "Unscored", (
+        f"{flow_path}: fall-through (below {tier_rules['C']['min_score']}) must write "
+        f"Unscored, got {ladder.get('__default__')!r} (F8's exact defect shape if this is 'D')"
+    )
