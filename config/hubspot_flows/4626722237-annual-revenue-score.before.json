@@ -1,0 +1,294 @@
+{
+  "actions": [
+    {
+      "actionId": "1",
+      "defaultBranch": {
+        "edgeType": "STANDARD",
+        "nextActionId": "7"
+      },
+      "listBranches": [
+        {
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "2"
+          },
+          "filterBranch": {
+            "filterBranchOperator": "OR",
+            "filterBranchType": "OR",
+            "filterBranches": [
+              {
+                "filterBranchOperator": "AND",
+                "filterBranchType": "AND",
+                "filterBranches": [],
+                "filters": [
+                  {
+                    "filterType": "PROPERTY",
+                    "operation": {
+                      "includeObjectsWithNoValueSet": false,
+                      "lowerBound": 5000000,
+                      "operationType": "NUMBER_RANGED",
+                      "operator": "IS_BETWEEN",
+                      "upperBound": 500000000
+                    },
+                    "property": "annualrevenue"
+                  }
+                ]
+              }
+            ],
+            "filters": []
+          }
+        },
+        {
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "3"
+          },
+          "filterBranch": {
+            "filterBranchOperator": "OR",
+            "filterBranchType": "OR",
+            "filterBranches": [
+              {
+                "filterBranchOperator": "AND",
+                "filterBranchType": "AND",
+                "filterBranches": [],
+                "filters": [
+                  {
+                    "filterType": "PROPERTY",
+                    "operation": {
+                      "includeObjectsWithNoValueSet": false,
+                      "lowerBound": 500000000,
+                      "operationType": "NUMBER_RANGED",
+                      "operator": "IS_BETWEEN",
+                      "upperBound": 750000000
+                    },
+                    "property": "annualrevenue"
+                  }
+                ]
+              }
+            ],
+            "filters": []
+          }
+        },
+        {
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "4"
+          },
+          "filterBranch": {
+            "filterBranchOperator": "OR",
+            "filterBranchType": "OR",
+            "filterBranches": [
+              {
+                "filterBranchOperator": "AND",
+                "filterBranchType": "AND",
+                "filterBranches": [],
+                "filters": [
+                  {
+                    "filterType": "PROPERTY",
+                    "operation": {
+                      "includeObjectsWithNoValueSet": false,
+                      "lowerBound": 750000000,
+                      "operationType": "NUMBER_RANGED",
+                      "operator": "IS_BETWEEN",
+                      "upperBound": 1000000000
+                    },
+                    "property": "annualrevenue"
+                  }
+                ]
+              }
+            ],
+            "filters": []
+          }
+        },
+        {
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "5"
+          },
+          "filterBranch": {
+            "filterBranchOperator": "OR",
+            "filterBranchType": "OR",
+            "filterBranches": [
+              {
+                "filterBranchOperator": "AND",
+                "filterBranchType": "AND",
+                "filterBranches": [],
+                "filters": [
+                  {
+                    "filterType": "PROPERTY",
+                    "operation": {
+                      "includeObjectsWithNoValueSet": false,
+                      "lowerBound": 1000000000,
+                      "operationType": "NUMBER_RANGED",
+                      "operator": "IS_BETWEEN",
+                      "upperBound": 1200000000
+                    },
+                    "property": "annualrevenue"
+                  }
+                ]
+              }
+            ],
+            "filters": []
+          }
+        },
+        {
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "6"
+          },
+          "filterBranch": {
+            "filterBranchOperator": "OR",
+            "filterBranchType": "OR",
+            "filterBranches": [
+              {
+                "filterBranchOperator": "AND",
+                "filterBranchType": "AND",
+                "filterBranches": [],
+                "filters": [
+                  {
+                    "filterType": "PROPERTY",
+                    "operation": {
+                      "includeObjectsWithNoValueSet": false,
+                      "operationType": "NUMBER",
+                      "operator": "IS_GREATER_THAN",
+                      "value": 1200000000.0
+                    },
+                    "property": "annualrevenue"
+                  }
+                ]
+              }
+            ],
+            "filters": []
+          }
+        }
+      ],
+      "type": "LIST_BRANCH"
+    },
+    {
+      "actionId": "2",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "annual_revenue_score",
+        "value": {
+          "staticValue": "10",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "3",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "annual_revenue_score",
+        "value": {
+          "staticValue": "-5",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "4",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "annual_revenue_score",
+        "value": {
+          "staticValue": "-15",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "5",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "annual_revenue_score",
+        "value": {
+          "staticValue": "-30",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "6",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "annual_revenue_score",
+        "value": {
+          "staticValue": "-50",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "7",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "annual_revenue_score",
+        "value": {
+          "staticValue": "0",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    }
+  ],
+  "blockedDates": [],
+  "crmObjectCreationStatus": "COMPLETE",
+  "customProperties": {},
+  "enrollmentCriteria": {
+    "eventFilterBranches": [
+      {
+        "eventTypeId": "4-655002",
+        "filterBranchOperator": "AND",
+        "filterBranchType": "UNIFIED_EVENTS",
+        "filterBranches": [],
+        "filters": [
+          {
+            "filterType": "PROPERTY",
+            "operation": {
+              "includeObjectsWithNoValueSet": false,
+              "operationType": "STRING",
+              "operator": "IS_EQUAL_TO",
+              "value": "annualrevenue"
+            },
+            "property": "hs_name"
+          },
+          {
+            "filterType": "PROPERTY",
+            "operation": {
+              "includeObjectsWithNoValueSet": false,
+              "operationType": "ALL_PROPERTY",
+              "operator": "IS_KNOWN"
+            },
+            "property": "hs_value"
+          }
+        ],
+        "operator": "HAS_COMPLETED"
+      }
+    ],
+    "listMembershipFilterBranches": [],
+    "shouldReEnroll": true,
+    "type": "EVENT_BASED"
+  },
+  "flowType": "WORKFLOW",
+  "id": "4626722237",
+  "isEnabled": true,
+  "name": "Annual Revenue Score",
+  "nextAvailableActionId": "8",
+  "objectTypeId": "0-2",
+  "revisionId": "17",
+  "startActionId": "1",
+  "timeWindows": [],
+  "type": "PLATFORM_FLOW"
+}
