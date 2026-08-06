@@ -25,6 +25,7 @@ Phase: 39 (Path Decision & Fit-Score Verification) — EXECUTING
 Plan: 39-01, 39-02, 39-03 complete (3 of 4); 39-04 depends on all three
 Status: Executing Phase 39 — only the decision record (39-04) remains
 Last activity: 2026-08-06 — 39-02 complete (availability evidence + verification note + coverage matrix)
+Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39-path-decision-fit-score-verification/39-DECISION.md`
 
 ## Session
 

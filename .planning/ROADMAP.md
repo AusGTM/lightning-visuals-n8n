@@ -50,7 +50,7 @@ phase is path-shaped by this decision, so it must land before Phase 40 is planne
      explicitly recorded instead of left implicit. **Superseded by 39-CONTEXT.md D-06:** the
      pre-committed fallback is fix-the-four-workflow-chain-in-place, not custom equation
      properties (those stay rejected per HANDOVER §5).
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans executed
 
 Plans:
 **Wave 1**
@@ -64,9 +64,9 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 39-04-PLAN.md — Armed latency run, band-c review gate, and 39-DECISION.md + ROADMAP/STATE pointers
+- [x] 39-04-PLAN.md — Decision record (D-04/latency gate skipped as moot, operator override) — 39-DECISION.md + ROADMAP/STATE pointers
 
-**Path decision:** pending — will be recorded in
+**Path decision:** fix-the-four-workflow-chain-in-place — see
 `.planning/phases/39-path-decision-fit-score-verification/39-DECISION.md`
 
 ### Phase 40: Scoring Engine, Veto & Parity Remediation
