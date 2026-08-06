@@ -30,7 +30,11 @@ sys.path.insert(0, str(ROOT))  # repo root on sys.path so `src.*` imports resolv
 
 from src.hubspot_client import BASE_URL, hs_headers  # noqa: E402
 
-EXPECTED_PORTAL_ID = os.getenv("HUBSPOT_EXPECTED_PORTAL_ID", "22617666")
+# WR-01 fix: hard-coded, no env override — same "module constant, no CLI/env
+# override" discipline as other disposable-artifact constants in this probe family. An
+# env override here would let a stale HUBSPOT_EXPECTED_PORTAL_ID silently redefine the
+# portal guard.
+EXPECTED_PORTAL_ID = "22617666"
 
 EVIDENCE_DIR = ROOT / ".planning" / "phases" / "39-path-decision-fit-score-verification" / "evidence"
 

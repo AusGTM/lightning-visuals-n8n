@@ -43,7 +43,10 @@ from src.hubspot_client import (  # noqa: E402
     delete_record,
 )
 
-EXPECTED_PORTAL_ID = os.getenv("HUBSPOT_EXPECTED_PORTAL_ID", "22617666")
+# WR-01 fix: hard-coded, no env override — same "module constant, no CLI/env
+# override" discipline as COMPANY_NAME_PREFIX/FLIP_PROPERTY_NAME. An env override here
+# would let a stale HUBSPOT_EXPECTED_PORTAL_ID silently redefine the portal guard.
+EXPECTED_PORTAL_ID = "22617666"
 
 EVIDENCE_DIR = ROOT / ".planning" / "phases" / "39-path-decision-fit-score-verification" / "evidence"
 EVIDENCE_PATH = EVIDENCE_DIR / "recalc_latency_probe.json"
