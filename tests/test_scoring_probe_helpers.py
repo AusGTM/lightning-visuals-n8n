@@ -21,6 +21,9 @@ from scripts.probe_scoring_recalc_latency import (  # noqa: E402
     median_latency,
     classify_latency_band,
     find_score_property_name,
+    flip_value_for_sample,
+    FLIP_INITIAL_VALUE,
+    FLIP_TARGET_VALUE,
 )
 
 
@@ -194,3 +197,25 @@ def test_find_score_property_name_found():
         {"name": "hs_lead_score", "fieldType": "calculation_score"},
     ]
     assert find_score_property_name(results) == "hs_lead_score"
+
+
+# --- WR-03: sample-loop write-alternation coverage (the gap that let CR-01 ship) -------
+
+def test_flip_value_for_sample_alternates_across_three_rounds():
+    # This is the exact 3-round sequence _run_one_sample is driven with in main()'s
+    # SAMPLE_COUNT loop. Before the CR-01 fix, every round wrote FLIP_TARGET_VALUE —
+    # this assertion would have failed against that code.
+    sequence = [flip_value_for_sample(i) for i in range(3)]
+    assert sequence == [FLIP_TARGET_VALUE, FLIP_INITIAL_VALUE, FLIP_TARGET_VALUE]
+    assert sequence[0] != sequence[1] != sequence[2]
+
+
+def test_flip_value_for_sample_never_repeats_previous_round():
+    for i in range(1, 6):
+        assert flip_value_for_sample(i) != flip_value_for_sample(i - 1)
+
+
+def test_flip_value_for_sample_round_zero_differs_from_disposable_companys_starting_value():
+    # The disposable company is created with FLIP_PROPERTY_NAME=FLIP_INITIAL_VALUE, so
+    # round 0's write must differ from that starting value to be a genuine change.
+    assert flip_value_for_sample(0) != FLIP_INITIAL_VALUE
