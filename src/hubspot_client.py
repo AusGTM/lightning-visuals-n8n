@@ -64,6 +64,27 @@ def create_record(object_type: str, properties: dict, dry_run=True):
     return r.json()
 
 
+def delete_record(object_type: str, record_id: str, dry_run=True):
+    # Phase 39 (39-03, DECIDE-01): mirrors patch_record/create_record. dry_run
+    # short-circuits BEFORE any live DELETE call — prints only the URL (never
+    # hs_headers/token; there is no payload on a DELETE) and returns the sentinel.
+    if dry_run:
+        print(json.dumps({
+            "dry_run": True,
+            "method": "DELETE",
+            "url": f"{BASE_URL}/crm/v3/objects/{object_type}/{record_id}"
+        }, indent=2, default=str))
+        return {"dry_run": True}
+
+    url = f"{BASE_URL}/crm/v3/objects/{object_type}/{record_id}"
+    r = requests.delete(url, headers=hs_headers(), timeout=30)
+    r.raise_for_status()
+    # HubSpot answers a successful company delete with 204 No Content, which has
+    # no JSON body — return the response object itself; caller asserts
+    # r.status_code == 204. Do not "fix" this into r.json(), there is no body.
+    return r
+
+
 def search_records(object_type: str, filters: list[dict], properties: list[str], limit=100):
     url = f"{BASE_URL}/crm/v3/objects/{object_type}/search"
     payload = {
