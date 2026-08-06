@@ -87,4 +87,23 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 
 ## Traceability
 
-(Filled by roadmap.)
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| DECIDE-01 | Phase 39 | Pending |
+| ENGINE-01 | Phase 40 | Pending |
+| ENGINE-02 | Phase 40 | Pending |
+| ENGINE-03 | Phase 40 | Pending |
+| ENGINE-04 | Phase 40 | Pending |
+| ENGINE-05 | Phase 40 | Pending |
+| ENGINE-06 | Phase 40 | Pending |
+| ENGINE-07 | Phase 40 | Pending |
+| VETO-01 | Phase 40 | Pending |
+| VETO-02 | Phase 40 | Pending |
+| VETO-03 | Phase 40 | Pending |
+| PARITY-01 | Phase 40 | Pending |
+| PARITY-02 | Phase 40 | Pending |
+| DATA-01 | Phase 41 | Pending |
+| DATA-02 | Phase 41 | Pending |
+| CLEAN-01 | Phase 42 | Pending |
+
+Coverage: 16/16 v0.7 requirements mapped. No orphans.
