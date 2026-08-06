@@ -151,8 +151,17 @@ def _disposable_company_name() -> str:
     return f"{COMPANY_NAME_PREFIX}{ts}"
 
 
-def _run_one_sample(record_id: str, score_property_name: str, pre_flip_value):
-    """Flips FLIP_PROPERTY_NAME on the disposable company to FLIP_TARGET_VALUE, then polls
+def flip_value_for_sample(i: int):
+    """Pure function (CR-01 fix): the value each round's write must alternate to, so every
+    sample is a genuine property change instead of samples 2+ re-writing the same value as
+    a no-op. Even rounds flip to FLIP_TARGET_VALUE, odd rounds flip back to
+    FLIP_INITIAL_VALUE — the disposable company starts at FLIP_INITIAL_VALUE (line ~208),
+    so round 0 (i=0) is always a real change from that starting value."""
+    return FLIP_TARGET_VALUE if i % 2 == 0 else FLIP_INITIAL_VALUE
+
+
+def _run_one_sample(record_id: str, score_property_name: str, pre_flip_value, flip_value):
+    """Flips FLIP_PROPERTY_NAME on the disposable company to `flip_value`, then polls
     the score property every POLL_INTERVAL_SECONDS until its value differs from
     pre_flip_value. Returns elapsed seconds (t1 - t0, both from time.monotonic()), or None
     if POLL_TIMEOUT_SECONDS elapses first (no observed change — the no-fire case).
@@ -160,7 +169,7 @@ def _run_one_sample(record_id: str, score_property_name: str, pre_flip_value):
     Only ever writes the disposable company's own property — never the scoring criteria
     definition (RESEARCH.md Pitfall 3)."""
     t0 = time.monotonic()
-    patch_record("companies", record_id, {FLIP_PROPERTY_NAME: FLIP_TARGET_VALUE}, dry_run=False)
+    patch_record("companies", record_id, {FLIP_PROPERTY_NAME: flip_value}, dry_run=False)
 
     while time.monotonic() - t0 < POLL_TIMEOUT_SECONDS:
         time.sleep(POLL_INTERVAL_SECONDS)
@@ -217,7 +226,8 @@ def main(argv=None) -> int:
         for i in range(SAMPLE_COUNT):
             record = get_record("companies", record_id, [score_property_name])
             pre_flip_value = record.get("properties", {}).get(score_property_name)
-            elapsed = _run_one_sample(record_id, score_property_name, pre_flip_value)
+            flip_value = flip_value_for_sample(i)
+            elapsed = _run_one_sample(record_id, score_property_name, pre_flip_value, flip_value)
             samples.append(elapsed)
             print(f"sample {i + 1}/{SAMPLE_COUNT}: {elapsed}")
             if elapsed is None:
