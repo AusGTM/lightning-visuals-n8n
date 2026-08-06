@@ -106,14 +106,14 @@ VETO-01, VETO-02, VETO-03, PARITY-01, PARITY-02
      scratch scenarios (AU-string veto, tier lag, gambling conflation, boundary overlap) encoded
      as named regression cases — this is the standing drift guard, since every defect above was
      invisible in the HubSpot UI.
-**Plans**: 2/7 plans executed
+**Plans**: 3/7 plans executed
 
 Plans:
 **Wave 1**
 
 - [x] 40-01-PLAN.md — Tracer: flow fetch/PUT tooling, four flow definitions archived, portal facts recorded, and the org-type point table fixed end-to-end (ENGINE-05, ENGINE-06)
 - [x] 40-02-PLAN.md — Parity harness: offline oracle tier, live-gated fixture tier, F4/F7/F9/F10 named regression cases, read-only sweep wrapper with a false-green guard (PARITY-01, PARITY-02)
-- [ ] 40-03-PLAN.md — Veto ownership onto the n8n pipeline, with the P2/P4 latent bugs closed first (VETO-01, VETO-02)
+- [x] 40-03-PLAN.md — Veto ownership onto the n8n pipeline, with the P2/P4 latent bugs closed first (VETO-01, VETO-02)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -206,6 +206,6 @@ Phases execute in numeric order: 39 → 40 → 41 → 42 → 43
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 39. Path Decision & Fit-Score Verification | 4/4 | Complete | 2026-08-06 |
-| 40. Scoring Engine, Veto & Parity Remediation | 2/7 | In Progress|  |
+| 40. Scoring Engine, Veto & Parity Remediation | 3/7 | In Progress|  |
 | 41. Validation Data Import & End-to-End Proof | 0/TBD | Not started | - |
 | 42. Scoring Artifact Cleanup & Reconciliation | 0/TBD | Not started | - |
