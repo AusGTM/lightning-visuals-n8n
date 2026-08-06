@@ -50,7 +50,7 @@ phase is path-shaped by this decision, so it must land before Phase 40 is planne
      explicitly recorded instead of left implicit. **Superseded by 39-CONTEXT.md D-06:** the
      pre-committed fallback is fix-the-four-workflow-chain-in-place, not custom equation
      properties (those stay rejected per HANDOVER §5).
-**Plans**: 1/4 plans executed
+**Plans**: 2/4 plans executed
 
 Plans:
 **Wave 1**
@@ -60,7 +60,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [ ] 39-02-PLAN.md — Live API evidence + operator in-portal walkthrough + VERIFICATION-NOTE.md + COVERAGE.md
-- [ ] 39-03-PLAN.md — `delete_record()` primitive + two-key-gated disposable-company recalc-latency probe
+- [x] 39-03-PLAN.md — `delete_record()` primitive + two-key-gated disposable-company recalc-latency probe
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
@@ -151,7 +151,7 @@ Phases execute in numeric order: 39 → 40 → 41 → 42
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 39. Path Decision & Fit-Score Verification | 1/4 | In Progress|  |
+| 39. Path Decision & Fit-Score Verification | 2/4 | In Progress|  |
 | 40. Scoring Engine, Veto & Parity Remediation | 0/TBD | Not started | - |
 | 41. Validation Data Import & End-to-End Proof | 0/TBD | Not started | - |
 | 42. Scoring Artifact Cleanup & Reconciliation | 0/TBD | Not started | - |
