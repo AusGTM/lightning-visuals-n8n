@@ -63,6 +63,8 @@ HubSpot's live scores against `src/icp_scoring.py`.
   scratch scenarios as fixtures
 - Retire/reconcile orphan scoring artifacts per the path decision
 
+**Phase 39 complete (2026-08-06):** Path decided — **fix-the-four-workflow-chain-in-place**. Operator hard requirement: score stays in `lv_icp_fit_score`/`lv_icp_tier`, existing architecture reused. Company fit score verified AVAILABLE on Sales Hub Pro in-portal (evidence + attestation in `.planning/phases/39-path-decision-fit-score-verification/`), but the lead-scoring tool cannot write to existing custom properties, so it was not adopted. Decision record: `39-DECISION.md`. Branch: v0.6 merged to master (local; push pending), work continues on `feat/v0.7-scoring-remediation`.
+
 **Key context:** full-712 backfill trigger deferred beyond v0.7. Phase numbering continues at 39
 (global sequence). The `milestone` workstream's v0.5 Phase 22 armed canary remains pending and is
 a dependency, not part of this milestone. HubSpot portal 22617666 (ap1); `automation` scope now
