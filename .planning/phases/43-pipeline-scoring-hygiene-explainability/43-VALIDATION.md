@@ -2,8 +2,8 @@
 phase: 43
 slug: pipeline-scoring-hygiene-explainability
 # status lifecycle: draft (seeded by plan-phase) → validated (set by validate-phase §6)
-status: draft
-nyquist_compliant: false
+status: validated
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-08-07
 ---
@@ -92,4 +92,4 @@ created: 2026-08-07
 - [ ] Feedback latency < 60s for the offline tier
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-08-07 (gsd-plan-checker: PASSED, 0 blockers, 0 warnings)
