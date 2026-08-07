@@ -185,3 +185,24 @@ def test_lusha_id_staging_properties_appear_in_search_property_lists():
     assert "lusha_company_id" in ENRICH_COMPANY_SEARCH_PROPERTIES_CSV.split(",")
     assert '"lusha_contact_id"' in HS_SEARCH_BODY_EXPR
     assert '"lusha_company_id"' in HS_CO_SEARCH_BODY_EXPR
+
+
+def test_lv_country_region_normalized_appears_in_the_company_fetch_property_list():
+    """fix-40 VETO-01/02 live evidence run: this property was absent from
+    ENRICH_COMPANY_SEARCH_PROPERTIES_CSV (the ONE list feeding both "HubSpot Company
+    Search" and "HubSpot Company Fetch By Id"), so `existingRecord.
+    lv_country_region_normalized` was always `undefined` -- ENRICH_DECIDE_CO_CLOUD's veto
+    derivation reads that field directly as its fallback (not through mergeCompanies'
+    policy gate), so `_regionKey(undefined)` fired a spurious "Non-ANZ geography" veto on
+    real AU/NZ companies whenever no candidate this run freshly re-promoted region. Unlike
+    lusha_company_id (a read-back-path property), this is a correctness-critical scoring
+    input -- pin it here so removing it again fails the suite instead of silently
+    reopening the live-caught defect."""
+    import sys
+    from pathlib import Path as _Path
+
+    root = _Path(__file__).resolve().parent.parent
+    sys.path.insert(0, str(root / "scripts"))
+    from build_cloud_workflows import ENRICH_COMPANY_SEARCH_PROPERTIES_CSV  # noqa: E402
+
+    assert "lv_country_region_normalized" in ENRICH_COMPANY_SEARCH_PROPERTIES_CSV.split(",")

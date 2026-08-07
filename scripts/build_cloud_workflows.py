@@ -3827,11 +3827,27 @@ return rows.map((it, i) => {
 # field was always misreported as null for this one field. Feeds ONLY
 # _hs_http_search_node HTTP nodes (never a Code node), so adding it moves zero frozen
 # {variant, node} pairs — verified below by re-running the frozen guard after this edit.
+#
+# fix-40 VETO-01/02 live evidence run (2026-08-07): lv_country_region_normalized was ALSO
+# omitted here, and unlike lv_sponsorship_reliant this one is NOT audit-cosmetic —
+# ENRICH_DECIDE_CO_CLOUD's veto derivation reads `existing.lv_country_region_normalized`
+# directly (never through mergeCompanies' policy gate) as its fallback when no candidate
+# this run re-promotes the field. With the property absent from BOTH HTTP fetch nodes this
+# CSV feeds ("HubSpot Company Search" domain-match AND "HubSpot Company Fetch By Id"
+# bare-objectId lanes — see the two `properties_csv=ENRICH_COMPANY_SEARCH_PROPERTIES_CSV`
+# call sites below), `existing.lv_country_region_normalized` was `undefined` on every run
+# that didn't freshly re-promote region, so `_regionKey(undefined)` -> "non_anz" fired a
+# spurious "Non-ANZ geography" veto on true-AU/NZ companies. Live-caught: two AU disposable
+# companies (region set directly via the HubSpot API, never touched by this run's
+# research/waterfall candidates, both matched:false) received "Non-ANZ geography" appended
+# to their correct no-content/hardware-vendor reasons. Same class of defect WR-01 already
+# fixed for lv_sponsorship_reliant, one property short of covering it.
 ENRICH_COMPANY_SEARCH_PROPERTIES_CSV = (
     "name,domain,industry,annualrevenue,"
     "numberofemployees,hs_object_id,lv_org_type,"
     "lv_produces_content,lv_content_type,lv_sponsorship_reliant,"
     "lv_is_hardware_vendor,lv_is_gambling_operator,"
+    "lv_country_region_normalized,"
     "lv_enrichment_provenance,lv_org_type_verified_at,"
     "lv_produces_content_verified_at,lusha_company_id"
 )
