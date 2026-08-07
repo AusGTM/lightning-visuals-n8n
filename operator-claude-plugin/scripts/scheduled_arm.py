@@ -55,8 +55,12 @@ minutes, not immediate").
 
 Bounded by design, not by convention: an empty batch is a no-op (`arm_for_dispatch`
 itself refuses an empty allowlist — reused verbatim, never re-implemented here); the
-arm/dispatch/disarm cycle costs at most one dispatch's wall-clock time and is never held
-open longer than that. One invocation of `run_scheduled_arm_cycle` is one cycle, exactly
+arm/dispatch/disarm cycle costs at most the batch's chunked-dispatch wall-clock time
+(`chunking.plan_chunks`/`dispatch_plan`, the same backend-record-cap-honoring split every
+other dispatch caller in this plugin uses — the enrichment webhook refuses rather than
+truncates an oversize request, so a batch larger than `max_records_per_chunk` sent as one
+POST fails closed with nothing enriched) and is never held open longer than that. One
+invocation of `run_scheduled_arm_cycle` is one cycle, exactly
 like `sweep_entry.run_sweep` is one sweep — a cron-adjacent wrapper supplies the repeat
 (SWEEP-CRON-TEMPLATE.md precedent), not this module.
 
@@ -69,6 +73,7 @@ one batch and closes the moment the dispatch returns, exactly like the manual
 """
 import requests
 
+import chunking
 import config_gate
 import enrichment
 import executions_client
@@ -93,6 +98,7 @@ LOOKBACK_EXECUTIONS = 5
 # design's safe default, not a failure to page anyone about.
 _FAILURE_OUTCOMES = frozenset({
     "not_configured", "workflow_not_found", "disarm_failed", "dispatch_failed",
+    "plan_failed",
 })
 
 
@@ -191,36 +197,60 @@ def run_scheduled_arm_cycle(config, get_transport=requests.get, post_transport=N
         return _outcome("no_records_matched", execution_id=batch["execution_id"])
 
     record_ids = batch["record_ids"]
-    # Built and validated BEFORE arming: a bad envelope must never arm a window it then
-    # has nothing to send through (mirrors control_actions.execute_action's own ordering).
     providers = enrichment.resolve_providers(None, config)
-    envelope = enrichment.build_envelope(
-        {"record_ids": record_ids, "object_type": "companies"}, providers)
+    # Built and validated BEFORE arming: a bad spec must never arm a window it then has
+    # nothing to send through (mirrors control_actions.execute_action's own ordering).
+    # `plan_chunks` is the same pure, no-I/O split every other dispatch caller in this
+    # plugin uses (preingest.rerequest_unanswered, preview_enrichment) — reusing it here
+    # is what fixes the bug this module shipped with: sending the WHOLE matched batch as
+    # one POST regardless of size ignored the backend's own per-request record cap
+    # (`ENRICH_MAX_LIST_RECORDS`, mirrored client-side by the `max_records_per_chunk`
+    # config key `chunk_ceiling` reads), so any batch larger than that cap was refused
+    # outright with nothing enriched — arm/disarm still ran, but the write never landed.
+    try:
+        ceiling = chunking.chunk_ceiling(config)
+        plan = chunking.plan_chunks(
+            {"record_ids": record_ids, "object_type": "companies"}, ceiling)
+    except chunking.ChunkPlanError as failure:
+        return _outcome("plan_failed", detail=str(failure), record_ids=record_ids,
+                        execution_id=batch["execution_id"])
 
-    dispatch_result = None
+    dispatch_outcome = None
     try:
         with n8n_arming.armed_window(enrichment_workflow_id, record_ids, [], False,
                                      config, transport=post_transport) as window:
-            dispatch_result = enrichment.dispatch_enrichment(
-                envelope, True, config, transport=post_transport)
+            # One armed window, one guaranteed disarm on exit — but now as many chunked
+            # POSTs as the batch needs. `dispatch_plan` never raises for a single failed
+            # chunk (D-12: recorded, the run continues); it only raises `NotArmedError`,
+            # which cannot fire here since `armed=True` is passed literally.
+            dispatch_outcome = chunking.dispatch_plan(
+                plan, providers, True, config, transport=post_transport)
     except n8n_arming.ArmingRefused as refusal:
         return _outcome("arm_refused", detail=str(refusal), record_ids=record_ids,
                         execution_id=batch["execution_id"])
     except n8n_arming.DisarmFailed as failure:
         return _outcome("disarm_failed", record_ids=record_ids,
                         execution_id=batch["execution_id"], **failure.outcome)
-    except enrichment.DispatchError as failure:
-        # The disarm already ran — `armed_window.__exit__` fires before this `except`
-        # is ever reached (guaranteed disarm on a dispatch failure, per the design
-        # brief). This only stops an unattended cron cycle from crashing silently
-        # (sweep_entry.py's own "a raised exception with nobody watching produces
-        # nothing" reasoning — D-15 — applies here too).
-        return _outcome("dispatch_failed", detail=str(failure), record_ids=record_ids,
-                        execution_id=batch["execution_id"])
+
+    results = [
+        {"index": r.index, "rows": r.rows, "ok": r.ok, "reason": r.reason}
+        for r in dispatch_outcome.results
+    ]
+    # A cron log/monitor pages on a batch that landed NOTHING (every chunk failed) the
+    # same way it would have paged on the old single-request `dispatch_failed` outcome.
+    # A partial failure (some chunks landed) stays under `dispatch_result`/`results` —
+    # visible, but not a page, matching D-12's "the run continues" contract for the rest
+    # of this plugin's chunked dispatch callers.
+    if results and all(not r["ok"] for r in results):
+        return _outcome("dispatch_failed", record_ids=record_ids,
+                        execution_id=batch["execution_id"], results=results,
+                        failed_batch=dispatch_outcome.failed_batch)
 
     return _outcome("dispatched", record_ids=record_ids, execution_id=batch["execution_id"],
                     arm=window.arm_result, disarm=window.disarm_result,
-                    dispatch_result=dispatch_result)
+                    chunk_count=plan.chunk_count, results=results,
+                    failed_batch=dispatch_outcome.failed_batch,
+                    dispatch_result=list(dispatch_outcome.responses))
 
 
 def _load_config_no_migration():

@@ -203,6 +203,7 @@ def test_without_ALLOW_N8N_ARM_the_cycle_refuses_and_never_dispatches(
         fake_config, stub_get_transport_factory, stub_module_transport_factory):
     """The kill switch precedes the transport construction inside arm_for_dispatch —
     zero mutating calls, and the dispatch body (inside the `with`) never runs at all."""
+    fake_config = {**fake_config, "max_records_per_chunk": 2}
     get_transport = stub_get_transport_factory([
         WORKFLOWS_PAGE, WORKFLOWS_PAGE,
         {"data": [_execution_list_item("t", "2026-08-06T10:15:00.000Z")]},
@@ -220,6 +221,7 @@ def test_without_ALLOW_N8N_ARM_the_cycle_refuses_and_never_dispatches(
 
 def test_a_successful_cycle_arms_dispatches_and_disarms_bounded_to_the_batch(
         armed_env, fake_config, stub_get_transport_factory, stub_module_transport_factory):
+    fake_config = {**fake_config, "max_records_per_chunk": 2}
     get_transport = stub_get_transport_factory([
         WORKFLOWS_PAGE, WORKFLOWS_PAGE,
         {"data": [_execution_list_item("t", "2026-08-06T10:15:00.000Z")]},
@@ -257,6 +259,7 @@ def test_a_successful_cycle_arms_dispatches_and_disarms_bounded_to_the_batch(
 def test_a_dispatch_failure_still_guarantees_the_disarm(
         armed_env, fake_config, stub_get_transport_factory, stub_module_transport_factory):
     """The dispatched enrichment run failing must not leave the write window open."""
+    fake_config = {**fake_config, "max_records_per_chunk": 2}
     get_transport = stub_get_transport_factory([
         WORKFLOWS_PAGE, WORKFLOWS_PAGE,
         {"data": [_execution_list_item("t", "2026-08-06T10:15:00.000Z")]},
@@ -283,8 +286,105 @@ def test_a_dispatch_failure_still_guarantees_the_disarm(
     assert len(mutating_puts) == 2, "one PUT to arm, one PUT to disarm — both must have run"
 
 
+def test_missing_chunk_ceiling_config_key_refuses_before_any_arm(
+        armed_env, fake_config, stub_get_transport_factory, stub_module_transport_factory):
+    """`max_records_per_chunk` absent (D-20: never defaulted) must refuse before the
+    window is ever armed — the same "validate before arm" ordering the module docstring
+    already guarantees for a malformed record spec."""
+    get_transport = stub_get_transport_factory([
+        WORKFLOWS_PAGE, WORKFLOWS_PAGE,
+        {"data": [_execution_list_item("t", "2026-08-06T10:15:00.000Z")]},
+        _execution_with_sj3_rows("t", "111"),
+    ])
+    post_transport = stub_module_transport_factory()
+
+    result = scheduled_arm.run_scheduled_arm_cycle(
+        fake_config, get_transport=get_transport, post_transport=post_transport)
+
+    assert result["outcome"] == "plan_failed"
+    assert post_transport.calls == []
+
+
+def test_a_batch_larger_than_the_ceiling_dispatches_in_multiple_chunks_in_one_arm_window(
+        armed_env, fake_config, stub_get_transport_factory, stub_module_transport_factory):
+    """The bug this fix closes: the whole matched batch used to go out as ONE POST
+    regardless of size, which the deployed webhook refuses outright once it exceeds
+    `ENRICH_MAX_LIST_RECORDS` (mirrored client-side by `max_records_per_chunk`). Three
+    records against a ceiling of two must become two chunked POSTs — 2 then 1 — inside
+    a SINGLE arm/disarm bracket, never a second arm."""
+    fake_config = {**fake_config, "max_records_per_chunk": 2}
+    get_transport = stub_get_transport_factory([
+        WORKFLOWS_PAGE, WORKFLOWS_PAGE,
+        {"data": [_execution_list_item("t", "2026-08-06T10:15:00.000Z")]},
+        _execution_with_sj3_rows("t", "111", "222", "333"),
+    ])
+    post_transport = stub_module_transport_factory([
+        _base_enrichment_workflow(),                                              # arm read
+        _base_enrichment_workflow(),                                              # apply_mutation re-read
+        {}, {}, {},                                                               # deactivate, put, activate
+        _base_enrichment_workflow(record_writes='"true"', ids='"111,222,333"'),   # arm verify
+        {"status": "accepted"},                                                   # dispatch POST chunk 1 (111,222)
+        {"status": "accepted"},                                                   # dispatch POST chunk 2 (333)
+        _base_enrichment_workflow(record_writes='"true"', ids='"111,222,333"'),   # disarm read
+        _base_enrichment_workflow(record_writes='"true"', ids='"111,222,333"'),   # apply_mutation re-read
+        {}, {}, {},                                                               # deactivate, put, activate
+        _base_enrichment_workflow(),                                              # disarm verify
+    ])
+
+    result = scheduled_arm.run_scheduled_arm_cycle(
+        fake_config, get_transport=get_transport, post_transport=post_transport)
+
+    assert result["outcome"] == "dispatched"
+    assert result["record_ids"] == ["111", "222", "333"]
+    assert result["chunk_count"] == 2
+    assert result["arm"]["record_ids"] == ["111", "222", "333"]
+    assert result["disarm"]["outcome"] == n8n_arming.DISARMED
+
+    dispatch_calls = [c for c in post_transport.calls
+                      if c["verb"] == "post" and "enrichment/event" in c["url"]]
+    assert len(dispatch_calls) == 2
+    assert {e["objectId"] for e in dispatch_calls[0]["json"]["events"]} == {"111", "222"}
+    assert {e["objectId"] for e in dispatch_calls[1]["json"]["events"]} == {"333"}
+
+
+def test_a_partial_chunk_failure_is_visible_not_silently_swallowed(
+        armed_env, fake_config, stub_get_transport_factory, stub_module_transport_factory):
+    """One chunk failing must still surface loudly — in `results`/`failed_batch` — even
+    though the cycle as a whole still reports `dispatched` because SOME records landed
+    (D-12: a failing chunk is recorded, the run continues). Never folded away silently."""
+    fake_config = {**fake_config, "max_records_per_chunk": 2}
+    get_transport = stub_get_transport_factory([
+        WORKFLOWS_PAGE, WORKFLOWS_PAGE,
+        {"data": [_execution_list_item("t", "2026-08-06T10:15:00.000Z")]},
+        _execution_with_sj3_rows("t", "111", "222", "333"),
+    ])
+    post_transport = stub_module_transport_factory([
+        _base_enrichment_workflow(),
+        _base_enrichment_workflow(),
+        {}, {}, {},
+        _base_enrichment_workflow(record_writes='"true"', ids='"111,222,333"'),   # arm verify
+        {"status": "accepted"},                                                   # chunk 1 (111,222) succeeds
+        RuntimeError("dispatch webhook unreachable"),                             # chunk 2 (333) fails
+        _base_enrichment_workflow(record_writes='"true"', ids='"111,222,333"'),   # disarm read
+        _base_enrichment_workflow(record_writes='"true"', ids='"111,222,333"'),   # apply_mutation re-read
+        {}, {}, {},
+        _base_enrichment_workflow(),                                              # disarm verify
+    ])
+
+    result = scheduled_arm.run_scheduled_arm_cycle(
+        fake_config, get_transport=get_transport, post_transport=post_transport)
+
+    assert result["outcome"] == "dispatched"
+    assert result["results"][0]["ok"] is True
+    assert result["results"][1]["ok"] is False
+    assert result["failed_batch"] == {"record_ids": ["333"], "object_type": "companies"}
+    mutating_puts = [c for c in post_transport.calls if c["verb"] == "put"]
+    assert len(mutating_puts) == 2, "arm PUT + disarm PUT both ran despite the partial failure"
+
+
 def test_a_failed_disarm_surfaces_as_its_own_outcome_never_folded_into_dispatched(
         armed_env, fake_config, stub_get_transport_factory, stub_module_transport_factory):
+    fake_config = {**fake_config, "max_records_per_chunk": 2}
     still_armed = _base_enrichment_workflow(record_writes='"true"', ids='"111"')
     post_transport = stub_module_transport_factory([
         _base_enrichment_workflow(),
@@ -332,6 +432,7 @@ def test_cli_main_reports_not_configured_without_raising():
     ("workflow_not_found", True),
     ("disarm_failed", True),
     ("dispatch_failed", True),
+    ("plan_failed", True),
 ])
 def test_failure_outcome_classification_matches_the_documented_intent(outcome, expect_failure):
     assert (outcome in scheduled_arm._FAILURE_OUTCOMES) == expect_failure
