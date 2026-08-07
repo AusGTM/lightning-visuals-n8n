@@ -1,0 +1,1150 @@
+{
+  "flows": [
+    {
+      "classification": "out_of_scope",
+      "id": "267947542",
+      "is_enabled": false,
+      "name": "Forecast Category Mapping for Pipeline: Sales Pipeline",
+      "object_type_id": "0-3",
+      "protected_by": null
+    },
+    {
+      "classification": "out_of_scope",
+      "id": "4474379725",
+      "is_enabled": false,
+      "name": "Send a follow-up email after form submission",
+      "object_type_id": "0-1",
+      "protected_by": null
+    },
+    {
+      "classification": "out_of_scope",
+      "id": "4503587295",
+      "is_enabled": true,
+      "name": "Virtuals Pipeline - Clone of: Pipeline is \"Sales Pipeline\", deal stage is \"Appointment scheduled\"",
+      "object_type_id": "0-3",
+      "protected_by": null
+    },
+    {
+      "classification": "protected",
+      "id": "4625147345",
+      "is_enabled": true,
+      "name": "WF1 Set ICP Tier based on ICP Score",
+      "object_type_id": "0-2",
+      "protected_by": "do_not_archive_flow_ids"
+    },
+    {
+      "classification": "protected",
+      "id": "4626124224",
+      "is_enabled": true,
+      "name": "Update Score Based on Org Type",
+      "object_type_id": "0-2",
+      "protected_by": "do_not_archive_flow_ids"
+    },
+    {
+      "classification": "protected",
+      "id": "4626722237",
+      "is_enabled": true,
+      "name": "Annual Revenue Score",
+      "object_type_id": "0-2",
+      "protected_by": "do_not_archive_flow_ids"
+    },
+    {
+      "classification": "protected",
+      "id": "4626722240",
+      "is_enabled": true,
+      "name": "Geography Score",
+      "object_type_id": "0-2",
+      "protected_by": "do_not_archive_flow_ids"
+    },
+    {
+      "classification": "protected",
+      "id": "4634822079",
+      "is_enabled": true,
+      "name": "Update Produces Content Score",
+      "object_type_id": "0-2",
+      "protected_by": "do_not_archive_flow_ids"
+    },
+    {
+      "classification": "protected",
+      "id": "4634822085",
+      "is_enabled": true,
+      "name": "Update Gambling Score",
+      "object_type_id": "0-2",
+      "protected_by": "do_not_archive_flow_ids"
+    },
+    {
+      "classification": "out_of_scope",
+      "id": "566720381",
+      "is_enabled": true,
+      "name": "Pipeline is \"Sales Pipeline\", deal stage is \"Appointment scheduled\"",
+      "object_type_id": "0-3",
+      "protected_by": null
+    }
+  ],
+  "generated_at": "2026-08-07T19:42:34.802556+00:00",
+  "portal_id": "22617666",
+  "properties": [
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/hubspot_flows/4626722237-annual-revenue-score.after.json",
+        "config/hubspot_flows/4626722237-annual-revenue-score.before.json",
+        "config/hubspot_flows/lv_icp_fit_score-property.after.json",
+        "config/hubspot_flows/lv_icp_fit_score-property.before.json",
+        "config/hubspot_properties.yaml",
+        "scripts/backfill_seed_company_scores.py",
+        "scripts/check_schema_drift.py"
+      ],
+      "name": "annual_revenue_score",
+      "protected_by": "do_not_archive_set",
+      "test_refs": [
+        "tests/scoring_fixtures.py",
+        "tests/test_backfill_seed_company_scores.py",
+        "tests/test_check_schema_drift.py",
+        "tests/test_flow_rubric_conformance.py",
+        "tests/test_hubspot_properties_config.py",
+        "tests/test_scoring_parity.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/hubspot_flows/gambling-score.after.json",
+        "config/hubspot_flows/lv_icp_fit_score-property.after.json",
+        "config/hubspot_properties.yaml",
+        "scripts/backfill_seed_company_scores.py",
+        "scripts/check_schema_drift.py"
+      ],
+      "name": "gambling_score",
+      "protected_by": "do_not_archive_set",
+      "test_refs": [
+        "tests/scoring_fixtures.py",
+        "tests/test_backfill_seed_company_scores.py",
+        "tests/test_check_schema_drift.py",
+        "tests/test_flow_rubric_conformance.py",
+        "tests/test_hubspot_properties_config.py",
+        "tests/test_scoring_parity.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/hubspot_flows/4626722240-geography-score.after.json",
+        "config/hubspot_flows/4626722240-geography-score.before.json",
+        "config/hubspot_flows/lv_icp_fit_score-property.after.json",
+        "config/hubspot_flows/lv_icp_fit_score-property.before.json",
+        "config/hubspot_properties.yaml",
+        "scripts/backfill_seed_company_scores.py",
+        "scripts/check_schema_drift.py"
+      ],
+      "name": "geography_score",
+      "protected_by": "do_not_archive_set",
+      "test_refs": [
+        "tests/scoring_fixtures.py",
+        "tests/test_backfill_seed_company_scores.py",
+        "tests/test_check_schema_drift.py",
+        "tests/test_flow_rubric_conformance.py",
+        "tests/test_hubspot_properties_config.py",
+        "tests/test_scoring_parity.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/hubspot_properties.yaml",
+        "n8n/code/normalizeProviders.js",
+        "n8n/wf_enrichment_cloud.json",
+        "n8n/wf_enrichment_local.json",
+        "n8n/wf_enrichment_local_live.json",
+        "scripts/build_cloud_workflows.py"
+      ],
+      "name": "lusha_company_id",
+      "protected_by": "declared_in_yaml",
+      "test_refs": [
+        "tests/test_cloud_write_path.py",
+        "tests/test_hubspot_properties_config.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/field_policy.yaml",
+        "config/hubspot_flows/4625147345-wf1-set-icp-tier.after.json",
+        "config/hubspot_flows/4625147345-wf1-set-icp-tier.before.json",
+        "config/hubspot_flows/4626722240-geography-score.before.json",
+        "config/hubspot_properties.yaml",
+        "n8n/code/mergeCompanies.js",
+        "n8n/code/reviewApply.js",
+        "n8n/wf_enrichment_cloud.json",
+        "n8n/wf_enrichment_local_live.json",
+        "n8n/wf_review_decision_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/backfill_seed_company_scores.py",
+        "scripts/build_cloud_workflows.py",
+        "scripts/check_schema_drift.py",
+        "scripts/run_scoring_parity.py",
+        "scripts/snapshot_hubspot_schema.py",
+        "src/merge_policy.py"
+      ],
+      "name": "lv_anti_icp_flag",
+      "protected_by": "do_not_archive_set",
+      "test_refs": [
+        "tests/scoring_fixtures.py",
+        "tests/test_backfill_seed_company_scores.py",
+        "tests/test_cloud_companies_branch.py",
+        "tests/test_field_policy_conformance.py",
+        "tests/test_flow_rubric_conformance.py",
+        "tests/test_scoring_parity.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/field_policy.yaml",
+        "config/hubspot_properties.yaml",
+        "n8n/code/mergeCompanies.js",
+        "n8n/wf_enrichment_cloud.json",
+        "n8n/wf_enrichment_local_live.json",
+        "n8n/wf_review_decision_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/backfill_seed_company_scores.py",
+        "scripts/build_cloud_workflows.py",
+        "src/merge_policy.py"
+      ],
+      "name": "lv_anti_icp_reason",
+      "protected_by": "declared_in_yaml",
+      "test_refs": [
+        "tests/scoring_fixtures.py",
+        "tests/test_backfill_seed_company_scores.py",
+        "tests/test_cloud_companies_branch.py",
+        "tests/test_field_policy_conformance.py",
+        "tests/test_flow_rubric_conformance.py",
+        "tests/test_hubspot_properties_config.py",
+        "tests/test_scoring_parity.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/field_policy.yaml",
+        "config/hubspot_properties.yaml",
+        "config/provider_priority.yaml",
+        "config/taxonomy.yaml",
+        "n8n/code/hubspotEnums.generated.js",
+        "n8n/code/judge.js",
+        "n8n/code/mergeCompanies.js",
+        "n8n/code/webResearch.js",
+        "n8n/wf_enrichment_cloud.json",
+        "n8n/wf_enrichment_local_live.json",
+        "n8n/wf_review_decision_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/build_cloud_workflows.py",
+        "scripts/gen_hubspot_enums_js.py",
+        "src/taxonomy.py",
+        "src/web_research.py"
+      ],
+      "name": "lv_content_type",
+      "protected_by": "declared_in_yaml",
+      "test_refs": [
+        "tests/test_bug10_company_search_transport.py",
+        "tests/test_cloud_contacts_branch.py",
+        "tests/test_judge_spec.py",
+        "tests/test_rollback_property_migration.py",
+        "tests/test_web_research_spec.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/field_policy.yaml",
+        "config/hubspot_flows/4626722240-geography-score.after.json",
+        "config/hubspot_properties.yaml",
+        "config/june_candidates.json",
+        "n8n/code/hubspotEnums.generated.js",
+        "n8n/code/mergeCompanies.js",
+        "n8n/code/normalizeProviders.js",
+        "n8n/code/webResearch.js",
+        "n8n/wf_enrichment_cloud.json",
+        "n8n/wf_enrichment_local.json",
+        "n8n/wf_enrichment_local_live.json",
+        "n8n/wf_review_decision_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/backfill_seed_company_scores.py",
+        "scripts/build_cloud_workflows.py",
+        "scripts/build_june_candidates.py",
+        "scripts/check_schema_drift.py",
+        "scripts/gen_hubspot_enums_js.py",
+        "src/icp_scoring.py",
+        "src/normalizer.py",
+        "src/taxonomy.py",
+        "src/web_research.py"
+      ],
+      "name": "lv_country_region_normalized",
+      "protected_by": "do_not_archive_set",
+      "test_refs": [
+        "tests/scoring_fixtures.py",
+        "tests/test_backfill_seed_company_scores.py",
+        "tests/test_flow_rubric_conformance.py",
+        "tests/test_hubspot_properties_config.py",
+        "tests/test_icp_scoring.py",
+        "tests/test_judge_spec.py",
+        "tests/test_june_candidates.py",
+        "tests/test_scoring_parity.py",
+        "tests/test_web_research_spec.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/field_policy.yaml",
+        "config/hubspot_properties.yaml",
+        "config/provider_priority.yaml",
+        "n8n/code/hubspotEnums.generated.js",
+        "n8n/code/mergeCompanies.js",
+        "n8n/code/normalizeProviders.js",
+        "n8n/wf_enrichment_cloud.json",
+        "n8n/wf_enrichment_local.json",
+        "n8n/wf_enrichment_local_live.json",
+        "n8n/wf_review_decision_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/build_cloud_workflows.py",
+        "scripts/gen_hubspot_enums_js.py",
+        "src/normalizer.py"
+      ],
+      "name": "lv_employee_band",
+      "protected_by": "declared_in_yaml",
+      "test_refs": [
+        "tests/test_bug10_company_search_transport.py",
+        "tests/test_cloud_contacts_branch.py",
+        "tests/test_judge_spec.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/hubspot_properties.yaml",
+        "n8n/code/reviewApply.js",
+        "n8n/code/reviewDecision.js",
+        "n8n/wf_backend_status_cloud.json",
+        "n8n/wf_enrichment_cloud.json",
+        "n8n/wf_review_decision_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/build_cloud_workflows.py",
+        "scripts/run_scoring_parity.py"
+      ],
+      "name": "lv_enrichment_needs_review",
+      "protected_by": "declared_in_yaml",
+      "test_refs": [
+        "tests/scoring_fixtures.py",
+        "tests/test_backend_status_wiring.py",
+        "tests/test_bug10_company_search_transport.py",
+        "tests/test_cloud_companies_branch.py",
+        "tests/test_hubspot_properties_config.py",
+        "tests/test_review_flag_eq_filter.py",
+        "tests/test_scoring_parity.py",
+        "tests/test_write_gate_coverage.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/hubspot_properties.yaml",
+        "n8n/code/mergeCompanies.js",
+        "n8n/code/reviewDecision.js",
+        "n8n/wf_enrichment_cloud.json",
+        "n8n/wf_enrichment_local_live.json",
+        "n8n/wf_review_decision_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/build_cloud_workflows.py",
+        "scripts/run_scoring_parity.py",
+        "src/merge_policy.py"
+      ],
+      "name": "lv_enrichment_provenance",
+      "protected_by": "declared_in_yaml",
+      "test_refs": [
+        "tests/scoring_fixtures.py",
+        "tests/test_main.py",
+        "tests/test_merge_policy.py",
+        "tests/test_scoring_parity.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/hubspot_properties.yaml",
+        "n8n/code/reviewApply.js",
+        "n8n/wf_backend_status_cloud.json",
+        "n8n/wf_contact_ingest_cloud.json",
+        "n8n/wf_enrichment_cloud.json",
+        "n8n/wf_review_decision_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/build_cloud_workflows.py"
+      ],
+      "name": "lv_enrichment_requested",
+      "protected_by": "declared_in_yaml",
+      "test_refs": [
+        "tests/test_bug10_company_search_transport.py",
+        "tests/test_cloud_companies_branch.py",
+        "tests/test_create_payload_identity.py",
+        "tests/test_hubspot_properties_config.py",
+        "tests/test_scoring_parity.py",
+        "tests/test_zero_provider_spend.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/hubspot_properties.yaml",
+        "n8n/code/reviewApply.js",
+        "n8n/wf_review_decision_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/build_cloud_workflows.py"
+      ],
+      "name": "lv_enrichment_review_approved",
+      "protected_by": "declared_in_yaml",
+      "test_refs": [
+        "tests/test_bug10_company_search_transport.py",
+        "tests/test_cloud_companies_branch.py",
+        "tests/test_hubspot_properties_config.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/hubspot_properties.yaml",
+        "n8n/code/reviewApply.js",
+        "n8n/code/reviewDecision.js",
+        "n8n/wf_enrichment_cloud.json",
+        "n8n/wf_review_decision_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/build_cloud_workflows.py"
+      ],
+      "name": "lv_enrichment_review_candidate_json",
+      "protected_by": "declared_in_yaml",
+      "test_refs": [
+        "tests/test_bug10_company_search_transport.py",
+        "tests/test_cloud_companies_branch.py",
+        "tests/test_hubspot_properties_config.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/hubspot_properties.yaml",
+        "n8n/code/reviewApply.js",
+        "n8n/code/reviewDecision.js",
+        "n8n/wf_enrichment_cloud.json",
+        "n8n/wf_review_decision_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/build_cloud_workflows.py",
+        "scripts/run_scoring_parity.py"
+      ],
+      "name": "lv_enrichment_review_reason",
+      "protected_by": "declared_in_yaml",
+      "test_refs": [
+        "tests/scoring_fixtures.py",
+        "tests/test_bug10_company_search_transport.py",
+        "tests/test_cloud_companies_branch.py",
+        "tests/test_hubspot_properties_config.py",
+        "tests/test_scoring_parity.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/hubspot_properties.yaml",
+        "n8n/code/reviewApply.js",
+        "n8n/wf_review_decision_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/build_cloud_workflows.py"
+      ],
+      "name": "lv_enrichment_reviewed_at",
+      "protected_by": "declared_in_yaml",
+      "test_refs": [
+        "tests/test_hubspot_properties_config.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/hubspot_properties.yaml",
+        "n8n/code/reviewDecision.js",
+        "n8n/wf_review_decision_cloud.json",
+        "scripts/build_cloud_workflows.py"
+      ],
+      "name": "lv_enrichment_reviewed_by",
+      "protected_by": "declared_in_yaml",
+      "test_refs": [
+        "tests/test_hubspot_properties_config.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/hubspot_properties.yaml",
+        "n8n/wf_backend_status_cloud.json",
+        "n8n/wf_enrichment_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/build_cloud_workflows.py"
+      ],
+      "name": "lv_enrichment_status",
+      "protected_by": "declared_in_yaml",
+      "test_refs": [
+        "tests/test_bug10_company_search_transport.py",
+        "tests/test_cloud_companies_branch.py",
+        "tests/test_hubspot_properties_config.py",
+        "tests/test_hubspot_schema_coverage.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/field_policy.yaml",
+        "config/hubspot_flows/4625147345-wf1-set-icp-tier.after.json",
+        "config/hubspot_flows/4625147345-wf1-set-icp-tier.before.json",
+        "config/hubspot_flows/lv_icp_fit_score-property.after.json",
+        "config/hubspot_flows/lv_icp_fit_score-property.before.json",
+        "config/hubspot_properties.yaml",
+        "n8n/code/mergeCompanies.js",
+        "n8n/wf_enrichment_cloud.json",
+        "n8n/wf_enrichment_local_live.json",
+        "n8n/wf_review_decision_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/backfill_seed_company_scores.py",
+        "scripts/build_cloud_workflows.py",
+        "scripts/build_loss_reason_report.py",
+        "scripts/check_schema_drift.py",
+        "scripts/resolve_june_ids.py",
+        "scripts/run_scoring_parity.py",
+        "scripts/snapshot_hubspot_schema.py",
+        "src/merge_policy.py"
+      ],
+      "name": "lv_icp_fit_score",
+      "protected_by": "do_not_archive_set",
+      "test_refs": [
+        "tests/scoring_fixtures.py",
+        "tests/test_backfill_seed_company_scores.py",
+        "tests/test_cloud_companies_branch.py",
+        "tests/test_flow_rubric_conformance.py",
+        "tests/test_hubspot_properties_config.py",
+        "tests/test_main.py",
+        "tests/test_merge_policy.py",
+        "tests/test_scoring_parity.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/hubspot_properties.yaml",
+        "n8n/code/reviewDecision.js",
+        "n8n/wf_backend_status_cloud.json",
+        "n8n/wf_review_decision_cloud.json",
+        "scripts/build_cloud_workflows.py",
+        "src/merge_policy.py"
+      ],
+      "name": "lv_icp_needs_review",
+      "protected_by": "declared_in_yaml",
+      "test_refs": [
+        "tests/test_backend_status_wiring.py",
+        "tests/test_hubspot_properties_config.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/hubspot_properties.yaml",
+        "n8n/wf_review_decision_cloud.json",
+        "scripts/build_cloud_workflows.py",
+        "scripts/run_scoring_parity.py",
+        "src/merge_policy.py"
+      ],
+      "name": "lv_icp_score_breakdown",
+      "protected_by": "declared_in_yaml",
+      "test_refs": [
+        "tests/scoring_fixtures.py",
+        "tests/test_hubspot_properties_config.py",
+        "tests/test_scoring_parity.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/field_policy.yaml",
+        "config/hubspot_flows/4625147345-wf1-set-icp-tier.after.json",
+        "config/hubspot_flows/4625147345-wf1-set-icp-tier.before.json",
+        "config/hubspot_flows/lv_icp_tier-property.after.json",
+        "config/hubspot_flows/lv_icp_tier-property.before.json",
+        "config/hubspot_properties.yaml",
+        "n8n/code/mergeCompanies.js",
+        "n8n/wf_enrichment_cloud.json",
+        "n8n/wf_enrichment_local_live.json",
+        "n8n/wf_review_decision_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/backfill_seed_company_scores.py",
+        "scripts/build_cloud_workflows.py",
+        "scripts/build_loss_reason_report.py",
+        "scripts/check_schema_drift.py",
+        "scripts/run_scoring_parity.py",
+        "scripts/snapshot_hubspot_schema.py",
+        "src/merge_policy.py"
+      ],
+      "name": "lv_icp_tier",
+      "protected_by": "do_not_archive_set",
+      "test_refs": [
+        "tests/scoring_fixtures.py",
+        "tests/test_backfill_seed_company_scores.py",
+        "tests/test_check_schema_drift.py",
+        "tests/test_cloud_companies_branch.py",
+        "tests/test_flow_rubric_conformance.py",
+        "tests/test_loss_reason_report.py",
+        "tests/test_main.py",
+        "tests/test_merge_policy.py",
+        "tests/test_scoring_parity.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/field_policy.yaml",
+        "config/hubspot_flows/gambling-score.after.json",
+        "config/hubspot_properties.yaml",
+        "config/june_candidates.json",
+        "config/provider_priority.yaml",
+        "config/taxonomy.yaml",
+        "n8n/code/judge.js",
+        "n8n/code/mergeCompanies.js",
+        "n8n/wf_enrichment_cloud.json",
+        "n8n/wf_enrichment_local_live.json",
+        "n8n/wf_review_decision_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/backfill_seed_company_scores.py",
+        "scripts/build_cloud_workflows.py",
+        "scripts/build_june_candidates.py",
+        "scripts/smoke_closed_won_research.py",
+        "src/icp_scoring.py",
+        "src/normalizer.py",
+        "src/web_research.py"
+      ],
+      "name": "lv_is_gambling_operator",
+      "protected_by": "declared_in_yaml",
+      "test_refs": [
+        "tests/scoring_fixtures.py",
+        "tests/test_backfill_seed_company_scores.py",
+        "tests/test_bug10_company_search_transport.py",
+        "tests/test_cloud_companies_branch.py",
+        "tests/test_cloud_contacts_branch.py",
+        "tests/test_flow_rubric_conformance.py",
+        "tests/test_icp_scoring.py",
+        "tests/test_judge_spec.py",
+        "tests/test_june_candidates.py",
+        "tests/test_scoring_parity.py",
+        "tests/test_zero_provider_spend.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/field_policy.yaml",
+        "config/hubspot_properties.yaml",
+        "config/june_candidates.json",
+        "config/provider_priority.yaml",
+        "config/taxonomy.yaml",
+        "n8n/code/judge.js",
+        "n8n/code/mergeCompanies.js",
+        "n8n/wf_enrichment_cloud.json",
+        "n8n/wf_enrichment_local_live.json",
+        "n8n/wf_review_decision_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/build_cloud_workflows.py",
+        "scripts/build_june_candidates.py",
+        "scripts/smoke_closed_won_research.py",
+        "src/icp_scoring.py",
+        "src/normalizer.py",
+        "src/web_research.py"
+      ],
+      "name": "lv_is_hardware_vendor",
+      "protected_by": "declared_in_yaml",
+      "test_refs": [
+        "tests/scoring_fixtures.py",
+        "tests/test_bug10_company_search_transport.py",
+        "tests/test_cloud_companies_branch.py",
+        "tests/test_cloud_contacts_branch.py",
+        "tests/test_icp_scoring.py",
+        "tests/test_judge_spec.py",
+        "tests/test_june_candidates.py",
+        "tests/test_scoring_parity.py",
+        "tests/test_zero_provider_spend.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/field_policy.yaml",
+        "config/hubspot_flows/4626124224-org-type-score.after.json",
+        "config/hubspot_flows/4626124224-org-type-score.before.json",
+        "config/hubspot_properties.yaml",
+        "config/june_candidates.json",
+        "config/provider_priority.yaml",
+        "config/taxonomy.yaml",
+        "n8n/code/enrichmentGate.js",
+        "n8n/code/hubspotEnums.generated.js",
+        "n8n/code/judge.js",
+        "n8n/code/mergeCompanies.js",
+        "n8n/code/webResearch.js",
+        "n8n/wf_enrichment_cloud.json",
+        "n8n/wf_enrichment_local.json",
+        "n8n/wf_enrichment_local_live.json",
+        "n8n/wf_review_decision_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/backfill_seed_company_scores.py",
+        "scripts/build_cloud_workflows.py",
+        "scripts/build_june_candidates.py",
+        "scripts/canary_record_snapshot.py",
+        "scripts/check_schema_drift.py",
+        "scripts/gen_hubspot_enums_js.py",
+        "scripts/inventory_org_type_values.py",
+        "scripts/migrate_org_type_enum.py",
+        "scripts/probe_org_type_migration.py",
+        "scripts/probe_scoring_recalc_latency.py",
+        "scripts/resolve_june_ids.py",
+        "scripts/run_scoring_parity.py",
+        "scripts/smoke_closed_won_research.py",
+        "scripts/snapshot_hubspot_schema.py",
+        "src/icp_scoring.py",
+        "src/merge_policy.py",
+        "src/taxonomy.py",
+        "src/web_research.py"
+      ],
+      "name": "lv_org_type",
+      "protected_by": "do_not_archive_set",
+      "test_refs": [
+        "tests/scoring_fixtures.py",
+        "tests/test_backfill_seed_company_scores.py",
+        "tests/test_bug10_company_search_transport.py",
+        "tests/test_canary_record_snapshot.py",
+        "tests/test_check_schema_drift.py",
+        "tests/test_cloud_contacts_branch.py",
+        "tests/test_field_policy_conformance.py",
+        "tests/test_flow_rubric_conformance.py",
+        "tests/test_hubspot_properties_config.py",
+        "tests/test_icp_scoring.py",
+        "tests/test_judge_spec.py",
+        "tests/test_june_candidates.py",
+        "tests/test_main.py",
+        "tests/test_merge_policy.py",
+        "tests/test_migrate_org_type_enum.py",
+        "tests/test_org_type_probe_gates.py",
+        "tests/test_resolve_june_ids.py",
+        "tests/test_scoring_parity.py",
+        "tests/test_snapshot_hubspot_schema.py",
+        "tests/test_taxonomy_conformance.py",
+        "tests/test_web_research_spec.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/hubspot_properties.yaml",
+        "n8n/code/enrichmentGate.js",
+        "n8n/code/mergeCompanies.js",
+        "n8n/wf_enrichment_cloud.json",
+        "n8n/wf_enrichment_local.json",
+        "n8n/wf_enrichment_local_live.json",
+        "n8n/wf_review_decision_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/build_cloud_workflows.py",
+        "src/merge_policy.py"
+      ],
+      "name": "lv_org_type_verified_at",
+      "protected_by": "declared_in_yaml",
+      "test_refs": [
+        "tests/scoring_fixtures.py",
+        "tests/test_bug10_company_search_transport.py",
+        "tests/test_merge_policy.py",
+        "tests/test_scoring_parity.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/field_policy.yaml",
+        "config/hubspot_flows/produces-content-score.after.json",
+        "config/hubspot_properties.yaml",
+        "config/june_candidates.json",
+        "config/provider_priority.yaml",
+        "config/taxonomy.yaml",
+        "n8n/code/judge.js",
+        "n8n/code/mergeCompanies.js",
+        "n8n/code/webResearch.js",
+        "n8n/wf_enrichment_cloud.json",
+        "n8n/wf_enrichment_local_live.json",
+        "n8n/wf_review_decision_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/backfill_seed_company_scores.py",
+        "scripts/build_cloud_workflows.py",
+        "scripts/build_june_candidates.py",
+        "scripts/canary_record_snapshot.py",
+        "scripts/check_schema_drift.py",
+        "scripts/run_scoring_parity.py",
+        "scripts/smoke_closed_won_research.py",
+        "scripts/snapshot_hubspot_schema.py",
+        "src/icp_scoring.py",
+        "src/merge_policy.py",
+        "src/normalizer.py",
+        "src/taxonomy.py",
+        "src/web_research.py"
+      ],
+      "name": "lv_produces_content",
+      "protected_by": "do_not_archive_set",
+      "test_refs": [
+        "tests/scoring_fixtures.py",
+        "tests/test_backfill_seed_company_scores.py",
+        "tests/test_bug10_company_search_transport.py",
+        "tests/test_canary_record_snapshot.py",
+        "tests/test_check_schema_drift.py",
+        "tests/test_cloud_companies_branch.py",
+        "tests/test_cloud_contacts_branch.py",
+        "tests/test_flow_rubric_conformance.py",
+        "tests/test_hubspot_properties_config.py",
+        "tests/test_icp_scoring.py",
+        "tests/test_judge_spec.py",
+        "tests/test_june_candidates.py",
+        "tests/test_merge_policy.py",
+        "tests/test_scoring_parity.py",
+        "tests/test_web_research_spec.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/hubspot_properties.yaml",
+        "n8n/code/mergeCompanies.js",
+        "n8n/wf_enrichment_cloud.json",
+        "n8n/wf_enrichment_local_live.json",
+        "n8n/wf_review_decision_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/build_cloud_workflows.py",
+        "src/merge_policy.py"
+      ],
+      "name": "lv_produces_content_verified_at",
+      "protected_by": "declared_in_yaml",
+      "test_refs": [
+        "tests/scoring_fixtures.py",
+        "tests/test_bug10_company_search_transport.py",
+        "tests/test_merge_policy.py",
+        "tests/test_scoring_parity.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/field_policy.yaml",
+        "config/hubspot_flows/4626722237-annual-revenue-score.after.json",
+        "config/hubspot_properties.yaml",
+        "config/provider_priority.yaml",
+        "n8n/code/hubspotEnums.generated.js",
+        "n8n/code/mergeCompanies.js",
+        "n8n/code/normalizeProviders.js",
+        "n8n/wf_enrichment_cloud.json",
+        "n8n/wf_enrichment_local.json",
+        "n8n/wf_enrichment_local_live.json",
+        "n8n/wf_review_decision_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/backfill_seed_company_scores.py",
+        "scripts/build_cloud_workflows.py",
+        "scripts/gen_hubspot_enums_js.py",
+        "src/icp_scoring.py",
+        "src/normalizer.py"
+      ],
+      "name": "lv_revenue_band",
+      "protected_by": "declared_in_yaml",
+      "test_refs": [
+        "tests/scoring_fixtures.py",
+        "tests/test_backfill_seed_company_scores.py",
+        "tests/test_bug10_company_search_transport.py",
+        "tests/test_cloud_contacts_branch.py",
+        "tests/test_contact_normalizer.py",
+        "tests/test_flow_rubric_conformance.py",
+        "tests/test_icp_scoring.py",
+        "tests/test_judge_spec.py",
+        "tests/test_merge_policy.py",
+        "tests/test_rollback_property_migration.py",
+        "tests/test_scoring_parity.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/field_policy.yaml",
+        "config/hubspot_properties.yaml",
+        "config/june_candidates.json",
+        "config/provider_priority.yaml",
+        "n8n/code/mergeCompanies.js",
+        "n8n/code/webResearch.js",
+        "n8n/wf_enrichment_cloud.json",
+        "n8n/wf_enrichment_local_live.json",
+        "n8n/wf_review_decision_cloud.json",
+        "n8n/wf_scheduled_maintenance_cloud.json",
+        "scripts/build_cloud_workflows.py",
+        "scripts/build_june_candidates.py",
+        "src/normalizer.py",
+        "src/web_research.py"
+      ],
+      "name": "lv_sponsorship_reliant",
+      "protected_by": "declared_in_yaml",
+      "test_refs": [
+        "tests/test_bug10_company_search_transport.py",
+        "tests/test_cloud_companies_branch.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/hubspot_flows/4626124224-org-type-score.after.json",
+        "config/hubspot_flows/4626124224-org-type-score.before.json",
+        "config/hubspot_flows/lv_icp_fit_score-property.after.json",
+        "config/hubspot_flows/lv_icp_fit_score-property.before.json",
+        "config/hubspot_properties.yaml",
+        "scripts/backfill_seed_company_scores.py",
+        "scripts/check_schema_drift.py"
+      ],
+      "name": "org_type_score",
+      "protected_by": "do_not_archive_set",
+      "test_refs": [
+        "tests/scoring_fixtures.py",
+        "tests/test_backfill_seed_company_scores.py",
+        "tests/test_check_schema_drift.py",
+        "tests/test_flow_rubric_conformance.py",
+        "tests/test_hubspot_properties_config.py",
+        "tests/test_scoring_parity.py"
+      ]
+    },
+    {
+      "classification": "protected",
+      "executable_refs": [
+        "config/hubspot_flows/lv_icp_fit_score-property.after.json",
+        "config/hubspot_flows/produces-content-score.after.json",
+        "config/hubspot_properties.yaml",
+        "scripts/backfill_seed_company_scores.py",
+        "scripts/check_schema_drift.py"
+      ],
+      "name": "produces_content_score",
+      "protected_by": "do_not_archive_set",
+      "test_refs": [
+        "tests/scoring_fixtures.py",
+        "tests/test_backfill_seed_company_scores.py",
+        "tests/test_check_schema_drift.py",
+        "tests/test_flow_rubric_conformance.py",
+        "tests/test_hubspot_properties_config.py",
+        "tests/test_scoring_parity.py"
+      ]
+    }
+  ],
+  "summary": {
+    "out_of_scope": 4,
+    "protected": 38
+  },
+  "surfaces_scanned": {
+    "excluded": [
+      ".planning/**",
+      "**/*.md"
+    ],
+    "executable": [
+      "config/column_mapping.yaml",
+      "config/escalation_policy.yaml",
+      "config/field_policy.yaml",
+      "config/hubspot_flows/4625147345-wf1-set-icp-tier.after.json",
+      "config/hubspot_flows/4625147345-wf1-set-icp-tier.before.json",
+      "config/hubspot_flows/4626124224-org-type-score.after.json",
+      "config/hubspot_flows/4626124224-org-type-score.before.json",
+      "config/hubspot_flows/4626722237-annual-revenue-score.after.json",
+      "config/hubspot_flows/4626722237-annual-revenue-score.before.json",
+      "config/hubspot_flows/4626722240-geography-score.after.json",
+      "config/hubspot_flows/4626722240-geography-score.before.json",
+      "config/hubspot_flows/gambling-score.after.json",
+      "config/hubspot_flows/lv_icp_fit_score-property.after.json",
+      "config/hubspot_flows/lv_icp_fit_score-property.before.json",
+      "config/hubspot_flows/lv_icp_tier-property.after.json",
+      "config/hubspot_flows/lv_icp_tier-property.before.json",
+      "config/hubspot_flows/produces-content-score.after.json",
+      "config/hubspot_properties.yaml",
+      "config/icp_scoring.yaml",
+      "config/june_candidates.json",
+      "config/june_candidates_source.json",
+      "config/provider_priority.yaml",
+      "config/source_registry.yaml",
+      "config/taxonomy.yaml",
+      "n8n/code/adaptFetchById.js",
+      "n8n/code/backendStatus.js",
+      "n8n/code/columnMap.js",
+      "n8n/code/contactJudge.js",
+      "n8n/code/contactResearch.js",
+      "n8n/code/dedupeSweep.js",
+      "n8n/code/enrichmentGate.js",
+      "n8n/code/escalation.generated.js",
+      "n8n/code/hubspotEnums.generated.js",
+      "n8n/code/hubspotEnums.js",
+      "n8n/code/judge.js",
+      "n8n/code/listExpansion.js",
+      "n8n/code/lushaRequest.js",
+      "n8n/code/matchProposal.js",
+      "n8n/code/mergeCompanies.js",
+      "n8n/code/mergeContacts.js",
+      "n8n/code/normalizeEmail.js",
+      "n8n/code/normalizePhone.js",
+      "n8n/code/normalizeProviders.js",
+      "n8n/code/providerSelection.js",
+      "n8n/code/resolveIdentity.js",
+      "n8n/code/reviewApply.js",
+      "n8n/code/reviewDecision.js",
+      "n8n/code/scoreEnrichment.js",
+      "n8n/code/taxonomy.generated.js",
+      "n8n/code/taxonomy.js",
+      "n8n/code/webResearch.js",
+      "n8n/code/zoominfoToken.js",
+      "n8n/wf_backend_status_cloud.json",
+      "n8n/wf_contact_ingest_cloud.json",
+      "n8n/wf_contact_ingest_local.json",
+      "n8n/wf_enrichment_cloud.json",
+      "n8n/wf_enrichment_local.json",
+      "n8n/wf_enrichment_local_live.json",
+      "n8n/wf_review_decision_cloud.json",
+      "n8n/wf_scheduled_maintenance_cloud.json",
+      "scripts/backfill_seed_company_scores.py",
+      "scripts/build_cloud_workflows.py",
+      "scripts/build_june_candidates.py",
+      "scripts/build_loss_reason_report.py",
+      "scripts/canary_record_snapshot.py",
+      "scripts/check_hubspot_list_scope.py",
+      "scripts/check_provider_credits.py",
+      "scripts/check_schema_drift.py",
+      "scripts/deploy_n8n_workflows.py",
+      "scripts/enrichment_cost_ledger.py",
+      "scripts/fetch_hubspot_flow.py",
+      "scripts/gen_escalation_js.py",
+      "scripts/gen_hubspot_enums_js.py",
+      "scripts/gen_taxonomy_js.py",
+      "scripts/inventory_org_type_values.py",
+      "scripts/june_run_arm.py",
+      "scripts/migrate_org_type_enum.py",
+      "scripts/probe_lusha_v3.py",
+      "scripts/probe_org_type_migration.py",
+      "scripts/probe_scoring_recalc_latency.py",
+      "scripts/probe_scoring_tool_availability.py",
+      "scripts/provider_registry.py",
+      "scripts/provision_n8n_credentials.py",
+      "scripts/put_hubspot_flow.py",
+      "scripts/resolve_june_ids.py",
+      "scripts/rollback_canary_proof.py",
+      "scripts/rollback_property_migration.py",
+      "scripts/run_scoring_parity.py",
+      "scripts/smoke_closed_won_research.py",
+      "scripts/snapshot_hubspot_schema.py",
+      "scripts/sync_hubspot_properties.py",
+      "scripts/verify_live_lusha_urls.py",
+      "scripts/verify_live_no_native_search.py",
+      "scripts/verify_live_write_safety.py",
+      "src/__init__.py",
+      "src/classifier_haiku.py",
+      "src/column_mapper.py",
+      "src/file_loader.py",
+      "src/hubspot_client.py",
+      "src/icp_scoring.py",
+      "src/identity.py",
+      "src/ingest.py",
+      "src/judge.py",
+      "src/merge_policy.py",
+      "src/normalizer.py",
+      "src/providers.py",
+      "src/schemas.py",
+      "src/service.py",
+      "src/sweep.py",
+      "src/taxonomy.py",
+      "src/validator_sonnet.py",
+      "src/web_research.py"
+    ],
+    "test": [
+      "tests/__init__.py",
+      "tests/live_smoke_contact.py",
+      "tests/scoring_fixtures.py",
+      "tests/test_architecture_guard.py",
+      "tests/test_backend_status_wiring.py",
+      "tests/test_backend_status_workflow.py",
+      "tests/test_backfill_seed_company_scores.py",
+      "tests/test_bug10_company_search_transport.py",
+      "tests/test_builder_flag_parity.py",
+      "tests/test_canary_record_snapshot.py",
+      "tests/test_check_hubspot_list_scope.py",
+      "tests/test_check_provider_credits.py",
+      "tests/test_check_schema_drift.py",
+      "tests/test_chunk_ceiling_contract.py",
+      "tests/test_classifier_parse.py",
+      "tests/test_cloud_companies_branch.py",
+      "tests/test_cloud_contacts_branch.py",
+      "tests/test_cloud_write_path.py",
+      "tests/test_companies_factory_frozen.py",
+      "tests/test_contact_create_overlay.py",
+      "tests/test_contact_ingest.py",
+      "tests/test_contact_normalizer.py",
+      "tests/test_create_payload_identity.py",
+      "tests/test_deploy_credential_binding.py",
+      "tests/test_deploy_flag_overlay.py",
+      "tests/test_deploy_n8n_workflows.py",
+      "tests/test_deploy_write_safety_overlay.py",
+      "tests/test_e2e_ingest.py",
+      "tests/test_enabled_build_invariants.py",
+      "tests/test_enrichment_contacts_search_transport.py",
+      "tests/test_enrichment_cost_ledger.py",
+      "tests/test_enrichment_lane_dedup.py",
+      "tests/test_enrichment_list_branch.py",
+      "tests/test_fetch_by_id_topology.py",
+      "tests/test_field_policy_conformance.py",
+      "tests/test_file_loader.py",
+      "tests/test_flow_rubric_conformance.py",
+      "tests/test_hubspot_enums_generated_currency.py",
+      "tests/test_hubspot_native_operation_validity.py",
+      "tests/test_hubspot_node_auth.py",
+      "tests/test_hubspot_properties_config.py",
+      "tests/test_hubspot_schema_coverage.py",
+      "tests/test_icp_scoring.py",
+      "tests/test_identity.py",
+      "tests/test_ingest_search_contract.py",
+      "tests/test_judge_spec.py",
+      "tests/test_june_candidates.py",
+      "tests/test_june_run_arm.py",
+      "tests/test_loss_reason_report.py",
+      "tests/test_main.py",
+      "tests/test_match_ceiling_contract.py",
+      "tests/test_merge_policy.py",
+      "tests/test_migrate_org_type_enum.py",
+      "tests/test_node_name_uniqueness.py",
+      "tests/test_org_type_probe_gates.py",
+      "tests/test_phase31_two_sided_contracts.py",
+      "tests/test_provider_gate_topology.py",
+      "tests/test_provider_registry_parity.py",
+      "tests/test_remaining_credits_response.py",
+      "tests/test_resolve_june_ids.py",
+      "tests/test_review_flag_eq_filter.py",
+      "tests/test_rollback_property_migration.py",
+      "tests/test_row_carry.py",
+      "tests/test_scaffold.py",
+      "tests/test_schedules_inactive.py",
+      "tests/test_scoring_parity.py",
+      "tests/test_scoring_probe_helpers.py",
+      "tests/test_service.py",
+      "tests/test_snapshot_hubspot_schema.py",
+      "tests/test_subworkflow_ref_rebinding.py",
+      "tests/test_sweep.py",
+      "tests/test_sync_hubspot_properties.py",
+      "tests/test_taxonomy_conformance.py",
+      "tests/test_verify_live_write_safety.py",
+      "tests/test_web_research.py",
+      "tests/test_web_research_spec.py",
+      "tests/test_write_gate_coverage.py",
+      "tests/test_write_lane_contracts.py",
+      "tests/test_write_node_transport.py",
+      "tests/test_zero_provider_spend.py",
+      "tests/test_zoominfo_shared_token_cache.py"
+    ]
+  }
+}
