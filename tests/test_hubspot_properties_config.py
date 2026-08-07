@@ -10,6 +10,13 @@ CONFIG_PATH = Path(__file__).resolve().parent.parent / "config" / "hubspot_prope
 
 # (type, fieldType) pairs HubSpot's CRM v3 Properties API actually accepts
 # (RESEARCH.md §2.1: type in string|number|date|datetime|bool|enumeration).
+#
+# Phase 42 Plan 02 (D-04): added ("number", "calculation_equation") -- the live pair for
+# lv_icp_fit_score, a calculated property proven live in this portal (plan-01 snapshot,
+# config/hubspot_migration/baseline/portal-schema-companies-phase42-pre.json). This guard's
+# protective intent (catch a type/fieldType pair the Properties API would reject at create
+# time, a live 400 nobody sees until a migration runs) still holds for every other pair --
+# only this one calculated-property pair, empirically live, is now accepted.
 VALID_TYPE_FIELDTYPE_PAIRS = {
     ("string", "text"),
     ("string", "textarea"),
@@ -20,6 +27,7 @@ VALID_TYPE_FIELDTYPE_PAIRS = {
     ("enumeration", "select"),
     ("enumeration", "checkbox"),
     ("enumeration", "radio"),
+    ("number", "calculation_equation"),
 }
 
 
@@ -39,7 +47,22 @@ def test_config_parses():
 # id, staged for request-side reuse only, and the plan names them lusha_contact_id /
 # lusha_company_id explicitly (docs/LUSHA-V3-CONTRACT.md, 20-04-PLAN.md) — an intentional,
 # narrow exception to the blanket PN-1 rule, not a drift.
-_PN1_EXEMPT_NAMES = {"lusha_contact_id", "lusha_company_id"}
+#
+# Phase 42 Plan 02 (D-04): the five component-score properties
+# (org_type_score/geography_score/annual_revenue_score/produces_content_score/
+# gambling_score) are ALSO exempt. PN-1's protective intent is: don't let this manifest
+# invent a wrongly-namespaced property that then gets created live under a name that
+# collides with HubSpot's own or another integration's. These five were created directly
+# against the portal during Phase 40's remediation, named by the flows that write them —
+# they are the live scoring engine's own terms, not project-namespaced enriched fields. The
+# manifest is mirroring an existing live name here, never proposing a new one, so PN-1's
+# collision risk does not apply. The rule still fires for any other name outside both
+# exemption sets.
+_PN1_EXEMPT_NAMES = {
+    "lusha_contact_id", "lusha_company_id",
+    "org_type_score", "geography_score", "annual_revenue_score",
+    "produces_content_score", "gambling_score",
+}
 
 
 def test_every_property_name_is_lv_prefixed():
@@ -92,30 +115,73 @@ def test_review_surface_names_appear_once_per_object():
         assert review_names.issubset(names), f"{object_type} is missing review-surface properties"
 
 
+# Phase 42 Plan 02 (D-04): this guard was protecting against a typo'd groupName that
+# compute_group_diff (scripts/sync_hubspot_properties.py:96-98) would then try to create as
+# a brand-new group on the portal. That protection still fires for anything not in EITHER
+# accepted source below. The expansion adds a second accepted source because a HubSpot-
+# native group (companyinformation, home to the ICP output properties and the five
+# component scores) is a legitimate groupName that must NEVER be declared in the yaml's own
+# groups: list -- doing so is the one path by which this expansion could cause a portal
+# write. This frozenset, populated from the live groupName values the plan-01 snapshot
+# shows for the newly-mirrored properties, is the deliberate alternative: accepted without
+# declaration, and never fed into compute_group_diff because it never touches groups:.
+_NATIVE_GROUPS_ACCEPTED_WITHOUT_DECLARATION = frozenset({"companyinformation"})
+
+
 def test_every_groupname_is_a_declared_group():
     cfg = load_config()
     for object_type in ("companies", "contacts"):
         group_names = {g["name"] for g in cfg[object_type]["groups"]}
         for prop in cfg[object_type]["properties"]:
-            assert prop["groupName"] in group_names, (
-                f"{object_type}.{prop['name']} references undeclared group {prop['groupName']}")
+            assert (
+                prop["groupName"] in group_names
+                or prop["groupName"] in _NATIVE_GROUPS_ACCEPTED_WITHOUT_DECLARATION
+            ), f"{object_type}.{prop['name']} references undeclared group {prop['groupName']}"
 
 
 def test_exact_counts_guard_against_manifest_drift():
+    # This test exists to catch accidental manifest drift; its numbers are expected to move
+    # with any deliberate expansion. Phase 42 Plan 02 (D-04) expanded companies from 22 to
+    # 32 (the ten properties drift-report-phase42-pre.json classified missing_from_yaml).
+    # Contacts and the group counts are untouched -- D-04 scopes the expansion to company
+    # scoring properties only.
     cfg = load_config()
-    assert len(cfg["companies"]["properties"]) == 22
+    assert len(cfg["companies"]["properties"]) == 32
     assert len(cfg["contacts"]["properties"]) == 17
     assert len(cfg["companies"]["groups"]) == 1
     assert len(cfg["contacts"]["groups"]) == 1
 
 
-def test_lv_org_type_and_lv_produces_content_not_listed_for_creation():
-    # These two already exist in the portal (2026-07-20 audit) — the manifest only lists
-    # what is MISSING; listing them would be harmless but the plan explicitly omits them.
+def test_lv_org_type_and_lv_produces_content_are_declared_with_live_matching_shape():
+    # SUPERSEDED (Phase 42 Plan 02, D-04): this test originally asserted lv_org_type and
+    # lv_produces_content were ABSENT, because the manifest was a create-only "what's
+    # missing" list at the time and both already existed live. D-04 overturns that premise --
+    # the manifest is now a full mirror, so both must be PRESENT. The replacement assertion
+    # protects the stronger property: presence with shape matching the live snapshot, not
+    # mere absence.
+    import json
+    from pathlib import Path as _Path
+
     cfg = load_config()
-    company_names = {p["name"] for p in cfg["companies"]["properties"]}
-    assert "lv_org_type" not in company_names
-    assert "lv_produces_content" not in company_names
+    company_props = {p["name"]: p for p in cfg["companies"]["properties"]}
+    assert "lv_org_type" in company_props
+    assert "lv_produces_content" in company_props
+
+    snapshot_path = (
+        _Path(__file__).resolve().parent.parent
+        / "config" / "hubspot_migration" / "baseline"
+        / "portal-schema-companies-phase42-pre.json"
+    )
+    live_by_name = {p["name"]: p for p in json.loads(snapshot_path.read_text())["results"]}
+    for name in ("lv_org_type", "lv_produces_content"):
+        declared = company_props[name]
+        live = live_by_name[name]
+        assert declared["type"] == live["type"]
+        assert declared["fieldType"] == live["fieldType"]
+        assert declared["groupName"] == live["groupName"]
+        declared_values = {str(o["value"]) for o in declared["options"]}
+        live_values = {str(o["value"]) for o in live["options"]}
+        assert declared_values == live_values
 
 
 def test_sj3_control_properties_exist_on_both_objects():
