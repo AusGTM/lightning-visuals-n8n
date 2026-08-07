@@ -6,10 +6,14 @@ oracle's opinion (src/icp_scoring.compute_icp_score, via tests/scoring_fixtures.
 shared expected_for/fetch_for_parity) for a sample of real companies and compares it
 against HubSpot's live lv_icp_fit_score / lv_icp_tier / lv_anti_icp_flag.
 
-Read-only. GET and search calls only — this script never creates, patches, or deletes a
-company (T-40-06's structural mitigation: no create-record, patch-record, delete-record,
-or disposable-company helper is imported anywhere in this file). That is what makes it safe to run
-unattended on a cadence; the on-demand full fixture tier (tests/test_scoring_parity.py's
+Read-only by default. GET and search calls only, UNLESS the operator explicitly passes
+--write-breakdown (Phase 43 Plan 02, D-01), which patches exactly one property
+(lv_icp_score_breakdown) on each company this invocation successfully compared -- no
+create-record or delete-record call exists anywhere in this file, live or otherwise, so
+even the flagged path cannot create or destroy a record. Phase 40 D-12's scheduled
+unattended pass never passes --write-breakdown and therefore never writes; that
+guarantee, not the absence of a patch import, is what keeps the standing sweep safe to
+run unattended on a cadence. The on-demand full fixture tier (tests/test_scoring_parity.py's
 `live` tier, RUN_LIVE_PARITY=true) is the create/exercise/delete tier and stays separate.
 
 The false-green guard is the point of this script, not a nicety (T-40-05). If
@@ -41,6 +45,7 @@ sys.path.insert(0, str(ROOT))  # repo root on sys.path so `src.*`/`tests.*` impo
 
 import yaml  # noqa: E402
 
+from src.hubspot_client import patch_record  # noqa: E402
 from tests.scoring_fixtures import expected_for, fetch_for_parity  # noqa: E402
 
 DEFAULT_REPORT_DIR = ROOT / ".planning" / "phases" / "40-scoring-engine-remediation-notes"
@@ -228,13 +233,18 @@ def _classify_mismatch(live_triple: dict, expected_triple: dict, expected_result
     return "documented_needs_review_divergence"
 
 
-def build_report(sample_ids, fetch_fn=fetch_for_parity):
+def build_report(sample_ids, fetch_fn=fetch_for_parity, write_breakdown=False, write_fn=patch_record):
     """The comparison core, offline-testable with an empty sample_ids or a stubbed
-    fetch_fn — no network call is reachable when sample_ids is empty. Returns
+    fetch_fn — no network call is reachable when sample_ids is empty. `write_breakdown`
+    defaults to False (D-01): with it off, `write_fn` is never called, proving the
+    standing unattended sweep stays read-only regardless of what `write_fn` is. With it
+    on, `write_fn` is called once per company this invocation successfully compared
+    (D-03 -- never a company whose fetch raised, never a portfolio backfill). Returns
     (report_dict, exit_code)."""
     comparisons = []
     mismatches = []
     real_findings = []
+    breakdowns_written = 0
 
     for company_id in sample_ids:
         try:
@@ -287,6 +297,18 @@ def build_report(sample_ids, fetch_fn=fetch_for_parity):
 
         comparisons.append(record)
 
+        # D-01/D-03: strictly opt-in and confined to the records this invocation
+        # successfully compared -- a company whose fetch raised `continue`d above and
+        # never reaches here, so it never gets a write. No portfolio backfill exists.
+        if write_breakdown:
+            write_fn(
+                "companies",
+                company_id,
+                {"lv_icp_score_breakdown": serialize_breakdown(expected)},
+                dry_run=False,
+            )
+            breakdowns_written += 1
+
     assertions_executed = len(comparisons)
     if assertions_executed == 0:
         verdict = (
@@ -313,6 +335,9 @@ def build_report(sample_ids, fetch_fn=fetch_for_parity):
         verdict = f"PASS: {assertions_executed} sampled companies match the oracle."
         exit_code = 0
 
+    if write_breakdown:
+        verdict += f" [--write-breakdown: wrote lv_icp_score_breakdown to {breakdowns_written} companies]"
+
     report = {
         "rubric_version": _rubric_version(),
         "checked_at_utc": datetime.now(timezone.utc).isoformat(),
@@ -321,6 +346,7 @@ def build_report(sample_ids, fetch_fn=fetch_for_parity):
         "mismatches": mismatches,
         "real_findings": real_findings,
         "assertions_executed": assertions_executed,
+        "breakdowns_written": breakdowns_written,
         "verdict": verdict,
     }
     return report, exit_code
@@ -338,12 +364,23 @@ def _write_report(report: dict) -> Path:
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.parse_args(argv)
+    parser.add_argument(
+        "--write-breakdown",
+        action="store_true",
+        default=False,
+        help=(
+            "Opt-in (D-01): also write lv_icp_score_breakdown to every company this "
+            "invocation successfully compares. Off by default -- the standing "
+            "unattended sweep (Phase 40 D-12) never passes this flag and therefore "
+            "never writes."
+        ),
+    )
+    args = parser.parse_args(argv)
 
     if not _has_credentials():
         print("skipped (no credentials): HUBSPOT_PRIVATE_APP_TOKEN must be set to run "
               "this parity sweep.")
-        report, exit_code = build_report([])
+        report, exit_code = build_report([], write_breakdown=args.write_breakdown)
         path = _write_report(report)
         print(f"wrote {path}")
         return exit_code
@@ -351,13 +388,13 @@ def main(argv=None) -> int:
     if not _portal_ok():
         print(f"REFUSED: HUBSPOT_PORTAL_ID does not match the expected portal "
               f"({EXPECTED_PORTAL_ID}). No API call made.")
-        report, exit_code = build_report([])
+        report, exit_code = build_report([], write_breakdown=args.write_breakdown)
         path = _write_report(report)
         print(f"wrote {path}")
         return 1
 
     sample_ids = _select_sample_ids()
-    report, exit_code = build_report(sample_ids)
+    report, exit_code = build_report(sample_ids, write_breakdown=args.write_breakdown)
     path = _write_report(report)
     print(f"wrote {path}")
     print(report["verdict"])

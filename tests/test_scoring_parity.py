@@ -786,6 +786,120 @@ def test_serialize_breakdown_falls_back_to_counts_when_shedding_detail_is_not_en
     # to parse -- json.loads succeeding above is the proof this path was never taken.
 
 
+# --------------------------------------------------------------------------------------
+# Phase 43 Plan 02, Task 2 (PIPE-03/D-01/D-03) -- --write-breakdown wiring. Offline,
+# stubbed fetch_fn AND write_fn -- no network. The guard test is the D-12 protection:
+# the default path must be structurally incapable of writing.
+# --------------------------------------------------------------------------------------
+
+def _matching_props_for_write_tests():
+    return {
+        "lv_org_type": "governing_body_league",
+        "lv_produces_content": True,
+        "lv_country_region_normalized": "AU",
+        "lv_revenue_band": "50-500M",
+        "lv_icp_fit_score": "80",
+        "lv_icp_tier": "A",
+        "lv_anti_icp_flag": "false",
+    }
+
+
+def test_write_breakdown_default_off_never_calls_write_fn():
+    """The D-12 guard: without the flag, the write stub must never be invoked -- proven
+    by a stub that raises if called, not merely by asserting a call count of zero."""
+    import scripts.run_scoring_parity as parity_script
+
+    def _raising_write_fn(*args, **kwargs):
+        raise AssertionError("write_fn must not be called when write_breakdown is off")
+
+    report, exit_code = parity_script.build_report(
+        ["c1"],
+        fetch_fn=lambda _cid: _matching_props_for_write_tests(),
+        write_fn=_raising_write_fn,
+    )
+    assert exit_code == 0
+    assert report["breakdowns_written"] == 0
+
+
+def test_write_breakdown_flag_writes_once_per_compared_company():
+    import scripts.run_scoring_parity as parity_script
+
+    calls = []
+
+    def _stub_write_fn(object_type, record_id, properties, dry_run):
+        calls.append((object_type, record_id, properties, dry_run))
+        return {"dry_run": dry_run}
+
+    report, exit_code = parity_script.build_report(
+        ["c1", "c2"],
+        fetch_fn=lambda _cid: _matching_props_for_write_tests(),
+        write_breakdown=True,
+        write_fn=_stub_write_fn,
+    )
+
+    assert exit_code == 0
+    assert report["breakdowns_written"] == 2
+    assert len(calls) == 2
+    for object_type, record_id, properties, dry_run in calls:
+        assert object_type == "companies"
+        assert record_id in ("c1", "c2")
+        assert dry_run is False
+        assert set(properties.keys()) == {"lv_icp_score_breakdown"}
+        json.loads(properties["lv_icp_score_breakdown"])  # must be valid JSON
+
+
+def test_write_breakdown_skips_a_company_whose_fetch_raised():
+    import scripts.run_scoring_parity as parity_script
+
+    calls = []
+
+    def _stub_write_fn(object_type, record_id, properties, dry_run):
+        calls.append(record_id)
+        return {"dry_run": dry_run}
+
+    def _stub_fetch(company_id):
+        if company_id == "raises":
+            raise RuntimeError("boom")
+        return _matching_props_for_write_tests()
+
+    report, exit_code = parity_script.build_report(
+        ["raises", "ok-1"],
+        fetch_fn=_stub_fetch,
+        write_breakdown=True,
+        write_fn=_stub_write_fn,
+    )
+
+    assert report["breakdowns_written"] == 1
+    assert calls == ["ok-1"]
+
+
+@live
+def test_write_breakdown_live_round_trips_through_hubspot():
+    """Authored here (43-02), executed by the operator in 43-04 -- RUN_LIVE_PARITY=true.
+    Writes the flagged breakdown to a disposable company and reads it back."""
+    import scripts.run_scoring_parity as parity_script
+
+    with disposable_company() as company_id:
+        patch_record("companies", company_id, {
+            "lv_org_type": "governing_body_league",
+            "lv_produces_content": "true",
+            "lv_country_region_normalized": "AU",
+            "lv_revenue_band": "50-500M",
+        }, dry_run=False)
+        settle(company_id, "lv_icp_tier")
+
+        report, exit_code = parity_script.build_report(
+            [company_id], write_breakdown=True
+        )
+        assert exit_code == 0
+        assert report["breakdowns_written"] == 1
+
+        stored = fetch_for_parity(company_id)
+        parsed = json.loads(stored["lv_icp_score_breakdown"])
+        oracle = expected_for(stored)
+        assert parsed["total"] == oracle.score
+
+
 def test_parity_02_named_case_completeness():
     """Collection-time guard, runs offline so it can never be skipped away: PARITY-02
     requires F4/F7/F9/F10 encoded as named, selectable regression cases. This makes that
