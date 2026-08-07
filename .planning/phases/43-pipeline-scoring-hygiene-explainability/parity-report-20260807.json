@@ -1,0 +1,36 @@
+{
+  "rubric_version": "lv-icp-v0.1",
+  "checked_at_utc": "2026-08-07T09:19:42.524663+00:00",
+  "sample_ids": [
+    "280147102145"
+  ],
+  "comparisons": [
+    {
+      "company_id": "280147102145",
+      "live": {
+        "lv_icp_fit_score": "80",
+        "lv_icp_tier": "A",
+        "lv_anti_icp_flag": null
+      },
+      "expected": {
+        "lv_icp_fit_score": "80",
+        "lv_icp_tier": "A",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": false,
+        "valid_json": false,
+        "fields": [],
+        "sources": []
+      },
+      "needs_review": null,
+      "review_reason": null
+    }
+  ],
+  "mismatches": [],
+  "real_findings": [],
+  "assertions_executed": 1,
+  "breakdowns_written": 1,
+  "verdict": "PASS: 1 sampled companies match the oracle. [--write-breakdown: wrote lv_icp_score_breakdown to 1 companies]"
+}
