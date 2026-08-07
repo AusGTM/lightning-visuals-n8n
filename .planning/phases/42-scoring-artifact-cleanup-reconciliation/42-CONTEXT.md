@@ -100,6 +100,18 @@ hygiene defects (Phase 43). Nothing that stops the repaired scoring engine from 
   run. The drift checker is deliberately NOT added to the unattended sweep — schema drifts
   rarely and the noise is not worth the sweep budget.
 
+### Discretionary Exception to D-01 (recorded 2026-08-07)
+
+- **X-01:** D-01 says ROADMAP.md "is not edited as a prerequisite." The planner nonetheless
+  added a short "Note on SC1" block to `.planning/ROADMAP.md` (commit `411b971`) warning that
+  SC1's archive list is superseded by the fix-in-place path. This is recorded here as a
+  **deliberate discretionary exception, not an unflagged deviation.** Rationale: D-01's intent
+  was that no roadmap edit be *required before planning could proceed* — not that the roadmap
+  must stay silent about a criterion which, read literally, instructs an executor to disable
+  the live scoring engine. The note is additive, cites 42-CONTEXT.md D-01, and mitigates the
+  same risk F1 exists to mitigate. Revert it if the roadmap should stay untouched; nothing in
+  the plans depends on it.
+
 ### Claude's Discretion
 - Exact archive directory name/date format under `config/hubspot_flows/`.
 - Drift-report JSON shape and exit-code semantics.
