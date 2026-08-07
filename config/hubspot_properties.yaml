@@ -335,6 +335,138 @@ companies:
       value: skipped
       displayOrder: 5
       hidden: false
+  - name: lv_org_type
+    label: Org Type
+    type: enumeration
+    fieldType: select
+    groupName: companyinformation
+    options:
+    - label: governing_body_league
+      value: governing_body_league
+      displayOrder: 0
+      hidden: false
+    - label: content_producer
+      value: content_producer
+      displayOrder: 1
+      hidden: false
+    - label: broadcaster
+      value: broadcaster
+      displayOrder: 2
+      hidden: false
+    - label: individual_club_team
+      value: individual_club_team
+      displayOrder: 3
+      hidden: false
+    - label: regulator
+      value: regulator
+      displayOrder: 4
+      hidden: false
+    - label: gambling_operator
+      value: gambling_operator
+      displayOrder: 5
+      hidden: false
+    - label: hardware_vendor
+      value: hardware_vendor
+      displayOrder: 6
+      hidden: false
+    - label: other
+      value: other
+      displayOrder: 7
+      hidden: false
+    - label: unknown
+      value: unknown
+      displayOrder: 8
+      hidden: false
+  - name: lv_produces_content
+    label: Content
+    type: bool
+    fieldType: booleancheckbox
+    groupName: companyinformation
+    options:
+    - label: 'Yes'
+      value: 'true'
+      displayOrder: 0
+      hidden: false
+    - label: 'No'
+      value: 'false'
+      displayOrder: 1
+      hidden: false
+  - name: lv_anti_icp_flag
+    label: Anti ICP Flag
+    type: bool
+    fieldType: booleancheckbox
+    groupName: companyinformation
+    options:
+    - label: 'Yes'
+      value: 'true'
+      displayOrder: 0
+      hidden: false
+    - label: 'No'
+      value: 'false'
+      displayOrder: 1
+      hidden: false
+  - name: lv_icp_tier
+    label: ICP Tier
+    type: enumeration
+    fieldType: select
+    groupName: companyinformation
+    options:
+    - label: A
+      value: A
+      displayOrder: 0
+      hidden: false
+    - label: B
+      value: B
+      displayOrder: 1
+      hidden: false
+    - label: C
+      value: C
+      displayOrder: 2
+      hidden: false
+    - label: D
+      value: D
+      displayOrder: 3
+      hidden: false
+    - label: Unscored
+      value: Unscored
+      displayOrder: 4
+      hidden: false
+  - name: lv_icp_fit_score
+    label: ICP Fit Score
+    type: number
+    fieldType: calculation_equation
+    groupName: companyinformation
+    options: []
+  - name: org_type_score
+    label: Org Type Score
+    type: number
+    fieldType: number
+    groupName: companyinformation
+    options: []
+  - name: geography_score
+    label: Geography Score
+    type: number
+    fieldType: number
+    groupName: companyinformation
+    options: []
+  - name: annual_revenue_score
+    label: Annual Revenue Score
+    type: number
+    fieldType: number
+    groupName: companyinformation
+    options: []
+  - name: produces_content_score
+    label: Produces Content Score
+    type: number
+    fieldType: number
+    groupName: companyinformation
+    options: []
+  - name: gambling_score
+    label: Gambling Score
+    type: number
+    fieldType: number
+    groupName: companyinformation
+    options: []
 contacts:
   groups:
   - name: lv_enrichment_contacts
