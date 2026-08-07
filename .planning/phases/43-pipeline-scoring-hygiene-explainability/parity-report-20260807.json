@@ -1,12 +1,12 @@
 {
   "rubric_version": "lv-icp-v0.1",
-  "checked_at_utc": "2026-08-07T09:19:42.524663+00:00",
+  "checked_at_utc": "2026-08-07T19:49:50.576598+00:00",
   "sample_ids": [
-    "280147102145"
+    "280268386773"
   ],
   "comparisons": [
     {
-      "company_id": "280147102145",
+      "company_id": "280268386773",
       "live": {
         "lv_icp_fit_score": "80",
         "lv_icp_tier": "A",
