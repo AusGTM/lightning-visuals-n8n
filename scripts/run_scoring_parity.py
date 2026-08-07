@@ -98,6 +98,42 @@ def _flag_matches(live_value, expected_flag: bool) -> bool:
     return (str(live_value) == "true") == expected_flag
 
 
+def _require_provenance() -> bool:
+    """Phase 41 Plan 02 Task 2: exact-'true' semantics, same as every other env kill
+    switch in this repo. Unset (the standing unattended sweep's default) means missing
+    provenance is recorded but never a real_finding -- records this sweep has never run
+    through the pipeline legitimately have none."""
+    return os.getenv("PARITY_REQUIRE_PROVENANCE") == "true"
+
+
+def _provenance_check(props: dict) -> dict:
+    """Presence/shape assertion for the single `lv_enrichment_provenance` JSON blob
+    (n8n/code/mergeCompanies.js's provenance model: one object keyed by field, each entry
+    carrying at least `source`) -- not the per-field `*_source`/`*_confidence` properties
+    CLAUDE.md's superseded local-MVP design describes."""
+    raw = props.get("lv_enrichment_provenance")
+    present = bool(raw)
+    valid_json = False
+    fields = []
+    sources = []
+
+    if present:
+        try:
+            parsed = json.loads(raw)
+        except (TypeError, ValueError):
+            parsed = None
+        if isinstance(parsed, dict):
+            valid_json = True
+            fields = sorted(parsed.keys())
+            sources = sorted({
+                entry.get("source")
+                for entry in parsed.values()
+                if isinstance(entry, dict) and entry.get("source")
+            })
+
+    return {"present": present, "valid_json": valid_json, "fields": fields, "sources": sources}
+
+
 def _classify_mismatch(live_triple: dict, expected_triple: dict, expected_result) -> str:
     """PARITY-01/Task 3: the oracle's documented `Needs Review` divergence (40-02's
     flagged assumption, restated in this module's own header) -- compute_icp_score
@@ -162,6 +198,18 @@ def build_report(sample_ids, fetch_fn=fetch_for_parity):
             if record["classification"] != "documented_needs_review_divergence":
                 real_findings.append(record)
             mismatches.append(record)
+
+        # Phase 41 Plan 02 Task 2: recorded on every comparison (DATA-01's "provenance
+        # stamped" bar needs this to be measured, not spot-checked) but only becomes a
+        # real_finding when a caller explicitly demands it via PARITY_REQUIRE_PROVENANCE
+        # -- the standing unattended sweep runs over records this phase never touches,
+        # which legitimately carry no provenance, and must keep passing by default.
+        record["provenance"] = _provenance_check(props)
+        record["needs_review"] = props.get("lv_enrichment_needs_review")
+        record["review_reason"] = props.get("lv_enrichment_review_reason")
+        if _require_provenance() and not record["provenance"]["valid_json"]:
+            real_findings.append({**record, "classification": "provenance_missing"})
+
         comparisons.append(record)
 
     assertions_executed = len(comparisons)

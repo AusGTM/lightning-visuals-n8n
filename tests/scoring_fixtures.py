@@ -48,6 +48,20 @@ FIT_SCORE_PROPS = [
     "lv_icp_tier",
     "lv_anti_icp_flag",
     "lv_anti_icp_reason",
+    # Phase 41 Plan 02 Task 2 (DATA-01's "provenance stamped" bar) -- appended, not
+    # inserted, so the first fifteen entries above stay byte-identical. The live schema
+    # carries provenance as ONE lv_enrichment_provenance JSON blob plus two verified_at
+    # cache keys (n8n/code/mergeCompanies.js's header comment; config/hubspot_properties
+    # .yaml:192-209) -- not the per-field *_source/*_confidence properties CLAUDE.md's
+    # superseded local-MVP design describes. Requesting an unknown property name in a
+    # HubSpot properties GET list is a documented no-op, so this addition is safe against
+    # a portal where any of them is missing, same reasoning as the component-score
+    # properties above.
+    "lv_enrichment_provenance",
+    "lv_org_type_verified_at",
+    "lv_produces_content_verified_at",
+    "lv_enrichment_needs_review",
+    "lv_enrichment_review_reason",
 ]
 
 

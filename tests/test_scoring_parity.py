@@ -20,6 +20,7 @@
 # from live HubSpot's A/B/C/D-only lv_icp_tier enum (PORTAL-FACTS.md confirms Unscored is
 # the only non-letter value live today), not a parity failure to chase.
 import copy
+import json
 import os
 
 import pytest
@@ -551,6 +552,142 @@ def test_run_scoring_parity_verdict_denominator_counts_failed_fetches():
     assert len(report["real_findings"]) == 1
     assert "1 of 2 sampled companies" in report["verdict"]
     assert "1 of 1 sampled companies" not in report["verdict"]
+
+
+# --------------------------------------------------------------------------------------
+# Phase 41 Plan 02 Task 2 -- the automated provenance assertion. Offline, stubbed
+# fetch_fn, no network. DATA-01's "provenance stamped" bar measured on every record;
+# enforced as a real_finding only when PARITY_REQUIRE_PROVENANCE=true.
+# --------------------------------------------------------------------------------------
+
+def test_fit_score_props_gains_five_provenance_properties_appended_not_inserted():
+    original_first_fifteen = [
+        "lv_org_type", "lv_produces_content", "lv_country_region_normalized",
+        "lv_revenue_band", "lv_is_gambling_operator", "lv_is_hardware_vendor",
+        "org_type_score", "geography_score", "annual_revenue_score",
+        "produces_content_score", "gambling_score",
+        "lv_icp_fit_score", "lv_icp_tier", "lv_anti_icp_flag", "lv_anti_icp_reason",
+    ]
+    assert FIT_SCORE_PROPS[:15] == original_first_fifteen
+    for name in (
+        "lv_enrichment_provenance",
+        "lv_org_type_verified_at",
+        "lv_produces_content_verified_at",
+        "lv_enrichment_needs_review",
+        "lv_enrichment_review_reason",
+    ):
+        assert name in FIT_SCORE_PROPS
+
+
+def _matching_stub_props(provenance_json=None, needs_review=None, review_reason=None):
+    """A record whose score/tier/flag already match the oracle -- isolates the
+    provenance assertion from the pre-existing mismatch classifier."""
+    props = {
+        "lv_org_type": "governing_body_league",
+        "lv_produces_content": True,
+        "lv_country_region_normalized": "AU",
+        "lv_revenue_band": "5-50M",
+        "lv_icp_fit_score": "80",
+        "lv_icp_tier": "A",
+        "lv_anti_icp_flag": "false",
+    }
+    if provenance_json is not None:
+        props["lv_enrichment_provenance"] = provenance_json
+    if needs_review is not None:
+        props["lv_enrichment_needs_review"] = needs_review
+    if review_reason is not None:
+        props["lv_enrichment_review_reason"] = review_reason
+    return props
+
+
+def test_provenance_absent_is_recorded_but_not_a_real_finding_by_default(monkeypatch):
+    monkeypatch.delenv("PARITY_REQUIRE_PROVENANCE", raising=False)
+    import scripts.run_scoring_parity as parity_script
+
+    report, exit_code = parity_script.build_report(
+        ["c1"], fetch_fn=lambda _cid: _matching_stub_props()
+    )
+
+    assert exit_code == 0
+    assert report["real_findings"] == []
+    assert report["comparisons"][0]["provenance"] == {
+        "present": False, "valid_json": False, "fields": [], "sources": [],
+    }
+
+
+def test_provenance_absent_is_a_real_finding_when_explicitly_required(monkeypatch):
+    monkeypatch.setenv("PARITY_REQUIRE_PROVENANCE", "true")
+    import scripts.run_scoring_parity as parity_script
+
+    report, exit_code = parity_script.build_report(
+        ["c1"], fetch_fn=lambda _cid: _matching_stub_props()
+    )
+
+    assert exit_code == 1
+    assert len(report["real_findings"]) == 1
+    assert report["real_findings"][0]["classification"] == "provenance_missing"
+
+
+def test_provenance_valid_json_reports_fields_and_sources(monkeypatch):
+    monkeypatch.delenv("PARITY_REQUIRE_PROVENANCE", raising=False)
+    import scripts.run_scoring_parity as parity_script
+
+    blob = json.dumps({
+        "lv_org_type": {"source": "claude_web", "confidence": 88},
+        "lv_produces_content": {"source": "june_2026", "confidence": 85},
+    })
+
+    report, exit_code = parity_script.build_report(
+        ["c1"], fetch_fn=lambda _cid: _matching_stub_props(provenance_json=blob)
+    )
+
+    assert exit_code == 0
+    assert report["real_findings"] == []
+    prov = report["comparisons"][0]["provenance"]
+    assert prov["present"] is True
+    assert prov["valid_json"] is True
+    assert prov["fields"] == ["lv_org_type", "lv_produces_content"]
+    assert prov["sources"] == ["claude_web", "june_2026"]
+
+
+def test_provenance_unparseable_json_is_a_real_finding_when_required(monkeypatch):
+    monkeypatch.setenv("PARITY_REQUIRE_PROVENANCE", "true")
+    import scripts.run_scoring_parity as parity_script
+
+    report, exit_code = parity_script.build_report(
+        ["c1"], fetch_fn=lambda _cid: _matching_stub_props(provenance_json="not-json{")
+    )
+
+    assert exit_code == 1
+    assert report["comparisons"][0]["provenance"]["valid_json"] is False
+    assert report["real_findings"][0]["classification"] == "provenance_missing"
+
+
+def test_needs_review_and_review_reason_are_copied_onto_the_record(monkeypatch):
+    monkeypatch.delenv("PARITY_REQUIRE_PROVENANCE", raising=False)
+    import scripts.run_scoring_parity as parity_script
+
+    report, _ = parity_script.build_report(
+        ["c1"],
+        fetch_fn=lambda _cid: _matching_stub_props(
+            needs_review="true", review_reason="june dataset conflict"
+        ),
+    )
+
+    record = report["comparisons"][0]
+    assert record["needs_review"] == "true"
+    assert record["review_reason"] == "june dataset conflict"
+
+
+def test_empty_sample_still_fails_even_with_provenance_required(monkeypatch):
+    monkeypatch.setenv("PARITY_REQUIRE_PROVENANCE", "true")
+    import scripts.run_scoring_parity as parity_script
+
+    report, exit_code = parity_script.build_report([])
+
+    assert exit_code == 1
+    assert report["assertions_executed"] == 0
+    assert "zero assertions" in report["verdict"]
 
 
 def test_parity_02_named_case_completeness():
