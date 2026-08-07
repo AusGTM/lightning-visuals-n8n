@@ -1,0 +1,24 @@
+{
+  "captured_at": "2026-08-07T16:45:00+10:00",
+  "phase": "41",
+  "step": "41-03 Task 2 step 6 — whole-run arm (D-06)",
+  "outcome": "armed",
+  "workflow_id": "950HPb7a1GgSAIyZ",
+  "record_id_count": 66,
+  "record_domain_count": 0,
+  "allow_hubspot_create": "false",
+  "prior_state_for_reversal": {
+    "ALLOW_HUBSPOT_RECORD_WRITES": "false",
+    "ALLOW_HUBSPOT_CREATE": "false",
+    "TEST_RECORD_IDS": "",
+    "TEST_RECORD_DOMAINS": ""
+  },
+  "gate_checks": {
+    "outcome_is_armed": true,
+    "record_count_equals_resolved_count": true,
+    "record_domains_empty": true,
+    "create_still_disarmed": true
+  },
+  "open_question": "The arm payload's consequence string reads 'It closes as soon as the dispatch returns.' That is the library's message for the bounded armed_window cycle. june_run_arm.py deliberately calls arm_for_dispatch() OUTSIDE armed_window so the window spans the whole run (D-06). If the message is literally accurate rather than inherited boilerplate, records dispatched after the first batch would silently become write_blocked. The canary must re-read the write-safety flag AFTER its dispatch to settle this before the remaining 61 are released.",
+  "disarm_obligation": "NON-DEFERRABLE. If this run is abandoned at any point, the window must still be closed via scripts/june_run_arm.py --disarm."
+}
