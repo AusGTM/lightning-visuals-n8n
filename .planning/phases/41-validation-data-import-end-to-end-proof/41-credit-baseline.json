@@ -1,0 +1,23 @@
+{
+  "captured_at": "2026-08-07T16:30:00+10:00",
+  "phase": "41",
+  "purpose": "Pre-run provider credit baseline — the 'before' half of DATA-01's zero-provider-spend proof (41-03 Task 2 step 1). Compared against a post-run read in 41-04.",
+  "source_command": "scripts/check_provider_credits.py",
+  "captured_by": "operator",
+  "providers": {
+    "lusha": {
+      "credits": 3925,
+      "status": 200
+    },
+    "apollo": {
+      "credits": null,
+      "status": 200,
+      "note": "Known condition, not a failure: the Apollo key is not a master key, so the credit endpoint returns no balance and the checker degrades to null. Zero-spend for Apollo is therefore proven structurally (the SJ-3 dispatch event carries no providers key) rather than by balance comparison."
+    },
+    "zoominfo": {
+      "credits": 9397,
+      "status": 200
+    }
+  },
+  "expected_post_run": "Identical lusha and zoominfo balances. Any decrease means a provider was called and the zero-provider-spend criterion of DATA-01 has failed."
+}
