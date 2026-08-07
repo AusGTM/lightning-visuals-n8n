@@ -62,6 +62,11 @@ FIT_SCORE_PROPS = [
     "lv_produces_content_verified_at",
     "lv_enrichment_needs_review",
     "lv_enrichment_review_reason",
+    # Phase 43 Plan 04 (live execution) — Rule 1 bug fix: fetch_for_parity() is the read
+    # path test_write_breakdown_live_round_trips_through_hubspot (43-02) uses to read the
+    # property --write-breakdown writes; the live round trip KeyErrors on every run
+    # without this, regardless of timing, because the property was never in this list.
+    "lv_icp_score_breakdown",
 ]
 
 
