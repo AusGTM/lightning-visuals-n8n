@@ -259,15 +259,31 @@ def test_built_report_object_carries_no_icp_trace_anywhere():
 def test_no_operator_facing_skill_body_mentions_icp_or_tier_not_even_a_placeholder():
     """Extends the same ban across every skill body under skills/ — including the
     enrichment skill a sibling plan (Phase 25) creates, the moment it lands. Assert
-    the scan found at least one file so this cannot pass by scanning nothing."""
+    the scan found at least one file so this cannot pass by scanning nothing.
+
+    ONE named exemption: loss-reason-report/SKILL.md (Phase 43 Plan 03, D-06). D-10b's
+    rationale was that the enrichment-dispatch report had nothing to read back — Phase 15
+    had removed canonical ICP writes from the pipeline, so a tier shown there would be
+    either fabricated or a misleading placeholder. That is not this skill's shape: it
+    relays lv_icp_tier read directly off the HubSpot company record (canonical,
+    HubSpot-owned, exactly as D-10a says it should be), via the backend repo's own
+    aggregator — never computed or guessed by the plugin. Phase 43-CONTEXT.md's D-06
+    records the operator being shown the plugin-scope conflict and choosing, explicitly,
+    to admit this one deliverable. The exemption is this one file, by name — not a
+    general allowance for any future skill to mention ICP/tier."""
     skill_files = [p for p in SKILLS_DIR.rglob("*") if p.is_file()]
     assert skill_files, "scan found zero skill files under operator-claude-plugin/skills/"
 
+    EXEMPT = {"loss-reason-report/SKILL.md"}
+
     offenders = {}
     for path in skill_files:
+        rel = str(path.relative_to(SKILLS_DIR))
+        if rel in EXEMPT:
+            continue
         hits = _scan_text_for_forbidden_terms(path.read_text(encoding="utf-8"))
         if hits:
-            offenders[str(path.relative_to(SKILLS_DIR))] = hits
+            offenders[rel] = hits
 
     assert not offenders, (
         f"skill file(s) mention ICP/tier — the plugin must show neither a tier nor a "

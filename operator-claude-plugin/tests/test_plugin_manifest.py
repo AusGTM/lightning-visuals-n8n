@@ -72,12 +72,35 @@ def test_every_skill_has_parseable_frontmatter_carrying_name_and_description(ski
     )
 
 
+# Phase 43 Plan 03 (D-06/C3): loss-reason-report is the first skill that shells out to a
+# BACKEND-repo script (scripts/build_loss_reason_report.py, in the repo the plugin is a
+# thin client for) rather than one of the plugin's own scripts/. Named, not a general
+# "allowed sources" mechanism -- one exemption, one comment, one citation, so a future
+# skill that quietly starts referencing an unshipped path still fails this guard.
+BACKEND_REPO_SCRIPTS = {"loss-reason-report": {"build_loss_reason_report.py"}}
+
+
 @pytest.mark.parametrize("skill_path", SKILL_PATHS, ids=lambda p: p.parent.name)
 def test_every_skill_references_only_scripts_that_exist_on_disk(skill_path):
     text = skill_path.read_text()
     referenced = set(re.findall(r"scripts/(\w+\.py)", text))
     assert referenced, f"{skill_path.parent.name}: expected at least one script reference"
+    backend_scripts = BACKEND_REPO_SCRIPTS.get(skill_path.parent.name, set())
     for script in referenced:
+        if script in backend_scripts:
+            # Must exist in the backend repo's scripts/ (one level up from the plugin
+            # root) and must NOT be shadow-copied into the plugin's own scripts/ -- the
+            # whole point of shelling out is never forking the backend script.
+            assert (PLUGIN_ROOT.parent / "scripts" / script).exists(), (
+                f"{skill_path.parent.name}/SKILL.md references backend-repo scripts/{script}, "
+                f"which does not exist in the backend repo's scripts/ directory"
+            )
+            assert not (PLUGIN_ROOT / "scripts" / script).exists(), (
+                f"{skill_path.parent.name}/SKILL.md references backend-repo scripts/{script}, "
+                f"but a same-named file also exists under the plugin's own scripts/ -- "
+                f"this skill must shell out to the backend repo, never a shadow copy"
+            )
+            continue
         assert (PLUGIN_ROOT / "scripts" / script).exists(), (
             f"{skill_path.parent.name}/SKILL.md references scripts/{script}, "
             f"which does not exist on disk"

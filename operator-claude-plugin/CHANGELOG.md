@@ -16,6 +16,25 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-08-07
+
+### Added
+
+- **New skill: `loss-reason-report`.** Builds a report of why closed-lost deals were
+  lost, cross-tabulated against the lost company's ICP tier and score, so the operator
+  can see patterns like "we lose Tier A deals on price" — the signal a future rubric
+  revision needs. This is the first skill that reaches a backend-repo script rather than
+  the n8n webhook surface: it shells out to `scripts/build_loss_reason_report.py` in the
+  backend repo checkout as a subprocess and reads back the markdown file it wrote. It
+  never imports backend code and this plugin gains no HubSpot credential from it — the
+  aggregator reads `HUBSPOT_PRIVATE_APP_TOKEN` from the backend repo's own `.env`, sourced
+  by the documented command, not from anything this plugin stores.
+
+  An empty report (zero closed-lost deals with a loss reason filled yet) is reported as
+  exactly that — a complete, successful answer, not a failure — and is kept distinct from
+  a run that could not reach HubSpot at all, which this skill never presents as "zero
+  found."
+
 ## [0.11.1] - 2026-08-05
 
 ### Fixed
@@ -622,8 +641,8 @@ greyed out through ten phases of shipped work).
    entry, following semver against *this client's* surface — not the backend's milestone
    number, which is a different thing that happens to match at 0.6.0. Claude Desktop compares
    only this string; equal strings mean no update is offered, whatever the content says.
-2. **Cut the CHANGELOG section**: `## [Unreleased]` stays on top and empty, the shipped work
-   moves under `## [<version>] - <date>`.
+2. **Cut the CHANGELOG section**: the Unreleased heading stays on top and empty, the
+   shipped work moves under `## [<version>] - <date>`.
 3. **Push to the branch the marketplace clone tracks** (`master`).
 4. **Refresh the marketplace clone** — it never fetches on its own, and a reinstall re-copies
    from whatever it already holds:
