@@ -5,15 +5,15 @@ milestone_name: HubSpot Scoring Engine Remediation
 current_phase: 41
 current_phase_name: Validation Data Import & End-to-End Proof
 status: planned
-stopped_at: Phase 41 planned (4 plans, verified)
-last_updated: "2026-08-07T06:24:47.325Z"
+stopped_at: Completed 41-02-PLAN.md
+last_updated: "2026-08-07T06:49:01.224Z"
 last_activity: 2026-08-07
 last_activity_desc: "40-07 complete (Phase 40 closed): ENGINE-01 live-proven (80/A entirely inside HubSpot off canonical inputs — org_type_score=40, produces_content_score=20, geography_score=10, annual_revenue_score=10, gambling_score=0); D-10 backfill mechanism (`scripts/backfill_seed_company_scores.py`) built, gated, and proven on the real-record sample (Melbourne Racing Club, id 9604614548 — the entire population of companies portal-wide carrying any canonical lv_* input); PARITY-01 verdict committed (`parity-report-final.json`, PASS with 1 documented Needs Review divergence, 0 real findings, assertions_executed=1); full live fixture tier 56/56 passed excluding the 5 veto_set/veto_clear cases, which are empirically confirmed blocked on the pre-existing VETO-01/VETO-02 pipeline write-gate arming gate (not a regression, not this plan's scope — WINDOWS.md id 5)"
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 15
-  completed_plans: 11
+  completed_plans: 12
   percent: 40
 ---
 
@@ -30,9 +30,9 @@ Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39
 
 ## Session
 
-**Last session:** 2026-08-07T06:24:47.317Z
-**Stopped at:** Phase 41 planned (4 plans, verified)
-**Resume file:** .planning/phases/41-validation-data-import-end-to-end-proof/41-01-PLAN.md
+**Last session:** 2026-08-07T06:49:01.214Z
+**Stopped at:** Completed 41-02-PLAN.md
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -49,6 +49,7 @@ Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39
 | Phase 40 P05 | 75min | 3 tasks | 4 files |
 | Phase 40 P06 | 55min | 3 tasks | 5 files |
 | Phase 40 P07 | ~60min | 3 tasks | 6 files |
+| Phase 41 P02 | 45m | 3 tasks | 7 files |
 
 ## Decisions
 
@@ -82,6 +83,9 @@ Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39
 - [Phase 40-07]: D-10's backfill mechanism built (`scripts/backfill_seed_company_scores.py`, `batch_update_companies` in `src/hubspot_client.py`) and proven on the real-record sample. Portfolio-wide measurement found exactly **one** company anywhere in the portal (711 total) carries any canonical `lv_*` scoring input — Melbourne Racing Club, id `9604614548` — confirming the 712-population backfill is genuinely Phase 41's job, not deferred prematurely. Armed run seeded its five components; settled live to `lv_icp_fit_score=15`, `lv_icp_tier=C` in ~11s.
 - [Phase 40-07]: PARITY-01 verdict committed (`.planning/phases/40-scoring-engine-remediation-notes/parity-report-final.json`): `assertions_executed=1`, `PASS` with 1 documented `Needs Review` divergence (40-02's flagged assumption — score and veto state agree with the oracle exactly; only the tier label diverges because HubSpot's live `lv_icp_tier` enum has no `Needs Review` value) and 0 real findings. `scripts/run_scoring_parity.py`'s flag comparison corrected (Rule 1, third instance of the same defect class 40-05/40-06 each fixed once in the pytest live tier) to boolean-equivalence instead of raw string equality — a never-enriched real record reads `lv_anti_icp_flag=None`, not `"false"`.
 - [Phase 40-07]: **VETO-01/VETO-02 confirmed still open, empirically, not fixed by this plan.** Full live fixture tier: 56/56 non-veto-arming tests passed. The 5 excluded cases (`test_veto_set_all_three_hard_vetoes` ×3, `test_veto_set_multiple_reasons_join`, `test_veto_clear_after_correction`) fail because setting veto-input properties alone never dispatches the n8n pipeline under this portal's actually-configured webhook subscriptions — VETO-WRITE-EVIDENCE.md's own proof required the SJ-3 poller plus a bounded `scheduled_arm.py` write-gate arm, an operational/security action outside this plan's `<action>` text and explicit scope per 40-03/40-05/40-06 precedent. Also fixed WINDOWS.md #4 (Rule 1, pre-existing open bug): `test_veto_clear_after_correction` patched `enrichment_requested` instead of the real SJ-3 poller-search property `lv_enrichment_requested` — corrected, though the test still fails at its earlier veto-setting assertion for the same structural reason as the other four. New WINDOWS.md entry (id 5, open) records this gate for Phase 41/future-phase visibility.
+- [Phase ?]: 41-02: domain-first D-09 re-match derives a candidate domain from the June row's per-field evidence URLs (urlparse netloc, www.-stripped) since the June source snapshot carries no explicit domain field
+- [Phase ?]: 41-02: PARITY_REQUIRE_PROVENANCE=true is additive to real_findings (a shallow-copied record with classification=provenance_missing), never overwriting a pre-existing score/tier/flag mismatch classification on the same record
+- [Phase ?]: 41-02: june_run_arm.py imports operator-claude-plugin/scripts modules directly via sys.path insert -- PLUGIN-04's import guard only forbids plugin-to-backend imports, backend-to-plugin was never scanned
 
 ### Blockers
 
