@@ -153,7 +153,8 @@ test("approve on a clean flagged row applies the held candidate, clears the queu
   assert.equal(out.properties.lv_produces_content, true);
   // ...plus its clear patch, which is what takes the record OUT of the queue. Unlike a
   // rejection (D-10), an approval is entitled to: the decision is recorded alongside it.
-  assert.equal(out.properties[P_NEEDS_REVIEW], false);
+  // 43-01 (D-07/PIPE-01): quoted string, not a bare JS boolean.
+  assert.equal(out.properties[P_NEEDS_REVIEW], "false");
   assert.equal(out.properties[P_CANDIDATE_JSON], "");
   assert.equal(typeof out.properties[P_REVIEWED_AT], "string",
     "reviewApply's clear patch stamps reviewed-at; this module must not stamp it twice");
@@ -678,7 +679,9 @@ test("(g5) an APPROVE on a company routes through the endpoint's own inlined rev
     undefined, PRECHECK_ARMED_789);
   assert.equal(built.outcome, "applied");
   assert.equal(built.would_write.lv_org_type, "governing_body_league");
-  assert.equal(built.would_write[P_NEEDS_REVIEW], false, "an approval clears the queue");
+  // 43-01 (D-07/PIPE-01): the cleared value is now the quoted string "false", not a bare
+  // JS boolean — HubSpot EQ filters compare strings.
+  assert.equal(built.would_write[P_NEEDS_REVIEW], "false", "an approval clears the queue");
   assert.equal(typeof built.would_write[P_PROVENANCE], "string");
   assert.equal(JSON.parse(built.would_write[P_PROVENANCE]).lv_org_type.source, "human");
   assert.equal("domain" in built.would_write, false,

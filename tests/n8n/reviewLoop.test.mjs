@@ -47,8 +47,10 @@ test("reviewApply: consumes the exact producer shape for held needs_review candi
     lv_produces_content: true,
   });
   assert.deepEqual(result.clearPatch, {
-    lv_enrichment_needs_review: false,
-    lv_enrichment_review_approved: false,
+    // 43-01 (D-07/PIPE-01): quoted strings, not bare JS booleans — HubSpot EQ filters
+    // compare strings.
+    lv_enrichment_needs_review: "false",
+    lv_enrichment_review_approved: "false",
     lv_enrichment_review_reason: "",
     lv_enrichment_review_candidate_json: "",
     lv_enrichment_reviewed_at: result.clearPatch.lv_enrichment_reviewed_at,

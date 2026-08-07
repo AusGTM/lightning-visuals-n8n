@@ -16,7 +16,12 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
 
-from build_cloud_workflows import ENRICH_DECIDE_CO_CLOUD, ENRICH_MERGE_CO  # noqa: E402
+from build_cloud_workflows import (  # noqa: E402
+    DECIDE_CLOUD,
+    ENRICH_DECIDE_CO_CLOUD,
+    ENRICH_DEDUPE_SWEEP,
+    ENRICH_MERGE_CO,
+)
 
 WORKFLOW_PATH = ROOT / "n8n" / "wf_enrichment_cloud.json"
 
@@ -204,6 +209,64 @@ def test_decide_company_action_veto_flag_assignment_is_a_quoted_string_literal()
     assert 'properties.lv_anti_icp_flag = vetoReasons.length > 0 ? "true" : "false";' in code
     assert "properties.lv_anti_icp_flag = true;" not in code
     assert "properties.lv_anti_icp_flag = false;" not in code
+
+
+def _decide_action_jscode():
+    doc = _load()
+    node = next(n for n in doc["nodes"] if n["name"] == "Decide Action")
+    return node["parameters"]["jsCode"]
+
+
+def test_decide_company_action_needs_review_flag_assignment_is_a_quoted_string_literal():
+    """D-07 (43-01, PIPE-01, row 3): same class as the veto-flag fix above — a bare JS
+    boolean assigned to lv_enrichment_needs_review would silently break
+    AWAITING_REVIEW_GROUPS' EQ filter. Assert the assignment is a quoted string literal."""
+    code = _decide_company_action_jscode()
+    assert 'properties.lv_enrichment_needs_review = "true";' in code
+    assert "properties.lv_enrichment_needs_review = true;" not in code
+
+
+def test_bug27_finalization_loops_coerce_booleans_alongside_the_array_join():
+    """D-07 (43-01, PIPE-01, rows 4/5): the properties-finalization loop in BOTH
+    ENRICH_DECIDE_CO_CLOUD ("Decide Company Action") and ENRICH_DECIDE_CLOUD
+    ("Decide Action") must convert any boolean-typed value to its quoted string form,
+    alongside the pre-existing BUG-27 array join — the single choke point every promoted
+    candidate passes through, covering lv_produces_content/lv_sponsorship_reliant/
+    lv_is_hardware_vendor/lv_is_gambling_operator (and any future boolean property) with no
+    per-field enumeration. Anchor on the typeof-check-plus-assignment shape, not a bare
+    substring, and confirm the join branch is byte-preserved (BUG-27 must not regress)."""
+    join = 'if (Array.isArray(properties[k])) properties[k] = properties[k].join(";");'
+    coercion = (
+        'else if (typeof properties[k] === "boolean") '
+        'properties[k] = properties[k] ? "true" : "false";'
+    )
+    for code in (_decide_company_action_jscode(), _decide_action_jscode()):
+        assert join in code, "BUG-27 array-join branch missing or altered"
+        assert coercion in code, "boolean-coercion branch missing from the finalization loop"
+        assert code.index(join) < code.index(coercion), (
+            "coercion branch must sit in the SAME finalization loop as the array join, "
+            "immediately after it"
+        )
+
+
+def test_inventory_rows_6_7_8_remain_already_correct():
+    """43-01 boolean_writer_inventory: rows 6 (lv_anti_icp_flag/lv_anti_icp_reason, Phase
+    40 D-04), 7 (ENRICH_DEDUPE_SWEEP's lv_enrichment_needs_review dedupe writer) and 8
+    (DECIDE_CLOUD's lv_enrichment_requested create-branch stamp, 36-07) were ALREADY FIXED
+    before this phase and must stay that way — a regression at any one of these sites
+    should fail here too, not just at whichever test happened to be written for its own
+    phase. Assert the rows individually, never a count."""
+    # Row 6.
+    assert 'properties.lv_anti_icp_flag = vetoReasons.length > 0 ? "true" : "false";' in (
+        ENRICH_DECIDE_CO_CLOUD
+    )
+    assert 'properties.lv_anti_icp_reason = vetoReasons.length > 0 ? vetoReasons.join("; ") : "";' in (
+        ENRICH_DECIDE_CO_CLOUD
+    )
+    # Row 7.
+    assert '{ lv_enrichment_needs_review: "true" }' in ENRICH_DEDUPE_SWEEP
+    # Row 8.
+    assert 'properties.lv_enrichment_requested = "true";' in DECIDE_CLOUD
 
 
 def test_decide_company_action_veto_reason_join_separator_matches_the_oracle():

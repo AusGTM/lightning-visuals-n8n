@@ -1357,8 +1357,13 @@ return $input.all().map((it) => {
   }
   // BUG 27 (live 400 on execution 328): HubSpot v3 PATCH rejects JSON arrays —
   // multi-checkbox values must be semicolon-joined strings. Single choke point.
+  // D-07 (43-01, PIPE-01, row 5, defensive parity with the companies branch): a second
+  // branch coerces any boolean-typed value to its quoted string form — no boolean-typed
+  // ICP candidate is a live contacts field today (DEFAULT_CONTACT_POLICY is string-only),
+  // but this closes the class here too rather than leaving one branch un-guarded.
   for (const k of Object.keys(properties)) {
     if (Array.isArray(properties[k])) properties[k] = properties[k].join(";");
+    else if (typeof properties[k] === "boolean") properties[k] = properties[k] ? "true" : "false";
   }
   return { json: {
     action,
@@ -2785,7 +2790,10 @@ return $input.all().map((it) => {
   properties.lv_anti_icp_reason = vetoReasons.length > 0 ? vetoReasons.join("; ") : "";
 
   if (needsReview.length > 0) {
-    properties.lv_enrichment_needs_review = true;
+    // D-07 (43-01, PIPE-01, row 3): string literal, never a bare JS boolean — same class
+    // as the lv_anti_icp_flag fix two lines above; the BUG-27 loop below only joins
+    // arrays, so this would otherwise ship unstringified straight to the PATCH body.
+    properties.lv_enrichment_needs_review = "true";
     properties.lv_enrichment_status = "needs_review";
     properties.lv_enrichment_review_reason =
       needsReview.map((d) => `${d.field}: ${d.reason}`).join("; ").slice(0, 60000);
@@ -2825,8 +2833,14 @@ return $input.all().map((it) => {
 
   // BUG 27 (live 400 on execution 328): HubSpot v3 PATCH rejects JSON arrays —
   // multi-checkbox values (lv_content_type) must be semicolon-joined strings.
+  // D-07 (43-01, PIPE-01, row 4): a second branch coerces any boolean-typed value to its
+  // quoted string form — the single choke point every promoted candidate passes through
+  // (mergeCompanies.js's canonicalPatch carries raw candidate types straight through), so
+  // this covers lv_produces_content/lv_sponsorship_reliant/lv_is_hardware_vendor/
+  // lv_is_gambling_operator, and any future boolean property, with no per-field list.
   for (const k of Object.keys(properties)) {
     if (Array.isArray(properties[k])) properties[k] = properties[k].join(";");
+    else if (typeof properties[k] === "boolean") properties[k] = properties[k] ? "true" : "false";
   }
 
   return { json: {
