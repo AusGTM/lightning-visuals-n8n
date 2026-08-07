@@ -40,14 +40,27 @@ created: 2026-08-07
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| TBD by planner | — | — | DATA-01 | — | Writes stay disarmed until operator arms | unit | `.venv/bin/python -m pytest tests/test_scoring_parity.py -k "not live"` | ✅ | ⬜ pending |
-| TBD by planner | — | — | DATA-02 | — | No per-record manual touch | live integration | `scripts/run_scoring_parity.py` over landed IDs | ✅ | ⬜ pending |
+| T1 tracer | 41-01 | 1 | DATA-01 | T-41-01/02/03 | June table reproducible from a committed snapshot; evidence URL required before an ICP claim promotes | unit + node | `.venv/bin/python -m pytest tests/test_june_candidates.py -q && node --test tests/n8n/juneCandidateFold.test.mjs` | ❌ Wave 0 | ⬜ pending |
+| T2 | 41-01 | 1 | DATA-01 | T-41-03 | Every enum value taxonomy-legal; no unevidenced veto-input negative | unit | `.venv/bin/python -m pytest tests/test_june_candidates.py -q` | ❌ Wave 0 | ⬜ pending |
+| T3 | 41-01 | 1 | DATA-01 | T-41-04/05 | Stale June data cannot silently overwrite fresh research; firmographics stay staged-only | node | `node --test tests/n8n/juneCandidateFold.test.mjs tests/n8n/mergeCompanies.test.mjs tests/n8n/parity.test.mjs` | ❌ Wave 0 | ⬜ pending |
+| T1 | 41-02 | 1 | DATA-01 | T-41-09/10 | Resolver is read-only by construction; refuses on wrong portal or missing credentials | unit | `.venv/bin/python -m pytest tests/test_resolve_june_ids.py -q` | ❌ Wave 0 | ⬜ pending |
+| T2 | 41-02 | 1 | DATA-01, DATA-02 | — | Missing provenance is a failure only when explicitly demanded; standing sweep unchanged | unit | `.venv/bin/python -m pytest tests/test_scoring_parity.py -k "not live" -q` | ✅ extends | ⬜ pending |
+| T3 | 41-02 | 1 | DATA-01 | T-41-06/07/08 | Arm gated on `ALLOW_N8N_ARM`; disarm never gated; empty allowlist refused | unit | `.venv/bin/python -m pytest tests/test_june_run_arm.py -q` | ❌ Wave 0 | ⬜ pending |
+| T1 | 41-03 | 2 | DATA-01 | T-41-14 | Zero provider spend proven structurally against the shipped workflow | unit | `.venv/bin/python -m pytest tests/test_zero_provider_spend.py -q` | ❌ Wave 0 | ⬜ pending |
+| T2 | 41-03 | 2 | DATA-01 | T-41-11/12/13 | Deploy precedes arm; bounce after content change; allowlist scoped to resolved ids only | manual (operator) | see Manual-Only Verifications | n/a | ⬜ pending |
+| T3 tracer | 41-03 | 2 | DATA-01, DATA-02 | T-41-14/15 | 5 real records score with no manual touch; credits unchanged | live integration | `PARITY_SAMPLE_IDS=<5 ids> PARITY_REQUIRE_PROVENANCE=true .venv/bin/python -c "…run_scoring_parity…"` | ✅ after 41-02 | ⬜ pending |
+| T1 | 41-04 | 3 | DATA-01, DATA-02 | — | Human gate before writing the remaining records | manual (operator) | see Manual-Only Verifications | n/a | ⬜ pending |
+| T2 | 41-04 | 3 | DATA-01, DATA-02 | T-41-17/18/21 | Window closed and proven closed; false-green guard on the sweep | live integration | `PARITY_SAMPLE_IDS=<landed ids> PARITY_REQUIRE_PROVENANCE=true .venv/bin/python -c "…run_scoring_parity…"` | ✅ after 41-02 | ⬜ pending |
+| T3 | 41-04 | 3 | DATA-01, DATA-02 | T-41-19/20 | No record omitted from the report; three expected-ugly categories counted even at zero | unit (suite gate) | `.venv/bin/python -m pytest -q` | ✅ | ⬜ pending |
 
 *Populated by the planner. Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
 ---
 
 ## Wave 0 Requirements
+
+All three are owned by wave-1 plans and land before any live task runs: the provenance assertion
+in 41-02 T2, the candidate-table builder in 41-01 T1/T2, the id resolver in 41-02 T1.
 
 - [ ] Provenance assertion in the parity path — `scripts/run_scoring_parity.py` asserts
       score/tier/veto parity only (`tests/scoring_fixtures.py::expected_for`); it does not

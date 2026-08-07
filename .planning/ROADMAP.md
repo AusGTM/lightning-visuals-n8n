@@ -147,7 +147,13 @@ path enrichment/import actually uses, not just on hand-constructed fixtures.
   2. Imported companies score automatically on landing — no per-record manual touch — proving
      the trigger chain fires on the actual import/enrichment write path, not only when a human
      pokes a property in the UI.
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 41-01-PLAN.md — June candidate table + three-source merge fold in the enrichment lane (offline)
+- [ ] 41-02-PLAN.md — Pre-flight id resolver, provenance assertion in the parity harness, unpaired arm/disarm commands
+- [ ] 41-03-PLAN.md — Deploy, arm, and drive 5 real companies end to end (live canary tracer)
+- [ ] 41-04-PLAN.md — Release the rest, disarm, parity verdict and run report
 
 ### Phase 42: Scoring Artifact Cleanup & Reconciliation
 
