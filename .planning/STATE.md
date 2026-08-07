@@ -2,9 +2,9 @@
 gsd_state_version: 1.0
 milestone: v0.7
 milestone_name: HubSpot Scoring Engine Remediation
-current_phase: 40
+current_phase: 41
 current_phase_name: Validation Data Import & End-to-End Proof
-status: context_gathered
+status: planned
 stopped_at: Phase 41 planned (4 plans, verified)
 last_updated: "2026-08-07T06:24:47.325Z"
 last_activity: 2026-08-07
@@ -21,9 +21,10 @@ progress:
 
 ## Current Position
 
-Phase: 40 (Scoring Engine, Veto & Parity Remediation) — COMPLETE & SEALED (verification + UAT resolved 2026-08-07)
-Next: Phase 41 (portfolio-wide backfill + data import, DATA-01/DATA-02) — run /gsd-discuss-phase 41 or /gsd-plan-phase 41
-Status: Phase 40 sealed — 7/7 plans, 12/12 requirements (ENGINE-01..07, VETO-01..03, PARITY-01..02) complete with live evidence
+Phase: 41 (Validation Data Import & End-to-End Proof) — PLANNED, execution starting
+Next: execute Phase 41 wave 1 (plans 41-01, 41-02 — offline, autonomous); waves 2-3 need operator arming
+Status: Phase 41 planned — 4 plans / 3 waves, plan-checker PASSED (0 blockers, 0 warnings). Phases 42 and 43 have CONTEXT.md gathered but are not yet planned.
+Phase 40: COMPLETE & SEALED — 7/7 plans, 12/12 requirements (ENGINE-01..07, VETO-01..03, PARITY-01..02) with live evidence
 Last activity: 2026-08-07 — 40-07 complete (Phase 40 closed): ENGINE-01 live-proven (80/A entirely inside HubSpot off canonical inputs — org_type_score=40, produces_content_score=20, geography_score=10, annual_revenue_score=10, gambling_score=0); D-10 backfill mechanism (`scripts/backfill_seed_company_scores.py`) built, gated, and proven on the real-record sample (Melbourne Racing Club, id 9604614548 — the entire population of companies portal-wide carrying any canonical lv_* input); PARITY-01 verdict committed (`parity-report-final.json`, PASS with 1 documented Needs Review divergence, 0 real findings, assertions_executed=1); full live fixture tier 56/56 passed excluding the 5 veto_set/veto_clear cases, which are empirically confirmed blocked on the pre-existing VETO-01/VETO-02 pipeline write-gate arming gate (not a regression, not this plan's scope — WINDOWS.md id 5)
 Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39-path-decision-fit-score-verification/39-DECISION.md`
 
