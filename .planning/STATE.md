@@ -6,14 +6,14 @@ current_phase: 41
 current_phase_name: Validation Data Import & End-to-End Proof
 status: executing
 stopped_at: All 3 phases discussed+planned+verified; offline execution done; 4 operator gates open
-last_updated: "2026-08-07T07:40:00.000Z"
+last_updated: "2026-08-07T09:02:52.482Z"
 last_activity: 2026-08-07
-last_activity_desc: "41-01 complete: 66-row June-2026 candidate table (config/june_candidates.json, sha256-pinned to a committed sibling-repo snapshot) folded into the Merge Company n8n node as a third mergeCompanies() candidate source (source=june_2026), tracer-proven on Racing NSW (15008671672); D-02 exception list applied (QRIC->regulator, Sportsbet/Entain->gambling_operator, Supertech/Simtech->hardware_vendor); D-01 precedence (fresh research always wins) and D-04 disagreement gate (org_type/produces_content conflicts suppress promotion, delete the cache-key stamp, push a synthetic needs_review decision) wired; F1 native firmographic band fold added (lv_revenue_band/lv_employee_band from the record's own annualrevenue/numberofemployees when the waterfall supplies neither). Offline only, zero live HubSpot/n8n/Anthropic calls. DATA-01 stays Pending in REQUIREMENTS.md — closes only after 41-03/41-04's live proof."
+last_activity_desc: "40-07 complete (Phase 40 closed): ENGINE-01 live-proven (80/A entirely inside HubSpot off canonical inputs — org_type_score=40, produces_content_score=20, geography_score=10, annual_revenue_score=10, gambling_score=0); D-10 backfill mechanism (`scripts/backfill_seed_company_scores.py`) built, gated, and proven on the real-record sample (Melbourne Racing Club, id 9604614548 — the entire population of companies portal-wide carrying any canonical lv_* input); PARITY-01 verdict committed (`parity-report-final.json`, PASS with 1 documented Needs Review divergence, 0 real findings, assertions_executed=1); full live fixture tier 56/56 passed excluding the 5 veto_set/veto_clear cases, which are empirically confirmed blocked on the pre-existing VETO-01/VETO-02 pipeline write-gate arming gate (not a regression, not this plan's scope — WINDOWS.md id 5)"
 progress:
   total_phases: 5
   completed_phases: 2
-  total_plans: 15
-  completed_plans: 12
+  total_plans: 23
+  completed_plans: 17
   percent: 40
 ---
 
@@ -25,7 +25,7 @@ Phase: 41 (Validation Data Import & End-to-End Proof) — ARMED, canary awaiting
 Next: OPERATOR ACTION — 41-03 Task 3 canary, 7 steps (before-readback, dry-run queue, live queue, ~30min wait, after-readback, credit check, parity sweep). **THE ARM WINDOW IS OPEN on 66 real records**; `scripts/june_run_arm.py --disarm` is non-deferrable even if the run is abandoned.
 Status: 41-01, 41-02, and 41-03 Task 1 complete. Operator completed 41-03 Task 2 — all six arm-gate steps passed, evidence committed (credit baseline Lusha 3925 / ZoomInfo 9397, bounce read-back proving deploy-before-arm, 66/66 id resolution with zero unmatched, arm payload with 66 ids and 0 domains). Suites green: 2392 pytest, 1286 plugin pytest, 636 node, arming grep 0, n8n/ clean.
 Phase 42: PLANNED + VERIFIED (0 blockers). 42-01 offline half EXECUTED (scripts/check_schema_drift.py + 15 tests, read-only proven); stopped at its live gate — two READ-ONLY operator commands pending (snapshot phase42-pre, then the drift check; exit 1 is the EXPECTED result pre-yaml-expansion, exit 2 means the do-not-archive invariant failed and the phase must stop). 42-02 and 42-03 blocked behind that. 42-03 is the only portal-mutating plan in the phase.
-Phase 43: PLANNED + VERIFIED (0 blockers, 0 warnings). 43-02 COMPLETE (--write-breakdown opt-in serializer, adds the missing total, raising-stub guard proves the default path inert). 43-03 COMPLETE (scripts/build_loss_reason_report.py empty-dataset-correct + loss-reason-report plugin skill shelling out, plugin.json bumped). 43-01 DELIBERATELY HELD: it regenerates n8n/*.json, which would leave the repo diverged from the deployed instance while Phase 41 is armed — and the command that reconciles that divergence is the same one that would close the window. 43-04 (live proofs) and 43-05 (deploy, gated on 41 disarming) follow.
+Phase 43: PLANNED + VERIFIED (0 blockers, 0 warnings). 43-02 COMPLETE (--write-breakdown opt-in serializer, adds the missing total, raising-stub guard proves the default path inert). 43-03 COMPLETE (scripts/build_loss_reason_report.py empty-dataset-correct + loss-reason-report plugin skill shelling out, plugin.json bumped). 43-01 COMPLETE (PIPE-01/PIPE-02 closed offline: 6-site boolean-writer inventory fixed at rows 1-5, rows 6-8 verified unchanged with new regression coverage; mergeCompanies.js promote-branch coerces boolean candidates; all 8 n8n/*.json regenerated via the builder, never hand-edited; tests/test_review_flag_eq_filter.py authored live-gated, ready for 43-04. **DEPLOY DELIBERATELY NOT PERFORMED** — the repo's n8n/*.json now carries undeployed Phase 43 changes while Phase 41's arm-window state is unconfirmed; any deploy before Phase 41 is confirmed disarmed would push these changes live for the first time AND close that window as a side effect of the same PUT. Full baselines confirmed at/above threshold: 2397 pytest / 636 node / 1286 plugin / arming grep 0.) 43-04 (live proofs, including the new EQ-filter test) and 43-05 (deploy, gated on 41 disarming) follow.
 Settled this session: june_run_arm.py's window does NOT auto-close on dispatch. arm_for_dispatch() has no close mechanism; the "closes as soon as the dispatch returns" line is boilerplate for the armed_window context manager that june_run_arm.py deliberately bypasses. Empirical confirmation pending the canary's after-readback.
 Phase 40: COMPLETE & SEALED — 7/7 plans, 12/12 requirements (ENGINE-01..07, VETO-01..03, PARITY-01..02) with live evidence
 Last activity: 2026-08-07 — 40-07 complete (Phase 40 closed): ENGINE-01 live-proven (80/A entirely inside HubSpot off canonical inputs — org_type_score=40, produces_content_score=20, geography_score=10, annual_revenue_score=10, gambling_score=0); D-10 backfill mechanism (`scripts/backfill_seed_company_scores.py`) built, gated, and proven on the real-record sample (Melbourne Racing Club, id 9604614548 — the entire population of companies portal-wide carrying any canonical lv_* input); PARITY-01 verdict committed (`parity-report-final.json`, PASS with 1 documented Needs Review divergence, 0 real findings, assertions_executed=1); full live fixture tier 56/56 passed excluding the 5 veto_set/veto_clear cases, which are empirically confirmed blocked on the pre-existing VETO-01/VETO-02 pipeline write-gate arming gate (not a regression, not this plan's scope — WINDOWS.md id 5)
@@ -33,8 +33,8 @@ Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39
 
 ## Session
 
-**Last session:** 2026-08-07T07:40:00.000Z
-**Stopped at:** Completed 41-01-PLAN.md
+**Last session:** 2026-08-07T09:02:52.399Z
+**Stopped at:** Completed 43-01-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -54,6 +54,7 @@ Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39
 | Phase 40 P07 | ~60min | 3 tasks | 6 files |
 | Phase 41 P02 | 45m | 3 tasks | 7 files |
 | Phase 41 P01 | ~55min | 3 tasks | 10 files |
+| Phase 43 P01 | 25min | 3 tasks | 13 files |
 
 ## Decisions
 
@@ -91,6 +92,11 @@ Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39
 - [Phase ?]: 41-02: PARITY_REQUIRE_PROVENANCE=true is additive to real_findings (a shallow-copied record with classification=provenance_missing), never overwriting a pre-existing score/tier/flag mismatch classification on the same record
 - [Phase ?]: 41-02: june_run_arm.py imports operator-claude-plugin/scripts modules directly via sys.path insert -- PLUGIN-04's import guard only forbids plugin-to-backend imports, backend-to-plugin was never scanned
 - [Phase 41-01]: F1/F2 resolved as planned (native firmographic band derivation; D-04 as a synthetic needs_review decision, not a CONFLICT_WATCH extension — CONFLICT_WATCH has zero live consumers for org_type/produces_content). Exception-list judgement: Big Screen Video, Racing.com, and The Creek Agency deliberately left on the deterministic org_type mapping — docs/business/icp-scoring.md section 4 does not name any of the three, so none were added to scripts/build_june_candidates.py's EXCEPTIONS dict. Two pre-existing guard tests (test_architecture_guard.py's AR-2 host allowlist, test_companies_factory_frozen.py's byte-identity fixture) required scoped, non-weakening extensions/re-baselines as a direct consequence of embedding the real 66-company dataset into the Merge Company node — both documented in 41-01-SUMMARY.md. DATA-01 intentionally left unmarked in REQUIREMENTS.md: this plan covers only the offline half; full closure needs 41-03's zero-spend proof and 41-04's live parity verdict.
+
+- [Phase 43-01]: PIPE-01's boolean-writer sweep (D-07) fixed exactly the 5 BROKEN inventory rows named in 43-01-PLAN.md — `reviewApply.js` clearPatch (rows 1-2, single shared fix site for both HubSpot PATCH consumers), `ENRICH_DECIDE_CO_CLOUD`'s needs-review branch (row 3), and a boolean-coercion branch added to the pre-existing BUG-27 array-join loop in both `ENRICH_DECIDE_CO_CLOUD` and `ENRICH_DECIDE_CLOUD` (rows 4-5) — covering `lv_produces_content`/`lv_sponsorship_reliant`/`lv_is_hardware_vendor`/`lv_is_gambling_operator` with no per-field list. Rows 6-8 (already fixed in Phase 40/36-07) verified unchanged with a new regression test guarding them.
+- [Phase 43-01]: PIPE-02's `min_confidence` was confirmed already 80 (Phase 40 D-04) and left untouched, per C1/43-RESEARCH.md Pitfall 1 — only coercion was added to `mergeCompanies.js`'s promote branch (D-09/D-10), proven statically with zero calls to `mergeCompanies()` in the new test, and applies to every promoted boolean candidate (not just the dead veto path) since it shares the one promote-branch assignment.
+- [Phase 43-01]: Rule 1 fallout — 4 node-test fixtures (reviewLoop, reviewDecisionEndpoint, mergeCompanies, sponsorshipReliantCopyLoop) and `tests/fixtures/companies_jscode_frozen.json` needed updating/re-baselining to match the corrected boolean-string shape; all documented in 43-01-SUMMARY.md's Deviations section, not scope creep.
+- [Phase 43-01]: **Deploy deliberately NOT performed.** The regenerated `n8n/*.json` files carry undeployed Phase 43 changes. 43-05 must confirm Phase 41's arm window is disarmed before running `scripts/deploy_n8n_workflows.py` against them — deploying now would push these unproven changes live for the first time AND close whatever Phase 41 arm state remains open, as a side effect of the same PUT.
 
 ### Blockers
 

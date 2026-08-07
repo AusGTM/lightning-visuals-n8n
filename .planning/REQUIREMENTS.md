@@ -79,11 +79,11 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 
 ### Pipeline Hygiene (validated 2026-08-06, PIPELINE-DEFECTS-VALIDATION.md)
 
-- [ ] **PIPE-01**: lv_enrichment_needs_review is written as the STRING "true"/"false", never a
+- [x] **PIPE-01**: lv_enrichment_needs_review is written as the STRING "true"/"false", never a
   JS boolean, at every writer — HubSpot EQ filters match strings only; the identical class was
   fixed for lv_enrichment_requested in 36-07. (LIVE defect: shallow-spread-with-no-coercion.)
 
-- [ ] **PIPE-02**: The dormant veto path in mergeCompanies.js is hardened at its one shared fix
+- [x] **PIPE-02**: The dormant veto path in mergeCompanies.js is hardened at its one shared fix
   site: veto-class fields carry a real min_confidence (not 0) and string coercion, so if
   pipeline-owned vetoes ever return they are born guarded. (P2+P4: latent, unreachable today —
   the repo test proving the candidate path dead is extended, not weakened.)
@@ -137,8 +137,8 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 | DATA-01 | Phase 41 | Pending |
 | DATA-02 | Phase 41 | Pending |
 | CLEAN-01 | Phase 42 | Pending |
-| PIPE-01 | Phase 43 | Pending |
-| PIPE-02 | Phase 43 | Pending |
+| PIPE-01 | Phase 43 | Complete |
+| PIPE-02 | Phase 43 | Complete |
 | PIPE-03 | Phase 43 | Pending |
 | PIPE-04 | Phase 43 | Pending |
 

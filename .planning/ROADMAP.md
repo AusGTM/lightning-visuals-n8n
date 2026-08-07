@@ -150,6 +150,7 @@ path enrichment/import actually uses, not just on hand-constructed fixtures.
 **Plans**: 4 plans
 
 Plans:
+
 - [x] 41-01-PLAN.md — June candidate table + three-source merge fold in the enrichment lane (offline)
 - [ ] 41-02-PLAN.md — Pre-flight id resolver, provenance assertion in the parity harness, unpaired arm/disarm commands
 - [ ] 41-03-PLAN.md — Deploy, arm, and drive 5 real companies end to end (live canary tracer)
@@ -179,10 +180,13 @@ artifacts — they are the live engine. SC1 is reinterpreted per `42-CONTEXT.md`
 archives only what is genuinely orphaned, and those artifacts are explicitly protected.
 
 **Plans**: 3 plans
+
 - [ ] 42-01-PLAN.md — Build and live-prove the standing schema drift checker; capture the
       pre-mutation portal snapshot; make the do-not-archive set a machine-checked invariant
+
 - [ ] 42-02-PLAN.md — Expand `config/hubspot_properties.yaml` to a full live mirror and amend
       the four offline guards the expansion inverts; prove it cannot cause a portal write
+
 - [ ] 42-03-PLAN.md — Derive orphans from a live portal diff, soft-archive the uncontested set,
       surface ambiguous items, and prove post-mutation that the scoring engine survived
 
@@ -215,16 +219,21 @@ they are deliberately absent here.)
 
   5. Suites green above baselines; arming grep 0; no n8n JSON hand-edits — builder only.
 
-**Plans**: 5 plans (waves 1/2/3 — three parallel offline plans, then operator live proofs,
+**Plans**: 3/5 plans executed
 then the Phase-41-gated deploy)
-- [ ] 43-01-PLAN.md — PIPE-01/PIPE-02 offline: coerce all six broken boolean write sites at
+
+- [x] 43-01-PLAN.md — PIPE-01/PIPE-02 offline: coerce all six broken boolean write sites at
       two shared choke points, harden the dormant veto site, regenerate the workflows
-- [ ] 43-02-PLAN.md — PIPE-03: `--write-breakdown` opt-in mode on the parity harness, with a
+
+- [x] 43-02-PLAN.md — PIPE-03: `--write-breakdown` opt-in mode on the parity harness, with a
       shed-detail-first serializer that adds the score total and keeps the default read-only
-- [ ] 43-03-PLAN.md — PIPE-04: repo-root loss-reason aggregator (empty-dataset-correct) plus
+
+- [x] 43-03-PLAN.md — PIPE-04: repo-root loss-reason aggregator (empty-dataset-correct) plus
       an operator-plugin skill that shells out to it, shipped behind a version bump
+
 - [ ] 43-04-PLAN.md — Operator live proofs: EQ-filter match, breakdown read-back, the two
       unanswered loss-reason questions, plugin install
+
 - [ ] 43-05-PLAN.md — Deploy and bounce the regenerated workflows, gated on Phase 41 having
       disarmed
 
@@ -239,4 +248,4 @@ Phases execute in numeric order: 39 → 40 → 41 → 42 → 43
 | 40. Scoring Engine, Veto & Parity Remediation | 7/7 | Complete | 2026-08-07 |
 | 41. Validation Data Import & End-to-End Proof | 0/TBD | Not started | - |
 | 42. Scoring Artifact Cleanup & Reconciliation | 0/TBD | Not started | - |
-| 43. Pipeline Scoring Hygiene & Explainability | 0/5 | Not started | - |
+| 43. Pipeline Scoring Hygiene & Explainability | 3/5 | In Progress|  |
