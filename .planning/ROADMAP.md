@@ -150,7 +150,7 @@ path enrichment/import actually uses, not just on hand-constructed fixtures.
 **Plans**: 4 plans
 
 Plans:
-- [ ] 41-01-PLAN.md — June candidate table + three-source merge fold in the enrichment lane (offline)
+- [x] 41-01-PLAN.md — June candidate table + three-source merge fold in the enrichment lane (offline)
 - [ ] 41-02-PLAN.md — Pre-flight id resolver, provenance assertion in the parity harness, unpaired arm/disarm commands
 - [ ] 41-03-PLAN.md — Deploy, arm, and drive 5 real companies end to end (live canary tracer)
 - [ ] 41-04-PLAN.md — Release the rest, disarm, parity verdict and run report

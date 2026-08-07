@@ -5,10 +5,10 @@ milestone_name: HubSpot Scoring Engine Remediation
 current_phase: 41
 current_phase_name: Validation Data Import & End-to-End Proof
 status: planned
-stopped_at: Completed 41-02-PLAN.md
-last_updated: "2026-08-07T06:49:01.224Z"
+stopped_at: Completed 41-01-PLAN.md
+last_updated: "2026-08-07T07:40:00.000Z"
 last_activity: 2026-08-07
-last_activity_desc: "40-07 complete (Phase 40 closed): ENGINE-01 live-proven (80/A entirely inside HubSpot off canonical inputs — org_type_score=40, produces_content_score=20, geography_score=10, annual_revenue_score=10, gambling_score=0); D-10 backfill mechanism (`scripts/backfill_seed_company_scores.py`) built, gated, and proven on the real-record sample (Melbourne Racing Club, id 9604614548 — the entire population of companies portal-wide carrying any canonical lv_* input); PARITY-01 verdict committed (`parity-report-final.json`, PASS with 1 documented Needs Review divergence, 0 real findings, assertions_executed=1); full live fixture tier 56/56 passed excluding the 5 veto_set/veto_clear cases, which are empirically confirmed blocked on the pre-existing VETO-01/VETO-02 pipeline write-gate arming gate (not a regression, not this plan's scope — WINDOWS.md id 5)"
+last_activity_desc: "41-01 complete: 66-row June-2026 candidate table (config/june_candidates.json, sha256-pinned to a committed sibling-repo snapshot) folded into the Merge Company n8n node as a third mergeCompanies() candidate source (source=june_2026), tracer-proven on Racing NSW (15008671672); D-02 exception list applied (QRIC->regulator, Sportsbet/Entain->gambling_operator, Supertech/Simtech->hardware_vendor); D-01 precedence (fresh research always wins) and D-04 disagreement gate (org_type/produces_content conflicts suppress promotion, delete the cache-key stamp, push a synthetic needs_review decision) wired; F1 native firmographic band fold added (lv_revenue_band/lv_employee_band from the record's own annualrevenue/numberofemployees when the waterfall supplies neither). Offline only, zero live HubSpot/n8n/Anthropic calls. DATA-01 stays Pending in REQUIREMENTS.md — closes only after 41-03/41-04's live proof."
 progress:
   total_phases: 5
   completed_phases: 2
@@ -21,17 +21,17 @@ progress:
 
 ## Current Position
 
-Phase: 41 (Validation Data Import & End-to-End Proof) — PLANNED, execution starting
-Next: execute Phase 41 wave 1 (plans 41-01, 41-02 — offline, autonomous); waves 2-3 need operator arming
-Status: Phase 41 planned — 4 plans / 3 waves, plan-checker PASSED (0 blockers, 0 warnings). Phases 42 and 43 have CONTEXT.md gathered but are not yet planned.
+Phase: 41 (Validation Data Import & End-to-End Proof) — wave 1 complete (41-01, 41-02), waves 2-3 need operator arming
+Next: execute Phase 41 wave 2 (41-03 — deploy, arm, and drive 5 real companies end to end); requires operator to run the arm command
+Status: Phase 41 wave 1 (41-01, 41-02) complete, offline-only. Phases 42 and 43 have CONTEXT.md gathered but are not yet planned.
 Phase 40: COMPLETE & SEALED — 7/7 plans, 12/12 requirements (ENGINE-01..07, VETO-01..03, PARITY-01..02) with live evidence
 Last activity: 2026-08-07 — 40-07 complete (Phase 40 closed): ENGINE-01 live-proven (80/A entirely inside HubSpot off canonical inputs — org_type_score=40, produces_content_score=20, geography_score=10, annual_revenue_score=10, gambling_score=0); D-10 backfill mechanism (`scripts/backfill_seed_company_scores.py`) built, gated, and proven on the real-record sample (Melbourne Racing Club, id 9604614548 — the entire population of companies portal-wide carrying any canonical lv_* input); PARITY-01 verdict committed (`parity-report-final.json`, PASS with 1 documented Needs Review divergence, 0 real findings, assertions_executed=1); full live fixture tier 56/56 passed excluding the 5 veto_set/veto_clear cases, which are empirically confirmed blocked on the pre-existing VETO-01/VETO-02 pipeline write-gate arming gate (not a regression, not this plan's scope — WINDOWS.md id 5)
 Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39-path-decision-fit-score-verification/39-DECISION.md`
 
 ## Session
 
-**Last session:** 2026-08-07T06:49:01.214Z
-**Stopped at:** Completed 41-02-PLAN.md
+**Last session:** 2026-08-07T07:40:00.000Z
+**Stopped at:** Completed 41-01-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -50,6 +50,7 @@ Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39
 | Phase 40 P06 | 55min | 3 tasks | 5 files |
 | Phase 40 P07 | ~60min | 3 tasks | 6 files |
 | Phase 41 P02 | 45m | 3 tasks | 7 files |
+| Phase 41 P01 | ~55min | 3 tasks | 10 files |
 
 ## Decisions
 
@@ -86,6 +87,7 @@ Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39
 - [Phase ?]: 41-02: domain-first D-09 re-match derives a candidate domain from the June row's per-field evidence URLs (urlparse netloc, www.-stripped) since the June source snapshot carries no explicit domain field
 - [Phase ?]: 41-02: PARITY_REQUIRE_PROVENANCE=true is additive to real_findings (a shallow-copied record with classification=provenance_missing), never overwriting a pre-existing score/tier/flag mismatch classification on the same record
 - [Phase ?]: 41-02: june_run_arm.py imports operator-claude-plugin/scripts modules directly via sys.path insert -- PLUGIN-04's import guard only forbids plugin-to-backend imports, backend-to-plugin was never scanned
+- [Phase 41-01]: F1/F2 resolved as planned (native firmographic band derivation; D-04 as a synthetic needs_review decision, not a CONFLICT_WATCH extension — CONFLICT_WATCH has zero live consumers for org_type/produces_content). Exception-list judgement: Big Screen Video, Racing.com, and The Creek Agency deliberately left on the deterministic org_type mapping — docs/business/icp-scoring.md section 4 does not name any of the three, so none were added to scripts/build_june_candidates.py's EXCEPTIONS dict. Two pre-existing guard tests (test_architecture_guard.py's AR-2 host allowlist, test_companies_factory_frozen.py's byte-identity fixture) required scoped, non-weakening extensions/re-baselines as a direct consequence of embedding the real 66-company dataset into the Merge Company node — both documented in 41-01-SUMMARY.md. DATA-01 intentionally left unmarked in REQUIREMENTS.md: this plan covers only the offline half; full closure needs 41-03's zero-spend proof and 41-04's live parity verdict.
 
 ### Blockers
 
