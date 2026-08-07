@@ -179,12 +179,12 @@ presumed path. Phase 39 chose fix-in-place and Phase 40 repaired and kept exactl
 artifacts — they are the live engine. SC1 is reinterpreted per `42-CONTEXT.md` D-01: Phase 42
 archives only what is genuinely orphaned, and those artifacts are explicitly protected.
 
-**Plans**: 3 plans
+**Plans**: 1/3 plans executed
 
 - [ ] 42-01-PLAN.md — Build and live-prove the standing schema drift checker; capture the
       pre-mutation portal snapshot; make the do-not-archive set a machine-checked invariant
 
-- [ ] 42-02-PLAN.md — Expand `config/hubspot_properties.yaml` to a full live mirror and amend
+- [x] 42-02-PLAN.md — Expand `config/hubspot_properties.yaml` to a full live mirror and amend
       the four offline guards the expansion inverts; prove it cannot cause a portal write
 
 - [ ] 42-03-PLAN.md — Derive orphans from a live portal diff, soft-archive the uncontested set,
@@ -247,5 +247,5 @@ Phases execute in numeric order: 39 → 40 → 41 → 42 → 43
 | 39. Path Decision & Fit-Score Verification | 4/4 | Complete | 2026-08-06 |
 | 40. Scoring Engine, Veto & Parity Remediation | 7/7 | Complete | 2026-08-07 |
 | 41. Validation Data Import & End-to-End Proof | 0/TBD | Not started | - |
-| 42. Scoring Artifact Cleanup & Reconciliation | 0/TBD | Not started | - |
+| 42. Scoring Artifact Cleanup & Reconciliation | 1/3 | In Progress|  |
 | 43. Pipeline Scoring Hygiene & Explainability | 3/5 | In Progress|  |
