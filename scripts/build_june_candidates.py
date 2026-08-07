@@ -49,9 +49,62 @@ ORG_TYPE_MAP = {
 
 # D-02 hand-curated exception list: named ICP misfits from docs/business/icp-scoring.md
 # section 4, where the coarse Perplexity enum bucketed a company into the wrong
-# lv_org_type. Populated in Task 2 (scripts/build_june_candidates.py EXCEPTIONS dict) —
-# left empty here so Task 1's tracer proves the plumbing on the deterministic table alone.
-EXCEPTIONS = {}
+# lv_org_type. Never sets a veto-input flag to "false" -- June never asserted the
+# negative, and an unevidenced negative would suppress a real hard veto.
+#
+# Three further candidates the deterministic table demonstrably gets wrong but which
+# section 4 does NOT name (Big Screen Video/hardware, Racing.com/content_producer,
+# The Creek Agency/native-industry-tag) are deliberately left OFF this list — section 4
+# names only the five below, and fresh research (D-01) is the source of truth for what
+# lands, not this exception list (see 41-01-SUMMARY.md "Exception list judgement calls").
+EXCEPTIONS = {
+    "16047156820": {  # Queensland Racing Integrity Commission
+        "lv_org_type": "regulator",
+        "_exception_reason": (
+            "docs/business/icp-scoring.md sec4: 'QRIC is a regulator, not a content "
+            "buyer' -- the coarse Perplexity enum bucketed a racing integrity commission "
+            "as League/Governing-Body. config/taxonomy.yaml's regulator synonyms "
+            "('commission', 'integrity body') independently corroborate the name text, "
+            "and n8n/code/judge.js:15 already names QRIC as this exact class of case."
+        ),
+    },
+    "17861423879": {  # Sportsbet
+        "lv_org_type": "gambling_operator",
+        "lv_is_gambling_operator": "true",
+        "_exception_reason": (
+            "docs/business/icp-scoring.md sec4: 'Gambling operators (Sportsbet, "
+            "Entain) = graduated deduction, not a veto' -- the Perplexity enum bucketed "
+            "Australia's largest online bookmaker as Other."
+        ),
+    },
+    "10024564084": {  # Entain
+        "lv_org_type": "gambling_operator",
+        "lv_is_gambling_operator": "true",
+        "_exception_reason": (
+            "docs/business/icp-scoring.md sec4: 'Gambling operators (Sportsbet, "
+            "Entain) = graduated deduction, not a veto' -- the Perplexity enum bucketed "
+            "this FTSE-100 sports betting/gaming operator as Other."
+        ),
+    },
+    "15274105699": {  # Supertech Electronics
+        "lv_org_type": "hardware_vendor",
+        "lv_is_hardware_vendor": "true",
+        "_exception_reason": (
+            "docs/business/icp-scoring.md sec4: 'Not sports-media at all: AV/LED-"
+            "hardware vendors (Supertech, Simtech) = veto' -- the Perplexity enum "
+            "bucketed this AV/LED-scoreboard repair shop as Other."
+        ),
+    },
+    "18047161864": {  # Simtech LED
+        "lv_org_type": "hardware_vendor",
+        "lv_is_hardware_vendor": "true",
+        "_exception_reason": (
+            "docs/business/icp-scoring.md sec4: 'Not sports-media at all: AV/LED-"
+            "hardware vendors (Supertech, Simtech) = veto' -- the Perplexity enum "
+            "bucketed this LED display hardware vendor as Other."
+        ),
+    },
+}
 
 # hq_country (June's free-text field) -> lv_country_region_normalized enum.
 COUNTRY_MAP = {"Australia": "AU", "New Zealand": "NZ"}
@@ -101,6 +154,10 @@ def map_row(record):
     hq_country = record.get("hq_country")
     if hq_country:
         row["lv_country_region_normalized"] = COUNTRY_MAP.get(hq_country, "Other")
+
+    sponsorship = _bool_str(record.get("sponsorship_reliant"))
+    if sponsorship is not None:
+        row["lv_sponsorship_reliant"] = sponsorship
 
     if exception:
         for key, value in exception.items():

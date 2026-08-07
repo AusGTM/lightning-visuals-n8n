@@ -2,7 +2,7 @@
 
 Task 1: builder mapping, boolean-string coercion, confidence mapping, `_meta` shape, and
 idempotent re-run against the committed snapshot.
-Task 2 (added later): the hand-curated exception list and table-wide invariants.
+Task 2: the hand-curated exception list and table-wide invariants.
 """
 import hashlib
 import json
@@ -10,6 +10,7 @@ import sys
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "scripts"))
@@ -99,3 +100,58 @@ def test_builder_idempotent_against_committed_snapshot(tmp_path):
     rows = bjc.build(json.loads(SNAPSHOT_PATH.read_text()))
     committed_rows = json.loads(TABLE_PATH.read_text())["rows"]
     assert rows == committed_rows
+
+
+# --- Task 2: exception list + table-wide invariants -----------------------------------
+
+def test_every_row_has_the_four_mandatory_keys(table):
+    for record_id, row in table["rows"].items():
+        for key in ("lv_org_type", "lv_produces_content", "lv_country_region_normalized",
+                    "_confidence"):
+            assert key in row, f"row {record_id} missing mandatory key {key}"
+
+
+def test_qric_exception_maps_to_regulator(table):
+    row = table["rows"]["16047156820"]
+    assert row["lv_org_type"] == "regulator"
+    assert row.get("_exception_reason")
+
+
+def test_gambling_operator_exceptions_carry_veto_input_flag(table):
+    for record_id in ("17861423879", "10024564084"):
+        row = table["rows"][record_id]
+        assert row["lv_org_type"] == "gambling_operator"
+        assert row["lv_is_gambling_operator"] == "true"
+        assert row.get("_exception_reason")
+
+
+def test_hardware_vendor_exceptions_carry_veto_input_flag(table):
+    for record_id in ("15274105699", "18047161864"):
+        row = table["rows"][record_id]
+        assert row["lv_org_type"] == "hardware_vendor"
+        assert row["lv_is_hardware_vendor"] == "true"
+        assert row.get("_exception_reason")
+
+
+def test_no_row_asserts_an_unevidenced_negative_veto_flag(table):
+    # June never asserted the negative -- an unevidenced "false" would suppress a real
+    # hard veto for a company June simply didn't classify as hardware/gambling.
+    for record_id, row in table["rows"].items():
+        assert row.get("lv_is_hardware_vendor") != "false", record_id
+        assert row.get("lv_is_gambling_operator") != "false", record_id
+
+
+def test_every_lv_org_type_is_taxonomy_legal(table):
+    taxonomy = yaml.safe_load((ROOT / "config" / "taxonomy.yaml").read_text())
+    valid_org_types = set(taxonomy["org_types"].keys())
+    for record_id, row in table["rows"].items():
+        assert row["lv_org_type"] in valid_org_types, (
+            f"row {record_id} has non-taxonomy lv_org_type {row['lv_org_type']!r}")
+
+
+def test_confidence_distribution_matches_d03(table):
+    from collections import Counter
+    counts = Counter(row["_confidence"] for row in table["rows"].values())
+    assert counts[85] == 49
+    assert counts[65] == 16
+    assert counts[40] == 1
