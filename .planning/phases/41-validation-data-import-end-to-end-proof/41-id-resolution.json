@@ -1,0 +1,670 @@
+{
+  "checked_at_utc": "2026-08-07T07:07:53.641480+00:00",
+  "source_sha256": "1d2c8c2aaef98ade6a1e73ddd1a9842bbefb968a4de649f779a4fa0e14500a37",
+  "records": [
+    {
+      "june_id": "10021900550",
+      "name": "Cairns Jockey Club",
+      "outcome": "live",
+      "resolved_id": "10021900550",
+      "domain": "www.cairnsjockeyclub.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "10024564084",
+      "name": "Entain",
+      "outcome": "live",
+      "resolved_id": "10024564084",
+      "domain": "www.entaingroup.com",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "10152138518",
+      "name": "Thoroughbred Park",
+      "outcome": "live",
+      "resolved_id": "10152138518",
+      "domain": "www.thoroughbredpark.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "10152245364",
+      "name": "Harness Racing ACT",
+      "outcome": "live",
+      "resolved_id": "10152245364",
+      "domain": "www.capitaltrots.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "10215097384",
+      "name": "Wyong",
+      "outcome": "live",
+      "resolved_id": "10215097384",
+      "domain": "www.wyongraceclub.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "12427415589",
+      "name": "Global Advance StreamLined",
+      "outcome": "live",
+      "resolved_id": "12427415589",
+      "domain": null,
+      "annualrevenue_present": false,
+      "numberofemployees_present": false
+    },
+    {
+      "june_id": "14748141740",
+      "name": "Scone Race Club",
+      "outcome": "live",
+      "resolved_id": "14748141740",
+      "domain": "www.sconeraceclub.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "14752422181",
+      "name": "Albury Racing Club",
+      "outcome": "live",
+      "resolved_id": "14752422181",
+      "domain": "www.alburyracing.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "14752488879",
+      "name": "Coffs Harbour Racing Club",
+      "outcome": "live",
+      "resolved_id": "14752488879",
+      "domain": "www.coffsracingclub.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "15008671672",
+      "name": "Racing NSW",
+      "outcome": "live",
+      "resolved_id": "15008671672",
+      "domain": "www.racingnsw.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "15042301818",
+      "name": "Panasonic Studio Productions",
+      "outcome": "live",
+      "resolved_id": "15042301818",
+      "domain": "www.pspvideo.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "15274105699",
+      "name": "Supertech Electronics",
+      "outcome": "live",
+      "resolved_id": "15274105699",
+      "domain": "www.supertech-electronics.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "15387953738",
+      "name": "Gloucester Park",
+      "outcome": "live",
+      "resolved_id": "15387953738",
+      "domain": "www.gloucesterpark.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "15388186399",
+      "name": "Bunbury Trotting Club",
+      "outcome": "live",
+      "resolved_id": "15388186399",
+      "domain": "www.bunburytrottingclub.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "15860116585",
+      "name": "Harness Racing Victoria",
+      "outcome": "live",
+      "resolved_id": "15860116585",
+      "domain": "www.thetrots.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "15860277364",
+      "name": "GRAVITY MEDIA",
+      "outcome": "live",
+      "resolved_id": "15860277364",
+      "domain": "www.gravitymedia.com",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "16047156820",
+      "name": "Queensland Racing Integrity Commission",
+      "outcome": "live",
+      "resolved_id": "16047156820",
+      "domain": "www.qric.qld.gov.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "17317147787",
+      "name": "Endemol Shine Australia",
+      "outcome": "live",
+      "resolved_id": "17317147787",
+      "domain": "www.endemolshine.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "17317184159",
+      "name": "Ironman",
+      "outcome": "live",
+      "resolved_id": "17317184159",
+      "domain": "www.ironman.com",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "17317337782",
+      "name": "Roving Enterprises",
+      "outcome": "live",
+      "resolved_id": "17317337782",
+      "domain": "www.rovingenterprises.com",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "17317381378",
+      "name": "Editix",
+      "outcome": "live",
+      "resolved_id": "17317381378",
+      "domain": "www.edetrix.com.au",
+      "annualrevenue_present": false,
+      "numberofemployees_present": false
+    },
+    {
+      "june_id": "17317850381",
+      "name": "Jam TV",
+      "outcome": "live",
+      "resolved_id": "17317850381",
+      "domain": "www.jamtv.it",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "17696004613",
+      "name": "Pinjarra Park",
+      "outcome": "live",
+      "resolved_id": "17696004613",
+      "domain": "www.pinjarrapark.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "17791151956",
+      "name": "Big Screen Video",
+      "outcome": "live",
+      "resolved_id": "17791151956",
+      "domain": "www.bigscreenvideo.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "17861423879",
+      "name": "Sportsbet",
+      "outcome": "live",
+      "resolved_id": "17861423879",
+      "domain": "www.sportsbet.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "18047161864",
+      "name": "Simtech LED",
+      "outcome": "live",
+      "resolved_id": "18047161864",
+      "domain": "www.simtechled.com",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "18647353914",
+      "name": "Surfing Australia",
+      "outcome": "live",
+      "resolved_id": "18647353914",
+      "domain": "www.surfingaustralia.com",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "18756544344",
+      "name": "Southside Racing",
+      "outcome": "live",
+      "resolved_id": "18756544344",
+      "domain": "southsideracing.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "18756544347",
+      "name": "Harness Racing New South Wales",
+      "outcome": "live",
+      "resolved_id": "18756544347",
+      "domain": "www.harnessmediacentre.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "18756544359",
+      "name": "AusCycling",
+      "outcome": "live",
+      "resolved_id": "18756544359",
+      "domain": "www.auscycling.org.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "18756544407",
+      "name": "Addington",
+      "outcome": "live",
+      "resolved_id": "18756544407",
+      "domain": "www.addington.co.nz",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "18796602894",
+      "name": "The Kalgoorlie-Boulder Racing Club",
+      "outcome": "live",
+      "resolved_id": "18796602894",
+      "domain": "www.kbrc.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "18811366029",
+      "name": "LiveHeats",
+      "outcome": "live",
+      "resolved_id": "18811366029",
+      "domain": "www.liveheats.com",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "18973591368",
+      "name": "Shepparton Harness Racing Club",
+      "outcome": "live",
+      "resolved_id": "18973591368",
+      "domain": "www.sheppartonhrc.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "19099896622",
+      "name": "Bathurst Harness Racing Club",
+      "outcome": "live",
+      "resolved_id": "19099896622",
+      "domain": "www.goldcrowncarnival.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "19100977027",
+      "name": "Newcastle Harness Racing Club",
+      "outcome": "live",
+      "resolved_id": "19100977027",
+      "domain": "www.newcastleharness.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "19154355339",
+      "name": "Bendigo Harness Racing Club",
+      "outcome": "live",
+      "resolved_id": "19154355339",
+      "domain": "www.bhrc.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "19363725157",
+      "name": "Racing.com Pty Ltd",
+      "outcome": "live",
+      "resolved_id": "19363725157",
+      "domain": "Racing.com",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "20538284384",
+      "name": "Waikato Racing Club Inc",
+      "outcome": "live",
+      "resolved_id": "20538284384",
+      "domain": "teraparacing.co.nz",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "20538599475",
+      "name": "RACE (Racing at Awapuni and Trentham Combined Enterprise Incorporated)",
+      "outcome": "live",
+      "resolved_id": "20538599475",
+      "domain": "jointheaction.co.nz",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "20943964946",
+      "name": "The Rumble / Pacific Action Sports",
+      "outcome": "live",
+      "resolved_id": "20943964946",
+      "domain": "therumble.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "22477259590",
+      "name": "ABC (Australian Broadcasting Corporation)",
+      "outcome": "live",
+      "resolved_id": "22477259590",
+      "domain": "www.abc.net.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "22477285976",
+      "name": "Surge Productions",
+      "outcome": "live",
+      "resolved_id": "22477285976",
+      "domain": "surgeproductions.com.au",
+      "annualrevenue_present": false,
+      "numberofemployees_present": false
+    },
+    {
+      "june_id": "26149144628",
+      "name": "The Stream Shop",
+      "outcome": "live",
+      "resolved_id": "26149144628",
+      "domain": "thestreamshop.live",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "40613322263",
+      "name": "Jam TV Australia",
+      "outcome": "live",
+      "resolved_id": "40613322263",
+      "domain": "jamtvaustralia.com.au",
+      "annualrevenue_present": false,
+      "numberofemployees_present": false
+    },
+    {
+      "june_id": "9604614548",
+      "name": "Melbourne Racing Club",
+      "outcome": "live",
+      "resolved_id": "9604614548",
+      "domain": "mrc.racing.com",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "9604732795",
+      "name": "Rockhampton Jockey Club",
+      "outcome": "live",
+      "resolved_id": "9604732795",
+      "domain": "callaghanpark.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "9604732797",
+      "name": "Tweed Valley Jockey Club",
+      "outcome": "live",
+      "resolved_id": "9604732797",
+      "domain": "tweedriverjockeyclub.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "9604738975",
+      "name": "Tamworth Jockey Club",
+      "outcome": "live",
+      "resolved_id": "9604738975",
+      "domain": "tamworthjockeyclub.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "9604738976",
+      "name": "Bunbury Turf Club",
+      "outcome": "live",
+      "resolved_id": "9604738976",
+      "domain": "bunburyturfclub.com.au",
+      "annualrevenue_present": false,
+      "numberofemployees_present": false
+    },
+    {
+      "june_id": "9604753960",
+      "name": "South Australian Jockey Club",
+      "outcome": "live",
+      "resolved_id": "9604753960",
+      "domain": "morphettville.com.au",
+      "annualrevenue_present": false,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "9604787229",
+      "name": "The Alice Springs Turf Club",
+      "outcome": "live",
+      "resolved_id": "9604787229",
+      "domain": "alicespringsturfclub.org.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "9604794661",
+      "name": "Sapphire Coast Turf Club (Bega Valley)",
+      "outcome": "live",
+      "resolved_id": "9604794661",
+      "domain": "sapphirecoastturfclub.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "9605244179",
+      "name": "Toowoomba Turf Club",
+      "outcome": "live",
+      "resolved_id": "9605244179",
+      "domain": "cliffordpark.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "9605273630",
+      "name": "Port Macquarie Race Club",
+      "outcome": "live",
+      "resolved_id": "9605273630",
+      "domain": "portmacquarieraceclub.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "9605284721",
+      "name": "Geraldton Turf Club",
+      "outcome": "live",
+      "resolved_id": "9605284721",
+      "domain": "geraldtonturfclub.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "9605284722",
+      "name": "Racing and Wagering Western Australia",
+      "outcome": "live",
+      "resolved_id": "9605284722",
+      "domain": "rwwa.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "9605284723",
+      "name": "Brisbane Racing Club (BRC)",
+      "outcome": "live",
+      "resolved_id": "9605284723",
+      "domain": "brc.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "9605284724",
+      "name": "Australian Turf Club",
+      "outcome": "live",
+      "resolved_id": "9605284724",
+      "domain": "australianturfclub.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "9605291627",
+      "name": "Victoria Racing Club",
+      "outcome": "live",
+      "resolved_id": "9605291627",
+      "domain": "flemington.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "9648957286",
+      "name": "Racing Queensland",
+      "outcome": "live",
+      "resolved_id": "9648957286",
+      "domain": "racingqueensland.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "9663194467",
+      "name": "Tasracing Pty",
+      "outcome": "live",
+      "resolved_id": "9663194467",
+      "domain": "tasracing.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "9680571285",
+      "name": "Auckland Thoroughbred Racing",
+      "outcome": "live",
+      "resolved_id": "9680571285",
+      "domain": "ellerslie.co.nz",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "9680907342",
+      "name": "Sunshine Coast Turf Club",
+      "outcome": "live",
+      "resolved_id": "9680907342",
+      "domain": "sctc.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "9680908136",
+      "name": "Redcliffe Harness RC",
+      "outcome": "live",
+      "resolved_id": "9680908136",
+      "domain": "redcliffehrc.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    },
+    {
+      "june_id": "9681041418",
+      "name": "The Creek Agency",
+      "outcome": "live",
+      "resolved_id": "9681041418",
+      "domain": "thecreek.com.au",
+      "annualrevenue_present": true,
+      "numberofemployees_present": true
+    }
+  ],
+  "resolved_ids": [
+    "10021900550",
+    "10024564084",
+    "10152138518",
+    "10152245364",
+    "10215097384",
+    "12427415589",
+    "14748141740",
+    "14752422181",
+    "14752488879",
+    "15008671672",
+    "15042301818",
+    "15274105699",
+    "15387953738",
+    "15388186399",
+    "15860116585",
+    "15860277364",
+    "16047156820",
+    "17317147787",
+    "17317184159",
+    "17317337782",
+    "17317381378",
+    "17317850381",
+    "17696004613",
+    "17791151956",
+    "17861423879",
+    "18047161864",
+    "18647353914",
+    "18756544344",
+    "18756544347",
+    "18756544359",
+    "18756544407",
+    "18796602894",
+    "18811366029",
+    "18973591368",
+    "19099896622",
+    "19100977027",
+    "19154355339",
+    "19363725157",
+    "20538284384",
+    "20538599475",
+    "20943964946",
+    "22477259590",
+    "22477285976",
+    "26149144628",
+    "40613322263",
+    "9604614548",
+    "9604732795",
+    "9604732797",
+    "9604738975",
+    "9604738976",
+    "9604753960",
+    "9604787229",
+    "9604794661",
+    "9605244179",
+    "9605273630",
+    "9605284721",
+    "9605284722",
+    "9605284723",
+    "9605284724",
+    "9605291627",
+    "9648957286",
+    "9663194467",
+    "9680571285",
+    "9680907342",
+    "9680908136",
+    "9681041418"
+  ],
+  "unmatched": [],
+  "verdict": "PASS: 66 of 66 June ids resolved (0 unmatched)."
+}
