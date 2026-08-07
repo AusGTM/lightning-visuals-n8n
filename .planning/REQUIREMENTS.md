@@ -43,11 +43,11 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 
 ### Veto Machinery
 
-- [ ] **VETO-01**: All three hard vetoes (non-ANZ, no broadcast/streaming content, hardware
+- [x] **VETO-01**: All three hard vetoes (non-ANZ, no broadcast/streaming content, hardware
   vendor) set `lv_anti_icp_flag=true` AND write `lv_anti_icp_reason`. (Today: only non-ANZ
   exists, reason never written; F4/F10.)
 
-- [ ] **VETO-02**: Correcting the veto condition clears the flag and reason — no one-way
+- [x] **VETO-02**: Correcting the veto condition clears the flag and reason — no one-way
   latch. (F6 — validated: Australia restored, flag stayed true, tier stuck D.)
 
 - [x] **VETO-03**: A flag change updates `lv_icp_tier` without requiring an unrelated score
@@ -129,8 +129,8 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 | ENGINE-05 | Phase 40 | Complete |
 | ENGINE-06 | Phase 40 | Complete |
 | ENGINE-07 | Phase 40 | Complete |
-| VETO-01 | Phase 40 | Pending |
-| VETO-02 | Phase 40 | Pending |
+| VETO-01 | Phase 40 | Complete |
+| VETO-02 | Phase 40 | Complete |
 | VETO-03 | Phase 40 | Complete |
 | PARITY-01 | Phase 40 | Complete |
 | PARITY-02 | Phase 40 | Complete |

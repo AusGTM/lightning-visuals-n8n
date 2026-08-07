@@ -141,3 +141,150 @@ Known Blockers section are now live-proven resolved:
 
 40-05's veto-branch deletion (removing the Geography flow's now-redundant veto branch,
 per D-01) is unblocked.
+
+---
+
+## 2026-08-07 — remaining VETO-01/02 human-verification items closed
+
+**Purpose:** live proof of the two items 40-VERIFICATION.md left `human_needed` —
+the no-content and hardware-vendor vetoes individually (VETO-01 had only proven
+non-ANZ), and the symmetric clear on a real PATCH (VETO-02/F6).
+
+### Setup
+
+Three disposable companies, no domain/website (mirrors the `280155690475` shape above),
+created directly via the HubSpot API (not gated — same as this document's own setup):
+
+| Case | Record id | Inputs | Purpose |
+|---|---|---|---|
+| D1 | `280205875649` | AU, `lv_produces_content=false`, hardware=false | no-content veto |
+| D2 | `280234186174` | AU, content=true, `lv_is_hardware_vendor=true` | hardware-vendor veto |
+| D3 | `280234186175` | US, content=true, hardware=false | non-ANZ veto (cycle 1), then clear (cycle 2) |
+
+SJ-3 execution **2080** (started `2026-08-06T23:30:11Z`) matched exactly these three
+ids — batch purity confirmed via a read-only re-scan of `scheduled_arm.
+find_latest_sj3_batch` before ever handing an arm command to the operator.
+
+### Bug 1 (found in Cycle 1 attempt #1): `scheduled_arm.py` never chunked the dispatch
+
+The operator's first arm cycle armed and disarmed cleanly, but the dispatch was refused:
+`"Request carries 3 events, more than this backend can enrich in one request — the
+limit is 2 record(s) per request. Nothing was enriched."` Nothing was written.
+
+**Root cause:** `scheduled_arm.py` sent the whole SJ-3-matched batch as ONE webhook POST
+regardless of size, ignoring the backend's own cap (`ENRICH_MAX_LIST_RECORDS = 2`,
+`scripts/build_cloud_workflows.py:3540`, mirrored client-side by the `max_records_per_chunk`
+config key every other dispatch caller in the plugin already reads via `chunking.py`).
+
+**Fix (commit `bf9cecd`):** reuse `chunking.plan_chunks`/`chunking.dispatch_plan`
+(already used by `preingest.rerequest_unanswered`/`preview_enrichment`) inside the same
+armed window — one arm covering the whole batch's allowlist, dispatch chunked into
+`<=max_records_per_chunk` POSTs, guaranteed single disarm after all chunks. Locked with
+3 new tests (batch-of-3 → 2+1 chunked dispatch in one arm window; a partial chunk
+failure stays visible in `results`/`failed_batch` rather than silently folding into a
+false-clean outcome; missing ceiling config refuses before any arm). Both suites green
+(root 2307/118 skipped, plugin 1284/5 skipped) before re-checkpointing.
+
+### Cycle 1 (post-fix): all three vetoes fire, but with a spurious prefix
+
+Operator re-ran the arm command. Outcome: `dispatched`, `chunk_count: 2`, both chunks
+`ok: true`. Independent GETs (execution ~`03:02Z`):
+
+| Record | `lv_anti_icp_flag` | `lv_anti_icp_reason` |
+|---|---|---|
+| D1 | `"true"` | `"Non-ANZ geography; No broadcast or streaming content"` — **unexpected prefix** |
+| D2 | `"true"` | `"Non-ANZ geography; Hardware/AV/LED vendor, not sports-media buyer"` — **unexpected prefix** |
+| D3 | `"true"` | `"Non-ANZ geography"` — exactly correct (D3 IS non-ANZ) |
+
+D1/D2 are true-AU records; a non-ANZ veto firing on them alongside their correct reason
+is the F4 failure mode reborn in the derivation, not a re-proof of VETO-01 as written.
+
+### Bug 2: `existingRecord.lv_country_region_normalized` never fetched
+
+Diagnosed directly from live n8n execution data (read-only GETs against executions
+2150/2152/2155/2157/2160 of `LV Enrichment (Cloud template)`, walking the `Merge
+Company`/`Validate Research Output`/`Decide Company Action` node runData for D1/D2):
+
+- `existingRecord.lv_country_region_normalized` was `None` in **every** execution for
+  D1 and D2, despite both carrying `lv_country_region_normalized="AU"` live in HubSpot.
+- `research_candidate.matched` was `false` in every execution (fake companies, no
+  domain — research legitimately found nothing), so `merge.canonicalPatch.
+  lv_country_region_normalized` was also never set (correctly gated by
+  `mergeCompanies.js`'s own `if (rc && rc.matched)` check).
+- With both the fresh-candidate path and the existing-value fallback empty,
+  `ENRICH_DECIDE_CO_CLOUD`'s `properties.lv_country_region_normalized ?? existing.
+  lv_country_region_normalized` resolved to `undefined`, and `_regionKey(undefined)`
+  returns `"non_anz"` — firing "Non-ANZ geography" on every company whose region
+  wasn't freshly re-promoted that run, true-AU or not.
+
+**Root cause:** `ENRICH_COMPANY_SEARCH_PROPERTIES_CSV` (the ONE property list feeding
+both `HubSpot Company Search` and `HubSpot Company Fetch By Id`) never requested
+`lv_country_region_normalized`. `lv_produces_content`/`lv_is_hardware_vendor` were
+already present, which is why only the region veto fired spuriously. Same class of gap
+WR-01 already fixed for `lv_sponsorship_reliant` (18-REVIEW.md) — one property short of
+covering the field that actually feeds a hard veto.
+
+**Fix:** added `lv_country_region_normalized` to the one CSV declaration (feeds only
+HTTP search-node parameters, moves zero Code-node fingerprints — confirmed via
+`test_companies_factory_frozen.py` staying green), rebuilt `n8n/wf_enrichment_cloud.json`
+deterministically. Locked with a Python CSV-membership pin
+(`test_hubspot_properties_config.py`) and a chained Merge-Company-then-Decide-Company-
+Action Node fixture (`tests/n8n/decideCompanyActionRegionFallbackNoSpuriousVeto.test.mjs`,
+4 cases: existing-AU-with-unmatched-research fires no veto; existing-US still vetoes
+correctly; existing-AU-with-no-content-veto fires ONLY that reason; existing-AU-with-
+hardware-veto fires ONLY that reason). Root suite 2308/118 skipped, Node suite 625/625,
+both green before deploy.
+
+**Deploy:** n8n serves a running workflow's pre-PUT content until deactivated/reactivated
+(the same mechanism `n8n_arming` already brackets for the write-safety flags — proven
+live 2026-08-03). Operator ran `DRY_RUN=false ALLOW_N8N_DEPLOY=true python
+scripts/deploy_n8n_workflows.py` (200 on all 5 workflows), then bounced every active
+workflow via the n8n Cloud UI (deactivate/activate, 200 each; `LV Review Decision` was
+already inactive and correctly skipped). Confirmed via a fresh, read-only SJ-3 batch
+scan: execution **2167** (started `2026-08-07T03:30:11Z`, after the bounce) matched
+exactly the three disposables — no foreign ids.
+
+Meanwhile D3 was corrected directly (no arm needed — a plain property write on the
+team's own disposable, same as the original setup): `lv_country_region_normalized` →
+`"AU"`, re-queued (`lv_enrichment_requested="true"`, `lv_enrichment_status="queued"`).
+D1/D2 needed no touch — both still carried `lv_enrichment_requested="true"`/
+`status="complete"` (never reset by the pipeline), so SJ-3's own filter
+(`requested=true AND status != running`) kept re-matching all three together.
+
+### Cycle 2 (post-fix, post-deploy): corrected proof
+
+Operator ran the arm command a second time. Outcome: `dispatched`, `chunk_count: 2`,
+both chunks `ok: true`, disarm clean. Independent GETs (this session, `~03:33Z`):
+
+| Record | `lv_anti_icp_flag` | `lv_anti_icp_reason` | `lv_icp_tier` |
+|---|---|---|---|
+| D1 (`280205875649`) | `"true"` | `"No broadcast or streaming content"` | `D` |
+| D2 (`280234186174`) | `"true"` | `"Hardware/AV/LED vendor, not sports-media buyer"` | `D` |
+| D3 (`280234186175`) | `"false"` | `""` | `C` |
+
+No spurious prefix on D1/D2. D3's `lv_anti_icp_flag` flipped `"true"` → `"false"` on a
+real PATCH with `lv_anti_icp_reason` cleared to `""` — the symmetric-clear proof
+(VETO-02/F6), no one-way latch. D3's `lv_icp_tier` also moved off `D` to `C` on the same
+event (VETO-03 corroboration, already independently proven in 40-06).
+
+Gate re-verified disarmed via `scripts/verify_live_write_safety.py` (12 declaring nodes
+across 5 workflows, `VERDICT: disarmed PASS`) — all `ALLOW_HUBSPOT_*` flags `"false"`,
+both allowlist constants `""`, no disagreement.
+
+### Cleanup
+
+- `DELETE companies/280205875649, 280234186174, 280234186175` → `204` each.
+- Portal-wide sweep (`CONTAINS_TOKEN "ZZ-SCORING-TEST-DELETE-ME"`) → `0` survivors.
+
+### Conclusion
+
+VETO-01 is now live-PATCH-proven for all three hard vetoes individually (non-ANZ from
+this document's earlier setup section, no-content and hardware-vendor from this run),
+each with the rubric-correct reason string and no cross-contamination between them.
+VETO-02/F6 is live-PATCH-proven: a real record's veto flag and reason both clear on
+correction, no one-way latch. Two real defects were found and fixed along the way
+(`scheduled_arm.py`'s missing dispatch-chunking, and the company existingRecord fetch's
+missing `lv_country_region_normalized`) — both would have silently corrupted future
+scheduled-poller runs had this evidence-gathering pass not exercised them against a real
+armed window. Per-run bounded arming (`scheduled_arm.py` + `WINDOWS.md` #5) remains the
+operational model; nothing here permanently flips `WRITE_SAFETY_DEFAULTS`.
