@@ -5,8 +5,8 @@ milestone_name: HubSpot Scoring Engine Remediation
 current_phase: 40
 current_phase_name: Scoring Engine, Veto & Parity Remediation
 status: phase_complete
-stopped_at: Phase 42 context gathered
-last_updated: "2026-08-07T05:02:06.737Z"
+stopped_at: Phases 41-43 context gathered
+last_updated: "2026-08-07T05:34:20.792Z"
 last_activity: 2026-08-07
 last_activity_desc: "40-07 complete (Phase 40 closed): ENGINE-01 live-proven (80/A entirely inside HubSpot off canonical inputs — org_type_score=40, produces_content_score=20, geography_score=10, annual_revenue_score=10, gambling_score=0); D-10 backfill mechanism (`scripts/backfill_seed_company_scores.py`) built, gated, and proven on the real-record sample (Melbourne Racing Club, id 9604614548 — the entire population of companies portal-wide carrying any canonical lv_* input); PARITY-01 verdict committed (`parity-report-final.json`, PASS with 1 documented Needs Review divergence, 0 real findings, assertions_executed=1); full live fixture tier 56/56 passed excluding the 5 veto_set/veto_clear cases, which are empirically confirmed blocked on the pre-existing VETO-01/VETO-02 pipeline write-gate arming gate (not a regression, not this plan's scope — WINDOWS.md id 5)"
 progress:
@@ -29,9 +29,9 @@ Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39
 
 ## Session
 
-**Last session:** 2026-08-07T05:02:06.729Z
-**Stopped at:** Phase 42 context gathered
-**Resume file:** .planning/phases/42-scoring-artifact-cleanup-reconciliation/42-CONTEXT.md
+**Last session:** 2026-08-07T05:34:20.783Z
+**Stopped at:** Phases 41-43 context gathered
+**Resume file:** .planning/phases/41-validation-data-import-end-to-end-proof/41-CONTEXT.md
 
 ## Performance Metrics
 
