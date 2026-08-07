@@ -2435,10 +2435,57 @@ ENRICH_MERGE_CO = JUNE_CANDIDATES_JS + inline(
 //    fields never promote — CLAUDE.md §17.2 "NEEDS_REVIEW if providers materially conflict".
 const CONFLICT_WATCH = ["lv_revenue_band", "lv_employee_band"];
 
+// Phase 41 Task 3 (F1): native firmographic band derivation, reproducing
+// src/normalizer.py's normalize_revenue_band / normalize_employee_band cut points
+// exactly in JS. HubSpot returns every property as a STRING, so this needs an explicit
+// Number() coercion the Python string-passthrough branch never needed — and Number("")
+// is 0 (finite!), so the blank check must run BEFORE the numeric conversion, not after.
+function _coerceNumeric(raw) {
+  if (raw === null || raw === undefined) return null;
+  const s = String(raw).trim();
+  if (s === "") return null;
+  const v = Number(s);
+  return Number.isFinite(v) ? v : null;
+}
+function _bandRevenue(raw) {
+  const v = _coerceNumeric(raw);
+  if (v === null) return null;
+  if (v < 1e6) return "<1M";
+  if (v < 5e6) return "1-5M";
+  if (v < 5e7) return "5-50M";
+  if (v < 5e8) return "50-500M";
+  if (v < 7.5e8) return "500-750M";
+  if (v < 1e9) return "750M-1B";
+  if (v < 1.2e9) return "1B-1.2B";
+  return "1.2B+";
+}
+function _bandEmployees(raw) {
+  const v = _coerceNumeric(raw);
+  if (v === null) return null;
+  if (v <= 9) return "1-9";
+  if (v <= 50) return "10-50";
+  if (v <= 200) return "51-200";
+  if (v <= 500) return "201-500";
+  if (v <= 1000) return "501-1000";
+  return "1001+";
+}
+
+// Phase 41 Task 3 (D-04): the two fields a June-vs-fresh-research disagreement routes to
+// needs_review instead of silently picking a source. Cache-key names hardcoded here
+// (not imported from mergeCompanies.js's private COMPANY_CACHE_KEY_FIELDS -- that file
+// is outside this task's scope) but must stay in lockstep with mergeCompanies.js's own
+// map for these two fields; a node test pins this.
+const JUNE_RESEARCH_CONFLICT_FIELDS = ["lv_org_type", "lv_produces_content"];
+const JUNE_RESEARCH_CACHE_KEYS = {
+  lv_org_type: "lv_org_type_verified_at",
+  lv_produces_content: "lv_produces_content_verified_at",
+};
+
 return $input.all().map((it) => {
   const row = it.json;
   if (!row.scored) return { json: { ...row, merge: null, conflicts: [] } };  // skip branch
   const best = row.scored.best || {};
+  const existingRecord = row.existingRecord || {};
 
   // Distinct normalized values per field, across distinct sources.
   const conflicts = [];
@@ -2462,25 +2509,72 @@ return $input.all().map((it) => {
     const v = b && b.normalizedValue;                 // NORMALIZED, not raw
     if (v != null && String(v).trim() !== "") candidate[f] = v;
   }
-  const merged = mergeCompanies(row.existingRecord || {}, candidate, undefined,
+  const merged = mergeCompanies(existingRecord, candidate, undefined,
                                 { source: "waterfall", confidence: 85 });
 
   let finalMerge = merged;
 
-  // Phase 41 Task 1 (D-08): June-2026 validation dataset fold, a THIRD mergeCompanies
-  // call mirroring the claude_web fold below. Unconditional here (no precedence filter,
-  // no D-04 disagreement gate) -- Task 3 adds both on top. A record id absent from
-  // JUNE_CANDIDATES leaves this whole block a no-op, so pre-Phase-41 behaviour is
-  // byte-identical for every company the table has no row for.
-  const juneRow = JUNE_CANDIDATES[String((row.existingRecord || {}).hs_object_id)];
+  // Phase 41 Task 3 (F1): native firmographic band fold. Fills lv_revenue_band /
+  // lv_employee_band from the record's OWN annualrevenue / numberofemployees ONLY when
+  // the waterfall candidate above supplied neither -- a waterfall-supplied band always
+  // wins. This is a permanent pipeline improvement (fires for any company enrichment
+  // the waterfall leaves blank), not a phase-scoped hack.
+  const nativeData = {};
+  if (candidate.lv_revenue_band === undefined) {
+    const band = _bandRevenue(existingRecord.annualrevenue);
+    if (band) nativeData.lv_revenue_band = band;
+  }
+  if (candidate.lv_employee_band === undefined) {
+    const band = _bandEmployees(existingRecord.numberofemployees);
+    if (band) nativeData.lv_employee_band = band;
+  }
+  if (Object.keys(nativeData).length > 0) {
+    const nativeMerged = mergeCompanies(existingRecord, nativeData, undefined,
+      { source: "hubspot_native", confidence: 85 });
+    finalMerge = {
+      canonicalPatch: { ...finalMerge.canonicalPatch, ...nativeMerged.canonicalPatch },
+      provenance: { ...finalMerge.provenance, ...nativeMerged.provenance },
+      cacheKeys: { ...finalMerge.cacheKeys, ...nativeMerged.cacheKeys },
+      decisions: [...finalMerge.decisions, ...nativeMerged.decisions],
+    };
+  }
+
+  // Phase 13 (D6) / Phase 41 Task 3: the Claude web-research candidate set, computed
+  // HERE (before the June fold below) so June's D-01 precedence filter can see which
+  // fields fresh research already answered. researchData is intentionally built even
+  // when empty -- the June fold and the disagreement gate both read it unconditionally.
+  const rc = row.research_candidate;
+  const researchData = {};
+  if (rc && rc.matched) {
+    // COPY-01: lv_sponsorship_reliant / lv_country_region_normalized appended at the END
+    // of this array (never inserted mid-array) so every existing field's key-insertion
+    // order stays byte-stable. The tri-state/blank continue guard below already applies
+    // uniformly to each new entry.
+    for (const f of ["lv_org_type", "lv_produces_content", "lv_content_type",
+                     "lv_is_hardware_vendor", "lv_is_gambling_operator",
+                     "lv_sponsorship_reliant", "lv_country_region_normalized"]) {
+      const v = rc.data && rc.data[f];
+      // tri-state null (TS-2 coercion) / blank -> skip, so mergeCompanies' own _isBlank
+      // check has nothing to write; an evidenced false is NOT blank and flows through.
+      if (v === null || v === undefined || v === "" || (Array.isArray(v) && v.length === 0)) continue;
+      researchData[f] = v;
+    }
+  }
+
+  // Phase 41 Task 1/3 (D-08 pseudo-provider, D-01 precedence): June-2026 validation
+  // dataset fold, a THIRD mergeCompanies call. D-01: fresh research wins outright on any
+  // field it answered -- June contributes candidates for the REMAINING lv_* keys only.
+  const juneRow = JUNE_CANDIDATES[String(existingRecord.hs_object_id)];
+  let juneDisagreements = [];
   if (juneRow) {
     const juneData = {};
     for (const f of Object.keys(juneRow)) {
-      if (!f.startsWith("lv_")) continue;  // skip _name/_confidence/_evidence/etc.
+      if (!f.startsWith("lv_")) continue;             // skip _name/_confidence/_evidence/etc.
+      if (researchData[f] !== undefined) continue;    // D-01: fresh research wins outright
       juneData[f] = juneRow[f];
     }
     if (Object.keys(juneData).length > 0) {
-      const juneMerged = mergeCompanies(row.existingRecord || {}, juneData, undefined,
+      const juneMerged = mergeCompanies(existingRecord, juneData, undefined,
         { source: "june_2026", confidence: juneRow._confidence, evidence: juneRow._evidence || {} });
       finalMerge = {
         canonicalPatch: { ...finalMerge.canonicalPatch, ...juneMerged.canonicalPatch },
@@ -2488,6 +2582,17 @@ return $input.all().map((it) => {
         cacheKeys: { ...finalMerge.cacheKeys, ...juneMerged.cacheKeys },
         decisions: [...finalMerge.decisions, ...juneMerged.decisions],
       };
+    }
+
+    // D-04: compare June's ORIGINAL mapped value (not the precedence-filtered juneData
+    // above -- June may have answered a field research also answered) against research's
+    // value, org_type/produces_content only. Both must be present to disagree.
+    for (const f of JUNE_RESEARCH_CONFLICT_FIELDS) {
+      const juneValue = juneRow[f];
+      const researchValue = researchData[f];
+      if (juneValue === undefined || researchValue === undefined) continue;
+      if (String(juneValue).trim().toLowerCase() === String(researchValue).trim().toLowerCase()) continue;
+      juneDisagreements.push({ field: f, juneValue, researchValue });
     }
   }
 
@@ -2501,47 +2606,55 @@ return $input.all().map((it) => {
   // (+ concatenated decisions) is safe. By the time this node runs, the Judge Gate chain
   // upstream has already demoted any UNADJUDICATED vendor-flag `true` to `null`
   // (Pitfall 6) — this fold only ever sees an already-safe value.
-  const rc = row.research_candidate;
-  if (rc && rc.matched) {
-    // COPY-01: lv_sponsorship_reliant / lv_country_region_normalized appended at the END
-    // of this array (never inserted mid-array) so every existing field's key-insertion
-    // order stays byte-stable. The tri-state/blank continue guard below already applies
-    // uniformly to each new entry.
-    const researchData = {};
-    for (const f of ["lv_org_type", "lv_produces_content", "lv_content_type",
-                     "lv_is_hardware_vendor", "lv_is_gambling_operator",
-                     "lv_sponsorship_reliant", "lv_country_region_normalized"]) {
-      const v = rc.data && rc.data[f];
-      // tri-state null (TS-2 coercion) / blank -> skip, so mergeCompanies' own _isBlank
-      // check has nothing to write; an evidenced false is NOT blank and flows through.
-      if (v === null || v === undefined || v === "" || (Array.isArray(v) && v.length === 0)) continue;
-      researchData[f] = v;
-    }
-    if (Object.keys(researchData).length > 0) {
-      // TA-8: confidenceByField carries the judge VERDICT's per-field confidence (only
-      // ever set for the ONE field the judge actually adjudicated, Apply Judge Verdict
-      // above) — everything else keeps the flat retrieval confidence, exactly as before.
-      const researchMerged = mergeCompanies(row.existingRecord || {}, researchData, undefined,
-        { source: "claude_web", confidence: rc.confidence || 80, evidence: rc.evidence_by_field || {},
-          confidenceByField: row.judge_confidence_by_field || {} });
-      // Phase 15: the two mergeCompanies calls handle mostly DISJOINT field sets
-      // (waterfall: domain/industry/revenue_band/employee_band/country; claude_web:
-      // org_type/produces_content/content_type/hardware/gambling/sponsorship), so a
-      // shallow merge of each provenance object + cacheKeys object is safe for those keys.
-      // lv_country_region_normalized (REQ-country-region-policy) is the ONE field both
-      // candidate sets can populate — the spread below intentionally lets researchMerged
-      // win when claude_web reaches its own promote decision (last-spread-wins), else the
-      // waterfall decision stands. Decisions from both calls are concatenated (never
-      // deduped), so an audit trail with two entries for this field is expected, not a
-      // bug. ponytail: no cross-source conflict check here (that's CONFLICT_WATCH's job
-      // above, scoped to revenue/employee bands only) — add one if silent overwrite
-      // between provider and research region values proves to be a real problem.
-      finalMerge = {
-        canonicalPatch: { ...finalMerge.canonicalPatch, ...researchMerged.canonicalPatch },
-        provenance: { ...finalMerge.provenance, ...researchMerged.provenance },
-        cacheKeys: { ...finalMerge.cacheKeys, ...researchMerged.cacheKeys },
-        decisions: [...finalMerge.decisions, ...researchMerged.decisions],
-      };
+  if (Object.keys(researchData).length > 0) {
+    // TA-8: confidenceByField carries the judge VERDICT's per-field confidence (only
+    // ever set for the ONE field the judge actually adjudicated, Apply Judge Verdict
+    // above) — everything else keeps the flat retrieval confidence, exactly as before.
+    const researchMerged = mergeCompanies(existingRecord, researchData, undefined,
+      { source: "claude_web", confidence: rc.confidence || 80, evidence: rc.evidence_by_field || {},
+        confidenceByField: row.judge_confidence_by_field || {} });
+    // Phase 15: the two mergeCompanies calls handle mostly DISJOINT field sets
+    // (waterfall: domain/industry/revenue_band/employee_band/country; claude_web:
+    // org_type/produces_content/content_type/hardware/gambling/sponsorship), so a
+    // shallow merge of each provenance object + cacheKeys object is safe for those keys.
+    // lv_country_region_normalized (REQ-country-region-policy) is the ONE field both
+    // candidate sets can populate — the spread below intentionally lets researchMerged
+    // win when claude_web reaches its own promote decision (last-spread-wins), else the
+    // waterfall decision stands. Decisions from both calls are concatenated (never
+    // deduped), so an audit trail with two entries for this field is expected, not a
+    // bug. Cross-source conflict checking on org_type/produces_content now lives in the
+    // D-04 disagreement gate below (CONFLICT_WATCH above stays scoped to revenue/employee
+    // bands only, per its own header comment).
+    finalMerge = {
+      canonicalPatch: { ...finalMerge.canonicalPatch, ...researchMerged.canonicalPatch },
+      provenance: { ...finalMerge.provenance, ...researchMerged.provenance },
+      cacheKeys: { ...finalMerge.cacheKeys, ...researchMerged.cacheKeys },
+      decisions: [...finalMerge.decisions, ...researchMerged.decisions],
+    };
+  }
+
+  // Phase 41 Task 3 (D-04): suppress promotion, delete the cache key, add a synthetic
+  // needs_review decision. Runs AFTER every spread above so ordering cannot resurrect a
+  // suppressed field -- mirrors the Phase 16.3 stale-timestamp fix's discipline: a held
+  // field must never still carry a fresh cache-key stamp.
+  if (juneDisagreements.length > 0) {
+    const disagreementVerifiedAt = new Date().toISOString();
+    for (const d of juneDisagreements) {
+      delete finalMerge.canonicalPatch[d.field];
+      const cacheKey = JUNE_RESEARCH_CACHE_KEYS[d.field];
+      if (cacheKey) delete finalMerge.cacheKeys[cacheKey];
+      finalMerge.decisions.push({
+        field: d.field,
+        current_value: existingRecord[d.field] === undefined ? null : existingRecord[d.field],
+        chosen_value: null,
+        source_provider: "june_2026",
+        decision: "needs_review",
+        confidence: juneRow._confidence,
+        reason: `June (${d.juneValue}) and fresh research (${d.researchValue}) disagree on ${d.field}.`,
+        validation_status: "human_review_required",
+        evidence_url: (juneRow._evidence && juneRow._evidence[d.field]) || null,
+        verified_at: disagreementVerifiedAt,
+      });
     }
   }
 
