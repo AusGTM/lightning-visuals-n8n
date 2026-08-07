@@ -107,7 +107,11 @@ test("mergeCompanies: lv_produces_content at high confidence with NO evidence ur
 test("mergeCompanies: lv_produces_content at high confidence WITH an evidence url promotes, provenance carries it", () => {
   const { canonicalPatch, provenance } = mergeCompanies({}, { lv_produces_content: true },
     undefined, { source: "claude_web", confidence: 95, evidence: { lv_produces_content: "https://x/live" } });
-  assert.equal(canonicalPatch.lv_produces_content, true);
+  // 43-01 (D-09/D-10, PIPE-02): canonicalPatch coerces a boolean-typed promoted candidate
+  // to its quoted string form; provenance's own `value` stays the raw candidate type
+  // (unaffected — the coercion is scoped to canonicalPatch only).
+  assert.equal(canonicalPatch.lv_produces_content, "true");
+  assert.equal(provenance.lv_produces_content.value, true);
   assert.equal(provenance.lv_produces_content.evidence_url, "https://x/live");
 });
 

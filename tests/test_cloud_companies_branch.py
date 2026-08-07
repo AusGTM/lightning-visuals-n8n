@@ -129,6 +129,26 @@ def test_merge_companies_veto_policy_entries_carry_a_real_min_confidence():
     )
 
 
+def test_merge_companies_promote_branch_coerces_boolean_candidates_statically():
+    """D-09/D-10 (43-01, PIPE-02): defence-in-depth for the veto_output policy entries
+    above -- min_confidence is already 80 (verified in the sibling test above, untouched
+    by this test); the remaining PIPE-02 work is coercion at the promote-branch
+    assignment, so a future accidental boolean candidate is born as its quoted string
+    form. Proven STATICALLY via a regex over the source text, anchored on the
+    canonicalPatch subscript assignment (this file is comment-heavy, so a bare substring
+    grep would pass on prose) -- D-10 forbids driving the dead veto path with a synthetic
+    candidate, so mergeCompanies() is never called here."""
+    text = (ROOT / "n8n" / "code" / "mergeCompanies.js").read_text()
+    import re
+
+    assert re.search(
+        r'canonicalPatch\[field\]\s*=\s*typeof value === "boolean"', text
+    ), (
+        "no canonicalPatch[field] assignment in mergeCompanies.js appears to coerce a "
+        "boolean-typed candidate value to its quoted string form"
+    )
+
+
 REVIEW_APPLY_CONSUMERS = [
     (ROOT / "n8n" / "wf_scheduled_maintenance_cloud.json", "Apply Review"),
     (ROOT / "n8n" / "wf_review_decision_cloud.json", "Build Review Decision"),

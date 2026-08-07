@@ -87,7 +87,9 @@ test("(b) RED (durable): the PRE body never produces an lv_sponsorship_reliant k
 
 test("(c) GREEN (fails until the fix lands): the POST body promotes lv_sponsorship_reliant", () => {
   const out = runMergeCompany(loadPostBody(), row(true));
-  assert.equal(out.merge.canonicalPatch.lv_sponsorship_reliant, true,
+  // 43-01 (D-09/D-10, PIPE-02): canonicalPatch coerces a boolean-typed promoted candidate
+  // to its quoted string form.
+  assert.equal(out.merge.canonicalPatch.lv_sponsorship_reliant, "true",
     "COPY-01: sponsorship value must reach lv_sponsorship_reliant in canonicalPatch");
   const decision = out.merge.decisions.find((d) => d.field === "lv_sponsorship_reliant");
   assert.ok(decision, "a decision entry must exist for the promoted field");

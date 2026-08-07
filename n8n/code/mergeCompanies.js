@@ -238,7 +238,15 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
     provenance[field] = entry;
 
     if (decision === "promote") {
-      canonicalPatch[field] = value;
+      // D-09/D-10 (43-01, PIPE-02): coercion only — min_confidence for the two
+      // veto_output entries above is already 80 (Phase 40 D-04) and this path is not
+      // live today (same comment). This is defence-in-depth for the class Task 2 closed
+      // at the properties-finalization loop: a boolean-typed candidate is born as its
+      // quoted string form the moment it is promoted here, so a future accidental veto
+      // candidate is correct at birth, not just correct downstream. Every other type
+      // (string, array, number) passes through unchanged — BUG-27's downstream array
+      // join must still see arrays.
+      canonicalPatch[field] = typeof value === "boolean" ? (value ? "true" : "false") : value;
       // STALE-TIMESTAMP FIX (Phase 16.3, companies twin of Phase 16.2 gpt #6): the
       // cache-key datetime is stamped ONLY when the field is actually ACCEPTED — moved
       // inside this branch (was previously unconditional) so a needs_review/stale-but-
