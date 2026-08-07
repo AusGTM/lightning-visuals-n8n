@@ -124,6 +124,34 @@ def test_merge_companies_veto_policy_entries_carry_a_real_min_confidence():
     )
 
 
+REVIEW_APPLY_CONSUMERS = [
+    (ROOT / "n8n" / "wf_scheduled_maintenance_cloud.json", "Apply Review"),
+    (ROOT / "n8n" / "wf_review_decision_cloud.json", "Build Review Decision"),
+]
+
+
+def test_review_apply_clearpatch_boolean_keys_are_quoted_string_literals():
+    """D-07/D-08 (43-01, PIPE-01): reviewApply.js's clearPatch object is spread unmodified
+    into TWO HubSpot PATCH consumers -- ENRICH_APPLY_REVIEW ("Apply Review") and
+    buildReviewDecision's approve branch ("Build Review Decision") -- so fixing the two
+    literal `false` values at reviewApply.js's one shared source site fixes both. Assert
+    the assignment/key form (property name + colon + quoted value), not a bare substring,
+    so a comment describing the fix cannot satisfy this."""
+    for path, node_name in REVIEW_APPLY_CONSUMERS:
+        doc = json.loads(path.read_text())
+        node = next(n for n in doc["nodes"] if n["name"] == node_name)
+        code = node["parameters"]["jsCode"]
+        for field in ("lv_enrichment_needs_review", "lv_enrichment_review_approved"):
+            assert f'{field}: "false",' in code, (
+                f"{node_name} in {path.name} missing the quoted-string clearPatch "
+                f"assignment for {field}"
+            )
+            assert f'{field}: false,' not in code, (
+                f"{node_name} in {path.name} still carries the bare-boolean clearPatch "
+                f"assignment for {field}"
+            )
+
+
 def _hard_veto_reasons():
     cfg = yaml.safe_load((ROOT / "config" / "icp_scoring.yaml").read_text())
     hv = cfg["hard_vetoes"]

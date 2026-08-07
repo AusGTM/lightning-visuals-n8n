@@ -85,9 +85,14 @@ function reviewApply(candidateJson, refetchedProperties) {
     };
   }
 
+  // D-07 (43-01, PIPE-01): string literals, never bare JS booleans — HubSpot EQ filters
+  // compare strings (the 36-07 precedent for lv_enrichment_requested, and Phase 40 D-04's
+  // lv_anti_icp_flag fix). Neither ENRICH_APPLY_REVIEW nor buildReviewDecision's approve
+  // branch (the two consumers that spread this object into a PATCH body) carries any
+  // coercion of its own, so an unstringified value here would ship straight through.
   const clearPatch = {
-    lv_enrichment_needs_review: false,
-    lv_enrichment_review_approved: false,
+    lv_enrichment_needs_review: "false",
+    lv_enrichment_review_approved: "false",
     lv_enrichment_review_reason: "",
     lv_enrichment_review_candidate_json: "",
     lv_enrichment_reviewed_at: new Date().toISOString(),
