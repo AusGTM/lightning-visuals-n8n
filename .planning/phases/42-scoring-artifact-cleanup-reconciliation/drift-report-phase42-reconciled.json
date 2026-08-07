@@ -1,0 +1,3158 @@
+{
+  "accepted_divergences": [
+    {
+      "description": "Live lv_icp_tier enum carries five values (A, B, C, D, Unscored). config/icp_scoring.yaml's recommended_motion map additionally names a sixth tier label, 'Needs Review', that the live enum does not have. This was deliberately deferred in Phase 40 (40-06-SUMMARY.md, F8/ENGINE-07) and is a documented, accepted divergence -- not a defect for this phase. Fixing it would require a portal-side enum-option addition, which D-05's no-mutation reconciliation does not authorize and D-07/D-08 do not cover.",
+      "id": "PARITY-01-tier-label",
+      "property": "lv_icp_tier"
+    }
+  ],
+  "do_not_archive": {
+    "flows": [
+      {
+        "id": "4626124224",
+        "is_enabled": true,
+        "live": true,
+        "slug": "org-type-score"
+      },
+      {
+        "id": "4626722240",
+        "is_enabled": true,
+        "live": true,
+        "slug": "geography-score"
+      },
+      {
+        "id": "4626722237",
+        "is_enabled": true,
+        "live": true,
+        "slug": "annual-revenue-score"
+      },
+      {
+        "id": "4625147345",
+        "is_enabled": true,
+        "live": true,
+        "slug": "wf1-set-icp-tier"
+      },
+      {
+        "id": "4634822079",
+        "is_enabled": true,
+        "live": true,
+        "slug": "produces-content-score"
+      },
+      {
+        "id": "4634822085",
+        "is_enabled": true,
+        "live": true,
+        "slug": "gambling-score"
+      }
+    ],
+    "ok": true,
+    "properties": [
+      {
+        "live": true,
+        "name": "annual_revenue_score"
+      },
+      {
+        "live": true,
+        "name": "gambling_score"
+      },
+      {
+        "live": true,
+        "name": "geography_score"
+      },
+      {
+        "live": true,
+        "name": "lv_anti_icp_flag"
+      },
+      {
+        "live": true,
+        "name": "lv_country_region_normalized"
+      },
+      {
+        "live": true,
+        "name": "lv_icp_fit_score"
+      },
+      {
+        "live": true,
+        "name": "lv_icp_tier"
+      },
+      {
+        "live": true,
+        "name": "lv_org_type"
+      },
+      {
+        "live": true,
+        "name": "lv_produces_content"
+      },
+      {
+        "live": true,
+        "name": "org_type_score"
+      },
+      {
+        "live": true,
+        "name": "produces_content_score"
+      }
+    ]
+  },
+  "exit_code": 0,
+  "generated_at": "2026-08-07T09:12:31.012973+00:00",
+  "portal_id": "22617666",
+  "properties": [
+    {
+      "declared": {
+        "fieldType": "number",
+        "groupName": "companyinformation",
+        "label": "Annual Revenue Score",
+        "name": "annual_revenue_score",
+        "options": [],
+        "type": "number"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-08-04T18:46:37.519Z",
+        "createdUserId": "93450314",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "number",
+        "formField": true,
+        "groupName": "companyinformation",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "Annual Revenue Score",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "annual_revenue_score",
+        "numberDisplayHint": "unformatted",
+        "options": [],
+        "showCurrencySymbol": false,
+        "type": "number",
+        "updatedAt": "2026-08-04T18:46:37.519Z",
+        "updatedUserId": "93450314"
+      },
+      "name": "annual_revenue_score",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "number",
+        "groupName": "companyinformation",
+        "label": "Gambling Score",
+        "name": "gambling_score",
+        "options": [],
+        "type": "number"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-08-06T08:00:25.632Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "number",
+        "formField": false,
+        "groupName": "companyinformation",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "Gambling Score",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "gambling_score",
+        "numberDisplayHint": "unformatted",
+        "options": [],
+        "type": "number",
+        "updatedAt": "2026-08-06T08:02:33.595Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "gambling_score",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "number",
+        "groupName": "companyinformation",
+        "label": "Geography Score",
+        "name": "geography_score",
+        "options": [],
+        "type": "number"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-08-04T18:47:10.817Z",
+        "createdUserId": "93450314",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "number",
+        "formField": true,
+        "groupName": "companyinformation",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "Geography Score",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "geography_score",
+        "numberDisplayHint": "unformatted",
+        "options": [],
+        "showCurrencySymbol": false,
+        "type": "number",
+        "updatedAt": "2026-08-04T18:47:10.817Z",
+        "updatedUserId": "93450314"
+      },
+      "name": "geography_score",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "text",
+        "groupName": "lv_enrichment",
+        "label": "Lusha Company Id",
+        "name": "lusha_company_id",
+        "options": [],
+        "type": "string"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-30T09:34:58.490Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "text",
+        "formField": false,
+        "groupName": "lv_enrichment",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "Lusha Company Id",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lusha_company_id",
+        "options": [],
+        "type": "string",
+        "updatedAt": "2026-07-30T09:34:58.490Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lusha_company_id",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "booleancheckbox",
+        "groupName": "companyinformation",
+        "label": "Anti ICP Flag",
+        "name": "lv_anti_icp_flag",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-17T08:25:39.258Z",
+        "createdUserId": "93450314",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "booleancheckbox",
+        "formField": true,
+        "groupName": "companyinformation",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "Anti ICP Flag",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_anti_icp_flag",
+        "options": [
+          {
+            "description": "",
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "description": "",
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool",
+        "updatedAt": "2026-07-17T08:25:39.258Z",
+        "updatedUserId": "93450314"
+      },
+      "name": "lv_anti_icp_flag",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "textarea",
+        "groupName": "lv_enrichment",
+        "label": "LV Anti-ICP Reason",
+        "name": "lv_anti_icp_reason",
+        "options": [],
+        "type": "string"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:11.391Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "textarea",
+        "formField": false,
+        "groupName": "lv_enrichment",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Anti-ICP Reason",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_anti_icp_reason",
+        "options": [],
+        "type": "string",
+        "updatedAt": "2026-07-22T01:28:11.391Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_anti_icp_reason",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "checkbox",
+        "groupName": "lv_enrichment",
+        "label": "LV Content Type",
+        "name": "lv_content_type",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Live Broadcast",
+            "value": "live_broadcast"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "Streaming",
+            "value": "streaming"
+          },
+          {
+            "displayOrder": 2,
+            "hidden": false,
+            "label": "Near Live",
+            "value": "near_live"
+          },
+          {
+            "displayOrder": 3,
+            "hidden": false,
+            "label": "Highlights",
+            "value": "highlights"
+          },
+          {
+            "displayOrder": 4,
+            "hidden": false,
+            "label": "None",
+            "value": "none"
+          },
+          {
+            "displayOrder": 5,
+            "hidden": false,
+            "label": "Unknown",
+            "value": "unknown"
+          }
+        ],
+        "type": "enumeration"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:02.737Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "checkbox",
+        "formField": false,
+        "groupName": "lv_enrichment",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Content Type",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_content_type",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Live Broadcast",
+            "value": "live_broadcast"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "Streaming",
+            "value": "streaming"
+          },
+          {
+            "displayOrder": 2,
+            "hidden": false,
+            "label": "Near Live",
+            "value": "near_live"
+          },
+          {
+            "displayOrder": 3,
+            "hidden": false,
+            "label": "Highlights",
+            "value": "highlights"
+          },
+          {
+            "displayOrder": 4,
+            "hidden": false,
+            "label": "None",
+            "value": "none"
+          },
+          {
+            "displayOrder": 5,
+            "hidden": false,
+            "label": "Unknown",
+            "value": "unknown"
+          }
+        ],
+        "type": "enumeration",
+        "updatedAt": "2026-07-22T01:28:02.737Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_content_type",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "select",
+        "groupName": "lv_enrichment",
+        "label": "LV Country/Region (normalized)",
+        "name": "lv_country_region_normalized",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "AU",
+            "value": "AU"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "NZ",
+            "value": "NZ"
+          },
+          {
+            "displayOrder": 2,
+            "hidden": false,
+            "label": "ANZ",
+            "value": "ANZ"
+          },
+          {
+            "displayOrder": 3,
+            "hidden": false,
+            "label": "US",
+            "value": "US"
+          },
+          {
+            "displayOrder": 4,
+            "hidden": false,
+            "label": "UK",
+            "value": "UK"
+          },
+          {
+            "displayOrder": 5,
+            "hidden": false,
+            "label": "EU",
+            "value": "EU"
+          },
+          {
+            "displayOrder": 6,
+            "hidden": false,
+            "label": "Other",
+            "value": "Other"
+          },
+          {
+            "displayOrder": 7,
+            "hidden": false,
+            "label": "Unknown",
+            "value": "Unknown"
+          }
+        ],
+        "type": "enumeration"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:04.481Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "select",
+        "formField": false,
+        "groupName": "lv_enrichment",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Country/Region (normalized)",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_country_region_normalized",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "AU",
+            "value": "AU"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "NZ",
+            "value": "NZ"
+          },
+          {
+            "displayOrder": 2,
+            "hidden": false,
+            "label": "ANZ",
+            "value": "ANZ"
+          },
+          {
+            "displayOrder": 3,
+            "hidden": false,
+            "label": "US",
+            "value": "US"
+          },
+          {
+            "displayOrder": 4,
+            "hidden": false,
+            "label": "UK",
+            "value": "UK"
+          },
+          {
+            "displayOrder": 5,
+            "hidden": false,
+            "label": "EU",
+            "value": "EU"
+          },
+          {
+            "displayOrder": 6,
+            "hidden": false,
+            "label": "Other",
+            "value": "Other"
+          },
+          {
+            "displayOrder": 7,
+            "hidden": false,
+            "label": "Unknown",
+            "value": "Unknown"
+          }
+        ],
+        "type": "enumeration",
+        "updatedAt": "2026-07-22T01:28:04.481Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_country_region_normalized",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "select",
+        "groupName": "lv_enrichment",
+        "label": "LV Employee Band",
+        "name": "lv_employee_band",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "1-9",
+            "value": "1-9"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "10-50",
+            "value": "10-50"
+          },
+          {
+            "displayOrder": 2,
+            "hidden": false,
+            "label": "51-200",
+            "value": "51-200"
+          },
+          {
+            "displayOrder": 3,
+            "hidden": false,
+            "label": "201-500",
+            "value": "201-500"
+          },
+          {
+            "displayOrder": 4,
+            "hidden": false,
+            "label": "501-1000",
+            "value": "501-1000"
+          },
+          {
+            "displayOrder": 5,
+            "hidden": false,
+            "label": "1001+",
+            "value": "1001+"
+          },
+          {
+            "displayOrder": 6,
+            "hidden": false,
+            "label": "Unknown",
+            "value": "unknown"
+          }
+        ],
+        "type": "enumeration"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:03.901Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "select",
+        "formField": false,
+        "groupName": "lv_enrichment",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Employee Band",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_employee_band",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "1-9",
+            "value": "1-9"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "10-50",
+            "value": "10-50"
+          },
+          {
+            "displayOrder": 2,
+            "hidden": false,
+            "label": "51-200",
+            "value": "51-200"
+          },
+          {
+            "displayOrder": 3,
+            "hidden": false,
+            "label": "201-500",
+            "value": "201-500"
+          },
+          {
+            "displayOrder": 4,
+            "hidden": false,
+            "label": "501-1000",
+            "value": "501-1000"
+          },
+          {
+            "displayOrder": 5,
+            "hidden": false,
+            "label": "1001+",
+            "value": "1001+"
+          },
+          {
+            "displayOrder": 6,
+            "hidden": false,
+            "label": "Unknown",
+            "value": "unknown"
+          }
+        ],
+        "type": "enumeration",
+        "updatedAt": "2026-07-22T01:28:03.901Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_employee_band",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "booleancheckbox",
+        "groupName": "lv_enrichment",
+        "label": "LV Enrichment Needs Review",
+        "name": "lv_enrichment_needs_review",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:29:25.507Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "booleancheckbox",
+        "formField": false,
+        "groupName": "lv_enrichment",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Enrichment Needs Review",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_enrichment_needs_review",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool",
+        "updatedAt": "2026-07-22T01:29:25.507Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_enrichment_needs_review",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "textarea",
+        "groupName": "lv_enrichment",
+        "label": "LV Enrichment Provenance",
+        "name": "lv_enrichment_provenance",
+        "options": [],
+        "type": "string"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:06.218Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "textarea",
+        "formField": false,
+        "groupName": "lv_enrichment",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Enrichment Provenance",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_enrichment_provenance",
+        "options": [],
+        "type": "string",
+        "updatedAt": "2026-07-22T01:28:06.218Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_enrichment_provenance",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "booleancheckbox",
+        "groupName": "lv_enrichment",
+        "label": "LV Enrichment Requested",
+        "name": "lv_enrichment_requested",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-29T00:11:56.041Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "booleancheckbox",
+        "formField": false,
+        "groupName": "lv_enrichment",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Enrichment Requested",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_enrichment_requested",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool",
+        "updatedAt": "2026-07-29T00:11:56.041Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_enrichment_requested",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "booleancheckbox",
+        "groupName": "lv_enrichment",
+        "label": "LV Enrichment Review Approved",
+        "name": "lv_enrichment_review_approved",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:29:26.031Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "booleancheckbox",
+        "formField": false,
+        "groupName": "lv_enrichment",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Enrichment Review Approved",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_enrichment_review_approved",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool",
+        "updatedAt": "2026-07-22T01:29:26.031Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_enrichment_review_approved",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "textarea",
+        "groupName": "lv_enrichment",
+        "label": "LV Enrichment Review Candidate JSON",
+        "name": "lv_enrichment_review_candidate_json",
+        "options": [],
+        "type": "string"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:08.958Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "textarea",
+        "formField": false,
+        "groupName": "lv_enrichment",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Enrichment Review Candidate JSON",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_enrichment_review_candidate_json",
+        "options": [],
+        "type": "string",
+        "updatedAt": "2026-07-22T01:28:08.958Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_enrichment_review_candidate_json",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "textarea",
+        "groupName": "lv_enrichment",
+        "label": "LV Enrichment Review Reason",
+        "name": "lv_enrichment_review_reason",
+        "options": [],
+        "type": "string"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:08.469Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "textarea",
+        "formField": false,
+        "groupName": "lv_enrichment",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Enrichment Review Reason",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_enrichment_review_reason",
+        "options": [],
+        "type": "string",
+        "updatedAt": "2026-07-22T01:28:08.469Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_enrichment_review_reason",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "date",
+        "groupName": "lv_enrichment",
+        "label": "LV Enrichment Reviewed At",
+        "name": "lv_enrichment_reviewed_at",
+        "options": [],
+        "type": "datetime"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:10.318Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "date",
+        "formField": false,
+        "groupName": "lv_enrichment",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Enrichment Reviewed At",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_enrichment_reviewed_at",
+        "options": [],
+        "type": "datetime",
+        "updatedAt": "2026-07-22T01:28:10.318Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_enrichment_reviewed_at",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "text",
+        "groupName": "lv_enrichment",
+        "label": "LV Enrichment Reviewed By",
+        "name": "lv_enrichment_reviewed_by",
+        "options": [],
+        "type": "string"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:09.859Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "text",
+        "formField": false,
+        "groupName": "lv_enrichment",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Enrichment Reviewed By",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_enrichment_reviewed_by",
+        "options": [],
+        "type": "string",
+        "updatedAt": "2026-07-22T01:28:09.859Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_enrichment_reviewed_by",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "select",
+        "groupName": "lv_enrichment",
+        "label": "LV Enrichment Status",
+        "name": "lv_enrichment_status",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Queued",
+            "value": "queued"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "Running",
+            "value": "running"
+          },
+          {
+            "displayOrder": 2,
+            "hidden": false,
+            "label": "Complete",
+            "value": "complete"
+          },
+          {
+            "displayOrder": 3,
+            "hidden": false,
+            "label": "Failed",
+            "value": "failed"
+          },
+          {
+            "displayOrder": 4,
+            "hidden": false,
+            "label": "Needs Review",
+            "value": "needs_review"
+          },
+          {
+            "displayOrder": 5,
+            "hidden": false,
+            "label": "Skipped",
+            "value": "skipped"
+          }
+        ],
+        "type": "enumeration"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-29T00:11:56.572Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "select",
+        "formField": false,
+        "groupName": "lv_enrichment",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Enrichment Status",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_enrichment_status",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Queued",
+            "value": "queued"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "Running",
+            "value": "running"
+          },
+          {
+            "displayOrder": 2,
+            "hidden": false,
+            "label": "Complete",
+            "value": "complete"
+          },
+          {
+            "displayOrder": 3,
+            "hidden": false,
+            "label": "Failed",
+            "value": "failed"
+          },
+          {
+            "displayOrder": 4,
+            "hidden": false,
+            "label": "Needs Review",
+            "value": "needs_review"
+          },
+          {
+            "displayOrder": 5,
+            "hidden": false,
+            "label": "Skipped",
+            "value": "skipped"
+          }
+        ],
+        "type": "enumeration",
+        "updatedAt": "2026-07-29T00:11:56.572Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_enrichment_status",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": null,
+      "detail": "design-only name (superseded local-MVP design, CLAUDE.md), never implemented live -- reported, not a failure, not a signal to create anything",
+      "live": null,
+      "name": "lv_icp_confidence",
+      "object_type": "companies",
+      "status": "documented_gap"
+    },
+    {
+      "declared": {
+        "fieldType": "calculation_equation",
+        "groupName": "companyinformation",
+        "label": "ICP Fit Score",
+        "name": "lv_icp_fit_score",
+        "options": [],
+        "type": "number"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": true,
+        "calculationFormula": "org_type_score + geography_score + annual_revenue_score + produces_content_score + gambling_score",
+        "createdAt": "2026-07-17T08:20:55.049Z",
+        "createdUserId": "93450314",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "calculation_equation",
+        "formField": false,
+        "groupName": "companyinformation",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "ICP Fit Score",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": true
+        },
+        "name": "lv_icp_fit_score",
+        "numberDisplayHint": "formatted",
+        "options": [],
+        "showCurrencySymbol": false,
+        "type": "number",
+        "updatedAt": "2026-08-06T08:16:24.734Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_icp_fit_score",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "booleancheckbox",
+        "groupName": "lv_enrichment",
+        "label": "LV ICP Needs Review",
+        "name": "lv_icp_needs_review",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:29:26.495Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "booleancheckbox",
+        "formField": false,
+        "groupName": "lv_enrichment",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV ICP Needs Review",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_icp_needs_review",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool",
+        "updatedAt": "2026-07-22T01:29:26.495Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_icp_needs_review",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "textarea",
+        "groupName": "lv_enrichment",
+        "label": "LV ICP Score Breakdown",
+        "name": "lv_icp_score_breakdown",
+        "options": [],
+        "type": "string"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:11.869Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "textarea",
+        "formField": false,
+        "groupName": "lv_enrichment",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV ICP Score Breakdown",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_icp_score_breakdown",
+        "options": [],
+        "type": "string",
+        "updatedAt": "2026-07-22T01:28:11.869Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_icp_score_breakdown",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": null,
+      "detail": "design-only name (superseded local-MVP design, CLAUDE.md), never implemented live -- reported, not a failure, not a signal to create anything",
+      "live": null,
+      "name": "lv_icp_scored_at",
+      "object_type": "companies",
+      "status": "documented_gap"
+    },
+    {
+      "declared": null,
+      "detail": "design-only name (superseded local-MVP design, CLAUDE.md), never implemented live -- reported, not a failure, not a signal to create anything",
+      "live": null,
+      "name": "lv_icp_scoring_version",
+      "object_type": "companies",
+      "status": "documented_gap"
+    },
+    {
+      "declared": {
+        "fieldType": "select",
+        "groupName": "companyinformation",
+        "label": "ICP Tier",
+        "name": "lv_icp_tier",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "A",
+            "value": "A"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "B",
+            "value": "B"
+          },
+          {
+            "displayOrder": 2,
+            "hidden": false,
+            "label": "C",
+            "value": "C"
+          },
+          {
+            "displayOrder": 3,
+            "hidden": false,
+            "label": "D",
+            "value": "D"
+          },
+          {
+            "displayOrder": 4,
+            "hidden": false,
+            "label": "Unscored",
+            "value": "Unscored"
+          }
+        ],
+        "type": "enumeration"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-17T08:21:46.973Z",
+        "createdUserId": "93450314",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "select",
+        "formField": true,
+        "groupName": "companyinformation",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "ICP Tier",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_icp_tier",
+        "options": [
+          {
+            "description": "",
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "A",
+            "value": "A"
+          },
+          {
+            "description": "",
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "B",
+            "value": "B"
+          },
+          {
+            "description": "",
+            "displayOrder": 2,
+            "hidden": false,
+            "label": "C",
+            "value": "C"
+          },
+          {
+            "description": "",
+            "displayOrder": 3,
+            "hidden": false,
+            "label": "D",
+            "value": "D"
+          },
+          {
+            "description": "",
+            "displayOrder": 4,
+            "hidden": false,
+            "label": "Unscored",
+            "value": "Unscored"
+          }
+        ],
+        "type": "enumeration",
+        "updatedAt": "2026-08-06T21:44:37.903Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_icp_tier",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "booleancheckbox",
+        "groupName": "lv_enrichment",
+        "label": "LV Is Gambling Operator",
+        "name": "lv_is_gambling_operator",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:29:24.497Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "booleancheckbox",
+        "formField": false,
+        "groupName": "lv_enrichment",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Is Gambling Operator",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_is_gambling_operator",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool",
+        "updatedAt": "2026-07-22T01:29:24.497Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_is_gambling_operator",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "booleancheckbox",
+        "groupName": "lv_enrichment",
+        "label": "LV Is Hardware Vendor",
+        "name": "lv_is_hardware_vendor",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:29:24Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "booleancheckbox",
+        "formField": false,
+        "groupName": "lv_enrichment",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Is Hardware Vendor",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_is_hardware_vendor",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool",
+        "updatedAt": "2026-07-22T01:29:24Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_is_hardware_vendor",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": null,
+      "detail": "design-only name (superseded local-MVP design, CLAUDE.md), never implemented live -- reported, not a failure, not a signal to create anything",
+      "live": null,
+      "name": "lv_named_account_priority",
+      "object_type": "companies",
+      "status": "documented_gap"
+    },
+    {
+      "declared": {
+        "fieldType": "select",
+        "groupName": "companyinformation",
+        "label": "Org Type",
+        "name": "lv_org_type",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "governing_body_league",
+            "value": "governing_body_league"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "content_producer",
+            "value": "content_producer"
+          },
+          {
+            "displayOrder": 2,
+            "hidden": false,
+            "label": "broadcaster",
+            "value": "broadcaster"
+          },
+          {
+            "displayOrder": 3,
+            "hidden": false,
+            "label": "individual_club_team",
+            "value": "individual_club_team"
+          },
+          {
+            "displayOrder": 4,
+            "hidden": false,
+            "label": "regulator",
+            "value": "regulator"
+          },
+          {
+            "displayOrder": 5,
+            "hidden": false,
+            "label": "gambling_operator",
+            "value": "gambling_operator"
+          },
+          {
+            "displayOrder": 6,
+            "hidden": false,
+            "label": "hardware_vendor",
+            "value": "hardware_vendor"
+          },
+          {
+            "displayOrder": 7,
+            "hidden": false,
+            "label": "other",
+            "value": "other"
+          },
+          {
+            "displayOrder": 8,
+            "hidden": false,
+            "label": "unknown",
+            "value": "unknown"
+          }
+        ],
+        "type": "enumeration"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-17T08:19:21.834Z",
+        "createdUserId": "93450314",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "select",
+        "formField": true,
+        "groupName": "companyinformation",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "Org Type",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_org_type",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "governing_body_league",
+            "value": "governing_body_league"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "content_producer",
+            "value": "content_producer"
+          },
+          {
+            "displayOrder": 2,
+            "hidden": false,
+            "label": "broadcaster",
+            "value": "broadcaster"
+          },
+          {
+            "displayOrder": 3,
+            "hidden": false,
+            "label": "individual_club_team",
+            "value": "individual_club_team"
+          },
+          {
+            "displayOrder": 4,
+            "hidden": false,
+            "label": "regulator",
+            "value": "regulator"
+          },
+          {
+            "displayOrder": 5,
+            "hidden": false,
+            "label": "gambling_operator",
+            "value": "gambling_operator"
+          },
+          {
+            "displayOrder": 6,
+            "hidden": false,
+            "label": "hardware_vendor",
+            "value": "hardware_vendor"
+          },
+          {
+            "displayOrder": 7,
+            "hidden": false,
+            "label": "other",
+            "value": "other"
+          },
+          {
+            "displayOrder": 8,
+            "hidden": false,
+            "label": "unknown",
+            "value": "unknown"
+          }
+        ],
+        "type": "enumeration",
+        "updatedAt": "2026-07-30T10:46:05.713Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_org_type",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "date",
+        "groupName": "lv_enrichment",
+        "label": "LV Org Type Verified At",
+        "name": "lv_org_type_verified_at",
+        "options": [],
+        "type": "datetime"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:06.724Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "date",
+        "formField": false,
+        "groupName": "lv_enrichment",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Org Type Verified At",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_org_type_verified_at",
+        "options": [],
+        "type": "datetime",
+        "updatedAt": "2026-07-22T01:28:06.724Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_org_type_verified_at",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "booleancheckbox",
+        "groupName": "companyinformation",
+        "label": "Content",
+        "name": "lv_produces_content",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-17T08:19:42.204Z",
+        "createdUserId": "93450314",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "booleancheckbox",
+        "formField": true,
+        "groupName": "companyinformation",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "Content",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_produces_content",
+        "options": [
+          {
+            "description": "",
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "description": "",
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool",
+        "updatedAt": "2026-07-17T08:19:42.204Z",
+        "updatedUserId": "93450314"
+      },
+      "name": "lv_produces_content",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "date",
+        "groupName": "lv_enrichment",
+        "label": "LV Produces Content Verified At",
+        "name": "lv_produces_content_verified_at",
+        "options": [],
+        "type": "datetime"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:07.442Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "date",
+        "formField": false,
+        "groupName": "lv_enrichment",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Produces Content Verified At",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_produces_content_verified_at",
+        "options": [],
+        "type": "datetime",
+        "updatedAt": "2026-07-22T01:28:07.442Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_produces_content_verified_at",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": null,
+      "detail": "design-only name (superseded local-MVP design, CLAUDE.md), never implemented live -- reported, not a failure, not a signal to create anything",
+      "live": null,
+      "name": "lv_recommended_motion",
+      "object_type": "companies",
+      "status": "documented_gap"
+    },
+    {
+      "declared": {
+        "fieldType": "select",
+        "groupName": "lv_enrichment",
+        "label": "LV Revenue Band",
+        "name": "lv_revenue_band",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "<1M",
+            "value": "<1M"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "1-5M",
+            "value": "1-5M"
+          },
+          {
+            "displayOrder": 2,
+            "hidden": false,
+            "label": "5-50M",
+            "value": "5-50M"
+          },
+          {
+            "displayOrder": 3,
+            "hidden": false,
+            "label": "50-500M",
+            "value": "50-500M"
+          },
+          {
+            "displayOrder": 4,
+            "hidden": false,
+            "label": "500-750M",
+            "value": "500-750M"
+          },
+          {
+            "displayOrder": 5,
+            "hidden": false,
+            "label": "750M-1B",
+            "value": "750M-1B"
+          },
+          {
+            "displayOrder": 6,
+            "hidden": false,
+            "label": "1B-1.2B",
+            "value": "1B-1.2B"
+          },
+          {
+            "displayOrder": 7,
+            "hidden": false,
+            "label": "1.2B+",
+            "value": "1.2B+"
+          },
+          {
+            "displayOrder": 8,
+            "hidden": false,
+            "label": "Unknown",
+            "value": "unknown"
+          }
+        ],
+        "type": "enumeration"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:03.378Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "select",
+        "formField": false,
+        "groupName": "lv_enrichment",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Revenue Band",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_revenue_band",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "<1M",
+            "value": "<1M"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "1-5M",
+            "value": "1-5M"
+          },
+          {
+            "displayOrder": 2,
+            "hidden": false,
+            "label": "5-50M",
+            "value": "5-50M"
+          },
+          {
+            "displayOrder": 3,
+            "hidden": false,
+            "label": "50-500M",
+            "value": "50-500M"
+          },
+          {
+            "displayOrder": 4,
+            "hidden": false,
+            "label": "500-750M",
+            "value": "500-750M"
+          },
+          {
+            "displayOrder": 5,
+            "hidden": false,
+            "label": "750M-1B",
+            "value": "750M-1B"
+          },
+          {
+            "displayOrder": 6,
+            "hidden": false,
+            "label": "1B-1.2B",
+            "value": "1B-1.2B"
+          },
+          {
+            "displayOrder": 7,
+            "hidden": false,
+            "label": "1.2B+",
+            "value": "1.2B+"
+          },
+          {
+            "displayOrder": 8,
+            "hidden": false,
+            "label": "Unknown",
+            "value": "unknown"
+          }
+        ],
+        "type": "enumeration",
+        "updatedAt": "2026-07-22T01:28:03.378Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_revenue_band",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "booleancheckbox",
+        "groupName": "lv_enrichment",
+        "label": "LV Sponsorship Reliant",
+        "name": "lv_sponsorship_reliant",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:29:25Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "booleancheckbox",
+        "formField": false,
+        "groupName": "lv_enrichment",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Sponsorship Reliant",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_sponsorship_reliant",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool",
+        "updatedAt": "2026-07-22T01:29:25Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_sponsorship_reliant",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "number",
+        "groupName": "companyinformation",
+        "label": "Org Type Score",
+        "name": "org_type_score",
+        "options": [],
+        "type": "number"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-08-04T18:40:02.878Z",
+        "createdUserId": "93450314",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "number",
+        "formField": true,
+        "groupName": "companyinformation",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "Org Type Score",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "org_type_score",
+        "numberDisplayHint": "unformatted",
+        "options": [],
+        "showCurrencySymbol": false,
+        "type": "number",
+        "updatedAt": "2026-08-04T18:40:02.878Z",
+        "updatedUserId": "93450314"
+      },
+      "name": "org_type_score",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "number",
+        "groupName": "companyinformation",
+        "label": "Produces Content Score",
+        "name": "produces_content_score",
+        "options": [],
+        "type": "number"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-08-06T08:00:24.840Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "number",
+        "formField": false,
+        "groupName": "companyinformation",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "Produces Content Score",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "produces_content_score",
+        "numberDisplayHint": "unformatted",
+        "options": [],
+        "type": "number",
+        "updatedAt": "2026-08-06T08:02:33.058Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "produces_content_score",
+      "object_type": "companies",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "text",
+        "groupName": "lv_enrichment_contacts",
+        "label": "Lusha Contact Id",
+        "name": "lusha_contact_id",
+        "options": [],
+        "type": "string"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-30T09:35:00.653Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "text",
+        "formField": false,
+        "groupName": "lv_enrichment_contacts",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "Lusha Contact Id",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lusha_contact_id",
+        "options": [],
+        "type": "string",
+        "updatedAt": "2026-07-30T09:35:00.653Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lusha_contact_id",
+      "object_type": "contacts",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "textarea",
+        "groupName": "lv_enrichment_contacts",
+        "label": "LV Anti-ICP Reason",
+        "name": "lv_anti_icp_reason",
+        "options": [],
+        "type": "string"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:20.298Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "textarea",
+        "formField": false,
+        "groupName": "lv_enrichment_contacts",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Anti-ICP Reason",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_anti_icp_reason",
+        "options": [],
+        "type": "string",
+        "updatedAt": "2026-07-22T01:28:20.298Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_anti_icp_reason",
+      "object_type": "contacts",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "textarea",
+        "groupName": "lv_enrichment_contacts",
+        "label": "LV Contact Enrichment Provenance",
+        "name": "lv_contact_enrichment_provenance",
+        "options": [],
+        "type": "string"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:15.493Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "textarea",
+        "formField": false,
+        "groupName": "lv_enrichment_contacts",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Contact Enrichment Provenance",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_contact_enrichment_provenance",
+        "options": [],
+        "type": "string",
+        "updatedAt": "2026-07-22T01:28:15.493Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_contact_enrichment_provenance",
+      "object_type": "contacts",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "booleancheckbox",
+        "groupName": "lv_enrichment_contacts",
+        "label": "LV Enrichment Needs Review",
+        "name": "lv_enrichment_needs_review",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:29:28.515Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "booleancheckbox",
+        "formField": false,
+        "groupName": "lv_enrichment_contacts",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Enrichment Needs Review",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_enrichment_needs_review",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool",
+        "updatedAt": "2026-07-22T01:29:28.515Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_enrichment_needs_review",
+      "object_type": "contacts",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "booleancheckbox",
+        "groupName": "lv_enrichment_contacts",
+        "label": "LV Enrichment Requested",
+        "name": "lv_enrichment_requested",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-29T00:11:58.673Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "booleancheckbox",
+        "formField": false,
+        "groupName": "lv_enrichment_contacts",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Enrichment Requested",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_enrichment_requested",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool",
+        "updatedAt": "2026-07-29T00:11:58.673Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_enrichment_requested",
+      "object_type": "contacts",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "booleancheckbox",
+        "groupName": "lv_enrichment_contacts",
+        "label": "LV Enrichment Review Approved",
+        "name": "lv_enrichment_review_approved",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:29:29.070Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "booleancheckbox",
+        "formField": false,
+        "groupName": "lv_enrichment_contacts",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Enrichment Review Approved",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_enrichment_review_approved",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool",
+        "updatedAt": "2026-07-22T01:29:29.070Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_enrichment_review_approved",
+      "object_type": "contacts",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "textarea",
+        "groupName": "lv_enrichment_contacts",
+        "label": "LV Enrichment Review Candidate JSON",
+        "name": "lv_enrichment_review_candidate_json",
+        "options": [],
+        "type": "string"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:17.920Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "textarea",
+        "formField": false,
+        "groupName": "lv_enrichment_contacts",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Enrichment Review Candidate JSON",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_enrichment_review_candidate_json",
+        "options": [],
+        "type": "string",
+        "updatedAt": "2026-07-22T01:28:17.920Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_enrichment_review_candidate_json",
+      "object_type": "contacts",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "textarea",
+        "groupName": "lv_enrichment_contacts",
+        "label": "LV Enrichment Review Reason",
+        "name": "lv_enrichment_review_reason",
+        "options": [],
+        "type": "string"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:17.382Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "textarea",
+        "formField": false,
+        "groupName": "lv_enrichment_contacts",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Enrichment Review Reason",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_enrichment_review_reason",
+        "options": [],
+        "type": "string",
+        "updatedAt": "2026-07-22T01:28:17.382Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_enrichment_review_reason",
+      "object_type": "contacts",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "date",
+        "groupName": "lv_enrichment_contacts",
+        "label": "LV Enrichment Reviewed At",
+        "name": "lv_enrichment_reviewed_at",
+        "options": [],
+        "type": "datetime"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:19.366Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "date",
+        "formField": false,
+        "groupName": "lv_enrichment_contacts",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Enrichment Reviewed At",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_enrichment_reviewed_at",
+        "options": [],
+        "type": "datetime",
+        "updatedAt": "2026-07-22T01:28:19.366Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_enrichment_reviewed_at",
+      "object_type": "contacts",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "text",
+        "groupName": "lv_enrichment_contacts",
+        "label": "LV Enrichment Reviewed By",
+        "name": "lv_enrichment_reviewed_by",
+        "options": [],
+        "type": "string"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:18.843Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "text",
+        "formField": false,
+        "groupName": "lv_enrichment_contacts",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Enrichment Reviewed By",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_enrichment_reviewed_by",
+        "options": [],
+        "type": "string",
+        "updatedAt": "2026-07-22T01:28:18.843Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_enrichment_reviewed_by",
+      "object_type": "contacts",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "select",
+        "groupName": "lv_enrichment_contacts",
+        "label": "LV Enrichment Status",
+        "name": "lv_enrichment_status",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Queued",
+            "value": "queued"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "Running",
+            "value": "running"
+          },
+          {
+            "displayOrder": 2,
+            "hidden": false,
+            "label": "Complete",
+            "value": "complete"
+          },
+          {
+            "displayOrder": 3,
+            "hidden": false,
+            "label": "Failed",
+            "value": "failed"
+          },
+          {
+            "displayOrder": 4,
+            "hidden": false,
+            "label": "Needs Review",
+            "value": "needs_review"
+          },
+          {
+            "displayOrder": 5,
+            "hidden": false,
+            "label": "Skipped",
+            "value": "skipped"
+          }
+        ],
+        "type": "enumeration"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-29T00:11:59.325Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "select",
+        "formField": false,
+        "groupName": "lv_enrichment_contacts",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Enrichment Status",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_enrichment_status",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Queued",
+            "value": "queued"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "Running",
+            "value": "running"
+          },
+          {
+            "displayOrder": 2,
+            "hidden": false,
+            "label": "Complete",
+            "value": "complete"
+          },
+          {
+            "displayOrder": 3,
+            "hidden": false,
+            "label": "Failed",
+            "value": "failed"
+          },
+          {
+            "displayOrder": 4,
+            "hidden": false,
+            "label": "Needs Review",
+            "value": "needs_review"
+          },
+          {
+            "displayOrder": 5,
+            "hidden": false,
+            "label": "Skipped",
+            "value": "skipped"
+          }
+        ],
+        "type": "enumeration",
+        "updatedAt": "2026-07-29T00:11:59.325Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_enrichment_status",
+      "object_type": "contacts",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "booleancheckbox",
+        "groupName": "lv_enrichment_contacts",
+        "label": "LV ICP Needs Review",
+        "name": "lv_icp_needs_review",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:29:29.581Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "booleancheckbox",
+        "formField": false,
+        "groupName": "lv_enrichment_contacts",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV ICP Needs Review",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_icp_needs_review",
+        "options": [
+          {
+            "displayOrder": 0,
+            "hidden": false,
+            "label": "Yes",
+            "value": "true"
+          },
+          {
+            "displayOrder": 1,
+            "hidden": false,
+            "label": "No",
+            "value": "false"
+          }
+        ],
+        "type": "bool",
+        "updatedAt": "2026-07-22T01:29:29.581Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_icp_needs_review",
+      "object_type": "contacts",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "textarea",
+        "groupName": "lv_enrichment_contacts",
+        "label": "LV ICP Score Breakdown",
+        "name": "lv_icp_score_breakdown",
+        "options": [],
+        "type": "string"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:20.808Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "textarea",
+        "formField": false,
+        "groupName": "lv_enrichment_contacts",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV ICP Score Breakdown",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_icp_score_breakdown",
+        "options": [],
+        "type": "string",
+        "updatedAt": "2026-07-22T01:28:20.808Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_icp_score_breakdown",
+      "object_type": "contacts",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "date",
+        "groupName": "lv_enrichment_contacts",
+        "label": "LV Jobtitle Verified At",
+        "name": "lv_jobtitle_verified_at",
+        "options": [],
+        "type": "datetime"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:15.977Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "date",
+        "formField": false,
+        "groupName": "lv_enrichment_contacts",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Jobtitle Verified At",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_jobtitle_verified_at",
+        "options": [],
+        "type": "datetime",
+        "updatedAt": "2026-07-22T01:28:15.977Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_jobtitle_verified_at",
+      "object_type": "contacts",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "text",
+        "groupName": "lv_enrichment_contacts",
+        "label": "LV LinkedIn URL",
+        "name": "lv_linkedin_url",
+        "options": [],
+        "type": "string"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:14.460Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "text",
+        "formField": false,
+        "groupName": "lv_enrichment_contacts",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV LinkedIn URL",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_linkedin_url",
+        "options": [],
+        "type": "string",
+        "updatedAt": "2026-07-22T01:28:14.460Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_linkedin_url",
+      "object_type": "contacts",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "date",
+        "groupName": "lv_enrichment_contacts",
+        "label": "LV Mobilephone Verified At",
+        "name": "lv_mobilephone_verified_at",
+        "options": [],
+        "type": "datetime"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:16.477Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "date",
+        "formField": false,
+        "groupName": "lv_enrichment_contacts",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Mobilephone Verified At",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_mobilephone_verified_at",
+        "options": [],
+        "type": "datetime",
+        "updatedAt": "2026-07-22T01:28:16.477Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_mobilephone_verified_at",
+      "object_type": "contacts",
+      "status": "in_sync"
+    },
+    {
+      "declared": {
+        "fieldType": "text",
+        "groupName": "lv_enrichment_contacts",
+        "label": "LV Persona Group",
+        "name": "lv_persona_group",
+        "options": [],
+        "type": "string"
+      },
+      "detail": "yaml and live agree",
+      "live": {
+        "archived": false,
+        "calculated": false,
+        "createdAt": "2026-07-22T01:28:14.981Z",
+        "createdUserId": "87581729",
+        "dataSensitivity": "non_sensitive",
+        "description": "",
+        "displayOrder": -1,
+        "externalOptions": false,
+        "fieldType": "text",
+        "formField": false,
+        "groupName": "lv_enrichment_contacts",
+        "hasUniqueValue": false,
+        "hidden": false,
+        "label": "LV Persona Group",
+        "modificationMetadata": {
+          "archivable": true,
+          "readOnlyDefinition": false,
+          "readOnlyValue": false
+        },
+        "name": "lv_persona_group",
+        "options": [],
+        "type": "string",
+        "updatedAt": "2026-07-22T01:28:14.981Z",
+        "updatedUserId": "87581729"
+      },
+      "name": "lv_persona_group",
+      "object_type": "contacts",
+      "status": "in_sync"
+    }
+  ],
+  "scope": {
+    "object_types": [
+      "companies",
+      "contacts"
+    ],
+    "property_count": 54
+  },
+  "summary": {
+    "documented_gap": 5,
+    "in_sync": 49
+  }
+}
