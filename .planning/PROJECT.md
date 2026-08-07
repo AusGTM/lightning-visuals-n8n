@@ -11,7 +11,17 @@ team, not a customer-facing product.
 
 ## Current State
 
-**Shipped: v0.4 — Reachability & Verification Debt (2026-07-29).** No new capability by design —
+**In progress: v0.7 — HubSpot Scoring Engine Remediation. Phase 40 complete (2026-08-07).**
+The ICP rubric now executes correctly inside HubSpot on the fix-in-place path: all ten validated
+defects (F1–F10) closed live — textbook Tier-A company scores 80/A entirely in HubSpot off
+canonical `lv_*` inputs; veto ownership moved to the n8n pipeline (all three hard vetoes
+individually PATCH-proven with rubric-exact reasons, symmetric clear proven, tier re-enrolls on
+flag change); a two-tier parity harness stands guard (`tests/test_scoring_parity.py` +
+`scripts/run_scoring_parity.py`, F4/F7/F9/F10 as named regression cases); record writes stay
+gated behind bounded operator-armed windows (`operator-claude-plugin/scripts/scheduled_arm.py`).
+Remaining: Phase 41 (validation data import + portfolio backfill), Phase 42 (artifact cleanup).
+
+**Previously shipped: v0.4 — Reachability & Verification Debt (2026-07-29).** No new capability by design —
 the milestone cleared every debt the v0.3 close deferred: BUG 23 (`contact:create` structurally
 unreachable) fixed with dual live canary; a numeric provider industry code can no longer win the
 waterfall or survive normalization; `lv_sponsorship_reliant` and `lv_persona_group` wired AND given
@@ -274,4 +284,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-07-29 after v0.4 milestone (Reachability & Verification Debt shipped and archived; ledger 6/6, zero operator debt)*
+*Last updated: 2026-08-07 after Phase 40 completion (v0.7 scoring engine remediation — F1-F10 closed live, veto pipeline-owned, parity harness standing)*

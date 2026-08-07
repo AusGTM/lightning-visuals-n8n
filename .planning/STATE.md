@@ -4,11 +4,11 @@ milestone: v0.7
 milestone_name: HubSpot Scoring Engine Remediation
 current_phase: 40
 current_phase_name: Scoring Engine, Veto & Parity Remediation
-status: executing
-stopped_at: Completed 40-07-PLAN.md
-last_updated: "2026-08-07T11:10:00.000Z"
+status: phase_complete
+stopped_at: Phase 40 sealed — verification passed, UAT resolved, all 12 requirements complete
+last_updated: "2026-08-07T03:45:00.000Z"
 last_activity: 2026-08-07
-last_activity_desc: 40-07 complete (Phase 40 CLOSED — ENGINE-01 proven live end to end, 80/A off canonical inputs only; batch_update_companies + D-10 component-seeding backfill built and proven on the portal's entire canonical-input-populated real-record population (n=1, Melbourne Racing Club); committed PARITY-01 verdict parity-report-final.json, PASS with 1 documented Needs Review divergence, 0 real findings; VETO-01/VETO-02 confirmed empirically still blocked on the pipeline write-gate arming gate, out of this plan's scope)
+last_activity_desc: Phase 40 SEALED — verifier 10/12 + UAT closure of the last 2 (VETO-01/VETO-02) with live evidence; all three hard vetoes individually PATCH-proven with rubric-exact reasons, symmetric clear proven (no one-way latch, tier moved D→C on clear); two load-bearing bugs found+fixed live (scheduled_arm chunking bf9cecd; missing lv_country_region_normalized in company fetch CSV 00f6f2b — spurious non-ANZ veto on AU records); code review 0C/4W all fixed; suites 2308 pytest + 625 node green
 progress:
   total_phases: 5
   completed_phases: 2
@@ -21,9 +21,9 @@ progress:
 
 ## Current Position
 
-Phase: 40 (Scoring Engine, Veto & Parity Remediation) — COMPLETE
-Next: Phase 41 (portfolio-wide backfill + data import, DATA-01/DATA-02) — not yet planned.
-Status: Phase 40 complete — all 7 plans done (01-07)
+Phase: 40 (Scoring Engine, Veto & Parity Remediation) — COMPLETE & SEALED (verification + UAT resolved 2026-08-07)
+Next: Phase 41 (portfolio-wide backfill + data import, DATA-01/DATA-02) — run /gsd-discuss-phase 41 or /gsd-plan-phase 41
+Status: Phase 40 sealed — 7/7 plans, 12/12 requirements (ENGINE-01..07, VETO-01..03, PARITY-01..02) complete with live evidence
 Last activity: 2026-08-07 — 40-07 complete (Phase 40 closed): ENGINE-01 live-proven (80/A entirely inside HubSpot off canonical inputs — org_type_score=40, produces_content_score=20, geography_score=10, annual_revenue_score=10, gambling_score=0); D-10 backfill mechanism (`scripts/backfill_seed_company_scores.py`) built, gated, and proven on the real-record sample (Melbourne Racing Club, id 9604614548 — the entire population of companies portal-wide carrying any canonical lv_* input); PARITY-01 verdict committed (`parity-report-final.json`, PASS with 1 documented Needs Review divergence, 0 real findings, assertions_executed=1); full live fixture tier 56/56 passed excluding the 5 veto_set/veto_clear cases, which are empirically confirmed blocked on the pre-existing VETO-01/VETO-02 pipeline write-gate arming gate (not a regression, not this plan's scope — WINDOWS.md id 5)
 Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39-path-decision-fit-score-verification/39-DECISION.md`
 
