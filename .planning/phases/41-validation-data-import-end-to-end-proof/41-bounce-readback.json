@@ -1,0 +1,48 @@
+{
+  "bounced": [
+    {
+      "name": "LV Enrichment (Cloud template)",
+      "id": "950HPb7a1GgSAIyZ",
+      "deactivate_verdict": "verified",
+      "activate_verdict": "verified",
+      "observed_active": true
+    },
+    {
+      "name": "LV Scheduled Maintenance (Cloud)",
+      "id": "1fXPuIabz3RsAHgn",
+      "deactivate_verdict": "verified",
+      "activate_verdict": "verified",
+      "observed_active": true
+    }
+  ],
+  "readback": {
+    "LV Enrichment (Cloud template)": {
+      "id": "950HPb7a1GgSAIyZ",
+      "write_safety": {
+        "value": "false",
+        "nodes": [
+          "Decide Action",
+          "Decide Company Action"
+        ],
+        "disagreement": null
+      },
+      "june_markers_present": [
+        "june_2026"
+      ]
+    },
+    "LV Scheduled Maintenance (Cloud)": {
+      "id": "1fXPuIabz3RsAHgn",
+      "write_safety": {
+        "value": "false",
+        "nodes": [
+          "Dedupe Set Needs Review Write Gate",
+          "Review Apply Update Write Gate",
+          "SJ-1 Set Requested Write Gate",
+          "SJ-2 Set Requested Write Gate"
+        ],
+        "disagreement": null
+      },
+      "june_markers_present": []
+    }
+  }
+}
