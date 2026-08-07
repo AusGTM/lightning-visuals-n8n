@@ -94,12 +94,12 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
   pipeline-owned vetoes ever return they are born guarded. (P2+P4: latent, unreachable today —
   the repo test proving the candidate path dead is extended, not weakened.)
 
-- [ ] **PIPE-03**: lv_icp_score_breakdown has a producer — the Phase 40 parity harness (which
+- [x] **PIPE-03**: lv_icp_score_breakdown has a producer — the Phase 40 parity harness (which
   already recomputes via compute_icp_score) emits and writes the breakdown JSON for the records
   it checks, so a challenged tier can explain itself. Truncated at the property limit, stamped
   with rubric version.
 
-- [ ] **PIPE-04**: lv_closed_lost_reason is consumed — a report artifact aggregates loss
+- [x] **PIPE-04**: lv_closed_lost_reason is consumed — a report artifact aggregates loss
   reasons against the current rubric version and surfaces them at review time. Consumption
   only; rubric weight changes stay behind the REQ-signoff-gate.
 
@@ -145,7 +145,7 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 | CLEAN-01 | Phase 42 | Complete (42-01/42-02 reconciliation + 42-03 archival derivation; zero orphans found, nothing to archive) |
 | PIPE-01 | Phase 43 | Complete |
 | PIPE-02 | Phase 43 | Complete |
-| PIPE-03 | Phase 43 | Pending |
-| PIPE-04 | Phase 43 | Pending |
+| PIPE-03 | Phase 43 | Complete |
+| PIPE-04 | Phase 43 | Complete |
 
 Coverage: 16/16 v0.7 requirements mapped. No orphans.

@@ -224,7 +224,7 @@ they are deliberately absent here.)
 
   5. Suites green above baselines; arming grep 0; no n8n JSON hand-edits — builder only.
 
-**Plans**: 3/5 plans executed
+**Plans**: 4/5 plans executed
 then the Phase-41-gated deploy)
 
 - [x] 43-01-PLAN.md — PIPE-01/PIPE-02 offline: coerce all six broken boolean write sites at
@@ -236,7 +236,7 @@ then the Phase-41-gated deploy)
 - [x] 43-03-PLAN.md — PIPE-04: repo-root loss-reason aggregator (empty-dataset-correct) plus
       an operator-plugin skill that shells out to it, shipped behind a version bump
 
-- [ ] 43-04-PLAN.md — Operator live proofs: EQ-filter match, breakdown read-back, the two
+- [x] 43-04-PLAN.md — Operator live proofs: EQ-filter match, breakdown read-back, the two
       unanswered loss-reason questions, plugin install
 
 - [ ] 43-05-PLAN.md — Deploy and bounce the regenerated workflows, gated on Phase 41 having
@@ -253,4 +253,4 @@ Phases execute in numeric order: 39 → 40 → 41 → 42 → 43
 | 40. Scoring Engine, Veto & Parity Remediation | 7/7 | Complete | 2026-08-07 |
 | 41. Validation Data Import & End-to-End Proof | 0/TBD | Not started | - |
 | 42. Scoring Artifact Cleanup & Reconciliation | 2/3 | In Progress|  |
-| 43. Pipeline Scoring Hygiene & Explainability | 3/5 | In Progress|  |
+| 43. Pipeline Scoring Hygiene & Explainability | 4/5 | In Progress|  |

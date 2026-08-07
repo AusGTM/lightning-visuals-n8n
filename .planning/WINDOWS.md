@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 1
+open_count: 2
 waived_count: 0
 fixed_count: 4
-total_count: 5
-last_updated: 2026-08-06T22:39:58.019Z
+total_count: 6
+last_updated: 2026-08-07T19:53:39.099Z
 ---
 
 # Broken Windows Ledger
@@ -20,6 +20,7 @@ last_updated: 2026-08-06T22:39:58.019Z
 | 3 | 40 | deviation | scripts/build_cloud_workflows.py |  | SJ-3 Dispatch To Enrichment errors "Missing node to start execution" (live n8n executions 1891/1893) — LV Enrichment (Cloud template) has no Execute Workflow Trigger, so the 15-min lv_enrichment_requested poller can never reach enrichment. Blocks the entire scheduled-maintenance refresh mechanism (SJ-1/SJ-2/SJ-3), not just the veto fields. RESOLVED WITH EVIDENCE (2026-08-06): live SJ-3 tick (execution 1931) matched a disposable company and dispatched into LV Enrichment (Cloud template) sub-execution 1932 end-to-end with zero errors — no "Missing node to start execution" on this or two subsequent ticks (1934, 1937). Full trail: .planning/phases/40-scoring-engine-remediation-notes/VETO-WRITE-EVIDENCE.md. | fixed |  | 2026-08-06T07:49:45.000Z | 2026-08-06T10:13:15.258Z |
 | 4 | 40 | deviation | tests/test_scoring_parity.py | 377 | test_veto_clear_after_correction patches "enrichment_requested" instead of "lv_enrichment_requested" (the real SJ-3 poller-search property) — the same wrong-property bug found and fixed in docs/OPERATOR-VETO-REFRESH.md's first draft. As written, this live test's refresh step will never actually trigger a poller pickup. | fixed |  | 2026-08-06T07:49:45.000Z | 2026-08-06T22:39:58.019Z |
 | 5 | 40 | deviation | tests/test_scoring_parity.py |  | veto_set/multiple_reasons/veto_clear (5 live test cases) structurally cannot pass without an armed n8n pipeline write-gate window (scheduled_arm.py, VETO-01/VETO-02) -- confirmed empirically in 40-07, not this plan's scope per 40-03/40-05/40-06 precedent. UPDATE (2026-08-07): all three hard vetoes and the symmetric clear are now live-PATCH-proven via scheduled_arm.py (VETO-WRITE-EVIDENCE.md) -- VETO-01/VETO-02 marked complete in REQUIREMENTS.md. Two real defects were found and fixed along the way (scheduled_arm.py's missing dispatch-chunking against the backend's per-request record cap; the company existingRecord fetch's missing lv_country_region_normalized, which fired a spurious non-ANZ veto on true-AU/NZ companies). Left open: the structural condition itself is unchanged -- these 5 pytest live cases still require a per-run bounded arm window to execute (RUN_LIVE_PARITY + an armed scheduled_arm.py cycle in the SAME run), which remains the deliberate operational model, not a defect to close. | open |  | 2026-08-06T22:39:50.576Z |  |
+| 6 | 43 | deviation | tests/test_review_flag_eq_filter.py |  | test_corrected_string_patch_is_matched_by_the_awaiting_review_eq_filter flakes on first run: PATCHes a brand-new company then searches immediately, with no wait for HubSpot search-index lag (~20s observed). Direct reproduction with a poll confirms the EQ filter itself matches correctly; the test lacks a poll/wait between create+patch and search. | open |  | 2026-08-07T19:53:39.099Z |  |
 
 ````json
 [
@@ -81,6 +82,18 @@ last_updated: 2026-08-06T22:39:58.019Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-08-06T22:39:50.576Z",
+    "resolved_at": null
+  },
+  {
+    "id": 6,
+    "kind": "deviation",
+    "phase": "43",
+    "file": "tests/test_review_flag_eq_filter.py",
+    "line": null,
+    "description": "test_corrected_string_patch_is_matched_by_the_awaiting_review_eq_filter flakes on first run: PATCHes a brand-new company then searches immediately, with no wait for HubSpot search-index lag (~20s observed). Direct reproduction with a poll confirms the EQ filter itself matches correctly; the test lacks a poll/wait between create+patch and search.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-08-07T19:53:39.099Z",
     "resolved_at": null
   }
 ]
