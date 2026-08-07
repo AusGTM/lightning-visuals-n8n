@@ -690,6 +690,102 @@ def test_empty_sample_still_fails_even_with_provenance_required(monkeypatch):
     assert "zero assertions" in report["verdict"]
 
 
+# --------------------------------------------------------------------------------------
+# Phase 43 Plan 02, Task 1 (PIPE-03/D-02/C4) -- serialize_breakdown offline tests. No
+# network: a real compute_icp_score result round-trips, and a SYNTHETIC oversized
+# breakdown is constructed here (per 43-02-PLAN.md fact 3: a real payload is a few
+# hundred bytes and can never trip shedding on its own).
+# --------------------------------------------------------------------------------------
+
+def test_serialize_breakdown_round_trips_a_real_result():
+    import scripts.run_scoring_parity as parity_script
+
+    r = score({
+        "lv_org_type": "governing_body_league",
+        "lv_produces_content": True,
+        "lv_country_region_normalized": "AU",
+        "lv_revenue_band": "50-500M",
+    })
+    text = parity_script.serialize_breakdown(r)
+    parsed = json.loads(text)
+    assert parsed["total"] == r.score == 80
+    assert parsed["version"] == CFG["version"]
+    assert parsed["truncated"] is False
+    assert parsed["hard_vetoes"] == []
+    assert {"signal": "org_type", "value": "governing_body_league", "points": 40} in parsed["components"]
+
+
+def test_serialize_breakdown_sheds_component_detail_before_bytes():
+    """A SYNTHETIC oversized breakdown (fact 3 -- real ones never trip this). Bulky
+    per-component `value` strings push the naive dump over budget; shedding drops just
+    the `value` key and keeps signal/points/hard_vetoes/total intact."""
+    import scripts.run_scoring_parity as parity_script
+    from src.schemas import ICPScoreResult
+
+    big_components = [
+        {"signal": f"synthetic_{i}", "value": "x" * 500, "points": i}
+        for i in range(300)
+    ]
+    result = ICPScoreResult(
+        score=42,
+        tier="B",
+        anti_icp_flag=False,
+        recommended_motion="work_direct",
+        confidence=85,
+        breakdown={
+            "version": "lv-icp-v0.1",
+            "components": big_components,
+            "hard_vetoes": ["Non-ANZ geography"],
+            "graduated_deductions": [],
+        },
+        scoring_version="lv-icp-v0.1",
+    )
+
+    text = parity_script.serialize_breakdown(result)
+    assert len(text) <= parity_script.BREAKDOWN_PROPERTY_LIMIT
+    parsed = json.loads(text)
+    assert parsed["total"] == 42
+    assert parsed["version"] == "lv-icp-v0.1"
+    assert parsed["truncated"] is True
+    assert parsed["hard_vetoes"] == ["Non-ANZ geography"]
+    assert len(parsed["components"]) == 300
+    for c in parsed["components"]:
+        assert set(c.keys()) == {"signal", "points"}
+
+
+def test_serialize_breakdown_falls_back_to_counts_when_shedding_detail_is_not_enough():
+    """A SYNTHETIC breakdown so large that dropping component values and bounding veto
+    strings still isn't enough (thousands of long hard-veto reasons). The output must
+    still be valid JSON within budget and still carry the total -- never a byte slice
+    through the middle of the assembled string (the rejected merge_policy.py idiom)."""
+    import scripts.run_scoring_parity as parity_script
+    from src.schemas import ICPScoreResult
+
+    result = ICPScoreResult(
+        score=-20,
+        tier="D",
+        anti_icp_flag=True,
+        recommended_motion="disqualify",
+        confidence=85,
+        breakdown={
+            "version": "lv-icp-v0.1",
+            "components": [{"signal": "org_type", "value": "other", "points": 0}],
+            "hard_vetoes": ["x" * 300] * 5000,
+            "graduated_deductions": [],
+        },
+        scoring_version="lv-icp-v0.1",
+    )
+
+    text = parity_script.serialize_breakdown(result)
+    assert len(text) <= parity_script.BREAKDOWN_PROPERTY_LIMIT
+    parsed = json.loads(text)
+    assert parsed["total"] == -20
+    assert parsed["version"] == "lv-icp-v0.1"
+    assert parsed["truncated"] is True
+    # A naive json.dumps(...)[:60000] slice on this input would cut mid-string and fail
+    # to parse -- json.loads succeeding above is the proof this path was never taken.
+
+
 def test_parity_02_named_case_completeness():
     """Collection-time guard, runs offline so it can never be skipped away: PARITY-02
     requires F4/F7/F9/F10 encoded as named, selectable regression cases. This makes that

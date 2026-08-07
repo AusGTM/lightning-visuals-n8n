@@ -52,6 +52,81 @@ EXPECTED_PORTAL_ID = "22617666"
 
 RUBRIC_PATH = ROOT / "config" / "icp_scoring.yaml"
 
+# D-02: the HubSpot property limit this serializer's shedding budget is set against
+# (config/hubspot_properties.yaml: lv_icp_score_breakdown is `type: string,
+# fieldType: textarea`, 60k chars).
+BREAKDOWN_PROPERTY_LIMIT = 60000
+
+# Shed 2's bound on each individual hard-veto reason string, once shedding component
+# detail alone wasn't enough.
+_HARD_VETO_REASON_MAX_LEN = 120
+
+
+def serialize_breakdown(result) -> str:
+    """D-02: serialize an ICPScoreResult's breakdown into a string that always fits
+    BREAKDOWN_PROPERTY_LIMIT and always parses as JSON -- never a byte slice through the
+    middle of the assembled string (the rejected src/merge_policy.py anti-pattern, C4).
+
+    `breakdown` (src/icp_scoring.py) carries no `total` key -- the score lives only on
+    the sibling `result.score` -- so it is added here on every path, including the
+    shed/fallback ones.
+
+    Shed order when over budget: (1) drop each component's `value`, keep `signal` and
+    `points`; (2) bound each hard_vetoes reason string's length; (3) pathological
+    fallback -- keep only version/total/counts, still valid JSON, still carries the
+    total. `truncated` is stamped True only on a path that actually shed something.
+    """
+    breakdown = result.breakdown
+    version = breakdown.get("version")
+    total = result.score
+    graduated_deductions = breakdown.get("graduated_deductions", [])
+    hard_vetoes = list(breakdown.get("hard_vetoes", []))
+    components = breakdown.get("components", [])
+
+    def _dump(components_, hard_vetoes_, truncated):
+        return json.dumps({
+            "version": version,
+            "components": components_,
+            "hard_vetoes": hard_vetoes_,
+            "graduated_deductions": graduated_deductions,
+            "total": total,
+            "truncated": truncated,
+        })
+
+    text = _dump(components, hard_vetoes, False)
+    if len(text) <= BREAKDOWN_PROPERTY_LIMIT:
+        return text
+
+    # Shed 1: drop each component's `value` (the detail); keep `signal` and `points`.
+    stripped_components = [
+        {"signal": c.get("signal"), "points": c.get("points")} for c in components
+    ]
+    text = _dump(stripped_components, hard_vetoes, True)
+    if len(text) <= BREAKDOWN_PROPERTY_LIMIT:
+        return text
+
+    # Shed 2: bound each hard-veto reason string's length.
+    bounded_vetoes = [
+        v[:_HARD_VETO_REASON_MAX_LEN] if isinstance(v, str) else v
+        for v in hard_vetoes
+    ]
+    text = _dump(stripped_components, bounded_vetoes, True)
+    if len(text) <= BREAKDOWN_PROPERTY_LIMIT:
+        return text
+
+    # Shed 3: pathological volume (e.g. thousands of components/vetoes) -- keep only
+    # counts. Still valid JSON, still carries version + total, never a slice.
+    return json.dumps({
+        "version": version,
+        "components": [],
+        "components_count": len(components),
+        "hard_vetoes": [],
+        "hard_vetoes_count": len(hard_vetoes),
+        "graduated_deductions": [],
+        "total": total,
+        "truncated": True,
+    })
+
 
 def _has_credentials() -> bool:
     return bool(os.getenv("HUBSPOT_PRIVATE_APP_TOKEN"))
