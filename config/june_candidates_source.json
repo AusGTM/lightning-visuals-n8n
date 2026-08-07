@@ -1,0 +1,1106 @@
+{
+  "9604614548": {
+    "id": "9604614548",
+    "name": "Melbourne Racing Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "200-500",
+    "evidence": "Major Victorian thoroughbred racing club operating Caulfield, Mornington & Sandown. Races (e.g. Caulfield Cup) broadcast/streamed via Racing.com/Gravity; sponsored by Sportsbet.",
+    "confidence": "high",
+    "sources": [
+      "https://www.gravitymedia.com/category/horse-racing/",
+      "https://thestraight.com.au/luxury-brands-shift-gears-as-racing-faces-global-sponsorship-competition/"
+    ]
+  },
+  "9605284724": {
+    "id": "9605284724",
+    "name": "Australian Turf Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "500+",
+    "evidence": "Sydney's principal thoroughbred racing club (Randwick, Rosehill). Hosts major race days broadcast/streamed via Sky/Racing.com and reliant on wagering & race sponsorships. Tagged gambling but is a racing club.",
+    "confidence": "high",
+    "sources": [
+      "https://www.australianturfclub.com.au/"
+    ]
+  },
+  "20538599475": {
+    "id": "20538599475",
+    "name": "RACE (Racing at Awapuni and Trentham Combined Enterprise Incorporated)",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "New Zealand",
+    "is_australia": false,
+    "employee_estimate": "50-100",
+    "evidence": "NZ not-for-profit umbrella owning Awapuni & Trentham racecourses, hosting 5 of NZ's 20 largest racing events. Thoroughbred race meetings streamed; event/sponsor reliant.",
+    "confidence": "high",
+    "sources": [
+      "https://jointheaction.co.nz/about-race",
+      "https://raceinc.co.nz/"
+    ]
+  },
+  "20943964946": {
+    "id": "20943964946",
+    "name": "The Rumble / Pacific Action Sports",
+    "org_type": "League/Governing-Body",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "10-50",
+    "evidence": "Operator of Australia's largest skateboarding pro tour & amateur series; partners Skate Australia for Olympic ranking. Title-sponsored (BMD); produces event/stream content.",
+    "confidence": "medium",
+    "sources": [
+      "https://www.therumble.com.au/",
+      "https://au.linkedin.com/company/therumble"
+    ]
+  },
+  "18973591368": {
+    "id": "18973591368",
+    "name": "Shepparton Harness Racing Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "10-50",
+    "evidence": "Victorian harness racing (trots) club. Race meetings streamed via Sky Racing / HRV; runs own YouTube channel of replays. Wagering & sponsor reliant.",
+    "confidence": "high",
+    "sources": [
+      "https://sheppartonhrc.com.au/",
+      "https://www.thetrots.com.au/racing/venues/shepparton/"
+    ]
+  },
+  "17861423879": {
+    "id": "17861423879",
+    "name": "Sportsbet",
+    "org_type": "Other",
+    "is_sports": false,
+    "produces_broadcast_or_streaming_content": false,
+    "sponsorship_reliant": false,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "1000+",
+    "evidence": "Australia's largest online corporate bookmaker (Flutter-owned). A wagering/gambling operator and sponsor of racing, not a sports org producing broadcast content. Out of ICP.",
+    "confidence": "high",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Sportsbet",
+      "https://www.sportsbet.com.au/"
+    ]
+  },
+  "9680907342": {
+    "id": "9680907342",
+    "name": "Sunshine Coast Turf Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "50-150",
+    "evidence": "Queensland thoroughbred racing club at Corbould Park, Caloundra; 70+ meetings/year broadcast/streamed via Sky/Racing Qld; own YouTube. Wagering & sponsor reliant.",
+    "confidence": "high",
+    "sources": [
+      "https://www.sctc.com.au/",
+      "https://www.racingqueensland.com.au/racing/club-details/thoroughbred/53300/sunshine-coast-turf-club"
+    ]
+  },
+  "14748141740": {
+    "id": "14748141740",
+    "name": "Scone Race Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "10-50",
+    "evidence": "NSW country thoroughbred racing club in the Hunter breeding region; annual Scone Racing Carnival. Meetings streamed via Sky Racing; sponsor & wagering reliant.",
+    "confidence": "high",
+    "sources": [
+      "https://www.sconeraceclub.com.au/",
+      "https://www.racingqueensland.com.au/racing/club-details/thoroughbred/22468/scone-race-club"
+    ]
+  },
+  "15388186399": {
+    "id": "15388186399",
+    "name": "Bunbury Trotting Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "5-30",
+    "evidence": "WA harness racing club at Donaldson Park, 20+ meetings/season. Races streamed via RWWA/Sky Racing; sponsor & wagering reliant.",
+    "confidence": "high",
+    "sources": [
+      "https://donaldsonpark.com.au/",
+      "https://racingwa.com.au/clubs/bunbury-trotting-club"
+    ]
+  },
+  "10024564084": {
+    "id": "10024564084",
+    "name": "Entain",
+    "org_type": "Other",
+    "is_sports": false,
+    "produces_broadcast_or_streaming_content": false,
+    "sponsorship_reliant": false,
+    "hq_country": "Isle of Man",
+    "is_australia": false,
+    "employee_estimate": "25,000+",
+    "evidence": "Global FTSE-100 sports betting & gaming operator (Ladbrokes, Neds, bwin, BetMGM JV). A wagering operator, not a sports org producing broadcast content. Out of ICP.",
+    "confidence": "high",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Entain",
+      "https://www.entaingroup.com/"
+    ]
+  },
+  "17317184159": {
+    "id": "17317184159",
+    "name": "Ironman",
+    "org_type": "League/Governing-Body",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "United States",
+    "is_australia": false,
+    "employee_estimate": "1000+",
+    "evidence": "The IRONMAN Group, world's largest participation-sports/triathlon series operator in 50+ countries. Pro Series broadcast live via ESPN/YouTube/DAZN; title-sponsor reliant. HQ Tampa USA.",
+    "confidence": "high",
+    "sources": [
+      "https://www.triathlete.com/culture/news/who-owns-ironman-who-owns-triathlon/",
+      "https://www.endurancesportswire.com/ironman-announces-partnership-with-espn-to-bring-live-coverage-of-the-ironman-pro-series-to-latin-america-and-the-caribbean/"
+    ]
+  },
+  "9605244179": {
+    "id": "9605244179",
+    "name": "Toowoomba Turf Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "20-50",
+    "evidence": "Thoroughbred club at Clifford Park, 45+ meetings/yr, races televised on Sky Racing; relies on Stallion Club partners and race-naming sponsorships.",
+    "confidence": "high",
+    "sources": [
+      "https://cliffordpark.com.au/toowoomba-turf-club/",
+      "https://cliffordpark.com.au/functions/community/naming-races/"
+    ]
+  },
+  "17317850381": {
+    "id": "17317850381",
+    "name": "Jam TV",
+    "org_type": "Broadcaster/Production",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": false,
+    "hq_country": "Italy",
+    "is_australia": false,
+    "employee_estimate": "50-200",
+    "evidence": "Sports broadcast/production company (jamtv.it, Italy); produces live sport content. B2B production house earns via contracts, not sponsorship.",
+    "confidence": "medium",
+    "sources": [
+      "https://x.com/jamtvit",
+      "https://www.gravitymedia.com/au/news-and-blogs/2024/apl-appoints-jam-tv-and-emg-gravity-media-as-new-production-partners/"
+    ]
+  },
+  "9663194467": {
+    "id": "9663194467",
+    "name": "Tasracing Pty",
+    "org_type": "League/Governing-Body",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "100-250",
+    "evidence": "Tasmania's governing body for thoroughbred, harness and greyhound racing; TasracingTV free live-streams vision; supports 6,400 jobs.",
+    "confidence": "high",
+    "sources": [
+      "https://tasracing.com.au/",
+      "https://form.tasracing.com.au/replays/"
+    ]
+  },
+  "9605284721": {
+    "id": "9605284721",
+    "name": "Geraldton Turf Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "5-20",
+    "evidence": "Oldest provincial race club in WA (est 1861), ~19 thoroughbred meetings/yr; racing vision distributed via RacingWA/Sky; sponsor-named feature races.",
+    "confidence": "high",
+    "sources": [
+      "https://racingwa.com.au/clubs/geraldton",
+      "https://www.geraldtonturfclub.com.au/about/about-geraldton-turf-club.aspx"
+    ]
+  },
+  "10021900550": {
+    "id": "10021900550",
+    "name": "Cairns Jockey Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "10-30",
+    "evidence": "Thoroughbred club at Ladbrokes Cannon Park, 14 meetings/yr inc Cairns Super Carnival; races on Sky Racing; naming-rights/sponsor partnerships.",
+    "confidence": "high",
+    "sources": [
+      "https://www.cairnsjockeyclub.com.au/",
+      "https://www.racingqueensland.com.au/racing/club-details/thoroughbred/50740/cairns-jockey-club"
+    ]
+  },
+  "18647353914": {
+    "id": "18647353914",
+    "name": "Surfing Australia",
+    "org_type": "League/Governing-Body",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "50-100",
+    "evidence": "National governing body for surfing; runs national events broadcast on Nine/Fox Sports plus original content; brand sponsorships fund programs/events.",
+    "confidence": "high",
+    "sources": [
+      "https://surfingaustralia.com/about/",
+      "https://surfingaustralia.com/partnerships/"
+    ]
+  },
+  "15387953738": {
+    "id": "15387953738",
+    "name": "Gloucester Park",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "20-50",
+    "evidence": "Home of WA harness racing (WA Trotting Assoc), races Fri/Tue nights broadcast on Sky Racing; rich stakes funded via wagering and sponsorships.",
+    "confidence": "high",
+    "sources": [
+      "https://www.gloucesterpark.com.au/",
+      "https://racingwa.com.au/clubs/gloucester-park-harness-racing"
+    ]
+  },
+  "15008671672": {
+    "id": "15008671672",
+    "name": "Racing NSW",
+    "org_type": "League/Governing-Body",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "100-300",
+    "evidence": "Statutory principal governing body controlling NSW thoroughbred racing; oversees racing broadcast/media rights; major event sponsorships (e.g. The Everest).",
+    "confidence": "high",
+    "sources": [
+      "https://www.racingnsw.com.au/",
+      "https://en.wikipedia.org/wiki/Racing_NSW"
+    ]
+  },
+  "15860277364": {
+    "id": "15860277364",
+    "name": "GRAVITY MEDIA",
+    "org_type": "Broadcaster/Production",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": false,
+    "hq_country": "United Kingdom",
+    "is_australia": false,
+    "employee_estimate": "500+",
+    "evidence": "Global broadcast solutions firm; end-to-end live/near-live sports production (Australian Open etc.) across UK/AU/USA. B2B services revenue, not sponsorship.",
+    "confidence": "high",
+    "sources": [
+      "https://www.gravitymedia.com/live-sports-production/",
+      "https://www.gravitymedia.com/us/About-us"
+    ]
+  },
+  "9648957286": {
+    "id": "9648957286",
+    "name": "Racing Queensland",
+    "org_type": "League/Governing-Body",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "150-300",
+    "evidence": "Control body for QLD thoroughbred, harness and greyhound racing; produces racing results/vision; events carry naming-rights sponsorships.",
+    "confidence": "high",
+    "sources": [
+      "https://www.racingqueensland.com.au/racing",
+      "https://www.business.qld.gov.au/industries/hospitality-tourism-sport/racing"
+    ]
+  },
+  "10152245364": {
+    "id": "10152245364",
+    "name": "Harness Racing ACT",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "5-20",
+    "evidence": "Canberra Harness Racing Club; meetings broadcast on Sky Racing and Tabcorp agencies; sponsor feature races (e.g. Canberra Cup).",
+    "confidence": "high",
+    "sources": [
+      "https://capitaltrots.com.au/",
+      "https://region.com.au/2855/2855/"
+    ]
+  },
+  "18756544407": {
+    "id": "18756544407",
+    "name": "Addington",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "New Zealand",
+    "is_australia": false,
+    "employee_estimate": "50-100",
+    "evidence": "Addington Raceway & Events Centre, Christchurch; home of NZ harness racing (Metropolitan Trotting Club), hosts NZ Trotting Cup; races broadcast/streamed; sponsor-reliant.",
+    "confidence": "high",
+    "sources": [
+      "https://www.addington.co.nz/",
+      "https://en.wikipedia.org/wiki/Addington_Raceway"
+    ]
+  },
+  "9605273630": {
+    "id": "9605273630",
+    "name": "Port Macquarie Race Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "10-30",
+    "evidence": "Regional NSW thoroughbred racing club hosting race meetings broadcast via Sky Racing/racing.com; revenue includes race/event sponsorship. Classified from name+industry.",
+    "confidence": "medium",
+    "sources": [
+      "https://portmacquarieraceclub.com.au"
+    ]
+  },
+  "9681041418": {
+    "id": "9681041418",
+    "name": "The Creek Agency",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "30-60",
+    "evidence": "'The Creek' = Albion Park Harness Racing Club, Queensland's leading trots track (150+ meetings/yr); races broadcast on Sky Racing; major sponsor Ladbrokes.",
+    "confidence": "high",
+    "sources": [
+      "https://www.thecreek.com.au/sponsorship/",
+      "https://www.thecreek.com.au/ladbrokes-new-major-sponsor/"
+    ]
+  },
+  "19100977027": {
+    "id": "19100977027",
+    "name": "Newcastle Harness Racing Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "10-30",
+    "evidence": "NSW harness racing club (Broadmeadow) conducting race meetings broadcast via Sky Racing/HRNSW; sponsorship-reliant. Classified from name+industry.",
+    "confidence": "medium",
+    "sources": [
+      "https://www.newcastleharness.com.au"
+    ]
+  },
+  "16047156820": {
+    "id": "16047156820",
+    "name": "Queensland Racing Integrity Commission",
+    "org_type": "League/Governing-Body",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": false,
+    "sponsorship_reliant": false,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "150-250",
+    "evidence": "Independent statutory body regulating integrity/animal welfare across QLD's 3 racing codes; govt-funded regulator, not a content producer or sponsorship-reliant.",
+    "confidence": "high",
+    "sources": [
+      "https://qric.qld.gov.au/",
+      "https://qric.qld.gov.au/about-us/functions-powers/"
+    ]
+  },
+  "10215097384": {
+    "id": "10215097384",
+    "name": "Wyong",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "10-30",
+    "evidence": "Wyong Race Club, NSW thoroughbred racing club hosting meetings broadcast via Sky Racing/racing.com; sponsorship-reliant. Classified from name+industry.",
+    "confidence": "medium",
+    "sources": [
+      "https://www.wyongraceclub.com.au"
+    ]
+  },
+  "9605284723": {
+    "id": "9605284723",
+    "name": "Brisbane Racing Club (BRC)",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "100-200",
+    "evidence": "Major QLD thoroughbred club operating Eagle Farm & Doomben racecourses; metropolitan meetings broadcast on Sky Racing; carnival race naming-rights sponsorships.",
+    "confidence": "high",
+    "sources": [
+      "https://brc.com.au"
+    ]
+  },
+  "18756544344": {
+    "id": "18756544344",
+    "name": "Southside Racing",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "100-200",
+    "evidence": "Merged Cranbourne & Pakenham clubs; Victoria's 2nd largest racing club, 60+ meetings/yr broadcast via racing.com; race sponsorships + 4 community clubs.",
+    "confidence": "high",
+    "sources": [
+      "https://www.thoroughbrednews.com.au/News/Story/southside-racing-the-new-name-of-cranbourne-and-pakenham-racing-161559",
+      "https://www.facebook.com/SthsideRacing/"
+    ]
+  },
+  "15042301818": {
+    "id": "15042301818",
+    "name": "Panasonic Studio Productions",
+    "org_type": "Broadcaster/Production",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": false,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "30-60",
+    "evidence": "4K/HD outside-broadcast provider for Racing Queensland thoroughbred/harness/greyhound, delivering live productions to Sky Racing & FTA; fee-for-service, not sponsorship-reliant.",
+    "confidence": "high",
+    "sources": [
+      "https://pspvideo.com.au/",
+      "https://au.linkedin.com/company/panasonic-studio-productions"
+    ]
+  },
+  "19363725157": {
+    "id": "19363725157",
+    "name": "Racing.com Pty Ltd",
+    "org_type": "Broadcaster/Production",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "100-200",
+    "evidence": "JV of Racing Victoria & Seven Network; 24/7 FTA horse-racing channel + streaming, media-rights holder for VIC/SA racing; ad/sponsorship-funded broadcaster.",
+    "confidence": "high",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Racing.com",
+      "https://au.linkedin.com/company/racing-com"
+    ]
+  },
+  "26149144628": {
+    "id": "26149144628",
+    "name": "The Stream Shop",
+    "org_type": "Broadcaster/Production",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": false,
+    "hq_country": "New Zealand",
+    "is_australia": false,
+    "employee_estimate": "11-50",
+    "evidence": "Auckland live multi-camera broadcast-quality streaming producer; live sports 'in their DNA', works with dozens of NZ NSOs plus corporate; fee-for-service production.",
+    "confidence": "high",
+    "sources": [
+      "https://thestreamshop.live/",
+      "https://nz.linkedin.com/company/the-streamshop"
+    ]
+  },
+  "9604794661": {
+    "id": "9604794661",
+    "name": "Sapphire Coast Turf Club (Bega Valley)",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "5-20",
+    "evidence": "Thoroughbred racing club in NSW Bega Valley; hosts race meetings broadcast via Sky Racing/racing.com, funded heavily by race-day sponsorships.",
+    "confidence": "medium",
+    "sources": [
+      "https://sapphirecoastturfclub.com.au"
+    ]
+  },
+  "17317337782": {
+    "id": "17317337782",
+    "name": "Roving Enterprises",
+    "org_type": "Broadcaster/Production",
+    "is_sports": false,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": false,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "50-100",
+    "evidence": "Melbourne TV production company (Rove McManus); produces entertainment/news shows like The Project for Network 10. Not sports; funded by networks not sponsorship.",
+    "confidence": "high",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Roving_Enterprises",
+      "https://www.rovingenterprises.com/"
+    ]
+  },
+  "15274105699": {
+    "id": "15274105699",
+    "name": "Supertech Electronics",
+    "org_type": "Other",
+    "is_sports": false,
+    "produces_broadcast_or_streaming_content": false,
+    "sponsorship_reliant": false,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "5-15",
+    "evidence": "Gold Coast electronic repair shop; supplies/repairs LED scoreboards, broadcast systems, audio. AV equipment vendor, not a sports org or content producer.",
+    "confidence": "high",
+    "sources": [
+      "https://supertech-electronics.com.au/services",
+      "https://supertech-electronics.com.au/repairs"
+    ]
+  },
+  "9604787229": {
+    "id": "9604787229",
+    "name": "The Alice Springs Turf Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "5-20",
+    "evidence": "Thoroughbred racing club in NT (home of Alice Springs Cup Carnival); race meetings broadcast via Sky Racing, sponsorship-dependent.",
+    "confidence": "medium",
+    "sources": [
+      "https://alicespringsturfclub.org.au"
+    ]
+  },
+  "14752488879": {
+    "id": "14752488879",
+    "name": "Coffs Harbour Racing Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "10-30",
+    "evidence": "Thoroughbred racing club in NSW; hosts TAB race meetings broadcast via Sky Racing/racing.com, reliant on race-day and event sponsorships.",
+    "confidence": "medium",
+    "sources": [
+      "https://www.coffsracingclub.com.au"
+    ]
+  },
+  "9604753960": {
+    "id": "9604753960",
+    "name": "South Australian Jockey Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "100-200",
+    "evidence": "Major SA thoroughbred club operating Morphettville Racecourse; metro race meetings broadcast on Sky Racing/racing.com, large sponsorship/wagering revenue.",
+    "confidence": "high",
+    "sources": [
+      "https://morphettville.com.au"
+    ]
+  },
+  "22477285976": {
+    "id": "22477285976",
+    "name": "Surge Productions",
+    "org_type": "Broadcaster/Production",
+    "is_sports": false,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": false,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "10-50",
+    "evidence": "Live broadcast production house; team produced Seven's Tokyo/Beijing Olympics coverage and live sports/entertainment events plus brand integration. Production vendor, not a sports org.",
+    "confidence": "high",
+    "sources": [
+      "https://www.surgeproductions.com.au/",
+      "https://www.surgeproductions.com.au/surge-team"
+    ]
+  },
+  "18811366029": {
+    "id": "18811366029",
+    "name": "LiveHeats",
+    "org_type": "Other",
+    "is_sports": false,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": false,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "20-50",
+    "evidence": "Bondi-based SaaS for surf/skate/snow comp scoring + livestreaming, used by 550+ sports orgs/federations. Sports-tech vendor (peer to ICP), not itself a sports org.",
+    "confidence": "high",
+    "sources": [
+      "https://liveheats.com/",
+      "https://organiser.liveheats.com/livestreaming/"
+    ]
+  },
+  "22477259590": {
+    "id": "22477259590",
+    "name": "ABC (Australian Broadcasting Corporation)",
+    "org_type": "Broadcaster/Production",
+    "is_sports": false,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": false,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "4000+",
+    "evidence": "Australia's national public broadcaster (TV, radio, iview streaming). General broadcaster incl some sport; publicly funded, not sponsorship-reliant.",
+    "confidence": "high",
+    "sources": [
+      "https://www.abc.net.au"
+    ]
+  },
+  "9604738976": {
+    "id": "9604738976",
+    "name": "Bunbury Turf Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "5-20",
+    "evidence": "Thoroughbred racing club in Bunbury WA; race meetings broadcast via Sky Racing/RWWA, reliant on race-day sponsorships.",
+    "confidence": "medium",
+    "sources": [
+      "https://bunburyturfclub.com.au"
+    ]
+  },
+  "18756544359": {
+    "id": "18756544359",
+    "name": "AusCycling",
+    "org_type": "League/Governing-Body",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "100-200",
+    "evidence": "National governing body for cycling in Australia; runs national championships/events broadcast and livestreamed, funded partly by sponsors and partners.",
+    "confidence": "high",
+    "sources": [
+      "https://www.auscycling.org.au"
+    ]
+  },
+  "9605291627": {
+    "id": "9605291627",
+    "name": "Victoria Racing Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "200-500",
+    "evidence": "Runs Flemington/Melbourne Cup Carnival; broadcast deal w/ Nine & Tabcorp 2024-29, content via racing.com; extensive race/raceday sponsorships.",
+    "confidence": "high",
+    "sources": [
+      "https://www.flemington.com.au/footer-links/sponsorship-advertising-opportunities",
+      "https://en.wikipedia.org/wiki/Victoria_Racing_Club"
+    ]
+  },
+  "18756544347": {
+    "id": "18756544347",
+    "name": "Harness Racing New South Wales",
+    "org_type": "League/Governing-Body",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "50-150",
+    "evidence": "Statutory controlling body for NSW harness racing; manages broadcast/media rights, produces meeting coverage; TAB sponsorship (TAB Eureka).",
+    "confidence": "high",
+    "sources": [
+      "https://www.hrnsw.com.au/",
+      "https://media.sportbusiness.com/news/new-south-wales-horse-racing-body-seeks-to-unify-rights/"
+    ]
+  },
+  "17696004613": {
+    "id": "17696004613",
+    "name": "Pinjarra Park",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "10-50",
+    "evidence": "Pinjarra Race Club, largest regional WA harness club; weekly meetings broadcast/replayed via RWWA & harness.org.au; runs club sponsorships.",
+    "confidence": "medium",
+    "sources": [
+      "https://www.pinjarrapark.com.au/",
+      "https://www.harness.org.au/pinjarra/pinjarra.cfm"
+    ]
+  },
+  "14752422181": {
+    "id": "14752422181",
+    "name": "Albury Racing Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "20-50",
+    "evidence": "Thoroughbred club est.1881, 18 meetings/yr incl. Commercial Club Albury Gold Cup; races broadcast via Sky/racing channels; sponsorship-driven.",
+    "confidence": "high",
+    "sources": [
+      "https://alburyracing.com.au/",
+      "https://racingnswcountry.com.au/club/albury-racing-club/"
+    ]
+  },
+  "9680908136": {
+    "id": "9680908136",
+    "name": "Redcliffe Harness RC",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "10-50",
+    "evidence": "QLD harness club at Redcliffe Paceway, races Wed/Thu under Racing Queensland; offers national TV exposure to sponsors; signage sponsorship.",
+    "confidence": "high",
+    "sources": [
+      "https://redcliffehrc.com.au/",
+      "https://www.racingqueensland.com.au/racing/club-details/harness/116/redcliffe-peninsula-harness-racing-sporting-club"
+    ]
+  },
+  "19099896622": {
+    "id": "19099896622",
+    "name": "Bathurst Harness Racing Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "10-50",
+    "evidence": "NSW harness club, 52 meetings/yr incl Gold Crown Carnival; SKY Channel coverage; sponsorship opportunities offered.",
+    "confidence": "high",
+    "sources": [
+      "https://goldcrowncarnival.com.au/",
+      "https://www.hrnsw.com.au/clubs-associations/clubs-1/bathurst-hrc"
+    ]
+  },
+  "9605284722": {
+    "id": "9605284722",
+    "name": "Racing and Wagering Western Australia",
+    "org_type": "League/Governing-Body",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "200-500",
+    "evidence": "Controlling authority for WA thoroughbred/harness/greyhound racing; manages broadcasting of race meetings & TAB wagering; statutory body.",
+    "confidence": "high",
+    "sources": [
+      "https://www.rwwa.com.au/",
+      "https://en.wikipedia.org/wiki/Racing_and_Wagering_Western_Australia"
+    ]
+  },
+  "18047161864": {
+    "id": "18047161864",
+    "name": "Simtech LED",
+    "org_type": "Other",
+    "is_sports": false,
+    "produces_broadcast_or_streaming_content": false,
+    "sponsorship_reliant": false,
+    "hq_country": "United States",
+    "is_australia": false,
+    "employee_estimate": "50-200",
+    "evidence": "LED display hardware/solutions vendor (gaming, hospitality, sports, retail); designs/manufactures/installs displays. AV supplier, not sports org or content producer.",
+    "confidence": "medium",
+    "sources": [
+      "https://simtechled.com/",
+      "https://www.zoominfo.com/c/simtech-led/357020679"
+    ]
+  },
+  "12427415589": {
+    "id": "12427415589",
+    "name": "Global Advance StreamLined",
+    "org_type": "Broadcaster/Production",
+    "is_sports": false,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": false,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "50-150",
+    "evidence": "Australian media production services co (est.2020, Randwick playout centre); remote/outside broadcast for A-Leagues, 1000+ hrs live content via Grass Valley/Telstra.",
+    "confidence": "high",
+    "sources": [
+      "https://www.globaladvance.com.au/",
+      "https://www.mediaweek.com.au/global-advance-wants-to-disrupt-tv-production-outsourcing-says-ian-hogg/"
+    ]
+  },
+  "9604738975": {
+    "id": "9604738975",
+    "name": "Tamworth Jockey Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "10-50",
+    "evidence": "NSW country thoroughbred club under Racing NSW Country; offers raceday/race sponsorships w/ audiovisual & naming rights; large country racing precinct.",
+    "confidence": "high",
+    "sources": [
+      "https://www.tamworthjockeyclub.com.au/sponsorship-benefits",
+      "https://race.com.au/racing/nsw-country/club/tamworth-jockey-club/"
+    ]
+  },
+  "19154355339": {
+    "id": "19154355339",
+    "name": "Bendigo Harness Racing Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "10-50",
+    "evidence": "VIC harness club at Lord's Raceway, weekly meetings; streamed via TrotsVision/Harness Racing Victoria; sponsorship packages offered.",
+    "confidence": "high",
+    "sources": [
+      "http://www.bhrc.com.au/",
+      "https://www.thetrots.com.au/tv/"
+    ]
+  },
+  "9680571285": {
+    "id": "9680571285",
+    "name": "Auckland Thoroughbred Racing",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "New Zealand",
+    "is_australia": false,
+    "employee_estimate": "50-150",
+    "evidence": "Operates Ellerslie & Pukekohe Park racecourses; major racedays draw domestic/international TV audiences; offers race naming-rights and carnival sponsorships.",
+    "confidence": "high",
+    "sources": [
+      "https://www.aucklandracing.co.nz/",
+      "https://www.aucklandracing.co.nz/about/partnerships/"
+    ]
+  },
+  "9604732795": {
+    "id": "9604732795",
+    "name": "Rockhampton Jockey Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "10-50",
+    "evidence": "Thoroughbred racing club operating Callaghan Park (Rockhampton, QLD); races broadcast via Sky Racing/TAB and sponsorship-funded like Australian race clubs.",
+    "confidence": "medium",
+    "sources": [
+      "https://callaghanpark.com.au/"
+    ]
+  },
+  "20538284384": {
+    "id": "20538284384",
+    "name": "Waikato Racing Club Inc",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "New Zealand",
+    "is_australia": false,
+    "employee_estimate": "10-50",
+    "evidence": "Thoroughbred racing club operating Te Rapa racecourse (Hamilton, NZ); races televised via TAB Trackside and reliant on race sponsorships.",
+    "confidence": "medium",
+    "sources": [
+      "https://teraparacing.co.nz/"
+    ]
+  },
+  "17317147787": {
+    "id": "17317147787",
+    "name": "Endemol Shine Australia",
+    "org_type": "Broadcaster/Production",
+    "is_sports": false,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": false,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "200-500",
+    "evidence": "Major Sydney-based TV production company (Banijay subsidiary) making MasterChef, Survivor, MAFS, LEGO Masters; general entertainment/drama, not sports broadcast.",
+    "confidence": "high",
+    "sources": [
+      "https://en.wikipedia.org/wiki/Endemol_Shine_Australia",
+      "https://www.endemolshine.com.au/about"
+    ]
+  },
+  "17791151956": {
+    "id": "17791151956",
+    "name": "Big Screen Video",
+    "org_type": "Other",
+    "is_sports": false,
+    "produces_broadcast_or_streaming_content": false,
+    "sponsorship_reliant": false,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "50-150",
+    "evidence": "Australia's LED screen supplier: stadium video walls, scoreboards, ribbon boards with game-day support. Hardware vendor to sport, not a content/broadcast producer.",
+    "confidence": "high",
+    "sources": [
+      "https://www.bigscreenvideo.com.au/",
+      "https://www.bigscreenvideo.com.au/sport/"
+    ]
+  },
+  "10152138518": {
+    "id": "10152138518",
+    "name": "Thoroughbred Park",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "10-50",
+    "evidence": "Canberra Racing Club's thoroughbred venue (ACT); race meetings broadcast via Sky Racing and funded by race/event sponsorships per Australian race clubs.",
+    "confidence": "medium",
+    "sources": [
+      "https://www.thoroughbredpark.com.au/"
+    ]
+  },
+  "17317381378": {
+    "id": "17317381378",
+    "name": "Editix",
+    "org_type": "Broadcaster/Production",
+    "is_sports": false,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": false,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "1-20",
+    "evidence": "No web presence found; classified Broadcast Media. Name (Editix/edetrix) and industry suggest a video editing/post-production house. Low-confidence inference.",
+    "confidence": "low",
+    "sources": [
+      "https://www.edetrix.com.au/"
+    ]
+  },
+  "9604732797": {
+    "id": "9604732797",
+    "name": "Tweed Valley Jockey Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "1-20",
+    "evidence": "Thoroughbred racing club (Tweed River, NSW); race meetings broadcast via Sky Racing and funded by race/sponsor support typical of Australian race clubs.",
+    "confidence": "medium",
+    "sources": [
+      "https://tweedriverjockeyclub.com.au/"
+    ]
+  },
+  "18796602894": {
+    "id": "18796602894",
+    "name": "The Kalgoorlie-Boulder Racing Club",
+    "org_type": "Team/Club",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "10-50",
+    "evidence": "Thoroughbred racing club (Kalgoorlie, WA), home of the Kalgoorlie Cup/Round; meetings broadcast via Sky Racing/RWWA and reliant on race sponsorships.",
+    "confidence": "medium",
+    "sources": [
+      "https://www.kbrc.com.au/"
+    ]
+  },
+  "15860116585": {
+    "id": "15860116585",
+    "name": "Harness Racing Victoria",
+    "org_type": "League/Governing-Body",
+    "is_sports": true,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": true,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "100-250",
+    "evidence": "State harness racing governing body; runs TrotsVision live-streaming of meetings, Racing.com FTA coverage, and major sponsorships (e.g. Sportsbet Victoria Cup).",
+    "confidence": "high",
+    "sources": [
+      "https://www.thetrots.com.au/tv/",
+      "https://www.thetrots.com.au/about-hrv/sponsorship/become-a-partner/"
+    ]
+  },
+  "40613322263": {
+    "id": "40613322263",
+    "name": "Jam TV Australia",
+    "org_type": "Broadcaster/Production",
+    "is_sports": false,
+    "produces_broadcast_or_streaming_content": true,
+    "sponsorship_reliant": false,
+    "hq_country": "Australia",
+    "is_australia": true,
+    "employee_estimate": "100-200",
+    "evidence": "Australia's largest independent sport/entertainment producer; 1000+ hrs/yr for FTA & subscription broadcasters; NBL and A-Leagues production partner. Strong ICP fit.",
+    "confidence": "high",
+    "sources": [
+      "https://jamtvaustralia.com.au/",
+      "https://www.jamtv.com.au/"
+    ]
+  }
+}

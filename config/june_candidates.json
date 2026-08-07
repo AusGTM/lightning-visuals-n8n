@@ -1,0 +1,737 @@
+{
+  "_meta": {
+    "generated_at": "2026-08-07T06:40:43.041442+00:00",
+    "mapping_version": "june-2026-v1",
+    "record_count": 66,
+    "source_path": "../ausgtm-lightningvisuals-data/data/enriched_companies.json",
+    "source_sha256": "1d2c8c2aaef98ade6a1e73ddd1a9842bbefb968a4de649f779a4fa0e14500a37"
+  },
+  "rows": {
+    "10021900550": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.cairnsjockeyclub.com.au/",
+        "lv_produces_content": "https://www.cairnsjockeyclub.com.au/"
+      },
+      "_name": "Cairns Jockey Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "10024564084": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://en.wikipedia.org/wiki/Entain",
+        "lv_produces_content": "https://en.wikipedia.org/wiki/Entain"
+      },
+      "_name": "Entain",
+      "lv_country_region_normalized": "Other",
+      "lv_org_type": "other",
+      "lv_produces_content": "false"
+    },
+    "10152138518": {
+      "_confidence": 65,
+      "_evidence": {
+        "lv_org_type": "https://www.thoroughbredpark.com.au/",
+        "lv_produces_content": "https://www.thoroughbredpark.com.au/"
+      },
+      "_name": "Thoroughbred Park",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "10152245364": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://capitaltrots.com.au/",
+        "lv_produces_content": "https://capitaltrots.com.au/"
+      },
+      "_name": "Harness Racing ACT",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "10215097384": {
+      "_confidence": 65,
+      "_evidence": {
+        "lv_org_type": "https://www.wyongraceclub.com.au",
+        "lv_produces_content": "https://www.wyongraceclub.com.au"
+      },
+      "_name": "Wyong",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "12427415589": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.globaladvance.com.au/",
+        "lv_produces_content": "https://www.globaladvance.com.au/"
+      },
+      "_name": "Global Advance StreamLined",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "broadcaster",
+      "lv_produces_content": "true"
+    },
+    "14748141740": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.sconeraceclub.com.au/",
+        "lv_produces_content": "https://www.sconeraceclub.com.au/"
+      },
+      "_name": "Scone Race Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "14752422181": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://alburyracing.com.au/",
+        "lv_produces_content": "https://alburyracing.com.au/"
+      },
+      "_name": "Albury Racing Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "14752488879": {
+      "_confidence": 65,
+      "_evidence": {
+        "lv_org_type": "https://www.coffsracingclub.com.au",
+        "lv_produces_content": "https://www.coffsracingclub.com.au"
+      },
+      "_name": "Coffs Harbour Racing Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "15008671672": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.racingnsw.com.au/",
+        "lv_produces_content": "https://www.racingnsw.com.au/"
+      },
+      "_name": "Racing NSW",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "governing_body_league",
+      "lv_produces_content": "true"
+    },
+    "15042301818": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://pspvideo.com.au/",
+        "lv_produces_content": "https://pspvideo.com.au/"
+      },
+      "_name": "Panasonic Studio Productions",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "broadcaster",
+      "lv_produces_content": "true"
+    },
+    "15274105699": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://supertech-electronics.com.au/services",
+        "lv_produces_content": "https://supertech-electronics.com.au/services"
+      },
+      "_name": "Supertech Electronics",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "other",
+      "lv_produces_content": "false"
+    },
+    "15387953738": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.gloucesterpark.com.au/",
+        "lv_produces_content": "https://www.gloucesterpark.com.au/"
+      },
+      "_name": "Gloucester Park",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "15388186399": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://donaldsonpark.com.au/",
+        "lv_produces_content": "https://donaldsonpark.com.au/"
+      },
+      "_name": "Bunbury Trotting Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "15860116585": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.thetrots.com.au/tv/",
+        "lv_produces_content": "https://www.thetrots.com.au/tv/"
+      },
+      "_name": "Harness Racing Victoria",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "governing_body_league",
+      "lv_produces_content": "true"
+    },
+    "15860277364": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.gravitymedia.com/live-sports-production/",
+        "lv_produces_content": "https://www.gravitymedia.com/live-sports-production/"
+      },
+      "_name": "GRAVITY MEDIA",
+      "lv_country_region_normalized": "Other",
+      "lv_org_type": "broadcaster",
+      "lv_produces_content": "true"
+    },
+    "16047156820": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://qric.qld.gov.au/",
+        "lv_produces_content": "https://qric.qld.gov.au/"
+      },
+      "_name": "Queensland Racing Integrity Commission",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "governing_body_league",
+      "lv_produces_content": "false"
+    },
+    "17317147787": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://en.wikipedia.org/wiki/Endemol_Shine_Australia",
+        "lv_produces_content": "https://en.wikipedia.org/wiki/Endemol_Shine_Australia"
+      },
+      "_name": "Endemol Shine Australia",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "broadcaster",
+      "lv_produces_content": "true"
+    },
+    "17317184159": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.triathlete.com/culture/news/who-owns-ironman-who-owns-triathlon/",
+        "lv_produces_content": "https://www.triathlete.com/culture/news/who-owns-ironman-who-owns-triathlon/"
+      },
+      "_name": "Ironman",
+      "lv_country_region_normalized": "Other",
+      "lv_org_type": "governing_body_league",
+      "lv_produces_content": "true"
+    },
+    "17317337782": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://en.wikipedia.org/wiki/Roving_Enterprises",
+        "lv_produces_content": "https://en.wikipedia.org/wiki/Roving_Enterprises"
+      },
+      "_name": "Roving Enterprises",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "broadcaster",
+      "lv_produces_content": "true"
+    },
+    "17317381378": {
+      "_confidence": 40,
+      "_evidence": {
+        "lv_org_type": "https://www.edetrix.com.au/",
+        "lv_produces_content": "https://www.edetrix.com.au/"
+      },
+      "_name": "Editix",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "broadcaster",
+      "lv_produces_content": "true"
+    },
+    "17317850381": {
+      "_confidence": 65,
+      "_evidence": {
+        "lv_org_type": "https://x.com/jamtvit",
+        "lv_produces_content": "https://x.com/jamtvit"
+      },
+      "_name": "Jam TV",
+      "lv_country_region_normalized": "Other",
+      "lv_org_type": "broadcaster",
+      "lv_produces_content": "true"
+    },
+    "17696004613": {
+      "_confidence": 65,
+      "_evidence": {
+        "lv_org_type": "https://www.pinjarrapark.com.au/",
+        "lv_produces_content": "https://www.pinjarrapark.com.au/"
+      },
+      "_name": "Pinjarra Park",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "17791151956": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.bigscreenvideo.com.au/",
+        "lv_produces_content": "https://www.bigscreenvideo.com.au/"
+      },
+      "_name": "Big Screen Video",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "other",
+      "lv_produces_content": "false"
+    },
+    "17861423879": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://en.wikipedia.org/wiki/Sportsbet",
+        "lv_produces_content": "https://en.wikipedia.org/wiki/Sportsbet"
+      },
+      "_name": "Sportsbet",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "other",
+      "lv_produces_content": "false"
+    },
+    "18047161864": {
+      "_confidence": 65,
+      "_evidence": {
+        "lv_org_type": "https://simtechled.com/",
+        "lv_produces_content": "https://simtechled.com/"
+      },
+      "_name": "Simtech LED",
+      "lv_country_region_normalized": "Other",
+      "lv_org_type": "other",
+      "lv_produces_content": "false"
+    },
+    "18647353914": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://surfingaustralia.com/about/",
+        "lv_produces_content": "https://surfingaustralia.com/about/"
+      },
+      "_name": "Surfing Australia",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "governing_body_league",
+      "lv_produces_content": "true"
+    },
+    "18756544344": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.thoroughbrednews.com.au/News/Story/southside-racing-the-new-name-of-cranbourne-and-pakenham-racing-161559",
+        "lv_produces_content": "https://www.thoroughbrednews.com.au/News/Story/southside-racing-the-new-name-of-cranbourne-and-pakenham-racing-161559"
+      },
+      "_name": "Southside Racing",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "18756544347": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.hrnsw.com.au/",
+        "lv_produces_content": "https://www.hrnsw.com.au/"
+      },
+      "_name": "Harness Racing New South Wales",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "governing_body_league",
+      "lv_produces_content": "true"
+    },
+    "18756544359": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.auscycling.org.au",
+        "lv_produces_content": "https://www.auscycling.org.au"
+      },
+      "_name": "AusCycling",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "governing_body_league",
+      "lv_produces_content": "true"
+    },
+    "18756544407": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.addington.co.nz/",
+        "lv_produces_content": "https://www.addington.co.nz/"
+      },
+      "_name": "Addington",
+      "lv_country_region_normalized": "NZ",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "18796602894": {
+      "_confidence": 65,
+      "_evidence": {
+        "lv_org_type": "https://www.kbrc.com.au/",
+        "lv_produces_content": "https://www.kbrc.com.au/"
+      },
+      "_name": "The Kalgoorlie-Boulder Racing Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "18811366029": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://liveheats.com/",
+        "lv_produces_content": "https://liveheats.com/"
+      },
+      "_name": "LiveHeats",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "other",
+      "lv_produces_content": "true"
+    },
+    "18973591368": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://sheppartonhrc.com.au/",
+        "lv_produces_content": "https://sheppartonhrc.com.au/"
+      },
+      "_name": "Shepparton Harness Racing Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "19099896622": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://goldcrowncarnival.com.au/",
+        "lv_produces_content": "https://goldcrowncarnival.com.au/"
+      },
+      "_name": "Bathurst Harness Racing Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "19100977027": {
+      "_confidence": 65,
+      "_evidence": {
+        "lv_org_type": "https://www.newcastleharness.com.au",
+        "lv_produces_content": "https://www.newcastleharness.com.au"
+      },
+      "_name": "Newcastle Harness Racing Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "19154355339": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "http://www.bhrc.com.au/",
+        "lv_produces_content": "http://www.bhrc.com.au/"
+      },
+      "_name": "Bendigo Harness Racing Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "19363725157": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://en.wikipedia.org/wiki/Racing.com",
+        "lv_produces_content": "https://en.wikipedia.org/wiki/Racing.com"
+      },
+      "_name": "Racing.com Pty Ltd",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "broadcaster",
+      "lv_produces_content": "true"
+    },
+    "20538284384": {
+      "_confidence": 65,
+      "_evidence": {
+        "lv_org_type": "https://teraparacing.co.nz/",
+        "lv_produces_content": "https://teraparacing.co.nz/"
+      },
+      "_name": "Waikato Racing Club Inc",
+      "lv_country_region_normalized": "NZ",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "20538599475": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://jointheaction.co.nz/about-race",
+        "lv_produces_content": "https://jointheaction.co.nz/about-race"
+      },
+      "_name": "RACE (Racing at Awapuni and Trentham Combined Enterprise Incorporated)",
+      "lv_country_region_normalized": "NZ",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "20943964946": {
+      "_confidence": 65,
+      "_evidence": {
+        "lv_org_type": "https://www.therumble.com.au/",
+        "lv_produces_content": "https://www.therumble.com.au/"
+      },
+      "_name": "The Rumble / Pacific Action Sports",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "governing_body_league",
+      "lv_produces_content": "true"
+    },
+    "22477259590": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.abc.net.au",
+        "lv_produces_content": "https://www.abc.net.au"
+      },
+      "_name": "ABC (Australian Broadcasting Corporation)",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "broadcaster",
+      "lv_produces_content": "true"
+    },
+    "22477285976": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.surgeproductions.com.au/",
+        "lv_produces_content": "https://www.surgeproductions.com.au/"
+      },
+      "_name": "Surge Productions",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "broadcaster",
+      "lv_produces_content": "true"
+    },
+    "26149144628": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://thestreamshop.live/",
+        "lv_produces_content": "https://thestreamshop.live/"
+      },
+      "_name": "The Stream Shop",
+      "lv_country_region_normalized": "NZ",
+      "lv_org_type": "broadcaster",
+      "lv_produces_content": "true"
+    },
+    "40613322263": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://jamtvaustralia.com.au/",
+        "lv_produces_content": "https://jamtvaustralia.com.au/"
+      },
+      "_name": "Jam TV Australia",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "broadcaster",
+      "lv_produces_content": "true"
+    },
+    "9604614548": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.gravitymedia.com/category/horse-racing/",
+        "lv_produces_content": "https://www.gravitymedia.com/category/horse-racing/"
+      },
+      "_name": "Melbourne Racing Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "9604732795": {
+      "_confidence": 65,
+      "_evidence": {
+        "lv_org_type": "https://callaghanpark.com.au/",
+        "lv_produces_content": "https://callaghanpark.com.au/"
+      },
+      "_name": "Rockhampton Jockey Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "9604732797": {
+      "_confidence": 65,
+      "_evidence": {
+        "lv_org_type": "https://tweedriverjockeyclub.com.au/",
+        "lv_produces_content": "https://tweedriverjockeyclub.com.au/"
+      },
+      "_name": "Tweed Valley Jockey Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "9604738975": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.tamworthjockeyclub.com.au/sponsorship-benefits",
+        "lv_produces_content": "https://www.tamworthjockeyclub.com.au/sponsorship-benefits"
+      },
+      "_name": "Tamworth Jockey Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "9604738976": {
+      "_confidence": 65,
+      "_evidence": {
+        "lv_org_type": "https://bunburyturfclub.com.au",
+        "lv_produces_content": "https://bunburyturfclub.com.au"
+      },
+      "_name": "Bunbury Turf Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "9604753960": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://morphettville.com.au",
+        "lv_produces_content": "https://morphettville.com.au"
+      },
+      "_name": "South Australian Jockey Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "9604787229": {
+      "_confidence": 65,
+      "_evidence": {
+        "lv_org_type": "https://alicespringsturfclub.org.au",
+        "lv_produces_content": "https://alicespringsturfclub.org.au"
+      },
+      "_name": "The Alice Springs Turf Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "9604794661": {
+      "_confidence": 65,
+      "_evidence": {
+        "lv_org_type": "https://sapphirecoastturfclub.com.au",
+        "lv_produces_content": "https://sapphirecoastturfclub.com.au"
+      },
+      "_name": "Sapphire Coast Turf Club (Bega Valley)",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "9605244179": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://cliffordpark.com.au/toowoomba-turf-club/",
+        "lv_produces_content": "https://cliffordpark.com.au/toowoomba-turf-club/"
+      },
+      "_name": "Toowoomba Turf Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "9605273630": {
+      "_confidence": 65,
+      "_evidence": {
+        "lv_org_type": "https://portmacquarieraceclub.com.au",
+        "lv_produces_content": "https://portmacquarieraceclub.com.au"
+      },
+      "_name": "Port Macquarie Race Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "9605284721": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://racingwa.com.au/clubs/geraldton",
+        "lv_produces_content": "https://racingwa.com.au/clubs/geraldton"
+      },
+      "_name": "Geraldton Turf Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "9605284722": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.rwwa.com.au/",
+        "lv_produces_content": "https://www.rwwa.com.au/"
+      },
+      "_name": "Racing and Wagering Western Australia",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "governing_body_league",
+      "lv_produces_content": "true"
+    },
+    "9605284723": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://brc.com.au",
+        "lv_produces_content": "https://brc.com.au"
+      },
+      "_name": "Brisbane Racing Club (BRC)",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "9605284724": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.australianturfclub.com.au/",
+        "lv_produces_content": "https://www.australianturfclub.com.au/"
+      },
+      "_name": "Australian Turf Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "9605291627": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.flemington.com.au/footer-links/sponsorship-advertising-opportunities",
+        "lv_produces_content": "https://www.flemington.com.au/footer-links/sponsorship-advertising-opportunities"
+      },
+      "_name": "Victoria Racing Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "9648957286": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.racingqueensland.com.au/racing",
+        "lv_produces_content": "https://www.racingqueensland.com.au/racing"
+      },
+      "_name": "Racing Queensland",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "governing_body_league",
+      "lv_produces_content": "true"
+    },
+    "9663194467": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://tasracing.com.au/",
+        "lv_produces_content": "https://tasracing.com.au/"
+      },
+      "_name": "Tasracing Pty",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "governing_body_league",
+      "lv_produces_content": "true"
+    },
+    "9680571285": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.aucklandracing.co.nz/",
+        "lv_produces_content": "https://www.aucklandracing.co.nz/"
+      },
+      "_name": "Auckland Thoroughbred Racing",
+      "lv_country_region_normalized": "NZ",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "9680907342": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.sctc.com.au/",
+        "lv_produces_content": "https://www.sctc.com.au/"
+      },
+      "_name": "Sunshine Coast Turf Club",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "9680908136": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://redcliffehrc.com.au/",
+        "lv_produces_content": "https://redcliffehrc.com.au/"
+      },
+      "_name": "Redcliffe Harness RC",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    },
+    "9681041418": {
+      "_confidence": 85,
+      "_evidence": {
+        "lv_org_type": "https://www.thecreek.com.au/sponsorship/",
+        "lv_produces_content": "https://www.thecreek.com.au/sponsorship/"
+      },
+      "_name": "The Creek Agency",
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "individual_club_team",
+      "lv_produces_content": "true"
+    }
+  }
+}

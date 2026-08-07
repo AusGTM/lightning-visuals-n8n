@@ -56,6 +56,25 @@ ALLOWED_HOSTS = {
 URL_RE = re.compile(r"https?://([A-Za-z0-9.\-]+)")
 
 
+def _june_evidence_hosts():
+    """Phase 41 (D-08): config/june_candidates.json's `_evidence` URLs are baked into the
+    "Merge Company" node's JUNE_CANDIDATES constant as static provenance strings — never
+    fetched at runtime, exactly like the linkedin.com fixture-data exemption above.
+    Derived from the committed table (not hand-listed) so regenerating the table never
+    requires touching this guard."""
+    path = ROOT / "config" / "june_candidates.json"
+    if not path.exists():
+        return set()
+    rows = json.loads(path.read_text()).get("rows", {})
+    hosts = set()
+    for row in rows.values():
+        for url in (row.get("_evidence") or {}).values():
+            m = URL_RE.match(url or "")
+            if m:
+                hosts.add(m.group(1))
+    return hosts
+
+
 def _hosts_in(workflow_path: Path):
     """Every HTTP host referenced anywhere in a workflow's node parameters."""
     doc = json.loads(workflow_path.read_text())
@@ -74,10 +93,11 @@ def test_ar2_no_middleware_hosts(name):
     A host outside the allowlist means either a new legitimate dependency (add it here,
     deliberately) or middleware creep (the thing this guard exists to catch).
     """
+    june_hosts = _june_evidence_hosts()
     offenders = {
         host: sorted(nodes)
         for host, nodes in _hosts_in(N8N / name).items()
-        if host not in ALLOWED_HOSTS
+        if host not in ALLOWED_HOSTS and host not in june_hosts
     }
     assert not offenders, (
         f"{name} references non-allowlisted host(s): {offenders}. "

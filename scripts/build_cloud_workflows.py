@@ -40,6 +40,19 @@ import provider_registry  # noqa: E402 — Phase 16.1 (reviews A3): SIDE-EFFECT-
 (CODE / "taxonomy.generated.js").write_text(gen_taxonomy_js.render())
 (CODE / "escalation.generated.js").write_text(gen_escalation_js.render())
 
+# June-2026 validation dataset (Phase 41, 41-CONTEXT.md D-08): read at module scope, same
+# discipline as the two codegen writes above -- the "Merge Company" node inlines the
+# `rows` object as a JS constant so this builder can never emit a workflow carrying a
+# stale table. No separate gen_*_js.py / .generated.js pair: ENRICH_MERGE_CO is the
+# table's only consumer and there is no cross-module reuse (Task 1 action note). Defaults
+# to {} when the config file does not exist yet, so a fresh checkout can still build.
+_JUNE_CANDIDATES_PATH = ROOT / "config" / "june_candidates.json"
+if _JUNE_CANDIDATES_PATH.exists():
+    JUNE_CANDIDATES_ROWS = json.loads(_JUNE_CANDIDATES_PATH.read_text())["rows"]
+else:
+    JUNE_CANDIDATES_ROWS = {}
+JUNE_CANDIDATES_JS = "const JUNE_CANDIDATES = " + json.dumps(JUNE_CANDIDATES_ROWS) + ";\n"
+
 # ---- module inliner ---------------------------------------------------------
 
 _REQUIRE_RE = re.compile(r"^\s*const\s*\{[^}]*\}\s*=\s*require\(")
@@ -2394,7 +2407,7 @@ ENRICH_APPLY_JUDGE_VERDICT = _enrich_apply_judge_verdict_js()
 # hubspotEnums.generated.js + hubspotEnums.js are inlined ahead of mergeCompanies.js
 # (Phase 31): mergeCompanies() now requires ./hubspotEnums for its own enum guard, so any
 # node inlining it without the validator throws at runtime inside n8n.
-ENRICH_MERGE_CO = inline(
+ENRICH_MERGE_CO = JUNE_CANDIDATES_JS + inline(
     "taxonomy.generated.js", "hubspotEnums.generated.js", "hubspotEnums.js", "mergeCompanies.js") + r"""
 
 // --- n8n wrapper: mergeCompanies(existingRecord, winners) non-clobber ---
@@ -2452,6 +2465,32 @@ return $input.all().map((it) => {
   const merged = mergeCompanies(row.existingRecord || {}, candidate, undefined,
                                 { source: "waterfall", confidence: 85 });
 
+  let finalMerge = merged;
+
+  // Phase 41 Task 1 (D-08): June-2026 validation dataset fold, a THIRD mergeCompanies
+  // call mirroring the claude_web fold below. Unconditional here (no precedence filter,
+  // no D-04 disagreement gate) -- Task 3 adds both on top. A record id absent from
+  // JUNE_CANDIDATES leaves this whole block a no-op, so pre-Phase-41 behaviour is
+  // byte-identical for every company the table has no row for.
+  const juneRow = JUNE_CANDIDATES[String((row.existingRecord || {}).hs_object_id)];
+  if (juneRow) {
+    const juneData = {};
+    for (const f of Object.keys(juneRow)) {
+      if (!f.startsWith("lv_")) continue;  // skip _name/_confidence/_evidence/etc.
+      juneData[f] = juneRow[f];
+    }
+    if (Object.keys(juneData).length > 0) {
+      const juneMerged = mergeCompanies(row.existingRecord || {}, juneData, undefined,
+        { source: "june_2026", confidence: juneRow._confidence, evidence: juneRow._evidence || {} });
+      finalMerge = {
+        canonicalPatch: { ...finalMerge.canonicalPatch, ...juneMerged.canonicalPatch },
+        provenance: { ...finalMerge.provenance, ...juneMerged.provenance },
+        cacheKeys: { ...finalMerge.cacheKeys, ...juneMerged.cacheKeys },
+        decisions: [...finalMerge.decisions, ...juneMerged.decisions],
+      };
+    }
+  }
+
   // Phase 13 (D6): fold the Claude web-research candidate in as a SECOND mergeCompanies
   // call — mergeCompanies.js itself stays byte-identical. Research fields (lv_org_type,
   // lv_produces_content, lv_content_type, lv_is_hardware_vendor, lv_is_gambling_operator —
@@ -2462,7 +2501,6 @@ return $input.all().map((it) => {
   // (+ concatenated decisions) is safe. By the time this node runs, the Judge Gate chain
   // upstream has already demoted any UNADJUDICATED vendor-flag `true` to `null`
   // (Pitfall 6) — this fold only ever sees an already-safe value.
-  let finalMerge = merged;
   const rc = row.research_candidate;
   if (rc && rc.matched) {
     // COPY-01: lv_sponsorship_reliant / lv_country_region_normalized appended at the END
@@ -2499,10 +2537,10 @@ return $input.all().map((it) => {
       // above, scoped to revenue/employee bands only) — add one if silent overwrite
       // between provider and research region values proves to be a real problem.
       finalMerge = {
-        canonicalPatch: { ...merged.canonicalPatch, ...researchMerged.canonicalPatch },
-        provenance: { ...merged.provenance, ...researchMerged.provenance },
-        cacheKeys: { ...merged.cacheKeys, ...researchMerged.cacheKeys },
-        decisions: [...merged.decisions, ...researchMerged.decisions],
+        canonicalPatch: { ...finalMerge.canonicalPatch, ...researchMerged.canonicalPatch },
+        provenance: { ...finalMerge.provenance, ...researchMerged.provenance },
+        cacheKeys: { ...finalMerge.cacheKeys, ...researchMerged.cacheKeys },
+        decisions: [...finalMerge.decisions, ...researchMerged.decisions],
       };
     }
   }
