@@ -171,7 +171,20 @@ leaving orphaned schema behind.
 
   2. `config/hubspot_properties.yaml` reconciles clean against the live portal — zero drift
      between the config file and HubSpot's actual schema.
-**Plans**: TBD
+
+**Note on SC1:** its archive list (`org_type_score`, `geography_score`, `annual_revenue_score`,
+the calculated `lv_icp_fit_score`) was written when the lead-scoring-tool rebuild was the
+presumed path. Phase 39 chose fix-in-place and Phase 40 repaired and kept exactly those
+artifacts — they are the live engine. SC1 is reinterpreted per `42-CONTEXT.md` D-01: Phase 42
+archives only what is genuinely orphaned, and those artifacts are explicitly protected.
+
+**Plans**: 3 plans
+- [ ] 42-01-PLAN.md — Build and live-prove the standing schema drift checker; capture the
+      pre-mutation portal snapshot; make the do-not-archive set a machine-checked invariant
+- [ ] 42-02-PLAN.md — Expand `config/hubspot_properties.yaml` to a full live mirror and amend
+      the four offline guards the expansion inverts; prove it cannot cause a portal write
+- [ ] 42-03-PLAN.md — Derive orphans from a live portal diff, soft-archive the uncontested set,
+      surface ambiguous items, and prove post-mutation that the scoring engine survived
 
 ### Phase 43: Pipeline Scoring Hygiene & Explainability
 
