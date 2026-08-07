@@ -5,7 +5,7 @@ milestone_name: HubSpot Scoring Engine Remediation
 current_phase: 41
 current_phase_name: Validation Data Import & End-to-End Proof
 status: executing
-stopped_at: Completed 41-01-PLAN.md
+stopped_at: Phase 41 armed + canary handed to operator; Phase 42 planned and verified
 last_updated: "2026-08-07T07:40:00.000Z"
 last_activity: 2026-08-07
 last_activity_desc: "41-01 complete: 66-row June-2026 candidate table (config/june_candidates.json, sha256-pinned to a committed sibling-repo snapshot) folded into the Merge Company n8n node as a third mergeCompanies() candidate source (source=june_2026), tracer-proven on Racing NSW (15008671672); D-02 exception list applied (QRIC->regulator, Sportsbet/Entain->gambling_operator, Supertech/Simtech->hardware_vendor); D-01 precedence (fresh research always wins) and D-04 disagreement gate (org_type/produces_content conflicts suppress promotion, delete the cache-key stamp, push a synthetic needs_review decision) wired; F1 native firmographic band fold added (lv_revenue_band/lv_employee_band from the record's own annualrevenue/numberofemployees when the waterfall supplies neither). Offline only, zero live HubSpot/n8n/Anthropic calls. DATA-01 stays Pending in REQUIREMENTS.md — closes only after 41-03/41-04's live proof."
@@ -21,9 +21,12 @@ progress:
 
 ## Current Position
 
-Phase: 41 (Validation Data Import & End-to-End Proof) — wave 1 complete (41-01, 41-02), waves 2-3 need operator arming
-Next: execute Phase 41 wave 2 (41-03 — deploy, arm, and drive 5 real companies end to end); requires operator to run the arm command
-Status: Phase 41 wave 1 (41-01, 41-02) complete, offline-only. Phases 42 and 43 have CONTEXT.md gathered but are not yet planned.
+Phase: 41 (Validation Data Import & End-to-End Proof) — ARMED, canary awaiting operator
+Next: OPERATOR ACTION — 41-03 Task 3 canary, 7 steps (before-readback, dry-run queue, live queue, ~30min wait, after-readback, credit check, parity sweep). **THE ARM WINDOW IS OPEN on 66 real records**; `scripts/june_run_arm.py --disarm` is non-deferrable even if the run is abandoned.
+Status: 41-01, 41-02, and 41-03 Task 1 complete. Operator completed 41-03 Task 2 — all six arm-gate steps passed, evidence committed (credit baseline Lusha 3925 / ZoomInfo 9397, bounce read-back proving deploy-before-arm, 66/66 id resolution with zero unmatched, arm payload with 66 ids and 0 domains). Suites green: 2362 pytest, 636 node.
+Phase 42: PLANNED + VERIFIED — 3 plans, sequential, all autonomous:false, plan-checker PASSED with 0 blockers. Cannot EXECUTE until 41-04 disarms: a workflow content deploy rebakes write-safety and would silently close Phase 41's window.
+Phase 43: CONTEXT.md gathered; planning deliberately held until the canary result lands, because 43 edits mergeCompanies.js and build_cloud_workflows.py — the exact files 41's live run exercises.
+Settled this session: june_run_arm.py's window does NOT auto-close on dispatch. arm_for_dispatch() has no close mechanism; the "closes as soon as the dispatch returns" line is boilerplate for the armed_window context manager that june_run_arm.py deliberately bypasses. Empirical confirmation pending the canary's after-readback.
 Phase 40: COMPLETE & SEALED — 7/7 plans, 12/12 requirements (ENGINE-01..07, VETO-01..03, PARITY-01..02) with live evidence
 Last activity: 2026-08-07 — 40-07 complete (Phase 40 closed): ENGINE-01 live-proven (80/A entirely inside HubSpot off canonical inputs — org_type_score=40, produces_content_score=20, geography_score=10, annual_revenue_score=10, gambling_score=0); D-10 backfill mechanism (`scripts/backfill_seed_company_scores.py`) built, gated, and proven on the real-record sample (Melbourne Racing Club, id 9604614548 — the entire population of companies portal-wide carrying any canonical lv_* input); PARITY-01 verdict committed (`parity-report-final.json`, PASS with 1 documented Needs Review divergence, 0 real findings, assertions_executed=1); full live fixture tier 56/56 passed excluding the 5 veto_set/veto_clear cases, which are empirically confirmed blocked on the pre-existing VETO-01/VETO-02 pipeline write-gate arming gate (not a regression, not this plan's scope — WINDOWS.md id 5)
 Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39-path-decision-fit-score-verification/39-DECISION.md`
