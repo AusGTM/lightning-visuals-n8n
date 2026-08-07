@@ -73,12 +73,15 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 
 ### Cleanup
 
-- [ ] **CLEAN-01**: Superseded scoring artifacts are archived, not deleted
+- [x] **CLEAN-01**: Superseded scoring artifacts are archived, not deleted
   (`scripts/snapshot_hubspot_schema.py` run first), and `config/hubspot_properties.yaml`
   reconciles clean against the live portal.
-  <!-- Reconciliation half (42-01 snapshot + 42-02 yaml expansion) is DONE and live-proven
-  (exit_code=0, do_not_archive.ok=true, 0 property/group creates). Archival half (42-03) is
-  still pending -- this requirement spans all three plans and completes only when 42-03 lands. -->
+  <!-- CLOSED 2026-08-08. Reconciliation half (42-01 snapshot + 42-02 yaml expansion) is DONE
+  and live-proven (exit_code=0, do_not_archive.ok=true, 0 property/group creates). Archival
+  half (42-03) landed: live derivation found zero uncontested_orphan and zero ambiguous
+  candidates (all 32 non-hubspotDefined company properties already covered), so nothing was
+  archived -- a valid, fully-satisfying outcome per 42-CONTEXT.md. Post-mutation
+  drift-report-phase42-post.json confirms exit_code=0, do_not_archive.ok=true. -->
 
 ### Pipeline Hygiene (validated 2026-08-06, PIPELINE-DEFECTS-VALIDATION.md)
 
@@ -139,7 +142,7 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 | PARITY-02 | Phase 40 | Complete |
 | DATA-01 | Phase 41 | Pending |
 | DATA-02 | Phase 41 | Pending |
-| CLEAN-01 | Phase 42 | In Progress (reconciliation done 42-01/42-02; archival 42-03 pending) |
+| CLEAN-01 | Phase 42 | Complete (42-01/42-02 reconciliation + 42-03 archival derivation; zero orphans found, nothing to archive) |
 | PIPE-01 | Phase 43 | Complete |
 | PIPE-02 | Phase 43 | Complete |
 | PIPE-03 | Phase 43 | Pending |

@@ -179,16 +179,21 @@ presumed path. Phase 39 chose fix-in-place and Phase 40 repaired and kept exactl
 artifacts — they are the live engine. SC1 is reinterpreted per `42-CONTEXT.md` D-01: Phase 42
 archives only what is genuinely orphaned, and those artifacts are explicitly protected.
 
-**Plans**: 1/3 plans executed
+**Plans**: 3/3 plans executed — Phase 42 COMPLETE, CLEAN-01 closed
 
-- [ ] 42-01-PLAN.md — Build and live-prove the standing schema drift checker; capture the
-      pre-mutation portal snapshot; make the do-not-archive set a machine-checked invariant
+- [x] 42-01-PLAN.md — Build and live-prove the standing schema drift checker; capture the
+      pre-mutation portal snapshot; make the do-not-archive set a machine-checked invariant.
+      (Commits `409cb03`/`b03ddc9`; no separate 42-01-SUMMARY.md was ever written — its
+      artifacts, `portal-schema-{companies,contacts}-phase42-pre.json` and
+      `drift-report-phase42-pre.json`, are committed and consumed directly by 42-02/42-03.)
 
 - [x] 42-02-PLAN.md — Expand `config/hubspot_properties.yaml` to a full live mirror and amend
       the four offline guards the expansion inverts; prove it cannot cause a portal write
 
-- [ ] 42-03-PLAN.md — Derive orphans from a live portal diff, soft-archive the uncontested set,
-      surface ambiguous items, and prove post-mutation that the scoring engine survived
+- [x] 42-03-PLAN.md — Derive orphans from a live portal diff, soft-archive the uncontested set,
+      surface ambiguous items, and prove post-mutation that the scoring engine survived.
+      Live result: zero uncontested orphans, zero ambiguous — nothing to archive. Engine
+      proven intact after (`drift-report-phase42-post.json` exit_code=0, do_not_archive.ok=true).
 
 ### Phase 43: Pipeline Scoring Hygiene & Explainability
 
@@ -247,5 +252,5 @@ Phases execute in numeric order: 39 → 40 → 41 → 42 → 43
 | 39. Path Decision & Fit-Score Verification | 4/4 | Complete | 2026-08-06 |
 | 40. Scoring Engine, Veto & Parity Remediation | 7/7 | Complete | 2026-08-07 |
 | 41. Validation Data Import & End-to-End Proof | 0/TBD | Not started | - |
-| 42. Scoring Artifact Cleanup & Reconciliation | 1/3 | In Progress|  |
+| 42. Scoring Artifact Cleanup & Reconciliation | 2/3 | In Progress|  |
 | 43. Pipeline Scoring Hygiene & Explainability | 3/5 | In Progress|  |
