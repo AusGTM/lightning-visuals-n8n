@@ -4,6 +4,17 @@
 **Status:** investigation complete, nothing implemented, no repo files changed.
 **Read this cold.** It is self-contained and does not depend on any `.claude` session data.
 
+> **REMEDIATED — read this before acting on anything below (added 2026-08-08).** Milestone
+> v0.7 closed every defect this handover reports. The scoring engine is live and correct in
+> HubSpot (16/16 requirements, Phases 39–43); F1–F10 are fixed; 66 companies carry real
+> scores with provenance, and the standing parity harness passes with zero real findings.
+> The `lv_icp_fit_score` formula in §5/§10 below is **out of date** — it is now null-safe
+> (`org_type_score + coalesce(geography_score, 0) + …`), because a bare sum blanks the entire
+> score on any null term. Current state: `.planning/STATE.md`; the formula story:
+> `.planning/phases/41-validation-data-import-end-to-end-proof/41-NULL-SAFE-FORMULA-FIX.md`.
+> This document is kept as the diagnostic record that started the milestone, not as a
+> description of the system today.
+
 > **Staleness note (added 2026-08-06):** the investigation behind this document was conducted
 > **prior to the Phase 38 quick fix** (unanswered-rows honesty fix, plugin 0.11.1 — commits
 > `b8ea…`/`4c40063`/`c2f7b0d`, 2026-08-05 22:30 AEST), although the file itself was written to

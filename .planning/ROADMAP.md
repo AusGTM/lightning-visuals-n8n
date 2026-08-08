@@ -17,14 +17,16 @@ milestone starts at Phase 39.
 
 **Phase Numbering:**
 
-- Continues the repo's global sequence (last consumed: Phase 38). This milestone: Phase 39–42.
-- Integer phases (39, 40, 41, 42): Planned milestone work.
+- Continues the repo's global sequence (last consumed: Phase 38). This milestone: Phase 39–43.
+- Integer phases (39, 40, 41, 42): Planned milestone work. Phase 43 was inserted mid-milestone
+  (pipeline-side residue of the 2026-08-06 scoring audit).
 - Decimal phases (e.g. 40.1): Reserved for urgent insertions if needed later.
 
 - [x] **Phase 39: Path Decision & Fit-Score Verification** (completed 2026-08-06) - Operator verifies Sales Hub Pro fit-score availability in-portal and records the remediation path (fix-in-place vs lead-scoring-tool rebuild) with rationale
-- [ ] **Phase 40: Scoring Engine, Veto & Parity Remediation** - The rubric scores and vetoes correctly inside HubSpot on the chosen path, with a parity harness landing alongside each fix
-- [ ] **Phase 41: Validation Data Import & End-to-End Proof** - The 66 web-researched companies land as a real scoreable population and prove the engine fires automatically at small volume
-- [ ] **Phase 42: Scoring Artifact Cleanup & Reconciliation** - Superseded scoring artifacts are archived (not deleted) and the property config reconciles clean against the live portal
+- [x] **Phase 40: Scoring Engine, Veto & Parity Remediation** (completed 2026-08-07) - The rubric scores and vetoes correctly inside HubSpot on the chosen path, with a parity harness landing alongside each fix
+- [x] **Phase 41: Validation Data Import & End-to-End Proof** (completed 2026-08-08) - The 66 web-researched companies land as a real scoreable population and prove the engine fires automatically at small volume
+- [x] **Phase 42: Scoring Artifact Cleanup & Reconciliation** (completed 2026-08-08) - Superseded scoring artifacts are archived (not deleted) and the property config reconciles clean against the live portal
+- [x] **Phase 43: Pipeline Scoring Hygiene & Explainability** (completed 2026-08-08, inserted) - The pipeline-side residue of the 2026-08-06 scoring audit is closed
 
 ## Phase Details
 
@@ -147,14 +149,14 @@ path enrichment/import actually uses, not just on hand-constructed fixtures.
   2. Imported companies score automatically on landing — no per-record manual touch — proving
      the trigger chain fires on the actual import/enrichment write path, not only when a human
      pokes a property in the UI.
-**Plans**: 4 plans
+**Plans**: 4/4 plans executed — Phase 41 COMPLETE, DATA-01/DATA-02 closed
 
 Plans:
 
 - [x] 41-01-PLAN.md — June candidate table + three-source merge fold in the enrichment lane (offline)
-- [ ] 41-02-PLAN.md — Pre-flight id resolver, provenance assertion in the parity harness, unpaired arm/disarm commands
-- [ ] 41-03-PLAN.md — Deploy, arm, and drive 5 real companies end to end (live canary tracer)
-- [ ] 41-04-PLAN.md — Release the rest, disarm, parity verdict and run report
+- [x] 41-02-PLAN.md — Pre-flight id resolver, provenance assertion in the parity harness, unpaired arm/disarm commands
+- [x] 41-03-PLAN.md — Deploy, arm, and drive 5 real companies end to end (live canary tracer)
+- [x] 41-04-PLAN.md — Release the rest, disarm, parity verdict and run report
 
 ### Phase 42: Scoring Artifact Cleanup & Reconciliation
 
@@ -224,7 +226,7 @@ they are deliberately absent here.)
 
   5. Suites green above baselines; arming grep 0; no n8n JSON hand-edits — builder only.
 
-**Plans**: 4/5 plans executed
+**Plans**: 5/5 plans executed
 then the Phase-41-gated deploy)
 
 - [x] 43-01-PLAN.md — PIPE-01/PIPE-02 offline: coerce all six broken boolean write sites at
@@ -239,7 +241,7 @@ then the Phase-41-gated deploy)
 - [x] 43-04-PLAN.md — Operator live proofs: EQ-filter match, breakdown read-back, the two
       unanswered loss-reason questions, plugin install
 
-- [ ] 43-05-PLAN.md — Deploy and bounce the regenerated workflows, gated on Phase 41 having
+- [x] 43-05-PLAN.md — Deploy and bounce the regenerated workflows, gated on Phase 41 having
       disarmed
 
 ## Progress
@@ -254,3 +256,13 @@ Phases execute in numeric order: 39 → 40 → 41 → 42 → 43
 | 41. Validation Data Import & End-to-End Proof | 4/4 | Complete | 2026-08-08 |
 | 42. Scoring Artifact Cleanup & Reconciliation | 3/3 | Complete | 2026-08-08 |
 | 43. Pipeline Scoring Hygiene & Explainability | 5/5 | Complete | 2026-08-08 |
+
+## Post-milestone follow-up (2026-08-08)
+
+Phase 41 exposed a defect that was not milestone work: `lv_icp_fit_score`'s
+`calculation_equation` blanked entirely whenever any referenced term was null, and research
+legitimately answers null for `gambling_score` on ~95% of companies, so 63 of 66 records
+carried no score at all while the parity sweep still reported PASS. Closed the same day —
+null-safe formula applied live plus a detector for the blank-score condition the harness
+could never see. See `.planning/phases/41-validation-data-import-end-to-end-proof/`:
+`41-FORMULA-SPIKE.md` (v2 verdict) and `41-NULL-SAFE-FORMULA-FIX.md`.

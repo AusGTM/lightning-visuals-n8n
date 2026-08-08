@@ -63,13 +63,17 @@ flowchart LR
 | Normalization & producer fixes (numeric industry code, `lv_sponsorship_reliant`, `lv_persona_group`) | ✅ Phase 18, red-before-green |
 | v0.3/v0.4 verification ledger | ✅ 6/6 discharged (`.planning/phases/19-verification-debt-closure/19-LEDGER.md`) |
 | Operator client (conversational front door + control plane) | ✅ **shipped — v0.6 sealed 2026-08-04** (49/49 requirements; armed canaries RB-3/7/8/9 all passed), [`operator-claude-plugin/`](operator-claude-plugin/README.md) |
+| HubSpot-resident ICP scoring engine (4 workflows + calculated fit score) | ✅ **remediated — v0.7 sealed 2026-08-08** (16/16 requirements; F1–F10 all closed on live evidence) |
+| Scoring parity harness (Python oracle vs live HubSpot) + standing drift guard | ✅ `scripts/run_scoring_parity.py` — PASS, 0 real findings; includes the blank-score detector |
+| Validation population | ✅ 66 web-researched companies landed and scored with provenance (A:7 B:18 C:17 D:24), zero provider spend |
+| Null-safe fit-score formula | ✅ 2026-08-08 — a bare sum blanked the whole score on any null term; now `coalesce()`-guarded, with `org_type_score` left bare as the "never scored" sentinel |
 
 **"Operator" means two different people in this repo.** Everything above is administered from this
 repository by a technical operator/admin (scripts, deploys, armed windows, runbooks in `docs/`). The
 v0.6 client targets a *non-technical* operator who works only in Claude and never opens n8n or a
 terminal; `docs/` runbooks and `scripts/` are admin surfaces, not theirs.
 
-Full test suite: `.venv/bin/python -m pytest -q` (Python oracle) + `node --test tests/n8n/*.test.mjs` (Code-node modules).
+Full test suite: `.venv/bin/python -m pytest -q` (Python oracle) + `node --test tests/n8n/*.test.mjs` (Code-node modules). Current: **2427 pytest / 636 node**.
 
 ## Repository layout
 

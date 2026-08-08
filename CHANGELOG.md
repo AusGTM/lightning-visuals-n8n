@@ -7,6 +7,49 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Milestone v0.7 — HubSpot Scoring Engine Remediation, sealed 2026-08-08.** 5 phases (39–43),
+  23 plans, 16/16 requirements. The ICP rubric had been implemented twice — correctly in
+  `src/icp_scoring.py` (oracle only, no production callers) and incorrectly as four live HubSpot
+  workflows created 2026-08-04 that surfaced only when the `automation` scope was granted. All
+  ten validated defects (F1–F10) are fixed in place:
+  - **Engine (Phase 40):** `lv_produces_content` contributes +20; scoring reads the canonical
+    `lv_country_region_normalized`/`lv_revenue_band` the pipeline actually writes instead of
+    native `country`/never-written `annualrevenue`; revenue decay lands −5/−15/−30/−50 in the
+    rubric-correct band at 500M/750M/1B/1.2B; the gambling deduction is driven by
+    `lv_is_gambling_operator` independent of org type and never sets the veto flag; regulator
+    scores 5; sub-15 without a veto no longer grades D. All three hard vetoes write flag **and**
+    reason, vetoes clear on correction (no one-way latch), and a flag change alone moves the
+    tier. New flow fetch/PUT tooling and `PORTAL-FACTS.md`.
+  - **Parity (Phase 40):** `scripts/run_scoring_parity.py` recomputes via the oracle and asserts
+    against live HubSpot, with a false-green guard that FAILS when zero assertions execute.
+    Every F-defect had been invisible in the HubSpot UI. F4/F7/F9/F10 encoded as named
+    regression cases.
+  - **Data (Phase 41):** the 66 web-researched validation companies landed with `lv_*` inputs and
+    provenance at **zero provider spend**, and scored automatically on the real write path —
+    A:7 B:18 C:17 D:24, parity PASS over all 66.
+  - **Cleanup (Phase 42):** `config/hubspot_properties.yaml` expanded to a full 32-property live
+    mirror at zero drift; standing `scripts/check_schema_drift.py` with a machine-checked
+    do-not-archive invariant and a dedicated exit code when the live engine itself is damaged.
+    Live orphan derivation found zero uncontested and zero ambiguous candidates — nothing to
+    archive.
+  - **Pipeline hygiene (Phase 43):** six boolean write sites coerced to strings at two shared
+    choke points; the dormant `mergeCompanies.js` veto site hardened; `--write-breakdown` gives
+    `lv_icp_score_breakdown` a producer (rubric-versioned, shed-detail-first serializer);
+    closed-lost reasons aggregated into a report plus an operator-plugin skill.
+- **Null-safe `lv_icp_fit_score` formula + blank-score detector (2026-08-08).** Phase 41 exposed
+  that HubSpot blanks a `calculation_equation` entirely when any referenced term is null, and
+  research legitimately answers null for `gambling_score` on ~95% of companies — so **63 of 66
+  records carried no score at all** while the parity sweep still reported PASS. A live spike
+  mapped the formula grammar (the API's 400 body enumerates every valid token) and verified
+  three null guards; the live formula is now
+  `org_type_score + coalesce(geography_score, 0) + coalesce(annual_revenue_score, 0) + coalesce(produces_content_score, 0) + coalesce(gambling_score, 0)`.
+  `org_type_score` is deliberately left unguarded as the "has been through the pipeline"
+  sentinel — guarding all five would score the 646 never-enriched companies as 0 and enroll every
+  one of them in the tier flow. The parity harness gained a detector for the complement of its
+  own sample (`org_type_score` present, `lv_icp_fit_score` absent) — the set it structurally
+  could not see, which is exactly how 63 records shipped as apparent success. New
+  `scripts/apply_fit_score_formula.py` (archive is the source of truth, `ALLOW_FORMULA_WRITE`
+  gated, dry-run by default); regression tests proven to fail on revert.
 - **Phase 39 (v0.7) — scoring-remediation path decision, sealed 2026-08-06.** Company fit-score
   availability on Sales Hub Pro verified **in-portal** (Lead Scoring app renders; company + fit
   score offered; Contacts locked behind Marketing Hub) with evidence on disk — 2 read-only API

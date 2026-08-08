@@ -1,5 +1,10 @@
 # Operational defect: `HUBSPOT_PORTAL_ID` in `.env` is corrupted to `'!'`
 
+> **RESOLVED 2026-08-08.** The operator fixed `.env`
+> (`HUBSPOT_PORTAL_ID='22617666'`). Verified by running the sweep with **no** inline
+> override: PASS, 67 assertions, 0 real findings. The standing scheduled guard runs again.
+
+
 **Found:** 2026-08-08, attempting the parity sweep over the landed canary records.
 **Severity:** HIGH operationally — the standing scoring-drift guard is currently inoperable.
 **Not a code defect.** Every affected component behaved correctly. The `.env` value is wrong.

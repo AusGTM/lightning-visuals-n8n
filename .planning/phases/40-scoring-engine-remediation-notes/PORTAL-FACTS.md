@@ -37,6 +37,17 @@ optional, before WF1 can be edited to write `Unscored` for D-03's F8 fix.
 
 ## lv_icp_fit_score calculationFormula
 
+> **SUPERSEDED 2026-08-08 (Phase 41 follow-up).** The live formula is now null-safe:
+> `org_type_score + coalesce(geography_score, 0) + coalesce(annual_revenue_score, 0) + coalesce(produces_content_score, 0) + coalesce(gambling_score, 0)`.
+> A bare sum blanks the whole score on ANY null term, and `gambling_score` is legitimately
+> null on ~95% of companies, so the five-term sum below left 63 of 66 records unscored.
+> `org_type_score` stays UNGUARDED on purpose — it is the "has been through the pipeline"
+> sentinel; guarding it too would score all 646 never-enriched companies as 0 and enroll
+> them in the tier flow. Grammar + live evidence:
+> `../41-validation-data-import-end-to-end-proof/41-FORMULA-SPIKE.md` and
+> `41-NULL-SAFE-FORMULA-FIX.md`.
+
+
 `GET /crm/v3/properties/companies/lv_icp_fit_score` (Open Question 2): `type=number`,
 `fieldType=calculation_equation`, `calculated=true`. Verbatim current formula string:
 

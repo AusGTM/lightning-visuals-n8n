@@ -110,13 +110,19 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 ## Future Requirements (deferred beyond v0.7)
 
 - Full-712 input-coverage backfill trigger — re-enrollment mechanism for existing companies
-  (property defaults only stamp new records). Explicitly deferred at scoping (2026-08-06).
+  (property defaults only stamp new records). Explicitly deferred at scoping (2026-08-06). **Note
+  (2026-08-08):** do NOT approach this by null-guarding `org_type_score` in the fit-score
+  formula. That would make all 646 never-enriched companies compute to 0 and enroll every one
+  of them in the tier flow; `org_type_score` is left bare on purpose as the "has been through
+  the pipeline" sentinel, and a conformance test fails if it is guarded. See
+  `.planning/phases/41-validation-data-import-end-to-end-proof/41-NULL-SAFE-FORMULA-FIX.md`.
 
 - Intent/pixel scoring block (+3/+7/+5/+10) — no property, no config entry, no node
   (carried from v0.5 deferral).
 
-- Review-queue policy at volume — `src/icp_scoring.py` routes 711/712 to review on unknown
-  org_type/content; policy decision precedes any armed backfill.
+- Review-queue policy at volume — `src/icp_scoring.py` routes companies with unknown
+  org_type/content to review; as of 2026-08-08 that is the 646 of 712 companies that carry no
+  `lv_*` inputs at all. Policy decision precedes any armed backfill.
 
 ## Out of Scope
 

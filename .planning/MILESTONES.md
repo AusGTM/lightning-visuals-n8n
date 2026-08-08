@@ -1,5 +1,45 @@
 # Milestones
 
+## v0.7 HubSpot Scoring Engine Remediation (Shipped: 2026-08-08)
+
+**Phases completed:** 5 phases (39–43), 23 plans
+
+**Key accomplishments:**
+
+- The ICP rubric was implemented twice — correctly in `src/icp_scoring.py` (oracle only, zero
+  production callers) and incorrectly as four live HubSpot workflows nobody knew existed until
+  the `automation` scope was granted. All ten validated defects (F1–F10) are fixed **in place**
+  on the HubSpot-resident path (Phase 39 decision: the lead-scoring tool cannot write
+  `lv_icp_fit_score`, so it was rejected despite being available).
+- Engine correct end to end: `lv_produces_content` contributes +20, scoring reads the canonical
+  `lv_*` inputs the pipeline actually writes (not native `country`/`annualrevenue`), revenue
+  decay lands in the rubric-correct band at every boundary, the gambling deduction is
+  independent of org type and never sets the veto flag, sub-15 without a veto no longer grades
+  D, all three hard vetoes write flag + reason, vetoes clear on correction, and a flag change
+  alone moves the tier.
+- **Parity harness instead of eyeballing the UI** (`scripts/run_scoring_parity.py`): recomputes
+  via the oracle and asserts against live HubSpot, with a false-green guard that fails when zero
+  assertions execute. Every F-defect had been invisible in the HubSpot UI.
+- 66 web-researched companies landed as a real scoreable population with provenance at **zero
+  provider spend**, and scored automatically on the actual write path (A:7 B:18 C:17 D:24).
+- Schema reconciled: `config/hubspot_properties.yaml` is a full 32-property live mirror at zero
+  drift, with a standing checker (`scripts/check_schema_drift.py`) and a machine-checked
+  do-not-archive invariant. Live derivation found zero orphans — Phase 40 left no debris.
+- Pipeline hygiene: boolean write sites coerced to strings at two shared choke points, the
+  dormant veto site hardened, `lv_icp_score_breakdown` given a producer, and the closed-lost
+  reason signal consumed.
+- **Post-milestone, same day:** Phase 41 exposed that `lv_icp_fit_score`'s formula blanked
+  entirely on any null term, so 63 of 66 records had no score while the sweep still said PASS.
+  Spiked the grammar (the API's 400 body enumerates it), applied a null-safe formula live, and
+  added a detector for the blank-score condition the harness structurally could not see.
+
+**Closeout:** REQUIREMENTS 16/16; ROADMAP 5/5 phases Complete; suites 2427 pytest / 636 node;
+arming grep 0; all n8n write gates disarmed at rest; live parity PASS with 0 real findings;
+schema drift exit 0. No milestone git tag (semver-release-tag namespace precedent from
+v0.3/v0.4/v0.6).
+
+---
+
 ## v0.6 Claude Plugin Entrypoint (Shipped: 2026-08-04)
 
 **Phases completed:** 10 phases (23–32), workstream `plugin-entrypoint`
