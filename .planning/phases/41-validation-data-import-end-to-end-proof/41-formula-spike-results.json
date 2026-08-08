@@ -1,0 +1,43 @@
+{
+  "original_formula": "org_type_score + geography_score + annual_revenue_score + produces_content_score + gambling_score",
+  "candidates": [
+    {
+      "candidate": "if-guard",
+      "accepted": false,
+      "http": 400,
+      "error": "{\"status\":\"error\",\"message\":\"Unable to parse calculation formula in line 1 and column 101 - line 1, column 101:\\n*, -, round_down, round_up, round_nearest, is_present, number_to_string, string_to_number, concatenate, max, min, coalesce, contains, date, time_between, time_between_skip_weekends, begin"
+    },
+    {
+      "candidate": "coalesce",
+      "accepted": true,
+      "http": 200,
+      "null_term_value": "60",
+      "null_term_ok": false,
+      "all_terms_value": "60",
+      "all_terms_ok": true,
+      "verdict": "accepted-but-wrong"
+    },
+    {
+      "candidate": "ifnull",
+      "accepted": false,
+      "http": 400,
+      "error": "{\"status\":\"error\",\"message\":\"Unable to parse calculation formula in line 1 and column 105 - line 1, column 105:\\n*, -, round_down, round_up, round_nearest, is_present, number_to_string, string_to_number, concatenate, max, min, coalesce, contains, date, time_between, time_between_skip_weekends, begin"
+    },
+    {
+      "candidate": "is_known",
+      "accepted": false,
+      "http": 400,
+      "error": "{\"status\":\"error\",\"message\":\"Unable to parse calculation formula in line 1 and column 111 - line 1, column 111:\\n*, -, round_down, round_up, round_nearest, is_present, number_to_string, string_to_number, concatenate, max, min, coalesce, contains, date, time_between, time_between_skip_weekends, begin"
+    },
+    {
+      "candidate": "zero-add",
+      "accepted": true,
+      "http": 200,
+      "null_term_value": "80",
+      "null_term_ok": true,
+      "all_terms_value": "60",
+      "all_terms_ok": true,
+      "verdict": "VIABLE"
+    }
+  ]
+}
