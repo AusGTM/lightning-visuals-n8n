@@ -112,8 +112,12 @@ def main() -> int:
     q = snap["16047156820"]
     checks.append(("QRIC -> regulator", q.get("lv_org_type") == "regulator", q.get("lv_org_type")))
     s = snap["17861423879"]
-    checks.append(("Sportsbet: no veto", str(s.get("lv_anti_icp_flag")).lower() in ("false", "none", ""),
-                   s.get("lv_anti_icp_flag")))
+    # NOT "no veto" -- a gambling operator can still be legitimately vetoed for no-content.
+    # The rubric claim under test is narrower: gambling must not be the CAUSE. Verified by
+    # reading the reason string, since the flag alone cannot distinguish the two.
+    s_reason = (s.get("lv_anti_icp_reason") or "").lower()
+    checks.append(("Sportsbet: gambling not the veto cause", "gambl" not in s_reason,
+                   s.get("lv_anti_icp_reason")))
     t = snap["15274105699"]
     checks.append(("Supertech: veto fires", str(t.get("lv_anti_icp_flag")).lower() == "true",
                    t.get("lv_anti_icp_flag")))
