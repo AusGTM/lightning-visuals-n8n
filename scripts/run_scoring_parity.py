@@ -165,6 +165,37 @@ def _select_sample_ids() -> list:
     return [r["id"] for r in result.get("results", [])]
 
 
+def _find_blank_score_with_inputs() -> list:
+    """Phase 41 task #3, option 4 — the detector for the failure class that shipped as
+    success.
+
+    `_select_sample_ids()` searches HAS_PROPERTY on lv_icp_fit_score, so a company whose
+    score is BLANK is invisible to the entire comparison above. That is exactly how 63 of
+    66 records went unscored through a full phase and the sweep still reported PASS: the
+    harness only ever looked at records that had a score.
+
+    This searches the complement — a company that HAS `org_type_score` (so the pipeline
+    has run on it and it is meant to be scored) but has NO `lv_icp_fit_score`. Under the
+    null-safe formula that set is empty; a non-empty result means the score is blanking
+    again, whatever the mechanism. Findings are real, never a documented divergence.
+
+    Returns a list of company ids. Search failures propagate — a detector that silently
+    returns [] on error is the same false green it exists to prevent (D-13).
+    """
+    from src.hubspot_client import search_records
+
+    result = search_records(
+        "companies",
+        [
+            {"propertyName": "org_type_score", "operator": "HAS_PROPERTY"},
+            {"propertyName": "lv_icp_fit_score", "operator": "NOT_HAS_PROPERTY"},
+        ],
+        ["name", "org_type_score"],
+        limit=100,
+    )
+    return [r["id"] for r in result.get("results", [])]
+
+
 def _flag_matches(live_value, expected_flag: bool) -> bool:
     """Phase 40-07 (Rule 1 -- bug fix, third instance of the same defect class 40-05 and
     40-06 each fixed once in tests/test_scoring_parity.py's live pytest assertions): since
@@ -233,18 +264,28 @@ def _classify_mismatch(live_triple: dict, expected_triple: dict, expected_result
     return "documented_needs_review_divergence"
 
 
-def build_report(sample_ids, fetch_fn=fetch_for_parity, write_breakdown=False, write_fn=patch_record):
+def build_report(sample_ids, fetch_fn=fetch_for_parity, write_breakdown=False,
+                 write_fn=patch_record, blank_score_ids=None):
     """The comparison core, offline-testable with an empty sample_ids or a stubbed
     fetch_fn — no network call is reachable when sample_ids is empty. `write_breakdown`
     defaults to False (D-01): with it off, `write_fn` is never called, proving the
     standing unattended sweep stays read-only regardless of what `write_fn` is. With it
     on, `write_fn` is called once per company this invocation successfully compared
-    (D-03 -- never a company whose fetch raised, never a portfolio backfill). Returns
-    (report_dict, exit_code)."""
+    (D-03 -- never a company whose fetch raised, never a portfolio backfill).
+
+    `blank_score_ids` carries _find_blank_score_with_inputs()'s result. `None` means the
+    detector did not run (offline/unit callers); `[]` means it ran and found nothing, which
+    is itself one executed assertion. Any id in it is a real finding — a company the
+    pipeline has scored components for whose lv_icp_fit_score is blank is the exact
+    condition that swallowed 63 records in Phase 41 while the sweep reported PASS.
+
+    Returns (report_dict, exit_code)."""
     comparisons = []
     mismatches = []
     real_findings = []
     breakdowns_written = 0
+    detector_ran = blank_score_ids is not None
+    blank_score_ids = list(blank_score_ids or [])
 
     for company_id in sample_ids:
         try:
@@ -309,7 +350,19 @@ def build_report(sample_ids, fetch_fn=fetch_for_parity, write_breakdown=False, w
             )
             breakdowns_written += 1
 
-    assertions_executed = len(comparisons)
+    sample_findings = len(real_findings)  # before the detector appends its own
+    for company_id in blank_score_ids:
+        real_findings.append({
+            "company_id": company_id,
+            "classification": "has_scoring_inputs_but_no_fit_score",
+            "detail": ("org_type_score is set but lv_icp_fit_score is blank -- the "
+                       "calculated property is blanking on a null term again."),
+        })
+
+    # The detector counts as one executed assertion ("no company has inputs but no
+    # score"), so a run whose comparison sample is empty but whose detector ran clean is
+    # not mistaken for a run that checked nothing.
+    assertions_executed = len(comparisons) + (1 if detector_ran else 0)
     if assertions_executed == 0:
         verdict = (
             "FAIL: zero assertions executed. A sweep that checked nothing must never "
@@ -319,10 +372,13 @@ def build_report(sample_ids, fetch_fn=fetch_for_parity, write_breakdown=False, w
         exit_code = 1
     elif real_findings:
         verdict = (
-            f"FAIL: {len(real_findings)} of {len(sample_ids)} sampled companies "
+            f"FAIL: {sample_findings} of {len(sample_ids)} sampled companies "
             "diverge from the oracle or could not be checked (not the documented Needs "
             "Review divergence)."
         )
+        if blank_score_ids:
+            verdict += (f" [detector: {len(blank_score_ids)} compan(ies) have scoring "
+                        "inputs but a blank lv_icp_fit_score]")
         exit_code = 1
     elif mismatches:
         verdict = (
@@ -342,6 +398,8 @@ def build_report(sample_ids, fetch_fn=fetch_for_parity, write_breakdown=False, w
         "rubric_version": _rubric_version(),
         "checked_at_utc": datetime.now(timezone.utc).isoformat(),
         "sample_ids": list(sample_ids),
+        "blank_score_detector_ran": detector_ran,
+        "blank_score_ids": blank_score_ids,
         "comparisons": comparisons,
         "mismatches": mismatches,
         "real_findings": real_findings,
@@ -394,7 +452,9 @@ def main(argv=None) -> int:
         return 1
 
     sample_ids = _select_sample_ids()
-    report, exit_code = build_report(sample_ids, write_breakdown=args.write_breakdown)
+    blank_score_ids = _find_blank_score_with_inputs()
+    report, exit_code = build_report(sample_ids, write_breakdown=args.write_breakdown,
+                                     blank_score_ids=blank_score_ids)
     path = _write_report(report)
     print(f"wrote {path}")
     print(report["verdict"])

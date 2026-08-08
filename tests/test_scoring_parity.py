@@ -555,6 +555,71 @@ def test_run_scoring_parity_verdict_denominator_counts_failed_fetches():
 
 
 # --------------------------------------------------------------------------------------
+# Phase 41 task #3, option 4 -- the blank-score detector. The comparison loop searches
+# HAS_PROPERTY on lv_icp_fit_score, so a blank-scored company is invisible to it; that is
+# precisely how 63 of 66 records went unscored through a full phase with the sweep still
+# reporting PASS. Offline: build_report() takes the ids directly.
+# --------------------------------------------------------------------------------------
+
+def test_blank_score_with_inputs_is_a_real_finding():
+    import scripts.run_scoring_parity as parity_script
+
+    report, exit_code = parity_script.build_report([], blank_score_ids=["901", "902"])
+    assert exit_code == 1
+    finding = report["real_findings"][0]
+    assert finding["company_id"] == "901"
+    assert finding["classification"] == "has_scoring_inputs_but_no_fit_score"
+    assert report["blank_score_ids"] == ["901", "902"]
+    assert "detector: 2 compan(ies)" in report["verdict"]
+
+
+def test_blank_score_detector_running_clean_counts_as_an_assertion():
+    """A sweep whose comparison sample is empty but whose detector ran clean has checked
+    something real, so it must not trip the zero-assertion false-green guard."""
+    import scripts.run_scoring_parity as parity_script
+
+    report, exit_code = parity_script.build_report([], blank_score_ids=[])
+    assert exit_code == 0
+    assert report["blank_score_detector_ran"] is True
+    assert report["assertions_executed"] == 1
+    assert "zero assertions" not in report["verdict"]
+
+
+def test_blank_score_detector_not_run_does_not_count_as_an_assertion():
+    """The default (None) means the detector never ran -- that must stay a zero-assertion
+    FAIL, not a silent pass."""
+    import scripts.run_scoring_parity as parity_script
+
+    report, exit_code = parity_script.build_report([])
+    assert exit_code != 0
+    assert report["blank_score_detector_ran"] is False
+    assert report["assertions_executed"] == 0
+
+
+def test_blank_score_detector_findings_stay_out_of_the_sample_denominator():
+    """Detector findings are not sampled companies, so folding them into the 'N of M
+    sampled' numerator would misreport the comparison result."""
+    import scripts.run_scoring_parity as parity_script
+
+    def stub_fetch(_company_id):
+        return {
+            "lv_org_type": "governing_body_league",
+            "lv_produces_content": True,
+            "lv_country_region_normalized": "AU",
+            "lv_revenue_band": "5-50M",
+            "lv_icp_fit_score": "80",
+            "lv_icp_tier": "A",
+            "lv_anti_icp_flag": "false",
+        }
+
+    report, exit_code = parity_script.build_report(
+        ["ok-1"], fetch_fn=stub_fetch, blank_score_ids=["901"])
+    assert exit_code == 1
+    assert "0 of 1 sampled companies" in report["verdict"]
+    assert len(report["real_findings"]) == 1
+
+
+# --------------------------------------------------------------------------------------
 # Phase 41 Plan 02 Task 2 -- the automated provenance assertion. Offline, stubbed
 # fetch_fn, no network. DATA-01's "provenance stamped" bar measured on every record;
 # enforced as a real_finding only when PARITY_REQUIRE_PROVENANCE=true.

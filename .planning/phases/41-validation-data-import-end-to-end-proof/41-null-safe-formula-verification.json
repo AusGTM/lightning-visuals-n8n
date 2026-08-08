@@ -1,0 +1,18 @@
+{
+  "counts": {
+    "total": 712,
+    "scored": 66,
+    "with_components": 66,
+    "blank_with_inputs": 0,
+    "pass": true
+  },
+  "disposable": {
+    "cleared_score": "",
+    "cleared_ok": true,
+    "four_of_five_score": "80",
+    "four_of_five_ok": true,
+    "pass": true
+  },
+  "leaks": 1,
+  "verdict": "PASS"
+}

@@ -375,6 +375,55 @@ def test_fit_score_formula_references_all_five_components():
         assert name in formula, f"calculationFormula '{formula}' is missing '{name}'"
 
 
+# Phase 41 task #3 -- the regression guard for the null-blanking defect. HubSpot blanks a
+# calculated property entirely when ANY referenced term is null, and research legitimately
+# answers null for gambling_score on ~95% of companies, so the bare five-term sum left
+# 63 of 66 records with NO SCORE for a whole phase while the sweep reported PASS.
+# Evidence: .planning/phases/41-.../41-FORMULA-SPIKE.md (three constructs verified live).
+FIT_SCORE_GUARDED_COMPONENTS = (
+    "geography_score",
+    "annual_revenue_score",
+    "produces_content_score",
+    "gambling_score",
+)
+FIT_SCORE_SENTINEL_COMPONENT = "org_type_score"
+
+
+def test_fit_score_formula_guards_every_nullable_component():
+    """Reverting any coalesce() guard fails here. This is the guard against recurrence,
+    not the fix itself -- the fix is one PATCH and is invisible to the repo otherwise."""
+    if not FIT_SCORE_PROPERTY_PATH.exists():
+        pytest.skip(f"{FIT_SCORE_PROPERTY_PATH} not archived yet")
+
+    with FIT_SCORE_PROPERTY_PATH.open() as f:
+        formula = json.load(f)["calculationFormula"]
+
+    for name in FIT_SCORE_GUARDED_COMPONENTS:
+        assert f"coalesce({name}, 0)" in formula, (
+            f"'{name}' is not null-guarded in calculationFormula '{formula}'. A single "
+            "null term blanks the whole score -- that defect cost Phase 41 63 records."
+        )
+
+
+def test_fit_score_formula_leaves_org_type_score_unguarded_as_the_sentinel():
+    """org_type_score stays bare ON PURPOSE. The org-type mapper writes it for every
+    enriched company ('unknown' scores 0, so it is never skipped), which makes it the
+    'this record has been through the pipeline' sentinel. Guarding it too would make all
+    646 never-enriched companies compute to 0 and enroll every one of them in the tier
+    flow -- blank must keep meaning 'never scored'."""
+    if not FIT_SCORE_PROPERTY_PATH.exists():
+        pytest.skip(f"{FIT_SCORE_PROPERTY_PATH} not archived yet")
+
+    with FIT_SCORE_PROPERTY_PATH.open() as f:
+        formula = json.load(f)["calculationFormula"]
+
+    assert f"coalesce({FIT_SCORE_SENTINEL_COMPONENT}" not in formula, (
+        f"'{FIT_SCORE_SENTINEL_COMPONENT}' must NOT be null-guarded -- see docstring. "
+        f"Formula: '{formula}'"
+    )
+    assert FIT_SCORE_SENTINEL_COMPONENT in formula
+
+
 # ----------------------------------------------------------------------------------
 # 40-06 (ENGINE-07/VETO-03) — WF1 "Set ICP Tier" tier-ladder conformance.
 # WF1's shape differs from the geography/revenue mapper flows above: its two
