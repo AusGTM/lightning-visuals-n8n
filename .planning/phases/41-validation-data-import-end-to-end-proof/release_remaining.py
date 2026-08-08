@@ -5,9 +5,7 @@ The canary (41-03 Task 3) is COMPLETE at 5/5 with every rubric path verified —
 
 PREREQUISITE — the operator must arm (Claude is blocked from arming):
 
-  ALLOW_N8N_ARM=true .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); \
-import sys; sys.argv=['june_run_arm.py','--ids','<ALL_66_COMMA_SEPARATED>']; \
-import runpy; runpy.run_path('scripts/june_run_arm.py', run_name='__main__')"
+  ALLOW_N8N_ARM=true .venv/bin/python scripts/june_run_arm.py --ids <ALL_66_COMMA_SEPARATED>
 
 The id list is in 41-id-resolution.json; this script prints it if the window is closed, so
 it can be pasted straight into the arm command.

@@ -11,9 +11,7 @@ that never ran are the three that test distinct rubric behaviour:
 
 PREREQUISITE — the operator must arm first (Claude is blocked from arming):
 
-  ALLOW_N8N_ARM=true .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); \
-import sys; sys.argv=['june_run_arm.py','--ids','16047156820,17861423879,15274105699']; \
-import runpy; runpy.run_path('scripts/june_run_arm.py', run_name='__main__')"
+  ALLOW_N8N_ARM=true .venv/bin/python scripts/june_run_arm.py --ids 16047156820,17861423879,15274105699
 
 Then run this. It refuses to queue anything if the window is not actually open, so a
 forgotten arm fails loudly instead of silently burning Anthropic tokens against a closed
