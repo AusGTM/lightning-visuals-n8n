@@ -1,0 +1,95 @@
+{
+  "original_formula": "org_type_score + geography_score + annual_revenue_score + produces_content_score + gambling_score",
+  "defect_reproduced": true,
+  "candidates": [
+    {
+      "candidate": "is_present-stmt-then",
+      "formula": "org_type_score + geography_score + annual_revenue_score + produces_content_score + if is_present(gambling_score) then gambling_score else 0",
+      "accepted": true,
+      "http": 200,
+      "null_case": {
+        "lv_icp_fit_score": "80",
+        "org_type_score": "40",
+        "geography_score": "10",
+        "annual_revenue_score": "10",
+        "produces_content_score": "20",
+        "gambling_score": ""
+      },
+      "null_ok": true,
+      "full_case": {
+        "lv_icp_fit_score": "60",
+        "org_type_score": "40",
+        "geography_score": "10",
+        "annual_revenue_score": "10",
+        "produces_content_score": "20",
+        "gambling_score": "-20"
+      },
+      "full_ok": true,
+      "verdict": "VIABLE"
+    },
+    {
+      "candidate": "is_present-stmt-brace",
+      "formula": "org_type_score + geography_score + annual_revenue_score + produces_content_score + if (is_present(gambling_score)) { gambling_score } else { 0 }",
+      "accepted": false,
+      "http": 400,
+      "error_full": "{\"status\":\"error\",\"message\":\"Unable to parse calculation formula in line 1 and column 116 - line 1, column 116:\\n*, -, round_down, round_up, round_nearest, is_present, number_to_string, string_to_number, concatenate, max, min, coalesce, contains, date, time_between, time_between_skip_weekends, begins_with, to_lower_case, to_upper_case, has_email_reply, has_plain_text_email_reply, extract_most_recent_email_reply_html, extract_most_recent_email_reply_text, extract_most_recent_plain_text_reply, pipeline_probability, is_pipeline_stage_closed, month, year, period_to_months, period_to_weeks, dated_exchange_rate, currency_decimal_places, exchange_rate, set_contains_string, is_engagement_type, fetch_single_currency_portal_currency, fetch_portal_home_currency, is_portal_enabled_currency, is_portal_multicurrency_enabled, format_full_name, format_phone_number, format_searchable_phone_number, abs, sqrt, power, string_length, substring, add_time, subtract_time, is_blank, regex_matches, is_valid_iso_period, is_month_based_iso_period, is_day_based_iso_period, is_multiple_of, validate_when, if, (, NOW, DECIMAL, scientific number literal, string literal, true, false, e, TARGET, IDENTIFIER, bool, string, timestamp, +, >, <, >=, <=, =, equals, !=, or, and, xor or then expected, EOF encountered.\",\"correlationId\":\"019fe192-03b2-7578-aaa9-dec4661a40fd\",\"propertiesErrorCode\":\"PROPERTY_INVALID\"}"
+    },
+    {
+      "candidate": "is_present-mul",
+      "formula": "org_type_score + geography_score + annual_revenue_score + produces_content_score + is_present(gambling_score) * gambling_score",
+      "accepted": false,
+      "http": 400,
+      "error_full": "{\"status\":\"error\",\"message\":\"Sub-expression output type: Boolean is not compatible with input type: BigDecimal\",\"correlationId\":\"019fe192-18bd-7068-8fc8-acab62c5bb7f\",\"propertiesErrorCode\":\"PROPERTY_INVALID\"}"
+    },
+    {
+      "candidate": "coalesce",
+      "formula": "org_type_score + geography_score + annual_revenue_score + produces_content_score + coalesce(gambling_score, 0)",
+      "accepted": true,
+      "http": 200,
+      "null_case": {
+        "lv_icp_fit_score": "80",
+        "org_type_score": "40",
+        "geography_score": "10",
+        "annual_revenue_score": "10",
+        "produces_content_score": "20",
+        "gambling_score": ""
+      },
+      "null_ok": true,
+      "full_case": {
+        "lv_icp_fit_score": "60",
+        "org_type_score": "40",
+        "geography_score": "10",
+        "annual_revenue_score": "10",
+        "produces_content_score": "20",
+        "gambling_score": "-20"
+      },
+      "full_ok": true,
+      "verdict": "VIABLE"
+    },
+    {
+      "candidate": "zero-add",
+      "formula": "org_type_score + geography_score + annual_revenue_score + produces_content_score + (gambling_score + 0)",
+      "accepted": true,
+      "http": 200,
+      "null_case": {
+        "lv_icp_fit_score": "80",
+        "org_type_score": "40",
+        "geography_score": "10",
+        "annual_revenue_score": "10",
+        "produces_content_score": "20",
+        "gambling_score": ""
+      },
+      "null_ok": true,
+      "full_case": {
+        "lv_icp_fit_score": "60",
+        "org_type_score": "40",
+        "geography_score": "10",
+        "annual_revenue_score": "10",
+        "produces_content_score": "20",
+        "gambling_score": "-20"
+      },
+      "full_ok": true,
+      "verdict": "VIABLE"
+    }
+  ]
+}

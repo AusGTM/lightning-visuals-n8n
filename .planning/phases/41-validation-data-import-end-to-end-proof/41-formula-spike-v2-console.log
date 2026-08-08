@@ -1,0 +1,56 @@
+=== live formula (captured for restore) ===
+  org_type_score + geography_score + annual_revenue_score + produces_content_score + gambling_score
+
+=== create disposable (bare — no components set) ===
+  id=280328273386
+  waiting up to 120s for the create-time 0-stamp to land...
+  stamped: lv_icp_fit_score='0' | org_type='0' geography='0' annual_revenue='0' produces_content='0' gambling='0'
+
+=== clear all five components ===
+  cleared: lv_icp_fit_score='' | org_type='' geography='' annual_revenue='' produces_content='' gambling=''
+
+=== gate: 4 of 5 set, gambling_score null, ORIGINAL formula ===
+  4-of-5: lv_icp_fit_score='' | org_type='40' geography='10' annual_revenue='10' produces_content='20' gambling=''
+  defect reproduced (score blank with a genuine null term): True
+
+=== candidate: is_present-stmt-then ===
+  org_type_score + geography_score + annual_revenue_score + produces_content_score + if is_present(gambling_score) then gambling_score else 0
+  PATCH 200 accepted=True
+  null term (want 80): lv_icp_fit_score='80' | org_type='40' geography='10' annual_revenue='10' produces_content='20' gambling=''
+  all five (want 60): lv_icp_fit_score='60' | org_type='40' geography='10' annual_revenue='10' produces_content='20' gambling='-20'
+  null_ok=True full_ok=True -> VIABLE
+
+=== candidate: is_present-stmt-brace ===
+  org_type_score + geography_score + annual_revenue_score + produces_content_score + if (is_present(gambling_score)) { gambling_score } else { 0 }
+  PATCH 400 accepted=False
+  rejected: {"status":"error","message":"Unable to parse calculation formula in line 1 and column 116 - line 1, column 116:\n*, -, round_down, round_up, round_nearest, is_present, number_to_string, string_to_number, concatenate, max, min, coalesce, contains, date, time_between, time_between_skip_weekends, begins_with, to_lower_case, to_upper_case, has_email_reply, has_plain_text_email_reply, extract_most_rece
+
+=== candidate: is_present-mul ===
+  org_type_score + geography_score + annual_revenue_score + produces_content_score + is_present(gambling_score) * gambling_score
+  PATCH 400 accepted=False
+  rejected: {"status":"error","message":"Sub-expression output type: Boolean is not compatible with input type: BigDecimal","correlationId":"019fe192-18bd-7068-8fc8-acab62c5bb7f","propertiesErrorCode":"PROPERTY_INVALID"}
+
+=== candidate: coalesce ===
+  org_type_score + geography_score + annual_revenue_score + produces_content_score + coalesce(gambling_score, 0)
+  PATCH 200 accepted=True
+  null term (want 80): lv_icp_fit_score='80' | org_type='40' geography='10' annual_revenue='10' produces_content='20' gambling=''
+  all five (want 60): lv_icp_fit_score='60' | org_type='40' geography='10' annual_revenue='10' produces_content='20' gambling='-20'
+  null_ok=True full_ok=True -> VIABLE
+
+=== candidate: zero-add ===
+  org_type_score + geography_score + annual_revenue_score + produces_content_score + (gambling_score + 0)
+  PATCH 200 accepted=True
+  null term (want 80): lv_icp_fit_score='80' | org_type='40' geography='10' annual_revenue='10' produces_content='20' gambling=''
+  all five (want 60): lv_icp_fit_score='60' | org_type='40' geography='10' annual_revenue='10' produces_content='20' gambling='-20'
+  null_ok=True full_ok=True -> VIABLE
+
+=== restore ===
+  PATCH 200; formula restored correctly: True
+  disposable 280328273386 deleted
+  leaked disposables still live: 1
+
+=== VERDICT: 3 viable of 5 ===
+  VIABLE: is_present-stmt-then  ->  org_type_score + geography_score + annual_revenue_score + produces_content_score + if is_present(gambling_score) then gambling_score else 0
+  VIABLE: coalesce  ->  org_type_score + geography_score + annual_revenue_score + produces_content_score + coalesce(gambling_score, 0)
+  VIABLE: zero-add  ->  org_type_score + geography_score + annual_revenue_score + produces_content_score + (gambling_score + 0)
+Evidence: /Users/robertli/Desktop/consulting/lightning-visuals/lv-n8n-poc/.planning/phases/41-validation-data-import-end-to-end-proof/41-formula-spike-v2-results.json
