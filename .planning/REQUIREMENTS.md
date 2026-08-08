@@ -87,7 +87,11 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 
 - [x] **PIPE-01**: lv_enrichment_needs_review is written as the STRING "true"/"false", never a
   JS boolean, at every writer — HubSpot EQ filters match strings only; the identical class was
-  fixed for lv_enrichment_requested in 36-07. (LIVE defect: shallow-spread-with-no-coercion.)
+  fixed for lv_enrichment_requested in 36-07. (Originally scoped as a LIVE defect:
+  shallow-spread-with-no-coercion. **Severity downgraded 2026-08-08** — 43-04 proved live that
+  HubSpot silently coerces a bare-boolean PATCH on this property to the string "true", so the
+  filters were not in fact broken. The fix still shipped and is correct: depending on undocumented
+  provider coercion is not a contract. See 43-LIVE-EVIDENCE.md.)
 
 - [x] **PIPE-02**: The dormant veto path in mergeCompanies.js is hardened at its one shared fix
   site: veto-class fields carry a real min_confidence (not 0) and string coercion, so if
