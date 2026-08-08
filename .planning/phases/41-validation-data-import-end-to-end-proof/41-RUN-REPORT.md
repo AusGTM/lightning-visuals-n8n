@@ -174,3 +174,71 @@ three unprocessed canary paths were chosen to test.
 
 Steps 2–5 are mechanical once step 1 is done. Step 3 is the substantive gate: it is what
 turns one record's success into evidence about the engine.
+
+---
+
+# ADDENDUM — PHASE COMPLETE (2026-08-08)
+
+The interim report above is superseded. The full release ran and both requirements closed.
+
+## The defect the release exposed
+
+After all 61 records enriched, **only 3 of 66 carried a `lv_icp_fit_score`** — despite 48
+records having `lv_org_type` and `lv_produces_content` written correctly.
+
+Root cause: **`gambling_score` was null on 63 of 66 records.** `lv_icp_fit_score` is a
+HubSpot `calculation_equation` property summing five component terms, and HubSpot blanks a
+calculated property entirely when *any* referenced term is null. The gambling mapper flow
+fires on `lv_is_gambling_operator` changing; for the 63 non-gambling companies that
+property was never written, so the flow never fired and the term stayed null — blanking the
+whole sum even though the other four components were correct.
+
+Null counts across the 66 before the fix:
+
+| Component | null on |
+|---|---|
+| `gambling_score` | **63** |
+| `org_type_score` | 18 |
+| `produces_content_score` | 17 |
+| `geography_score` | 17 |
+| `annual_revenue_score` | 6 |
+
+## The fix was already built
+
+`scripts/backfill_seed_company_scores.py` (Phase 40, D-09/D-10) predicts this exact failure
+in its own docstring, and names the remedy as **Phase 41's job**:
+
+> "The portfolio-wide 712-record run is Phase 41's job, after enrichment has populated
+> inputs so the seeded scores land meaningful instead of mass-zero."
+
+Enrichment had now populated the inputs, so the precondition was met. Run in 3 batches
+(the script hard-caps at 25 records as a typo-guard). It computes all five components from
+each record's own canonical inputs via `src/icp_scoring.py` and writes only those five —
+never the score, tier, or veto, which have their own owners.
+
+Tiers settled in **~5.8 seconds** per record after seeding.
+
+## Final state — 66/66
+
+| Metric | Result |
+|---|---|
+| Records with `lv_icp_fit_score` | **66 / 66** |
+| Records with provenance stamped | **66 / 66** |
+| Tier distribution | **A: 7 · B: 18 · C: 17 · D: 24** |
+| Parity sweep | **PASS — 66 checked, 0 real findings** |
+| Provider spend | **zero** (Lusha 3925, ZoomInfo 9397 — unchanged) |
+| Write window | **disarmed** |
+
+The only parity mismatches are the 2 documented `lv_icp_tier` enum divergences accepted
+under PARITY-01 (`Needs Review` does not exist in the live enum).
+
+24 tier-D records are hard vetoes firing correctly on real data — 19 non-ANZ, 3 no-content,
+1 hardware vendor, 1 compound. That is the rubric working, not an import defect.
+
+## Verdicts
+
+**DATA-01 — MET.** 66 companies landed with `lv_*` inputs and provenance stamped, at zero
+provider spend.
+
+**DATA-02 — MET.** Scores and tiers computed with no per-record manual touch on the actual
+enrichment write path, and the parity sweep confirms all 66 agree with `compute_icp_score`.

@@ -55,11 +55,11 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 
 ### Data Coverage
 
-- [ ] **DATA-01**: The 66 web-researched companies (49 high-confidence) from the ICP
+- [x] **DATA-01**: The 66 web-researched companies (49 high-confidence) from the ICP
   validation analysis land in HubSpot with `lv_*` inputs and provenance stamped — zero
   provider spend.
 
-- [ ] **DATA-02**: Imported companies score automatically on landing — no per-record manual
+- [x] **DATA-02**: Imported companies score automatically on landing — no per-record manual
   touch. (Proves triggers fire on the write path enrichment/import actually uses.)
 
 ### Parity & Regression
@@ -144,8 +144,8 @@ engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity
 | VETO-03 | Phase 40 | Complete |
 | PARITY-01 | Phase 40 | Complete |
 | PARITY-02 | Phase 40 | Complete |
-| DATA-01 | Phase 41 | Pending |
-| DATA-02 | Phase 41 | Pending |
+| DATA-01 | Phase 41 | Complete (66/66 landed with lv_* inputs + provenance, zero provider spend) |
+| DATA-02 | Phase 41 | Complete (66/66 scored, parity PASS 0 real findings) |
 | CLEAN-01 | Phase 42 | Complete (42-01/42-02 reconciliation + 42-03 archival derivation; zero orphans found, nothing to archive) |
 | PIPE-01 | Phase 43 | Complete |
 | PIPE-02 | Phase 43 | Complete |

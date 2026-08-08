@@ -251,6 +251,6 @@ Phases execute in numeric order: 39 → 40 → 41 → 42 → 43
 |-------|----------------|--------|-----------|
 | 39. Path Decision & Fit-Score Verification | 4/4 | Complete | 2026-08-06 |
 | 40. Scoring Engine, Veto & Parity Remediation | 7/7 | Complete | 2026-08-07 |
-| 41. Validation Data Import & End-to-End Proof | 2/4 | In Progress | - |
+| 41. Validation Data Import & End-to-End Proof | 4/4 | Complete | 2026-08-08 |
 | 42. Scoring Artifact Cleanup & Reconciliation | 3/3 | Complete | 2026-08-08 |
 | 43. Pipeline Scoring Hygiene & Explainability | 5/5 | Complete | 2026-08-08 |
