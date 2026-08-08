@@ -1,0 +1,117 @@
+{
+  "rubric_version": "lv-icp-v0.1",
+  "checked_at_utc": "2026-08-08T08:39:10.330773+00:00",
+  "sample_ids": [
+    "9604614548",
+    "17861423879"
+  ],
+  "comparisons": [
+    {
+      "company_id": "9604614548",
+      "live": {
+        "lv_icp_fit_score": "25",
+        "lv_icp_tier": "C",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "25",
+        "lv_icp_tier": "Needs Review",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": false,
+      "classification": "documented_needs_review_divergence",
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_produces_content: June (true) and fresh research (false) disagree on lv_produces_content."
+    },
+    {
+      "company_id": "17861423879",
+      "live": {
+        "lv_icp_fit_score": "0",
+        "lv_icp_tier": "D",
+        "lv_anti_icp_flag": "true"
+      },
+      "expected": {
+        "lv_icp_fit_score": "0",
+        "lv_icp_tier": "D",
+        "lv_anti_icp_flag": "true"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_is_gambling_operator",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    }
+  ],
+  "mismatches": [
+    {
+      "company_id": "9604614548",
+      "live": {
+        "lv_icp_fit_score": "25",
+        "lv_icp_tier": "C",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "25",
+        "lv_icp_tier": "Needs Review",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": false,
+      "classification": "documented_needs_review_divergence",
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_produces_content: June (true) and fresh research (false) disagree on lv_produces_content."
+    }
+  ],
+  "real_findings": [],
+  "assertions_executed": 2,
+  "breakdowns_written": 0,
+  "verdict": "PASS (with 1 documented Needs Review divergence(s)): 2 sampled companies checked, every mismatch is the accepted oracle-vs-live-enum divergence (40-02), zero real findings."
+}

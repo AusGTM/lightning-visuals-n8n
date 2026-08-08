@@ -85,3 +85,37 @@ Expected: `'22617666'`. After that the parity sweep runs normally.
 DATA-02's closure needs a parity sweep over the landed population. That sweep cannot run
 until this is fixed — independent of the arm/release step. **Both are required to close
 Phase 41**, and this one is a one-line `.env` correction rather than a live-write decision.
+
+---
+
+## Stopgap confirmed working (2026-08-08)
+
+The corrupted `.env` value can be overridden per-invocation without editing `.env`:
+
+```
+HUBSPOT_PORTAL_ID=22617666 PARITY_SAMPLE_IDS=<ids> PARITY_REQUIRE_PROVENANCE=true \
+  .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; \
+  runpy.run_path('scripts/run_scoring_parity.py', run_name='__main__')"
+```
+
+This is **not** defeating the guard. The guard exists to stop the harness running against
+an *unexpected* portal; supplying `22617666` asserts the expected one, which is the portal
+the private-app token already authenticates against (every other live call this session
+proves that). It restores the intended check rather than skipping it.
+
+Verified live on the landed canary records:
+
+```
+PASS (with 1 documented Needs Review divergence): 2 sampled companies checked,
+every mismatch is the accepted oracle-vs-live-enum divergence (40-02), zero real findings.
+assertions_executed: 2
+```
+
+| Record | live score/tier | oracle score | verdict |
+|---|---|---|---|
+| Melbourne Racing Club (9604614548) | 25 / C | 25 | match; tier label is the documented PARITY-01 divergence |
+| Sportsbet (17861423879) | 0 / D | 0 | match |
+
+**The permanent fix is still the one-line `.env` correction** — the scheduled read-only
+sweep (D-12) loads `.env` and has no opportunity to pass an inline override, so the standing
+drift guard stays inoperable until that value is corrected.
