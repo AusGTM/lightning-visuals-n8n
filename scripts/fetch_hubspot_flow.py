@@ -38,7 +38,8 @@ DEFAULT_OUT_DIR = ROOT / "config" / "hubspot_flows"
 # scripts/snapshot_hubspot_schema.py / scripts/probe_scoring_recalc_latency.py.
 EXPECTED_PORTAL_ID = "22617666"
 
-# HANDOVER-2026-08-06-icp-scoring.md §10.1 — the six company scoring flows this phase
+# HANDOVER-2026-08-06-icp-scoring.md §10.1 (that file was removed at the v0.7 close; it is
+# in git history, and PORTAL-FACTS.md carries the live flow inventory) — the six company scoring flows this phase
 # remediates (four original + two added by 40-04: produces-content, gambling). Module
 # constant, no CLI override for the slug mapping (the --flow-id list is the
 # operator-facing override surface; slugs stay tied to these known ids).

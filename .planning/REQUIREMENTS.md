@@ -5,6 +5,8 @@ finding, §10 amended workflow investigation, defects F1–F10 all live-validate
 engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity oracle:
 `src/icp_scoring.py` + `config/icp_scoring.yaml` (version lv-icp-v0.1).
 
+> **Note (2026-08-08):** `HANDOVER-2026-08-06-icp-scoring.md`, cited above, was removed at the v0.7 close — every defect it reported is fixed. It remains in git history (`git show 36f8d84:HANDOVER-2026-08-06-icp-scoring.md`); the current record is `.planning/MILESTONES.md` (v0.7) and the Phase 39–43 folders.
+
 ## v0.7 Requirements
 
 ### Path Decision

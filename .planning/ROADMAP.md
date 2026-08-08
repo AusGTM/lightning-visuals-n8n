@@ -13,6 +13,8 @@ parity harness instead of eyeballing the HubSpot UI, validates it end-to-end aga
 repo's global sequence — Phase 38 was the last consumed (plugin-entrypoint workstream) — so this
 milestone starts at Phase 39.
 
+> **Note (2026-08-08):** `HANDOVER-2026-08-06-icp-scoring.md`, cited above, was removed at the v0.7 close — every defect it reported is fixed. It remains in git history (`git show 36f8d84:HANDOVER-2026-08-06-icp-scoring.md`); the current record is `.planning/MILESTONES.md` (v0.7) and the Phase 39–43 folders.
+
 ## Phases
 
 **Phase Numbering:**

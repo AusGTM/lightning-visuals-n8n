@@ -53,6 +53,8 @@ derived outputs (`lv_icp_fit_score`, `lv_icp_tier`, `lv_anti_icp_flag`, `lv_anti
 workflows + calculated property, built 2026-08-04) but carries ten validated defects — see
 `HANDOVER-2026-08-06-icp-scoring.md` §10. Remediating it is milestone v0.7. Supersedes CLAUDE.md §29.
 
+> **Note (2026-08-08):** `HANDOVER-2026-08-06-icp-scoring.md`, cited above, was removed at the v0.7 close — every defect it reported is fixed. It remains in git history (`git show 36f8d84:HANDOVER-2026-08-06-icp-scoring.md`); the current record is `.planning/MILESTONES.md` (v0.7) and the Phase 39–43 folders.
+
 ## Current Milestone: v0.7 HubSpot Scoring Engine Remediation
 
 **Goal:** The ICP rubric executes correctly inside HubSpot (the scoring engine stays
