@@ -95,3 +95,16 @@ run). Fix:
 ```
 ! sed -i '' "s/^HUBSPOT_PORTAL_ID=.*/HUBSPOT_PORTAL_ID='22617666'/" .env
 ```
+
+## Accepted gap
+
+A **portal-side** revert of the formula is not detected immediately. The conformance tests
+guard the repo archive, and the detector only trips once a record lands with a null term —
+all 66 current records have all five components populated. The scheduled sweep therefore
+catches a portal revert on the next enrichment run, not instantly. Proportionate; a live
+formula-equality assertion was deliberately not built.
+
+`scripts/check_schema_drift.py` compares existence + enum option sets, **not**
+`calculationFormula`, so this change raises no drift finding. Verified after the apply:
+`in_sync 49, documented_gap 5, do_not_archive.ok True, exit 0`
+(`post-formula-fix/drift-report.json`).

@@ -1,3 +1,11 @@
+> **RESOLVED 2026-08-08 — do not re-run this thread.** All three tasks are complete.
+> The spike came back CONCLUSIVE POSITIVE (`41-FORMULA-SPIKE.md`, v2 section), the operator
+> selected options **1 + 4**, and the fix is applied and verified live
+> (`41-NULL-SAFE-FORMULA-FIX.md`). The live formula is now
+> `org_type_score + coalesce(geography_score, 0) + coalesce(annual_revenue_score, 0) + coalesce(produces_content_score, 0) + coalesce(gambling_score, 0)`.
+> The only item below still outstanding is the `.env` `HUBSPOT_PORTAL_ID='!'` fix, which
+> needs the operator's own shell. This document is kept for the reasoning trail.
+
 # Handoff — 2026-08-08 — resume at task #2 (formula spike re-run)
 
 Read this, then re-create the three tasks below and continue. Everything else in v0.7 is
