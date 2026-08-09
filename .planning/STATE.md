@@ -2,9 +2,13 @@
 gsd_state_version: 1.0
 milestone: v0.8
 milestone_name: Execution Budget Safety
+current_phase: 44
+current_phase_name: SJ-3 Dispatch Gate, Drain & Cap
 status: planning
-last_updated: "2026-08-10T00:00:00.000Z"
+stopped_at: Phase 44 context gathered
+last_updated: "2026-08-09T23:55:21.260Z"
 last_activity: 2026-08-10
+last_activity_desc: ROADMAP.md and REQUIREMENTS.md traceability written for v0.8
 progress:
   total_phases: 2
   completed_phases: 0
@@ -24,9 +28,9 @@ Last activity: 2026-08-10 — ROADMAP.md and REQUIREMENTS.md traceability writte
 
 ## Session
 
-**Last session:** 2026-08-07T19:55:00.000Z
-**Stopped at:** Completed 43-04-PLAN.md (live evidence recorded)
-**Resume file:** None
+**Last session:** 2026-08-09T23:55:21.250Z
+**Stopped at:** Phase 44 context gathered
+**Resume file:** .planning/phases/44-sj-3-dispatch-gate-drain-cap/44-CONTEXT.md
 
 ## Performance Metrics
 
