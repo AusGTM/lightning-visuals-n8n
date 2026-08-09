@@ -1,163 +1,114 @@
-# Requirements — Milestone v0.7: HubSpot Scoring Engine Remediation
+# Requirements — Milestone v0.8: Execution Budget Safety
 
-Defined 2026-08-06. Source evidence: `HANDOVER-2026-08-06-icp-scoring.md` (§2–§4 original
-finding, §10 amended workflow investigation, defects F1–F10 all live-validated). Scoring
-engine stays HubSpot-resident (operator decision, reaffirmed 2026-08-06). Parity oracle:
-`src/icp_scoring.py` + `config/icp_scoring.yaml` (version lv-icp-v0.1).
+Defined 2026-08-10. Source evidence: the live n8n execution log read on 2026-08-09/10 (flat
+253 executions/hour over 10 hours, ~182,000/month run rate against a **2,500/month plan**),
+the 61 companies stuck at `lv_enrichment_requested=true`, and the API probe showing n8n
+exposes no usage/quota endpoint to an API key. Prior milestone: v0.7 HubSpot Scoring Engine
+Remediation (shipped 2026-08-08, 16/16).
 
-> **Note (2026-08-08):** `HANDOVER-2026-08-06-icp-scoring.md`, cited above, was removed at the v0.7 close — every defect it reported is fixed. It remains in git history (`git show 36f8d84:HANDOVER-2026-08-06-icp-scoring.md`); the current record is `.planning/MILESTONES.md` (v0.7) and the Phase 39–43 folders.
+**The defect this milestone exists to make impossible:** SJ-3 dispatched one sub-execution per
+flagged record every tick. The step that clears the trigger flag is a HubSpot write, the write
+gate was closed (its correct resting state), so the flag never cleared and the same 61 records
+re-dispatched forever. The system spent its entire monthly allowance ~73 times over on work it
+was structurally incapable of completing, and nobody found out until a human read the billing
+page at 80%.
 
-## v0.7 Requirements
+## v0.8 Requirements
 
-### Path Decision
+### Gate Check — do not start work that cannot finish
 
-- [x] **DECIDE-01**: Operator has an in-portal verification of company fit-score availability
-  on Sales Hub Pro, and a recorded path decision — fix the four-workflow chain in place vs
-  lead-scoring-tool rebuild — with rationale. Everything downstream is path-shaped by this.
+- [ ] **GATE-01**: When the enrichment write gate is closed, an SJ-3 tick dispatches **zero**
+  records. The tick costs 1 execution, not 1 + N.
 
-### Scoring Engine (path-neutral outcomes)
+- [ ] **GATE-02**: A gate-closed tick reports a named, non-error outcome that an operator can
+  distinguish from "found nothing to do". Disarmed is the normal resting state, so this path
+  must not be modelled as a failure.
 
-- [x] **ENGINE-01**: A company with `lv_org_type=governing_body_league`,
-  `lv_produces_content=true`, region AU, revenue band 50-500M scores **80** and grades **A**
-  entirely inside HubSpot — no pipeline scoring code. (Today: 60/B via native inputs; F1.)
+- [ ] **GATE-03**: When the gate is open, dispatch behaviour is unchanged — a test fails if the
+  gate check swallows or reorders dispatches inside a legitimately armed window.
 
-- [x] **ENGINE-02**: `lv_produces_content=true` contributes +20 to the score. (F1 — term
-  absent from every component, workflow, and formula.)
+### Queue Drain — a stuck flag cannot survive
 
-- [x] **ENGINE-03**: Scoring reads the canonical `lv_country_region_normalized` and
-  `lv_revenue_band` properties the pipeline actually writes — never native free-text
-  `country` or never-written `annualrevenue`. (F2/F3 — current triggers watch properties
-  enrichment can never drive.)
+- [ ] **DRAIN-01**: On a gate-closed tick, SJ-3 clears `lv_enrichment_requested` on every record
+  it declined to dispatch, so the following tick finds none. The queue drains instead of
+  accumulating.
 
-- [x] **ENGINE-04**: Revenue decay fires −5/−15/−30/−50 per rubric, with exact boundary
-  values (500M, 750M, 1B, 1.2B) landing in the rubric-correct band. (F10 boundary overlap —
-  750M scored −5 live, rubric −15.)
+- [ ] **DRAIN-02**: The drain write path is narrow by construction — it can write exactly
+  `lv_enrichment_requested="false"` and nothing else, on records it just declined. Clearing a
+  trigger flag is not a data write, but it must not become a hole in the data write gate.
 
-- [x] **ENGINE-05**: Gambling deduction (−20) is driven by `lv_is_gambling_operator`,
-  independent of org type, and never sets the veto flag. (F9 — currently wired as
-  org-type points; `lv_is_gambling_operator` referenced by nothing.)
+- [ ] **DRAIN-03**: A record whose flag is cleared by the drain is distinguishable afterwards
+  from one that was enriched — a drained record was never processed, and nothing downstream may
+  read the cleared flag as evidence that it was.
 
-- [x] **ENGINE-06**: Every org-type point value matches `config/icp_scoring.yaml`,
-  including regulator = 5. (F10 — regulator currently 0.)
+### Dispatch Cap — one tick cannot spend the month
 
-- [x] **ENGINE-07**: A score below 15 without a veto does not grade D. (F8 — low fit
-  currently conflated with disqualify.)
+- [ ] **CAP-01**: A single tick dispatches at most a cap **derived from the plan allowance and
+  the tick cadence**, not a hardcoded constant, so the bound cannot silently drift out of
+  budget when a trigger is re-timed.
 
-### Veto Machinery
+- [ ] **CAP-02**: When a tick caps, it logs how many records it found and how many it
+  dispatched. Silent truncation reads as "processed everything" and is forbidden.
 
-- [x] **VETO-01**: All three hard vetoes (non-ANZ, no broadcast/streaming content, hardware
-  vendor) set `lv_anti_icp_flag=true` AND write `lv_anti_icp_reason`. (Today: only non-ANZ
-  exists, reason never written; F4/F10.)
+- [ ] **CAP-03**: A test fails if the shipped schedule's computed monthly execution floor
+  exceeds a configured share of the plan allowance. The v0.7 schedule was 2.6x over the entire
+  allowance while doing no work, and nothing in the repo said so.
 
-- [x] **VETO-02**: Correcting the veto condition clears the flag and reason — no one-way
-  latch. (F6 — validated: Australia restored, flag stayed true, tier stuck D.)
+### Burn-Rate Alarm — the system reports it, not the billing page
 
-- [x] **VETO-03**: A flag change updates `lv_icp_tier` without requiring an unrelated score
-  change. (F7 — tier currently recomputes only on score movement.)
+- [ ] **ALARM-01**: The sweep fires a notice when the sampled execution rate projects to exhaust
+  the plan allowance for the current billing period.
 
-### Data Coverage
+- [ ] **ALARM-02**: The alarm samples a **rate over a bounded recent window** and never claims a
+  monthly total. n8n prunes executions (2,500 rows / ~10 hours observed here) and exposes no
+  usage endpoint to an API key, so a total is unknowable by construction — reporting one would
+  be a fabrication.
 
-- [x] **DATA-01**: The 66 web-researched companies (49 high-confidence) from the ICP
-  validation analysis land in HubSpot with `lv_*` inputs and provenance stamped — zero
-  provider spend.
+- [ ] **ALARM-03**: The plan allowance is configuration, not a literal. A missing or unreadable
+  allowance produces a notice naming the missing key — never silence, and never a guessed
+  default.
 
-- [x] **DATA-02**: Imported companies score automatically on landing — no per-record manual
-  touch. (Proves triggers fire on the write path enrichment/import actually uses.)
+- [ ] **ALARM-04**: An alarm that cannot read execution history says so. This inherits the
+  sweep's existing rule (D-15): silence means healthy, so a check that failed to run must never
+  be indistinguishable from a check that found nothing wrong.
 
-### Parity & Regression
+## Future Requirements (deferred beyond v0.8)
 
-- [x] **PARITY-01**: A parity harness recomputes expected scores via `compute_icp_score`
-  and asserts them against HubSpot's live scores for fixtures plus a real-record sample.
-  (Every F-defect was invisible in the HubSpot UI; this is the standing drift guard.)
+- Alarm delivery beyond the existing notification path (email/Slack escalation for a burn rate
+  that would exhaust the plan within hours rather than days).
 
-- [x] **PARITY-02**: The F4/F7/F9/F10 scratch scenarios (AU-string veto, tier lag, gambling
-  conflation, boundary overlap) are encoded as named regression cases in the harness.
+- Per-lane execution attribution — which workflow/lane spent the month, not just the total rate.
+  Useful for tuning; not needed to prevent the failure.
 
-### Cleanup
-
-- [x] **CLEAN-01**: Superseded scoring artifacts are archived, not deleted
-  (`scripts/snapshot_hubspot_schema.py` run first), and `config/hubspot_properties.yaml`
-  reconciles clean against the live portal.
-  <!-- CLOSED 2026-08-08. Reconciliation half (42-01 snapshot + 42-02 yaml expansion) is DONE
-  and live-proven (exit_code=0, do_not_archive.ok=true, 0 property/group creates). Archival
-  half (42-03) landed: live derivation found zero uncontested_orphan and zero ambiguous
-  candidates (all 32 non-hubspotDefined company properties already covered), so nothing was
-  archived -- a valid, fully-satisfying outcome per 42-CONTEXT.md. Post-mutation
-  drift-report-phase42-post.json confirms exit_code=0, do_not_archive.ok=true. -->
-
-### Pipeline Hygiene (validated 2026-08-06, PIPELINE-DEFECTS-VALIDATION.md)
-
-- [x] **PIPE-01**: lv_enrichment_needs_review is written as the STRING "true"/"false", never a
-  JS boolean, at every writer — HubSpot EQ filters match strings only; the identical class was
-  fixed for lv_enrichment_requested in 36-07. (Originally scoped as a LIVE defect:
-  shallow-spread-with-no-coercion. **Severity downgraded 2026-08-08** — 43-04 proved live that
-  HubSpot silently coerces a bare-boolean PATCH on this property to the string "true", so the
-  filters were not in fact broken. The fix still shipped and is correct: depending on undocumented
-  provider coercion is not a contract. See 43-LIVE-EVIDENCE.md.)
-
-- [x] **PIPE-02**: The dormant veto path in mergeCompanies.js is hardened at its one shared fix
-  site: veto-class fields carry a real min_confidence (not 0) and string coercion, so if
-  pipeline-owned vetoes ever return they are born guarded. (P2+P4: latent, unreachable today —
-  the repo test proving the candidate path dead is extended, not weakened.)
-
-- [x] **PIPE-03**: lv_icp_score_breakdown has a producer — the Phase 40 parity harness (which
-  already recomputes via compute_icp_score) emits and writes the breakdown JSON for the records
-  it checks, so a challenged tier can explain itself. Truncated at the property limit, stamped
-  with rubric version.
-
-- [x] **PIPE-04**: lv_closed_lost_reason is consumed — a report artifact aggregates loss
-  reasons against the current rubric version and surfaces them at review time. Consumption
-  only; rubric weight changes stay behind the REQ-signoff-gate.
-
-## Future Requirements (deferred beyond v0.7)
-
-- Full-712 input-coverage backfill trigger — re-enrollment mechanism for existing companies
-  (property defaults only stamp new records). Explicitly deferred at scoping (2026-08-06). **Note
-  (2026-08-08):** do NOT approach this by null-guarding `org_type_score` in the fit-score
-  formula. That would make all 646 never-enriched companies compute to 0 and enroll every one
-  of them in the tier flow; `org_type_score` is left bare on purpose as the "has been through
-  the pipeline" sentinel, and a conformance test fails if it is guarded. See
-  `.planning/phases/41-validation-data-import-end-to-end-proof/41-NULL-SAFE-FORMULA-FIX.md`.
-
-- Intent/pixel scoring block (+3/+7/+5/+10) — no property, no config entry, no node
-  (carried from v0.5 deferral).
-
-- Review-queue policy at volume — `src/icp_scoring.py` routes companies with unknown
-  org_type/content to review; as of 2026-08-08 that is the 646 of 712 companies that carry no
-  `lv_*` inputs at all. Policy decision precedes any armed backfill.
+- Automatic cadence throttling in response to a burn-rate alarm. Deliberately deferred: a system
+  that re-times its own triggers unattended is a larger blast radius than the problem.
 
 ## Out of Scope
 
 | Item | Reason |
 | --- | --- |
-| Rubric weight changes | JTBD-2 weighted-rubric sign-off (REQ-signoff-gate) is an external business-owner gate ON this milestone, not work inside it |
-| Operator plugin changes | Plugin is v0.6's surface; scoring remediation is backend/HubSpot-side |
-| `milestone` ws Phase 22 armed canary | Pending operator action in the v0.5 workstream; dependency, separately owned |
-| Pipeline-side score computation | Scoring engine stays HubSpot-resident — operator decision 2026-08-06; `src/icp_scoring.py` remains oracle-only |
+| Installing the sweep cron / launchd schedule | Admin action on the operator's machine, not code. The alarm ships inert until it is scheduled — stated plainly, not papered over. |
+| Upgrading the n8n Cloud plan | Commercial decision. This milestone makes the system fit the plan it has. |
+| Re-enabling sub-daily cadences | Already corrected to daily (2026-08-10). CAP-03 is what keeps it corrected; changing it back is a budget decision, not milestone work. |
+| Reducing per-record execution count (sub-workflow → inline) | An architecture change to the enrichment lane with its own risk surface; the budget problem is solved by not dispatching work that cannot complete. |
+| HubSpot-side write-gate redesign | The gate's disarmed-at-rest default is a v0.6 safety invariant, load-bearing across three packages. This milestone works with it, not around it. |
 
 ## Traceability
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| DECIDE-01 | Phase 39 | Complete |
-| ENGINE-01 | Phase 40 | Complete |
-| ENGINE-02 | Phase 40 | Complete |
-| ENGINE-03 | Phase 40 | Complete |
-| ENGINE-04 | Phase 40 | Complete |
-| ENGINE-05 | Phase 40 | Complete |
-| ENGINE-06 | Phase 40 | Complete |
-| ENGINE-07 | Phase 40 | Complete |
-| VETO-01 | Phase 40 | Complete |
-| VETO-02 | Phase 40 | Complete |
-| VETO-03 | Phase 40 | Complete |
-| PARITY-01 | Phase 40 | Complete |
-| PARITY-02 | Phase 40 | Complete |
-| DATA-01 | Phase 41 | Complete (66/66 landed with lv_* inputs + provenance, zero provider spend) |
-| DATA-02 | Phase 41 | Complete (66/66 scored, parity PASS 0 real findings) |
-| CLEAN-01 | Phase 42 | Complete (42-01/42-02 reconciliation + 42-03 archival derivation; zero orphans found, nothing to archive) |
-| PIPE-01 | Phase 43 | Complete |
-| PIPE-02 | Phase 43 | Complete |
-| PIPE-03 | Phase 43 | Complete |
-| PIPE-04 | Phase 43 | Complete |
+| GATE-01 | TBD | Pending |
+| GATE-02 | TBD | Pending |
+| GATE-03 | TBD | Pending |
+| DRAIN-01 | TBD | Pending |
+| DRAIN-02 | TBD | Pending |
+| DRAIN-03 | TBD | Pending |
+| CAP-01 | TBD | Pending |
+| CAP-02 | TBD | Pending |
+| CAP-03 | TBD | Pending |
+| ALARM-01 | TBD | Pending |
+| ALARM-02 | TBD | Pending |
+| ALARM-03 | TBD | Pending |
+| ALARM-04 | TBD | Pending |
 
-Coverage: 16/16 v0.7 requirements mapped. No orphans.
+Coverage: 13 v0.8 requirements. Phase mapping filled by the roadmapper.
