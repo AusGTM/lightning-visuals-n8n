@@ -11,76 +11,53 @@ team, not a customer-facing product.
 
 ## Current State
 
-**In progress: v0.7 — HubSpot Scoring Engine Remediation. Phase 40 complete (2026-08-07).**
-The ICP rubric now executes correctly inside HubSpot on the fix-in-place path: all ten validated
-defects (F1–F10) closed live — textbook Tier-A company scores 80/A entirely in HubSpot off
-canonical `lv_*` inputs; veto ownership moved to the n8n pipeline (all three hard vetoes
-individually PATCH-proven with rubric-exact reasons, symmetric clear proven, tier re-enrolls on
-flag change); a two-tier parity harness stands guard (`tests/test_scoring_parity.py` +
-`scripts/run_scoring_parity.py`, F4/F7/F9/F10 as named regression cases); record writes stay
-gated behind bounded operator-armed windows (`operator-claude-plugin/scripts/scheduled_arm.py`).
-Remaining: Phase 41 (validation data import + portfolio backfill), Phase 42 (artifact cleanup).
+**Starting: v0.8 — Execution Budget Safety.** The n8n Cloud plan allows 2,500 executions
+per month, and on 2026-08-09 the backend spent them on work it could not complete: 61
+companies carried `lv_enrichment_requested=true`, SJ-3 re-dispatched all 61 every 15 minutes,
+and the step that would have cleared the flag is a HubSpot write the (correctly) closed write
+gate refuses. Measured at a flat **253 executions/hour — a ~182,000/month run rate against a
+2,500 allowance**. Remediated by hand the same day (61 flags cleared; the three sub-daily
+triggers moved to daily, dropping the idle floor from ~6,500 to ~95/month). This milestone
+makes that fix structural: the poller must not start work it cannot finish, a stuck flag must
+not survive forever, one tick must not be able to spend the month, and the sweep must say so
+before a human notices at 80%.
 
-**Previously shipped: v0.4 — Reachability & Verification Debt (2026-07-29).** No new capability by design —
-the milestone cleared every debt the v0.3 close deferred: BUG 23 (`contact:create` structurally
-unreachable) fixed with dual live canary; a numeric provider industry code can no longer win the
-waterfall or survive normalization; `lv_sponsorship_reliant` and `lv_persona_group` wired AND given
-live producers; the six-item verification ledger discharged **6/6** (surfacing and same-day
-resolving BUG 26 deployment drift, and closing the last armed-write residual with a passed
-`company:update` canary). Live deployment is current with git, active, and disarmed at rest.
+**Shipped: v0.7 — HubSpot Scoring Engine Remediation (2026-08-08).** 5 phases (39–43),
+16/16 requirements. All ten validated defects (F1–F10) closed on the fix-in-place path: a
+textbook Tier-A company scores 80/A entirely inside HubSpot off canonical `lv_*` inputs;
+vetoes set and clear symmetrically with rubric-exact reasons; a two-tier parity harness stands
+guard (`tests/test_scoring_parity.py` + `scripts/run_scoring_parity.py`); the 66 web-researched
+validation companies landed and scored with provenance at zero provider spend (A:7 B:18 C:17
+D:24); `config/hubspot_properties.yaml` reconciles clean against the live portal. A same-day
+follow-up made `lv_icp_fit_score`'s formula null-safe — a bare sum blanked the entire score on
+any null term, which had left 63 of 66 records unscored while the sweep still reported PASS.
 
-**Previously shipped: v0.3 — Company Enrichment & ICP Research (2026-07-29).**
+## Current Milestone: v0.8 Execution Budget Safety
 
-The description above is the project's origin, not its present shape. Three milestones in, this is
-no longer a local-first mock MVP:
-
-- **v0.1** — ICP scoring engine, hard vetoes, tiering, non-clobber merge, dry-run PATCH payloads,
-  proven locally against fixtures.
-- **v0.2** — contact ingestion, dedupe and enrichment ported into n8n; local Docker n8n replica.
-- **v0.3** — companies enrich through a live provider waterfall (Lusha + Apollo + ZoomInfo) with
-  native web retrieval for the two ICP fields no provider supplies, and **the pipeline now writes to
-  HubSpot**. Three workflows run in n8n Cloud (LV Contact Ingest, LV Enrichment, LV Scheduled
-  Maintenance). The non-clobber guarantee is live-proven, not asserted: a provider candidate that
-  cleared the confidence threshold was refused on ownership class alone, and an un-allowlisted
-  company was refused with `write_blocked`.
-
-**Deployment posture:** all three workflows are active and **disarmed** — write gates off by
-default, armed only inside a deliberate, audited window against allowlisted test records.
-
-**Scope fence that still holds:** the pipeline writes ICP *inputs* and their provenance. The
-derived outputs (`lv_icp_fit_score`, `lv_icp_tier`, `lv_anti_icp_flag`, `lv_anti_icp_reason`,
-`lv_recommended_motion`) are HubSpot-side. A partial HubSpot-side implementation exists (four
-workflows + calculated property, built 2026-08-04) but carries ten validated defects — see
-`HANDOVER-2026-08-06-icp-scoring.md` §10. Remediating it is milestone v0.7. Supersedes CLAUDE.md §29.
-
-> **Note (2026-08-08):** `HANDOVER-2026-08-06-icp-scoring.md`, cited above, was removed at the v0.7 close — every defect it reported is fixed. It remains in git history (`git show 36f8d84:HANDOVER-2026-08-06-icp-scoring.md`); the current record is `.planning/MILESTONES.md` (v0.7) and the Phase 39–43 folders.
-
-## Current Milestone: v0.7 HubSpot Scoring Engine Remediation
-
-**Goal:** The ICP rubric executes correctly inside HubSpot (the scoring engine stays
-HubSpot-resident) — a textbook Tier-A record (governing body + content + ANZ + mid-market)
-scores 80 and grades A; the ten validated defects (F1–F10, HANDOVER-2026-08-06-icp-scoring.md
-§10) are remediated; vetoes set AND clear with reason strings; and a parity guard asserts
-HubSpot's live scores against `src/icp_scoring.py`.
+**Goal:** The backend cannot spend its monthly n8n execution allowance on work it is
+structurally unable to complete, and it reports an unsustainable burn rate before a human
+notices it.
 
 **Target features:**
-- Decision phase first: verify company fit-score availability on Sales Hub Pro, then commit to
-  fix-the-workflow-chain-in-place vs lead-scoring-tool rebuild (requirements path-neutral until then)
-- Scoring engine remediation per chosen path: content term (+20), input rewiring to canonical
-  `lv_*` properties, symmetric veto with `lv_anti_icp_reason`, revenue boundary fixes,
-  gambling deduction on `lv_is_gambling_operator`, regulator points, missing hard vetoes
-- Import the 66 web-researched companies (49 high-confidence) from the ICP validation analysis
-  as scoreable validation population — zero provider spend
-- Parity/regression harness: `src/icp_scoring.py` as oracle; worked examples + F4/F7/F9/F10
-  scratch scenarios as fixtures
-- Retire/reconcile orphan scoring artifacts per the path decision
+- **SJ-3 gate check** — the 15-minute/daily poller refuses to dispatch when the HubSpot write
+  gate is closed, rather than fanning out one sub-execution per record that can never complete
+  or clear its own trigger flag
+- **Self-healing flag clear** — `lv_enrichment_requested` cannot remain `true` indefinitely
+  after a dispatch that could not finish, so the re-dispatch loop cannot re-form even if the
+  gate check is bypassed
+- **Per-tick dispatch cap** — a bound on how many records one tick may fan out, so no single
+  tick can consume a large share of the monthly allowance whatever the cause
+- **Burn-rate alarm** — a sweep condition that samples the recent execution rate and fires when
+  it would exhaust the plan
 
-**Phase 39 complete (2026-08-06):** Path decided — **fix-the-four-workflow-chain-in-place**. Operator hard requirement: score stays in `lv_icp_fit_score`/`lv_icp_tier`, existing architecture reused. Company fit score verified AVAILABLE on Sales Hub Pro in-portal (evidence + attestation in `.planning/phases/39-path-decision-fit-score-verification/`), but the lead-scoring tool cannot write to existing custom properties, so it was not adopted. Decision record: `39-DECISION.md`. Branch: v0.6 merged to master (local; push pending), work continues on `feat/v0.7-scoring-remediation`.
-
-**Key context:** full-712 backfill trigger deferred beyond v0.7. Phase numbering continues at 39
-(global sequence). The `milestone` workstream's v0.5 Phase 22 armed canary remains pending and is
-a dependency, not part of this milestone. HubSpot portal 22617666 (ap1); `automation` scope now
-granted to the private app.
+**Key context:** the plan allowance (2,500/month) is a hard constraint, not a preference —
+three sub-daily triggers alone exceeded it 2.6x while doing no work. n8n prunes executions at
+2,500 rows (~10 hours of history here) and exposes no usage/quota endpoint to an API key
+(`/api/v1/usage|license|quota` all 404; `/rest/*` needs a browser session), so the alarm must
+sample a RATE — monthly totals are unavailable by construction. Write gates read `false` at
+rest by design, so "gate closed" is the normal state and the gate check must not be written as
+an error path. The sweep cron is not installed on this machine (`crontab -l` empty), so the
+alarm ships inert until an admin schedules it — that limit is explicit, not a gap to paper over.
 
 ## Parallel Milestone (in-flight workstream): v0.5 Lusha v3 & Armed Enrichment
 
@@ -286,4 +263,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-07 after Phase 40 completion (v0.7 scoring engine remediation — F1-F10 closed live, veto pipeline-owned, parity harness standing)*
+*Last updated: 2026-08-10 at v0.8 start (Execution Budget Safety — after the 182k/month SJ-3 re-dispatch runaway was found and hand-remediated)*

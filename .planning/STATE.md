@@ -1,36 +1,26 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.7
-milestone_name: HubSpot Scoring Engine Remediation
-current_phase: 41
-current_phase_name: Validation Data Import & End-to-End Proof
-status: executing
-stopped_at: v0.7 COMPLETE (41+42+43). Formula null-safety thread also closed — null-safe lv_icp_fit_score applied live + blank-score detector
-last_updated: "2026-08-07T19:55:00.000Z"
-last_activity: 2026-08-08
-last_activity_desc: "Formula null-safety thread CLOSED (the defect Phase 41 exposed, not milestone work). Spike v2 conclusive: HubSpot calculation_equation supports null guards — coalesce(), statement-form `if is_present(x) then x else 0`, and (x + 0) all verified live on a record with a genuine null term; function-form if()/ifnull()/is_known() are not in the grammar. Operator selected options 1+4. Applied live: org_type_score + coalesce(geography_score,0) + coalesce(annual_revenue_score,0) + coalesce(produces_content_score,0) + coalesce(gambling_score,0). org_type_score stays UNGUARDED as the 'been through the pipeline' sentinel — guarding all five would score the 646 never-enriched companies as 0 and enroll every one in the tier flow. Verified: still 66 scored of 712, disposable with all components cleared reads blank, disposable with gambling_score null reads 80 (was blank). Detector added to run_scoring_parity: has org_type_score + no lv_icp_fit_score — the set the harness could never see, which is how 63 records shipped as success. Regression guards proven to fail on revert. Live parity PASS 67 assertions 0 real findings; drift check exit 0. Suites 2427 pytest / 636 node."
+milestone: v0.8
+milestone_name: Execution Budget Safety
+status: planning
+last_updated: "2026-08-09T23:23:11.638Z"
+last_activity: 2026-08-10
 progress:
-  total_phases: 5
-  completed_phases: 3
-  total_plans: 23
-  completed_plans: 19
-  percent: 40
+  total_phases: 0
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
 
 ## Current Position
 
-Phase: 41 (Validation Data Import & End-to-End Proof) — COMPLETE. 66/66 companies scored with provenance, tiers A:7 B:18 C:17 D:24, parity PASS. DATA-01/DATA-02 closed.
-Formula null-safety follow-up (the defect Phase 41 exposed) — CLOSED: see 41-FORMULA-SPIKE.md (v2 verdict) and 41-NULL-SAFE-FORMULA-FIX.md.
-Next: nothing open in v0.7. One operator action outstanding: `.env` has HUBSPOT_PORTAL_ID='!' instead of 22617666, so the scheduled drift/parity guard refuses on every unattended invocation (manual runs work with an inline override).
-Phase 42: COMPLETE — CLEAN-01 closed. hubspot_properties.yaml is a full 32-property mirror at zero drift (exit 0, do_not_archive.ok true); standing drift checker at scripts/check_schema_drift.py. Archival found zero orphans and zero ambiguous — Phase 40 left no debris.
-Phase 43: COMPLETE — PIPE-01..04 all closed. 6 boolean-writer sites coerced, veto site hardened, --write-breakdown opt-in producer, loss-reason report + plugin skill. Deployed and bounced 2026-08-08; verified live: 0 bare-boolean needs_review writes, 2 string-coerced, matching repo.
-Live state: all n8n write gates DISARMED. All 5 canary records have lv_enrichment_requested=false (cleared post-disarm so the poller cannot burn tokens against a closed gate).
-Key findings: (1) HubSpot silently coerces bare-boolean PATCHes to strings — softens PIPE-01's severity framing, recorded in 43-LIVE-EVIDENCE.md. (2) Phase 40's "80/A live-proven" claim on MRC is STALE; live is 25/C and the drift predates Phase 41 — see 41-MRC-DRIFT-FINDING.md. (3) 66 of 712 companies carry a live ICP score (the validation set); the other 646 are deliberately unscored — blank means "never enriched", preserved by leaving org_type_score unguarded in the formula.
-Phase 40: COMPLETE & SEALED — 7/7 plans, 12/12 requirements (ENGINE-01..07, VETO-01..03, PARITY-01..02) with live evidence
-Last activity: 2026-08-07 — 40-07 complete (Phase 40 closed): ENGINE-01 live-proven (80/A entirely inside HubSpot off canonical inputs — org_type_score=40, produces_content_score=20, geography_score=10, annual_revenue_score=10, gambling_score=0); D-10 backfill mechanism (`scripts/backfill_seed_company_scores.py`) built, gated, and proven on the real-record sample (Melbourne Racing Club, id 9604614548 — the entire population of companies portal-wide carrying any canonical lv_* input); PARITY-01 verdict committed (`parity-report-final.json`, PASS with 1 documented Needs Review divergence, 0 real findings, assertions_executed=1); full live fixture tier 56/56 passed excluding the 5 veto_set/veto_clear cases, which are empirically confirmed blocked on the pre-existing VETO-01/VETO-02 pipeline write-gate arming gate (not a regression, not this plan's scope — WINDOWS.md id 5)
-Path decision: fix-the-four-workflow-chain-in-place — see `.planning/phases/39-path-decision-fit-score-verification/39-DECISION.md`
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-08-10 — Milestone v0.8 started
 
 ## Session
 
