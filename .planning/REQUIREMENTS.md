@@ -97,18 +97,18 @@ page at 80%.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GATE-01 | TBD | Pending |
-| GATE-02 | TBD | Pending |
-| GATE-03 | TBD | Pending |
-| DRAIN-01 | TBD | Pending |
-| DRAIN-02 | TBD | Pending |
-| DRAIN-03 | TBD | Pending |
-| CAP-01 | TBD | Pending |
-| CAP-02 | TBD | Pending |
-| CAP-03 | TBD | Pending |
-| ALARM-01 | TBD | Pending |
-| ALARM-02 | TBD | Pending |
-| ALARM-03 | TBD | Pending |
-| ALARM-04 | TBD | Pending |
+| GATE-01 | Phase 44 | Pending |
+| GATE-02 | Phase 44 | Pending |
+| GATE-03 | Phase 44 | Pending |
+| DRAIN-01 | Phase 44 | Pending |
+| DRAIN-02 | Phase 44 | Pending |
+| DRAIN-03 | Phase 44 | Pending |
+| CAP-01 | Phase 44 | Pending |
+| CAP-02 | Phase 44 | Pending |
+| CAP-03 | Phase 44 | Pending |
+| ALARM-01 | Phase 45 | Pending |
+| ALARM-02 | Phase 45 | Pending |
+| ALARM-03 | Phase 45 | Pending |
+| ALARM-04 | Phase 45 | Pending |
 
-Coverage: 13 v0.8 requirements. Phase mapping filled by the roadmapper.
+Coverage: 13/13 v0.8 requirements mapped. 100% coverage, no orphans.
