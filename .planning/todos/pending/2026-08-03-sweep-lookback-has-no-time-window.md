@@ -3,6 +3,7 @@ created: 2026-08-03T08:45:00.000Z
 title: Sweep re-notifies a fixed failure until 100 executions displace it
 area: planning
 severity: major
+resolves_phase: 45
 files:
   - operator-claude-plugin/scripts/n8n_read.py:47
   - operator-claude-plugin/scripts/sweep_conditions.py
