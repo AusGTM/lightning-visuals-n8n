@@ -170,7 +170,7 @@ def test_a_node_with_no_disabled_key_reads_as_enabled_and_disabling_adds_it():
     """None of the five committed triggers carries the key, so a toggle assuming its
     presence would raise on every real node."""
     workflow = _maintenance()
-    name = "Review Trigger (15 min)"
+    name = "Review Trigger"
     assert "disabled" not in json.dumps(
         [n for n in workflow["nodes"] if n["name"] == name][0])
     assert n8n_cadence.job_enabled(workflow, name) is True
@@ -186,13 +186,13 @@ def test_disabling_one_job_sends_a_body_differing_only_in_that_nodes_disabled_fi
     fetched = _maintenance()
     after = copy.deepcopy(fetched)
     for node in after["nodes"]:
-        if node["name"] == "Review Trigger (15 min)":
+        if node["name"] == "Review Trigger":
             node["disabled"] = True
 
     transport = stub_module_transport_factory([fetched, {}, {}, {}, after])
 
     result = n8n_cadence.set_schedule_enabled(
-        WORKFLOW_ID, "Review Trigger (15 min)", False, fake_config, transport=transport)
+        WORKFLOW_ID, "Review Trigger", False, fake_config, transport=transport)
 
     assert result.verdict == n8n_control.VERIFIED
     put = [call for call in transport.calls if call["verb"] == "put"][0]
@@ -200,7 +200,7 @@ def test_disabling_one_job_sends_a_body_differing_only_in_that_nodes_disabled_fi
     sent_nodes = {node["name"]: node for node in sent["nodes"]}
     for node in fetched["nodes"]:
         expected = copy.deepcopy(node)
-        if node["name"] == "Review Trigger (15 min)":
+        if node["name"] == "Review Trigger":
             expected["disabled"] = True
         assert sent_nodes[node["name"]] == expected
 
@@ -210,12 +210,12 @@ def test_the_reversal_sentence_quotes_the_prior_state(fake_config,
     fetched = _maintenance()
     after = copy.deepcopy(fetched)
     for node in after["nodes"]:
-        if node["name"] == "Review Trigger (15 min)":
+        if node["name"] == "Review Trigger":
             node["disabled"] = True
     transport = stub_module_transport_factory([fetched, {}, {}, {}, after])
 
     result = n8n_cadence.set_schedule_enabled(
-        WORKFLOW_ID, "Review Trigger (15 min)", False, fake_config, transport=transport)
+        WORKFLOW_ID, "Review Trigger", False, fake_config, transport=transport)
 
     assert "was running" in result.reversal
     assert "switch it back on" in result.reversal
@@ -234,7 +234,7 @@ def test_a_readback_still_showing_the_prior_state_is_failed(fake_config,
     transport = stub_module_transport_factory([fetched, {}, {}, {}, _maintenance()])
 
     result = n8n_cadence.set_schedule_enabled(
-        WORKFLOW_ID, "Review Trigger (15 min)", False, fake_config, transport=transport)
+        WORKFLOW_ID, "Review Trigger", False, fake_config, transport=transport)
 
     assert result.verdict == n8n_control.FAILED
 
@@ -244,7 +244,7 @@ def test_a_readback_still_showing_the_prior_state_is_failed(fake_config,
 def _retimed(interval):
     after = _maintenance()
     for node in after["nodes"]:
-        if node["name"] == "Review Trigger (15 min)":
+        if node["name"] == "Review Trigger":
             node["parameters"]["rule"]["interval"] = interval
     return after
 
@@ -255,7 +255,7 @@ def test_set_cadence_sends_a_body_whose_only_differing_node_is_the_named_trigger
     fetched = _maintenance()
     transport = stub_module_transport_factory([fetched, {}, {}, {}, _retimed(target)])
 
-    result = n8n_cadence.set_cadence(WORKFLOW_ID, "Review Trigger (15 min)", target,
+    result = n8n_cadence.set_cadence(WORKFLOW_ID, "Review Trigger", target,
                                      fake_config, transport=transport)
 
     assert result.verdict == n8n_control.VERIFIED
@@ -263,7 +263,7 @@ def test_set_cadence_sends_a_body_whose_only_differing_node_is_the_named_trigger
     sent = put["kwargs"]["json"] if "json" in put.get("kwargs", {}) else put.get("json")
     differing = [node["name"] for node, original in
                  zip(sent["nodes"], fetched["nodes"]) if node != original]
-    assert differing == ["Review Trigger (15 min)"]
+    assert differing == ["Review Trigger"]
 
 
 def test_the_reversal_names_the_prior_cadence_in_plain_language(
@@ -272,10 +272,13 @@ def test_the_reversal_names_the_prior_cadence_in_plain_language(
     transport = stub_module_transport_factory(
         [_maintenance(), {}, {}, {}, _retimed(target)])
 
-    result = n8n_cadence.set_cadence(WORKFLOW_ID, "Review Trigger (15 min)", target,
+    result = n8n_cadence.set_cadence(WORKFLOW_ID, "Review Trigger", target,
                                      fake_config, transport=transport)
 
-    assert "every 15 minutes" in result.reversal
+    # The shipped Review Trigger is daily (2026-08-10: three sub-daily triggers alone
+    # exceeded the 2,500/month n8n plan while doing no work), so the prior cadence this
+    # reversal names is "once a day".
+    assert "once a day" in result.reversal
     assert not FIELD_EXPRESSION.match(result.reversal)
     assert "*" not in result.reversal
 
@@ -289,7 +292,7 @@ def test_a_refusal_object_is_never_accepted_as_an_interval(fake_config,
         n8n_cadence.parse_cadence("something unparseable")
     except n8n_cadence.CadenceRefused as refusal:
         with pytest.raises(n8n_cadence.CadenceRefused):
-            n8n_cadence.set_cadence(WORKFLOW_ID, "Review Trigger (15 min)", refusal,
+            n8n_cadence.set_cadence(WORKFLOW_ID, "Review Trigger", refusal,
                                     fake_config, transport=transport)
     assert transport.mutating_calls == []
 
@@ -299,7 +302,7 @@ def test_an_unchanged_readback_is_failed(fake_config, stub_module_transport_fact
     transport = stub_module_transport_factory(
         [_maintenance(), {}, {}, {}, _maintenance()])      # read-back returns the OLD interval
 
-    result = n8n_cadence.set_cadence(WORKFLOW_ID, "Review Trigger (15 min)", target,
+    result = n8n_cadence.set_cadence(WORKFLOW_ID, "Review Trigger", target,
                                      fake_config, transport=transport)
 
     assert result.verdict == n8n_control.FAILED
@@ -309,7 +312,7 @@ def test_retiming_and_disabling_stay_independent():
     """Neither mutation may widen to cover the other's field, or the field-level guard
     stops meaning anything."""
     workflow = _maintenance()
-    name = "Review Trigger (15 min)"
+    name = "Review Trigger"
 
     n8n_cadence._set_interval_in_place(workflow, name,
                                        [{"field": "hours", "hoursInterval": 1}])
@@ -322,7 +325,7 @@ def test_retiming_and_disabling_stay_independent():
 
 def test_the_field_guard_refuses_a_change_outside_the_permitted_field():
     original = [n for n in _maintenance()["nodes"]
-                if n["name"] == "Review Trigger (15 min)"][0]
+                if n["name"] == "Review Trigger"][0]
     modified = copy.deepcopy(original)
     modified["disabled"] = True
     modified["parameters"]["rule"]["interval"] = [{"field": "hours", "hoursInterval": 1}]

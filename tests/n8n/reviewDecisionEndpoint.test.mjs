@@ -694,12 +694,12 @@ test("(h) the scheduled maintenance workflow still carries its 15-minute review 
   const MW = JSON.parse(fs.readFileSync(
     path.join(ROOT, "n8n", "wf_scheduled_maintenance_cloud.json"), "utf8"));
   const names = new Set(MW.nodes.map((n) => n.name));
-  for (const n of ["Review Trigger (15 min)", "Review Search (approved=true)",
+  for (const n of ["Review Trigger", "Review Search (approved=true)",
                    "Apply Review", "Review Apply Update"]) {
     assert.ok(names.has(n), `the backstop node must still exist: ${n}`);
   }
   const next = (name) => (MW.connections[name].main[0] || []).map((c) => c.node);
-  assert.deepEqual(next("Review Trigger (15 min)"), ["Review Search (approved=true)"]);
+  assert.deepEqual(next("Review Trigger"), ["Review Search (approved=true)"]);
   assert.deepEqual(next("Review Search (approved=true)"), ["Review Extract Rows"]);
   assert.deepEqual(next("Review Extract Rows"), ["Apply Review"]);
   assert.ok(next("Apply Review").length, "Apply Review still feeds the loop's continuation");

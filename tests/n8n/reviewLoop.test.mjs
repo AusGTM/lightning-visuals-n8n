@@ -147,7 +147,7 @@ test("the built workflow contains an Apply Review node reachable from a review-a
   assert.ok(props.includes("lv_enrichment_review_candidate_json"));
 
   // Reachability: trigger -> search -> extract -> apply review.
-  assert.ok(wf.connections["Review Trigger (15 min)"]);
+  assert.ok(wf.connections["Review Trigger"]);
   assert.ok(wf.connections[search.name]);
   assert.ok(wf.connections["Review Extract Rows"]);
 });

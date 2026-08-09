@@ -7,14 +7,14 @@
         "rule": {
           "interval": [
             {
-              "field": "minutes",
-              "minutesInterval": 15
+              "field": "days",
+              "daysInterval": 1
             }
           ]
         }
       },
       "id": "st00010000-0000-4000-8000-000000000000",
-      "name": "SJ-3 Trigger (15 min)",
+      "name": "SJ-3 Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -99,14 +99,14 @@
         "rule": {
           "interval": [
             {
-              "field": "hours",
-              "hoursInterval": 1
+              "field": "days",
+              "daysInterval": 1
             }
           ]
         }
       },
       "id": "st00060000-0000-4000-8000-000000000000",
-      "name": "SJ-1 Trigger (hourly)",
+      "name": "SJ-1 Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -189,7 +189,7 @@
         }
       },
       "id": "st00100000-0000-4000-8000-000000000000",
-      "name": "SJ-2 Trigger (monthly)",
+      "name": "SJ-2 Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -354,7 +354,7 @@
         }
       },
       "id": "st00200000-0000-4000-8000-000000000000",
-      "name": "Dedupe Trigger (weekly)",
+      "name": "Dedupe Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -440,14 +440,14 @@
         "rule": {
           "interval": [
             {
-              "field": "minutes",
-              "minutesInterval": 15
+              "field": "days",
+              "daysInterval": 1
             }
           ]
         }
       },
       "id": "st00250000-0000-4000-8000-000000000000",
-      "name": "Review Trigger (15 min)",
+      "name": "Review Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
       "position": [
@@ -670,7 +670,7 @@
     }
   ],
   "connections": {
-    "SJ-3 Trigger (15 min)": {
+    "SJ-3 Trigger": {
       "main": [
         [
           {
@@ -714,7 +714,7 @@
         ]
       ]
     },
-    "SJ-1 Trigger (hourly)": {
+    "SJ-1 Trigger": {
       "main": [
         [
           {
@@ -747,7 +747,7 @@
         ]
       ]
     },
-    "SJ-2 Trigger (monthly)": {
+    "SJ-2 Trigger": {
       "main": [
         [
           {
@@ -820,7 +820,7 @@
         ]
       ]
     },
-    "Dedupe Trigger (weekly)": {
+    "Dedupe Trigger": {
       "main": [
         [
           {
@@ -864,7 +864,7 @@
         ]
       ]
     },
-    "Review Trigger (15 min)": {
+    "Review Trigger": {
       "main": [
         [
           {

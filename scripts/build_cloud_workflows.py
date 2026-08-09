@@ -5528,6 +5528,15 @@ return $input.all().map((it) => {
 
 
 def _schedule_trigger(name, x, y, field, interval_value):
+    """A schedule trigger. EVERY FIRE IS ONE BILLED n8n EXECUTION, and the plan here is
+    2,500/month -- so the intervals below are a budget, not a preference. Arithmetic before
+    changing one: 15 minutes = 2,880/month PER TRIGGER, hourly = 720, daily = 30. Three
+    sub-daily triggers alone blew the entire monthly allowance while doing no work.
+
+    Node names deliberately carry NO interval ("SJ-3 Trigger", not "SJ-3 Trigger (15 min)"):
+    the operator can change cadence at runtime via the plugin's `cadence` action, so a name
+    that encodes one goes stale the moment they do.
+    """
     return {
         "parameters": {"rule": {"interval": [{"field": field, f"{field}Interval": interval_value}]}},
         "id": nid("st"), "name": name,
@@ -5800,7 +5809,7 @@ def build_scheduled_maintenance_cloud():
 
     # --- SJ-3: 15-min requested poller (Task 1 tracer — end-to-end thin slice) ---------
     x, y = 220, 300
-    sj3_trigger = _schedule_trigger("SJ-3 Trigger (15 min)", x, y, "minutes", 15)
+    sj3_trigger = _schedule_trigger("SJ-3 Trigger", x, y, "days", 1)
     nodes.append(sj3_trigger)
     x += 220
     # BUG 10 / Phase 16.6: _hs_http_search_node for all 4 company searches below — the
@@ -5833,7 +5842,7 @@ def build_scheduled_maintenance_cloud():
     # --- SJ-1: hourly input-gap scan (Task 2) ------------------------------------------
     # Three single-filter OR'd groups (Pitfall 3) — "any input unresolved", never AND.
     x, y1 = 220, 620
-    sj1_trigger = _schedule_trigger("SJ-1 Trigger (hourly)", x, y1, "hours", 1)
+    sj1_trigger = _schedule_trigger("SJ-1 Trigger", x, y1, "days", 1)
     nodes.append(sj1_trigger)
     x1 = x + 220
     sj1_search = _hs_http_search_node(
@@ -5864,7 +5873,7 @@ def build_scheduled_maintenance_cloud():
     # the terminal dispatch — a skip (still fresh, or re-verified since the scan started)
     # never re-queues.
     x, y2 = 220, 940
-    sj2_trigger = _schedule_trigger("SJ-2 Trigger (monthly)", x, y2, "months", 1)
+    sj2_trigger = _schedule_trigger("SJ-2 Trigger", x, y2, "months", 1)
     nodes.append(sj2_trigger)
     x2 = x + 220
     nodes.append(code_node("SJ-2 Epoch Cutoff (180d)", ENRICH_SJ2_EPOCH_CUTOFF, x2, y2))
@@ -5912,7 +5921,7 @@ def build_scheduled_maintenance_cloud():
     # wrapper (ENRICH_DEDUPE_SWEEP) maps lv_linkedin_url -> linkedin_url so the frozen
     # module never needs to change (CLAUDE.md §13.4 Workflow D).
     x, y3 = 220, 1520
-    dedupe_trigger = _schedule_trigger("Dedupe Trigger (weekly)", x, y3, "weeks", 1)
+    dedupe_trigger = _schedule_trigger("Dedupe Trigger", x, y3, "weeks", 1)
     nodes.append(dedupe_trigger)
     x3 = x + 220
     dedupe_search = _hs_http_search_node(
@@ -5945,7 +5954,7 @@ def build_scheduled_maintenance_cloud():
     # CURRENT value (the refetch reviewApply compares against) + the candidate JSON + the
     # 4 review flags reviewApply's clearPatch zeroes.
     x, y4 = 220, 1840
-    review_trigger = _schedule_trigger("Review Trigger (15 min)", x, y4, "minutes", 15)
+    review_trigger = _schedule_trigger("Review Trigger", x, y4, "days", 1)
     nodes.append(review_trigger)
     x4 = x + 220
     review_search = _hs_http_search_node(
@@ -6415,7 +6424,7 @@ def build_review_decision_cloud():
     ALLOW_HUBSPOT_REVIEW_WRITES plus the shared TEST_RECORD_* allowlist and by NEITHER
     dispatch constant (D-02). Committed disarmed and inactive.
 
-    The 15-minute `Review Trigger` loop in build_scheduled_maintenance_cloud() is
+    The daily `Review Trigger` loop in build_scheduled_maintenance_cloud() is
     deliberately untouched and remains the backstop for a record approved outside this
     conversation (D-08e/D-15).
 
@@ -6636,7 +6645,7 @@ def build_review_decision_cloud():
         "parameters": {"content": (
             "## LV Review Decision — CLOUD (Phase 30 Plan 02, D-08e/D-19)\n"
             "`hubspot/review/decision`: ONE operator review decision, synchronously. The "
-            "15-minute `Review Trigger` loop in \"LV Scheduled Maintenance (Cloud)\" is "
+            "daily `Review Trigger` loop in \"LV Scheduled Maintenance (Cloud)\" is "
             "untouched and stays as the backstop — this is a second path, not a "
             "replacement.\n\n"
             "**The caller cannot say what to write.** Only `object_type`, `record_id`, "
