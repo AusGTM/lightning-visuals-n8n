@@ -22,9 +22,10 @@ starts at Phase 44.
 - Integer phases (44, 45): Planned milestone work.
 - Decimal phases (e.g. 44.1): Reserved for urgent insertions if needed later.
 
-- [ ] **Phase 44: SJ-3 Dispatch Gate, Drain & Cap** - The poller refuses to start work the write
+- [x] **Phase 44: SJ-3 Dispatch Gate, Drain & Cap** - The poller refuses to start work the write
   gate can't finish, self-heals the stuck-flag queue instead of accumulating it, and cannot let
-  a single tick spend a large share of the monthly allowance
+  a single tick spend a large share of the monthly allowance (completed 2026-08-10 — live-proven,
+  44-LIVE-EVIDENCE.md)
 
 - [ ] **Phase 45: Burn-Rate Alarm** - The sweep detects and reports an execution burn rate that
   would exhaust the plan allowance, without ever fabricating a monthly total
@@ -69,13 +70,13 @@ live, drain not) is worse than either the current runaway or a further delay.
      monthly execution floor exceeds a configured share of the plan allowance — the check the
      v0.7 schedule (2.6x over budget doing no work) would have failed. (CAP-01, CAP-02, CAP-03)
 
-**Plans**: 2/3 plans executed
+**Plans**: 3/3 plans executed
 
 Plans:
 
 - [x] 44-01-PLAN.md — Tracer: SJ-3 dispatch gate + queue drain end-to-end offline (GATE-01, DRAIN-01/02/03)
 - [x] 44-02-PLAN.md — Budget-derived dispatch cap + tick outcome (GATE-02/03, CAP-01/02/03)
-- [ ] 44-03-PLAN.md — One build → deploy → bounce, then live proof of cost bound, outcome and drain
+- [x] 44-03-PLAN.md — One build → deploy → bounce, then live proof of cost bound, outcome and drain
 
 ### Phase 45: Burn-Rate Alarm
 

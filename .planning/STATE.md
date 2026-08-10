@@ -4,34 +4,36 @@ milestone: v0.8
 milestone_name: Execution Budget Safety
 current_phase: 44
 current_phase_name: SJ-3 Dispatch Gate, Drain & Cap
-status: planning
-stopped_at: Completed 44-02-PLAN.md (cap + tick outcome, offline; no deploy)
-last_updated: "2026-08-10T03:30:00.000Z"
+status: phase_complete
+stopped_at: Completed 44-03-PLAN.md (deploy + bounce + live proof) — Phase 44 complete
+last_updated: "2026-08-10T03:10:00.000Z"
 last_activity: 2026-08-10
-last_activity_desc: 44-02 executed — dispatch cap derived from execution_budget.yaml
+last_activity_desc: 44-03 executed — gate/drain/cap live-proven (execution 11820); Phase 44 sealed
 progress:
   total_phases: 2
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 3
-  completed_plans: 2
-  percent: 0
+  completed_plans: 3
+  percent: 50
 ---
 
 # Project State
 
 ## Current Position
 
-Phase: Phase 44 — SJ-3 Dispatch Gate, Drain & Cap (in progress, 2/3 plans executed)
-Plan: 44-02 complete (cap + tick outcome offline); next 44-03 (deploy + bounce + live proof)
-Status: 44-02 executed — SJ3_DISPATCH_CAP=40 derived from config/execution_budget.yaml,
-SJ-3 Tick Outcome node landed, CAP-03 idle-floor test in place; suites green (pytest 2438 /
-node 656 / plugin 1286), NOTHING DEPLOYED (44-03 owns deploy + bounce)
-Last activity: 2026-08-10 — 44-02-SUMMARY.md written; commits dd677a8, 97ee434, 8e50d85
+Phase: Phase 44 — SJ-3 Dispatch Gate, Drain & Cap (COMPLETE, 3/3 plans executed)
+Plan: 44-03 complete (deploy + bounce + live proof); next Phase 45 (Burn-Rate Alarm)
+Status: gate/drain/cap DEPLOYED and live-proven — execution 11820 (manual, gate-closed):
+1 execution, 0 enrichment sub-executions, verbatim gate_closed outcome (cap 40), drained
+disposable read back requested=false/status=skipped; verify_live_write_safety.py reads
+disarmed PASS + drain authority PASS (13 nodes); all nine Phase 44 requirements complete
+with pointers; suites green (pytest 2438 / node 656)
+Last activity: 2026-08-10 — 44-03-SUMMARY.md + 44-LIVE-EVIDENCE.md written; commit c3c2955
 
 ## Session
 
-**Last session:** 2026-08-10T03:30:00.000Z
-**Stopped at:** Completed 44-02-PLAN.md (cap + tick outcome, offline; no deploy)
+**Last session:** 2026-08-10T03:10:00.000Z
+**Stopped at:** Completed 44-03-PLAN.md (deploy + bounce + live proof) — Phase 44 complete
 **Resume file:** None
 
 ## Performance Metrics
@@ -57,6 +59,7 @@ Last activity: 2026-08-10 — 44-02-SUMMARY.md written; commits dd677a8, 97ee434
 | Phase 43 P04 | 45min | 3 tasks | 3 files |
 | Phase 44 P01 | 35m | 3 tasks | 14 files |
 | Phase 44 P02 | ~20min | 3 tasks | 8 files |
+| Phase 44 P03 | ~50min | 3 tasks | 2 files |
 
 ## Decisions
 
@@ -113,6 +116,8 @@ Last activity: 2026-08-10 — 44-02-SUMMARY.md written; commits dd677a8, 97ee434
 - [Phase ?]: 44-01: write-gate coverage guarantee amended deliberately — SJ-3 Drain Clear Flag exempt by name (walker inversion recorded), replaced by sole-feeder + D-06 negative-grep + key+value patch allowlist assertions
 - [Phase 44-02]: idle_floor_max_share set to 0.25 in config/execution_budget.yaml — current schedule idles at ~95/month (~4%); one hourly trigger (720/month = 29%) already fails CAP-03, so any sub-daily re-timing is caught
 - [Phase 44-02]: invalid opts.cap fails CLOSED in sj3Gate (behaves as 0: defer everything permitted) — deferral preserves work and stays visible via outcome=capped_partial; build also asserts SJ3_DISPATCH_CAP >= 1 since a sub-daily cadence derives the cap to <= 0
+- [Phase 44-03]: Phase 44 SEALED live — deploy (operator-run, five 200s, disarmed) + agent bounce (8/8 verified) + execution 11820: gate-closed tick costs 1 execution / 0 sub-executions (research A1 discharged as observation), verbatim gate_closed outcome with cap 40, drain read-back requested=false/status=skipped on disposable 280176525780 (deleted, 0 leaked). verify_live_write_safety.py: disarmed PASS + drain PASS.
+- [Phase 44-03]: The observed tick was mode=manual (operator-fired from SJ-3 Trigger in the UI) — no API run-now exists for schedule triggers (405) and the natural daily tick was ~21h out; the schedule's own firing is separately proven by prior tick history. Recorded honestly in 44-LIVE-EVIDENCE.md.
 
 ### Blockers
 
