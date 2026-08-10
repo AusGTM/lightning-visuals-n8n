@@ -65,8 +65,31 @@ page at 80%.
 
 ### Burn-Rate Alarm — the system reports it, not the billing page
 
-- [ ] **ALARM-01**: The sweep fires a notice when the sampled execution rate projects to exhaust
-  the plan allowance for the current billing period.
+- [ ] **ALARM-01**: The sweep fires a notice when the sampled execution rate, projected forward
+  at that rate over a 30-day month, would exhaust the configured monthly plan allowance.
+
+  <!-- AMENDED 2026-08-10, Phase 45 D-02. Originally read "the plan allowance for the current
+  billing period". n8n exposes no billing-cycle anchor day to an API key, so an anchored
+  mid-cycle projection would have to invent the cycle start — the same fabrication ALARM-02
+  forbids one line below. The projection is therefore anchor-free: `rate x 30 days` against the
+  allowance. A `billing_anchor_day` config key was considered and rejected (one more key to keep
+  correct, and a wrong anchor silently mis-projects). -->
+
+- [ ] **LOOK-01**: The sweep's execution lookback is bounded by TIME, not by a fixed row count.
+  A failure that has already been fixed stops being reported once it ages out of the window,
+  rather than re-notifying until 100 newer executions displace it (observed live 2026-08-03,
+  RB-8: execution 1173 still notifying hours after Phase 31 fixed its cause). An in-flight run is
+  current state and is never aged out. Where a workflow's name is resolvable it is named, rather
+  than degraded to "an unnamed workflow".
+
+### Cadence Budget Floor — the front door the alarm backstops
+
+- [ ] **FLOOR-01**: A runtime cadence change is refused when the resulting schedule's monthly
+  execution floor would bust the configured share of the plan allowance — the same bound
+  CAP-03 enforces at build time, applied to the path that never rebuilds. The refusal states the
+  arithmetic (requested fires per month, the ceiling, the allowance) before anything else, and
+  bounds the WHOLE schedule rather than the one trigger being changed: five triggers each passing
+  individually can sum past the plan.
 
 - [ ] **ALARM-02**: The alarm samples a **rate over a bounded recent window** and never claims a
   monthly total. n8n prunes executions (2,500 rows / ~10 hours observed here) and exposes no
@@ -119,5 +142,13 @@ page at 80%.
 | ALARM-02 | Phase 45 | Pending |
 | ALARM-03 | Phase 45 | Pending |
 | ALARM-04 | Phase 45 | Pending |
+| LOOK-01 | Phase 45 | Pending |
+| FLOOR-01 | Phase 45 | Pending |
 
-Coverage: 13/13 v0.8 requirements mapped. 100% coverage, no orphans.
+Coverage: 15/15 v0.8 requirements mapped. 100% coverage, no orphans.
+
+<!-- LOOK-01 and FLOOR-01 added 2026-08-10 during Phase 45 planning: 45-CONTEXT.md folds two
+pending todos into the phase (2026-08-03-sweep-lookback-has-no-time-window,
+2026-08-10-runtime-cadence-has-no-budget-floor) and instructs the planner to add requirement rows
+so traceability stays at 100% rather than the folded scope arriving unmapped. -->
+

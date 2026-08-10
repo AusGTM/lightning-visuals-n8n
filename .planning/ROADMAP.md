@@ -80,6 +80,7 @@ Plans:
 
 ### Phase 45: Burn-Rate Alarm
 
+**UI hint**: no
 **Goal**: The sweep reports an unsustainable execution rate before a human notices it on the
 billing page — sampling a bounded recent rate, never claiming a monthly total n8n makes
 unknowable by construction, and failing loudly rather than silently when it cannot read
@@ -87,11 +88,13 @@ execution history. Pure Python, entirely inside `operator-claude-plugin/scripts/
 deploy, no bounce, independent blast radius from Phase 44.
 **Depends on**: Nothing (pure Python plugin-side sweep condition; no n8n dependency. Sequenced
 after Phase 44 by priority — the active runaway fix ships first — not by technical necessity)
-**Requirements**: ALARM-01, ALARM-02, ALARM-03, ALARM-04
+**Requirements**: ALARM-01, ALARM-02, ALARM-03, ALARM-04, LOOK-01, FLOOR-01
 **Success Criteria** (what must be TRUE):
 
-  1. The sweep fires a notice when a sampled recent execution rate projects to exhaust the
-     configured plan allowance within the current billing period. (ALARM-01)
+  1. The sweep fires a notice when a sampled recent execution rate, projected forward at that
+     rate over a 30-day month, would exhaust the configured plan allowance. The projection is
+     anchor-free — amended 2026-08-10 per 45-CONTEXT.md D-02, because n8n exposes no
+     billing-cycle day and an anchored projection would have to invent one. (ALARM-01)
 
   2. The rate sample is drawn from a bounded recent window, and the notice never states or
      implies a monthly total — n8n prunes execution history (2,500 rows / ~10 hours observed)
@@ -106,13 +109,32 @@ after Phase 44 by priority — the active runaway fix ships first — not by tec
      the sweep's existing D-15 rule that a check which failed to run must never be
      indistinguishable from a check that found nothing wrong. (ALARM-04)
 
+  5. The sweep's execution lookback is bounded by time rather than by a fixed 100-row page, so a
+     failure whose cause was fixed stops being reported once it ages out — while an in-flight run
+     is never aged out, because it is current state, not history. (LOOK-01, folded todo
+     2026-08-03-sweep-lookback-has-no-time-window)
+
+  6. A runtime cadence change is refused when the resulting schedule's monthly execution floor
+     would bust the configured share of the plan allowance, stating the arithmetic first, and
+     summing the WHOLE schedule rather than the one trigger being re-timed. (FLOOR-01, folded todo
+     2026-08-10-runtime-cadence-has-no-budget-floor)
+
 **Note**: this alarm ships **inert** — no cron/launchd installation is in scope for this phase.
 The sweep cron is not installed on this machine (`crontab -l` empty); scheduling it is an admin
 action on the operator's machine, stated as an accepted limit, not a gap this phase works around.
 Verification is therefore by direct sweep invocation and unit tests against synthetic/fixture
 execution history, not by observing a live scheduled fire.
 
-**Plans**: TBD
+**Plans:** 3 plans
+
+Plans:
+- [ ] 45-01-PLAN.md — Time-windowed executions read and the burn-rate alarm (tracer-led): the
+  runaway-to-notice path end to end, the branches that must never be silent, and LOOK-01's
+  lookback fold
+- [ ] 45-02-PLAN.md — Cadence budget floor: whole-schedule monthly cost, a refusal that states
+  the arithmetic first, and D-10's single-shot override
+- [ ] 45-03-PLAN.md — Drift test pinning the plugin's allowance and floor share to
+  config/execution_budget.yaml, plugin release 0.13.0, and requirement closure
 
 ## Progress
 
