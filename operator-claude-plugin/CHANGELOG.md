@@ -16,6 +16,66 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-08-10
+
+### Added
+
+- **Burn-rate alarm.** The unattended sweep now samples the recent n8n execution rate and
+  fires when it projects, over a 30-day month, to exhaust the plan's monthly allowance —
+  the same failure mode the 2026-08-09 incident hit (a runaway lane spending 253
+  executions/hour, ~182,000/month against a 2,500/month plan). The condition reports one of
+  three outcomes on every sweep, never silence: `burn_rate_alarm` (the projected rate names
+  the sampled rate, the actually-observed span — flagged when it was shortened by n8n's
+  own 2,500-row pruning — the projection, and the allowance), `burn_rate_not_configured`
+  (the allowance key is missing or unusable — names the key, never a value, and every
+  other sweep condition keeps running), or `burn_rate_unreadable` (the execution history
+  itself could not be read). The alarm re-notifies on every sweep while a burn persists —
+  the one condition where repetition is deliberate, because an active burn costs money
+  hourly and a missed signal here has already cost 73x the plan once.
+
+- **Time-windowed execution lookback**, replacing the sweep's fixed 100-row page for every
+  condition that reads execution history. A terminal failure that ended outside the window
+  now ages out of the notice stream instead of re-notifying for days after it was fixed; an
+  in-flight run that started outside the window is still retained and still fires as stuck.
+  Every notice that names a workflow now resolves its real name instead of falling back to
+  "an unnamed workflow," wherever a name is resolvable.
+
+- **Runtime cadence budget floor.** Re-timing any of the five schedule triggers through the
+  plugin's cadence action now sums the WHOLE schedule's projected monthly cost — not just
+  the one trigger being changed — against the configured budget ceiling, before any change
+  reaches n8n. Five individually-affordable triggers that together bust the ceiling are
+  refused, naming the requested job's own cost, the whole-schedule cost, the ceiling, and
+  the allowance, in that order. A disabled trigger contributes zero; an unreadable workflow
+  list or a hand-edited `cronExpression` node refuses as an unknown cost rather than being
+  treated as free. A single-shot conversational override phrase, `"override the budget
+  floor"`, lets exactly one over-budget change through — restating the arithmetic and the
+  consequence at the moment it is taken — and never persists to a later change or a later
+  session. This floor guards only the plugin's own cadence action; a trigger re-timed
+  directly in the n8n editor is what the burn-rate alarm above backstops instead.
+
+### Upgrade step required
+
+An existing `operator.local.json` predates this release and therefore lacks its three new
+keys. **The FIRST sweep after upgrading will fire `burn_rate_not_configured`, by design, not
+as a bug**, until you add all three to your real config file (the shipped
+`operator.local.example.json` documents each with its required value and provenance):
+
+- `n8n_monthly_execution_allowance` — must currently be `2500`, and must match
+  `config/execution_budget.yaml`'s `monthly_execution_allowance` in the backend repo.
+- `n8n_schedule_floor_max_share` — must currently be `0.25`, and must match
+  `config/execution_budget.yaml`'s `idle_floor_max_share` in the backend repo.
+- `burn_rate_alarm_threshold` — must currently be `1.0`.
+
+`tests/test_execution_budget_drift.py` in the backend repo now enforces that the first two
+values agree with `config/execution_budget.yaml` mechanically — the two cannot silently
+drift apart. Until all three keys are added, the cadence action will also refuse every
+schedule change it is asked to make, for the same reason: it cannot judge a budget it
+cannot read.
+
+**This release ships the alarm INERT.** No cron or launchd schedule is installed by this
+release — the sweep only fires when it is invoked. Scheduling it on a recurring cadence is
+an admin action you take on your own machine; this plugin does not do it for you.
+
 ## [0.12.0] - 2026-08-07
 
 ### Added
