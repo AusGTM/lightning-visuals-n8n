@@ -72,17 +72,27 @@ itself beyond the one new authority named in D-05.
   records — that is the failure mode itself — so an allowlisted drain would clear only the
   records that were never stuck.
 
-- **D-07:** Blast radius is bounded **structurally**: the drain may write only
-  `lv_enrichment_requested`, only the literal `"false"`, only to record ids the gate
-  declined **in the same tick**, and it stamps provenance. A test asserts the emitted patch
-  has exactly one key.
+- **D-07:** Blast radius is bounded **structurally** by a **key+value allowlist**: the drain's
+  patch may contain only `lv_enrichment_requested="false"` and `lv_enrichment_status="skipped"`,
+  only on record ids the gate declined **in the same tick**. A test asserts the emitted patch
+  contains no key and no value outside that allowlist.
+  — **Amended 2026-08-10 (operator decision).** Originally "exactly one key". Phase 44 research
+  proved that unsatisfiable alongside D-08/D-13: the same write is what stamps the provenance.
+  Narrowness is now a two-key allowlist rather than a count of one — same protective intent,
+  and DRAIN-03 becomes achievable.
 
-- **D-08:** Drain provenance reuses the existing **`lv_enrichment_status`** property rather
-  than adding a new one. It is already in SJ-3's own search filter (`NEQ "running"`) and
-  already part of the control-property model, so it is readable by the same searches and
-  needs no property migration — this phase otherwise ships no schema change. A drained
-  record is therefore distinguishable from an enriched one and from a hand-cleared one
-  (DRAIN-03).
+- **D-08:** Drain provenance reuses the existing **`lv_enrichment_status`** property, written
+  as **`"skipped"`**. Research confirmed this property is a **closed enumeration** —
+  `queued|running|complete|failed|needs_review|skipped` (`config/hubspot_properties.yaml:308-337`)
+  — so a new value such as `"drained"` would need a live property PATCH, the migration this
+  phase must not perform. `skipped` is an existing option that **nothing in the pipeline writes
+  today** (only `needs_review` and `complete` are ever written,
+  `build_cloud_workflows.py:2797,2802`), so it carries no semantic collision and needs no
+  migration. A drained record is therefore distinguishable from an enriched one and from a
+  hand-cleared one (DRAIN-03).
+  **Note:** the status write is provenance ONLY. Clearing `lv_enrichment_requested` alone
+  already removes the record from SJ-3's `EQ "true"` filter, so the poller's re-match logic
+  does not depend on it.
 
 ### Cap policy + overflow
 

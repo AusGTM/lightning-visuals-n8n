@@ -33,9 +33,18 @@ page at 80%.
   it declined to dispatch, so the following tick finds none. The queue drains instead of
   accumulating.
 
-- [ ] **DRAIN-02**: The drain write path is narrow by construction — it can write exactly
-  `lv_enrichment_requested="false"` and nothing else, on records it just declined. Clearing a
-  trigger flag is not a data write, but it must not become a hole in the data write gate.
+- [ ] **DRAIN-02**: The drain write path is narrow by construction — its patch may contain
+  only the keys `lv_enrichment_requested` and `lv_enrichment_status`, with only the values
+  `"false"` and `"skipped"` respectively, on records it just declined. Clearing a trigger flag
+  is not a data write, but it must not become a hole in the data write gate.
+  <!-- AMENDED 2026-08-10, operator decision. Originally read "exactly
+  `lv_enrichment_requested=\"false\"` and nothing else", which Phase 44 research proved
+  incompatible with DRAIN-03/D-08: the same write is what stamps the provenance that makes a
+  drained record distinguishable. Narrowness is now enforced by an explicit key+value
+  ALLOWLIST rather than a key count of one — same intent, and DRAIN-03 becomes achievable.
+  `skipped` is an existing option on the closed `lv_enrichment_status` enumeration
+  (config/hubspot_properties.yaml:308-337) and is written by nothing else in the pipeline, so
+  no property migration is needed. -->
 
 - [ ] **DRAIN-03**: A record whose flag is cleared by the drain is distinguishable afterwards
   from one that was enriched — a drained record was never processed, and nothing downstream may
