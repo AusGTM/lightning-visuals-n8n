@@ -27,8 +27,9 @@ starts at Phase 44.
   a single tick spend a large share of the monthly allowance (completed 2026-08-10 — live-proven,
   44-LIVE-EVIDENCE.md)
 
-- [ ] **Phase 45: Burn-Rate Alarm** - The sweep detects and reports an execution burn rate that
-  would exhaust the plan allowance, without ever fabricating a monthly total
+- [x] **Phase 45: Burn-Rate Alarm** - The sweep detects and reports an execution burn rate that
+  would exhaust the plan allowance, without ever fabricating a monthly total (completed
+  2026-08-10 — 26/26 must-haves verified, 45-VERIFICATION.md; ships inert per the note below)
 
 ## Phase Details
 
@@ -146,5 +147,5 @@ Phases execute in numeric order: 44 → 45
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 44. SJ-3 Dispatch Gate, Drain & Cap | 2/3 | In Progress|  |
-| 45. Burn-Rate Alarm | 3/3 | In Progress|  |
+| 44. SJ-3 Dispatch Gate, Drain & Cap | 3/3 | Complete | 2026-08-10 |
+| 45. Burn-Rate Alarm | 3/3 | Complete | 2026-08-10 |

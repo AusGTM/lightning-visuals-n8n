@@ -4,11 +4,11 @@ milestone: v0.8
 milestone_name: Execution Budget Safety
 current_phase: 45
 current_phase_name: burn-rate-alarm
-status: verifying
-stopped_at: Completed 45-03-PLAN.md (Phase 45 complete)
-last_updated: "2026-08-10T05:22:39.308Z"
+status: phase_complete
+stopped_at: Phase 45 sealed — verification passed 26/26, code review findings fixed
+last_updated: "2026-08-10T06:20:00.000Z"
 last_activity: 2026-08-10
-last_activity_desc: Phase 45 execution started
+last_activity_desc: Phase 45 sealed — burn-rate alarm, cadence budget floor, windowed lookback
 progress:
   total_phases: 2
   completed_phases: 2
@@ -21,19 +21,23 @@ progress:
 
 ## Current Position
 
-Phase: 45 (burn-rate-alarm) — EXECUTING
+Phase: 45 (burn-rate-alarm) — COMPLETE
 Plan: 3 of 3
-Status: Phase complete — ready for verification
-1 execution, 0 enrichment sub-executions, verbatim gate_closed outcome (cap 40), drained
-disposable read back requested=false/status=skipped; verify_live_write_safety.py reads
-disarmed PASS + drain authority PASS (13 nodes); all nine Phase 44 requirements complete
-with pointers; suites green (pytest 2438 / node 656)
-Last activity: 2026-08-10 — Phase 45 execution started
+Status: Phase sealed — verification passed 26/26 must-haves (45-VERIFICATION.md)
+Burn-rate alarm, cadence budget floor and time-windowed lookback all ship inert (no cron or
+launchd installed — an admin action, an accepted limit, not a gap). Post-execution code review
+found 1 Critical + 5 Warnings; all six fixed and re-verified. CR-01 was a false burn-rate alarm
+when retained history held nothing older than the 24h window, whose notice also blamed n8n
+pruning that never happened — now an unanchored sub-hour sample stays silent while a page-cap
+truncated read (a real fast runaway) still fires. All six requirements (ALARM-01..04, LOOK-01,
+FLOOR-01) closed with test pointers; suites green (repo pytest 2487 / plugin 1332 / node 656).
+With Phase 44 sealed 2026-08-10, both v0.8 phases are complete — milestone ready to close.
+Last activity: 2026-08-10 — Phase 45 sealed
 
 ## Session
 
 **Last session:** 2026-08-10T05:22:39.302Z
-**Stopped at:** Completed 45-03-PLAN.md (Phase 45 complete)
+**Stopped at:** Phase 45 sealed — verification passed 26/26, code review findings fixed
 **Resume file:** None
 
 ## Performance Metrics
