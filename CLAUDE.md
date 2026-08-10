@@ -183,6 +183,40 @@ hubspot-enrichment-icp-mvp/
 
 # 4. HubSpot Data Model
 
+## 4.0 As-built delta (verified live 2026-08-10) — READ BEFORE USING §4/§5 NAMES
+
+The tables in §4 and §5 are the **original target design**. The portal and the deployed n8n
+flows diverged from them. Verified by listing live HubSpot properties and reading the deployed
+`n8n/wf_scheduled_maintenance_cloud.json`:
+
+**Two naming conventions coexist, and both are correct in their own lane:**
+
+| Lane | Convention | Example |
+| --- | --- | --- |
+| Live HubSpot portal + n8n Cloud flows | `lv_`-prefixed | `lv_enrichment_requested` |
+| Local Python MVP (§11/§12 fixtures, `src/ingest.py`, `src/merge_policy.py`) | bare | `enrichment_requested` |
+
+Every `enrichment_*` control property in the live portal carries the `lv_` prefix; **no bare
+`enrichment_requested` / `enrichment_status` property exists in HubSpot at all.** Code examples
+under §11–§12 (local MVP) legitimately use bare names and are left unchanged.
+
+**Control properties that exist live** (companies): `lv_enrichment_requested`,
+`lv_enrichment_status`, `lv_enrichment_needs_review`, `lv_enrichment_review_reason`,
+`lv_enrichment_provenance`, `lv_enrichment_review_approved`,
+`lv_enrichment_review_candidate_json`, `lv_enrichment_reviewed_at`, `lv_enrichment_reviewed_by`.
+
+**Documented in §4 but never created:** `enrichment_mode`, `enrichment_priority`,
+`enrichment_lock_until`, `last_enrichment_run_id`, `last_enriched_at`, `enrichment_confidence`,
+`enrichment_error`, `enrichment_last_sources`, `enrichment_last_decision`.
+
+**Documented in §5 but never created:** `lv_has_broadcast_or_streaming_signals`,
+`lv_has_sports_media_fit`, `lv_cloud_fear_risk`, `lv_price_sensitivity_risk`,
+`lv_icp_scored_at`, `lv_icp_scoring_version`, `lv_icp_confidence`, `lv_recommended_motion`,
+`lv_named_account_priority`.
+
+Treat §4/§5 as the roadmap, not an inventory. Re-list the portal before writing to any property
+named there.
+
 ## 4.1 Company control properties
 
 Create these custom company properties.
@@ -2200,13 +2234,16 @@ Compensate for missed webhooks and enable Sales Hub Pro on-demand enrichment wit
 Trigger:
 
 - n8n Schedule Trigger.
-- MVP frequency: every 15 minutes.
+- ~~MVP frequency: every 15 minutes.~~ **As-built (verified 2026-08-10): `SJ-3 Trigger` in the
+  deployed `LV Scheduled Maintenance (Cloud)` is `daysInterval: 1` — DAILY.** It was reduced
+  from the 15-minute cadence after the 2026-08-09 execution runaway (see CHANGELOG). A record
+  flagged for re-enrichment therefore waits up to 24h, not 15 minutes.
 - Production frequency: hourly or batch windows.
 
 Search for companies where:
 
 ```text
-enrichment_requested = true
+lv_enrichment_requested = true
 OR lv_org_type is unknown
 OR lv_produces_content is unknown
 OR lv_icp_tier is empty
@@ -2692,6 +2729,12 @@ return items.map(item => ({
 
 ## 18.4 Build HubSpot fetch properties
 
+> **Stale against the live portal (see §4.0).** The `enrichment_*` entries below are unprefixed
+> and several name properties that were never created. HubSpot silently ignores unknown names
+> in a `properties` request, so copying these lists fails quietly rather than erroring — you
+> get `undefined` for every missing field, which is exactly the shape that produced the
+> blank-region veto bug. Use `lv_`-prefixed names and confirm each exists before relying on it.
+
 Company fetch list:
 
 ```text
@@ -2848,9 +2891,30 @@ return [{
 
 # 19. Scheduled Jobs
 
-## 19.1 Every 15 minutes: requested enrichment poller
+## 19.0 As-built cadences (verified 2026-08-10)
 
-Search companies where:
+The per-section headings below carry the ORIGINAL intended cadences. The deployed
+`LV Scheduled Maintenance (Cloud)` schedule triggers are:
+
+| Deployed trigger | Actual cadence | Section describing it | Heading accurate? |
+| --- | --- | --- | --- |
+| `SJ-3 Trigger` (requested poller) | `daysInterval: 1` — daily | §19.1 | corrected |
+| `SJ-1 Trigger` (input-gap scan) | `daysInterval: 1` — daily | §19.2 "Hourly" | **stale — daily, not hourly** |
+| `Review Trigger` (needs-review queue) | `daysInterval: 1` — daily | §19.4 "Weekly" | **stale — daily, not weekly** |
+| `Dedupe Trigger` | `weeksInterval: 1` — weekly | §13.4 dedupe job | accurate |
+| `SJ-2 Trigger` (stale refresh) | `monthsInterval: 1` — monthly | §19.5 "Monthly" | accurate |
+
+There is no 15-minute trigger anywhere in the deployed workflow. Re-read the
+`scheduleTrigger` nodes before relying on any latency figure in this section.
+
+## 19.1 Daily: requested enrichment poller
+
+**As-built, verified 2026-08-10** against the deployed `SJ-3 Search (requested poller)` node.
+Two corrections to the original spec: the trigger property is `lv_enrichment_requested` (the
+`lv_` prefix is required — a PATCH to bare `enrichment_requested` writes a property that does
+not exist and the poller never sees it), and the cadence is **daily**, not every 15 minutes.
+
+The deployed filter is exactly:
 
 ```json
 {
@@ -2858,12 +2922,12 @@ Search companies where:
     {
       "filters": [
         {
-          "propertyName": "enrichment_requested",
+          "propertyName": "lv_enrichment_requested",
           "operator": "EQ",
           "value": "true"
         },
         {
-          "propertyName": "enrichment_status",
+          "propertyName": "lv_enrichment_status",
           "operator": "NEQ",
           "value": "running"
         }
@@ -2871,20 +2935,18 @@ Search companies where:
     }
   ],
   "properties": [
-    "name",
+    "hs_object_id",
     "domain",
-    "website",
-    "country",
-    "lv_org_type",
-    "lv_produces_content",
-    "lv_icp_tier",
-    "enrichment_requested",
-    "enrichment_status",
-    "enrichment_lock_until"
+    "lv_enrichment_requested",
+    "lv_enrichment_status"
   ],
   "limit": 100
 }
 ```
+
+Operator note: a record stuck at `lv_enrichment_status="running"` is silently skipped by the
+`NEQ running` clause. The PATCH setting the flag still returns 200, so a successful write is
+not evidence the record will be processed — check the status before any bulk re-score.
 
 ## 19.2 Hourly: ICP unscored scan
 
@@ -2989,11 +3051,11 @@ crm.objects.custom.write
 
 ## 20.2 Webhook subscriptions
 
-MVP subscriptions:
+MVP subscriptions (property names corrected to the live `lv_`-prefixed properties — see §4.0):
 
 ```text
-company.propertyChange.enrichment_requested
-contact.propertyChange.enrichment_requested
+company.propertyChange.lv_enrichment_requested
+contact.propertyChange.lv_enrichment_requested
 ```
 
 Later subscriptions:
@@ -3201,7 +3263,7 @@ Use test webhook payload:
     "objectId": 789,
     "objectType": "company",
     "subscriptionType": "company.propertyChange",
-    "propertyName": "enrichment_requested",
+    "propertyName": "lv_enrichment_requested",
     "propertyValue": "true",
     "occurredAt": 1783316400000
   }

@@ -46,7 +46,7 @@ structurally unable to complete, and it reports an unsustainable burn rate befor
 notices it.
 
 **Target features:**
-- **SJ-3 gate check** — the 15-minute/daily poller refuses to dispatch when the HubSpot write
+- **SJ-3 gate check** — the daily poller (`daysInterval: 1`, verified live 2026-08-10) refuses to dispatch when the HubSpot write
   gate is closed, rather than fanning out one sub-execution per record that can never complete
   or clear its own trigger flag
 - **Self-healing flag clear** — `lv_enrichment_requested` cannot remain `true` indefinitely
