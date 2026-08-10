@@ -414,8 +414,17 @@ def schedule_month_cost(workflow_items, workflow_id, node_name, interval):
 
 
 def _read_positive_float(config, key):
+    """WR-03: `bool` is an `int`/`float` subclass in Python, so `float(True) == 1.0`
+    would otherwise let a misconfigured `"key": true` silently parse as a real allowance
+    of 1.0 rather than degrading to the same missing/unusable-config refusal every other
+    unparseable value gets -- the same gotcha `tests/test_execution_budget_drift.py`
+    already guards the static config artifacts against. Checked before the float() call,
+    since float() itself would happily accept a bool."""
+    value = (config or {}).get(key)
+    if isinstance(value, bool):
+        return None
     try:
-        value = float((config or {}).get(key))
+        value = float(value)
     except (TypeError, ValueError):
         return None
     return value if value > 0 else None

@@ -399,9 +399,19 @@ def check_stuck_armed(workflows, executions_summaries):
 def _parsed_burn_rate_threshold(execution_budget, default):
     """Mirrors n8n_read.stuck_threshold_minutes exactly, including its rationale: a
     status read must not fail because a config value was typed wrong. Configuration
-    first, the documented default on missing, blank, unparseable or non-positive."""
+    first, the documented default on missing, blank, unparseable or non-positive.
+
+    WR-03: `bool` is an `int`/`float` subclass in Python, so a misconfigured
+    `"burn_rate_alarm_threshold": true` would otherwise silently parse as `1.0` rather
+    than degrading to the default like any other unusable value -- the same gotcha
+    `tests/test_execution_budget_drift.py` already guards the static config artifacts
+    against. Checked before the float() call, not after: `float(True) == 1.0` succeeds,
+    so `isinstance(..., bool)` is the only place this can be caught."""
+    value = (execution_budget or {}).get("threshold")
+    if isinstance(value, bool):
+        return default
     try:
-        value = float((execution_budget or {}).get("threshold"))
+        value = float(value)
     except (TypeError, ValueError):
         return default
     return value if value > 0 else default
@@ -455,11 +465,12 @@ def check_burn_rate(executions, execution_budget, threshold=DEFAULT_BURN_RATE_TH
 
     Precedence order (documented, not incidental):
 
-    1. Allowance not usable (absent, blank, non-numeric, or not strictly positive) ->
-       `BURN_RATE_NOT_CONFIGURED`, naming the exact config key, never a value (this
-       module inherits config_gate's names-only rule). With the allowance missing the
-       check cannot run at all, so naming the missing key is the one actionable fact —
-       adding "also could not read history" to it would be noise; the operator learns
+    1. Allowance not usable (absent, blank, non-numeric, a `bool` (WR-03), or not
+       strictly positive) -> `BURN_RATE_NOT_CONFIGURED`, naming the exact config key,
+       never a value (this module inherits config_gate's names-only rule). With the
+       allowance missing the check cannot run at all, so naming the missing key is the
+       one actionable fact — adding "also could not read history" to it would be
+       noise; the operator learns
        that fact on the next sweep. `sweep_entry` already short-circuits to its own
        `sweep_blind` notice when EVERY read failed, so this never double-reports that
        case.
@@ -494,10 +505,17 @@ def check_burn_rate(executions, execution_budget, threshold=DEFAULT_BURN_RATE_TH
     executions = executions or {}
     execution_budget = execution_budget or {}
 
-    try:
-        allowance = float(execution_budget.get("allowance"))
-    except (TypeError, ValueError):
+    # WR-03: bool is an int/float subclass, so float(True) == 1.0 -- checked before the
+    # float() call so a misconfigured "allowance": true degrades to not-configured
+    # rather than silently becoming a real allowance of 1.0.
+    allowance_raw = execution_budget.get("allowance")
+    if isinstance(allowance_raw, bool):
         allowance = None
+    else:
+        try:
+            allowance = float(allowance_raw)
+        except (TypeError, ValueError):
+            allowance = None
     if allowance is None or allowance <= 0:
         key_name = execution_budget.get("key") or n8n_read.EXECUTION_ALLOWANCE_KEY
         return [{

@@ -172,6 +172,20 @@ def test_missing_share_key_names_it():
         assert "n8n_schedule_floor_max_share" in str(refusal)
 
 
+def test_a_bool_allowance_value_refuses_as_missing_not_as_a_real_1_0():
+    """WR-03: bool is an int subclass, so float(True) == 1.0 -- a misconfigured
+    `"n8n_monthly_execution_allowance": true` must refuse the same way a missing key
+    does, never silently authorize against an allowance of 1.0."""
+    items = [_workflow("wf-1", _node("A", "days", 1))]
+    config = {"n8n_monthly_execution_allowance": True, "n8n_schedule_floor_max_share": 0.25}
+    try:
+        n8n_cadence.check_budget_floor(
+            "wf-1", "A", [{"field": "days", "daysInterval": 1}], config, items)
+        assert False, "expected a CadenceRefused"
+    except n8n_cadence.CadenceRefused as refusal:
+        assert "n8n_monthly_execution_allowance" in str(refusal)
+
+
 def test_daily_request_within_budget_returns_the_arithmetic_and_does_not_raise():
     items = [_workflow("wf-1", _node("A", "days", 1))]
     result = n8n_cadence.check_budget_floor(

@@ -338,6 +338,26 @@ def test_a_blank_zero_negative_or_non_numeric_threshold_falls_back_to_default():
         assert bool(result) == bool(baseline), f"threshold={bad!r} must not raise or diverge"
 
 
+def test_a_bool_allowance_or_threshold_never_parses_as_a_real_number():
+    """WR-03: `bool` is an `int` subclass, so `float(True) == 1.0` -- a misconfigured
+    `true` for either key must degrade to the same unusable-config handling as any
+    other unparseable value, never silently become a real 1.0."""
+    window = dict(_RUNAWAY_WINDOW, count_in_window=3000, observed_span_hours=1.0)
+
+    fired = sweep_conditions.check_burn_rate(
+        {"available": True, "summaries": [], "window": window},
+        dict(_BUDGET, allowance=True))
+    assert fired and fired[0]["condition"] == sweep_conditions.BURN_RATE_NOT_CONFIGURED
+
+    baseline = sweep_conditions.check_burn_rate(
+        {"available": True, "summaries": [], "window": window}, dict(_BUDGET, threshold=None))
+    with_bool_threshold = sweep_conditions.check_burn_rate(
+        {"available": True, "summaries": [], "window": window},
+        dict(_BUDGET, threshold=True))
+    assert bool(with_bool_threshold) == bool(baseline), (
+        "a bool threshold must fall back to the default, not parse as 1.0")
+
+
 def test_a_window_with_no_older_history_reads_differently_than_a_read_bound_truncation():
     """CR-01: `covers_full_window=False, truncated_by_page_cap=False` means nothing older
     is in retained history at all — that is NOT proof n8n pruned it (a fresh deploy or a
