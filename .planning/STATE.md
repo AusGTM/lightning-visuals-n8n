@@ -5,15 +5,15 @@ milestone_name: Execution Budget Safety
 current_phase: 44
 current_phase_name: SJ-3 Dispatch Gate, Drain & Cap
 status: planning
-stopped_at: Phase 44 context gathered
-last_updated: "2026-08-09T23:55:21.260Z"
+stopped_at: Completed 44-01-PLAN.md (gate + drain, offline; no deploy)
+last_updated: "2026-08-10T01:45:42.906Z"
 last_activity: 2026-08-10
 last_activity_desc: ROADMAP.md and REQUIREMENTS.md traceability written for v0.8
 progress:
   total_phases: 2
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 3
+  completed_plans: 1
   percent: 0
 ---
 
@@ -21,16 +21,17 @@ progress:
 
 ## Current Position
 
-Phase: Phase 44 — SJ-3 Dispatch Gate, Drain & Cap (not started; roadmap created, ready to plan)
-Plan: —
-Status: Roadmap created — 2 phases (44, 45), 13/13 requirements mapped, awaiting `/gsd-plan-phase 44`
-Last activity: 2026-08-10 — ROADMAP.md and REQUIREMENTS.md traceability written for v0.8
+Phase: Phase 44 — SJ-3 Dispatch Gate, Drain & Cap (in progress, 1/3 plans executed)
+Plan: 44-01 complete (gate + drain end-to-end offline); next 44-02 (cap + tick outcome)
+Status: 44-01 executed — ALLOW_SJ3_DRAIN_WRITES landed (D-05 approved), suites green
+(pytest 2437 / node 648 / plugin 1286), NOTHING DEPLOYED (44-03 owns deploy + bounce)
+Last activity: 2026-08-10 — 44-01-SUMMARY.md written; commits 8167be7, 9b56008, 8fb64a4
 
 ## Session
 
-**Last session:** 2026-08-09T23:55:21.250Z
-**Stopped at:** Phase 44 context gathered
-**Resume file:** .planning/phases/44-sj-3-dispatch-gate-drain-cap/44-CONTEXT.md
+**Last session:** 2026-08-10T01:45:42.898Z
+**Stopped at:** Completed 44-01-PLAN.md (gate + drain, offline; no deploy)
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -53,6 +54,7 @@ Last activity: 2026-08-10 — ROADMAP.md and REQUIREMENTS.md traceability writte
 | Phase 42 P02 | 12min | 3 tasks | 3 files |
 | Phase 42 P03 | 20min | 3 tasks | 6 files |
 | Phase 43 P04 | 45min | 3 tasks | 3 files |
+| Phase 44 P01 | 35m | 3 tasks | 14 files |
 
 ## Decisions
 
@@ -105,6 +107,8 @@ Last activity: 2026-08-10 — ROADMAP.md and REQUIREMENTS.md traceability writte
 - [Phase 43-04]: PIPE-04 both `lv_closed_lost_reason` (custom) and `closed_lost_reason` (native) confirmed to exist live on Deals, both 0% filled across 59 examined closed-lost deals — expected first-run outcome per D-04. Open Question 2 (join reliability via `hs_primary_associated_company`) is recorded as genuinely untested: the join step only runs for a deal that already carries a reason, and none did this session.
 - [Phase 43-04]: Portal-wide finding, flagged for the operator and not investigated further (out of scope): exactly 1 of 712 companies carries a live ICP score (the canary, Melbourne Racing Club) — its score has drifted from Phase 40's recorded 80/A to 25/C sometime between then and now.
 - [Phase 43-04]: Plugin marketplace clone refresh (C5) deferred to merge — session remains on `feat/v0.7-scoring-remediation`; the clone tracks `master` and a refresh now would fetch nothing new.
+- [Phase ?]: 44-01: ALLOW_SJ3_DRAIN_WRITES defaults true (D-05 approved) — first enabled-at-rest write authority; bound recorded in code; excluded from overlay/arm system per ALLOW_JUDGE_ESCALATION precedent
+- [Phase ?]: 44-01: write-gate coverage guarantee amended deliberately — SJ-3 Drain Clear Flag exempt by name (walker inversion recorded), replaced by sole-feeder + D-06 negative-grep + key+value patch allowlist assertions
 
 ### Blockers
 

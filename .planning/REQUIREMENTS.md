@@ -17,7 +17,7 @@ page at 80%.
 
 ### Gate Check — do not start work that cannot finish
 
-- [ ] **GATE-01**: When the enrichment write gate is closed, an SJ-3 tick dispatches **zero**
+- [x] **GATE-01**: When the enrichment write gate is closed, an SJ-3 tick dispatches **zero**
   records. The tick costs 1 execution, not 1 + N.
 
 - [ ] **GATE-02**: A gate-closed tick reports a named, non-error outcome that an operator can
@@ -29,11 +29,11 @@ page at 80%.
 
 ### Queue Drain — a stuck flag cannot survive
 
-- [ ] **DRAIN-01**: On a gate-closed tick, SJ-3 clears `lv_enrichment_requested` on every record
+- [x] **DRAIN-01**: On a gate-closed tick, SJ-3 clears `lv_enrichment_requested` on every record
   it declined to dispatch, so the following tick finds none. The queue drains instead of
   accumulating.
 
-- [ ] **DRAIN-02**: The drain write path is narrow by construction — its patch may contain
+- [x] **DRAIN-02**: The drain write path is narrow by construction — its patch may contain
   only the keys `lv_enrichment_requested` and `lv_enrichment_status`, with only the values
   `"false"` and `"skipped"` respectively, on records it just declined. Clearing a trigger flag
   is not a data write, but it must not become a hole in the data write gate.
@@ -46,7 +46,7 @@ page at 80%.
   (config/hubspot_properties.yaml:308-337) and is written by nothing else in the pipeline, so
   no property migration is needed. -->
 
-- [ ] **DRAIN-03**: A record whose flag is cleared by the drain is distinguishable afterwards
+- [x] **DRAIN-03**: A record whose flag is cleared by the drain is distinguishable afterwards
   from one that was enriched — a drained record was never processed, and nothing downstream may
   read the cleared flag as evidence that it was.
 
@@ -106,12 +106,12 @@ page at 80%.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GATE-01 | Phase 44 | Pending |
+| GATE-01 | Phase 44 | Complete |
 | GATE-02 | Phase 44 | Pending |
 | GATE-03 | Phase 44 | Pending |
-| DRAIN-01 | Phase 44 | Pending |
-| DRAIN-02 | Phase 44 | Pending |
-| DRAIN-03 | Phase 44 | Pending |
+| DRAIN-01 | Phase 44 | Complete |
+| DRAIN-02 | Phase 44 | Complete |
+| DRAIN-03 | Phase 44 | Complete |
 | CAP-01 | Phase 44 | Pending |
 | CAP-02 | Phase 44 | Pending |
 | CAP-03 | Phase 44 | Pending |
