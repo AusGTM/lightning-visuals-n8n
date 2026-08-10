@@ -39,8 +39,8 @@ test("sj3Gate: allows-true for all rows -> all sj3_dispatch, input order, payloa
   for (const [i, row] of out.entries()) {
     assert.equal(row.sj3_dispatch, true);
     assert.equal(row.sj3_drain, false);
-    // payload otherwise untouched
-    const { sj3_dispatch, sj3_drain, ...rest } = row;
+    // payload otherwise untouched (Plan 02: every row also carries the sj3_tick summary)
+    const { sj3_dispatch, sj3_drain, sj3_tick, ...rest } = row;
     assert.deepEqual(rest, rows[i]);
   }
   assertMutuallyExclusive(out);
@@ -87,6 +87,84 @@ test("sj3Gate: missing/absent allows predicate fails closed (everything drains)"
   assert.equal(out[0].sj3_drain, true);
 });
 
+// --- (1b) Plan 02: cap + tick summary (CAP-01/CAP-02/D-09) ------------------------------
+
+function assertTickInvariants(rows) {
+  assert.ok(rows.length > 0, "invariant check needs rows");
+  const t = rows[0].sj3_tick;
+  for (const row of rows) {
+    assert.deepEqual(row.sj3_tick, t, "every row carries the SAME sj3_tick summary object");
+  }
+  assert.equal(t.found, t.permitted + t.declined, "found === permitted + declined");
+  assert.equal(t.permitted, t.dispatched + t.deferred, "permitted === dispatched + deferred");
+  return t;
+}
+
+test("sj3Gate cap: all permitted, under the cap -> all dispatch, outcome=dispatched", () => {
+  const rows = [{ hs_object_id: "1" }, { hs_object_id: "2" }, { hs_object_id: "3" }];
+  const out = sj3Gate(rows, { allows: () => true, cap: 10 });
+  assert.deepEqual(out.map((r) => r.sj3_dispatch), [true, true, true]);
+  assert.deepEqual(out.map((r) => r.sj3_drain), [false, false, false]);
+  const t = assertTickInvariants(out);
+  assert.deepEqual(t, {
+    found: 3, permitted: 3, dispatched: 3, declined: 0, deferred: 0,
+    cap: 10, outcome: "dispatched",
+  });
+});
+
+test("sj3Gate cap: 5 permitted, cap 2 -> first two dispatch, tail three DEFERRED not drained (D-09)", () => {
+  const rows = ["1", "2", "3", "4", "5"].map((id) => ({ hs_object_id: id }));
+  const out = sj3Gate(rows, { allows: () => true, cap: 2 });
+  assert.deepEqual(out.map((r) => r.hs_object_id), ["1", "2", "3", "4", "5"], "input order");
+  assert.deepEqual(out.map((r) => r.sj3_dispatch), [true, true, false, false, false],
+    "cap applies in input order — the deferred remainder is the tail, not an arbitrary subset");
+  assert.deepEqual(out.map((r) => r.sj3_drain), [false, false, false, false, false],
+    "deferred rows are NEVER drained — they keep their flag for the next tick (D-09)");
+  const t = assertTickInvariants(out);
+  assert.deepEqual(t, {
+    found: 5, permitted: 5, dispatched: 2, declined: 0, deferred: 3,
+    cap: 2, outcome: "capped_partial",
+  });
+});
+
+test("sj3Gate cap: declined rows drain regardless of position and never consume cap budget", () => {
+  // permitted at 1,3,5; declined at 2,4 — with cap 2, permitted 1 and 3 dispatch,
+  // permitted 5 defers; both declined rows drain even though one sits past the cap point.
+  const rows = ["1", "2", "3", "4", "5"].map((id) => ({ hs_object_id: id }));
+  const permitted = new Set(["1", "3", "5"]);
+  const out = sj3Gate(rows, { allows: (r) => permitted.has(r.hs_object_id), cap: 2 });
+  assert.deepEqual(out.filter((r) => r.sj3_dispatch).map((r) => r.hs_object_id), ["1", "3"]);
+  assert.deepEqual(out.filter((r) => r.sj3_drain).map((r) => r.hs_object_id), ["2", "4"],
+    "declined rows drain regardless of cap position");
+  assert.deepEqual(
+    out.filter((r) => !r.sj3_dispatch && !r.sj3_drain).map((r) => r.hs_object_id), ["5"],
+    "the permitted row past the cap is deferred, not drained");
+  const t = assertTickInvariants(out);
+  assert.deepEqual(t, {
+    found: 5, permitted: 3, dispatched: 2, declined: 2, deferred: 1,
+    cap: 2, outcome: "capped_partial",
+  });
+});
+
+test("sj3Gate cap: fully gate-closed tick reports outcome=gate_closed, all rows drain", () => {
+  const out = sj3Gate([{ hs_object_id: "1" }, { hs_object_id: "2" }],
+    { allows: () => false, cap: 40 });
+  const t = assertTickInvariants(out);
+  assert.deepEqual(t, {
+    found: 2, permitted: 0, dispatched: 0, declined: 2, deferred: 0,
+    cap: 40, outcome: "gate_closed",
+  });
+});
+
+test("sj3Gate cap: an invalid cap fails CLOSED (behaves as 0, reported as the effective cap)", () => {
+  const out = sj3Gate([{ hs_object_id: "1" }], { allows: () => true, cap: -3 });
+  assert.equal(out[0].sj3_dispatch, false);
+  assert.equal(out[0].sj3_drain, false, "deferred, not drained — the work is preserved");
+  const t = assertTickInvariants(out);
+  assert.equal(t.cap, 0, "sj3_tick echoes the EFFECTIVE cap, not the raw invalid opt");
+  assert.equal(t.outcome, "capped_partial");
+});
+
 // --- (2) workflow wiring ----------------------------------------------------------------
 
 const WF_PATH = path.join(ROOT, "n8n/wf_scheduled_maintenance_cloud.json");
@@ -122,6 +200,18 @@ test("wiring: the permitted path reaches the Execute Workflow terminal through B
   assert.deepEqual(successors(wf, "SJ-3 Build Dispatch Event"), ["SJ-3 Dispatch To Enrichment"]);
   const dispatch = findNode(wf, "SJ-3 Dispatch To Enrichment");
   assert.equal(dispatch.type, "n8n-nodes-base.executeWorkflow");
+});
+
+test("wiring: the gate node bakes a numeric dispatch cap and passes it to sj3Gate (CAP-01)", () => {
+  const wf = loadWorkflow();
+  const js = findNode(wf, "SJ-3 Dispatch Gate").parameters.jsCode;
+  // The cap is a build-time constant DERIVED from config/execution_budget.yaml — never
+  // computed at n8n runtime. This pins that a number was baked; the derivation itself is
+  // pinned Python-side (the builder KeyErrors on a missing config key).
+  assert.match(js, /const SJ3_DISPATCH_CAP = \d+;/,
+    "the built gate node must carry a numeric baked cap constant");
+  assert.match(js, /cap: SJ3_DISPATCH_CAP/,
+    "the baked cap must actually be passed into sj3Gate");
 });
 
 test("wiring: the declined path reaches SJ-3 Drain Clear Flag through SJ-3 Drain Gate", () => {

@@ -5468,20 +5468,64 @@ return $input.all().filter((it) => it.json.sj3_dispatch === true).map((it) => ({
 } }));
 """
 
+# Phase 44 Plan 02 (CAP-01, D-10/D-11) — the SJ-3 dispatch cap, DERIVED at build time,
+# never written as a literal. One allowance, one home: config/execution_budget.yaml
+# (read the same way _COMPANY_POLICY_FIELDS reads field_policy.yaml; Phase 45's ALARM-03
+# reads the same key). Direct indexing on purpose — a missing key must KeyError the
+# build, not default (T-44-07: a misread config silently changing unattended spend).
+_EXECUTION_BUDGET = yaml.safe_load(
+    (ROOT / "config" / "execution_budget.yaml").read_text())
+
+# Ticks-per-month for one schedule trigger, per _schedule_trigger's own documented
+# arithmetic (30-day month: 15 min = 2,880/month, hourly = 720, daily = 30).
+# tests/test_execution_budget.py re-derives this table from the committed artifacts
+# rather than importing it, so builder/config drift is visible (CAP-03).
+_TICKS_PER_MONTH = {
+    "minutes": 43200.0, "hours": 720.0, "days": 30.0, "weeks": 30.0 / 7.0, "months": 1.0}
+
+# The (field, interval) pair SJ-3's trigger is actually built with — the SAME tuple is
+# passed to _schedule_trigger below, so re-timing the trigger necessarily moves the cap
+# (CAP-01 fails the moment these diverge into two hand-kept numbers).
+SJ3_TRIGGER_SCHEDULE = ("days", 1)
+
+# cap = allowance x share / ticks-per-month, minus the tick's own execution (GATE-01's
+# cost model is 1 + dispatched). At the shipped daily cadence with a 0.5 share this
+# derives to 40 — floor(2500 x 0.5 / 30) - 1 — the sanity anchor from D-10; the number
+# is DERIVED here, never written.
+SJ3_DISPATCH_CAP = int(
+    _EXECUTION_BUDGET["monthly_execution_allowance"]
+    * _EXECUTION_BUDGET["sj3_dispatch_share"]
+    / (_TICKS_PER_MONTH[SJ3_TRIGGER_SCHEDULE[0]] / SJ3_TRIGGER_SCHEDULE[1])
+) - 1
+# A sub-daily cadence can drive the derived cap to zero or below (15-min cadence:
+# floor(1250 / 2880) - 1 = -1), which would defer everything forever. Fail the build
+# loudly instead of baking a cap that dispatches nothing.
+assert SJ3_DISPATCH_CAP >= 1, (
+    f"SJ3_DISPATCH_CAP derived to {SJ3_DISPATCH_CAP} — the {SJ3_TRIGGER_SCHEDULE} cadence "
+    "leaves no per-tick budget; re-time the trigger or raise the share in "
+    "config/execution_budget.yaml")
+
 # Phase 44 Plan 01 (GATE-01/D-01/D-02) — SJ-3's per-record dispatch permission check.
 # WRITE_SAFETY_GATE_JS is embedded VERBATIM (D-02: one definition of "permitted", so the
 # poller cannot drift from the enrichment lane's own write gates), followed by the pure
 # routing module and an n8n wrapper delegating to _writeSafetyAllows per row.
 ENRICH_SJ3_DISPATCH_GATE = (
-    WRITE_SAFETY_GATE_JS + "\n" + inline("sj3DispatchGate.js") + r"""
-
-// n8n wrapper: SJ-3 Dispatch Gate — annotates EVERY row (sj3_dispatch / sj3_drain) and
-// returns them ALL, not only the permitted ones: the declined rows are what the drain
-// branch consumes (DRAIN-01). The "enrich" action mirrors the SJ-1/SJ-2 spliced gates;
-// row.domain exists because SJ-3's search requests it (BUG 24's class — see the search).
+    WRITE_SAFETY_GATE_JS + "\n" + inline("sj3DispatchGate.js")
+    # Plan 02 (CAP-01): the cap is baked as a build-time constant, like every other
+    # budget-ish constant in this builder — never computed at n8n runtime, where the
+    # arithmetic would live in a Code node nothing tests.
+    + "\nconst SJ3_DISPATCH_CAP = " + str(SJ3_DISPATCH_CAP)
+    + ";  // derived: allowance x share / ticks-per-month - 1 (config/execution_budget.yaml)\n"
+    + r"""
+// n8n wrapper: SJ-3 Dispatch Gate — annotates EVERY row (sj3_dispatch / sj3_drain /
+// deferred = neither) and returns them ALL, not only the permitted ones: the declined
+// rows are what the drain branch consumes (DRAIN-01), and permitted-but-over-cap rows
+// keep their flag for the next tick (D-09). The "enrich" action mirrors the SJ-1/SJ-2
+// spliced gates; row.domain exists because SJ-3's search requests it (BUG 24's class).
 const rows = $input.all().map((it) => it.json);
 const annotated = sj3Gate(rows, {
   allows: (row) => _writeSafetyAllows("enrich", row.hs_object_id || null, row.domain || null),
+  cap: SJ3_DISPATCH_CAP,
 });
 return annotated.map((row) => ({ json: row }));
 """
@@ -5596,10 +5640,12 @@ return $input.all().map((it) => {
 
 
 def _schedule_trigger(name, x, y, field, interval_value):
-    """A schedule trigger. EVERY FIRE IS ONE BILLED n8n EXECUTION, and the plan here is
-    2,500/month -- so the intervals below are a budget, not a preference. Arithmetic before
-    changing one: 15 minutes = 2,880/month PER TRIGGER, hourly = 720, daily = 30. Three
-    sub-daily triggers alone blew the entire monthly allowance while doing no work.
+    """A schedule trigger. EVERY FIRE IS ONE BILLED n8n EXECUTION, and the plan allowance
+    lives in config/execution_budget.yaml (the single home, D-11) -- so the intervals below
+    are a budget, not a preference. Arithmetic before changing one: 15 minutes =
+    2,880/month PER TRIGGER, hourly = 720, daily = 30 (executable form: _TICKS_PER_MONTH).
+    Three sub-daily triggers alone blew the entire monthly allowance while doing no work;
+    tests/test_execution_budget.py now fails a schedule whose idle floor does that again.
 
     Node names deliberately carry NO interval ("SJ-3 Trigger", not "SJ-3 Trigger (15 min)"):
     the operator can change cadence at runtime via the plugin's `cadence` action, so a name
@@ -5883,9 +5929,10 @@ def build_scheduled_maintenance_cloud():
     nodes = []
     conns = {}
 
-    # --- SJ-3: 15-min requested poller (Task 1 tracer — end-to-end thin slice) ---------
+    # --- SJ-3: requested poller (cadence = SJ3_TRIGGER_SCHEDULE, which also derives the
+    # dispatch cap — re-timing this trigger moves the cap, CAP-01) ----------------------
     x, y = 220, 300
-    sj3_trigger = _schedule_trigger("SJ-3 Trigger", x, y, "days", 1)
+    sj3_trigger = _schedule_trigger("SJ-3 Trigger", x, y, *SJ3_TRIGGER_SCHEDULE)
     nodes.append(sj3_trigger)
     x += 220
     # BUG 10 / Phase 16.6: _hs_http_search_node for all 4 company searches below — the

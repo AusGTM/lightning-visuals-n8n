@@ -1,0 +1,37 @@
+# config/execution_budget.yaml — the single home for the n8n Cloud execution allowance.
+#
+# The incident this file exists to prevent (measured live 2026-08-09/10, not inferred):
+# 253 executions/hour, flat, for at least 10 hours — 61 stuck records x 4 ticks/hour —
+# ~182,000/month against a 2,500/month plan allowance. Phase 44 bounds the SJ-3 lane
+# (gate + drain + cap); Phase 45's burn-rate alarm (ALARM-03) reads the SAME
+# monthly_execution_allowance key from this file, so there is one allowance rather than
+# two that drift (D-11).
+#
+# Readers (never duplicate these numbers anywhere else):
+#   - scripts/build_cloud_workflows.py — derives SJ-3's per-tick dispatch cap at build
+#     time from allowance x sj3_dispatch_share / ticks-per-month (CAP-01, D-10).
+#   - tests/test_execution_budget.py — re-derives the shipped schedule's idle floor from
+#     the committed n8n/wf_*_cloud.json artifacts and fails if it exceeds
+#     allowance x idle_floor_max_share (CAP-03).
+#   - Phase 45 ALARM-03 (planned) — the burn-rate alarm's budget baseline.
+#
+# Why here and not elsewhere: an env var was rejected (.env is permission-blocked to
+# tooling in this repo, and a committed test cannot read it); a builder constant was
+# rejected because Phase 45 would then have to import from a build script or duplicate
+# the number.
+
+# The measured n8n Cloud plan: 2,500 executions/month.
+monthly_execution_allowance: 2500
+
+# Share of the allowance SJ-3's unattended dispatch lane may consume (D-10, ~50%).
+# The remaining headroom is deliberately reserved for webhook and operator-initiated
+# enrichment, which do not pass SJ-3 and are therefore not covered by the cap (D-12).
+sj3_dispatch_share: 0.5
+
+# Maximum share of the allowance the shipped schedule's IDLE floor — every schedule
+# trigger firing and finding nothing — may consume (CAP-03's threshold). The current
+# daily/weekly/monthly schedule idles at ~95/month (~4%); the v0.7 schedule's three
+# sub-daily triggers idled at roughly 2.6x the ENTIRE allowance while doing no work.
+# 0.25 keeps generous headroom for the current schedule while failing any sub-daily
+# re-timing (one hourly trigger alone is 720/month = 29%).
+idle_floor_max_share: 0.25
