@@ -407,10 +407,27 @@ def _parsed_burn_rate_threshold(execution_budget, default):
     return value if value > 0 else default
 
 
+# CR-01: a rate sampled over a span this short cannot support a 30-day extrapolation at
+# all, regardless of what it projects to — a handful of executions with no anchoring
+# older item is not evidence of a sustained rate. One hour is a starting point, not a
+# measured value, same footing as DEFAULT_STUCK_MINUTES / DEFAULT_REVIEW_BACKLOG_THRESHOLD
+# elsewhere in this module.
+MIN_SAMPLE_SPAN_HOURS = 1.0
+
+
 def _burn_rate_span_clause(window, window_hours):
     """The span clause is honest about WHY it is short (D-01) — three cases, three
     different sentences, so a reader never confuses a pruning-shrunk window with a
-    sweep-imposed read bound."""
+    sweep-imposed read bound.
+
+    CR-01: the third case (`covers_full_window` False, `truncated_by_page_cap` False)
+    means the walk read every execution n8n has and none of it reaches back to the
+    window's edge — but that is NOT evidence n8n pruned anything. A fresh deploy, a
+    history wipe, or simply a quiet system that has not run window_hours worth of jobs
+    yet reads identically from this function's inputs. Naming pruning unconditionally
+    here was itself part of CR-01: a notice must never claim a cause it did not observe
+    (D-01). Both possibilities are named, neither is asserted as the cause.
+    """
     observed = window.get("observed_span_hours") or 0.0
     if window.get("covers_full_window"):
         return f"the full {window_hours:g}-hour window"
@@ -420,9 +437,10 @@ def _burn_rate_span_clause(window, window_hours):
             f"own execution read bound, not pruning, so the span is shorter than the "
             f"{window_hours:g}-hour target")
     return (
-        f"only the last {observed:.1f} hours because n8n has pruned older execution "
-        f"history — at a runaway rate the window itself shrinks, which is part of the "
-        f"symptom")
+        f"only the last {observed:.1f} hours — that is everything n8n's retained "
+        f"execution history reaches back; nothing older is available. n8n's own pruning "
+        f"could be why, or this could simply be a system with no older execution yet — "
+        f"this read cannot tell the two apart, so neither is claimed")
 
 
 def check_burn_rate(executions, execution_budget, threshold=DEFAULT_BURN_RATE_THRESHOLD):
@@ -435,7 +453,7 @@ def check_burn_rate(executions, execution_budget, threshold=DEFAULT_BURN_RATE_TH
     dict of RAW config values — parsing happens here, never upstream, so this stays a
     pure function over already-fetched data.
 
-    Three explicit outcomes, in this precedence order (documented, not incidental):
+    Precedence order (documented, not incidental):
 
     1. Allowance not usable (absent, blank, non-numeric, or not strictly positive) ->
        `BURN_RATE_NOT_CONFIGURED`, naming the exact config key, never a value (this
@@ -447,7 +465,22 @@ def check_burn_rate(executions, execution_budget, threshold=DEFAULT_BURN_RATE_TH
        case.
     2. Executions unreadable (unavailable, or no window) -> `BURN_RATE_UNREADABLE`
        (ALARM-04). Checked second, only once the allowance is known usable.
-    3. Otherwise, compute and compare. The comparison is made on UNROUNDED floats;
+    3. CR-01: the observed span is too short to anchor a 30-day extrapolation AND the
+       sweep's own read did not stop it short (`not covers_full_window and not
+       truncated_by_page_cap and observed_span_hours < MIN_SAMPLE_SPAN_HOURS`) -> `[]`,
+       silently. This is deliberately NOT a fourth named condition: unlike
+       not-configured/unreadable (both genuinely actionable — a missing key, a failed
+       read), "not enough sample yet" is a normal transient state (first sweep after a
+       deploy, a history wipe, a quiet system) that resolves itself within the hour and
+       asks nothing of an operator or admin — a notice here would be exactly the noise
+       NOTICE-04 warns turns a sweep into one the operator learns to ignore (D-15:
+       silence is only a lie when something readable and actionable was suppressed).
+       `truncated_by_page_cap` is excluded from this guard on purpose: a runaway rate
+       fast enough to fill the whole page walk (T-45-02's 1,000-execution ceiling) inside
+       an hour pins `observed_span_hours` below the guard for the ENTIRE duration of the
+       burn — silencing that case would blind the alarm to the exact incident shape it
+       exists for (D-01).
+    4. Otherwise, compute and compare. The comparison is made on UNROUNDED floats;
        rounding happens only inside the rendered reason string via format specifiers,
        so a projection a fraction over the ceiling still fires (ALARM-01 precision).
 
@@ -489,6 +522,11 @@ def check_burn_rate(executions, execution_budget, threshold=DEFAULT_BURN_RATE_TH
     window_hours = window.get("window_hours") or n8n_read.DEFAULT_EXECUTION_WINDOW_HOURS
     count_in_window = window.get("count_in_window") or 0
     observed_span_hours = window.get("observed_span_hours") or n8n_read.MIN_OBSERVED_SPAN_HOURS
+
+    if (not window.get("covers_full_window") and not window.get("truncated_by_page_cap")
+            and observed_span_hours < MIN_SAMPLE_SPAN_HOURS):
+        return []
+
     rate_per_hour = count_in_window / observed_span_hours
     projected = rate_per_hour * n8n_read.HOURS_PER_MONTH
     ceiling = allowance * resolved_threshold

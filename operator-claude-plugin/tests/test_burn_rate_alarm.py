@@ -203,6 +203,65 @@ _BUDGET = {"key": "n8n_monthly_execution_allowance", "allowance": 2500,
           "threshold_key": "burn_rate_alarm_threshold", "threshold": None}
 
 
+# --- CR-01: an unanchored short sample must never extrapolate into a false alarm ----------
+
+def test_a_single_recent_execution_with_no_anchor_does_not_fire_and_does_not_claim_pruning(
+        stub_get_transport_factory):
+    """CR-01's exact reproduction: one execution started ~10 minutes ago, nothing else
+    readable at all. Before the fix this extrapolated a lone unanchored sample into a
+    false BURN_RATE alarm, whose rendered reason falsely blamed n8n pruning even though
+    nothing was pruned — there simply was no older execution yet."""
+    lone = [{"id": "e-lone", "workflowId": "wf-a", "status": "success",
+             "startedAt": _iso(NOW - timedelta(minutes=10)),
+             "stoppedAt": _iso(NOW - timedelta(minutes=10) + timedelta(seconds=5)),
+             "finished": True, "workflowData": {"name": "Workflow wf-a"}}]
+
+    get = stub_get_transport_factory([{"data": lone}])
+    gathered = sweep_read.gather(SWEEP_CONFIG, get_transport=get, post_transport=_post_ok,
+                                 now=NOW)
+    window = gathered["executions"]["window"]
+    assert window["covers_full_window"] is False, "fixture must reproduce CR-01's exact state"
+    assert window["truncated_by_page_cap"] is False, "fixture must reproduce CR-01's exact state"
+
+    fired = sweep_conditions.check_burn_rate(gathered["executions"], gathered["execution_budget"])
+    assert fired == [], "an unanchored ~10-minute sample must never extrapolate into an alarm"
+
+    get_for_sweep = stub_get_transport_factory([{"data": lone}])
+    notices = sweep_entry.run_sweep(SWEEP_CONFIG, get_transport=get_for_sweep,
+                                    post_transport=_post_ok, now=NOW)
+    assert notices == []
+    assert not any("prune" in (n.get("detail") or "").lower() for n in notices)
+
+
+def test_sample_too_short_is_silent_but_the_boundary_hour_computes_normally():
+    """The guard is a hard cutoff at MIN_SAMPLE_SPAN_HOURS, not a fuzzy one: a hair under
+    it is silence, a hair at-or-over it computes and can still fire."""
+    just_under = dict(_RUNAWAY_WINDOW, observed_span_hours=0.999)
+    assert sweep_conditions.check_burn_rate(
+        {"available": True, "summaries": [], "window": just_under}, _BUDGET) == []
+
+    at_boundary = dict(_RUNAWAY_WINDOW, observed_span_hours=1.0)
+    fired = sweep_conditions.check_burn_rate(
+        {"available": True, "summaries": [], "window": at_boundary}, _BUDGET)
+    assert fired and fired[0]["condition"] == sweep_conditions.BURN_RATE
+
+
+def test_a_runaway_pinned_below_the_sample_guard_by_page_cap_truncation_still_fires():
+    """The guard must not blind the alarm to the exact incident shape it exists for: a
+    runaway fast enough to fill the whole page walk (T-45-02's 1,000-execution ceiling)
+    inside under an hour pins `observed_span_hours` below MIN_SAMPLE_SPAN_HOURS for the
+    ENTIRE duration of the burn. `truncated_by_page_cap=True` is the sweep's own read
+    stopping short — never silenced, unlike the CR-01 no-older-history case."""
+    pinned_by_page_cap = dict(_RUNAWAY_WINDOW, covers_full_window=False,
+                              truncated_by_page_cap=True, observed_span_hours=0.2,
+                              count_in_window=1000)
+    fired = sweep_conditions.check_burn_rate(
+        {"available": True, "summaries": [], "window": pinned_by_page_cap}, _BUDGET)
+    assert len(fired) == 1
+    assert fired[0]["condition"] == sweep_conditions.BURN_RATE
+    assert "own execution read bound" in fired[0]["reason"]
+
+
 def test_missing_allowance_fires_not_configured_naming_the_key_and_stops_there():
     fired = sweep_conditions.check_burn_rate(
         {"available": True, "summaries": [], "window": _RUNAWAY_WINDOW},
@@ -279,22 +338,28 @@ def test_a_blank_zero_negative_or_non_numeric_threshold_falls_back_to_default():
         assert bool(result) == bool(baseline), f"threshold={bad!r} must not raise or diverge"
 
 
-def test_a_shrunken_window_from_pruning_reads_differently_than_a_read_bound_truncation():
-    pruned = dict(_RUNAWAY_WINDOW, covers_full_window=False, truncated_by_page_cap=False,
-                  observed_span_hours=3.1)
+def test_a_window_with_no_older_history_reads_differently_than_a_read_bound_truncation():
+    """CR-01: `covers_full_window=False, truncated_by_page_cap=False` means nothing older
+    is in retained history at all — that is NOT proof n8n pruned it (a fresh deploy or a
+    quiet system reads identically), so the reason must name both possibilities rather
+    than asserting pruning as the cause. It must still read differently from the
+    page-cap-truncated case, whose cause (the sweep's own read bound) IS known."""
+    no_older_history = dict(_RUNAWAY_WINDOW, covers_full_window=False,
+                            truncated_by_page_cap=False, observed_span_hours=3.1)
     capped = dict(_RUNAWAY_WINDOW, covers_full_window=False, truncated_by_page_cap=True,
                   observed_span_hours=3.1)
 
-    pruned_reason = sweep_conditions.check_burn_rate(
-        {"available": True, "summaries": [], "window": pruned}, _BUDGET)[0]["reason"]
+    no_older_reason = sweep_conditions.check_burn_rate(
+        {"available": True, "summaries": [], "window": no_older_history}, _BUDGET)[0]["reason"]
     capped_reason = sweep_conditions.check_burn_rate(
         {"available": True, "summaries": [], "window": capped}, _BUDGET)[0]["reason"]
 
-    assert "3.1 hours" in pruned_reason and "3.1 hours" in capped_reason
-    assert "pruned" in pruned_reason
+    assert "3.1 hours" in no_older_reason and "3.1 hours" in capped_reason
     assert "own execution read bound" in capped_reason
-    assert "pruned" not in capped_reason
-    assert pruned_reason != capped_reason
+    assert "own execution read bound" not in no_older_reason
+    assert "cannot tell the two apart" in no_older_reason, (
+        "must not claim a cause it did not observe (D-01)")
+    assert no_older_reason != capped_reason
 
 
 def test_error_table_translates_the_not_configured_and_unreadable_reasons():
