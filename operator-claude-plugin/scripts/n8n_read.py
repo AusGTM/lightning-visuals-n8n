@@ -46,6 +46,27 @@ DEFAULT_STUCK_MINUTES = 15
 # rather than being reported never-run from an absence in it.
 EXECUTIONS_PAGE_LIMIT = 100
 
+# The SAME 30-day month scripts/build_cloud_workflows.py's _schedule_trigger and
+# tests/test_execution_budget.py's TICKS_PER_MONTH already document, given one home in
+# the plugin so the burn-rate alarm here and the cadence budget floor cannot disagree
+# about the length of a month (Phase 45).
+DAYS_PER_MONTH = 30.0
+HOURS_PER_MONTH = DAYS_PER_MONTH * 24
+
+# D-01's target lookback for the windowed executions read. A module constant
+# deliberately, not a config key — one fewer key is one fewer thing to keep correct.
+DEFAULT_EXECUTION_WINDOW_HOURS = 24.0
+
+# n8n's documented per-page maximum for the executions list endpoint.
+EXECUTIONS_WINDOW_PAGE_LIMIT = 250
+
+# A hard bound on one sweep's execution read: MAX_EXECUTION_PAGES x
+# EXECUTIONS_WINDOW_PAGE_LIMIT = 1,000 executions is one sweep's ceiling (T-45-02).
+MAX_EXECUTION_PAGES = 4
+
+# One minute. A division guard only, never a meaningful observed span.
+MIN_OBSERVED_SPAN_HOURS = 1.0 / 60.0
+
 
 def _base_url(config: dict) -> str:
     return str(config.get("n8n_url") or "").rstrip("/")
@@ -224,6 +245,132 @@ def recent_executions(config: dict, transport=requests.get, limit: int = EXECUTI
         return None
     data = body.get("data")
     return data if isinstance(data, list) else None
+
+
+def executions_in_window(config: dict, transport=requests.get, now=None,
+                         window_hours: float = DEFAULT_EXECUTION_WINDOW_HOURS) -> dict:
+    """Executions across every workflow, newest first, walked back to `window_hours` ago
+    (D-08 — the fixed 100-row page this augments; D-01's shrunken-window rule).
+
+    `None` is returned when and only when the FIRST page read fails — same unreadable
+    contract as `recent_executions`. Otherwise a dict with keys `items`, `window_hours`,
+    `count_in_window`, `observed_span_hours`, `oldest_started_at`, `covers_full_window`,
+    `truncated_by_page_cap`.
+
+    Retention (load-bearing — a naive `startedAt >= cutoff` filter would blind the stuck
+    check to its own headline case): every IN-FLIGHT item (status in `IN_FLIGHT_STATUSES`)
+    is retained unconditionally, never age-filtered — it is current state, not stale
+    history. A TERMINAL item is retained when its `stoppedAt` is at or after the cutoff,
+    falling back to `startedAt` when `stoppedAt` is missing or unparseable — a failure
+    ages out by when it ENDED. `count_in_window` counts items whose `startedAt` is at or
+    after the cutoff ONLY — that is the billing-rate numerator, because n8n bills an
+    execution when it starts, and an in-flight run started long ago is retained but does
+    not count here. Boundary: at-or-after the cutoff is INSIDE.
+
+    `covers_full_window` is true once the walk has seen an item strictly older than the
+    cutoff — proof retained history reaches back at least the whole window.
+    `truncated_by_page_cap` is true when the walk stopped at `MAX_EXECUTION_PAGES` or on a
+    failed later page while `covers_full_window` was still false. `observed_span_hours` is
+    `window_hours` when `covers_full_window`, else `now` minus the oldest parseable
+    `startedAt` seen anywhere in the walk (floored at `MIN_OBSERVED_SPAN_HOURS` so a rate
+    division can neither raise ZeroDivisionError nor produce infinity); with no parseable
+    `startedAt` seen at all it is `window_hours`.
+
+    Pagination cursor: opaque, passed only as a query-parameter value, never interpolated
+    into the URL path (T-45-01). This repo has never paginated this API live — if the
+    cursor mechanic does not work, only the SPAN's accuracy degrades (a shorter observed
+    span is honestly stated); the RATE over whatever was actually read is still true. An
+    in-flight run both older than the window and deeper than the page walk stays
+    invisible — the same limitation the fixed 100-row page already had, now written down.
+    """
+    now = now or datetime.now(timezone.utc)
+    window_minutes = window_hours * 60.0
+
+    items = []
+    count_in_window = 0
+    saw_older_than_cutoff = False
+    truncated_by_page_cap = False
+    oldest_age_minutes = None
+    oldest_started_at = None
+
+    cursor = None
+
+    # A bounded `for` over MAX_EXECUTION_PAGES, never a `while` — T-45-02's page-count
+    # bound doubles as the reason this can be a `for`: test_report_sufficiency.py's D-07
+    # guard forbids any poll/watch `while` loop outside watch.py, and a page walk with a
+    # hard-known iteration ceiling is exactly what `for ... else` expresses without one.
+    # The `else` clause fires only when every allotted page was consumed without an early
+    # `break` — i.e. the walk stopped because it hit the cap, not because it ran out of
+    # data or found the cutoff.
+    for page_index in range(1, MAX_EXECUTION_PAGES + 1):
+        params = {"limit": EXECUTIONS_WINDOW_PAGE_LIMIT}
+        if cursor:
+            params["cursor"] = cursor
+
+        body = _get_json(config, f"{_base_url(config)}/api/v1/executions", params, transport)
+
+        if body is None:
+            if page_index == 1:
+                return None
+            truncated_by_page_cap = True
+            break
+
+        data = body.get("data")
+        page = data if isinstance(data, list) else []
+
+        page_oldest_age = None
+        for item in page:
+            if not isinstance(item, dict):
+                continue
+            status = _derive_status(item)
+            in_flight = status in IN_FLIGHT_STATUSES if status else False
+            started_age = elapsed_minutes(item.get("startedAt"), now=now)
+
+            if started_age is not None:
+                if oldest_age_minutes is None or started_age > oldest_age_minutes:
+                    oldest_age_minutes = started_age
+                    oldest_started_at = item.get("startedAt")
+                if page_oldest_age is None or started_age > page_oldest_age:
+                    page_oldest_age = started_age
+                if started_age <= window_minutes:
+                    count_in_window += 1
+
+            if in_flight:
+                items.append(item)
+                continue
+
+            stopped_age = elapsed_minutes(item.get("stoppedAt"), now=now)
+            retention_age = stopped_age if stopped_age is not None else started_age
+            if retention_age is not None and retention_age <= window_minutes:
+                items.append(item)
+
+        if page_oldest_age is not None and page_oldest_age > window_minutes:
+            saw_older_than_cutoff = True
+
+        next_cursor = body.get("nextCursor")
+        if saw_older_than_cutoff or not next_cursor:
+            break
+        cursor = next_cursor
+    else:
+        if not saw_older_than_cutoff:
+            truncated_by_page_cap = True
+
+    if saw_older_than_cutoff:
+        observed_span_hours = window_hours
+    elif oldest_age_minutes is not None:
+        observed_span_hours = max(oldest_age_minutes / 60.0, MIN_OBSERVED_SPAN_HOURS)
+    else:
+        observed_span_hours = window_hours
+
+    return {
+        "items": items,
+        "window_hours": window_hours,
+        "count_in_window": count_in_window,
+        "observed_span_hours": observed_span_hours,
+        "oldest_started_at": oldest_started_at,
+        "covers_full_window": saw_older_than_cutoff,
+        "truncated_by_page_cap": truncated_by_page_cap,
+    }
 
 
 def read_write_safety(workflow_body, flag_name: str) -> dict:

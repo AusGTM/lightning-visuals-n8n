@@ -43,6 +43,12 @@ import n8n_read
 # boundary.
 MAINTENANCE_WORKFLOW_NAME = "LV Scheduled Maintenance (Cloud)"
 
+# The plugin config keys the burn-rate alarm's allowance and threshold live under
+# (D-04). Read here, once, and passed downstream as RAW values — parsing is
+# sweep_conditions.check_burn_rate's job, so this module stays a pure fetch layer.
+EXECUTION_ALLOWANCE_KEY = "n8n_monthly_execution_allowance"
+BURN_RATE_THRESHOLD_KEY = "burn_rate_alarm_threshold"
+
 _NO_RECENT_MAINTENANCE_EXECUTION = {
     "available": False, "reason": "no_recent_maintenance_execution", "findings": []}
 _MAINTENANCE_EXECUTION_UNREADABLE = {
@@ -54,11 +60,14 @@ def gather(config, get_transport=requests.get, post_transport=None, now=None):
 
     Returns::
 
-        {"executions": {"available": bool, "summaries": [...]},
+        {"executions": {"available": bool, "summaries": [...], "window": {...} | None},
          "backend":    fetch_backend_status's {available, reason, data},
          "workflows":  {"available": bool, "items": [...]},
          "maintenance_errors": execution_errors.harvest_errors's {available, reason,
-                                findings} over the maintenance workflow's latest run}
+                                findings} over the maintenance workflow's latest run,
+         "execution_budget": {"key", "allowance", "threshold_key", "threshold"} — the
+                              burn-rate alarm's RAW config values (Phase 45, D-04);
+                              parsing is sweep_conditions.check_burn_rate's job}
 
     Each summary is n8n_read.summarize_execution's dict (tri-state `stuck` included)
     plus the raw item's workflow name AND id, so a notice can say WHICH run is wedged and
@@ -67,26 +76,42 @@ def gather(config, get_transport=requests.get, post_transport=None, now=None):
 
     `now=` is injected through to summarize_execution — no sweep module reads the clock,
     so the stuck threshold is testable on both sides (29-03 Task 1).
+
+    Phase 45 D-08: the executions read is now TIME-WINDOWED (n8n_read.executions_in_window)
+    rather than a fixed 100-row page — every condition that consumes `summaries` inherits
+    the window through this ONE substitution. `executions["window"]` carries the read's own
+    `window_hours`/`count_in_window`/`observed_span_hours`/`covers_full_window`/
+    `truncated_by_page_cap`, which is what lets check_burn_rate state an honest span.
     """
-    raw = n8n_read.recent_executions(config, transport=get_transport)
+    window = n8n_read.executions_in_window(config, transport=get_transport, now=now)
 
     maintenance_execution_id = None
-    if raw is None:
-        executions = {"available": False, "summaries": []}
+    if window is None:
+        executions = {"available": False, "summaries": [], "window": None}
     else:
         summaries = []
-        for item in raw:
+        for item in window["items"]:
             summary = n8n_read.summarize_execution(item, config, now=now)
             workflow_data = item.get("workflowData") if isinstance(item, dict) else None
             summary["workflow_name"] = (workflow_data or {}).get("name")
             summary["workflow_id"] = item.get("workflowId") if isinstance(item, dict) else None
             summaries.append(summary)
-            # The page is newest-first, so the first maintenance-workflow item seen is
+            # The window is newest-first, so the first maintenance-workflow item seen is
             # its latest — the only one D-17 permits fetching runData for.
             if (maintenance_execution_id is None
                     and summary["workflow_name"] == MAINTENANCE_WORKFLOW_NAME):
                 maintenance_execution_id = summary["execution_id"]
-        executions = {"available": True, "summaries": summaries}
+        executions = {
+            "available": True,
+            "summaries": summaries,
+            "window": {
+                "window_hours": window["window_hours"],
+                "count_in_window": window["count_in_window"],
+                "observed_span_hours": window["observed_span_hours"],
+                "covers_full_window": window["covers_full_window"],
+                "truncated_by_page_cap": window["truncated_by_page_cap"],
+            },
+        }
 
     if maintenance_execution_id is None:
         maintenance_errors = dict(_NO_RECENT_MAINTENANCE_EXECUTION)
@@ -109,8 +134,15 @@ def gather(config, get_transport=requests.get, post_transport=None, now=None):
     else:
         backend = backend_status.fetch_backend_status(config, transport=post_transport)
 
+    execution_budget = {
+        "key": EXECUTION_ALLOWANCE_KEY,
+        "allowance": (config or {}).get(EXECUTION_ALLOWANCE_KEY),
+        "threshold_key": BURN_RATE_THRESHOLD_KEY,
+        "threshold": (config or {}).get(BURN_RATE_THRESHOLD_KEY),
+    }
+
     return {"executions": executions, "backend": backend, "workflows": workflows,
-           "maintenance_errors": maintenance_errors}
+           "maintenance_errors": maintenance_errors, "execution_budget": execution_budget}
 
 
 def nothing_was_readable(gathered) -> bool:

@@ -68,10 +68,23 @@ class _Entry:
         self.who_can_fix = who_can_fix
 
 
-# Order is load-bearing: the first match wins. Authentication is checked before quota so
-# a message carrying both ("401 ... balance exhausted") reads as the credential problem,
-# which is the one that blocks everything rather than one provider.
+# Order is load-bearing: the first match wins. The burn-rate row (Phase 45) is PREPENDED
+# ahead of everything else: its reason string carries arithmetic that can incidentally
+# contain 400/402/429, and the existing rows below match on those BARE numbers — without
+# this ordering a burn-rate reason would be stolen and rendered as a malformed record or
+# an exhausted quota. Matched on a long literal phrase unique to the burn reason, never on
+# a bare number and never on the word "rate" alone. Authentication is checked before quota
+# so a message carrying both ("401 ... balance exhausted") reads as the credential
+# problem, which is the one that blocks everything rather than one provider.
 TABLE = (
+    _Entry(
+        r"this is a sampled rate, not a total for this month",
+        "burn_rate",
+        "The execution rate is running high enough to exhaust the monthly plan allowance "
+        "at the sampled rate, so look at what is running on the plugin's own control "
+        "surface.",
+        OPERATOR,
+    ),
     _Entry(
         r"\b(401|403)\b|unauthori[sz]ed|forbidden|invalid[ _-]?(api[ _-]?)?"
         r"(key|token|credential)|authentication (failed|error)|expired token",

@@ -53,6 +53,9 @@ FAILED_RUN = "failed_scheduled_run"
 REVIEW_BACKLOG = "review_backlog"
 SWALLOWED_MAINTENANCE_FAILURE = "swallowed_maintenance_failure"
 STUCK_ARMED = "stuck_armed"
+BURN_RATE = "burn_rate_alarm"
+BURN_RATE_NOT_CONFIGURED = "burn_rate_not_configured"
+BURN_RATE_UNREADABLE = "burn_rate_unreadable"
 
 # The floor below which a provider's prepaid balance counts as exhausted. Zero is the
 # only value guaranteed to mean "cannot buy one more lookup" without provider-specific
@@ -75,6 +78,11 @@ WRITE_SAFETY_FLAGS = ("ALLOW_HUBSPOT_RECORD_WRITES", "ALLOW_HUBSPOT_CREATE")
 # "canceled" is excluded on purpose: an operator- or admin-cancelled run is not the same
 # condition as one that failed on its own.
 FAILED_STATUSES = frozenset({"error", "crashed"})
+
+# Fire when rate x 30d > allowance x threshold. 1.0 default: the idle floor is ~95/month
+# (~4% of a 2,500/month plan), so any real anomaly clears 1.0 by an order of magnitude —
+# the key exists for tightening later, not because 1.0 is marginal (D-06).
+DEFAULT_BURN_RATE_THRESHOLD = 1.0
 
 
 def check_stuck(summaries):
@@ -388,6 +396,57 @@ def check_stuck_armed(workflows, executions_summaries):
     return fired
 
 
+def check_burn_rate(executions, execution_budget, threshold=DEFAULT_BURN_RATE_THRESHOLD):
+    """Fires when the sampled n8n execution rate, projected over 30 days, would exceed
+    `allowance x threshold` (ALARM-01, D-02 — anchor-free: n8n exposes no billing-cycle
+    day, so a "for the current billing period" claim would be invented).
+
+    `executions` is `sweep_read.gather`'s widened `{"available", "summaries", "window"}`
+    dict; `execution_budget` is its `{"key", "allowance", "threshold_key", "threshold"}`
+    dict of RAW config values — parsing happens here, never upstream, so this stays a
+    pure function over already-fetched data (Task 1 scope: fire/no-fire only, over an
+    allowance and a window that both already parse; Task 2 adds the degraded branches —
+    allowance not configured, executions unreadable — this task deliberately omits).
+
+    The comparison is made on UNROUNDED floats; rounding happens only inside the
+    rendered reason string via format specifiers, so a projection a fraction over the
+    ceiling still fires (ALARM-01 precision).
+    """
+    executions = executions or {}
+    execution_budget = execution_budget or {}
+    window = executions.get("window")
+    if not window:
+        return []
+
+    try:
+        allowance = float(execution_budget.get("allowance"))
+    except (TypeError, ValueError):
+        return []
+    if allowance <= 0:
+        return []
+
+    count_in_window = window.get("count_in_window") or 0
+    observed_span_hours = window.get("observed_span_hours") or n8n_read.MIN_OBSERVED_SPAN_HOURS
+    rate_per_hour = count_in_window / observed_span_hours
+    projected = rate_per_hour * n8n_read.HOURS_PER_MONTH
+    ceiling = allowance * threshold
+
+    if projected <= ceiling:
+        return []
+
+    return [{
+        "condition": BURN_RATE,
+        "reason": (
+            f"n8n execution rate sampled at {rate_per_hour:.1f} per hour over the "
+            f"observed {observed_span_hours:.1f}-hour span, projecting to about "
+            f"{projected:.0f} executions over the next 30 days against the "
+            f"{allowance:.0f}-execution monthly allowance ({threshold:g}x ceiling "
+            f"{ceiling:.0f}) — this is a sampled rate, not a total for this month, "
+            f"because n8n prunes execution history and exposes no usage figure to an "
+            f"API key"),
+    }]
+
+
 def evaluate(gathered, quota_floor=DEFAULT_QUOTA_FLOOR,
             review_backlog_threshold=DEFAULT_REVIEW_BACKLOG_THRESHOLD):
     """Every condition this slice knows, over one gather."""
@@ -412,5 +471,9 @@ def evaluate(gathered, quota_floor=DEFAULT_QUOTA_FLOOR,
                                           threshold=review_backlog_threshold))
 
     fired.extend(check_swallowed_maintenance_failure(gathered.get("maintenance_errors")))
+
+    # OUTSIDE the executions.available gate on purpose: ALARM-04 (executions unreadable)
+    # is unreachable by construction if this were nested inside that block (Phase 45).
+    fired.extend(check_burn_rate(gathered.get("executions"), gathered.get("execution_budget")))
 
     return fired
