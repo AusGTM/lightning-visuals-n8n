@@ -20,11 +20,11 @@ page at 80%.
 - [x] **GATE-01**: When the enrichment write gate is closed, an SJ-3 tick dispatches **zero**
   records. The tick costs 1 execution, not 1 + N.
 
-- [ ] **GATE-02**: A gate-closed tick reports a named, non-error outcome that an operator can
+- [x] **GATE-02**: A gate-closed tick reports a named, non-error outcome that an operator can
   distinguish from "found nothing to do". Disarmed is the normal resting state, so this path
   must not be modelled as a failure.
 
-- [ ] **GATE-03**: When the gate is open, dispatch behaviour is unchanged — a test fails if the
+- [x] **GATE-03**: When the gate is open, dispatch behaviour is unchanged — a test fails if the
   gate check swallows or reorders dispatches inside a legitimately armed window.
 
 ### Queue Drain — a stuck flag cannot survive
@@ -52,14 +52,14 @@ page at 80%.
 
 ### Dispatch Cap — one tick cannot spend the month
 
-- [ ] **CAP-01**: A single tick dispatches at most a cap **derived from the plan allowance and
+- [x] **CAP-01**: A single tick dispatches at most a cap **derived from the plan allowance and
   the tick cadence**, not a hardcoded constant, so the bound cannot silently drift out of
   budget when a trigger is re-timed.
 
-- [ ] **CAP-02**: When a tick caps, it logs how many records it found and how many it
+- [x] **CAP-02**: When a tick caps, it logs how many records it found and how many it
   dispatched. Silent truncation reads as "processed everything" and is forbidden.
 
-- [ ] **CAP-03**: A test fails if the shipped schedule's computed monthly execution floor
+- [x] **CAP-03**: A test fails if the shipped schedule's computed monthly execution floor
   exceeds a configured share of the plan allowance. The v0.7 schedule was 2.6x over the entire
   allowance while doing no work, and nothing in the repo said so.
 
@@ -107,14 +107,14 @@ page at 80%.
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | GATE-01 | Phase 44 | Complete |
-| GATE-02 | Phase 44 | Pending |
-| GATE-03 | Phase 44 | Pending |
+| GATE-02 | Phase 44 | Complete |
+| GATE-03 | Phase 44 | Complete |
 | DRAIN-01 | Phase 44 | Complete |
 | DRAIN-02 | Phase 44 | Complete |
 | DRAIN-03 | Phase 44 | Complete |
-| CAP-01 | Phase 44 | Pending |
-| CAP-02 | Phase 44 | Pending |
-| CAP-03 | Phase 44 | Pending |
+| CAP-01 | Phase 44 | Complete |
+| CAP-02 | Phase 44 | Complete |
+| CAP-03 | Phase 44 | Complete |
 | ALARM-01 | Phase 45 | Pending |
 | ALARM-02 | Phase 45 | Pending |
 | ALARM-03 | Phase 45 | Pending |

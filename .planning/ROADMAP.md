@@ -69,12 +69,12 @@ live, drain not) is worse than either the current runaway or a further delay.
      monthly execution floor exceeds a configured share of the plan allowance — the check the
      v0.7 schedule (2.6x over budget doing no work) would have failed. (CAP-01, CAP-02, CAP-03)
 
-**Plans**: 1/3 plans executed
+**Plans**: 2/3 plans executed
 
 Plans:
 
 - [x] 44-01-PLAN.md — Tracer: SJ-3 dispatch gate + queue drain end-to-end offline (GATE-01, DRAIN-01/02/03)
-- [ ] 44-02-PLAN.md — Budget-derived dispatch cap + tick outcome (GATE-02/03, CAP-01/02/03)
+- [x] 44-02-PLAN.md — Budget-derived dispatch cap + tick outcome (GATE-02/03, CAP-01/02/03)
 - [ ] 44-03-PLAN.md — One build → deploy → bounce, then live proof of cost bound, outcome and drain
 
 ### Phase 45: Burn-Rate Alarm
@@ -120,5 +120,5 @@ Phases execute in numeric order: 44 → 45
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 44. SJ-3 Dispatch Gate, Drain & Cap | 1/3 | In Progress|  |
+| 44. SJ-3 Dispatch Gate, Drain & Cap | 2/3 | In Progress|  |
 | 45. Burn-Rate Alarm | 0/TBD | Not started | - |
