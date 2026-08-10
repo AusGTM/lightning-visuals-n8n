@@ -15,11 +15,16 @@
 # EVERY write node in EVERY cloud workflow sits directly behind a gate that calls
 # _writeSafetyAllows. A write node added later cannot quietly skip one.
 import json
+import sys
 from pathlib import Path
 
 import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
+# Phase 44 Plan 01: scripts/build_cloud_workflows.py does `import gen_taxonomy_js`, a
+# sibling-script import that resolves only with scripts/ on sys.path. The full suite got
+# this for free from an earlier-collected module; standalone runs of THIS file did not.
+sys.path.insert(0, str(ROOT / "scripts"))
 CLOUD_WORKFLOWS = sorted((ROOT / "n8n").glob("wf_*_cloud.json"))
 
 
@@ -75,6 +80,21 @@ def _js(wf, name):
 # — asserted, not just skipped, so a write node landing there unnoticed would still fail.
 NO_WRITE_NODES_EXPECTED = {"wf_backend_status_cloud.json"}
 
+# Phase 44 Plan 01 (D-05/D-06) — the SJ-3 drain write is exempted from the generic
+# _writeSafetyAllows walk BY NAME, deliberately, because for this one node the walk
+# INVERTS: its upstream "SJ-3 Dispatch Gate" embeds WRITE_SAFETY_GATE_JS verbatim (D-02),
+# so the walker finds the literal `_writeSafetyAllows` and reports the drain as gated —
+# but the drain write is reachable precisely on the rows _writeSafetyAllows DECLINED.
+# The string the walker matches is, for this node, evidence of the OPPOSITE of what the
+# generic test claims. The drain cannot use the shared allowlist at all (D-06: the stuck
+# queue is overwhelmingly non-allowlisted records — that is the failure mode itself), so
+# it carries its own authority (ALLOW_SJ3_DRAIN_WRITES, default "true" per D-05) and is
+# covered instead by the strictly stronger dedicated assertions below: sole-feeder,
+# D-06 negative grep on the drain gate, and a key+value patch allowlist.
+DRAIN_EXEMPT_WRITE_NODES = {
+    ("wf_scheduled_maintenance_cloud.json", "SJ-3 Drain Clear Flag"),
+}
+
 
 @pytest.mark.parametrize("path", CLOUD_WORKFLOWS, ids=lambda p: p.name)
 def test_every_write_node_sits_behind_a_write_safety_gate(path):
@@ -90,6 +110,8 @@ def test_every_write_node_sits_behind_a_write_safety_gate(path):
     assert writes, f"{path.name}: no write node found — this guard would be vacuous"
     ungated = []
     for node in writes:
+        if (path.name, node["name"]) in DRAIN_EXEMPT_WRITE_NODES:
+            continue  # covered by the dedicated drain assertions below — see the set's comment
         feeders = _feeders(wf, node["name"])
         if not feeders:
             continue  # unreachable node cannot write
@@ -128,7 +150,12 @@ def test_every_cloud_workflow_with_a_write_declares_the_safety_constants(path):
 def test_committed_write_safety_constants_are_all_disabled(path):
     """The committed artifact must never ship armed, in ANY workflow — the same invariant
     tests/test_enabled_build_invariants.py holds for the enrichment workflow, now that two
-    more workflows carry these constants."""
+    more workflows carry these constants.
+
+    Phase 44 Plan 01: the name is now imprecise — this verifies committed literals match
+    their DECLARED DEFAULTS (the expected literal is derived from WRITE_SAFETY_DEFAULTS
+    itself below), and one entry (ALLOW_SJ3_DRAIN_WRITES, D-05) now defaults "true". Not
+    renamed: the name is referenced in prior phase notes."""
     import re
 
     from scripts.build_cloud_workflows import WRITE_SAFETY_DEFAULTS
@@ -209,6 +236,87 @@ def test_dedupe_lane_emits_only_allowlisted_property_keys():
         f"{_DEDUPE_SWEEP_NODE} emits property key(s) {unexpected} outside the classify-only "
         f"allowlist {_DEDUPE_LANE_ALLOWED_PROPERTY_KEYS} — a new key here is a new, "
         f"unreviewed HubSpot write surface on a lane dedupeSweep.js documents as CLASSIFY ONLY"
+    )
+
+
+# Phase 44 Plan 01 (DRAIN-01/02/03, D-05/D-06) — the drain node's replacement coverage,
+# strictly stronger than the generic walk it is exempt from (see DRAIN_EXEMPT_WRITE_NODES).
+_DRAIN_GATE_NODE = "SJ-3 Drain Gate"
+_DRAIN_WRITE_NODE = "SJ-3 Drain Clear Flag"
+# DRAIN-02 as amended 2026-08-10 (operator decision): a KEY+VALUE allowlist, deliberately
+# NOT a count of keys. The original "exactly one key" wording was amended because the
+# same write is what stamps the provenance DRAIN-03 needs (lv_enrichment_status="skipped"
+# — the one closed-enum option nothing else in the pipeline writes, D-08). Order matters:
+# these are baked literals in the built JSON, so the exact list is the exact patch.
+_DRAIN_ALLOWED_PATCH_PAIRS = [
+    ("lv_enrichment_requested", "false"),
+    ("lv_enrichment_status", "skipped"),
+]
+
+
+def _drain_wf():
+    return _load(_maintenance_workflow_path())
+
+
+def test_drain_write_nodes_sole_feeder_is_the_drain_gate():
+    wf = _drain_wf()
+    feeders = _feeders(wf, _DRAIN_WRITE_NODE)
+    assert feeders == [_DRAIN_GATE_NODE], (
+        f"{_DRAIN_WRITE_NODE} must be fed by {_DRAIN_GATE_NODE!r} and nothing else; found "
+        f"{feeders} — a second feeder is an ungated path onto the one write node exempted "
+        f"from the generic walk, and adding one must be a deliberate, reviewed act"
+    )
+
+
+def test_drain_gate_reads_only_its_own_authority():
+    """Pins D-06 structurally: the drain gate compares ALLOW_SJ3_DRAIN_WRITES against the
+    exact string "true" and never touches the shared write-safety helper or a record
+    allowlist constant. Because a Code node's comments are part of its jsCode, the
+    negative assertions below also constrain that node's PROSE — the drain gate documents
+    its exclusions without naming the excluded identifiers, so a future editor must not
+    "improve" its comment into naming them (that would fail this test, by design)."""
+    wf = _drain_wf()
+    js = _js(wf, _DRAIN_GATE_NODE)
+    assert js, f"{_DRAIN_GATE_NODE}: no jsCode found"
+    assert 'ALLOW_SJ3_DRAIN_WRITES !== "true"' in js, (
+        f"{_DRAIN_GATE_NODE} must gate on an exact-string comparison of "
+        f'ALLOW_SJ3_DRAIN_WRITES against "true" (CLAUDE.md §21)'
+    )
+    assert "_writeSafetyAllows" not in js, (
+        f"{_DRAIN_GATE_NODE} must not reference the shared write-safety helper (D-06): "
+        "its allowlist branch is unconditional, and an allowlisted drain would clear only "
+        "records that were never stuck"
+    )
+    assert "TEST_RECORD" not in js, (
+        f"{_DRAIN_GATE_NODE} must not reference a record-allowlist constant (D-06)"
+    )
+
+
+def test_drain_write_patch_is_exactly_the_two_pair_allowlist():
+    """DRAIN-02, structural: the built node's customPropertiesValues is EXACTLY the two
+    (property, value) literal pairs — this fails on any additional key AND on any other
+    value, so widening the drain's blast radius is a builder diff that fails here, never
+    a runtime surprise. Widening _DRAIN_ALLOWED_PATCH_PAIRS itself must be a deliberate,
+    reviewed act (see its comment for why it is two pairs, not one key)."""
+    wf = _drain_wf()
+    node = next((n for n in wf["nodes"] if n["name"] == _DRAIN_WRITE_NODE), None)
+    assert node, f"{_DRAIN_WRITE_NODE} not found"
+    pairs = [(p["property"], p["value"]) for p in
+             node["parameters"]["updateFields"]["customPropertiesUi"]["customPropertiesValues"]]
+    assert pairs == _DRAIN_ALLOWED_PATCH_PAIRS, (
+        f"{_DRAIN_WRITE_NODE} patch is {pairs}, expected exactly "
+        f"{_DRAIN_ALLOWED_PATCH_PAIRS} — any other key or value here is a new, unreviewed "
+        f"write surface on the ONLY write authority in this system enabled at rest (D-05)"
+    )
+
+
+def test_drain_exemption_set_names_exactly_one_node():
+    """Widening DRAIN_EXEMPT_WRITE_NODES must be a reviewed act: every entry weakens the
+    generic every-write-node-is-gated guarantee for one node, and each needs its own
+    replacement assertions the way the drain has above."""
+    assert DRAIN_EXEMPT_WRITE_NODES == {(_MAINTENANCE_WORKFLOW_NAME, _DRAIN_WRITE_NODE)}, (
+        f"DRAIN_EXEMPT_WRITE_NODES is {DRAIN_EXEMPT_WRITE_NODES} — a new exemption here "
+        "must arrive with its own dedicated replacement coverage, not silently"
     )
 
 
