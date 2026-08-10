@@ -2774,13 +2774,23 @@ return $input.all().map((it) => {
   // D-01 (40-03): lv_anti_icp_flag/lv_anti_icp_reason are derived HERE, not supplied as a
   // mergeCompanies() candidate (40-RESEARCH.md Pitfall 4 — the veto derives from three
   // already-merged fields on the same row, only known after mergeCompanies() has run, not
-  // a provider-supplied candidate). Direct JS port of src/icp_scoring.py:84-97's hard-veto
+  // a provider-supplied candidate). Direct JS port of src/icp_scoring.py:94-107's hard-veto
   // block — field names, comparison semantics (produces_content is False, not falsy;
   // is_hardware_vendor truthy) and reason-string order must stay byte-identical to the
   // oracle, since tests/test_scoring_parity.py asserts live state against it. Recomputed
   // from current inputs on every run (VETO-02: not a latch by construction).
+  //
+  // debug: blank-region-fires-non-anz-veto (2026-08-10) — a never-enriched region
+  // (undefined/null/"") is an absence of enrichment, not a positive non-ANZ determination.
+  // HubSpot property-history live evidence traced 17 real companies (13 AU racing clubs +
+  // 1 NZ club) that were PATCHed lv_anti_icp_flag="true"/"Non-ANZ geography" by this exact
+  // node (sourceType INTEGRATION) while lv_country_region_normalized had never been set.
+  // "unknown" is a third state, distinct from "non_anz" (a KNOWN, different value, e.g.
+  // "US") — mirrors src/icp_scoring.py's region_raw/region_key split.
   function _regionKey(v) {
-    return (v === "AU" || v === "NZ" || v === "ANZ") ? v : "non_anz";
+    if (v === "AU" || v === "NZ" || v === "ANZ") return v;
+    if (v === undefined || v === null || v === "") return "unknown";
+    return "non_anz";
   }
   function _boolish(v) {
     if (typeof v === "boolean") return v;
@@ -4022,6 +4032,12 @@ return rows.map((it, i) => {
 # research/waterfall candidates, both matched:false) received "Non-ANZ geography" appended
 # to their correct no-content/hardware-vendor reasons. Same class of defect WR-01 already
 # fixed for lv_sponsorship_reliant, one property short of covering it.
+#
+# debug: blank-region-fires-non-anz-veto (2026-08-10) — this CSV fix only covers the
+# transient "region was set but this run didn't fetch it" case. A company whose region has
+# GENUINELY never been enriched still resolves to `undefined`/`null` here even with the
+# fixed CSV, and `_regionKey` now treats that as "unknown" (no veto), not "non_anz" — see
+# the `_regionKey` definition in ENRICH_DECIDE_CO_CLOUD above.
 ENRICH_COMPANY_SEARCH_PROPERTIES_CSV = (
     "name,domain,industry,annualrevenue,"
     "numberofemployees,hs_object_id,lv_org_type,"

@@ -37,7 +37,14 @@ def compute_icp_score(record: HubSpotRecord, candidate_patch: dict) -> ICPScoreR
 
     org_type = get_signal(record, candidate_patch, "lv_org_type", "unknown") or "unknown"
     produces_content = boolish(get_signal(record, candidate_patch, "lv_produces_content"))
-    region = get_signal(record, candidate_patch, "lv_country_region_normalized", None)
+    # region_raw is the authoritative enrichment signal, checked BEFORE the native-country
+    # fallback below: a blank/never-enriched lv_country_region_normalized is an absence of
+    # enrichment, not a positive non-ANZ determination, and must never drive the hard veto
+    # (debug: blank-region-fires-non-anz-veto -- 17 live companies, mostly AU racing clubs,
+    # scored tier D off a blank region). `region` (with the country fallback applied) stays
+    # for display/scoring only; region_key below keys off region_raw, not region.
+    region_raw = get_signal(record, candidate_patch, "lv_country_region_normalized", None)
+    region = region_raw
     if not region:
         region = get_signal(record, candidate_patch, "country", "Unknown")
     revenue_band = get_signal(record, candidate_patch, "lv_revenue_band", "unknown") or "unknown"
@@ -67,7 +74,10 @@ def compute_icp_score(record: HubSpotRecord, candidate_patch: dict) -> ICPScoreR
     score += content_points
     breakdown["components"].append({"signal": "produces_content", "value": produces_content, "points": content_points})
 
-    region_key = region if region in ["AU", "NZ", "ANZ"] else "non_anz"
+    if not region_raw:
+        region_key = "unknown"
+    else:
+        region_key = region if region in ["AU", "NZ", "ANZ"] else "non_anz"
     geo_points = cfg["base_score"]["geography"].get(region_key, 0)
     score += geo_points
     breakdown["components"].append({"signal": "geography", "value": region, "points": geo_points})

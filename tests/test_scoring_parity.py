@@ -188,6 +188,72 @@ def test_disposable_company_fixture_asserts_portal_before_creating(monkeypatch):
             pass  # pragma: no cover -- create_record must never be reached
 
 
+def test_blank_region_is_not_vetoed_offline():
+    """debug: blank-region-fires-non-anz-veto — a company whose
+    lv_country_region_normalized has never been enriched (property absent/None) must NOT be
+    treated as a positive non-ANZ determination. Live evidence traced 17 real companies (13
+    AU racing clubs + 1 NZ club, e.g. Bunbury Turf Club 9604738976) PATCHed
+    lv_anti_icp_flag="true"/"Non-ANZ geography" off a blank region. Unknown geography still
+    contributes 0 points (unchanged), but must not fire the hard veto."""
+    r = score({
+        "lv_org_type": "individual_club_team",
+        "lv_produces_content": True,
+        "lv_revenue_band": "1-5M",
+        # lv_country_region_normalized intentionally omitted -- never enriched
+    })
+    assert r.anti_icp_flag is False
+    assert "Non-ANZ" not in (r.anti_icp_reason or "")
+    assert _component(r, "geography")["points"] == 0
+    # This particular fixture has org_type/produces_content already known, so it lands a
+    # real tier off its remaining points (5 + 20 + 0 + 0 = 25 -> C) rather than Unscored --
+    # blank region alone isn't a data-completeness veto, it's just a missing +10. Contrast
+    # test_bunbury_turf_club_shape_blank_region_and_org_type_is_unscored_offline below,
+    # which locks in the "Unscored" outcome the debug session's stated expectation
+    # actually describes: that shape is blank region AND blank org_type together.
+    assert r.tier == "C"
+
+
+def test_bunbury_turf_club_shape_blank_region_and_org_type_is_unscored_offline():
+    """The real live shape (Bunbury Turf Club 9604738976 and most of the other 16 false-veto
+    records): lv_org_type was ALSO never enriched, not just region. compute_icp_score's
+    existing confidence-downgrade branch (org_type == "unknown") already routes this to
+    Unscored once the veto stops masking it -- this is the debug session's literal
+    'Unscored/Needs Review' expectation, now reachable because no veto short-circuits to D
+    first."""
+    r = score({
+        "lv_country_region_normalized": None,
+        # lv_org_type, lv_produces_content, lv_revenue_band all omitted -- never enriched
+    })
+    assert r.anti_icp_flag is False
+    assert r.tier == "Unscored"
+
+
+def test_blank_region_boundary_neighbor_empty_string_offline():
+    """Boundary neighbor of the test above: an explicit empty-string region (as opposed to
+    the key being absent from the patch entirely) must resolve identically -- both mean
+    'never enriched', not a known non-ANZ value."""
+    r = score({
+        "lv_org_type": "individual_club_team",
+        "lv_produces_content": True,
+        "lv_revenue_band": "1-5M",
+        "lv_country_region_normalized": "",
+    })
+    assert r.anti_icp_flag is False
+
+
+def test_known_non_anz_region_still_vetoes_offline():
+    """Companion to the two tests above: the fix must not blind the veto to a genuinely
+    non-ANZ company -- a KNOWN, different region value keeps firing it."""
+    r = score({
+        "lv_org_type": "governing_body_league",
+        "lv_produces_content": True,
+        "lv_revenue_band": "5-50M",
+        "lv_country_region_normalized": "US",
+    })
+    assert r.anti_icp_flag is True
+    assert "Non-ANZ" in r.anti_icp_reason
+
+
 # --------------------------------------------------------------------------------------
 # Live tier — behind RUN_LIVE_PARITY only (D-13: no offline substitute for veto cases;
 # every test here drives a real disposable company through the real HubSpot flow chain).

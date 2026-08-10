@@ -83,6 +83,31 @@ test("existing US (genuinely non-ANZ) + research matched:false: the veto still f
   assert.equal(out.properties.lv_anti_icp_reason, "Non-ANZ geography");
 });
 
+// debug: blank-region-fires-non-anz-veto (2026-08-10) -- distinct from the two tests
+// above. Those cover "region WAS set but this run's fetch didn't request it" (the CSV
+// fix). This covers a company whose region has GENUINELY never been enriched: HubSpot
+// property-history live evidence traced 17 real companies (13 AU racing clubs + 1 NZ
+// club, e.g. Bunbury Turf Club 9604738976) PATCHed lv_anti_icp_flag="true"/
+// "Non-ANZ geography" by this exact node while lv_country_region_normalized had no
+// history at all -- never set, not merely unfetched this run.
+test("existing region genuinely never enriched (undefined) + research matched:false: " +
+     "no non-ANZ veto fires", () => {
+  const out = runMergeThenDecide(row(undefined, true, false));
+  assert.ok(!("lv_country_region_normalized" in out.properties),
+    "vacuity check: region must NOT have been freshly re-promoted this run -- otherwise " +
+    "this test would pass for the wrong reason (the ?? fallback never exercised)");
+  assert.equal(out.properties.lv_anti_icp_flag, "false");
+  assert.equal(out.properties.lv_anti_icp_reason, "");
+});
+
+test("existing region as an explicit empty string + research matched:false: treated " +
+     "identically to undefined -- both mean 'never enriched', not a known non-ANZ value",
+     () => {
+  const out = runMergeThenDecide(row("", true, false));
+  assert.equal(out.properties.lv_anti_icp_flag, "false");
+  assert.equal(out.properties.lv_anti_icp_reason, "");
+});
+
 test("existing AU + no-content veto: fires ONLY the no-content reason, never a spurious " +
      "non-ANZ prefix (the exact live-caught defect on disposable D1)", () => {
   const out = runMergeThenDecide(row("AU", false, false));
