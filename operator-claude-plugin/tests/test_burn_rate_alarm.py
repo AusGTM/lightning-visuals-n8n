@@ -15,6 +15,7 @@ and the workflow-name backfill.
 from datetime import datetime, timedelta, timezone
 
 import error_table
+import n8n_read
 import sweep_conditions
 import sweep_entry
 import sweep_read
@@ -150,9 +151,42 @@ def test_error_table_still_matches_the_burn_reason_when_its_numbers_include_400(
 def test_recent_executions_and_its_page_limit_are_untouched():
     """status.py:159 still calls recent_executions with EXECUTIONS_PAGE_LIMIT — this
     plan adds a windowed read alongside it, never removes the interactive one."""
-    import n8n_read
     assert n8n_read.EXECUTIONS_PAGE_LIMIT == 100
     assert callable(n8n_read.recent_executions)
+
+
+# --- direct unit coverage of executions_in_window's own boundary contract -----------------
+
+
+def test_an_execution_exactly_at_the_cutoff_counts_one_a_second_older_does_not(
+        stub_get_transport_factory):
+    at_cutoff = _iso(NOW - timedelta(hours=24))
+    one_second_older = (NOW - timedelta(hours=24) - timedelta(seconds=1)).strftime(
+        "%Y-%m-%dT%H:%M:%S.000Z")
+
+    items = [
+        {"id": "e-at-cutoff", "workflowId": "wf-a", "status": "success",
+         "startedAt": at_cutoff, "stoppedAt": at_cutoff, "finished": True},
+        {"id": "e-older", "workflowId": "wf-a", "status": "success",
+         "startedAt": one_second_older, "stoppedAt": one_second_older, "finished": True},
+    ]
+    get = stub_get_transport_factory([{"data": items}])
+    window = n8n_read.executions_in_window(SWEEP_CONFIG, transport=get, now=NOW)
+
+    assert window["count_in_window"] == 1, "only the at-cutoff item should count"
+
+
+def test_observed_span_hours_is_floored_never_zero_or_negative(stub_get_transport_factory):
+    """A single execution a few seconds old must not make the rate division raise or
+    produce infinity — floored at MIN_OBSERVED_SPAN_HOURS."""
+    just_now = (NOW - timedelta(seconds=5)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    items = [{"id": "e-fresh", "workflowId": "wf-a", "status": "success",
+             "startedAt": just_now, "stoppedAt": just_now, "finished": True}]
+    get = stub_get_transport_factory([{"data": items}])
+    window = n8n_read.executions_in_window(SWEEP_CONFIG, transport=get, now=NOW)
+
+    assert window["observed_span_hours"] >= n8n_read.MIN_OBSERVED_SPAN_HOURS
+    assert window["observed_span_hours"] > 0
 
 
 # --- Task 2: the branches that must never be silent ---------------------------------------
