@@ -48,10 +48,14 @@ _ALIAS = {
 }
 
 
-def _node(name, declares=None, **overrides):
+def _node(name, declares=None, drain="true", **overrides):
     """One Code node. `declares` is the SUBSET of constants this node writes into its
     jsCode (default: all of them) — the contact lane's `Decide Action` really does
-    declare only the create flag, so a partial declaration must be expressible."""
+    declare only the create flag, so a partial declaration must be expressible.
+
+    `drain` (Phase 44 Plan 01) is the ALLOW_SJ3_DRAIN_WRITES literal this node declares
+    — default "true" because every real gate node declares it at its rest value via
+    WRITE_SAFETY_GATE_JS; pass None to build a node that does not declare it."""
     assert set(_DISARMED) == set(verifier.CHECKED_CONSTANTS), (
         "fixture is out of date with verifier.CHECKED_CONSTANTS: "
         f"{set(verifier.CHECKED_CONSTANTS) ^ set(_DISARMED)}"
@@ -64,6 +68,7 @@ def _node(name, declares=None, **overrides):
         "// unrelated preamble, e.g. taxonomy consts, should never confuse the parser\n"
         'const SOME_OTHER_CONST = "unrelated";\n'
         + "".join(f'const {n} = "{values[n]}";\n' for n in declared)
+        + (f'const {verifier.DRAIN_CONSTANT} = "{drain}";\n' if drain is not None else "")
     )
     return {"name": name, "parameters": {"jsCode": js_code}}
 
@@ -401,6 +406,78 @@ def test_the_armed_report_states_what_was_expected_as_well_as_what_was_found(cap
     out = capsys.readouterr().out
     assert "ALLOW_HUBSPOT_REVIEW_WRITES" in out
     assert "9604614548" in out
+
+
+# --- the drain authority's dedicated check (Phase 44 Plan 01, T-44-05) ------------------
+# ALLOW_SJ3_DRAIN_WRITES rests "true" and is deliberately outside CHECKED_CONSTANTS (a
+# disarmed branch that hard-requires "false" would declare a correctly-disarmed backend
+# armed). Missing or "false" means the SJ-3 drain is silently inert and the stuck queue
+# can re-form — a failure with its own reason line, never folded into the five overlay
+# constants' verdict.
+
+def test_drain_constant_missing_everywhere_fails_even_when_disarmed_is_clean():
+    nodes_without_drain = [
+        _node("Decide Action", drain=None),
+        _node("Decide Company Action", drain=None),
+    ]
+    result = verifier.verify([_wf("LV Enrichment (Cloud template)", *nodes_without_drain)], "disarmed")
+    assert result["ok"] is False
+    assert result["drain"]["ok"] is False
+    assert result["drain"]["declaring_nodes"] == 0
+    reason = next(r for r in result["reasons"] if "ALLOW_SJ3_DRAIN_WRITES" in r)
+    assert "inert" in reason
+    # the five overlay constants themselves are clean — the only failure is the drain's
+    assert all("ALLOW_SJ3_DRAIN_WRITES" in r for r in result["reasons"])
+
+
+def test_drain_constant_reading_false_fails_and_names_workflow_and_node():
+    workflows = [_wf(
+        "LV Scheduled Maintenance (Cloud)",
+        _node("SJ-3 Dispatch Gate"),
+        _node("SJ-3 Drain Gate", declares=(), drain="false"),
+    )]
+    result = verifier.verify(workflows, "disarmed")
+    assert result["ok"] is False
+    reason = next(r for r in result["reasons"] if "ALLOW_SJ3_DRAIN_WRITES" in r)
+    assert "LV Scheduled Maintenance (Cloud)" in reason and "SJ-3 Drain Gate" in reason
+
+
+def test_drain_constant_true_passes_and_does_not_disturb_the_disarmed_verdict():
+    result = verifier.verify(_enrichment(contact={}, company={}), "disarmed")
+    assert result["ok"] is True
+    assert result["drain"] == {
+        "constant": "ALLOW_SJ3_DRAIN_WRITES", "expected": "true",
+        "declaring_nodes": 2, "ok": True,
+    }
+
+
+def test_drain_check_applies_under_the_armed_expectation_too():
+    workflows = _enrichment(
+        contact={"writes": "true", "ids": "201"},
+        company={"writes": "true", "ids": "201"},
+    )
+    for wf in workflows:
+        for node in wf["nodes"]:
+            node["parameters"]["jsCode"] = node["parameters"]["jsCode"].replace(
+                'const ALLOW_SJ3_DRAIN_WRITES = "true";', "")
+    result = verifier.verify(workflows, "armed", expected_allowlist="201")
+    assert result["ok"] is False
+    assert any("ALLOW_SJ3_DRAIN_WRITES" in r for r in result["reasons"])
+
+
+def test_report_prints_the_drain_authority_as_its_own_line(capsys):
+    verifier._print_report(verifier.verify(_enrichment(contact={}, company={}), "disarmed"))
+    out = capsys.readouterr().out
+    line = next(ln for ln in out.splitlines() if "drain authority" in ln)
+    assert "ALLOW_SJ3_DRAIN_WRITES" in line and "PASS" in line
+
+
+def test_drain_constant_stays_out_of_the_overlay_and_checked_sets():
+    """The exclusion itself is pinned elsewhere (test_enabled_build_invariants' strict
+    5-name equality, operator-claude-plugin's control-flag parity) — this only asserts
+    the verifier's own derived sets never silently absorb it."""
+    assert verifier.DRAIN_CONSTANT not in verifier.CHECKED_CONSTANTS
+    assert verifier.DRAIN_CONSTANT not in verifier.BOOLEAN_CONSTANTS
 
 
 # --- unknown expectation refuses, never silently no-ops ---------------------------------

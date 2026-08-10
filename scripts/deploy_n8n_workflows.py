@@ -167,7 +167,14 @@ NODE_CREDENTIAL_MAP = {
 # `ALLOW_WEB_RESEARCH` are ALSO excluded on purpose (quick-260730-din, quick-260730-fij):
 # both now default to `true` at build time, so the overlay — which only ever widens
 # disabled->enabled — has no meaningful entry for either; the emergency-off path is
-# editing CONFIG_FLAG_DEFAULTS + rebuild + disarmed redeploy.
+# editing CONFIG_FLAG_DEFAULTS + rebuild + disarmed redeploy. `ALLOW_SJ3_DRAIN_WRITES`
+# (Phase 44 Plan 01, D-05) is the THIRD such default-true exclusion, for the same reason:
+# it rests `"true"` (the drain must run at rest — that is the only state in which the
+# queue gets stuck), so the disabled->enabled overlay has nothing to arm, and adding it
+# here would also make verify_live_write_safety.py's disarmed branch declare a correctly
+# disarmed backend armed. Its emergency-off path is the same one named above: edit the
+# default (WRITE_SAFETY_DEFAULTS in build_cloud_workflows.py) + rebuild + disarmed
+# redeploy. The verifier still reads it back via its own dedicated check.
 # Deliberately NOT imported from build_cloud_workflows — that module runs
 # taxonomy/escalation codegen at import time and writes into n8n/code/; a deploy script
 # must never carry that side effect. tests/test_enabled_build_invariants.py pins this

@@ -39,6 +39,12 @@ An armed window whose allowlist reads empty is its own finding, not a pass:
 `_writeSafetyAllows()` returns false on an empty allowlist, so that state grants nothing
 while every flag reads enabled.
 
+Phase 44 Plan 01: `ALLOW_SJ3_DRAIN_WRITES` (rests "true", D-05) is checked separately
+under both expectations with the OPPOSITE polarity — it must be present and read "true",
+or the SJ-3 drain is silently inert and the stuck queue can re-form. It is deliberately
+not in CHECKED_CONSTANTS (see the comment at its definition below) and gets its own
+report line; the five overlay constants' verdict keeps its meaning unchanged.
+
 A scan that discovers ZERO declaring nodes is a failure with an explicit reason, never a
 disarmed pass: a scan that matched nothing is otherwise indistinguishable from a disarmed
 instance.
@@ -78,6 +84,18 @@ from deploy_n8n_workflows import (  # noqa: E402
 
 # Never re-typed: the checked set IS the overlay's overlayable set, imported directly.
 CHECKED_CONSTANTS = tuple(_OVERLAY_FLAG_SPEC.keys())
+
+# Phase 44 Plan 01 (D-05, T-44-05) — the SJ-3 drain authority is deliberately OUTSIDE
+# CHECKED_CONSTANTS: it rests "true", and the disarmed branch below hard-requires every
+# boolean it tracks to read "false", so folding it in would declare a correctly-disarmed
+# backend armed. It is checked SEPARATELY, with the opposite polarity, in every
+# expectation: the constant must be present in the live workflow content and read
+# "true" — a missing or "false" ALLOW_SJ3_DRAIN_WRITES means the drain is silently inert
+# and the stuck queue can re-form, the exact failure Phase 44 exists to prevent. It gets
+# its own report line and its own reasons; the armed/disarmed verdict for the five
+# overlay constants keeps its meaning unchanged.
+DRAIN_CONSTANT = "ALLOW_SJ3_DRAIN_WRITES"
+DRAIN_EXPECTED = "true"
 ALLOWLIST_CONSTANTS = ("TEST_RECORD_IDS", "TEST_RECORD_DOMAINS")
 # Everything else in the checked set is a write-enabling boolean. Derived, not re-typed,
 # so a constant added to the overlay (ALLOW_HUBSPOT_REVIEW_WRITES was the fifth, Phase 30
@@ -120,12 +138,13 @@ def _fetch_all_live_workflows() -> list:
 
 def _parse_constants(js_code: str) -> dict:
     """Extract the write-safety constants' literal string values out of one node's
-    jsCode. Only names in CHECKED_CONSTANTS are kept; anything else in the body (e.g.
-    the taxonomy module's unrelated `const`s in Decide Company Action) is ignored."""
+    jsCode. Only names in CHECKED_CONSTANTS (plus DRAIN_CONSTANT, checked separately)
+    are kept; anything else in the body (e.g. the taxonomy module's unrelated `const`s
+    in Decide Company Action) is ignored."""
     found = {}
     for m in _CONST_RE.finditer(js_code or ""):
         name, value = m.group(1), m.group(2)
-        if name in CHECKED_CONSTANTS:
+        if name in CHECKED_CONSTANTS or name == DRAIN_CONSTANT:
             found[name] = value
     return found
 
@@ -246,6 +265,27 @@ def verify(workflows, expectation: str, expected_allowlist: str = None, expected
                     f"expected {expected_allowlist!r}"
                 )
 
+    # Phase 44 Plan 01 (T-44-05) — the drain authority's dedicated check, opposite
+    # polarity to everything above and applied under BOTH expectations: present and
+    # "true", or the SJ-3 drain is silently inert and the queue can re-form. Its reasons
+    # join the verdict (a silent drain is a failure), but the five overlay constants'
+    # armed/disarmed meaning above is untouched.
+    drain_declaring = [r for r in reports if DRAIN_CONSTANT in r["constants"]]
+    drain_reasons = []
+    for report in drain_declaring:
+        value = report["constants"][DRAIN_CONSTANT]
+        if value != DRAIN_EXPECTED:
+            drain_reasons.append(
+                f"{report['workflow']} / {report['node']}: {DRAIN_CONSTANT}={value!r}, expected "
+                f"\"{DRAIN_EXPECTED}\" — the SJ-3 drain is silently inert and the stuck queue can re-form"
+            )
+    if reports and not drain_declaring:
+        drain_reasons.append(
+            f"{DRAIN_CONSTANT} is declared by no node in any deployed workflow — the SJ-3 "
+            "drain is silently inert and the stuck queue can re-form (Phase 44 Plan 01)"
+        )
+    reasons.extend(drain_reasons)
+
     return {
         "expectation": expectation,
         "expected_allowlist": expected_allowlist,
@@ -253,6 +293,12 @@ def verify(workflows, expectation: str, expected_allowlist: str = None, expected
         "workflows_scanned": len(workflows),
         "declaring_nodes": len(reports),
         "workflows": grouped,
+        "drain": {
+            "constant": DRAIN_CONSTANT,
+            "expected": DRAIN_EXPECTED,
+            "declaring_nodes": len(drain_declaring),
+            "ok": not drain_reasons,
+        },
         "ok": not reasons,
         "reasons": reasons,
     }
@@ -268,6 +314,15 @@ def _print_report(result: dict) -> None:
         f"coverage: {result['workflows_scanned']} workflow(s) fetched, "
         f"{result['declaring_nodes']} declaring node(s) found"
     )
+    # Phase 44 Plan 01 — the drain authority's own line, never folded into the
+    # armed/disarmed verdict: missing or "false" means the SJ-3 drain is silently inert.
+    drain = result.get("drain") or {}
+    drain_verdict = "PASS" if drain.get("ok") else "FAIL"
+    print(
+        f"drain authority: {drain.get('constant', DRAIN_CONSTANT)} expected "
+        f"\"{drain.get('expected', DRAIN_EXPECTED)}\", declared by "
+        f"{drain.get('declaring_nodes', 0)} node(s) — {drain_verdict}"
+    )
 
     for wf in result["workflows"]:
         if not wf["nodes"]:
@@ -277,7 +332,8 @@ def _print_report(result: dict) -> None:
             c = report["constants"]
             # Only the constants THIS node declares — a partial declaration is the real
             # committed shape, not a defect, and printing a phantom value would misread.
-            rendered = " ".join(f"{k}={c[k]!r}" for k in CHECKED_CONSTANTS if k in c)
+            rendered = " ".join(
+                f"{k}={c[k]!r}" for k in CHECKED_CONSTANTS + (DRAIN_CONSTANT,) if k in c)
             print(f"  node {report['node']!r}: {rendered}")
 
     for reason in result["reasons"]:
