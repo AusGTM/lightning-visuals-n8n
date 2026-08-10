@@ -325,3 +325,26 @@ def test_override_phrase_does_not_help_when_the_workflow_list_is_unreadable(
         STRICT_CONFIG, transport=transport)
 
     assert result["outcome"] == control_actions.REFUSED
+
+
+def test_proposal_override_flag_only_true_when_the_floor_actually_used_it(
+        stub_module_transport_factory):
+    """WR-05: an override phrase present on an ALREADY-WITHIN-BUDGET request must not
+    make the proposal carry `budget_floor_override: True` -- check_budget_floor never
+    consulted `override` on that path (it returns before reaching that branch), so
+    nothing was ever shown to justify treating it as taken. The prior bug carried the
+    raw phrase-match forward regardless, which could silently authorize a LATER
+    over-budget re-check (at execute time, against numbers the operator never saw)
+    that had nothing to do with this request."""
+    transport = stub_module_transport_factory(
+        [_budget_workflow(), _budget_workflow_items_response()])
+
+    request = {"kind": "cadence", "workflow_id": BUDGET_WORKFLOW_ID,
+              "node_name": BUDGET_NODE_NAME, "phrase": "daily",
+              "budget_floor_override_phrase": n8n_cadence.BUDGET_FLOOR_OVERRIDE_PHRASE}
+    proposal = control_actions.plan_action(request, STRICT_CONFIG, transport=transport)
+
+    assert "outcome" not in proposal, proposal
+    assert proposal["budget_floor"]["within"] is True
+    assert proposal["budget_floor"]["overridden"] is False
+    assert proposal["budget_floor_override"] is False

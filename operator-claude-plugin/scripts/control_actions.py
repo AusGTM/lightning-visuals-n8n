@@ -217,7 +217,15 @@ def plan_action(request, config, transport=None):
             "consequence": consequence,
             "inverse": f"set it back to {n8n_cadence.describe_cadence(current)} — one step",
             "budget_floor": budget_floor,
-            "budget_floor_override": override,
+            # WR-05: NOT the raw phrase-match `override` — that is true whenever the
+            # request happens to carry the override phrase, even on an already-within-
+            # budget request where check_budget_floor never consulted it. Carrying the
+            # raw match forward would let execute_action's fresh re-check silently
+            # authorize an over-budget change against numbers the operator was never
+            # shown (D-10 rule 1). `budget_floor["overridden"]` is only True when
+            # check_budget_floor actually exercised the override against the numbers in
+            # this same `consequence` message.
+            "budget_floor_override": budget_floor.get("overridden", False),
         }
 
     # kind == "job_enabled"
