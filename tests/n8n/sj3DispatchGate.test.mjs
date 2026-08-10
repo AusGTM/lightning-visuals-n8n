@@ -238,6 +238,28 @@ test("wiring: SJ-3 Drain Gate reads ALLOW_SJ3_DRAIN_WRITES and nothing of the sh
     "the drain gate must not consult the record allowlist (D-06)");
 });
 
+test("wiring: SJ-3 Tick Outcome's only feeder is the Dispatch Gate itself (GATE-02)", () => {
+  const wf = loadWorkflow();
+  const outcome = findNode(wf, "SJ-3 Tick Outcome");
+  assert.equal(outcome.type, "n8n-nodes-base.code");
+  // Fed DIRECTLY off the gate's own output — never off Build Dispatch Event or the drain
+  // branch, whose item counts can reach zero and would make this node not run on exactly
+  // the tick it exists to record (zero-items-stops-the-chain).
+  const feeders = Object.entries(wf.connections)
+    .filter(([, spec]) => spec.main.flat().some((c) => c.node === "SJ-3 Tick Outcome"))
+    .map(([src]) => src);
+  assert.deepEqual(feeders, ["SJ-3 Dispatch Gate"],
+    "the tick outcome's ONLY feeder must be the Dispatch Gate");
+  // The named-outcome vocabulary is part of the node's contract; comments are part of
+  // jsCode (the same convention the drain gate's D-06 negative-grep relies on).
+  for (const outcomeName of ["gate_closed", "capped_partial", "dispatched"]) {
+    assert.ok(outcome.parameters.jsCode.includes(outcomeName),
+      `the tick outcome node's jsCode must carry the "${outcomeName}" outcome string`);
+  }
+  assert.match(outcome.parameters.jsCode, /sj3_tick/,
+    "the node reads the gate's sj3_tick summary");
+});
+
 test("wiring: SJ-3 Drain Clear Flag's patch is exactly the two baked literal pairs (DRAIN-02)", () => {
   const wf = loadWorkflow();
   const clear = findNode(wf, "SJ-3 Drain Clear Flag");

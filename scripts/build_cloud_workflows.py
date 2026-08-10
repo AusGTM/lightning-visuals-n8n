@@ -5532,6 +5532,46 @@ return annotated.map((row) => ({ json: row }));
 )
 
 
+# Phase 44 Plan 02 (GATE-02, D-13/D-14) — the one node that runs on a fully gate-closed
+# tick. It is fed DIRECTLY from SJ-3 Dispatch Gate (a third consumer of the gate's single
+# output) and must never sit downstream of any branch whose item count can reach zero:
+# a zero-item feed makes a node not run at all (the zero-items-stops-the-chain behaviour
+# established live at execution 22), which is exactly the invisibility this node exists
+# to solve. On a fully gate-closed tick, Build Dispatch Event returns [] and the dispatch
+# chain never runs — GATE-01's cost bound — but THIS node still receives the annotated
+# rows and records what happened.
+ENRICH_SJ3_TICK_OUTCOME = r"""// SJ-3 Tick Outcome — reads the sj3_tick summary the gate
+// stamped on every row and emits ONE item carrying the named outcome plus the counts:
+// `gate_closed` when permitted is zero and found is non-zero, `capped_partial` when
+// deferred is non-zero, `dispatched` otherwise (CAP-02: a capped tick says found vs
+// dispatched, never silent truncation).
+//
+// "Gate closed" vs "found nothing to do" (GATE-02): a tick where the search matched
+// nothing produces no items at all through SJ-3 Extract Rows, so the gate and this node
+// do not run — the absence of this node's output IS the distinguishing signal between
+// the two.
+//
+// D-14: quiet and recorded, never loud. Disarmed is the normal resting state, so a tick
+// declining 61 records while disarmed is correct behaviour, not an incident — this node
+// must not throw, must not set an error status, must not emit a warning. Phase 45's
+// burn-rate alarm is the thing that should be loud.
+//
+// D-13: this is one of the two observation points and the EPHEMERAL one — n8n prunes
+// execution history at ~2,500 rows; the durable evidence is the drained records' own
+// lv_enrichment_status.
+const t = ($input.first().json || {}).sj3_tick || {};
+return [{ json: {
+  sj3_tick_outcome: t.outcome || "unknown",
+  found: t.found ?? null,
+  permitted: t.permitted ?? null,
+  dispatched: t.dispatched ?? null,
+  declined: t.declined ?? null,
+  deferred: t.deferred ?? null,
+  cap: t.cap ?? null,
+} }];
+"""
+
+
 def _sj3_drain_gate_js() -> str:
     """Phase 44 Plan 01 (DRAIN-01/D-05/D-06) — the drain branch's own authority check.
     Deliberately NOT routed through _write_gate_js/splice_write_gates: both hardcode the
@@ -5983,14 +6023,20 @@ def build_scheduled_maintenance_cloud():
         # literals in the built JSON (DRAIN-02 is structural, not a runtime promise).
         extra_properties=(("lv_enrichment_status", "skipped"),))
     nodes.append(sj3_drain_write)
+    # Plan 02 (GATE-02): the tick outcome hangs off the gate's OWN output — never off a
+    # filtered branch whose item count can reach zero (see ENRICH_SJ3_TICK_OUTCOME).
+    nodes.append(code_node("SJ-3 Tick Outcome", ENRICH_SJ3_TICK_OUTCOME, x - 220, y - 150))
 
     conns.update(chain([sj3_trigger["name"], sj3_search["name"], "SJ-3 Extract Rows",
                         "SJ-3 Dispatch Gate"]))
-    # Fan-out, not a chain: BOTH terminals consume the gate's single annotated output —
-    # the permitted path filters on sj3_dispatch, the declined path on sj3_drain.
+    # Fan-out, not a chain: all THREE consumers read the gate's single annotated output —
+    # the permitted path filters on sj3_dispatch, the declined path on sj3_drain, and the
+    # tick outcome reads the sj3_tick summary (the only node that runs on a fully
+    # gate-closed tick — GATE-02).
     conns["SJ-3 Dispatch Gate"] = {"main": [[
         {"node": "SJ-3 Build Dispatch Event", "type": "main", "index": 0},
         {"node": "SJ-3 Drain Gate", "type": "main", "index": 0},
+        {"node": "SJ-3 Tick Outcome", "type": "main", "index": 0},
     ]]}
     conns.update(chain(["SJ-3 Build Dispatch Event", sj3_dispatch["name"]]))
     conns.update(chain(["SJ-3 Drain Gate", sj3_drain_write["name"]]))

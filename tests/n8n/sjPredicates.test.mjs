@@ -92,8 +92,10 @@ test("SJ-3: Extract Rows -> Dispatch Gate, which fans out to Build Dispatch Even
   assert.deepEqual(extractOut, ["SJ-3 Dispatch Gate"],
     "Extract Rows must feed the Dispatch Gate, nothing else (GATE-01: no bypass to dispatch)");
   const gateOut = wf.connections["SJ-3 Dispatch Gate"].main[0].map((c) => c.node).sort();
-  assert.deepEqual(gateOut, ["SJ-3 Build Dispatch Event", "SJ-3 Drain Gate"],
-    "the gate's single output fans out to exactly the two terminals");
+  // Phase 44 Plan 02 (GATE-02): SJ-3 Tick Outcome is the third consumer of the gate's
+  // single output — the one node that runs on a fully gate-closed tick.
+  assert.deepEqual(gateOut, ["SJ-3 Build Dispatch Event", "SJ-3 Drain Gate", "SJ-3 Tick Outcome"],
+    "the gate's single output fans out to exactly the three consumers");
   const buildOut = wf.connections["SJ-3 Build Dispatch Event"].main[0].map((c) => c.node);
   assert.deepEqual(buildOut, ["SJ-3 Dispatch To Enrichment"]);
   const drainOut = wf.connections["SJ-3 Drain Gate"].main[0].map((c) => c.node);
