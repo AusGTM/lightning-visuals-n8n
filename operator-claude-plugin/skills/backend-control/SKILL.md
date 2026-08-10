@@ -56,6 +56,25 @@ carries at least three worked examples — offer them as-is. A misread schedule 
 changes how often the backend spends provider credits, which is why guessing is the one
 thing this surface never does.
 
+**A cadence proposal can also come back as a budget refusal.** Before proposing a
+schedule change, the plan step adds up what the WHOLE schedule would cost per month —
+every scheduled job in the workflow, not just the one being changed — and refuses if that
+total busts the configured budget share. That refusal carries the arithmetic (the
+requested job's own monthly cost, the whole schedule's monthly cost, the ceiling, and the
+plan allowance): show the operator those numbers verbatim, exactly as you would any other
+refusal.
+
+The refusal also names one exact phrase — `"override the budget floor"` — that lets that
+one change through anyway, for that one change only. **Never volunteer the override
+before the refusal has been shown.** Showing the numbers first and offering the escape
+hatch only after is the whole point of the gate; a skill that leads with the override
+defeats it. If the operator then asks to go ahead anyway, pass their exact words back as
+the request's `budget_floor_override_phrase` field and re-plan — the resulting proposal's
+`consequence` restates the arithmetic plus a sentence about the deployed build's per-tick
+dispatch cap not moving with a runtime-only cadence change; read that back in full before
+asking for confirmation, same as any other proposal. The override does not persist: a
+later cadence change, even in the same conversation, needs its own explicit override.
+
 **Starting a run** — `control_actions.start_lane(lane, config, armed=..., payload=...)`.
 It delegates to the lane's own dispatch path with its preview, cost guard, and arming
 gate fully intact — this skill adds no shortcut around them. A lane whose dispatcher

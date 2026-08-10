@@ -105,10 +105,23 @@ construction — refused before any change is possible, not caught after.
 **Budget note:** every schedule fire costs one n8n execution against a **2,500/month plan**.
 The shipped cadences (daily/weekly/monthly, ~95 executions/month idle) are set against that
 budget — speeding a job up multiplies its cost. The *deployed build* refuses to bake a
-cadence that fast, but a schedule change made here applies at runtime without a rebuild —
-the plugin reads the consequence back to you, and nothing else stands between a too-fast
-cadence and the budget. Treat anything faster than daily as an admin conversation, and ask
-Claude to lay out the arithmetic first.
+cadence that fast, but a schedule change made here applies at runtime without a rebuild.
+
+That runtime path has its own budget floor. Before showing you a cadence proposal, the
+plugin adds up what the **whole schedule** — every scheduled job in the workflow, not just
+the one you're changing — would cost per month, and refuses the change if that total busts
+a configured share of the plan allowance (`n8n_monthly_execution_allowance`,
+`n8n_schedule_floor_max_share`), stating the requested cost, the whole-schedule cost, the
+ceiling and the allowance before anything else. You can let a refused change through
+anyway, for that one change only, by saying the exact phrase the refusal gives you — the
+override never persists to a later change or a later session, and each time you say it the
+consequence is restated in full, including that the deployed build's per-tick dispatch cap
+was derived from the *previous* cadence and does not move with a runtime-only change.
+
+**Boundary:** this floor guards the plugin's own cadence action only. A trigger re-timed
+directly in the n8n editor bypasses it entirely — that path is what the unattended sweep's
+burn-rate alarm backstops instead, by watching the actual execution rate rather than a
+schedule's declared interval.
 
 ## Working the review queue
 
@@ -168,5 +181,5 @@ that was never installed, or that has stopped firing, produces nothing at all �
 | Provider credits exhausted | Buying credits is a commercial action |
 | The unattended sweep never notifies | The schedule is installed on your machine by an admin |
 | You want live writes enabled for a batch send | The one-shot armed send only works in a shell where an admin has set the arming switch (`ALLOW_N8N_ARM`) |
-| You want something faster than daily (n8n execution budget) | Plan size vs cadence is an admin/commercial decision |
+| You want something faster than daily and the budget floor refuses it | The refusal names the exact one-time override phrase; raising the plan's execution allowance itself is a commercial decision an admin owns |
 | Review approvals refuse with "submit not enabled" | `ALLOW_REVIEW_SUBMIT` is an environment variable only an administrator sets; previewing and rejecting still work without it |
