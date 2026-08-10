@@ -165,6 +165,38 @@ test("sj3Gate cap: an invalid cap fails CLOSED (behaves as 0, reported as the ef
   assert.equal(t.outcome, "capped_partial");
 });
 
+// --- (1c) Plan 02 GATE-03: a legitimately armed window loses nothing ---------------------
+
+test("sj3Gate GATE-03: permitted rows at/under the cap ALL dispatch, in input order, no field mutated or dropped", () => {
+  // Declined rows interleaved BETWEEN permitted ones on purpose: a filter that quietly
+  // re-sorts to group dispositions must fail this. The gate is defence in depth (D-03) —
+  // it must not swallow or reorder a single dispatch inside an armed window.
+  const rows = [
+    { hs_object_id: "1", domain: "a.example", lv_enrichment_requested: "true", name: "A" },
+    { hs_object_id: "2", domain: "b.example", lv_enrichment_requested: "true", name: "B" },
+    { hs_object_id: "3", domain: "c.example", lv_enrichment_requested: "true", name: "C" },
+    { hs_object_id: "4", domain: "d.example", lv_enrichment_requested: "true", name: "D" },
+    { hs_object_id: "5", domain: "e.example", lv_enrichment_requested: "true", name: "E" },
+  ];
+  const permitted = new Set(["1", "3", "5"]);
+  const out = sj3Gate(rows, { allows: (r) => permitted.has(r.hs_object_id), cap: 3 });
+  // overall stream order is input order — nothing reordered
+  assert.deepEqual(out.map((r) => r.hs_object_id), ["1", "2", "3", "4", "5"]);
+  // every permitted row dispatches (3 permitted, cap 3 — at the cap, none deferred)
+  assert.deepEqual(out.filter((r) => r.sj3_dispatch).map((r) => r.hs_object_id), ["1", "3", "5"],
+    "every permitted row dispatches, in input order — nothing swallowed");
+  // no field of the original row mutated or dropped
+  for (const [i, row] of out.entries()) {
+    const { sj3_dispatch, sj3_drain, sj3_tick, ...rest } = row;
+    assert.deepEqual(rest, rows[i], "original payload byte-identical");
+  }
+  const t = assertTickInvariants(out);
+  assert.deepEqual(t, {
+    found: 5, permitted: 3, dispatched: 3, declined: 2, deferred: 0,
+    cap: 3, outcome: "dispatched",
+  });
+});
+
 // --- (2) workflow wiring ----------------------------------------------------------------
 
 const WF_PATH = path.join(ROOT, "n8n/wf_scheduled_maintenance_cloud.json");
