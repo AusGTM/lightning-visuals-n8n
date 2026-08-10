@@ -297,3 +297,112 @@ def test_driving_run_sweep_twice_over_identical_inputs_produces_identical_notice
     notices_b = sweep_entry.run_sweep(SWEEP_CONFIG, get_transport=get_b,
                                       post_transport=_post_ok, now=NOW)
     assert notices_a == notices_b
+
+
+# --- Task 3: LOOK-01 — the window reaches the pre-existing conditions, and workflows
+# get named --------------------------------------------------------------------------
+
+_LOOK01_WORKFLOW_ID = "wf-look01"
+_LOOK01_WORKFLOW_NAME = "LV Enrichment (Cloud template)"
+
+
+def _execution_item(execution_id, *, status, started_ago_hours, stopped_ago_minutes=None,
+                    workflow_id=_LOOK01_WORKFLOW_ID, workflow_name=_LOOK01_WORKFLOW_NAME):
+    """One raw executions-collection item, `started_ago_hours` before NOW. Mirrors
+    conftest's own `_execution` helper but parameterised in hours (LOOK-01's fixtures
+    need a 30-hour-old start, well past conftest's minutes-scale fixtures)."""
+    started = NOW - timedelta(hours=started_ago_hours)
+    item = {
+        "id": execution_id,
+        "workflowId": workflow_id,
+        "status": status,
+        "startedAt": _iso(started),
+        "finished": status not in ("running", "new", "waiting"),
+    }
+    if workflow_name is not None:
+        item["workflowData"] = {"name": workflow_name}
+    if stopped_ago_minutes is not None:
+        item["stoppedAt"] = _iso(NOW - timedelta(minutes=stopped_ago_minutes))
+    return item
+
+
+def test_a_terminal_failure_that_ended_outside_the_window_ages_out(stub_get_transport_factory):
+    """RB-8: a failure whose cause was fixed hours ago must stop being reported."""
+    stale = _execution_item("e-stale", status="error", started_ago_hours=30.1,
+                            stopped_ago_minutes=30 * 60)
+    get = stub_get_transport_factory([{"data": [stale]}, {"data": []}])
+    gathered = sweep_read.gather(SWEEP_CONFIG, get_transport=get, post_transport=_post_ok,
+                                 now=NOW)
+    assert sweep_conditions.check_failed_run(gathered["executions"]["summaries"]) == []
+
+
+def test_the_same_failure_with_a_recent_stop_time_still_fires(stub_get_transport_factory):
+    """Same 30-hour-old start, but it ENDED 20 minutes ago — still fires."""
+    recent_stop = _execution_item("e-recent-stop", status="error", started_ago_hours=30.0,
+                                  stopped_ago_minutes=20)
+    get = stub_get_transport_factory([{"data": [recent_stop]}, {"data": []}])
+    gathered = sweep_read.gather(SWEEP_CONFIG, get_transport=get, post_transport=_post_ok,
+                                 now=NOW)
+    fired = sweep_conditions.check_failed_run(gathered["executions"]["summaries"])
+    assert len(fired) == 1
+    assert fired[0]["execution_id"] == "e-recent-stop"
+
+
+def test_an_in_flight_run_started_outside_the_window_is_retained_and_fires_stuck(
+        stub_get_transport_factory):
+    """The window must not blind the sweep to its own headline case: an in-flight run
+    is current state, never age-filtered out of `items`."""
+    old_running = _execution_item("e-old-running", status="running", started_ago_hours=30.0)
+    get = stub_get_transport_factory([{"data": [old_running]}, {"data": []}])
+    gathered = sweep_read.gather(SWEEP_CONFIG, get_transport=get, post_transport=_post_ok,
+                                 now=NOW)
+    summaries = gathered["executions"]["summaries"]
+    assert any(s["execution_id"] == "e-old-running" for s in summaries)
+    fired = sweep_conditions.check_stuck(summaries)
+    assert any(c["execution_id"] == "e-old-running" and c["condition"] == sweep_conditions.STUCK
+              for c in fired)
+
+
+def test_a_workflow_name_absent_from_the_raw_item_is_backfilled_from_list_workflows(
+        stub_get_transport_factory):
+    no_name = _execution_item("e-unnamed", status="error", started_ago_hours=0.5,
+                              stopped_ago_minutes=10, workflow_name=None,
+                              workflow_id="wf-backfill")
+    workflows_payload = [{"id": "wf-backfill", "name": "Backfilled Workflow Name", "nodes": []}]
+    get = stub_get_transport_factory([{"data": [no_name]}, {"data": workflows_payload}])
+    gathered = sweep_read.gather(SWEEP_CONFIG, get_transport=get, post_transport=_post_ok,
+                                 now=NOW)
+    fired = sweep_conditions.check_failed_run(gathered["executions"]["summaries"])
+    assert len(fired) == 1
+    assert "Backfilled Workflow Name" in fired[0]["reason"]
+
+
+def test_list_workflows_returning_none_backfills_nothing_but_does_not_crash(
+        stub_get_transport_factory):
+    no_name = _execution_item("e-unnamed-2", status="error", started_ago_hours=0.5,
+                              stopped_ago_minutes=10, workflow_name=None,
+                              workflow_id="wf-unreadable")
+    # Only ONE payload: the executions call. The workflows GET falls through to the
+    # stub's default ({}), which n8n_read.list_workflows reads as unreadable (None).
+    get = stub_get_transport_factory([{"data": [no_name]}])
+    gathered = sweep_read.gather(SWEEP_CONFIG, get_transport=get, post_transport=_post_ok,
+                                 now=NOW)
+    assert gathered["workflows"]["available"] is False
+    fired = sweep_conditions.check_failed_run(gathered["executions"]["summaries"])
+    assert len(fired) == 1
+    assert "an unnamed workflow" in fired[0]["reason"]
+
+
+def test_maintenance_execution_still_resolves_after_the_backfill(stub_get_transport_factory):
+    maintenance = _execution_item("e-maint", status="success", started_ago_hours=0.2,
+                                  stopped_ago_minutes=5, workflow_id="wf-maintenance",
+                                  workflow_name=sweep_read.MAINTENANCE_WORKFLOW_NAME)
+    maintenance["data"] = {"resultData": {"runData": {}}}
+    get = stub_get_transport_factory([
+        {"data": [maintenance]},
+        {"data": []},
+        maintenance,  # the gated get_execution response for the maintenance run
+    ])
+    gathered = sweep_read.gather(SWEEP_CONFIG, get_transport=get, post_transport=_post_ok,
+                                 now=NOW)
+    assert gathered["maintenance_errors"]["available"] is True

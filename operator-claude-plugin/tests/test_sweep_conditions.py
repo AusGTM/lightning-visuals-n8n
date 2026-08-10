@@ -149,15 +149,20 @@ def _gather(executions, sweep_now, stub_get_transport_factory, workflows=None,
            post=_post_404):
     """Drives the real sweep_read.gather wiring over a fixture's raw execution list, so
     Task 2's conditions are proven against what gather ACTUALLY produces (workflow_id,
-    the maintenance workflow's harvested run data) rather than a hand-built stand-in."""
-    payloads = [{"data": executions}]
+    the maintenance workflow's harvested run data) rather than a hand-built stand-in.
+
+    Payload order mirrors gather's own GET call order (Phase 45 Task 3 moved
+    list_workflows to before the summary loop, but still after the executions read):
+    executions, then workflows (always), then the maintenance execution (gated, only
+    when a maintenance-workflow item is present).
+    """
+    payloads = [{"data": executions}, {"data": workflows or []}]
     maintenance_item = next(
         (e for e in executions
          if (e.get("workflowData") or {}).get("name") == sweep_read.MAINTENANCE_WORKFLOW_NAME),
         None)
     if maintenance_item is not None:
         payloads.append(maintenance_item)  # the extra gated get_execution response
-    payloads.append({"data": workflows or []})
     get = stub_get_transport_factory(payloads)
     return sweep_read.gather(_SWEEP_CONFIG, get_transport=get, post_transport=post,
                              now=sweep_now)

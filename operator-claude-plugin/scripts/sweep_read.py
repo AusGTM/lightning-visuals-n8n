@@ -82,8 +82,24 @@ def gather(config, get_transport=requests.get, post_transport=None, now=None):
     the window through this ONE substitution. `executions["window"]` carries the read's own
     `window_hours`/`count_in_window`/`observed_span_hours`/`covers_full_window`/
     `truncated_by_page_cap`, which is what lets check_burn_rate state an honest span.
+
+    LOOK-01's secondary: `list_workflows` is fetched BEFORE the summary loop (though
+    still after the executions read itself — it has no dependency on THAT read's
+    result, only on running before the loop that consumes it) and backfills
+    `summary["workflow_name"]` for any raw item whose own `workflowData.name` is
+    absent — removing the unnamed-workflow fallback text wherever a name is actually
+    resolvable. An unreadable workflow list (`workflows_raw is None`) means no
+    backfill, never a crash and never a guessed name.
     """
     window = n8n_read.executions_in_window(config, transport=get_transport, now=now)
+
+    workflows_raw = n8n_read.list_workflows(config, transport=get_transport)
+    workflows = {"available": workflows_raw is not None, "items": workflows_raw or []}
+    workflow_id_to_name = {
+        wf["id"]: wf["name"]
+        for wf in workflows["items"]
+        if isinstance(wf, dict) and wf.get("id") is not None and wf.get("name")
+    }
 
     maintenance_execution_id = None
     if window is None:
@@ -93,11 +109,16 @@ def gather(config, get_transport=requests.get, post_transport=None, now=None):
         for item in window["items"]:
             summary = n8n_read.summarize_execution(item, config, now=now)
             workflow_data = item.get("workflowData") if isinstance(item, dict) else None
-            summary["workflow_name"] = (workflow_data or {}).get("name")
-            summary["workflow_id"] = item.get("workflowId") if isinstance(item, dict) else None
+            workflow_id = item.get("workflowId") if isinstance(item, dict) else None
+            # The raw item's own name wins when present; the backfill fills it in only
+            # where it was genuinely absent — never overriding a name the item carried.
+            summary["workflow_name"] = ((workflow_data or {}).get("name")
+                                        or workflow_id_to_name.get(workflow_id))
+            summary["workflow_id"] = workflow_id
             summaries.append(summary)
             # The window is newest-first, so the first maintenance-workflow item seen is
-            # its latest — the only one D-17 permits fetching runData for.
+            # its latest — the only one D-17 permits fetching runData for. The name must
+            # already be resolved (backfill included) for this comparison to see it.
             if (maintenance_execution_id is None
                     and summary["workflow_name"] == MAINTENANCE_WORKFLOW_NAME):
                 maintenance_execution_id = summary["execution_id"]
@@ -122,9 +143,6 @@ def gather(config, get_transport=requests.get, post_transport=None, now=None):
             maintenance_errors = dict(_MAINTENANCE_EXECUTION_UNREADABLE)
         else:
             maintenance_errors = execution_errors.harvest_errors(full_execution)
-
-    workflows_raw = n8n_read.list_workflows(config, transport=get_transport)
-    workflows = {"available": workflows_raw is not None, "items": workflows_raw or []}
 
     # post_transport=None lets fetch_backend_status's OWN default supply the verb, so
     # this module never names a non-GET transport (test_sweep_read_only.py holds it to
