@@ -146,9 +146,10 @@ score — the pattern-finder for things like "we lose Tier A deals on price." Re
 Not something you invoke — a scheduled check an **admin** installs on your machine (see
 `skills/backend-sweep/SWEEP-CRON-TEMPLATE.md`). Once installed, it watches the backend with
 no session open and raises a notification only when something needs a human: a failed run, a
-dead credential, an exhausted quota, a stuck lock, a review backlog past its threshold, or
+dead credential, an exhausted quota, a stuck lock, a review backlog past its threshold,
 live-write permission left switched on with nothing dispatching (the residue of a crash
-between arming and disarming).
+between arming and disarming), or the n8n execution rate running high enough to blow
+through the monthly plan.
 
 Silence means healthy — and a sweep that *runs* but cannot do its job is loud about it (a
 banner, a non-zero exit, a "not configured" notice). One silence it cannot break: a schedule
