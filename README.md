@@ -68,6 +68,7 @@ flowchart LR
 | Validation population | ✅ 66 web-researched companies landed and scored with provenance (A:7 B:18 C:17 D:24), zero provider spend |
 | Null-safe fit-score formula | ✅ 2026-08-08 — a bare sum blanked the whole score on any null term; now `coalesce()`-guarded, with `org_type_score` left bare as the "never scored" sentinel |
 | Execution-budget safety (SJ-3 gate + drain + cap) | ✅ **v0.8 Phase 44, live-proven 2026-08-10** — a gate-closed tick costs 1 execution (was 1+N), drains its own queue, and dispatch is capped from `config/execution_budget.yaml` (2,500/month plan) |
+| Burn-rate alarm + runtime cadence budget floor | ✅ **v0.8 Phase 45, sealed 2026-08-10** — the sweep samples a bounded recent execution rate and fires when it projects past the allowance, never claiming a monthly total n8n makes unknowable; a cadence change is refused when the whole schedule's floor would bust its configured share. **Ships inert** — installing the sweep schedule is an admin action, so this is unit-proven against synthetic history, not an observed scheduled fire |
 | Operator usage guide | ✅ [`operator-claude-plugin/USAGE.md`](operator-claude-plugin/USAGE.md) — task-oriented guide for the non-technical operator |
 
 **"Operator" means two different people in this repo.** Everything above is administered from this
@@ -75,7 +76,7 @@ repository by a technical operator/admin (scripts, deploys, armed windows, runbo
 v0.6 client targets a *non-technical* operator who works only in Claude and never opens n8n or a
 terminal; `docs/` runbooks and `scripts/` are admin surfaces, not theirs.
 
-Full test suite: `.venv/bin/python -m pytest -q` (Python oracle) + `node --test tests/n8n/*.test.mjs` (Code-node modules). Current: **2438 pytest / 656 node**.
+Full test suite: `.venv/bin/python -m pytest -q` (Python oracle) + `node --test tests/n8n/*.test.mjs` (Code-node modules). Current: **2487 pytest / 656 node**, plus **1332** in `operator-claude-plugin/tests/`.
 
 ## Repository layout
 

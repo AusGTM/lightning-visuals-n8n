@@ -7,6 +7,32 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **v0.8 Phase 45 — Burn-Rate Alarm, Cadence Budget Floor & Windowed Lookback (sealed
+  2026-08-10).** Phase 44 stopped the runaway; this phase reports one before a human reads the
+  billing page. A new `burn_rate_alarm` sweep condition samples the execution rate over a bounded
+  recent window (`n8n_read.executions_in_window`) and fires when that rate, projected over a
+  30-day month, would exhaust the allowance read from `config/execution_budget.yaml`. It never
+  states a monthly total: n8n prunes execution history (2,500 rows / ~10 hours observed) and
+  exposes no usage endpoint to an API key, so a total is unknowable by construction and reporting
+  one would be a fabrication. The projection is deliberately anchor-free (rate × 30 days) because
+  n8n exposes no billing-cycle day. A missing allowance produces a notice naming the missing key —
+  never silence, never a guessed default — and an alarm that cannot read execution history says
+  so, inheriting the sweep's rule that a check which failed to run must never look like a check
+  that found nothing wrong. The sweep's lookback is now bounded by time rather than a fixed
+  100-row page, so a failure whose cause was fixed ages out while an in-flight run is never aged
+  out. Separately, a runtime cadence change is refused when the **whole** schedule's monthly
+  execution floor would bust its configured share of the allowance — stating the arithmetic before
+  the refusal, with a single-shot override. `tests/test_execution_budget_drift.py` pins the
+  plugin's allowance and floor share to `config/execution_budget.yaml` so the two cannot drift.
+  Post-execution code review caught a false-positive class and it was fixed before sealing: an
+  unanchored sub-hour sample (retained history holding nothing older than the window — first day
+  after deploy, a history rotation, a fresh instance) was extrapolated into a false alarm whose
+  notice also blamed n8n pruning that never happened; such a sample is now silent, while a
+  page-cap-truncated read still fires so a genuinely fast runaway is not silenced. **Ships
+  inert** — no cron/launchd schedule is installed (an admin action, an accepted limit), so the
+  alarm is proven by unit tests against synthetic execution history rather than an observed
+  scheduled fire. Plugin 0.13.0. 6/6 requirements closed (ALARM-01..04, LOOK-01, FLOOR-01);
+  26/26 must-haves verified; suites 2487 pytest / 656 node / 1332 plugin.
 - **v0.8 Phase 44 — SJ-3 Dispatch Gate, Drain & Cap (live-proven 2026-08-10).** After the
   2026-08-09 execution runaway (61 stuck `lv_enrichment_requested` flags × a 15-min poller =
   253 executions/hour, ~73x the 2,500/month n8n plan, spent on dispatches that could never
