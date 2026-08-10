@@ -81,6 +81,14 @@ def fake_config():
         "webhook_secret": "fake-secret-for-tests-only",
         "n8n_api_key": "fake-n8n-api-key-for-tests-only",
         "column_mapping_path": None,
+        # Phase 45-02 (FLOOR-01): present so `n8n_cadence.set_cadence`'s mandatory budget
+        # floor check does not refuse every pre-existing cadence test for a missing config
+        # key. `share=1.0` is deliberately permissive (never the real 0.25 mirrored from
+        # config/execution_budget.yaml) so these plumbing tests keep their original
+        # semantics — the floor's OWN refusal arithmetic is exercised only by
+        # test_cadence_budget_floor.py's dedicated, strict configs.
+        "n8n_monthly_execution_allowance": 2500,
+        "n8n_schedule_floor_max_share": 1.0,
     }
 
 

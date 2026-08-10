@@ -293,6 +293,213 @@ def _named_weekday(text):
 
 
 # ---------------------------------------------------------------------------------------
+# Phase 45 Plan 02 (FLOOR-01, D-09/D-10) — the runtime cadence budget floor. The one path
+# that changes how often the backend spends money without ever passing a build; the
+# 2026-08-09 runaway was this exact budget domain.
+# ---------------------------------------------------------------------------------------
+
+# Every value here is DERIVED from n8n_read.DAYS_PER_MONTH / n8n_read.HOURS_PER_MONTH
+# (Phase 45-01's one home for the 30-day month) rather than written as a fresh literal, so
+# this table and tests/test_execution_budget.py's build-time TICKS_PER_MONTH cannot drift
+# about the length of a month. Deliberate refinement over the build-time table: a `weeks`
+# entry carrying `triggerOnWeekdays` fires once per listed weekday, so this runtime floor
+# multiplies the weekly base by the number of listed weekdays (schedule_month_cost/
+# interval_month_cost below) — the build-time guard has no need of this because no
+# committed trigger uses weekdays, and undercounting a weekday schedule by five times at
+# runtime would be the kind of silent gap this floor exists to close.
+#
+# `cronExpression` has no entry here and must never gain one: a workflow hand-edited in
+# the n8n UI can carry one, and its cost is not computable by this module (T-45-09).
+TICKS_PER_MONTH = {
+    "seconds": n8n_read.HOURS_PER_MONTH * 3600.0,
+    "minutes": n8n_read.HOURS_PER_MONTH * 60.0,
+    "hours": n8n_read.HOURS_PER_MONTH,
+    "days": n8n_read.DAYS_PER_MONTH,
+    "weeks": n8n_read.DAYS_PER_MONTH / 7.0,
+    "months": 1.0,
+}
+
+# The examples offered alongside a budget-floor refusal must themselves be affordable —
+# recommending "every 15 minutes" or "hourly" as the way forward out of a refusal caused
+# by exactly that class of request would be a refusal that recommends the thing it just
+# refused. Conservatively cheap regardless of a real deployment's configured share.
+_BUDGET_SAFE_EXAMPLES = ["every day at 6am", "weekly", "monthly"]
+
+# D-10 (an explicit operator decision, made against the no-override recommendation): this
+# is the FIRST budget gate in this repo that yields to conversation. The narrowness — one
+# exact phrase, matched only here, a plain boolean parameter on one call, never stored,
+# never a config key, never a shared helper — is the condition of its existence. Do not
+# generalise this pattern to another gate (45-CONTEXT.md D-10).
+BUDGET_FLOOR_OVERRIDE_PHRASE = "override the budget floor"
+
+
+def interval_month_cost(interval):
+    """The whole-month execution cost of one interval array — or `None` when any entry
+    uses a field this plugin cannot cost (including `cronExpression` and anything
+    unrecognised), so an uncomputable schedule is never mistaken for a cheap one
+    (T-45-09)."""
+    if not isinstance(interval, list) or not interval:
+        return None
+
+    total = 0.0
+    for entry in interval:
+        if not isinstance(entry, dict):
+            return None
+        field = entry.get("field")
+        if field not in TICKS_PER_MONTH:
+            return None
+
+        companion = SUPPORTED_FIELDS[field]
+        try:
+            every = float(entry.get(companion, 1) or 1)
+        except (TypeError, ValueError):
+            every = 1.0
+        if every < 1:
+            every = 1.0
+
+        cost = TICKS_PER_MONTH[field] / every
+        if field == "weeks":
+            weekdays = entry.get("triggerOnWeekdays")
+            if weekdays:
+                cost *= len(weekdays)
+        total += cost
+    return total
+
+
+def schedule_month_cost(workflow_items, workflow_id, node_name, interval):
+    """The WHOLE schedule's monthly execution cost across every workflow in
+    `workflow_items` (as `n8n_read.list_workflows` returns them), with the one node
+    identified by `workflow_id` + `node_name` substituted for the requested `interval` and
+    every other schedule trigger counted at its own committed interval.
+
+    A schedule trigger node carrying `disabled: true` contributes nothing — a switched-off
+    job spends nothing, and counting it would refuse a change the backend would never
+    actually bill for. `None` means the total is UNKNOWN: an unreadable `workflow_items`,
+    an uncomputable node interval, or a target node this list does not actually contain
+    (fail closed — a list that doesn't contain the workflow being edited is a list that
+    could not really be read for this purpose, T-45-08).
+    """
+    if not isinstance(workflow_items, list):
+        return None
+
+    total = 0.0
+    found_target = False
+    for workflow in workflow_items:
+        if not isinstance(workflow, dict):
+            return None
+        workflow_id_here = workflow.get("id")
+        for node in (workflow.get("nodes") or []):
+            if not isinstance(node, dict):
+                continue
+            if not str(node.get("type", "")).endswith("scheduleTrigger"):
+                continue
+
+            is_target = (str(workflow_id_here) == str(workflow_id)
+                        and node.get("name") == node_name)
+            if is_target:
+                found_target = True
+            if node.get("disabled"):
+                continue
+
+            node_interval = interval if is_target else (
+                (node.get("parameters") or {}).get("rule") or {}).get("interval")
+            cost = interval_month_cost(node_interval)
+            if cost is None:
+                return None
+            total += cost
+
+    if not found_target:
+        return None
+    return total
+
+
+def _read_positive_float(config, key):
+    try:
+        value = float((config or {}).get(key))
+    except (TypeError, ValueError):
+        return None
+    return value if value > 0 else None
+
+
+def _fetch_workflow_items(config, transport):
+    """The rest of the schedule, read via the SAME transport `set_cadence` was given.
+    `None` means unreadable. `n8n_read.list_workflows` expects the GET callable, while
+    this module's own functions thread the requests MODULE as `transport` — so this passes
+    `transport.get`, not `transport` itself."""
+    return n8n_read.list_workflows(config, transport=transport.get)
+
+
+def check_budget_floor(workflow_id, node_name, interval, config, workflow_items,
+                       override=False):
+    """Refuse a cadence change whose WHOLE-SCHEDULE monthly cost busts the configured
+    share of the plan allowance (D-09). Every enabled schedule trigger across every
+    workflow in `workflow_items` counts, not just the one being changed — five triggers
+    each individually affordable can still sum past the ceiling.
+
+    Order: a missing/unusable config key refuses first (never overridable — without the
+    arithmetic there is nothing to override); an unreadable workflow list or an
+    uncomputable schedule refuses second (also never overridable — D-10's override
+    presupposes arithmetic on the table, and overriding an unknown number restates
+    nothing); an affordable request returns quietly; an over-budget request refuses unless
+    `override` is True, in which case it returns the arithmetic with `overridden: True` —
+    the caller (Task 2) owns what is said at that point.
+
+    Returns a dict on every non-raising path: `requested_month_cost`,
+    `schedule_month_cost`, `allowance`, `share`, `ceiling`, `within`, `overridden`.
+    """
+    allowance = _read_positive_float(config, "n8n_monthly_execution_allowance")
+    if allowance is None:
+        raise CadenceRefused(
+            "the config key 'n8n_monthly_execution_allowance' is missing, blank or not a "
+            "positive number, and without it I cannot judge what this change would cost "
+            "against the plan — so the change is refused rather than guessed at. Ask your "
+            "admin to set it.", _BUDGET_SAFE_EXAMPLES)
+
+    share = _read_positive_float(config, "n8n_schedule_floor_max_share")
+    if share is None:
+        raise CadenceRefused(
+            "the config key 'n8n_schedule_floor_max_share' is missing, blank or not a "
+            "positive number, and without it I cannot judge what share of the plan this "
+            "change may use — so the change is refused rather than guessed at. Ask your "
+            "admin to set it.", _BUDGET_SAFE_EXAMPLES)
+
+    requested_cost = interval_month_cost(interval)
+    total = schedule_month_cost(workflow_items, workflow_id, node_name, interval)
+
+    if workflow_items is None or total is None:
+        raise CadenceRefused(
+            "the rest of this workflow's scheduled jobs could not be read (or one of "
+            "them uses a schedule this plugin cannot cost), so the total monthly cost of "
+            "this change is unknown — and an unknown cost is refused, not permitted.",
+            _BUDGET_SAFE_EXAMPLES)
+
+    ceiling = allowance * share
+    result = {
+        "requested_month_cost": requested_cost,
+        "schedule_month_cost": total,
+        "allowance": allowance,
+        "share": share,
+        "ceiling": ceiling,
+        "within": total <= ceiling,
+        "overridden": False,
+    }
+    if result["within"]:
+        return result
+
+    if not override:
+        raise CadenceRefused(
+            f"that schedule would run about {requested_cost or 0:.0f} times a month by "
+            f"itself, and the whole schedule together would then run about "
+            f"{total:.0f} times a month — over the {ceiling:.0f}-execution ceiling "
+            f"({share:g} of the {allowance:.0f}/month plan allowance). Pick a slower "
+            f"cadence, or say {BUDGET_FLOOR_OVERRIDE_PHRASE!r} to let this one change "
+            f"through anyway.", _BUDGET_SAFE_EXAMPLES)
+
+    result["overridden"] = True
+    return result
+
+
+# ---------------------------------------------------------------------------------------
 # Task 2 — per-job enable/disable, the ONE field D-25 widened the allowlist by
 # ---------------------------------------------------------------------------------------
 
@@ -436,8 +643,15 @@ def set_schedule_enabled(workflow_id, node_name, enabled, config, transport=None
     return result
 
 
-def set_cadence(workflow_id, node_name, interval, config, transport=None):
-    """Re-time ONE scheduled job, with the prior cadence quoted back in plain language."""
+def set_cadence(workflow_id, node_name, interval, config, transport=None,
+                budget_floor_override=False):
+    """Re-time ONE scheduled job, with the prior cadence quoted back in plain language.
+
+    Re-checks the budget floor (`check_budget_floor`) here, independently of any proposal
+    layer above it — a gate that lives only in `control_actions.plan_action` is a gate a
+    direct caller walks around (FLOOR-01). `budget_floor_override` defaults False, so a
+    caller that forgets the parameter gets the gate, not a bypass.
+    """
     import requests as _requests
     transport = transport if transport is not None else _requests
 
@@ -447,6 +661,10 @@ def set_cadence(workflow_id, node_name, interval, config, transport=None):
             f"({interval.reason})", interval.examples)
     if not isinstance(interval, list) or not interval:
         raise CadenceRefused("a schedule needs at least one interval entry.")
+
+    workflow_items = _fetch_workflow_items(config, transport)
+    check_budget_floor(workflow_id, node_name, interval, config, workflow_items,
+                       override=budget_floor_override)
 
     prior = {}
 

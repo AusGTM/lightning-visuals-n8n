@@ -249,11 +249,25 @@ def _retimed(interval):
     return after
 
 
+def _workflow_items_response():
+    """Phase 45-02: `set_cadence` now fetches the whole schedule for its budget-floor
+    check before `n8n_control.apply_mutation` touches anything — one extra GET, scripted
+    FIRST in every `set_cadence` transport sequence below. The list's `id` is set to
+    `WORKFLOW_ID` (not the committed artifact's own embedded id) so the floor's
+    workflow_id + node_name match finds this fixture's schedule triggers, mirroring how
+    `apply_mutation` is already called with `WORKFLOW_ID` as the URL-path id in these
+    tests."""
+    workflow = _maintenance()
+    workflow["id"] = WORKFLOW_ID
+    return {"data": [workflow]}
+
+
 def test_set_cadence_sends_a_body_whose_only_differing_node_is_the_named_trigger(
         fake_config, stub_module_transport_factory):
     target = [{"field": "hours", "hoursInterval": 1}]
     fetched = _maintenance()
-    transport = stub_module_transport_factory([fetched, {}, {}, {}, _retimed(target)])
+    transport = stub_module_transport_factory(
+        [_workflow_items_response(), fetched, {}, {}, {}, _retimed(target)])
 
     result = n8n_cadence.set_cadence(WORKFLOW_ID, "Review Trigger", target,
                                      fake_config, transport=transport)
@@ -270,7 +284,7 @@ def test_the_reversal_names_the_prior_cadence_in_plain_language(
         fake_config, stub_module_transport_factory):
     target = [{"field": "hours", "hoursInterval": 1}]
     transport = stub_module_transport_factory(
-        [_maintenance(), {}, {}, {}, _retimed(target)])
+        [_workflow_items_response(), _maintenance(), {}, {}, {}, _retimed(target)])
 
     result = n8n_cadence.set_cadence(WORKFLOW_ID, "Review Trigger", target,
                                      fake_config, transport=transport)
@@ -300,7 +314,8 @@ def test_a_refusal_object_is_never_accepted_as_an_interval(fake_config,
 def test_an_unchanged_readback_is_failed(fake_config, stub_module_transport_factory):
     target = [{"field": "hours", "hoursInterval": 1}]
     transport = stub_module_transport_factory(
-        [_maintenance(), {}, {}, {}, _maintenance()])      # read-back returns the OLD interval
+        [_workflow_items_response(), _maintenance(), {}, {}, {},
+         _maintenance()])      # read-back returns the OLD interval
 
     result = n8n_cadence.set_cadence(WORKFLOW_ID, "Review Trigger", target,
                                      fake_config, transport=transport)
