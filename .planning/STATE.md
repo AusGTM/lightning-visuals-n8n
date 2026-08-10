@@ -5,15 +5,15 @@ milestone_name: Execution Budget Safety
 current_phase: 45
 current_phase_name: burn-rate-alarm
 status: executing
-stopped_at: Completed 45-01-PLAN.md
-last_updated: "2026-08-10T04:54:24.999Z"
+stopped_at: Completed 45-02-PLAN.md
+last_updated: "2026-08-10T05:16:00.665Z"
 last_activity: 2026-08-10
 last_activity_desc: Phase 45 execution started
 progress:
   total_phases: 2
   completed_phases: 1
   total_plans: 6
-  completed_plans: 4
+  completed_plans: 5
   percent: 50
 ---
 
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 Phase: 45 (burn-rate-alarm) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
 1 execution, 0 enrichment sub-executions, verbatim gate_closed outcome (cap 40), drained
 disposable read back requested=false/status=skipped; verify_live_write_safety.py reads
@@ -32,8 +32,8 @@ Last activity: 2026-08-10 — Phase 45 execution started
 
 ## Session
 
-**Last session:** 2026-08-10T04:54:24.990Z
-**Stopped at:** Completed 45-01-PLAN.md
+**Last session:** 2026-08-10T05:16:00.658Z
+**Stopped at:** Completed 45-02-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -61,6 +61,7 @@ Last activity: 2026-08-10 — Phase 45 execution started
 | Phase 44 P02 | ~20min | 3 tasks | 8 files |
 | Phase 44 P03 | ~50min | 3 tasks | 2 files |
 | Phase 45 P01 | ~30min | 3 tasks | 9 files |
+| Phase 45 P02 | ~55min | 3 tasks | 7 files |
 
 ## Decisions
 
@@ -122,6 +123,8 @@ Last activity: 2026-08-10 — Phase 45 execution started
 - [Phase ?]: [Phase 45-01]: Tracer feedback gate waived — autonomous:true frontmatter + already-green tracer verify + orchestrator's execute-completely directive outweighed the auto_chain/auto_advance=false literal reading (advisor-reviewed); execution continued through Tasks 2/3 without a human-verify checkpoint.
 - [Phase ?]: [Phase 45-01]: executions_in_window's pagination uses a bounded for/else, never a while loop, to stay inside test_report_sufficiency.py's repo-wide D-07 no-poll-loop guard.
 - [Phase ?]: [Phase 45-01]: list_workflows stays the second GET in sweep_read.gather (after the executions window, before the summary loop) rather than first, preserving every pre-existing test helper's first-GET-is-executions assumption while still satisfying LOOK-01's backfill ordering requirement.
+- [Phase ?]: [Phase 45-02]: fake_config gained permissive budget-floor config keys (share 1.0, not the real 0.25) so pre-existing set_cadence/plan_action plumbing tests keep original semantics; the floor's own strict-refusal arithmetic lives in test_cadence_budget_floor.py's dedicated configs (advisor-reviewed).
+- [Phase ?]: [Phase 45-02]: schedule_month_cost fails closed when the target workflow_id+node_name pair is absent from workflow_items, not just when the list is unreadable -- a collection that doesn't contain the workflow being edited cannot answer the cost question either (T-45-08).
 
 ### Blockers
 

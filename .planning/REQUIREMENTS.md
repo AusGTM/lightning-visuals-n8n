@@ -84,7 +84,7 @@ page at 80%.
 
 ### Cadence Budget Floor — the front door the alarm backstops
 
-- [ ] **FLOOR-01**: A runtime cadence change is refused when the resulting schedule's monthly
+- [x] **FLOOR-01**: A runtime cadence change is refused when the resulting schedule's monthly
   execution floor would bust the configured share of the plan allowance — the same bound
   CAP-03 enforces at build time, applied to the path that never rebuilds. The refusal states the
   arithmetic (requested fires per month, the ceiling, the allowance) before anything else, and
@@ -143,7 +143,7 @@ page at 80%.
 | ALARM-03 | Phase 45 | Complete |
 | ALARM-04 | Phase 45 | Complete |
 | LOOK-01 | Phase 45 | Complete |
-| FLOOR-01 | Phase 45 | Pending |
+| FLOOR-01 | Phase 45 | Complete |
 
 Coverage: 15/15 v0.8 requirements mapped. 100% coverage, no orphans.
 
