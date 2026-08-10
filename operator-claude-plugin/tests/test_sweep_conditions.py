@@ -113,9 +113,17 @@ def test_evaluate_fires_quota_and_credential_conditions_from_a_gather(
 
 
 def test_evaluate_skips_backend_conditions_when_the_backend_is_unavailable():
+    """Phase 45: `check_burn_rate` runs unconditionally (ALARM-04), so an unavailable
+    executions read now fires its own `burn_rate_unreadable` condition rather than
+    silence — but no OTHER backend- or execution-derived condition fires alongside it,
+    which is this test's real assertion."""
     gathered = {"executions": {"available": False, "summaries": []},
-               "backend": {"available": False, "reason": "http_404", "data": None}}
-    assert sweep_conditions.evaluate(gathered) == []
+               "backend": {"available": False, "reason": "http_404", "data": None},
+               "execution_budget": {"key": "n8n_monthly_execution_allowance",
+                                    "allowance": 2500, "threshold_key": "x",
+                                    "threshold": None}}
+    fired = sweep_conditions.evaluate(gathered)
+    assert [c["condition"] for c in fired] == [sweep_conditions.BURN_RATE_UNREADABLE]
 
 
 # --- Task 2: failed-scheduled-run, review-backlog, swallowed-maintenance-failure,
@@ -125,6 +133,9 @@ _SWEEP_CONFIG = {
     "n8n_url": "https://fake-tenant.n8n.cloud",
     "n8n_api_key": "fake-key-for-tests",
     "webhook_secret": "fake-secret-for-tests",
+    # Configured (Phase 45) so these pre-existing fixtures stay quiet on the
+    # burn-rate condition rather than spuriously firing burn_rate_not_configured.
+    "n8n_monthly_execution_allowance": 2500,
 }
 
 

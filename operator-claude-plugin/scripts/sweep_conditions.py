@@ -396,6 +396,35 @@ def check_stuck_armed(workflows, executions_summaries):
     return fired
 
 
+def _parsed_burn_rate_threshold(execution_budget, default):
+    """Mirrors n8n_read.stuck_threshold_minutes exactly, including its rationale: a
+    status read must not fail because a config value was typed wrong. Configuration
+    first, the documented default on missing, blank, unparseable or non-positive."""
+    try:
+        value = float((execution_budget or {}).get("threshold"))
+    except (TypeError, ValueError):
+        return default
+    return value if value > 0 else default
+
+
+def _burn_rate_span_clause(window, window_hours):
+    """The span clause is honest about WHY it is short (D-01) — three cases, three
+    different sentences, so a reader never confuses a pruning-shrunk window with a
+    sweep-imposed read bound."""
+    observed = window.get("observed_span_hours") or 0.0
+    if window.get("covers_full_window"):
+        return f"the full {window_hours:g}-hour window"
+    if window.get("truncated_by_page_cap"):
+        return (
+            f"only the last {observed:.1f} hours — the sample stopped at this sweep's "
+            f"own execution read bound, not pruning, so the span is shorter than the "
+            f"{window_hours:g}-hour target")
+    return (
+        f"only the last {observed:.1f} hours because n8n has pruned older execution "
+        f"history — at a runaway rate the window itself shrinks, which is part of the "
+        f"symptom")
+
+
 def check_burn_rate(executions, execution_budget, threshold=DEFAULT_BURN_RATE_THRESHOLD):
     """Fires when the sampled n8n execution rate, projected over 30 days, would exceed
     `allowance x threshold` (ALARM-01, D-02 — anchor-free: n8n exposes no billing-cycle
@@ -404,46 +433,80 @@ def check_burn_rate(executions, execution_budget, threshold=DEFAULT_BURN_RATE_TH
     `executions` is `sweep_read.gather`'s widened `{"available", "summaries", "window"}`
     dict; `execution_budget` is its `{"key", "allowance", "threshold_key", "threshold"}`
     dict of RAW config values — parsing happens here, never upstream, so this stays a
-    pure function over already-fetched data (Task 1 scope: fire/no-fire only, over an
-    allowance and a window that both already parse; Task 2 adds the degraded branches —
-    allowance not configured, executions unreadable — this task deliberately omits).
+    pure function over already-fetched data.
 
-    The comparison is made on UNROUNDED floats; rounding happens only inside the
-    rendered reason string via format specifiers, so a projection a fraction over the
-    ceiling still fires (ALARM-01 precision).
+    Three explicit outcomes, in this precedence order (documented, not incidental):
+
+    1. Allowance not usable (absent, blank, non-numeric, or not strictly positive) ->
+       `BURN_RATE_NOT_CONFIGURED`, naming the exact config key, never a value (this
+       module inherits config_gate's names-only rule). With the allowance missing the
+       check cannot run at all, so naming the missing key is the one actionable fact —
+       adding "also could not read history" to it would be noise; the operator learns
+       that fact on the next sweep. `sweep_entry` already short-circuits to its own
+       `sweep_blind` notice when EVERY read failed, so this never double-reports that
+       case.
+    2. Executions unreadable (unavailable, or no window) -> `BURN_RATE_UNREADABLE`
+       (ALARM-04). Checked second, only once the allowance is known usable.
+    3. Otherwise, compute and compare. The comparison is made on UNROUNDED floats;
+       rounding happens only inside the rendered reason string via format specifiers,
+       so a projection a fraction over the ceiling still fires (ALARM-01 precision).
+
+    D-07: this condition deliberately RE-FIRES on every sweep while the burn persists —
+    the one condition where repetition is the discipline, since an active burn costs
+    money hourly. It is self-clearing: the rate is computed over a moving window, so it
+    drops when the burn stops. That is what distinguishes it from LOOK-01's stale-history
+    defect, where an already-fixed failure kept re-notifying about the past. No
+    suppression is added here.
     """
     executions = executions or {}
     execution_budget = execution_budget or {}
-    window = executions.get("window")
-    if not window:
-        return []
 
     try:
         allowance = float(execution_budget.get("allowance"))
     except (TypeError, ValueError):
-        return []
-    if allowance <= 0:
-        return []
+        allowance = None
+    if allowance is None or allowance <= 0:
+        key_name = execution_budget.get("key") or "n8n_monthly_execution_allowance"
+        return [{
+            "condition": BURN_RATE_NOT_CONFIGURED,
+            "reason": (
+                f"the sweep is not watching the n8n execution budget because {key_name} "
+                f"is not configured (missing, blank, or not a positive number) — set it "
+                f"following operator.local.example.json's shape to enable this check; "
+                f"every other check in this sweep still ran"),
+        }]
 
+    window = executions.get("window")
+    if not executions.get("available") or not window:
+        return [{
+            "condition": BURN_RATE_UNREADABLE,
+            "reason": (
+                "the execution history could not be read this sweep, so the burn rate "
+                "is unknown — unknown is not fine"),
+        }]
+
+    resolved_threshold = _parsed_burn_rate_threshold(execution_budget, threshold)
+    window_hours = window.get("window_hours") or n8n_read.DEFAULT_EXECUTION_WINDOW_HOURS
     count_in_window = window.get("count_in_window") or 0
     observed_span_hours = window.get("observed_span_hours") or n8n_read.MIN_OBSERVED_SPAN_HOURS
     rate_per_hour = count_in_window / observed_span_hours
     projected = rate_per_hour * n8n_read.HOURS_PER_MONTH
-    ceiling = allowance * threshold
+    ceiling = allowance * resolved_threshold
 
     if projected <= ceiling:
         return []
 
+    span_clause = _burn_rate_span_clause(window, window_hours)
+
     return [{
         "condition": BURN_RATE,
         "reason": (
-            f"n8n execution rate sampled at {rate_per_hour:.1f} per hour over the "
-            f"observed {observed_span_hours:.1f}-hour span, projecting to about "
-            f"{projected:.0f} executions over the next 30 days against the "
-            f"{allowance:.0f}-execution monthly allowance ({threshold:g}x ceiling "
-            f"{ceiling:.0f}) — this is a sampled rate, not a total for this month, "
-            f"because n8n prunes execution history and exposes no usage figure to an "
-            f"API key"),
+            f"n8n execution rate sampled at {rate_per_hour:.1f} per hour over "
+            f"{span_clause}, projecting to about {projected:.0f} executions over the "
+            f"next 30 days against the {allowance:.0f}-execution monthly allowance "
+            f"({resolved_threshold:g}x ceiling {ceiling:.0f}) — this is a sampled rate, "
+            f"not a total for this month, because n8n prunes execution history and "
+            f"exposes no usage figure to an API key"),
     }]
 
 

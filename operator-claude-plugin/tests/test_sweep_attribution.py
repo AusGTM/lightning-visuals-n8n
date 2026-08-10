@@ -13,6 +13,9 @@ SWEEP_CONFIG = {
     "n8n_url": "https://fake-tenant.n8n.cloud",
     "n8n_api_key": "fake-key-for-tests",
     "webhook_secret": "fake-secret-for-tests",
+    # Configured (Phase 45) so these pre-existing fixtures stay quiet on the
+    # burn-rate condition rather than spuriously firing burn_rate_not_configured.
+    "n8n_monthly_execution_allowance": 2500,
 }
 
 

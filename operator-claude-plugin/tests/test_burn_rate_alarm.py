@@ -88,7 +88,7 @@ def test_a_runaway_history_produces_exactly_one_burn_rate_notice(stub_get_transp
     assert notice["condition"] == sweep_conditions.BURN_RATE
     detail = notice["detail"]
     assert "per hour" in detail
-    assert "hour span" in detail
+    assert "hours" in detail
     assert "2500" in detail
     assert "not a total for this month" in detail
 
@@ -153,3 +153,147 @@ def test_recent_executions_and_its_page_limit_are_untouched():
     import n8n_read
     assert n8n_read.EXECUTIONS_PAGE_LIMIT == 100
     assert callable(n8n_read.recent_executions)
+
+
+# --- Task 2: the branches that must never be silent ---------------------------------------
+
+_RUNAWAY_WINDOW = {
+    "window_hours": 24.0, "count_in_window": 6000, "observed_span_hours": 4.0,
+    "covers_full_window": False, "truncated_by_page_cap": False,
+}
+_HEALTHY_WINDOW = {
+    "window_hours": 24.0, "count_in_window": 2, "observed_span_hours": 24.0,
+    "covers_full_window": True, "truncated_by_page_cap": False,
+}
+_BUDGET = {"key": "n8n_monthly_execution_allowance", "allowance": 2500,
+          "threshold_key": "burn_rate_alarm_threshold", "threshold": None}
+
+
+def test_missing_allowance_fires_not_configured_naming_the_key_and_stops_there():
+    fired = sweep_conditions.check_burn_rate(
+        {"available": True, "summaries": [], "window": _RUNAWAY_WINDOW},
+        {"key": "n8n_monthly_execution_allowance", "allowance": None,
+         "threshold_key": "burn_rate_alarm_threshold", "threshold": None})
+    assert len(fired) == 1
+    assert fired[0]["condition"] == sweep_conditions.BURN_RATE_NOT_CONFIGURED
+    assert "n8n_monthly_execution_allowance" in fired[0]["reason"]
+
+
+def test_missing_allowance_alongside_a_stuck_run_fires_both_via_evaluate(
+        stub_get_transport_factory):
+    """D-05: the rest of the sweep still runs."""
+    stuck = _synthetic_history(1, span_hours=0.01)
+    stuck[0]["status"] = "running"
+    stuck[0].pop("stoppedAt", None)
+    stuck[0]["startedAt"] = _iso(NOW - timedelta(minutes=45))
+    config = {k: v for k, v in SWEEP_CONFIG.items() if k != "n8n_monthly_execution_allowance"}
+
+    get = stub_get_transport_factory([{"data": stuck}])
+    gathered = sweep_read.gather(config, get_transport=get, post_transport=_post_ok, now=NOW)
+    fired = sweep_conditions.evaluate(gathered)
+    conditions = {c["condition"] for c in fired}
+    assert sweep_conditions.BURN_RATE_NOT_CONFIGURED in conditions
+    assert sweep_conditions.STUCK in conditions
+
+
+def test_allowance_present_but_executions_unreadable_fires_unreadable():
+    fired = sweep_conditions.check_burn_rate(
+        {"available": False, "summaries": [], "window": None}, _BUDGET)
+    assert len(fired) == 1
+    assert fired[0]["condition"] == sweep_conditions.BURN_RATE_UNREADABLE
+
+
+def test_projection_exactly_at_ceiling_does_not_fire_one_execution_more_does():
+    # allowance=2500, threshold=1.0 -> ceiling 2500/month = 2500/720 per hour.
+    # observed_span_hours=1.0 makes count_in_window == rate_per_hour numerically, so
+    # rate*720 == ceiling exactly when count_in_window == ceiling/720.
+    exact_count = 2500 / 720.0
+    at_ceiling = dict(_RUNAWAY_WINDOW, count_in_window=exact_count, observed_span_hours=1.0)
+    assert sweep_conditions.check_burn_rate(
+        {"available": True, "summaries": [], "window": at_ceiling}, _BUDGET) == []
+
+    over = dict(at_ceiling, count_in_window=exact_count + 0.4 / 720.0)
+    fired = sweep_conditions.check_burn_rate(
+        {"available": True, "summaries": [], "window": over}, _BUDGET)
+    assert len(fired) == 1
+    assert fired[0]["condition"] == sweep_conditions.BURN_RATE
+
+
+def test_threshold_of_2_raises_the_fire_point():
+    # allowance=2500 -> ceiling(1x)=2500/month, ceiling(2x)=5000/month. count=5 over a
+    # 1-hour span projects to 5*720=3600/month: over the 1x ceiling, under the 2x one.
+    window = dict(_RUNAWAY_WINDOW, count_in_window=5, observed_span_hours=1.0)
+    budget_1x = dict(_BUDGET, threshold=1.0)
+    budget_2x = dict(_BUDGET, threshold=2.0)
+    fired_1x = sweep_conditions.check_burn_rate(
+        {"available": True, "summaries": [], "window": window}, budget_1x)
+    fired_2x = sweep_conditions.check_burn_rate(
+        {"available": True, "summaries": [], "window": window}, budget_2x)
+    assert fired_1x and fired_1x[0]["condition"] == sweep_conditions.BURN_RATE
+    assert fired_2x == [], "doubling the threshold must raise the fire point"
+
+
+def test_a_blank_zero_negative_or_non_numeric_threshold_falls_back_to_default():
+    window = dict(_RUNAWAY_WINDOW, count_in_window=3000, observed_span_hours=1.0)
+    baseline = sweep_conditions.check_burn_rate(
+        {"available": True, "summaries": [], "window": window},
+        dict(_BUDGET, threshold=None))
+    for bad in ("", 0, -1, "abc"):
+        result = sweep_conditions.check_burn_rate(
+            {"available": True, "summaries": [], "window": window},
+            dict(_BUDGET, threshold=bad))
+        assert bool(result) == bool(baseline), f"threshold={bad!r} must not raise or diverge"
+
+
+def test_a_shrunken_window_from_pruning_reads_differently_than_a_read_bound_truncation():
+    pruned = dict(_RUNAWAY_WINDOW, covers_full_window=False, truncated_by_page_cap=False,
+                  observed_span_hours=3.1)
+    capped = dict(_RUNAWAY_WINDOW, covers_full_window=False, truncated_by_page_cap=True,
+                  observed_span_hours=3.1)
+
+    pruned_reason = sweep_conditions.check_burn_rate(
+        {"available": True, "summaries": [], "window": pruned}, _BUDGET)[0]["reason"]
+    capped_reason = sweep_conditions.check_burn_rate(
+        {"available": True, "summaries": [], "window": capped}, _BUDGET)[0]["reason"]
+
+    assert "3.1 hours" in pruned_reason and "3.1 hours" in capped_reason
+    assert "pruned" in pruned_reason
+    assert "own execution read bound" in capped_reason
+    assert "pruned" not in capped_reason
+    assert pruned_reason != capped_reason
+
+
+def test_error_table_translates_the_not_configured_and_unreadable_reasons():
+    not_configured = sweep_conditions.check_burn_rate(
+        {"available": True, "summaries": [], "window": _RUNAWAY_WINDOW},
+        {"key": "n8n_monthly_execution_allowance", "allowance": "", "threshold_key": "x",
+         "threshold": None})[0]["reason"]
+    unreadable = sweep_conditions.check_burn_rate(
+        {"available": False, "summaries": [], "window": None}, _BUDGET)[0]["reason"]
+
+    for reason, expected_cause in (
+        (not_configured, "burn_rate_not_configured"),
+        (unreadable, "burn_rate_unreadable"),
+    ):
+        result = error_table.translate(reason)
+        assert result["matched"] is True
+        assert result["cause"] == expected_cause
+        assert result["who_can_fix"] == "admin"
+        assert result["is_interpretation"] is False
+
+
+def test_driving_run_sweep_twice_over_identical_inputs_produces_identical_notices(
+        stub_get_transport_factory):
+    """Concurrency backstop: two sweeps share no mutable state. Two FRESH transports —
+    a `_StubGetTransport` pops its scripted payloads, so reusing one across two calls
+    would prove nothing about shared state and everything about running out of script."""
+    history = _synthetic_history(1012, span_hours=4.0)
+
+    get_a = stub_get_transport_factory([{"data": history}])
+    get_b = stub_get_transport_factory([{"data": history}])
+
+    notices_a = sweep_entry.run_sweep(SWEEP_CONFIG, get_transport=get_a,
+                                      post_transport=_post_ok, now=NOW)
+    notices_b = sweep_entry.run_sweep(SWEEP_CONFIG, get_transport=get_b,
+                                      post_transport=_post_ok, now=NOW)
+    assert notices_a == notices_b
