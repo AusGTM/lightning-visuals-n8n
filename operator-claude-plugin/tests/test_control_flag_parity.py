@@ -125,10 +125,12 @@ def test_a_declaration_the_plugin_writes_is_read_back_by_phase_27s_reader():
 # --- rewrite counts, asserted AND derived --------------------------------------------
 
 def test_maintenance_workflow_rewrite_counts():
+    """5 declaring nodes since Phase 44 Plan 01: the four spliced write gates plus
+    "SJ-3 Dispatch Gate", which embeds the same shared gate blob verbatim (D-02)."""
     workflow = _workflow("wf_scheduled_maintenance_cloud.json")
     _, counts = n8n_arming.set_write_safety(
         workflow, {"ALLOW_HUBSPOT_RECORD_WRITES": True, "ALLOW_HUBSPOT_CREATE": True})
-    assert counts == {"ALLOW_HUBSPOT_RECORD_WRITES": 4, "ALLOW_HUBSPOT_CREATE": 4}
+    assert counts == {"ALLOW_HUBSPOT_RECORD_WRITES": 5, "ALLOW_HUBSPOT_CREATE": 5}
 
 
 def test_contact_ingest_rewrite_counts_create_leads_by_one():

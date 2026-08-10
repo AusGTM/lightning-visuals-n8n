@@ -113,6 +113,12 @@ NODE_CREDENTIAL_MAP = {
     "SJ-3 Search (requested poller)": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "SJ-1 Search (input-gap scan)": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "SJ-1 Set Requested": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    # Phase 44 Plan 01 — the SJ-3 drain's terminal write (clears lv_enrichment_requested
+    # on gate-declined rows). Registered in the SAME commit as the node's creation in
+    # scripts/build_cloud_workflows.py, per this map's convention: an unmapped HubSpot
+    # node deploys UNBOUND and 401s only at runtime — the failure this repo has taken
+    # four times.
+    "SJ-3 Drain Clear Flag": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "SJ-2 Search (stale refresh)": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "SJ-2 Set Requested": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "Dedupe Search (candidate contacts)": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},

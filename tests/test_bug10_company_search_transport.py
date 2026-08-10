@@ -62,7 +62,9 @@ NODES = {
     },
     "SJ-3 Search (requested poller)": {
         "workflow": "wf_scheduled_maintenance_cloud.json",
-        "properties_csv": "hs_object_id,lv_enrichment_requested,lv_enrichment_status",
+        # BUG 24's class (Phase 44 Plan 01): domain added so the SJ-3 Dispatch Gate can
+        # be satisfied by TEST_RECORD_DOMAINS at all — same reason as SJ-1/SJ-2 below.
+        "properties_csv": "hs_object_id,domain,lv_enrichment_requested,lv_enrichment_status",
         "body_tokens": [
             'propertyName: "lv_enrichment_requested"', 'operator: "EQ"', 'value: "true"',
             'propertyName: "lv_enrichment_status"', 'operator: "NEQ"', 'value: "running"',

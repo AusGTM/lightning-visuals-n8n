@@ -911,6 +911,21 @@ WRITE_SAFETY_DEFAULTS = {
     "ALLOW_HUBSPOT_REVIEW_WRITES": "false",
     "TEST_RECORD_DOMAINS": "",
     "TEST_RECORD_IDS": "",
+    # ALLOW_SJ3_DRAIN_WRITES (Phase 44 Plan 01, D-05 — operator-approved 2026-08-10) is
+    # the FIRST write authority in this system that is enabled at rest, and the bound is
+    # deliberate and narrow: it may only ever set lv_enrichment_requested to "false" and
+    # lv_enrichment_status to "skipped", on records the SJ-3 gate declined in the SAME
+    # tick. It removes queued work; it cannot create or alter data. It is NOT precedent
+    # for defaulting any other write on. A "false"-defaulting drain was considered and
+    # rejected: it would run only inside an armed window, which is precisely when the
+    # queue is not stuck — leaving the runaway free to re-form every time the system
+    # rests disarmed. Unreachable from ALLOW_HUBSPOT_RECORD_WRITES /
+    # ALLOW_HUBSPOT_REVIEW_WRITES in either direction (no branch of _writeSafetyAllows
+    # reads it, and its one reader — "SJ-3 Drain Gate" — reads nothing else), and
+    # deliberately absent from the deploy overlay / arm system, following the
+    # ALLOW_JUDGE_ESCALATION / ALLOW_WEB_RESEARCH default-true precedent
+    # (scripts/deploy_n8n_workflows.py's _OVERLAY_FLAG_SPEC comment).
+    "ALLOW_SJ3_DRAIN_WRITES": "true",
 }
 
 
@@ -5439,13 +5454,66 @@ return rows.map((r) => ({ json: { ...(r.properties || {}), hs_object_id: r.id } 
 ENRICH_SJ3_BUILD_DISPATCH_EVENT = r"""// SJ-3 Build Dispatch Event — reshape Extract Rows'
 // {...properties, hs_object_id} into the event shape Parse HubSpot Event parses (see
 // ENRICH_PARSE_EVENT_CLOUD: event.objectId/objectType/subscriptionType/occurredAt).
-return $input.all().map((it) => ({ json: {
+// Phase 44 Plan 01 (GATE-01): only rows the SJ-3 Dispatch Gate permitted (sj3_dispatch)
+// become events. When every row is declined this returns [], the Execute Workflow node
+// receives zero items and does not run, and the tick costs 1 execution rather than 1+N —
+// the zero-items-stops-the-chain behaviour established live at execution 22 (see the
+// HubSpot Search comments above; Plan 03 re-verifies it empirically for this lane).
+return $input.all().filter((it) => it.json.sj3_dispatch === true).map((it) => ({ json: {
   objectId: it.json.hs_object_id,
   objectType: "company",
   subscriptionType: "company.propertyChange",
   propertyName: "lv_enrichment_requested",
   occurredAt: new Date().toISOString(),
 } }));
+"""
+
+# Phase 44 Plan 01 (GATE-01/D-01/D-02) — SJ-3's per-record dispatch permission check.
+# WRITE_SAFETY_GATE_JS is embedded VERBATIM (D-02: one definition of "permitted", so the
+# poller cannot drift from the enrichment lane's own write gates), followed by the pure
+# routing module and an n8n wrapper delegating to _writeSafetyAllows per row.
+ENRICH_SJ3_DISPATCH_GATE = (
+    WRITE_SAFETY_GATE_JS + "\n" + inline("sj3DispatchGate.js") + r"""
+
+// n8n wrapper: SJ-3 Dispatch Gate — annotates EVERY row (sj3_dispatch / sj3_drain) and
+// returns them ALL, not only the permitted ones: the declined rows are what the drain
+// branch consumes (DRAIN-01). The "enrich" action mirrors the SJ-1/SJ-2 spliced gates;
+// row.domain exists because SJ-3's search requests it (BUG 24's class — see the search).
+const rows = $input.all().map((it) => it.json);
+const annotated = sj3Gate(rows, {
+  allows: (row) => _writeSafetyAllows("enrich", row.hs_object_id || null, row.domain || null),
+});
+return annotated.map((row) => ({ json: row }));
+"""
+)
+
+
+def _sj3_drain_gate_js() -> str:
+    """Phase 44 Plan 01 (DRAIN-01/D-05/D-06) — the drain branch's own authority check.
+    Deliberately NOT routed through _write_gate_js/splice_write_gates: both hardcode the
+    shared gate whose allowlist branch is unconditional, which D-06 forbids here (an
+    allowlisted drain would clear only records that were never stuck). The declaration
+    literal derives from WRITE_SAFETY_DEFAULTS via _write_safety_const, so the committed
+    artifact's value is pinned by tests/test_write_gate_coverage.py the same way every
+    other write-safety constant is."""
+    return _write_safety_const("ALLOW_SJ3_DRAIN_WRITES") + r"""
+// SJ-3 Drain Gate — passes through only rows the dispatch gate declined this same tick
+// (sj3_drain), feeding the terminal write that clears the trigger flag so a stuck queue
+// cannot re-form (DRAIN-01).
+//
+// D-05 bound, repeated at the point of authority: this constant may only ever authorise
+// setting lv_enrichment_requested to "false" and lv_enrichment_status to "skipped" on
+// records declined in the same tick. It removes queued work; it cannot create or alter
+// data. It is NOT precedent for defaulting any other write on — a false-defaulting drain
+// would run only inside an armed window, which is precisely when the queue is not stuck.
+//
+// D-06: this gate deliberately does not call the shared write-safety helper and does not
+// consult the record allowlist. The stuck queue is overwhelmingly non-allowlisted
+// records — that is the failure mode itself. (Exclusions described in words on purpose:
+// the coverage tests negative-grep this node's entire jsCode for the excluded
+// identifiers, and a Code node's comments are part of its jsCode.)
+if (ALLOW_SJ3_DRAIN_WRITES !== "true") return [];  // exact-string gate (CLAUDE.md §21)
+return $input.all().filter((it) => it.json.sj3_drain === true);
 """
 
 ENRICH_SJ2_EPOCH_CUTOFF = r"""// SJ-2 epoch-ms cutoff — HubSpot's LT operator on a datetime property expects epoch
@@ -5704,16 +5772,24 @@ def _hs_http_create_node(name, resource, x, y):
     )
 
 
-def _hs_update_set_property(name, resource, x, y, property_name, value_literal="true"):
+def _hs_update_set_property(name, resource, x, y, property_name, value_literal="true",
+                            extra_properties=()):
     """Terminal dispatch write (SJ-1/SJ-2): sets ONE known custom boolean property to a
     static value on the matched record's id (review consensus #5 — a search that only
-    matches rows never triggers enrichment on its own)."""
+    matches rows never triggers enrichment on its own).
+
+    `extra_properties` (Phase 44 Plan 01) is an optional sequence of additional
+    (property, value) LITERAL pairs appended to customPropertiesValues — every key and
+    value is baked into the built JSON, never runtime-computed, which is what makes a
+    caller's patch narrowness structural rather than a runtime promise (DRAIN-02). Both
+    pre-existing call sites pass nothing and are byte-unchanged."""
     id_key = "contactId" if resource == "contact" else "companyId"
     return {
         "parameters": {"resource": resource, "operation": "update",
                        id_key: "={{ $json.hs_object_id }}",
                        "updateFields": {"customPropertiesUi": {"customPropertiesValues": [
                            {"property": property_name, "value": value_literal},
+                           *({"property": p, "value": v} for p, v in extra_properties),
                        ]}}},
         "id": nid("hu"), "name": name,
         "type": "n8n-nodes-base.hubspot", "typeVersion": 2.1, "position": [x, y],
@@ -5821,10 +5897,19 @@ def build_scheduled_maintenance_cloud():
             {"propertyName": "lv_enrichment_requested", "operator": "EQ", "value": "true"},
             {"propertyName": "lv_enrichment_status", "operator": "NEQ", "value": "running"},
         ]],
-        properties_csv="hs_object_id,lv_enrichment_requested,lv_enrichment_status")
+        # BUG 24's class (Phase 44 Plan 01): `domain` requested so a domain-scoped armed
+        # window (TEST_RECORD_DOMAINS) can permit an SJ-3 row at all — without it on the
+        # row, D-01's per-record gate would silently deny everything in exactly the
+        # windows scheduled_arm.py opens. Same precedent as SJ-1/SJ-2 below.
+        properties_csv="hs_object_id,domain,lv_enrichment_requested,lv_enrichment_status")
     nodes.append(sj3_search)
     x += 220
     nodes.append(code_node("SJ-3 Extract Rows", ENRICH_EXTRACT_SEARCH_ROWS, x, y))
+    x += 220
+    # Phase 44 Plan 01 (GATE-01/D-01): per-record dispatch permission, one shared
+    # definition of "permitted" (D-02). Emits ALL rows annotated — fan-out below routes
+    # permitted rows to dispatch and declined rows to the drain.
+    nodes.append(code_node("SJ-3 Dispatch Gate", ENRICH_SJ3_DISPATCH_GATE, x, y))
     x += 220
     # fix(40) / WINDOWS.md #3: reshape into an event Parse HubSpot Event can read, since
     # the enrichment workflow's new Execute Workflow Trigger entry point (build_enrichment_
@@ -5835,9 +5920,33 @@ def build_scheduled_maintenance_cloud():
     sj3_dispatch = _execute_workflow_node(
         "SJ-3 Dispatch To Enrichment", x, y, "LVenrichmentCloud01", "LV Enrichment (Cloud template)")
     nodes.append(sj3_dispatch)
+    # Drain branch (DRAIN-01/02/03, D-05..D-08): declined rows get their trigger flag
+    # cleared through a structurally narrow write. NOT routed through splice_write_gates —
+    # see _sj3_drain_gate_js's docstring for why (D-06).
+    nodes.append(code_node("SJ-3 Drain Gate", _sj3_drain_gate_js(), x - 440, y + 150))
+    sj3_drain_write = _hs_update_set_property(
+        "SJ-3 Drain Clear Flag", "company", x - 220, y + 150,
+        "lv_enrichment_requested", "false",
+        # lv_enrichment_status="skipped" is the drain's provenance stamp (D-08/DRAIN-03):
+        # the property is a closed enumeration (config/hubspot_properties.yaml) and
+        # `skipped` is the one option nothing else in the pipeline writes today — so it
+        # needs no property migration and collides with no existing meaning. The stamp is
+        # provenance ONLY: clearing lv_enrichment_requested alone already removes the
+        # record from SJ-3's EQ-"true" filter. Both keys and both values are baked
+        # literals in the built JSON (DRAIN-02 is structural, not a runtime promise).
+        extra_properties=(("lv_enrichment_status", "skipped"),))
+    nodes.append(sj3_drain_write)
 
     conns.update(chain([sj3_trigger["name"], sj3_search["name"], "SJ-3 Extract Rows",
-                        "SJ-3 Build Dispatch Event", sj3_dispatch["name"]]))
+                        "SJ-3 Dispatch Gate"]))
+    # Fan-out, not a chain: BOTH terminals consume the gate's single annotated output —
+    # the permitted path filters on sj3_dispatch, the declined path on sj3_drain.
+    conns["SJ-3 Dispatch Gate"] = {"main": [[
+        {"node": "SJ-3 Build Dispatch Event", "type": "main", "index": 0},
+        {"node": "SJ-3 Drain Gate", "type": "main", "index": 0},
+    ]]}
+    conns.update(chain(["SJ-3 Build Dispatch Event", sj3_dispatch["name"]]))
+    conns.update(chain(["SJ-3 Drain Gate", sj3_drain_write["name"]]))
 
     # --- SJ-1: hourly input-gap scan (Task 2) ------------------------------------------
     # Three single-filter OR'd groups (Pitfall 3) — "any input unresolved", never AND.

@@ -83,6 +83,38 @@ test("SJ-3: dispatches matched rows into enrichment via a terminal Execute Workf
   assert.ok(wf.connections[search.name], "SJ-3 search node must have an outgoing connection");
 });
 
+// Phase 44 Plan 01 (GATE-01/GATE-03, DRAIN-01): the dispatch chain now runs through the
+// per-record SJ-3 Dispatch Gate, which fans out to BOTH terminals — permitted rows to
+// Build Dispatch Event -> Execute Workflow, declined rows to the drain.
+test("SJ-3: Extract Rows -> Dispatch Gate, which fans out to Build Dispatch Event AND Drain Gate", () => {
+  const wf = loadWorkflow();
+  const extractOut = wf.connections["SJ-3 Extract Rows"].main[0].map((c) => c.node);
+  assert.deepEqual(extractOut, ["SJ-3 Dispatch Gate"],
+    "Extract Rows must feed the Dispatch Gate, nothing else (GATE-01: no bypass to dispatch)");
+  const gateOut = wf.connections["SJ-3 Dispatch Gate"].main[0].map((c) => c.node).sort();
+  assert.deepEqual(gateOut, ["SJ-3 Build Dispatch Event", "SJ-3 Drain Gate"],
+    "the gate's single output fans out to exactly the two terminals");
+  const buildOut = wf.connections["SJ-3 Build Dispatch Event"].main[0].map((c) => c.node);
+  assert.deepEqual(buildOut, ["SJ-3 Dispatch To Enrichment"]);
+  const drainOut = wf.connections["SJ-3 Drain Gate"].main[0].map((c) => c.node);
+  assert.deepEqual(drainOut, ["SJ-3 Drain Clear Flag"]);
+});
+
+// Phase 44 Plan 01 (BUG 24's class): without `domain` on the row, a domain-scoped armed
+// window (TEST_RECORD_DOMAINS) is structurally unable to permit an SJ-3 row — the gate
+// would silently deny everything in exactly the windows scheduled_arm.py opens. No prior
+// test asserted on any lane's property list, so this is a new guard, not a restored one.
+test("SJ-3: search requests `domain` so a domain-scoped armed window can permit its rows", () => {
+  const wf = loadWorkflow();
+  const node = findNode(wf, "SJ-3 Search (requested poller)");
+  const propsMatch = node.parameters.jsonBody.match(/properties:\s*(\[[^\]]*\])/);
+  assert.ok(propsMatch, "jsonBody must carry a `properties: [...]` array");
+  const props = JSON.parse(propsMatch[1]);
+  assert.ok(props.includes("hs_object_id"));
+  assert.ok(props.includes("domain"),
+    "SJ-3's search must request `domain` (BUG 24's class — see build_cloud_workflows.py)");
+});
+
 test("no SJ filter block anywhere in the built workflow references a derived ICP output field", () => {
   const wf = loadWorkflow();
   const sjNodes = wf.nodes.filter((n) => n.name.startsWith("SJ-"));
