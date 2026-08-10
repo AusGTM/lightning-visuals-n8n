@@ -1,5 +1,5 @@
 ---
-status: awaiting_human_verify
+status: resolved
 trigger: "scoring adjustment likely required, the rubric may be faulty. Review HubSpot view hubspot-crm-exports-lv-scored-uat-2026-08-10.csv. (1) Entain -70 appears to be a mistake from testing, check and revert if it is, if not explain why. (2) Many horse racing/turf clubs are scored low — scoring issue or enrichment issue?"
 created: 2026-08-10
 updated: 2026-08-10
@@ -232,3 +232,54 @@ files_changed:
   - n8n/wf_enrichment_cloud.json (regenerated build artifact, local codegen only)
   - tests/test_scoring_parity.py (+5 offline regression tests)
   - tests/n8n/decideCompanyActionRegionFallbackNoSpuriousVeto.test.mjs (+2 regression tests)
+
+## Live deployment + remediation (2026-08-10, operator-authorized)
+
+The two operator-gated steps above were subsequently completed.
+
+deploy: `DRY_RUN=false ALLOW_N8N_DEPLOY=true scripts/deploy_n8n_workflows.py` — all 5 cloud
+  workflows PUT, HTTP 200 each, `updatedAt=2026-08-10T11:03:52.159Z`. `ENABLE_BAKED_FLAGS`
+  left unset, so nothing was armed. Pre-deploy drift audit: after stripping deploy-time
+  rebinds (`credentials`, server-stamped `webhookId`, and the `executeWorkflow`
+  `workflowId` placeholder `LVenrichmentCloud01` that `rebind_subworkflow_refs()` rewrites),
+  the ONLY real local-vs-live difference across all 5 workflows was the intended
+  `Decide Company Action` change. Note `compute_workflow_diff()` performs no content
+  comparison — "Workflows to update: [all 5]" means "all 5 exist by name", not "all changed".
+
+bounce: performed via API (`/deactivate` then `/activate`) rather than the UI, asserting the
+  midpoint. Observed `active=False` between the calls — that observation is the evidence.
+  `versionId` did NOT change across the bounce (`be853177-…` throughout), so versionId does
+  not track activation state and must not be used to test for a bounce.
+
+verification (decisive): extracted the `Decide Company Action` jsCode from the LIVE instance
+  via `/api/v1/workflows/{id}` and executed its `_regionKey` directly under node:
+    _regionKey("")/null/undefined -> "unknown"   (was "non_anz" — the bug)
+    _regionKey("Other"/"US"/"UK") -> "non_anz"   (genuine vetoes still fire)
+    _regionKey("AU"/"NZ"/"ANZ")   -> passthrough
+  This tests the running source rather than inferring from one record's output — necessary
+  because a `june_2026` seed supplies a low-confidence `lv_country_region_normalized="AU"`
+  candidate on these records, which makes a single record's veto-absence ambiguous as
+  evidence (it could be explained by either the fix or the seed).
+
+remediation: re-derived the false-veto set LIVE rather than trusting the recorded list —
+  24 records carry `lv_anti_icp_flag=true`; 17 have a non-ANZ reason WITH a blank region
+  (false), 3 have a non-ANZ reason with a KNOWN region (Entain 10024564084, Gravity Media
+  15860277364, Ironman 17317184159 — all correct, untouched). All 17 PATCHed
+  `lv_enrichment_requested="true"` (HTTP 200 each) and confirmed to match the SJ-3 poller's
+  own filter (`lv_enrichment_requested EQ "true" AND lv_enrichment_status NEQ "running"`).
+
+  Property-name correction: the poller filters on `lv_enrichment_requested` (lv_-prefixed).
+  CLAUDE.md §4.1/§19.1 documents `enrichment_requested`; no bare token exists in the built
+  workflow. The spec text is stale relative to the deployed flow.
+
+  Cadence correction: `SJ-3 Trigger` is `daysInterval: 1` — DAILY, not the 15-minute cadence
+  described in CLAUDE.md §19.1. The 17 queued records will be processed on the next daily
+  tick (~09:00 local), not within 15 minutes. Each is a never-enriched record, so the run is
+  a full provider waterfall per record and SJ-3 fans out per record — see the execution
+  budget (2,500/month).
+
+outstanding:
+  - Confirm the 17 actually re-score on the next daily tick and that the false vetoes clear.
+  - `master` is 1 commit ahead of origin (417ee6d) — not pushed.
+  - Docs defect: CLAUDE.md's `enrichment_requested` name and "every 15 minutes" cadence both
+    contradict the deployed workflow.
