@@ -23,15 +23,18 @@ over the same n8n system, so its version says nothing about backend capability.
 - **Burn-rate alarm.** The unattended sweep now samples the recent n8n execution rate and
   fires when it projects, over a 30-day month, to exhaust the plan's monthly allowance —
   the same failure mode the 2026-08-09 incident hit (a runaway lane spending 253
-  executions/hour, ~182,000/month against a 2,500/month plan). The condition reports one of
-  three outcomes on every sweep, never silence: `burn_rate_alarm` (the projected rate names
-  the sampled rate, the actually-observed span — flagged when it was shortened by n8n's
-  own 2,500-row pruning — the projection, and the allowance), `burn_rate_not_configured`
-  (the allowance key is missing or unusable — names the key, never a value, and every
-  other sweep condition keeps running), or `burn_rate_unreadable` (the execution history
-  itself could not be read). The alarm re-notifies on every sweep while a burn persists —
-  the one condition where repetition is deliberate, because an active burn costs money
-  hourly and a missed signal here has already cost 73x the plan once.
+  executions/hour, ~182,000/month against a 2,500/month plan). When it has something to
+  report, the condition names one of three outcomes: `burn_rate_alarm` (the sampled rate,
+  the actually-observed span — naming the sweep's own read bound when that shortened it,
+  since n8n's own pruning can't be told apart from a system with no older execution yet —
+  the projection, and the allowance), `burn_rate_not_configured` (the allowance key is
+  missing or unusable — names the key, never a value, and every other sweep condition
+  keeps running), or `burn_rate_unreadable` (the execution history itself could not be
+  read). A healthy rate — including a sample too short to project from yet, such as the
+  first sweep after a deploy — stays silent, same as every other condition in this sweep.
+  The alarm re-notifies on every sweep while a burn persists — the one condition where
+  repetition is deliberate, because an active burn costs money hourly and a missed signal
+  here has already cost 73x the plan once.
 
 - **Time-windowed execution lookback**, replacing the sweep's fixed 100-row page for every
   condition that reads execution history. A terminal failure that ended outside the window
