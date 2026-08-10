@@ -65,7 +65,7 @@ page at 80%.
 
 ### Burn-Rate Alarm — the system reports it, not the billing page
 
-- [ ] **ALARM-01**: The sweep fires a notice when the sampled execution rate, projected forward
+- [x] **ALARM-01**: The sweep fires a notice when the sampled execution rate, projected forward
   at that rate over a 30-day month, would exhaust the configured monthly plan allowance.
 
   <!-- AMENDED 2026-08-10, Phase 45 D-02. Originally read "the plan allowance for the current
@@ -75,7 +75,7 @@ page at 80%.
   allowance. A `billing_anchor_day` config key was considered and rejected (one more key to keep
   correct, and a wrong anchor silently mis-projects). -->
 
-- [ ] **LOOK-01**: The sweep's execution lookback is bounded by TIME, not by a fixed row count.
+- [x] **LOOK-01**: The sweep's execution lookback is bounded by TIME, not by a fixed row count.
   A failure that has already been fixed stops being reported once it ages out of the window,
   rather than re-notifying until 100 newer executions displace it (observed live 2026-08-03,
   RB-8: execution 1173 still notifying hours after Phase 31 fixed its cause). An in-flight run is
@@ -91,16 +91,16 @@ page at 80%.
   bounds the WHOLE schedule rather than the one trigger being changed: five triggers each passing
   individually can sum past the plan.
 
-- [ ] **ALARM-02**: The alarm samples a **rate over a bounded recent window** and never claims a
+- [x] **ALARM-02**: The alarm samples a **rate over a bounded recent window** and never claims a
   monthly total. n8n prunes executions (2,500 rows / ~10 hours observed here) and exposes no
   usage endpoint to an API key, so a total is unknowable by construction — reporting one would
   be a fabrication.
 
-- [ ] **ALARM-03**: The plan allowance is configuration, not a literal. A missing or unreadable
+- [x] **ALARM-03**: The plan allowance is configuration, not a literal. A missing or unreadable
   allowance produces a notice naming the missing key — never silence, and never a guessed
   default.
 
-- [ ] **ALARM-04**: An alarm that cannot read execution history says so. This inherits the
+- [x] **ALARM-04**: An alarm that cannot read execution history says so. This inherits the
   sweep's existing rule (D-15): silence means healthy, so a check that failed to run must never
   be indistinguishable from a check that found nothing wrong.
 
@@ -138,11 +138,11 @@ page at 80%.
 | CAP-01 | Phase 44 | Complete — test: cap derivation in tests/n8n/sj3DispatchGate.test.mjs + builder assert; live `cap: 40` in 44-LIVE-EVIDENCE.md |
 | CAP-02 | Phase 44 | Complete — test: overflow-defers + found-vs-dispatched tests in tests/n8n/sj3DispatchGate.test.mjs |
 | CAP-03 | Phase 44 | Complete — test: tests/test_execution_budget.py idle-floor guard over committed scheduleTriggers |
-| ALARM-01 | Phase 45 | Pending |
-| ALARM-02 | Phase 45 | Pending |
-| ALARM-03 | Phase 45 | Pending |
-| ALARM-04 | Phase 45 | Pending |
-| LOOK-01 | Phase 45 | Pending |
+| ALARM-01 | Phase 45 | Complete |
+| ALARM-02 | Phase 45 | Complete |
+| ALARM-03 | Phase 45 | Complete |
+| ALARM-04 | Phase 45 | Complete |
+| LOOK-01 | Phase 45 | Complete |
 | FLOOR-01 | Phase 45 | Pending |
 
 Coverage: 15/15 v0.8 requirements mapped. 100% coverage, no orphans.
@@ -151,4 +151,3 @@ Coverage: 15/15 v0.8 requirements mapped. 100% coverage, no orphans.
 pending todos into the phase (2026-08-03-sweep-lookback-has-no-time-window,
 2026-08-10-runtime-cadence-has-no-budget-floor) and instructs the planner to add requirement rows
 so traceability stays at 100% rather than the folded scope arriving unmapped. -->
-

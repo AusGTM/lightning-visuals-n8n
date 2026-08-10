@@ -125,14 +125,17 @@ action on the operator's machine, stated as an accepted limit, not a gap this ph
 Verification is therefore by direct sweep invocation and unit tests against synthetic/fixture
 execution history, not by observing a live scheduled fire.
 
-**Plans:** 3 plans
+**Plans:** 1/3 plans executed
 
 Plans:
-- [ ] 45-01-PLAN.md — Time-windowed executions read and the burn-rate alarm (tracer-led): the
+
+- [x] 45-01-PLAN.md — Time-windowed executions read and the burn-rate alarm (tracer-led): the
   runaway-to-notice path end to end, the branches that must never be silent, and LOOK-01's
   lookback fold
+
 - [ ] 45-02-PLAN.md — Cadence budget floor: whole-schedule monthly cost, a refusal that states
   the arithmetic first, and D-10's single-shot override
+
 - [ ] 45-03-PLAN.md — Drift test pinning the plugin's allowance and floor share to
   config/execution_budget.yaml, plugin release 0.13.0, and requirement closure
 
@@ -144,4 +147,4 @@ Phases execute in numeric order: 44 → 45
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 44. SJ-3 Dispatch Gate, Drain & Cap | 2/3 | In Progress|  |
-| 45. Burn-Rate Alarm | 0/TBD | Not started | - |
+| 45. Burn-Rate Alarm | 1/3 | In Progress|  |
