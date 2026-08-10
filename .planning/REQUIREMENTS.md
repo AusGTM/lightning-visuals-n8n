@@ -106,15 +106,15 @@ page at 80%.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| GATE-01 | Phase 44 | Complete |
-| GATE-02 | Phase 44 | Complete |
-| GATE-03 | Phase 44 | Complete |
-| DRAIN-01 | Phase 44 | Complete |
-| DRAIN-02 | Phase 44 | Complete |
-| DRAIN-03 | Phase 44 | Complete |
-| CAP-01 | Phase 44 | Complete |
-| CAP-02 | Phase 44 | Complete |
-| CAP-03 | Phase 44 | Complete |
+| GATE-01 | Phase 44 | Complete — live: 44-LIVE-EVIDENCE.md (execution 11820, 0 enrichment sub-executions) |
+| GATE-02 | Phase 44 | Complete — live: 44-LIVE-EVIDENCE.md (verbatim `gate_closed` tick outcome item) |
+| GATE-03 | Phase 44 | Complete — test: tests/n8n/sj3DispatchGate.test.mjs gate-open order/mutation pin + tests/n8n/sjPredicates.test.mjs wiring |
+| DRAIN-01 | Phase 44 | Complete — live: 44-LIVE-EVIDENCE.md (HubSpot read-back of 280176525780: requested="false", status="skipped") |
+| DRAIN-02 | Phase 44 | Complete — test: tests/test_write_gate_coverage.py::test_drain_write_patch_is_exactly_the_two_pair_allowlist |
+| DRAIN-03 | Phase 44 | Complete — test: tests/test_write_gate_coverage.py drain provenance assertions; live corroboration in 44-LIVE-EVIDENCE.md |
+| CAP-01 | Phase 44 | Complete — test: cap derivation in tests/n8n/sj3DispatchGate.test.mjs + builder assert; live `cap: 40` in 44-LIVE-EVIDENCE.md |
+| CAP-02 | Phase 44 | Complete — test: overflow-defers + found-vs-dispatched tests in tests/n8n/sj3DispatchGate.test.mjs |
+| CAP-03 | Phase 44 | Complete — test: tests/test_execution_budget.py idle-floor guard over committed scheduleTriggers |
 | ALARM-01 | Phase 45 | Pending |
 | ALARM-02 | Phase 45 | Pending |
 | ALARM-03 | Phase 45 | Pending |
