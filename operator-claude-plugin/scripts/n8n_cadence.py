@@ -458,13 +458,17 @@ def check_budget_floor(workflow_id, node_name, interval, config, workflow_items,
     Returns a dict on every non-raising path: `requested_month_cost`,
     `schedule_month_cost`, `allowance`, `share`, `ceiling`, `within`, `overridden`.
     """
-    allowance = _read_positive_float(config, "n8n_monthly_execution_allowance")
+    # WR-02: sourced from n8n_read.EXECUTION_ALLOWANCE_KEY (its one home) rather than
+    # spelled here independently — sweep_read.py reads the same key for the burn-rate
+    # alarm's gather, and two independent literal spellings of the same config key is
+    # exactly the drift class this hoist closes.
+    allowance = _read_positive_float(config, n8n_read.EXECUTION_ALLOWANCE_KEY)
     if allowance is None:
         raise CadenceRefused(
-            "the config key 'n8n_monthly_execution_allowance' is missing, blank or not a "
-            "positive number, and without it I cannot judge what this change would cost "
-            "against the plan — so the change is refused rather than guessed at. Ask your "
-            "admin to set it.", _BUDGET_SAFE_EXAMPLES)
+            f"the config key {n8n_read.EXECUTION_ALLOWANCE_KEY!r} is missing, blank or "
+            "not a positive number, and without it I cannot judge what this change would "
+            "cost against the plan — so the change is refused rather than guessed at. "
+            "Ask your admin to set it.", _BUDGET_SAFE_EXAMPLES)
 
     share = _read_positive_float(config, "n8n_schedule_floor_max_share")
     if share is None:

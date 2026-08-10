@@ -499,7 +499,7 @@ def check_burn_rate(executions, execution_budget, threshold=DEFAULT_BURN_RATE_TH
     except (TypeError, ValueError):
         allowance = None
     if allowance is None or allowance <= 0:
-        key_name = execution_budget.get("key") or "n8n_monthly_execution_allowance"
+        key_name = execution_budget.get("key") or n8n_read.EXECUTION_ALLOWANCE_KEY
         return [{
             "condition": BURN_RATE_NOT_CONFIGURED,
             "reason": (

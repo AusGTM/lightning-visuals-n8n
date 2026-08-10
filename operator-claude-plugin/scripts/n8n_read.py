@@ -53,6 +53,14 @@ EXECUTIONS_PAGE_LIMIT = 100
 DAYS_PER_MONTH = 30.0
 HOURS_PER_MONTH = DAYS_PER_MONTH * 24
 
+# WR-02: the ONE home for the burn-rate alarm's allowance config-key literal, mirroring
+# DAYS_PER_MONTH/HOURS_PER_MONTH's precedent above — sweep_read.py's gather and
+# n8n_cadence.py's runtime budget floor both read this key out of the SAME plugin config
+# file, so a rename in one that is not also made in the other would silently break the
+# other's lookup with no test to catch it. Both modules import this constant rather than
+# spelling the string themselves.
+EXECUTION_ALLOWANCE_KEY = "n8n_monthly_execution_allowance"
+
 # D-01's target lookback for the windowed executions read. A module constant
 # deliberately, not a config key — one fewer key is one fewer thing to keep correct.
 DEFAULT_EXECUTION_WINDOW_HOURS = 24.0

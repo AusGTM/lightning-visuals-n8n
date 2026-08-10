@@ -46,7 +46,11 @@ MAINTENANCE_WORKFLOW_NAME = "LV Scheduled Maintenance (Cloud)"
 # The plugin config keys the burn-rate alarm's allowance and threshold live under
 # (D-04). Read here, once, and passed downstream as RAW values — parsing is
 # sweep_conditions.check_burn_rate's job, so this module stays a pure fetch layer.
-EXECUTION_ALLOWANCE_KEY = "n8n_monthly_execution_allowance"
+# WR-02: EXECUTION_ALLOWANCE_KEY is sourced from n8n_read (its one home, alongside
+# DAYS_PER_MONTH/HOURS_PER_MONTH) rather than spelled here independently — n8n_cadence.py
+# reads the same key for the runtime budget floor, and two independent literal spellings
+# of the same config key is exactly the drift class this hoist closes.
+EXECUTION_ALLOWANCE_KEY = n8n_read.EXECUTION_ALLOWANCE_KEY
 BURN_RATE_THRESHOLD_KEY = "burn_rate_alarm_threshold"
 
 _NO_RECENT_MAINTENANCE_EXECUTION = {
