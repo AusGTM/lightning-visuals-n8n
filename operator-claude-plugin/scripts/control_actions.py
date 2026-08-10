@@ -177,18 +177,47 @@ def plan_action(request, config, transport=None):
                         else n8n_cadence.parse_cadence(request.get("phrase")))
         except n8n_cadence.CadenceRefused as refusal:
             return _refusal(str(refusal))
+
+        # FLOOR-01 (D-09/D-10): the arithmetic must reach the operator at PROPOSAL time,
+        # before the confirmation prompt — a floor checked only inside set_cadence would
+        # refuse after the operator already said yes, which inverts D-10's order.
+        workflow_items = n8n_read.list_workflows(config, transport=transport.get)
+        override = n8n_cadence.budget_floor_override_taken(
+            request.get("budget_floor_override_phrase"))
+        try:
+            budget_floor = n8n_cadence.check_budget_floor(
+                workflow_id, node_name, proposed, config, workflow_items,
+                override=override)
+        except n8n_cadence.CadenceRefused as refusal:
+            return _refusal(str(refusal))
+
+        consequence = (
+            f"The job {node_name!r} currently runs "
+            f"{n8n_cadence.describe_cadence(current)}; after this change it will "
+            f"run {n8n_cadence.describe_cadence(proposed)}. That changes how often "
+            f"the backend does this work — and, for jobs that spend provider "
+            f"credits, how often it spends them.")
+        if budget_floor.get("overridden"):
+            consequence += (
+                f" This is going ahead only because the budget floor was overridden "
+                f"for this one change: the whole schedule will now run about "
+                f"{budget_floor['schedule_month_cost']:.0f} times a month, over the "
+                f"{budget_floor['ceiling']:.0f}-execution ceiling "
+                f"({budget_floor['share']:g} of the {budget_floor['allowance']:.0f}"
+                f"/month plan allowance). The per-tick dispatch cap baked into the "
+                f"deployed build was derived from the PREVIOUS cadence and does not "
+                f"change with this edit — a faster tick multiplies against a cap that "
+                f"no longer matches it until the next build.")
+
         return {
             "kind": kind, "workflow_id": workflow_id, "workflow_name": name,
             "node_name": node_name, "interval": proposed,
             "before": n8n_cadence.describe_cadence(current),
             "after": n8n_cadence.describe_cadence(proposed),
-            "consequence": (
-                f"The job {node_name!r} currently runs "
-                f"{n8n_cadence.describe_cadence(current)}; after this change it will "
-                f"run {n8n_cadence.describe_cadence(proposed)}. That changes how often "
-                f"the backend does this work — and, for jobs that spend provider "
-                f"credits, how often it spends them."),
+            "consequence": consequence,
             "inverse": f"set it back to {n8n_cadence.describe_cadence(current)} — one step",
+            "budget_floor": budget_floor,
+            "budget_floor_override": override,
         }
 
     # kind == "job_enabled"
@@ -236,9 +265,10 @@ def execute_action(proposal, confirmation, config, transport=None):
         return _mutation_report(result, proposal)
 
     if kind == "cadence":
-        result = n8n_cadence.set_cadence(workflow_id, proposal["node_name"],
-                                         proposal["interval"], config,
-                                         transport=transport)
+        result = n8n_cadence.set_cadence(
+            workflow_id, proposal["node_name"], proposal["interval"], config,
+            transport=transport,
+            budget_floor_override=proposal.get("budget_floor_override", False))
         return _mutation_report(result, proposal)
 
     if kind == "job_enabled":

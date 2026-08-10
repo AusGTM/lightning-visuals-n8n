@@ -35,6 +35,13 @@ def _workflow(active=True):
     }
 
 
+def _workflow_items_response(active=True):
+    """Phase 45-02: a cadence proposal now also fetches the whole schedule for its
+    budget-floor check, so any test reaching a successful cadence proposal needs a
+    second scripted GET response, after the workflow read."""
+    return {"data": [_workflow(active=active)]}
+
+
 @pytest.fixture
 def control_config(fake_config):
     return dict(fake_config)          # carries n8n_url + n8n_api_key -> control-capable
@@ -146,7 +153,7 @@ def test_the_arming_consequence_names_what_writes_permit_and_the_record_bound(
 
 def test_the_cadence_consequence_speaks_plainly_in_both_directions(
         control_config, stub_module_transport_factory):
-    transport = stub_module_transport_factory([_workflow()])
+    transport = stub_module_transport_factory([_workflow(), _workflow_items_response()])
 
     proposal = control_actions.plan_action(
         {"kind": "cadence", "workflow_id": WORKFLOW_ID,

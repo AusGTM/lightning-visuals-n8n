@@ -429,6 +429,17 @@ def _fetch_workflow_items(config, transport):
     return n8n_read.list_workflows(config, transport=transport.get)
 
 
+def budget_floor_override_taken(phrase):
+    """Whether `phrase` is EXACTLY `BUDGET_FLOOR_OVERRIDE_PHRASE`, once lowercased and
+    with runs of whitespace collapsed — never a substring match. A substring match would
+    let the phrase fire from inside a sentence that merely quotes the refusal back, which
+    is the opposite of deliberate (T-45-07)."""
+    if not isinstance(phrase, str):
+        return False
+    normalized = " ".join(phrase.strip().lower().split())
+    return normalized == BUDGET_FLOOR_OVERRIDE_PHRASE
+
+
 def check_budget_floor(workflow_id, node_name, interval, config, workflow_items,
                        override=False):
     """Refuse a cadence change whose WHOLE-SCHEDULE monthly cost busts the configured

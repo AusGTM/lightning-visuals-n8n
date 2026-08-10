@@ -13,8 +13,17 @@ Task 1 covers the arithmetic: `interval_month_cost`, `schedule_month_cost`, and
 override.
 """
 import n8n_cadence
+import n8n_control
+import control_actions
 
 CONFIG = {
+    "n8n_monthly_execution_allowance": 2500,
+    "n8n_schedule_floor_max_share": 0.25,
+}
+
+STRICT_CONFIG = {
+    "n8n_url": "https://fake-tenant.n8n.cloud",
+    "n8n_api_key": "fake-n8n-api-key-for-tests-only",
     "n8n_monthly_execution_allowance": 2500,
     "n8n_schedule_floor_max_share": 0.25,
 }
@@ -172,3 +181,133 @@ def test_daily_request_within_budget_returns_the_arithmetic_and_does_not_raise()
     assert result["allowance"] == 2500
     assert result["share"] == 0.25
     assert result["ceiling"] == 625.0
+
+
+# =============================================================================================
+# Task 2 — the single-shot override
+# =============================================================================================
+
+def test_budget_floor_override_taken_matches_the_exact_normalised_phrase_only():
+    assert n8n_cadence.budget_floor_override_taken("Override The Budget Floor") is True
+    assert n8n_cadence.budget_floor_override_taken(
+        "  override   the budget floor ") is True
+
+    assert n8n_cadence.budget_floor_override_taken(
+        "please override the budget floor now") is False
+    assert n8n_cadence.budget_floor_override_taken("") is False
+    assert n8n_cadence.budget_floor_override_taken(None) is False
+    assert n8n_cadence.budget_floor_override_taken(123) is False
+
+
+BUDGET_WORKFLOW_ID = "wf-budget-1"
+BUDGET_NODE_NAME = "Nightly Sweep"
+
+
+def _budget_workflow(*, active=False):
+    return {
+        "id": BUDGET_WORKFLOW_ID, "name": "Budget Test Workflow", "active": active,
+        "settings": {}, "connections": {},
+        "nodes": [
+            {"name": BUDGET_NODE_NAME, "type": "n8n-nodes-base.scheduleTrigger",
+             "parameters": {"rule": {"interval": [
+                 {"field": "days", "daysInterval": 1}]}}},
+        ],
+    }
+
+
+def _budget_workflow_items_response():
+    return {"data": [_budget_workflow()]}
+
+
+def _retimed_budget_workflow():
+    workflow = _budget_workflow()
+    for node in workflow["nodes"]:
+        if node["name"] == BUDGET_NODE_NAME:
+            node["parameters"]["rule"]["interval"] = [
+                {"field": "minutes", "minutesInterval": 15}]
+    return workflow
+
+
+def _over_budget_request(**extra):
+    return {"kind": "cadence", "workflow_id": BUDGET_WORKFLOW_ID,
+           "node_name": BUDGET_NODE_NAME, "phrase": "every 15 minutes", **extra}
+
+
+def test_plan_action_refuses_over_budget_and_names_the_override_phrase(
+        stub_module_transport_factory):
+    transport = stub_module_transport_factory(
+        [_budget_workflow(), _budget_workflow_items_response()])
+
+    result = control_actions.plan_action(_over_budget_request(), STRICT_CONFIG,
+                                         transport=transport)
+
+    assert result["outcome"] == control_actions.REFUSED
+    text = result["detail"]
+    for number in ("2880", "625", "2500"):
+        assert number in text, text
+    assert n8n_cadence.BUDGET_FLOOR_OVERRIDE_PHRASE in text
+
+
+def test_the_single_shot_override_end_to_end_then_refuses_again(
+        stub_module_transport_factory):
+    plan_transport = stub_module_transport_factory(
+        [_budget_workflow(), _budget_workflow_items_response()])
+
+    proposal = control_actions.plan_action(
+        _over_budget_request(
+            budget_floor_override_phrase=n8n_cadence.BUDGET_FLOOR_OVERRIDE_PHRASE),
+        STRICT_CONFIG, transport=plan_transport)
+
+    assert "outcome" not in proposal, proposal
+    assert proposal["budget_floor"]["overridden"] is True
+    consequence = proposal["consequence"]
+    for number in ("2880", "625", "2500"):
+        assert number in consequence, consequence
+    assert "dispatch cap" in consequence
+
+    execute_transport = stub_module_transport_factory([
+        _budget_workflow_items_response(),   # set_cadence's own floor re-check
+        _budget_workflow(),                  # apply_mutation's fetch
+        {},                                  # the PUT
+        _retimed_budget_workflow(),          # read-back
+    ])
+    result = control_actions.execute_action(proposal, "yes", STRICT_CONFIG,
+                                            transport=execute_transport)
+    assert result["outcome"] == n8n_control.VERIFIED
+
+    # Single-shot: the override did NOT persist. A fresh over-budget request with no
+    # phrase refuses again, with the same arithmetic.
+    second_transport = stub_module_transport_factory(
+        [_budget_workflow(), _budget_workflow_items_response()])
+    second = control_actions.plan_action(_over_budget_request(), STRICT_CONFIG,
+                                         transport=second_transport)
+    assert second["outcome"] == control_actions.REFUSED
+    for number in ("2880", "625", "2500"):
+        assert number in second["detail"], second["detail"]
+
+
+def test_set_cadence_direct_call_refuses_even_after_a_prior_overridden_call(
+        stub_module_transport_factory):
+    """A direct caller that forgets `budget_floor_override` gets the gate, not a bypass —
+    the override never persists across calls in the same process."""
+    transport = stub_module_transport_factory([_budget_workflow_items_response()])
+    try:
+        n8n_cadence.set_cadence(
+            BUDGET_WORKFLOW_ID, BUDGET_NODE_NAME,
+            [{"field": "minutes", "minutesInterval": 15}], STRICT_CONFIG,
+            transport=transport, budget_floor_override=False)
+        assert False, "expected a CadenceRefused"
+    except n8n_cadence.CadenceRefused:
+        pass
+
+
+def test_override_phrase_does_not_help_when_the_workflow_list_is_unreadable(
+        stub_module_transport_factory):
+    transport = stub_module_transport_factory([_budget_workflow(), {}])
+
+    result = control_actions.plan_action(
+        _over_budget_request(
+            budget_floor_override_phrase=n8n_cadence.BUDGET_FLOOR_OVERRIDE_PHRASE),
+        STRICT_CONFIG, transport=transport)
+
+    assert result["outcome"] == control_actions.REFUSED
