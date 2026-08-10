@@ -11,7 +11,14 @@ team, not a customer-facing product.
 
 ## Current State
 
-**Starting: v0.8 — Execution Budget Safety.** The n8n Cloud plan allows 2,500 executions
+**Both v0.8 phases complete (2026-08-10) — milestone ready to close.** Phase 44 (SJ-3 dispatch
+gate, drain, budget-derived cap) sealed live-proven; Phase 45 (burn-rate alarm, runtime cadence
+budget floor, time-windowed sweep lookback) sealed at 26/26 must-haves with all 6 code-review
+findings fixed. Phase 45 ships **inert** — installing the sweep cron/launchd schedule is an admin
+action on the operator's machine and was never in scope, so the alarm is unit-proven against
+synthetic execution history rather than observed firing on a schedule.
+
+**v0.8 — Execution Budget Safety.** The n8n Cloud plan allows 2,500 executions
 per month, and on 2026-08-09 the backend spent them on work it could not complete: 61
 companies carried `lv_enrichment_requested=true`, SJ-3 re-dispatched all 61 every 15 minutes,
 and the step that would have cleared the flag is a HubSpot write the (correctly) closed write
@@ -263,4 +270,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-10 at v0.8 start (Execution Budget Safety — after the 182k/month SJ-3 re-dispatch runaway was found and hand-remediated)*
+*Last updated: 2026-08-10 — both v0.8 phases (44, 45) sealed; milestone ready to close*
