@@ -124,7 +124,7 @@ calculations. Derived fields are therefore unusable as queue signals. This secti
 the §19.2 / §19.5 predicates. Implemented in Phase 16 (`wf_scheduled_maintenance_cloud.json`);
 the SJ-1/2/3 acceptance tests shipped with that phase.
 
-**SJ-1 (input-gap scan, hourly — replaces §19.2 "unscored scan").** Queue a company for
+**SJ-1 (input-gap scan, daily since 2026-08-10 — replaces §19.2 "unscored scan").** Queue a company for
 enrichment when any pipeline-owned input is unresolved:
 `lv_org_type` empty or `unknown`, OR `lv_produces_content` empty. MUST NOT reference
 `lv_icp_tier` or any derived output.
@@ -133,7 +133,7 @@ enrichment when any pipeline-owned input is unresolved:
 `lv_org_type_verified_at` OR `lv_produces_content_verified_at` is older than 180 days.
 MUST NOT reference `lv_icp_scored_at` — the pipeline never writes it.
 
-**SJ-3 (requested poller, every 15 min — §19.1 carried forward).** Predicate unchanged
+**SJ-3 (requested poller, daily since 2026-08-10 — §19.1 carried forward; Phase 44 added a per-record write-safety gate, a queue drain, and a budget-derived dispatch cap).** Predicate unchanged
 in substance, property names per PN-5: `lv_enrichment_requested = true AND
 lv_enrichment_status ≠ running`.
 

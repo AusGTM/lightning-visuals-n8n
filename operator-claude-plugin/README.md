@@ -1,5 +1,9 @@
 # Operator Claude Plugin
 
+> **New here? Start with the [Usage Guide](USAGE.md)** — task-oriented, operator-facing,
+> covers every skill with the plain-English phrasing that triggers it. This README is the
+> deeper contract-and-design document.
+
 A conversational **front end and control panel** for the n8n enrichment backend in this
 repository. It lets a non-technical operator load contacts, trigger enrichment, watch runs,
 change schedules, and resolve review conflicts — from a chat window, without opening n8n.
@@ -459,7 +463,7 @@ reads `config/field_policy.yaml` only to *label* a field before you decide about
 never refuses a decision on its own, because the backend is the single authority on what
 may be written and a second opinion here would be a second authority that drifts. The label
 is scoped to the endpoint this plugin submits to; approving inside HubSpot instead goes
-through a separate 15-minute sweep that does not apply the same check.
+through a separate scheduled sweep (daily since 2026-08-10) that does not apply the same check.
 
 **Rejecting records your reason and leaves the record in the queue.** It does not clear,
 dismiss or remove anything. A review flag is never cleared without a recorded decision, so

@@ -420,7 +420,7 @@ return $input.all().map((it) => {
     if (row.lastname) properties.lastname = row.lastname;
     // 37-CONTEXT.md §13(b) / operator's option-b ruling (resolves 37-07's checkpoint):
     // stamp the poller's work-queue flag so a freshly created contact is swept by the
-    // already-deployed 15-minute scheduled poller with no further operator action. This
+    // already-deployed scheduled poller (daily cadence since 2026-08-10) with no further operator action. This
     // is a work-queue flag the poller searches for, NOT a write gate — it grants no
     // permission and opens no write path (ALLOW_HUBSPOT_CREATE above already gates this
     // whole branch). Create branch ONLY for the same reason the identity seeds above are:
@@ -6151,7 +6151,7 @@ def build_scheduled_maintenance_cloud():
                         dedupe_node["name"], dedupe_flag_write["name"]]))
 
     # --- Review Loop: §22.2 approve -> apply -> clear (Task 4) -------------------------
-    # Shares SJ-3's 15-min cadence in spirit (own trigger node, same interval). The search
+    # Shares SJ-3's cadence in spirit (own trigger node, same interval — daily since 2026-08-10). The search
     # requests hs_object_id + every DEFAULT_COMPANY_POLICY-adjacent candidate field's
     # CURRENT value (the refetch reviewApply compares against) + the candidate JSON + the
     # 4 review flags reviewApply's clearPatch zeroes.
@@ -6224,14 +6224,17 @@ def build_scheduled_maintenance_cloud():
             "alongside \"LV Enrichment (Cloud template)\" — this workflow only ever "
             "DISCOVERS/DISPATCHES/CLASSIFIES; the actual provider waterfall + merge lives "
             "in that sibling workflow's companies branch.\n\n"
-            "**SJ-1 (hourly):** any pipeline-owned input unresolved "
+            "**SJ-1 (daily):** any pipeline-owned input unresolved "
             "(`lv_org_type` blank/unknown OR `lv_produces_content` blank) -> "
             "`lv_enrichment_requested=true`.\n\n"
             "**SJ-2 (monthly):** either verified-at cache key older than 180 days -> "
             "reused Company Gate CONFIRMS staleness (RT-5) -> `lv_enrichment_requested=true`.\n\n"
-            "**SJ-3 (15 min):** `lv_enrichment_requested=true AND lv_enrichment_status != "
-            "running` -> Execute Workflow into the companies branch of \"LV Enrichment "
-            "(Cloud template)\". Re-bind `workflowId` after deploy (n8n Cloud assigns its "
+            "**SJ-3 (daily):** `lv_enrichment_requested=true AND lv_enrichment_status != "
+            "running` -> per-record write-safety gate -> budget-derived dispatch cap "
+            "(config/execution_budget.yaml) -> Execute Workflow into the companies branch "
+            "of \"LV Enrichment (Cloud template)\"; declined rows are DRAINED "
+            "(`lv_enrichment_requested=false`, `lv_enrichment_status=skipped`) so a "
+            "closed write gate cannot re-form the re-dispatch runaway (Phase 44). Re-bind `workflowId` after deploy (n8n Cloud assigns its "
             "own id on import — this constant is the byte-identical build-time id, the "
             "deploy script re-binds credentials/references the same way it already does "
             "for the 6 provider credentials, `scripts/deploy_n8n_workflows.py`).\n\n"
@@ -6302,9 +6305,10 @@ def build_scheduled_maintenance_cloud():
 # =============================================================================
 # REVIEW DECISION workflow (Phase 30 Plan 02) — `hubspot/review/decision`.
 #
-# The SYNCHRONOUS counterpart to the 15-minute review loop above, which stays exactly as
-# it is as a backstop (D-08e). That loop cannot satisfy Phase 28's confirm-then-verify
-# pattern: there is nothing to read back for up to 15 minutes. This endpoint takes one
+# The SYNCHRONOUS counterpart to the scheduled review loop above (daily since 2026-08-10),
+# which stays exactly as
+# a backstop (D-08e). That loop cannot satisfy Phase 28's confirm-then-verify
+# pattern: there is nothing to read back until its next scheduled fire. This endpoint takes one
 # operator decision, computes the exact property write, and either shows it (dry run) or
 # performs it and reads it back with an INDEPENDENT refetch.
 #
@@ -6906,7 +6910,7 @@ def build_review_decision_cloud():
             "`config/field_policy.yaml` to show that in advance (D-06), because the "
             "endpoint withholds those fields silently apart from a clause in `message`. "
             "**That class filter is the DECISION endpoint's, and it does not describe the "
-            "15-minute `Apply Review` backstop, which allowlists by key (D-31, open).**\n\n"
+            "scheduled `Apply Review` backstop, which allowlists by key (D-31, open).**\n\n"
             "**One item out, always.** The response is an envelope — `{object_type, "
             "search_ok, total, returned, rows}` — not one item per record: a zero-hit "
             "search that emitted zero items would reach no responder at all and hang the "

@@ -7,6 +7,23 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **v0.8 Phase 44 — SJ-3 Dispatch Gate, Drain & Cap (live-proven 2026-08-10).** After the
+  2026-08-09 execution runaway (61 stuck `lv_enrichment_requested` flags × a 15-min poller =
+  253 executions/hour, ~73x the 2,500/month n8n plan, spent on dispatches that could never
+  complete), the SJ-3 lane is now structurally budget-safe: a per-record write-safety gate
+  (reusing `WRITE_SAFETY_GATE_JS`) dispatches only what an armed window would actually permit;
+  declined rows are **drained** (`lv_enrichment_requested="false"` + `lv_enrichment_status="skipped"`,
+  a two-key allowlisted patch under a new `ALLOW_SJ3_DRAIN_WRITES` authority that defaults true,
+  is never armable, and can only remove queued work); and dispatch is **capped** at a bound
+  derived from `config/execution_budget.yaml` (allowance × share / cadence — 40/tick at daily),
+  with overflow deferred, never drained, and found-vs-dispatched always logged. A
+  `SJ-3 Tick Outcome` node runs even on a fully gate-closed tick (`gate_closed`/`capped_partial`/
+  `dispatched` + counts). `tests/test_execution_budget.py` fails the build if the shipped
+  schedule's idle floor exceeds its configured share of the plan — the check the old
+  2.6x-over-budget schedule would have failed. Live evidence (execution 11820): gate-closed tick
+  cost exactly 1 execution with 0 sub-executions; drain landed with a 272-property diff showing
+  nothing outside the allowlist changed. All five schedule triggers also moved to daily/weekly/
+  monthly cadence (idle floor ~95/month). 9/9 requirements closed; suites 2438 pytest / 656 node.
 - **Milestone v0.7 — HubSpot Scoring Engine Remediation, sealed 2026-08-08.** 5 phases (39–43),
   23 plans, 16/16 requirements. The ICP rubric had been implemented twice — correctly in
   `src/icp_scoring.py` (oracle only, no production callers) and incorrectly as four live HubSpot

@@ -221,10 +221,13 @@ Five `scheduleTrigger` entry points. The workflow ships **`active: false`** (Pha
 ```mermaid
 flowchart TD
   subgraph S1["SJ-1 · input-gap scan"]
-    A1["scheduleTrigger · every 1 h"] --> B1["HubSpot Search · org_type/produces_content missing|unknown (3 OR groups)"] --> C1["Extract Rows · code"] --> D1["HubSpot Update · lv_enrichment_requested=true"]
+    A1["scheduleTrigger · daily"] --> B1["HubSpot Search · org_type/produces_content missing|unknown (3 OR groups)"] --> C1["Extract Rows · code"] --> D1["HubSpot Update · lv_enrichment_requested=true"]
   end
-  subgraph S3["SJ-3 · requested poller"]
-    A3["scheduleTrigger · every 15 min"] --> B3["HubSpot Search · lv_enrichment_requested=true AND status≠running"] --> C3["Extract Rows · code"] --> D3["Execute Workflow → LV Enrichment (Cloud template)"]
+  subgraph S3["SJ-3 · requested poller (gated + capped, Phase 44)"]
+    A3["scheduleTrigger · daily"] --> B3["HubSpot Search · lv_enrichment_requested=true AND status≠running"] --> C3["Extract Rows · code"] --> G3["Dispatch Gate · code · per-record write-safety"]
+    G3 -->|permitted ≤ cap| D3["Execute Workflow → LV Enrichment (Cloud template)"]
+    G3 -->|declined| DR3["Drain Gate → HubSpot Update<br/>requested=false · status=skipped<br/>ALLOW_SJ3_DRAIN_WRITES (default true, never armable)"]
+    G3 --> O3["SJ-3 Tick Outcome · code<br/>gate_closed / capped_partial / dispatched + counts"]
   end
   subgraph S2["SJ-2 · stale refresh"]
     A2["scheduleTrigger · every 1 month"] --> E2["Epoch Cutoff 180d · code"] --> B2["HubSpot Search · _verified_at &lt; cutoff"] --> F2["Adapt Search · code"] --> G2["Company Gate · code"] --> H2{"IF Skip"}
@@ -234,8 +237,8 @@ flowchart TD
   subgraph SD["Dedupe · weekly (classify-only)"]
     AD["scheduleTrigger · every 1 week"] --> BD["HubSpot Search · candidate contacts"] --> CD2["Extract Rows · code"] --> DD["Dedupe Sweep · code · dedupeSweep.js"] --> ED["HubSpot Update · lv_enrichment_needs_review"]
   end
-  subgraph SR["§22.2 review loop · every 15 min"]
-    AR["scheduleTrigger · every 15 min"] --> BR["HubSpot Search · lv_enrichment_review_approved=true"] --> CR2["Extract Rows · code"] --> DR["Apply Review · code · reviewApply.js<br/>refetch + compare-and-set + fail-closed JSON"] --> ER{"IF Stale"}
+  subgraph SR["§22.2 review loop · daily"]
+    AR["scheduleTrigger · daily"] --> BR["HubSpot Search · lv_enrichment_review_approved=true"] --> CR2["Extract Rows · code"] --> DR["Apply Review · code · reviewApply.js<br/>refetch + compare-and-set + fail-closed JSON"] --> ER{"IF Stale"}
     ER -->|fresh| FR["Review Apply Update — hubspot<br/>updateFields:{} placeholder → operator wires the patch"]
     ER -->|stale| GR["Stale · NoOp (keep queued)"]
   end
@@ -378,7 +381,7 @@ plugin and are documented here so this README's inventory matches `n8n/*.json` o
 | File | Purpose |
 | ---- | ------- |
 | `wf_backend_status_cloud.json` | **`hubspot/backend-status`** — read-only backend health: workflows and their active states, recent executions, review-queue counts, provider credit balances (usage endpoints only, never a data endpoint). A value that cannot be read reports an explicit unreadable marker, never zero. Active at rest. |
-| `wf_review_decision_cloud.json` | **`hubspot/review/queue`** (read-only backlog) + **`hubspot/review/decision`** (synchronous adjudication; `n8n/code/reviewDecision.js` calling the same `reviewApply` engine the 15-minute backstop uses). Approve promotes the held candidate, clears the flags, and writes a human provenance entry (`source: human`, `human_approved`, timestamp, reason, `superseded_source`); reject records the reason and leaves the record queued; `manual_protected`/`review_required` classes are withheld on this endpoint. **Ships and rests inactive** — activated only inside audited review windows. |
+| `wf_review_decision_cloud.json` | **`hubspot/review/queue`** (read-only backlog) + **`hubspot/review/decision`** (synchronous adjudication; `n8n/code/reviewDecision.js` calling the same `reviewApply` engine the scheduled backstop uses). Approve promotes the held candidate, clears the flags, and writes a human provenance entry (`source: human`, `human_approved`, timestamp, reason, `superseded_source`); reject records the reason and leaves the record queued; `manual_protected`/`review_required` classes are withheld on this endpoint. **Ships and rests inactive** — activated only inside audited review windows. |
 
 **Enum guard (Phase 31).** Every candidate value bound for an enum-backed HubSpot company
 property passes `n8n/code/hubspotEnums.js` over the generated option data

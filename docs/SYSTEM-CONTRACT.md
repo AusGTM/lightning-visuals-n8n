@@ -35,7 +35,7 @@ There is no external oracle of correctness, and there should not be — because 
 6. **Right-sized compute.** Each task uses the cheapest sufficient method — deterministic rules where possible, a fast cheap model for simple classification, a capable model only for genuine conflict or high-risk decisions. Capability is spent only where it changes the outcome.
 7. **Coverage.** The system continuously works toward every eligible record having its key inputs resolved _or explicitly marked unknown / in-review_ — no silent gaps. A well-marked unknown counts as covered.
 8. **Auditability and reversibility.** Schema and data changes are logged, dry-run-able, and reversible, meeting the higher governance bar of a canonical CRM.
-9. **Continuous, low-friction operation.** Three supported triggers — batch (upload to HubSpot, cron catches the blanks), on-demand (per-record flag, ~15 min), reactive (webhook on change). Batch freshness is within one cron interval, not instant.
+9. **Continuous, low-friction operation.** Three supported triggers — batch (upload to HubSpot, cron catches the blanks), on-demand (per-record flag, picked up by the next scheduled tick — daily since 2026-08-10; for immediate processing use the webhook), reactive (webhook on change). Batch freshness is within one cron interval, not instant.
 
 ## How each commitment is checked
 

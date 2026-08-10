@@ -18,7 +18,7 @@ flowchart LR
 
   subgraph TRIG["Trigger point"]
     WH["<b>On-demand webhook</b><br/>POST /webhook/hubspot/enrichment/event<br/>Header Auth: X-Enrichment-Secret"]
-    SCH["<b>Scheduled maintenance</b><br/>SJ-1 hourly · SJ-2 monthly · SJ-3 15-min<br/>weekly dedupe · 15-min review poller"]
+    SCH["<b>Scheduled maintenance</b><br/>SJ-1 daily · SJ-2 monthly · SJ-3 daily (gated + capped)<br/>weekly dedupe · daily review poller"]
   end
 
   subgraph CORE["Enrichment core — n8n Cloud"]
@@ -67,13 +67,15 @@ flowchart LR
 | Scoring parity harness (Python oracle vs live HubSpot) + standing drift guard | ✅ `scripts/run_scoring_parity.py` — PASS, 0 real findings; includes the blank-score detector |
 | Validation population | ✅ 66 web-researched companies landed and scored with provenance (A:7 B:18 C:17 D:24), zero provider spend |
 | Null-safe fit-score formula | ✅ 2026-08-08 — a bare sum blanked the whole score on any null term; now `coalesce()`-guarded, with `org_type_score` left bare as the "never scored" sentinel |
+| Execution-budget safety (SJ-3 gate + drain + cap) | ✅ **v0.8 Phase 44, live-proven 2026-08-10** — a gate-closed tick costs 1 execution (was 1+N), drains its own queue, and dispatch is capped from `config/execution_budget.yaml` (2,500/month plan) |
+| Operator usage guide | ✅ [`operator-claude-plugin/USAGE.md`](operator-claude-plugin/USAGE.md) — task-oriented guide for the non-technical operator |
 
 **"Operator" means two different people in this repo.** Everything above is administered from this
 repository by a technical operator/admin (scripts, deploys, armed windows, runbooks in `docs/`). The
 v0.6 client targets a *non-technical* operator who works only in Claude and never opens n8n or a
 terminal; `docs/` runbooks and `scripts/` are admin surfaces, not theirs.
 
-Full test suite: `.venv/bin/python -m pytest -q` (Python oracle) + `node --test tests/n8n/*.test.mjs` (Code-node modules). Current: **2427 pytest / 636 node**.
+Full test suite: `.venv/bin/python -m pytest -q` (Python oracle) + `node --test tests/n8n/*.test.mjs` (Code-node modules). Current: **2438 pytest / 656 node**.
 
 ## Repository layout
 
@@ -96,6 +98,7 @@ CLAUDE.md      # canonical technical specification (also Claude Code project ins
 - **System contract** — [`docs/SYSTEM-CONTRACT.md`](docs/SYSTEM-CONTRACT.md) (the standard the system is evaluated against)
 - **Business** — [`docs/business/icp-scoring.md`](docs/business/icp-scoring.md) (ICP / Anti-ICP validation from closed deals)
 - **n8n workflows** — [`n8n/README.md`](n8n/README.md) (node-level mermaid, import, credentials, deploy, Cloud-vs-local)
+- **Operator usage guide** — [`operator-claude-plugin/USAGE.md`](operator-claude-plugin/USAGE.md) (task-oriented: what to say, what to expect)
 - **Operator client** — [`operator-claude-plugin/README.md`](operator-claude-plugin/README.md) (conversational front end + control panel; a suggested default thin client, not the only possible one — the backend is plain HTTP, so other front ends can be built against the same contract)
 - **Changelog** — [`CHANGELOG.md`](CHANGELOG.md)
 

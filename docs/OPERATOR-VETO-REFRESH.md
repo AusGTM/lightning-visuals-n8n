@@ -71,12 +71,12 @@ through this pipeline, not just the veto fields.
    ALLOW_N8N_ARM=true python3 operator-claude-plugin/scripts/scheduled_arm.py
    ```
    Schedule it (cron, launchd, or any external scheduler) on a cadence comparable to SJ-3's
-   own 15-minute trigger; each invocation is one bounded arm/dispatch/disarm cycle, never a
+   own scheduled trigger (daily since 2026-08-10); each invocation is one bounded arm/dispatch/disarm cycle, never a
    loop. `tests/test_scheduled_arm.py` (22 tests, offline) covers the batch-read, arm
    scoping, and guaranteed-disarm-on-failure behavior; no live deploy of any n8n workflow
    is required for this companion to work — it operates against the enrichment workflow's
    write-safety Code node exactly as already deployed since 40-03.
-2. **SJ-3 (the 15-minute requested-enrichment poller) could not dispatch to enrichment at
+2. **SJ-3 (the requested-enrichment poller, daily since 2026-08-10) could not dispatch to enrichment at
    all — FIXED, pending deploy (WINDOWS.md #3).** Its `SJ-3 Dispatch To Enrichment` node
    calls `LV Enrichment (Cloud template)` via n8n's Execute-Workflow "call another
    workflow" mode, which requires the CALLED workflow to expose an Execute Workflow
@@ -120,9 +120,9 @@ current inputs:
    Python code and in an earlier draft of this document is a different, unrelated
    property from the old local-first prototype and does nothing on the cloud
    pipeline).
-3. Wait for the existing 15-minute scheduled poller
+3. Wait for the existing scheduled poller (daily since 2026-08-10)
    (`LV Scheduled Maintenance (Cloud)` → the requested-enrichment poll job,
-   CLAUDE.md §19.1) to pick the record up. Latency is **up to 15 minutes**, not
+   CLAUDE.md §19.1) to pick the record up. Latency is **up to one scheduled tick (daily)**, not
    immediate. WINDOWS.md #3's fix is deployed and bounced, so the poller successfully
    *dispatches* to enrichment — but SJ-3's own in-n8n dispatch still needs the write gate
    armed (WINDOWS.md #2, still open — no permanent flip) to actually PATCH the record, and
