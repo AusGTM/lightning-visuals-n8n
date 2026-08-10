@@ -138,12 +138,12 @@ page at 80%.
 | CAP-01 | Phase 44 | Complete — test: cap derivation in tests/n8n/sj3DispatchGate.test.mjs + builder assert; live `cap: 40` in 44-LIVE-EVIDENCE.md |
 | CAP-02 | Phase 44 | Complete — test: overflow-defers + found-vs-dispatched tests in tests/n8n/sj3DispatchGate.test.mjs |
 | CAP-03 | Phase 44 | Complete — test: tests/test_execution_budget.py idle-floor guard over committed scheduleTriggers |
-| ALARM-01 | Phase 45 | Complete |
-| ALARM-02 | Phase 45 | Complete |
-| ALARM-03 | Phase 45 | Complete |
-| ALARM-04 | Phase 45 | Complete |
-| LOOK-01 | Phase 45 | Complete |
-| FLOOR-01 | Phase 45 | Complete |
+| ALARM-01 | Phase 45 | Complete — closed by unit test against synthetic execution history (ships inert, no live scheduled fire): operator-claude-plugin/tests/test_burn_rate_alarm.py::test_a_runaway_history_produces_exactly_one_burn_rate_notice (2026-08-09 253/hour shape), ::test_a_quiet_history_produces_no_notice_at_all, ::test_projection_exactly_at_ceiling_does_not_fire_one_execution_more_does |
+| ALARM-02 | Phase 45 | Complete — closed by unit test against synthetic execution history (ships inert): same fixture set as ALARM-01 above, asserting the notice states a sampled rate and observed span, never a claimed monthly total |
+| ALARM-03 | Phase 45 | Complete — closed by unit test against synthetic execution history (ships inert): operator-claude-plugin/tests/test_burn_rate_alarm.py::test_missing_allowance_fires_not_configured_naming_the_key_and_stops_there, ::test_missing_allowance_alongside_a_stuck_run_fires_both_via_evaluate; drift mechanically enforced by tests/test_execution_budget_drift.py |
+| ALARM-04 | Phase 45 | Complete — closed by unit test against synthetic execution history (ships inert): operator-claude-plugin/tests/test_burn_rate_alarm.py::test_allowance_present_but_executions_unreadable_fires_unreadable |
+| LOOK-01 | Phase 45 | Complete — test: operator-claude-plugin/tests/test_burn_rate_alarm.py::test_a_terminal_failure_that_ended_outside_the_window_ages_out, ::test_an_in_flight_run_started_outside_the_window_is_retained_and_fires_stuck, ::test_a_workflow_name_absent_from_the_raw_item_is_backfilled_from_list_workflows |
+| FLOOR-01 | Phase 45 | Complete — test: operator-claude-plugin/tests/test_cadence_budget_floor.py::test_15_minute_request_over_the_ceiling_names_all_three_numbers, ::test_five_hourly_triggers_refused_even_though_no_single_one_exceeds_the_allowance, ::test_budget_floor_override_taken_matches_the_exact_normalised_phrase_only |
 
 Coverage: 15/15 v0.8 requirements mapped. 100% coverage, no orphans.
 
