@@ -167,7 +167,20 @@ write windows.
   3. Operator can search HubSpot alone — no scripts — for "non-ANZ veto reason with a blank
      `lv_country_region_normalized`" and get zero results.
 
-**Plans**: TBD
+**Plans**: 4 plans
+
+Plans:
+- [ ] 47-01-PLAN.md — Build `scripts/remediate_veto_companies.py` and its offline suite: the
+      pinned-ID gate, the never-write guard, the two independent settle-and-assert wrappers, the
+      D-18 webhook event builder, and the budget refusal (wave 1)
+- [ ] 47-02-PLAN.md — Map COVER-01/COVER-02 to Phase 47 + 48 per D-02, write the ex-ante cost
+      estimate, fill the validation map, and scope the API coverage matrix (wave 1)
+- [ ] 47-03-PLAN.md — Pre-flight, all read-only: the per-ID before-snapshot, the live
+      property-existence guard, the single live web-research pass, and the mandatory disarmed
+      dry-run printing every exact payload (wave 2)
+- [ ] 47-04-PLAN.md — The one armed write window across both surfaces, the disarm with
+      independent read-back, the after-diff and cost actuals, and the operator's script-free
+      VETO-03 search (wave 3)
 
 ---
 
