@@ -1,15 +1,16 @@
 # tests/test_simulate_rubric_weights.py
 #
-# Phase 46 Plan 01, Task 2 (tracer, tdd) -- proves the simulation path end to end for
-# one record: an in-memory proposed rubric scores correctly, config/icp_scoring.yaml on
-# disk stays untouched, and the gambling-deduction guard added to
-# src/icp_scoring.py::compute_icp_score neither raises nor double-counts. No network, no
-# credentials, no fixtures directory -- every case below drives compute_icp_score /
-# scripts/simulate_rubric_weights.py against literal property dicts and in-memory cfgs.
+# Phase 46 Plan 01 (tracer, tdd) proved the simulation path end to end for one record.
+# Plan 02 (this revision) grows it to the full RUBRIC-02 shape: PROPOSED_OVERRIDES carries
+# all three decided levers (D-01/D-02/D-03), SCENARIOS adds club-weight sensitivity
+# (10/15/20), build_simulation adds row-set selection/cross-check, D-10 flags, tier
+# distributions, movement summary, and render_markdown. No network, no credentials, no
+# fixtures directory for these cases -- every test below drives compute_icp_score /
+# scripts/simulate_rubric_weights.py against literal property dicts, in-memory cfgs, and
+# (for the row-set finding) the real committed 41-final-population.json cross-check file
+# (a local, offline read -- no live call).
 import copy
 import inspect
-
-import yaml
 
 import src.hubspot_client as hubspot_client
 import scripts.simulate_rubric_weights as simulate_rubric_weights
@@ -18,7 +19,10 @@ from src.schemas import HubSpotRecord
 from scripts.simulate_rubric_weights import (
     PROPOSED_OVERRIDES,
     RUBRIC_PATH,
+    SCENARIOS,
     build_proposed_cfg,
+    build_scenario_cfg,
+    build_simulation,
     simulate_row,
 )
 
@@ -30,13 +34,40 @@ def _record(props: dict) -> HubSpotRecord:
 CURRENT_CFG = load_yaml(str(RUBRIC_PATH))
 
 
-def test_proposed_overrides_carries_only_d01_this_task():
-    """Task 2 populates only D-01 (individual_club_team -> 15). Plan 02 adds D-02/D-03 --
-    this pins the wave-1 scope so a later addition is a deliberate, reviewed diff, not a
-    silent scope creep."""
+# --- PROPOSED_OVERRIDES / SCENARIOS shape (Plan 02 grows Plan 01's one-lever scope) ---
+
+def test_proposed_overrides_carries_all_three_levers():
+    """Plan 02 grows PROPOSED_OVERRIDES from Plan 01's single D-01 entry to all three
+    decided levers -- D-01 (club->15), D-02 (regulator->-20, a DIRECT base_score.org_type
+    weight per 46-RESEARCH.md Open Question 5's live-executed finding, not a new
+    graduated_deductions key), D-03 (gambling deduction key deleted outright)."""
     assert PROPOSED_OVERRIDES == [
         ("base_score.org_type.individual_club_team", 15),
+        ("base_score.org_type.regulator", -20),
+        ("graduated_deductions.gambling_operator", None),
     ]
+
+
+def test_build_proposed_cfg_adds_no_new_graduated_deductions_key():
+    """D-02's regulator deduction is a direct base_score.org_type value, not a new
+    graduated_deductions key -- deleting gambling_operator must leave graduated_deductions
+    empty, never a new key added in its place."""
+    proposed = build_proposed_cfg(CURRENT_CFG)
+    assert proposed["graduated_deductions"] == {}
+
+
+def test_scenarios_differ_only_by_club_weight():
+    """SCENARIOS defines exactly three scenarios whose only difference is the club weight
+    (10 / 15 / 20)."""
+    assert len(SCENARIOS) == 3
+    assert sorted(s["club_weight"] for s in SCENARIOS) == [10, 15, 20]
+    assert len({s["name"] for s in SCENARIOS}) == 3
+
+
+def test_build_scenario_cfg_club_15_matches_build_proposed_cfg():
+    """The primary scenario (club weight 15) is byte-identical to build_proposed_cfg's
+    output -- a single source of truth for the primary weight set."""
+    assert build_scenario_cfg(CURRENT_CFG, 15) == build_proposed_cfg(CURRENT_CFG)
 
 
 def test_build_proposed_cfg_never_writes_to_disk():
@@ -58,9 +89,10 @@ def test_build_proposed_cfg_does_not_mutate_current_cfg():
     assert CURRENT_CFG["base_score"]["org_type"]["individual_club_team"] == 5
 
 
+# --- Per-weight arithmetic (D-01/D-02/D-03 worked examples, verified in 46-RESEARCH.md) ---
+
 def test_au_club_scores_35_c_under_current_and_45_b_under_proposed():
-    """The behavior this whole task exists to prove: one record, two rubrics, two
-    different tiers -- club(5)+content(20)+AU(10)+1-5M(0)=35=C today,
+    """club(5)+content(20)+AU(10)+1-5M(0)=35=C today,
     club(15)+content(20)+AU(10)+1-5M(0)=45=B under D-01."""
     props = {
         "lv_org_type": "individual_club_team",
@@ -76,6 +108,42 @@ def test_au_club_scores_35_c_under_current_and_45_b_under_proposed():
     assert row["oracle_current_tier"] == "C"
     assert row["oracle_proposed_score"] == 45
     assert row["oracle_proposed_tier"] == "B"
+
+
+def test_regulator_moves_to_10_unscored_under_proposed():
+    """D-02's own worked example: regulator(5)+content(20)+AU(10)=35=C today,
+    regulator(-20)+content(20)+AU(10)=10=Unscored under the proposed rubric."""
+    props = {
+        "lv_org_type": "regulator",
+        "lv_produces_content": True,
+        "lv_country_region_normalized": "AU",
+    }
+    proposed_cfg = build_proposed_cfg(CURRENT_CFG)
+
+    row = simulate_row(props, CURRENT_CFG, proposed_cfg)
+
+    assert row["oracle_current_score"] == 35
+    assert row["oracle_current_tier"] == "C"
+    assert row["oracle_proposed_score"] == 10
+    assert row["oracle_proposed_tier"] == "Unscored"
+
+
+def test_gambling_row_gains_20_under_proposed():
+    """D-03's worked example: league(40)+content(20)+AU(10)+5-50M(10)-gambling(20)=60
+    today; with the deduction removed outright, the same inputs score 80."""
+    props = {
+        "lv_org_type": "governing_body_league",
+        "lv_produces_content": True,
+        "lv_is_gambling_operator": True,
+        "lv_country_region_normalized": "AU",
+        "lv_revenue_band": "5-50M",
+    }
+    proposed_cfg = build_proposed_cfg(CURRENT_CFG)
+
+    row = simulate_row(props, CURRENT_CFG, proposed_cfg)
+
+    assert row["oracle_current_score"] == 60
+    assert row["oracle_proposed_score"] == 80
 
 
 def test_simulate_row_carries_distinct_live_and_oracle_columns():
@@ -147,7 +215,7 @@ def test_gambling_still_deducts_20_under_current_cfg():
 def test_blank_org_type_contributes_zero_under_both_rubrics():
     """A record with blank lv_org_type contributes 0 org-type points under both the
     current and the proposed rubric -- the proposed rubric only reweights
-    individual_club_team, it does not touch the blank/unknown fallback."""
+    individual_club_team/regulator, it does not touch the blank/unknown fallback."""
     props = {
         "lv_produces_content": True,
         "lv_country_region_normalized": "AU",
@@ -167,6 +235,143 @@ def test_blank_org_type_contributes_zero_under_both_rubrics():
     assert org_type_points(current) == 0
     assert org_type_points(proposed) == 0
 
+
+# --- build_simulation: row set, D-10 flags, distributions, movement, false-green guard ---
+
+def test_empty_row_set_yields_failure_verdict_and_nonzero_exit():
+    payload, exit_code = build_simulation([], fetch_fn=lambda _id: {}, current_cfg=CURRENT_CFG)
+    assert exit_code == 1
+    assert "FAIL" in payload["verdict"]
+
+
+def test_false_veto_row_keeps_live_and_oracle_columns_distinct():
+    """The false-veto shape (D-10): HubSpot's live tier reads D off a stale blank-region
+    veto write; the oracle (which carries the blank-region veto fix -- 46-RESEARCH.md)
+    does not veto and computes a real tier. Both values must stay distinct and
+    addressable, and the row must carry the false_veto flag."""
+    props = {
+        "lv_org_type": "individual_club_team",
+        "lv_produces_content": True,
+        "lv_country_region_normalized": "",
+        "lv_icp_fit_score": "10",
+        "lv_icp_tier": "D",
+        "lv_anti_icp_flag": "true",
+        "lv_anti_icp_reason": "Non-ANZ geography",
+    }
+    payload, exit_code = build_simulation(["1"], fetch_fn=lambda _id: props, current_cfg=CURRENT_CFG)
+
+    assert exit_code == 0
+    row = payload["rows"][0]
+    assert row["live_tier"] == "D"
+    assert row["oracle_current_tier"] != "D"
+    assert "false_veto" in row["flags"]
+
+
+def test_blank_org_type_row_is_flagged_in_build_simulation():
+    props = {
+        "lv_produces_content": True,
+        "lv_country_region_normalized": "AU",
+        "lv_revenue_band": "5-50M",
+    }
+    payload, exit_code = build_simulation(["1"], fetch_fn=lambda _id: props, current_cfg=CURRENT_CFG)
+
+    assert exit_code == 0
+    row = payload["rows"][0]
+    assert "blank_org_type" in row["flags"]
+    # unknown(0)+content(20)+AU(10)+5-50M(10) = 40 under both rubrics -- the proposed
+    # rubric only reweights individual_club_team/regulator/gambling.
+    assert row["oracle_current_score"] == 40
+    assert row["oracle_proposed_score"] == 40
+
+
+def test_row_set_divergence_finding_populated_against_cross_check():
+    """Uses the real committed 41-final-population.json (66 ids) as the cross-check --
+    an offline, local read, no live call. A stub row set of unrelated ids must produce a
+    non-empty, non-silent divergence finding."""
+    payload, exit_code = build_simulation(
+        ["1001", "1002", "1003"],
+        fetch_fn=lambda _id: {
+            "lv_org_type": "individual_club_team",
+            "lv_produces_content": True,
+            "lv_country_region_normalized": "AU",
+            "lv_revenue_band": "1-5M",
+        },
+        current_cfg=CURRENT_CFG,
+    )
+
+    assert exit_code == 0
+    finding = payload["row_set_finding"]
+    assert finding["live_count"] == 3
+    assert finding["cross_check_count"] == 66
+    assert finding["matches_exactly"] is False
+    assert finding["symmetric_difference_count"] == 69
+    assert set(finding["only_in_live"]) == {"1001", "1002", "1003"}
+
+
+def test_movement_summary_counts_tier_changes_by_org_type():
+    props_by_id = {
+        "1": {  # club: moves C -> B
+            "lv_org_type": "individual_club_team",
+            "lv_produces_content": True,
+            "lv_country_region_normalized": "AU",
+            "lv_revenue_band": "1-5M",
+        },
+        "2": {  # league: unaffected by any of the three levers
+            "lv_org_type": "governing_body_league",
+            "lv_produces_content": True,
+            "lv_country_region_normalized": "AU",
+            "lv_revenue_band": "5-50M",
+        },
+    }
+    payload, exit_code = build_simulation(
+        ["1", "2"], fetch_fn=lambda cid: props_by_id[cid], current_cfg=CURRENT_CFG,
+    )
+
+    assert exit_code == 0
+    movement = payload["movement_summary"]
+    assert movement["total_rows"] == 2
+    assert movement["changed_tier_count"] == 1
+    assert movement["unchanged_tier_count"] == 1
+    assert movement["by_org_type"]["individual_club_team"] == {"changed": 1, "unchanged": 0}
+    assert movement["by_org_type"]["governing_body_league"] == {"changed": 0, "unchanged": 1}
+
+
+def test_sensitivity_tiers_present_for_10_and_20_not_15():
+    props = {
+        "lv_org_type": "individual_club_team",
+        "lv_produces_content": True,
+        "lv_country_region_normalized": "AU",
+        "lv_revenue_band": "1-5M",
+    }
+    payload, exit_code = build_simulation(["1"], fetch_fn=lambda _id: props, current_cfg=CURRENT_CFG)
+
+    assert exit_code == 0
+    row = payload["rows"][0]
+    assert set(row["sensitivity_tiers"].keys()) == {"club_10", "club_20"}
+    # club(10)+content(20)+AU(10)+1-5M(0)=40=B; club(20)+...=50=B -- both cross the B
+    # floor for this record; the sensitivity table exists precisely to show that margin.
+    assert row["sensitivity_tiers"]["club_10"] == "B"
+    assert row["sensitivity_tiers"]["club_20"] == "B"
+
+
+def test_render_markdown_includes_portal_row_count_and_flags():
+    props = {
+        "lv_produces_content": True,
+        "lv_country_region_normalized": "AU",
+        "lv_revenue_band": "5-50M",
+    }
+    payload, exit_code = build_simulation(["1"], fetch_fn=lambda _id: props, current_cfg=CURRENT_CFG)
+    assert exit_code == 0
+
+    md = simulate_rubric_weights.render_markdown(payload)
+
+    assert simulate_rubric_weights.EXPECTED_PORTAL_ID in md
+    assert "blank_org_type" in md
+    assert "Rows simulated:** 1" in md
+    assert "Sensitivity" in md
+
+
+# --- Zero-write proof (Plan 01 Task 3) -- unchanged, preserved verbatim ---
 
 def _write_capable_hubspot_client_names() -> list:
     """Enumerates src/hubspot_client.py's write-capable functions by introspection
