@@ -109,6 +109,7 @@ Based on Org Type"). See `46-ENGINE-INVENTORY.md` for the full evidence and
   content to bounce or read back this phase. Re-triggers if a future phase touches categorical
   promotion logic, taxonomy membership, evidence gating, or merge policy in the n8n leg (the
   four triggers `46-ENGINE-INVENTORY.md` names).
+
 - **Criterion 3 status: satisfied at engine level; the live record-level parity sweep is
   expected red by design.** The offline parity harness, `tests/test_flow_rubric_conformance.py`,
   and Plan 04's running-content read-back all agree with the rubric of record for both live
@@ -118,7 +119,7 @@ Based on Org Type"). See `46-ENGINE-INVENTORY.md` for the full evidence and
   old-weight live score against the new-weight oracle, per `46-DECISION.md`'s "Parity red
   window" section. This is expected and self-inflicted, not a new defect.
 
-**Plans**: 4/5 plans executed
+**Plans**: 5/5 plans executed
 
 Plans:
 
@@ -134,7 +135,7 @@ Plans:
 - [x] 46-04-PLAN.md — Commit the signed-off weights to `config/icp_scoring.yaml` and land them
       identically in the HubSpot flows, with a running-content read-back
 
-- [ ] 46-05-PLAN.md — Sync every live document to the new rubric and record the engine-count
+- [x] 46-05-PLAN.md — Sync every live document to the new rubric and record the engine-count
       amendment
 
 ---
@@ -242,7 +243,7 @@ did not change, no full re-score is owed and this phase proves the procedure wit
 | ----- | --------- | -------------- | ------ | --------- |
 | 44. SJ-3 Dispatch Gate, Drain & Cap | v0.8 | 3/3 | Complete (verified) | 2026-08-10 |
 | 45. Burn-Rate Alarm | v0.8 | 3/3 | Complete (verified) | 2026-08-10 |
-| 46. Rubric Decision, Simulation & Engine Parity | v0.9 | 4/5 | In Progress|  |
+| 46. Rubric Decision, Simulation & Engine Parity | v0.9 | 5/5 | In Progress|  |
 | 47. Veto Remediation | v0.9 | 0/? | Not started | - |
 | 48. Enrichment Coverage | v0.9 | 0/? | Not started | - |
 | 49. Re-score Strategy & Reporting | v0.9 | 0/? | Not started | - |

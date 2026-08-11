@@ -4,17 +4,17 @@ milestone: v0.9
 milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 46
 current_phase_name: Rubric Decision, Simulation & Engine Parity
-status: executing
-stopped_at: Completed 46-04-PLAN.md
-last_updated: "2026-08-11T08:35:08.964Z"
+status: verifying
+stopped_at: Completed 46-05-PLAN.md
+last_updated: "2026-08-11T08:49:47.111Z"
 last_activity: 2026-08-11
 last_activity_desc: Phase 46 execution started
 progress:
   total_phases: 4
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 5
-  completed_plans: 4
-  percent: 0
+  completed_plans: 5
+  percent: 25
 ---
 
 # Project State
@@ -23,18 +23,18 @@ progress:
 
 Phase: 46 (Rubric Decision, Simulation & Engine Parity) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-08-11 — Phase 46 execution started
   mapped (RUBRIC-01..03 -> 46, VETO-01..03 -> 47, COVER-01..02 -> 48, RESCORE-01..03 -> 49).
   Sequencing: rubric decided once (46) before the 17 false-veto records are touched (47), so
   they re-score exactly once rather than twice under a later weight change.
 
-Progress: [████████░░] 80%
+Progress: [██████████] 100%
 
 ## Session
 
-**Last session:** 2026-08-11T08:35:08.958Z
-**Stopped at:** Completed 46-04-PLAN.md
+**Last session:** 2026-08-11T08:49:39.578Z
+**Stopped at:** Completed 46-05-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -68,6 +68,7 @@ Progress: [████████░░] 80%
 | Phase 46 P02 | ~35min | 2 tasks | 4 files |
 | Phase 46 P03 | ~20min | 2 tasks | 1 files |
 | Phase 46 P04 | 35min | 2 tasks | 11 files |
+| Phase 46 P05 | ~15min | 2 tasks | 7 files |
 
 ## Decisions
 
@@ -142,6 +143,9 @@ Progress: [████████░░] 80%
 - [Phase ?]: [Phase 46-03]: D-09's shareable-artifact publish deferred to the orchestrator session -- this CLI executor has no artifact-publishing capability; recorded as a deviation, not an unmet requirement.
 - [Phase ?]: Landed signed-off rubric weights (club=15, regulator=-20, gambling deduction removed) in config/icp_scoring.yaml and both live HubSpot flows, with a running-content read-back; RUBRIC-03 complete.
 - [Phase ?]: Discovered mid-execution: config/taxonomy.yaml mirrors icp_scoring.yaml's org-type scores and needed the same two edits (not named by 46-RESEARCH.md/46-ENGINE-INVENTORY.md) -- confirmed it never reaches the generated n8n JS.
+- [Phase ?]: 46-05: docs/business/icp-scoring.md's anti-ICP direction markers ('club –') fixed to '+' beyond the plan's explicit list, to avoid contradicting the newly-added GTM override text in the same document
+- [Phase ?]: 46-05: WEB-RESEARCH-SPEC.md's FanDuel worked-example row was the one site beyond D-13's table the grep sweep found (D-13's own line-159 citation is now stale in a different way -- that text describes revenue-band conflicts, not gambling)
+- [Phase ?]: 46-05: .planning/intel/requirements.md edited beyond the single read_first-cited line (REQ-icp-scoring-model, REQ-graduated-deductions also updated) since both print superseded literal weight values covered by the plan's numeric-agreement truth
 
 ### Blockers
 
