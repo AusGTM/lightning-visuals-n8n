@@ -38,14 +38,13 @@ def _refuse_network(*_a, **_kw):
 # Task 2 (T-47-13): a fake lister covering every property name any built payload or the
 # report script's OBSERVED_PROPS could ever check, so Plan 01's tests -- which predate
 # the live property-existence guard -- keep exercising main() without a live HubSpot
-# properties call. Deliberately a superset, not the literal live portal set.
-_ALL_METADATA_PROPS = {
-    f"{field}{suffix}" for field in m.INPUT_PROPS for suffix in m.METADATA_SUFFIXES
-}
+# properties call. D-21 (Amendment 2026-08-12): build_metadata_patch only ever emits
+# LIVE_METADATA_STAMP_KEYS (2 keys, not the full 21 METADATA_SUFFIXES combinations) --
+# this fake set mirrors the guard's actual narrowed checked set, not an inflated one.
 _FAKE_LIVE_PROPERTY_NAMES = (
     {"name", "domain", "website", "country", "industry"}
     | set(m.INPUT_PROPS)
-    | _ALL_METADATA_PROPS
+    | set(m.LIVE_METADATA_STAMP_KEYS)
     | {"org_type_score", "geography_score", "annual_revenue_score",
        "produces_content_score", "gambling_score"}
     | set(m.FORBIDDEN_PROPS)

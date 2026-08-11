@@ -54,7 +54,7 @@ import requests  # noqa: E402
 
 from src.hubspot_client import batch_update_companies, get_record  # noqa: E402
 from src.icp_scoring import compute_icp_score, load_yaml  # noqa: E402
-from src.schemas import HubSpotRecord  # noqa: E402
+from src.schemas import HubSpotRecord, ProviderResult  # noqa: E402
 from src.web_research import claude_web_research  # noqa: E402
 from scripts.backfill_seed_company_scores import compute_components  # noqa: E402
 
@@ -113,11 +113,21 @@ FORBIDDEN_PROPS = frozenset({
 # D-05: the widened scoring-input set this phase enriches (not lv_org_type alone).
 INPUT_PROPS = ("lv_org_type", "lv_produces_content", "lv_country_region_normalized")
 
-# D-09: the seven source-metadata stamps written for every field this script writes.
+# D-09: the seven source-metadata stamps this phase RECORDS for every field it writes.
 METADATA_SUFFIXES = (
     "_source", "_confidence", "_evidence_url", "_evidence_summary",
     "_verified_at", "_verified_by_model", "_validation_status",
 )
+
+# D-21 (Amendment 2026-08-12, operator-confirmed at the Plan 03 checkpoint): Task 2's
+# live property-existence guard found 19 of the 21 D-09 stamp properties absent from the
+# portal -- only these two exist and are ever PATCHed to HubSpot. The full seven-suffix
+# D-09 trail (build_metadata_record) is still computed for every written field, but is
+# recorded in 47-RESEARCH-RESULTS.json / 47-RUN-REPORT.md instead, never sent live. The
+# standing "no new HubSpot properties of any kind" constraint is not lifted by this
+# narrowing.
+LIVE_METADATA_FIELDS = ("lv_org_type", "lv_produces_content")
+LIVE_METADATA_STAMP_KEYS = tuple(f"{field}_verified_at" for field in LIVE_METADATA_FIELDS)
 
 # config/field_policy.yaml's lv_org_type.require_evidence_url_for -- read-only input,
 # never written to disk by this script.
@@ -314,7 +324,29 @@ def unresolved_reasons(company_id: str, result) -> dict:
 
 
 def build_metadata_patch(company_id: str, result, written_fields) -> dict:
-    """For each field actually written, the seven METADATA_SUFFIXES stamps (D-09)."""
+    """D-21: the NARROWED HubSpot PATCH -- only LIVE_METADATA_STAMP_KEYS
+    (lv_org_type_verified_at / lv_produces_content_verified_at), and only for fields
+    this run actually wrote. The other five D-09 suffixes per field, and all seven for
+    lv_country_region_normalized, do not exist live and are never PATCHed -- see
+    build_metadata_record for the full trail this narrowing does not drop, only
+    relocates."""
+    verified_at = datetime.now(timezone.utc).isoformat()
+    props = {
+        f"{field}_verified_at": verified_at
+        for field in written_fields
+        if field in LIVE_METADATA_FIELDS
+    }
+    assert FORBIDDEN_PROPS.isdisjoint(props), "build_metadata_patch produced a forbidden derived-field key"
+    return {"id": company_id, "properties": props}
+
+
+def build_metadata_record(company_id: str, result, written_fields) -> dict:
+    """D-21: the FULL seven-suffix D-09 evidence trail for every field this run
+    actually wrote -- never PATCHed to HubSpot (build_metadata_patch is the narrowed
+    subset that is). Recorded in 47-RESEARCH-RESULTS.json / 47-RUN-REPORT.md instead, so
+    the config/field_policy.yaml evidence-URL obligation for hardware_vendor /
+    content_producer / governing_body_league / gambling_operator is met in the repo
+    artifact rather than on the live record."""
     props = {}
     verified_by_model = os.getenv("ANTHROPIC_RESEARCH_MODEL", "claude-sonnet-5")
     verified_at = datetime.now(timezone.utc).isoformat()
@@ -328,7 +360,7 @@ def build_metadata_patch(company_id: str, result, written_fields) -> dict:
         props[f"{field}_verified_by_model"] = verified_by_model
         props[f"{field}_validation_status"] = "web_researched"
 
-    assert FORBIDDEN_PROPS.isdisjoint(props), "build_metadata_patch produced a forbidden derived-field key"
+    assert FORBIDDEN_PROPS.isdisjoint(props), "build_metadata_record produced a forbidden derived-field key"
     return {"id": company_id, "properties": props}
 
 
@@ -350,6 +382,21 @@ def expected_score_and_tier(props: dict):
     record = HubSpotRecord(object_type="companies", id="0", properties=props)
     result = compute_icp_score(record, {})
     return result.score, result.tier
+
+
+def predicted_label(anti_icp_flag: bool, anti_icp_reason) -> str:
+    """D-16/D-17 pre-arm classification: 'clears veto', 'still predicted non-ANZ
+    (unresolved)', or a named different genuine veto (e.g. Simtech LED as
+    hardware_vendor). The non-ANZ reason string is read from config/icp_scoring.yaml,
+    never restated as a local literal (mirrors settle_veto's own predicate)."""
+    if not anti_icp_flag:
+        return "clears veto"
+    cfg = load_yaml("config/icp_scoring.yaml")
+    non_anz_reason = cfg["hard_vetoes"]["non_anz"]["reason"]
+    reason = anti_icp_reason or ""
+    if non_anz_reason in reason:
+        return "still predicted non-ANZ (unresolved)"
+    return f"different genuine veto ({reason})"
 
 
 # --- settle-and-assert (D-10: "fail loudly", not a drop-in reuse of _settle()/settle(),
@@ -585,6 +632,21 @@ def _build_arg_parser() -> argparse.ArgumentParser:
                          help="Comma-separated pinned company ids (alias for repeated --company-id).")
     parser.add_argument("--report", default=None,
                          help="Path to write the JSON run report.")
+    parser.add_argument("--research-only", action="store_true",
+                         help="Run the web-research pass only, cache raw ProviderResult "
+                              "dicts (keyed by company id) to --out, and exit. No HubSpot "
+                              "write of any kind.")
+    parser.add_argument("--from-cache", default=None,
+                         help="Path to a --research-only cache file. Every resolved id must "
+                              "be present -- a missing id refuses the run rather than "
+                              "falling through to live research.")
+    parser.add_argument("--out", default=None,
+                         help="Output path for --research-only's cached research results.")
+    parser.add_argument("--report-md", default=None,
+                         help="Path to write the D-21 full-evidence-trail markdown report "
+                              "(the seven D-09 suffixes per written field, plus D-14 "
+                              "reasons and the predicted post-write outcome) -- never "
+                              "PATCHed to HubSpot, recorded here instead.")
     return parser
 
 
@@ -602,31 +664,128 @@ def _fetch_company(company_id: str) -> HubSpotRecord:
     return HubSpotRecord(object_type="companies", id=company_id, properties=record.get("properties", {}))
 
 
-def _process_one(company_id: str) -> dict:
-    """Runs one pinned company through research + the three payload builders. Returns
+def _process_one(company_id: str, research_fn=research_company) -> dict:
+    """Runs one pinned company through research + the payload builders. Returns
     everything main()'s print/report/armed-write step needs. No batching, no writes --
-    this is the pure "one path" this task proves."""
+    this is the pure "one path" this task proves. `research_fn` is injectable so
+    --from-cache can substitute a cache lookup for a live research call without touching
+    this function's body."""
     record = _fetch_company(company_id)
-    result = research_company(record)
+    result = research_fn(record)
 
     input_patch = build_input_patch(company_id, result)
     written_fields = list(input_patch["properties"].keys())
-    metadata_patch = build_metadata_patch(company_id, result, written_fields)
+    metadata_patch = build_metadata_patch(company_id, result, written_fields)  # D-21: narrowed
+    metadata_record = build_metadata_record(company_id, result, written_fields)  # D-21: full trail
     merged_props = {**record.properties, **input_patch["properties"]}
     component_patch = build_component_patch(company_id, merged_props)
-    expected_score, expected_tier = expected_score_and_tier(merged_props)
+    scored = compute_icp_score(HubSpotRecord(object_type="companies", id="0", properties=merged_props), {})
     webhook_event = build_webhook_event(company_id)
 
     return {
         "id": company_id,
+        "name": record.properties.get("name"),
         "input_patch": input_patch,
         "metadata_patch": metadata_patch,
+        "metadata_record": metadata_record,
         "component_patch": component_patch,
-        "expected_score": expected_score,
-        "expected_tier": expected_tier,
+        "expected_score": scored.score,
+        "expected_tier": scored.tier,
+        "predicted_anti_icp_flag": scored.anti_icp_flag,
+        "predicted_anti_icp_reason": scored.anti_icp_reason,
+        "predicted_label": predicted_label(scored.anti_icp_flag, scored.anti_icp_reason),
         "webhook_event": webhook_event,
         "unresolved_reasons": unresolved_reasons(company_id, result),
     }
+
+
+def _research_fn_from_cache(cache: dict):
+    """A research_fn (same call shape as research_company) that looks up
+    `cache[record.id]` instead of calling claude_web_research. Raises KeyError -- never
+    falls through to a live call -- when an id is missing, so a partial cache refuses
+    rather than silently re-researching (and re-spending) mid-run."""
+    def _fn(record):
+        cached = cache.get(record.id)
+        if cached is None:
+            raise KeyError(
+                f"{record.id!r} missing from research cache -- refusing rather than "
+                "falling through to live research."
+            )
+        return ProviderResult(**cached)
+    return _fn
+
+
+def _run_research_only(resolved_ids, out_path) -> int:
+    """D-08's one-and-only live research pass. Writes raw ProviderResult dicts, keyed by
+    company id, to `out_path` -- flushed after every record so a mid-run failure does not
+    lose already-paid-for calls. No HubSpot write of any kind; the cost/budget gate
+    (estimate_cost/refuse_if_over_budget) has already run in main() before this is
+    called."""
+    if not out_path:
+        print("REFUSED: --research-only requires --out. No call made.")
+        return 1
+    if not os.getenv("ANTHROPIC_API_KEY"):
+        print("REFUSED: ANTHROPIC_API_KEY must be set for --research-only. No call made.")
+        return 1
+
+    out = Path(out_path)
+    results = {}
+    for company_id in resolved_ids:
+        record = _fetch_company(company_id)
+        result = research_company(record)
+        results[company_id] = json.loads(result.model_dump_json())
+        out.write_text(json.dumps(results, indent=2, default=str))  # incremental flush
+        print(f"RESEARCHED: {company_id}")
+
+    print(f"research-only complete -- {len(results)}/{len(resolved_ids)} records written to {out_path}")
+    return 0 if len(results) == len(resolved_ids) else 1
+
+
+def _render_run_report_md(records, estimate: dict) -> str:
+    """D-21: the full D-09 seven-suffix evidence trail plus D-14 reasons and the
+    predicted post-write outcome, per record -- committed to 47-RUN-REPORT.md since 19
+    of the 21 D-09 stamp properties do not exist live and are never PATCHed."""
+    lines = [
+        "# Phase 47 Plan 03 -- Run Report (D-21 full evidence trail)",
+        "",
+        f"Generated: {datetime.now(timezone.utc).isoformat()}",
+        f"Cost estimate: {json.dumps(estimate)}",
+        "",
+        "Both HubSpot write surfaces are disarmed for every record below (DRY_RUN "
+        "default, ALLOW_VETO_REMEDIATION unset). D-21: only "
+        f"{', '.join(LIVE_METADATA_STAMP_KEYS)} are ever PATCHed to HubSpot -- every "
+        "other D-09 field is recorded here, never on the live record.",
+        "",
+        "| id | name | lv_org_type | lv_produces_content | lv_country_region_normalized "
+        "| predicted_score | predicted_tier | outcome |",
+        "|---|---|---|---|---|---|---|---|",
+    ]
+    for rec in records:
+        props = rec["input_patch"]["properties"]
+        reasons = rec["unresolved_reasons"]
+        org_type = props.get("lv_org_type") or f"UNRESOLVED: {reasons.get('lv_org_type', '')}"
+        produces = props.get("lv_produces_content")
+        if produces is None:
+            produces = f"UNRESOLVED: {reasons.get('lv_produces_content', '')}"
+        region = props.get("lv_country_region_normalized") or f"UNRESOLVED: {reasons.get('lv_country_region_normalized', '')}"
+        lines.append(
+            f"| {rec['id']} | {rec['name']} | {org_type} | {produces} | {region} | "
+            f"{rec['expected_score']} | {rec['expected_tier']} | {rec['predicted_label']} |"
+        )
+
+    lines += ["", "## Full D-09 evidence trail per record (never PATCHed to HubSpot)", ""]
+    for rec in records:
+        lines.append(f"### {rec['id']} -- {rec['name']}")
+        lines.append("")
+        lines.append("```json")
+        lines.append(json.dumps(rec["metadata_record"]["properties"], indent=2, default=str))
+        lines.append("```")
+        if rec["unresolved_reasons"]:
+            lines.append("")
+            lines.append(f"D-14 unresolved reasons: {json.dumps(rec['unresolved_reasons'])}")
+        lines.append("")
+
+    return "\n".join(lines)
 
 
 def main(argv=None) -> int:
@@ -665,7 +824,25 @@ def main(argv=None) -> int:
         print(f"REFUSED: {exc}")
         return 1
 
-    records = [_process_one(company_id) for company_id in resolved_ids]
+    if args.research_only:
+        return _run_research_only(resolved_ids, args.out)
+
+    research_fn = research_company
+    if args.from_cache:
+        cache_path = Path(args.from_cache)
+        if not cache_path.exists():
+            print(f"REFUSED: cache file {args.from_cache} does not exist. No call made.")
+            return 1
+        cache = json.loads(cache_path.read_text())
+        missing_cache_ids = [cid for cid in resolved_ids if cid not in cache]
+        if missing_cache_ids:
+            print(f"REFUSED: {len(missing_cache_ids)} resolved id(s) missing from research "
+                  f"cache {args.from_cache}: {missing_cache_ids}. Refusing rather than "
+                  "falling through to live research.")
+            return 1
+        research_fn = _research_fn_from_cache(cache)
+
+    records = [_process_one(company_id, research_fn=research_fn) for company_id in resolved_ids]
 
     missing = _run_property_existence_guard(records)
     if missing:
@@ -674,9 +851,18 @@ def main(argv=None) -> int:
         return 1
 
     for rec in records:
-        print(json.dumps(rec["input_patch"], indent=2))
-        print(json.dumps(rec["metadata_patch"], indent=2))
-        print(json.dumps(rec["component_patch"], indent=2))
+        combined_props = {**rec["input_patch"]["properties"], **rec["metadata_patch"]["properties"]}
+        # D-13: print the EXACT batch-update payload each record would send -- same
+        # function, same dry_run=True short-circuit, as the armed branch below uses.
+        if combined_props:
+            batch_update_companies([{"id": rec["id"], "properties": combined_props}], dry_run=True)
+        batch_update_companies([rec["component_patch"]], dry_run=True)
+        # D-21: the full D-09 trail, printed for visibility even though it is never
+        # PATCHed -- 47-RUN-REPORT.md is the committed record of it.
+        print(json.dumps(
+            {"id": rec["id"], "recorded_not_written_to_hubspot": rec["metadata_record"]["properties"]},
+            indent=2, default=str,
+        ))
         print(json.dumps(rec["webhook_event"], indent=2))
         if rec["unresolved_reasons"]:
             print(json.dumps({"id": rec["id"], "unresolved_reasons": rec["unresolved_reasons"]}, indent=2))
@@ -687,6 +873,9 @@ def main(argv=None) -> int:
             "writes_allowed": _writes_allowed(),
             "records": records,
         }, indent=2, default=str))
+
+    if args.report_md:
+        Path(args.report_md).write_text(_render_run_report_md(records, estimate))
 
     if not _writes_allowed():
         print("DRY RUN complete -- no write performed. Set DRY_RUN=false and "

@@ -202,6 +202,40 @@ def test_checked_name_set_includes_derived_read_only_fields_and_veto_03_search_n
     assert veto_03_search_names <= set(m.OBSERVED_PROPS)
 
 
+def test_d21_narrows_metadata_patch_to_only_the_two_live_stamp_keys():
+    # D-21 (Amendment 2026-08-12): Task 2's live guard found 19 of the 21 D-09 stamp
+    # names absent from the portal. build_metadata_patch -- the function whose output
+    # feeds the guard's checked payload-key set -- must emit ONLY the two that exist.
+    assert rvc.LIVE_METADATA_STAMP_KEYS == ("lv_org_type_verified_at", "lv_produces_content_verified_at")
+
+    class _Result:
+        provider = "claude_web"
+        confidence = 88
+        evidence_by_field = {}
+        evidence = None
+
+    patch = rvc.build_metadata_patch("999", _Result(), list(rvc.INPUT_PROPS))
+
+    assert set(patch["properties"].keys()) == set(rvc.LIVE_METADATA_STAMP_KEYS)
+
+
+def test_d21_metadata_record_keeps_the_full_seven_suffix_trail():
+    # The full trail is not dropped -- it moves to build_metadata_record, which is
+    # never PATCHed (never passed to the property guard or batch_update_companies).
+    from src.schemas import ProviderEvidence, ProviderResult
+
+    result = ProviderResult(
+        provider="claude_web", object_type="companies", matched=True, confidence=88,
+        data={}, evidence=ProviderEvidence(evidence_urls=["https://a.example"]),
+    )
+
+    record = rvc.build_metadata_record("999", result, ["lv_org_type"])
+
+    expected_keys = {f"lv_org_type{suffix}" for suffix in rvc.METADATA_SUFFIXES}
+    assert set(record["properties"].keys()) == expected_keys
+    assert len(expected_keys) == 7
+
+
 def test_remediate_main_with_fake_lister_missing_one_stamp_refuses_and_calls_no_write(monkeypatch):
     monkeypatch.setenv("HUBSPOT_PRIVATE_APP_TOKEN", "fake-token")
     monkeypatch.setenv("HUBSPOT_PORTAL_ID", rvc.EXPECTED_PORTAL_ID)
@@ -220,17 +254,13 @@ def test_remediate_main_with_fake_lister_missing_one_stamp_refuses_and_calls_no_
     monkeypatch.setattr("requests.post", _refuse_network)
     monkeypatch.setattr("requests.get", _refuse_network)
 
-    # A lister that is missing lv_org_type_validation_status -- one of the seven
-    # metadata stamps -- among an otherwise-complete live property set.
-    all_metadata_props = {
-        f"{field}{suffix}"
-        for field in rvc.INPUT_PROPS
-        for suffix in rvc.METADATA_SUFFIXES
-    }
+    # D-21: the guard only ever checks the NARROWED metadata stamp set
+    # (rvc.LIVE_METADATA_STAMP_KEYS -- 2 keys, not the full 21). A lister missing one of
+    # those two is the "missing one stamp" case now.
     almost_everything = (
         {"name", "domain", "website", "country", "industry"}
         | set(rvc.INPUT_PROPS)
-        | (all_metadata_props - {"lv_org_type_validation_status"})
+        | (set(rvc.LIVE_METADATA_STAMP_KEYS) - {"lv_org_type_verified_at"})
         | {"org_type_score", "geography_score", "annual_revenue_score",
            "produces_content_score", "gambling_score"}
         | set(rvc.FORBIDDEN_PROPS)
@@ -268,15 +298,10 @@ def test_remediate_main_with_fake_lister_covering_everything_proceeds(monkeypatc
     monkeypatch.setattr("requests.post", _refuse_network)
     monkeypatch.setattr("requests.get", _refuse_network)
 
-    all_metadata_props = {
-        f"{field}{suffix}"
-        for field in rvc.INPUT_PROPS
-        for suffix in rvc.METADATA_SUFFIXES
-    }
     everything = (
         {"name", "domain", "website", "country", "industry"}
         | set(rvc.INPUT_PROPS)
-        | all_metadata_props
+        | set(rvc.LIVE_METADATA_STAMP_KEYS)
         | {"org_type_score", "geography_score", "annual_revenue_score",
            "produces_content_score", "gambling_score"}
         | set(rvc.FORBIDDEN_PROPS)
