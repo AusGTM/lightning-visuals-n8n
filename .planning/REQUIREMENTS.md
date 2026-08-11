@@ -30,6 +30,13 @@ target list a non-technical operator can act on from inside HubSpot.
       identified during `/gsd-discuss-phase 46` as a third native scoring engine this requirement
       originally omitted. It maps `lv_org_type` → points and feeds `lv_icp_fit_score` directly, so
       a weight change that skips it diverges the portal's own score from the pipeline's.)*
+      *(Further amended 2026-08-11, Phase 46 Plan 05: `46-ENGINE-INVENTORY.md`'s exhaustive
+      grep found only **two** of the three engines named above actually carry an org-type point
+      table — `config/icp_scoring.yaml` (Python oracle) and the HubSpot flow `4626124224`. The
+      n8n JS leg (`n8n/wf_enrichment_cloud.json`, built from `n8n/code/mergeCompanies.js`)
+      carries no org-type-keyed numeric table at all. For that leg this requirement is satisfied
+      by a permanent absence-guard test, `tests/test_n8n_org_type_absence.py`, rather than by a
+      ported weight table — see `46-ENGINE-INVENTORY.md` for the full grep evidence.)*
 
 ### Veto Remediation (VETO)
 

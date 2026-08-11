@@ -95,6 +95,29 @@ still prints the superseded rubric after the change ships.
      `config/icp_scoring.yaml`. Archived milestone artifacts under `.planning/milestones/` are
      deliberately left verbatim as historical record.
 
+**Amendment (2026-08-11, Phase 46 Plan 05 — `46-ENGINE-INVENTORY.md`, `46-DECISION.md`):**
+The "three engines" premise in the Scope-amended paragraph above and in success criterion 3 is
+corrected: an exhaustive word-boundary-adjacent-to-number grep of the n8n leg
+(`n8n/wf_enrichment_cloud.json`, `scripts/build_cloud_workflows.py`) found **no**
+org-type-keyed numeric table there. Only **two** engines carry `base_score.org_type` weights —
+`config/icp_scoring.yaml` (Python oracle) and the HubSpot flow `4626124224` ("Update Score
+Based on Org Type"). See `46-ENGINE-INVENTORY.md` for the full evidence and
+`tests/test_n8n_org_type_absence.py` for the permanent guard against regression.
+
+- **Criterion 4 status: NOT TRIGGERED, not satisfied.** No org-type or gambling-deduction
+  weight reaches the live n8n workflow at all, so there is no build to deploy and no running
+  content to bounce or read back this phase. Re-triggers if a future phase touches categorical
+  promotion logic, taxonomy membership, evidence gating, or merge policy in the n8n leg (the
+  four triggers `46-ENGINE-INVENTORY.md` names).
+- **Criterion 3 status: satisfied at engine level; the live record-level parity sweep is
+  expected red by design.** The offline parity harness, `tests/test_flow_rubric_conformance.py`,
+  and Plan 04's running-content read-back all agree with the rubric of record for both live
+  engines. `scripts/run_scoring_parity.py`'s live-population sweep is red from the moment
+  Plan 04 committed the new weights (commit `caae5d6`, 2026-08-11) until **Phase 49** executes
+  the full-population re-score and closes the window — by design it compares each record's
+  old-weight live score against the new-weight oracle, per `46-DECISION.md`'s "Parity red
+  window" section. This is expected and self-inflicted, not a new defect.
+
 **Plans**: 4/5 plans executed
 
 Plans:
