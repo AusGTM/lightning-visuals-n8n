@@ -411,10 +411,33 @@ record, per D-05/D-09.
 
 ## Operator Sign-off
 
-**Decision:** _(pending — fill at Task 2: "accepted" or "override: ...")_
+**Decision:** Accepted — "Accept all three (Recommended)". All three values proceed exactly as
+recorded in this document: `base_score.org_type.individual_club_team = 15`,
+`base_score.org_type.regulator = -20`, `graduated_deductions.gambling_operator` removed.
 
-**Date:** _(pending)_
+**Date:** 2026-08-11
 
-**Substituted values (if override):** _(pending — list any value that replaces the recommendation above)_
+**Substituted values (if override):** None. No lever was overridden from the recommendation
+above.
 
-**Downstream impact (if override):** _(pending — which of Plan 04 / Plan 05 needs revision, and with what substituted values, before they execute)_
+**Downstream impact (if override):** Not applicable — Plans 04 and 05 execute with the values
+exactly as recorded in this document; no revision needed.
+
+**What the operator was shown before deciding:** the decision record above in full, the live
+simulation numbers (14/66 rows move, all `individual_club_team` C→B; club-weight sensitivity
+insensitive across 10/15/20 on this population), the D-07 standing-tiebreaker tension on D-02
+and D-03 (both are score-only on live data — QRIC, Entain, and Sportsbet already carry
+independent hard vetoes, so neither move tracks a live tier), and the parity red-window cost
+(option (a): accept a bounded window from Plan 04's commit until Phase 49's re-score closes it).
+The operator accepted the recommendation with both of these explicitly surfaced, not despite
+them being omitted.
+
+**Provenance:** received via the `/gsd-execute-phase` coordinator relay on 2026-08-11 (this
+executor has no direct channel to the operator). Recorded per D-05's "Claude proposes, operator
+signs off" flow, through the orchestrator layer that manages the operator conversation.
+
+**D-09 publish note:** the shareable-artifact publish (simulation content, published outside the
+repo for the sales/business sign-off conversation) could not be performed from this CLI
+executor session — no artifact-publishing capability is available here. Deferred to the
+orchestrator session, which will publish it after the phase completes. This is recorded as a
+deferred step, not an unmet requirement; see `46-03-SUMMARY.md`.
