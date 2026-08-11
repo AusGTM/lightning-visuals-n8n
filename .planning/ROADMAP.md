@@ -90,7 +90,19 @@ still prints the superseded rubric after the change ships.
      `config/icp_scoring.yaml`. Archived milestone artifacts under `.planning/milestones/` are
      deliberately left verbatim as historical record.
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 46-01-PLAN.md — Reconcile the engine count, and prove the simulation machinery end-to-end
+      on one record before any weight is committed
+- [ ] 46-02-PLAN.md — Simulate the full live scored population under the proposed weights and
+      commit the per-company before/after report (zero HubSpot writes)
+- [ ] 46-03-PLAN.md — Write `46-DECISION.md` and take operator sign-off (blocking gate on every
+      engine write below)
+- [ ] 46-04-PLAN.md — Commit the signed-off weights to `config/icp_scoring.yaml` and land them
+      identically in the HubSpot flows, with a running-content read-back
+- [ ] 46-05-PLAN.md — Sync every live document to the new rubric and record the engine-count
+      amendment
 
 ---
 
