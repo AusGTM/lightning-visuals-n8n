@@ -158,9 +158,60 @@ the full-population re-score (Phase 49); any rubric weight change (settled in Ph
   3. **Waikato Racing Club Inc** (`20538284384`) is **NZ**, not AU. Inside ANZ so no veto, but it
      proves the region field must be genuinely researched rather than defaulted to `AU`.
 
+### Amendment 2026-08-11 — post-research, operator-confirmed
+
+Phase 47 research (`47-RESEARCH.md` §"BLOCKING FINDING") established by direct file read that
+**no deployed HubSpot-native flow writes `lv_anti_icp_flag` / `lv_anti_icp_reason`**. All 8 live
+`config/hubspot_flows/*.after.json` were swept; WF1 (`4625147345`) only *reads* the flag as a
+branch filter. The sole writer is the **`Decide Company Action` Code node in
+`n8n/wf_enrichment_cloud.json`**, which writes both fields unconditionally on every execution
+(`vetoReasons.length > 0 ? "true" : "false"`), and therefore actively *clears* a stale veto once
+its inputs no longer justify one. `tests/test_scoring_parity.py:441-466` already fails today for
+this exact structural reason, with an inline comment stating it.
+
+Consequence: **D-06's direct batch-PATCH is necessary but not sufficient.** It settles
+`lv_icp_fit_score` / `lv_icp_tier` through the calculated property + WF1, but cannot satisfy
+VETO-01's literal bar. A second step must fire the n8n node.
+
+- **D-18:** **Trigger mechanism is a direct webhook POST per record.** `POST
+  {N8N_URL}/webhook/hubspot/enrichment/event` with header `X-Enrichment-Secret` and a
+  HubSpot-shaped property-change event array (`objectId`, `objectType: "company"`,
+  `subscriptionType`, `propertyName`, `occurredAt`), one POST per record after its inputs are
+  PATCHed and settled. Proven live in Phase 40-03 (`40-03-SUMMARY.md:241-281`); the workflow's
+  `IF Company Bare Event` → `HubSpot Company Fetch By Id` path accepts a bare object-id event
+  with no `domain` match required. Costs ≤17 n8n executions against the 2,500/month allowance.
+  Rejected: the `scheduled_arm.py` drain path (a second, separate ceremony with a config-driven
+  chunk ceiling to re-verify live); rejected: relying on a portal webhook subscription firing on
+  the PATCH — CLAUDE.md §20.2 lists only `lv_enrichment_requested` as subscribed and the
+  researcher could not confirm otherwise (Assumption A1).
+  — **Reversibility:** reversible — swapping to the `scheduled_arm.py` path later is a change of
+  caller, not of data written.
+
+- **D-19:** **D-11 is inverted: n8n arming IS part of VETO-02's write window.** The
+  `Decide Company Action` node's own gate is
+  `ALLOW_HUBSPOT_RECORD_WRITES` + a `TEST_RECORD_IDS` allowlist (empty allowlist denies
+  everything) — precisely what `n8n_arming.arm_for_dispatch()` / `scripts/june_run_arm.py`
+  toggle, with `ALLOW_HUBSPOT_RECORD_WRITES` baked `"false"` at rest per `OVERLAY_DISABLED_LITERALS`.
+  D-11's premise ("arming a surface the write never touches") is therefore false for the chosen
+  path. VETO-02's ceremony now arms **both** surfaces: the batch-PATCH script's own operator-only
+  env gate AND the n8n workflow, with `TEST_RECORD_IDS` set to exactly the 17 pinned IDs. D-11's
+  standing rules survive unchanged: operator-only, per-shell, never set by Claude, and **disarm
+  ungated**. Both surfaces must be disarmed and read back per D-13.
+
+- **D-20:** **The redundant second research call is accepted, not suppressed.** The workflow's
+  `Research Trigger Gate` (`needsResearch()`) will fire a second Claude web-research call for any
+  of the 17 landing on `hardware_vendor` / `content_producer` / `governing_body_league` /
+  `gambling_operator` — roughly 4 records (D-17 names Simtech LED, Jam TV, Editix, The Rumble).
+  Accepted because suppressing it means editing the deployed workflow, which is a far larger blast
+  radius than ~4 extra Anthropic calls. The plan must (a) include this in D-03's cost estimate
+  rather than discovering it in the actuals, and (b) verify after the run that the second pass did
+  not overwrite the evidence metadata stamped by D-09 — if it did, re-stamp.
+
 ### Claude's Discretion
 
 - The exact chunking within the 17 (one chunk of 17 is permitted by the cap; smaller is allowed).
+- Whether the webhook POSTs are issued by extending the batch-PATCH script or by a small separate
+  caller, provided both surfaces are armed and disarmed in one ceremony.
 - The dry-run output format, beyond the requirement that it print the exact PATCH payloads.
 - Whether the per-record "could not establish" note lives in a property, the run report, or both.
 - The polling interval and timeout for `_settle`.
