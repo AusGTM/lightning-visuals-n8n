@@ -5,15 +5,15 @@ milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 47
 current_phase_name: veto-remediation
 status: executing
-stopped_at: Completed 47-02-PLAN.md
-last_updated: "2026-08-11T12:36:56.532Z"
-last_activity: 2026-08-11
-last_activity_desc: Phase 47 execution started
+stopped_at: Completed 47-03-PLAN.md
+last_updated: "2026-08-11T22:08:21.345Z"
+last_activity: 2026-08-12
+last_activity_desc: Phase 47 blocked at Plan 03 Task 3. Both research legs (the
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 9
-  completed_plans: 7
+  completed_plans: 8
   percent: 25
 ---
 
@@ -21,25 +21,25 @@ progress:
 
 ## Current Position
 
-Phase: 47 (veto-remediation) — BLOCKED
-Plan: 3 of 4
-Status: Blocked — Anthropic account out of credit
-Last activity: 2026-08-12 — Phase 47 blocked at Plan 03 Task 3. Both research legs (the
-  script's --research-only pass and the n8n Claude Web Research node) fail with
-  400 invalid_request_error, insufficient credit on the account behind ANTHROPIC_API_KEY.
-  Nothing armed, zero HubSpot writes, zero spend. Waves 1-2 complete and committed.
-  Resume: add credit, then re-run the research pass. Full detail and the exact resume
-  command in .planning/phases/47-veto-remediation/47-BLOCKED.md
-  mapped (RUBRIC-01..03 -> 46, VETO-01..03 -> 47, COVER-01..02 -> 48, RESCORE-01..03 -> 49).
-  Sequencing: rubric decided once (46) before the 17 false-veto records are touched (47), so
-  they re-score exactly once rather than twice under a later weight change.
+Phase: 47 (veto-remediation) — Plan 03 complete, Plan 04 next
+Plan: 4 of 4
+Status: Executing — Anthropic credit restored, Plan 03 completed
+Last activity: 2026-08-12 — Plan 03 complete: 47-BEFORE.json (17-row before-snapshot),
+  the live property-existence guard (found 19 missing D-09 metadata properties, resolved
+  via operator-confirmed D-21 narrowing), one live research pass over all 17 pinned
+  companies (47-RESEARCH-RESULTS.json), two live-discovered data-quality fixes
+  (lv_org_type enum gate, lv_is_gambling_operator never derives org_type), and the
+  mandatory disarmed dry-run (47-DRYRUN.md/47-RUN-REPORT.md). Zero live writes. The
+  Anthropic billing outage recorded in 47-BLOCKED.md is resolved -- credit confirmed
+  restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
+  per D-22) is next.
 
-Progress: [████████░░] 78%
+Progress: [█████████░] 89%
 
 ## Session
 
-**Last session:** 2026-08-11T12:36:56.522Z
-**Stopped at:** Completed 47-02-PLAN.md
+**Last session:** 2026-08-11T22:08:21.338Z
+**Stopped at:** Completed 47-03-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -76,6 +76,7 @@ Progress: [████████░░] 78%
 | Phase 46 P05 | ~15min | 2 tasks | 7 files |
 | Phase 47 P01 | 20min | 3 tasks | 3 files |
 | Phase 47 P02 | 35m | 3 tasks | 4 files |
+| Phase 47 P03 | 5h | 3 tasks | 9 files |
 
 ## Decisions
 
@@ -157,6 +158,9 @@ Progress: [████████░░] 78%
 - [Phase ?]: Phase 47-01: added evidence_by_field to the shared claude_web_research_company.json mock fixture (Rule 2) -- it predated the Phase 13/OC-1 addition and was stale against its own RESEARCH_SYSTEM contract
 - [Phase ?]: COVER-01/COVER-02 mapped to Phase 47 + 48 (D-02); neither phase closes them alone
 - [Phase ?]: 47-COST-ESTIMATE.md written ex-ante, sourced from live estimate_cost() call: 17 web-research calls, ~4 redundant, ~$1.17 Anthropic floor, 0 provider credits
+- [Phase ?]: D-21: narrowed D-09 metadata stamps to the 2 that exist live (lv_org_type_verified_at, lv_produces_content_verified_at); full trail moves to 47-RESEARCH-RESULTS.json/47-RUN-REPORT.md
+- [Phase ?]: Live-discovered fix: lv_org_type gated to a strict CRM enum allowlist -- the research prompt returns free text, never guessed via keyword mapping
+- [Phase ?]: Live-discovered fix: lv_is_gambling_operator boolean never derives lv_org_type -- proven unreliable (8/17 racing clubs false-flagged) unlike lv_is_hardware_vendor
 
 ### Blockers
 
