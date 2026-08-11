@@ -276,38 +276,48 @@ def _evidence_url_for_metadata(result, field: str):
 def _classify_org_type(data: dict):
     """D-14/D-17: maps a research result to a VALID_ORG_TYPES member WITHOUT guessing.
     The exact enum string passes straight through. Otherwise, the free text is left
-    unclassified UNLESS a separate, schema-conformant boolean signal
-    (lv_is_hardware_vendor / lv_is_gambling_operator) makes the call unambiguous --
-    keyword-matching the free text itself (e.g. reading "Event organizer / Sports
-    league operator" as governing_body_league) is exactly the "they are all clubs"
-    guessing D-17 forbids, so this deliberately does not do it. Returns
-    (org_type_or_None, the_field_name_whose_evidence_backs_the_claim_or_None)."""
+    unclassified UNLESS the schema-conformant lv_is_hardware_vendor boolean makes the
+    call unambiguous -- keyword-matching the free text itself (e.g. reading "Event
+    organizer / Sports league operator" as governing_body_league) is exactly the "they
+    are all clubs" guessing D-17 forbids, so this deliberately does not do it.
+
+    lv_is_gambling_operator is deliberately NOT used to derive org_type, despite being
+    the same schema shape as lv_is_hardware_vendor. Discovered live 2026-08-12: it fired
+    `true` for 8 of the 17 records, every one a not-for-profit racing/turf club whose OWN
+    free-text org_type and evidence_summary say "racing club" / "non-profit" -- the model
+    is conflating "hosts on-track TAB/bookmaker facilities" (standard for every
+    Australian racecourse) with "is a gambling operator entity". Unlike hardware_vendor
+    (validated correct against Simtech LED, a genuine LED manufacturer, in this same
+    dataset), this boolean is proven UNRELIABLE for org_type derivation here -- trusting
+    it would write "gambling_operator" onto 8 racing clubs, exactly the wrong-data
+    failure class D-17 warns against, just from a boolean instead of a keyword.
+
+    Returns (org_type_or_None, the_field_name_whose_evidence_backs_the_claim_or_None)."""
     raw = data.get("lv_org_type")
     if raw in VALID_ORG_TYPES:
         return raw, "lv_org_type"
     if data.get("lv_is_hardware_vendor") is True:
         return "hardware_vendor", "lv_is_hardware_vendor"
-    if data.get("lv_is_gambling_operator") is True:
-        return "gambling_operator", "lv_is_gambling_operator"
     return None, None
 
 
 def _normalize_region(raw):
-    """D-14: only unambiguous free-text forms are mapped ('Australia', 'Australia -
-    NSW' -> AU; 'New Zealand' -> NZ) -- deliberately NOT src/normalizer.py's
-    normalize_country_region, whose else-branch maps every unrecognized string to
-    'Other', which would manufacture a genuine non-ANZ veto from an ambiguous or
-    mismatched-entity read (e.g. a foreign same-name company). Anything else is left
-    unresolved rather than guessed."""
+    """D-14: only unambiguous free-text forms are mapped -- 'Australia', 'Australia -
+    NSW', 'New South Wales, Australia' -> AU (a state/territory name qualified by the
+    country is still unambiguous); 'New Zealand' -> NZ. Deliberately NOT
+    src/normalizer.py's normalize_country_region, whose else-branch maps every
+    unrecognized string to 'Other', which would manufacture a genuine non-ANZ veto from
+    an ambiguous or mismatched-entity read (e.g. a foreign same-name company). Anything
+    else is left unresolved rather than guessed."""
     if raw in VALID_REGIONS:
         return raw
     if not isinstance(raw, str):
         return None
     text = raw.strip().lower()
-    if text.startswith("australia"):
-        return "AU"
-    if text.startswith("new zealand"):
+    if "new zealand" in text:
         return "NZ"
+    if "australia" in text:
+        return "AU"
     return None
 
 

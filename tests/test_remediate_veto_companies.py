@@ -356,9 +356,30 @@ def test_boolean_hardware_vendor_signal_without_evidence_stays_unresolved():
     assert "lv_org_type" not in patch["properties"]
 
 
+def test_gambling_operator_boolean_never_derives_org_type_even_when_evidenced():
+    # Regression guard for a real bug found live 2026-08-12: lv_is_gambling_operator
+    # fired true for 8 of 17 records -- every one a not-for-profit racing club that
+    # merely hosts on-track TAB/bookmaker facilities (standard for every AU racecourse),
+    # not a gambling operator itself. Unlike hardware_vendor, this boolean is proven
+    # unreliable for org_type derivation and must never be used for it, evidenced or not.
+    result = _provider_result(
+        data={"lv_org_type": "Sports club / Racing club", "lv_is_gambling_operator": True},
+        evidence_by_field={"lv_is_gambling_operator": "https://club.example/sponsors"},
+    )
+    org_type, evidence_field = m._classify_org_type(result.data)
+    assert org_type is None
+    assert evidence_field is None
+    patch = m.build_input_patch("999", result)
+    assert "lv_org_type" not in patch["properties"]
+
+
 def test_region_normalizer_accepts_only_unambiguous_australia_and_new_zealand_forms():
     assert m._normalize_region("Australia") == "AU"
     assert m._normalize_region("Australia - NSW") == "AU"
+    # A state/territory name qualified by the country is still unambiguous -- the
+    # actual live shape returned for two of the 17 records.
+    assert m._normalize_region("New South Wales, Australia") == "AU"
+    assert m._normalize_region("NSW, Australia") == "AU"
     assert m._normalize_region("New Zealand") == "NZ"
     # Ambiguous/foreign free text (Jam TV's actual live result -- entity-resolution
     # doubt against jamtv.it, an Italian company) must NOT default to "Other": that
