@@ -195,6 +195,24 @@ directly rather than regenerating.
 
 ---
 
+## Post-discussion addendum — documentation sync folded in
+
+**Operator, after the summary:** *"Fold in docs update into this phase to reflect the decisions
+we've made."*
+
+No options presented — a direct scope instruction, actioned. Claude inventoried the live doc
+sites carrying superseded values (11 locations across `docs/business/icp-scoring.md`, `CLAUDE.md`
+§10, `.planning/intel/*`, `docs/WEB-RESEARCH-SPEC.md`), recorded them as **D-13**, and added
+**D-14** guarding the business doc's evidentiary voice — the 19%/n=36 finding stays on the page
+with the override recorded beside it, rather than the evidence being rewritten to agree.
+
+Archived artifacts under `.planning/milestones/` (~12 files quoting the old org-type map) were
+deliberately excluded — historical record, load-bearing for audit.
+
+In the same pass, `ROADMAP.md` Phase 46 and `REQUIREMENTS.md` RUBRIC-01/RUBRIC-03 were amended to
+match the widened scope, so `gsd-verifier`'s goal-backward check does not read the regulator,
+gambling, third-engine, and docs work as unrequested. Commit `8c210f8`.
+
 ## Claude's Discretion
 
 - Candidate weight set for the simulation (operator answered "you decide", then directed the club
