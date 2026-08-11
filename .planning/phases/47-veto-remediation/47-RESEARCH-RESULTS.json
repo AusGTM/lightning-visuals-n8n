@@ -1,0 +1,870 @@
+{
+  "9604732797": {
+    "provider": "claude_web",
+    "object_type": "companies",
+    "matched": true,
+    "confidence": 90,
+    "data": {
+      "lv_org_type": "Sporting club / Racecourse operator",
+      "lv_produces_content": true,
+      "lv_content_type": [
+        "Horse racing broadcasts",
+        "Live race streaming"
+      ],
+      "lv_is_hardware_vendor": false,
+      "lv_is_gambling_operator": null,
+      "lv_sponsorship_reliant": null,
+      "lv_country_region_normalized": "Australia",
+      "lv_has_sports_media_fit": true,
+      "lv_has_broadcast_or_streaming_signals": true
+    },
+    "evidence": {
+      "last_seen": "August 11, 2026",
+      "match_basis": [
+        "Domain matches tweedriverjockeyclub.com.au",
+        "Organization operates as a sporting club running a racecourse in Tygalgah, NSW",
+        "Conducts 11 horse race meetings annually",
+        "Broadcasts live racing via Sky Racing Network and Sky Sports Radio"
+      ],
+      "evidence_urls": [
+        "https://www.tweedriverjockeyclub.com.au/",
+        "https://www.tweedriverjockeyclub.com.au/about-us",
+        "https://www.tweedriverjockeyclub.com.au/race-day-information",
+        "https://horseracing.com.au/racecourses/murwillumbah/"
+      ],
+      "evidence_summary": "Tweed River Jockey Club is confirmed as a regional Australian horse racing club operating the Tygalgah racecourse in Murwillumbah, NSW. It conducts 11 race meetings per year (9 TAB meetings and 2 community meetings). All race meetings except Big Dance Raceday and ANZAC Day are broadcast live via Sky Racing Network and Sky Sports Radio, establishing strong sports media fit and broadcast signals. No hardware vendor or gambling operator status found in sources\u2014TAB and bookmaker facilities are on-site but operation appears limited to facility provision rather than gambling operator role. Sponsorship reliance information not found in available sources."
+    },
+    "model_trace": {
+      "research_model": "claude-web",
+      "classifier_model": null,
+      "validator_model": null
+    },
+    "evidence_by_field": {
+      "lv_org_type": "https://www.tweedriverjockeyclub.com.au/about-us",
+      "lv_produces_content": "https://www.tweedriverjockeyclub.com.au/race-day-information",
+      "lv_content_type": "https://www.tweedriverjockeyclub.com.au/race-day-information",
+      "lv_country_region_normalized": "https://www.tweedriverjockeyclub.com.au/about-us",
+      "lv_has_sports_media_fit": "https://www.tweedriverjockeyclub.com.au/",
+      "lv_has_broadcast_or_streaming_signals": "https://www.tweedriverjockeyclub.com.au/race-day-information"
+    }
+  },
+  "9604794661": {
+    "provider": "claude_web",
+    "object_type": "companies",
+    "matched": true,
+    "confidence": 92,
+    "data": {
+      "lv_org_type": "Sports club / Racing club",
+      "lv_produces_content": true,
+      "lv_content_type": [
+        "Live racing",
+        "Horse racing broadcasts",
+        "Race day events"
+      ],
+      "lv_is_hardware_vendor": false,
+      "lv_is_gambling_operator": true,
+      "lv_sponsorship_reliant": true,
+      "lv_country_region_normalized": "New South Wales, Australia",
+      "lv_has_sports_media_fit": true,
+      "lv_has_broadcast_or_streaming_signals": true
+    },
+    "evidence": {
+      "last_seen": "2026-08-11",
+      "match_basis": [
+        "Exact domain match: sapphirecoastturfclub.com.au",
+        "Located in Bega Valley, NSW as specified",
+        "Confirmed as racing club with gambling operations"
+      ],
+      "evidence_urls": [
+        "https://sapphirecoastturfclub.com.au/",
+        "https://sapphirecoastturfclub.com.au/sponsors/",
+        "https://sapphirecoastturfclub.com.au/contact-us/",
+        "https://playsport.com/SapphireCoastTurfClub_Wallagoot/about"
+      ],
+      "evidence_summary": "Sapphire Coast Turf Club is a modern country racecourse and sports club in Kalaru, Bega Valley, NSW. It operates 12 race meetings per year. TAB race meets are broadcast nationally on TV, radio, and internet. The club generates revenue through memberships ($60 annual fee), race day entry ($15 adults), TAB betting facilities, bookmakers, and sponsorships. The organization is highly sponsorship-reliant per its own marketing materials. Annual operational costs are approximately AUD $400,000."
+    },
+    "model_trace": {
+      "research_model": "claude-web",
+      "classifier_model": null,
+      "validator_model": null
+    },
+    "evidence_by_field": {
+      "lv_org_type": "https://sapphirecoastturfclub.com.au/",
+      "lv_produces_content": "https://sapphirecoastturfclub.com.au/sponsors/",
+      "lv_content_type": "https://sapphirecoastturfclub.com.au/sponsors/",
+      "lv_is_hardware_vendor": "https://sapphirecoastturfclub.com.au/",
+      "lv_is_gambling_operator": "https://sapphirecoastturfclub.com.au/sponsors/",
+      "lv_sponsorship_reliant": "https://sapphirecoastturfclub.com.au/sponsors/",
+      "lv_country_region_normalized": "https://sapphirecoastturfclub.com.au/contact-us/",
+      "lv_has_sports_media_fit": "https://sapphirecoastturfclub.com.au/",
+      "lv_has_broadcast_or_streaming_signals": "https://sapphirecoastturfclub.com.au/sponsors/"
+    }
+  },
+  "9605273630": {
+    "provider": "claude_web",
+    "object_type": "companies",
+    "matched": true,
+    "confidence": 85,
+    "data": {
+      "lv_org_type": "racing_club",
+      "lv_produces_content": true,
+      "lv_content_type": [
+        "live_racing_events",
+        "race_day_entertainment"
+      ],
+      "lv_is_hardware_vendor": false,
+      "lv_is_gambling_operator": true,
+      "lv_sponsorship_reliant": true,
+      "lv_country_region_normalized": "NSW, Australia",
+      "lv_has_sports_media_fit": true,
+      "lv_has_broadcast_or_streaming_signals": false
+    },
+    "evidence": {
+      "last_seen": "2026-08-11",
+      "match_basis": [
+        "Official website domain match (portmacquarieraceclub.com.au)",
+        "Confirmed as thoroughbred racing club in NSW",
+        "Operates race track and hosts betting facilities",
+        "Produces live racing events and entertainment content",
+        "Sponsored events with branded race meetings"
+      ],
+      "evidence_urls": [
+        "https://portmacquarieraceclub.com.au/",
+        "https://racingnswcountry.com.au/club/port-macquarie-race-club/",
+        "https://rocketreach.co/port-macquarie-race-club-profile_b460f793fc5c5d7d",
+        "https://www.racingandsports.com.au/thoroughbred/course/australia/port-macquarie/history"
+      ],
+      "evidence_summary": "Port Macquarie Race Club is a regional thoroughbred racing venue located in NSW, Australia. It operates a racecourse hosting approximately 23 meetings annually including the Port Macquarie Cup carnival. The club produces content through live racing events and entertainment programming. Betting facilities with TAB are available on-site. No evidence of live streaming or broadcast distribution was found, though the club promotes 'race day highlights' on social media. Annual revenue estimated at $3M based on 2026 data. Sponsorship-reliant model evidenced by branded race meetings (Carlton Mid Port Macquarie Cup). Not a hardware vendor; operates as a racing operator with gambling components."
+    },
+    "model_trace": {
+      "research_model": "claude-web",
+      "classifier_model": null,
+      "validator_model": null
+    },
+    "evidence_by_field": {
+      "lv_org_type": "https://racingnswcountry.com.au/club/port-macquarie-race-club/",
+      "lv_produces_content": "https://portmacquarieraceclub.com.au/racing.html",
+      "lv_content_type": "https://portmacquarieraceclub.com.au/",
+      "lv_is_hardware_vendor": "https://racingnswcountry.com.au/club/port-macquarie-race-club/",
+      "lv_is_gambling_operator": "https://racingnswcountry.com.au/club/port-macquarie-race-club/",
+      "lv_sponsorship_reliant": "https://racingnswcountry.com.au/club/port-macquarie-race-club/",
+      "lv_country_region_normalized": "https://portmacquarieraceclub.com.au/",
+      "lv_has_sports_media_fit": "https://racingnswcountry.com.au/club/port-macquarie-race-club/",
+      "lv_has_broadcast_or_streaming_signals": "https://www.racingqueensland.com.au/racing/profiles/track/thoroughbred/p%20mq"
+    }
+  },
+  "9604732795": {
+    "provider": "claude_web",
+    "object_type": "companies",
+    "matched": true,
+    "confidence": 95,
+    "data": {
+      "lv_org_type": "Not-for-Profit Racing Club",
+      "lv_produces_content": true,
+      "lv_content_type": [
+        "Horse Racing",
+        "Educational/Tips Content",
+        "Event Broadcasting"
+      ],
+      "lv_is_hardware_vendor": false,
+      "lv_is_gambling_operator": true,
+      "lv_sponsorship_reliant": true,
+      "lv_country_region_normalized": "Australia - Queensland",
+      "lv_has_sports_media_fit": true,
+      "lv_has_broadcast_or_streaming_signals": true
+    },
+    "evidence": {
+      "last_seen": "2026-04-13",
+      "match_basis": [
+        "Organization name matches exactly",
+        "Domain matches (callaghanpark.com.au)",
+        "Location confirmed: Rockhampton, Queensland, Australia",
+        "Industry confirmed: Horse racing/gambling operations"
+      ],
+      "evidence_urls": [
+        "https://callaghanpark.com.au/",
+        "https://callaghanpark.com.au/about/",
+        "https://au.linkedin.com/company/rockhampton-jockey-club",
+        "https://capricornenterprise.com.au/member-directory/rockhampton-jockey-club-inc/",
+        "https://www.racingqueensland.com.au/racing/club-details/thoroughbred/53008/rockhampton-jockey-club-inc"
+      ],
+      "evidence_summary": "Rockhampton Jockey Club is a not-for-profit organization established 1868, operating Callaghan Park Racecourse in North Rockhampton, Queensland. Conducts 35-45 thoroughbred horse race meetings annually. Produces original content including YouTube channel with 'Rocky Turf Talk' educational series and race coverage. Revenue model dependent on race day attendance, sponsorships (XXXX Gold branding), and wagering. No hard veto characteristics identified for hardware vendor status. Gambling operations occur through betting at racecourse events (typical of such clubs). Strong sports media fit as provincial racing hub."
+    },
+    "model_trace": {
+      "research_model": "claude-web",
+      "classifier_model": null,
+      "validator_model": null
+    },
+    "evidence_by_field": {
+      "lv_org_type": "https://capricornenterprise.com.au/member-directory/rockhampton-jockey-club-inc/",
+      "lv_produces_content": "https://www.youtube.com/@rockhamptonjockeyclub6459",
+      "lv_content_type": "https://callaghanpark.com.au/racing/rocky-turf-talk/",
+      "lv_is_hardware_vendor": "https://callaghanpark.com.au/about/",
+      "lv_is_gambling_operator": "https://callaghanpark.com.au/",
+      "lv_sponsorship_reliant": "https://au.linkedin.com/company/rockhampton-jockey-club",
+      "lv_country_region_normalized": "https://callaghanpark.com.au/about/",
+      "lv_has_sports_media_fit": "https://5-2.com.au/",
+      "lv_has_broadcast_or_streaming_signals": "https://callaghanpark.com.au/racing/rocky-turf-talk/"
+    }
+  },
+  "9604738976": {
+    "provider": "claude_web",
+    "object_type": "companies",
+    "matched": true,
+    "confidence": 90,
+    "data": {
+      "lv_org_type": "Non-profit Racing Club",
+      "lv_produces_content": true,
+      "lv_content_type": [
+        "Live Racing Events",
+        "Race Broadcasting"
+      ],
+      "lv_is_hardware_vendor": null,
+      "lv_is_gambling_operator": true,
+      "lv_sponsorship_reliant": true,
+      "lv_country_region_normalized": "Australia",
+      "lv_has_sports_media_fit": true,
+      "lv_has_broadcast_or_streaming_signals": true
+    },
+    "evidence": {
+      "last_seen": "2026-08-11",
+      "match_basis": [
+        "Domain matches bunburyturfclub.com.au",
+        "Established racing club confirmed as primary thoroughbred racing operator in Bunbury, WA",
+        "Multiple sources confirm gambling/wagering operations through race meetings",
+        "Broadcasting signals identified for race events",
+        "Sponsorship model evident from naming rights partnerships"
+      ],
+      "evidence_urls": [
+        "https://www.bunburyturfclub.com.au/about",
+        "https://racingwa.com.au/clubs/bunbury",
+        "https://donaldsonpark.com.au/racing/race-dates/",
+        "https://www.bunburyturfclub.com.au/",
+        "https://rocketreach.co/bunbury-turf-club-profile_b45e15e2fc77f77b"
+      ],
+      "evidence_summary": "Bunbury Turf Club is a non-profit racing club established in 1868 operating Western Australia's primary thoroughbred racing facility. The organization hosts race meetings September-April (per first-party sources) and produces live racing events for attendance and broadcast. Revenue estimated at $4 million annually. Club facilitates gambling/wagering through race betting operations and member betting facilities. Race events are broadcast nationally via Sky Racing Channel to TAB agencies and Foxtel. Substantial sponsorship dependency evident from branded race events (Swan Draught Bunbury Cup, XXXX Gold Bunbury Cup). High sports media relevance as major provincial racing venue attracting 8,000+ attendees at annual carnival events."
+    },
+    "model_trace": {
+      "research_model": "claude-web",
+      "classifier_model": null,
+      "validator_model": null
+    },
+    "evidence_by_field": {
+      "lv_org_type": "https://www.bunburyturfclub.com.au/about",
+      "lv_produces_content": "https://www.bunburyturfclub.com.au/",
+      "lv_content_type": "https://racingwa.com.au/clubs/bunbury",
+      "lv_is_gambling_operator": "https://www.bunburyturfclub.com.au/",
+      "lv_sponsorship_reliant": "https://www.bunburyturfclub.com.au/about-menu",
+      "lv_country_region_normalized": "https://www.bunburyturfclub.com.au/about",
+      "lv_has_sports_media_fit": "https://racingwa.com.au/clubs/bunbury",
+      "lv_has_broadcast_or_streaming_signals": "https://donaldsonpark.com.au/racing/race-dates/"
+    }
+  },
+  "9604787229": {
+    "provider": "claude_web",
+    "object_type": "companies",
+    "matched": true,
+    "confidence": 92,
+    "data": {
+      "lv_org_type": "Sports Club - Racecourse Operator",
+      "lv_produces_content": true,
+      "lv_content_type": [
+        "Horse Racing Broadcasting",
+        "Live Race Coverage"
+      ],
+      "lv_is_hardware_vendor": null,
+      "lv_is_gambling_operator": null,
+      "lv_sponsorship_reliant": true,
+      "lv_country_region_normalized": "Australia - Northern Territory",
+      "lv_has_sports_media_fit": true,
+      "lv_has_broadcast_or_streaming_signals": true
+    },
+    "evidence": {
+      "last_seen": "2026-08-11",
+      "match_basis": [
+        "Official website confirmed as alicespringsturfclub.org.au",
+        "Organization confirmed as horse racing/turf club operator",
+        "Broadcasts nationally and internationally on Sky Racing",
+        "YouTube channel with race replays for content distribution",
+        "Major sponsorship from Ladbrokes evident in event naming and partnerships",
+        "TAB wagering facilities available on-site",
+        "Hosts annual Ladbrokes Alice Springs Cup Carnival"
+      ],
+      "evidence_urls": [
+        "https://www.alicespringsturfclub.org.au/about",
+        "https://www.alicespringsturfclub.org.au/racing",
+        "https://www.alicespringsturfclub.org.au/our-news",
+        "https://www.alicespringsturfclub.org.au/results",
+        "https://www.trnt.org.au/racing-club/alice-springs-turf-club-inc"
+      ],
+      "evidence_summary": "The Alice Springs Turf Club is a regional thoroughbred racing club operator in Alice Springs, Northern Territory, Australia. The organization produces horse racing content distributed via Sky Racing broadcasts (nationally/internationally) and YouTube race replays. Strong sponsorship reliance evidenced by Ladbrokes partnership (facility naming: Ladbrokes Pioneer Park, Ladbrokes Cup Carnival, Ladbrokes Next Gen Marquee). TAB wagering facilities present on-site. Organization is recognized as a single entity sports club operating as Alice Springs Turf Club Inc, member of Thoroughbred Racing NT. Good fit for sports media as host of racing events and content producer/distributor."
+    },
+    "model_trace": {
+      "research_model": "claude-web",
+      "classifier_model": null,
+      "validator_model": null
+    },
+    "evidence_by_field": {
+      "lv_org_type": "https://www.alicespringsturfclub.org.au/about",
+      "lv_produces_content": "https://www.alicespringsturfclub.org.au/about",
+      "lv_content_type": "https://www.alicespringsturfclub.org.au/about",
+      "lv_sponsorship_reliant": "https://www.alicespringsturfclub.org.au/our-news",
+      "lv_country_region_normalized": "https://www.alicespringsturfclub.org.au/about",
+      "lv_has_sports_media_fit": "https://www.alicespringsturfclub.org.au/about",
+      "lv_has_broadcast_or_streaming_signals": "https://www.alicespringsturfclub.org.au/about"
+    }
+  },
+  "10152138518": {
+    "provider": "claude_web",
+    "object_type": "companies",
+    "matched": true,
+    "confidence": 85,
+    "data": {
+      "lv_org_type": "Horse racing track / Sports venue",
+      "lv_produces_content": true,
+      "lv_content_type": [
+        "Live horse racing",
+        "Broadcast feed"
+      ],
+      "lv_is_hardware_vendor": null,
+      "lv_is_gambling_operator": null,
+      "lv_sponsorship_reliant": true,
+      "lv_country_region_normalized": "Australia",
+      "lv_has_sports_media_fit": true,
+      "lv_has_broadcast_or_streaming_signals": true
+    },
+    "evidence": {
+      "last_seen": "2026-08-11",
+      "match_basis": [
+        "Domain matches www.thoroughbredpark.com.au",
+        "Confirmed as home of Canberra Racing Club in Lyneham, ACT",
+        "Operates thoroughbred horse racing venue with 25 meetings per year",
+        "Produces live racing content broadcast via third-party platforms (Sky Racing, Ladbrokes, bet365, Racing.com)",
+        "Conducts major race events: Black Opal Stakes, Canberra Cup, TAB Melbourne Cup Day",
+        "Sponsorship-dependent business model (John McGrath Auto Group, Kia Australia, etc.)"
+      ],
+      "evidence_urls": [
+        "https://thoroughbredpark.com.au/about-us/",
+        "https://en.wikipedia.org/wiki/Canberra_Racecourse",
+        "https://www.bets.com.au/horse-racing/race-courses/canberra-races-live-stream-20210329-0015/",
+        "https://thoroughbredpark.com.au/events-thoroughbred-park/",
+        "https://thoroughbredpark.com.au/fact-sheet-thoroughbred-park-and-canberra-racing-club-playing-role-future-canberra/"
+      ],
+      "evidence_summary": "Thoroughbred Park is a thoroughbred horse racing venue operated by the Canberra Racing Club in Lyneham, Australian Capital Territory. It conducts 25 race meetings annually including major branded events. The venue produces live racing content that is distributed through third-party broadcasting platforms (Sky Racing, Ladbrokes, bet365, Racing.com) rather than proprietary channels. The organization is heavily sponsor-reliant (major sponsors include John McGrath Auto Group, Kia Australia) and receives government funding via MOU. No evidence found of in-house broadcast or streaming production facility\u2014races are broadcast through established racing platforms. The venue is not a gambling operator (wagering is managed through external TAB platforms) and is not a hardware vendor. Strong sports media relevance due to hosting premium racing events for major Australian racing calendar."
+    },
+    "model_trace": {
+      "research_model": "claude-web",
+      "classifier_model": null,
+      "validator_model": null
+    },
+    "evidence_by_field": {
+      "lv_org_type": "https://thoroughbredpark.com.au/about-us/",
+      "lv_produces_content": "https://bets.com.au/horse-racing/race-courses/canberra-races-live-stream-20210329-0015/",
+      "lv_content_type": "https://thoroughbredpark.com.au/events-thoroughbred-park/",
+      "lv_sponsorship_reliant": "https://thoroughbredpark.com.au/about-us/",
+      "lv_country_region_normalized": "https://thoroughbredpark.com.au/about-us/",
+      "lv_has_sports_media_fit": "https://en.wikipedia.org/wiki/Canberra_Racecourse",
+      "lv_has_broadcast_or_streaming_signals": "https://bets.com.au/horse-racing/race-courses/canberra-races-live-stream-20210329-0015/"
+    }
+  },
+  "10215097384": {
+    "provider": "claude_web",
+    "object_type": "companies",
+    "matched": true,
+    "confidence": 92,
+    "data": {
+      "lv_org_type": "Thoroughbred racecourse operator / Recreational facilities management",
+      "lv_produces_content": true,
+      "lv_content_type": [
+        "Live horse racing broadcasts",
+        "Event streaming"
+      ],
+      "lv_is_hardware_vendor": false,
+      "lv_is_gambling_operator": null,
+      "lv_sponsorship_reliant": true,
+      "lv_country_region_normalized": "Australia - NSW",
+      "lv_has_sports_media_fit": true,
+      "lv_has_broadcast_or_streaming_signals": true
+    },
+    "evidence": {
+      "last_seen": "2026-08-11",
+      "match_basis": [
+        "Domain matches www.wyongraceclub.com.au",
+        "Organisation name matches Wyong Race Club",
+        "Located on Central Coast, NSW, Australia",
+        "Provincial thoroughbred racecourse operator"
+      ],
+      "evidence_urls": [
+        "https://wyongraceclub.com.au/",
+        "https://www.centralcoastaustralia.com.au/15764/wyong-race-club/",
+        "https://au.linkedin.com/company/wyongraceclub",
+        "https://rocketreach.co/wyong-race-club-limited-profile_b465e196fc5d8c1e"
+      ],
+      "evidence_summary": "Wyong Race Club is a well-established provincial racecourse operator in Wyong, NSW, hosting approximately 22 thoroughbred race meetings annually. The organisation produces and broadcasts live racing content via multiple platforms (Sky Racing, betting sites, YouTube). The club is sponsorship-reliant, having secured a major three-year agreement with Wyong Leagues Group in 2024 for naming rights to key events. Regarding gambling operations: while Wyong Race Club does not directly operate betting services, wagering on races is facilitated by external bookmakers and betting agencies (Tabcorp, NEDS, Ladbrokes, bet365), and the racecourse facilitates on-course betting promotions. The distinction between venue operations and gambling operations is sufficient to mark this as null rather than true. Revenue band $9.2-11.8M based on 2026 data ($9.2M) and 2017-18 report ($11.76M excluding grants)."
+    },
+    "model_trace": {
+      "research_model": "claude-web",
+      "classifier_model": null,
+      "validator_model": null
+    },
+    "evidence_by_field": {
+      "lv_org_type": "https://www.centralcoastaustralia.com.au/15764/wyong-race-club/",
+      "lv_produces_content": "https://www.bets.com.au/horse-racing/race-courses/wyong-races-live-stream-20210406-0030/",
+      "lv_content_type": "https://www.watchhorseracing.tv/live/wyong-live.html",
+      "lv_is_hardware_vendor": "https://wyongraceclub.com.au/",
+      "lv_sponsorship_reliant": "https://coastcommunitynews.com.au/central-coast/news/2024/02/major-sponsorship-for-wyong-race-club/",
+      "lv_country_region_normalized": "https://www.centralcoastaustralia.com.au/15764/wyong-race-club/",
+      "lv_has_sports_media_fit": "https://wyongraceclub.com.au/",
+      "lv_has_broadcast_or_streaming_signals": "https://www.bets.com.au/horse-racing/race-courses/wyong-races-live-stream-20210406-0030/"
+    }
+  },
+  "14752488879": {
+    "provider": "claude_web",
+    "object_type": "companies",
+    "matched": true,
+    "confidence": 85,
+    "data": {
+      "lv_org_type": "Sports/Racing Club",
+      "lv_produces_content": false,
+      "lv_content_type": [],
+      "lv_is_hardware_vendor": null,
+      "lv_is_gambling_operator": true,
+      "lv_sponsorship_reliant": true,
+      "lv_country_region_normalized": "Australia - NSW",
+      "lv_has_sports_media_fit": true,
+      "lv_has_broadcast_or_streaming_signals": false
+    },
+    "evidence": {
+      "last_seen": "2026-08-11",
+      "match_basis": [
+        "Domain match: www.coffsracingclub.com.au",
+        "Organization identity confirmed via multiple sources",
+        "Location: Coffs Harbour, NSW Australia",
+        "Horse racing operations - member of Racing NSW Country"
+      ],
+      "evidence_urls": [
+        "https://coffsracingclub.com.au/",
+        "https://coffsracingclub.com.au/about-coffs-racing/",
+        "https://www.crunchbase.com/organization/coffs-harbour-racing-club",
+        "https://race.com.au/racing/nsw-country/club/coffs-harbour-racing-club/",
+        "https://rocketreach.co/coffs-harbour-racing-club-profile_b46dfe69fc5c839a"
+      ],
+      "evidence_summary": "Coffs Harbour Racing Club is a regional thoroughbred horse racing club in NSW, Australia that operates 16 racing events annually. As a racing club, it operates wagering/betting facilities and relies on sponsorship opportunities. The club does not produce its own broadcast or streaming content; Race.com.au provides coverage of their meetings. Revenue ~$2M AUD (2025). Primary business is horse racing events and function venue operations."
+    },
+    "model_trace": {
+      "research_model": "claude-web",
+      "classifier_model": null,
+      "validator_model": null
+    },
+    "evidence_by_field": {
+      "lv_org_type": "https://coffsracingclub.com.au/about-coffs-racing/",
+      "lv_is_gambling_operator": "https://coffsracingclub.com.au/racing-wagering/",
+      "lv_sponsorship_reliant": "https://www.zoominfo.com/c/the-coffs-harbour-racing-club-ltd/356922130",
+      "lv_country_region_normalized": "https://www.crunchbase.com/organization/coffs-harbour-racing-club",
+      "lv_has_sports_media_fit": "https://race.com.au/racing/nsw-country/club/coffs-harbour-racing-club/"
+    }
+  },
+  "17317381378": {
+    "provider": "claude_web",
+    "object_type": "companies",
+    "matched": false,
+    "confidence": 5,
+    "data": {
+      "lv_org_type": null,
+      "lv_produces_content": null,
+      "lv_content_type": [],
+      "lv_is_hardware_vendor": null,
+      "lv_is_gambling_operator": null,
+      "lv_sponsorship_reliant": null,
+      "lv_country_region_normalized": null,
+      "lv_has_sports_media_fit": null,
+      "lv_has_broadcast_or_streaming_signals": null
+    },
+    "evidence": {
+      "last_seen": null,
+      "match_basis": [],
+      "evidence_urls": [],
+      "evidence_summary": "Web searches for 'Editix edetrix.com.au', 'Editix broadcast streaming live', and 'edetrix.com.au OR Editix Australia media' returned no results for a company matching this identity. Results included unrelated companies: EditiX (XML editor software), Editrix (AI book editing tool), and EditShare (media software), but none matching the provided company name and domain combination."
+    },
+    "model_trace": {
+      "research_model": "claude-web",
+      "classifier_model": null,
+      "validator_model": null
+    },
+    "evidence_by_field": {}
+  },
+  "17317850381": {
+    "provider": "claude_web",
+    "object_type": "companies",
+    "matched": true,
+    "confidence": 85,
+    "data": {
+      "lv_org_type": "Media company / Web television broadcaster",
+      "lv_produces_content": true,
+      "lv_content_type": [
+        "Music television",
+        "Rock music programming",
+        "Interviews",
+        "News and reviews",
+        "Live streaming"
+      ],
+      "lv_is_hardware_vendor": false,
+      "lv_is_gambling_operator": null,
+      "lv_sponsorship_reliant": null,
+      "lv_country_region_normalized": "Italy",
+      "lv_has_sports_media_fit": false,
+      "lv_has_broadcast_or_streaming_signals": true
+    },
+    "evidence": {
+      "last_seen": "2026-08-11",
+      "match_basis": [
+        "Domain match: jamtv.it",
+        "Company name match: Jam TV",
+        "Country match: Italy",
+        "Industry match: Broadcast media / Music television"
+      ],
+      "evidence_urls": [
+        "https://jamtv.it/",
+        "https://x.com/jamtvit",
+        "https://www.youtube.com/@JamTVit",
+        "https://www.facebook.com/JamTVit/"
+      ],
+      "evidence_summary": "Jam TV is confirmed as an Italian music television platform dedicated to rock and related genres. It operates as a web-based television service with daily streaming content including interviews, live sessions, and music programming. The platform originated from the magazine 'Jam - Viaggio nella Musica' and launched as a web television service on February 1, 2016. Based in Milan (Segrate area), it maintains presence across multiple platforms including its website, YouTube, social media, and X/Twitter. No gambling operations, hardware vendor activities, or sports media content identified. Revenue information not available from public sources."
+    },
+    "model_trace": {
+      "research_model": "claude-web",
+      "classifier_model": null,
+      "validator_model": null
+    },
+    "evidence_by_field": {
+      "lv_org_type": "https://jamtv.it/",
+      "lv_produces_content": "https://jamtv.it/",
+      "lv_content_type": "https://jamtv.it/",
+      "lv_is_hardware_vendor": "https://jamtv.it/",
+      "lv_country_region_normalized": "https://x.com/jamtvit",
+      "lv_has_sports_media_fit": "https://jamtv.it/",
+      "lv_has_broadcast_or_streaming_signals": "https://jamtv.it/"
+    }
+  },
+  "17696004613": {
+    "provider": "claude_web",
+    "object_type": "companies",
+    "matched": true,
+    "confidence": 92,
+    "data": {
+      "lv_org_type": "Association/Non-profit racing club",
+      "lv_produces_content": true,
+      "lv_content_type": [
+        "Live horse racing",
+        "Sky Racing broadcasts"
+      ],
+      "lv_is_hardware_vendor": null,
+      "lv_is_gambling_operator": null,
+      "lv_sponsorship_reliant": true,
+      "lv_country_region_normalized": "Australia - Western Australia",
+      "lv_has_sports_media_fit": true,
+      "lv_has_broadcast_or_streaming_signals": true
+    },
+    "evidence": {
+      "last_seen": "2026-06-19",
+      "match_basis": [
+        "Domain match to first-party website",
+        "Name and location match (Pinjarra, Western Australia)",
+        "Industry classification as entertainment/sports venue",
+        "Confirmed horse racing operations"
+      ],
+      "evidence_urls": [
+        "https://www.pinjarrapark.com.au/",
+        "https://en.wikipedia.org/wiki/Pinjarra_Park",
+        "https://racingwa.com.au/clubs/pinjarra",
+        "https://www.bets.com.au/horse-racing/race-courses/pinjarra-races-live-stream-20210324-0023/"
+      ],
+      "evidence_summary": "<cite index=\"1-1\">Pinjarra Park is a Thoroughbred horse racing venue located in the town of Pinjarra, Western Australia</cite>. <cite index=\"2-4\">The racecourse is home to the Pinjarra Race Club, which hosts thoroughbred racing events from December to August each year</cite>. <cite index=\"17-2\">The venue offers bars, hospitality outlets, TAB, Sky Racing, live racing, and members facilities</cite>. <cite index=\"17-9\">Platinum Club provides a low-cost entry point to sponsorship, with fantastic benefits for one low packaged price</cite>, indicating sponsorship reliance. <cite index=\"11-1,11-2\">Pinjarra Races live streams are available via Sky Racing Channels and online through bet365 or Ladbrokes</cite>, confirming broadcast and streaming signals."
+    },
+    "model_trace": {
+      "research_model": "claude-web",
+      "classifier_model": null,
+      "validator_model": null
+    },
+    "evidence_by_field": {
+      "lv_org_type": "https://www.pinjarrapark.com.au/",
+      "lv_produces_content": "https://www.pinjarrapark.com.au/",
+      "lv_content_type": "https://www.pinjarrapark.com.au/",
+      "lv_sponsorship_reliant": "https://www.pinjarrapark.com.au/",
+      "lv_country_region_normalized": "https://en.wikipedia.org/wiki/Pinjarra_Park",
+      "lv_has_sports_media_fit": "https://en.wikipedia.org/wiki/Pinjarra_Park",
+      "lv_has_broadcast_or_streaming_signals": "https://www.bets.com.au/horse-racing/race-courses/pinjarra-races-live-stream-20210324-0023/"
+    }
+  },
+  "18047161864": {
+    "provider": "claude_web",
+    "object_type": "companies",
+    "matched": true,
+    "confidence": 85,
+    "data": {
+      "lv_org_type": "private_company",
+      "lv_produces_content": true,
+      "lv_content_type": [
+        "custom_animation",
+        "marketing_content",
+        "LED_display_content"
+      ],
+      "lv_is_hardware_vendor": true,
+      "lv_is_gambling_operator": false,
+      "lv_sponsorship_reliant": false,
+      "lv_country_region_normalized": "Australia",
+      "lv_has_sports_media_fit": true,
+      "lv_has_broadcast_or_streaming_signals": false
+    },
+    "evidence": {
+      "last_seen": "2025-08-28",
+      "match_basis": [
+        "Domain www.simtechled.com matches input",
+        "Company confirmed as LED solutions provider",
+        "Produces custom content and animations"
+      ],
+      "evidence_urls": [
+        "https://simtechled.com/",
+        "https://simtechled.com/about/",
+        "https://asgam.com/2023/08/01/let-there-be-light/",
+        "https://www.zoominfo.com/c/simtech-led/357020679"
+      ],
+      "evidence_summary": "Simtech LED is a private LED display manufacturer and content creation company headquartered in Queensland, Australia. Founded in 1980s as digital printing firm, evolved to specialize in LED signage and displays for gaming, hospitality, sports, retail, corporate, and education sectors. Produces custom content and animations in-house via 4th Gen Studio. Operates offices in Macau, Singapore, Las Vegas, and Philippines. No evidence of broadcasting/streaming operations or gambling operation. Does produce hardware (LED displays) and has sports media applications through stadium and venue installations."
+    },
+    "model_trace": {
+      "research_model": "claude-web",
+      "classifier_model": null,
+      "validator_model": null
+    },
+    "evidence_by_field": {
+      "lv_org_type": "https://simtechled.com/about/",
+      "lv_produces_content": "https://simtechled.com/about/",
+      "lv_content_type": "https://simtechled.com/led-solutions/",
+      "lv_is_hardware_vendor": "https://simtechled.com/led-solutions/",
+      "lv_is_gambling_operator": "https://asgam.com/2023/08/01/let-there-be-light/",
+      "lv_sponsorship_reliant": "https://simtechled.com/about/",
+      "lv_country_region_normalized": "https://asgam.com/2023/08/01/let-there-be-light/",
+      "lv_has_sports_media_fit": "https://simtechled.com/led-solutions/",
+      "lv_has_broadcast_or_streaming_signals": "https://simtechled.com/"
+    }
+  },
+  "18796602894": {
+    "provider": "claude_web",
+    "object_type": "companies",
+    "matched": true,
+    "confidence": 92,
+    "data": {
+      "lv_org_type": "Thoroughbred racing club",
+      "lv_produces_content": true,
+      "lv_content_type": [
+        "horse racing event coverage",
+        "race replays",
+        "sports event media"
+      ],
+      "lv_is_hardware_vendor": null,
+      "lv_is_gambling_operator": true,
+      "lv_sponsorship_reliant": true,
+      "lv_country_region_normalized": "Australia - Western Australia",
+      "lv_has_sports_media_fit": true,
+      "lv_has_broadcast_or_streaming_signals": true
+    },
+    "evidence": {
+      "last_seen": "2026-08-11",
+      "match_basis": [
+        "Company name matches exactly with provided domain www.kbrc.com.au",
+        "Confirmed thoroughbred horse racing club in Kalgoorlie-Boulder, Western Australia",
+        "Hosts 21 annual race meetings including the iconic Kalgoorlie-Boulder Race Round",
+        "YouTube channel contains race replays and event coverage",
+        "Offers Punters Club membership indicating sports betting operations",
+        "Actively solicits sponsorships for races and race days",
+        "Revenue data available from business databases"
+      ],
+      "evidence_urls": [
+        "https://www.kbrc.com.au/",
+        "https://racingwa.com.au/clubs/kalgoorlie",
+        "https://www.youtube.com/channel/UCENGnQVMjYPZuB-rlIASddQ",
+        "https://rocketreach.co/kalgoorlie-boulder-racing-club-profile_b70e6925c4f4def6",
+        "https://www.zoominfo.com/c/the-kalgoorlie-boulder-racing-club-inc/352941038"
+      ],
+      "evidence_summary": "The Kalgoorlie-Boulder Racing Club is a confirmed single-entity sports organization operating as a thoroughbred racing club in Western Australia. It operates as a membership-based organization that produces content (race replays via YouTube) and generates revenue from race day attendance, punter betting operations, sponsorships, and venue hire. The organization has clear sports media signals through multiple broadcast channels and YouTube content distribution."
+    },
+    "model_trace": {
+      "research_model": "claude-web",
+      "classifier_model": null,
+      "validator_model": null
+    },
+    "evidence_by_field": {
+      "lv_org_type": "https://racingwa.com.au/clubs/kalgoorlie",
+      "lv_produces_content": "https://www.youtube.com/channel/UCENGnQVMjYPZuB-rlIASddQ",
+      "lv_content_type": "https://www.youtube.com/channel/UCENGnQVMjYPZuB-rlIASddQ",
+      "lv_is_gambling_operator": "https://www.kbrc.com.au/",
+      "lv_sponsorship_reliant": "https://www.kbrc.com.au/",
+      "lv_country_region_normalized": "https://www.kbrc.com.au/",
+      "lv_has_sports_media_fit": "https://www.youtube.com/channel/UCENGnQVMjYPZuB-rlIASddQ",
+      "lv_has_broadcast_or_streaming_signals": "https://www.youtube.com/channel/UCENGnQVMjYPZuB-rlIASddQ"
+    }
+  },
+  "19100977027": {
+    "provider": "claude_web",
+    "object_type": "companies",
+    "matched": true,
+    "confidence": 92,
+    "data": {
+      "lv_org_type": "not-for-profit sports club",
+      "lv_produces_content": true,
+      "lv_content_type": [
+        "harness racing broadcasts",
+        "race replays",
+        "live racing events"
+      ],
+      "lv_is_hardware_vendor": false,
+      "lv_is_gambling_operator": true,
+      "lv_sponsorship_reliant": null,
+      "lv_country_region_normalized": "Australia",
+      "lv_has_sports_media_fit": true,
+      "lv_has_broadcast_or_streaming_signals": true
+    },
+    "evidence": {
+      "last_seen": "2026-08-11",
+      "match_basis": [
+        "Official website domain matches (www.newcastleharness.com.au)",
+        "Organization confirmed as Newcastle Harness Racing Club Ltd",
+        "Located in Broadmeadow, Newcastle NSW, Australia",
+        "Operates ~70 harness racing meetings annually",
+        "Under Cover Betting Ring facilities confirmed",
+        "Video replays and race content available on Australian Harness Racing official site"
+      ],
+      "evidence_urls": [
+        "https://www.newcastleharness.com.au/about/club-information/",
+        "https://www.newcastleharness.com.au/about/",
+        "https://www.harness.org.au/video-replays.cfm",
+        "https://www.harness.org.au/newcastle/newcastle.cfm",
+        "https://www.facebook.com/newcastleharnessracingclub/",
+        "https://www.newcastleharness.com.au/racing"
+      ],
+      "evidence_summary": "Newcastle Harness Racing Club is confirmed as a not-for-profit, member-based sports organization operating a harness racing venue in New South Wales, Australia. The club produces racing content distributed through the Australian Harness Racing website's video replay section and social media channels. Betting operations are facilitated through an on-site covered betting ring. No specific revenue figures located. The organization has clear sports media fit with regular ~70 annual race meetings and feature events including the $100,000 Newcastle Mile."
+    },
+    "model_trace": {
+      "research_model": "claude-web",
+      "classifier_model": null,
+      "validator_model": null
+    },
+    "evidence_by_field": {
+      "lv_org_type": "https://www.newcastleharness.com.au/about/club-information/",
+      "lv_produces_content": "https://www.harness.org.au/video-replays.cfm",
+      "lv_content_type": "https://www.facebook.com/newcastleharnessracingclub/",
+      "lv_is_hardware_vendor": "https://www.newcastleharness.com.au/about/club-information/",
+      "lv_is_gambling_operator": "https://www.harness.org.au/newcastle/newcastle.cfm",
+      "lv_country_region_normalized": "https://www.newcastleharness.com.au/",
+      "lv_has_sports_media_fit": "https://www.newcastleharness.com.au/racing",
+      "lv_has_broadcast_or_streaming_signals": "https://www.harness.org.au/video-replays.cfm"
+    }
+  },
+  "20538284384": {
+    "provider": "claude_web",
+    "object_type": "companies",
+    "matched": true,
+    "confidence": 85,
+    "data": {
+      "lv_org_type": "Racing Club / Sports Organization",
+      "lv_produces_content": true,
+      "lv_content_type": [
+        "Live Horse Racing Events",
+        "Broadcast-Ready Racing Content"
+      ],
+      "lv_is_hardware_vendor": false,
+      "lv_is_gambling_operator": true,
+      "lv_sponsorship_reliant": true,
+      "lv_country_region_normalized": "New Zealand",
+      "lv_has_sports_media_fit": true,
+      "lv_has_broadcast_or_streaming_signals": true
+    },
+    "evidence": {
+      "last_seen": "2024",
+      "match_basis": [
+        "Thoroughbred horse racing club operating racecourse and event venue",
+        "Conducts licensed race meetings with betting operations",
+        "Receives NZRB industry distributions (gambling/racing revenue)",
+        "Sponsors racedays and receives sponsorship support",
+        "Operates as event center and venue",
+        "Part of organized racing industry with broadcast potential"
+      ],
+      "evidence_urls": [
+        "https://www.teraparacing.co.nz/about",
+        "https://waikatoracing.co.nz/",
+        "https://nztr.co.nz/news/announcement-waikato-super-club-merger",
+        "https://waikatoracing.co.nz/sites/terapa/files/2022-10/Consolidated%20Financial%20Statements%20%5BSigned%5D.pdf"
+      ],
+      "evidence_summary": "Waikato Racing Club Inc is a thoroughbred horse racing organization operating the Te Rapa Racecourse in Hamilton, New Zealand. It merged with Cambridge Jockey Club and Waipa Racing Club to form Waikato Thoroughbred Racing in August 2023. The organization is classified as a gambling operator because it receives New Zealand Racing Board distributions and operates licensed race meetings with TAB betting facilities. It produces live horse racing content across 30+ annual race meetings. The organization is sponsorship-reliant as noted in official descriptions. It has clear sports media fit as a racing event operator. Broadcasting/streaming signals are present through its role as a licensed racing venue that feeds into national racing broadcast networks."
+    },
+    "model_trace": {
+      "research_model": "claude-web",
+      "classifier_model": null,
+      "validator_model": null
+    },
+    "evidence_by_field": {
+      "lv_org_type": "https://www.teraparacing.co.nz/about",
+      "lv_produces_content": "https://waikatoracing.co.nz/",
+      "lv_content_type": "https://www.teraparacing.co.nz/about",
+      "lv_is_gambling_operator": "https://waikatoracing.co.nz/sites/terapa/files/2022-10/Consolidated%20Financial%20Statements%20%5BSigned%5D.pdf",
+      "lv_sponsorship_reliant": "https://www.teraparacing.co.nz/about",
+      "lv_country_region_normalized": "https://www.teraparacing.co.nz/about",
+      "lv_has_sports_media_fit": "https://www.teraparacing.co.nz/about",
+      "lv_has_broadcast_or_streaming_signals": "https://waikatoracing.co.nz/"
+    }
+  },
+  "20943964946": {
+    "provider": "claude_web",
+    "object_type": "companies",
+    "matched": true,
+    "confidence": 92,
+    "data": {
+      "lv_org_type": "Event organizer / Sports league operator",
+      "lv_produces_content": true,
+      "lv_content_type": [
+        "live skateboarding events",
+        "professional skateboarding tour",
+        "amateur skateboarding series",
+        "broadcast/streaming content"
+      ],
+      "lv_is_hardware_vendor": null,
+      "lv_is_gambling_operator": null,
+      "lv_sponsorship_reliant": true,
+      "lv_country_region_normalized": "Australia",
+      "lv_has_sports_media_fit": true,
+      "lv_has_broadcast_or_streaming_signals": true
+    },
+    "evidence": {
+      "last_seen": "2026-04-24",
+      "match_basis": [
+        "First-party domain therumble.com.au matches",
+        "Company name match Pacific Action Sports",
+        "Australian location match",
+        "Industry alignment with action sports events"
+      ],
+      "evidence_urls": [
+        "https://www.therumble.com.au/",
+        "https://au.linkedin.com/company/therumble",
+        "https://www.therumble.com.au/updates/appointgeneral-manager",
+        "https://www.rumbleonthereef.com/",
+        "https://www.nsw.gov.au/visiting-and-exploring-nsw/nsw-events/rumble-on-river-0",
+        "https://experiencegoldcoast.com/events/rumble-on-the-beach"
+      ],
+      "evidence_summary": "The Rumble is owned and operated by Pacific Action Sports, an Australian spectator sports company founded in 2017 based in Mackay, Queensland. The organization produces skateboarding content through the Rumble Pro Tour and Amateur Series events held across Australia. Events are broadcast with average viewership exceeding 740,000 across attendance, social media, and broadcast channels. The organization is highly sponsorship-reliant with title sponsorships (e.g., BMD Rumble Pro Tour) and partnership support from Skate Australia. Broadcasting partnerships include KommunityTV and streamer.com.au/league/rumbleskatetours."
+    },
+    "model_trace": {
+      "research_model": "claude-web",
+      "classifier_model": null,
+      "validator_model": null
+    },
+    "evidence_by_field": {
+      "lv_org_type": "https://www.therumble.com.au/",
+      "lv_produces_content": "https://www.therumble.com.au/",
+      "lv_content_type": "https://www.therumble.com.au/upcoming",
+      "lv_sponsorship_reliant": "https://experiencegoldcoast.com/events/rumble-on-the-beach",
+      "lv_country_region_normalized": "https://au.linkedin.com/company/therumble",
+      "lv_has_sports_media_fit": "https://www.nsw.gov.au/visiting-and-exploring-nsw/nsw-events/rumble-on-river-0",
+      "lv_has_broadcast_or_streaming_signals": "https://www.rumbleonthereef.com/"
+    }
+  }
+}
