@@ -147,6 +147,26 @@ def diff(before_rows, after_rows) -> dict:
     return result
 
 
+# --- Task 2: live property-existence guard ---------------------------------------------
+
+def live_property_names(object_type="companies", lister=None):
+    """The set of property names the portal actually has for `object_type`. Delegates
+    the HTTP call to `scripts.check_schema_drift._get_live_properties` (lazy-imported to
+    avoid importing that module's own dependency chain at module load) rather than
+    issuing a second properties-listing call of its own. `lister` is injectable so
+    offline tests need no network."""
+    if lister is None:
+        from scripts.check_schema_drift import _get_live_properties as lister
+    results = lister(object_type)
+    return {p["name"] for p in results}
+
+
+def missing_property_names(payload_keys, live_names) -> list:
+    """The sorted set of `payload_keys` absent from `live_names` -- CLAUDE.md §4.0's
+    guard: a name declared in a design table is not necessarily a name the portal has."""
+    return sorted(set(payload_keys) - set(live_names))
+
+
 # --- main -------------------------------------------------------------------------------
 
 def _parse_ids_csv(raw: str) -> list:

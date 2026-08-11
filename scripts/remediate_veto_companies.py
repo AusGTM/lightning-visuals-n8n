@@ -535,6 +535,42 @@ def verify_post_run(company_id: str, expected_inputs: dict, expected_metadata: d
     }
 
 
+# --- Task 2 (T-47-13): live property-existence guard, before any write branch -----------
+
+def _live_property_lister(object_type):
+    """Production seam for the guard's HTTP call -- lazy-imports
+    scripts.check_schema_drift._get_live_properties to avoid a module-level import cycle
+    (scripts.veto_remediation_report imports PINNED_COMPANY_ID_ORDER/resolve_pinned_ids/
+    expected_score_and_tier from THIS module, so this module must never import that one
+    at module level). Tests monkeypatch this module-level name directly with a fake
+    lister -- do not inline the import at the call site."""
+    from scripts.check_schema_drift import _get_live_properties
+    return _get_live_properties(object_type)
+
+
+def _run_property_existence_guard(records) -> list:
+    """The checked name set is deliberately WIDER than what this run writes: every
+    payload key across all built payloads (input, metadata, component), UNION the 8
+    read-only property names scripts.veto_remediation_report observes -- which includes
+    the four derived fields this phase never writes and both VETO-03 search property
+    names. A written name that's missing 400s the whole batch mid-window; a read name
+    that's missing fails silently and returns None, the same defect class as the false
+    veto this phase exists to clear. Returns the sorted list of missing names (empty if
+    none)."""
+    from scripts.veto_remediation_report import (
+        OBSERVED_PROPS, live_property_names, missing_property_names,
+    )
+
+    payload_keys = set(OBSERVED_PROPS)
+    for rec in records:
+        payload_keys.update(rec["input_patch"]["properties"].keys())
+        payload_keys.update(rec["metadata_patch"]["properties"].keys())
+        payload_keys.update(rec["component_patch"]["properties"].keys())
+
+    live_names = live_property_names("companies", lister=_live_property_lister)
+    return missing_property_names(payload_keys, live_names)
+
+
 # --- main -----------------------------------------------------------------------------
 
 def _parse_ids_csv(raw: str) -> list:
@@ -630,6 +666,12 @@ def main(argv=None) -> int:
         return 1
 
     records = [_process_one(company_id) for company_id in resolved_ids]
+
+    missing = _run_property_existence_guard(records)
+    if missing:
+        print(f"REFUSED: {len(missing)} checked property name(s) are absent from the "
+              f"live portal -- refusing before any write branch: {missing}")
+        return 1
 
     for rec in records:
         print(json.dumps(rec["input_patch"], indent=2))

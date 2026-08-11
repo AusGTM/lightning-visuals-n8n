@@ -35,6 +35,27 @@ def _refuse_network(*_a, **_kw):
     raise AssertionError("no network call should be made in this test")
 
 
+# Task 2 (T-47-13): a fake lister covering every property name any built payload or the
+# report script's OBSERVED_PROPS could ever check, so Plan 01's tests -- which predate
+# the live property-existence guard -- keep exercising main() without a live HubSpot
+# properties call. Deliberately a superset, not the literal live portal set.
+_ALL_METADATA_PROPS = {
+    f"{field}{suffix}" for field in m.INPUT_PROPS for suffix in m.METADATA_SUFFIXES
+}
+_FAKE_LIVE_PROPERTY_NAMES = (
+    {"name", "domain", "website", "country", "industry"}
+    | set(m.INPUT_PROPS)
+    | _ALL_METADATA_PROPS
+    | {"org_type_score", "geography_score", "annual_revenue_score",
+       "produces_content_score", "gambling_score"}
+    | set(m.FORBIDDEN_PROPS)
+)
+
+
+def _fake_property_lister(object_type):
+    return [{"name": n} for n in sorted(_FAKE_LIVE_PROPERTY_NAMES)]
+
+
 def _arm_credentials_and_env(monkeypatch, *, dry_run_unset=True):
     monkeypatch.setenv("HUBSPOT_PRIVATE_APP_TOKEN", "fake-token")
     monkeypatch.setenv("HUBSPOT_PORTAL_ID", m.EXPECTED_PORTAL_ID)
@@ -44,6 +65,7 @@ def _arm_credentials_and_env(monkeypatch, *, dry_run_unset=True):
     monkeypatch.delenv("ALLOW_VETO_REMEDIATION", raising=False)
     monkeypatch.delenv("VETO_MAX_RECORDS", raising=False)
     monkeypatch.setattr(m, "get_record", _fake_get_record)
+    monkeypatch.setattr(m, "_live_property_lister", _fake_property_lister)
     monkeypatch.setattr("requests.post", _refuse_network)
     monkeypatch.setattr("requests.get", _refuse_network)
 
