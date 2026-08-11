@@ -5,15 +5,15 @@ milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 47
 current_phase_name: veto-remediation
 status: executing
-stopped_at: Completed 47-01-PLAN.md
-last_updated: "2026-08-11T12:29:55.783Z"
+stopped_at: Completed 47-02-PLAN.md
+last_updated: "2026-08-11T12:36:56.532Z"
 last_activity: 2026-08-11
 last_activity_desc: Phase 47 execution started
 progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 9
-  completed_plans: 6
+  completed_plans: 7
   percent: 25
 ---
 
@@ -22,19 +22,19 @@ progress:
 ## Current Position
 
 Phase: 47 (veto-remediation) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 Status: Ready to execute
 Last activity: 2026-08-11 — Phase 47 execution started
   mapped (RUBRIC-01..03 -> 46, VETO-01..03 -> 47, COVER-01..02 -> 48, RESCORE-01..03 -> 49).
   Sequencing: rubric decided once (46) before the 17 false-veto records are touched (47), so
   they re-score exactly once rather than twice under a later weight change.
 
-Progress: [███████░░░] 67%
+Progress: [████████░░] 78%
 
 ## Session
 
-**Last session:** 2026-08-11T12:29:55.774Z
-**Stopped at:** Completed 47-01-PLAN.md
+**Last session:** 2026-08-11T12:36:56.522Z
+**Stopped at:** Completed 47-02-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -70,6 +70,7 @@ Progress: [███████░░░] 67%
 | Phase 46 P04 | 35min | 2 tasks | 11 files |
 | Phase 46 P05 | ~15min | 2 tasks | 7 files |
 | Phase 47 P01 | 20min | 3 tasks | 3 files |
+| Phase 47 P02 | 35m | 3 tasks | 4 files |
 
 ## Decisions
 
@@ -149,6 +150,8 @@ Progress: [███████░░░] 67%
 - [Phase ?]: 46-05: .planning/intel/requirements.md edited beyond the single read_first-cited line (REQ-icp-scoring-model, REQ-graduated-deductions also updated) since both print superseded literal weight values covered by the plan's numeric-agreement truth
 - [Phase ?]: Phase 47-01: skipped requirements mark-complete for VETO-01/02/COVER-01/02 -- gsd-tools requirements ready-ids confirmed all 4 are blocked pending sibling plans 47-02/03/04's SUMMARY.md
 - [Phase ?]: Phase 47-01: added evidence_by_field to the shared claude_web_research_company.json mock fixture (Rule 2) -- it predated the Phase 13/OC-1 addition and was stale against its own RESEARCH_SYSTEM contract
+- [Phase ?]: COVER-01/COVER-02 mapped to Phase 47 + 48 (D-02); neither phase closes them alone
+- [Phase ?]: 47-COST-ESTIMATE.md written ex-ante, sourced from live estimate_cost() call: 17 web-research calls, ~4 redundant, ~$1.17 Anthropic floor, 0 provider credits
 
 ### Blockers
 

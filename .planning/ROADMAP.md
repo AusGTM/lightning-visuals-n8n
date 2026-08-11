@@ -167,7 +167,7 @@ write windows.
   3. Operator can search HubSpot alone — no scripts — for "non-ANZ veto reason with a blank
      `lv_country_region_normalized`" and get zero results.
 
-**Plans**: 1/4 plans executed
+**Plans**: 2/4 plans executed
 
 Plans:
 
@@ -175,7 +175,7 @@ Plans:
       pinned-ID gate, the never-write guard, the two independent settle-and-assert wrappers, the
       D-18 webhook event builder, and the budget refusal (wave 1)
 
-- [ ] 47-02-PLAN.md — Map COVER-01/COVER-02 to Phase 47 + 48 per D-02, write the ex-ante cost
+- [x] 47-02-PLAN.md — Map COVER-01/COVER-02 to Phase 47 + 48 per D-02, write the ex-ante cost
       estimate, fill the validation map, and scope the API coverage matrix (wave 1)
 
 - [ ] 47-03-PLAN.md — Pre-flight, all read-only: the per-ID before-snapshot, the live
@@ -261,7 +261,7 @@ did not change, no full re-score is owed and this phase proves the procedure wit
 | 44. SJ-3 Dispatch Gate, Drain & Cap | v0.8 | 3/3 | Complete (verified) | 2026-08-10 |
 | 45. Burn-Rate Alarm | v0.8 | 3/3 | Complete (verified) | 2026-08-10 |
 | 46. Rubric Decision, Simulation & Engine Parity | v0.9 | 5/5 | In Progress|  |
-| 47. Veto Remediation | v0.9 | 1/4 | In Progress|  |
+| 47. Veto Remediation | v0.9 | 2/4 | In Progress|  |
 | 48. Enrichment Coverage | v0.9 | 0/? | Not started | - |
 | 49. Re-score Strategy & Reporting | v0.9 | 0/? | Not started | - |
 
