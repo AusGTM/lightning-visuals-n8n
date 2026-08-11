@@ -1,0 +1,1235 @@
+{
+  "run_metadata": {
+    "checked_at_utc": "2026-08-11T07:59:01.631351+00:00",
+    "portal_id": "22617666",
+    "proposed_overrides": [
+      {
+        "path": "base_score.org_type.individual_club_team",
+        "value": 15
+      },
+      {
+        "path": "base_score.org_type.regulator",
+        "value": -20
+      },
+      {
+        "path": "graduated_deductions.gambling_operator",
+        "value": null
+      }
+    ],
+    "scenarios": [
+      {
+        "name": "club_10",
+        "club_weight": 10
+      },
+      {
+        "name": "club_15",
+        "club_weight": 15
+      },
+      {
+        "name": "club_20",
+        "club_weight": 20
+      }
+    ]
+  },
+  "rows": [
+    {
+      "company_id": "9604614548",
+      "name": "Melbourne Racing Club",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "25",
+      "live_tier": "C",
+      "oracle_current_score": 25,
+      "oracle_current_tier": "Needs Review",
+      "oracle_proposed_score": 35,
+      "oracle_proposed_tier": "Needs Review",
+      "sensitivity_tiers": {
+        "club_10": "Needs Review",
+        "club_20": "Needs Review"
+      }
+    },
+    {
+      "company_id": "9605284724",
+      "name": "Australian Turf Club",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "45",
+      "live_tier": "B",
+      "oracle_current_score": 45,
+      "oracle_current_tier": "B",
+      "oracle_proposed_score": 55,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "9604738975",
+      "name": "Tamworth Jockey Club",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "35",
+      "live_tier": "C",
+      "oracle_current_score": 35,
+      "oracle_current_tier": "C",
+      "oracle_proposed_score": 45,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "9604732797",
+      "name": "Tweed Valley Jockey Club",
+      "lv_org_type": null,
+      "flags": [
+        "blank_org_type",
+        "false_veto"
+      ],
+      "live_score": "0",
+      "live_tier": "D",
+      "oracle_current_score": 0,
+      "oracle_current_tier": "Unscored",
+      "oracle_proposed_score": 0,
+      "oracle_proposed_tier": "Unscored",
+      "sensitivity_tiers": {
+        "club_10": "Unscored",
+        "club_20": "Unscored"
+      }
+    },
+    {
+      "company_id": "9604794661",
+      "name": "Sapphire Coast Turf Club (Bega Valley)",
+      "lv_org_type": null,
+      "flags": [
+        "blank_org_type",
+        "false_veto"
+      ],
+      "live_score": "0",
+      "live_tier": "D",
+      "oracle_current_score": 0,
+      "oracle_current_tier": "Unscored",
+      "oracle_proposed_score": 0,
+      "oracle_proposed_tier": "Unscored",
+      "sensitivity_tiers": {
+        "club_10": "Unscored",
+        "club_20": "Unscored"
+      }
+    },
+    {
+      "company_id": "9605273630",
+      "name": "Port Macquarie Race Club",
+      "lv_org_type": null,
+      "flags": [
+        "blank_org_type",
+        "false_veto"
+      ],
+      "live_score": "0",
+      "live_tier": "D",
+      "oracle_current_score": 0,
+      "oracle_current_tier": "Unscored",
+      "oracle_proposed_score": 0,
+      "oracle_proposed_tier": "Unscored",
+      "sensitivity_tiers": {
+        "club_10": "Unscored",
+        "club_20": "Unscored"
+      }
+    },
+    {
+      "company_id": "9605291627",
+      "name": "Victoria Racing Club",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "45",
+      "live_tier": "B",
+      "oracle_current_score": 45,
+      "oracle_current_tier": "B",
+      "oracle_proposed_score": 55,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "9604732795",
+      "name": "Rockhampton Jockey Club",
+      "lv_org_type": null,
+      "flags": [
+        "blank_org_type",
+        "false_veto"
+      ],
+      "live_score": "10",
+      "live_tier": "D",
+      "oracle_current_score": 10,
+      "oracle_current_tier": "Unscored",
+      "oracle_proposed_score": 10,
+      "oracle_proposed_tier": "Unscored",
+      "sensitivity_tiers": {
+        "club_10": "Unscored",
+        "club_20": "Unscored"
+      }
+    },
+    {
+      "company_id": "9605244179",
+      "name": "Toowoomba Turf Club",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "45",
+      "live_tier": "B",
+      "oracle_current_score": 45,
+      "oracle_current_tier": "B",
+      "oracle_proposed_score": 55,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "9605284723",
+      "name": "Brisbane Racing Club (BRC)",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "45",
+      "live_tier": "B",
+      "oracle_current_score": 45,
+      "oracle_current_tier": "B",
+      "oracle_proposed_score": 55,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "9604738976",
+      "name": "Bunbury Turf Club",
+      "lv_org_type": null,
+      "flags": [
+        "blank_org_type",
+        "false_veto"
+      ],
+      "live_score": "0",
+      "live_tier": "D",
+      "oracle_current_score": 0,
+      "oracle_current_tier": "Unscored",
+      "oracle_proposed_score": 0,
+      "oracle_proposed_tier": "Unscored",
+      "sensitivity_tiers": {
+        "club_10": "Unscored",
+        "club_20": "Unscored"
+      }
+    },
+    {
+      "company_id": "9604753960",
+      "name": "South Australian Jockey Club",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "35",
+      "live_tier": "C",
+      "oracle_current_score": 35,
+      "oracle_current_tier": "C",
+      "oracle_proposed_score": 45,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "9605284721",
+      "name": "Geraldton Turf Club",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "35",
+      "live_tier": "C",
+      "oracle_current_score": 35,
+      "oracle_current_tier": "C",
+      "oracle_proposed_score": 45,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "9605284722",
+      "name": "Racing and Wagering Western Australia",
+      "lv_org_type": "governing_body_league",
+      "flags": [],
+      "live_score": "80",
+      "live_tier": "A",
+      "oracle_current_score": 80,
+      "oracle_current_tier": "A",
+      "oracle_proposed_score": 80,
+      "oracle_proposed_tier": "A",
+      "sensitivity_tiers": {
+        "club_10": "A",
+        "club_20": "A"
+      }
+    },
+    {
+      "company_id": "9604787229",
+      "name": "The Alice Springs Turf Club",
+      "lv_org_type": null,
+      "flags": [
+        "blank_org_type",
+        "false_veto"
+      ],
+      "live_score": "10",
+      "live_tier": "D",
+      "oracle_current_score": 10,
+      "oracle_current_tier": "Unscored",
+      "oracle_proposed_score": 10,
+      "oracle_proposed_tier": "Unscored",
+      "sensitivity_tiers": {
+        "club_10": "Unscored",
+        "club_20": "Unscored"
+      }
+    },
+    {
+      "company_id": "9648957286",
+      "name": "Racing Queensland",
+      "lv_org_type": "governing_body_league",
+      "flags": [],
+      "live_score": "80",
+      "live_tier": "A",
+      "oracle_current_score": 80,
+      "oracle_current_tier": "A",
+      "oracle_proposed_score": 80,
+      "oracle_proposed_tier": "A",
+      "sensitivity_tiers": {
+        "club_10": "A",
+        "club_20": "A"
+      }
+    },
+    {
+      "company_id": "9663194467",
+      "name": "Tasracing Pty",
+      "lv_org_type": "governing_body_league",
+      "flags": [],
+      "live_score": "80",
+      "live_tier": "A",
+      "oracle_current_score": 80,
+      "oracle_current_tier": "A",
+      "oracle_proposed_score": 80,
+      "oracle_proposed_tier": "A",
+      "sensitivity_tiers": {
+        "club_10": "A",
+        "club_20": "A"
+      }
+    },
+    {
+      "company_id": "9680571285",
+      "name": "Auckland Thoroughbred Racing",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "45",
+      "live_tier": "B",
+      "oracle_current_score": 45,
+      "oracle_current_tier": "B",
+      "oracle_proposed_score": 55,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "9680907342",
+      "name": "Sunshine Coast Turf Club",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "45",
+      "live_tier": "B",
+      "oracle_current_score": 45,
+      "oracle_current_tier": "B",
+      "oracle_proposed_score": 55,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "9681041418",
+      "name": "The Creek Agency",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "35",
+      "live_tier": "C",
+      "oracle_current_score": 35,
+      "oracle_current_tier": "C",
+      "oracle_proposed_score": 45,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "9680908136",
+      "name": "Redcliffe Harness RC",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "35",
+      "live_tier": "C",
+      "oracle_current_score": 35,
+      "oracle_current_tier": "C",
+      "oracle_proposed_score": 45,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "10021900550",
+      "name": "Cairns Jockey Club",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "35",
+      "live_tier": "C",
+      "oracle_current_score": 35,
+      "oracle_current_tier": "C",
+      "oracle_proposed_score": 45,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "10024564084",
+      "name": "Entain",
+      "lv_org_type": "gambling_operator",
+      "flags": [],
+      "live_score": "-70",
+      "live_tier": "D",
+      "oracle_current_score": -70,
+      "oracle_current_tier": "D",
+      "oracle_proposed_score": -50,
+      "oracle_proposed_tier": "D",
+      "sensitivity_tiers": {
+        "club_10": "D",
+        "club_20": "D"
+      }
+    },
+    {
+      "company_id": "10152138518",
+      "name": "Thoroughbred Park",
+      "lv_org_type": null,
+      "flags": [
+        "blank_org_type",
+        "false_veto"
+      ],
+      "live_score": "10",
+      "live_tier": "D",
+      "oracle_current_score": 10,
+      "oracle_current_tier": "Unscored",
+      "oracle_proposed_score": 10,
+      "oracle_proposed_tier": "Unscored",
+      "sensitivity_tiers": {
+        "club_10": "Unscored",
+        "club_20": "Unscored"
+      }
+    },
+    {
+      "company_id": "10152245364",
+      "name": "Harness Racing ACT",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "35",
+      "live_tier": "C",
+      "oracle_current_score": 35,
+      "oracle_current_tier": "C",
+      "oracle_proposed_score": 45,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "10215097384",
+      "name": "Wyong",
+      "lv_org_type": null,
+      "flags": [
+        "blank_org_type",
+        "false_veto"
+      ],
+      "live_score": "10",
+      "live_tier": "D",
+      "oracle_current_score": 10,
+      "oracle_current_tier": "Unscored",
+      "oracle_proposed_score": 10,
+      "oracle_proposed_tier": "Unscored",
+      "sensitivity_tiers": {
+        "club_10": "Unscored",
+        "club_20": "Unscored"
+      }
+    },
+    {
+      "company_id": "12427415589",
+      "name": "Global Advance StreamLined",
+      "lv_org_type": "broadcaster",
+      "flags": [],
+      "live_score": "50",
+      "live_tier": "B",
+      "oracle_current_score": 50,
+      "oracle_current_tier": "B",
+      "oracle_proposed_score": 50,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "14748141740",
+      "name": "Scone Race Club",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "35",
+      "live_tier": "C",
+      "oracle_current_score": 35,
+      "oracle_current_tier": "C",
+      "oracle_proposed_score": 45,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "14752422181",
+      "name": "Albury Racing Club",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "35",
+      "live_tier": "C",
+      "oracle_current_score": 35,
+      "oracle_current_tier": "C",
+      "oracle_proposed_score": 45,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "14752488879",
+      "name": "Coffs Harbour Racing Club",
+      "lv_org_type": null,
+      "flags": [
+        "blank_org_type",
+        "false_veto"
+      ],
+      "live_score": "0",
+      "live_tier": "D",
+      "oracle_current_score": 0,
+      "oracle_current_tier": "Unscored",
+      "oracle_proposed_score": 0,
+      "oracle_proposed_tier": "Unscored",
+      "sensitivity_tiers": {
+        "club_10": "Unscored",
+        "club_20": "Unscored"
+      }
+    },
+    {
+      "company_id": "15008671672",
+      "name": "Racing NSW",
+      "lv_org_type": null,
+      "flags": [
+        "blank_org_type"
+      ],
+      "live_score": "40",
+      "live_tier": "B",
+      "oracle_current_score": 40,
+      "oracle_current_tier": "Needs Review",
+      "oracle_proposed_score": 40,
+      "oracle_proposed_tier": "Needs Review",
+      "sensitivity_tiers": {
+        "club_10": "Needs Review",
+        "club_20": "Needs Review"
+      }
+    },
+    {
+      "company_id": "15042301818",
+      "name": "Panasonic Studio Productions",
+      "lv_org_type": "broadcaster",
+      "flags": [],
+      "live_score": "60",
+      "live_tier": "B",
+      "oracle_current_score": 60,
+      "oracle_current_tier": "B",
+      "oracle_proposed_score": 60,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "15274105699",
+      "name": "Supertech Electronics",
+      "lv_org_type": "hardware_vendor",
+      "flags": [],
+      "live_score": "10",
+      "live_tier": "D",
+      "oracle_current_score": 10,
+      "oracle_current_tier": "D",
+      "oracle_proposed_score": 10,
+      "oracle_proposed_tier": "D",
+      "sensitivity_tiers": {
+        "club_10": "D",
+        "club_20": "D"
+      }
+    },
+    {
+      "company_id": "15387953738",
+      "name": "Gloucester Park",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "45",
+      "live_tier": "B",
+      "oracle_current_score": 45,
+      "oracle_current_tier": "B",
+      "oracle_proposed_score": 55,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "15388186399",
+      "name": "Bunbury Trotting Club",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "35",
+      "live_tier": "C",
+      "oracle_current_score": 35,
+      "oracle_current_tier": "C",
+      "oracle_proposed_score": 45,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "15860277364",
+      "name": "GRAVITY MEDIA",
+      "lv_org_type": "broadcaster",
+      "flags": [],
+      "live_score": "50",
+      "live_tier": "D",
+      "oracle_current_score": 50,
+      "oracle_current_tier": "D",
+      "oracle_proposed_score": 50,
+      "oracle_proposed_tier": "D",
+      "sensitivity_tiers": {
+        "club_10": "D",
+        "club_20": "D"
+      }
+    },
+    {
+      "company_id": "15860116585",
+      "name": "Harness Racing Victoria",
+      "lv_org_type": "governing_body_league",
+      "flags": [],
+      "live_score": "80",
+      "live_tier": "A",
+      "oracle_current_score": 80,
+      "oracle_current_tier": "A",
+      "oracle_proposed_score": 80,
+      "oracle_proposed_tier": "A",
+      "sensitivity_tiers": {
+        "club_10": "A",
+        "club_20": "A"
+      }
+    },
+    {
+      "company_id": "16047156820",
+      "name": "Queensland Racing Integrity Commission",
+      "lv_org_type": "regulator",
+      "flags": [],
+      "live_score": "25",
+      "live_tier": "D",
+      "oracle_current_score": 25,
+      "oracle_current_tier": "D",
+      "oracle_proposed_score": 0,
+      "oracle_proposed_tier": "D",
+      "sensitivity_tiers": {
+        "club_10": "D",
+        "club_20": "D"
+      }
+    },
+    {
+      "company_id": "17317337782",
+      "name": "Roving Enterprises",
+      "lv_org_type": "broadcaster",
+      "flags": [],
+      "live_score": "60",
+      "live_tier": "B",
+      "oracle_current_score": 60,
+      "oracle_current_tier": "B",
+      "oracle_proposed_score": 60,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "17317147787",
+      "name": "Endemol Shine Australia",
+      "lv_org_type": "broadcaster",
+      "flags": [],
+      "live_score": "60",
+      "live_tier": "B",
+      "oracle_current_score": 60,
+      "oracle_current_tier": "B",
+      "oracle_proposed_score": 60,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "17317184159",
+      "name": "Ironman",
+      "lv_org_type": "governing_body_league",
+      "flags": [],
+      "live_score": "70",
+      "live_tier": "D",
+      "oracle_current_score": 70,
+      "oracle_current_tier": "D",
+      "oracle_proposed_score": 70,
+      "oracle_proposed_tier": "D",
+      "sensitivity_tiers": {
+        "club_10": "D",
+        "club_20": "D"
+      }
+    },
+    {
+      "company_id": "17317381378",
+      "name": "Editix",
+      "lv_org_type": null,
+      "flags": [
+        "blank_org_type",
+        "false_veto"
+      ],
+      "live_score": "0",
+      "live_tier": "D",
+      "oracle_current_score": 0,
+      "oracle_current_tier": "Unscored",
+      "oracle_proposed_score": 0,
+      "oracle_proposed_tier": "Unscored",
+      "sensitivity_tiers": {
+        "club_10": "Unscored",
+        "club_20": "Unscored"
+      }
+    },
+    {
+      "company_id": "17317850381",
+      "name": "Jam TV",
+      "lv_org_type": null,
+      "flags": [
+        "blank_org_type",
+        "false_veto"
+      ],
+      "live_score": "0",
+      "live_tier": "D",
+      "oracle_current_score": 0,
+      "oracle_current_tier": "Unscored",
+      "oracle_proposed_score": 0,
+      "oracle_proposed_tier": "Unscored",
+      "sensitivity_tiers": {
+        "club_10": "Unscored",
+        "club_20": "Unscored"
+      }
+    },
+    {
+      "company_id": "17696004613",
+      "name": "Pinjarra Park",
+      "lv_org_type": null,
+      "flags": [
+        "blank_org_type",
+        "false_veto"
+      ],
+      "live_score": "0",
+      "live_tier": "D",
+      "oracle_current_score": 0,
+      "oracle_current_tier": "Unscored",
+      "oracle_proposed_score": 0,
+      "oracle_proposed_tier": "Unscored",
+      "sensitivity_tiers": {
+        "club_10": "Unscored",
+        "club_20": "Unscored"
+      }
+    },
+    {
+      "company_id": "17791151956",
+      "name": "Big Screen Video",
+      "lv_org_type": "other",
+      "flags": [],
+      "live_score": "20",
+      "live_tier": "D",
+      "oracle_current_score": 20,
+      "oracle_current_tier": "D",
+      "oracle_proposed_score": 20,
+      "oracle_proposed_tier": "D",
+      "sensitivity_tiers": {
+        "club_10": "D",
+        "club_20": "D"
+      }
+    },
+    {
+      "company_id": "17861423879",
+      "name": "Sportsbet",
+      "lv_org_type": "gambling_operator",
+      "flags": [],
+      "live_score": "0",
+      "live_tier": "D",
+      "oracle_current_score": 0,
+      "oracle_current_tier": "D",
+      "oracle_proposed_score": 20,
+      "oracle_proposed_tier": "D",
+      "sensitivity_tiers": {
+        "club_10": "D",
+        "club_20": "D"
+      }
+    },
+    {
+      "company_id": "18047161864",
+      "name": "Simtech LED",
+      "lv_org_type": null,
+      "flags": [
+        "blank_org_type",
+        "false_veto"
+      ],
+      "live_score": "10",
+      "live_tier": "D",
+      "oracle_current_score": 10,
+      "oracle_current_tier": "Unscored",
+      "oracle_proposed_score": 10,
+      "oracle_proposed_tier": "Unscored",
+      "sensitivity_tiers": {
+        "club_10": "Unscored",
+        "club_20": "Unscored"
+      }
+    },
+    {
+      "company_id": "18647353914",
+      "name": "Surfing Australia",
+      "lv_org_type": "governing_body_league",
+      "flags": [],
+      "live_score": "70",
+      "live_tier": "A",
+      "oracle_current_score": 70,
+      "oracle_current_tier": "A",
+      "oracle_proposed_score": 70,
+      "oracle_proposed_tier": "A",
+      "sensitivity_tiers": {
+        "club_10": "A",
+        "club_20": "A"
+      }
+    },
+    {
+      "company_id": "18756544344",
+      "name": "Southside Racing",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "45",
+      "live_tier": "B",
+      "oracle_current_score": 45,
+      "oracle_current_tier": "B",
+      "oracle_proposed_score": 55,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "18756544347",
+      "name": "Harness Racing New South Wales",
+      "lv_org_type": "governing_body_league",
+      "flags": [],
+      "live_score": "70",
+      "live_tier": "A",
+      "oracle_current_score": 70,
+      "oracle_current_tier": "A",
+      "oracle_proposed_score": 70,
+      "oracle_proposed_tier": "A",
+      "sensitivity_tiers": {
+        "club_10": "A",
+        "club_20": "A"
+      }
+    },
+    {
+      "company_id": "18756544359",
+      "name": "AusCycling",
+      "lv_org_type": "governing_body_league",
+      "flags": [],
+      "live_score": "80",
+      "live_tier": "A",
+      "oracle_current_score": 80,
+      "oracle_current_tier": "A",
+      "oracle_proposed_score": 80,
+      "oracle_proposed_tier": "A",
+      "sensitivity_tiers": {
+        "club_10": "A",
+        "club_20": "A"
+      }
+    },
+    {
+      "company_id": "18756544407",
+      "name": "Addington",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "45",
+      "live_tier": "B",
+      "oracle_current_score": 45,
+      "oracle_current_tier": "B",
+      "oracle_proposed_score": 55,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "18796602894",
+      "name": "The Kalgoorlie-Boulder Racing Club",
+      "lv_org_type": null,
+      "flags": [
+        "blank_org_type",
+        "false_veto"
+      ],
+      "live_score": "10",
+      "live_tier": "D",
+      "oracle_current_score": 10,
+      "oracle_current_tier": "Unscored",
+      "oracle_proposed_score": 10,
+      "oracle_proposed_tier": "Unscored",
+      "sensitivity_tiers": {
+        "club_10": "Unscored",
+        "club_20": "Unscored"
+      }
+    },
+    {
+      "company_id": "18811366029",
+      "name": "LiveHeats",
+      "lv_org_type": "other",
+      "flags": [],
+      "live_score": "30",
+      "live_tier": "C",
+      "oracle_current_score": 30,
+      "oracle_current_tier": "C",
+      "oracle_proposed_score": 30,
+      "oracle_proposed_tier": "C",
+      "sensitivity_tiers": {
+        "club_10": "C",
+        "club_20": "C"
+      }
+    },
+    {
+      "company_id": "18973591368",
+      "name": "Shepparton Harness Racing Club",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "35",
+      "live_tier": "C",
+      "oracle_current_score": 35,
+      "oracle_current_tier": "C",
+      "oracle_proposed_score": 45,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "19099896622",
+      "name": "Bathurst Harness Racing Club",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "35",
+      "live_tier": "C",
+      "oracle_current_score": 35,
+      "oracle_current_tier": "C",
+      "oracle_proposed_score": 45,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "19100977027",
+      "name": "Newcastle Harness Racing Club",
+      "lv_org_type": null,
+      "flags": [
+        "blank_org_type",
+        "false_veto"
+      ],
+      "live_score": "0",
+      "live_tier": "D",
+      "oracle_current_score": 0,
+      "oracle_current_tier": "Unscored",
+      "oracle_proposed_score": 0,
+      "oracle_proposed_tier": "Unscored",
+      "sensitivity_tiers": {
+        "club_10": "Unscored",
+        "club_20": "Unscored"
+      }
+    },
+    {
+      "company_id": "19154355339",
+      "name": "Bendigo Harness Racing Club",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "35",
+      "live_tier": "C",
+      "oracle_current_score": 35,
+      "oracle_current_tier": "C",
+      "oracle_proposed_score": 45,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "19363725157",
+      "name": "Racing.com Pty Ltd",
+      "lv_org_type": "broadcaster",
+      "flags": [],
+      "live_score": "60",
+      "live_tier": "B",
+      "oracle_current_score": 60,
+      "oracle_current_tier": "B",
+      "oracle_proposed_score": 60,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "20538284384",
+      "name": "Waikato Racing Club Inc",
+      "lv_org_type": null,
+      "flags": [
+        "blank_org_type",
+        "false_veto"
+      ],
+      "live_score": "0",
+      "live_tier": "D",
+      "oracle_current_score": 0,
+      "oracle_current_tier": "Unscored",
+      "oracle_proposed_score": 0,
+      "oracle_proposed_tier": "Unscored",
+      "sensitivity_tiers": {
+        "club_10": "Unscored",
+        "club_20": "Unscored"
+      }
+    },
+    {
+      "company_id": "20538599475",
+      "name": "RACE (Racing at Awapuni and Trentham Combined Enterprise Incorporated)",
+      "lv_org_type": "individual_club_team",
+      "flags": [],
+      "live_score": "35",
+      "live_tier": "C",
+      "oracle_current_score": 35,
+      "oracle_current_tier": "C",
+      "oracle_proposed_score": 45,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "20943964946",
+      "name": "The Rumble / Pacific Action Sports",
+      "lv_org_type": null,
+      "flags": [
+        "blank_org_type",
+        "false_veto"
+      ],
+      "live_score": "10",
+      "live_tier": "D",
+      "oracle_current_score": 10,
+      "oracle_current_tier": "Unscored",
+      "oracle_proposed_score": 10,
+      "oracle_proposed_tier": "Unscored",
+      "sensitivity_tiers": {
+        "club_10": "Unscored",
+        "club_20": "Unscored"
+      }
+    },
+    {
+      "company_id": "22477285976",
+      "name": "Surge Productions",
+      "lv_org_type": "broadcaster",
+      "flags": [],
+      "live_score": "50",
+      "live_tier": "B",
+      "oracle_current_score": 50,
+      "oracle_current_tier": "B",
+      "oracle_proposed_score": 50,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "22477259590",
+      "name": "ABC (Australian Broadcasting Corporation)",
+      "lv_org_type": "broadcaster",
+      "flags": [],
+      "live_score": "20",
+      "live_tier": "C",
+      "oracle_current_score": 20,
+      "oracle_current_tier": "C",
+      "oracle_proposed_score": 20,
+      "oracle_proposed_tier": "C",
+      "sensitivity_tiers": {
+        "club_10": "C",
+        "club_20": "C"
+      }
+    },
+    {
+      "company_id": "26149144628",
+      "name": "The Stream Shop",
+      "lv_org_type": "broadcaster",
+      "flags": [],
+      "live_score": "50",
+      "live_tier": "B",
+      "oracle_current_score": 50,
+      "oracle_current_tier": "B",
+      "oracle_proposed_score": 50,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    },
+    {
+      "company_id": "40613322263",
+      "name": "Jam TV Australia",
+      "lv_org_type": "broadcaster",
+      "flags": [],
+      "live_score": "50",
+      "live_tier": "B",
+      "oracle_current_score": 50,
+      "oracle_current_tier": "B",
+      "oracle_proposed_score": 50,
+      "oracle_proposed_tier": "B",
+      "sensitivity_tiers": {
+        "club_10": "B",
+        "club_20": "B"
+      }
+    }
+  ],
+  "tier_distribution": {
+    "live": {
+      "C": 17,
+      "B": 18,
+      "D": 24,
+      "A": 7
+    },
+    "oracle_current": {
+      "Needs Review": 2,
+      "B": 17,
+      "C": 16,
+      "Unscored": 17,
+      "A": 7,
+      "D": 7
+    },
+    "oracle_proposed": {
+      "Needs Review": 2,
+      "B": 31,
+      "Unscored": 17,
+      "A": 7,
+      "D": 7,
+      "C": 2
+    }
+  },
+  "sensitivity_tier_distribution": {
+    "club_10": {
+      "Needs Review": 2,
+      "B": 31,
+      "Unscored": 17,
+      "A": 7,
+      "D": 7,
+      "C": 2
+    },
+    "club_20": {
+      "Needs Review": 2,
+      "B": 31,
+      "Unscored": 17,
+      "A": 7,
+      "D": 7,
+      "C": 2
+    }
+  },
+  "movement_summary": {
+    "total_rows": 66,
+    "changed_tier_count": 14,
+    "unchanged_tier_count": 52,
+    "by_org_type": {
+      "individual_club_team": {
+        "changed": 14,
+        "unchanged": 10
+      },
+      "unknown": {
+        "changed": 0,
+        "unchanged": 18
+      },
+      "governing_body_league": {
+        "changed": 0,
+        "unchanged": 8
+      },
+      "gambling_operator": {
+        "changed": 0,
+        "unchanged": 2
+      },
+      "broadcaster": {
+        "changed": 0,
+        "unchanged": 10
+      },
+      "hardware_vendor": {
+        "changed": 0,
+        "unchanged": 1
+      },
+      "regulator": {
+        "changed": 0,
+        "unchanged": 1
+      },
+      "other": {
+        "changed": 0,
+        "unchanged": 2
+      }
+    }
+  },
+  "row_set_finding": {
+    "live_count": 66,
+    "cross_check_count": 66,
+    "matches_exactly": true,
+    "symmetric_difference_count": 0,
+    "only_in_live": [],
+    "only_in_cross_check": []
+  },
+  "verdict": "OK: 66 row(s) simulated."
+}
