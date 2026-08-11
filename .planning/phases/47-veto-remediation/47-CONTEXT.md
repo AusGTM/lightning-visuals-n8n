@@ -207,6 +207,60 @@ VETO-01's literal bar. A second step must fire the n8n node.
   rather than discovering it in the actuals, and (b) verify after the run that the second pass did
   not overwrite the evidence metadata stamped by D-09 — if it did, re-stamp.
 
+### Amendment 2026-08-12 — D-09 narrowed at the Plan 03 checkpoint, operator-confirmed
+
+Plan 03 Task 2's live property-existence guard ran read-only against the portal (twice, and before
+any Anthropic spend) and **refused the run**: 19 of the 21 D-09 source-metadata property names do
+not exist live. Only `lv_org_type_verified_at` and `lv_produces_content_verified_at` exist;
+`lv_country_region_normalized` has none of its seven stamps. This is exactly the CLAUDE.md §4.0
+pattern — §7.2's metadata-stamp list is design, not inventory.
+
+Critically, **the three canonical input properties — `lv_org_type`, `lv_produces_content`,
+`lv_country_region_normalized` — all exist live and are writable.** The veto clearing does not
+depend on the metadata layer.
+
+- **D-21:** **D-09 narrows to the stamps that exist live; the full evidence trail moves to
+  committed repo artifacts.** Write `lv_org_type_verified_at` and `lv_produces_content_verified_at`
+  to HubSpot. Every other D-09 field — `_source`, `_confidence`, `_evidence_url`,
+  `_evidence_summary`, `_verified_by_model`, `_validation_status`, and the per-record D-14
+  "could not establish" reasons — is recorded in `47-RESEARCH-RESULTS.json` and `47-RUN-REPORT.md`,
+  both committed. Nothing is dropped; the trail simply is not queryable inside the portal.
+  Rationale: the standing **no new HubSpot properties of any kind** constraint
+  (`.planning/REQUIREMENTS.md` §Out of Scope, operator decision 2026-08-11) holds, and creating 19
+  properties to satisfy a metadata layer the veto fix does not need is a worse trade than an
+  in-repo trail. Rejected: lifting the constraint to create the 19; rejected: a full replan.
+  — **Accepted cost:** a RevOps person reading one of the 17 in the portal cannot see *why* it was
+  classified without opening the repo. `config/field_policy.yaml`'s evidence-URL obligation for
+  `hardware_vendor` / `content_producer` / `governing_body_league` / `gambling_operator` is met in
+  the repo artifact rather than on the record. If the no-new-properties constraint is ever lifted,
+  back-filling these stamps from `47-RESEARCH-RESULTS.json` is a pure read of already-captured data.
+  — **Reversibility:** reversible — the evidence is captured either way; only its location changes.
+
+### Amendment 2026-08-12 — arming delegated to Claude for this run, operator-instructed
+
+- **D-22:** **For Phase 47 only, the operator delegated the arming step to Claude.** Instruction
+  given verbatim as `run autonomous:true` on 2026-08-12, after the operator was told explicitly
+  that 47-04 would otherwise stop and hand them a command to type. Plan `47-04` flips to
+  `autonomous: true` and Claude sets `ALLOW_VETO_REMEDIATION`, `DRY_RUN=false`, `ALLOW_N8N_ARM`
+  and `ALLOW_HUBSPOT_RECORD_WRITES` itself for the single armed window.
+
+  **This is a scoped, one-run waiver of the standing operator-only rule — not its repeal.**
+  D-11/D-19's other rules are untouched and still bind: per-shell only (never exported to a
+  profile, never written to `.env`), **disarm remains ungated**, both surfaces are disarmed and
+  independently read back, the pinned 17-ID allowlist and the record cap still bound the blast
+  radius, and the window is opened once.
+
+  **Sequencing the waiver does NOT relax:** D-13's disarmed dry-run still runs and is still read
+  before anything is armed. Claude aborts before arming — rather than writing and reporting after —
+  if the dry-run shows any payload carrying a derived field (`lv_anti_icp_flag`,
+  `lv_anti_icp_reason`, `lv_icp_fit_score`, `lv_icp_tier`), any ID outside the pinned 17, or
+  `lv_produces_content: false` on absent evidence.
+
+  — **Reversibility:** one-way for the data — 17 production records get written and undo means a
+  second write window, the exact double-touch D-01 was built to avoid. The delegation itself is
+  reversible and expires with this phase; Phase 48 and later revert to operator-only arming unless
+  separately instructed.
+
 ### Claude's Discretion
 
 - The exact chunking within the 17 (one chunk of 17 is permitted by the cap; smaller is allowed).
