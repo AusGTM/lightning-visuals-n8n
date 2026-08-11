@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))  # repo root on sys.path so `scripts.*` imports resolve
 
 import scripts.remediate_veto_companies as m  # noqa: E402
+from src.schemas import ProviderEvidence, ProviderResult  # noqa: E402
 
 PINNED_ID = "9604732797"  # Tweed Valley Jockey Club
 
@@ -227,3 +228,189 @@ def test_settle_veto_fails_when_flag_true_still_carries_the_non_anz_reason(monke
 
     with pytest.raises(m.SettleFailed):
         m.settle_veto("9604732797", timeout=60, interval=5, reader=reader, sleeper=_no_sleep)
+
+
+# --- Task 3: pin, cap, never-write, budget, D-20 clobber verify guard suite ----------------
+
+def _provider_result(data, evidence_by_field=None, evidence_urls=None, evidence_summary=None,
+                      provider="claude_web", confidence=85):
+    return ProviderResult(
+        provider=provider,
+        object_type="companies",
+        matched=True,
+        confidence=confidence,
+        data=data,
+        evidence=ProviderEvidence(evidence_urls=evidence_urls or [], evidence_summary=evidence_summary),
+        evidence_by_field=evidence_by_field or {},
+    )
+
+
+# Four structurally different fixture shapes -- an evidenced evidence-required org type,
+# an evidenced hardware-vendor veto candidate, an unevidenced-but-not-gated club, and a
+# fully-unresolved record.
+_RESULT_GOVERNING_BODY = _provider_result(
+    data={"lv_org_type": "governing_body_league", "lv_produces_content": True,
+          "lv_country_region_normalized": "AU"},
+    evidence_by_field={"lv_org_type": "https://a.example/about",
+                        "lv_produces_content": "https://a.example/watch"},
+)
+_RESULT_HARDWARE_VENDOR = _provider_result(
+    data={"lv_org_type": "hardware_vendor", "lv_produces_content": False,
+          "lv_country_region_normalized": "AU"},
+    evidence_by_field={"lv_org_type": "https://b.example/products",
+                        "lv_produces_content": "https://b.example/about"},
+)
+_RESULT_CLUB_NO_EVIDENCE = _provider_result(
+    data={"lv_org_type": "individual_club_team", "lv_produces_content": True,
+          "lv_country_region_normalized": "NZ"},
+)
+_RESULT_UNKNOWN = _provider_result(
+    data={"lv_org_type": "unknown", "lv_produces_content": None,
+          "lv_country_region_normalized": "Unknown"},
+)
+FIXTURE_RESULTS = [_RESULT_GOVERNING_BODY, _RESULT_HARDWARE_VENDOR, _RESULT_CLUB_NO_EVIDENCE, _RESULT_UNKNOWN]
+
+
+def test_never_writes_a_forbidden_derived_field_key_across_fixtures():
+    assert len(FIXTURE_RESULTS) >= 4
+    for result in FIXTURE_RESULTS:
+        input_patch = m.build_input_patch("999", result)
+        written_fields = list(input_patch["properties"].keys())
+        metadata_patch = m.build_metadata_patch("999", result, written_fields)
+        component_patch = m.build_component_patch("999", input_patch["properties"])
+        for patch in (input_patch, metadata_patch, component_patch):
+            assert m.FORBIDDEN_PROPS.isdisjoint(patch["properties"].keys())
+
+
+def test_metadata_patch_never_writes_a_forbidden_key_even_when_all_fields_written():
+    result = _RESULT_GOVERNING_BODY
+    written_fields = list(m.INPUT_PROPS)  # pretend every input field was written
+    metadata_patch = m.build_metadata_patch("999", result, written_fields)
+    assert m.FORBIDDEN_PROPS.isdisjoint(metadata_patch["properties"].keys())
+
+
+def test_produces_content_false_without_evidence_is_omitted_with_a_reason():
+    result = _provider_result(data={"lv_produces_content": False}, evidence_by_field={})
+    patch = m.build_input_patch("999", result)
+    assert "lv_produces_content" not in patch["properties"]
+    reasons = m.unresolved_reasons("999", result)
+    assert "lv_produces_content" in reasons
+
+
+@pytest.mark.parametrize("excluded_id,name", [
+    ("10024564084", "Entain"),
+    ("15860277364", "Gravity Media"),
+    ("17317184159", "Ironman"),
+])
+def test_resolve_pinned_ids_refuses_excluded_ids(excluded_id, name):
+    with pytest.raises(m.PinRefused) as exc_info:
+        m.resolve_pinned_ids([excluded_id])
+    assert excluded_id in str(exc_info.value)
+
+
+def test_resolve_pinned_ids_refuses_arbitrary_unpinned_id():
+    with pytest.raises(m.PinRefused) as exc_info:
+        m.resolve_pinned_ids(["99999999"])
+    assert "99999999" in str(exc_info.value)
+
+
+def test_resolve_pinned_ids_returns_deterministic_order_regardless_of_input_order():
+    import random
+    shuffled = list(m.PINNED_COMPANY_ID_ORDER)
+    random.Random(42).shuffle(shuffled)
+    assert m.resolve_pinned_ids(shuffled) == m.PINNED_COMPANY_ID_ORDER
+
+
+def test_enforce_sample_cap_all_17_true_at_default(monkeypatch):
+    monkeypatch.delenv("VETO_MAX_RECORDS", raising=False)
+    assert m.enforce_sample_cap(list(m.PINNED_COMPANY_ID_ORDER)) is True
+
+
+def test_enforce_sample_cap_refuses_below_17(monkeypatch):
+    monkeypatch.setenv("VETO_MAX_RECORDS", "5")
+    assert m.enforce_sample_cap(list(m.PINNED_COMPANY_ID_ORDER)) is False
+
+
+def test_resolved_max_records_clamps_above_17_and_falls_back_on_non_integer(monkeypatch):
+    monkeypatch.setenv("VETO_MAX_RECORDS", "25")
+    assert m._resolved_max_records() == 17
+    monkeypatch.setenv("VETO_MAX_RECORDS", "not-a-number")
+    assert m._resolved_max_records() == 17
+
+
+def test_writes_allowed_false_for_every_non_both_keys_combo(monkeypatch):
+    monkeypatch.delenv("ALLOW_VETO_REMEDIATION", raising=False)
+    monkeypatch.setenv("DRY_RUN", "false")
+    assert m._writes_allowed() is False
+
+    monkeypatch.setenv("ALLOW_VETO_REMEDIATION", "true")
+    monkeypatch.setenv("DRY_RUN", "true")
+    assert m._writes_allowed() is False
+
+    monkeypatch.delenv("DRY_RUN", raising=False)
+    monkeypatch.setenv("ALLOW_VETO_REMEDIATION", "true")
+    assert m._writes_allowed() is False  # DRY_RUN unset defaults to "true"
+
+    monkeypatch.setenv("ALLOW_VETO_REMEDIATION", "true")
+    monkeypatch.setenv("DRY_RUN", "false")
+    assert m._writes_allowed() is True
+
+
+def test_estimate_cost_reports_expected_keys_for_all_17():
+    estimate = m.estimate_cost(list(m.PINNED_COMPANY_ID_ORDER))
+    assert estimate["web_research_calls"] == 17
+    assert estimate["n8n_executions"] == 17
+    assert estimate["n8n_budget_month"] == m.N8N_EXECUTION_BUDGET_MONTH
+    assert estimate["lusha_credits"] == 0
+    assert 0 <= estimate["redundant_research_calls"] <= 17
+    assert estimate["anthropic_estimate_usd"] > 0
+
+
+def test_refuse_if_over_budget_raises_above_budget_and_never_truncates_when_ok():
+    ids = ["1", "2", "3"]
+    over_budget = {"n8n_executions": 3000, "n8n_budget_month": 2500}
+    with pytest.raises(m.BudgetRefused):
+        m.refuse_if_over_budget(over_budget, ids)
+
+    under_budget = {"n8n_executions": 17, "n8n_budget_month": 2500}
+    result = m.refuse_if_over_budget(under_budget, ids)
+    assert result is ids
+
+
+def test_verify_post_run_detects_a_lost_metadata_stamp():
+    live_props = {
+        "lv_org_type": "governing_body_league",
+        "lv_org_type_source": "claude_web",
+        # lv_org_type_validation_status was lost by a re-research lane (D-20).
+    }
+
+    def _reader(object_type, record_id, properties):
+        return {"id": record_id, "properties": dict(live_props)}
+
+    diverged = m.verify_post_run(
+        "999",
+        expected_inputs={"lv_org_type": "governing_body_league"},
+        expected_metadata={
+            "lv_org_type_source": "claude_web",
+            "lv_org_type_validation_status": "web_researched",
+        },
+        reader=_reader,
+    )
+
+    assert diverged == {"lv_org_type_validation_status"}
+
+
+def test_verify_post_run_returns_empty_set_when_everything_matches():
+    live_props = {"lv_org_type": "governing_body_league", "lv_org_type_source": "claude_web"}
+
+    def _reader(object_type, record_id, properties):
+        return {"id": record_id, "properties": dict(live_props)}
+
+    diverged = m.verify_post_run(
+        "999",
+        expected_inputs={"lv_org_type": "governing_body_league"},
+        expected_metadata={"lv_org_type_source": "claude_web"},
+        reader=_reader,
+    )
+
+    assert diverged == set()
