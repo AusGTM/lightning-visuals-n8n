@@ -5,15 +5,15 @@ milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 46
 current_phase_name: Rubric Decision, Simulation & Engine Parity
 status: executing
-stopped_at: Phase 46 context gathered
-last_updated: "2026-08-11T07:28:36.178Z"
+stopped_at: Completed 46-01-PLAN.md
+last_updated: "2026-08-11T07:45:59.446Z"
 last_activity: 2026-08-11
-last_activity_desc: "v0.9 ROADMAP.md written: 4 phases (46-49), 11/11 requirements"
+last_activity_desc: Phase 46 execution started
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 5
-  completed_plans: 0
+  completed_plans: 1
   percent: 0
 ---
 
@@ -21,21 +21,21 @@ progress:
 
 ## Current Position
 
-Phase: Phase 46 of 49 (Rubric Decision, Simulation & Engine Parity) — 1st of 4 phases in v0.9
-Plan: — (ready to plan)
+Phase: 46 (Rubric Decision, Simulation & Engine Parity) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-08-11 — v0.9 ROADMAP.md written: 4 phases (46-49), 11/11 requirements
+Last activity: 2026-08-11 — Phase 46 execution started
   mapped (RUBRIC-01..03 -> 46, VETO-01..03 -> 47, COVER-01..02 -> 48, RESCORE-01..03 -> 49).
   Sequencing: rubric decided once (46) before the 17 false-veto records are touched (47), so
   they re-score exactly once rather than twice under a later weight change.
 
-Progress: [░░░░░░░░░░] 0%
+Progress: [██░░░░░░░░] 20%
 
 ## Session
 
-**Last session:** 2026-08-11T06:02:27.789Z
-**Stopped at:** Phase 46 context gathered
-**Resume file:** .planning/phases/46-rubric-decision-simulation-engine-parity/46-CONTEXT.md
+**Last session:** 2026-08-11T07:45:59.439Z
+**Stopped at:** Completed 46-01-PLAN.md
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -64,6 +64,7 @@ Progress: [░░░░░░░░░░] 0%
 | Phase 45 P01 | ~30min | 3 tasks | 9 files |
 | Phase 45 P02 | ~55min | 3 tasks | 7 files |
 | Phase 45 P03 | ~20min | 3 tasks | 4 files |
+| Phase 46 P01 | ~40min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -129,6 +130,9 @@ Progress: [░░░░░░░░░░] 0%
 - [Phase ?]: [Phase 45-02]: schedule_month_cost fails closed when the target workflow_id+node_name pair is absent from workflow_items, not just when the list is unreadable -- a collection that doesn't contain the workflow being edited cannot answer the cost question either (T-45-08).
 - [Phase ?]: [Phase 45-03]: Task 3 was pointer-writing not status-flipping — all six requirement rows were already Complete with ticked checkboxes from 45-01/45-02's own commits; this plan added the concrete test-name pointer each row lacked.
 - [Phase ?]: [Phase 45-03]: Plan's literal collected-test-count acceptance criteria (2562/1291+) predate 45-01/45-02's own test additions and no longer match (2481+121/1326+5 actual); the binding zero-failures contract holds on all three suites, recorded per 45-02's precedent for the same stale-literal class.
+- [Phase ?]: [Phase 46-01]: Engine count settled at TWO (Python oracle + HubSpot flow 4626124224), not three -- n8n leg carries no org-type weight table (Approach C, Phase 15). ROADMAP success criterion 4 recorded not-triggered.
+- [Phase ?]: [Phase 46-01]: Deviated from 46-PATTERNS.md's gambling-block-deletion instruction -- guarded the .get-chained deduction lookup one wave earlier instead of deleting the block, so config and code are never simultaneously green/red across the phase's waves.
+- [Phase ?]: [Phase 46-01]: Tracer feedback gate waived (advisor-reviewed) between Task 2 and Task 3, matching Phase 45-01's precedent -- autonomous:true + already-green tracer verify + execute-completely directive outweigh the literal auto_chain/auto_advance=false reading.
 
 ### Blockers
 

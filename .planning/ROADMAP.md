@@ -68,39 +68,49 @@ still prints the superseded rubric after the change ships.
 **Requirements**: RUBRIC-01, RUBRIC-02, RUBRIC-03
 
 **Success Criteria** (what must be TRUE):
+
   1. A written decision on each changed org-type weight exists, citing specific closed-deal
      evidence from `icp-scoring.md` — and where the decision *overrides* that evidence on GTM
      grounds, the override and its reasoning are recorded rather than the evidence being rewritten.
      Confirming a current weight unchanged is an equally valid, evidenced outcome.
+
   2. Operator can view a re-tier simulation of the 66 currently-scored companies under proposed
      weights, computed from current `lv_*` inputs, that writes nothing to HubSpot. Records
      affected by the 17 false vetoes or the 18 blank `lv_org_type` values are annotated so they
      are not misread as genuine outcomes.
+
   3. The parity harness (`tests/test_scoring_parity.py`, `scripts/run_scoring_parity.py`) passes
      against the decided weights in all three engines — `config/icp_scoring.yaml` (Python oracle),
      the JS port compiled into `n8n/wf_enrichment_cloud.json`, and the HubSpot flow
      `config/hubspot_flows/4626124224-org-type-score.*.json` (guarded by
      `tests/test_flow_rubric_conformance.py`) — trivially if a weight is unchanged, substantively
      if it changed.
+
   4. If a weight changed, the new value reached the live workflow only via
      `build_cloud_workflows.py` → deploy → bounce, and a read-back of the running (not merely
      stored) workflow content confirms the new weight is what actually executes.
+
   5. No live document still prints a superseded weight or deduction: `docs/business/icp-scoring.md`,
      `CLAUDE.md` §10, `.planning/intel/*`, and `docs/WEB-RESEARCH-SPEC.md` agree with
      `config/icp_scoring.yaml`. Archived milestone artifacts under `.planning/milestones/` are
      deliberately left verbatim as historical record.
 
-**Plans**: 5 plans
+**Plans**: 1/5 plans executed
 
 Plans:
-- [ ] 46-01-PLAN.md — Reconcile the engine count, and prove the simulation machinery end-to-end
+
+- [x] 46-01-PLAN.md — Reconcile the engine count, and prove the simulation machinery end-to-end
       on one record before any weight is committed
+
 - [ ] 46-02-PLAN.md — Simulate the full live scored population under the proposed weights and
       commit the per-company before/after report (zero HubSpot writes)
+
 - [ ] 46-03-PLAN.md — Write `46-DECISION.md` and take operator sign-off (blocking gate on every
       engine write below)
+
 - [ ] 46-04-PLAN.md — Commit the signed-off weights to `config/icp_scoring.yaml` and land them
       identically in the HubSpot flows, with a running-content read-back
+
 - [ ] 46-05-PLAN.md — Sync every live document to the new rubric and record the engine-count
       amendment
 
@@ -122,11 +132,14 @@ write windows.
 **Requirements**: VETO-01, VETO-02, VETO-03
 
 **Success Criteria** (what must be TRUE):
+
   1. Each of the 17 flagged companies (excluding the 3 confirmed-correct IDs above) has been
      re-scored under the Phase-46-settled rubric, and its `lv_anti_icp_flag` / `lv_anti_icp_reason`
      reflect the corrected region data.
+
   2. The re-score ran inside a write window that was deliberately armed with a record-count cap,
      then disarmed, with the disarmed state read back and confirmed afterward.
+
   3. Operator can search HubSpot alone — no scripts — for "non-ANZ veto reason with a blank
      `lv_country_region_normalized`" and get zero results.
 
@@ -149,12 +162,16 @@ touched once.
 **Requirements**: COVER-01, COVER-02
 
 **Success Criteria** (what must be TRUE):
+
   1. Each of the 18 companies has a non-blank `lv_org_type`, or is marked un-enrichable with a
      stated reason — distinguishable from a company that was never attempted.
+
   2. Before the enrichment run, operator sees an estimated execution and provider-credit cost
      against the 2,500/month n8n allowance and the current Lusha balance.
+
   3. A run whose estimated cost would exceed either budget is refused outright, never truncated
      silently mid-run.
+
   4. The enrichment writes happened inside a deliberately armed, record-count-capped write
      window that was disarmed and read back afterward, and the actual cost is reported against
      the pre-run estimate.
@@ -178,14 +195,18 @@ did not change, no full re-score is owed and this phase proves the procedure wit
 **Requirements**: RESCORE-01, RESCORE-02, RESCORE-03
 
 **Success Criteria** (what must be TRUE):
+
   1. Operator can see, before any future rubric change is committed, exactly which records would
      be re-scored, in what chunk size, and under what write window — a documented, budget-bounded
      plan, not an ad-hoc sweep.
+
   2. Because no `lv_icp_scoring_version` property exists, the plan explicitly re-scores the
      entire 66-company scored population on any rubric change, and states the execution cost up
      front rather than discovering it mid-run.
+
   3. If Phase 46 changed a weight, the full-population re-score executed under this defined
      procedure; if it didn't, the procedure is proven (e.g. dry-run) without being spent.
+
   4. Operator receives a plain-language before/after tier-distribution comparison covering this
      milestone's re-scoring activity as a whole (veto clear, coverage enrichment, and any
      weight-driven full re-score).
@@ -198,7 +219,7 @@ did not change, no full re-score is owed and this phase proves the procedure wit
 | ----- | --------- | -------------- | ------ | --------- |
 | 44. SJ-3 Dispatch Gate, Drain & Cap | v0.8 | 3/3 | Complete (verified) | 2026-08-10 |
 | 45. Burn-Rate Alarm | v0.8 | 3/3 | Complete (verified) | 2026-08-10 |
-| 46. Rubric Decision, Simulation & Engine Parity | v0.9 | 0/? | Not started | - |
+| 46. Rubric Decision, Simulation & Engine Parity | v0.9 | 1/5 | In Progress|  |
 | 47. Veto Remediation | v0.9 | 0/? | Not started | - |
 | 48. Enrichment Coverage | v0.9 | 0/? | Not started | - |
 | 49. Re-score Strategy & Reporting | v0.9 | 0/? | Not started | - |
@@ -210,6 +231,7 @@ did not change, no full re-score is owed and this phase proves the procedure wit
   `v0.5.0` exists as a git release tag. v0.5 appears to have shipped without being run through
   `/gsd-complete-milestone`. Not reconstructed at v0.8 close (out of scope) — recorded so it is
   not mistaken for a numbering skip.
+
 - **v0.6 has a MILESTONES.md entry but no roadmap/phase archive** under `milestones/`. Same
   likely cause, lesser impact: the narrative record survives, the phase artifacts were never
   archived under a `v0.6-*` label.
