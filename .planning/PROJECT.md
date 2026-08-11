@@ -51,6 +51,47 @@ D:24); `config/hubspot_properties.yaml` reconciles clean against the live portal
 follow-up made `lv_icp_fit_score`'s formula null-safe — a bare sum blanked the entire score on
 any null term, which had left 63 of 66 records unscored while the sweep still reported PASS.
 
+## Current Milestone: v0.9 ICP Rubric Calibration & Veto Remediation
+
+**Goal:** The ICP rubric reflects who Lightning Visuals actually wins, and every scored company
+carries a score derived from that rubric rather than from a stale or false one.
+
+**Target features:**
+- **Rubric recalibration** — resolve whether `individual_club_team: 5` inverts GTM priority.
+  Racing clubs cap at tier C (35–45) while governing bodies reach tier A (80) on org_type alone.
+  If clubs are the core market the weighting is backwards. This is the question that triggered
+  the blank-region investigation and is still unanswered.
+- **Veto remediation** — clear the 17 false non-ANZ vetoes. The code fix is deployed, bounced and
+  live-proven; the records need a deliberate armed write window, because SJ-3 correctly declined
+  to dispatch through a closed gate and self-drained their flags.
+- **Enrichment coverage** — 18 of 66 scored companies have no `lv_org_type` at all. The rubric
+  cannot outperform its inputs, so coverage is a scoring-quality ceiling, not a separate concern.
+- **Weight validation against outcomes** — the revenue-band deductions (−5 at 500–750M, −50 at
+  1.2B+) and the gambling −20 were set by judgement and have never been checked against won/lost
+  deals.
+- **Loss-reason capture** — start filling `lv_closed_lost_reason` (exists on Deals, 0% filled
+  across 59 examined closed-lost deals). This is the evidence that makes future recalibration
+  empirical rather than intuitive.
+- **Re-score strategy** — with no `lv_icp_scoring_version`, any rubric change implies re-scoring
+  the whole population. Plan that against the 2,500/month execution budget deliberately.
+
+**Key context:**
+- The pipeline is **disarmed at rest** — `ALLOW_HUBSPOT_RECORD_WRITES`, `ALLOW_HUBSPOT_CREATE`
+  and `ALLOW_HUBSPOT_REVIEW_WRITES` are baked `"false"` in the deployed workflow. No re-score of
+  any kind lands until a window is opened deliberately. Every write item in this milestone
+  inherits that gate.
+- **No new HubSpot properties** (operator decision 2026-08-11). Loss-reason capture fits inside
+  this because `lv_closed_lost_reason` already exists; the supporting fields it was spec'd
+  alongside (`lv_qualitative_fit_summary`, `lv_budget_timeline_signal`, `lv_loss_reason_detail`)
+  do NOT exist and are deferred to v1.0 rather than created.
+- Current distribution across the 66 scored: A:7 B:18 C:17 D:24 — 17 of the D are the false
+  vetoes, so a correct post-remediation shape is roughly A:7 B:18 C:17+ D:7.
+- Rubric weights are still `lv-icp-v0.1` and were always flagged as illustrative pending JTBD 2
+  sign-off (REQ-signoff-gate). This milestone is where that sign-off either happens or is
+  explicitly deferred again.
+- SJ-3 runs daily and fans out per record against a 2,500/month allowance — a full-population
+  re-score is a budget event, not a free operation.
+
 ## Shipped Milestone: v0.8 Execution Budget Safety (2026-08-11)
 
 **Goal:** The backend cannot spend its monthly n8n execution allowance on work it is
