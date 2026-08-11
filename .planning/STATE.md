@@ -4,8 +4,8 @@ milestone: v0.9
 milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 46
 status: completed
-stopped_at: Completed 46-05-PLAN.md
-last_updated: "2026-08-11T09:01:15.986Z"
+stopped_at: Phase 47 context gathered
+last_updated: "2026-08-11T10:49:51.807Z"
 last_activity: 2026-08-11
 last_activity_desc: Phase 46 execution started
 progress:
@@ -33,9 +33,9 @@ Progress: [██████████] 100%
 
 ## Session
 
-**Last session:** 2026-08-11T08:49:39.578Z
-**Stopped at:** Completed 46-05-PLAN.md
-**Resume file:** None
+**Last session:** 2026-08-11T10:49:51.789Z
+**Stopped at:** Phase 47 context gathered
+**Resume file:** .planning/phases/47-veto-remediation/47-CONTEXT.md
 
 ## Performance Metrics
 
