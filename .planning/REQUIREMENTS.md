@@ -9,18 +9,27 @@ target list a non-technical operator can act on from inside HubSpot.
 
 ### Rubric Calibration (RUBRIC)
 
-- [ ] **RUBRIC-01**: A decision on the `individual_club_team` weight is recorded with reasoning
-      traceable to the closed-deal evidence in `icp-scoring.md`, not intuition. Confirming the
-      current weight of 5 is a valid outcome — the requirement is that the decision is made and
-      evidenced, not that it changes.
+- [ ] **RUBRIC-01**: A decision on each org-type weight under review is recorded with reasoning
+      traceable to the closed-deal evidence in `icp-scoring.md`, not intuition. Confirming a
+      current weight is a valid outcome — the requirement is that the decision is made and
+      evidenced, not that it changes. Where a decision **overrides** the evidence on GTM grounds,
+      the override and its reasoning are recorded and the underlying evidence is left intact.
+      *(Scope amended 2026-08-11, operator-directed during `/gsd-discuss-phase 46`: covers
+      `individual_club_team`, `regulator`, and removal of the `gambling_operator` deduction —
+      originally `individual_club_team` alone. Every live doc printing a superseded value is
+      updated in the same phase; see `46-CONTEXT.md` D-01…D-03 and D-13.)*
 - [ ] **RUBRIC-02**: Operator can see how the scored population would re-tier under proposed
       weights BEFORE committing them — a simulation over current `lv_*` inputs that writes
       nothing to HubSpot.
-- [ ] **RUBRIC-03**: If weights change, both scoring engines carry them identically —
-      `config/icp_scoring.yaml` (Python oracle) and the JS port compiled into
-      `n8n/wf_enrichment_cloud.json` — proven by the existing parity harness rather than by
-      inspection. A weight that lands in one engine only is the split-brain failure v0.7 already
-      paid for once.
+- [ ] **RUBRIC-03**: If weights change, **all three** scoring engines carry them identically —
+      `config/icp_scoring.yaml` (Python oracle), the JS port compiled into
+      `n8n/wf_enrichment_cloud.json`, and the HubSpot flow
+      `config/hubspot_flows/4626124224-org-type-score.*.json` — proven by the existing parity
+      harness rather than by inspection. A weight that lands in one engine only is the split-brain
+      failure v0.7 already paid for once. *(Amended 2026-08-11: the HubSpot org-type-score flow was
+      identified during `/gsd-discuss-phase 46` as a third native scoring engine this requirement
+      originally omitted. It maps `lv_org_type` → points and feeds `lv_icp_fit_score` directly, so
+      a weight change that skips it diverges the portal's own score from the pipeline's.)*
 
 ### Veto Remediation (VETO)
 

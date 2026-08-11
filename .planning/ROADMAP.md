@@ -14,7 +14,7 @@
 
 ### 📋 v0.9 ICP Rubric Calibration & Veto Remediation (Phases 46–49)
 
-- [ ] **Phase 46: Rubric Decision, Simulation & Engine Parity** - Decide the `individual_club_team` weight with evidence, simulate re-tiering with zero writes, and prove any change lands identically in both scoring engines before either downstream write phase runs
+- [ ] **Phase 46: Rubric Decision, Simulation & Engine Parity** - Decide the org-type weights (`individual_club_team`, `regulator`, and the `gambling_operator` deduction) with evidence, simulate re-tiering with zero record writes, prove any change lands identically in all three scoring engines, and update every doc that prints the superseded rubric — before either downstream write phase runs
 - [ ] **Phase 47: Veto Remediation** - Clear the 17 false non-ANZ vetoes under the settled rubric, inside a deliberately armed and capped write window, verifiable from HubSpot alone
 - [ ] **Phase 48: Enrichment Coverage** - Fill or document `lv_org_type` for the 18 never-enriched companies, under a pre-estimated and budget-refusing armed write window
 - [ ] **Phase 49: Re-score Strategy & Reporting** - Define and (if triggered) execute the budget-bounded full-population re-score procedure, and report the milestone's net tier-distribution effect in plain language
@@ -49,31 +49,46 @@ file constant-size:
 
 ### Phase 46: Rubric Decision, Simulation & Engine Parity
 
-**Goal**: Decide the `individual_club_team` weight question with evidence, and prove that any
-change lands identically in both scoring engines — before either the 17 false-veto records
-(Phase 47) or the 18 uncovered records (Phase 48) are touched. Deciding weights once, first,
-costs less than the alternative: re-scoring the 17 veto records under the old rubric and then
-again under a changed one. This phase writes nothing to a HubSpot record — the simulation reads
-current `lv_*` inputs only, and any engine deploy is a workflow artifact change, not a record
-write.
+**Goal**: Decide the org-type weight questions with evidence, and prove that any change lands
+identically in every scoring engine — before either the 17 false-veto records (Phase 47) or the
+18 uncovered records (Phase 48) are touched. Deciding weights once, first, costs less than the
+alternative: re-scoring the 17 veto records under the old rubric and then again under a changed
+one. This phase writes nothing to a HubSpot **record** — the simulation reads current `lv_*`
+inputs only, and any engine deploy is a workflow artifact change, not a record write.
+
+**Scope amended 2026-08-11** (during `/gsd-discuss-phase 46`, operator-directed — see
+`46-CONTEXT.md` D-01…D-03, D-13): the decision covers **three** org-type levers rather than one
+(`individual_club_team`, `regulator`, and removal of the `gambling_operator` deduction), the
+parity surface is **three** engines rather than two (the HubSpot flow `4626124224-org-type-score`
+was found to be a third native scoring engine), and **documentation sync is in scope** so no doc
+still prints the superseded rubric after the change ships.
 
 **Depends on**: Nothing (first phase of milestone)
 
 **Requirements**: RUBRIC-01, RUBRIC-02, RUBRIC-03
 
 **Success Criteria** (what must be TRUE):
-  1. A written decision on the `individual_club_team` weight exists, citing specific closed-deal
-     evidence from `icp-scoring.md` — confirming the current weight of 5 is a valid, evidenced
-     outcome, not just a changed one.
+  1. A written decision on each changed org-type weight exists, citing specific closed-deal
+     evidence from `icp-scoring.md` — and where the decision *overrides* that evidence on GTM
+     grounds, the override and its reasoning are recorded rather than the evidence being rewritten.
+     Confirming a current weight unchanged is an equally valid, evidenced outcome.
   2. Operator can view a re-tier simulation of the 66 currently-scored companies under proposed
-     weights, computed from current `lv_*` inputs, that writes nothing to HubSpot.
+     weights, computed from current `lv_*` inputs, that writes nothing to HubSpot. Records
+     affected by the 17 false vetoes or the 18 blank `lv_org_type` values are annotated so they
+     are not misread as genuine outcomes.
   3. The parity harness (`tests/test_scoring_parity.py`, `scripts/run_scoring_parity.py`) passes
-     against the decided weights in both `config/icp_scoring.yaml` (Python oracle) and the JS
-     port compiled into `n8n/wf_enrichment_cloud.json` — trivially if the weight is unchanged,
-     substantively if it changed.
-  4. If the weight changed, the new value reached the live workflow only via
+     against the decided weights in all three engines — `config/icp_scoring.yaml` (Python oracle),
+     the JS port compiled into `n8n/wf_enrichment_cloud.json`, and the HubSpot flow
+     `config/hubspot_flows/4626124224-org-type-score.*.json` (guarded by
+     `tests/test_flow_rubric_conformance.py`) — trivially if a weight is unchanged, substantively
+     if it changed.
+  4. If a weight changed, the new value reached the live workflow only via
      `build_cloud_workflows.py` → deploy → bounce, and a read-back of the running (not merely
      stored) workflow content confirms the new weight is what actually executes.
+  5. No live document still prints a superseded weight or deduction: `docs/business/icp-scoring.md`,
+     `CLAUDE.md` §10, `.planning/intel/*`, and `docs/WEB-RESEARCH-SPEC.md` agree with
+     `config/icp_scoring.yaml`. Archived milestone artifacts under `.planning/milestones/` are
+     deliberately left verbatim as historical record.
 
 **Plans**: TBD
 

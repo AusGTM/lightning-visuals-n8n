@@ -12,10 +12,12 @@ simulate how the 66 currently-scored companies re-tier under the proposed weight
 nothing to any HubSpot record**; and prove the change lands identically in every scoring engine
 before Phase 47 (veto remediation) or Phase 48 (coverage enrichment) touch a record.
 
-**Scope grew during discussion, deliberately.** ROADMAP.md scoped this to
+**Scope grew during discussion, deliberately — twice.** ROADMAP.md scoped this to
 `individual_club_team` alone. The operator folded in two more org-type levers (D-02, D-03) so
-all rubric changes are decided once and the population re-scores once rather than three times.
-RUBRIC-01/02/03 still frame the work; the decision record covers three weights instead of one.
+all rubric changes are decided once and the population re-scores once rather than three times,
+then folded in **documentation sync** (D-13) so no doc still prints the superseded rubric after
+the change ships. RUBRIC-01/02/03 still frame the work; ROADMAP.md and REQUIREMENTS.md were
+amended on 2026-08-11 to match the widened scope.
 
 **Not in this phase:** clearing the 17 false vetoes (Phase 47), enriching the 18 blank
 `lv_org_type` records (Phase 48), executing the full-population re-score (Phase 49).
@@ -135,6 +137,44 @@ RUBRIC-01/02/03 still frame the work; the decision record covers three weights i
   merely stored) workflow** confirming the new value is what actually executes. A bare PUT never
   reloads a running workflow.
 
+### Documentation sync (folded in 2026-08-11)
+
+- **D-13:** **Every doc that prints the superseded rubric is updated in this phase**, in the same
+  pass as the config change — not left to drift. A weight table that disagrees with the engine is
+  the same split-brain failure class as an unported JS value, just with humans as the consumer.
+  The `46-DECISION.md` task owns this.
+
+  **Live sites carrying values these decisions supersede** (verified 2026-08-11):
+
+  | File | What goes stale |
+  |---|---|
+  | `docs/business/icp-scoring.md` §5 scoring model table | `Org: individual club \| +5` → 15 |
+  | `docs/business/icp-scoring.md` §5 graduated-deductions table | `Gambling Operator \| −20` row is removed; a `regulator \| −20` row is added |
+  | `docs/business/icp-scoring.md` §5 property-map table | "gambling and $500M+ revenue are graduated deductions" — gambling is no longer a deduction at all |
+  | `docs/business/icp-scoring.md` §5 tier illustration | "**C** = individual club, AU, content → nurture via league" — becomes **B** |
+  | `docs/business/icp-scoring.md` §4 anti-ICP bullets | Clubs listed as anti-ICP "suppress/disqualify"; gambling described as "graduated deduction, targetable" |
+  | `CLAUDE.md` §10.1 (lines ~786, ~787, ~817) | Inline copy of `config/icp_scoring.yaml`: `individual_club_team: 5`, `regulator: 5`, `graduated_deductions.gambling_operator: -20` |
+  | `CLAUDE.md` §10.3 | "Graduated deductions include: gambling_operator" |
+  | `.planning/intel/constraints.md:46` | Machine-readable rubric mirror — full org-type map + deductions |
+  | `.planning/intel/requirements.md:24` | "Gambling operators … are graduated deductions and must never set the anti-ICP flag" |
+  | `docs/WEB-RESEARCH-SPEC.md:159` | Gambling "only drives graduated deductions, never a veto" |
+  | `docs/WEB-RESEARCH-SPEC.md:483` | Australian Turf Club → "`individual_club_team` — low-score path" |
+
+  **Do NOT edit:** anything under `.planning/milestones/` (v0.7 phase artifacts, `40-VERIFICATION.md`,
+  `PORTAL-FACTS.md`, prior PLAN/SUMMARY files). Those are the historical record of what was true
+  at the time and are load-bearing for audit. Roughly a dozen archive files quote the old org-type
+  map; all stay verbatim.
+
+  **`.planning/PROJECT.md` (lines 60, 239, 348) is also left as-is** — it frames `individual_club_team=5`
+  as an *open question*, which remains accurate until this phase executes. It updates at milestone
+  close, not here.
+
+- **D-14:** `icp-scoring.md` is a **business sign-off document**, not a config mirror. The edit
+  must preserve its evidentiary voice: the 19%/n=36 finding stays on the page, with the override
+  and its GTM reasoning recorded next to it. Do not silently rewrite the evidence to agree with
+  the new weight — that would destroy the record RUBRIC-01 depends on and mislead the next
+  recalibration.
+
 ### Claude's Discretion
 
 - Candidate weight set for the simulation. Operator answered "you decide", then directed the club
@@ -188,6 +228,15 @@ None folded. See Deferred.
   this phase gates.
 - `.planning/PROJECT.md` — current tier distribution (A:7 B:18 C:17 D:24 across 66, 17 of the D
   being false vetoes) and the v0.9 goal statement.
+
+### Docs that must be updated in this phase (D-13)
+- `docs/business/icp-scoring.md` §4, §5 — business sign-off doc; scoring model table, graduated
+  deductions table, property-map table, tier illustration. Preserve the evidence, record the
+  override (D-14).
+- `CLAUDE.md` §10.1, §10.3 — inline `icp_scoring.yaml` copy and the graduated-deductions prose.
+- `.planning/intel/constraints.md`, `.planning/intel/requirements.md` — machine-readable rubric
+  mirrors read by other agents.
+- `docs/WEB-RESEARCH-SPEC.md` — gambling-deduction semantics and the ATC worked example.
 
 ### Operational gotchas that constrain how the change ships
 - `.planning/milestones/v0.7-phases/` — `PORTAL-FACTS.md` (HubSpot Automation v4 PUT limits
