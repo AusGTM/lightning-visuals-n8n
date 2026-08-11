@@ -23,6 +23,11 @@
     ],
     "evidence_summary": "The organisation appears to govern racing events and publishes live or near-live video content."
   },
+  "evidence_by_field": {
+    "lv_org_type": "https://exampleracing.example/about",
+    "lv_produces_content": "https://exampleracing.example/watch-live",
+    "lv_country_region_normalized": "https://exampleracing.example/about"
+  },
   "model_trace": {
     "research_model": "claude-web",
     "classifier_model": "haiku",
