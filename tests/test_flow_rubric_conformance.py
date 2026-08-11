@@ -50,6 +50,21 @@ def extract_org_type_branch_scores(flow: dict) -> dict:
     return scores
 
 
+def extract_org_type_default_branch_score(flow: dict) -> int:
+    """Phase 46 Plan 01 (Task 1) -- extract_org_type_branch_scores above walks
+    staticBranches only, leaving flow 4626124224's defaultBranch (the path a
+    blank or unrecognised lv_org_type takes -- 18 live records) unasserted.
+    Returns the int points the defaultBranch target writes to org_type_score."""
+    actions_by_id = {a["actionId"]: a for a in flow["actions"]}
+    branch_action = next(
+        a for a in flow["actions"]
+        if a.get("type") == "STATIC_BRANCH"
+        and a.get("inputValue", {}).get("propertyName") == "lv_org_type"
+    )
+    default_target = actions_by_id[branch_action["defaultBranch"]["nextActionId"]]
+    return int(default_target["fields"]["value"]["staticValue"])
+
+
 def find_static_branch_action(flow: dict, property_name: str):
     """Returns the STATIC_BRANCH action keyed on property_name, or None if the
     flow has no such branch (40-04's two-terms-only extractors)."""
@@ -133,6 +148,33 @@ def test_org_type_flow_matches_rubric(flow_path):
             f"{flow_path}: branch '{branch_value}' scores {points}, "
             f"rubric says {rubric_org_type[branch_value]}"
         )
+
+
+@pytest.mark.parametrize("flow_path", _after_json_paths())
+def test_org_type_flow_defaultbranch_scores_zero(flow_path):
+    """Phase 46 Plan 01 (Task 1) -- closes the blank-lv_org_type parity gap.
+    extract_org_type_branch_scores walks staticBranches only, so flow
+    4626124224's defaultBranch (the path a blank or unrecognised lv_org_type
+    takes -- 18 live records per 46-RESEARCH.md) was previously unasserted.
+    This guards that the defaultBranch target writes org_type_score "0",
+    matching the oracle's cfg["base_score"]["org_type"].get(org_type, 0)
+    fallback in src/icp_scoring.py. This assertion passes today -- it is a
+    guard, not a fix."""
+    flow = load_flow(flow_path)
+    if not _is_flow(flow):
+        pytest.skip(f"{flow_path} is not a flow archive")
+    has_org_type_branch = any(
+        a.get("type") == "STATIC_BRANCH"
+        and a.get("inputValue", {}).get("propertyName") == "lv_org_type"
+        for a in flow["actions"]
+    )
+    if not has_org_type_branch:
+        pytest.skip(f"{flow_path} has no lv_org_type STATIC_BRANCH action")
+
+    assert extract_org_type_default_branch_score(flow) == 0, (
+        f"{flow_path}: defaultBranch must write org_type_score 0, matching the "
+        "oracle's .get(org_type, 0) fallback for a blank/unrecognised lv_org_type"
+    )
 
 
 @pytest.mark.parametrize("flow_path", _after_json_paths())
