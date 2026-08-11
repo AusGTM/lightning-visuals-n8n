@@ -95,14 +95,14 @@ still prints the superseded rubric after the change ships.
      `config/icp_scoring.yaml`. Archived milestone artifacts under `.planning/milestones/` are
      deliberately left verbatim as historical record.
 
-**Plans**: 1/5 plans executed
+**Plans**: 2/5 plans executed
 
 Plans:
 
 - [x] 46-01-PLAN.md — Reconcile the engine count, and prove the simulation machinery end-to-end
       on one record before any weight is committed
 
-- [ ] 46-02-PLAN.md — Simulate the full live scored population under the proposed weights and
+- [x] 46-02-PLAN.md — Simulate the full live scored population under the proposed weights and
       commit the per-company before/after report (zero HubSpot writes)
 
 - [ ] 46-03-PLAN.md — Write `46-DECISION.md` and take operator sign-off (blocking gate on every
@@ -219,7 +219,7 @@ did not change, no full re-score is owed and this phase proves the procedure wit
 | ----- | --------- | -------------- | ------ | --------- |
 | 44. SJ-3 Dispatch Gate, Drain & Cap | v0.8 | 3/3 | Complete (verified) | 2026-08-10 |
 | 45. Burn-Rate Alarm | v0.8 | 3/3 | Complete (verified) | 2026-08-10 |
-| 46. Rubric Decision, Simulation & Engine Parity | v0.9 | 1/5 | In Progress|  |
+| 46. Rubric Decision, Simulation & Engine Parity | v0.9 | 2/5 | In Progress|  |
 | 47. Veto Remediation | v0.9 | 0/? | Not started | - |
 | 48. Enrichment Coverage | v0.9 | 0/? | Not started | - |
 | 49. Re-score Strategy & Reporting | v0.9 | 0/? | Not started | - |

@@ -5,15 +5,15 @@ milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 46
 current_phase_name: Rubric Decision, Simulation & Engine Parity
 status: executing
-stopped_at: Completed 46-01-PLAN.md
-last_updated: "2026-08-11T07:45:59.446Z"
+stopped_at: Completed 46-02-PLAN.md
+last_updated: "2026-08-11T08:01:46.378Z"
 last_activity: 2026-08-11
 last_activity_desc: Phase 46 execution started
 progress:
   total_phases: 4
   completed_phases: 0
   total_plans: 5
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -22,19 +22,19 @@ progress:
 ## Current Position
 
 Phase: 46 (Rubric Decision, Simulation & Engine Parity) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-08-11 — Phase 46 execution started
   mapped (RUBRIC-01..03 -> 46, VETO-01..03 -> 47, COVER-01..02 -> 48, RESCORE-01..03 -> 49).
   Sequencing: rubric decided once (46) before the 17 false-veto records are touched (47), so
   they re-score exactly once rather than twice under a later weight change.
 
-Progress: [██░░░░░░░░] 20%
+Progress: [████░░░░░░] 40%
 
 ## Session
 
-**Last session:** 2026-08-11T07:45:59.439Z
-**Stopped at:** Completed 46-01-PLAN.md
+**Last session:** 2026-08-11T08:01:46.369Z
+**Stopped at:** Completed 46-02-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -65,6 +65,7 @@ Progress: [██░░░░░░░░] 20%
 | Phase 45 P02 | ~55min | 3 tasks | 7 files |
 | Phase 45 P03 | ~20min | 3 tasks | 4 files |
 | Phase 46 P01 | ~40min | 3 tasks | 6 files |
+| Phase 46 P02 | ~35min | 2 tasks | 4 files |
 
 ## Decisions
 
@@ -133,6 +134,8 @@ Progress: [██░░░░░░░░] 20%
 - [Phase ?]: [Phase 46-01]: Engine count settled at TWO (Python oracle + HubSpot flow 4626124224), not three -- n8n leg carries no org-type weight table (Approach C, Phase 15). ROADMAP success criterion 4 recorded not-triggered.
 - [Phase ?]: [Phase 46-01]: Deviated from 46-PATTERNS.md's gambling-block-deletion instruction -- guarded the .get-chained deduction lookup one wave earlier instead of deleting the block, so config and code are never simultaneously green/red across the phase's waves.
 - [Phase ?]: [Phase 46-01]: Tracer feedback gate waived (advisor-reviewed) between Task 2 and Task 3, matching Phase 45-01's precedent -- autonomous:true + already-green tracer verify + execute-completely directive outweigh the literal auto_chain/auto_advance=false reading.
+- [Phase ?]: [Phase 46-02]: D-02 confirmed as a direct base_score.org_type weight (-20), not a new graduated_deductions key -- build_proposed_cfg's graduated_deductions dict is empty ({}) after all three overrides apply, proven by test.
+- [Phase ?]: [Phase 46-02]: Live simulation (66 rows, exact match against 41-final-population.json) found QRIC and both gambling-flagged records already carry genuine hard vetoes independent of this phase's weight changes -- D-02/D-03's score effects are real but do not move those records' tiers, differing from CONTEXT.md's June-snapshot-derived '~1 record moves' estimate. Movement is 14/66 rows, all individual_club_team C->B.
 
 ### Blockers
 
