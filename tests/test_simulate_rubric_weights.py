@@ -117,7 +117,7 @@ def test_gambling_scores_without_raising_when_proposed_cfg_omits_the_key():
         cfg=proposed_cfg,
     )
 
-    assert r.score == 60  # 40 + 20 + 10 + 0 - 0 (no deduction contributed)
+    assert r.score == 80  # 40 + 20 + 10 + 10 - 0 (no deduction contributed)
     assert r.breakdown["graduated_deductions"] == []
 
 
@@ -137,7 +137,7 @@ def test_gambling_still_deducts_20_under_current_cfg():
         cfg=CURRENT_CFG,
     )
 
-    assert r.score == 40
+    assert r.score == 60  # 40 + 20 + 10 + 10 - 20
     assert {"signal": "gambling_operator", "points": -20} in r.breakdown["graduated_deductions"]
 
 

@@ -31,8 +31,13 @@ def get_signal(record: HubSpotRecord, patch: dict, key: str, default=None):
     return record.properties.get(key, default)
 
 
-def compute_icp_score(record: HubSpotRecord, candidate_patch: dict) -> ICPScoreResult:
-    cfg = load_yaml("config/icp_scoring.yaml")
+def compute_icp_score(record: HubSpotRecord, candidate_patch: dict, cfg: dict = None) -> ICPScoreResult:
+    # Phase 46 Plan 01 (RUBRIC-02): additive, backward-compatible override -- every
+    # existing two-positional-argument call site (tests/scoring_fixtures.py::expected_for,
+    # scripts/backfill_seed_company_scores.py) keeps loading the on-disk rubric untouched.
+    # Passing cfg= lets a caller (scripts/simulate_rubric_weights.py) score the same
+    # record under a rubric that exists only in memory, never written to disk.
+    cfg = cfg or load_yaml("config/icp_scoring.yaml")
     version = cfg.get("version", "unknown")
 
     org_type = get_signal(record, candidate_patch, "lv_org_type", "unknown") or "unknown"
@@ -87,9 +92,16 @@ def compute_icp_score(record: HubSpotRecord, candidate_patch: dict) -> ICPScoreR
     breakdown["components"].append({"signal": "revenue_band", "value": revenue_band, "points": revenue_points})
 
     if is_gambling_operator:
-        deduction = cfg["graduated_deductions"]["gambling_operator"]
+        # Phase 46 Plan 01 (46-PATTERNS.md deviation, recorded in 46-01-SUMMARY.md):
+        # .get-chained rather than the unconditional cfg["graduated_deductions"]
+        # ["gambling_operator"] lookup, so a proposed cfg that has deleted the key (D-03,
+        # Plan 04) scores 0 instead of raising KeyError. The breakdown entry is appended
+        # only when the deduction is non-zero, so the current cfg (key present, -20)
+        # still appends {"signal": "gambling_operator", "points": -20} unchanged.
+        deduction = cfg.get("graduated_deductions", {}).get("gambling_operator", 0)
         score += deduction
-        breakdown["graduated_deductions"].append({"signal": "gambling_operator", "points": deduction})
+        if deduction:
+            breakdown["graduated_deductions"].append({"signal": "gambling_operator", "points": deduction})
 
     anti_icp_flag = False
     anti_reasons = []
