@@ -4,15 +4,15 @@ milestone: v0.9
 milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 46
 current_phase_name: Rubric Decision, Simulation & Engine Parity
-status: ready_to_plan
+status: executing
 stopped_at: Phase 46 context gathered
-last_updated: "2026-08-11T06:02:27.802Z"
+last_updated: "2026-08-11T07:28:36.178Z"
 last_activity: 2026-08-11
 last_activity_desc: "v0.9 ROADMAP.md written: 4 phases (46-49), 11/11 requirements"
 progress:
   total_phases: 4
   completed_phases: 0
-  total_plans: 0
+  total_plans: 5
   completed_plans: 0
   percent: 0
 ---
@@ -23,7 +23,7 @@ progress:
 
 Phase: Phase 46 of 49 (Rubric Decision, Simulation & Engine Parity) — 1st of 4 phases in v0.9
 Plan: — (ready to plan)
-Status: Ready to plan
+Status: Ready to execute
 Last activity: 2026-08-11 — v0.9 ROADMAP.md written: 4 phases (46-49), 11/11 requirements
   mapped (RUBRIC-01..03 -> 46, VETO-01..03 -> 47, COVER-01..02 -> 48, RESCORE-01..03 -> 49).
   Sequencing: rubric decided once (46) before the 17 false-veto records are touched (47), so
