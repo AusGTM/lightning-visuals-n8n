@@ -2,40 +2,40 @@
 gsd_state_version: 1.0
 milestone: v0.9
 milestone_name: ICP Rubric Calibration & Veto Remediation
-current_phase: 46
+current_phase: 47
+current_phase_name: veto-remediation
 status: executing
-stopped_at: Phase 47 context gathered
-last_updated: "2026-08-11T12:06:19.867Z"
+stopped_at: Completed 47-01-PLAN.md
+last_updated: "2026-08-11T12:29:55.783Z"
 last_activity: 2026-08-11
-last_activity_desc: Phase 46 marked complete
+last_activity_desc: Phase 47 execution started
 progress:
   total_phases: 4
   completed_phases: 1
-  total_plans: 5
-  completed_plans: 5
+  total_plans: 9
+  completed_plans: 6
   percent: 25
-current_phase_name: Rubric Decision, Simulation & Engine Parity
 ---
 
 # Project State
 
 ## Current Position
 
-Phase: 46 — COMPLETE
-Plan: 5 of 5
+Phase: 47 (veto-remediation) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
-Last activity: 2026-08-11 — Phase 46 marked complete
+Last activity: 2026-08-11 — Phase 47 execution started
   mapped (RUBRIC-01..03 -> 46, VETO-01..03 -> 47, COVER-01..02 -> 48, RESCORE-01..03 -> 49).
   Sequencing: rubric decided once (46) before the 17 false-veto records are touched (47), so
   they re-score exactly once rather than twice under a later weight change.
 
-Progress: [██████████] 100%
+Progress: [███████░░░] 67%
 
 ## Session
 
-**Last session:** 2026-08-11T10:49:51.789Z
-**Stopped at:** Phase 47 context gathered
-**Resume file:** .planning/phases/47-veto-remediation/47-CONTEXT.md
+**Last session:** 2026-08-11T12:29:55.774Z
+**Stopped at:** Completed 47-01-PLAN.md
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -69,6 +69,7 @@ Progress: [██████████] 100%
 | Phase 46 P03 | ~20min | 2 tasks | 1 files |
 | Phase 46 P04 | 35min | 2 tasks | 11 files |
 | Phase 46 P05 | ~15min | 2 tasks | 7 files |
+| Phase 47 P01 | 20min | 3 tasks | 3 files |
 
 ## Decisions
 
@@ -146,6 +147,8 @@ Progress: [██████████] 100%
 - [Phase ?]: 46-05: docs/business/icp-scoring.md's anti-ICP direction markers ('club –') fixed to '+' beyond the plan's explicit list, to avoid contradicting the newly-added GTM override text in the same document
 - [Phase ?]: 46-05: WEB-RESEARCH-SPEC.md's FanDuel worked-example row was the one site beyond D-13's table the grep sweep found (D-13's own line-159 citation is now stale in a different way -- that text describes revenue-band conflicts, not gambling)
 - [Phase ?]: 46-05: .planning/intel/requirements.md edited beyond the single read_first-cited line (REQ-icp-scoring-model, REQ-graduated-deductions also updated) since both print superseded literal weight values covered by the plan's numeric-agreement truth
+- [Phase ?]: Phase 47-01: skipped requirements mark-complete for VETO-01/02/COVER-01/02 -- gsd-tools requirements ready-ids confirmed all 4 are blocked pending sibling plans 47-02/03/04's SUMMARY.md
+- [Phase ?]: Phase 47-01: added evidence_by_field to the shared claude_web_research_company.json mock fixture (Rule 2) -- it predated the Phase 13/OC-1 addition and was stale against its own RESEARCH_SYSTEM contract
 
 ### Blockers
 
