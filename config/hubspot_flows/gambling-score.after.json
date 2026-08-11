@@ -120,7 +120,7 @@
   "name": "Update Gambling Score",
   "nextAvailableActionId": "4",
   "objectTypeId": "0-2",
-  "revisionId": "2",
+  "revisionId": "4",
   "startActionId": "1",
   "timeWindows": [],
   "type": "PLATFORM_FLOW"

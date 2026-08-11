@@ -252,7 +252,7 @@
   "name": "Update Score Based on Org Type",
   "nextAvailableActionId": "12",
   "objectTypeId": "0-2",
-  "revisionId": "24",
+  "revisionId": "26",
   "startActionId": "1",
   "timeWindows": [],
   "type": "PLATFORM_FLOW"
