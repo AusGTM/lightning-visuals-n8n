@@ -1,0 +1,259 @@
+{
+  "actions": [
+    {
+      "actionId": "1",
+      "defaultBranch": {
+        "edgeType": "STANDARD",
+        "nextActionId": "11"
+      },
+      "inputValue": {
+        "propertyName": "lv_org_type",
+        "type": "OBJECT_PROPERTY"
+      },
+      "staticBranches": [
+        {
+          "branchValue": "governing_body_league",
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "2"
+          }
+        },
+        {
+          "branchValue": "content_producer",
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "3"
+          }
+        },
+        {
+          "branchValue": "broadcaster",
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "4"
+          }
+        },
+        {
+          "branchValue": "individual_club_team",
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "5"
+          }
+        },
+        {
+          "branchValue": "regulator",
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "6"
+          }
+        },
+        {
+          "branchValue": "gambling_operator",
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "7"
+          }
+        },
+        {
+          "branchValue": "hardware_vendor",
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "8"
+          }
+        },
+        {
+          "branchValue": "other",
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "9"
+          }
+        },
+        {
+          "branchValue": "unknown",
+          "connection": {
+            "edgeType": "STANDARD",
+            "nextActionId": "10"
+          }
+        }
+      ],
+      "type": "STATIC_BRANCH"
+    },
+    {
+      "actionId": "2",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "org_type_score",
+        "value": {
+          "staticValue": "40",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "3",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "org_type_score",
+        "value": {
+          "staticValue": "20",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "4",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "org_type_score",
+        "value": {
+          "staticValue": "20",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "5",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "org_type_score",
+        "value": {
+          "staticValue": "5",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "6",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "org_type_score",
+        "value": {
+          "staticValue": "5",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "7",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "org_type_score",
+        "value": {
+          "staticValue": "0",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "8",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "org_type_score",
+        "value": {
+          "staticValue": "0",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "9",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "org_type_score",
+        "value": {
+          "staticValue": "0",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "10",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "org_type_score",
+        "value": {
+          "staticValue": "0",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    },
+    {
+      "actionId": "11",
+      "actionTypeId": "0-5",
+      "actionTypeVersion": 0,
+      "fields": {
+        "property_name": "org_type_score",
+        "value": {
+          "staticValue": "0",
+          "type": "STATIC_VALUE"
+        }
+      },
+      "type": "SINGLE_CONNECTION"
+    }
+  ],
+  "blockedDates": [],
+  "crmObjectCreationStatus": "COMPLETE",
+  "customProperties": {},
+  "enrollmentCriteria": {
+    "eventFilterBranches": [
+      {
+        "eventTypeId": "4-655002",
+        "filterBranchOperator": "AND",
+        "filterBranchType": "UNIFIED_EVENTS",
+        "filterBranches": [],
+        "filters": [
+          {
+            "filterType": "PROPERTY",
+            "operation": {
+              "includeObjectsWithNoValueSet": false,
+              "operationType": "STRING",
+              "operator": "IS_EQUAL_TO",
+              "value": "lv_org_type"
+            },
+            "property": "hs_name"
+          },
+          {
+            "filterType": "PROPERTY",
+            "operation": {
+              "includeObjectsWithNoValueSet": false,
+              "operationType": "ALL_PROPERTY",
+              "operator": "IS_KNOWN"
+            },
+            "property": "hs_value"
+          }
+        ],
+        "operator": "HAS_COMPLETED"
+      }
+    ],
+    "listMembershipFilterBranches": [],
+    "shouldReEnroll": true,
+    "type": "EVENT_BASED"
+  },
+  "flowType": "WORKFLOW",
+  "id": "4626124224",
+  "isEnabled": true,
+  "name": "Update Score Based on Org Type",
+  "nextAvailableActionId": "12",
+  "objectTypeId": "0-2",
+  "revisionId": "24",
+  "startActionId": "1",
+  "timeWindows": [],
+  "type": "PLATFORM_FLOW"
+}
