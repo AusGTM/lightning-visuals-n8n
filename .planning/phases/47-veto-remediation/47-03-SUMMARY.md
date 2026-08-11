@@ -233,3 +233,14 @@ Plan 04 has everything it needs to run the actual armed ceremony: `47-BEFORE.jso
 ---
 *Phase: 47-veto-remediation*
 *Completed: 2026-08-12*
+
+## Self-Check: PASSED
+
+- FOUND: `scripts/veto_remediation_report.py`
+- FOUND: `tests/test_veto_remediation_report.py`
+- FOUND: `.planning/phases/47-veto-remediation/47-BEFORE.json`
+- FOUND: `.planning/phases/47-veto-remediation/47-RESEARCH-RESULTS.json`
+- FOUND: `.planning/phases/47-veto-remediation/47-DRYRUN.md`
+- FOUND: `.planning/phases/47-veto-remediation/47-RUN-REPORT.md`
+- FOUND: `.planning/phases/47-veto-remediation/47-03-SUMMARY.md`
+- FOUND commits: `276ac7c`, `e258cdd`, `d4827d3`, `4f40eb7`, `351f42b`, `024c112`, `c2bb7e5`, `1a67814`, `d517600`, `29d03e2`, `03736eb`
