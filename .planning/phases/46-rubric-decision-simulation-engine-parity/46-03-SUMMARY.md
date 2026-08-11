@@ -154,6 +154,17 @@ explicit instruction, and recording the deferral (not a silent skip) in `46-DECI
 sign-off block. The committed markdown report satisfies D-09's other half (markdown committed
 under `.planning/`) in full.
 
+**`gsd-tools requirements mark-complete RUBRIC-01` returned `not_found`** — pre-existing format
+mismatch, not caused by this plan. The tool's traceability-row writer only flips a row whose
+current `Status` cell reads `Pending` or `Gaps Found`; this repo's `REQUIREMENTS.md` table uses
+`Not started` for the same unstarted state, so the row never matched and the checkbox flip was
+rolled back to keep the two surfaces consistent (the tool's own `#2788` anti-drift guard).
+Resolved by editing `.planning/REQUIREMENTS.md` directly — checkbox `- [x] **RUBRIC-01**` and
+traceability row `Status = Complete` — producing the exact end state the tool would have written
+had the row read `Pending`. Not fixed at the tool level (out of this plan's scope); flagging here
+so a future plan's `mark-complete` call for `RUBRIC-02`/`RUBRIC-03` isn't surprised by the same
+`not_found` result against this file's `Not started` rows.
+
 ## Requirements Note
 
 `RUBRIC-01` is marked complete in `REQUIREMENTS.md` by this plan — its own bar ("the requirement

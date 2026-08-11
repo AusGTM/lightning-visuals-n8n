@@ -9,7 +9,7 @@ target list a non-technical operator can act on from inside HubSpot.
 
 ### Rubric Calibration (RUBRIC)
 
-- [ ] **RUBRIC-01**: A decision on each org-type weight under review is recorded with reasoning
+- [x] **RUBRIC-01**: A decision on each org-type weight under review is recorded with reasoning
       traceable to the closed-deal evidence in `icp-scoring.md`, not intuition. Confirming a
       current weight is a valid outcome — the requirement is that the decision is made and
       evidenced, not that it changes. Where a decision **overrides** the evidence on GTM grounds,
@@ -101,7 +101,7 @@ recoverable, only forward capture works, which cannot inform a v0.9 recalibratio
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RUBRIC-01 | Phase 46 | Not started |
+| RUBRIC-01 | Phase 46 | Complete |
 | RUBRIC-02 | Phase 46 | Not started |
 | RUBRIC-03 | Phase 46 | Not started |
 | VETO-01 | Phase 47 | Not started |
