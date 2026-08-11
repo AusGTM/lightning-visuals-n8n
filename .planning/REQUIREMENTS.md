@@ -92,16 +92,16 @@ recoverable, only forward capture works, which cannot inform a v0.9 recalibratio
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| RUBRIC-01 | — | Not started |
-| RUBRIC-02 | — | Not started |
-| RUBRIC-03 | — | Not started |
-| VETO-01 | — | Not started |
-| VETO-02 | — | Not started |
-| VETO-03 | — | Not started |
-| COVER-01 | — | Not started |
-| COVER-02 | — | Not started |
-| RESCORE-01 | — | Not started |
-| RESCORE-02 | — | Not started |
-| RESCORE-03 | — | Not started |
+| RUBRIC-01 | Phase 46 | Not started |
+| RUBRIC-02 | Phase 46 | Not started |
+| RUBRIC-03 | Phase 46 | Not started |
+| VETO-01 | Phase 47 | Not started |
+| VETO-02 | Phase 47 | Not started |
+| VETO-03 | Phase 47 | Not started |
+| COVER-01 | Phase 48 | Not started |
+| COVER-02 | Phase 48 | Not started |
+| RESCORE-01 | Phase 49 | Not started |
+| RESCORE-02 | Phase 49 | Not started |
+| RESCORE-03 | Phase 49 | Not started |
 
 *Phase column filled by the roadmapper.*

@@ -8,9 +8,16 @@
 - ✅ **v0.6 Claude Plugin Entrypoint** — Phases 23–32, workstream `plugin-entrypoint` (shipped 2026-08-04)
 - ✅ **v0.7 HubSpot Scoring Engine Remediation** — Phases 39–43 (shipped 2026-08-08)
 - ✅ **v0.8 Execution Budget Safety** — Phases 44–45 (shipped 2026-08-11)
-- 📋 **v0.9** — next milestone, not yet defined
+- 📋 **v0.9 ICP Rubric Calibration & Veto Remediation** — Phases 46–49 (roadmapped, not started)
 
 ## Phases
+
+### 📋 v0.9 ICP Rubric Calibration & Veto Remediation (Phases 46–49)
+
+- [ ] **Phase 46: Rubric Decision, Simulation & Engine Parity** - Decide the `individual_club_team` weight with evidence, simulate re-tiering with zero writes, and prove any change lands identically in both scoring engines before either downstream write phase runs
+- [ ] **Phase 47: Veto Remediation** - Clear the 17 false non-ANZ vetoes under the settled rubric, inside a deliberately armed and capped write window, verifiable from HubSpot alone
+- [ ] **Phase 48: Enrichment Coverage** - Fill or document `lv_org_type` for the 18 never-enriched companies, under a pre-estimated and budget-refusing armed write window
+- [ ] **Phase 49: Re-score Strategy & Reporting** - Define and (if triggered) execute the budget-bounded full-population re-score procedure, and report the milestone's net tier-distribution effect in plain language
 
 <details>
 <summary>✅ v0.8 Execution Budget Safety (Phases 44–45) — SHIPPED 2026-08-11</summary>
@@ -38,10 +45,125 @@ file constant-size:
 
 </details>
 
-### 📋 v0.9 (not yet defined)
+## Phase Details
 
-Run `/gsd-new-milestone` to define requirements and phases. Phase numbering continues the repo's
-global sequence — Phase 45 was the last consumed, so v0.9 starts at Phase 46.
+### Phase 46: Rubric Decision, Simulation & Engine Parity
+
+**Goal**: Decide the `individual_club_team` weight question with evidence, and prove that any
+change lands identically in both scoring engines — before either the 17 false-veto records
+(Phase 47) or the 18 uncovered records (Phase 48) are touched. Deciding weights once, first,
+costs less than the alternative: re-scoring the 17 veto records under the old rubric and then
+again under a changed one. This phase writes nothing to a HubSpot record — the simulation reads
+current `lv_*` inputs only, and any engine deploy is a workflow artifact change, not a record
+write.
+
+**Depends on**: Nothing (first phase of milestone)
+
+**Requirements**: RUBRIC-01, RUBRIC-02, RUBRIC-03
+
+**Success Criteria** (what must be TRUE):
+  1. A written decision on the `individual_club_team` weight exists, citing specific closed-deal
+     evidence from `icp-scoring.md` — confirming the current weight of 5 is a valid, evidenced
+     outcome, not just a changed one.
+  2. Operator can view a re-tier simulation of the 66 currently-scored companies under proposed
+     weights, computed from current `lv_*` inputs, that writes nothing to HubSpot.
+  3. The parity harness (`tests/test_scoring_parity.py`, `scripts/run_scoring_parity.py`) passes
+     against the decided weights in both `config/icp_scoring.yaml` (Python oracle) and the JS
+     port compiled into `n8n/wf_enrichment_cloud.json` — trivially if the weight is unchanged,
+     substantively if it changed.
+  4. If the weight changed, the new value reached the live workflow only via
+     `build_cloud_workflows.py` → deploy → bounce, and a read-back of the running (not merely
+     stored) workflow content confirms the new weight is what actually executes.
+
+**Plans**: TBD
+
+---
+
+### Phase 47: Veto Remediation
+
+**Goal**: Clear the 17 companies carrying a false non-ANZ veto, re-scored under the rubric
+Phase 46 settled — once, not twice — inside a deliberately bounded write window, and
+verifiable from HubSpot alone with no script. Excludes the 3 companies verified correct on
+2026-08-11 — Entain (`10024564084`), Gravity Media (`15860277364`), Ironman (`17317184159`) —
+which carry genuine non-ANZ regions and must not be swept up in this re-score. Before opening
+the write window, check whether any of the 17 also fall inside Phase 48's 18-company no-`lv_org_type`
+set; an overlapping record should get both fixes in one armed touch rather than two separate
+write windows.
+
+**Depends on**: Phase 46 (rubric must be settled before this re-score runs, so it runs once)
+
+**Requirements**: VETO-01, VETO-02, VETO-03
+
+**Success Criteria** (what must be TRUE):
+  1. Each of the 17 flagged companies (excluding the 3 confirmed-correct IDs above) has been
+     re-scored under the Phase-46-settled rubric, and its `lv_anti_icp_flag` / `lv_anti_icp_reason`
+     reflect the corrected region data.
+  2. The re-score ran inside a write window that was deliberately armed with a record-count cap,
+     then disarmed, with the disarmed state read back and confirmed afterward.
+  3. Operator can search HubSpot alone — no scripts — for "non-ANZ veto reason with a blank
+     `lv_country_region_normalized`" and get zero results.
+
+**Plans**: TBD
+
+---
+
+### Phase 48: Enrichment Coverage
+
+**Goal**: Every scored company either has a real `lv_org_type` or a documented, distinguishable
+reason it can't get one, spent through a cost-estimated, budget-refusing, deliberately armed
+write window. This is a separate, larger budget event than Phase 47's cheap recompute — a full
+provider waterfall per record, not a rescore of existing data — so it is a separable spend
+decision the operator approves on its own terms. Before opening the write window, check the
+overlap noted in Phase 47: a record needing both a region fix and org-type enrichment should be
+touched once.
+
+**Depends on**: Phase 46 (settled rubric so post-enrichment scores are computed correctly)
+
+**Requirements**: COVER-01, COVER-02
+
+**Success Criteria** (what must be TRUE):
+  1. Each of the 18 companies has a non-blank `lv_org_type`, or is marked un-enrichable with a
+     stated reason — distinguishable from a company that was never attempted.
+  2. Before the enrichment run, operator sees an estimated execution and provider-credit cost
+     against the 2,500/month n8n allowance and the current Lusha balance.
+  3. A run whose estimated cost would exceed either budget is refused outright, never truncated
+     silently mid-run.
+  4. The enrichment writes happened inside a deliberately armed, record-count-capped write
+     window that was disarmed and read back afterward, and the actual cost is reported against
+     the pre-run estimate.
+
+**Plans**: TBD
+
+---
+
+### Phase 49: Re-score Strategy & Reporting
+
+**Goal**: A future rubric-triggered full-population re-score has a defined, budget-bounded
+procedure the operator can trust before invoking it, and the milestone's net effect on the
+target list is visible in plain language. This holds in both branches of Phase 46's decision:
+if the weight changed, this phase's full-66 pass necessarily re-touches the 17 records Phase 47
+already wrote — roughly 17 redundant executions, accepted deliberately because it let the known
+live veto bug clear one phase earlier rather than waiting on the weight decision. If the weight
+did not change, no full re-score is owed and this phase proves the procedure without spending it.
+
+**Depends on**: Phase 46, Phase 47, Phase 48
+
+**Requirements**: RESCORE-01, RESCORE-02, RESCORE-03
+
+**Success Criteria** (what must be TRUE):
+  1. Operator can see, before any future rubric change is committed, exactly which records would
+     be re-scored, in what chunk size, and under what write window — a documented, budget-bounded
+     plan, not an ad-hoc sweep.
+  2. Because no `lv_icp_scoring_version` property exists, the plan explicitly re-scores the
+     entire 66-company scored population on any rubric change, and states the execution cost up
+     front rather than discovering it mid-run.
+  3. If Phase 46 changed a weight, the full-population re-score executed under this defined
+     procedure; if it didn't, the procedure is proven (e.g. dry-run) without being spent.
+  4. Operator receives a plain-language before/after tier-distribution comparison covering this
+     milestone's re-scoring activity as a whole (veto clear, coverage enrichment, and any
+     weight-driven full re-score).
+
+**Plans**: TBD
 
 ## Progress
 
@@ -49,6 +171,10 @@ global sequence — Phase 45 was the last consumed, so v0.9 starts at Phase 46.
 | ----- | --------- | -------------- | ------ | --------- |
 | 44. SJ-3 Dispatch Gate, Drain & Cap | v0.8 | 3/3 | Complete (verified) | 2026-08-10 |
 | 45. Burn-Rate Alarm | v0.8 | 3/3 | Complete (verified) | 2026-08-10 |
+| 46. Rubric Decision, Simulation & Engine Parity | v0.9 | 0/? | Not started | - |
+| 47. Veto Remediation | v0.9 | 0/? | Not started | - |
+| 48. Enrichment Coverage | v0.9 | 0/? | Not started | - |
+| 49. Re-score Strategy & Reporting | v0.9 | 0/? | Not started | - |
 
 ## Ledger gaps (known)
 

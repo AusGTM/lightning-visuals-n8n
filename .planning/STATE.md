@@ -2,11 +2,11 @@
 gsd_state_version: 1.0
 milestone: v0.9
 milestone_name: ICP Rubric Calibration & Veto Remediation
-status: planning
-last_updated: "2026-08-11T00:43:24.512Z"
+status: ready_to_plan
+last_updated: "2026-08-11T00:53:36.000Z"
 last_activity: 2026-08-11
 progress:
-  total_phases: 0
+  total_phases: 4
   completed_phases: 0
   total_plans: 0
   completed_plans: 0
@@ -17,10 +17,15 @@ progress:
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-08-11 — Milestone v0.9 started
+Phase: Phase 46 of 49 (Rubric Decision, Simulation & Engine Parity) — 1st of 4 phases in v0.9
+Plan: — (ready to plan)
+Status: Ready to plan
+Last activity: 2026-08-11 — v0.9 ROADMAP.md written: 4 phases (46-49), 11/11 requirements
+  mapped (RUBRIC-01..03 -> 46, VETO-01..03 -> 47, COVER-01..02 -> 48, RESCORE-01..03 -> 49).
+  Sequencing: rubric decided once (46) before the 17 false-veto records are touched (47), so
+  they re-score exactly once rather than twice under a later weight change.
+
+Progress: [░░░░░░░░░░] 0%
 
 ## Session
 
@@ -142,4 +147,4 @@ across the next plugin update — it fails silently, which is the dangerous dire
 
 ## Operator Next Steps
 
-- Start the next milestone with /gsd-new-milestone
+- Run /gsd-plan-phase 46 to plan Rubric Decision, Simulation & Engine Parity
