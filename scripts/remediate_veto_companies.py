@@ -458,6 +458,83 @@ def post_webhook_event(company_id: str, armed, config: dict, transport=requests)
     return response
 
 
+# --- cost estimate + budget refusal (D-03/D-20) --------------------------------------------
+
+# D-20/D-17: the ~4 pinned records (Simtech LED, Editix, Jam TV, The Rumble / Pacific
+# Action Sports) whose names plainly are not racing clubs, and are therefore the ones
+# most likely to land on an EVIDENCE_REQUIRED_ORG_TYPES org type, re-triggering the
+# deployed workflow's "Research Trigger Gate" a second time. This is a documented
+# ESTIMATE (D-20), not a live prediction -- the true count is only knowable after
+# research actually runs, which is the whole reason D-08 chose research over guessing.
+KNOWN_LIKELY_EVIDENCE_GATED_IDS = frozenset({
+    "18047161864",  # Simtech LED
+    "17317381378",  # Editix
+    "17317850381",  # Jam TV
+    "20943964946",  # The Rumble / Pacific Action Sports
+})
+
+# Phase 20 canary figure ($0.0686/record) -- measured on the n8n Haiku-plus-Sonnet path,
+# NOT this script's single claude-sonnet-5 + native web_search call. Excludes the native
+# web_search tool's per-search billing this path incurs. An explicit under-estimate, not
+# a live-measured figure for this code path (47-RESEARCH.md "Cost estimate inputs").
+ANTHROPIC_PER_RECORD_ESTIMATE_USD = 0.0686
+
+
+def estimate_cost(ids) -> dict:
+    """D-03/D-20 cost projection over `ids` (the ids about to run) -- a static
+    projection, never a live balance check. There is no n8n usage endpoint (project
+    memory n8n-execution-budget.md); month-to-date headroom is the operator's own
+    confirmation at the arming checkpoint."""
+    n_records = len(ids)
+    redundant = len(set(ids) & KNOWN_LIKELY_EVIDENCE_GATED_IDS)
+    return {
+        "web_research_calls": n_records,
+        "redundant_research_calls": redundant,
+        "n8n_executions": n_records,
+        "n8n_budget_month": N8N_EXECUTION_BUDGET_MONTH,
+        "lusha_credits": 0,
+        "lusha_credits_note": "D-08: web research only, no provider waterfall -- zero Lusha credits drawn.",
+        "anthropic_estimate_usd": round(n_records * ANTHROPIC_PER_RECORD_ESTIMATE_USD, 4),
+        "anthropic_estimate_note": (
+            "Derived from the Phase 20 canary figure ($0.0686/record), measured on the "
+            "n8n Haiku-plus-Sonnet path -- NOT this script's single claude-sonnet-5 + "
+            "native web_search call, and excludes that call's per-search billing. An "
+            "under-estimate, not a live-measured figure for this path."
+        ),
+    }
+
+
+def refuse_if_over_budget(estimate: dict, ids):
+    """D-03: refuse rather than truncate. Returns `ids` UNMODIFIED when the projected
+    n8n_executions stays within n8n_budget_month; raises BudgetRefused otherwise."""
+    if estimate["n8n_executions"] > estimate["n8n_budget_month"]:
+        raise BudgetRefused(
+            f"projected n8n executions ({estimate['n8n_executions']}) exceed the "
+            f"monthly budget ({estimate['n8n_budget_month']}). Refusing rather than "
+            "truncating the run -- no API call made."
+        )
+    return ids
+
+
+# --- D-20 clobber verify ---------------------------------------------------------------
+
+def verify_post_run(company_id: str, expected_inputs: dict, expected_metadata: dict, reader=get_record):
+    """Re-reads the input properties AND the metadata stamps this script wrote, and
+    returns the set of field names whose live value diverges from what was written.
+    Project memory `companies-research-lane-rowloss` records a suspected latent row-loss
+    when the n8n re-research lane runs (D-20) -- the ~4 KNOWN_LIKELY_EVIDENCE_GATED_IDS
+    are exactly the ones that lane re-enters."""
+    expected = {**expected_inputs, **expected_metadata}
+    if not expected:
+        return set()
+    record = reader("companies", company_id, list(expected.keys()))
+    live = record.get("properties", {})
+    return {
+        field for field, expected_value in expected.items()
+        if str(live.get(field)) != str(expected_value)
+    }
+
+
 # --- main -----------------------------------------------------------------------------
 
 def _parse_ids_csv(raw: str) -> list:
@@ -544,6 +621,14 @@ def main(argv=None) -> int:
 
     print(f"RESOLVED_IDS: {json.dumps(list(resolved_ids))}")
 
+    estimate = estimate_cost(resolved_ids)
+    print(f"COST ESTIMATE: {json.dumps(estimate, indent=2)}")
+    try:
+        resolved_ids = refuse_if_over_budget(estimate, resolved_ids)
+    except BudgetRefused as exc:
+        print(f"REFUSED: {exc}")
+        return 1
+
     records = [_process_one(company_id) for company_id in resolved_ids]
 
     for rec in records:
@@ -568,6 +653,9 @@ def main(argv=None) -> int:
 
     cfg = config_gate.load_config()
     for rec in records:
+        # D-01: all four write legs for one record happen inside the one armed window --
+        # batch-PATCH inputs+metadata -> batch-PATCH components -> settle_tier ->
+        # webhook POST -> settle_veto -> verify_post_run -> conditional re-stamp.
         combined_props = {**rec["input_patch"]["properties"], **rec["metadata_patch"]["properties"]}
         if combined_props:
             batch_update_companies([{"id": rec["id"], "properties": combined_props}], dry_run=False)
@@ -576,6 +664,26 @@ def main(argv=None) -> int:
 
         post_webhook_event(rec["id"], True, cfg)
         settle_veto(rec["id"])
+
+        # D-20: the deployed Research Trigger Gate re-enters ~4 evidence-gated records
+        # and can overwrite this run's own stamps. Verify INSIDE the armed window --
+        # discovering a clobber after disarm would need a second arming ceremony, the
+        # exact twice-touched cost D-01 exists to avoid.
+        diverged = verify_post_run(
+            rec["id"], rec["input_patch"]["properties"], rec["metadata_patch"]["properties"],
+        )
+        if diverged:
+            print(f"  {rec['id']}: re-research lane diverged fields {sorted(diverged)} -- re-stamping once")
+            restamp = {k: v for k, v in combined_props.items() if k in diverged}
+            batch_update_companies([{"id": rec["id"], "properties": restamp}], dry_run=False)
+            diverged_again = verify_post_run(
+                rec["id"], rec["input_patch"]["properties"], rec["metadata_patch"]["properties"],
+            )
+            if diverged_again:
+                raise RuntimeError(
+                    f"{rec['id']}: fields {sorted(diverged_again)} diverged again after "
+                    "re-stamp -- refusing to continue silently."
+                )
 
     print(f"armed run complete -- {len(records)} companies patched and settled.")
     return 0
