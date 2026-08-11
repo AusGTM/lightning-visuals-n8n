@@ -18,7 +18,7 @@ target list a non-technical operator can act on from inside HubSpot.
       `individual_club_team`, `regulator`, and removal of the `gambling_operator` deduction —
       originally `individual_club_team` alone. Every live doc printing a superseded value is
       updated in the same phase; see `46-CONTEXT.md` D-01…D-03 and D-13.)*
-- [ ] **RUBRIC-02**: Operator can see how the scored population would re-tier under proposed
+- [x] **RUBRIC-02**: Operator can see how the scored population would re-tier under proposed
       weights BEFORE committing them — a simulation over current `lv_*` inputs that writes
       nothing to HubSpot.
 - [x] **RUBRIC-03**: If weights change, **all three** scoring engines carry them identically —
@@ -109,7 +109,7 @@ recoverable, only forward capture works, which cannot inform a v0.9 recalibratio
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | RUBRIC-01 | Phase 46 | Complete |
-| RUBRIC-02 | Phase 46 | Not started |
+| RUBRIC-02 | Phase 46 | Complete |
 | RUBRIC-03 | Phase 46 | Complete |
 | VETO-01 | Phase 47 | Not started |
 | VETO-02 | Phase 47 | Not started |
