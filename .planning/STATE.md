@@ -21,10 +21,15 @@ progress:
 
 ## Current Position
 
-Phase: 47 (veto-remediation) — EXECUTING
+Phase: 47 (veto-remediation) — BLOCKED
 Plan: 3 of 4
-Status: Ready to execute
-Last activity: 2026-08-11 — Phase 47 execution started
+Status: Blocked — Anthropic account out of credit
+Last activity: 2026-08-12 — Phase 47 blocked at Plan 03 Task 3. Both research legs (the
+  script's --research-only pass and the n8n Claude Web Research node) fail with
+  400 invalid_request_error, insufficient credit on the account behind ANTHROPIC_API_KEY.
+  Nothing armed, zero HubSpot writes, zero spend. Waves 1-2 complete and committed.
+  Resume: add credit, then re-run the research pass. Full detail and the exact resume
+  command in .planning/phases/47-veto-remediation/47-BLOCKED.md
   mapped (RUBRIC-01..03 -> 46, VETO-01..03 -> 47, COVER-01..02 -> 48, RESCORE-01..03 -> 49).
   Sequencing: rubric decided once (46) before the 17 false-veto records are touched (47), so
   they re-score exactly once rather than twice under a later weight change.
