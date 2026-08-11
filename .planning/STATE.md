@@ -3,10 +3,9 @@ gsd_state_version: 1.0
 milestone: v0.9
 milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 46
-current_phase_name: Rubric Decision, Simulation & Engine Parity
-status: verifying
+status: completed
 stopped_at: Completed 46-05-PLAN.md
-last_updated: "2026-08-11T08:49:47.111Z"
+last_updated: "2026-08-11T09:01:15.986Z"
 last_activity: 2026-08-11
 last_activity_desc: Phase 46 execution started
 progress:
@@ -15,16 +14,17 @@ progress:
   total_plans: 5
   completed_plans: 5
   percent: 25
+current_phase_name: Rubric Decision, Simulation & Engine Parity
 ---
 
 # Project State
 
 ## Current Position
 
-Phase: 46 (Rubric Decision, Simulation & Engine Parity) — EXECUTING
+Phase: 46 — COMPLETE
 Plan: 5 of 5
-Status: Phase complete — ready for verification
-Last activity: 2026-08-11 — Phase 46 execution started
+Status: Phase 46 complete
+Last activity: 2026-08-11 — Phase 46 marked complete
   mapped (RUBRIC-01..03 -> 46, VETO-01..03 -> 47, COVER-01..02 -> 48, RESCORE-01..03 -> 49).
   Sequencing: rubric decided once (46) before the 17 false-veto records are touched (47), so
   they re-score exactly once rather than twice under a later weight change.
