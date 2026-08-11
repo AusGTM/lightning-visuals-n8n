@@ -52,15 +52,17 @@ HubSpot’s native industry tag proved unreliable (e.g. “The Creek Agency” i
 
 **Best-fit profile:** AU-based · **governing-body or league** (or content producer) · produces live/near-live broadcast/streaming content · mid-market revenue ($5–500M).
 
-·      **Primary — AU racing & sport governing / league bodies that produce content** (83% win). *Won:* Racing Queensland, Harness Racing Victoria & NSW, Racing & Wagering WA, Tasracing, AusCycling, Surfing Australia. Logic fits: a governing body buys once and standardises branding **league-wide**. *(Bucket is slightly mixed — e.g. QRIC is a regulator, not a content buyer — so JTBD 2 shouldn’t treat “governing body” as monolithic.)*
+·      **Primary — AU racing & sport governing / league bodies that produce content** (83% win). *Won:* Racing Queensland, Harness Racing Victoria & NSW, Racing & Wagering WA, Tasracing, AusCycling, Surfing Australia. Logic fits: a governing body buys once and standardises branding **league-wide**. *(Bucket is slightly mixed — e.g. QRIC is a regulator, not a content buyer — so JTBD 2 shouldn’t treat “governing body” as monolithic.)* **GTM override (`46-DECISION.md` D-02):** the rubric scores `regulator` at **−20** (down from the originally proposed +5) — a regulator is not a sports-media buyer even where it sits adjacent to a governing body that is.
 
 ·      **Secondary — AU sports content producers / OB houses** (\~40% win): Gravity Media, Panasonic Studio Productions, Jam TV, ABC. Real but more competitive, lower value.
 
-**Anti-ICP (suppress / disqualify):** \- **Individual clubs/teams as the direct target** — 19% win over 36 deals; high effort, low yield (single-venue racing clubs: Shepparton, Scone, Toowoomba, Geraldton…). *Reach them via their governing body, not directly.* 
+**Closed-deal evidence — individual clubs/teams:** the data names clubs anti-ICP as a *direct* target — **19% win over 36 deals**; high effort, low yield (single-venue racing clubs: Shepparton, Scone, Toowoomba, Geraldton…). *Reach them via their governing body, not directly.* **GTM override (`46-DECISION.md` D-01):** the rubric scores `individual_club_team` at **15** (up from 5), below governing bodies/leagues but no longer a suppress/disqualify segment. Sales treats individual racing/turf clubs as a prime target ranking just below leagues — a deliberate GTM decision **against** the win-rate evidence above, not a data disagreement; the underlying finding is preserved verbatim, not softened.
 
-\- **Non-Australian** (11% win) · **no broadcast/streaming content** (17%) · **$500M+ revenue / enterprise (17% — graduated deduction, not a veto: penalty decays toward near-veto at $1.2B+, so strong-fit large prospects remain targetable)**. 
+**Anti-ICP (suppress / disqualify):** \- **Non-Australian** (11% win) · **no broadcast/streaming content** (17%) · **$500M+ revenue / enterprise (17% — graduated deduction, not a veto: penalty decays toward near-veto at $1.2B+, so strong-fit large prospects remain targetable)**. 
 
-\- **Not sports-media at all: AV/LED-hardware vendors (Supertech, Simtech) \= veto. Gambling operators (Sportsbet, Entain) \= graduated deduction, not a veto — targetable proactively where other fit signals are strong.**
+\- **Not sports-media at all: AV/LED-hardware vendors (Supertech, Simtech) \= veto.**
+
+**Closed-deal evidence — gambling operators:** the discovery data supported treating gambling operators (Sportsbet, Entain) as a graduated deduction, not a veto — targetable proactively where other fit signals are strong. **GTM override (`46-DECISION.md` D-03):** the rubric removes the deduction entirely; `lv_is_gambling_operator = true` no longer reduces score at all (it still never sets `lv_anti_icp_flag`, unchanged from before).
 
 **Why deals are lost (from discovery calls, since closed\_lost\_reason is blank):** \#1 is **price / affordability** — “everyone wants it, it’s that they can’t afford it”; \#2 is **fear of cloud**, especially in horse racing. Plus disqualifiers: happy with the incumbent, no streaming/broadcast, or sub-professional production kit. **Deal-size note:** the headline $100–500K deals (a jurisdiction, racing.com, A-League) are a *tiny tier — fewer than 10 prospects exist*; most CRM wins are smaller racing-template deals (won-median \~$20K). So “we lose the big ones” is real but is largely a **small-TAM \+ price/cloud-fear** story, not a firmographic one — capture lv\_closed\_lost\_reason to track it systematically (§6).
 
@@ -72,13 +74,13 @@ All signals below are available **at lead/account-scoring time** (firmographic \
 
 | Category | Signals (with data source) | Direction |
 | :---- | :---- | :---- |
-| **Firmographic** | org\_type *(web-enriched → Claude/Orchestrator classifier in prod)*; country=AU *(HubSpot)*; revenue band *(HubSpot \+ Apollo/ZoomInfo)* | League/Gov **\+++**, Producer **\+**, Club **–**, Other **– –**; AU **\++**; $5–500M **\++** |
+| **Firmographic** | org\_type *(web-enriched → Claude/Orchestrator classifier in prod)*; country=AU *(HubSpot)*; revenue band *(HubSpot \+ Apollo/ZoomInfo)* | League/Gov **\+++**, Producer **\+**, Club **\+** (`46-DECISION.md` D-01), Other **– –**, Regulator **– – –** (`46-DECISION.md` D-02); AU **\++**; $5–500M **\++** |
 | **Product-fit (technographic)** | produces broadcast/streaming content *(web-enriched → Claude \+ Apollo/Zoominfo)* | content **\++**; no content \= **disqualify** |
 | **Intent** | buying-committee / topic affinity *(ZoomInfo/Hubspot pixel — forward-looking, none in historical data)* | **\+** when present |
 | **Lifecycle** | new vs existing business; lead source *(HubSpot)* | renewals scored separately, scoring rubric here is for new business, omit scoring for existing |
-| **Anti-ICP deductions** | Hard veto: non-AU; no content; hardware-vendor. Graduated deduction (targetable): gambling-operator; $500M+ revenue | Negative deduction OR veto |
+| **Anti-ICP deductions** | Hard veto: non-AU; no content; hardware-vendor. Graduated deduction (targetable): $500M+ revenue. Regulator carries a direct org-type weight of –20 (`46-DECISION.md` D-02) — not a graduated deduction. | Negative deduction OR veto |
 
-**Tiers (illustrative):** **A** \= AU governing-body/league, produces content, mid-market → priority. **B** \= AU content producer or strong club-via-league. **C** \= individual club, AU, content → nurture via league. **D** \= anti-ICP (non-AU / no-content / non-media) → disqualify.
+**Tiers (illustrative):** **A** \= AU governing-body/league, produces content, mid-market → priority. **B** \= AU content producer, or AU individual club producing content (`46-DECISION.md` D-01 override) → priority. **C** \= weaker-fit org type (e.g. other/unknown), AU, content → nurture. **D** \= anti-ICP (non-AU / no-content / non-media) → disqualify.
 
 **Scoring model** 
 
@@ -86,7 +88,8 @@ All signals below are available **at lead/account-scoring time** (firmographic \
 | :---- | :---- |
 | Org: governing-body / league | \+40 |
 | Org: content producer | \+20 |
-| Org: individual club | \+5 |
+| Org: individual club | \+15 |
+| Org: regulator | –20 |
 | Other | 0 |
 | Produces broadcast/streaming content | \+20 (none \= hard veto) |
 | Geography: ANZ | \+10 (non-ANZ \= hard veto) |
@@ -100,7 +103,6 @@ All signals below are available **at lead/account-scoring time** (firmographic \
 | $750M–1B | –15 |
 | $1B–1.2B | –30 |
 | $1.2B+ | –50 (near-veto, but never auto-disqualify) |
-| Gambling Operator | –20 (can be surfaced with strong other attributes) |
 
 **Intent signals** (HubSpot-pixel-driven scheme):
 
@@ -116,12 +118,12 @@ All signals below are available **at lead/account-scoring time** (firmographic \
 
 | Property | Role | Rubric mapping |
 | :---- | :---- | :---- |
-| lv\_org\_type | **Input** (enrichment writes) | Firmographic row: governing-body/league \+++, producer \+, club – |
+| lv\_org\_type | **Input** (enrichment writes) | Firmographic row: governing-body/league \+++, producer \+, club \+ (`46-DECISION.md` D-01), regulator – – – (D-02) |
 | lv\_produces\_content | **Input** (enrichment writes) | Product-fit row: content \++, no content \= veto |
 | country, annualrevenue | **Input** (already exist) | ANZ \++, $5–500M \++; non-ANZ \= veto; revenue \>$500M \= graduated deduction, decaying to near-veto at $1.2B+ (targetable, not disqualified) |
 | lv\_icp\_fit\_score | **Output** (rubric writes) | The computed number — sorts the stack-ranked view |
 | lv\_icp\_tier | **Output** (rubric writes) | Score bands \+ veto rules → the A/B/C/D label reps act on |
-| lv\_anti\_icp\_flag | **Output** (rubric writes) | True only when a hard veto fires (non-AU / no-content / hardware); gambling and $500M+ revenue are graduated deductions and never set this flag — filters records out of working views |
+| lv\_anti\_icp\_flag | **Output** (rubric writes) | True only when a hard veto fires (non-AU / no-content / hardware); revenue \>$500M is a graduated deduction and never sets this flag — gambling status no longer carries any scoring deduction (`46-DECISION.md` D-03) and, like before, never sets this flag either — filters records out of working views |
 | lv\_closed\_lost\_reason | **Hygiene** (not scoring) | Closes audit F2; feeds the *next* rubric revision with real loss reasons |
 | deal\_source | **Hygiene** (not scoring) | Closes audit F1 — channel attribution |
 
@@ -130,9 +132,9 @@ All signals below are available **at lead/account-scoring time** (firmographic \
 | Tier | Rule | Worked example |
 | :---- | :---- | :---- |
 | **A** | score ≥ 70 | Harness Racing NZ: governing body \+40, content \+20, ANZ \+10, mid-market \+10 \= 80 |
-| **B** | 40–69 | Producer \+20, content \+20, ANZ \+10 \= 50; or club whose league is a customer |
-| **C** | 15–39 | Club \+5, content \+20, ANZ \+10 \= 35 → nurture via its league, not worked directly |
-| **D** | any veto fired (lv\_anti\_icp\_flag \= true) | Sportsbet: wagering-operator deduction (–20) \+ high-revenue decay, scored deduction → typically Tier C, targetable |
+| **B** | 40–69 | Producer \+20, content \+20, ANZ \+10 \= 50; or individual club, AU, content \= club \+15, content \+20, ANZ \+10 \= 45 (`46-DECISION.md` D-01 override — see §4) |
+| **C** | 15–39 | Other org type, AU, content \= 0 \+ 20 \+ 10 \= 30 → nurture |
+| **D** | any veto fired (lv\_anti\_icp\_flag \= true) | Supertech: AV/LED-hardware vendor \= hard veto. Gambling operators (e.g. Sportsbet) no longer carry any scoring deduction (`46-DECISION.md` D-03 override — see §4); they land wherever their other signals put them, typically still D where an independent veto (no content / non-AU) also applies. |
 
 ## **6\. Enrichment plan & HubSpot data gaps**
 

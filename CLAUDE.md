@@ -783,8 +783,8 @@ base_score:
     governing_body_league: 40
     content_producer: 20
     broadcaster: 20
-    individual_club_team: 5
-    regulator: 5
+    individual_club_team: 15
+    regulator: -20
     gambling_operator: 0
     hardware_vendor: 0
     other: 0
@@ -813,8 +813,7 @@ base_score:
     "1.2B+": -50
     unknown: 0
 
-graduated_deductions:
-  gambling_operator: -20
+graduated_deductions: {}
 
 hard_vetoes:
   non_anz:
@@ -894,7 +893,6 @@ Graduated deductions do not set `lv_anti_icp_flag`.
 Graduated deductions include:
 
 ```text
-gambling_operator
 revenue above 500M
 ```
 

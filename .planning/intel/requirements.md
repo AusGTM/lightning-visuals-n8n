@@ -10,7 +10,9 @@ Status: For sign-off before rubric build (JTBD 2). Basis: 92 closed HubSpot deal
 Source: icp-scoring.md §5
 Description: Compute a numeric ICP fit score from firmographic + enrichment signals available at lead/account-scoring time. Deal value is deliberately excluded (does not exist until a deal opens).
 Acceptance criteria:
-- Org type: governing-body/league +40, content producer +20, individual club +5, other 0.
+- Org type: governing-body/league +40, content producer +20, individual club +15, regulator −20, other 0.
+  (Club and regulator amended 2026-08-11 from the original PRD's +5/+5, per `46-DECISION.md`
+  D-01/D-02 — both are operator GTM overrides of the closed-deal evidence, not corrections.)
 - Produces broadcast/streaming content: +20 (none = hard veto).
 - Geography ANZ: +10 (non-ANZ = hard veto).
 - Revenue $5–500M: +10 (>$500M handled by graduated decay, see REQ-graduated-deductions).
@@ -21,14 +23,17 @@ Description: Hard vetoes disqualify a prospect and set the anti-ICP flag.
 Acceptance criteria:
 - Hard veto fires for: non-ANZ geography, no broadcast/streaming content, AV/LED hardware vendor.
 - On veto: `lv_anti_icp_flag = true`, tier forced to D.
-- Gambling operators and >$500M revenue are NOT vetoes — they are graduated deductions and must never set the anti-ICP flag.
+- Gambling operators and >$500M revenue are NOT vetoes. Revenue >$500M remains a graduated
+  deduction; gambling status no longer produces any scoring deduction at all (`46-DECISION.md`
+  D-03 removed it) — but, like before, gambling status must never set the anti-ICP flag.
 
 ## REQ-graduated-deductions
 Source: icp-scoring.md §5
 Description: Negative-decay deductions applied after base points; targetable prospects, never auto-disqualified.
 Acceptance criteria:
 - Revenue $500M–750M −5; $750M–1B −15; $1B–1.2B −30; $1.2B+ −50 (near-veto, never auto-disqualify).
-- Gambling operator −20 (surface-able when other fit signals strong).
+- Gambling operator: deduction removed entirely (`46-DECISION.md` D-03, amended 2026-08-11) — no
+  longer contributes to score. Was −20 in the original PRD.
 - None of these set `lv_anti_icp_flag`.
 
 ## REQ-tiering
