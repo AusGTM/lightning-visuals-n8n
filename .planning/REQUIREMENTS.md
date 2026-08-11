@@ -21,7 +21,7 @@ target list a non-technical operator can act on from inside HubSpot.
 - [ ] **RUBRIC-02**: Operator can see how the scored population would re-tier under proposed
       weights BEFORE committing them — a simulation over current `lv_*` inputs that writes
       nothing to HubSpot.
-- [ ] **RUBRIC-03**: If weights change, **all three** scoring engines carry them identically —
+- [x] **RUBRIC-03**: If weights change, **all three** scoring engines carry them identically —
       `config/icp_scoring.yaml` (Python oracle), the JS port compiled into
       `n8n/wf_enrichment_cloud.json`, and the HubSpot flow
       `config/hubspot_flows/4626124224-org-type-score.*.json` — proven by the existing parity
@@ -103,7 +103,7 @@ recoverable, only forward capture works, which cannot inform a v0.9 recalibratio
 |-------------|-------|--------|
 | RUBRIC-01 | Phase 46 | Complete |
 | RUBRIC-02 | Phase 46 | Not started |
-| RUBRIC-03 | Phase 46 | Not started |
+| RUBRIC-03 | Phase 46 | Complete |
 | VETO-01 | Phase 47 | Not started |
 | VETO-02 | Phase 47 | Not started |
 | VETO-03 | Phase 47 | Not started |

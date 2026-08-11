@@ -95,7 +95,7 @@ still prints the superseded rubric after the change ships.
      `config/icp_scoring.yaml`. Archived milestone artifacts under `.planning/milestones/` are
      deliberately left verbatim as historical record.
 
-**Plans**: 3/5 plans executed
+**Plans**: 4/5 plans executed
 
 Plans:
 
@@ -108,7 +108,7 @@ Plans:
 - [x] 46-03-PLAN.md — Write `46-DECISION.md` and take operator sign-off (blocking gate on every
       engine write below)
 
-- [ ] 46-04-PLAN.md — Commit the signed-off weights to `config/icp_scoring.yaml` and land them
+- [x] 46-04-PLAN.md — Commit the signed-off weights to `config/icp_scoring.yaml` and land them
       identically in the HubSpot flows, with a running-content read-back
 
 - [ ] 46-05-PLAN.md — Sync every live document to the new rubric and record the engine-count
@@ -219,7 +219,7 @@ did not change, no full re-score is owed and this phase proves the procedure wit
 | ----- | --------- | -------------- | ------ | --------- |
 | 44. SJ-3 Dispatch Gate, Drain & Cap | v0.8 | 3/3 | Complete (verified) | 2026-08-10 |
 | 45. Burn-Rate Alarm | v0.8 | 3/3 | Complete (verified) | 2026-08-10 |
-| 46. Rubric Decision, Simulation & Engine Parity | v0.9 | 3/5 | In Progress|  |
+| 46. Rubric Decision, Simulation & Engine Parity | v0.9 | 4/5 | In Progress|  |
 | 47. Veto Remediation | v0.9 | 0/? | Not started | - |
 | 48. Enrichment Coverage | v0.9 | 0/? | Not started | - |
 | 49. Re-score Strategy & Reporting | v0.9 | 0/? | Not started | - |
