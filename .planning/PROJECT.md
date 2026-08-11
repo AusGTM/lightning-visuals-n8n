@@ -11,14 +11,26 @@ team, not a customer-facing product.
 
 ## Current State
 
-**Both v0.8 phases complete (2026-08-10) — milestone ready to close.** Phase 44 (SJ-3 dispatch
-gate, drain, budget-derived cap) sealed live-proven; Phase 45 (burn-rate alarm, runtime cadence
-budget floor, time-windowed sweep lookback) sealed at 26/26 must-haves with all 6 code-review
-findings fixed. Phase 45 ships **inert** — installing the sweep cron/launchd schedule is an admin
-action on the operator's machine and was never in scope, so the alarm is unit-proven against
-synthetic execution history rather than observed firing on a schedule.
+**v0.8 closed 2026-08-11 (verified_closeout).** Both phases verified: Phase 44 (SJ-3 dispatch
+gate, drain, budget-derived cap) 5/5 must-haves — its `44-VERIFICATION.md` was written
+retroactively at close, having been sealed at plan level only; Phase 45 (burn-rate alarm,
+runtime cadence budget floor, time-windowed sweep lookback) 26/26 with all 6 code-review
+findings fixed. Phase 45 ships **inert** — installing the sweep cron/launchd schedule is an
+admin action on the operator's machine and was never in scope, so the alarm is unit-proven
+against synthetic execution history rather than observed firing on a schedule.
 
-**v0.8 — Execution Budget Safety.** The n8n Cloud plan allows 2,500 executions
+**Live remediation carried into v0.9 (2026-08-11).** A blank `lv_country_region_normalized` was
+firing the non-ANZ hard veto — treating *absence of enrichment* as a positive non-ANZ finding.
+Root cause was a split-brain: the same bug in `src/icp_scoring.py` (oracle) and in the
+hand-ported `_regionKey` baked into the armed `n8n/wf_enrichment_cloud.json`, the latter being
+the actual live producer (traced via HubSpot property history, `sourceType=INTEGRATION`). Fixed,
+deployed, bounced, and proven live by executing the running node's own `_regionKey`. **17
+companies still carry false vetoes** — they were requeued, but SJ-3 found the write gate closed,
+marked them `skipped` and self-cleared the flags, so nothing re-scored. Clearing them needs a
+deliberate armed write window. Tier distribution across the 66 scored is A:7 B:18 C:17 D:24,
+where 17 of the D are these false vetoes; post-remediation D should fall to ~7.
+
+**v0.8 — Execution Budget Safety (shipped 2026-08-11).** The n8n Cloud plan allows 2,500 executions
 per month, and on 2026-08-09 the backend spent them on work it could not complete: 61
 companies carried `lv_enrichment_requested=true`, SJ-3 re-dispatched all 61 every 15 minutes,
 and the step that would have cleared the flag is a HubSpot write the (correctly) closed write
@@ -39,7 +51,7 @@ D:24); `config/hubspot_properties.yaml` reconciles clean against the live portal
 follow-up made `lv_icp_fit_score`'s formula null-safe — a bare sum blanked the entire score on
 any null term, which had left 63 of 66 records unscored while the sweep still reported PASS.
 
-## Current Milestone: v0.8 Execution Budget Safety
+## Shipped Milestone: v0.8 Execution Budget Safety (2026-08-11)
 
 **Goal:** The backend cannot spend its monthly n8n execution allowance on work it is
 structurally unable to complete, and it reports an unsustainable burn rate before a human
@@ -159,16 +171,39 @@ proven entirely in dry-run locally, before touching a single production record.
 
 Full detail and traceability live in `.planning/REQUIREMENTS.md`.
 
+> **Section hygiene note (2026-08-11, v0.8 close).** This section had drifted: the "Active"
+> heading still carried v0.4 items that MILESTONES.md records as shipped 2026-07-29, and the
+> "Shipped (Milestone 1)" block below still has unchecked boxes. The v0.4 rows are corrected
+> below against the ledger. The Milestone 1 / Milestone 3 blocks are left as-found — their
+> checkbox state predates the current ledger and re-deriving it was out of scope at this close.
+
 ### Validated
 
-(None yet — ship Milestone 1 to validate.)
+- ✓ **Execution budget safety** — v0.8. SJ-3 cannot dispatch work it cannot finish (gate), a stuck
+  `lv_enrichment_requested` flag drains instead of re-accumulating, one tick's fan-out is capped
+  at a build-time value derived from the plan allowance and baked cadence, and the sweep reports
+  an unsustainable burn rate before a human reads the billing page. Live-proven (execution 11820).
+- ✓ **Scoring engine correct on the live path** — v0.7. All ten defects (F1–F10) closed in place on
+  the HubSpot-resident path, guarded by a two-tier parity harness.
+- ✓ Enrichment `contact:create` reachable — v0.4 (BUG 23: transport swap + pin override + dual live canary)
+- ✓ Numeric provider industry codes never survive normalization or win the waterfall over text — v0.4 (ZoomInfo `"71"`)
+- ✓ `lv_sponsorship_reliant` + `persona_group` copy-loops wired — v0.4 (both now have real producers)
+- ✓ Six `/gsd-verify-work` re-runs from the v0.3 goal ledger closed — v0.4 (6/6 passed, zero residual operator debt)
 
-### Active (Milestone v0.4 — Reachability & Verification Debt)
+### Active (v0.9 — not yet scoped)
 
-- [ ] Enrichment `contact:create` reachable — transport swap + pin override + dual live canary + harness gap (BUG 23)
-- [ ] Numeric provider industry codes never survive normalization or win the waterfall over text (ZoomInfo `"71"`)
-- [ ] `lv_sponsorship_reliant` + `persona_group` copy-loops wired; properties stop being permanently empty
-- [ ] Six `/gsd-verify-work` re-runs from the v0.3 goal ledger closed
+Requirements are defined by `/gsd-new-milestone`. The candidate scope carried out of v0.8 and the
+2026-08-11 debug work:
+
+- [ ] ICP rubric recalibrated against real-world fit — the `individual_club_team=5` weighting caps
+      racing clubs at C/35–45 while governing bodies reach A/80 on org_type alone
+- [ ] The 17 false non-ANZ vetoes cleared (needs a deliberate armed write window; the code fix is
+      already deployed and live-proven)
+- [ ] Enrichment coverage raised — 18 of 66 scored companies have no `lv_org_type` at all, so the
+      rubric cannot outperform its inputs
+- [ ] Revenue-band deductions and the gambling deduction validated against actual won/lost outcomes
+- [ ] A feedback loop that lets the rubric be revised on evidence rather than intuition
+      (`lv_closed_lost_reason` and siblings are spec'd in CLAUDE.md §5.3, never built)
 
 ### Shipped (Milestone 3 — Company Enrichment & ICP Research, 2026-07-29)
 
@@ -241,6 +276,12 @@ Full detail and traceability live in `.planning/REQUIREMENTS.md`.
 | **(M3)** Authoring the HubSpot-side calculation is downstream, out of Milestone 3 scope | The rubric must be re-expressed in HubSpot calculation syntax against the `lv_*` inputs. Sequencing it after the inputs are trustworthy avoids encoding a formula against fields the pipeline cannot yet populate | — Deferred |
 | **(M3)** All custom properties this workflow creates are prefixed `lv_` | Ownership signalling — marks the property as created by LV's team, and separates ours from HubSpot-native fields and third-party integration properties already in the portal. Native properties are never renamed. Zero migration cost: the 5 existing custom properties already comply and the ~40 others do not exist yet | ✅ Decided 2026-07-20 |
 | **(M3)** `config/taxonomy.yaml` as single source; node literals generated at build time | n8n Code nodes cannot read files, so values must be literals — but generated ones. Hand-editing a node yields a silent 0-score and a HubSpot 400 | — Pending |
+| **(v0.8)** The per-tick dispatch cap is COMPUTED at build time from the plan allowance and the baked trigger cadence, never a literal | A hardcoded cap silently becomes wrong the moment a trigger is re-timed — which is exactly how the 2026-08-09 runaway happened. Deriving it from the same tuple that builds the trigger makes the two impossible to disagree | ✅ Shipped 2026-08-10 |
+| **(v0.8)** "Gate closed" is a named non-error outcome, not a failure path | Write gates read `false` at rest by design, so disarmed is the normal resting state. Reporting it as an error trains the operator to ignore the channel that also carries real failures | ✅ Shipped 2026-08-10 |
+| **(v0.8)** The burn-rate alarm samples a RATE, never a monthly total | n8n prunes executions at 2,500 rows (~10h of history here) and exposes no usage/quota endpoint to an API key (`/api/v1/usage\|license\|quota` all 404). A monthly total is unavailable by construction | ✅ Shipped 2026-08-10 |
+| **(v0.8)** `ALLOW_SJ3_DRAIN_WRITES` defaults `true` — the first write authority enabled at rest | A drain that needs arming cannot drain a queue that only accumulates while disarmed. Bounded by a key+value patch allowlist to the single flag, and excluded from the overlay/arm system per the `ALLOW_JUDGE_ESCALATION` precedent | ✅ Shipped 2026-08-10 |
+| **(2026-08-11)** No `lv_icp_scoring_version` property — the no-new-properties constraint holds | Operator decision at the v0.8 close. Consequence accepted: HubSpot cannot filter on JSON inside a text property, so identifying records scored under a superseded rubric requires re-scoring the population rather than segmenting a list | ⚠️ Revisit if rubric churn becomes frequent |
+| **(2026-08-11)** Two property-naming lanes coexist deliberately: live/n8n uses `lv_`-prefixed, the local Python oracle uses bare | The bare names are pinned by the oracle's fixtures and its JS-parity relationship; renaming them breaks the oracle. Translation happens at the live-write boundary instead (`src/live_patch.py`) | ✅ Decided 2026-08-11 |
 
 ## Risks & Open Items
 
@@ -251,6 +292,25 @@ Full detail and traceability live in `.planning/REQUIREMENTS.md`.
 - **(M3) `lv_icp_tier` accepts only `A,B,C,D`** but the scorer also emits `Unscored` / `Needs Review` — those writes fail today.
 - **(M3) Research caching is blocked** until metadata properties exist; every run currently re-researches every company.
 - **Enrich-first reality**: org type verified for only 66 of 712 CRM companies; `closed_lost_reason` is 0% filled. Anti-ICP is currently inferred from firmographics; discovery calls now supply real reasons (price #1, cloud-fear #2).
+- **(2026-08-11) 17 companies carry false non-ANZ vetoes.** The code fix is deployed, bounced and
+  live-proven, but the records did not re-score: SJ-3 found the write gate closed, marked them
+  `lv_enrichment_status=skipped` and self-cleared their `lv_enrichment_requested` flags. Clearing
+  them requires a deliberate armed write window — the drain behaved exactly as designed, which is
+  why nothing happened.
+- **(2026-08-11) The pipeline is disarmed at rest.** `ALLOW_HUBSPOT_RECORD_WRITES`,
+  `ALLOW_HUBSPOT_CREATE` and `ALLOW_HUBSPOT_REVIEW_WRITES` are all baked `"false"` in the deployed
+  workflow. No re-score of any kind can land until that window is opened deliberately.
+- **(2026-08-11) The rubric has never been validated against outcomes.** Revenue-band deductions
+  (−5 at 500–750M, −50 at 1.2B+) and the gambling −20 were set by judgement, not by won/lost
+  evidence, and `lv_closed_lost_reason` (CLAUDE.md §5.3, the field that would supply that
+  evidence) was never built. The rubric can currently only be revised on intuition.
+- **(2026-08-11) `individual_club_team=5` may invert GTM priority.** It caps racing clubs at
+  tier C (35–45) while governing bodies score 40 on org_type alone and reach tier A (80). If clubs
+  are the core market, the weighting is backwards — this is a business-calibration decision, not a
+  defect, and is the open question that triggered the blank-region investigation.
+- **(2026-08-11) Ledger gaps.** v0.5 has no MILESTONES.md entry and no `milestones/v0.5-*` archive
+  despite a `v0.5.0` git tag; v0.6 has a narrative entry but no archive. Both appear to have
+  shipped without running `/gsd-complete-milestone`. Recorded in ROADMAP.md, not reconstructed.
 
 ## Evolution
 
@@ -270,4 +330,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-10 — both v0.8 phases (44, 45) sealed; milestone ready to close*
+*Last updated: 2026-08-11 after v0.8 milestone close (verified_closeout, 2 phases / 6 plans / 15 requirements)*

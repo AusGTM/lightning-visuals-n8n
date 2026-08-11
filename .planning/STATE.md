@@ -2,37 +2,29 @@
 gsd_state_version: 1.0
 milestone: v0.8
 milestone_name: Execution Budget Safety
-current_phase: 45
-current_phase_name: burn-rate-alarm
-status: phase_complete
+status: Awaiting next milestone
 stopped_at: context exhaustion at 82% (2026-08-10)
-last_updated: "2026-08-10T06:28:32.133Z"
-last_activity: 2026-08-10
-last_activity_desc: Phase 45 sealed
+last_updated: "2026-08-11T00:28:49.145Z"
+last_activity: 2026-08-11
+last_activity_desc: Milestone v0.8 completed and archived
 progress:
   total_phases: 2
   completed_phases: 2
   total_plans: 6
   completed_plans: 6
   percent: 100
+current_phase: 45
+current_phase_name: burn-rate-alarm
 ---
 
 # Project State
 
 ## Current Position
 
-Phase: 45 (burn-rate-alarm) — COMPLETE
-Plan: 3 of 3
-Status: Phase sealed — verification passed 26/26 must-haves (45-VERIFICATION.md)
-Burn-rate alarm, cadence budget floor and time-windowed lookback all ship inert (no cron or
-launchd installed — an admin action, an accepted limit, not a gap). Post-execution code review
-found 1 Critical + 5 Warnings; all six fixed and re-verified. CR-01 was a false burn-rate alarm
-when retained history held nothing older than the 24h window, whose notice also blamed n8n
-pruning that never happened — now an unanchored sub-hour sample stays silent while a page-cap
-truncated read (a real fast runaway) still fires. All six requirements (ALARM-01..04, LOOK-01,
-FLOOR-01) closed with test pointers; suites green (repo pytest 2487 / plugin 1332 / node 656).
-With Phase 44 sealed 2026-08-10, both v0.8 phases are complete — milestone ready to close.
-Last activity: 2026-08-10 — Phase 45 sealed
+Phase: Milestone v0.8 complete
+Plan: —
+Status: Awaiting next milestone
+Last activity: 2026-08-11 — Milestone v0.8 completed and archived
 
 ## Session
 
@@ -136,3 +128,22 @@ Last activity: 2026-08-10 — Phase 45 sealed
 ### Blockers
 
 None open (VETO-01/VETO-02 remain open requirements, not blockers — Phase 40 met its own scope; see WINDOWS.md id 5 and Decisions above).
+
+## Deferred Items
+
+Items acknowledged and deferred at the v0.8 milestone close on 2026-08-11. All three predate
+this milestone (planted 2026-08-04, v0.6 era) and are not v0.8 gaps.
+
+| Category | Item | Severity | Area | Status |
+|----------|------|----------|------|--------|
+| pending todo | Enrichment throughput — 82% of every full run is two sequential Anthropic calls | major | n8n | deferred |
+| pending todo | Sweep crontab pins a versioned plugin path, so an update silently stops the unattended sweep | major | operator-claude-plugin | deferred |
+| pending todo | UAT 2.2 names two header aliases the column mapping does not support | major | n8n + operator-claude-plugin | deferred |
+
+Note on the second item: it is the same failure class as the known plugin-install trap where a
+version bump breaks a pinned path. Deferring it leaves the unattended sweep quietly fragile
+across the next plugin update — it fails silently, which is the dangerous direction.
+
+## Operator Next Steps
+
+- Start the next milestone with /gsd-new-milestone
