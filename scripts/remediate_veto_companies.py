@@ -135,6 +135,19 @@ EVIDENCE_REQUIRED_ORG_TYPES = (
     "governing_body_league", "content_producer", "hardware_vendor", "gambling_operator",
 )
 
+# CLAUDE.md §5.1's lv_org_type enumeration. Discovered live 2026-08-12: none of the 17
+# pinned records' research results returned a member of this set -- src/web_research.py's
+# RESEARCH_SYSTEM prompt does not constrain the model to it, so every live result was
+# free text (e.g. "private_company", "Media company / Web television broadcaster").
+# Writing free text to an ENUMERATION property either 400s the live batch or corrupts the
+# record. Not fixed at the prompt (shared/production, parity-tracked against the n8n
+# mirror, out of this plan's files_modified) -- gated here instead, at the trust boundary
+# this script already owns.
+VALID_ORG_TYPES = (
+    "governing_body_league", "content_producer", "individual_club_team", "broadcaster",
+    "gambling_operator", "hardware_vendor", "regulator", "other", "unknown",
+)
+
 # The only values compute_icp_score treats as a resolved (non-"unknown") region.
 VALID_REGIONS = ("AU", "NZ", "ANZ", "Other")
 
@@ -260,30 +273,71 @@ def _evidence_url_for_metadata(result, field: str):
     return urls[0] if urls else None
 
 
+def _classify_org_type(data: dict):
+    """D-14/D-17: maps a research result to a VALID_ORG_TYPES member WITHOUT guessing.
+    The exact enum string passes straight through. Otherwise, the free text is left
+    unclassified UNLESS a separate, schema-conformant boolean signal
+    (lv_is_hardware_vendor / lv_is_gambling_operator) makes the call unambiguous --
+    keyword-matching the free text itself (e.g. reading "Event organizer / Sports
+    league operator" as governing_body_league) is exactly the "they are all clubs"
+    guessing D-17 forbids, so this deliberately does not do it. Returns
+    (org_type_or_None, the_field_name_whose_evidence_backs_the_claim_or_None)."""
+    raw = data.get("lv_org_type")
+    if raw in VALID_ORG_TYPES:
+        return raw, "lv_org_type"
+    if data.get("lv_is_hardware_vendor") is True:
+        return "hardware_vendor", "lv_is_hardware_vendor"
+    if data.get("lv_is_gambling_operator") is True:
+        return "gambling_operator", "lv_is_gambling_operator"
+    return None, None
+
+
+def _normalize_region(raw):
+    """D-14: only unambiguous free-text forms are mapped ('Australia', 'Australia -
+    NSW' -> AU; 'New Zealand' -> NZ) -- deliberately NOT src/normalizer.py's
+    normalize_country_region, whose else-branch maps every unrecognized string to
+    'Other', which would manufacture a genuine non-ANZ veto from an ambiguous or
+    mismatched-entity read (e.g. a foreign same-name company). Anything else is left
+    unresolved rather than guessed."""
+    if raw in VALID_REGIONS:
+        return raw
+    if not isinstance(raw, str):
+        return None
+    text = raw.strip().lower()
+    if text.startswith("australia"):
+        return "AU"
+    if text.startswith("new zealand"):
+        return "NZ"
+    return None
+
+
 def build_input_patch(company_id: str, result):
     """Carries only those of INPUT_PROPS the research actually established, per D-05/D-14:
-    - lv_org_type: non-empty and not "unknown"; if it is one of EVIDENCE_REQUIRED_ORG_TYPES,
-      only when evidenced.
+    - lv_org_type: a VALID_ORG_TYPES member (via _classify_org_type, never guessed from
+      free text); if it is one of EVIDENCE_REQUIRED_ORG_TYPES, only when the field that
+      backs the classification is evidenced.
     - lv_produces_content: only a real boolean AND evidenced -- false on absent evidence is
       NEVER written (D-14: false is a hard veto, and writing it on a data gap manufactures
       exactly the false-veto class this phase clears). Written as the lowercase strings
       HubSpot booleancheckbox properties store, not JSON booleans.
-    - lv_country_region_normalized: only one of AU/NZ/ANZ/Other.
+    - lv_country_region_normalized: only an unambiguous AU/NZ/ANZ/Other (_normalize_region).
     """
     props = {}
     data = result.data or {}
 
-    org_type = data.get("lv_org_type")
+    org_type, org_type_evidence_field = _classify_org_type(data)
     if org_type and org_type != "unknown":
-        if org_type not in EVIDENCE_REQUIRED_ORG_TYPES or _has_field_evidence(result, "lv_org_type"):
+        if org_type not in EVIDENCE_REQUIRED_ORG_TYPES or (
+            org_type_evidence_field and _has_field_evidence(result, org_type_evidence_field)
+        ):
             props["lv_org_type"] = org_type
 
     produces_content = data.get("lv_produces_content")
     if isinstance(produces_content, bool) and _has_field_evidence(result, "lv_produces_content"):
         props["lv_produces_content"] = "true" if produces_content else "false"
 
-    region = data.get("lv_country_region_normalized")
-    if region in VALID_REGIONS:
+    region = _normalize_region(data.get("lv_country_region_normalized"))
+    if region:
         props["lv_country_region_normalized"] = region
 
     assert FORBIDDEN_PROPS.isdisjoint(props), "build_input_patch produced a forbidden derived-field key"
@@ -298,9 +352,16 @@ def unresolved_reasons(company_id: str, result) -> dict:
     reasons = {}
 
     if "lv_org_type" not in written:
-        org_type = data.get("lv_org_type")
-        if not org_type or org_type == "unknown":
+        raw_org_type = data.get("lv_org_type")
+        org_type, _evidence_field = _classify_org_type(data)
+        if not raw_org_type or raw_org_type == "unknown":
             reasons["lv_org_type"] = "research did not establish an org type"
+        elif not org_type:
+            reasons["lv_org_type"] = (
+                f"research returned {raw_org_type!r}, not a recognized lv_org_type enum "
+                "value and no boolean signal confirmed a mapping -- left unresolved "
+                "rather than guessed (D-17)"
+            )
         else:
             reasons["lv_org_type"] = (
                 f"org type {org_type!r} requires an evidence URL and none was cited"
@@ -316,9 +377,17 @@ def unresolved_reasons(company_id: str, result) -> dict:
             )
 
     if "lv_country_region_normalized" not in written:
-        reasons["lv_country_region_normalized"] = (
-            "research did not establish a region in AU/NZ/ANZ/Other"
-        )
+        raw_region = data.get("lv_country_region_normalized")
+        if not raw_region:
+            reasons["lv_country_region_normalized"] = (
+                "research did not establish a region in AU/NZ/ANZ/Other"
+            )
+        else:
+            reasons["lv_country_region_normalized"] = (
+                f"research returned {raw_region!r}, not confidently AU/NZ -- left "
+                "unresolved rather than defaulted to Other (a genuine veto would follow "
+                "from a wrong guess)"
+            )
 
     return reasons
 

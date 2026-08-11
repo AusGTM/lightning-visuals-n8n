@@ -318,6 +318,63 @@ def test_produces_content_false_without_evidence_is_omitted_with_a_reason():
     assert "lv_produces_content" in reasons
 
 
+# --- discovered live 2026-08-12: none of the 17 real research results returned a member
+# of the lv_org_type enum -- these tests pin the fix (D-14/D-17) against real observed
+# free-text shapes rather than only the hand-crafted enum fixtures above.
+
+def test_out_of_enum_org_type_free_text_is_left_unresolved_not_guessed():
+    # "Event organizer / Sports league operator" (The Rumble's actual live result) must
+    # NOT be keyword-mapped to governing_body_league -- that is the exact D-17 "they are
+    # all clubs" guessing failure mode.
+    result = _provider_result(
+        data={"lv_org_type": "Event organizer / Sports league operator"},
+        evidence_by_field={"lv_org_type": "https://therumble.example/about"},
+    )
+    patch = m.build_input_patch("999", result)
+    assert "lv_org_type" not in patch["properties"]
+    reasons = m.unresolved_reasons("999", result)
+    assert "not a recognized lv_org_type enum value" in reasons["lv_org_type"]
+
+
+def test_boolean_hardware_vendor_signal_classifies_org_type_when_free_text_does_not():
+    # Simtech LED's actual live shape: lv_org_type is free text ("private_company") but
+    # lv_is_hardware_vendor is a schema-conformant boolean. D-16/D-17's expected outcome.
+    result = _provider_result(
+        data={"lv_org_type": "private_company", "lv_is_hardware_vendor": True},
+        evidence_by_field={"lv_is_hardware_vendor": "https://simtechled.example/products"},
+    )
+    patch = m.build_input_patch("999", result)
+    assert patch["properties"]["lv_org_type"] == "hardware_vendor"
+
+
+def test_boolean_hardware_vendor_signal_without_evidence_stays_unresolved():
+    result = _provider_result(
+        data={"lv_org_type": "private_company", "lv_is_hardware_vendor": True},
+        evidence_by_field={},
+    )
+    patch = m.build_input_patch("999", result)
+    assert "lv_org_type" not in patch["properties"]
+
+
+def test_region_normalizer_accepts_only_unambiguous_australia_and_new_zealand_forms():
+    assert m._normalize_region("Australia") == "AU"
+    assert m._normalize_region("Australia - NSW") == "AU"
+    assert m._normalize_region("New Zealand") == "NZ"
+    # Ambiguous/foreign free text (Jam TV's actual live result -- entity-resolution
+    # doubt against jamtv.it, an Italian company) must NOT default to "Other": that
+    # would manufacture a genuine non-ANZ veto from an ambiguous or mismatched read.
+    assert m._normalize_region("Italy") is None
+    assert m._normalize_region(None) is None
+
+
+def test_ambiguous_region_free_text_is_left_unresolved_with_a_reason_not_defaulted():
+    result = _provider_result(data={"lv_country_region_normalized": "Italy"})
+    patch = m.build_input_patch("999", result)
+    assert "lv_country_region_normalized" not in patch["properties"]
+    reasons = m.unresolved_reasons("999", result)
+    assert "Italy" in reasons["lv_country_region_normalized"]
+
+
 @pytest.mark.parametrize("excluded_id,name", [
     ("10024564084", "Entain"),
     ("15860277364", "Gravity Media"),
