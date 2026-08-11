@@ -14,6 +14,7 @@ from .identity import resolve_identity
 from .merge_policy import build_merge_result
 from .file_loader import ingest_file
 from .hubspot_client import get_record, search_records, create_record, patch_record
+from .live_patch import to_live_patch
 
 # Contact fields an upload row may carry (matches column_mapping canonical props).
 _UPLOAD_FIELDS = ["email", "firstname", "lastname", "jobtitle",
@@ -84,7 +85,12 @@ def run_contact_ingest(path, hs_search=search_records, hs_get=get_record,
                 row_to_provider_result(row, confidence=upload_confidence))
             merge = build_merge_result(record, candidates)
             patch = merge.full_patch  # staging + metadata + canonical + status (no ICP)
-            patch_record("contacts", ident.contact_id, patch, dry_run=dry_run)
+            # merge-policy-bare-name-400: `patch` carries oracle-internal bare status
+            # keys (main.py's live-write boundary has the same translation, see
+            # src/live_patch.py's module docstring). Only the wire payload is
+            # translated -- the report's "payload" stays bare to match the internal
+            # contract asserted by tests/test_contact_ingest.py / test_e2e_ingest.py.
+            patch_record("contacts", ident.contact_id, to_live_patch(patch), dry_run=dry_run)
             report.append({"row_index": idx, "outcome": "match", "action": "patch",
                            "contact_id": ident.contact_id, "payload": patch,
                            "canonical_patch": merge.canonical_patch})
@@ -108,7 +114,14 @@ def run_contact_ingest(path, hs_search=search_records, hs_get=get_record,
                         row_to_provider_result(row, confidence=upload_confidence))
                     if c.normalized_value not in (None, "")
                 }
-                result = create_record("contacts", create_props, dry_run=dry_run)
+                # merge-policy-bare-name-400: the create path is the THIRD live-write
+                # boundary and carries the same bare-name defect as the patch paths —
+                # `create_props` is keyed by candidate canonical_field, so a CSV row with
+                # a LinkedIn column emits bare "linkedin_url" where the live property is
+                # `lv_linkedin_url` (PN-1), 400ing the create. Same translation, applied
+                # to the wire payload only.
+                result = create_record("contacts", to_live_patch(create_props),
+                                       dry_run=dry_run)
                 report.append({"row_index": idx, "outcome": "net_new", "action": "create",
                                "payload": result})
 

@@ -9,6 +9,7 @@ from src.web_research import claude_web_research
 from src.normalizer import provider_to_candidates
 from src.merge_policy import build_merge_result
 from src.hubspot_client import patch_record
+from src.live_patch import to_live_patch
 
 # DEVIATION 1 (vs CLAUDE.md §12.10): load_dotenv() is NOT called at module import.
 # A real .env with ANTHROPIC_API_KEY exists; a module-level load would leak the key
@@ -69,10 +70,15 @@ def run_local_mvp():
     print("\n=== HubSpot Patch Payload ===")
     print(json.dumps(patch, indent=2, default=str))
 
+    # merge-policy-bare-name-400: the oracle-internal `patch` dict carries bare
+    # status_patch keys (enrichment_requested/enrichment_status/...) that do not match
+    # the live HubSpot schema. Translate ONLY the payload sent over the wire -- `patch`
+    # itself stays untranslated so the return value below (asserted on by
+    # tests/test_main.py) keeps matching the oracle's internal bare-name contract.
     patch_record(
         object_type=record.object_type,
         record_id=record.id,
-        properties=patch,
+        properties=to_live_patch(patch),
         dry_run=dry_run
     )
 

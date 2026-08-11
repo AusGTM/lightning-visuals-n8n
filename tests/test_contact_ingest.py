@@ -112,6 +112,22 @@ def test_net_new_creates_with_email_when_flag_on_and_recheck_clear():
     assert props["email"] == "alice@example.com"
 
 
+def test_net_new_create_payload_uses_live_property_names():
+    # merge-policy-bare-name-400: the create path is the third live-write boundary.
+    # `create_props` is keyed by candidate canonical_field, so alice's LinkedIn column
+    # emitted bare "linkedin_url" — which is not a live property (PN-1 renamed it to
+    # lv_linkedin_url) and 400s the create. The wire payload must carry the live name.
+    report = run_contact_ingest(
+        CSV, hs_search=make_search([[], []]), hs_get=make_get(),
+        allow_create=True, dry_run=True, upload_confidence=85)
+
+    props = [e for e in report if e["action"] == "create"][0]["payload"]["payload"]["properties"]
+    assert props["lv_linkedin_url"] == "https://linkedin.com/in/alice"
+    assert "linkedin_url" not in props  # the bare name must never reach HubSpot
+    # native identity fields are genuinely native and must pass through untranslated
+    assert props["email"] == "alice@example.com"
+
+
 def test_net_new_downgraded_to_review_when_recheck_finds_dup():
     # A dup appearing between resolution and create must block the create.
     report = run_contact_ingest(
