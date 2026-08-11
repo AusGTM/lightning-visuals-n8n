@@ -352,6 +352,76 @@ def expected_score_and_tier(props: dict):
     return result.score, result.tier
 
 
+# --- settle-and-assert (D-10: "fail loudly", not a drop-in reuse of _settle()/settle(),
+# neither of which asserts anything of their own -- 47-RESEARCH.md "Script surface
+# corrections") -----------------------------------------------------------------------
+
+def settle_and_assert(company_id: str, prop: str, expected, timeout, interval,
+                       reader=get_record, sleeper=time.sleep):
+    """Polls `prop` on `company_id` until two consecutive reads agree, or `timeout`
+    elapses -- then asserts the settled value against `expected` (a literal, or a
+    single-argument predicate), raising SettleFailed on a stable-but-wrong value as well
+    as on timeout. `reader`/`sleeper` are injectable so offline tests need no network and
+    no real sleeping."""
+    start = time.monotonic()
+    previous = None
+    first_read = True
+    current = None
+    elapsed = 0.0
+
+    while True:
+        record = reader("companies", company_id, [prop])
+        current = record.get("properties", {}).get(prop)
+        elapsed = time.monotonic() - start
+
+        if not first_read and current == previous:
+            ok = expected(current) if callable(expected) else (current == expected)
+            if ok:
+                return current, elapsed
+            raise SettleFailed(
+                f"{company_id}: {prop} settled to {current!r}, but expected {expected!r}."
+            )
+
+        first_read = False
+        previous = current
+
+        if elapsed >= timeout:
+            raise SettleFailed(
+                f"{company_id}: {prop} did not settle within {timeout}s (last observed "
+                f"{current!r}, expected {expected!r})."
+            )
+        sleeper(interval)
+
+
+def settle_tier(company_id: str, expected_tier: str, timeout=120, interval=5,
+                 reader=get_record, sleeper=time.sleep):
+    """The pure-HubSpot chain: component PATCH -> lv_icp_fit_score (calculated property)
+    -> WF1 -> lv_icp_tier. Measured latency is seconds."""
+    return settle_and_assert(company_id, "lv_icp_tier", expected_tier, timeout, interval,
+                              reader=reader, sleeper=sleeper)
+
+
+def settle_veto(company_id: str, timeout=900, interval=15, reader=get_record, sleeper=time.sleep):
+    """The n8n-dependent chain: only moves once the D-18 webhook POST reaches the
+    "Decide Company Action" node. Passes when lv_anti_icp_flag != "true", OR when it is
+    "true" but lv_anti_icp_reason does not carry the non-ANZ hard-veto reason string
+    (read from config/icp_scoring.yaml, never restated as a local literal) -- a
+    legitimately revealed different veto (Simtech LED as hardware_vendor is the expected
+    case) is a correct outcome (D-16), not a failure."""
+    cfg = load_yaml("config/icp_scoring.yaml")
+    non_anz_reason = cfg["hard_vetoes"]["non_anz"]["reason"]
+
+    def _acceptable(flag_value):
+        if flag_value != "true":
+            return True
+        record = reader("companies", company_id, ["lv_anti_icp_reason"])
+        reason = record.get("properties", {}).get("lv_anti_icp_reason") or ""
+        return non_anz_reason not in reason
+
+    return settle_and_assert(company_id, "lv_anti_icp_flag", _acceptable, timeout, interval,
+                              reader=reader, sleeper=sleeper)
+
+
 # --- the D-18 webhook POST leg (no analog in the repo -- small and local) -----------------
 
 def build_webhook_event(company_id: str, property_name: str = "lv_country_region_normalized"):
@@ -496,15 +566,18 @@ def main(argv=None) -> int:
               "ALLOW_VETO_REMEDIATION=true to arm.")
         return 0
 
+    cfg = config_gate.load_config()
     for rec in records:
         combined_props = {**rec["input_patch"]["properties"], **rec["metadata_patch"]["properties"]}
         if combined_props:
             batch_update_companies([{"id": rec["id"], "properties": combined_props}], dry_run=False)
         batch_update_companies([rec["component_patch"]], dry_run=False)
-        cfg = config_gate.load_config()
-        post_webhook_event(rec["id"], True, cfg)
+        settle_tier(rec["id"], rec["expected_tier"])
 
-    print(f"armed run complete -- {len(records)} companies patched.")
+        post_webhook_event(rec["id"], True, cfg)
+        settle_veto(rec["id"])
+
+    print(f"armed run complete -- {len(records)} companies patched and settled.")
     return 0
 
 
