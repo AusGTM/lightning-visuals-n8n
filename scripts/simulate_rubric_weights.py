@@ -11,13 +11,12 @@ columns, not two -- the oracle already carries the blank-region veto fix live Hu
 does not, so a two-column report would misattribute Phase 47's veto fix to this phase's
 weight change.
 
-RUBRIC-02 / D-08: this script writes NOTHING to any HubSpot record. It has no import,
-anywhere, of patch_record, create_record, delete_record, or batch_update_companies --
-structurally, not just by docstring claim
-(tests/test_simulate_rubric_weights.py::test_zero_write_static_scan_finds_no_write_import
-and its behavioural sibling enforce this two ways). Contrast with
-scripts/run_scoring_parity.py's own opt-in --write-breakdown path, which this script does
-not replicate.
+RUBRIC-02 / D-08: this script writes NOTHING to any HubSpot record. It imports no
+write-capable src.hubspot_client function -- structurally, not just by docstring claim
+(tests/test_simulate_rubric_weights.py's zero-write tests enumerate the write-capable
+function set and enforce this two ways: a static source scan and a behavioural stub run).
+Contrast with scripts/run_scoring_parity.py's own opt-in --write-breakdown path, which
+this script does not replicate.
 
 Read path is fetch_for_parity, imported from tests/scoring_fixtures.py -- no second fetch
 loop, and no new property added to FIT_SCORE_PROPS.
