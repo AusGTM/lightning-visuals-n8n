@@ -28,7 +28,7 @@
       "fields": {
         "property_name": "gambling_score",
         "value": {
-          "staticValue": "-20",
+          "staticValue": "0",
           "type": "STATIC_VALUE"
         }
       },

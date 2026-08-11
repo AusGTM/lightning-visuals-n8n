@@ -123,7 +123,7 @@
       "fields": {
         "property_name": "org_type_score",
         "value": {
-          "staticValue": "5",
+          "staticValue": "15",
           "type": "STATIC_VALUE"
         }
       },
@@ -136,7 +136,7 @@
       "fields": {
         "property_name": "org_type_score",
         "value": {
-          "staticValue": "5",
+          "staticValue": "-20",
           "type": "STATIC_VALUE"
         }
       },

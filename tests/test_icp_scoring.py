@@ -45,18 +45,18 @@ def test_case_2_au_content_producer_tier_b():
     assert r.score == 60
 
 
-def test_case_3_au_individual_club_tier_c():
+def test_case_3_au_individual_club_tier_b():
     # Case 3 uses revenue 1-5M (a 0-point band), NOT mid-market. §24.1 case 3
-    # does not pin a revenue band for the club (case 1 does). Under correct
-    # produces_content scoring, club(5)+content(20)+AU(10)+mid(10)=45=Tier B;
-    # a 0-point revenue band gives 5+20+10+0=35=Tier C, the outcome
-    # REQ-org-type-targeting and SC1 require. This is a frozen-rubric weight
-    # sensitivity, not a this-phase concern.
+    # does not pin a revenue band for the club (case 1 does). Phase 46 Plan 04 (D-01,
+    # operator sign-off in 46-DECISION.md) moves individual_club_team from 5 to 15:
+    # club(15)+content(20)+AU(10)+0-point-band(0)=45=Tier B. Renamed from
+    # test_case_3_au_individual_club_tier_c (was 35/C under the pre-Phase-46 weight)
+    # so the test's name doesn't lie about the tier it now produces.
     r = score({"lv_org_type": "individual_club_team", "lv_produces_content": True,
                "lv_country_region_normalized": "AU", "lv_revenue_band": "1-5M"})
-    assert r.tier == "C"
+    assert r.tier == "B"
     assert r.anti_icp_flag is False
-    assert r.score == 35
+    assert r.score == 45
 
 
 def test_case_4_non_anz_veto():
@@ -85,12 +85,16 @@ def test_case_6_hardware_vendor_veto():
 
 
 def test_case_7_gambling_operator_deduction_not_veto():
+    # Phase 46 Plan 04 (D-03, operator sign-off in 46-DECISION.md): the gambling
+    # deduction is removed outright, not just re-valued -- a gambling-flagged record now
+    # carries no graduated-deduction entry at all and scores the same as any other
+    # non-gambling record with identical inputs: league(40)+content(20)+AU(10)+5-50M(10)=80.
     r = score({"lv_org_type": "governing_body_league", "lv_produces_content": True,
                "lv_is_gambling_operator": True,
                "lv_country_region_normalized": "AU", "lv_revenue_band": "5-50M"})
     assert r.anti_icp_flag is False
-    assert r.score == 60
-    assert {"signal": "gambling_operator", "points": -20} in r.breakdown["graduated_deductions"]
+    assert r.score == 80
+    assert r.breakdown["graduated_deductions"] == []
 
 
 def test_case_8_revenue_500_750m_decay():

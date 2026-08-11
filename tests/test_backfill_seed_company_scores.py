@@ -147,8 +147,10 @@ def test_backfill_component_scores_revenue_all_nine_bands():
 
 
 def test_backfill_component_scores_gambling_deduction():
+    # Phase 46 Plan 04 (D-03, operator sign-off in 46-DECISION.md): the deduction is
+    # removed outright -- both true and false now compute to 0.
     backfill = _import_backfill()
-    assert backfill.compute_components({"lv_is_gambling_operator": "true"})["gambling_score"] == -20
+    assert backfill.compute_components({"lv_is_gambling_operator": "true"})["gambling_score"] == 0
     assert backfill.compute_components({"lv_is_gambling_operator": "false"})["gambling_score"] == 0
 
 

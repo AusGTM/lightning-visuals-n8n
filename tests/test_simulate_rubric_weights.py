@@ -33,6 +33,20 @@ def _record(props: dict) -> HubSpotRecord:
 
 CURRENT_CFG = load_yaml(str(RUBRIC_PATH))
 
+# Phase 46 Plan 04: config/icp_scoring.yaml now carries the POST-decision weights
+# (individual_club_team=15, regulator=-20, graduated_deductions={}) -- CURRENT_CFG above
+# reflects the on-disk file directly, so it is no longer a stand-in for "before this
+# phase's weight change." The delta-comparison tests below need an explicit frozen
+# snapshot of the PRE-Phase-46 rubric (individual_club_team=5, regulator=5,
+# graduated_deductions={"gambling_operator": -20}) to keep exercising
+# build_proposed_cfg's/build_scenario_cfg's delta-computation code path with the same
+# arithmetic 46-RESEARCH.md verified by direct execution -- now anchored to an explicit
+# historical baseline instead of implicitly relying on the on-disk file being pre-decision.
+PRE_PHASE_46_CFG = copy.deepcopy(CURRENT_CFG)
+PRE_PHASE_46_CFG["base_score"]["org_type"]["individual_club_team"] = 5
+PRE_PHASE_46_CFG["base_score"]["org_type"]["regulator"] = 5
+PRE_PHASE_46_CFG["graduated_deductions"]["gambling_operator"] = -20
+
 
 # --- PROPOSED_OVERRIDES / SCENARIOS shape (Plan 02 grows Plan 01's one-lever scope) ---
 
@@ -86,23 +100,28 @@ def test_build_proposed_cfg_does_not_mutate_current_cfg():
     current_copy = copy.deepcopy(CURRENT_CFG)
     build_proposed_cfg(CURRENT_CFG)
     assert CURRENT_CFG == current_copy
-    assert CURRENT_CFG["base_score"]["org_type"]["individual_club_team"] == 5
+    # Phase 46 Plan 04: config/icp_scoring.yaml now carries the landed D-01 weight (15),
+    # not the pre-decision 5 -- CURRENT_CFG reads the on-disk file directly.
+    assert CURRENT_CFG["base_score"]["org_type"]["individual_club_team"] == 15
 
 
 # --- Per-weight arithmetic (D-01/D-02/D-03 worked examples, verified in 46-RESEARCH.md) ---
 
 def test_au_club_scores_35_c_under_current_and_45_b_under_proposed():
-    """club(5)+content(20)+AU(10)+1-5M(0)=35=C today,
-    club(15)+content(20)+AU(10)+1-5M(0)=45=B under D-01."""
+    """club(5)+content(20)+AU(10)+1-5M(0)=35=C under the pre-Phase-46 baseline,
+    club(15)+content(20)+AU(10)+1-5M(0)=45=B under D-01 (landed in config/icp_scoring.yaml
+    by this phase -- PRE_PHASE_46_CFG stands in for "current" so this test keeps
+    exercising the delta build_proposed_cfg computes, now that the on-disk file itself
+    already carries the proposed values)."""
     props = {
         "lv_org_type": "individual_club_team",
         "lv_produces_content": True,
         "lv_country_region_normalized": "AU",
         "lv_revenue_band": "1-5M",
     }
-    proposed_cfg = build_proposed_cfg(CURRENT_CFG)
+    proposed_cfg = build_proposed_cfg(PRE_PHASE_46_CFG)
 
-    row = simulate_row(props, CURRENT_CFG, proposed_cfg)
+    row = simulate_row(props, PRE_PHASE_46_CFG, proposed_cfg)
 
     assert row["oracle_current_score"] == 35
     assert row["oracle_current_tier"] == "C"
@@ -111,16 +130,17 @@ def test_au_club_scores_35_c_under_current_and_45_b_under_proposed():
 
 
 def test_regulator_moves_to_10_unscored_under_proposed():
-    """D-02's own worked example: regulator(5)+content(20)+AU(10)=35=C today,
-    regulator(-20)+content(20)+AU(10)=10=Unscored under the proposed rubric."""
+    """D-02's own worked example: regulator(5)+content(20)+AU(10)=35=C under the
+    pre-Phase-46 baseline, regulator(-20)+content(20)+AU(10)=10=Unscored under the
+    proposed rubric (landed in config/icp_scoring.yaml by this phase)."""
     props = {
         "lv_org_type": "regulator",
         "lv_produces_content": True,
         "lv_country_region_normalized": "AU",
     }
-    proposed_cfg = build_proposed_cfg(CURRENT_CFG)
+    proposed_cfg = build_proposed_cfg(PRE_PHASE_46_CFG)
 
-    row = simulate_row(props, CURRENT_CFG, proposed_cfg)
+    row = simulate_row(props, PRE_PHASE_46_CFG, proposed_cfg)
 
     assert row["oracle_current_score"] == 35
     assert row["oracle_current_tier"] == "C"
@@ -130,7 +150,8 @@ def test_regulator_moves_to_10_unscored_under_proposed():
 
 def test_gambling_row_gains_20_under_proposed():
     """D-03's worked example: league(40)+content(20)+AU(10)+5-50M(10)-gambling(20)=60
-    today; with the deduction removed outright, the same inputs score 80."""
+    under the pre-Phase-46 baseline; with the deduction removed outright (landed in
+    config/icp_scoring.yaml by this phase), the same inputs score 80."""
     props = {
         "lv_org_type": "governing_body_league",
         "lv_produces_content": True,
@@ -138,9 +159,9 @@ def test_gambling_row_gains_20_under_proposed():
         "lv_country_region_normalized": "AU",
         "lv_revenue_band": "5-50M",
     }
-    proposed_cfg = build_proposed_cfg(CURRENT_CFG)
+    proposed_cfg = build_proposed_cfg(PRE_PHASE_46_CFG)
 
-    row = simulate_row(props, CURRENT_CFG, proposed_cfg)
+    row = simulate_row(props, PRE_PHASE_46_CFG, proposed_cfg)
 
     assert row["oracle_current_score"] == 60
     assert row["oracle_proposed_score"] == 80
@@ -149,7 +170,9 @@ def test_gambling_row_gains_20_under_proposed():
 def test_simulate_row_carries_distinct_live_and_oracle_columns():
     """Three columns, not two -- the live HubSpot value, the oracle-under-current-config
     control, and the oracle-under-proposed-config effect must all be present and
-    independently addressable."""
+    independently addressable. Uses PRE_PHASE_46_CFG as the "current" input (see its
+    module-level comment) so oracle_current still differs from oracle_proposed now that
+    config/icp_scoring.yaml itself carries the landed weights."""
     props = {
         "lv_org_type": "individual_club_team",
         "lv_produces_content": True,
@@ -158,9 +181,9 @@ def test_simulate_row_carries_distinct_live_and_oracle_columns():
         "lv_icp_fit_score": "35",
         "lv_icp_tier": "C",
     }
-    proposed_cfg = build_proposed_cfg(CURRENT_CFG)
+    proposed_cfg = build_proposed_cfg(PRE_PHASE_46_CFG)
 
-    row = simulate_row(props, CURRENT_CFG, proposed_cfg)
+    row = simulate_row(props, PRE_PHASE_46_CFG, proposed_cfg)
 
     assert row["live_score"] == "35"
     assert row["live_tier"] == "C"
@@ -171,10 +194,11 @@ def test_simulate_row_carries_distinct_live_and_oracle_columns():
 
 
 def test_gambling_scores_without_raising_when_proposed_cfg_omits_the_key():
-    """A proposed cfg with no graduated_deductions.gambling_operator key must not
-    KeyError -- it contributes 0 and appends no breakdown entry."""
+    """A cfg with no graduated_deductions.gambling_operator key must not KeyError -- it
+    contributes 0 and appends no breakdown entry. Phase 46 Plan 04 (D-03) landed this
+    exact no-key state in config/icp_scoring.yaml itself, so CURRENT_CFG already omits
+    the key -- no del needed to construct the case this test exercises."""
     proposed_cfg = copy.deepcopy(CURRENT_CFG)
-    del proposed_cfg["graduated_deductions"]["gambling_operator"]
 
     r = compute_icp_score(
         _record({}),
@@ -192,10 +216,13 @@ def test_gambling_scores_without_raising_when_proposed_cfg_omits_the_key():
     assert r.breakdown["graduated_deductions"] == []
 
 
-def test_gambling_still_deducts_20_under_current_cfg():
-    """The same gambling record under the *current* cfg (key present, -20) still
-    deducts 20 and still appends the breakdown entry -- the before/after contrast the
-    proposed-cfg test above depends on."""
+def test_gambling_still_deducts_20_under_pre_phase_46_cfg():
+    """The same gambling record under the pre-Phase-46 baseline cfg (key present, -20)
+    still deducts 20 and still appends the breakdown entry -- the before/after contrast
+    the proposed-cfg test above depends on. Renamed from
+    test_gambling_still_deducts_20_under_current_cfg: config/icp_scoring.yaml's real
+    "current" no longer carries this key at all after D-03 landed (Phase 46 Plan 04) --
+    PRE_PHASE_46_CFG is the explicit historical stand-in this test now needs."""
     r = compute_icp_score(
         _record({}),
         {
@@ -205,7 +232,7 @@ def test_gambling_still_deducts_20_under_current_cfg():
             "lv_country_region_normalized": "AU",
             "lv_revenue_band": "5-50M",
         },
-        cfg=CURRENT_CFG,
+        cfg=PRE_PHASE_46_CFG,
     )
 
     assert r.score == 60  # 40 + 20 + 10 + 10 - 20
@@ -309,6 +336,11 @@ def test_row_set_divergence_finding_populated_against_cross_check():
 
 
 def test_movement_summary_counts_tier_changes_by_org_type():
+    # current_cfg=PRE_PHASE_46_CFG (not CURRENT_CFG): config/icp_scoring.yaml already
+    # carries the landed D-01 weight, so passing the real on-disk cfg here would make
+    # oracle_current and oracle_proposed identical for the club row and this test could
+    # no longer observe a movement. PRE_PHASE_46_CFG is the explicit historical baseline
+    # that keeps exercising the "moves C -> B" case this test is named for.
     props_by_id = {
         "1": {  # club: moves C -> B
             "lv_org_type": "individual_club_team",
@@ -324,7 +356,7 @@ def test_movement_summary_counts_tier_changes_by_org_type():
         },
     }
     payload, exit_code = build_simulation(
-        ["1", "2"], fetch_fn=lambda cid: props_by_id[cid], current_cfg=CURRENT_CFG,
+        ["1", "2"], fetch_fn=lambda cid: props_by_id[cid], current_cfg=PRE_PHASE_46_CFG,
     )
 
     assert exit_code == 0

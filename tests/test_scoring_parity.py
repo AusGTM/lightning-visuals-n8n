@@ -131,7 +131,12 @@ def test_revenue_boundary_750000000_normalizes_to_750m_1b_offline():
     assert _component(r, "revenue_band")["points"] == -15
 
 
-def test_gambling_deducts_20_without_veto_offline():
+def test_gambling_contributes_zero_without_veto_offline():
+    # Phase 46 Plan 04 (D-03, operator sign-off in 46-DECISION.md): the graduated
+    # deduction is removed outright -- config/icp_scoring.yaml carries no
+    # graduated_deductions.gambling_operator key anymore, so a gambling-flagged record
+    # contributes no deduction and appends no breakdown entry. Renamed from
+    # test_gambling_deducts_20_without_veto_offline so the name doesn't lie.
     r = score({
         "lv_org_type": "broadcaster",
         "lv_produces_content": True,
@@ -140,8 +145,8 @@ def test_gambling_deducts_20_without_veto_offline():
         "lv_is_gambling_operator": True,
     })
     assert r.anti_icp_flag is False
-    deduction = CFG["graduated_deductions"]["gambling_operator"]
-    assert {"signal": "gambling_operator", "points": deduction} in r.breakdown["graduated_deductions"]
+    assert "gambling_operator" not in CFG.get("graduated_deductions", {})
+    assert r.breakdown["graduated_deductions"] == []
 
 
 def test_tier_band_boundaries_offline(monkeypatch):
@@ -338,7 +343,11 @@ def test_revenue_boundary_bands(band, points):
 
 
 @live
-def test_gambling_deducts_20_without_veto():
+def test_gambling_contributes_zero_without_veto():
+    # Phase 46 Plan 04 (D-03, operator sign-off in 46-DECISION.md): flow 4634822085
+    # ("Update Gambling Score") now writes 0 on both its true and default branches --
+    # the deduction is removed outright, not just re-valued. Renamed from
+    # test_gambling_deducts_20_without_veto so the name doesn't lie.
     with disposable_company() as company_id:
         patch_record("companies", company_id, {
             "lv_org_type": "broadcaster",
@@ -350,7 +359,7 @@ def test_gambling_deducts_20_without_veto():
         settle(company_id, "lv_icp_fit_score")
         props = fetch_for_parity(company_id)
         assert props.get("org_type_score") == "20"
-        assert props.get("gambling_score") == "-20"
+        assert props.get("gambling_score") == "0"
         # 40-05/D-01: HubSpot no longer writes lv_anti_icp_flag at all (the n8n pipeline
         # is the sole writer), and a bare disposable patch here never triggers a
         # pipeline run -- the field reads None, not "false". Same correction pattern
@@ -511,7 +520,7 @@ def test_f7_tier_lag():
 def test_f9_gambling_conflation():
     # Thin alias: F9's live signature is exactly the gambling deduction/no-veto
     # separation this test already asserts.
-    test_gambling_deducts_20_without_veto()
+    test_gambling_contributes_zero_without_veto()
 
 
 @live
@@ -554,15 +563,18 @@ def test_run_scoring_parity_classifies_needs_review_as_documented_divergence():
     import scripts.run_scoring_parity as parity_script
 
     def stub_fetch(_company_id):
-        # lv_produces_content unset -> oracle downgrades to Needs Review at score 15.
-        # Live values mirror what a real HubSpot record shows after the backfill seeds
-        # its components and WF1 grades strictly off the numeric ladder (no Needs Review
-        # enum value exists live) -- score agrees, tier is the live-enum "C", flag is
-        # never written (null, not "false").
+        # lv_produces_content unset -> oracle downgrades to Needs Review at score 25.
+        # Phase 46 Plan 04 (D-01, operator sign-off in 46-DECISION.md) moves
+        # individual_club_team from 5 to 15: club(15)+AU(10)=25, was club(5)+AU(10)=15
+        # before this phase landed. Live values mirror what a real HubSpot record shows
+        # after the backfill seeds its components and WF1 grades strictly off the numeric
+        # ladder (no Needs Review enum value exists live) -- score agrees, tier is the
+        # live-enum "C" (still inside the 15-39 band either way), flag is never written
+        # (null, not "false").
         return {
             "lv_org_type": "individual_club_team",
             "lv_country_region_normalized": "AU",
-            "lv_icp_fit_score": "15",
+            "lv_icp_fit_score": "25",
             "lv_icp_tier": "C",
             "lv_anti_icp_flag": None,
         }

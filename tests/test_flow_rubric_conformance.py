@@ -206,9 +206,11 @@ def test_produces_content_flow_matches_rubric(flow_path):
 
 @pytest.mark.parametrize("flow_path", _after_json_paths())
 def test_gambling_flow_matches_rubric(flow_path):
-    """40-04 (ENGINE-05) — gambling_score's mapper flow branch table must equal
-    config/icp_scoring.yaml's graduated_deductions.gambling_operator: true -> -20,
-    everything else -> 0. The flow must write only gambling_score — never
+    """Phase 46 Plan 04 (D-03) — the gambling deduction is removed outright, not merely
+    re-valued: config/icp_scoring.yaml's graduated_deductions no longer carries a
+    gambling_operator key at all (46-DECISION.md operator sign-off). This test no longer
+    reads a rubric key that doesn't exist -- its job becomes: both branches of the
+    gambling flow write 0. The flow must still write only gambling_score — never
     lv_anti_icp_flag or lv_org_type — so the deduction stays independent of both
     the veto and the org-type branch (F9's original defect, T-40-15)."""
     flow = load_flow(flow_path)
@@ -217,12 +219,15 @@ def test_gambling_flow_matches_rubric(flow_path):
     if find_static_branch_action(flow, "lv_is_gambling_operator") is None:
         pytest.skip(f"{flow_path} has no lv_is_gambling_operator STATIC_BRANCH action")
 
-    rubric_deduction = load_rubric()["graduated_deductions"]["gambling_operator"]
+    assert "gambling_operator" not in load_rubric().get("graduated_deductions", {}), (
+        f"{flow_path}: rubric still carries graduated_deductions.gambling_operator -- "
+        "D-03 removed this key entirely"
+    )
+
     scores = extract_true_default_scores(flow, "lv_is_gambling_operator")
 
-    assert scores["true"] == rubric_deduction, (
-        f"{flow_path}: 'true' branch scores {scores['true']}, "
-        f"rubric graduated_deductions.gambling_operator says {rubric_deduction}"
+    assert scores["true"] == 0, (
+        f"{flow_path}: 'true' branch scores {scores['true']}, expected 0 (D-03)"
     )
     assert scores["__default__"] == 0, (
         f"{flow_path}: default branch scores {scores['__default__']}, expected 0"

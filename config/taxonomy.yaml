@@ -63,7 +63,7 @@ org_types:
       - free to air
 
   individual_club_team:
-    score: 5
+    score: 15
     requires_evidence: false
     synonyms:
       - club
@@ -74,7 +74,7 @@ org_types:
       - franchise team
 
   regulator:
-    score: 5
+    score: -20
     requires_evidence: false
     synonyms:
       - regulatory body
