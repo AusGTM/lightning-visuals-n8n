@@ -52,9 +52,18 @@ target list a non-technical operator can act on from inside HubSpot.
 - [ ] **COVER-01**: The 18 scored companies with no `lv_org_type` are either enriched to a real
       org type, or individually recorded as un-enrichable with a stated reason. An unresolved
       company must be distinguishable from one never attempted.
+      *(Scope amended 2026-08-11, operator-directed during `/gsd-discuss-phase 47`: the 18-company
+      set is covered in two parts, not one. 17 of the 18 are a strict subset of Phase 48's set,
+      being simultaneously the false-veto cohort Phase 47 remediates, and are covered there. The
+      1 remaining record — Racing NSW `15008671672`, flagged `blank_org_type` only with no
+      `false_veto` flag — is covered by Phase 48. See `47-CONTEXT.md` D-01 and D-02.)*
 - [ ] **COVER-02**: The execution and provider cost of that enrichment is estimated before the
       run and reported after, against the 2,500/month n8n allowance and the current Lusha
       balance. A run that would exceed either is refused, not truncated silently.
+      *(Scope amended 2026-08-11, operator-directed during `/gsd-discuss-phase 47`: this cost
+      discipline applies to Phase 47's run as well as Phase 48's, per `47-CONTEXT.md` D-03 —
+      the estimate-before/report-after/refuse-rather-than-truncate bar is not deferred to
+      Phase 48 alone.)*
 
 ### Re-score Strategy (RESCORE)
 
@@ -114,10 +123,14 @@ recoverable, only forward capture works, which cannot inform a v0.9 recalibratio
 | VETO-01 | Phase 47 | Not started |
 | VETO-02 | Phase 47 | Not started |
 | VETO-03 | Phase 47 | Not started |
-| COVER-01 | Phase 48 | Not started |
-| COVER-02 | Phase 48 | Not started |
+| COVER-01 | Phase 47 + 48 | Not started |
+| COVER-02 | Phase 47 + 48 | Not started |
 | RESCORE-01 | Phase 49 | Not started |
 | RESCORE-02 | Phase 49 | Not started |
 | RESCORE-03 | Phase 49 | Not started |
 
 *Phase column filled by the roadmapper.*
+
+**COVER-01 / COVER-02 split (D-02, 2026-08-11):** Phase 47 satisfies both requirements for its 17
+records; Phase 48 satisfies both for the 1 remaining record. Neither phase may be closed claiming
+full coverage of COVER-01 or COVER-02 on its own.

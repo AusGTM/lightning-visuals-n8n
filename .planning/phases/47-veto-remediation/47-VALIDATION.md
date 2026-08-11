@@ -4,7 +4,7 @@ slug: veto-remediation
 # status lifecycle: draft (seeded by plan-phase) → validated (set by validate-phase §6)
 # audit-milestone §5.5 distinguishes NOT-VALIDATED (draft) from PARTIAL (validated + nyquist_compliant: false) (#2117)
 status: draft
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-08-11
 ---
@@ -51,16 +51,20 @@ and MUST NOT share one poll loop or one timeout.
 
 ## Per-Task Verification Map
 
-> Task IDs are filled in by the planner; the requirement/behavior rows below are fixed.
+> Each row is keyed to the concrete plan/task that satisfies it (filled 2026-08-11, Plan 02
+> Task 1). The two offline VETO-01 rows and the never-write row are discharged by Plan 01 Tasks
+> 1 and 3 (`scripts/remediate_veto_companies.py` tracer + guard suite); the per-ID before/after
+> row by Plan 03 Task 1 (`scripts/veto_remediation_report.py`); the VETO-02 armed-then-disarmed
+> row by Plan 04 Tasks 1 and 2; the VETO-03 manual search by Plan 04 Task 3.
 
-| Behavior | Requirement | Test Type | Automated Command | File Exists | Status |
-|----------|-------------|-----------|-------------------|-------------|--------|
-| 17 records' inputs populated; component scores computed correctly | VETO-01 | unit (offline) | `.venv/bin/python -m pytest tests/test_backfill_seed_company_scores.py -x` | ✅ | ⬜ pending |
-| `lv_anti_icp_flag`/`lv_anti_icp_reason` actually clear on a corrected record | VETO-01 | integration (live, disposable) | `.venv/bin/python -m pytest tests/test_scoring_parity.py::test_veto_clear_after_correction -x` | ✅ (red today) | ⬜ pending |
-| Per-ID before/after assertion across the 17 pinned IDs | VETO-01 | integration (live, read-only) | ❌ Wave 0 — must be created | ❌ W0 | ⬜ pending |
-| Never-write guard: no payload contains `lv_anti_icp_flag`/`_reason`/`lv_icp_fit_score`/`lv_icp_tier` | VETO-01 / D-07 | unit (offline) | `.venv/bin/python -m pytest -k never_write -x` | ❌ W0 — verify/extend | ⬜ pending |
-| Both write surfaces armed with a cap + pinned allowlist, then disarmed and read back | VETO-02 | script exit code + manual | batch-PATCH script's own gate AND `n8n_arming.disarm()` read-back | ❌ W0 | ⬜ pending |
-| HubSpot search for non-ANZ veto reason + blank region returns zero | VETO-03 | manual (script-free by design) | operator runs the verbatim search in `47-RESEARCH.md` §"VETO-03 acceptance search" | N/A | ⬜ pending |
+| Task | Behavior | Requirement | Test Type | Automated Command | File Exists | Status |
+|------|----------|-------------|-----------|-------------------|-------------|--------|
+| Plan 01 Task 1 / 3 | 17 records' inputs populated; component scores computed correctly | VETO-01 | unit (offline) | `.venv/bin/python -m pytest tests/test_backfill_seed_company_scores.py -x` | ✅ | ⬜ pending |
+| Plan 04 Task 2 | `lv_anti_icp_flag`/`lv_anti_icp_reason` actually clear on a corrected record | VETO-01 | integration (live, disposable) | `.venv/bin/python -m pytest tests/test_scoring_parity.py::test_veto_clear_after_correction -x` | ✅ (red today) | ⬜ pending |
+| Plan 03 Task 1 | Per-ID before/after assertion across the 17 pinned IDs | VETO-01 | integration (live, read-only) | `.venv/bin/python -m pytest tests/test_veto_remediation_report.py -x` (script: `scripts/veto_remediation_report.py`) | ✅ | ⬜ pending |
+| Plan 01 Task 3 | Never-write guard: no payload contains `lv_anti_icp_flag`/`_reason`/`lv_icp_fit_score`/`lv_icp_tier` | VETO-01 / D-07 | unit (offline) | `.venv/bin/python -m pytest -k never_write -x` | ✅ | ⬜ pending |
+| Plan 04 Task 1 / 2 | Both write surfaces armed with a cap + pinned allowlist, then disarmed and read back | VETO-02 | script exit code + manual | batch-PATCH script's own gate AND `n8n_arming.disarm()` read-back | ✅ | ⬜ pending |
+| Plan 04 Task 3 | HubSpot search for non-ANZ veto reason + blank region returns zero | VETO-03 | manual (script-free by design) | operator runs the verbatim search in `47-RESEARCH.md` §"VETO-03 acceptance search" | N/A | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -68,16 +72,25 @@ and MUST NOT share one poll loop or one timeout.
 
 ## Wave 0 Requirements
 
-- [ ] Per-ID before/after assertion for the 17 pinned IDs — none exists;
-      `run_scoring_parity.py` samples the wider population, not this cohort.
-- [ ] A "settled to the *expected value*, not merely stopped changing" wrapper around
-      `_settle()` / `settle()` — the existing helper has no expected-value assertion, so D-10's
-      "fail loudly" bar is not met by it alone.
-- [ ] A second settle path for the veto fields keyed to the D-18 webhook POST, with its own
-      (longer) timeout, separate from the calculated-property settle.
-- [ ] Confirm/extend the offline guard asserting the never-write field set. Research found
-      "T-40-22" is a plan-task label, not a test function name — locate the real assertion or
-      create one.
+> Discharge pointers added 2026-08-11, Plan 02 Task 1.
+
+- [x] Per-ID before/after assertion for the 17 pinned IDs — discharged by
+      `scripts/veto_remediation_report.py` (Plan 03 Task 1); `run_scoring_parity.py` still
+      samples the wider population, not this cohort, so this new script is additive, not a reuse.
+- [x] A "settled to the *expected value*, not merely stopped changing" wrapper around
+      `_settle()` / `settle()` — discharged by `settle_and_assert` in
+      `scripts/remediate_veto_companies.py` (Plan 01 Task 2), which raises `SettleFailed` on
+      both timeout and a stable-but-wrong value.
+- [x] A second settle path for the veto fields keyed to the D-18 webhook POST, with its own
+      (longer) timeout, separate from the calculated-property settle — discharged by the
+      `settle_tier` (timeout 120) / `settle_veto` (timeout 900) split in
+      `scripts/remediate_veto_companies.py` (Plan 01 Task 2).
+- [x] Confirm/extend the offline guard asserting the never-write field set. Research established
+      "T-40-22" is a Phase 40 plan-task label, not a test identifier — the real assertions are
+      `test_backfill_never_writes_derived_output_properties` (line 169) and
+      `test_backfill_build_updates_payload_never_contains_derived_fields` (line 234) in
+      `tests/test_backfill_seed_company_scores.py`, extended by the new sibling assertions in
+      `tests/test_remediate_veto_companies.py` (Plan 01 Task 3).
 
 ---
 
@@ -93,11 +106,15 @@ and MUST NOT share one poll loop or one timeout.
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or a Wave 0 dependency
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references above
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 60s offline
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or a Wave 0 dependency
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references above — all four Wave 0 items now name the plan/task
+      that discharges them (Plan 02 Task 1, 2026-08-11)
+- [x] No watch-mode flags
+- [x] Feedback latency < 60s offline
+- [x] `nyquist_compliant: true` set in frontmatter — every row in the Per-Task Verification Map
+      carries either an automated command (5 of 6 rows) or an explicit manual-only justification
+      cross-referenced in the Manual-Only Verifications table below (VETO-03's script-free-by-design
+      row)
 
 **Approval:** pending
