@@ -1,0 +1,187 @@
+{
+  "15008671672": {
+    "properties": {
+      "createdate": "2023-03-08T22:49:02.917Z",
+      "hs_lastmodifieddate": "2026-08-12T22:34:52.718Z",
+      "hs_object_id": "15008671672",
+      "lv_anti_icp_flag": "false",
+      "lv_anti_icp_reason": null,
+      "lv_country_region_normalized": "AU",
+      "lv_enrichment_review_reason": "lv_org_type: June (governing_body_league) and fresh research (regulator) disagree on lv_org_type.",
+      "lv_icp_fit_score": "80",
+      "lv_icp_tier": "A",
+      "lv_org_type": "governing_body_league",
+      "_execution_id": "11866",
+      "_node_count": 111,
+      "_duration_seconds": 3.092,
+      "_hubspot_company_update_ran": true,
+      "_decide_company_action_output": {
+        "action": "enrich",
+        "object_type": "companies",
+        "hs_object_id": "15008671672",
+        "gap_flag": false,
+        "needs_review": false,
+        "row_id": null,
+        "mode": null,
+        "match": {
+          "tier": "unknown",
+          "auto": false,
+          "reason": "no searchable identity \u2014 the row has no email, object id, or name+company pair",
+          "candidates": []
+        },
+        "properties": {
+          "lv_anti_icp_flag": "false",
+          "lv_anti_icp_reason": ""
+        }
+      }
+    }
+  },
+  "17317381378": {
+    "properties": {
+      "createdate": "2023-09-14T02:47:09.684Z",
+      "hs_lastmodifieddate": "2026-08-12T22:35:04.027Z",
+      "hs_object_id": "17317381378",
+      "lv_anti_icp_flag": "false",
+      "lv_anti_icp_reason": "",
+      "lv_country_region_normalized": null,
+      "lv_enrichment_review_reason": "Web searches for 'Editix edetrix.com.au', 'Editix broadcast streaming live', and 'edetrix.com.au OR Editix Australia media' returned no results for a company matching this identity (matched=false, confidence=5, every data field null). Near-hits were EditiX (an XML editor), Editrix (an AI book-editing tool) and EditShare (media software) -- none matching the company name+domain. Identity is unresolvable, not merely unresearched.",
+      "lv_icp_fit_score": "0",
+      "lv_icp_tier": "Unscored",
+      "lv_org_type": "unknown",
+      "_execution_id": "11867",
+      "_node_count": 111,
+      "_duration_seconds": 1.528,
+      "_hubspot_company_update_ran": true,
+      "_decide_company_action_output": {
+        "action": "enrich",
+        "object_type": "companies",
+        "hs_object_id": "17317381378",
+        "gap_flag": false,
+        "needs_review": false,
+        "row_id": null,
+        "mode": null,
+        "match": {
+          "tier": "unknown",
+          "auto": false,
+          "reason": "no searchable identity \u2014 the row has no email, object id, or name+company pair",
+          "candidates": []
+        },
+        "properties": {
+          "lv_anti_icp_flag": "false",
+          "lv_anti_icp_reason": ""
+        }
+      }
+    }
+  },
+  "17317850381": {
+    "properties": {
+      "createdate": "2023-09-14T05:18:41.757Z",
+      "hs_lastmodifieddate": "2026-08-12T22:35:17.141Z",
+      "hs_object_id": "17317850381",
+      "lv_anti_icp_flag": "true",
+      "lv_anti_icp_reason": "Non-ANZ geography",
+      "lv_country_region_normalized": "Other",
+      "lv_enrichment_review_reason": "lv_produces_content: Best confidence 65 below threshold 85.; lv_sponsorship_reliant: Best confidence 65 below threshold 70.; lv_org_type: June (broadcaster) and fresh research (content_producer) disagree on lv_org_type.",
+      "lv_icp_fit_score": "40",
+      "lv_icp_tier": "D",
+      "lv_org_type": "broadcaster",
+      "_execution_id": "11868",
+      "_node_count": 111,
+      "_duration_seconds": 2.246,
+      "_hubspot_company_update_ran": true,
+      "_decide_company_action_output": {
+        "action": "enrich",
+        "object_type": "companies",
+        "hs_object_id": "17317850381",
+        "gap_flag": false,
+        "needs_review": false,
+        "row_id": null,
+        "mode": null,
+        "match": {
+          "tier": "unknown",
+          "auto": false,
+          "reason": "no searchable identity \u2014 the row has no email, object id, or name+company pair",
+          "candidates": []
+        },
+        "properties": {
+          "lv_anti_icp_flag": "true",
+          "lv_anti_icp_reason": "Non-ANZ geography"
+        }
+      }
+    }
+  },
+  "20538284384": {
+    "properties": {
+      "createdate": "2024-04-29T23:39:41.576Z",
+      "hs_lastmodifieddate": "2026-08-12T22:35:30.237Z",
+      "hs_object_id": "20538284384",
+      "lv_anti_icp_flag": "false",
+      "lv_anti_icp_reason": "",
+      "lv_country_region_normalized": "NZ",
+      "lv_enrichment_review_reason": "lv_produces_content: Best confidence 65 below threshold 85.; lv_org_type: Best confidence 75 below threshold 80.; lv_is_gambling_operator: Best confidence 75 below threshold 85.",
+      "lv_icp_fit_score": "45",
+      "lv_icp_tier": "B",
+      "lv_org_type": "individual_club_team",
+      "_execution_id": "11869",
+      "_node_count": 111,
+      "_duration_seconds": 2.34,
+      "_hubspot_company_update_ran": true,
+      "_decide_company_action_output": {
+        "action": "enrich",
+        "object_type": "companies",
+        "hs_object_id": "20538284384",
+        "gap_flag": false,
+        "needs_review": false,
+        "row_id": null,
+        "mode": null,
+        "match": {
+          "tier": "unknown",
+          "auto": false,
+          "reason": "no searchable identity \u2014 the row has no email, object id, or name+company pair",
+          "candidates": []
+        },
+        "properties": {
+          "lv_anti_icp_flag": "false",
+          "lv_anti_icp_reason": ""
+        }
+      }
+    }
+  },
+  "20943964946": {
+    "properties": {
+      "createdate": "2024-05-22T10:26:32.694Z",
+      "hs_lastmodifieddate": "2026-08-12T22:35:43.470Z",
+      "hs_object_id": "20943964946",
+      "lv_anti_icp_flag": "false",
+      "lv_anti_icp_reason": "",
+      "lv_country_region_normalized": "AU",
+      "lv_enrichment_review_reason": "lv_produces_content: Best confidence 65 below threshold 85.; lv_org_type: June (governing_body_league) and fresh research (content_producer) disagree on lv_org_type.",
+      "lv_icp_fit_score": "60",
+      "lv_icp_tier": "B",
+      "lv_org_type": "content_producer",
+      "_execution_id": "11870",
+      "_node_count": 111,
+      "_duration_seconds": 1.254,
+      "_hubspot_company_update_ran": true,
+      "_decide_company_action_output": {
+        "action": "enrich",
+        "object_type": "companies",
+        "hs_object_id": "20943964946",
+        "gap_flag": false,
+        "needs_review": false,
+        "row_id": null,
+        "mode": null,
+        "match": {
+          "tier": "unknown",
+          "auto": false,
+          "reason": "no searchable identity \u2014 the row has no email, object id, or name+company pair",
+          "candidates": []
+        },
+        "properties": {
+          "lv_anti_icp_flag": "false",
+          "lv_anti_icp_reason": ""
+        }
+      }
+    }
+  }
+}
