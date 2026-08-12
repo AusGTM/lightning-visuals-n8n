@@ -66,14 +66,33 @@ def _load_racing_nsw_research():
     return json.loads(path.read_text())
 
 
-def test_tracer_racing_nsw_decision_no_longer_pending_after_task_3():
-    # Plan 48-03 Task 3: the one enum-constrained call resolved Racing NSW to "regulator"
-    # (evidenced, not the plan's flagged-likely "governing_body_league" -- the value
-    # written is whatever the call returned and validated, never a plan-time guess).
+def test_racing_nsw_decision_is_governing_body_league_overriding_the_returned_value():
+    # Plan 48-03 Task 3 resolved Racing NSW to "regulator" (evidenced, not a guess).
+    # Plan 48-07 Task 1: operator review rejected that classification and overrides it to
+    # "governing_body_league" -- recorded as data (override_of/override_rationale), never
+    # by editing the captured artifact.
     research = _load_racing_nsw_research()
     decision = m.decide_org_type(RACING_NSW_ID, research)
-    assert decision["org_type"] == "regulator"
+    assert decision["org_type"] == "governing_body_league"
+    assert decision["override_of"] == "regulator"
+    assert "QRIC" in decision["override_rationale"]
+    assert "Racing NSW" in decision["override_rationale"]
     assert decision.get("basis")
+
+
+def test_load_captured_research_resolves_racing_nsw_via_path_override():
+    # Racing NSW is not one of the 17 keys in 47-RESEARCH-RESULTS.json -- before this
+    # task, _load_captured_research("15008671672") returned None and decide_org_type
+    # raised an uncaught ValueError (the live blocker this task fixes). The override
+    # file IS the research dict itself (unlike 47-RESEARCH-RESULTS.json, which is keyed
+    # by company id) -- the loader must resolve both shapes correctly.
+    racing_nsw = m._load_captured_research(RACING_NSW_ID)
+    assert isinstance(racing_nsw, dict)
+    assert "matched" in racing_nsw and "confidence" in racing_nsw
+
+    jam_tv = m._load_captured_research(JAM_TV_ID)
+    assert isinstance(jam_tv, dict)
+    assert "matched" in jam_tv and "confidence" in jam_tv
 
 
 def test_tracer_valid_org_types_imported_not_redeclared():
@@ -270,10 +289,20 @@ def test_racing_nsw_prompt_lists_all_9_options_and_the_unknown_instruction():
     assert '"lv_org_type":<str>' in RESEARCH_SYSTEM
 
 
-def test_racing_nsw_captured_artifact_exists_and_is_the_fifth_decision():
+def test_racing_nsw_captured_artifact_is_unedited_and_the_override_is_recorded():
     assert len(m.ORG_TYPE_DECISIONS) == 5
     research = _load_racing_nsw_research()
-    assert research["data"]["lv_org_type"] == m.ORG_TYPE_DECISIONS[RACING_NSW_ID]["org_type"]
+    decision = m.ORG_TYPE_DECISIONS[RACING_NSW_ID]
+
+    # The artifact is verbatim evidence: it still reads the model's original answer.
+    assert research["data"]["lv_org_type"] == "regulator"
+    # The decision diverges from it -- deliberately, not accidentally (was equality
+    # before Task 1; now the divergence itself is the thing under test).
+    assert decision["org_type"] == "governing_body_league"
+    assert decision["org_type"] != research["data"]["lv_org_type"]
+    # The divergence is recorded as data, not buried in prose.
+    assert decision["override_of"] == research["data"]["lv_org_type"]
+    assert decision["override_rationale"]
 
 
 def test_resolve_racing_nsw_decision_out_of_vocabulary_routes_to_d03_marker():

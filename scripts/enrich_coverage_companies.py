@@ -58,6 +58,15 @@ from src.web_research import claude_web_research, RACING_NSW_ORG_TYPE_SYSTEM  # 
 
 RESEARCH_RESULTS_PATH = ROOT / ".planning/phases/47-veto-remediation/47-RESEARCH-RESULTS.json"
 
+# Plan 48-07 Task 1: Racing NSW has no entry in the 17-keyed 47-RESEARCH-RESULTS.json (it
+# was never one of the pinned 17) -- its captured evidence lives in its own file, and
+# unlike 47-RESEARCH-RESULTS.json (a dict KEYED BY company id), 48-RESEARCH-RACING-NSW.json
+# IS the research dict itself. One guard in the loader (_load_captured_research below), not
+# a special case grown at every caller.
+RESEARCH_PATH_OVERRIDES = {
+    "15008671672": ROOT / ".planning/phases/48-enrichment-coverage/48-RESEARCH-RACING-NSW.json",
+}
+
 # CONTEXT.md's per-record mapping table, in the order the table prints (Racing NSW,
 # Editix, Jam TV, Waikato, The Rumble). A literal, order-preserving tuple -- the same
 # pattern PINNED_COMPANY_ID_ORDER uses, new membership.
@@ -74,22 +83,52 @@ COVERAGE_COMPANY_IDS = frozenset(COVERAGE_COMPANY_ID_ORDER)
 # regex/keyword mapper exists anywhere in this module -- decide_org_type below reads this
 # table, it never derives the enum value from research free text.
 ORG_TYPE_DECISIONS = {
-    # Task 3 (plan 48-03): resolve_racing_nsw_decision() output over the ONE live
-    # enum-constrained call captured verbatim in 48-RESEARCH-RACING-NSW.json
-    # (matched=True confidence=95). NOT the "governing_body_league" the plan flagged as
-    # the likely outcome -- citing Wikipedia and the Thoroughbred Racing Act 1996, the
-    # model found Racing NSW is the statutory REGULATOR of the sport, not a league or
-    # governing body that itself administers competition. "regulator" is a valid
-    # VALID_ORG_TYPES member with an evidence_by_field URL, so it is recorded as
-    # returned/validated, never force-fit to the plan-time guess (48-03-PLAN.md Task 3).
+    # Plan 48-03 Task 3 made the ONE live enum-constrained call, captured verbatim in
+    # 48-RESEARCH-RACING-NSW.json (matched=True confidence=95). It returned "regulator" --
+    # citing Wikipedia and the Thoroughbred Racing Act 1996, the model read Racing NSW's
+    # statutory origin and concluded regulator, not league/governing body.
+    #
+    # Plan 48-07 Task 1: OPERATOR REVIEW ON 2026-08-13 REJECTED THAT CLASSIFICATION and
+    # overrides it to "governing_body_league" here. The discriminator is COMMERCIAL
+    # CONTROL of the sport, not statutory origin -- statutory origin is useless as a test
+    # because both a pure regulator and a governing body can be creatures of an Act. This
+    # is an override of an operator-reviewed, evidenced value -- not a guess and not a
+    # rewrite of the captured artifact (48-RESEARCH-RACING-NSW.json stays byte-identical;
+    # see override_of/override_rationale below, which record the divergence as data).
     "15008671672": {
-        "org_type": "regulator",
+        "org_type": "governing_body_league",
+        "override_of": "regulator",
+        "override_rationale": (
+            "Operator review on 2026-08-13 rejected the returned 'regulator' "
+            "classification. The discriminator is COMMERCIAL CONTROL of the sport, not "
+            "statutory origin -- statutory origin is useless as a test because both a "
+            "pure regulator and a governing body can be creatures of an Act. The test: "
+            "does a DIFFERENT body hold the commercial functions (race programme and "
+            "calendar, prizemoney, media rights, sponsorship)? If yes, this org is a pure "
+            "regulator. If this org holds them itself, it is a governing body, even where "
+            "it also carries statutory regulatory powers. QRIC is the pure-regulator "
+            "anchor -- integrity, licensing and stewards only, with Racing Queensland "
+            "holding the commercial functions after Queensland split them out in 2016. "
+            "Racing NSW is the governing-body anchor: it sets the race calendar, "
+            "distributes prizemoney, collects Race Fields fees, runs its own streaming "
+            "and is Tabcorp-sponsored. Every one of those commercial facts is already "
+            "stated in the captured artifact's own evidence.evidence_summary -- cited, "
+            "not re-fetched. Two independent repo artifacts already agree: "
+            "config/taxonomy.yaml lists 'racing authority' and 'controlling body' among "
+            "governing_body_league's synonyms, and docs/WEB-RESEARCH-SPEC.md §9 "
+            "already names Racing NSW -> governing_body_league + Tier A/B as a "
+            "golden-set acceptance case."
+        ),
         "basis": (
             "48-RESEARCH-RACING-NSW.json matched=True confidence=95, "
-            "lv_org_type='regulator', evidence_by_field[\"lv_org_type\"]="
+            "evidence_by_field[\"lv_org_type\"]="
             "'https://en.wikipedia.org/wiki/Racing_NSW' -- statutory body corporate "
-            "under the Thoroughbred Racing Act 1996 to control/supervise/regulate "
-            "thoroughbred racing in NSW"
+            "under the Thoroughbred Racing Act 1996, but the same artifact's "
+            "evidence.evidence_summary shows it programmes racing, distributes "
+            "prizemoney, collects Race Fields fees, runs its own streaming and is "
+            "Tabcorp-sponsored -- commercial control, which is why the returned "
+            "'regulator' is overridden to 'governing_body_league' (see override_of/"
+            "override_rationale)"
         ),
     },
     "17317850381": {
@@ -297,6 +336,11 @@ def reconcile_population(derived, literal=COVERAGE_COMPANY_ID_ORDER):
 # --- the offline mapping pass (D-01/D-05) + the D-03 marker semantics ---------------------
 
 def _load_captured_research(company_id, path=RESEARCH_RESULTS_PATH):
+    override_path = RESEARCH_PATH_OVERRIDES.get(company_id)
+    if override_path is not None:
+        if not override_path.exists():
+            return None
+        return json.loads(override_path.read_text())
     if not path.exists():
         return None
     data = json.loads(path.read_text())
