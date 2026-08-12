@@ -277,7 +277,7 @@ touched once.
      window that was disarmed and read back afterward, and the actual cost is reported against
      the pre-run estimate.
 
-**Plans**: 6/7 plans executed
+**Plans**: 7/7 plans executed
 
 > **Planned 2026-08-12 — two ROADMAP claims above are superseded by `48-CONTEXT.md`, which wins.**
 > "the 18 companies" is a stale census: the population was re-derived live on 2026-08-12 as
@@ -311,7 +311,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5 completion)*
 
-- [ ] 48-06-PLAN.md — run report (actual vs estimate, window accounting), venue deferral amendment, traceability
+- [x] 48-06-PLAN.md — run report (actual vs estimate, window accounting), venue deferral amendment, traceability
 
 ---
 
@@ -357,7 +357,7 @@ did not change, no full re-score is owed and this phase proves the procedure wit
 | 46. Rubric Decision, Simulation & Engine Parity | v0.9 | 5/5 | Complete | 2026-08-11 |
 | 47. Veto Remediation | v0.9 | 4/4 | Complete | 2026-08-12 |
 | 47.5. Veto Recompute Path | v0.9 | 6/6 | Complete | 2026-08-12 |
-| 48. Enrichment Coverage | v0.9 | 6/7 | In Progress|  |
+| 48. Enrichment Coverage | v0.9 | 7/7 | In Progress|  |
 | 49. Re-score Strategy & Reporting | v0.9 | 0/? | Not started | - |
 
 ## Ledger gaps (known)
