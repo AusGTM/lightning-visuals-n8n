@@ -685,3 +685,29 @@ re-read; the blast radius never widened, and no record outside the pinned set wa
 writable. But "one window" is a real must_have and it was not achieved — the cause was five
 plan assertions that the deployed system could not satisfy, each discovered only by running
 against it. Recorded as a miss, not softened.
+
+## VETO-03 — operator confirmation (Task 3)
+
+**2026-08-12, operator, verbatim:** *"There are no Non-ANZ geography companies with Unknown
+for the lv_country_region_normalized."*
+
+That is VETO-03's bar, met from inside HubSpot with no script. Corroborated independently by
+an API census run the same day — 4 companies portal-wide carry a non-ANZ veto and **all four
+have `lv_country_region_normalized` populated as `"Other"`**, so none matches the
+blank-region filter:
+
+```
+10024564084 Entain          region Other  score -70  D
+15860277364 GRAVITY MEDIA   region Other  score  50  D
+17317184159 Ironman         region Other  score  70  D
+17317850381 Jam TV          region Other  score  20  D
+```
+
+Before the window that same bar returned 17. **17 → 0.**
+
+Jam TV is in that list by design (D-23). The other three were Phase 47's forbidden records,
+carry regions set under the pre-D-V6 headquarters reading, and are the Phase 49
+re-examination candidates tracked in
+`.planning/todos/pending/2026-08-12-d-v6-reexamine-the-four-remaining-non-anz-vetoes.md`.
+Ironman is the notable one: it scores **70** as a content-producing governing body and is
+held at Tier D solely by a geography call made on a Tampa HQ.

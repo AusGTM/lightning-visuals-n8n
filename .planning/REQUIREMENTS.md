@@ -40,12 +40,30 @@ target list a non-technical operator can act on from inside HubSpot.
 
 ### Veto Remediation (VETO)
 
-- [ ] **VETO-01**: All 17 companies carrying a false non-ANZ veto are re-scored under the fixed
+- [x] **VETO-01**: All 17 companies carrying a false non-ANZ veto are re-scored under the fixed
       rubric, and their `lv_anti_icp_flag` / `lv_anti_icp_reason` reflect that re-score.
-- [ ] **VETO-02**: The clearing run happens inside a deliberately-opened armed write window with
+      → 16 cleared; Jam TV `17317850381` correctly RETAINED its veto per D-23 (it is the
+      Italian broadcaster, a true veto, mislabelled `false_veto` by Phase 46 only because its
+      region was blank). Per-id before/after table and classifications:
+      `47-RUN-REPORT.md` § "Per-id outcome"; snapshot `47-AFTER.json` (17 rows);
+      classifier `scripts/veto_remediation_report.py` (`correct_non_anz`, pinned by
+      `tests/test_veto_remediation_report.py::test_classify_correct_non_anz_for_the_d23_true_veto_record`).
+- [x] **VETO-02**: The clearing run happens inside a deliberately-opened armed write window with
       a record-count cap, and the window is disarmed and read back as disarmed afterward.
-- [ ] **VETO-03**: Operator can confirm from HubSpot alone — no scripts — that no company remains
+      → Both surfaces disarmed and proven closed by `n8n_arming.disarm`'s **independent
+      re-read**, quoted verbatim in `47-RUN-REPORT.md` § "VETO-02". Allowlist was exactly the
+      17 pinned ids every time. **Caveat, disclosed not softened:** this took FIVE
+      arm/disarm cycles, not the ONE the plan's must_have required — see
+      `47-RUN-REPORT.md` § "Window accounting".
+- [x] **VETO-03**: Operator can confirm from HubSpot alone — no scripts — that no company remains
       with a non-ANZ veto reason and a blank `lv_country_region_normalized`.
+      → **Operator-confirmed 2026-08-12: "There are no Non-ANZ geography companies with
+      Unknown for the lv_country_region_normalized."** Independently corroborated by an API
+      census (4 companies portal-wide carry a non-ANZ veto — Jam TV, Ironman, Gravity Media,
+      Entain — and all four have `region = "Other"` populated, so zero match the bar; it was
+      17 before the window). The three non-Jam-TV rows are D-V6 re-examination candidates for
+      Phase 49, tracked in
+      `.planning/todos/pending/2026-08-12-d-v6-reexamine-the-four-remaining-non-anz-vetoes.md`.
 
 ### Enrichment Coverage (COVER)
 
@@ -120,9 +138,9 @@ recoverable, only forward capture works, which cannot inform a v0.9 recalibratio
 | RUBRIC-01 | Phase 46 | Complete |
 | RUBRIC-02 | Phase 46 | Complete |
 | RUBRIC-03 | Phase 46 | Complete |
-| VETO-01 | Phase 47 | Not started |
-| VETO-02 | Phase 47 | Not started |
-| VETO-03 | Phase 47 | Not started |
+| VETO-01 | Phase 47 | **Complete** (16 cleared + Jam TV correctly retained, D-23) |
+| VETO-02 | Phase 47 | **Complete** (disarm re-read verbatim; 5 windows not 1 — disclosed) |
+| VETO-03 | Phase 47 | **Complete** (operator-confirmed 2026-08-12, zero results) |
 | COVER-01 | Phase 47 + 48 | Not started |
 | COVER-02 | Phase 47 + 48 | Not started |
 | RESCORE-01 | Phase 49 | Not started |
