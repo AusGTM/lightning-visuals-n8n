@@ -87,7 +87,7 @@ traceable bar. They are new requirements, not a re-scoping of VETO-01/02/03, whi
       and any flip is written inside one bounded, disarmed-afterward window. Jam TV
       `17317850381` is correct and must retain its veto (D-23); Entain `10024564084` cannot
       move on a region flip because `lv_produces_content` fires a second veto.
-- [ ] **RECOMP-04**: The hardware-vendor veto's trigger field is **decided and recorded with
+- [x] **RECOMP-04**: The hardware-vendor veto's trigger field is **decided and recorded with
       reasoning**, and the decision lands in every engine that carries the veto predicate in
       the same commit — `src/icp_scoring.py` and the n8n `Decide Company Action` node. The
       equivalent question for `lv_is_gambling_operator` is answered in writing; the live
@@ -172,7 +172,7 @@ recoverable, only forward capture works, which cannot inform a v0.9 recalibratio
 | RECOMP-01 | Phase 47.5 | **Complete** (live exec 11856/11857: gate `skip` -> `enrich`, PATCH landed; test green with assertions byte-identical; 47.5-A-LIVE-PROOF § Armed window #1) |
 | RECOMP-02 | Phase 47.5 | **Complete** (live exec 11853: `action:"skip"` + gate reason; 47.5-A-LIVE-PROOF §3d) |
 | RECOMP-03 | Phase 47.5 | Not started |
-| RECOMP-04 | Phase 47.5 | Not started |
+| RECOMP-04 | Phase 47.5 | **Complete** (decision `or-retroactive` + gambling answered: 47.5-C-DECISION.md; both engines in one commit `f817ec5`; deployed and read back out of the RUNNING instance: 47.5-C-DECISION.md § Deploy record) |
 | COVER-01 | Phase 47 + 48 | Not started |
 | COVER-02 | Phase 47 + 48 | Not started |
 | RESCORE-01 | Phase 49 | Not started |
