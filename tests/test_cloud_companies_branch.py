@@ -576,3 +576,51 @@ def test_recompute_intent_is_read_at_request_level_and_never_carried_in_mode():
     assert parse_code.index("...event,") < parse_code.index("recompute: event.recompute"), (
         "recompute must be assigned AFTER the ...event spread, never before it"
     )
+
+
+def test_every_path_into_company_gate_runs_parse_hubspot_event_first():
+    """IF Company Recompute's expression reads $('Parse HubSpot Event') WITHOUT a try/catch
+    -- an IF node cannot carry one. n8n throws on $() for a node that exists but did not
+    execute on this run, so if any entry point could reach Company Gate without running
+    Parse HubSpot Event, every company enrichment on that path would die at the new IF.
+    Neither the chain-flow tests (which never evaluate IF expressions against a partial run)
+    nor the edge assertions above would catch it.
+
+    The lane that makes this non-obvious is Phase 25's list ingest: `IF List Input` forks off
+    the Webhook Trigger BEFORE Parse HubSpot Event, runs HubSpot List By Name -> List
+    Memberships -> Expand List To Events, and converges back INTO Parse HubSpot Event rather
+    than downstream of it. That convergence point is what makes the unguarded read safe, and
+    it is exactly the kind of thing a future rewiring would move.
+
+    (ENRICH_CO_GATE's own read IS try/catch-guarded, for a different reason: that constant is
+    shared with two workflows that have no Parse HubSpot Event node at all.)"""
+    doc = _load()
+    adjacency = {
+        src: [edge["node"] for branch in c.get("main", []) for edge in branch]
+        for src, c in doc["connections"].items()
+    }
+    entry_points = [
+        n["name"] for n in doc["nodes"]
+        if n["type"].endswith(("webhook", "executeWorkflowTrigger"))
+    ]
+    assert entry_points, "no entry-point node found in the built workflow"
+
+    paths = []
+    for start in entry_points:
+        stack = [(start, [start])]
+        while stack:
+            node, path = stack.pop()
+            if node == "Company Gate":
+                paths.append(path)
+                continue
+            for nxt in adjacency.get(node, []):
+                if nxt not in path:  # simple paths only — the graph has convergences
+                    stack.append((nxt, path + [nxt]))
+
+    assert paths, "no path from any entry point reaches Company Gate"
+    unguarded = [p for p in paths if "Parse HubSpot Event" not in p]
+    assert not unguarded, (
+        "path(s) reach Company Gate without running Parse HubSpot Event, so "
+        "IF Company Recompute's $() read would throw: "
+        + "; ".join(" -> ".join(p) for p in unguarded)
+    )
