@@ -218,3 +218,9 @@ None — no external service configuration required. One read-only live HubSpot 
 ---
 *Phase: 48-enrichment-coverage*
 *Completed: 2026-08-13*
+
+## Self-Check: PASSED
+
+All 4 claimed files found on disk (`48-RUN-REPORT.md`, the amended decision file, the amended
+`REQUIREMENTS.md`, this SUMMARY). All 4 commit hashes (`c09ba50`, `6cb639a`, `9bdb05c`,
+`bca0eb3`) found in `git log --oneline --all`.
