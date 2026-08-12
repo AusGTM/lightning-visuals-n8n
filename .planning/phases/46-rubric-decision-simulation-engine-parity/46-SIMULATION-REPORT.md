@@ -89,7 +89,7 @@ This report shows, per company, three numbers: what HubSpot's live score/tier sa
 | Endemol Shine Australia | 17317147787 | broadcaster |  | 60/B | 60/B | 60/B | B | B |
 | Ironman | 17317184159 | governing_body_league |  | 70/D | 70/D | 70/D | D | D |
 | Editix | 17317381378 | (blank) | blank_org_type, false_veto | 0/D | 0/Unscored | 0/Unscored | Unscored | Unscored |
-| Jam TV | 17317850381 | (blank) | blank_org_type, false_veto | 0/D | 0/Unscored | 0/Unscored | Unscored | Unscored |
+| Jam TV | 17317850381 | (blank) | blank_org_type, ~~false_veto~~ **TRUE veto — see D-23** | 0/D | 0/Unscored | 0/Unscored | Unscored | Unscored |
 | Pinjarra Park | 17696004613 | (blank) | blank_org_type, false_veto | 0/D | 0/Unscored | 0/Unscored | Unscored | Unscored |
 | Big Screen Video | 17791151956 | other |  | 20/D | 20/D | 20/D | D | D |
 | Sportsbet | 17861423879 | gambling_operator |  | 0/D | 0/D | 20/D | D | D |
@@ -115,3 +115,27 @@ This report shows, per company, three numbers: what HubSpot's live score/tier sa
 | Jam TV Australia | 40613322263 | broadcaster |  | 50/B | 50/B | 50/B | B | B |
 
 **Verdict:** OK: 66 row(s) simulated.
+
+---
+
+## Correction (2026-08-12, from Phase 47's armed window) — Jam TV `17317850381`
+
+**This report's `false_veto` label on Jam TV `17317850381` was wrong. Do NOT re-target that
+row as a false veto in Phase 49 or anywhere else.**
+
+The classifier keyed `false_veto` off a blank `lv_country_region_normalized` — but blank
+means *never determined*, not *determined to be ANZ*. Jam TV `17317850381` is the **Italian**
+broadcaster `jamtv.it` (`country: Italy`, `industry: BROADCAST_MEDIA`). Its non-ANZ veto is
+**correct** and was deliberately preserved: Phase 47 wrote it
+`lv_country_region_normalized = "Other"`, so it now reads `lv_anti_icp_flag = "true"`,
+`lv_anti_icp_reason = "Non-ANZ geography"`, Tier D — with the region populated, which also
+moves it outside VETO-03's blank-region search. Operator-confirmed as D-23 in
+`.planning/phases/47-veto-remediation/47-CONTEXT.md`.
+
+Note the portal holds **two** separate Jam TV records, and row 115 of this same table is the
+other one — `Jam TV Australia` (`40613322263`, `broadcaster`, Tier B), the Australian
+company. They are different organisations; do not merge or dedupe them on name.
+
+The other 16 rows this report flagged `false_veto` were genuine false vetoes and all cleared
+in Phase 47. Evidence: `.planning/phases/47-veto-remediation/47-RUN-REPORT.md` § "Plan 04 —
+the armed window (actuals)".
