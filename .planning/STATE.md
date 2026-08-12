@@ -4,11 +4,11 @@ milestone: v0.9
 milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 48
 current_phase_name: Enrichment Coverage
-status: verifying
-stopped_at: Completed 48-enrichment-coverage/48-06-PLAN.md
-last_updated: "2026-08-12T22:48:18.767Z"
-last_activity: 2026-08-12
-last_activity_desc: Phase 48 execution started
+status: phase_complete
+stopped_at: Phase 48 complete (verified) — ready for Phase 49
+last_updated: "2026-08-13T00:00:00.000Z"
+last_activity: 2026-08-13
+last_activity_desc: Phase 48 complete — 7/7 plans, verification passed 5/5
 progress:
   total_phases: 5
   completed_phases: 4
@@ -18,6 +18,58 @@ progress:
 ---
 
 # Project State
+
+## ✅ PHASE 48 — ALL 7 PLANS COMPLETE, NOTHING ARMED (2026-08-13)
+
+**Verification passed 5/5 must-haves.** The one declared armed window is spent and closed;
+independent post-hoc live read confirms `TEST_RECORD_IDS = ""`, 111 nodes, `active: True`.
+
+**Coverage outcome — all 5 blank-`lv_org_type` records resolved** (population re-derived live
+2026-08-12 and again at execution; the ROADMAP's "18" was stale — Phase 47 resolved 13 of its 17):
+
+| id | company | written | tier | score |
+|---|---|---|---|---|
+| `15008671672` | Racing NSW | `governing_body_league` | B → **A** | 40 → 80 |
+| `20538284384` | Waikato Racing Club | `individual_club_team` | C → B | 30 → 45 |
+| `20943964946` | The Rumble | `content_producer` | B → B | 40 → 60 |
+| `17317850381` | Jam TV | `broadcaster` | D → D | 20 → 40 |
+| `17317381378` | Editix | `unknown` + reason (D-03) | Unscored | 0 |
+
+Jam TV's geographic veto (`Non-ANZ geography`) survived its `broadcaster` write, as predicted —
+org-type has no path to clear a geography veto.
+
+**Costs vs the approved ex-ante estimate:** 1 Anthropic research call, 6 n8n executions
+(`11865` disarmed proof + `11866`–`11870` armed), 0 provider credits. Matched the projection.
+The Anthropic *dollar* actual was never captured — `claude_web_research()` does not log
+`msg.usage` — so the run report carries the $0.0686 **floor**, explicitly not a measurement.
+
+**D-06 window accounting honoured exactly:** 1 deploy+bounce, 1 armed window, cap 5. One deploy
+attempt printed `skipped (no n8n creds)` and made no PUT — disclosed, did not count.
+
+**Two mid-phase deviations, both disclosed:**
+1. **Plan 48-07 inserted mid-execution.** The paid research classified Racing NSW as `regulator`;
+   the operator rejected it. Root cause: the prompts listed the 9 enum values but never *defined*
+   them, so the model keyed on statutory origin — useless, since QRIC and Racing NSW are both
+   statutory bodies. The real discriminator is **commercial control of the sport**. Fixed offline
+   at zero spend: definitions now live once in `config/taxonomy.yaml` and render into both
+   prompts, a coherence guard flags (never auto-flips) an incoherent `regulator`, and the
+   `WEB-RESEARCH-SPEC` §9 golden case is now an executable test. Vindicated empirically — Racing
+   NSW landed Tier A (80); `regulator` would have scored 20 (Tier C). 48-07 also fixed a live
+   blocker that would have made 48-05 raise.
+2. **Waiver `D-48-01`** (operator, 2026-08-13, `375e919`) delegated the deploy+bounce and both
+   arming surfaces to Claude **for Phase 48 only**. It does not revive the expired `D-47.5-01`
+   and expires with this phase.
+
+**Known-unproven, stated rather than papered over:** the D-04 gate's live *firing* on a real
+Anthropic error. Proven instead: structural presence in the RUNNING instance (execution `11865`'s
+own embedded node list) plus an offline expression test. No Phase 48 execution traverses the
+research branch and a 400 cannot be induced on demand.
+
+**Carried forward:** COVER-01/COVER-02 are NOT closed by Phase 48 alone (D-02 split — Phase 47
+covers 17 records, Phase 48 the rest). Code review left 2 WARNINGs (bare `assert` for the D-07
+guard; partial audit-trail loss if an unexpected exception hits the armed loop) — latent
+robustness gaps for future re-invocation, neither affecting this run.
+
 
 ## ✅ PHASE 47.5 — ALL 6 PLANS COMPLETE, NOTHING ARMED (2026-08-12)
 
