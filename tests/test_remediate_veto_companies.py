@@ -513,3 +513,120 @@ def test_verify_post_run_returns_empty_set_when_everything_matches():
     )
 
     assert diverged == set()
+
+
+# --- Phase 47.5 Plan 01 Task 3: the recompute-capable D-18 POST -------------------------
+#
+# The webhook helper is the only on-demand trigger the recompute lane has. No test here
+# performs a network call -- every one injects a fake transport.
+
+
+class _FakeResponse:
+    status_code = 200
+
+    def raise_for_status(self):
+        return None
+
+
+class _FakeTransport:
+    """Records the single POST it receives. Never reaches the network."""
+
+    def __init__(self):
+        self.calls = []
+
+    def post(self, url, **kwargs):
+        self.calls.append({"url": url, **kwargs})
+        return _FakeResponse()
+
+
+_WEBHOOK_CONFIG = {
+    "n8n_url": "https://fake-tenant.n8n.cloud/",
+    "webhook_secret": "fake-secret",
+}
+
+_D18_KEYS = {"objectId", "objectType", "subscriptionType", "propertyName", "occurredAt"}
+
+
+def test_build_webhook_event_default_shape_is_unchanged_by_the_recompute_option():
+    """The D-18 array element every prior phase posted must stay byte-shape identical when
+    the new options are not used -- an always-present `recompute: false` or `domain: null`
+    key would change the event body for every existing caller."""
+    event = m.build_webhook_event(PINNED_ID)
+    assert isinstance(event, list) and len(event) == 1
+    assert set(event[0]) == _D18_KEYS
+    assert "recompute" not in event[0]
+    assert "domain" not in event[0]
+    assert event[0]["objectId"] == PINNED_ID
+    assert event[0]["objectType"] == "company"
+
+
+def test_build_webhook_event_carries_a_real_json_boolean_recompute_when_requested():
+    """Parse HubSpot Event normalizes with `event.recompute === true`, so the string
+    "true" would silently NOT arm the lane. Assert the real boolean, by identity."""
+    event = m.build_webhook_event(PINNED_ID, recompute=True)
+    assert event[0]["recompute"] is True
+    assert set(event[0]) == _D18_KEYS | {"recompute"}
+
+
+def test_build_webhook_event_omits_recompute_entirely_when_false():
+    assert "recompute" not in m.build_webhook_event(PINNED_ID, recompute=False)[0]
+
+
+def test_build_webhook_event_carries_a_domain_when_given_and_omits_it_when_none():
+    """A domain-carrying event routes through `HubSpot Company Search` (domain EQ) rather
+    than the bare-event fetch-by-id lane, which is what populates identity_keys.domain so
+    _writeSafetyAllows can match a TEST_RECORD_DOMAINS allowlist -- the only allowlist that
+    can be armed for a company that does not exist yet (plan 03's disposable)."""
+    with_domain = m.build_webhook_event(PINNED_ID, domain="tvjc.example")
+    assert with_domain[0]["domain"] == "tvjc.example"
+    assert set(with_domain[0]) == _D18_KEYS | {"domain"}
+
+    assert "domain" not in m.build_webhook_event(PINNED_ID, domain=None)[0]
+
+
+def test_post_webhook_event_threads_recompute_and_domain_into_the_body():
+    transport = _FakeTransport()
+
+    m.post_webhook_event(
+        PINNED_ID, True, _WEBHOOK_CONFIG, transport=transport,
+        recompute=True, domain="tvjc.example",
+    )
+
+    assert len(transport.calls) == 1
+    body = transport.calls[0]["json"]
+    assert body[0]["recompute"] is True
+    assert body[0]["domain"] == "tvjc.example"
+    assert transport.calls[0]["headers"]["X-Enrichment-Secret"] == "fake-secret"
+
+
+def test_post_webhook_event_read_timeout_defaults_to_300_seconds():
+    """Phase 47 correction 4: this function hardcoded timeout=30, and a lane that reaches
+    Decide runs far longer than that -- Phase 47 burned a window on a read timeout against a
+    run n8n had ALREADY COMPLETED, and patched it in a throwaway driver's transport wrapper
+    (.planning/phases/47-veto-remediation/47-armed-driver.py) instead of in the script. The
+    correction belongs here."""
+    transport = _FakeTransport()
+
+    m.post_webhook_event(PINNED_ID, True, _WEBHOOK_CONFIG, transport=transport)
+
+    assert transport.calls[0]["timeout"] == 300
+
+
+def test_post_webhook_event_timeout_is_overridable_per_call():
+    transport = _FakeTransport()
+
+    m.post_webhook_event(PINNED_ID, True, _WEBHOOK_CONFIG, transport=transport, timeout=12)
+
+    assert transport.calls[0]["timeout"] == 12
+
+
+def test_post_webhook_event_still_refuses_when_not_armed_even_with_recompute():
+    """`armed` stays a positional with no default -- the recompute option must not become a
+    second way to reach the network unarmed."""
+    transport = _FakeTransport()
+
+    with pytest.raises(m.NotArmedError):
+        m.post_webhook_event(
+            PINNED_ID, False, _WEBHOOK_CONFIG, transport=transport, recompute=True)
+
+    assert transport.calls == []

@@ -259,3 +259,84 @@ def test_main_disarm_failure_exits_non_zero(monkeypatch, _stub_resolve, capsys):
     assert exit_code != 0
     out = capsys.readouterr().out
     assert "still enabled" in out
+
+
+# --------------------------------------------------------------------------------------
+# Phase 47.5 Plan 01 Task 3 — the DOMAIN allowlist
+#
+# n8n_arming.arm_for_dispatch has always accepted record_domains; only this wrapper hid it
+# by passing [] unconditionally. Plan 03 cannot arm a not-yet-created disposable by id, so
+# a domain allowlist is the only allowlist available to it.
+# --------------------------------------------------------------------------------------
+
+def test_arm_passes_a_domain_allowlist_through_to_arm_for_dispatch(monkeypatch, _stub_resolve):
+    calls = []
+
+    def _fake_arm_for_dispatch(workflow_id, record_ids, record_domains, allow_create, config):
+        calls.append({"record_ids": record_ids, "record_domains": record_domains,
+                      "allow_create": allow_create})
+        return {"outcome": n8n_arming.ARMED}
+
+    monkeypatch.setattr(n8n_arming, "arm_for_dispatch", _fake_arm_for_dispatch)
+
+    outcome = june_run_arm.arm("", domains_csv="a.example, b.example ")
+
+    assert outcome["outcome"] == n8n_arming.ARMED
+    assert calls == [{"record_ids": [], "record_domains": ["a.example", "b.example"],
+                      "allow_create": False}]
+
+
+def test_arm_accepts_ids_and_domains_together(monkeypatch, _stub_resolve):
+    calls = []
+    monkeypatch.setattr(
+        n8n_arming, "arm_for_dispatch",
+        lambda workflow_id, record_ids, record_domains, allow_create, config: (
+            calls.append((record_ids, record_domains)) or {"outcome": n8n_arming.ARMED}),
+    )
+
+    june_run_arm.arm("111", domains_csv="a.example")
+
+    assert calls == [(["111"], ["a.example"])]
+
+
+def test_arm_refuses_only_when_ids_AND_domains_are_both_empty(monkeypatch):
+    """The refusal's reason is unchanged: an empty allowlist denies every write and would
+    look like a successful arm. It just has to see both allowlists now, not only --ids."""
+    def _boom(*a, **kw):
+        raise AssertionError("arm_for_dispatch must not be called for an empty allowlist")
+
+    monkeypatch.setattr(n8n_arming, "arm_for_dispatch", _boom)
+
+    outcome = june_run_arm.arm("", domains_csv="")
+
+    assert outcome["outcome"] == "refused"
+    assert "empty" in outcome["detail"].lower()
+
+
+def test_main_domains_flag_reaches_arm(monkeypatch, _stub_resolve):
+    calls = []
+    monkeypatch.setattr(
+        n8n_arming, "arm_for_dispatch",
+        lambda workflow_id, record_ids, record_domains, allow_create, config: (
+            calls.append((record_ids, record_domains)) or {"outcome": n8n_arming.ARMED}),
+    )
+
+    exit_code = june_run_arm.main(["--domains", "a.example"])
+
+    assert exit_code == 0
+    assert calls == [([], ["a.example"])]
+
+
+def test_domains_never_leak_into_disarm(monkeypatch, _stub_resolve):
+    """The disarm path is not gated on the arming variable and is untouched by this task."""
+    seen = []
+    monkeypatch.setattr(
+        n8n_arming, "disarm",
+        lambda workflow_id, config: (seen.append(workflow_id)
+                                     or {"outcome": n8n_arming.DISARMED}),
+    )
+
+    exit_code = june_run_arm.main(["--disarm", "--domains", "a.example"])
+
+    assert exit_code == 0
+    assert seen == [FAKE_WORKFLOW_ID]
