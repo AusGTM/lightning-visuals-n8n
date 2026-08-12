@@ -156,6 +156,66 @@ than a hardcoded list, so adding a member cannot silently desynchronise the two.
 
 ---
 
+## D-V5 — The three layers apply to **every** property that must be deterministic to be scoreable
+
+D-V4 is not an `lv_org_type` fix. It is the general rule, and `lv_org_type` was simply where it
+surfaced first. **Any property the scoring engine or a downstream gate reads by exact value must
+be generated under an enum/typed schema (layer 1), normalized through a deterministic reviewed
+map (layer 2), and backstopped by a classifier that answers `unknown` when unsure (layer 3).**
+
+Free text is permitted only where nothing keys on the value — evidence summaries, reasons,
+provenance blobs.
+
+### Immediately in scope
+
+`lv_country_region_normalized` — confirmed broken in the same Phase 47 run, which returned
+`"Australia"`, `"Australia - NSW"`, `"NSW, Australia"`, `"Australia - Queensland"`,
+`"Australia - Northern Territory"`, `"Australia - Western Australia"`, `"New Zealand"`, `"Italy"`.
+The scoring engine keys on `AU` / `NZ` / `ANZ`, everything else collapsing to `non_anz` — which is
+a **hard veto**. Free-text region is therefore not merely unscoreable, it is actively dangerous:
+`"Australia - NSW"` reaching the engine unnormalized vetoes an Australian company. This is the
+precise defect Phase 47 exists to remediate, still live one field over.
+
+Allowed set: `AU` · `NZ` · `ANZ` · `Other` · `Unknown`.
+
+### Sweep — enumerate the rest before implementing
+
+Phase 48 must **enumerate every property read by `src/icp_scoring.py`, `config/icp_scoring.yaml`,
+the n8n `Decide Company Action` node, and the HubSpot calculated property**, then classify each as
+free-text-safe or must-be-deterministic, and apply all three layers to the latter. Do not
+hand-pick from the list below — derive it from the code, and treat this as the starting point:
+
+| Property | Kind | Allowed values |
+| --- | --- | --- |
+| `lv_org_type` | enum | taxonomy above, incl. `venue` |
+| `lv_country_region_normalized` | enum | `AU` `NZ` `ANZ` `Other` `Unknown` |
+| `lv_revenue_band` | enum | `<1M` `1-5M` `5-50M` `50-500M` `500-750M` `750M-1B` `1B-1.2B` `1.2B+` `unknown` |
+| `lv_employee_band` | enum | `1-9` `10-50` `51-200` `201-500` `501-1000` `1001+` `unknown` |
+| `lv_content_type` | enum set | `live_broadcast` `streaming` `near_live` `highlights` `none` `unknown` |
+| `lv_produces_content` | tri-state | `true` `false` `unknown` |
+| `lv_is_hardware_vendor` | tri-state | `true` `false` `unknown` |
+| `lv_is_gambling_operator` | tri-state | `true` `false` `unknown` |
+| `lv_sponsorship_reliant` | tri-state | `true` `false` `unknown` |
+| contact `seniority`, `persona_group` | enum | per `config/field_policy.yaml` |
+
+### Booleans are tri-state, never two-state
+
+The boolean fields above are the same problem wearing a different type. `normalize_bool` already
+returns `None` for unrecognized input, and D-14 forbids writing `false` on absent evidence —
+because `lv_produces_content: false` and `lv_is_hardware_vendor: true` are **hard vetoes**. Layer 1
+must therefore offer `unknown` as an explicit schema member rather than forcing a binary choice; a
+model given only `true`/`false` will pick one. Phase 47 saw exactly this: research returned
+`lv_is_gambling_operator: true` for 8 of 17 country racing clubs.
+
+### Invariant
+
+Every deterministic property's allowed set is defined in **one** place, read by the layer-1 schema,
+the layer-2 normalizer, the layer-3 classifier, and the tests alike. A test must fail if any two
+drift apart. Duplicating an allowed-set literal is how the enum and the scoring map silently
+desynchronise.
+
+---
+
 ## Implementation notes for Phase 48 planning
 
 Files this touches:
