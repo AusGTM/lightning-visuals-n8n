@@ -51,6 +51,39 @@ grep -oE '\b[0-9]{10,11}\b' $D | sort -u | wc -l                                
 
 Abort before arming if any fails.
 
+
+### 3. Pre-flight VETO-03 guard — run BEFORE arming (read-only)
+
+VETO-03's bar is portal-wide, not limited to the 17: *no company anywhere* may end with a non-ANZ
+veto reason AND a blank `lv_country_region_normalized`. A record outside the pinned set matching
+that search means **VETO-03 cannot pass however well this window runs** — and finding it after the
+window is spent costs a second write window, the exact double-touch D-01 exists to prevent.
+
+This is the Jam TV lesson generalised: Jam TV matched both halves and was only caught by accident.
+
+```bash
+.venv/bin/python -c "
+from dotenv import load_dotenv; load_dotenv()
+from src.hubspot_client import search_records
+r = search_records('companies', [
+    {'propertyName':'lv_anti_icp_reason','operator':'CONTAINS_TOKEN','value':'Non-ANZ'},
+    {'propertyName':'lv_country_region_normalized','operator':'NOT_HAS_PROPERTY'},
+], ['name','lv_anti_icp_reason','lv_country_region_normalized'], limit=100)
+res = r.get('results', [])
+print('MATCHES:', len(res))
+for x in res:
+    print(' ', x['id'], x['properties'].get('name'))
+"
+```
+
+Verified live 2026-08-12: Entain, Gravity Media and Ironman all read `region = Other` (populated),
+so they correctly fall **outside** this search. Expect only pinned ids — Jam TV among them until
+the window writes its region.
+
+**Refuse to arm** if any id returned is not in the pinned set and is not explained in writing
+first. Record the result set in `47-RUN-REPORT.md` either way, and re-run it after the window to
+confirm it returns zero.
+
 ---
 
 ## The one thing that changed late — read before arming
