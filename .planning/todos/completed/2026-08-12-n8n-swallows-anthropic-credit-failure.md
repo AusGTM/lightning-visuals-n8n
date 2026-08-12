@@ -61,3 +61,32 @@ allowlist denies every write), then read the execution back with `includeData=tr
 the payload for `credit balance is too low`.
 
 Full context: `.planning/phases/47-veto-remediation/47-BLOCKED.md`.
+
+---
+
+## RESOLVED — Phase 48, D-04 (2026-08-13)
+
+Folded into Phase 48 as decision **D-04** and fixed at the lane, not at the driver.
+
+**What shipped.** `IF Research Errored` + `Build Research Failure Response` were added to the
+CLOUD build site in `scripts/build_cloud_workflows.py`, immediately after `Claude Web Research`
+and before `Validate Research Output`. An error-shaped payload now routes to a failure branch
+terminating at a response with a stated reason, instead of flowing downstream where a
+`ProviderResult` belongs. `n8n/wf_enrichment_cloud.json` was regenerated from the builder (never
+hand-edited) and is byte-reproducible.
+
+**Deployed and live.** Phase 48's one declared deploy+bounce (plan 48-04) put it on the running
+instance. Proven by execution `11865`'s own embedded workflow node list — 111 nodes, up from the
+109-node pre-deploy baseline, containing both new nodes. A stored read-back was not accepted as
+proof (stored ≠ running).
+
+**Honest limitation.** The gate's live *firing* on a real Anthropic 400 is **not** proven. No
+Phase 48 execution traverses the research branch, and a credit-exhaustion 400 cannot be induced
+on demand. What is proven is structural presence in the running instance plus
+`tests/n8n/researchErrorGateFlow.test.mjs`, which drives the node's REAL emitted expression
+(loaded from the workflow JSON, evaluated via `new Function`) against the live-observed 400 shape
+from execution `11833` — this todo's own evidence — plus a healthy shape and a degenerate shape.
+
+Closing on that basis: the fix exists, is deployed, and is tested against the exact payload shape
+this todo recorded. If a future run ever does observe it firing live, that observation belongs in
+the phase that sees it.
