@@ -8,6 +8,7 @@ suite stays green today and tells you exactly what to delete tomorrow.
 Each test cites a requirement ID. Do not add a test here without one.
 """
 import importlib
+import json
 
 import pytest
 import yaml
@@ -219,3 +220,113 @@ def test_er1_entity_resolution_present():
         }
     )
     assert out["entity_resolution"]["represents"] in allowed
+
+
+# --- Task 3 (Phase 48 Plan 07): the incoherent-regulator coherence guard ----------------
+RACING_NSW_ARTIFACT_PATH = (
+    ROOT / ".planning/phases/48-enrichment-coverage/48-RESEARCH-RACING-NSW.json"
+)
+
+
+def test_guard_captured_racing_nsw_artifact_trips_the_coherence_flags():
+    """The verbatim captured artifact is exactly the shape this guard exists for:
+    org_type='regulator' alongside evidenced lv_produces_content=True AND
+    lv_sponsorship_reliant=True -- internally inconsistent, not merely low-confidence,
+    and nothing checked it before this task."""
+    artifact = json.loads(RACING_NSW_ARTIFACT_PATH.read_text())
+    flags = _norm_mod().org_type_coherence_flags(artifact["data"])
+
+    assert flags
+    joined = " ".join(flags)
+    assert "lv_produces_content" in joined
+    assert "lv_sponsorship_reliant" in joined
+
+
+def test_guard_qric_shaped_regulator_is_coherent_and_unflagged():
+    """A QRIC-shaped regulator -- integrity/licensing only, no evidenced commercial
+    functions -- is coherent; the guard does not fire on an honest regulator."""
+    m = _norm_mod()
+    assert m.org_type_coherence_flags(
+        {"lv_org_type": "regulator", "lv_produces_content": None,
+         "lv_sponsorship_reliant": None}
+    ) == []
+    assert m.org_type_coherence_flags(
+        {"lv_org_type": "regulator", "lv_produces_content": False,
+         "lv_sponsorship_reliant": None}
+    ) == []
+
+
+def test_guard_scoped_to_regulator_only():
+    """A non-regulator org_type carrying both signals is out of scope for this guard --
+    it is not the contradiction this guard understands."""
+    flags = _norm_mod().org_type_coherence_flags(
+        {"lv_org_type": "governing_body_league", "lv_produces_content": True,
+         "lv_sponsorship_reliant": True}
+    )
+    assert flags == []
+
+
+def test_guard_fires_on_either_signal_and_both_together():
+    m = _norm_mod()
+    content_only = m.org_type_coherence_flags(
+        {"lv_org_type": "regulator", "lv_produces_content": True}
+    )
+    sponsorship_only = m.org_type_coherence_flags(
+        {"lv_org_type": "regulator", "lv_sponsorship_reliant": True}
+    )
+    both = m.org_type_coherence_flags(
+        {"lv_org_type": "regulator", "lv_produces_content": True,
+         "lv_sponsorship_reliant": True}
+    )
+    assert content_only and "lv_produces_content" in content_only[0]
+    assert sponsorship_only and "lv_sponsorship_reliant" in sponsorship_only[0]
+    assert len(both) == 2
+
+
+def test_validate_research_output_incoherent_regulator_flags_but_does_not_rewrite():
+    """Additive-only: needs_review flips True and coherence_flags is populated, but the
+    normalized lv_org_type is left exactly as normalization left it -- flagged, not
+    rewritten."""
+    out = _norm_mod().validate_research_output(
+        {
+            "data": {"lv_org_type": "regulator", "lv_produces_content": True,
+                      "lv_sponsorship_reliant": True},
+            "evidence_by_field": {"lv_org_type": "https://x/about",
+                                  "lv_produces_content": "https://x/live"},
+        }
+    )
+    assert out["needs_review"] is True
+    assert out["coherence_flags"]
+    assert out["data"]["lv_org_type"] == "regulator"
+
+
+# --- AT-4: Racing NSW golden-set row, made executable (added 2026-08-13) ---------------
+def test_at4_golden_racing_nsw_governing_body_league_scores_tier_a_or_b():
+    """AT-4: the §9 golden-set row for Racing NSW, made executable. Arithmetic:
+    governing_body_league(40) + content true(20) + AU geography(10) = 70, exactly the
+    Tier A threshold. Negative control: regulator(-20) + 20 + 10 = 10, below the Tier C
+    floor (15) -> Unscored, never A/B. A test that passes for both values is not testing
+    anything. Also pins ORG_TYPE_DECISIONS itself so a future edit to the decision table
+    cannot silently re-break the golden case."""
+    from src.icp_scoring import compute_icp_score
+    from src.schemas import HubSpotRecord
+    import scripts.enrich_coverage_companies as ecc
+
+    def score(org_type):
+        rec = HubSpotRecord(object_type="companies", id="15008671672", properties={
+            "lv_org_type": org_type,
+            "lv_produces_content": True,
+            "lv_country_region_normalized": "AU",
+        })
+        return compute_icp_score(rec, {})
+
+    governing = score("governing_body_league")
+    assert governing.score == 70
+    assert governing.tier in {"A", "B"}
+    assert governing.anti_icp_flag is False
+
+    regulator = score("regulator")
+    assert regulator.score == 10
+    assert regulator.tier not in {"A", "B"}
+
+    assert ecc.ORG_TYPE_DECISIONS["15008671672"]["org_type"] == "governing_body_league"

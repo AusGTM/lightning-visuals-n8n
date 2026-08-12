@@ -55,6 +55,7 @@ from scripts.remediate_veto_companies import (  # noqa: E402
 from src.hubspot_client import search_records, get_record  # noqa: E402
 from src.schemas import HubSpotRecord  # noqa: E402
 from src.web_research import claude_web_research, RACING_NSW_ORG_TYPE_SYSTEM  # noqa: E402
+from src.taxonomy import org_type_coherence_flags  # noqa: E402
 
 RESEARCH_RESULTS_PATH = ROOT / ".planning/phases/47-veto-remediation/47-RESEARCH-RESULTS.json"
 
@@ -202,10 +203,15 @@ def research_racing_nsw(fetcher=get_record, research_fn=claude_web_research) -> 
 
 
 def resolve_racing_nsw_decision(research: dict) -> dict:
-    """D-03 fallback logic over a captured research dict (real or synthetic). Three
+    """D-03 fallback logic over a captured research dict (real or synthetic). FOUR
     refusal conditions each land on the "unknown" marker with a non-empty reason rather
-    than a forced value: an out-of-vocabulary lv_org_type, a bare "unknown" answer, or a
-    valid enum value with no evidence_by_field URL for the classification. Returns a dict
+    than a forced value: an out-of-vocabulary lv_org_type, a bare "unknown" answer, a
+    valid enum value with no evidence_by_field URL for the classification, or (Task 3) a
+    coherence-guard trip -- `regulator` arriving alongside evidence of content output or
+    sponsorship reliance is internally inconsistent, not merely low-confidence. This
+    function NEVER rewrites org_type to a different value on its own: a corrected
+    classification, if any, comes only from an operator-authored ORG_TYPE_DECISIONS
+    override (Task 1) -- never from this guard guessing a replacement. Returns a dict
     shaped like an ORG_TYPE_DECISIONS entry, plus a "reason" key (for
     UNENRICHABLE_REASONS) present only when org_type == "unknown"."""
     data = (research or {}).get("data") or {}
@@ -246,6 +252,25 @@ def resolve_racing_nsw_decision(research: dict) -> dict:
                 "require-evidence rule."
             ),
         }
+
+    flags = org_type_coherence_flags(data)
+    if flags:
+        joined = "; ".join(flags)
+        return {
+            "org_type": "unknown",
+            "basis": (
+                f"48-RESEARCH-RACING-NSW.json: lv_org_type={org_type!r} is incoherent -- "
+                + joined
+            ),
+            "reason": (
+                f"Research call returned lv_org_type={org_type!r} alongside evidence this "
+                f"guard treats as contradictory: {joined} -- refusing to promote a "
+                "self-contradictory classification. The guard does not guess a "
+                "replacement value; a corrected classification, if any, comes only from "
+                "an operator-authored override (D-03, Task 1)."
+            ),
+        }
+
     return {
         "org_type": org_type,
         "basis": (

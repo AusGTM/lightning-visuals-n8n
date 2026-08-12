@@ -360,7 +360,21 @@ test("webResearch: GENUINE parity vs Python src.taxonomy validate_research_outpu
              confidence: r.confidence, data: r.data, evidence_by_field: r.evidence_by_field };
   });
 
-  assert.deepStrictEqual(jsValidate, py.validate, "validateResearchOutput parity");
+  // KNOWN, DISCLOSED DIVERGENCE (Phase 48 Plan 07 Task 3): Python's
+  // validate_research_output gained an additive `coherence_flags` key (the incoherent-
+  // regulator guard); n8n/code/webResearch.js's JS port is knowingly NOT updated --
+  // touching anything under n8n/ (including n8n/code/*.js) requires a rebuild + operator
+  // deploy this plan's hard rules forbid. Same class of divergence as the research-prompt
+  // gap tracked in .planning/todos/pending/2026-08-13-n8n-research-prompt-lacks-org-type-
+  // definitions.md. Tripwire below: if the JS side is ever updated to carry the key, this
+  // fails loudly and forces the strip to be removed rather than silently rotting.
+  const pyRaw = py.validate;
+  assert.ok(pyRaw.every((r) => "coherence_flags" in r), "Python side must carry coherence_flags");
+  assert.ok(jsValidate.every((r) => !("coherence_flags" in r)),
+    "JS webResearch.js now carries coherence_flags -- remove this strip and the comment above it");
+  const pyValidateForParity = pyRaw.map(({ coherence_flags, ...rest }) => rest);
+
+  assert.deepStrictEqual(jsValidate, pyValidateForParity, "validateResearchOutput parity");
   assert.deepStrictEqual(jsProviderResult, py.provider_result, "toProviderResult parity");
 });
 

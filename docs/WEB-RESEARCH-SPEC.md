@@ -525,6 +525,37 @@ Golden set = the five live prospect accounts, which between them cover every bra
 `needs_review`, never the raw value.
 **AT-3.** Golden-set assertions run against recorded fixtures, not live APIs.
 
+**AT-4 (added 2026-08-13, Phase 48 Plan 07).** The Racing NSW golden-set row above is
+enforced by an executable test:
+`tests/test_web_research_spec.py::test_at4_golden_racing_nsw_governing_body_league_scores_tier_a_or_b`.
+It asserts `compute_icp_score` yields a tier in `{A, B}` for `governing_body_league` +
+content `true` + `AU` (arithmetic: `40 + 20 + 10 = 70`, the Tier A threshold exactly),
+asserts the `regulator` negative control (`-20 + 20 + 10 = 10`, below the Tier C floor)
+does NOT land in `{A, B}`, and pins
+`ORG_TYPE_DECISIONS["15008671672"]["org_type"] == "governing_body_league"` so a future
+edit to the decision table cannot silently re-break the golden case. Before this test
+existed, the golden-set row was prose only — a `regulator` classification producing a
+Tier-C-shaped score passed through unremarked (the misclassification Task 1 corrected).
+
+**Coherence guard (added 2026-08-13, Phase 48 Plan 07).** `regulator` arriving alongside
+evidence of content output or sponsorship reliance is internally inconsistent, not merely
+low-confidence — a pure regulator holds no commercial functions and so has nothing to
+evidence. `src.taxonomy.org_type_coherence_flags()` flags this combination; wired into
+`validate_research_output` (additive `coherence_flags` key, ORed into `needs_review`) and
+into `resolve_racing_nsw_decision` (a fourth D-03 refusal condition). The guard NEVER
+rewrites `org_type` to a different value — it flags/refuses only; a corrected
+classification, if any, comes from an operator-authored override (D-03), never from the
+guard guessing. Tests: `test_guard_captured_racing_nsw_artifact_trips_the_coherence_flags`,
+`test_guard_qric_shaped_regulator_is_coherent_and_unflagged`,
+`test_guard_never_flips_an_incoherent_regulator_to_another_value` (the last in
+`tests/test_enrich_coverage_companies.py`).
+
+**Known divergence (as of 2026-08-13).** `n8n/code/webResearch.js`'s JS port of
+`validateResearchOutput` does not yet carry `coherence_flags` — touching anything under
+`n8n/` requires a rebuild and operator deploy this plan's hard rules forbid.
+`tests/n8n/parity.test.mjs` strips the Python-only key before comparing, with a tripwire
+assertion that fails loudly (forcing the strip's removal) once the JS side is updated.
+
 ---
 
 ## 10. Out of scope for MVP

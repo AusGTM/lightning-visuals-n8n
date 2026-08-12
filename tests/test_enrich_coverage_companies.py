@@ -80,6 +80,19 @@ def test_racing_nsw_decision_is_governing_body_league_overriding_the_returned_va
     assert decision.get("basis")
 
 
+def test_guard_never_flips_an_incoherent_regulator_to_another_value():
+    # Task 3: the verbatim captured artifact is exactly the shape the guard exists for --
+    # org_type='regulator' alongside evidenced content output and sponsorship reliance.
+    # resolve_racing_nsw_decision refuses to promote it -- it does NOT guess a
+    # replacement; the corrected value comes only from Task 1's authored override table.
+    research = _load_racing_nsw_research()
+    decision = m.resolve_racing_nsw_decision(research)
+
+    assert decision["org_type"] == "unknown"
+    assert decision["org_type"] != "governing_body_league"
+    assert decision["reason"]
+
+
 def test_load_captured_research_resolves_racing_nsw_via_path_override():
     # Racing NSW is not one of the 17 keys in 47-RESEARCH-RESULTS.json -- before this
     # task, _load_captured_research("15008671672") returned None and decide_org_type

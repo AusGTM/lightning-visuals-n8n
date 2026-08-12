@@ -131,6 +131,37 @@ ALLOWED_REPRESENTS = {"group", "subsidiary", "franchise_outlet", "single_entity"
 # by tests/n8n/parity.test.mjs's GENUINE Python parity assertion).
 ALLOWED_COUNTRY_REGIONS = {"AU", "NZ", "ANZ", "Other", "Unknown"}
 
+# Phase 48 Plan 07 Task 3 (D-03 guard extension): a `regulator` classification means
+# integrity/licensing only, with commercial functions held elsewhere -- a body with no
+# commercial control has no broadcast product to sell and no sponsorship inventory to
+# evidence. `regulator` arriving alongside evidence of content output or sponsorship
+# reliance is not low-confidence, it is internally inconsistent. Named here rather than
+# open-coded in org_type_coherence_flags so the two signals it checks are visible as data.
+INCOHERENT_WITH_REGULATOR = ("lv_produces_content", "lv_sponsorship_reliant")
+
+
+def org_type_coherence_flags(data: dict) -> list:
+    """Pure function: a list of human-readable reason strings, empty when coherent.
+    Fires ONLY for the one contradiction this guard understands -- org_type normalizes to
+    `regulator` while lv_produces_content and/or lv_sponsorship_reliant is True. Any other
+    org_type, or a regulator with no such evidence (a QRIC-shaped honest regulator),
+    returns an empty list. Reads only; NEVER mutates; NEVER rewrites org_type to another
+    value -- an automatic flip would be the same class of guess that produced the error
+    this guard exists to catch (prefer-unknown-over-guessing, AT-2 precedent)."""
+    data = data or {}
+    org_type = normalize_org_type(data.get("lv_org_type"))
+    if org_type != "regulator":
+        return []
+    flags = []
+    for field in INCOHERENT_WITH_REGULATOR:
+        if data.get(field) is True:
+            flags.append(
+                f"org_type='regulator' is incoherent with {field}=True -- a pure "
+                "regulator holds no commercial functions and should have no content "
+                "output or sponsorship inventory to evidence"
+            )
+    return flags
+
 
 def validate_research_output(raw) -> dict:
     """OC-2/OC-3/OC-4, TS-1/TS-2/TS-3, AT-2, ER-1. Never raises."""
@@ -145,6 +176,7 @@ def validate_research_output(raw) -> dict:
                 "notes": "",
             },
             "needs_review": True,
+            "coherence_flags": [],
         }
 
     data = dict(raw.get("data") or {})
@@ -168,6 +200,10 @@ def validate_research_output(raw) -> dict:
     if represents not in ALLOWED_REPRESENTS:
         represents = "unknown"
 
+    # Additive-only: ORs into the existing needs_review, never replaces it, and never
+    # rewrites data["lv_org_type"] (flagged, not fixed).
+    coherence_flags = org_type_coherence_flags(data)
+
     return {
         "matched": bool(raw.get("matched", True)),
         "data": data,
@@ -177,7 +213,8 @@ def validate_research_output(raw) -> dict:
             "likely_revenue_band": er.get("likely_revenue_band"),
             "notes": er.get("notes", ""),
         },
-        "needs_review": org_result["needs_review"],
+        "needs_review": org_result["needs_review"] or bool(coherence_flags),
+        "coherence_flags": coherence_flags,
     }
 
 
@@ -214,4 +251,14 @@ if __name__ == "__main__":
     assert len(ORG_TYPE_DEFINITIONS) == 9 and all(v.strip() for v in ORG_TYPE_DEFINITIONS.values())
     assert "QRIC" in org_type_definitions_block()
     assert "Racing NSW" in org_type_definitions_block()
+    assert org_type_coherence_flags(
+        {"lv_org_type": "regulator", "lv_produces_content": True}
+    )
+    assert org_type_coherence_flags(
+        {"lv_org_type": "regulator", "lv_produces_content": None}
+    ) == []
+    assert org_type_coherence_flags(
+        {"lv_org_type": "governing_body_league", "lv_produces_content": True,
+         "lv_sponsorship_reliant": True}
+    ) == []
     print("src/taxonomy.py self-check OK")
