@@ -233,9 +233,164 @@ lasting seconds carries no meaningful missed-trigger risk. This is the ONE deplo
 bounce declared in D-06 for this phase — if a second becomes necessary, that is a
 disclosure obligation in the run report, not a silent event.
 
-**Claude executed neither command above and will not.** No command run in this task set
+**Claude executed neither command above at Task 1 time.** No command run in Task 1 set
 `ALLOW_N8N_DEPLOY` or ran the deploy script with `DRY_RUN=false`; the Phase 47.5 waiver
-that once delegated arming/deploy to Claude expired with that phase and was not invoked
-here.
+that once delegated arming/deploy to Claude had expired with that phase and was not
+invoked at Task 1 time.
 
-<!-- Task 3 appends its proof here after the operator confirms the deploy and bounce. -->
+## Task 2 — Deploy and bounce, performed by Claude under D-48-01 (2026-08-13)
+
+**Amendment to the paragraph directly above.** After Task 1 wrote this document, the
+operator was asked to run the two commands above (or pause the phase) and instead chose,
+on 2026-08-13, to grant `D-48-01` — a NEW, Phase-48-scoped waiver recorded in
+`48-CONTEXT.md`, delegating the deploy+bounce and both arming surfaces to Claude for this
+phase only. It does **not** revive the expired `D-47.5-01`. Under that waiver, **Claude**
+ran both commands recorded above, not the operator. D-06's declaration is unchanged and
+was honoured: exactly one deploy, one bounce.
+
+**First attempt (recorded for honesty, not a spend):** a bare-shell invocation of Command 1
+printed `skipped (no n8n creds): N8N_URL and N8N_API_KEY must both be set to run this
+deploy.`, exit code `0` — no PUT was made. Per this checkpoint's own note, a call that
+never reaches the write path does not count against D-06's declaration. It was re-run
+through the dotenv-absolute-path form (`.env` is Read/Bash permission-blocked; see
+`48-CONTEXT.md` constraints table).
+
+**Deploy (armed, `DRY_RUN=false ALLOW_N8N_DEPLOY=true`, one invocation, exit 0):**
+
+```
+Workflows to create: []
+Workflows to update: ['LV Backend Status (Cloud template)', 'LV Contact Ingest (Cloud template)', 'LV Enrichment (Cloud template)', 'LV Review Decision (Cloud)', 'LV Scheduled Maintenance (Cloud)']
+updated workflow LV Backend Status (Cloud template) (200)
+updated workflow LV Contact Ingest (Cloud template) (200)
+updated workflow LV Enrichment (Cloud template) (200)
+updated workflow LV Review Decision (Cloud) (200)
+updated workflow LV Scheduled Maintenance (Cloud) (200)
+EXIT_CODE= 0
+```
+
+**Bounce (deactivate then reactivate, both legs independently re-read, both verified):**
+
+```
+turn workflow 950HPb7a1GgSAIyZ off -> verified | observed: False
+turn workflow 950HPb7a1GgSAIyZ on  -> verified | observed: True
+```
+
+Per D-48-01's terms, this is the disclosed count: **1 deploy, 1 bounce** — matching D-06.
+Task 3 below independently proves, from the RUNNING instance's own execution output
+(never a re-read of this stored PUT — Trap 3), that the reload actually took effect.
+
+## Task 3 — Proof: one disarmed recompute execution against the RUNNING instance
+
+**Proof POST.** `remediate_veto_companies.post_webhook_event('17317850381', True, cfg,
+recompute=True)` — `armed=True` is this script's own client-side ceremony flag, not n8n's
+write arming; no HubSpot-write arming surface was touched for this proof (no
+`ALLOW_HUBSPOT_RECORD_WRITES`, no `TEST_RECORD_IDS`/`TEST_RECORD_DOMAINS` set — the run
+is disarmed on the n8n side by construction). Sent
+`2026-08-12T22:13:50.442788+00:00` UTC, HTTP 200, client elapsed 3.99s. Exactly one POST
+was made; no retry occurred (the client did not time out).
+
+Response body, verbatim:
+
+```json
+[{"action":"write_blocked","object_type":"companies","hs_object_id":"17317850381","gap_flag":false,"needs_review":false,"row_id":null,"mode":null,"match":{"tier":"unknown","auto":false,"reason":"no searchable identity — the row has no email, object id, or name+company pair","candidates":[]},"properties":{"lv_anti_icp_flag":"true","lv_anti_icp_reason":"Non-ANZ geography"},"remaining_credits":[]}]
+```
+
+**Execution located and read back.** `executions_client.find_execution_for_dispatch`
+against `LV Enrichment (Cloud template)`'s 5 most recent executions selected **execution
+`11865`** (`startedAt 2026-08-12T22:13:50.890Z`, ~0.4s after dispatch, well inside
+tolerance and clearly newer than the pre-POST executions `11858`-`11861`). Read via
+`GET /api/v1/executions/11865?includeData=true`.
+
+| Field | Value |
+|---|---|
+| `status` | `success` (not treated as proof by itself — Trap 1; judged by `runData` below) |
+| `finished` | `true` |
+| `resultData.error` | `None` (absent) |
+| `lastNodeExecuted` | `Respond to Webhook` |
+| `startedAt` → `stoppedAt` | `2026-08-12T22:13:50.890Z` → `2026-08-12T22:13:54.315Z` |
+| duration | **3.425s** |
+| `mode` | `webhook` |
+
+**The load-bearing check — the execution's OWN embedded `workflowData.nodes`**, i.e. the
+full graph snapshot n8n stored for this execution at run time, independent of which
+branch actually fired:
+
+| Check | Result |
+|---|---|
+| `workflowData.nodes` count | **111** (up from the Task-1 baseline of 109 — the +2 the deploy added) |
+| `IF Research Errored` present in `workflowData.nodes` | **YES** |
+| `Build Research Failure Response` present in `workflowData.nodes` | **YES** |
+
+This is the running instance's own record of its current graph, produced at execution
+time by n8n itself — not a `GET /workflows/{id}` read of the stored definition (explicitly
+rejected as proof by this plan and by Trap 3). Both new D-04 gate nodes are present. **This
+proves the bounce reloaded the running instance's in-memory graph**, independent of
+whether the recompute lane's control flow happens to touch them.
+
+**`resultData.runData` node list, 20 nodes, in order** (the actual execution path — the
+recompute lane, which never touches the research branch and so never runs the two new
+nodes; their absence here is expected, not a defect):
+
+```
+Webhook Trigger, IF List Input, Parse HubSpot Event, IF Object Type Supported,
+Credit Request, Route By Object Type, IF Lusha Credit Requested,
+IF Apollo Credit Requested, IF ZoomInfo Credit Requested, Build Company Identity,
+IF Company Bare Event, HubSpot Company Fetch By Id, Adapt Company Fetch By Id,
+Company Gate, IF Company Recompute, Decide Company Action, IF Company Create,
+IF Company Enrich, Build Response, Respond to Webhook
+```
+
+`Decide Company Action` output, verbatim:
+
+```json
+{
+  "action": "write_blocked",
+  "object_type": "companies",
+  "hs_object_id": "17317850381",
+  "gap_flag": false,
+  "needs_review": false,
+  "row_id": null,
+  "mode": null,
+  "match": {"tier": "unknown", "auto": false, "reason": "no searchable identity — the row has no email, object id, or name+company pair", "candidates": []},
+  "properties": {"lv_anti_icp_flag": "true", "lv_anti_icp_reason": "Non-ANZ geography"}
+}
+```
+
+Zero provider, research, judge, or merge node appears in `runData` — the recompute lane
+routes straight from `Company Gate` to `Decide Company Action`, exactly as D-09/§13.0
+describe. This proof therefore cost **0 provider credits and 0 Anthropic calls**, plus 1
+n8n execution.
+
+**Duration read, corrected against the right precedent.** The plan text's "10-37s /
+2.4s-means-died-early" figure (`48-CONTEXT.md` Trap 6) describes the FULL-enrichment lane
+that traverses providers/research/judge (Phase 47's `11845`, 36 nodes, 10-37s) versus a
+`skip`-before-Decide short-circuit (Phase 47's `11846`, 19 nodes, 2.4s, ended at
+`Normalize + Score Company` with 0 items out — genuinely died early). This execution is
+neither of those shapes: it is the recompute lane, which by design bypasses
+providers/research/judge and is SUPPOSED to run fast. The correct precedent is Phase
+47.5's own recompute-lane proof, execution `11852` (20 nodes, 2.6s, ended at
+`Respond to Webhook` with a real `Decide Company Action` output —
+`47.5-A-LIVE-PROOF.md` §3c). This execution (`11865`, 20 nodes, 3.425s, ended at
+`Respond to Webhook` with a real `Decide Company Action` output) matches that healthy
+recompute-lane shape, not the died-early shape. The tell is not raw duration but whether
+`Decide Company Action` ran and produced a real decision (it did) versus the chain
+stopping at `Normalize + Score Company` with 0 items out (it did not).
+
+**What is proven and what is not.** Proven: the RUNNING instance's graph now contains
+both D-04 gate nodes (structural presence, via the execution's own embedded node list),
+and the recompute lane still functions correctly end to end post-deploy, disarmed,
+writing nothing. **Not proven this phase:** the gate's live FIRING on a genuine erroring
+Anthropic call — no execution in Phase 48 traverses the research branch (the armed window
+plan 48-05 will open is recompute-only; Racing NSW's fresh research, per D-01, runs
+standalone through `src/web_research.py`, not through this n8n lane), and there is no
+supported way to force a live Anthropic 400 on demand. Structural presence in the running
+instance plus plan 48-02's offline expression test against the real emitted expression is
+the proof bar this phase meets. This document does not claim more.
+
+**Budget note.** This is 1 n8n execution against the 2,500/month allowance and against
+`48-COST-ESTIMATE.md`'s projection of 6 for the phase — execution #1 of that 6, to be
+reconciled in `48-06`. 0 provider credits, 0 Anthropic calls, 0 HubSpot writes.
+
+**`git log --oneline -1 -- n8n/wf_enrichment_cloud.json`** still shows plan 48-02's commit
+`3a1edf1` as the last touch to that file — this plan did not modify it (deploy reads the
+committed artifact and PUTs it; it never hand-edits it).
