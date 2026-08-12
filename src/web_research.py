@@ -54,6 +54,44 @@ RESEARCH_SYSTEM = (
 )
 
 
+# Phase 48 (COVER-01, plan 48-03 Task 3): a narrow one-off prompt used ONLY for the
+# Racing NSW enum-constrained call. RESEARCH_SYSTEM above is left untouched -- it stays
+# in parity with the production n8n research prompt and is what every other caller sees.
+# Same schema as RESEARCH_SYSTEM except "lv_org_type" is constrained to the 9 live
+# lv_org_type options (VALID_ORG_TYPES in scripts/remediate_veto_companies.py) instead of
+# an open string, with an explicit answer-"unknown"-rather-than-invent instruction.
+RACING_NSW_ORG_TYPE_SYSTEM = (
+    "You are an ICP research analyst. Use web search to research the company across three "
+    "query intents: identity (<name> <domain> about), content (<name> watch live | broadcast "
+    "| streaming), and size (<name> annual report revenue — only when a revenue band is not "
+    "already known). Then return ONLY a single JSON object (no prose, no markdown fences) "
+    "matching this schema:\n"
+    '{"provider":"claude_web","object_type":"companies","matched":<bool>,'
+    '"confidence":<int 0-100>,"data":{"lv_org_type":<one of "governing_body_league"|'
+    '"content_producer"|"broadcaster"|"individual_club_team"|"regulator"|'
+    '"gambling_operator"|"hardware_vendor"|"other"|"unknown">,'
+    '"lv_produces_content":<bool|null>,'
+    '"lv_content_type":[<str>],"lv_is_hardware_vendor":<bool|null>,'
+    '"lv_is_gambling_operator":<bool|null>,"lv_sponsorship_reliant":<bool|null>},'
+    '"evidence_by_field":{"<field>":"<url>"},'
+    '"entity_resolution":{"represents":"group|subsidiary|franchise_outlet|single_entity|unknown",'
+    '"likely_revenue_band":<str|null>,"notes":<str>},'
+    '"evidence":{"last_seen":<str|null>,"match_basis":[<str>],'
+    '"evidence_urls":[<str>],"evidence_summary":<str>},'
+    '"model_trace":{"research_model":"claude-web","classifier_model":null,"validator_model":null}}\n'
+    "lv_org_type MUST be exactly one of the 9 listed options — never invent a value outside "
+    "this set. If the evidence does not clearly support one of the 8 non-unknown options, "
+    "answer \"unknown\" rather than guess. Prefer \"unknown\"/null over guessing — an absent "
+    "search result is NOT evidence of absence. Cite a supporting URL in evidence_by_field for "
+    "every field you set in data, keyed by that exact field name — lv_org_type REQUIRES an "
+    "evidence_by_field URL whenever it is not \"unknown\". First-party domains are preferred "
+    "for identity and content; reputable secondary sources are fine for size. If sources "
+    "conflict, set confidence below 75 and explain in evidence_summary. lv_is_hardware_vendor "
+    "and lv_is_gambling_operator are hard-veto inputs — answer null unless a cited source "
+    "directly supports the classification."
+)
+
+
 def mock_claude_web_research(record: HubSpotRecord) -> ProviderResult:
     return ProviderResult(**json.loads((FIXTURE_DIR / "claude_web_research_company.json").read_text()))
 
@@ -71,7 +109,7 @@ def _extract_json(text: str) -> dict:
         return json.loads(m.group(0))
 
 
-def claude_web_research(record: HubSpotRecord) -> ProviderResult:
+def claude_web_research(record: HubSpotRecord, system_prompt: str = None) -> ProviderResult:
     if os.getenv("USE_MOCK_WEB_RESEARCH", "true").lower() == "true":
         return mock_claude_web_research(record)
 
@@ -82,6 +120,7 @@ def claude_web_research(record: HubSpotRecord) -> ProviderResult:
     client = Anthropic()
     model = os.getenv("ANTHROPIC_RESEARCH_MODEL", "claude-sonnet-5")
     max_uses = int(os.getenv("WEB_RESEARCH_MAX_SEARCHES", "5"))
+    system_prompt = system_prompt or RESEARCH_SYSTEM
 
     props = record.properties
     user_payload = {
@@ -104,7 +143,7 @@ def claude_web_research(record: HubSpotRecord) -> ProviderResult:
         # eats ~1000-1300 tokens on this prompt. 4096 leaves ~45% headroom over the
         # largest observed complete response (2829 total). Bump further if it recurs.
         max_tokens=4096,
-        system=RESEARCH_SYSTEM,
+        system=system_prompt,
         tools=[{"type": "web_search_20250305", "name": "web_search", "max_uses": max_uses}],
         messages=[{"role": "user", "content": json.dumps(user_payload)}],
     )

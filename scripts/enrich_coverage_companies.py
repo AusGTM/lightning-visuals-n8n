@@ -52,7 +52,9 @@ from scripts.remediate_veto_companies import (  # noqa: E402
     NotArmedError,
     PinRefused,
 )
-from src.hubspot_client import search_records  # noqa: E402
+from src.hubspot_client import search_records, get_record  # noqa: E402
+from src.schemas import HubSpotRecord  # noqa: E402
+from src.web_research import claude_web_research, RACING_NSW_ORG_TYPE_SYSTEM  # noqa: E402
 
 RESEARCH_RESULTS_PATH = ROOT / ".planning/phases/47-veto-remediation/47-RESEARCH-RESULTS.json"
 
@@ -70,10 +72,26 @@ COVERAGE_COMPANY_IDS = frozenset(COVERAGE_COMPANY_ID_ORDER)
 
 # D-01/D-05: the literal per-record decision table authored from CONTEXT.md. No
 # regex/keyword mapper exists anywhere in this module -- decide_org_type below reads this
-# table, it never derives the enum value from research free text. Racing NSW has no entry
-# (no captured research) -- decide_org_type raises PendingResearch for it, correct until a
-# later plan supplies its researched value.
+# table, it never derives the enum value from research free text.
 ORG_TYPE_DECISIONS = {
+    # Task 3 (plan 48-03): resolve_racing_nsw_decision() output over the ONE live
+    # enum-constrained call captured verbatim in 48-RESEARCH-RACING-NSW.json
+    # (matched=True confidence=95). NOT the "governing_body_league" the plan flagged as
+    # the likely outcome -- citing Wikipedia and the Thoroughbred Racing Act 1996, the
+    # model found Racing NSW is the statutory REGULATOR of the sport, not a league or
+    # governing body that itself administers competition. "regulator" is a valid
+    # VALID_ORG_TYPES member with an evidence_by_field URL, so it is recorded as
+    # returned/validated, never force-fit to the plan-time guess (48-03-PLAN.md Task 3).
+    "15008671672": {
+        "org_type": "regulator",
+        "basis": (
+            "48-RESEARCH-RACING-NSW.json matched=True confidence=95, "
+            "lv_org_type='regulator', evidence_by_field[\"lv_org_type\"]="
+            "'https://en.wikipedia.org/wiki/Racing_NSW' -- statutory body corporate "
+            "under the Thoroughbred Racing Act 1996 to control/supervise/regulate "
+            "thoroughbred racing in NSW"
+        ),
+    },
     "17317850381": {
         "org_type": "broadcaster",
         "basis": (
@@ -118,6 +136,86 @@ UNENRICHABLE_REASONS = {
         "unresolvable, not merely unresearched."
     ),
 }
+
+# --- Task 3: the one enum-constrained research call for Racing NSW -------------------------
+
+RACING_NSW_ID = COVERAGE_COMPANY_ID_ORDER[0]
+
+# Identity fields src/web_research.py's user_payload reads -- a subset of
+# remediate_veto_companies.FETCH_PROPS, since this call never recomputes scoring itself
+# (D-07) and needs no canonical ICP inputs merged back in.
+RACING_NSW_FETCH_PROPS = ("name", "domain", "website", "country", "industry")
+
+
+def _fetch_racing_nsw_record(fetcher=get_record) -> HubSpotRecord:
+    record = fetcher("companies", RACING_NSW_ID, list(RACING_NSW_FETCH_PROPS))
+    return HubSpotRecord(object_type="companies", id=RACING_NSW_ID, properties=record.get("properties", {}))
+
+
+def research_racing_nsw(fetcher=get_record, research_fn=claude_web_research) -> dict:
+    """Makes the ONE enum-constrained research call this plan authorizes -- Racing NSW
+    only, USE_MOCK_WEB_RESEARCH=false required for a live call. Returns the verbatim
+    ProviderResult dict; the caller writes it to 48-RESEARCH-RACING-NSW.json before any
+    mapping happens (phase hard rule: exactly one paid call, no retry loop)."""
+    record = _fetch_racing_nsw_record(fetcher)
+    result = research_fn(record, system_prompt=RACING_NSW_ORG_TYPE_SYSTEM)
+    return result.model_dump()
+
+
+def resolve_racing_nsw_decision(research: dict) -> dict:
+    """D-03 fallback logic over a captured research dict (real or synthetic). Three
+    refusal conditions each land on the "unknown" marker with a non-empty reason rather
+    than a forced value: an out-of-vocabulary lv_org_type, a bare "unknown" answer, or a
+    valid enum value with no evidence_by_field URL for the classification. Returns a dict
+    shaped like an ORG_TYPE_DECISIONS entry, plus a "reason" key (for
+    UNENRICHABLE_REASONS) present only when org_type == "unknown"."""
+    data = (research or {}).get("data") or {}
+    org_type = data.get("lv_org_type")
+    evidence_url = (research.get("evidence_by_field") or {}).get("lv_org_type")
+
+    if org_type not in VALID_ORG_TYPES:
+        return {
+            "org_type": "unknown",
+            "basis": (
+                f"48-RESEARCH-RACING-NSW.json: returned lv_org_type {org_type!r} is not "
+                "a VALID_ORG_TYPES member -- D-03 marker applied, never force-fit."
+            ),
+            "reason": (
+                f"Research call returned lv_org_type={org_type!r}, not one of the 9 live "
+                "enum options -- refusing to force-fit an out-of-vocabulary value."
+            ),
+        }
+    if org_type == "unknown":
+        return {
+            "org_type": "unknown",
+            "basis": '48-RESEARCH-RACING-NSW.json: model answered "unknown" for lv_org_type.',
+            "reason": (
+                (research.get("evidence") or {}).get("evidence_summary")
+                or 'Research call answered "unknown" for lv_org_type -- no reason summary captured.'
+            ),
+        }
+    if not evidence_url:
+        return {
+            "org_type": "unknown",
+            "basis": (
+                f"48-RESEARCH-RACING-NSW.json: lv_org_type={org_type!r} carries no "
+                'evidence_by_field["lv_org_type"] URL.'
+            ),
+            "reason": (
+                f"Research call returned lv_org_type={org_type!r} but cited no evidence "
+                "URL for the org-type classification -- D-03 marker applied per the "
+                "require-evidence rule."
+            ),
+        }
+    return {
+        "org_type": org_type,
+        "basis": (
+            f"48-RESEARCH-RACING-NSW.json matched={research.get('matched')} "
+            f"confidence={research.get('confidence')}, lv_org_type={org_type!r}, "
+            f'evidence_by_field["lv_org_type"]={evidence_url!r}'
+        ),
+    }
+
 
 # The exact live HubSpot search filter CONTEXT.md re-derived the population with.
 POPULATION_FILTERS = [

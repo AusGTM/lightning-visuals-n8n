@@ -1,0 +1,52 @@
+{
+  "provider": "claude_web",
+  "object_type": "companies",
+  "matched": true,
+  "confidence": 95,
+  "data": {
+    "lv_org_type": "regulator",
+    "lv_produces_content": true,
+    "lv_content_type": [
+      "live_racing",
+      "race_replays",
+      "racing_news"
+    ],
+    "lv_is_hardware_vendor": false,
+    "lv_is_gambling_operator": false,
+    "lv_sponsorship_reliant": true,
+    "lv_country_region_normalized": "Australia",
+    "lv_has_sports_media_fit": true,
+    "lv_has_broadcast_or_streaming_signals": true
+  },
+  "evidence": {
+    "last_seen": "2026-08-12",
+    "match_basis": [
+      "Organization name matches exactly",
+      "Domain matches www.racingnsw.com.au",
+      "Country is Australia",
+      "Statutory regulatory body for thoroughbred racing in NSW"
+    ],
+    "evidence_urls": [
+      "https://en.wikipedia.org/wiki/Racing_NSW",
+      "https://www.racingnsw.com.au/",
+      "https://www.parliament.nsw.gov.au/tp/files/192181/2024-25%20Racing%20NSW%20Annual%20Report.pdf"
+    ],
+    "evidence_summary": "Racing NSW is a body corporate established under the Thoroughbred Racing Act 1996 to control, supervise and regulate thoroughbred horse racing in New South Wales. It functions as a regulator with statutory powers. The organization produces content including live racing broadcasts, race replays, and racing news available through its website, YouTube channels, and streaming platforms. It generates over $300 million in recurring annual income from wagering revenue sources including Race Fields fees, TAB distribution parity, and Point of Consumption Tax. The organization relies on wagering-related sponsorship and partnerships (particularly with Tabcorp) for revenue generation."
+  },
+  "model_trace": {
+    "research_model": "claude-web",
+    "classifier_model": null,
+    "validator_model": null
+  },
+  "evidence_by_field": {
+    "lv_org_type": "https://en.wikipedia.org/wiki/Racing_NSW",
+    "lv_produces_content": "https://www.racingnsw.com.au/",
+    "lv_content_type": "https://www.youtube.com/@racingnsw276",
+    "lv_is_hardware_vendor": "https://en.wikipedia.org/wiki/Racing_NSW",
+    "lv_is_gambling_operator": "https://en.wikipedia.org/wiki/Racing_NSW",
+    "lv_sponsorship_reliant": "https://www.parliament.nsw.gov.au/tp/files/192181/2024-25%20Racing%20NSW%20Annual%20Report.pdf",
+    "lv_country_region_normalized": "https://en.wikipedia.org/wiki/Racing_NSW",
+    "lv_has_sports_media_fit": "https://en.wikipedia.org/wiki/Racing_NSW",
+    "lv_has_broadcast_or_streaming_signals": "https://www.racingnsw.com.au/"
+  }
+}

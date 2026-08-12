@@ -61,9 +61,19 @@ def test_tracer_jam_tv_end_to_end_zero_network(monkeypatch):
     assert m.coverage_writes_allowed() is False
 
 
-def test_tracer_racing_nsw_has_no_decision_yet_raises_pending_research():
-    with pytest.raises(m.PendingResearch):
-        m.decide_org_type(RACING_NSW_ID, None)
+def _load_racing_nsw_research():
+    path = m.ROOT / ".planning/phases/48-enrichment-coverage/48-RESEARCH-RACING-NSW.json"
+    return json.loads(path.read_text())
+
+
+def test_tracer_racing_nsw_decision_no_longer_pending_after_task_3():
+    # Plan 48-03 Task 3: the one enum-constrained call resolved Racing NSW to "regulator"
+    # (evidenced, not the plan's flagged-likely "governing_body_league" -- the value
+    # written is whatever the call returned and validated, never a plan-time guess).
+    research = _load_racing_nsw_research()
+    decision = m.decide_org_type(RACING_NSW_ID, research)
+    assert decision["org_type"] == "regulator"
+    assert decision.get("basis")
 
 
 def test_tracer_valid_org_types_imported_not_redeclared():
@@ -167,9 +177,11 @@ def test_marker_editix_is_unknown_with_reason():
     assert decision.get("basis")
 
 
-def test_marker_racing_nsw_still_pending_research():
-    with pytest.raises(m.PendingResearch):
-        m.decide_org_type(RACING_NSW_ID, None)
+def test_marker_racing_nsw_is_resolved_not_pending():
+    research = _load_racing_nsw_research()
+    decision = m.decide_org_type(RACING_NSW_ID, research)
+    assert decision["org_type"] in rvc.VALID_ORG_TYPES
+    assert decision.get("basis")
 
 
 def test_marker_coverage_state_distinguishes_never_attempted_from_attempted_unresolved():
@@ -244,3 +256,103 @@ def test_reconcile_population_no_drift_when_sets_match():
     assert reconciliation["drift"] is False
     assert reconciliation["missing"] == []
     assert reconciliation["unexpected"] == []
+
+
+# --- Plan 48-03 Task 3: Racing NSW's one enum-constrained call, captured + mapped ------------
+
+def test_racing_nsw_prompt_lists_all_9_options_and_the_unknown_instruction():
+    from src.web_research import RACING_NSW_ORG_TYPE_SYSTEM, RESEARCH_SYSTEM
+
+    for option in rvc.VALID_ORG_TYPES:
+        assert option in RACING_NSW_ORG_TYPE_SYSTEM
+    assert "unknown" in RACING_NSW_ORG_TYPE_SYSTEM.lower()
+    # The shared production prompt is untouched by this plan.
+    assert '"lv_org_type":<str>' in RESEARCH_SYSTEM
+
+
+def test_racing_nsw_captured_artifact_exists_and_is_the_fifth_decision():
+    assert len(m.ORG_TYPE_DECISIONS) == 5
+    research = _load_racing_nsw_research()
+    assert research["data"]["lv_org_type"] == m.ORG_TYPE_DECISIONS[RACING_NSW_ID]["org_type"]
+
+
+def test_resolve_racing_nsw_decision_out_of_vocabulary_routes_to_d03_marker():
+    synthetic = {
+        "matched": True, "confidence": 90,
+        "data": {"lv_org_type": "venue"},  # not a VALID_ORG_TYPES member
+        "evidence_by_field": {"lv_org_type": "https://example.org/about"},
+    }
+    decision = m.resolve_racing_nsw_decision(synthetic)
+
+    # The out-of-vocabulary string itself never reaches the decision's org_type -- only
+    # "unknown" (a VALID_ORG_TYPES member) is, which build_coverage_patch accepts (its own
+    # out-of-vocabulary guard is exercised separately by
+    # test_tracer_build_coverage_patch_rejects_out_of_vocabulary_org_type).
+    assert decision["org_type"] == "unknown"
+    assert decision["org_type"] in rvc.VALID_ORG_TYPES
+    assert decision["reason"]
+
+
+def test_resolve_racing_nsw_decision_bare_unknown_routes_to_d03_marker():
+    synthetic = {
+        "matched": True, "confidence": 40,
+        "data": {"lv_org_type": "unknown"},
+        "evidence_by_field": {},
+        "evidence": {"evidence_summary": "Sources did not clearly support any option."},
+    }
+    decision = m.resolve_racing_nsw_decision(synthetic)
+
+    assert decision["org_type"] == "unknown"
+    assert decision["reason"]
+
+
+def test_resolve_racing_nsw_decision_valid_enum_without_evidence_url_routes_to_d03_marker():
+    synthetic = {
+        "matched": True, "confidence": 85,
+        "data": {"lv_org_type": "governing_body_league"},
+        "evidence_by_field": {},  # no URL for lv_org_type specifically
+    }
+    decision = m.resolve_racing_nsw_decision(synthetic)
+
+    assert decision["org_type"] == "unknown"
+    assert decision["reason"]
+
+
+def test_resolve_racing_nsw_decision_valid_enum_with_evidence_url_promotes():
+    synthetic = {
+        "matched": True, "confidence": 92,
+        "data": {"lv_org_type": "governing_body_league"},
+        "evidence_by_field": {"lv_org_type": "https://example.org/about"},
+    }
+    decision = m.resolve_racing_nsw_decision(synthetic)
+
+    assert decision["org_type"] == "governing_body_league"
+    assert "reason" not in decision
+    assert decision["basis"]
+
+
+def test_research_racing_nsw_calls_research_fn_with_the_enum_constrained_prompt():
+    from src.web_research import RACING_NSW_ORG_TYPE_SYSTEM
+
+    captured = {}
+
+    def _fake_fetcher(object_type, record_id, properties):
+        captured["fetch_args"] = (object_type, record_id, tuple(properties))
+        return {"properties": {"name": "Racing NSW", "domain": "racingnsw.com.au"}}
+
+    class _FakeResult:
+        def model_dump(self):
+            return {"provider": "claude_web", "matched": True, "data": {}}
+
+    def _fake_research_fn(record, system_prompt=None):
+        captured["record_id"] = record.id
+        captured["system_prompt"] = system_prompt
+        return _FakeResult()
+
+    result = m.research_racing_nsw(fetcher=_fake_fetcher, research_fn=_fake_research_fn)
+
+    assert captured["fetch_args"][0] == "companies"
+    assert captured["fetch_args"][1] == RACING_NSW_ID
+    assert captured["record_id"] == RACING_NSW_ID
+    assert captured["system_prompt"] is RACING_NSW_ORG_TYPE_SYSTEM
+    assert result == {"provider": "claude_web", "matched": True, "data": {}}
