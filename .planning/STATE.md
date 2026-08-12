@@ -2,31 +2,44 @@
 gsd_state_version: 1.0
 milestone: v0.9
 milestone_name: ICP Rubric Calibration & Veto Remediation
-current_phase: 47
-current_phase_name: veto-remediation
-status: phase-complete
-stopped_at: Phase 47 COMPLETE — VETO-01/02/03 ticked, operator confirmed VETO-03
-last_updated: "2026-08-12T01:55:00.000Z"
+current_phase: 47.5
+current_phase_name: veto-recompute-path
+status: executing
+stopped_at: Completed 47.5-01-PLAN.md
+last_updated: "2026-08-12T05:41:42.621Z"
 last_activity: 2026-08-12
-last_activity_desc: Phase 47 armed window COMPLETE. 16 of 17 false non-ANZ vetoes
+last_activity_desc: 47.5 Plan 01 complete — the request-level recompute lane, offline only
 progress:
-  total_phases: 4
-  completed_phases: 1
-  total_plans: 9
-  completed_plans: 9
-  percent: 25
+  total_phases: 5
+  completed_phases: 2
+  total_plans: 15
+  completed_plans: 10
+  percent: 40
 ---
 
 # Project State
 
 ## Current Position
 
-Phase: 47 (veto-remediation) — **COMPLETE** (4 of 4 plans). Next: Phase 47.5 or 48.
-Plan: 4 of 4
-Status: Phase complete. All 17 records written, both write surfaces disarmed and proven
-  closed by independent re-read, VETO-01/02/03 ticked in REQUIREMENTS.md.
+Phase: 47.5 (veto-recompute-path) — **EXECUTING** (1 of 6 plans). Phase 47 is COMPLETE.
+Plan: 1 of 6 — 47.5-01 landed
+Status: Workstream A's mechanism EXISTS, offline only. Nothing is deployed and nothing
+  is armed. Plan 02 owns deploy + bounce + the one disarmed live execution that proves
+  the RUNNING graph changed; workstreams B and C stay blocked until it does.
 
-**Outcome.** 16 false non-ANZ vetoes cleared; Jam TV (17317850381) correctly RETAINED its
+**47.5-01 outcome.** A complete company can now be routed straight from `Company Gate`
+into `Decide Company Action` by a request-level `recompute` flag on the D-18 POST — one
+edge, zero provider/research/Anthropic calls, `Decide` still the sole veto writer. A
+recompute that resolves to no company is REFUSED (`recompute_refused`), never created. A
+skipped company now terminates observably at `Build Response` with its gate reason instead
+of a bare 200 (RECOMP-02), which also closes the latent paired-index defect by construction.
+Two operator helpers landed for plan 03: `post_webhook_event(..., recompute=True)` with a
+300s default read timeout, and `june_run_arm.py --domains`. 664 node tests + 2600 pytest
+green; zero live reads, zero writes, zero arming. See 47.5-01-SUMMARY.md — one live-found
+deviation (`ENRICH_CO_GATE` is shared by two workflows that have no `Parse HubSpot Event`
+node, so the `$()` read is try/catch-guarded, fail-closed).
+
+**Phase 47 outcome (closed).** 16 false non-ANZ vetoes cleared; Jam TV (17317850381) correctly RETAINED its
 veto per D-23 with region=Other. VETO-03 operator-confirmed 2026-08-12 ("no Non-ANZ
 geography companies with Unknown region") — that bar went 17 -> 0. Tiers after: B×9, C×5,
 Unscored×2, D×1. n8n executions 18 (11834-11851). Provider credits 0. Tests green.
@@ -36,16 +49,20 @@ cycles, two records touched twice. Two named checks relaxed (D-20 re-stamp; orac
 assertion). Both recorded in 47-RUN-REPORT.md § "Window accounting" and 47-04-SUMMARY.md,
 not softened. settle_veto stayed hard throughout.
 
-**Next action: `/gsd-plan-phase 47.5`.** Operator folded both open findings into 47.5 on
-2026-08-12, so it now carries THREE workstreams — plan them together:
+**Next action: execute 47.5-02** (deploy, bounce, one disarmed live execution). 47.5 carries
+THREE workstreams:
 
-- **A — fix the recompute path.** A record with COMPLETE inputs cannot have its veto
-  recomputed by any on-demand trigger (Company Gate skips it, so Decide never runs).
-  Do A first and prove it; B cannot be written until it lands.
+- **A — fix the recompute path.** ~~A record with COMPLETE inputs cannot have its veto
+  recomputed by any on-demand trigger.~~ **Mechanism BUILT in 47.5-01, not yet proven live.**
+  Per project memory `n8n-stored-vs-running-content.md`, a stored read-back proves nothing:
+  the lane is in the built JSON only until plan 02 deploys, bounces and reads back one live
+  execution whose `runData` contains `Decide Company Action`.
+
 - **B — D-V6 re-examination of the four remaining non-ANZ vetoes.** Ironman (17317184159)
   scores 70, Tier A material, suppressed on a Tampa HQ; D-V6 says operating presence, not
   HQ. Gravity Media same shape at 50. Entain will not move (second veto fires). Jam TV is
   correct and stays. Needs researched evidence URLs, not assertion.
+
 - **C — decide the hardware veto's trigger field.** It fires on lv_is_hardware_vendor, which
   1 of 66 records has set, not on lv_org_type. Must land in all three engines together.
 
@@ -66,13 +83,13 @@ Last activity: 2026-08-12 — Plan 03 complete: 47-BEFORE.json (17-row before-sn
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [██████████] 100% (v0.9 phase 47 of 46-49)
+Progress: [███████░░░] 67% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-11T22:08:21.338Z
-**Stopped at:** Completed 47-04-PLAN.md — phase 47 closed
-**Resume file:** .planning/phases/47-veto-remediation/47-04-SUMMARY.md
+**Last session:** 2026-08-12T05:40:53.503Z
+**Stopped at:** Completed 47.5-01-PLAN.md
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -110,6 +127,7 @@ Progress: [██████████] 100% (v0.9 phase 47 of 46-49)
 | Phase 47 P02 | 35m | 3 tasks | 4 files |
 | Phase 47 P03 | 5h | 3 tasks | 9 files |
 | Phase 47 P04 | ~3h | 4 tasks | 8 files |
+| Phase 47.5 P01 | 50min | 3 tasks | 9 files |
 
 ## Decisions
 
@@ -196,6 +214,9 @@ Progress: [██████████] 100% (v0.9 phase 47 of 46-49)
 - [Phase ?]: D-21: narrowed D-09 metadata stamps to the 2 that exist live (lv_org_type_verified_at, lv_produces_content_verified_at); full trail moves to 47-RESEARCH-RESULTS.json/47-RUN-REPORT.md
 - [Phase ?]: Live-discovered fix: lv_org_type gated to a strict CRM enum allowlist -- the research prompt returns free text, never guessed via keyword mapping
 - [Phase ?]: Live-discovered fix: lv_is_gambling_operator boolean never derives lv_org_type -- proven unreliable (8/17 racing clubs false-flagged) unlike lv_is_hardware_vendor
+- [Phase ?]: [47.5-01] The recompute intent is a strict boolean row property normalized AFTER the ...event spread, never a `mode` value — isReturnOnly() treats every non-"write" mode as return-only, so a mode-borne intent would report success and write nothing.
+- [Phase ?]: [47.5-01] Live-found deviation: ENRICH_CO_GATE is shared by wf_enrichment_cloud, wf_enrichment_local_live and wf_scheduled_maintenance_cloud (SJ-2 Company Gate); only the first has a Parse HubSpot Event node, so the request-level $() read is wrapped in the repo's nodeAll try/catch idiom and fails to false. The plan's literal form would have thrown on every row of the SJ-2 daily sweep.
+- [Phase ?]: [47.5-01] The single-veto-writer count gate is DOT-ANCHORED (`.lv_anti_icp_flag =`) — a naive scan reads 2 in Decide Company Action alone, because its 2026-08-10 blank-region debug comment quotes lv_anti_icp_flag="true" in prose. Measured before the assertion was written.
 
 ### Blockers
 
