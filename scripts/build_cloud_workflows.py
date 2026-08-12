@@ -4774,6 +4774,38 @@ def build_enrichment_cloud():
                  {"name": "content-type", "value": "application/json"}],
         json_body="={{ JSON.stringify($json.research_request_body) }}"))
     csx += 220
+    # D-04 (Phase 48 Plan 02, folded todo
+    # .planning/todos/pending/2026-08-12-n8n-swallows-anthropic-credit-failure.md): _http_node's
+    # default onError="continueRegularOutput" means an Anthropic 400 (live exec 11833, credit
+    # exhaustion) arrives as DATA on Claude Web Research's main output, not as a node failure —
+    # so a gate is needed immediately downstream to keep an error-shaped payload out of
+    # Validate Research Output / Merge Company / Decide Company Action. Bare $json is correct
+    # HERE and only here: the immediate upstream IS the HTTP node itself, so nothing can have
+    # replaced the item in between — the same reasoning IF Company Skip's own comment gives for
+    # its own bare $json.action read (:4687-4688).
+    nodes.append(_if_bool_expr_node(
+        "IF Research Errored",
+        "!!$json.error || !Array.isArray($json.content)",
+        csx, cy - 180,
+    ))
+    csx += 220
+    # The true lane's item is the raw HTTP-node output (no action/hs_object_id/gate fields),
+    # unlike IF Company Skip's true lane — it cannot wire straight to Build Response the way
+    # that gate does. Recover the pre-HTTP row BY NODE NAME, the SAME idiom
+    # Validate Research Output already uses for "Build Research Request"
+    # (_enrich_validate_research_js, :2360-2362), so the row reaching Build Response carries
+    # the same action/gate shape every other terminal produces.
+    nodes.append(code_node("Build Research Failure Response", r"""
+const preHttp = (function () {
+  try { return $('Build Research Request').all(); } catch (e) { return []; }
+})();
+return $input.all().map((it, i) => {
+  const row = (preHttp[i] && preHttp[i].json) || {};
+  const message = (it.json && it.json.error && it.json.error.message) || 'research call failed';
+  return { json: { ...row, action: "research_failed", gate: { reason: message } } };
+});
+""", csx, cy - 260))
+    csx += 220
     nodes.append(code_node("Validate Research Output", ENRICH_VALIDATE_RESEARCH, csx, cy - 180))
     csx += 220
     nodes.append(code_node("Judge Gate", _enrich_judge_gate_js(cloud=True), csx, cy - 180))
@@ -5082,7 +5114,16 @@ def build_enrichment_cloud():
             [{"node": "Merge Company", "type": "main", "index": 0}],           # false: fan straight in
         ]},
         "Build Research Request": {"main": [[{"node": "Claude Web Research", "type": "main", "index": 0}]]},
-        "Claude Web Research": {"main": [[{"node": "Validate Research Output", "type": "main", "index": 0}]]},
+        # D-04 (Phase 48 Plan 02): Claude Web Research's single outgoing edge is no longer
+        # "Validate Research Output" — it is "IF Research Errored". An error-shaped payload
+        # (true lane) terminates observably at Build Response via Build Research Failure
+        # Response; a healthy payload (false lane) continues unchanged.
+        "Claude Web Research": {"main": [[{"node": "IF Research Errored", "type": "main", "index": 0}]]},
+        "IF Research Errored": {"main": [
+            [{"node": "Build Research Failure Response", "type": "main", "index": 0}],  # true: errored
+            [{"node": "Validate Research Output", "type": "main", "index": 0}],         # false: unchanged
+        ]},
+        "Build Research Failure Response": {"main": [[{"node": "Build Response", "type": "main", "index": 0}]]},
         "Validate Research Output": {"main": [[{"node": "Judge Gate", "type": "main", "index": 0}]]},
         "Judge Gate": {"main": [[{"node": "IF Needs Judge", "type": "main", "index": 0}]]},
         "IF Needs Judge": {"main": [
