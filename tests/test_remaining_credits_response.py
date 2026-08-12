@@ -154,18 +154,27 @@ def test_zero_env_or_vars_expressions_in_the_credit_branch():
 
 
 # --- (c) Build Response convergence: 5 real terminals + 2 re-pointed lanes + unsupported
+#         + the companies skip terminal (Phase 47.5 RECOMP-02)
 
 BUILD_RESPONSE_SOURCES = {
     ("HubSpot Create", 0), ("HubSpot Update", 0), ("Skip (NoOp)", 0),
     ("HubSpot Company Create", 0), ("HubSpot Company Update", 0),
     ("IF Enrich", 1), ("IF Company Enrich", 1),
     ("Unsupported Object Type", 0),
+    # Phase 47.5 Plan 01 (RECOMP-02): the companies branch's skip terminal. Until now a
+    # complete company died at Normalize + Score Company with zero rows out, so the caller
+    # got a bare 200 with no body and could not tell "complete, nothing to do" from
+    # "something broke". This is the direct companies mirror of ("Skip (NoOp)", 0) above,
+    # which the contacts branch has always had. The assertion below stays EXACT equality —
+    # this extends the expected set, it does not relax the check.
+    ("IF Company Skip", 0),
 }
 
 
 def test_build_response_is_reachable_from_every_terminal_branch():
     """Fails if only the five real terminal nodes converge — the two re-pointed
-    IF-enrich-false lanes and the unsupported terminal must ALSO feed Build Response."""
+    IF-enrich-false lanes, the unsupported terminal and the companies skip terminal must
+    ALSO feed Build Response."""
     doc = _load()
     edges = set(_inbound_edges(doc, "Build Response"))
     assert edges == BUILD_RESPONSE_SOURCES, (

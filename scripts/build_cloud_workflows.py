@@ -1840,12 +1840,50 @@ const POLICY = {
   lv_produces_content: { stale_after_days: 180 },
 };
 const NOW = new Date().toISOString();
+// Phase 47.5 (RECOMP-01): the on-demand veto-recompute intent, read at REQUEST level by
+// node name from the ROOT `Parse HubSpot Event` — never bare $json, and never `.item`.
+// `.first()` makes this a WHOLE-REQUEST decision, which is what keeps the two lanes of
+// `IF Company Recompute` mutually exclusive for a whole execution — the property every
+// existing multi-inbound convergence in this graph relies on, and the reason none of them
+// has ever mis-fired. Hoisted out of the per-row map for the same reason.
+//
+// The try/catch is the SAME idiom ENRICH_NORMALIZE_SCORE_CO's nodeAll() uses, and it is
+// load-bearing, not decorative: this constant is shared by three workflows and only the
+// enrichment webhook one HAS a `Parse HubSpot Event` node. n8n throws on $() for a node
+// that does not exist in the current workflow, so `wf_enrichment_local_live`'s
+// "Company Gate" and `wf_scheduled_maintenance_cloud`'s "SJ-2 Company Gate" would throw on
+// every row without it. Failing to false is the fail-closed direction: those two workflows
+// keep exactly the behaviour they have today.
+let RECOMPUTE_REQUESTED = false;
+try {
+  const _first = $('Parse HubSpot Event').first();
+  RECOMPUTE_REQUESTED = !!(_first && _first.json && _first.json.recompute === true);
+} catch (e) { RECOMPUTE_REQUESTED = false; }
 return $input.all().map((it) => {
   const row = it.json;
   const gate = decideAction(row.existingRecord || {}, REQUIRED, POLICY, NOW);
   let action = gate.action;
   // Fail-closed (Task 6, review #8) — see ENRICH_GATE's identical comment (contacts).
   if (row.lookup_failed === true && action === "create") action = "skip";
+  // Phase 47.5 (RECOMP-01) — exactly two mappings, and only under the request-level intent
+  // resolved above:
+  //   skip   -> enrich            a COMPLETE record is otherwise frozen: Normalize + Score
+  //                               drops it and the sole veto writer never runs (exec 11846)
+  //   create -> recompute_refused a recompute for a record that resolved to nothing must
+  //                               NEVER seed a junk company (BUG 19 shape). It falls
+  //                               through both write IFs to Build Response.
+  // `enrich` is untouched. `gate` itself is left intact apart from the refusal reason —
+  // the reason string is what makes the outcome readable in the response.
+  if (RECOMPUTE_REQUESTED) {
+    if (action === "skip") {
+      action = "enrich";
+    } else if (action === "create") {
+      action = "recompute_refused";
+      gate.reason =
+        "a recompute was requested for a company that did not resolve to an existing " +
+        "record — refused rather than created (" + gate.reason + ")";
+    }
+  }
   return { json: { ...row, gate, action } };
 });
 """
@@ -1880,6 +1918,13 @@ ENRICH_NORMALIZE_SCORE_CO = inline(
 // object_type is pinned to "companies" so toCandidates takes its companies branch — the
 // one that emits lv_revenue_band / lv_employee_band / lv_country_region_normalized.
 function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
+// Phase 47.5: RETAINED as defence in depth, no longer load-bearing. `IF Company Skip` now
+// terminates skipped rows at Build Response BEFORE Build Company Requests, so a skipped row
+// can no longer reach this node at all. That is what closes the latent paired-index defect:
+// providers ran for EVERY gate row while this filter re-indexed the surviving rows against
+// the unfiltered provider arrays, so in a mixed 2-row batch rows[0] was row 1 but lusha[0]
+// was row 0's response — one company scored off another's provider data. The arrays now
+// align by construction, not by this filter.
 const rows = $('Company Gate').all().filter((it) => it.json.action !== "skip");
 const lusha = nodeAll('Lusha Company');
 const apollo = nodeAll('Apollo Org');
@@ -3699,6 +3744,18 @@ return parsed.events.map((event) => {
     // HubSpot event carries none of these fields, so on the real path Build Identity
     // sees only object_id/object_type until a follow-up phase adds the fetch-by-id.
     ...event,
+    // Phase 47.5 (RECOMP-01): the on-demand veto-recompute intent. Placed AFTER the
+    // `...event` spread deliberately — the companies branch has entry_strip_markers=False,
+    // so a caller-supplied raw row property is NOT stripped on that branch and would
+    // otherwise shadow this normalization. Strictly `=== true`: anything that is not a real
+    // JSON boolean true (the string "true", 1, "yes", absent) normalizes to false. That
+    // direction is fail-closed and costs nothing.
+    //
+    // NOT carried in `mode`, deliberately: isReturnOnly() (n8n/code/matchProposal.js)
+    // treats EVERY non-"write" mode as return-only, so a mode-borne intent would set
+    // action:"proposed", write nothing, and report success — the exact silent-success
+    // class this phase exists to remove.
+    recompute: event.recompute === true,
   }};
 });
 """
@@ -4605,6 +4662,28 @@ def build_enrichment_cloud():
     nodes.append(code_node(
         "Adapt Company Fetch By Id", ENRICH_ADAPT_FETCH_BY_ID_COMPANY, adapt_co_search_x, cfby))
 
+    # Phase 47.5 Plan 01 (RECOMP-01/RECOMP-02): the request-level recompute lane. Emitted on
+    # a second free row below the fetch-by-id lane so no existing node's `position` moves.
+    #
+    # `IF Company Recompute` reads the intent BY NODE NAME from the ROOT Parse HubSpot Event
+    # with `.first()` — never `.item`, never bare $json. `.first()` makes it a WHOLE-REQUEST
+    # decision, so exactly one of the two lanes carries data per execution; that is the
+    # property Decide Company Action's now-second inbound edge relies on, and the same one
+    # _provider_gate_bypass_chain's convergence already depends on. A per-row predicate would
+    # break it.
+    #
+    # `IF Company Skip` reads bare `$json.action` — correct HERE and only here: its immediate
+    # upstream is a Code node, with no HTTP hop in between that could have replaced the item.
+    crby = cfby + 200
+    nodes.append(_if_bool_expr_node(
+        "IF Company Recompute",
+        "$('Parse HubSpot Event').first().json.recompute === true",
+        build_company_identity_x, crby,
+    ))
+    nodes.append(_if_bool_expr_node(
+        "IF Company Skip", '$json.action === "skip"', hs_co_search_x, crby,
+    ))
+
     cpx = cx + 220
     # Phase 16.1 (Task 2 — mirrors Task 1's contacts fix): identity is read BY NODE NAME
     # from "Build Company Requests" (never bare $json), for the same reason as the
@@ -4953,8 +5032,29 @@ def build_enrichment_cloud():
     ]))
     conns.update(chain([
         "HubSpot Company Search",
-        "Adapt Company Search", "Company Gate", "Build Company Requests",
+        "Adapt Company Search", "Company Gate",
     ]))
+    # Phase 47.5 Plan 01: Company Gate's single outgoing edge is no longer
+    # "Build Company Requests" — it is the recompute lane's entry. Both chain() calls above
+    # still terminate AT Company Gate; only its outgoing edge changed.
+    #   recompute true  -> Decide Company Action   (one edge: no provider, research, judge or
+    #                                               merge node, so a recompute costs nothing)
+    #   recompute false -> IF Company Skip
+    #       skip true   -> Build Response          (RECOMP-02: a skipped record is observable,
+    #                                               carrying gate.reason, instead of today's
+    #                                               bare 200 with no body — a direct port of
+    #                                               the contacts branch's Skip (NoOp) edge)
+    #       skip false  -> Build Company Requests  (the unchanged enrichment path)
+    conns["Company Gate"] = {
+        "main": [[{"node": "IF Company Recompute", "type": "main", "index": 0}]]}
+    conns["IF Company Recompute"] = {"main": [
+        [{"node": "Decide Company Action", "type": "main", "index": 0}],  # true
+        [{"node": "IF Company Skip", "type": "main", "index": 0}],        # false
+    ]}
+    conns["IF Company Skip"] = {"main": [
+        [{"node": "Build Response", "type": "main", "index": 0}],          # true
+        [{"node": "Build Company Requests", "type": "main", "index": 0}],  # false
+    ]}
     # Phase 16.1 Task 2: Build Company Requests feeds the gated waterfall's first gate
     # directly (no dispatch IF — companies has no skip lane). The gate1..gateN + rejoin
     # wiring (up to "Normalize + Score Company") comes from the SAME shared
