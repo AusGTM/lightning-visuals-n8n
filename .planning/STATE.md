@@ -19,6 +19,49 @@ progress:
 
 # Project State
 
+## ⛔ PHASE 47.5 — BLOCKED ON ONE OPERATOR COMMAND (2026-08-12)
+
+5 of 6 plans complete. Everything that can be done without the operator IS done.
+
+**THE ONLY THING NEEDED — operator runs this (ALLOW_N8N_DEPLOY is operator-only; D-47.5-01's
+arming waiver deliberately does NOT cover deploys):**
+
+```
+DRY_RUN=false ALLOW_N8N_DEPLOY=true .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/deploy_n8n_workflows.py', run_name='__main__')"
+```
+The bare script form FAILS — it never calls load_dotenv and needs N8N_URL/N8N_API_KEY.
+
+**Then Claude, in order:**
+1. Bounce: `n8n_control.set_active('950HPb7a1GgSAIyZ', False)` then `True`, loader is
+   `config_gate.load_config()`. Verify `active: true` by an INDEPENDENT GET — wave 2 needed
+   three deactivations after a `vars()` TypeError left it OFF mid-bounce.
+2. Confirm the RUNNING instance carries `orgType === "hardware_vendor"`. Stored != running.
+3. Append the deploy status codes + both set_active read-backs to `47.5-C-DECISION.md`
+   § Deploy record. RECOMP-04 stays unmarked until they land.
+4. Execute plan `47.5-06` — armed window #2, allowlist EXACTLY
+   `17317184159,15860277364,18047161864`.
+
+**Why arming cannot precede the deploy** (not merely ordering): `src/icp_scoring.py` already
+fires workstream C's OR predicate, but the DEPLOYED Decide node still runs the old boolean-only
+rule. Arm first and Simtech recomputes under the old rule and stays Tier B — the decision
+recorded and silently not applied, the exact failure class this phase exists to remove.
+
+**Predictions to assert against** (`47.5-WINDOW2-PREARM.md`, written before arming):
+
+| id | write | predicted |
+|---|---|---|
+| 17317184159 Ironman | region -> ANZ | 80 / **Tier A** / no veto |
+| 15860277364 GRAVITY MEDIA | region -> ANZ | 60 / Tier B / no veto |
+| 18047161864 Simtech LED | *(no input write — recompute only)* | 40 / **Tier D** / hardware veto |
+
+Abort conditions are listed in that same file. Entain `10024564084` and Jam TV `17317850381`
+must NEVER appear in the allowlist — Entain cannot move (second veto), Jam TV is correct (D-23).
+
+**Completed:** 47.5-01 (lane offline) · 47.5-02 (deployed+bounced, proven live execs
+11852/11853) · 47.5-03 (acceptance test GREEN, assertions byte-identical, red since Phase
+40-07) · 47.5-04 (registry-grade D-V6 evidence, decision applied) · 47.5-05 (OR predicate in
+both engines, one commit — deploy outstanding).
+
 ## Current Position
 
 Phase: 47.5 (veto-recompute-path) — **EXECUTING** (4 of 6 plans: 01 + 02 + 03 + 04). Phase 47 is COMPLETE.
