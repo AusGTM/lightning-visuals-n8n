@@ -94,7 +94,7 @@ regulator · gambling_operator · hardware_vendor · other · unknown
 
 ### The `venue` enum option
 
-- **D-02:** **Defer `venue`. No record in this population needs it.** The LOCKED decision
+- **D-02:** **Defer `venue`. No record in this population needs it.** *(Amendment written 2026-08-12 — the dated DEFERRAL block is live at the top of the decision file.)* The LOCKED decision
   `.planning/decisions/2026-08-12-org-type-venue-and-normalization.md` says `venue` implements in
   Phase 48; its "no portal work is required" clause is **false** (already corrected in a dated
   block at the top of that file). Adding it is a HubSpot **enum-option PATCH** via
@@ -158,7 +158,7 @@ regulator · gambling_operator · hardware_vendor · other · unknown
 
 ### Re-derivation after the writes
 
-- **D-07:** **Fire a recompute POST per written record and report before/after.** Writing
+- **D-09:** **Fire a recompute POST per written record and report before/after.** Writing
   `lv_org_type` *completes* each record, so `Company Gate` will return `skip` on every future
   trigger and `Decide Company Action` — the sole writer of `lv_anti_icp_flag` /
   `lv_anti_icp_reason` — would never run again. The Phase 47.5 recompute lane is the only way to
@@ -201,7 +201,7 @@ regulator · gambling_operator · hardware_vendor · other · unknown
 
 | Rule | Detail |
 |---|---|
-| **D-07 (project-level, not this file's D-07)** | **Never PATCH `lv_anti_icp_flag`, `lv_anti_icp_reason`, `lv_icp_fit_score`, `lv_icp_tier`.** Write inputs, let the derived chain settle, read it back. Held absolutely through both Phase 47.5 windows |
+| **Project-level D-07** | **Never PATCH `lv_anti_icp_flag`, `lv_anti_icp_reason`, `lv_icp_fit_score`, `lv_icp_tier`.** Write inputs, let the derived chain settle, read it back. Held absolutely through both Phase 47.5 windows. (This phase's own decisions are numbered D-01..D-09 in the section above; no `D-07` is reused there) |
 | **No new HubSpot properties** | Standing v0.9 constraint. Adding an *option* to an existing enumeration is not a new property — but it is still portal schema work with its own arming (this is why D-02 defers `venue`) |
 | **Out-of-vocabulary `lv_org_type` 400s, and in a batch fails the batch** | The strict allowlist in `scripts/remediate_veto_companies.py:142` is correct. `lv_org_type` IS an `enumeration` / `select` (verified live 2026-08-12). All three D-V4 normalization layers still required: the CRM guard stops a bad value reaching the *record*, not the *write*, and `.get(org_type, 0)` scores an unrecognised key **0, silently** |
 | **Arming is operator-only** | `D-47.5-01` and its amendment delegated arming to Claude **for Phase 47.5 only**. EXPIRED. Do not carry forward, do not cite |
@@ -332,7 +332,7 @@ regulator · gambling_operator · hardware_vendor · other · unknown
 ### Integration Points
 - D-04's gate node sits immediately after `Claude Web Research` in `wf_enrichment_cloud.json`,
   built from `scripts/build_cloud_workflows.py`, terminating at `Build Response` with a reason
-- The recompute POST (D-07) enters at the D-18 webhook and routes `Company Gate` →
+- The recompute POST (D-09) enters at the D-18 webhook and routes `Company Gate` →
   `IF Company Recompute` → `Decide Company Action`, bypassing providers/research/judge/merge
 - `lv_enrichment_review_reason` (live, multi-line text) is the un-enrichable reason's home (D-03)
 
@@ -366,7 +366,7 @@ regulator · gambling_operator · hardware_vendor · other · unknown
 - **A live `D` → non-`D` tier *transition*, proven as a transition** — end states are right; the
   reads are 1–2s apart. Phase 49.
 - **Plain-language before/after tier distribution as a deliverable** — Phase 49 / RESCORE-03.
-  Phase 48 records the numbers (D-07); Phase 49 narrates them.
+  Phase 48 records the numbers (D-09); Phase 49 narrates them.
 
 ### Reviewed Todos (not folded)
 

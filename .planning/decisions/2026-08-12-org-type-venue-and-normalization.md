@@ -34,6 +34,27 @@
 > Re-list the live property before acting on any of this; a committed snapshot is evidence, not
 > a guarantee.
 
+> ### DEFERRAL — 2026-08-12, `/gsd-discuss-phase 48` (operator-selected). D-V1 stands; Phase 48 does not spend it.
+>
+> **"Implements in: Phase 48" above is now inaccurate.** Phase 48's population was re-derived live
+> (2026-08-12: 66 scored companies, **5** with blank `lv_org_type`) and every record's evidence was
+> read. **None of the five maps to `venue`.** Their outcomes are `broadcaster` (Jam TV),
+> `individual_club_team` (Waikato Racing Club), `content_producer` (The Rumble), `unknown` +
+> stated reason (Editix, whose identity the research could not resolve at all), and one fresh
+> research call (Racing NSW). Waikato — a racecourse and event centre — is the nearest miss and
+> maps better to `individual_club_team`, since it *is* a racing club, not merely the venue one
+> races at.
+>
+> Because adding `venue` is a portal enum-option PATCH requiring its own arming decision
+> (correction block above, point 1), and no record in scope needs it, **Phase 48 defers it rather
+> than paying for an option nothing will carry.**
+>
+> **D-V1's substance is not withdrawn.** The category is real and the taxonomy still cannot express
+> it. Revisit when a record's evidence actually demands it — most likely during Phase 49's
+> full-population pass, which sees all 66 rather than the 5 with blank org types.
+>
+> D-V2..D-V6 are unaffected. See `.planning/phases/48-enrichment-coverage/48-CONTEXT.md` D-02.
+
 Raised because Phase 47's live research returned free-text `lv_org_type` for 16 of 17 pinned
 companies ("Sporting club / Racecourse operator", "Thoroughbred racecourse operator /
 Recreational facilities management", …). The enum gate correctly refused to guess-map them, which
