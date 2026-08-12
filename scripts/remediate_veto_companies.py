@@ -139,15 +139,16 @@ EVIDENCE_REQUIRED_ORG_TYPES = (
 # pinned records' research results returned a member of this set -- src/web_research.py's
 # RESEARCH_SYSTEM prompt does not constrain the model to it, so every live result was
 # free text (e.g. "private_company", "Media company / Web television broadcaster").
-# CORRECTED 2026-08-12 (Phase 47 Plan 04): this comment previously said free text "400s
-# the batch because the property is an ENUMERATION". That reason is WRONG --
-# lv_org_type is NOT a HubSpot enumeration (docs/WEB-RESEARCH-SPEC.md:208). HubSpot
-# ACCEPTS the write and it fails silently downstream instead: every scoring engine looks
-# the value up with `.get(org_type, 0)`, so an unrecognised string scores 0 and the record
-# quietly reads as worthless rather than erroring. Silent-zero is worse than a 400, which
-# makes the gate MORE necessary, not less -- do not remove it on the grounds that the
-# stated 400 never happens. Not fixed at the prompt (shared/production, parity-tracked
-# against the n8n mirror, out of this plan's files_modified) -- gated here instead, at the
+# RE-CORRECTED 2026-08-12 (Phase 47.5 doc sweep). An earlier "correction" this same day
+# claimed lv_org_type is NOT an enumeration and that free text is silently accepted. That
+# was WRONG. It trusted docs/WEB-RESEARCH-SPEC.md's 2026-07-20 note, which predates the
+# enum migration. VERIFIED LIVE 2026-08-12 via the properties API:
+#     type: enumeration | fieldType: select
+#     options: governing_body_league, content_producer, broadcaster, individual_club_team,
+#              regulator, gambling_operator, hardware_vendor, other, unknown
+# So the ORIGINAL comment was right: writing free text to this property 400s the batch.
+# The gate below is load-bearing either way — do not remove it. Not fixed at the prompt
+# (shared/production, parity-tracked against the n8n mirror) — gated here instead, at the
 # trust boundary this script already owns.
 VALID_ORG_TYPES = (
     "governing_body_league", "content_producer", "individual_club_team", "broadcaster",
