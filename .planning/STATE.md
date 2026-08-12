@@ -5,15 +5,15 @@ milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 47.5
 current_phase_name: veto-recompute-path
 status: executing
-stopped_at: Completed 47.5-01-PLAN.md
-last_updated: "2026-08-12T05:41:42.621Z"
+stopped_at: Completed 47.5-04-PLAN.md
+last_updated: "2026-08-12T06:05:22.156Z"
 last_activity: 2026-08-12
-last_activity_desc: 47.5 Plan 01 complete — the request-level recompute lane, offline only
+last_activity_desc: 47.5 Plan 04 complete — D-V6 operating-presence evidence; Ironman + Gravity Media -> ANZ (no writes yet)
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 15
-  completed_plans: 10
+  completed_plans: 11
   percent: 40
 ---
 
@@ -21,8 +21,8 @@ progress:
 
 ## Current Position
 
-Phase: 47.5 (veto-recompute-path) — **EXECUTING** (1 of 6 plans). Phase 47 is COMPLETE.
-Plan: 1 of 6 — 47.5-01 landed
+Phase: 47.5 (veto-recompute-path) — **EXECUTING** (2 of 6 plans: 01 + 04). Phase 47 is COMPLETE.
+Plan: 2 of 6 — 47.5-01 landed
 Status: Workstream A's mechanism EXISTS, offline only. Nothing is deployed and nothing
   is armed. Plan 02 owns deploy + bounce + the one disarmed live execution that proves
   the RUNNING graph changed; workstreams B and C stay blocked until it does.
@@ -83,12 +83,12 @@ Last activity: 2026-08-12 — Plan 03 complete: 47-BEFORE.json (17-row before-sn
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [███████░░░] 67% (v0.9 phase 47.5 of 46-49)
+Progress: [███████░░░] 73% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-12T05:40:53.503Z
-**Stopped at:** Completed 47.5-01-PLAN.md
+**Last session:** 2026-08-12T06:05:11.928Z
+**Stopped at:** Completed 47.5-04-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -128,6 +128,7 @@ Progress: [███████░░░] 67% (v0.9 phase 47.5 of 46-49)
 | Phase 47 P03 | 5h | 3 tasks | 9 files |
 | Phase 47 P04 | ~3h | 4 tasks | 8 files |
 | Phase 47.5 P01 | 50min | 3 tasks | 9 files |
+| Phase 47.5 P04 | 35 min | 3 tasks | 2 files |
 
 ## Decisions
 
@@ -217,6 +218,8 @@ Progress: [███████░░░] 67% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: [47.5-01] The recompute intent is a strict boolean row property normalized AFTER the ...event spread, never a `mode` value — isReturnOnly() treats every non-"write" mode as return-only, so a mode-borne intent would report success and write nothing.
 - [Phase ?]: [47.5-01] Live-found deviation: ENRICH_CO_GATE is shared by wf_enrichment_cloud, wf_enrichment_local_live and wf_scheduled_maintenance_cloud (SJ-2 Company Gate); only the first has a Parse HubSpot Event node, so the request-level $() read is wrapped in the repo's nodeAll try/catch idiom and fails to false. The plan's literal form would have thrown on every row of the SJ-2 daily sweep.
 - [Phase ?]: [47.5-01] The single-veto-writer count gate is DOT-ANCHORED (`.lv_anti_icp_flag =`) — a naive scan reads 2 in Decide Company Action alone, because its 2026-08-10 blank-region debug comment quotes lv_anti_icp_flag="true" in prose. Measured before the assertion was written.
+- [47.5-04]: 47.5-B: Ironman 17317184159 -> ANZ and GRAVITY MEDIA 15860277364 -> ANZ (region only); Entain and Jam TV get no write
+- [47.5-04]: D-V6 AU-vs-ANZ resolved: ANZ absorbs the multinational-with-local-operations case; Gravity Media's NZ leg recorded UNPROVEN
 
 ### Blockers
 
