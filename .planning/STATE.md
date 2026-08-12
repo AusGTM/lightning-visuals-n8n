@@ -5,71 +5,67 @@ milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 47.5
 current_phase_name: veto-recompute-path
 status: executing
-stopped_at: Completed 47.5-05-PLAN.md; operator deploy+bounce outstanding
-last_updated: "2026-08-12T06:51:33.894Z"
+stopped_at: "Completed 47.5-06-PLAN.md — all 6 plans done; armed window #2 closed"
+last_updated: "2026-08-12T07:12:54.998Z"
 last_activity: 2026-08-12
-last_activity_desc: 47.5 Plan 04 complete — D-V6 operating-presence evidence; Ironman + Gravity Media -> ANZ (no writes yet)
+last_activity_desc: "47.5 Plan 06 complete — armed window #2, 3 records written in ONE cycle; Ironman Tier A, Gravity Media Tier B, Simtech LED Tier D; non-ANZ census 4 -> 2"
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 15
-  completed_plans: 14
-  percent: 40
+  completed_plans: 15
+  percent: 60
 ---
 
 # Project State
 
-## ⛔ PHASE 47.5 — BLOCKED ON ONE OPERATOR COMMAND (2026-08-12)
+## ✅ PHASE 47.5 — ALL 6 PLANS COMPLETE, NOTHING ARMED (2026-08-12)
 
-5 of 6 plans complete. Everything that can be done without the operator IS done.
+**Both declared armed windows are spent and closed. The phase declared TWO up front and used
+exactly two** — the correction to Phase 47, which needed five for one plan.
 
-**THE ONLY THING NEEDED — operator runs this (ALLOW_N8N_DEPLOY is operator-only; D-47.5-01's
-arming waiver deliberately does NOT cover deploys):**
+**47.5-06 outcome (armed window #2 of 2).** One arm, one disarm, three records touched once
+each. Executions 11859/11860/11861 (plus disarmed rehearsal 11858).
 
-```
-DRY_RUN=false ALLOW_N8N_DEPLOY=true .venv/bin/python -c "from dotenv import load_dotenv; load_dotenv(); import runpy; runpy.run_path('scripts/deploy_n8n_workflows.py', run_name='__main__')"
-```
-The bare script form FAILS — it never calls load_dotenv and needs N8N_URL/N8N_API_KEY.
+| id | write | before | after |
+|---|---|---|---|
+| 17317184159 Ironman | region `Other` -> `ANZ` | 70 / D / `Non-ANZ geography` | **80 / A / no veto** |
+| 15860277364 GRAVITY MEDIA | region `Other` -> `ANZ` | 50 / D / `Non-ANZ geography` | **60 / B / no veto** |
+| 18047161864 Simtech LED | **NONE — recompute only** | 40 / B / no veto | **40 / D / `Hardware/AV/LED vendor…`** |
 
-**Then Claude, in order:**
-1. Bounce: `n8n_control.set_active('950HPb7a1GgSAIyZ', False)` then `True`, loader is
-   `config_gate.load_config()`. Verify `active: true` by an INDEPENDENT GET — wave 2 needed
-   three deactivations after a `vars()` TypeError left it OFF mid-bounce.
-2. Confirm the RUNNING instance carries `orgType === "hardware_vendor"`. Stored != running.
-3. Append the deploy status codes + both set_active read-backs to `47.5-C-DECISION.md`
-   § Deploy record. RECOMP-04 stays unmarked until they land.
-4. Execute plan `47.5-06` — armed window #2, allowlist EXACTLY
-   `17317184159,15860277364,18047161864`.
+**Simtech is the load-bearing row:** a COMPLETE record the gate calls `skip`, zero input change,
+moved solely because the new OR predicate ran on the recompute lane. Retroactivity executed, not
+asserted — and the one outcome no input edit could have produced.
 
-**Why arming cannot precede the deploy** (not merely ordering): `src/icp_scoring.py` already
-fires workstream C's OR predicate, but the DEPLOYED Decide node still runs the old boolean-only
-rule. Arm first and Simtech recomputes under the old rule and stays Tier B — the decision
-recorded and silently not applied, the exact failure class this phase exists to remove.
+Every hard assertion (flag + reason) proven by independent read-back. Score and tier all six
+matched the pre-arm oracle predictions but **stay reported as predictions** — Phase 49 owns
+oracle-vs-live parity. D-07 held absolutely: only `lv_country_region_normalized` was ever
+PATCHed, twice. Disarm `observed` all-false with both allowlists empty, plus a fourth
+independent read of the workflow literals; `active: true`. Cost: 4 n8n executions, **0** provider
+credits, **0** Anthropic calls.
 
-**Predictions to assert against** (`47.5-WINDOW2-PREARM.md`, written before arming):
+**Portal-wide non-ANZ veto census: 4 -> 2.** The two remaining are the two never in the
+allowlist — Entain `10024564084` (held by its second veto, `lv_produces_content=false`) and
+**Jam TV `17317850381`, still vetoed as D-23 requires**. Both untouched, `hs_lastmodifieddate`
+predating the window. VETO-03 bar still 0.
 
-| id | write | predicted |
-|---|---|---|
-| 17317184159 Ironman | region -> ANZ | 80 / **Tier A** / no veto |
-| 15860277364 GRAVITY MEDIA | region -> ANZ | 60 / Tier B / no veto |
-| 18047161864 Simtech LED | *(no input write — recompute only)* | 40 / **Tier D** / hardware veto |
+**Completed:** 47.5-01 (lane offline) · 47.5-02 (deployed+bounced, execs 11852/11853) ·
+47.5-03 (acceptance test GREEN, window #1) · 47.5-04 (registry-grade D-V6 evidence) ·
+47.5-05 (OR predicate in both engines, one commit) · 47.5-06 (window #2, 3 records written).
+**RECOMP-01/02/03/04 all Complete.**
 
-Abort conditions are listed in that same file. Entain `10024564084` and Jam TV `17317850381`
-must NEVER appear in the allowlist — Entain cannot move (second veto), Jam TV is correct (D-23).
-
-**Completed:** 47.5-01 (lane offline) · 47.5-02 (deployed+bounced, proven live execs
-11852/11853) · 47.5-03 (acceptance test GREEN, assertions byte-identical, red since Phase
-40-07) · 47.5-04 (registry-grade D-V6 evidence, decision applied) · 47.5-05 (OR predicate in
-both engines, one commit — deploy outstanding).
+**Next action: seal phase 47.5, then Phase 48 (COVER-01/COVER-02).** Do NOT pass `--ws` to
+`phase.complete` — v0.8 phases live in root `.planning/` and the workstream guard misfires.
 
 ## Current Position
 
-Phase: 47.5 (veto-recompute-path) — **EXECUTING** (4 of 6 plans: 01 + 02 + 03 + 04). Phase 47 is COMPLETE.
-Plan: 5 of 6 — 47.5-03 landed
-Status: **Workstream A is DONE and RECOMP-01 is met.** The recompute lane is deployed,
-  live, and the acceptance test that has been red since Phase 40-07 is GREEN, with all
-  four of its assertions byte-identical. Nothing is armed — armed window #1 of 2 was
-  opened once and closed once, and the disarm was independently re-read.
+Phase: 47.5 (veto-recompute-path) — **COMPLETE** (6 of 6 plans). Phase 47 is COMPLETE.
+Plan: 6 of 6 — 47.5-06 landed
+Status: **All three workstreams DONE; RECOMP-01/02/03/04 all met.** The recompute lane is
+  deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
+  assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
+  has executed on a real record. **Nothing is armed** — windows #1 and #2 were each opened
+  once and closed once, and both disarms were independently re-read.
 
 **47.5-03 outcome (armed window #1 of 2).**
 `tests/test_scoring_parity.py::test_veto_clear_after_correction` passed live in 23.34s,
@@ -114,8 +110,7 @@ cycles, two records touched twice. Two named checks relaxed (D-20 re-stamp; orac
 assertion). Both recorded in 47-RUN-REPORT.md § "Window accounting" and 47-04-SUMMARY.md,
 not softened. settle_veto stayed hard throughout.
 
-**Next action: execute 47.5-05** (then 47.5-06, which owns armed window #2 — the ONLY
-remaining arming budget in this phase). 47.5 carries
+**All three workstreams are now closed.** Both armed windows are spent. 47.5 carried
 THREE workstreams:
 
 - **A — fix the recompute path.** ~~A record with COMPLETE inputs cannot have its veto
@@ -125,13 +120,16 @@ THREE workstreams:
   the lane is in the built JSON only until plan 02 deploys, bounces and reads back one live
   execution whose `runData` contains `Decide Company Action`.
 
-- **B — D-V6 re-examination of the four remaining non-ANZ vetoes.** Ironman (17317184159)
-  scores 70, Tier A material, suppressed on a Tampa HQ; D-V6 says operating presence, not
-  HQ. Gravity Media same shape at 50. Entain will not move (second veto fires). Jam TV is
-  correct and stays. Needs researched evidence URLs, not assertion.
+- **B — D-V6 re-examination of the four remaining non-ANZ vetoes.** **DONE** — registry-grade
+  evidence in 47.5-04 (RECOMP-03), written live in 47.5-06. Ironman is Tier A and Gravity Media
+  Tier B; Entain and Jam TV correctly retained. Gravity Media's `ANZ` rests on **Australian
+  operating presence alone** — its NZ leg is UNPROVEN and must not be read as two-country
+  evidence.
 
-- **C — decide the hardware veto's trigger field.** It fires on lv_is_hardware_vendor, which
-  1 of 66 records has set, not on lv_org_type. Must land in all three engines together.
+- **C — decide the hardware veto's trigger field.** **DONE** — `or-retroactive` decided
+  (47.5-C-DECISION.md), landed in both engines in one commit `f817ec5`, deployed, bounced, read
+  back out of the RUNNING instance, and its retroactive consequence executed live on Simtech LED
+  (RECOMP-04).
 
 Scope doc amended accordingly, including its out-of-scope list (which previously forbade
 exactly what B and C now do): .planning/phases/47.5-veto-recompute-path/47.5-CONTEXT.md
@@ -199,6 +197,7 @@ Progress: [█████████░] 93% (v0.9 phase 47.5 of 46-49)
 | Phase 47.5 P02 | 25min | 3 tasks | 3 files |
 | Phase 47.5 P03 | 45min | 3 tasks | 3 files |
 | Phase 47.5 P05 | 40min | 3 tasks | 7 files |
+| Phase 47.5 P06 | 35min | 3 tasks | 4 files |
 
 ## Decisions
 
