@@ -47,7 +47,8 @@ def _reachable_from(doc: dict, start: str) -> set:
 
 COMPANY_BRANCH_NODES = [
     "Build Company Identity", "HubSpot Company Search", "Adapt Company Search",
-    "Company Gate", "Build Company Requests", "Lusha Company", "Apollo Org",
+    "Company Gate", "IF Company Recompute", "IF Company Skip",
+    "Build Company Requests", "Lusha Company", "Apollo Org",
     "ZoomInfo Company Token Gate", "IF ZoomInfo Company Needs Mint", "ZoomInfo Mint Company",
     "ZoomInfo Company Cache Token", "ZoomInfo Company",
     "Normalize + Score Company", "Research Trigger Gate", "IF Research Needed",
@@ -434,3 +435,144 @@ console.log(JSON.stringify(body));
     body = json.loads(r.stdout.strip())
     assert body == {"companies": [{"domain": "racingnsw.com.au"}]}
     assert "companyName" not in body["companies"][0]
+
+
+# --- Phase 47.5 Plan 01: the request-level recompute lane (RECOMP-01/RECOMP-02) ----------
+
+
+def _targets(doc: dict, node_name: str, branch_index: int) -> list:
+    branch = (doc["connections"].get(node_name, {}).get("main", []) or [])
+    if branch_index >= len(branch):
+        return []
+    return [edge["node"] for edge in branch[branch_index]]
+
+
+def test_recompute_lane_nodes_exist_and_are_bfs_reachable_from_webhook_trigger():
+    """Guards the defect root-caused live from execution 11846 (Simtech LED 18047161864):
+    a company whose enrichment inputs are all present, fresh and valid gets action:"skip"
+    from Company Gate, Normalize + Score Company drops it on its first line, and
+    Decide Company Action -- the ONLY node that writes lv_anti_icp_flag/lv_anti_icp_reason
+    -- never runs. The two IF nodes ARE the fix; an unreachable fix is no fix, so assert
+    reachability from the trigger, not just presence in the node list."""
+    doc = _load()
+    names = {n["name"] for n in doc["nodes"]}
+    reachable = _reachable_from(doc, "Webhook Trigger")
+    for node in ("IF Company Recompute", "IF Company Skip"):
+        assert node in names, f"{node} was not built"
+        assert node in reachable, f"{node} is not reachable from Webhook Trigger"
+
+
+def test_company_gate_routes_through_the_recompute_lane_and_no_longer_straight_to_providers():
+    """Guards the exact five edges by TARGET, never by count -- an edge-count assertion
+    alone would pass on the wrong targets, which is precisely how a recompute could end up
+    routed through Merge Company (re-stamping *_verified_at and re-entering the D-20 clobber
+    race) or through the provider waterfall (making a free recompute cost an Anthropic
+    research call). The direct Company Gate -> Build Company Requests edge must be GONE:
+    while it exists, a skipped row still reaches the waterfall's entry."""
+    doc = _load()
+
+    assert _targets(doc, "Company Gate", 0) == ["IF Company Recompute"]
+    assert "Build Company Requests" not in _targets(doc, "Company Gate", 0), (
+        "Company Gate still feeds Build Company Requests directly"
+    )
+    assert _targets(doc, "IF Company Recompute", 0) == ["Decide Company Action"]
+    assert _targets(doc, "IF Company Recompute", 1) == ["IF Company Skip"]
+    # RECOMP-02: a skipped record is observable -- it terminates at Build Response carrying
+    # its gate reason instead of returning today's bare 200 with no body.
+    assert _targets(doc, "IF Company Skip", 0) == ["Build Response"]
+    assert _targets(doc, "IF Company Skip", 1) == ["Build Company Requests"]
+
+
+def test_recompute_lane_reaches_decide_in_exactly_one_edge_with_no_intermediate_node():
+    """A recompute must cost ZERO provider, research and Anthropic calls. The only
+    structural guarantee of that is that nothing at all sits between IF Company Recompute's
+    true output and Decide Company Action -- one edge, one target. Any intermediate node,
+    however cheap it looks, is where a future edit would reintroduce the merge re-stamp or a
+    research hop."""
+    doc = _load()
+    true_lane = _targets(doc, "IF Company Recompute", 0)
+    assert len(true_lane) == 1, f"recompute true lane fans out to {true_lane}"
+    assert true_lane[0] == "Decide Company Action"
+
+    costly = {
+        "Build Company Requests", "Lusha Company", "Apollo Org", "ZoomInfo Company",
+        "Normalize + Score Company", "Research Trigger Gate", "Build Research Request",
+        "Claude Web Research", "Judge Gate", "Judge Call", "Merge Company",
+    }
+    assert not costly & set(true_lane)
+
+
+def test_exactly_one_node_in_the_built_workflow_assigns_each_veto_field():
+    """The single-writer constraint, proven by a POSITIVE count gate over the built JSON
+    rather than by inspection: Decide Company Action must remain the ONLY node that assigns
+    lv_anti_icp_flag / lv_anti_icp_reason. Splitting the veto's authority in two is the more
+    expensive bug to fix later, and the recompute lane's whole design (route the row to the
+    existing writer, never add a second one) depends on this staying true.
+
+    The pattern is DOT-ANCHORED (`.lv_anti_icp_flag =`) deliberately. A naive
+    `lv_anti_icp_flag\\s*=` scan reads 2 in Decide alone, because its 2026-08-10
+    blank-region debug comment quotes `lv_anti_icp_flag="true"` in prose. Anchoring on the
+    property-write shape means a comment mentioning the field cannot inflate the count, and
+    -- unlike a zero-hit search -- a comment cannot invalidate the gate either."""
+    import re
+
+    doc = _load()
+    for field in ("lv_anti_icp_flag", "lv_anti_icp_reason"):
+        pattern = re.compile(r"\." + field + r"\s*=(?!=)")
+        writers = []
+        total = 0
+        for node in doc["nodes"]:
+            code = (node.get("parameters") or {}).get("jsCode") or ""
+            hits = len(pattern.findall(code))
+            if hits:
+                total += hits
+                writers.append(node["name"])
+        assert total == 1, (
+            f"{field} is assigned {total} time(s) across {writers} in the built workflow "
+            "-- Decide Company Action must be the sole writer"
+        )
+        assert writers == ["Decide Company Action"], (
+            f"{field} is assigned by {writers}, not by Decide Company Action"
+        )
+
+
+def test_recompute_intent_is_read_at_request_level_and_never_carried_in_mode():
+    """Two anti-patterns 47.5-RESEARCH.md found in source and the plan forbids outright.
+
+    (1) `mode`: isReturnOnly() (n8n/code/matchProposal.js) returns true for EVERY string
+        that is not "write", so a mode:"recompute" request would set action:"proposed",
+        write nothing, and report success -- the exact silent-success class this phase
+        exists to remove.
+    (2) per-row: the predicate must be `.first()`, never `.item`. `.first()` makes the lane
+        a whole-REQUEST decision, so exactly one of the two lanes carries data per
+        execution. That is the property Decide Company Action's now-second inbound edge
+        relies on, and the one every existing multi-inbound convergence in this graph shares.
+    """
+    doc = _load()
+    node = next(n for n in doc["nodes"] if n["name"] == "IF Company Recompute")
+    expr = node["parameters"]["conditions"]["conditions"][0]["leftValue"]
+    assert expr == "={{ $('Parse HubSpot Event').first().json.recompute === true }}", expr
+    assert ".item" not in expr, "a per-row predicate breaks the mutual exclusivity of the lanes"
+
+    gate = next(n for n in doc["nodes"] if n["name"] == "Company Gate")
+    code = gate["parameters"]["jsCode"]
+    assert "$('Parse HubSpot Event').first()" in code
+    assert 'action = "recompute_refused"' in code, (
+        "the gate must refuse a recompute that resolved to no company (BUG-19 shape), "
+        "never promote it to enrich"
+    )
+    # The intent is a strictly-typed boolean row property normalized in Parse HubSpot
+    # Event, and `mode` is left exactly as it was. A loose truthiness check would let the
+    # string "false" arm a recompute; === true is the fail-closed direction and costs
+    # nothing.
+    parse = next(n for n in doc["nodes"] if n["name"] == "Parse HubSpot Event")
+    parse_code = parse["parameters"]["jsCode"]
+    assert "recompute: event.recompute === true," in parse_code
+    assert "mode: parsed.mode ?? event.mode ?? null," in parse_code, (
+        "the recompute intent must not have disturbed the mode threading"
+    )
+    # Placement matters: AFTER the `...event` spread, or a caller-supplied raw row property
+    # shadows the normalization (the companies branch has entry_strip_markers=False).
+    assert parse_code.index("...event,") < parse_code.index("recompute: event.recompute"), (
+        "recompute must be assigned AFTER the ...event spread, never before it"
+    )
