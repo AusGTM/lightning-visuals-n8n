@@ -1,0 +1,107 @@
+{
+  "_note": "Phase 47.5 workstream B before-snapshot. READ-ONLY capture, 2026-08-12. Nothing here was written to HubSpot.",
+  "captured_at": "2026-08-12T00:00:00Z",
+  "census": {
+    "query": "companies WHERE lv_anti_icp_reason CONTAINS_TOKEN 'Non-ANZ'",
+    "total": 4,
+    "ids": ["10024564084", "15860277364", "17317184159", "17317850381"],
+    "matches_worklist": true,
+    "comment": "Same four ids as the todo's census table. The work-list did not move under the plan."
+  },
+  "records": [
+    {
+      "id": "10024564084",
+      "name": "Entain",
+      "domain": "www.entaingroup.com",
+      "lv_country_region_normalized": "Other",
+      "lv_org_type": "gambling_operator",
+      "lv_produces_content": "false",
+      "lv_is_hardware_vendor": null,
+      "lv_icp_fit_score": "-70",
+      "lv_icp_tier": "D",
+      "lv_anti_icp_flag": "true",
+      "lv_anti_icp_reason": "Non-ANZ geography; No broadcast or streaming content",
+      "lv_org_type_verified_at": "2026-08-08T11:01:01.959Z",
+      "lv_produces_content_verified_at": "2026-08-08T11:01:01.959Z",
+      "gate_action_predicted": "skip",
+      "gate_reason": "both required fields present, both stamps 4 days old (< 180d TTL)",
+      "in_write_set_candidate": false
+    },
+    {
+      "id": "15860277364",
+      "name": "GRAVITY MEDIA",
+      "domain": "www.gravitymedia.com",
+      "lv_country_region_normalized": "Other",
+      "lv_org_type": "broadcaster",
+      "lv_produces_content": "true",
+      "lv_is_hardware_vendor": null,
+      "lv_icp_fit_score": "50",
+      "lv_icp_tier": "D",
+      "lv_anti_icp_flag": "true",
+      "lv_anti_icp_reason": "Non-ANZ geography",
+      "lv_org_type_verified_at": "2026-08-08T11:01:25.672Z",
+      "lv_produces_content_verified_at": "2026-08-08T11:01:25.672Z",
+      "gate_action_predicted": "skip",
+      "gate_reason": "both required fields present, both stamps 4 days old (< 180d TTL)",
+      "in_write_set_candidate": true
+    },
+    {
+      "id": "17317184159",
+      "name": "Ironman",
+      "domain": "www.ironman.com",
+      "lv_country_region_normalized": "Other",
+      "lv_org_type": "governing_body_league",
+      "lv_produces_content": "true",
+      "lv_is_hardware_vendor": null,
+      "lv_icp_fit_score": "70",
+      "lv_icp_tier": "D",
+      "lv_anti_icp_flag": "true",
+      "lv_anti_icp_reason": "Non-ANZ geography",
+      "lv_org_type_verified_at": "2026-08-08T11:01:34.241Z",
+      "lv_produces_content_verified_at": "2026-08-08T11:01:34.241Z",
+      "gate_action_predicted": "skip",
+      "gate_reason": "both required fields present, both stamps 4 days old (< 180d TTL)",
+      "in_write_set_candidate": true
+    },
+    {
+      "id": "17317850381",
+      "name": "Jam TV",
+      "domain": "www.jamtv.it",
+      "lv_country_region_normalized": "Other",
+      "lv_org_type": null,
+      "lv_produces_content": "true",
+      "lv_is_hardware_vendor": null,
+      "lv_icp_fit_score": "20",
+      "lv_icp_tier": "D",
+      "lv_anti_icp_flag": "true",
+      "lv_anti_icp_reason": "Non-ANZ geography",
+      "lv_org_type_verified_at": null,
+      "lv_produces_content_verified_at": "2026-08-12T01:37:01.593Z",
+      "gate_action_predicted": "enrich",
+      "gate_reason": "lv_org_type missing — the only one of the four the gate would NOT skip",
+      "in_write_set_candidate": false,
+      "comment": "CORRECT AS IT STANDS (D-23). Italian broadcaster jamtv.it. Present for completeness only; never to be touched."
+    }
+  ],
+  "gate_ttl_note": {
+    "required_fields": ["lv_org_type", "lv_produces_content"],
+    "stale_after_days": 180,
+    "source": "n8n/wf_enrichment_cloud.json node 'Company Gate' — const REQUIRED / POLICY",
+    "skipped_count": 3,
+    "statement": "Three of the four (Entain, Gravity Media, Ironman) have both required fields present with stamps well inside the 180-day TTL, so Company Gate emits action=skip and Decide Company Action never runs for them. That is the Phase 47.5 workstream-A defect, and it is why changing a region alone would not clear their flag today."
+  },
+  "entain_second_veto": {
+    "derived_from": "fetched lv_produces_content and lv_anti_icp_reason on record 10024564084, this snapshot",
+    "lv_produces_content": "false",
+    "lv_anti_icp_reason": "Non-ANZ geography; No broadcast or streaming content",
+    "statement": "Entain's reason string already carries TWO vetoes. lv_produces_content reads false, which fires the no-content hard veto independently of geography. A region flip therefore cannot move Entain off Tier D. It is out of the write set on the data, not on an assumption."
+  },
+  "region_property_live": {
+    "name": "lv_country_region_normalized",
+    "type": "enumeration",
+    "fieldType": "select",
+    "read_from": "GET /crm/v3/properties/companies/lv_country_region_normalized, 2026-08-12",
+    "options": ["AU", "NZ", "ANZ", "US", "UK", "EU", "Other", "Unknown"],
+    "comment": "The LIVE option set is wider than D-V5's allowed set (AU/NZ/ANZ/Other/Unknown) — the portal also accepts US, UK and EU. Any value plan 06 writes must come from this live list. Under D-V6's semantics only AU, NZ, ANZ and Unknown are non-veto; US, UK, EU and Other all collapse to non_anz in the scoring engine. Recording the divergence, not acting on it — normalizing the option set is Phase 48 D-V5 work, out of scope here."
+  }
+}
