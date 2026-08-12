@@ -62,3 +62,41 @@ config/icp_scoring.yaml         hard_vetoes.hardware_vendor.reason
 
 Related: [[Phase 47.5 — Veto Recompute Path]]
 (`.planning/phases/47.5-veto-recompute-path/47.5-CONTEXT.md`), same "unreachable rule" class.
+
+---
+
+## DECIDED — operator, 2026-08-12 (workstream C)
+
+**The hardware veto fires if EITHER trigger is true:**
+
+```js
+if (isHardwareVendor === true || orgType === "hardware_vendor")
+    vetoReasons.push("Hardware/AV/LED vendor, not sports-media buyer");
+```
+
+**Retroactive: yes.** Simtech LED (`18047161864`) moves Tier B → D on its next recompute.
+
+**Why OR rather than replacing the boolean.** The change is purely additive, so no record can
+lose a veto it currently holds — there is no regression path. It also keeps
+`lv_is_hardware_vendor` alive as a manual override for a record whose org type says otherwise.
+Replacing the boolean outright would have produced identical outcomes today (both current
+hardware vendors carry the org type) but would silently stop vetoing any future record that has
+the boolean set and no org type.
+
+**Scope of the change.** Both engines that carry the predicate, in ONE commit, per Phase 46's
+parity rule — `src/icp_scoring.py` and the `Decide Company Action` node built by
+`scripts/build_cloud_workflows.py`. Never hand-edit `n8n/wf_enrichment_cloud.json`. Deploy
+needs a bounce; the operator runs the deploy (`ALLOW_N8N_DEPLOY` is NOT covered by
+D-47.5-01's arming waiver).
+
+**`lv_is_gambling_operator`: answered, no work.** It has the same shape but ZERO divergent
+records — no company has the boolean set while carrying `lv_org_type == "gambling_operator"`,
+and gambling is a graduated deduction rather than a veto. Recorded here so the question is not
+re-derived later; no code change.
+
+**Consequence for the write window.** Retroactivity is not self-executing: Simtech is a
+complete record, so its veto only recomputes if something triggers the new recompute lane on
+it. It therefore JOINS window #2's allowlist as a third id —
+`17317184159, 15860277364, 18047161864` — which stays inside plan 06's stated cap. Without
+that, the decision would be recorded and silently never applied, which is the exact failure
+class this phase exists to remove.
