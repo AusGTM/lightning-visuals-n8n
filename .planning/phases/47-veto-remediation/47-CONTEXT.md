@@ -261,6 +261,37 @@ depend on the metadata layer.
   reversible and expires with this phase; Phase 48 and later revert to operator-only arming unless
   separately instructed.
 
+### Amendment 2026-08-12 — Jam TV is a TRUE veto, operator-confirmed
+
+- **D-23:** **Jam TV (`17317850381`) is the Italian broadcaster, not the Australian company, and
+  its non-ANZ veto is CORRECT.** The portal holds two distinct records: this one (`jamtv.it`,
+  `country: Italy`, `industry: BROADCAST_MEDIA`) and a separate Australian sports-and-entertainment
+  company. Operator confirmed 2026-08-12 that its current scoring card is right — score 0,
+  anti-ICP flag Yes, Tier D, reason "Non-ANZ geography".
+  Record: https://app-ap1.hubspot.com/contacts/22617666/record/0-2/17317850381
+
+  **Phase 46's `false_veto` flag on this row is wrong.** It was flagged only because
+  `lv_country_region_normalized` is blank; the blank-region bug made a genuine veto look
+  manufactured. The record belongs to the same class as Entain / Gravity Media / Ironman.
+
+  **It is NOT dropped from the window — it is written, but only to correct the blank.**
+  Write `lv_country_region_normalized = "Other"`. The veto then correctly persists.
+
+  **Why dropping it would break VETO-03.** VETO-03's bar is a HubSpot search for a non-ANZ veto
+  reason **AND a blank `lv_country_region_normalized`** returning zero. Jam TV today matches both
+  halves, so leaving it blank leaves VETO-03 failing. Writing `Other` populates the region, moves
+  it outside the search, and satisfies VETO-03 without special-casing the query.
+
+  **Plan 47-04's must_have needs amending.** It currently requires every one of the 17 to read back
+  `lv_anti_icp_flag != "true"` OR a *different* veto reason. Jam TV keeps `true` and keeps
+  "Non-ANZ geography", and that is now the correct outcome — the D-16 principle (a cleared false
+  veto may reveal a genuine one) applied to a veto that was genuine all along. The window therefore
+  clears 16 and correctly leaves 1 vetoed.
+
+  **Also correct `46-SIMULATION-REPORT.md`'s classification** so a later phase does not re-flag
+  this row as a false veto.
+  — **Reversibility:** reversible — writing a region on a blank field, no derived state destroyed.
+
 ### Claude's Discretion
 
 - The exact chunking within the 17 (one chunk of 17 is permitted by the cap; smaller is allowed).
