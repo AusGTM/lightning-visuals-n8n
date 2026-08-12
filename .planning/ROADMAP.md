@@ -277,7 +277,7 @@ touched once.
      window that was disarmed and read back afterward, and the actual cost is reported against
      the pre-run estimate.
 
-**Plans**: 6 plans
+**Plans**: 1/6 plans executed
 
 > **Planned 2026-08-12 — two ROADMAP claims above are superseded by `48-CONTEXT.md`, which wins.**
 > "the 18 companies" is a stale census: the population was re-derived live on 2026-08-12 as
@@ -290,7 +290,7 @@ touched once.
 Plans:
 **Wave 1**
 
-- [ ] 48-01-PLAN.md — coverage driver spine, offline enum mapping for the 4 evidenced records, D-03 marker, live population re-derivation
+- [x] 48-01-PLAN.md — coverage driver spine, offline enum mapping for the 4 evidenced records, D-03 marker, live population re-derivation
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
@@ -356,7 +356,7 @@ did not change, no full re-score is owed and this phase proves the procedure wit
 | 46. Rubric Decision, Simulation & Engine Parity | v0.9 | 5/5 | Complete | 2026-08-11 |
 | 47. Veto Remediation | v0.9 | 4/4 | Complete | 2026-08-12 |
 | 47.5. Veto Recompute Path | v0.9 | 6/6 | Complete | 2026-08-12 |
-| 48. Enrichment Coverage | v0.9 | 0/? | Not started | - |
+| 48. Enrichment Coverage | v0.9 | 1/6 | In Progress|  |
 | 49. Re-score Strategy & Reporting | v0.9 | 0/? | Not started | - |
 
 ## Ledger gaps (known)

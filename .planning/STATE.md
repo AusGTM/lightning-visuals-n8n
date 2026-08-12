@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v0.9
 milestone_name: ICP Rubric Calibration & Veto Remediation
-current_phase: 47.5
-current_phase_name: veto-recompute-path
+current_phase: 48
+current_phase_name: Enrichment Coverage
 status: executing
-stopped_at: Phase 48 context gathered
-last_updated: "2026-08-12T12:46:27.951Z"
+stopped_at: Completed 48-01-PLAN.md
+last_updated: "2026-08-12T13:01:38.973Z"
 last_activity: 2026-08-12
 last_activity_desc: "Plan 03 complete: 47-BEFORE.json (17-row before-snapshot),"
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 21
-  completed_plans: 15
+  completed_plans: 16
   percent: 60
 ---
 
@@ -59,9 +59,9 @@ predating the window. VETO-03 bar still 0.
 
 ## Current Position
 
-Phase: 47.5 (veto-recompute-path) — **COMPLETE** (6 of 6 plans). Phase 47 is COMPLETE.
-Plan: 6 of 6 — 47.5-06 landed
-Status: **All three workstreams DONE; RECOMP-01/02/03/04 all met.** The recompute lane is
+Phase: 48 (Enrichment Coverage) — EXECUTING
+Plan: 2 of 6
+Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
   has executed on a real record. **Nothing is armed** — windows #1 and #2 were each opened
@@ -138,7 +138,7 @@ exactly what B and C now do): .planning/phases/47.5-veto-recompute-path/47.5-CON
 lv_org_type: Editix, Jam TV, Waikato, The Rumble). Not a 47.5 workstream.
 
 Previous status: Executing — Anthropic credit restored, Plan 03 completed
-Last activity: 2026-08-12 — Plan 03 complete: 47-BEFORE.json (17-row before-snapshot),
+Last activity: 2026-08-12 — Phase 48 execution started
   the live property-existence guard (found 19 missing D-09 metadata properties, resolved
   via operator-confirmed D-21 narrowing), one live research pass over all 17 pinned
   companies (47-RESEARCH-RESULTS.json), two live-discovered data-quality fixes
@@ -148,13 +148,13 @@ Last activity: 2026-08-12 — Plan 03 complete: 47-BEFORE.json (17-row before-sn
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████████░] 93% (v0.9 phase 47.5 of 46-49)
+Progress: [████████░░] 76% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-12T10:54:45.854Z
-**Stopped at:** Phase 48 context gathered
-**Resume file:** .planning/phases/48-enrichment-coverage/48-CONTEXT.md
+**Last session:** 2026-08-12T13:01:38.962Z
+**Stopped at:** Completed 48-01-PLAN.md
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -198,6 +198,7 @@ Progress: [█████████░] 93% (v0.9 phase 47.5 of 46-49)
 | Phase 47.5 P03 | 45min | 3 tasks | 3 files |
 | Phase 47.5 P05 | 40min | 3 tasks | 7 files |
 | Phase 47.5 P06 | 35min | 3 tasks | 4 files |
+| Phase 48 P01 | 25min | 3 tasks | 3 files |
 
 ## Decisions
 
@@ -295,6 +296,7 @@ Progress: [█████████░] 93% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: [47.5-03] python-dotenv's bare load_dotenv() resolves relative to the CALLING FILE, not the cwd; with no conftest.py, live pytest must be driven through a wrapper passing an absolute .env path, or every HubSpot read 401s.
 - [Phase ?]: 47.5-C: hardware veto fires on lv_is_hardware_vendor === true OR lv_org_type == 'hardware_vendor' (or-retroactive); additive so no record loses a veto, boolean survives as manual override
 - [Phase ?]: 47.5-C: lv_is_gambling_operator answered with no work — zero divergent records, graduated deduction already empty (Phase 46 D-03)
+- [Phase ?]: Phase 48 Plan 01: live population re-derivation matched CONTEXT.md's 2026-08-12 snapshot exactly (5 ids, drift: false); this plan builds coverage_writes_allowed() as a tested gate only, no armed write leg -- zero HubSpot writes/n8n executions by construction
 
 ### Blockers
 
