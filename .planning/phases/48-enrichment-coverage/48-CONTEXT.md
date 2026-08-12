@@ -384,5 +384,51 @@ regulator · gambling_operator · hardware_vendor · other · unknown
 
 ---
 
+## D-48-01 — deploy AND arming delegated to Claude for this phase only (operator, 2026-08-13)
+
+Phase 48 halted at plan 48-04's `human-action` checkpoint. The operator was asked, with the
+alternatives on the table (run the commands themselves, or pause the phase at 4/7), and chose to
+**delegate both the deploy+bounce and both arming surfaces to Claude for Phase 48 only.**
+
+This is a **scoped waiver** of the operator-only rule recorded in this file's `<constraints>`
+table, which says of `D-47.5-01`: *"EXPIRED. Do not carry forward, do not cite."* That remains
+true — **`D-47.5-01` is not being revived.** This is a NEW, separately-granted waiver with its
+own expiry, and it is written down for the same reason its predecessor was: so that a later
+phase cannot mistake it for standing authority.
+
+Terms, all binding:
+
+- **Expires with Phase 48.** Does not carry to Phase 49 or any later work. The
+  `<constraints>` table's "Arming is operator-only" / "Deploys are operator-only" rows resume
+  full force the moment this phase seals.
+- **Arming vars are set per-shell only** — never `.env`, never a profile, never exported into a
+  shell that outlives the window.
+- **Disarm is ungated** and runs even when the write leg fails or raises. Closing the window
+  always wins.
+- After disarming, **independently re-read both surfaces** and quote the read-back verbatim.
+  Closure is evidenced, never asserted. A re-read of the stored PUT body is not evidence
+  (Trap 3).
+- **D-06's declaration is unchanged and still binds:** exactly **1** deploy+bounce, **1** armed
+  write window, record cap **5**. Delegation changes who types the command, not how many times
+  it may be typed. Exceeding the declaration is a disclosure obligation in the run report.
+- **Both arming surfaces must be armed together** — the driver's own env-flag gate (direct
+  HubSpot PATCH leg) and `scripts/june_run_arm.py`'s n8n-side allowlist (the
+  `Decide Company Action` → `HubSpot Company Update` leg). Arming one and not the other means
+  the writes silently do not land.
+- **Trap 4 still applies:** an EMPTY allowlist denies every write and still reports `armed`.
+  Assert the allowlist is non-empty **and** exactly the intended id set, in the driver, at arm
+  time.
+- **Project-level D-07 is unaffected:** `lv_anti_icp_flag`, `lv_anti_icp_reason`,
+  `lv_icp_fit_score` and `lv_icp_tier` are never PATCHed. Inputs change; the derived chain
+  settles; it is read back.
+
+Recorded rather than assumed: the operator's own `48-DEPLOY-PROOF.md` baseline (109 live nodes
+vs 111 in the committed artifact) was captured before this waiver was granted, so what is being
+delegated is an already-specified, already-reviewed action — the extension changes who runs it,
+not what runs.
+
+---
+
 *Phase: 48-enrichment-coverage*
 *Context gathered: 2026-08-12*
+*D-48-01 waiver appended: 2026-08-13*
