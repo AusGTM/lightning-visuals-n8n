@@ -189,8 +189,8 @@ recoverable, only forward capture works, which cannot inform a v0.9 recalibratio
 | RECOMP-02 | Phase 47.5 | **Complete** (live exec 11853: `action:"skip"` + gate reason; 47.5-A-LIVE-PROOF §3d) |
 | RECOMP-03 | Phase 47.5 | **Complete** (registry-grade D-V6 evidence: 47.5-B-EVIDENCE.md; written in ONE window, disarm re-read verbatim: 47.5-RUN-REPORT.md § Part 2; census 4 -> 2, Jam TV retains its veto per D-23 and Entain held by its second veto: 47.5-AFTER.json) |
 | RECOMP-04 | Phase 47.5 | **Complete** (decision `or-retroactive` + gambling answered: 47.5-C-DECISION.md; both engines in one commit `f817ec5`; deployed and read back out of the RUNNING instance: 47.5-C-DECISION.md § Deploy record) |
-| COVER-01 | Phase 47 + 48 | Not started |
-| COVER-02 | Phase 47 + 48 | Not started |
+| COVER-01 | Phase 47 + 48 | Phase 48's share **complete** — live-derived 5-record population, all 5 now carry a real `lv_org_type` or the D-03 `unknown`+reason marker; `48-RUN-REPORT.md` § Per-record outcomes. Phase 47's 17 records tracked separately; joint closure not asserted here. |
+| COVER-02 | Phase 47 + 48 | Phase 48's share **complete** — estimate (`48-COST-ESTIMATE.md`) reported against actuals line by line, refuse-rather-than-truncate proven by test; `48-RUN-REPORT.md` § Cost actuals and § Window accounting. One disclosed gap: Anthropic-dollar spend is an unmeasured floor, not a measured actual. Joint closure not asserted here. |
 | RESCORE-01 | Phase 49 | Not started |
 | RESCORE-02 | Phase 49 | Not started |
 | RESCORE-03 | Phase 49 | Not started |
