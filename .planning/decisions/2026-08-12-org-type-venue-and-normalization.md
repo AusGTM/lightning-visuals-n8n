@@ -216,6 +216,79 @@ desynchronise.
 
 ---
 
+## D-V6 — `lv_country_region_normalized` means ANZ **operating presence**, not headquarters
+
+**The problem.** The non-ANZ hard veto is asking "can we sell to them in ANZ?" but the field
+currently encodes "where is head office?". Those diverge precisely where the revenue is: a large
+multinational with a substantive ANZ operating business is a legitimate ANZ sports-media buyer,
+and is today vetoed for having a foreign HQ.
+
+**Decision.** The field encodes **regional operating presence**. Enum values keep their names and
+take these semantics:
+
+| Value | Meaning |
+| --- | --- |
+| `AU` | domiciled in Australia |
+| `NZ` | domiciled in New Zealand |
+| `ANZ` | **multinational with a substantive ANZ operating presence** (previously near-unused) |
+| `Other` | no ANZ operating presence |
+| `Unknown` | not established — never a guess |
+
+No new property is required, which matters: a dedicated `lv_anz_presence` field would collide with
+the standing no-new-properties constraint. The existing `ANZ` member absorbs the new case.
+
+### The bright line
+
+**A substantive local operating entity: a subsidiary, office, staff, or production operations in
+Australia or New Zealand.**
+
+Explicitly **not**:
+- selling into the market from overseas;
+- having ANZ customers, viewers, or events;
+- a reseller, distributor, or agent relationship;
+- a domain or landing page targeted at ANZ.
+
+Without this line every multinational becomes `ANZ` and the veto stops filtering anything.
+
+Research must **cite evidence of the local entity** — the same evidence discipline
+`config/field_policy.yaml` compels for `lv_org_type`. Absent that evidence the value is `Unknown`,
+never `Other` by default and never `ANZ` by inference. `Other` is a hard veto, so guessing it is
+the D-14 failure mode one field over.
+
+### This changes the question the researcher is asked
+
+Under D-V4/D-V5 the layer-1 schema and the research prompt must ask **"does this company have a
+substantive ANZ operating presence?"** — not "where is it headquartered?". Leaving the old prompt
+in place while changing the enum's meaning would produce HQ answers wearing regional-presence
+labels, which is worse than either definition alone. The prompt change and the semantics change
+must land together.
+
+### Phase 49 must RE-EXAMINE the three excluded records
+
+`Entain` (`10024564084`), `Gravity Media` (`15860277364`) and `Ironman` (`17317184159`) were
+excluded from Phase 47 as genuinely non-ANZ **under the headquarters definition**, and a human
+signed that exclusion off. All three are plausible ANZ-operating multinationals — Entain most
+obviously (Ladbrokes and Neds are Entain brands), and Gravity Media and Ironman both plausibly run
+ANZ operations. Under D-V6 some or all may cease to be non-ANZ vetoes and become targetable.
+
+**This is a mandatory, explicit re-examination in Phase 49 — not an incidental consequence of the
+re-score.** Each of the three gets researched against the bright line and its outcome recorded
+with evidence, whether it flips or not. The risk being managed is that a re-score silently
+un-vetoes a record a human deliberately excluded; recording the re-examination makes the reversal
+a visible decision rather than a side effect.
+
+All three currently read `lv_country_region_normalized = "Other"` with the flag set and Tier D —
+verified live 2026-08-12 — so they are correctly outside VETO-03's search (which requires a
+*blank* region) and Phase 47 is unaffected either way.
+
+### Phase 47 is unaffected
+
+Its 16 clearing records are AU/NZ clubs under either definition, and the Italian Jam TV
+(`17317850381`) has no plausible ANZ operating entity. D-V6 does not block or alter the armed
+window. Implement in Phase 48, score in Phase 49, per D-V3.
+
+---
+
 ## Implementation notes for Phase 48 planning
 
 Files this touches:

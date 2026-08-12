@@ -148,6 +148,13 @@ Phase 47**:
   `lv_country_region_normalized`, and **every** property read by exact value. Booleans are
   tri-state; layer 1 must offer `unknown` explicitly.
 
+- **D-V6** `lv_country_region_normalized` means ANZ **operating presence**, not headquarters.
+  Bright line: a substantive local operating entity (subsidiary, office, staff, production ops)
+  in AU/NZ — not selling in from overseas, not ANZ customers, not a reseller. `ANZ` absorbs the
+  multinational-with-local-operations case. **Phase 49 must explicitly re-examine Entain,
+  Gravity Media and Ironman against it** — they were excluded under the HQ definition and may
+  flip. Phase 47 unaffected.
+
 ---
 
 ## Loose ends for after the window
