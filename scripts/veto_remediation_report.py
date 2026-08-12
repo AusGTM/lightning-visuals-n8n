@@ -98,16 +98,32 @@ def predict(row, candidate_inputs):
     return expected_score_and_tier(merged)
 
 
+# D-23 (2026-08-12): Jam TV is the ITALIAN broadcaster jamtv.it. Its non-ANZ veto is
+# CORRECT and Phase 47 deliberately preserved it, writing lv_country_region_normalized
+# = "Other" so the record also falls outside VETO-03's blank-region search. Phase 46
+# mislabelled it `false_veto` only because that field was blank, and blank means
+# never-determined, not determined-to-be-ANZ.
+#
+# Without this exemption `classify` returns `still_non_anz` for the one record required
+# to be in exactly that state, and `--mode after` REFUSES on a correct end state -- a
+# false failure for anyone re-running the report after Phase 47. Keyed by id, not by
+# reason text, because the reason is genuinely the non-ANZ one.
+TRUE_NON_ANZ_VETO_IDS = frozenset({"17317850381"})  # Jam TV (IT) -- D-23
+
+
 def classify(row) -> str:
-    """`cleared` | `residual_other_veto` | `still_non_anz`, from a single row's
-    lv_anti_icp_flag/lv_anti_icp_reason. `still_non_anz` is the only failing
-    classification -- `residual_other_veto` covers a legitimate different hard veto
-    (Simtech LED as hardware_vendor is the expected case, D-16)."""
+    """`cleared` | `residual_other_veto` | `correct_non_anz` | `still_non_anz`, from a
+    single row's lv_anti_icp_flag/lv_anti_icp_reason. `still_non_anz` is the only failing
+    classification -- `residual_other_veto` covers a legitimate different hard veto, and
+    `correct_non_anz` covers a D-23 record whose non-ANZ veto is true (see
+    TRUE_NON_ANZ_VETO_IDS)."""
     flag = row.get("lv_anti_icp_flag")
     if flag != "true":
         return "cleared"
     reason = row.get("lv_anti_icp_reason") or ""
     if _non_anz_reason() in reason:
+        if str(row.get("id")) in TRUE_NON_ANZ_VETO_IDS:
+            return "correct_non_anz"
         return "still_non_anz"
     return "residual_other_veto"
 

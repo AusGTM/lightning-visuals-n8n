@@ -111,6 +111,22 @@ def test_classify_residual_other_veto_when_reason_is_a_different_hard_veto():
     assert m.classify(row) == "residual_other_veto"
 
 
+def test_classify_correct_non_anz_for_the_d23_true_veto_record():
+    # D-23: Jam TV 17317850381 is the Italian broadcaster jamtv.it. Its non-ANZ veto is
+    # CORRECT and Phase 47 preserved it deliberately. Protective intent: without this
+    # exemption, `--mode after` REFUSES on the one record required to be in exactly this
+    # state, reporting a false failure to anyone re-running the report after Phase 47.
+    row = _row("17317850381", lv_anti_icp_flag="true", lv_anti_icp_reason="Non-ANZ geography")
+    assert m.classify(row) == "correct_non_anz"
+
+
+def test_classify_d23_exemption_is_keyed_by_id_not_by_reason_text():
+    # Protective intent: the exemption must NOT generalise. Any OTHER record carrying the
+    # same reason string is still a real failure -- that is the whole bar of VETO-01.
+    row = _row("9604732797", lv_anti_icp_flag="true", lv_anti_icp_reason="Non-ANZ geography")
+    assert m.classify(row) == "still_non_anz"
+
+
 def test_classify_still_non_anz_wins_when_reason_carries_both_vetoes():
     # A record can carry multiple simultaneous vetoes joined with "; " -- the non-ANZ
     # substring anywhere in the joined string is still a failing classification.
