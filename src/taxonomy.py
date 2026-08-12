@@ -38,6 +38,27 @@ EVIDENCE_GATED_ORG_TYPES = sorted(
     k for k, v in ORG_TYPES.items() if v.get("requires_evidence")
 )
 
+# TX-10 (Phase 48 Plan 07): every org_types entry's `definition` key, in
+# config/taxonomy.yaml key order. Both research prompts (src/web_research.py) render
+# org_type_definitions_block() below rather than restating any definition inline -- a
+# discriminator present in two hand-maintained copies is two things that drift. Root
+# cause this closes: both prompts used to enumerate the 9 lv_org_type VALUES with no
+# definitions, so a model classifying Racing NSW keyed on statutory origin instead of the
+# correct discriminator (commercial control of the sport).
+ORG_TYPE_DEFINITIONS = {k: v.get("definition", "") for k, v in ORG_TYPES.items()}
+
+
+def org_type_definitions_block() -> str:
+    """Deterministic single string listing every lv_org_type option with its semantic
+    definition, in config/taxonomy.yaml key order. gen_taxonomy_js.render() does NOT
+    read the `definition` key (it reads only the key list, synonyms, requires_evidence
+    and implies_content), so this block never reaches n8n/code/taxonomy.generated.js --
+    it is rendered ONLY into the two Python research prompts."""
+    lines = ["lv_org_type option definitions:"]
+    for key, definition in ORG_TYPE_DEFINITIONS.items():
+        lines.append(f"- {key}: {definition}")
+    return "\n".join(lines)
+
 
 def normalize_key(raw) -> str:
     """NM-3 comparison form: lowercase, punctuation/whitespace collapsed to single
@@ -190,4 +211,7 @@ if __name__ == "__main__":
     assert normalize_content_types(
         ["live stream", "streaming", "bogus_value", "highlights"]
     ) == ["streaming", "highlights"]
+    assert len(ORG_TYPE_DEFINITIONS) == 9 and all(v.strip() for v in ORG_TYPE_DEFINITIONS.values())
+    assert "QRIC" in org_type_definitions_block()
+    assert "Racing NSW" in org_type_definitions_block()
     print("src/taxonomy.py self-check OK")

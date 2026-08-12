@@ -191,6 +191,29 @@ different values, in either vocabulary.
 
 **TX-9.** No synonym may equal a canonical key of the same vocabulary.
 
+**TX-10 (added 2026-08-13, Phase 48 Plan 07).** Every `org_types` entry MUST carry a
+non-empty `definition` key stating its semantics — not merely its name. Both Python
+research prompts (`RESEARCH_SYSTEM` and `RACING_NSW_ORG_TYPE_SYSTEM` in
+`src/web_research.py`) MUST render `src.taxonomy.org_type_definitions_block()` verbatim
+rather than restating any definition inline, so a discriminator cannot exist in one prompt
+and be silently missing from the other.
+
+Root cause this closes: prior to this addition, both prompts enumerated the 9
+`lv_org_type` values with no definitions, so a model reclassifying Racing NSW
+`15008671672` keyed on statutory origin (both QRIC and Racing NSW are creatures of an Act)
+instead of the correct discriminator — commercial control of the sport's
+calendar/prizemoney/media rights/sponsorship. The `regulator` definition names QRIC and
+the `governing_body_league` definition names Racing NSW as their respective anchor cases.
+
+**Known divergence (as of 2026-08-13).** The production n8n research prompt
+(`scripts/build_cloud_workflows.py`'s `COMPANIES_TARGET.research_system_prompt_fn_js`)
+still builds `allowed_org_types` from the bare generated key list with no definitions —
+injecting them there requires re-baselining a frozen jsCode fixture
+(`tests/test_companies_factory_frozen.py`) and an operator-only deploy, outside this
+plan's one-deploy budget (D-06, owned by plan 48-04). Tracked at
+`.planning/todos/pending/2026-08-13-n8n-research-prompt-lacks-org-type-definitions.md`.
+The Python and production prompts are knowingly divergent until that todo lands.
+
 ### Adding a value later
 
 Edit `taxonomy.yaml` → rebuild workflows → run the HubSpot property sync → run the

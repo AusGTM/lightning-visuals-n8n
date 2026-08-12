@@ -9,6 +9,12 @@ import os
 import re
 from pathlib import Path
 from .schemas import HubSpotRecord, ProviderResult
+# Phase 48 Plan 07 Task 2: both prompts below render this block rather than restating any
+# org_type definition inline -- a discriminator in two hand-maintained copies is two
+# things that drift. Makes this module CWD-sensitive (taxonomy loads by relative path,
+# the same convention src/icp_scoring.py already uses) -- run verify commands from the
+# repo root.
+from .taxonomy import org_type_definitions_block
 
 FIXTURE_DIR = Path("tests/fixtures")
 
@@ -51,7 +57,7 @@ RESEARCH_SYSTEM = (
     "confidence below 75 and explain in evidence_summary. lv_is_hardware_vendor and "
     "lv_is_gambling_operator are hard-veto inputs — answer null unless a cited source "
     "directly supports the classification."
-)
+) + "\n\n" + org_type_definitions_block()
 
 
 # Phase 48 (COVER-01, plan 48-03 Task 3): a narrow one-off prompt used ONLY for the
@@ -89,7 +95,7 @@ RACING_NSW_ORG_TYPE_SYSTEM = (
     "conflict, set confidence below 75 and explain in evidence_summary. lv_is_hardware_vendor "
     "and lv_is_gambling_operator are hard-veto inputs — answer null unless a cited source "
     "directly supports the classification."
-)
+) + "\n\n" + org_type_definitions_block()
 
 
 def mock_claude_web_research(record: HubSpotRecord) -> ProviderResult:

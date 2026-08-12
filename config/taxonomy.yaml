@@ -26,12 +26,25 @@ version: lv-taxonomy-v1
 #                    (-> field_policy lv_org_type.require_evidence_url_for)
 # hard_veto:        names a key in icp_scoring.yaml hard_vetoes, if this type vetoes
 # deduction_signal: names the boolean ICP field this type implies, if any
+# definition:       semantic definition rendered into both research prompts (TX-10,
+#                   src/taxonomy.py::org_type_definitions_block()) -- WITHOUT this, both
+#                   prompts enumerate the 9 values with no meaning, which is exactly what
+#                   let a model key on statutory origin instead of commercial control and
+#                   misclassify Racing NSW as `regulator` (Phase 48 Plan 07). Every value
+#                   gets one, not just the two in dispute -- a half-defined vocabulary
+#                   invites the model to treat the defined pair as special.
 # synonyms:         lowercase forms the normalizer maps INTO this value. Matching is on
 #                   the normalized string (lowercased, punctuation->space, collapsed).
 org_types:
   governing_body_league:
     score: 40
     requires_evidence: true
+    definition: >-
+      Holds commercial control of a sport or competition: sets the calendar or race
+      programme, distributes prizemoney, and holds media rights and sponsorship, whether
+      or not it ALSO carries statutory regulatory powers. Anchor example: Racing NSW, a
+      statutory body that nonetheless programmes racing, distributes prizemoney, collects
+      Race Fields fees and runs its own streaming.
     synonyms:
       - league
       - governing body
@@ -44,6 +57,10 @@ org_types:
   content_producer:
     score: 20
     requires_evidence: true
+    definition: >-
+      Produces and distributes broadcast or streaming content but does not govern the
+      sport it covers -- a media/production entity, not the competition's controlling
+      body.
     synonyms:
       - production company
       - media producer
@@ -54,6 +71,9 @@ org_types:
   broadcaster:
     score: 20
     requires_evidence: false
+    definition: >-
+      A media company or network that airs or streams sport content, typically without
+      governing the competition itself.
     synonyms:
       - tv network
       - television network
@@ -65,6 +85,9 @@ org_types:
   individual_club_team:
     score: 15
     requires_evidence: false
+    definition: >-
+      A single club, team, or venue-level sporting organisation -- not a governing body,
+      league, or peak body for the wider sport.
     synonyms:
       - club
       - team
@@ -76,6 +99,12 @@ org_types:
   regulator:
     score: -20
     requires_evidence: false
+    definition: >-
+      Integrity, licensing and stewarding ONLY, where a DIFFERENT body holds the
+      commercial functions (calendar, prizemoney, media rights, sponsorship). Anchor
+      example: QRIC, where Racing Queensland holds the commercial functions. Statutory
+      origin is NOT the test -- both a pure regulator and a governing body can be created
+      by an Act.
     synonyms:
       - regulatory body
       - regulator authority
@@ -86,6 +115,9 @@ org_types:
     score: 0
     requires_evidence: true
     deduction_signal: lv_is_gambling_operator
+    definition: >-
+      A bookmaker, betting exchange, or wagering/gaming operator -- takes bets or offers
+      gambling products, rather than producing or governing sport.
     synonyms:
       - bookmaker
       - betting operator
@@ -99,6 +131,9 @@ org_types:
     requires_evidence: true
     hard_veto: hardware_vendor
     deduction_signal: lv_is_hardware_vendor
+    definition: >-
+      An AV/LED/display or systems-integration vendor supplying broadcast hardware --
+      not a sports-media buyer; a hard-veto trigger.
     synonyms:
       - av vendor
       - led vendor
@@ -111,12 +146,18 @@ org_types:
   other:
     score: 0
     requires_evidence: false
+    definition: >-
+      A company that does not fit any other org_type option -- identity is known but the
+      category is genuinely outside this list.
     synonyms: []
 
   unknown:
     score: 0
     requires_evidence: false
     is_default: true
+    definition: >-
+      Identity or category could not be established from the evidence available -- the
+      default; never guessed into.
     synonyms: []
 
 # --- lv_content_type ---------------------------------------------------------

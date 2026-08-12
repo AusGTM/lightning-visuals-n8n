@@ -145,6 +145,27 @@ def test_tx8_synonyms_are_unique(taxonomy, vocab):
     assert not clashes, f"ambiguous synonyms in {vocab}: {clashes}"
 
 
+# --- TX-10: org_type definitions reach both research prompts ---------------
+def test_tx10_every_org_type_has_a_definition_and_both_prompts_render_them(taxonomy):
+    """TX-10 (2026-08-13, Phase 48 Plan 07): every org_types entry MUST carry a non-empty
+    `definition`, and both Python research prompts MUST render the rendered block
+    verbatim -- a discriminator present in one prompt and absent from the other is a
+    silent divergence (the Racing NSW misclassification's root cause; see
+    docs/WEB-RESEARCH-SPEC.md's dated §2 amendment)."""
+    from src.taxonomy import ORG_TYPE_DEFINITIONS, org_type_definitions_block
+    from src.web_research import RACING_NSW_ORG_TYPE_SYSTEM, RESEARCH_SYSTEM
+
+    assert set(ORG_TYPE_DEFINITIONS) == set(taxonomy["org_types"])
+    assert all(v.strip() for v in ORG_TYPE_DEFINITIONS.values())
+
+    block = org_type_definitions_block()
+    assert block in RESEARCH_SYSTEM
+    assert block in RACING_NSW_ORG_TYPE_SYSTEM
+
+    assert "QRIC" in ORG_TYPE_DEFINITIONS["regulator"]
+    assert "Racing NSW" in ORG_TYPE_DEFINITIONS["governing_body_league"]
+
+
 @pytest.mark.parametrize("vocab", ["org_types", "content_types"])
 def test_tx9_synonyms_never_shadow_canonical_keys(taxonomy, vocab):
     """TX-9: a synonym may not equal a canonical key of the same vocabulary."""
