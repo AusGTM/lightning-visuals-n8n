@@ -5,10 +5,10 @@ milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 47.5
 current_phase_name: veto-recompute-path
 status: executing
-stopped_at: "Completed 47.5-06-PLAN.md — all 6 plans done; armed window #2 closed"
-last_updated: "2026-08-12T07:12:54.998Z"
+stopped_at: Phase 48 context gathered
+last_updated: "2026-08-12T10:54:45.868Z"
 last_activity: 2026-08-12
-last_activity_desc: "47.5 Plan 06 complete — armed window #2, 3 records written in ONE cycle; Ironman Tier A, Gravity Media Tier B, Simtech LED Tier D; non-ANZ census 4 -> 2"
+last_activity_desc: "Plan 03 complete: 47-BEFORE.json (17-row before-snapshot),"
 progress:
   total_phases: 5
   completed_phases: 3
@@ -152,9 +152,9 @@ Progress: [█████████░] 93% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-12T06:51:15.276Z
-**Stopped at:** Completed 47.5-05-PLAN.md; operator deploy+bounce outstanding
-**Resume file:** .planning/phases/47.5-veto-recompute-path/47.5-05-SUMMARY.md
+**Last session:** 2026-08-12T10:54:45.854Z
+**Stopped at:** Phase 48 context gathered
+**Resume file:** .planning/phases/48-enrichment-coverage/48-CONTEXT.md
 
 ## Performance Metrics
 
