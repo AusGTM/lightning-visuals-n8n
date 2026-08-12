@@ -18,9 +18,11 @@ target list a non-technical operator can act on from inside HubSpot.
       `individual_club_team`, `regulator`, and removal of the `gambling_operator` deduction —
       originally `individual_club_team` alone. Every live doc printing a superseded value is
       updated in the same phase; see `46-CONTEXT.md` D-01…D-03 and D-13.)*
+
 - [x] **RUBRIC-02**: Operator can see how the scored population would re-tier under proposed
       weights BEFORE committing them — a simulation over current `lv_*` inputs that writes
       nothing to HubSpot.
+
 - [x] **RUBRIC-03**: If weights change, **all three** scoring engines carry them identically —
       `config/icp_scoring.yaml` (Python oracle), the JS port compiled into
       `n8n/wf_enrichment_cloud.json`, and the HubSpot flow
@@ -48,6 +50,7 @@ target list a non-technical operator can act on from inside HubSpot.
       `47-RUN-REPORT.md` § "Per-id outcome"; snapshot `47-AFTER.json` (17 rows);
       classifier `scripts/veto_remediation_report.py` (`correct_non_anz`, pinned by
       `tests/test_veto_remediation_report.py::test_classify_correct_non_anz_for_the_d23_true_veto_record`).
+
 - [x] **VETO-02**: The clearing run happens inside a deliberately-opened armed write window with
       a record-count cap, and the window is disarmed and read back as disarmed afterward.
       → Both surfaces disarmed and proven closed by `n8n_arming.disarm`'s **independent
@@ -55,6 +58,7 @@ target list a non-technical operator can act on from inside HubSpot.
       17 pinned ids every time. **Caveat, disclosed not softened:** this took FIVE
       arm/disarm cycles, not the ONE the plan's must_have required — see
       `47-RUN-REPORT.md` § "Window accounting".
+
 - [x] **VETO-03**: Operator can confirm from HubSpot alone — no scripts — that no company remains
       with a non-ANZ veto reason and a blank `lv_country_region_normalized`.
       → **Operator-confirmed 2026-08-12: "There are no Non-ANZ geography companies with
@@ -78,15 +82,18 @@ traceable bar. They are new requirements, not a re-scoping of VETO-01/02/03, whi
       `lv_anti_icp_reason`. The bar is
       `tests/test_scoring_parity.py::test_veto_clear_after_correction` passing live with its
       assertions untouched — red since Phase 40-07 for exactly this reason.
+
 - [x] **RECOMP-02**: A skipped record is observable to the caller. Today a complete record
       returns `status: "success"` with nothing written and no node error — the same
       silent-success class recorded in `47-BLOCKED.md`. The caller must be able to tell
       "complete, nothing to do" from "something broke".
+
 - [x] **RECOMP-03**: The four companies still carrying a non-ANZ veto are re-examined under
       D-V6's operating-presence test, with **researched evidence URLs** rather than assertion,
       and any flip is written inside one bounded, disarmed-afterward window. Jam TV
       `17317850381` is correct and must retain its veto (D-23); Entain `10024564084` cannot
       move on a region flip because `lv_produces_content` fires a second veto.
+
 - [x] **RECOMP-04**: The hardware-vendor veto's trigger field is **decided and recorded with
       reasoning**, and the decision lands in every engine that carries the veto predicate in
       the same commit — `src/icp_scoring.py` and the n8n `Decide Company Action` node. The
@@ -95,7 +102,7 @@ traceable bar. They are new requirements, not a re-scoping of VETO-01/02/03, whi
 
 ### Enrichment Coverage (COVER)
 
-- [ ] **COVER-01**: The 18 scored companies with no `lv_org_type` are either enriched to a real
+- [x] **COVER-01**: The 18 scored companies with no `lv_org_type` are either enriched to a real
       org type, or individually recorded as un-enrichable with a stated reason. An unresolved
       company must be distinguishable from one never attempted.
       *(Scope amended 2026-08-11, operator-directed during `/gsd-discuss-phase 47`: the 18-company
@@ -103,7 +110,8 @@ traceable bar. They are new requirements, not a re-scoping of VETO-01/02/03, whi
       being simultaneously the false-veto cohort Phase 47 remediates, and are covered there. The
       1 remaining record — Racing NSW `15008671672`, flagged `blank_org_type` only with no
       `false_veto` flag — is covered by Phase 48. See `47-CONTEXT.md` D-01 and D-02.)*
-- [ ] **COVER-02**: The execution and provider cost of that enrichment is estimated before the
+
+- [x] **COVER-02**: The execution and provider cost of that enrichment is estimated before the
       run and reported after, against the 2,500/month n8n allowance and the current Lusha
       balance. A run that would exceed either is refused, not truncated silently.
       *(Scope amended 2026-08-11, operator-directed during `/gsd-discuss-phase 47`: this cost
@@ -116,10 +124,12 @@ traceable bar. They are new requirements, not a re-scoping of VETO-01/02/03, whi
 - [ ] **RESCORE-01**: A rubric change triggers a defined, budget-bounded re-score of the affected
       population rather than an ad-hoc sweep — including which records, in what chunk size, under
       which write window.
+
 - [ ] **RESCORE-02**: Because rubric-version segmentation is impossible without
       `lv_icp_scoring_version` (operator decision 2026-08-11: no new properties), any rubric
       change re-scores the ENTIRE scored population. The plan states that execution cost up front
       rather than discovering it mid-run.
+
 - [ ] **RESCORE-03**: Operator is told, in plain language, what the tier distribution was before
       and after any re-score — so a rubric change's effect on the target list is visible rather
       than inferred.
@@ -134,9 +144,11 @@ recoverable, only forward capture works, which cannot inform a v0.9 recalibratio
 
 - **EVID-01**: Closed-lost deals carry a reason in `lv_closed_lost_reason` (the property exists
   on Deals today), backfilled where recoverable.
+
 - **EVID-02**: The revenue-band deductions (−5 at 500–750M, −50 at 1.2B+) and the gambling −20
   are tested against actual won/lost outcomes, with the result recorded whether or not it changes
   the weights.
+
 - **EVID-03**: The supporting fields spec'd in CLAUDE.md §5.3 — `lv_qualitative_fit_summary`,
   `lv_budget_timeline_signal`, `lv_loss_reason_detail` — are created and populated. Confirmed
   live 2026-08-11 as NOT existing; creating them requires lifting the no-new-properties
@@ -147,14 +159,18 @@ recoverable, only forward capture works, which cannot inform a v0.9 recalibratio
 - **`lv_icp_scoring_version`** — operator decision 2026-08-11. Accepted consequence: HubSpot
   cannot filter on JSON inside a text property, so records scored under a superseded rubric
   cannot be segmented in a list and must be re-scored wholesale. This is why RESCORE-02 exists.
+
 - **New HubSpot properties of any kind** — same decision. `lv_closed_lost_reason` and
   `deal_source` already exist and may be used; the three §5.3 fields that do not exist are
   deferred rather than created.
+
 - **Installing the sweep cron/launchd schedule** — an admin action on the operator's machine,
   carried from v0.8 where the burn-rate alarm shipped inert. Not a v0.9 deliverable.
+
 - **JTBD 2 weighted-rubric sign-off as a formal gate** (REQ-signoff-gate) — RUBRIC-01 records a
   decision on one weight with evidence; a full business-owner sign-off of the entire rubric
   remains a separate, downstream event.
+
 - **Re-scoring the 3 correct vetoes** (Entain 10024564084, Gravity Media 15860277364, Ironman
   17317184159) — verified correct on 2026-08-11; they carry known non-ANZ regions and must not be
   swept up in VETO-01.
