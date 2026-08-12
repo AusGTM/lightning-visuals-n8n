@@ -16,9 +16,16 @@ plan) POSTs a synthetic property-change event with recompute=True so that Code n
 actually runs, then reads the derived values back -- it never patches the derived fields
 directly.
 
-Two-key arm: DRY_RUN=false AND ALLOW_ENRICH_COVERAGE=true (operator-only, per-shell, never
-set by Claude). Deliberately NOT ALLOW_VETO_REMEDIATION -- a distinct arm key for a
-distinct script. This plan builds the gate function only; no armed write leg exists yet.
+Two-key arm: DRY_RUN=false AND ALLOW_ENRICH_COVERAGE=true, set PER-SHELL only (never
+`.env`, never a profile). Deliberately NOT ALLOW_VETO_REMEDIATION -- a distinct arm key
+for a distinct script. The n8n-side allowlist (TEST_RECORD_IDS/ALLOW_HUBSPOT_RECORD_WRITES)
+is the SECOND, independent arming surface `scripts/june_run_arm.py` guards --
+`run_coverage_window` below refuses to write unless BOTH are open (`assert_allowlist_exact`).
+
+AMENDMENT (48-CONTEXT.md D-48-01, operator-granted 2026-08-13, Phase 48 only): both arming
+surfaces above -- normally operator-only per this docstring's original wording -- were
+delegated to Claude for this phase only. D-48-01 does not revive any earlier, expired
+waiver and expires with Phase 48; both surfaces revert to operator-only immediately after.
 
 `.env` is Read/Bash permission-blocked this session -- the operator invocation for any
 live read is:
@@ -28,15 +35,17 @@ live read is:
 A bare load_dotenv() resolves relative to the calling file, not the cwd -- pass an
 absolute path or every HubSpot read 401s.
 
-Run dry-run first (the default) and review the printed payloads before any future plan
-arms a write.
+Run dry-run first (the default) and review the printed payloads before any write.
 """
 import argparse
 import json
 import os
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
+
+import requests
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))  # repo root on sys.path so `scripts.*`/`src.*` imports resolve
@@ -48,14 +57,26 @@ from scripts.remediate_veto_companies import (  # noqa: E402
     ANTHROPIC_PER_RECORD_ESTIMATE_USD,
     refuse_if_over_budget,
     post_webhook_event,
+    settle_and_assert,
     BudgetRefused,
     NotArmedError,
     PinRefused,
+    SettleFailed,
 )
-from src.hubspot_client import search_records, get_record  # noqa: E402
+from scripts import june_run_arm  # noqa: E402
+from src.hubspot_client import search_records, get_record, batch_update_companies  # noqa: E402
 from src.schemas import HubSpotRecord  # noqa: E402
 from src.web_research import claude_web_research, RACING_NSW_ORG_TYPE_SYSTEM  # noqa: E402
 from src.taxonomy import org_type_coherence_flags  # noqa: E402
+
+# scripts.remediate_veto_companies (imported above) inserts operator-claude-plugin/scripts
+# onto sys.path as a side effect of its own module-level import -- these flat plugin
+# imports resolve because of that, the same idiom remediate_veto_companies.py itself uses.
+import config_gate  # noqa: E402
+import execution_errors  # noqa: E402
+import executions_client  # noqa: E402
+import n8n_arming  # noqa: E402
+import n8n_read  # noqa: E402
 
 RESEARCH_RESULTS_PATH = ROOT / ".planning/phases/47-veto-remediation/47-RESEARCH-RESULTS.json"
 
@@ -469,6 +490,337 @@ def coverage_writes_allowed() -> bool:
 
 def _has_credentials() -> bool:
     return bool(os.getenv("HUBSPOT_PRIVATE_APP_TOKEN"))
+
+
+# --- Plan 48-05: the before/after snapshot, the allowlist assertion, and the one armed
+# window (D-06) -----------------------------------------------------------------------
+
+# The 8 properties CONTEXT.md's Task 1 requires captured for both 48-BEFORE.json (always
+# disarmed) and 48-AFTER.json's per-record after-state (read back independently inside
+# the armed window). Deliberately one quoted name per line -- the same style
+# POPULATION_PROPERTIES already uses -- so the acceptance grep for the four forbidden
+# derived-field names
+# (grep -vE '^\s*(#|")' scripts/enrich_coverage_companies.py | grep -cE ...)
+# excludes these read-only property-name literals the same way it already excludes
+# POPULATION_PROPERTIES' own "lv_icp_fit_score/lv_icp_tier/lv_anti_icp_flag" lines. This
+# module reads these fields to prove what the n8n node settled, never PATCHes them
+# (FORBIDDEN_PROPS stays asserted disjoint from every payload build_coverage_patch
+# produces).
+BEFORE_PROPS = (
+    "lv_org_type",
+    "lv_enrichment_review_reason",
+    "lv_icp_fit_score",
+    "lv_icp_tier",
+    "lv_anti_icp_flag",
+    "lv_anti_icp_reason",
+    "lv_country_region_normalized",
+    "hs_lastmodifieddate",
+)
+
+
+class AllowlistNotExact(Exception):
+    """Raised by assert_allowlist_exact when the deployed workflow's n8n-side
+    write-safety state is not exactly what this window intends -- Trap 4 (an EMPTY
+    allowlist arms successfully and denies every write while still reporting armed)
+    plus two cheap adjacent checks: a populated allowlist with ALLOW_HUBSPOT_RECORD_WRITES
+    still reading false (execution 11858's exact silent-denial shape), and a populated
+    TEST_RECORD_DOMAINS this population never needs. Raised before this driver's first
+    write, always from an INDEPENDENT fetch -- never from a prior arm call's own return
+    value."""
+
+
+class WindowError(Exception):
+    """Raised by run_coverage_window before its first write, when
+    coverage_writes_allowed() is False -- this driver's own two-key gate (DRY_RUN=false
+    AND ALLOW_ENRICH_COVERAGE=true, per-shell) is not open. Nothing is sent."""
+
+
+def _read_snapshot(company_id, reader=get_record):
+    record = reader("companies", company_id, list(BEFORE_PROPS))
+    return record.get("properties", {})
+
+
+def snapshot_records(ids=None, reader=get_record):
+    """Reads BEFORE_PROPS for every id, in COVERAGE_COMPANY_ID_ORDER order (never the
+    caller's order) -- the shared read used for both 48-BEFORE.json (Task 1, always
+    disarmed) and 48-AFTER.json's per-record after-state (Task 3, read back
+    independently inside the armed window)."""
+    resolved = resolve_coverage_ids(ids or COVERAGE_COMPANY_ID_ORDER)
+    return {company_id: _read_snapshot(company_id, reader) for company_id in resolved}
+
+
+def assert_allowlist_exact(expected_ids, config=None,
+                            workflow_name=june_run_arm.DEFAULT_WORKFLOW_NAME,
+                            workflow_id=None, resolver=None, fetcher=None):
+    """Independently re-fetches the deployed workflow -- a FRESH GET, never a prior arm
+    call's own return value -- and asserts the n8n-side write-safety state is exactly
+    what this window intends, before this driver's first write:
+      - ALLOW_HUBSPOT_RECORD_WRITES reads "true"
+      - TEST_RECORD_IDS is non-empty AND its id set equals `expected_ids` exactly
+      - TEST_RECORD_DOMAINS is empty (this population is id-armed only)
+    Raises AllowlistNotExact naming the observed state on any mismatch. `workflow_id`
+    and `fetcher` are both injectable (the latter workflow_id -> workflow dict) so
+    offline tests need no network call at all."""
+    expected = frozenset(str(v).strip() for v in expected_ids if str(v).strip())
+    cfg = config if config is not None else config_gate.load_config()
+    resolve = resolver or (lambda: executions_client.resolve_workflow_id(cfg, workflow_name=workflow_name))
+    resolved_workflow_id = workflow_id if workflow_id is not None else resolve()
+    if resolved_workflow_id is None:
+        raise AllowlistNotExact(
+            f"no workflow named {workflow_name!r} was found -- refusing to assert an "
+            "allowlist that cannot be read."
+        )
+    fetch = fetcher or (lambda wid: n8n_read.get_workflow(cfg, wid))
+    workflow = fetch(resolved_workflow_id)
+    if not isinstance(workflow, dict):
+        raise AllowlistNotExact(
+            f"workflow {workflow_id!r} could not be read -- refusing to assert an "
+            "allowlist against an unreadable workflow."
+        )
+
+    def _read(flag):
+        observed = n8n_read.read_write_safety(workflow, flag)
+        if observed.get("disagreement") is not None:
+            raise AllowlistNotExact(
+                f"{flag} declaring nodes disagree: {observed.get('nodes')} -- refusing "
+                "to trust a desynced flag."
+            )
+        return observed.get("value")
+
+    writes_flag = _read("ALLOW_HUBSPOT_RECORD_WRITES")
+    if writes_flag != "true":
+        raise AllowlistNotExact(
+            f"ALLOW_HUBSPOT_RECORD_WRITES reads {writes_flag!r}, not 'true' -- a "
+            "populated id allowlist with this flag false is a silent denial (the exact "
+            "shape of execution 11858). Refusing before any write."
+        )
+
+    domains_raw = _read("TEST_RECORD_DOMAINS") or ""
+    domains = frozenset(v.strip() for v in domains_raw.split(",") if v.strip())
+    if domains:
+        raise AllowlistNotExact(
+            f"TEST_RECORD_DOMAINS is non-empty ({sorted(domains)}) -- this population is "
+            "id-armed only; a populated domain allowlist widens the grant beyond what "
+            "this window intends. Refusing before any write."
+        )
+
+    ids_raw = _read("TEST_RECORD_IDS") or ""
+    observed_ids = frozenset(v.strip() for v in ids_raw.split(",") if v.strip())
+    if not observed_ids:
+        raise AllowlistNotExact(
+            "TEST_RECORD_IDS is empty -- an empty allowlist denies every write while "
+            "still reporting armed (Trap 4). Refusing before any write."
+        )
+    if observed_ids != expected:
+        raise AllowlistNotExact(
+            f"TEST_RECORD_IDS reads {sorted(observed_ids)}, not exactly the expected "
+            f"{sorted(expected)} -- refusing before any write."
+        )
+    return observed_ids
+
+
+def _duration_seconds(started, stopped):
+    if not started or not stopped:
+        return None
+    try:
+        s = datetime.fromisoformat(str(started).replace("Z", "+00:00"))
+        e = datetime.fromisoformat(str(stopped).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return (e - s).total_seconds()
+
+
+def _node_output_json(execution, node_name):
+    """One named node's first output item's `json` payload from
+    data.resultData.runData -- the same defensive `main[0]` walk report.py/
+    execution_errors.py already use (report.py's own comment: this exact tiny walk is
+    reimplemented at each call site in this repo rather than shared)."""
+    run_data = ((execution.get("data") or {}).get("resultData") or {}).get("runData")
+    if not isinstance(run_data, dict):
+        return None
+    runs = run_data.get(node_name)
+    if not isinstance(runs, list) or not runs:
+        return None
+    first = runs[0]
+    if not isinstance(first, dict):
+        return None
+    main = (first.get("data") or {}).get("main")
+    if not isinstance(main, list) or not main:
+        return None
+    branch = main[0] if isinstance(main[0], list) else []
+    for item in branch:
+        if isinstance(item, dict) and isinstance(item.get("json"), dict):
+            return item["json"]
+    return None
+
+
+def summarize_execution(execution):
+    """The per-record execution evidence 48-AFTER.json records: node count (Trap 6),
+    which nodes actually ran, whether `HubSpot Company Update` ran, `Decide Company
+    Action`'s own output, and errors judged from node-level runData (Trap 1) via the
+    shipped `execution_errors.harvest_errors` -- never from top-level `status` alone."""
+    if not isinstance(execution, dict):
+        return None
+    workflow_data = execution.get("workflowData") or {}
+    run_data = ((execution.get("data") or {}).get("resultData") or {}).get("runData")
+    nodes_run = sorted(run_data.keys()) if isinstance(run_data, dict) else []
+    return {
+        "execution_id": execution.get("id"),
+        "status": execution.get("status"),
+        "node_count": len(workflow_data.get("nodes") or []),
+        "nodes_run": nodes_run,
+        "hubspot_company_update_ran": "HubSpot Company Update" in nodes_run,
+        "decide_company_action_output": _node_output_json(execution, "Decide Company Action"),
+        "duration_seconds": _duration_seconds(execution.get("startedAt"), execution.get("stoppedAt")),
+        "errors": execution_errors.harvest_errors(execution),
+    }
+
+
+def _independent_disarm_reread(cfg, workflow_id):
+    """A FRESH GET performed AFTER the disarm mutation, never a re-read of the disarm
+    call's own echoed/verified response (Trap 3) -- this is the closure evidence the
+    run report quotes verbatim."""
+    workflow = n8n_read.get_workflow(cfg, workflow_id)
+    if not isinstance(workflow, dict):
+        return {"error": "workflow could not be independently re-read after disarm"}
+    flags = {
+        flag: n8n_read.read_write_safety(workflow, flag).get("value")
+        for flag in n8n_arming.DISPATCH_FLAGS
+    }
+    return {"flags": flags, "active": workflow.get("active")}
+
+
+def run_coverage_window(
+    ids=None,
+    armed=False,
+    now_iso=None,
+    config=None,
+    writes_allowed_fn=coverage_writes_allowed,
+    allowlist_asserter=assert_allowlist_exact,
+    patcher=batch_update_companies,
+    poster=post_webhook_event,
+    lister=executions_client.list_executions,
+    finder=executions_client.find_execution_for_dispatch,
+    getter=executions_client.get_execution,
+    disarmer=None,
+    rereader=_independent_disarm_reread,
+    reader=get_record,
+    sleeper=time.sleep,
+    settle_timeout=90,
+    settle_interval=5,
+    workflow_id=None,
+    workflow_resolver=None,
+):
+    """The single entry point for the D-06 armed window: asserts both gates, then for
+    every record PATCHes the org-type input, fires one D-09 recompute POST, waits for
+    the derived chain to stabilise (reusing settle_and_assert -- never a new poller),
+    and reads the record back independently. Disarms the n8n side in a `finally` so a
+    mid-loop failure can never leave the window open (D-48-01: "disarm is ungated and
+    runs even when the write leg fails or raises"). Never trims `ids` -- refuses whole
+    (COVER-02) via WindowError/AllowlistNotExact before the first write.
+
+    `armed=False` (the default) never touches the network beyond the two pre-write
+    gates: every PATCH is built and recorded but sent with dry_run=True, and no webhook
+    POST is made (mirrors post_webhook_event's own NotArmedError contract) -- this is
+    what a rehearsal/offline call exercises. Only `armed=True` sends a real PATCH and a
+    real webhook POST.
+    """
+    resolved_ids = resolve_coverage_ids(ids or COVERAGE_COMPANY_ID_ORDER)
+
+    if not writes_allowed_fn():
+        raise WindowError(
+            "coverage_writes_allowed() is False -- DRY_RUN=false AND "
+            "ALLOW_ENRICH_COVERAGE=true must both be set, per-shell, before the first "
+            "write. Nothing was sent."
+        )
+
+    cfg = config if config is not None else config_gate.load_config()
+    resolve_workflow_id = workflow_resolver or (
+        lambda: executions_client.resolve_workflow_id(
+            cfg, workflow_name=june_run_arm.DEFAULT_WORKFLOW_NAME,
+        )
+    )
+    resolved_workflow_id = workflow_id if workflow_id is not None else resolve_workflow_id()
+
+    allowlist_asserter(resolved_ids, config=cfg, workflow_id=resolved_workflow_id)
+
+    now_iso = now_iso or datetime.now(timezone.utc).isoformat()
+    workflow_id = resolved_workflow_id
+    disarm_fn = disarmer or (lambda: june_run_arm.disarm())
+
+    pre_window_executions = lister(cfg, workflow_id, limit=1) if (armed and workflow_id) else []
+
+    results = []
+    try:
+        for company_id in resolved_ids:
+            decision = decide_org_type(company_id, _load_captured_research(company_id))
+            patch = build_coverage_patch(company_id, decision, now_iso)
+            patcher([patch], dry_run=not armed)
+
+            record = {
+                "id": company_id,
+                "decision": decision,
+                "patch_properties": patch["properties"],
+                "timed_out": False,
+                "execution": None,
+                "after_properties": None,
+            }
+
+            if armed:
+                dispatched_at = datetime.now(timezone.utc)
+                try:
+                    poster(company_id, True, cfg, recompute=True)
+                except requests.exceptions.Timeout:
+                    # Trap 2: n8n completes server-side; a client timeout is never
+                    # retried. Fall straight through to reading the execution back.
+                    record["timed_out"] = True
+
+                candidates = lister(cfg, workflow_id, limit=5)
+                handle = finder(candidates, dispatched_at)
+                execution = getter(cfg, handle["execution_id"]) if handle else None
+                record["execution_handle"] = handle
+                record["execution"] = summarize_execution(execution)
+
+                try:
+                    settle_and_assert(
+                        company_id,
+                        "lv_icp_tier",
+                        lambda _v: True,
+                        settle_timeout,
+                        settle_interval,
+                        reader=reader,
+                        sleeper=sleeper,
+                    )
+                except SettleFailed:
+                    pass  # recorded via the after-read below, not fatal to the window
+
+                record["after_properties"] = _read_snapshot(company_id, reader=reader)
+
+            results.append(record)
+    finally:
+        # D-48-01: "disarm is ungated and runs even when the write leg fails or
+        # raises" -- called unconditionally, never inside the try, never skipped on
+        # an exception. The independent re-read only bothers hitting the network when
+        # this window actually armed the n8n side (armed=True and a workflow_id was
+        # resolved); a dry-run/rehearsal call never armed anything to re-read.
+        disarm_outcome = disarm_fn()
+        disarm_reread = (
+            rereader(cfg, workflow_id) if (armed and workflow_id) else None
+        )
+
+    post_window_executions = lister(cfg, workflow_id, limit=10) if (armed and workflow_id) else []
+
+    return {
+        "results": results,
+        "disarm_outcome": disarm_outcome,
+        "disarm_reread": disarm_reread,
+        "pre_window_last_execution_id": (
+            pre_window_executions[0].get("id") if pre_window_executions else None
+        ),
+        "post_window_execution_ids": [
+            item.get("id") for item in post_window_executions if isinstance(item, dict)
+        ],
+    }
 
 
 # --- main -----------------------------------------------------------------------------

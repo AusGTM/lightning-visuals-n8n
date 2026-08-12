@@ -373,6 +373,164 @@ def test_resolve_racing_nsw_decision_valid_enum_with_evidence_url_promotes():
     assert decision["basis"]
 
 
+# --- Plan 48-05 Task 1: assert_allowlist_exact + run_coverage_window --------------------
+
+ALL_FIVE_IDS = tuple(m.COVERAGE_COMPANY_ID_ORDER)
+
+
+def _fake_workflow_with_allowlist(ids_csv, writes_flag="true", domains_csv=""):
+    """A minimal fake workflow body n8n_read.read_write_safety can parse -- one node
+    whose jsCode declares the three flags assert_allowlist_exact reads."""
+    js = (
+        f'const ALLOW_HUBSPOT_RECORD_WRITES = "{writes_flag}";\n'
+        f'const TEST_RECORD_IDS = "{ids_csv}";\n'
+        f'const TEST_RECORD_DOMAINS = "{domains_csv}";\n'
+    )
+    return {"nodes": [{"name": "ENRICH_CO_GATE", "parameters": {"jsCode": js}}]}
+
+
+def test_assert_allowlist_exact_raises_on_empty_allowlist():
+    workflow = _fake_workflow_with_allowlist("")
+    with pytest.raises(m.AllowlistNotExact):
+        m.assert_allowlist_exact(ALL_FIVE_IDS, config={}, workflow_id="wf-fake", fetcher=lambda wid: workflow)
+
+
+def test_assert_allowlist_exact_raises_on_superset():
+    superset_csv = ",".join(list(ALL_FIVE_IDS) + ["0000000000"])
+    workflow = _fake_workflow_with_allowlist(superset_csv)
+    with pytest.raises(m.AllowlistNotExact):
+        m.assert_allowlist_exact(ALL_FIVE_IDS, config={}, workflow_id="wf-fake", fetcher=lambda wid: workflow)
+
+
+def test_assert_allowlist_exact_passes_on_exact_set():
+    workflow = _fake_workflow_with_allowlist(",".join(ALL_FIVE_IDS))
+    observed = m.assert_allowlist_exact(ALL_FIVE_IDS, config={}, workflow_id="wf-fake", fetcher=lambda wid: workflow)
+    assert observed == frozenset(ALL_FIVE_IDS)
+
+
+def test_assert_allowlist_exact_raises_when_record_writes_flag_is_false():
+    # Execution 11858's exact silent-denial shape: a populated id allowlist with the
+    # write-enabling flag still reading false.
+    workflow = _fake_workflow_with_allowlist(",".join(ALL_FIVE_IDS), writes_flag="false")
+    with pytest.raises(m.AllowlistNotExact):
+        m.assert_allowlist_exact(ALL_FIVE_IDS, config={}, workflow_id="wf-fake", fetcher=lambda wid: workflow)
+
+
+def test_assert_allowlist_exact_raises_when_domains_populated_too():
+    workflow = _fake_workflow_with_allowlist(
+        ",".join(ALL_FIVE_IDS), domains_csv="example.org",
+    )
+    with pytest.raises(m.AllowlistNotExact):
+        m.assert_allowlist_exact(ALL_FIVE_IDS, config={}, workflow_id="wf-fake", fetcher=lambda wid: workflow)
+
+
+def test_run_coverage_window_raises_before_first_write_when_writes_not_allowed(monkeypatch):
+    monkeypatch.setattr("requests.post", _refuse_network)
+    monkeypatch.setattr("requests.patch", _refuse_network)
+
+    def _refuse_asserter(*_a, **_kw):
+        raise AssertionError("allowlist must never be asserted when writes are not allowed")
+
+    def _refuse_patcher(*_a, **_kw):
+        raise AssertionError("no patch should ever be sent when writes are not allowed")
+
+    with pytest.raises(m.WindowError):
+        m.run_coverage_window(
+            ids=ALL_FIVE_IDS,
+            armed=True,
+            writes_allowed_fn=lambda: False,
+            allowlist_asserter=_refuse_asserter,
+            patcher=_refuse_patcher,
+        )
+
+
+def test_run_coverage_window_dry_run_builds_every_patch_and_disarms_without_network(monkeypatch):
+    monkeypatch.setattr("requests.post", _refuse_network)
+    monkeypatch.setattr("requests.patch", _refuse_network)
+
+    seen_patches = []
+
+    def _fake_patcher(updates, dry_run=True):
+        assert dry_run is True
+        seen_patches.extend(updates)
+
+    disarm_calls = []
+
+    def _fake_disarmer():
+        disarm_calls.append(True)
+        return {"outcome": "disarmed"}
+
+    result = m.run_coverage_window(
+        ids=ALL_FIVE_IDS,
+        armed=False,
+        now_iso="2026-08-13T00:00:00+00:00",
+        config={},
+        writes_allowed_fn=lambda: True,
+        allowlist_asserter=lambda *_a, **_kw: frozenset(ALL_FIVE_IDS),
+        patcher=_fake_patcher,
+        lister=_refuse_network,
+        finder=_refuse_network,
+        getter=_refuse_network,
+        disarmer=_fake_disarmer,
+        workflow_id="wf-fake",
+    )
+
+    assert len(seen_patches) == 5
+    assert {rec["id"] for rec in result["results"]} == set(ALL_FIVE_IDS)
+    assert all(rec["execution"] is None for rec in result["results"])
+    assert disarm_calls == [True]
+
+
+def test_run_coverage_window_never_trims_the_id_set_on_mismatch(monkeypatch):
+    with pytest.raises(rvc.PinRefused):
+        m.run_coverage_window(
+            ids=["0000000000"],
+            armed=False,
+            writes_allowed_fn=lambda: True,
+            allowlist_asserter=lambda *_a, **_kw: None,
+            patcher=_refuse_network,
+            disarmer=lambda: {"outcome": "disarmed"},
+        )
+
+
+def test_summarize_execution_reads_decide_company_action_output_and_node_counts():
+    execution = {
+        "id": "11900",
+        "status": "success",
+        "startedAt": "2026-08-13T00:00:00.000Z",
+        "stoppedAt": "2026-08-13T00:00:10.000Z",
+        "workflowData": {"nodes": [{"name": f"n{i}"} for i in range(21)]},
+        "data": {
+            "resultData": {
+                "runData": {
+                    "Decide Company Action": [
+                        {"data": {"main": [[{"json": {"action": "written"}}]]}}
+                    ],
+                    "HubSpot Company Update": [{"data": {"main": [[{"json": {}}]]}}],
+                }
+            }
+        },
+    }
+    summary = m.summarize_execution(execution)
+    assert summary["node_count"] == 21
+    assert summary["hubspot_company_update_ran"] is True
+    assert summary["decide_company_action_output"] == {"action": "written"}
+    assert summary["duration_seconds"] == 10.0
+
+
+def test_snapshot_records_reads_before_props_in_table_order():
+    seen = []
+
+    def _fake_reader(object_type, company_id, properties):
+        seen.append((object_type, company_id, tuple(properties)))
+        return {"properties": {"lv_org_type": ""}}
+
+    snapshot = m.snapshot_records(reader=_fake_reader)
+
+    assert list(snapshot.keys()) == list(m.COVERAGE_COMPANY_ID_ORDER)
+    assert seen[0][2] == m.BEFORE_PROPS
+
+
 def test_research_racing_nsw_calls_research_fn_with_the_enum_constrained_prompt():
     from src.web_research import RACING_NSW_ORG_TYPE_SYSTEM
 

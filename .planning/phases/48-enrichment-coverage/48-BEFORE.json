@@ -1,0 +1,62 @@
+{
+  "15008671672": {
+    "createdate": "2023-03-08T22:49:02.917Z",
+    "hs_lastmodifieddate": "2026-08-08T12:40:25.666Z",
+    "hs_object_id": "15008671672",
+    "lv_anti_icp_flag": "false",
+    "lv_anti_icp_reason": null,
+    "lv_country_region_normalized": "AU",
+    "lv_enrichment_review_reason": "lv_org_type: June (governing_body_league) and fresh research (regulator) disagree on lv_org_type.",
+    "lv_icp_fit_score": "40",
+    "lv_icp_tier": "B",
+    "lv_org_type": null
+  },
+  "17317381378": {
+    "createdate": "2023-09-14T02:47:09.684Z",
+    "hs_lastmodifieddate": "2026-08-12T01:41:49.102Z",
+    "hs_object_id": "17317381378",
+    "lv_anti_icp_flag": "false",
+    "lv_anti_icp_reason": "",
+    "lv_country_region_normalized": null,
+    "lv_enrichment_review_reason": "lv_country_region_normalized: Best confidence 40 below threshold 75.; lv_org_type: Best confidence 40 below threshold 80.; lv_produces_content: Best confidence 40 below threshold 85.; lv_sponsorship_reliant: Best confidence 40 below threshold 70.",
+    "lv_icp_fit_score": "0",
+    "lv_icp_tier": "Unscored",
+    "lv_org_type": null
+  },
+  "17317850381": {
+    "createdate": "2023-09-14T05:18:41.757Z",
+    "hs_lastmodifieddate": "2026-08-12T01:42:45.648Z",
+    "hs_object_id": "17317850381",
+    "lv_anti_icp_flag": "true",
+    "lv_anti_icp_reason": "Non-ANZ geography",
+    "lv_country_region_normalized": "Other",
+    "lv_enrichment_review_reason": "lv_produces_content: Best confidence 65 below threshold 85.; lv_sponsorship_reliant: Best confidence 65 below threshold 70.; lv_org_type: June (broadcaster) and fresh research (content_producer) disagree on lv_org_type.",
+    "lv_icp_fit_score": "20",
+    "lv_icp_tier": "D",
+    "lv_org_type": null
+  },
+  "20538284384": {
+    "createdate": "2024-04-29T23:39:41.576Z",
+    "hs_lastmodifieddate": "2026-08-12T01:54:17.141Z",
+    "hs_object_id": "20538284384",
+    "lv_anti_icp_flag": "false",
+    "lv_anti_icp_reason": "",
+    "lv_country_region_normalized": "NZ",
+    "lv_enrichment_review_reason": "lv_produces_content: Best confidence 65 below threshold 85.; lv_org_type: Best confidence 75 below threshold 80.; lv_is_gambling_operator: Best confidence 75 below threshold 85.",
+    "lv_icp_fit_score": "30",
+    "lv_icp_tier": "C",
+    "lv_org_type": null
+  },
+  "20943964946": {
+    "createdate": "2024-05-22T10:26:32.694Z",
+    "hs_lastmodifieddate": "2026-08-12T01:54:56.188Z",
+    "hs_object_id": "20943964946",
+    "lv_anti_icp_flag": "false",
+    "lv_anti_icp_reason": "",
+    "lv_country_region_normalized": "AU",
+    "lv_enrichment_review_reason": "lv_produces_content: Best confidence 65 below threshold 85.; lv_org_type: June (governing_body_league) and fresh research (content_producer) disagree on lv_org_type.",
+    "lv_icp_fit_score": "40",
+    "lv_icp_tier": "B",
+    "lv_org_type": null
+  }
+}
