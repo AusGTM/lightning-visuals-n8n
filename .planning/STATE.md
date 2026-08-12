@@ -80,6 +80,8 @@ Progress: [█████████░] 89%
 
 ## Decisions
 
+- [Decision 2026-08-12]: `venue` org type LOCKED at weight 5 (no hard veto, motion work_via_league); on entity collision individual_club_team wins; three-layer org-type normalization (generation-time enum, deterministic alias table, Haiku fallback) LOCKED. Implement in Phase 48, score in Phase 49. Phase 47's window unaffected. Full record: .planning/decisions/2026-08-12-org-type-venue-and-normalization.md
+
 - [Phase 40-01]: D-05 round-trip verdict PROVEN — `PUT /automation/v4/flows/{id}` accepts STATIC_BRANCH action-content edits live; no portal-UI fallback needed for this edit shape. IS_BETWEEN edits (40-05) remain unverified.
 - [Phase 40-01]: Corrected D-07's literal step order — validate-on-disposable must run while the flow is enabled, not disabled (a disabled flow never fires). Documented in PORTAL-FACTS.md for 40-04/40-05/40-06 to follow.
 - [Phase 40-01]: ENGINE-06 fully closed; ENGINE-05 only half-closed (org-type branch no longer double-deducts gambling, but the real lv_is_gambling_operator-driven -20 component is still 40-04's work — do not mark ENGINE-05 complete until then).
