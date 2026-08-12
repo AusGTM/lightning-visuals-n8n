@@ -12,8 +12,9 @@ whole-run style has no existing single-command wrapper anywhere in the repo.
 Every safety check stays inside n8n_arming, where it already lives: the ALLOW_N8N_ARM kill
 switch, the allowlist charset validation, and the fail-closed re-scan are never duplicated
 here. This wrapper adds exactly two refusals the library cannot make on its own -- an
-empty --ids list (an empty allowlist denies every write and would look like a successful
-arm) and an unresolvable workflow name (refusing rather than guessing an id) -- and
+empty allowlist, i.e. --ids AND --domains both empty (an empty allowlist denies every write
+and would look like a successful arm) and an unresolvable workflow name (refusing rather
+than guessing an id) -- and
 translates a raised library exception into the same JSON outcome shape a clean refusal
 already has, so a partially-applied state can never read as a plain success on stdout.
 
@@ -25,6 +26,8 @@ exists to prevent.
 `ALLOW_N8N_ARM` is operator-only, per-shell, never set by Claude. The operator invocation
 for arming:
     ALLOW_N8N_ARM=true .venv/bin/python scripts/june_run_arm.py --ids <comma-separated ids>
+or, for a record HubSpot has not created yet (an id allowlist cannot name it):
+    ALLOW_N8N_ARM=true .venv/bin/python scripts/june_run_arm.py --domains <comma-separated domains>
 and for disarming at the end of the run:
     .venv/bin/python scripts/june_run_arm.py --disarm
 """
@@ -48,16 +51,26 @@ def _parse_ids(raw: str) -> list:
     return [v.strip() for v in (raw or "").split(",") if v.strip()]
 
 
-def arm(ids_csv: str, workflow_name: str = DEFAULT_WORKFLOW_NAME) -> dict:
-    """Arm the whole run for exactly the resolved ids. Never calls n8n_arming.disarm --
-    the two are separate operator actions by D-06."""
+def arm(ids_csv: str, workflow_name: str = DEFAULT_WORKFLOW_NAME,
+        domains_csv: str = "") -> dict:
+    """Arm the whole run for exactly the resolved ids and/or domains. Never calls
+    n8n_arming.disarm -- the two are separate operator actions by D-06.
+
+    Phase 47.5: `domains_csv` exposes n8n_arming.arm_for_dispatch's `record_domains`
+    parameter, which the library has always accepted and this wrapper hid by passing []
+    unconditionally. A domain allowlist is the only allowlist that can be armed for a
+    company that does not exist yet -- an id allowlist cannot name a record HubSpot has not
+    created. Keyword with an empty default, so every existing caller keeps passing ids only
+    and lands the same record_domains=[] it always did.
+    """
     ids = _parse_ids(ids_csv)
-    if not ids:
+    domains = _parse_ids(domains_csv)
+    if not ids and not domains:
         return {
             "outcome": "refused",
             "detail": (
-                "refusing to arm: --ids is empty. An empty allowlist denies every write "
-                "and would look like a successful arm."
+                "refusing to arm: --ids and --domains are both empty. An empty allowlist "
+                "denies every write and would look like a successful arm."
             ),
         }
 
@@ -71,7 +84,8 @@ def arm(ids_csv: str, workflow_name: str = DEFAULT_WORKFLOW_NAME) -> dict:
 
     try:
         return n8n_arming.arm_for_dispatch(
-            workflow_id, record_ids=ids, record_domains=[], allow_create=False, config=cfg,
+            workflow_id, record_ids=ids, record_domains=domains, allow_create=False,
+            config=cfg,
         )
     except n8n_arming.ArmingRefused as exc:
         return {"outcome": "refused", "detail": str(exc)}
@@ -106,6 +120,11 @@ def main(argv=None) -> int:
         help="comma-separated resolved HubSpot company ids (arm mode only)",
     )
     parser.add_argument(
+        "--domains", default="",
+        help=("comma-separated company domains (arm mode only). The only allowlist that "
+              "can cover a company that does not exist yet."),
+    )
+    parser.add_argument(
         "--disarm", action="store_true",
         help="close the arm window instead of opening it",
     )
@@ -113,7 +132,7 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
 
     outcome = disarm(workflow_name=args.workflow_name) if args.disarm \
-        else arm(args.ids, workflow_name=args.workflow_name)
+        else arm(args.ids, workflow_name=args.workflow_name, domains_csv=args.domains)
 
     print(json.dumps(outcome, indent=2, default=str))
 

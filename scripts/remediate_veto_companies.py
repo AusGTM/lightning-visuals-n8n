@@ -556,25 +556,57 @@ def settle_veto(company_id: str, timeout=900, interval=15, reader=get_record, sl
 
 # --- the D-18 webhook POST leg (no analog in the repo -- small and local) -----------------
 
-def build_webhook_event(company_id: str, property_name: str = "lv_country_region_normalized"):
+def build_webhook_event(company_id: str, property_name: str = "lv_country_region_normalized",
+                        recompute: bool = False, domain: str = None):
     """The raw HubSpot-shaped property-change event array D-18 specifies. Proven live in
     Phase 40-03 -- the workflow's `IF Company Bare Event` -> `HubSpot Company Fetch By Id`
-    path accepts a bare object-id event with no domain match required."""
-    return [{
+    path accepts a bare object-id event with no domain match required.
+
+    `recompute=True` adds a REAL JSON boolean (Phase 47.5 RECOMP-01). The deployed
+    `Parse HubSpot Event` normalizes with `event.recompute === true`, so the string "true"
+    would silently fail to arm the lane -- fail-closed by design, but only if this stays a
+    bool. It rides the `...event` spread onto the row and is read at request level by
+    `IF Company Recompute`. It is deliberately NOT a `mode` value: isReturnOnly() treats
+    every non-"write" mode as return-only, so a mode-borne intent would report success and
+    write nothing.
+
+    `domain` routes the event through `HubSpot Company Search` (domain EQ) instead of the
+    bare-event fetch-by-id lane, which is what populates identity_keys.domain so
+    _writeSafetyAllows can match a TEST_RECORD_DOMAINS allowlist -- the only allowlist that
+    can be armed for a company that does not exist yet.
+
+    BOTH keys are added only when set. An always-present `recompute: false` / `domain: null`
+    would change the event body shape for every existing caller.
+    """
+    event = {
         "objectId": str(company_id),
         "objectType": "company",
         "subscriptionType": "company.propertyChange",
         "propertyName": property_name,
         "occurredAt": int(time.time() * 1000),
-    }]
+    }
+    if recompute:
+        event["recompute"] = True
+    if domain:
+        event["domain"] = domain
+    return [event]
 
 
-def post_webhook_event(company_id: str, armed, config: dict, transport=requests):
+def post_webhook_event(company_id: str, armed, config: dict, transport=requests,
+                       recompute: bool = False, domain: str = None, timeout: float = 300):
     """`armed` has NO default, mirroring operator-claude-plugin/scripts/dispatch.py --
     raises NotArmedError when falsy before any network call. Target is config_gate-
     resolved n8n_url joined with webhook/hubspot/enrichment/event; header
     X-Enrichment-Secret from config["webhook_secret"]. Never prints the secret or the
-    HubSpot token."""
+    HubSpot token.
+
+    `timeout` defaults to 300 seconds, not the 30 this function used to hardcode. Phase 47
+    correction 4 (live-discovered): a lane that reaches Decide runs far longer than 30s, and
+    the read timeout fired against a run n8n had ALREADY COMPLETED. That correction was
+    patched into a throwaway driver's transport wrapper
+    (.planning/phases/47-veto-remediation/47-armed-driver.py) rather than here, so the next
+    caller inherited the same bug. It belongs in the script.
+    """
     if not armed:
         raise NotArmedError(
             "Live writes are off for this run -- nothing was sent. Arming "
@@ -584,7 +616,9 @@ def post_webhook_event(company_id: str, armed, config: dict, transport=requests)
     url = f"{str((config or {}).get('n8n_url') or '').rstrip('/')}/{WEBHOOK_PATH}"
     headers = {"X-Enrichment-Secret": config["webhook_secret"]}
     response = transport.post(
-        url, headers=headers, json=build_webhook_event(company_id), timeout=30,
+        url, headers=headers,
+        json=build_webhook_event(company_id, recompute=recompute, domain=domain),
+        timeout=timeout,
     )
     response.raise_for_status()
     return response
