@@ -1,0 +1,240 @@
+{
+  "records": [
+    {
+      "id": "9604732797",
+      "name": "Tweed Valley Jockey Club",
+      "expected_tier": "B",
+      "skipped": "completed in prior window",
+      "tier": "B",
+      "veto": {
+        "flag": "false",
+        "reason": ""
+      }
+    },
+    {
+      "id": "9604794661",
+      "name": "Sapphire Coast Turf Club (Bega Valley)",
+      "expected_tier": "B",
+      "skipped": "completed in prior window",
+      "tier": "B",
+      "veto": {
+        "flag": "false",
+        "reason": ""
+      }
+    },
+    {
+      "id": "9605273630",
+      "name": "Port Macquarie Race Club",
+      "expected_tier": "B",
+      "skipped": "completed in prior window",
+      "tier": "C",
+      "veto": {
+        "flag": "false",
+        "reason": ""
+      }
+    },
+    {
+      "id": "9604732795",
+      "name": "Rockhampton Jockey Club",
+      "expected_tier": "B",
+      "skipped": "completed in prior window",
+      "tier": "B",
+      "veto": {
+        "flag": "false",
+        "reason": ""
+      }
+    },
+    {
+      "id": "9604738976",
+      "name": "Bunbury Turf Club",
+      "expected_tier": "B",
+      "skipped": "completed in prior window",
+      "tier": "C",
+      "veto": {
+        "flag": "false",
+        "reason": ""
+      }
+    },
+    {
+      "id": "9604787229",
+      "name": "The Alice Springs Turf Club",
+      "expected_tier": "B",
+      "skipped": "completed in prior window",
+      "tier": "B",
+      "veto": {
+        "flag": "false",
+        "reason": ""
+      }
+    },
+    {
+      "id": "10152138518",
+      "name": "Thoroughbred Park",
+      "expected_tier": "B",
+      "skipped": "completed in prior window",
+      "tier": "B",
+      "veto": {
+        "flag": "false",
+        "reason": ""
+      }
+    },
+    {
+      "id": "10215097384",
+      "name": "Wyong",
+      "expected_tier": "B",
+      "skipped": "completed in prior window",
+      "tier": "B",
+      "veto": {
+        "flag": "false",
+        "reason": ""
+      }
+    },
+    {
+      "id": "14752488879",
+      "name": "Coffs Harbour Racing Club",
+      "expected_tier": "Needs Review",
+      "skipped": "completed in prior window",
+      "tier": "Unscored",
+      "veto": {
+        "flag": "false",
+        "reason": ""
+      }
+    },
+    {
+      "id": "17317381378",
+      "name": "Editix",
+      "expected_tier": "Unscored",
+      "skipped": "completed in prior window",
+      "tier": "Unscored",
+      "veto": {
+        "flag": "false",
+        "reason": ""
+      }
+    },
+    {
+      "id": "17317850381",
+      "name": "Jam TV",
+      "expected_tier": "D",
+      "skipped": "completed in prior window",
+      "tier": "D",
+      "veto": {
+        "flag": "true",
+        "reason": "Non-ANZ geography"
+      }
+    },
+    {
+      "id": "17696004613",
+      "name": "Pinjarra Park",
+      "expected_tier": "B",
+      "skipped": "completed in prior window",
+      "tier": "C",
+      "veto": {
+        "flag": "false",
+        "reason": ""
+      }
+    },
+    {
+      "id": "18796602894",
+      "name": "The Kalgoorlie-Boulder Racing Club",
+      "expected_tier": "Needs Review",
+      "written": {
+        "lv_produces_content": "true",
+        "lv_country_region_normalized": "AU",
+        "lv_produces_content_verified_at": "2026-08-12T01:51:43.184616+00:00"
+      },
+      "webhook": "posted",
+      "veto": {
+        "flag": "false",
+        "expected": "cleared or different genuine veto"
+      },
+      "tier": "B",
+      "oracle_tier": "Needs Review",
+      "tier_diverged_from_oracle": true,
+      "diverged": [
+        "lv_produces_content_verified_at"
+      ]
+    },
+    {
+      "id": "19100977027",
+      "name": "Newcastle Harness Racing Club",
+      "expected_tier": "Needs Review",
+      "written": {
+        "lv_produces_content": "true",
+        "lv_country_region_normalized": "AU",
+        "lv_produces_content_verified_at": "2026-08-12T01:51:43.599923+00:00"
+      },
+      "webhook": "posted",
+      "veto": {
+        "flag": "false",
+        "expected": "cleared or different genuine veto"
+      },
+      "tier": "C",
+      "oracle_tier": "Needs Review",
+      "tier_diverged_from_oracle": true,
+      "diverged": [
+        "lv_produces_content_verified_at"
+      ]
+    },
+    {
+      "id": "20538284384",
+      "name": "Waikato Racing Club Inc",
+      "expected_tier": "Needs Review",
+      "written": {
+        "lv_produces_content": "true",
+        "lv_country_region_normalized": "NZ",
+        "lv_produces_content_verified_at": "2026-08-12T01:51:43.982796+00:00"
+      },
+      "webhook": "posted",
+      "veto": {
+        "flag": "false",
+        "expected": "cleared or different genuine veto"
+      },
+      "tier": "C",
+      "oracle_tier": "Needs Review",
+      "tier_diverged_from_oracle": true,
+      "diverged": [
+        "lv_produces_content_verified_at"
+      ]
+    },
+    {
+      "id": "20943964946",
+      "name": "The Rumble / Pacific Action Sports",
+      "expected_tier": "Needs Review",
+      "written": {
+        "lv_produces_content": "true",
+        "lv_country_region_normalized": "AU",
+        "lv_produces_content_verified_at": "2026-08-12T01:51:44.387943+00:00"
+      },
+      "webhook": "posted",
+      "veto": {
+        "flag": "false",
+        "expected": "cleared or different genuine veto"
+      },
+      "tier": "B",
+      "oracle_tier": "Needs Review",
+      "tier_diverged_from_oracle": true,
+      "diverged": [
+        "lv_produces_content_verified_at"
+      ]
+    },
+    {
+      "id": "18047161864",
+      "name": "Simtech LED",
+      "path": "gate-skip unstick (correction 6)",
+      "org_type_before": "hardware_vendor",
+      "veto": {
+        "flag": "false",
+        "outcome": "recomputed"
+      },
+      "tier": "B",
+      "final": {
+        "lv_anti_icp_flag": "false",
+        "lv_anti_icp_reason": "",
+        "lv_org_type": "hardware_vendor"
+      }
+    }
+  ],
+  "corrections": [
+    "settle order: webhook -> settle_veto -> settle_tier",
+    "D-23 region override Other for 17317850381, veto asserted to persist"
+  ]
+}

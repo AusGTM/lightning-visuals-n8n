@@ -393,3 +393,224 @@ D-14 unresolved reasons: {"lv_org_type": "research returned 'Racing Club / Sport
 ```
 
 D-14 unresolved reasons: {"lv_org_type": "research returned 'Event organizer / Sports league operator', not a recognized lv_org_type enum value and no boolean signal confirmed a mapping -- left unresolved rather than guessed (D-17)"}
+
+---
+
+# Plan 04 — the armed window (actuals), 2026-08-12
+
+Everything above this line is Plan 03's disarmed prediction and D-21 evidence trail. This
+section is what actually happened.
+
+**Headline: all 17 records written. 16 false non-ANZ vetoes cleared. Jam TV correctly kept
+its veto (D-23). The portal-wide VETO-03 search returns zero.**
+
+## VETO-02 — both surfaces disarmed, quoted verbatim
+
+Final disarm of surface one (`scripts/june_run_arm.py --disarm`, exit 0). The `observed`
+block is `n8n_arming.disarm`'s own **independent re-read** after the mutation, not an echo
+of the request:
+
+```json
+{
+  "outcome": "disarmed",
+  "workflow_id": "950HPb7a1GgSAIyZ",
+  "workflow_name": "LV Enrichment (Cloud template)",
+  "observed": {
+    "ALLOW_HUBSPOT_RECORD_WRITES": "false",
+    "ALLOW_HUBSPOT_CREATE": "false",
+    "TEST_RECORD_IDS": "",
+    "TEST_RECORD_DOMAINS": ""
+  }
+}
+```
+
+Every value matches `OVERLAY_DISABLED_LITERALS`. Surface two, read back in the session
+shell after the run:
+
+```
+ALLOW_VETO_REMEDIATION= '<unset>'
+DRY_RUN= '<unset>'
+_writes_allowed() = False
+```
+
+The arming variables were never exported into the session shell — only into each
+backgrounded run's own process environment, per D-11/D-22.
+
+## Pre-flight VETO-03 guard (run BEFORE arming, read-only)
+
+Portal-wide search, `lv_anti_icp_reason CONTAINS_TOKEN "Non-ANZ"` AND
+`lv_country_region_normalized NOT_HAS_PROPERTY`. **17 matches, and all 17 were the pinned
+ids** — no out-of-set record, so the refuse-to-arm condition did not fire:
+
+```
+9604732797 Tweed Valley Jockey Club        9604794661 Sapphire Coast Turf Club
+9605273630 Port Macquarie Race Club        9604732795 Rockhampton Jockey Club
+9604738976 Bunbury Turf Club               9604787229 The Alice Springs Turf Club
+10152138518 Thoroughbred Park              10215097384 Wyong
+14752488879 Coffs Harbour Racing Club      17317381378 Editix
+17317850381 Jam TV                         17696004613 Pinjarra Park
+18047161864 Simtech LED                    18796602894 The Kalgoorlie-Boulder Racing Club
+19100977027 Newcastle Harness Racing Club  20538284384 Waikato Racing Club Inc
+20943964946 The Rumble / Pacific Action Sports
+```
+
+**Re-run after the window: `MATCHES: 0`.**
+
+## Per-id outcome
+
+| id | name | before score/tier/flag | after score/tier/flag | after reason | region | org_type | classification |
+|---|---|---|---|---|---|---|---|
+| 9604732797 | Tweed Valley Jockey Club | 0 / D / true | 45 / B / false | `''` | AU | individual_club_team | cleared |
+| 9604794661 | Sapphire Coast Turf Club (Bega Valley) | 0 / D / true | 45 / B / false | `''` | AU | individual_club_team | cleared |
+| 9605273630 | Port Macquarie Race Club | 0 / D / true | 45 / C / false | `''` | AU | individual_club_team | cleared |
+| 9604732795 | Rockhampton Jockey Club | 10 / D / true | 55 / B / false | `''` | AU | individual_club_team | cleared |
+| 9604738976 | Bunbury Turf Club | 0 / D / true | 45 / C / false | `''` | AU | individual_club_team | cleared |
+| 9604787229 | The Alice Springs Turf Club | 10 / D / true | 55 / B / false | `''` | AU | individual_club_team | cleared |
+| 10152138518 | Thoroughbred Park | 10 / D / true | 55 / B / false | `''` | AU | individual_club_team | cleared |
+| 10215097384 | Wyong | 10 / D / true | 55 / B / false | `''` | AU | individual_club_team | cleared |
+| 14752488879 | Coffs Harbour Racing Club | 0 / D / true | 25 / Unscored / false | `''` | AU | individual_club_team | cleared |
+| 17317381378 | Editix | 0 / D / true | 0 / Unscored / false | `''` | *(blank)* | *(blank)* | cleared, un-enrichable |
+| **17317850381** | **Jam TV** | 0 / D / true | 20 / **D** / **true** | **`Non-ANZ geography`** | **Other** | *(blank)* | **correct veto retained (D-23)** |
+| 17696004613 | Pinjarra Park | 0 / D / true | 45 / C / false | `''` | AU | individual_club_team | cleared |
+| 18047161864 | Simtech LED | 10 / D / true | 40 / B / false | `''` | AU | hardware_vendor | cleared (see gate defect) |
+| 18796602894 | The Kalgoorlie-Boulder Racing Club | 10 / D / true | 55 / B / false | `''` | AU | individual_club_team | cleared |
+| 19100977027 | Newcastle Harness Racing Club | 0 / D / true | 45 / C / false | `''` | AU | individual_club_team | cleared |
+| 20538284384 | Waikato Racing Club Inc | 0 / D / true | 30 / C / false | `''` | NZ | *(blank)* | cleared |
+| 20943964946 | The Rumble / Pacific Action Sports | 10 / D / true | 40 / B / false | `''` | AU | *(blank)* | cleared |
+
+**No row is `still_non_anz` except Jam TV, which is required to be.** Tier spread after:
+B×9, C×5, Unscored×2, D×1. Flags after: `false`×16, `true`×1.
+
+`scripts/veto_remediation_report.py --mode after` prints
+`REFUSED: 1 record(s) still classify still_non_anz after remediation: ['17317850381']`.
+That refusal **predates D-23** and is wrong now: D-23 requires precisely this state. The
+D-23-aware assertion (every non-Jam-TV row clear, Jam TV `true` + non-ANZ reason +
+`region=Other`) passes. Fix the script's classifier before it is trusted again.
+
+## Records legitimately not in a real tier
+
+- **Jam TV (`17317850381`) — Tier D, `Non-ANZ geography`, and correct.** The Italian
+  broadcaster `jamtv.it`. Phase 46 labelled it `false_veto` only because its region was
+  blank. Writing `region = "Other"` both preserves the true veto and moves the record
+  outside VETO-03's search — which is exactly why it stayed in the window instead of being
+  dropped from it.
+- **Editix (`17317381378`) — Unscored, score 0.** `matched: false`, confidence 5; searches
+  on the CRM domain `edetrix.com.au` found nothing. Nothing was written to it beyond the
+  component scores. Recorded as un-enrichable with a stated reason (COVER-01's
+  "distinguishable from never attempted" bar). Its false veto still cleared, because that
+  veto turned on the blank region, not on the missing research.
+- **Coffs Harbour (`14752488879`) — Unscored, score 25.** Its `produces_content` was gated
+  out for lacking an evidence URL, so it cannot reach a content score. Raw research also
+  returned `produces_content: false` and `is_gambling_operator: true`, both wrong and both
+  correctly refused by the D-14 gates. **The cache still holds those wrong values** —
+  anything re-reading `47-RESEARCH-RESULTS.json` raw must re-apply the gates.
+- **Simtech LED (`18047161864`) — Tier B, veto cleared.** The handover expected a hardware
+  hard veto here. It did not fire, and that is consistent: both the deployed `Decide` node
+  and the local oracle key the hardware veto off `lv_is_hardware_vendor`, which is `null`
+  on this record — not off `lv_org_type`, which reads `hardware_vendor`. Worth a decision
+  in a later phase; it is a rubric question, not a defect of this run.
+
+## COVER-01 — records with no `lv_org_type` after the run
+
+Four: Editix, Jam TV, Waikato Racing Club, The Rumble / Pacific Action Sports. The enum
+gate (D-17) refused to guess-map their free-text research values. As D-02 permits, COVER-01
+stays open and is carried to Phase 48. **The 13 others did land an org type** — better than
+the pre-arm prediction of 16-of-17 blank, because the n8n research lane resolved
+`individual_club_team` for the racing clubs after our patch.
+
+## D-20 — evidence-metadata verification
+
+The research lane's second pass **did** overwrite this run's stamps, on 12 of 17 records —
+always and only `lv_produces_content_verified_at`. It was verified inside the armed window,
+per record, immediately after the webhook leg.
+
+The re-stamp does not converge: n8n writes its own `verified_at` **after** ours, so a
+re-stamp merely loses the same race again. `9605273630` diverged again immediately after a
+successful re-stamp while every field that matters (flag cleared, region AU, content true,
+org type resolved) was correct. **Operator decision inside the window: stop re-stamping,
+record the divergence, let n8n's timestamp stand** — it is a valid timestamp of n8n's own
+research pass, and the full D-09 trail lives in this file and `47-RESEARCH-RESULTS.json`
+regardless (D-21). A clobbered *input* field remained a hard stop; none occurred.
+
+No sign of the suspected research-lane row-loss from project memory
+(`companies-research-lane-rowloss.md`) — no record showed `merge: null` or lost its
+`existingRecord`.
+
+## Corrections made inside the window
+
+Six, each an assertion the plan made that the deployed system could not satisfy. All were
+put to the operator and approved before use; none weakened the veto bar.
+
+1. **Settle order.** `settle_tier` ran *before* the webhook POST, but WF1 pins
+   `lv_icp_tier` to `D` while `lv_anti_icp_flag` still reads `true`, and only the webhook
+   clears that flag — so the assertion was unsatisfiable for exactly the records this phase
+   exists to fix. Proven on `9604732797`. Corrected to
+   inputs → components → **webhook → settle_veto** → tier.
+2. **D-23 Jam TV region.** `_normalize_region('Italy')` returns `None` (D-14 no-guess), so
+   no region was written; the deployed `_regionKey("")` maps blank to `"unknown"`, not
+   `"non_anz"`, which would have **cleared a correct veto** and turned a disqualified
+   Italian broadcaster into a live prospect. Nothing downstream would have caught it —
+   `settle_veto`, the Task 2 automated verify and the VETO-03 search all pass on a cleared
+   flag. `region="Other"` is now written up front and the veto asserted to persist.
+3. **Tier recorded, not asserted.** The oracle's pre-webhook tier cannot match a live tier
+   that n8n's own lane changes downstream (`9604732797`: org type null →
+   `individual_club_team`, 30 → 45, `Needs Review` → `B`). Oracle-vs-live parity is Phase
+   49's scope. `settle_veto` stayed a hard assertion.
+4. **Webhook timeout.** `post_webhook_event` hardcodes `timeout=30`; the research lane runs
+   longer. `9604794661` read-timed out at 30s while n8n completed it server-side anyway.
+   Raised to 300s, and a client-side timeout no longer aborts the run — the read-back is
+   the only trustworthy evidence either way (`47-BLOCKED.md`).
+5. **Re-stamp dropped.** See D-20 above.
+6. **`Company Gate` skip — a product defect, not a data problem.** See below.
+
+## Finding: a complete record's veto cannot be recomputed (→ Phase 47.5)
+
+`Company Gate` returns `action: "skip"` when a record's inputs are all present, fresh and
+valid, and `Normalize + Score Company` opens with
+
+```js
+const rows = $('Company Gate').all().filter((it) => it.json.action !== "skip");
+```
+
+so a skipped row leaves zero items and the branch ends. **`Decide Company Action` — the
+sole writer of `lv_anti_icp_flag` and `lv_anti_icp_reason` — is downstream of that point
+and never runs.** A record with complete inputs therefore cannot have its veto recomputed
+by any on-demand trigger: the better its data, the less able the system is to fix its
+scoring.
+
+| Execution | Record | Gate | Reason | Nodes | Decide ran? |
+|---|---|---|---|---|---|
+| `11846` | Simtech LED | `skip` | "all required fields present, fresh and valid" | 19, ends at `Normalize + Score Company`, 0 items out, **2.4s** | no |
+| `11845` | Pinjarra Park | `enrich` | "missing: lv_org_type" | 36, ends at `Respond to Webhook`, 10–37s | yes |
+
+Simtech was the one pinned record whose research produced a *valid* `lv_org_type` enum, so
+our own successful write is what made it complete and froze its stale veto — it read
+`Non-ANZ geography` beside `region = "AU"`. It was unstuck inside the window by blanking
+`lv_org_type` (gate → `enrich` → `Decide` runs → veto recomputed to `false`), after which
+`hardware_vendor` was restored. That workaround degrades data deliberately and no scheduled
+job should ever run it.
+
+Scoped as **Phase 47.5 — Veto Recompute Path**
+(`.planning/phases/47.5-veto-recompute-path/47.5-CONTEXT.md`). It compounds forward: Phase
+48 completes 18 more records and so enlarges the affected population, and Phase 49's full
+re-score would move scores and tiers while leaving frozen veto fields untouched and
+unreported.
+
+## Cost actuals
+
+| Row | Projected | Actual |
+|---|---|---|
+| Web-research calls (this script) | 17 | **0** — the run used `--from-cache` against Plan 03's `47-RESEARCH-RESULTS.json`; the 17 live calls were spent in Plan 03, not here |
+| Redundant second-pass research calls | ~4 | **~17** — the deployed research lane re-entered on essentially every record, not only the four evidence-gated ones. Visible as the 10–37s executions and as the 12 `lv_produces_content_verified_at` clobbers. D-20 under-estimated this |
+| n8n executions | at most 17 | **18** (`11834`–`11851`, all `success`). 17 productive + 1 wasted (`11846`, the gate-skipped Simtech run). Against the 2,500/month allowance |
+| Provider credits | 0 | **0** — no provider waterfall ran (D-08) |
+| Anthropic dollars | ~$1.17 floor | **not directly measurable.** Zero spend from this script (cache). The n8n-side research lane's spend is not exposed per execution; at the Phase 20 canary rate (~$0.0686/record) ~17 in-workflow passes imply roughly $1.20, which is an inference, not a reading |
+
+The projection's own caveat held: it was an under-estimate. The miss was the redundant-call
+row, not the execution budget — 18 against 2,500 is immaterial either way.
+
+## What is NOT claimed here
+
+VETO-03's bar is a search run by a human in the HubSpot UI with no script. The `MATCHES: 0`
+above is an API search — necessary, not sufficient. Task 3 remains open until the operator
+runs the two-filter view themselves.

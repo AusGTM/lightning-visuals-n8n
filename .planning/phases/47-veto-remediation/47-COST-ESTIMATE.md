@@ -92,8 +92,12 @@ part-way through the 17.
 
 | Row | Projected | Actual |
 |-----|-----------|--------|
-| Web-research calls | 17 | *(Plan 04)* |
-| Redundant second-pass research calls | ~4 | *(Plan 04)* |
-| Anthropic dollars | ~$1.17 (floor, unmeasured components excluded) | *(Plan 04)* |
-| n8n executions | at most 17 | *(Plan 04)* |
-| Provider credits | 0 | *(Plan 04)* |
+| Web-research calls | 17 | **0** — Plan 04 ran `--from-cache` against Plan 03's `47-RESEARCH-RESULTS.json`. The 17 live calls were spent in Plan 03, not in the armed window |
+| Redundant second-pass research calls | ~4 | **~17** — the deployed research lane re-entered on essentially every record, not only the four evidence-gated ones. Evidenced by the 10–37s execution durations and 12 `lv_produces_content_verified_at` clobbers. **D-20 under-estimated this row** |
+| Anthropic dollars | ~$1.17 (floor, unmeasured components excluded) | **not directly measurable.** Zero from this script. n8n-side spend is not exposed per execution; at the Phase 20 canary rate (~$0.0686/record) ~17 in-workflow passes imply roughly $1.20 — an inference, not a reading |
+| n8n executions | at most 17 | **18** (`11834`–`11851`, all `success`): 17 productive + 1 wasted (`11846`, the gate-skipped Simtech run). Against the 2,500/month allowance |
+| Provider credits | 0 | **0** — no provider waterfall ran (D-08) |
+
+The projection's stated caveat held: it was an under-estimate. The miss was the
+redundant-call row, not the execution budget — 18 against 2,500 is immaterial either way.
+Full context in `47-RUN-REPORT.md` § "Plan 04 — the armed window (actuals)".

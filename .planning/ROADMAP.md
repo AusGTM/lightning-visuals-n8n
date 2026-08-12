@@ -16,6 +16,7 @@
 
 - [ ] **Phase 46: Rubric Decision, Simulation & Engine Parity** - Decide the org-type weights (`individual_club_team`, `regulator`, and the `gambling_operator` deduction) with evidence, simulate re-tiering with zero record writes, prove any change lands identically in all three scoring engines, and update every doc that prints the superseded rubric — before either downstream write phase runs
 - [ ] **Phase 47: Veto Remediation** - Clear the 17 false non-ANZ vetoes under the settled rubric, inside a deliberately armed and capped write window, verifiable from HubSpot alone
+- [ ] **Phase 47.5: Veto Recompute Path** - Make a veto recomputable for a record whose inputs are already complete. `Company Gate` skips complete records and `Normalize + Score Company` drops every skipped row, so `Decide Company Action` — the only writer of `lv_anti_icp_flag`/`lv_anti_icp_reason` — never runs for them. Found live in Phase 47 (n8n execution `11846`, Simtech LED left reading `Non-ANZ geography` against `region=AU`)
 - [ ] **Phase 48: Enrichment Coverage** - Fill or document `lv_org_type` for the 18 never-enriched companies, under a pre-estimated and budget-refusing armed write window
 - [ ] **Phase 49: Re-score Strategy & Reporting** - Define and (if triggered) execute the budget-bounded full-population re-score procedure, and report the milestone's net tier-distribution effect in plain language
 
@@ -188,6 +189,31 @@ Plans:
 
 ---
 
+### Phase 47.5: Veto Recompute Path
+
+Debug subphase, raised by Phase 47's armed window on 2026-08-12 and root-caused live from
+n8n execution `11846`. `Company Gate` returns `action: "skip"` when a record's inputs are all
+present, fresh and valid; `Normalize + Score Company` opens with
+`$('Company Gate').all().filter((it) => it.json.action !== "skip")`, so a skipped row leaves
+zero items and the branch ends. `Decide Company Action` — the sole writer of
+`lv_anti_icp_flag` and `lv_anti_icp_reason` — is downstream of that point and never runs.
+
+**A record with complete inputs therefore cannot have its veto recomputed by any on-demand
+trigger.** The better a record's data, the less able the system is to correct its scoring.
+Simtech LED (`18047161864`) is the live case: Phase 47 wrote it a valid `lv_org_type`, which
+made it complete, which froze its stale veto — it still read `Non-ANZ geography` beside
+`lv_country_region_normalized = "AU"`. Phase 47 unstuck it only by blanking `lv_org_type` to
+force the gate to enrich, which is a data-degrading workaround no scheduled job should run.
+
+This compounds forward, which is why it is a phase rather than a note: Phase 48 completes 18
+more records and so enlarges the affected population, and Phase 49's full re-score would move
+scores and tiers while leaving frozen veto fields untouched and unreported.
+
+**Depends on**: Phase 47 (found it; owns the evidence)
+**Scope doc**: `.planning/phases/47.5-veto-recompute-path/47.5-CONTEXT.md` — includes the
+paired reference executions `11845` (healthy) / `11846` (defect), the required outcomes, and
+an explicit out-of-scope list. Plan with `/gsd-plan-phase 47.5`.
+
 ### Phase 48: Enrichment Coverage
 
 **Goal**: Every scored company either has a real `lv_org_type` or a documented, distinguishable
@@ -262,6 +288,7 @@ did not change, no full re-score is owed and this phase proves the procedure wit
 | 45. Burn-Rate Alarm | v0.8 | 3/3 | Complete (verified) | 2026-08-10 |
 | 46. Rubric Decision, Simulation & Engine Parity | v0.9 | 5/5 | In Progress|  |
 | 47. Veto Remediation | v0.9 | 3/4 | In Progress|  |
+| 47.5. Veto Recompute Path | v0.9 | 0/? | Scoped, not planned | - |
 | 48. Enrichment Coverage | v0.9 | 0/? | Not started | - |
 | 49. Re-score Strategy & Reporting | v0.9 | 0/? | Not started | - |
 

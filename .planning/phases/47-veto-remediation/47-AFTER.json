@@ -1,0 +1,189 @@
+[
+  {
+    "id": "9604732797",
+    "name": "Tweed Valley Jockey Club",
+    "lv_org_type": "individual_club_team",
+    "lv_produces_content": "true",
+    "lv_country_region_normalized": "AU",
+    "lv_icp_fit_score": "45",
+    "lv_icp_tier": "B",
+    "lv_anti_icp_flag": "false",
+    "lv_anti_icp_reason": ""
+  },
+  {
+    "id": "9604794661",
+    "name": "Sapphire Coast Turf Club (Bega Valley)",
+    "lv_org_type": "individual_club_team",
+    "lv_produces_content": "true",
+    "lv_country_region_normalized": "AU",
+    "lv_icp_fit_score": "45",
+    "lv_icp_tier": "B",
+    "lv_anti_icp_flag": "false",
+    "lv_anti_icp_reason": ""
+  },
+  {
+    "id": "9605273630",
+    "name": "Port Macquarie Race Club",
+    "lv_org_type": "individual_club_team",
+    "lv_produces_content": "true",
+    "lv_country_region_normalized": "AU",
+    "lv_icp_fit_score": "45",
+    "lv_icp_tier": "C",
+    "lv_anti_icp_flag": "false",
+    "lv_anti_icp_reason": ""
+  },
+  {
+    "id": "9604732795",
+    "name": "Rockhampton Jockey Club",
+    "lv_org_type": "individual_club_team",
+    "lv_produces_content": "true",
+    "lv_country_region_normalized": "AU",
+    "lv_icp_fit_score": "55",
+    "lv_icp_tier": "B",
+    "lv_anti_icp_flag": "false",
+    "lv_anti_icp_reason": ""
+  },
+  {
+    "id": "9604738976",
+    "name": "Bunbury Turf Club",
+    "lv_org_type": "individual_club_team",
+    "lv_produces_content": "true",
+    "lv_country_region_normalized": "AU",
+    "lv_icp_fit_score": "45",
+    "lv_icp_tier": "C",
+    "lv_anti_icp_flag": "false",
+    "lv_anti_icp_reason": ""
+  },
+  {
+    "id": "9604787229",
+    "name": "The Alice Springs Turf Club",
+    "lv_org_type": "individual_club_team",
+    "lv_produces_content": "true",
+    "lv_country_region_normalized": "AU",
+    "lv_icp_fit_score": "55",
+    "lv_icp_tier": "B",
+    "lv_anti_icp_flag": "false",
+    "lv_anti_icp_reason": ""
+  },
+  {
+    "id": "10152138518",
+    "name": "Thoroughbred Park",
+    "lv_org_type": "individual_club_team",
+    "lv_produces_content": "true",
+    "lv_country_region_normalized": "AU",
+    "lv_icp_fit_score": "55",
+    "lv_icp_tier": "B",
+    "lv_anti_icp_flag": "false",
+    "lv_anti_icp_reason": ""
+  },
+  {
+    "id": "10215097384",
+    "name": "Wyong",
+    "lv_org_type": "individual_club_team",
+    "lv_produces_content": "true",
+    "lv_country_region_normalized": "AU",
+    "lv_icp_fit_score": "55",
+    "lv_icp_tier": "B",
+    "lv_anti_icp_flag": "false",
+    "lv_anti_icp_reason": ""
+  },
+  {
+    "id": "14752488879",
+    "name": "Coffs Harbour Racing Club",
+    "lv_org_type": "individual_club_team",
+    "lv_produces_content": null,
+    "lv_country_region_normalized": "AU",
+    "lv_icp_fit_score": "25",
+    "lv_icp_tier": "Unscored",
+    "lv_anti_icp_flag": "false",
+    "lv_anti_icp_reason": ""
+  },
+  {
+    "id": "17317381378",
+    "name": "Editix",
+    "lv_org_type": null,
+    "lv_produces_content": null,
+    "lv_country_region_normalized": null,
+    "lv_icp_fit_score": "0",
+    "lv_icp_tier": "Unscored",
+    "lv_anti_icp_flag": "false",
+    "lv_anti_icp_reason": ""
+  },
+  {
+    "id": "17317850381",
+    "name": "Jam TV",
+    "lv_org_type": null,
+    "lv_produces_content": "true",
+    "lv_country_region_normalized": "Other",
+    "lv_icp_fit_score": "20",
+    "lv_icp_tier": "D",
+    "lv_anti_icp_flag": "true",
+    "lv_anti_icp_reason": "Non-ANZ geography"
+  },
+  {
+    "id": "17696004613",
+    "name": "Pinjarra Park",
+    "lv_org_type": "individual_club_team",
+    "lv_produces_content": "true",
+    "lv_country_region_normalized": "AU",
+    "lv_icp_fit_score": "45",
+    "lv_icp_tier": "C",
+    "lv_anti_icp_flag": "false",
+    "lv_anti_icp_reason": ""
+  },
+  {
+    "id": "18047161864",
+    "name": "Simtech LED",
+    "lv_org_type": "hardware_vendor",
+    "lv_produces_content": "true",
+    "lv_country_region_normalized": "AU",
+    "lv_icp_fit_score": "40",
+    "lv_icp_tier": "B",
+    "lv_anti_icp_flag": "false",
+    "lv_anti_icp_reason": ""
+  },
+  {
+    "id": "18796602894",
+    "name": "The Kalgoorlie-Boulder Racing Club",
+    "lv_org_type": "individual_club_team",
+    "lv_produces_content": "true",
+    "lv_country_region_normalized": "AU",
+    "lv_icp_fit_score": "55",
+    "lv_icp_tier": "B",
+    "lv_anti_icp_flag": "false",
+    "lv_anti_icp_reason": ""
+  },
+  {
+    "id": "19100977027",
+    "name": "Newcastle Harness Racing Club",
+    "lv_org_type": "individual_club_team",
+    "lv_produces_content": "true",
+    "lv_country_region_normalized": "AU",
+    "lv_icp_fit_score": "45",
+    "lv_icp_tier": "C",
+    "lv_anti_icp_flag": "false",
+    "lv_anti_icp_reason": ""
+  },
+  {
+    "id": "20538284384",
+    "name": "Waikato Racing Club Inc",
+    "lv_org_type": null,
+    "lv_produces_content": "true",
+    "lv_country_region_normalized": "NZ",
+    "lv_icp_fit_score": "30",
+    "lv_icp_tier": "C",
+    "lv_anti_icp_flag": "false",
+    "lv_anti_icp_reason": ""
+  },
+  {
+    "id": "20943964946",
+    "name": "The Rumble / Pacific Action Sports",
+    "lv_org_type": null,
+    "lv_produces_content": "true",
+    "lv_country_region_normalized": "AU",
+    "lv_icp_fit_score": "40",
+    "lv_icp_tier": "B",
+    "lv_anti_icp_flag": "false",
+    "lv_anti_icp_reason": ""
+  }
+]
