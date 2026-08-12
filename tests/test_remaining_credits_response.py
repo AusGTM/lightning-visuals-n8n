@@ -168,6 +168,13 @@ BUILD_RESPONSE_SOURCES = {
     # which the contacts branch has always had. The assertion below stays EXACT equality —
     # this extends the expected set, it does not relax the check.
     ("IF Company Skip", 0),
+    # Phase 48 Plan 02 (D-04): the research-error failure terminal. An error-shaped Claude
+    # Web Research payload (Anthropic 400, e.g. credit exhaustion) now terminates
+    # observably at Build Response via Build Research Failure Response, carrying
+    # action:"research_failed" and a stated reason, instead of silently flowing into
+    # Validate Research Output / Merge Company / Decide Company Action as if it were real
+    # data. Extends the expected set again; exact equality is preserved.
+    ("Build Research Failure Response", 0),
 }
 
 
