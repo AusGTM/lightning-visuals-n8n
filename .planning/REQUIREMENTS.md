@@ -78,7 +78,7 @@ traceable bar. They are new requirements, not a re-scoping of VETO-01/02/03, whi
       `lv_anti_icp_reason`. The bar is
       `tests/test_scoring_parity.py::test_veto_clear_after_correction` passing live with its
       assertions untouched — red since Phase 40-07 for exactly this reason.
-- [ ] **RECOMP-02**: A skipped record is observable to the caller. Today a complete record
+- [x] **RECOMP-02**: A skipped record is observable to the caller. Today a complete record
       returns `status: "success"` with nothing written and no node error — the same
       silent-success class recorded in `47-BLOCKED.md`. The caller must be able to tell
       "complete, nothing to do" from "something broke".
@@ -170,7 +170,7 @@ recoverable, only forward capture works, which cannot inform a v0.9 recalibratio
 | VETO-02 | Phase 47 | **Complete** (disarm re-read verbatim; 5 windows not 1 — disclosed) |
 | VETO-03 | Phase 47 | **Complete** (operator-confirmed 2026-08-12, zero results) |
 | RECOMP-01 | Phase 47.5 | Not started |
-| RECOMP-02 | Phase 47.5 | Not started |
+| RECOMP-02 | Phase 47.5 | **Complete** (live exec 11853: `action:"skip"` + gate reason; 47.5-A-LIVE-PROOF §3d) |
 | RECOMP-03 | Phase 47.5 | Not started |
 | RECOMP-04 | Phase 47.5 | Not started |
 | COVER-01 | Phase 47 + 48 | Not started |
