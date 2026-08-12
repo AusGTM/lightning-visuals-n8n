@@ -36,7 +36,11 @@ from tests.scoring_fixtures import (
     disposable_company,
     expected_for,  # noqa: F401 -- re-exported for the live tier
     fetch_for_parity,  # noqa: F401 -- re-exported for the live tier
+    now_iso_ms,
     settle,
+    settle_until,
+    trigger_recompute,
+    wait_until_searchable,
 )
 
 CFG = yaml.safe_load(open("config/icp_scoring.yaml"))
@@ -53,6 +57,12 @@ ORG_TYPE_POINTS = CFG["base_score"]["org_type"]
 PRODUCES_CONTENT_POINTS = CFG["base_score"]["produces_content"]
 REVENUE_BAND_POINTS = CFG["base_score"]["revenue_band"]
 HARD_VETOES = CFG["hard_vetoes"]
+
+# Phase 47.5 Plan 03 (RECOMP-01): the throwaway domain armed for this test's ONE window.
+# A domain allowlist is the only allowlist that can cover a record HubSpot has not created
+# yet — the disposable's id does not exist until disposable_company() runs. `.example` is
+# RFC 2606 reserved, so it can never collide with a real account.
+VETO_CLEAR_DOMAIN = "zz-scoring-test-delete-me.example"
 
 
 def score(patch):
@@ -439,27 +449,49 @@ def test_veto_set_multiple_reasons_join():
 
 @live
 def test_veto_clear_after_correction():
-    with disposable_company() as company_id:
+    with disposable_company(domain=VETO_CLEAR_DOMAIN) as company_id:
         patch_record("companies", company_id, {
             "lv_org_type": "broadcaster",
             "lv_produces_content": "true",
             "lv_country_region_normalized": "US",
             "lv_revenue_band": "5-50M",
         }, dry_run=False)
-        settle(company_id, "lv_anti_icp_flag")
+        if wait_until_searchable(VETO_CLEAR_DOMAIN) != 1:
+            pytest.fail(
+                f"{VETO_CLEAR_DOMAIN} does not resolve to exactly one company; a "
+                "recompute for a record that resolves to nothing is refused, not run."
+            )
+        trigger_recompute(company_id, VETO_CLEAR_DOMAIN)
+        settle_until(company_id, "lv_anti_icp_flag", lambda v: v not in (None, ""))
         vetoed = fetch_for_parity(company_id)
         assert vetoed.get("lv_anti_icp_flag") == "true"
 
         # D-01/D-02: the flag is owned and cleared by the n8n pipeline, not a HubSpot
-        # workflow — correcting the input alone isn't enough. The operator-documented
-        # refresh path is lv_enrichment_requested + the 15-min SJ-3 poller (D-02).
-        # WINDOWS.md #4 (Rule 1 fix, this plan): the poller's actual search property is
-        # lv_enrichment_requested (VETO-WRITE-EVIDENCE.md's live-proven trigger), not
-        # enrichment_requested -- the latter is never read by SJ-3 Extract Rows, so this
-        # patch was a silent no-op that could never have triggered a poller pickup.
+        # workflow — correcting the input alone isn't enough. Phase 47.5 (RECOMP-01)
+        # replaces the lv_enrichment_requested + SJ-3 path with a direct recompute POST,
+        # for three reasons all confirmed live: SJ-3 is DAILY, not 15-minute (CLAUDE.md
+        # §19.0 as-built), so the old 900s wait could never have reached it; leg 1 above
+        # had no trigger of any kind (settle only reads); and a complete record was
+        # dropped by the gate before the sole veto writer ever ran (execution 11846).
+        #
+        # The two _verified_at stamps are deliberate and make this test HARDER, not
+        # easier: with lv_org_type and lv_produces_content both present AND fresh, the
+        # gate's verdict is `skip` — the frozen state that used to make a correction
+        # unrecomputable. Only the recompute intent's skip->enrich mapping gets past it,
+        # so an unstamped record here would prove a trigger exists and nothing more.
         patch_record("companies", company_id, {"lv_country_region_normalized": "AU"}, dry_run=False)
-        patch_record("companies", company_id, {"lv_enrichment_requested": "true"}, dry_run=False)
-        settle(company_id, "lv_anti_icp_flag", timeout=900, interval=15)
+        patch_record("companies", company_id, {
+            "lv_org_type_verified_at": now_iso_ms(),
+            "lv_produces_content_verified_at": now_iso_ms(),
+        }, dry_run=False)
+        if wait_until_searchable(VETO_CLEAR_DOMAIN) != 1:
+            pytest.fail(
+                f"{VETO_CLEAR_DOMAIN} does not resolve to exactly one company before "
+                "the correcting recompute."
+            )
+        trigger_recompute(company_id, VETO_CLEAR_DOMAIN)
+        settle_until(company_id, "lv_anti_icp_flag", lambda v: v == "false")
+        settle_until(company_id, "lv_icp_tier", lambda v: v != "D", timeout=300)
         cleared = fetch_for_parity(company_id)
         assert cleared.get("lv_anti_icp_flag") == "false"
         assert cleared.get("lv_anti_icp_reason") in (None, "")
