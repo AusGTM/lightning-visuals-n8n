@@ -18,8 +18,10 @@ import scripts.enrich_coverage_companies as m  # noqa: E402
 import scripts.remediate_veto_companies as rvc  # noqa: E402
 
 RACING_NSW_ID = "15008671672"   # Racing NSW -- no captured research (PendingResearch)
+EDITIX_ID = "17317381378"       # Editix -- D-03 un-enrichable marker
 JAM_TV_ID = "17317850381"       # Jam TV -- broadcaster
 WAIKATO_ID = "20538284384"      # Waikato Racing Club Inc -- individual_club_team
+RUMBLE_ID = "20943964946"       # The Rumble / Pacific Action Sports -- content_producer
 
 
 def _refuse_network(*_a, **_kw):
@@ -107,3 +109,66 @@ def test_tracer_dry_run_cli_prints_broadcaster_patch(monkeypatch, capsys):
     assert "lv_anti_icp_flag" not in captured.out
     assert "lv_icp_fit_score" not in captured.out
     assert "lv_icp_tier" not in captured.out
+
+
+# --- Task 2: full decision table + D-03 marker -----------------------------------------------
+
+def test_mapping_jam_tv_is_broadcaster():
+    research = _load_research(JAM_TV_ID)
+    decision = m.decide_org_type(JAM_TV_ID, research)
+    assert decision["org_type"] == "broadcaster"
+
+
+def test_mapping_waikato_is_individual_club_team():
+    research = _load_research(WAIKATO_ID)
+    decision = m.decide_org_type(WAIKATO_ID, research)
+    assert decision["org_type"] == "individual_club_team"
+
+
+def test_mapping_rumble_is_content_producer_per_d05():
+    research = _load_research(RUMBLE_ID)
+    decision = m.decide_org_type(RUMBLE_ID, research)
+    assert decision["org_type"] == "content_producer"
+
+
+def test_marker_editix_is_unknown_with_reason():
+    research = _load_research(EDITIX_ID)
+    decision = m.decide_org_type(EDITIX_ID, research)
+    assert decision["org_type"] == "unknown"
+    assert decision.get("basis")
+
+
+def test_marker_racing_nsw_still_pending_research():
+    with pytest.raises(m.PendingResearch):
+        m.decide_org_type(RACING_NSW_ID, None)
+
+
+def test_marker_coverage_state_distinguishes_never_attempted_from_attempted_unresolved():
+    never_attempted = m.coverage_state({"lv_org_type": ""})
+    attempted_unresolved = m.coverage_state(
+        {"lv_org_type": "unknown", "lv_enrichment_review_reason": "identity unresolvable"}
+    )
+    assert never_attempted == "never_attempted"
+    assert attempted_unresolved == "attempted_unresolved"
+    assert never_attempted != attempted_unresolved
+
+
+def test_marker_build_coverage_patch_editix_carries_non_empty_review_reason():
+    decision = m.ORG_TYPE_DECISIONS[EDITIX_ID]
+    patch = m.build_coverage_patch(EDITIX_ID, decision, "2026-08-12T00:00:00+00:00")
+    assert patch["properties"]["lv_enrichment_review_reason"]
+
+
+def test_marker_build_coverage_patch_others_carry_no_review_reason_key():
+    for company_id in (JAM_TV_ID, WAIKATO_ID, RUMBLE_ID):
+        decision = m.ORG_TYPE_DECISIONS[company_id]
+        patch = m.build_coverage_patch(company_id, decision, "2026-08-12T00:00:00+00:00")
+        assert not any("review_reason" in key for key in patch["properties"])
+
+
+def test_marker_no_patch_contains_country_region_key():
+    now_iso = "2026-08-12T00:00:00+00:00"
+    for company_id in (JAM_TV_ID, WAIKATO_ID, RUMBLE_ID, EDITIX_ID):
+        decision = m.ORG_TYPE_DECISIONS[company_id]
+        patch = m.build_coverage_patch(company_id, decision, now_iso)
+        assert not any("country_region" in key for key in patch["properties"])
