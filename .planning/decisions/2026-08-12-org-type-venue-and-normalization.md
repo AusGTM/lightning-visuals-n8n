@@ -356,3 +356,35 @@ Files this touches:
 Verification available before committing weights: `scripts/simulate_rubric_weights.py` (built in
 Phase 46) scores live records read-only under a candidate config. Run the three venue-shaped
 records through it to confirm the Tier C landing predicted above.
+
+---
+
+> ### CLOSURE — 2026-08-13, Phase 48 plan 06. D-V1/D-02's deferral is confirmed spent as
+> deferral, not silently dropped.
+>
+> Phase 48 (`.planning/phases/48-enrichment-coverage/48-06-PLAN.md` Task 2, per D-02 in
+> `48-CONTEXT.md`) was the implementing phase this decision file named at the top. It examined
+> the whole live 5-record population — the entire set of blank-`lv_org_type` records this phase
+> touched, not a subset — and found **no record whose evidence maps to `venue`.**
+>
+> `20538284384` (Waikato Racing Club Inc) was the nearest miss: a racecourse and event centre,
+> exactly the shape D-V1's rationale describes. It was written `individual_club_team`, not
+> `venue`, per D-V2 — Waikato *is* the racing club that operates the course, the same legal
+> entity, not a separate venue operator leasing to one. Its research evidence names it as the
+> club itself, so `individual_club_team` is the correct classification under D-V2's own
+> entity-collision rule, and the `venue` option was not needed to express it.
+>
+> Adding `venue` remains a HubSpot **enum-option PATCH** on `lv_org_type` via `scripts/
+> sync_hubspot_properties.py` / `config/hubspot_properties.yaml` — portal schema work with its
+> own arming decision, per the FACTUAL CORRECTION block above. Phase 48 did not spend that
+> arming: no invocation of `sync_hubspot_properties.py` occurred, and a live re-list of the
+> `lv_org_type` property (2026-08-13) confirms the enumeration still holds exactly its original
+> **9 options** — `governing_body_league`, `content_producer`, `broadcaster`, `individual_club_
+> team`, `regulator`, `gambling_operator`, `hardware_vendor`, `other`, `unknown`. `venue` is not
+> among them.
+>
+> **D-V1's substance is not withdrawn a second time.** This block confirms the DEFERRAL block
+> above did what it said it would: the population was examined, no record demanded the option,
+> and the option was deliberately not spent. Revisit when a record's evidence actually demands
+> it — most likely Phase 49's full-population re-score, which sees all 66 scored records rather
+> than the 5 with blank org types this phase touched.
