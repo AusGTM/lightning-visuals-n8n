@@ -1,0 +1,121 @@
+{
+  "_note": "Phase 47.5 workstream B after-snapshot, captured immediately after armed window #2 closed and the disarm was independently re-read. Same four ids and same shape as 47.5-B-BEFORE.json. Simtech LED 18047161864 is deliberately NOT a row here — it is not in the non-ANZ census either before or after; its outcome is in 47.5-RUN-REPORT.md § per-id table.",
+  "captured_at": "2026-08-12T07:07:00Z",
+  "census": {
+    "query": "companies WHERE lv_anti_icp_reason CONTAINS_TOKEN 'Non-ANZ'",
+    "total": 2,
+    "ids": ["10024564084", "17317850381"],
+    "before_total": 4,
+    "comment": "Down from 4 to 2. The two that remain are the two that were never in the write set: Entain (a second veto holds it) and Jam TV (correct, D-23)."
+  },
+  "veto03_bar": {
+    "query": "lv_anti_icp_reason CONTAINS_TOKEN 'Non-ANZ' AND lv_country_region_normalized NOT_HAS_PROPERTY",
+    "total": 0,
+    "comment": "Zero before the window and zero after it. VETO-03 stays met."
+  },
+  "records": [
+    {
+      "id": "10024564084",
+      "name": "Entain",
+      "domain": "www.entaingroup.com",
+      "lv_country_region_normalized": "Other",
+      "lv_org_type": "gambling_operator",
+      "lv_produces_content": "false",
+      "lv_is_hardware_vendor": null,
+      "lv_icp_fit_score": "-70",
+      "lv_icp_tier": "D",
+      "lv_anti_icp_flag": "true",
+      "lv_anti_icp_reason": "Non-ANZ geography; No broadcast or streaming content",
+      "lv_org_type_verified_at": "2026-08-08T11:01:01.959Z",
+      "lv_produces_content_verified_at": "2026-08-08T11:01:01.959Z",
+      "hs_lastmodifieddate": "2026-08-09T23:13:31.865Z",
+      "touched": false,
+      "comment": "UNTOUCHED. Never in the allowlist. hs_lastmodifieddate is unchanged from the before-snapshot and predates the window by three days — HubSpot saw no write at all, which is stronger than an unchanged property diff."
+    },
+    {
+      "id": "15860277364",
+      "name": "GRAVITY MEDIA",
+      "domain": "www.gravitymedia.com",
+      "lv_country_region_normalized": "ANZ",
+      "lv_org_type": "broadcaster",
+      "lv_produces_content": "true",
+      "lv_is_hardware_vendor": null,
+      "lv_icp_fit_score": "60",
+      "lv_icp_tier": "B",
+      "lv_anti_icp_flag": "false",
+      "lv_anti_icp_reason": "",
+      "lv_org_type_verified_at": "2026-08-08T11:01:25.672Z",
+      "lv_produces_content_verified_at": "2026-08-08T11:01:25.672Z",
+      "hs_lastmodifieddate": "2026-08-12T07:06:40.477Z",
+      "touched": true,
+      "touch_count": 1,
+      "written_property": "lv_country_region_normalized: Other -> ANZ",
+      "comment": "Veto cleared, 50 -> 60, D -> B. ANZ rests on Australian operating presence alone; the New Zealand leg is UNPROVEN (47.5-B-EVIDENCE.md)."
+    },
+    {
+      "id": "17317184159",
+      "name": "Ironman",
+      "domain": "www.ironman.com",
+      "lv_country_region_normalized": "ANZ",
+      "lv_org_type": "governing_body_league",
+      "lv_produces_content": "true",
+      "lv_is_hardware_vendor": null,
+      "lv_icp_fit_score": "80",
+      "lv_icp_tier": "A",
+      "lv_anti_icp_flag": "false",
+      "lv_anti_icp_reason": "",
+      "lv_org_type_verified_at": "2026-08-08T11:01:34.241Z",
+      "lv_produces_content_verified_at": "2026-08-08T11:01:34.241Z",
+      "hs_lastmodifieddate": "2026-08-12T07:06:33.791Z",
+      "touched": true,
+      "touch_count": 1,
+      "written_property": "lv_country_region_normalized: Other -> ANZ",
+      "comment": "Veto cleared, 70 -> 80, D -> A. Suppressed since 2024-03-26 by a geography call made on a Tampa HQ; registry evidence in both AU and NZ."
+    },
+    {
+      "id": "17317850381",
+      "name": "Jam TV",
+      "domain": "www.jamtv.it",
+      "lv_country_region_normalized": "Other",
+      "lv_org_type": null,
+      "lv_produces_content": "true",
+      "lv_is_hardware_vendor": null,
+      "lv_icp_fit_score": "20",
+      "lv_icp_tier": "D",
+      "lv_anti_icp_flag": "true",
+      "lv_anti_icp_reason": "Non-ANZ geography",
+      "lv_org_type_verified_at": null,
+      "lv_produces_content_verified_at": "2026-08-12T01:37:01.593Z",
+      "hs_lastmodifieddate": "2026-08-12T01:42:45.648Z",
+      "touched": false,
+      "comment": "UNTOUCHED and STILL VETOED, which is the correct outcome (D-23). Never in the allowlist, never read-modified. hs_lastmodifieddate is byte-identical to the before-snapshot and predates the window by five hours."
+    }
+  ],
+  "off_census_outcome": {
+    "id": "18047161864",
+    "name": "Simtech LED",
+    "in_before_snapshot": false,
+    "reason_absent": "It carries no non-ANZ veto, before or after — it is a workstream C record, not a workstream B one. Its diff source is the live-state table in 47.5-WINDOW2-PREARM.md.",
+    "before": {
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "hardware_vendor",
+      "lv_is_hardware_vendor": null,
+      "lv_icp_fit_score": "40",
+      "lv_icp_tier": "B",
+      "lv_anti_icp_flag": "false",
+      "lv_anti_icp_reason": ""
+    },
+    "after": {
+      "lv_country_region_normalized": "AU",
+      "lv_org_type": "hardware_vendor",
+      "lv_is_hardware_vendor": null,
+      "lv_icp_fit_score": "40",
+      "lv_icp_tier": "D",
+      "lv_anti_icp_flag": "true",
+      "lv_anti_icp_reason": "Hardware/AV/LED vendor, not sports-media buyer",
+      "hs_lastmodifieddate": "2026-08-12T07:06:55.091Z"
+    },
+    "written_property": "NONE — no input was written. Recompute only.",
+    "comment": "The purest test of workstream A: a COMPLETE record the gate calls skip, with no input change, moved solely because the new OR predicate ran on the recompute lane. It moved."
+  }
+}

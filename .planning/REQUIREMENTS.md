@@ -82,7 +82,7 @@ traceable bar. They are new requirements, not a re-scoping of VETO-01/02/03, whi
       returns `status: "success"` with nothing written and no node error — the same
       silent-success class recorded in `47-BLOCKED.md`. The caller must be able to tell
       "complete, nothing to do" from "something broke".
-- [ ] **RECOMP-03**: The four companies still carrying a non-ANZ veto are re-examined under
+- [x] **RECOMP-03**: The four companies still carrying a non-ANZ veto are re-examined under
       D-V6's operating-presence test, with **researched evidence URLs** rather than assertion,
       and any flip is written inside one bounded, disarmed-afterward window. Jam TV
       `17317850381` is correct and must retain its veto (D-23); Entain `10024564084` cannot
@@ -171,7 +171,7 @@ recoverable, only forward capture works, which cannot inform a v0.9 recalibratio
 | VETO-03 | Phase 47 | **Complete** (operator-confirmed 2026-08-12, zero results) |
 | RECOMP-01 | Phase 47.5 | **Complete** (live exec 11856/11857: gate `skip` -> `enrich`, PATCH landed; test green with assertions byte-identical; 47.5-A-LIVE-PROOF § Armed window #1) |
 | RECOMP-02 | Phase 47.5 | **Complete** (live exec 11853: `action:"skip"` + gate reason; 47.5-A-LIVE-PROOF §3d) |
-| RECOMP-03 | Phase 47.5 | Not started |
+| RECOMP-03 | Phase 47.5 | **Complete** (registry-grade D-V6 evidence: 47.5-B-EVIDENCE.md; written in ONE window, disarm re-read verbatim: 47.5-RUN-REPORT.md § Part 2; census 4 -> 2, Jam TV retains its veto per D-23 and Entain held by its second veto: 47.5-AFTER.json) |
 | RECOMP-04 | Phase 47.5 | **Complete** (decision `or-retroactive` + gambling answered: 47.5-C-DECISION.md; both engines in one commit `f817ec5`; deployed and read back out of the RUNNING instance: 47.5-C-DECISION.md § Deploy record) |
 | COVER-01 | Phase 47 + 48 | Not started |
 | COVER-02 | Phase 47 + 48 | Not started |
