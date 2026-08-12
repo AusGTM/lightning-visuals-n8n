@@ -40,7 +40,7 @@ Progress: [█████████░] 89%
 
 **Last session:** 2026-08-11T22:08:21.338Z
 **Stopped at:** Completed 47-03-PLAN.md
-**Resume file:** None
+**Resume file:** .planning/phases/47-veto-remediation/47-HANDOVER.md
 
 ## Performance Metrics
 
