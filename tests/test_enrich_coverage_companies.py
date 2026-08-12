@@ -101,6 +101,22 @@ def test_tracer_refuse_if_over_budget_raises_and_never_returns_a_shorter_list():
     # above. Nothing further to assert here; the pytest.raises block IS the proof.
 
 
+def test_budget_within_budget_returns_ids_unmodified_same_length_and_order():
+    all_five = list(m.COVERAGE_COMPANY_ID_ORDER)
+    estimate = m.estimate_phase48_cost(
+        research_ids=["15008671672"], written_ids=all_five, proof_executions=1,
+    )
+    # 48-03-PLAN.md's expected shape: 1 web-research call, 6 n8n executions (5 recompute
+    # POSTs + 1 disarmed proof-of-deploy execution), well within the 2,500/month budget.
+    assert estimate["web_research_calls"] == 1
+    assert estimate["n8n_executions"] == 6
+    assert estimate["anthropic_estimate_usd"] == 0.0686
+
+    resolved = m.refuse_if_over_budget(estimate, all_five)
+    assert resolved == all_five
+    assert len(resolved) == len(all_five)
+
+
 def test_tracer_post_webhook_event_refuses_unarmed_before_any_transport_call():
     def _refuse_transport(*_a, **_kw):
         raise AssertionError("no transport call should be made when unarmed")
