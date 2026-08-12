@@ -5,10 +5,10 @@ milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 47
 current_phase_name: veto-remediation
 status: executing
-stopped_at: Completed 47-03-PLAN.md
-last_updated: "2026-08-11T22:08:21.345Z"
+stopped_at: 47-04 Task 3 — awaiting operator's script-free HubSpot VETO-03 search
+last_updated: "2026-08-12T01:55:00.000Z"
 last_activity: 2026-08-12
-last_activity_desc: Phase 47 blocked at Plan 03 Task 3. Both research legs (the
+last_activity_desc: Phase 47 armed window COMPLETE. 16 of 17 false non-ANZ vetoes
 progress:
   total_phases: 4
   completed_phases: 1
@@ -21,9 +21,30 @@ progress:
 
 ## Current Position
 
-Phase: 47 (veto-remediation) — Plan 03 complete, Plan 04 next
+Phase: 47 (veto-remediation) — Plan 04 armed window COMPLETE, Task 3 operator gate open
 Plan: 4 of 4
-Status: Executing — Anthropic credit restored, Plan 03 completed
+Status: Executing — all 17 records written and both write surfaces disarmed and proven
+  closed. **Blocked only on the operator's script-free HubSpot search (Task 3).**
+
+**Resume here.** Task 3: in the HubSpot portal, Companies view, two filters ANDed —
+`lv_anti_icp_reason` **contains exactly** `Non-ANZ geography`, AND
+`lv_country_region_normalized` **is unknown**. Expected zero. (The API equivalent already
+returns 0, but VETO-03's text demands script-free proof, so it does not substitute.)
+Then Task 4: tick VETO-01/02/03 in `.planning/REQUIREMENTS.md` with pointers
+(VETO-01 → `47-RUN-REPORT.md` per-id table; VETO-02 → the two verbatim disarm outcomes;
+VETO-03 → the operator's search result). Leave COVER-01/COVER-02 open for Phase 48 per
+D-02. Rule 1 fallout is already done and committed — nothing to edit there.
+
+Outcome: 16 false non-ANZ vetoes cleared; Jam TV (17317850381) correctly RETAINED its veto
+per D-23 with `region=Other`. Portal-wide VETO-03 API search: 17 matches before, 0 after.
+Tiers after: B×9, C×5, Unscored×2, D×1. n8n executions 18 (11834-11851). Provider credits 0.
+Six in-window corrections, all operator-approved — see `47-RUN-REPORT.md` § Plan 04.
+
+**New: Phase 47.5 (Veto Recompute Path)** scoped from a defect found live — `Company Gate`
+skips records whose inputs are complete, so `Decide Company Action` never recomputes their
+veto. Plan with `/gsd-plan-phase 47.5`.
+
+Previous status: Executing — Anthropic credit restored, Plan 03 completed
 Last activity: 2026-08-12 — Plan 03 complete: 47-BEFORE.json (17-row before-snapshot),
   the live property-existence guard (found 19 missing D-09 metadata properties, resolved
   via operator-confirmed D-21 narrowing), one live research pass over all 17 pinned
