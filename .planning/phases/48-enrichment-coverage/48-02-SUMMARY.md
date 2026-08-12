@@ -280,6 +280,13 @@ calls, zero HubSpot reads/writes, zero n8n executions, and zero deploys.
   runs through the standalone Python `src/web_research.py` path, not through n8n) or
   48-04 (the operator deploy this plan's gate is waiting on).
 
+## Self-Check: PASSED
+
+All 5 claimed files found on disk (`scripts/build_cloud_workflows.py`,
+`n8n/wf_enrichment_cloud.json`, `tests/n8n/researchErrorGateFlow.test.mjs`,
+`tests/test_remaining_credits_response.py`, this SUMMARY). All 3 task commit hashes
+(`08128d3`, `3a1edf1`, `5fc157c`) found in `git log --oneline --all`.
+
 ---
 *Phase: 48-enrichment-coverage*
 *Completed: 2026-08-12*
