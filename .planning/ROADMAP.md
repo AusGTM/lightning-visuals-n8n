@@ -16,7 +16,7 @@
 
 - [ ] **Phase 46: Rubric Decision, Simulation & Engine Parity** - Decide the org-type weights (`individual_club_team`, `regulator`, and the `gambling_operator` deduction) with evidence, simulate re-tiering with zero record writes, prove any change lands identically in all three scoring engines, and update every doc that prints the superseded rubric — before either downstream write phase runs
 - [ ] **Phase 47: Veto Remediation** - Clear the 17 false non-ANZ vetoes under the settled rubric, inside a deliberately armed and capped write window, verifiable from HubSpot alone
-- [ ] **Phase 47.5: Veto Recompute Path** - Make a veto recomputable for a record whose inputs are already complete. `Company Gate` skips complete records and `Normalize + Score Company` drops every skipped row, so `Decide Company Action` — the only writer of `lv_anti_icp_flag`/`lv_anti_icp_reason` — never runs for them. Found live in Phase 47 (n8n execution `11846`, Simtech LED left reading `Non-ANZ geography` against `region=AU`)
+- [ ] **Phase 47.5: Veto Recompute Path** - Three workstreams: (A) make a veto recomputable for a record whose inputs are already complete; (B) re-examine the four remaining non-ANZ vetoes under D-V6's operating-presence test — Ironman scores 70 and is suppressed on a Tampa HQ; (C) decide whether the hardware veto should key off `lv_org_type` rather than a boolean 1 of 66 records has set. `Company Gate` skips complete records and `Normalize + Score Company` drops every skipped row, so `Decide Company Action` — the only writer of `lv_anti_icp_flag`/`lv_anti_icp_reason` — never runs for them. Found live in Phase 47 (n8n execution `11846`, Simtech LED left reading `Non-ANZ geography` against `region=AU`)
 - [ ] **Phase 48: Enrichment Coverage** - Fill or document `lv_org_type` for the 18 never-enriched companies, under a pre-estimated and budget-refusing armed write window
 - [ ] **Phase 49: Re-score Strategy & Reporting** - Define and (if triggered) execute the budget-bounded full-population re-score procedure, and report the milestone's net tier-distribution effect in plain language
 
@@ -208,6 +208,13 @@ force the gate to enrich, which is a data-degrading workaround no scheduled job 
 This compounds forward, which is why it is a phase rather than a note: Phase 48 completes 18
 more records and so enlarges the affected population, and Phase 49's full re-score would move
 scores and tiers while leaving frozen veto fields untouched and unreported.
+
+**Workstreams B and C** were folded in on 2026-08-12 (operator-directed) because both are
+blocked on A: changing a record's region or veto inputs does nothing to its flag while the
+gate skips it. B covers at most four records — Ironman (`17317184159`, score 70, Tier A
+material), GRAVITY MEDIA (50) and Entain (which will not move; a second veto fires); Jam TV
+is correct and stays. C decides the hardware veto's trigger field and must land in all three
+engines together per Phase 46's parity rule.
 
 **Depends on**: Phase 47 (found it; owns the evidence)
 **Scope doc**: `.planning/phases/47.5-veto-recompute-path/47.5-CONTEXT.md` — includes the

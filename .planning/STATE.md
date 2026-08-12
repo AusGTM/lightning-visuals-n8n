@@ -36,18 +36,24 @@ cycles, two records touched twice. Two named checks relaxed (D-20 re-stamp; orac
 assertion). Both recorded in 47-RUN-REPORT.md § "Window accounting" and 47-04-SUMMARY.md,
 not softened. settle_veto stayed hard throughout.
 
-**Next actions, in priority order:**
-1. `/gsd-plan-phase 47.5` — Veto Recompute Path. A record with COMPLETE inputs cannot have
-   its veto recomputed by any on-demand trigger (Company Gate skips it, so Decide never
-   runs). Compounds forward: Phase 48 completes 18 more records.
-2. Decide the two open todos before Phase 48/49 writes:
-   - `.planning/todos/pending/2026-08-12-d-v6-reexamine-the-four-remaining-non-anz-vetoes.md`
-     — Ironman scores 70 (Tier A material) suppressed on a Tampa HQ; D-V6 says operating
-     presence, not HQ. Gravity Media similar. Entain will not move (second veto).
-   - `.planning/todos/pending/2026-08-12-hardware-veto-keys-off-an-unpopulated-boolean.md`
-   Both blocked behind 47.5 for the write leg — changing region alone will NOT clear a flag.
-3. COVER-01/COVER-02 remain open for Phase 48 (four records ended with no lv_org_type:
-   Editix, Jam TV, Waikato, The Rumble).
+**Next action: `/gsd-plan-phase 47.5`.** Operator folded both open findings into 47.5 on
+2026-08-12, so it now carries THREE workstreams — plan them together:
+
+- **A — fix the recompute path.** A record with COMPLETE inputs cannot have its veto
+  recomputed by any on-demand trigger (Company Gate skips it, so Decide never runs).
+  Do A first and prove it; B cannot be written until it lands.
+- **B — D-V6 re-examination of the four remaining non-ANZ vetoes.** Ironman (17317184159)
+  scores 70, Tier A material, suppressed on a Tampa HQ; D-V6 says operating presence, not
+  HQ. Gravity Media same shape at 50. Entain will not move (second veto fires). Jam TV is
+  correct and stays. Needs researched evidence URLs, not assertion.
+- **C — decide the hardware veto's trigger field.** It fires on lv_is_hardware_vendor, which
+  1 of 66 records has set, not on lv_org_type. Must land in all three engines together.
+
+Scope doc amended accordingly, including its out-of-scope list (which previously forbade
+exactly what B and C now do): .planning/phases/47.5-veto-recompute-path/47.5-CONTEXT.md
+
+**Standing order:** COVER-01/COVER-02 stay open for Phase 48 (four records ended with no
+lv_org_type: Editix, Jam TV, Waikato, The Rumble). Not a 47.5 workstream.
 
 Previous status: Executing — Anthropic credit restored, Plan 03 completed
 Last activity: 2026-08-12 — Plan 03 complete: 47-BEFORE.json (17-row before-snapshot),

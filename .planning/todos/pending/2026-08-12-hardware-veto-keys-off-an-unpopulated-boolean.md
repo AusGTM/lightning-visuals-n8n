@@ -1,6 +1,7 @@
 # Hardware-vendor hard veto keys off a boolean almost nothing populates
 
 **Found:** 2026-08-12, Phase 47 Plan 04 armed window, from Simtech LED (`18047161864`).
+**Owner phase:** **47.5, workstream C** (operator-directed 2026-08-12).
 **Type:** rubric / data-model inconsistency. Not a Phase 47 defect — Phase 47's outcome for
 Simtech is correct under the rules as they are currently written.
 

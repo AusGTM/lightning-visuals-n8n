@@ -1,7 +1,9 @@
-# D-V6: re-examine the four remaining non-ANZ vetoes (Phase 49)
+# D-V6: re-examine the four remaining non-ANZ vetoes (Phase 47.5, workstream B)
 
 **Raised:** 2026-08-12, immediately after Phase 47's armed window closed.
-**Owner phase:** 49 (D-V6 already makes this re-examination mandatory).
+**Owner phase:** **47.5, workstream B** (operator-directed 2026-08-12 — moved from Phase 49,
+because the write leg is blocked on 47.5's recompute fix and doing it later means doing it
+twice). D-V6 already makes the re-examination mandatory; this only settles *where* it runs.
 **Do NOT action in Phase 47** — three of these four are on Phase 47's forbidden list.
 
 ## The complete work-list
