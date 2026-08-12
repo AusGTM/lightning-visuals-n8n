@@ -277,7 +277,23 @@ touched once.
      window that was disarmed and read back afterward, and the actual cost is reported against
      the pre-run estimate.
 
-**Plans**: TBD
+**Plans**: 6 plans
+
+> **Planned 2026-08-12 — two ROADMAP claims above are superseded by `48-CONTEXT.md`, which wins.**
+> "the 18 companies" is a stale census: the population was re-derived live on 2026-08-12 as
+> **66 scored, 5 with blank `lv_org_type`**, and the plans re-derive it again at execution time.
+> "a full provider waterfall per record" is rejected by D-01 — providers do not return
+> `lv_org_type` at all; 4 of the 5 records resolve from already-paid Phase 47 research on disk and
+> only Racing NSW `15008671672` needs a fresh call. Neither Phase 47 nor Phase 48 closes
+> COVER-01/COVER-02 alone.
+
+Plans:
+- [ ] 48-01-PLAN.md — coverage driver spine, offline enum mapping for the 4 evidenced records, D-03 marker, live population re-derivation
+- [ ] 48-02-PLAN.md — D-04 research-error gate built into the cloud lane, workflow rebuilt, offline node test
+- [ ] 48-03-PLAN.md — ex-ante cost estimate, operator spend decision, one enum-constrained research call for Racing NSW
+- [ ] 48-04-PLAN.md — the ONE declared deploy and bounce, proven live by an execution's own node list
+- [ ] 48-05-PLAN.md — the ONE declared armed write window: write, recompute, settle, read back, disarm
+- [ ] 48-06-PLAN.md — run report (actual vs estimate, window accounting), venue deferral amendment, traceability
 
 ---
 
