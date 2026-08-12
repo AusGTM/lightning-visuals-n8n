@@ -70,9 +70,9 @@ COVERAGE_COMPANY_IDS = frozenset(COVERAGE_COMPANY_ID_ORDER)
 
 # D-01/D-05: the literal per-record decision table authored from CONTEXT.md. No
 # regex/keyword mapper exists anywhere in this module -- decide_org_type below reads this
-# table, it never derives the enum value from research free text. Populated one record at
-# a time as its evidence is proven end-to-end (Jam TV, this task); the remaining three
-# already-evidenced records land in the next task.
+# table, it never derives the enum value from research free text. Racing NSW has no entry
+# (no captured research) -- decide_org_type raises PendingResearch for it, correct until a
+# later plan supplies its researched value.
 ORG_TYPE_DECISIONS = {
     "17317850381": {
         "org_type": "broadcaster",
@@ -81,12 +81,43 @@ ORG_TYPE_DECISIONS = {
             "television broadcaster'"
         ),
     },
+    "20538284384": {
+        "org_type": "individual_club_team",
+        "basis": (
+            "47-RESEARCH-RESULTS.json matched=true confidence=85, 'Racing Club / Sports "
+            "Organization'"
+        ),
+    },
+    "20943964946": {
+        "org_type": "content_producer",
+        "basis": (
+            "D-05: research says 'Event organizer / Sports league operator' conf 92, but "
+            "the same evidence names Skate Australia as the sport's governing body and "
+            "The Rumble as a partner -- it produces and broadcasts content, it does not "
+            "govern"
+        ),
+    },
+    "17317381378": {
+        "org_type": "unknown",
+        "basis": (
+            "D-03: matched=false confidence=5, every data field null -- identity "
+            "unresolvable, not merely unresearched"
+        ),
+    },
 }
 
 # D-03: the un-enrichable reason, authored data (never generated prose), keyed by company
 # id -- the home for every record whose ORG_TYPE_DECISIONS entry is the "unknown" marker.
-# Populated by the task that adds Editix's decision.
-UNENRICHABLE_REASONS = {}
+UNENRICHABLE_REASONS = {
+    "17317381378": (
+        "Web searches for 'Editix edetrix.com.au', 'Editix broadcast streaming live', and "
+        "'edetrix.com.au OR Editix Australia media' returned no results for a company "
+        "matching this identity (matched=false, confidence=5, every data field null). "
+        "Near-hits were EditiX (an XML editor), Editrix (an AI book-editing tool) and "
+        "EditShare (media software) -- none matching the company name+domain. Identity is "
+        "unresolvable, not merely unresearched."
+    ),
+}
 
 # The exact live HubSpot search filter CONTEXT.md re-derived the population with.
 POPULATION_FILTERS = [
@@ -179,6 +210,19 @@ def decide_org_type(company_id, research):
             "to ground the decision table's basis"
         )
     return decision
+
+
+def coverage_state(record_properties):
+    """D-03's three-state semantics, machine-readable: blank lv_org_type is
+    never_attempted; "unknown" is attempted_unresolved; any other valid enum value is
+    resolved. This is what makes COVER-01's "distinguishable from never attempted" bar an
+    assertion rather than a description."""
+    org_type = (record_properties or {}).get("lv_org_type")
+    if not org_type:
+        return "never_attempted"
+    if org_type == "unknown":
+        return "attempted_unresolved"
+    return "resolved"
 
 
 def build_coverage_patch(company_id, decision, now_iso):
