@@ -2847,11 +2847,23 @@ return $input.all().map((it) => {
   const region = _regionKey(properties.lv_country_region_normalized ?? existing.lv_country_region_normalized);
   const producesContent = _boolish(properties.lv_produces_content ?? existing.lv_produces_content);
   const isHardwareVendor = _boolish(properties.lv_is_hardware_vendor ?? existing.lv_is_hardware_vendor);
+  // 47.5-C (47.5-C-DECISION.md, or-retroactive): the hardware veto fires on EITHER
+  // trigger. lv_is_hardware_vendor is suppressed by design — the research contract
+  // answers null without a cited source, a true forces judge escalation, the D5
+  // fail-safe demotes it back, and merge then wants 85 confidence — so it sat on 1 of
+  // 66 live companies while lv_org_type, which the pipeline reliably lands, said
+  // hardware_vendor for 2. OR rather than replacing the boolean: purely additive (no
+  // record loses a veto) and the boolean stays alive as a manual override. Same
+  // `?? existing` fallback as the three signals above, so a merge-free recompute row
+  // derives it from existingRecord like everything else (lv_org_type is already in
+  // ENRICH_COMPANY_SEARCH_PROPERTIES_CSV). This is a STRING predicate, not an
+  // org-type-keyed numeric table — tests/test_n8n_org_type_absence.py stays green.
+  const orgType = properties.lv_org_type ?? existing.lv_org_type;
 
   const vetoReasons = [];
   if (region === "non_anz") vetoReasons.push("Non-ANZ geography");
   if (producesContent === false) vetoReasons.push("No broadcast or streaming content");
-  if (isHardwareVendor === true) vetoReasons.push("Hardware/AV/LED vendor, not sports-media buyer");
+  if (isHardwareVendor === true || orgType === "hardware_vendor") vetoReasons.push("Hardware/AV/LED vendor, not sports-media buyer");
 
   // D-04 / P4: string literals, never bare JS booleans — HubSpot EQ filters compare
   // strings (the 36-07 precedent for lv_enrichment_requested). The BUG-27 loop below only

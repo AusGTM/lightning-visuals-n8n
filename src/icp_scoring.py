@@ -114,7 +114,15 @@ def compute_icp_score(record: HubSpotRecord, candidate_patch: dict, cfg: dict = 
         anti_icp_flag = True
         anti_reasons.append(cfg["hard_vetoes"]["no_content"]["reason"])
 
-    if is_hardware_vendor:
+    # 47.5-C (47.5-C-DECISION.md, or-retroactive): the veto fires on EITHER trigger. The
+    # boolean is suppressed by design — the research contract answers null without a cited
+    # source, a true forces judge escalation, the D5 fail-safe demotes it back, and merge
+    # then wants 85 confidence — so it sat on 1 of 66 live companies while lv_org_type,
+    # which the pipeline reliably lands, said hardware_vendor for 2. OR rather than
+    # replacing the boolean: purely additive (no record loses a veto) and the boolean
+    # stays alive as a manual override. Must stay byte-identical to the JS port in
+    # scripts/build_cloud_workflows.py's ENRICH_DECIDE_CO_CLOUD.
+    if is_hardware_vendor or org_type == "hardware_vendor":
         anti_icp_flag = True
         anti_reasons.append(cfg["hard_vetoes"]["hardware_vendor"]["reason"])
 

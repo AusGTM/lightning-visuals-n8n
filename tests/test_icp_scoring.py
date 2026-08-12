@@ -182,3 +182,53 @@ def test_case_17_hard_veto_survives_confidence_downgrade():
     assert r.tier == "D"
     assert r.recommended_motion == "disqualify"
     assert r.confidence == 55
+
+
+# --- 47.5-C: the hardware veto's OR trigger ---------------------------------------
+# Decision 47.5-C-DECISION.md (or-retroactive): the veto fires on the boolean OR on
+# lv_org_type == "hardware_vendor". Both paths are pinned here, not just the new one --
+# a test covering only the org-type path would let the boolean path rot silently, and
+# the boolean is the manual-override half of the reason the OR shape was chosen.
+HARDWARE_REASON = "Hardware/AV/LED vendor, not sports-media buyer"
+
+# (lv_is_hardware_vendor, lv_org_type, veto fires?)
+HARDWARE_VETO_TABLE = [
+    (True, "hardware_vendor", True),      # both triggers -- one reason, not two
+    (True, "broadcaster", True),          # boolean alone: the manual-override path
+    (None, "hardware_vendor", True),      # org type alone: Simtech LED's shape
+    (False, "hardware_vendor", True),     # explicit false does NOT suppress the org type
+    (None, "broadcaster", False),         # neither trigger
+    (False, "broadcaster", False),
+    (None, "unknown", False),
+]
+
+
+def test_hardware_veto_fires_on_either_trigger():
+    for is_hw, org_type, expected in HARDWARE_VETO_TABLE:
+        patch = {"lv_org_type": org_type, "lv_produces_content": True,
+                 "lv_country_region_normalized": "AU", "lv_revenue_band": "5-50M"}
+        if is_hw is not None:
+            patch["lv_is_hardware_vendor"] = is_hw
+        r = score(patch)
+        assert r.anti_icp_flag is expected, f"{(is_hw, org_type)} -> flag {r.anti_icp_flag}"
+        if expected:
+            # Byte-identical reason, and exactly once even when both triggers hold.
+            assert r.anti_icp_reason == HARDWARE_REASON, f"{(is_hw, org_type)}"
+            assert r.breakdown["hard_vetoes"] == [HARDWARE_REASON]
+            assert r.tier == "D"
+        else:
+            assert r.anti_icp_reason is None
+            assert r.breakdown["hard_vetoes"] == []
+
+
+def test_hardware_veto_keeps_third_position_in_the_join_via_the_org_type_trigger():
+    # test_scoring_parity.py::test_veto_set_multiple_reasons_join pins this order live
+    # off the BOOLEAN. The new trigger must land in the same slot, or the two engines'
+    # joined reason strings diverge for an org-type-only hardware vendor.
+    r = score({"lv_org_type": "hardware_vendor", "lv_produces_content": False,
+               "lv_country_region_normalized": "US", "lv_revenue_band": "5-50M"})
+    assert r.anti_icp_reason == "; ".join([
+        "Non-ANZ geography",
+        "No broadcast or streaming content",
+        HARDWARE_REASON,
+    ])

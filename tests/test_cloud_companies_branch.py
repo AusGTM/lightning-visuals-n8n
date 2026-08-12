@@ -202,6 +202,40 @@ def test_decide_company_action_derives_both_veto_fields_via_regionkey_and_boolis
         assert token in code, f"built Decide Company Action jsCode missing {token!r}"
 
 
+def test_decide_company_action_hardware_veto_fires_on_org_type_as_well_as_the_boolean():
+    """47.5-C-DECISION.md (or-retroactive): the hardware veto's trigger widens to
+    `lv_is_hardware_vendor === true || lv_org_type === "hardware_vendor"`, because the
+    boolean is suppressed by design (research contract -> judge escalation -> D5
+    fail-safe -> 85 min_confidence) and sits on 1 of 66 live companies, while
+    `lv_org_type` is what the pipeline actually lands.
+
+    Asserted on BOTH the source constant and the built jsCode — the built workflow is
+    generated, so a stale build is the failure this catches."""
+    for code in (ENRICH_DECIDE_CO_CLOUD, _decide_company_action_jscode()):
+        assert 'isHardwareVendor === true || orgType === "hardware_vendor"' in code, (
+            "the hardware veto must fire on either trigger"
+        )
+        # The org-type local must use the same `properties.X ?? existing.X` fallback the
+        # other three veto inputs use, or a merge-free recompute row (merge: null, all
+        # signals on existingRecord) never sees it — that is precisely plan 06's lane.
+        assert "properties.lv_org_type ?? existing.lv_org_type" in code, (
+            "orgType must resolve via the same ?? existing fallback as region/content/boolean"
+        )
+
+
+def test_decide_company_action_hardware_veto_push_keeps_third_position():
+    """The reason strings are joined in list order and
+    tests/test_scoring_parity.py::test_veto_set_multiple_reasons_join pins that order
+    against live HubSpot state. Widening the trigger must not move the push."""
+    non_anz, no_content, hardware = _hard_veto_reasons()
+    code = _decide_company_action_jscode()
+    positions = [code.index(r) for r in (non_anz, no_content, hardware)]
+    assert positions == sorted(positions), (
+        "veto reason pushes are out of order; the joined lv_anti_icp_reason would diverge "
+        "from src/icp_scoring.py"
+    )
+
+
 def test_veto_fields_never_enter_enrich_merge_co_candidate_lists():
     """40-RESEARCH.md names this as the phase's most likely wrong turn: adding the veto
     fields to ENRICH_MERGE_CO's candidate lists instead of deriving them in Decide."""

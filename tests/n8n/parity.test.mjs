@@ -452,3 +452,112 @@ print(json.dumps(entries, sort_keys=True, separators=(",", ":")))
   assert.ok(broken.includes("\\u"), "the broken (ensure_ascii default True) variant must \\u-escape the macron");
   assert.ok(js.includes("Ngā"), "the correct JS serialization keeps the raw UTF-8 characters");
 });
+
+// --- 47.5-C: hardware-veto trigger, GENUINE oracle-vs-node parity ------------------
+// The veto predicate lives in TWO engines (47.5-C-DECISION.md): src/icp_scoring.py and
+// the `Decide Company Action` node built into n8n/wf_enrichment_cloud.json. Phase 46's
+// parity rule says they move together; this table proves they are EQUAL rather than
+// inspecting each separately. Run through Merge Company -> Decide Company Action with a
+// matched:false research candidate, the same harness idiom
+// decideCompanyActionRegionFallbackNoSpuriousVeto.test.mjs uses, so the `?? existing`
+// fallback path is the one exercised — that is the lane a recompute actually takes.
+
+function loadNodeJsCode(name) {
+  const wf = JSON.parse(fs.readFileSync(path.join(ROOT, "n8n/wf_enrichment_cloud.json"), "utf8"));
+  return wf.nodes.find((n) => n.name === name).parameters.jsCode;
+}
+
+function runCodeNode(jsCode, row) {
+  const $input = { all: () => [{ json: row }], get item() { return { json: row }; } };
+  const $ = () => ({ all: () => [], get item() { return { json: undefined }; } });
+  const $now = new Date();
+  const fn = new Function("$", "$input", "$json", "$node", "$now", "$today",
+    `"use strict";\n${jsCode}`);
+  const out = fn($, $input, row, {}, $now, $now) || [];
+  return (out[0] && out[0].json) || {};
+}
+
+// (lv_is_hardware_vendor, lv_org_type, veto fires?) — mirrors tests/test_icp_scoring.py's
+// HARDWARE_VETO_TABLE, including the explicit-false-plus-org-type edge (an explicit
+// false boolean must NOT suppress the org-type trigger under OR) and both single-trigger
+// paths, so neither half can rot. The third column is the ANTI-VACUITY column: without
+// it, two engines that both dropped the veto would still "agree" and the parity
+// assertions would pass on a broken rubric.
+const HARDWARE_VETO_CASES = [
+  [true, "hardware_vendor", true],
+  [true, "broadcaster", true],
+  [null, "hardware_vendor", true],
+  [false, "hardware_vendor", true],
+  [null, "broadcaster", false],
+  [false, "broadcaster", false],
+  [null, "unknown", false],
+];
+
+function pyVeto(cases) {
+  const script = `
+import json, sys
+from src.schemas import HubSpotRecord
+from src.icp_scoring import compute_icp_score
+out = []
+for is_hw, org_type, _fires in json.loads(sys.argv[1]):
+    patch = {"lv_org_type": org_type, "lv_produces_content": True,
+             "lv_country_region_normalized": "AU", "lv_revenue_band": "5-50M"}
+    if is_hw is not None:
+        patch["lv_is_hardware_vendor"] = is_hw
+    r = compute_icp_score(HubSpotRecord(object_type="companies", id="789", properties={}), patch)
+    out.append({"flag": "true" if r.anti_icp_flag else "false",
+                "reason": r.anti_icp_reason or ""})
+print(json.dumps(out))
+`;
+  const raw = execFileSync(PY, ["-c", script, JSON.stringify(cases)], { cwd: ROOT }).toString().trim();
+  return JSON.parse(raw);
+}
+
+test("hardware veto: GENUINE parity between src/icp_scoring.py and the built " +
+     "Decide Company Action node across the (boolean x org_type) table", () => {
+  const MERGE_COMPANY = loadNodeJsCode("Merge Company");
+  const DECIDE_COMPANY_ACTION = loadNodeJsCode("Decide Company Action");
+  const expected = pyVeto(HARDWARE_VETO_CASES);
+  const HARDWARE_REASON = "Hardware/AV/LED vendor, not sports-media buyer";
+
+  HARDWARE_VETO_CASES.forEach(([isHw, orgType, fires], i) => {
+    const row = {
+      action: "enrich",
+      identity_keys: { domain: null },
+      existingRecord: {
+        hs_object_id: "999",
+        name: "ZZ-SCORING-TEST-DELETE-ME-fixture",
+        lv_country_region_normalized: "AU",
+        lv_produces_content: true,
+        lv_org_type: orgType,
+        ...(isHw === null ? {} : { lv_is_hardware_vendor: isHw }),
+      },
+      scored: { best: {}, winners: {}, sourcesByField: {} },
+      research_candidate: { matched: false, confidence: 0, data: {}, evidence_by_field: {} },
+    };
+    const merged = runCodeNode(MERGE_COMPANY, row);
+    const out = runCodeNode(DECIDE_COMPANY_ACTION, { ...row, merge: merged.merge });
+    const label = `(lv_is_hardware_vendor=${isHw}, lv_org_type=${orgType})`;
+    // Anti-vacuity: pin the expected outcome first, so a rubric that lost the veto in
+    // BOTH engines fails here rather than passing as "agreement".
+    assert.equal(expected[i].flag, fires ? "true" : "false",
+      `${label}: the Python oracle's veto outcome is not the decided one`);
+    assert.equal(expected[i].reason, fires ? HARDWARE_REASON : "",
+      `${label}: the Python oracle's reason string is not the decided one`);
+    assert.equal(out.properties.lv_anti_icp_flag, expected[i].flag,
+      `${label}: node flag disagrees with the Python oracle`);
+    assert.equal(out.properties.lv_anti_icp_reason, expected[i].reason,
+      `${label}: node reason string disagrees with the Python oracle`);
+  });
+});
+
+test("hardware veto: the reason string the node emits is byte-identical to the rubric YAML", () => {
+  // Vacuity guard for the table above — if BOTH engines dropped the veto the parity
+  // assertions would still pass. Pin the actual expected string independently.
+  const DECIDE_COMPANY_ACTION = loadNodeJsCode("Decide Company Action");
+  const yamlReason = fs.readFileSync(path.join(ROOT, "config/icp_scoring.yaml"), "utf8")
+    .match(/hardware_vendor:\s*\n\s*enabled:.*\n\s*reason:\s*"([^"]+)"/)[1];
+  assert.equal(yamlReason, "Hardware/AV/LED vendor, not sports-media buyer");
+  assert.ok(DECIDE_COMPANY_ACTION.includes(yamlReason),
+    "the built node must carry the rubric's reason string verbatim");
+});
