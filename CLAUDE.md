@@ -896,6 +896,31 @@ Graduated deductions include:
 revenue above 500M
 ```
 
+### 10.3.1 As-built delta — the hardware veto's trigger (verified live 2026-08-12)
+
+The three veto *names* above are correct. The hardware veto's **trigger field** is not what
+§5.1 / §12.7 imply. As decided in Phase 47.5 workstream C (`or-retroactive`, operator,
+2026-08-12) and landed in both engines in one commit `f817ec5`, the predicate is an **OR**:
+
+```js
+if (isHardwareVendor === true || orgType === "hardware_vendor")
+    vetoReasons.push("Hardware/AV/LED vendor, not sports-media buyer");
+```
+
+`lv_is_hardware_vendor` alone was effectively unreachable — 1 of 66 companies had it set, while
+`lv_org_type` is what enrichment actually writes. The change is additive (no record loses a
+veto) and **retroactive**: Simtech LED `18047161864` moved Tier B → D on execution `11861`.
+`lv_is_gambling_operator` was checked and needs no equivalent change (zero divergent records;
+gambling is a graduated deduction, and `graduated_deductions` is `{}` since Phase 46 D-03).
+
+The two engines carrying the predicate are `src/icp_scoring.py` and the `Decide Company Action`
+node built by `scripts/build_cloud_workflows.py`. Any change lands in both, in one commit
+(Phase 46 parity rule). Never hand-edit `n8n/wf_enrichment_cloud.json`.
+
+**§12.7's `compute_icp_score` listing is the local-MVP prototype, not the live rule** — it keys
+the hardware veto off the boolean only, and its `graduated_deductions["gambling_operator"]`
+lookup would now `KeyError` against the shipped config.
+
 ---
 
 # 11. Local-First MVP
@@ -2192,6 +2217,55 @@ python main.py
 
 # 13. n8n Cloud Production Workflows
 
+## 13.0 As-built delta — the veto recompute lane (verified live 2026-08-12) — READ BEFORE USING §13/§18/§19.1
+
+§13.3's node list, §18.2's parser sample and §19.1's refresh story all predate Phase 47.5.
+Verified against the deployed `LV Enrichment (Cloud template)` (`950HPb7a1GgSAIyZ`) and live
+executions `11858`–`11861`.
+
+**The defect this closed.** `Company Gate` returns `action: "skip"` for a company whose
+enrichment inputs are all present, fresh and valid. `Normalize + Score Company` opened by
+dropping every skipped row, so the branch ended there and **`Decide Company Action` — the sole
+writer of `lv_anti_icp_flag` / `lv_anti_icp_reason` — never ran.** A record with complete inputs
+therefore could not have its veto recomputed by any trigger: the better a record's data, the
+less able the system was to correct its scoring. Phase 47 worked around it by blanking
+`lv_org_type` to force an enrich. That workaround is now prohibited and unnecessary.
+
+**Two nodes were added to the company branch** (both between `Company Gate`'s successors and the
+rest of the lane):
+
+| Node | Routes when | To |
+| --- | --- | --- |
+| `IF Company Recompute` | `$('Parse HubSpot Event').first().json.recompute === true` | straight to `Decide Company Action` |
+| `IF Company Skip` | gate said `skip` and no recompute intent | `Build Response`, which returns the gate's reason instead of a bare 200 |
+
+**How to ask for a recompute.** It is a **request-level boolean** on the D-18 webhook POST body
+(`recompute: true`), normalized in `Parse HubSpot Event` *after* the event spread. It is
+deliberately **not** a `mode` value — `isReturnOnly()` treats any non-`"write"` mode as
+return-only, so a mode-borne intent would report success and write nothing. Helper:
+`scripts/remediate_veto_companies.py::post_webhook_event(..., recompute=True)` (300s default
+read timeout).
+
+**What it costs: nothing.** The lane reaches `Decide` with no provider, research, judge, merge
+or normalize node on it — 0 provider credits, 0 Anthropic calls, 1 n8n execution per POST
+(measured over executions 11858–11861).
+
+**What it does not change.**
+
+- `Decide Company Action` remains the **single** writer of the two veto fields. Do not add a second.
+- **Arming is still required to PATCH.** Execution `11858` ran the whole lane, derived the
+  correct veto, and returned `action: "write_blocked"` because the allowlist was empty. Deriving
+  is free; writing still needs a deliberately armed, record-scoped window.
+- **The scheduled poller does not carry the intent.** SJ-3 and every other scheduled path still
+  hit `Company Gate` with no `recompute` flag, so a *complete* record is still skipped on a
+  poller tick. The recompute lane is on-demand only. See §19.1.
+- A recompute for a request that resolves to no existing company is **refused**
+  (`action: "recompute_refused"`), never turned into a create.
+
+Regression coverage: `node --test tests/n8n/*.test.mjs` (glob form — the directory form is broken
+on node 24). Acceptance test: `tests/test_scoring_parity.py::test_veto_clear_after_correction`
+(`@live`), green since 2026-08-12 after being red since Phase 40-07.
+
 ## 13.1 Workflow A: HubSpot private-app webhook receiver
 
 Purpose:
@@ -2945,6 +3019,13 @@ The deployed filter is exactly:
 Operator note: a record stuck at `lv_enrichment_status="running"` is silently skipped by the
 `NEQ running` clause. The PATCH setting the flag still returns 200, so a successful write is
 not evidence the record will be processed — check the status before any bulk re-score.
+
+**This poller is NOT the way to recompute a veto (amended 2026-08-12, Phase 47.5).** It carries
+no `recompute` intent, so a record whose inputs are complete is skipped at `Company Gate` and
+`Decide Company Action` never runs — its veto stays frozen however long you wait. For a veto
+refresh, use the on-demand recompute POST described in §13.0: it is immediate rather than
+up-to-24h, costs 0 provider credits and 0 Anthropic calls, and needs no data degraded first.
+The poller remains the right path for actual *enrichment* (a record missing inputs).
 
 ## 19.2 Hourly: ICP unscored scan
 

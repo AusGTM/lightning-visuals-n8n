@@ -2,6 +2,51 @@
 
 **Applies from:** Phase 40 Plan 03 (D-01/D-02, `.planning/phases/40-scoring-engine-remediation-notes/40-CONTEXT.md`)
 
+---
+
+## AS-BUILT AMENDMENT — 2026-08-12 (Phase 47.5) — READ THIS BEFORE "The refresh path"
+
+Two things below are now false. The rest of the document stands.
+
+**1. The refresh path (steps 3–4) does not work for a record whose inputs are complete.** Its
+claim that step 3 "will reliably *reach* Decide Company Action on the poller's own tick" is
+wrong, and was wrong when written. `Company Gate` returns `action: "skip"` for a record whose
+inputs are all present, fresh and valid; `Normalize + Score Company` dropped every skipped row,
+so `Decide Company Action` never ran. **The better a record's data, the less able the system was
+to fix its veto.** Live evidence: execution `11846` (Simtech LED `18047161864`, 19 nodes, 2.4s,
+`Decide` never reached) versus `11845` (an incomplete record, 36 nodes, healthy).
+
+**2. There is now a cheaper, correct, on-demand path — and the poller is still not it.** Phase
+47.5 added a request-level `recompute` boolean to the D-18 webhook POST body, routed by a new
+`IF Company Recompute` node straight to `Decide Company Action`. Use it instead of steps 2–4:
+
+```
+POST {N8N_URL}/webhook/hubspot/enrichment/event     header X-Enrichment-Secret
+body: the usual D-18 event, plus  "recompute": true
+helper: scripts/remediate_veto_companies.py::post_webhook_event(..., recompute=True)
+```
+
+- Immediate, not "up to one daily tick".
+- **0 provider credits, 0 Anthropic calls, 1 n8n execution** — no provider, research, judge,
+  merge or normalize node is on the lane (measured, executions 11858–11861).
+- **No data has to be degraded first.** Phase 47's blank-`lv_org_type`-to-force-an-enrich
+  workaround is prohibited now; this lane is why.
+- **Arming is still required to PATCH.** Execution `11858` derived the correct veto and returned
+  `action: "write_blocked"` on an empty allowlist. Deriving is free; writing is not. Everything
+  in "KNOWN BLOCKERS" §1 about scoped arm windows still applies unchanged.
+- **`lv_enrichment_requested` + the SJ-3 poller carries no `recompute` intent**, so it still
+  gate-skips a complete record. It remains the right path for enriching a record that is
+  genuinely *missing* inputs — it is not a veto-refresh path.
+
+**3. The hardware veto's trigger changed** (workstream C, commit `f817ec5`). The three canonical
+inputs listed under "What changed" are now effectively four: the veto fires on
+`lv_is_hardware_vendor === true` **OR** `lv_org_type === "hardware_vendor"`. Retroactive —
+Simtech LED moved Tier B → D on execution `11861` with no input write at all.
+
+Full record: `.planning/phases/47.5-veto-recompute-path/` (`47.5-CONTEXT.md`, `47.5-RUN-REPORT.md`).
+
+---
+
 ## What changed
 
 `lv_anti_icp_flag` and `lv_anti_icp_reason` are now derived by the n8n pipeline — the

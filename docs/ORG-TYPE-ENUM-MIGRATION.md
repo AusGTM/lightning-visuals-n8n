@@ -42,7 +42,15 @@ Roll back if any of these hold after arming:
   non-zero — in this case the live property may be in an inconsistent state and rollback
   is not merely advisable, it may be necessary to get back to a known-good schema.
 
-**The point past which this stops being cheap:** right now, it is unconditionally cheap.
+> **AMENDED 2026-08-12 — the cheap window described in the next paragraph is CLOSED.**
+> "All 712 live companies blank on `lv_org_type`" was true on 2026-07-30 and is no longer.
+> Phase 47 (2026-08-11/12) wrote real enum values onto real companies, and Phase 48 will
+> write more. Populated records now exist, so a rollback lands squarely in the "decide fast /
+> unverified round-trip" case described below, **not** the unconditionally-cheap one. Re-run
+> the inventory before arming anything in either direction; do not read the paragraph below
+> as a current statement of risk.
+
+**The point past which this stops being cheap:** ~~right now, it is unconditionally cheap.~~
 The committed pre-migration inventory (`org_type_inventory-20260730T071919Z.json`) shows
 all 712 live companies blank on `lv_org_type` — there is no existing record data to lose
 in either direction. That changes the moment real enrichment writes start landing on the

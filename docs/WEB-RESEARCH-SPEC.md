@@ -204,11 +204,24 @@ conformance suite. **Never edit a node.** A value added only to a node scores 0 
 **NM-1.** `normalize_org_type(raw)` MUST return a canonical `org_types` key or the
 default (`unknown`). It MUST NEVER return a value outside the vocabulary.
 
-> Note (portal audit, 2026-07-20): `lv_org_type` in portal 22617666 is `string/text`, NOT
-> an enumeration — HubSpot will accept *any* string. There is therefore no CRM-level
-> guard, which makes NM-1 the **only** barrier between a hallucinated org_type and the
-> CRM, and makes `icp_scoring`'s `.get(org_type, 0)` silently score it 0. Strengthening
-> the property to an enumeration is tracked separately as an irreversible migration.
+> ~~Note (portal audit, 2026-07-20): `lv_org_type` in portal 22617666 is `string/text`, NOT
+> an enumeration — HubSpot will accept *any* string.~~
+>
+> **CORRECTED 2026-08-12 — this note is stale and has been cited as fact elsewhere.** The
+> text→enumeration migration it calls "tracked separately" **ran** (forward manifest
+> `config/hubspot_migration/org-type-enum-manifest-5973fa43-*.json`; runbook
+> `docs/ORG-TYPE-ENUM-MIGRATION.md`). The newest committed live schema snapshot,
+> `config/hubspot_migration/baseline/portal-schema-companies-phase42-post.json` (2026-08-08),
+> reads `lv_org_type` as `type: enumeration` / `fieldType: select` with **9 options**, and
+> `config/hubspot_properties.yaml` mirrors it. **HubSpot now rejects an out-of-vocabulary
+> string with a 400** — so `scripts/remediate_veto_companies.py`'s strict enum allowlist
+> (Phase 47-03) is protecting a real CRM constraint, not a hypothetical one.
+>
+> NM-1 still matters: it is the barrier that keeps a hallucinated value from *reaching* the
+> write and 400-ing the batch, and `icp_scoring`'s `.get(org_type, 0)` still scores an
+> unrecognised key 0 silently. What changed is that the CRM is now a second guard, and that
+> **adding any new org type (e.g. `venue`) requires adding a HubSpot enum option first** —
+> re-list the property live before assuming a value is writable.
 
 **NM-2.** Matching order: exact canonical key → synonym table → `unknown`.
 

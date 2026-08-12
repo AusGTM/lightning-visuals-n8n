@@ -205,9 +205,16 @@ made it complete, which froze its stale veto — it still read `Non-ANZ geograph
 `lv_country_region_normalized = "AU"`. Phase 47 unstuck it only by blanking `lv_org_type` to
 force the gate to enrich, which is a data-degrading workaround no scheduled job should run.
 
-This compounds forward, which is why it is a phase rather than a note: Phase 48 completes 18
+~~This compounds forward, which is why it is a phase rather than a note: Phase 48 completes 18
 more records and so enlarges the affected population, and Phase 49's full re-score would move
-scores and tiers while leaving frozen veto fields untouched and unreported.
+scores and tiers while leaving frozen veto fields untouched and unreported.~~
+
+**Resolved 2026-08-12 — the compounding claim no longer holds.** The recompute lane shipped
+(`IF Company Recompute` on the D-18 webhook POST), so completing a record no longer freezes its
+veto: any record can be recomputed on demand for 0 provider credits and 0 Anthropic calls.
+**Phase 48 no longer enlarges a frozen population**, and Phase 49's re-score has a reachable
+veto path. The lane is on-demand only — the scheduled poller still carries no `recompute`
+intent and still gate-skips a complete record.
 
 **Workstreams B and C** were folded in on 2026-08-12 (operator-directed) because both are
 blocked on A: changing a record's region or veto inputs does nothing to its flag while the

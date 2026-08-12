@@ -6,6 +6,34 @@
 **Implements in:** Phase 48 · **Scores in:** Phase 49's full-population re-score
 **Does not change:** Phase 47's write window, which proceeds unchanged
 
+> ### FACTUAL CORRECTION — 2026-08-12, doc sweep. The decisions stand; one premise does not.
+>
+> D-V3 ("No portal work required") and D-V4's aside both assert that **`lv_org_type` is not an
+> enumeration in HubSpot**, citing `docs/WEB-RESEARCH-SPEC.md:208`. **That citation was stale
+> when it was made.** The text→enumeration migration ran (forward manifest
+> `config/hubspot_migration/org-type-enum-manifest-5973fa43-*.json`); the newest committed live
+> schema snapshot, `config/hubspot_migration/baseline/portal-schema-companies-phase42-post.json`
+> (2026-08-08), reads `type: enumeration` / `fieldType: select` with **9 options**, and
+> `config/hubspot_properties.yaml` mirrors it. `venue` is **not** one of the nine.
+>
+> Consequences for whoever implements this in Phase 48:
+>
+> 1. **D-V3's "No portal work required" is false.** Adding `venue` needs a HubSpot **enum option
+>    added to `lv_org_type`** before any record can carry it — a PATCH of the property's
+>    `options`, run through `scripts/sync_hubspot_properties.py` / the yaml, not a bare record
+>    write. The standing no-new-**properties** constraint is still respected (this adds an option
+>    to an existing property, not a property), but it is portal schema work and needs its own
+>    arming decision.
+> 2. **Writing `venue` before that option exists will 400**, and in a batch it fails the batch.
+> 3. **D-V4's aside is backwards.** `scripts/remediate_veto_companies.py:142`'s stated reason
+>    ("writing free text to an ENUMERATION property 400s the batch") is **correct**, not wrong.
+> 4. **The three normalization layers (D-V4) are unaffected and still required** — the CRM guard
+>    stops a bad value reaching the record, it does not stop a bad value reaching the *write* and
+>    breaking a batch, and `.get(org_type, 0)` still scores an unrecognised key 0 silently.
+>
+> Re-list the live property before acting on any of this; a committed snapshot is evidence, not
+> a guarantee.
+
 Raised because Phase 47's live research returned free-text `lv_org_type` for 16 of 17 pinned
 companies ("Sporting club / Racecourse operator", "Thoroughbred racecourse operator /
 Recreational facilities management", …). The enum gate correctly refused to guess-map them, which
