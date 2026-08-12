@@ -71,7 +71,7 @@ target list a non-technical operator can act on from inside HubSpot.
 debug subphase with no requirement ids of its own; these four give its three workstreams a
 traceable bar. They are new requirements, not a re-scoping of VETO-01/02/03, which are closed.*
 
-- [ ] **RECOMP-01**: A company whose enrichment inputs are complete can have its veto
+- [x] **RECOMP-01**: A company whose enrichment inputs are complete can have its veto
       recomputed **on demand**, without degrading, blanking or otherwise falsifying its data
       first, and at zero provider, zero web-research and zero Anthropic cost.
       `Decide Company Action` remains the single writer of `lv_anti_icp_flag` /
@@ -169,7 +169,7 @@ recoverable, only forward capture works, which cannot inform a v0.9 recalibratio
 | VETO-01 | Phase 47 | **Complete** (16 cleared + Jam TV correctly retained, D-23) |
 | VETO-02 | Phase 47 | **Complete** (disarm re-read verbatim; 5 windows not 1 — disclosed) |
 | VETO-03 | Phase 47 | **Complete** (operator-confirmed 2026-08-12, zero results) |
-| RECOMP-01 | Phase 47.5 | Not started |
+| RECOMP-01 | Phase 47.5 | **Complete** (live exec 11856/11857: gate `skip` -> `enrich`, PATCH landed; test green with assertions byte-identical; 47.5-A-LIVE-PROOF § Armed window #1) |
 | RECOMP-02 | Phase 47.5 | **Complete** (live exec 11853: `action:"skip"` + gate reason; 47.5-A-LIVE-PROOF §3d) |
 | RECOMP-03 | Phase 47.5 | Not started |
 | RECOMP-04 | Phase 47.5 | Not started |

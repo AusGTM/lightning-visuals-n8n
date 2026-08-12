@@ -5,15 +5,15 @@ milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 47.5
 current_phase_name: veto-recompute-path
 status: executing
-stopped_at: Completed 47.5-02-PLAN.md
-last_updated: "2026-08-12T06:16:25.349Z"
+stopped_at: Completed 47.5-03-PLAN.md
+last_updated: "2026-08-12T06:40:07.021Z"
 last_activity: 2026-08-12
 last_activity_desc: 47.5 Plan 04 complete — D-V6 operating-presence evidence; Ironman + Gravity Media -> ANZ (no writes yet)
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 15
-  completed_plans: 12
+  completed_plans: 13
   percent: 40
 ---
 
@@ -21,11 +21,33 @@ progress:
 
 ## Current Position
 
-Phase: 47.5 (veto-recompute-path) — **EXECUTING** (2 of 6 plans: 01 + 04). Phase 47 is COMPLETE.
-Plan: 3 of 6 — 47.5-01 landed
-Status: Workstream A's mechanism EXISTS, offline only. Nothing is deployed and nothing
-  is armed. Plan 02 owns deploy + bounce + the one disarmed live execution that proves
-  the RUNNING graph changed; workstreams B and C stay blocked until it does.
+Phase: 47.5 (veto-recompute-path) — **EXECUTING** (4 of 6 plans: 01 + 02 + 03 + 04). Phase 47 is COMPLETE.
+Plan: 4 of 6 — 47.5-03 landed
+Status: **Workstream A is DONE and RECOMP-01 is met.** The recompute lane is deployed,
+  live, and the acceptance test that has been red since Phase 40-07 is GREEN, with all
+  four of its assertions byte-identical. Nothing is armed — armed window #1 of 2 was
+  opened once and closed once, and the disarm was independently re-read.
+
+**47.5-03 outcome (armed window #1 of 2).**
+`tests/test_scoring_parity.py::test_veto_clear_after_correction` passed live in 23.34s,
+exit 0. `git diff HEAD -- tests/test_scoring_parity.py | grep -cE '^[-+][[:space:]]*assert '`
+reads **0** — no assertion was weakened, deleted, reworded or added; the "exactly one
+search match" enforcement is `pytest.fail`, not `assert`. The test was made HARDER: it
+stamps both `lv_*_verified_at` before leg 2, so exec **11857**'s `Company Gate` verdict is
+`skip` ("all required fields present, fresh and valid") mapped to `enrich` by the recompute
+intent — the frozen-COMPLETE case, proven on the acceptance test itself and not only by
+inheritance from Simtech LED. `HubSpot Company Update` returned 200 in both legs
+(11856 flag `"true"`/`"Non-ANZ geography"`; 11857 flag `"false"`/`""`), 21 nodes each, zero
+provider/research/judge/merge nodes. Disarm `observed` all-false with both allowlists empty,
+confirmed by a fourth independent re-read showing `active: true`; domain search `MATCHES: 0`
+before and after; no disposables survive. **Not proven: a live D -> non-D tier transition** —
+the tier assert passed but the legs are 5s apart and the disarmed rehearsal read
+`lv_icp_tier: "Unscored"` pre-veto, so the flag->tier flow likely never wrote D. Phase 49
+scope. Full record: 47.5-A-LIVE-PROOF.md § "Armed window #1".
+
+**47.5-02 outcome.** The lane is LIVE in the running instance, proven by execution 11852's
+own node list (not a stored read-back). Assumption A1 discharged: n8n did not fan out.
+RECOMP-02 met live by execution 11853.
 
 **47.5-01 outcome.** A complete company can now be routed straight from `Company Gate`
 into `Decide Company Action` by a request-level `recompute` flag on the D-18 POST — one
@@ -49,11 +71,13 @@ cycles, two records touched twice. Two named checks relaxed (D-20 re-stamp; orac
 assertion). Both recorded in 47-RUN-REPORT.md § "Window accounting" and 47-04-SUMMARY.md,
 not softened. settle_veto stayed hard throughout.
 
-**Next action: execute 47.5-02** (deploy, bounce, one disarmed live execution). 47.5 carries
+**Next action: execute 47.5-05** (then 47.5-06, which owns armed window #2 — the ONLY
+remaining arming budget in this phase). 47.5 carries
 THREE workstreams:
 
 - **A — fix the recompute path.** ~~A record with COMPLETE inputs cannot have its veto
-  recomputed by any on-demand trigger.~~ **Mechanism BUILT in 47.5-01, not yet proven live.**
+  recomputed by any on-demand trigger.~~ **DONE — built in 47.5-01, proven live in 47.5-02,
+  and the acceptance bar met in 47.5-03 (RECOMP-01 Complete).**
   Per project memory `n8n-stored-vs-running-content.md`, a stored read-back proves nothing:
   the lane is in the built JSON only until plan 02 deploys, bounces and reads back one live
   execution whose `runData` contains `Decide Company Action`.
@@ -83,12 +107,12 @@ Last activity: 2026-08-12 — Plan 03 complete: 47-BEFORE.json (17-row before-sn
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [████████░░] 80% (v0.9 phase 47.5 of 46-49)
+Progress: [█████████░] 87% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-12T06:16:25.338Z
-**Stopped at:** Completed 47.5-02-PLAN.md
+**Last session:** 2026-08-12T06:39:55.682Z
+**Stopped at:** Completed 47.5-03-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -130,6 +154,7 @@ Progress: [████████░░] 80% (v0.9 phase 47.5 of 46-49)
 | Phase 47.5 P01 | 50min | 3 tasks | 9 files |
 | Phase 47.5 P04 | 35 min | 3 tasks | 2 files |
 | Phase 47.5 P02 | 25min | 3 tasks | 3 files |
+| Phase 47.5 P03 | 45min | 3 tasks | 3 files |
 
 ## Decisions
 
@@ -221,6 +246,10 @@ Progress: [████████░░] 80% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: [47.5-01] The single-veto-writer count gate is DOT-ANCHORED (`.lv_anti_icp_flag =`) — a naive scan reads 2 in Decide Company Action alone, because its 2026-08-10 blank-region debug comment quotes lv_anti_icp_flag="true" in prose. Measured before the assertion was written.
 - [47.5-04]: 47.5-B: Ironman 17317184159 -> ANZ and GRAVITY MEDIA 15860277364 -> ANZ (region only); Entain and Jam TV get no write
 - [47.5-04]: D-V6 AU-vs-ANZ resolved: ANZ absorbs the multinational-with-local-operations case; Gravity Media's NZ leg recorded UNPROVEN
+- [Phase ?]: [47.5-03] RECOMP-01 MET: test_veto_clear_after_correction is green LIVE with all four assertions byte-identical (assert-diff gate = 0). Armed window #1 of 2, opened once and closed once.
+- [Phase ?]: [47.5-03] The frozen-COMPLETE case is proven on the acceptance test itself: exec 11857's Company Gate verdict is 'skip' with both lv_*_verified_at stamps present, mapped to 'enrich' by the recompute intent; HubSpot Company Update returned 200 with flag 'false'.
+- [Phase ?]: [47.5-03] NOT proven: a live D -> non-D tier transition. The tier assert passed but the legs are 5s apart and the rehearsal read tier 'Unscored' pre-veto — the flag->tier flow likely never wrote D. Phase 49 scope.
+- [Phase ?]: [47.5-03] python-dotenv's bare load_dotenv() resolves relative to the CALLING FILE, not the cwd; with no conftest.py, live pytest must be driven through a wrapper passing an absolute .env path, or every HubSpot read 401s.
 
 ### Blockers
 
