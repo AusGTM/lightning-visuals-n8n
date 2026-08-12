@@ -65,6 +65,34 @@ target list a non-technical operator can act on from inside HubSpot.
       Phase 49, tracked in
       `.planning/todos/pending/2026-08-12-d-v6-reexamine-the-four-remaining-non-anz-vetoes.md`.
 
+### Veto Recompute (RECOMP)
+
+*Added 2026-08-12 during `/gsd-plan-phase 47.5`. Phase 47.5 was registered in the ROADMAP as a
+debug subphase with no requirement ids of its own; these four give its three workstreams a
+traceable bar. They are new requirements, not a re-scoping of VETO-01/02/03, which are closed.*
+
+- [ ] **RECOMP-01**: A company whose enrichment inputs are complete can have its veto
+      recomputed **on demand**, without degrading, blanking or otherwise falsifying its data
+      first, and at zero provider, zero web-research and zero Anthropic cost.
+      `Decide Company Action` remains the single writer of `lv_anti_icp_flag` /
+      `lv_anti_icp_reason`. The bar is
+      `tests/test_scoring_parity.py::test_veto_clear_after_correction` passing live with its
+      assertions untouched — red since Phase 40-07 for exactly this reason.
+- [ ] **RECOMP-02**: A skipped record is observable to the caller. Today a complete record
+      returns `status: "success"` with nothing written and no node error — the same
+      silent-success class recorded in `47-BLOCKED.md`. The caller must be able to tell
+      "complete, nothing to do" from "something broke".
+- [ ] **RECOMP-03**: The four companies still carrying a non-ANZ veto are re-examined under
+      D-V6's operating-presence test, with **researched evidence URLs** rather than assertion,
+      and any flip is written inside one bounded, disarmed-afterward window. Jam TV
+      `17317850381` is correct and must retain its veto (D-23); Entain `10024564084` cannot
+      move on a region flip because `lv_produces_content` fires a second veto.
+- [ ] **RECOMP-04**: The hardware-vendor veto's trigger field is **decided and recorded with
+      reasoning**, and the decision lands in every engine that carries the veto predicate in
+      the same commit — `src/icp_scoring.py` and the n8n `Decide Company Action` node. The
+      equivalent question for `lv_is_gambling_operator` is answered in writing; the live
+      census found zero divergences, so recording the answer closes it.
+
 ### Enrichment Coverage (COVER)
 
 - [ ] **COVER-01**: The 18 scored companies with no `lv_org_type` are either enriched to a real
@@ -141,6 +169,10 @@ recoverable, only forward capture works, which cannot inform a v0.9 recalibratio
 | VETO-01 | Phase 47 | **Complete** (16 cleared + Jam TV correctly retained, D-23) |
 | VETO-02 | Phase 47 | **Complete** (disarm re-read verbatim; 5 windows not 1 — disclosed) |
 | VETO-03 | Phase 47 | **Complete** (operator-confirmed 2026-08-12, zero results) |
+| RECOMP-01 | Phase 47.5 | Not started |
+| RECOMP-02 | Phase 47.5 | Not started |
+| RECOMP-03 | Phase 47.5 | Not started |
+| RECOMP-04 | Phase 47.5 | Not started |
 | COVER-01 | Phase 47 + 48 | Not started |
 | COVER-02 | Phase 47 + 48 | Not started |
 | RESCORE-01 | Phase 49 | Not started |

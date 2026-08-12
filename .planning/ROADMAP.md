@@ -216,10 +216,29 @@ material), GRAVITY MEDIA (50) and Entain (which will not move; a second veto fir
 is correct and stays. C decides the hardware veto's trigger field and must land in all three
 engines together per Phase 46's parity rule.
 
+**Goal**: A company whose enrichment inputs are complete can have its veto recomputed on
+demand — cheaply, observably, and without degrading its data first — and the two findings
+that were blocked on that mechanism are closed: the four remaining non-ANZ vetoes are
+re-examined under D-V6 with researched evidence, and the hardware veto's trigger field is
+decided and carried identically by every engine holding the predicate.
+
 **Depends on**: Phase 47 (found it; owns the evidence)
+
+**Requirements**: RECOMP-01, RECOMP-02, RECOMP-03, RECOMP-04
+
+**Plans:** 6 plans
+
+Plans:
+- [ ] 47.5-01-PLAN.md — the recompute lane: request-level intent, two IF nodes, the skip terminal, and the operator helpers (offline)
+- [ ] 47.5-02-PLAN.md — deploy, bounce, and prove the lane on a live disarmed execution
+- [ ] 47.5-03-PLAN.md — armed window #1: `test_veto_clear_after_correction` green live, assertions untouched
+- [ ] 47.5-04-PLAN.md — workstream B: D-V6 operating-presence research with evidence URLs, and the flip decision (read-only)
+- [ ] 47.5-05-PLAN.md — workstream C: decide the hardware-veto trigger field, land it in both engines, deploy and bounce
+- [ ] 47.5-06-PLAN.md — armed window #2: at most three records written, one arm, one disarm, proven closed
+
 **Scope doc**: `.planning/phases/47.5-veto-recompute-path/47.5-CONTEXT.md` — includes the
 paired reference executions `11845` (healthy) / `11846` (defect), the required outcomes, and
-an explicit out-of-scope list. Plan with `/gsd-plan-phase 47.5`.
+an explicit out-of-scope list.
 
 ### Phase 48: Enrichment Coverage
 
