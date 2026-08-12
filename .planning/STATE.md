@@ -5,15 +5,15 @@ milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 48
 current_phase_name: Enrichment Coverage
 status: executing
-stopped_at: Completed 48-03-PLAN.md
-last_updated: "2026-08-12T19:58:24.952Z"
+stopped_at: Completed 48-07-PLAN.md
+last_updated: "2026-08-12T21:34:20.836Z"
 last_activity: 2026-08-12
 last_activity_desc: Phase 48 execution started
 progress:
   total_phases: 5
   completed_phases: 3
-  total_plans: 21
-  completed_plans: 18
+  total_plans: 22
+  completed_plans: 19
   percent: 60
 ---
 
@@ -60,7 +60,7 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Phase: 48 (Enrichment Coverage) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
@@ -152,8 +152,8 @@ Progress: [█████████░] 86% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-12T19:58:24.943Z
-**Stopped at:** Completed 48-03-PLAN.md
+**Last session:** 2026-08-12T21:34:20.823Z
+**Stopped at:** Completed 48-07-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -201,6 +201,7 @@ Progress: [█████████░] 86% (v0.9 phase 47.5 of 46-49)
 | Phase 48 P01 | 25min | 3 tasks | 3 files |
 | Phase 48 P02 | ~20min | 3 tasks | 4 files |
 | Phase 48 P03 | 35min | 3 tasks | 4 files |
+| Phase 48 P07 | 35min | 3 tasks | 9 files |
 
 ## Decisions
 
@@ -301,6 +302,9 @@ Progress: [█████████░] 86% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: Phase 48 Plan 01: live population re-derivation matched CONTEXT.md's 2026-08-12 snapshot exactly (5 ids, drift: false); this plan builds coverage_writes_allowed() as a tested gate only, no armed write leg -- zero HubSpot writes/n8n executions by construction
 - [Phase ?]: Phase 48 Plan 02: D-04 IF Research Errored gate + Build Research Failure Response landed in scripts/build_cloud_workflows.py (CLOUD build site only), rebuilt into n8n/wf_enrichment_cloud.json (byte-reproducible), offline-tested in tests/n8n/researchErrorGateFlow.test.mjs against the live-observed error shape, a healthy shape, and a degenerate shape. Not deployed -- plan 48-04 owns the operator deploy+bounce.
 - [Phase ?]: Operator approved approve-as-estimated at plan 48-03's checkpoint; Racing NSW resolved to 'regulator' (evidenced), not the flagged-likely 'governing_body_league'
+- [Phase ?]: Phase 48 Plan 07: Racing NSW ORG_TYPE_DECISIONS entry overridden from returned 'regulator' to 'governing_body_league' per 2026-08-13 operator review; commercial control of the sport (not statutory origin) is the discriminator; the override is recorded as data (override_of/override_rationale) over the byte-identical captured artifact.
+- [Phase ?]: Phase 48 Plan 07: config/taxonomy.yaml gained a definition: key on all 9 org_types entries, rendered into both Python research prompts via src.taxonomy.org_type_definitions_block() -- one source, two call sites, no rebuild needed since gen_taxonomy_js.render() doesn't read the new key.
+- [Phase ?]: Phase 48 Plan 07: added org_type_coherence_flags() -- flags a regulator classification alongside evidenced content/sponsorship as incoherent, refuses to promote, never auto-flips to another value. Deviation: tests/n8n/parity.test.mjs strips the new Python-only coherence_flags key with a tripwire assertion, since the JS port cannot be touched in this offline plan.
 
 ### Blockers
 
