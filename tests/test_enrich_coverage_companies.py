@@ -88,6 +88,19 @@ def test_tracer_build_coverage_patch_rejects_out_of_vocabulary_org_type():
         )
 
 
+def test_tracer_refuse_if_over_budget_raises_and_never_returns_a_shorter_list():
+    over_budget_estimate = m.estimate_phase48_cost(
+        research_ids=[], written_ids=[JAM_TV_ID, WAIKATO_ID], proof_executions=0,
+    )
+    over_budget_estimate["n8n_budget_month"] = 1  # force n8n_executions > budget
+
+    with pytest.raises(rvc.BudgetRefused):
+        m.refuse_if_over_budget(over_budget_estimate, [JAM_TV_ID, WAIKATO_ID])
+    # COVER-02: refuse whole, never trim -- there is no code path that returns a shorter
+    # id list, so the only observable outcome of an over-budget estimate is the raise
+    # above. Nothing further to assert here; the pytest.raises block IS the proof.
+
+
 def test_tracer_post_webhook_event_refuses_unarmed_before_any_transport_call():
     def _refuse_transport(*_a, **_kw):
         raise AssertionError("no transport call should be made when unarmed")
