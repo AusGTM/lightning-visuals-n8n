@@ -4,16 +4,16 @@ milestone: v0.9
 milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 48
 current_phase_name: Enrichment Coverage
-status: executing
-stopped_at: Completed 48-04-PLAN.md
-last_updated: "2026-08-12T22:18:21.776Z"
+status: verifying
+stopped_at: Completed 48-enrichment-coverage/48-05-PLAN.md
+last_updated: "2026-08-12T22:40:38.577Z"
 last_activity: 2026-08-12
 last_activity_desc: Phase 48 execution started
 progress:
   total_phases: 5
   completed_phases: 3
   total_plans: 22
-  completed_plans: 20
+  completed_plans: 21
   percent: 60
 ---
 
@@ -61,7 +61,7 @@ predating the window. VETO-03 bar still 0.
 
 Phase: 48 (Enrichment Coverage) — EXECUTING
 Plan: 6 of 6
-Status: Ready to execute
+Status: Phase complete — ready for verification
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
   has executed on a real record. **Nothing is armed** — windows #1 and #2 were each opened
@@ -148,12 +148,12 @@ Last activity: 2026-08-12 — Phase 48 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████████░] 91% (v0.9 phase 47.5 of 46-49)
+Progress: [██████████] 95% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-12T22:18:21.767Z
-**Stopped at:** Completed 48-04-PLAN.md
+**Last session:** 2026-08-12T22:40:38.570Z
+**Stopped at:** Completed 48-enrichment-coverage/48-05-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -203,6 +203,7 @@ Progress: [█████████░] 91% (v0.9 phase 47.5 of 46-49)
 | Phase 48 P03 | 35min | 3 tasks | 4 files |
 | Phase 48 P07 | 35min | 3 tasks | 9 files |
 | Phase 48 P04 | 15min | 3 tasks | 1 files |
+| Phase 48 P05 | 35min | 3 tasks | 5 files |
 
 ## Decisions
 
@@ -308,6 +309,8 @@ Progress: [█████████░] 91% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: Phase 48 Plan 07: added org_type_coherence_flags() -- flags a regulator classification alongside evidenced content/sponsorship as incoherent, refuses to promote, never auto-flips to another value. Deviation: tests/n8n/parity.test.mjs strips the new Python-only coherence_flags key with a tripwire assertion, since the JS port cannot be touched in this offline plan.
 - [Phase ?]: D-48-01 waiver: operator delegated Phase 48's one deploy+bounce and both arming surfaces to Claude, scoped to this phase only; Task 2 performed by Claude accordingly
 - [Phase ?]: Execution 11865 (embedded workflowData.nodes, 111 nodes incl. both D-04 gate nodes) proves the RUNNING n8n instance carries the D-04 gate; the Trap-6 duration heuristic did not apply as literally stated and was corrected against the Phase 47.5 recompute-lane precedent instead
+- [Phase ?]: 48-05: D-48-01 delegated both arming surfaces to Claude for Phase 48 only; arm and window ran as two separate per-shell Bash invocations so a failed window start still has an explicit disarm path
+- [Phase ?]: 48-05: assert_allowlist_exact widened beyond the plan's literal Trap-4 wording to also require ALLOW_HUBSPOT_RECORD_WRITES==true and an empty TEST_RECORD_DOMAINS, closing execution 11858's silent-denial shape
 
 ### Blockers
 
