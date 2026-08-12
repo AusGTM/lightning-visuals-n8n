@@ -4,8 +4,8 @@ milestone: v0.9
 milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 47
 current_phase_name: veto-remediation
-status: executing
-stopped_at: 47-04 Task 3 — awaiting operator's script-free HubSpot VETO-03 search
+status: phase-complete
+stopped_at: Phase 47 COMPLETE — VETO-01/02/03 ticked, operator confirmed VETO-03
 last_updated: "2026-08-12T01:55:00.000Z"
 last_activity: 2026-08-12
 last_activity_desc: Phase 47 armed window COMPLETE. 16 of 17 false non-ANZ vetoes
@@ -13,7 +13,7 @@ progress:
   total_phases: 4
   completed_phases: 1
   total_plans: 9
-  completed_plans: 8
+  completed_plans: 9
   percent: 25
 ---
 
@@ -21,28 +21,33 @@ progress:
 
 ## Current Position
 
-Phase: 47 (veto-remediation) — Plan 04 armed window COMPLETE, Task 3 operator gate open
+Phase: 47 (veto-remediation) — **COMPLETE** (4 of 4 plans). Next: Phase 47.5 or 48.
 Plan: 4 of 4
-Status: Executing — all 17 records written and both write surfaces disarmed and proven
-  closed. **Blocked only on the operator's script-free HubSpot search (Task 3).**
+Status: Phase complete. All 17 records written, both write surfaces disarmed and proven
+  closed by independent re-read, VETO-01/02/03 ticked in REQUIREMENTS.md.
 
-**Resume here.** Task 3: in the HubSpot portal, Companies view, two filters ANDed —
-`lv_anti_icp_reason` **contains exactly** `Non-ANZ geography`, AND
-`lv_country_region_normalized` **is unknown**. Expected zero. (The API equivalent already
-returns 0, but VETO-03's text demands script-free proof, so it does not substitute.)
-Then Task 4: tick VETO-01/02/03 in `.planning/REQUIREMENTS.md` with pointers
-(VETO-01 → `47-RUN-REPORT.md` per-id table; VETO-02 → the two verbatim disarm outcomes;
-VETO-03 → the operator's search result). Leave COVER-01/COVER-02 open for Phase 48 per
-D-02. Rule 1 fallout is already done and committed — nothing to edit there.
+**Outcome.** 16 false non-ANZ vetoes cleared; Jam TV (17317850381) correctly RETAINED its
+veto per D-23 with region=Other. VETO-03 operator-confirmed 2026-08-12 ("no Non-ANZ
+geography companies with Unknown region") — that bar went 17 -> 0. Tiers after: B×9, C×5,
+Unscored×2, D×1. n8n executions 18 (11834-11851). Provider credits 0. Tests green.
 
-Outcome: 16 false non-ANZ vetoes cleared; Jam TV (17317850381) correctly RETAINED its veto
-per D-23 with `region=Other`. Portal-wide VETO-03 API search: 17 matches before, 0 after.
-Tiers after: B×9, C×5, Unscored×2, D×1. n8n executions 18 (11834-11851). Provider credits 0.
-Six in-window corrections, all operator-approved — see `47-RUN-REPORT.md` § Plan 04.
+**Two disclosed misses.** must_have #1 ("ONE armed window") NOT met — five arm/disarm
+cycles, two records touched twice. Two named checks relaxed (D-20 re-stamp; oracle-tier
+assertion). Both recorded in 47-RUN-REPORT.md § "Window accounting" and 47-04-SUMMARY.md,
+not softened. settle_veto stayed hard throughout.
 
-**New: Phase 47.5 (Veto Recompute Path)** scoped from a defect found live — `Company Gate`
-skips records whose inputs are complete, so `Decide Company Action` never recomputes their
-veto. Plan with `/gsd-plan-phase 47.5`.
+**Next actions, in priority order:**
+1. `/gsd-plan-phase 47.5` — Veto Recompute Path. A record with COMPLETE inputs cannot have
+   its veto recomputed by any on-demand trigger (Company Gate skips it, so Decide never
+   runs). Compounds forward: Phase 48 completes 18 more records.
+2. Decide the two open todos before Phase 48/49 writes:
+   - `.planning/todos/pending/2026-08-12-d-v6-reexamine-the-four-remaining-non-anz-vetoes.md`
+     — Ironman scores 70 (Tier A material) suppressed on a Tampa HQ; D-V6 says operating
+     presence, not HQ. Gravity Media similar. Entain will not move (second veto).
+   - `.planning/todos/pending/2026-08-12-hardware-veto-keys-off-an-unpopulated-boolean.md`
+   Both blocked behind 47.5 for the write leg — changing region alone will NOT clear a flag.
+3. COVER-01/COVER-02 remain open for Phase 48 (four records ended with no lv_org_type:
+   Editix, Jam TV, Waikato, The Rumble).
 
 Previous status: Executing — Anthropic credit restored, Plan 03 completed
 Last activity: 2026-08-12 — Plan 03 complete: 47-BEFORE.json (17-row before-snapshot),
@@ -55,13 +60,13 @@ Last activity: 2026-08-12 — Plan 03 complete: 47-BEFORE.json (17-row before-sn
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████████░] 89%
+Progress: [██████████] 100% (v0.9 phase 47 of 46-49)
 
 ## Session
 
 **Last session:** 2026-08-11T22:08:21.338Z
-**Stopped at:** Completed 47-03-PLAN.md
-**Resume file:** .planning/phases/47-veto-remediation/47-HANDOVER.md
+**Stopped at:** Completed 47-04-PLAN.md — phase 47 closed
+**Resume file:** .planning/phases/47-veto-remediation/47-04-SUMMARY.md
 
 ## Performance Metrics
 
@@ -98,6 +103,7 @@ Progress: [█████████░] 89%
 | Phase 47 P01 | 20min | 3 tasks | 3 files |
 | Phase 47 P02 | 35m | 3 tasks | 4 files |
 | Phase 47 P03 | 5h | 3 tasks | 9 files |
+| Phase 47 P04 | ~3h | 4 tasks | 8 files |
 
 ## Decisions
 
