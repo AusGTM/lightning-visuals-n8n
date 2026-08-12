@@ -226,7 +226,7 @@ decided and carried identically by every engine holding the predicate.
 
 **Requirements**: RECOMP-01, RECOMP-02, RECOMP-03, RECOMP-04
 
-**Plans:** 4/6 plans executed
+**Plans:** 5/6 plans executed
 
 Plans:
 
@@ -234,7 +234,7 @@ Plans:
 - [x] 47.5-02-PLAN.md — deploy, bounce, and prove the lane on a live disarmed execution
 - [x] 47.5-03-PLAN.md — armed window #1: `test_veto_clear_after_correction` green live, assertions untouched
 - [x] 47.5-04-PLAN.md — workstream B: D-V6 operating-presence research with evidence URLs, and the flip decision (read-only)
-- [ ] 47.5-05-PLAN.md — workstream C: decide the hardware-veto trigger field, land it in both engines, deploy and bounce
+- [x] 47.5-05-PLAN.md — workstream C: decide the hardware-veto trigger field, land it in both engines, deploy and bounce
 - [ ] 47.5-06-PLAN.md — armed window #2: at most three records written, one arm, one disarm, proven closed
 
 **Scope doc**: `.planning/phases/47.5-veto-recompute-path/47.5-CONTEXT.md` — includes the
@@ -315,7 +315,7 @@ did not change, no full re-score is owed and this phase proves the procedure wit
 | 45. Burn-Rate Alarm | v0.8 | 3/3 | Complete (verified) | 2026-08-10 |
 | 46. Rubric Decision, Simulation & Engine Parity | v0.9 | 5/5 | In Progress|  |
 | 47. Veto Remediation | v0.9 | 3/4 | In Progress|  |
-| 47.5. Veto Recompute Path | v0.9 | 4/6 | In Progress|  |
+| 47.5. Veto Recompute Path | v0.9 | 5/6 | In Progress|  |
 | 48. Enrichment Coverage | v0.9 | 0/? | Not started | - |
 | 49. Re-score Strategy & Reporting | v0.9 | 0/? | Not started | - |
 

@@ -5,15 +5,15 @@ milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 47.5
 current_phase_name: veto-recompute-path
 status: executing
-stopped_at: Completed 47.5-03-PLAN.md
-last_updated: "2026-08-12T06:40:07.021Z"
+stopped_at: Completed 47.5-05-PLAN.md; operator deploy+bounce outstanding
+last_updated: "2026-08-12T06:51:33.894Z"
 last_activity: 2026-08-12
 last_activity_desc: 47.5 Plan 04 complete — D-V6 operating-presence evidence; Ironman + Gravity Media -> ANZ (no writes yet)
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 15
-  completed_plans: 13
+  completed_plans: 14
   percent: 40
 ---
 
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 Phase: 47.5 (veto-recompute-path) — **EXECUTING** (4 of 6 plans: 01 + 02 + 03 + 04). Phase 47 is COMPLETE.
-Plan: 4 of 6 — 47.5-03 landed
+Plan: 5 of 6 — 47.5-03 landed
 Status: **Workstream A is DONE and RECOMP-01 is met.** The recompute lane is deployed,
   live, and the acceptance test that has been red since Phase 40-07 is GREEN, with all
   four of its assertions byte-identical. Nothing is armed — armed window #1 of 2 was
@@ -107,13 +107,13 @@ Last activity: 2026-08-12 — Plan 03 complete: 47-BEFORE.json (17-row before-sn
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████████░] 87% (v0.9 phase 47.5 of 46-49)
+Progress: [█████████░] 93% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-12T06:39:55.682Z
-**Stopped at:** Completed 47.5-03-PLAN.md
-**Resume file:** None
+**Last session:** 2026-08-12T06:51:15.276Z
+**Stopped at:** Completed 47.5-05-PLAN.md; operator deploy+bounce outstanding
+**Resume file:** .planning/phases/47.5-veto-recompute-path/47.5-05-SUMMARY.md
 
 ## Performance Metrics
 
@@ -155,6 +155,7 @@ Progress: [█████████░] 87% (v0.9 phase 47.5 of 46-49)
 | Phase 47.5 P04 | 35 min | 3 tasks | 2 files |
 | Phase 47.5 P02 | 25min | 3 tasks | 3 files |
 | Phase 47.5 P03 | 45min | 3 tasks | 3 files |
+| Phase 47.5 P05 | 40min | 3 tasks | 7 files |
 
 ## Decisions
 
@@ -250,6 +251,8 @@ Progress: [█████████░] 87% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: [47.5-03] The frozen-COMPLETE case is proven on the acceptance test itself: exec 11857's Company Gate verdict is 'skip' with both lv_*_verified_at stamps present, mapped to 'enrich' by the recompute intent; HubSpot Company Update returned 200 with flag 'false'.
 - [Phase ?]: [47.5-03] NOT proven: a live D -> non-D tier transition. The tier assert passed but the legs are 5s apart and the rehearsal read tier 'Unscored' pre-veto — the flag->tier flow likely never wrote D. Phase 49 scope.
 - [Phase ?]: [47.5-03] python-dotenv's bare load_dotenv() resolves relative to the CALLING FILE, not the cwd; with no conftest.py, live pytest must be driven through a wrapper passing an absolute .env path, or every HubSpot read 401s.
+- [Phase ?]: 47.5-C: hardware veto fires on lv_is_hardware_vendor === true OR lv_org_type == 'hardware_vendor' (or-retroactive); additive so no record loses a veto, boolean survives as manual override
+- [Phase ?]: 47.5-C: lv_is_gambling_operator answered with no work — zero divergent records, graduated deduction already empty (Phase 46 D-03)
 
 ### Blockers
 
