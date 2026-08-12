@@ -614,3 +614,49 @@ row, not the execution budget — 18 against 2,500 is immaterial either way.
 VETO-03's bar is a search run by a human in the HubSpot UI with no script. The `MATCHES: 0`
 above is an API search — necessary, not sufficient. Task 3 remains open until the operator
 runs the two-filter view themselves.
+
+## Rule 1 fallout — tests and fixtures
+
+**Nothing was edited.** Both offline tiers are green after the window:
+
+```
+.venv/bin/python -m pytest tests/ -q   ->  1248 passed, 123 skipped   (exit 0)
+node --test tests/n8n/*.test.mjs       ->  658 pass, 0 fail           (exit 0)
+```
+
+`scripts/run_scoring_parity.py` is unmodified (`git diff --quiet` clean). Its population
+sweep stays red by design from Phase 46 commit `caae5d6` until Phase 49 — untouched here.
+
+### `tests/fixtures/companies_jscode_frozen.json` — checked, NOT re-baselined
+
+The plan (via `47-RESEARCH.md` § "Rule 1 fallout risk") recorded that *no test references
+any of the 17 ids by literal value*. **That is wrong** — ten of them appear in this
+fixture: `10152138518`, `10215097384`, `14752488879`, `17317381378`, `17317850381`,
+`17696004613`, `18047161864`, `18796602894`, `19100977027`, `20538284384`.
+
+They are harmless. The fixture is a frozen **research-input** cache keyed by company id
+(`_confidence`, `_evidence`, `lv_org_type`, `lv_produces_content`, …) feeding the JS
+scoring tests — it does not embed any expected post-remediation CRM state, no
+pre-remediation blank org type and no D-tier expectation. Remediating the live records
+cannot invalidate it, and the node tier passing after the window confirms that. Left as-is;
+the stale research claim is corrected here so the next phase does not re-derive it.
+
+### The five `@live` veto tests — still skipped, and now explained
+
+`tests/test_scoring_parity.py::test_veto_clear_after_correction` and its four siblings carry
+the `@live` skipif and are among the 123 skips; they were not run, because running them
+needs live write authority and a disposable company, and the window is closed.
+
+More usefully, **this phase found the structural reason that test could never pass.** Its
+fixture patches `lv_country_region_normalized = "AU"` onto a record that already carries
+`lv_org_type`, `lv_produces_content` and `lv_revenue_band` — leaving the record **complete**.
+`Company Gate` therefore returns `action: "skip"`, `Normalize + Score Company` drops the row,
+and `Decide Company Action` — the only writer of `lv_anti_icp_flag` — never runs. The test's
+own comment already suspected the shape of this ("correcting the input alone isn't enough")
+and reached for `lv_enrichment_requested` + the SJ-3 poller as the workaround; the poller is
+now daily, and it would hit the same gate regardless.
+
+No assertion was weakened to make it pass. It stays red/skipped, and it is the natural
+**acceptance test for Phase 47.5** — when a complete record's veto can be recomputed on
+demand, this test passes without touching its assertions. Recorded per Task 4's rule that a
+still-failing test gets a stated reason rather than an edit.
