@@ -5,15 +5,15 @@ milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 47.5
 current_phase_name: veto-recompute-path
 status: executing
-stopped_at: Completed 47.5-04-PLAN.md
-last_updated: "2026-08-12T06:05:22.156Z"
+stopped_at: Completed 47.5-02-PLAN.md
+last_updated: "2026-08-12T06:16:25.349Z"
 last_activity: 2026-08-12
 last_activity_desc: 47.5 Plan 04 complete — D-V6 operating-presence evidence; Ironman + Gravity Media -> ANZ (no writes yet)
 progress:
   total_phases: 5
   completed_phases: 2
   total_plans: 15
-  completed_plans: 11
+  completed_plans: 12
   percent: 40
 ---
 
@@ -22,7 +22,7 @@ progress:
 ## Current Position
 
 Phase: 47.5 (veto-recompute-path) — **EXECUTING** (2 of 6 plans: 01 + 04). Phase 47 is COMPLETE.
-Plan: 2 of 6 — 47.5-01 landed
+Plan: 3 of 6 — 47.5-01 landed
 Status: Workstream A's mechanism EXISTS, offline only. Nothing is deployed and nothing
   is armed. Plan 02 owns deploy + bounce + the one disarmed live execution that proves
   the RUNNING graph changed; workstreams B and C stay blocked until it does.
@@ -83,12 +83,12 @@ Last activity: 2026-08-12 — Plan 03 complete: 47-BEFORE.json (17-row before-sn
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [███████░░░] 73% (v0.9 phase 47.5 of 46-49)
+Progress: [████████░░] 80% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-12T06:05:11.928Z
-**Stopped at:** Completed 47.5-04-PLAN.md
+**Last session:** 2026-08-12T06:16:25.338Z
+**Stopped at:** Completed 47.5-02-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -129,6 +129,7 @@ Progress: [███████░░░] 73% (v0.9 phase 47.5 of 46-49)
 | Phase 47 P04 | ~3h | 4 tasks | 8 files |
 | Phase 47.5 P01 | 50min | 3 tasks | 9 files |
 | Phase 47.5 P04 | 35 min | 3 tasks | 2 files |
+| Phase 47.5 P02 | 25min | 3 tasks | 3 files |
 
 ## Decisions
 
