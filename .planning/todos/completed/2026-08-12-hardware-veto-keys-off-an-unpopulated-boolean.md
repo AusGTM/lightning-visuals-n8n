@@ -100,3 +100,22 @@ it. It therefore JOINS window #2's allowlist as a third id —
 `17317184159, 15860277364, 18047161864` — which stays inside plan 06's stated cap. Without
 that, the decision would be recorded and silently never applied, which is the exact failure
 class this phase exists to remove.
+
+---
+
+## RESOLVED — 2026-08-12, Phase 47.5 workstream C
+
+`or-retroactive` landed in both engines (`src/icp_scoring.py` and the `Decide Company Action`
+node built by `scripts/build_cloud_workflows.py`) in **one commit `f817ec5`**, per Phase 46's
+parity rule. Deployed, bounced, and read back out of the RUNNING instance.
+
+Retroactivity **executed**, not asserted: **Simtech LED `18047161864` moved Tier B → D** on
+execution `11861`, with **no input write of any kind** — the record's `lv_is_hardware_vendor` is
+still `null` and its region still `AU`. It moved solely because the new OR predicate ran on the
+new recompute lane. That is the one outcome no input edit could have produced.
+
+`lv_is_gambling_operator`: answered, no work, as recorded above.
+
+Documentation follow-through: `CLAUDE.md` §10.3.1 now carries the OR predicate as an as-built
+delta, and flags that §12.7's `compute_icp_score` listing is the local-MVP prototype rather than
+the live rule.

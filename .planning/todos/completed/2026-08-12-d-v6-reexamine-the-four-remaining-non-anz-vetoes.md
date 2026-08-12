@@ -71,3 +71,28 @@ r=search_records('companies',[{'propertyName':'lv_anti_icp_reason','operator':'C
 for x in r.get('results',[]): print(x['id'], x['properties'])
 "
 ```
+
+---
+
+## RESOLVED — 2026-08-12, Phase 47.5 workstream B
+
+Researched with evidence URLs (`47.5-B-EVIDENCE.md`, registry-grade), decided, and written in
+armed window #2 (`47.5-RUN-REPORT.md`; one arm, one disarm, three records touched once each).
+
+| id | outcome |
+|---|---|
+| `17317184159` Ironman | region `Other` → `ANZ`. Veto cleared. **70/D → 80/Tier A.** Execution `11859` |
+| `15860277364` GRAVITY MEDIA | region `Other` → `ANZ`. Veto cleared. **50/D → 60/Tier B.** Execution `11860`. Its NZ leg is **UNPROVEN** — `ANZ` denotes the multinational-with-local-operations pattern per D-V6, not two countries |
+| `10024564084` Entain | **no write.** Excluded on arithmetic: `lv_produces_content=false` fires a second veto, so a region flip would spend a touch and leave it Tier D |
+| `17317850381` Jam TV | **no write, veto retained — the required outcome (D-23).** `hs_lastmodifieddate` unchanged from before the window |
+
+Portal-wide non-ANZ veto census **4 → 2** (Entain + Jam TV, both correct). VETO-03 bar
+(non-ANZ veto AND blank region) still **0 rows**. D-07 held: only
+`lv_country_region_normalized` was ever PATCHed, twice.
+
+The recompute trap this todo warned about is gone — Phase 47.5 workstream A shipped the
+on-demand recompute lane, so a region change now clears the flag without blanking anything.
+
+**Still open for Phase 49:** Entain has never had its actual ANZ operating presence examined
+(it was excluded on the second veto, not on a geography finding), and Jam TV must be confirmed
+to stay vetoed.
