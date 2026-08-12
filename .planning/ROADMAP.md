@@ -288,11 +288,28 @@ touched once.
 > COVER-01/COVER-02 alone.
 
 Plans:
+**Wave 1**
+
 - [ ] 48-01-PLAN.md — coverage driver spine, offline enum mapping for the 4 evidenced records, D-03 marker, live population re-derivation
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 48-02-PLAN.md — D-04 research-error gate built into the cloud lane, workflow rebuilt, offline node test
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 48-03-PLAN.md — ex-ante cost estimate, operator spend decision, one enum-constrained research call for Racing NSW
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 48-04-PLAN.md — the ONE declared deploy and bounce, proven live by an execution's own node list
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
 - [ ] 48-05-PLAN.md — the ONE declared armed write window: write, recompute, settle, read back, disarm
+
+**Wave 6** *(blocked on Wave 5 completion)*
+
 - [ ] 48-06-PLAN.md — run report (actual vs estimate, window accounting), venue deferral amendment, traceability
 
 ---
