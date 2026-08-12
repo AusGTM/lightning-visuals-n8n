@@ -172,3 +172,46 @@ def test_marker_no_patch_contains_country_region_key():
         decision = m.ORG_TYPE_DECISIONS[company_id]
         patch = m.build_coverage_patch(company_id, decision, now_iso)
         assert not any("country_region" in key for key in patch["properties"])
+
+
+# --- Task 3: live population re-derivation + reconciliation ----------------------------------
+
+def test_population_derive_population_uses_exact_filters_and_properties():
+    captured = {}
+
+    def _fake_searcher(object_type, filters, properties, limit=100):
+        captured["object_type"] = object_type
+        captured["filters"] = filters
+        captured["properties"] = properties
+        return {"results": [{"id": JAM_TV_ID, "properties": {"name": "Jam TV"}}]}
+
+    population = m.derive_population(searcher=_fake_searcher)
+
+    assert captured["object_type"] == "companies"
+    assert captured["filters"] == [
+        {"propertyName": "lv_icp_fit_score", "operator": "HAS_PROPERTY"},
+        {"propertyName": "lv_org_type", "operator": "NOT_HAS_PROPERTY"},
+    ]
+    assert population["count"] == 1
+    assert population["ids"] == [JAM_TV_ID]
+    assert population["derived_at"]
+
+
+def test_reconcile_population_flags_drift_and_never_narrows():
+    derived = {"ids": [EDITIX_ID, JAM_TV_ID, WAIKATO_ID, RUMBLE_ID]}  # RACING_NSW_ID missing
+
+    reconciliation = m.reconcile_population(derived)
+
+    assert reconciliation["drift"] is True
+    assert RACING_NSW_ID in reconciliation["missing"]
+    assert len(reconciliation["expected"]) == 5
+
+
+def test_reconcile_population_no_drift_when_sets_match():
+    derived = {"ids": list(m.COVERAGE_COMPANY_ID_ORDER)}
+
+    reconciliation = m.reconcile_population(derived)
+
+    assert reconciliation["drift"] is False
+    assert reconciliation["missing"] == []
+    assert reconciliation["unexpected"] == []

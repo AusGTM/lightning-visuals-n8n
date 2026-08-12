@@ -1,0 +1,103 @@
+{
+  "derived_at": "2026-08-12T12:58:27.366076+00:00",
+  "count": 5,
+  "ids": [
+    "15008671672",
+    "17317381378",
+    "17317850381",
+    "20538284384",
+    "20943964946"
+  ],
+  "rows": [
+    {
+      "id": "15008671672",
+      "properties": {
+        "createdate": "2023-03-08T22:49:02.917Z",
+        "hs_lastmodifieddate": "2026-08-08T12:40:25.666Z",
+        "hs_object_id": "15008671672",
+        "lv_anti_icp_flag": "false",
+        "lv_country_region_normalized": "AU",
+        "lv_icp_fit_score": "40",
+        "lv_icp_tier": "B",
+        "lv_org_type": null,
+        "name": "Racing NSW"
+      },
+      "createdAt": "2023-03-08T22:49:02.917Z",
+      "updatedAt": "2026-08-08T12:40:25.666Z",
+      "archived": false,
+      "url": "https://app-ap1.hubspot.com/contacts/22617666/record/0-2/15008671672"
+    },
+    {
+      "id": "17317381378",
+      "properties": {
+        "createdate": "2023-09-14T02:47:09.684Z",
+        "hs_lastmodifieddate": "2026-08-12T01:41:49.102Z",
+        "hs_object_id": "17317381378",
+        "lv_anti_icp_flag": "false",
+        "lv_country_region_normalized": null,
+        "lv_icp_fit_score": "0",
+        "lv_icp_tier": "Unscored",
+        "lv_org_type": null,
+        "name": "Editix"
+      },
+      "createdAt": "2023-09-14T02:47:09.684Z",
+      "updatedAt": "2026-08-12T01:41:49.102Z",
+      "archived": false,
+      "url": "https://app-ap1.hubspot.com/contacts/22617666/record/0-2/17317381378"
+    },
+    {
+      "id": "17317850381",
+      "properties": {
+        "createdate": "2023-09-14T05:18:41.757Z",
+        "hs_lastmodifieddate": "2026-08-12T01:42:45.648Z",
+        "hs_object_id": "17317850381",
+        "lv_anti_icp_flag": "true",
+        "lv_country_region_normalized": "Other",
+        "lv_icp_fit_score": "20",
+        "lv_icp_tier": "D",
+        "lv_org_type": null,
+        "name": "Jam TV"
+      },
+      "createdAt": "2023-09-14T05:18:41.757Z",
+      "updatedAt": "2026-08-12T01:42:45.648Z",
+      "archived": false,
+      "url": "https://app-ap1.hubspot.com/contacts/22617666/record/0-2/17317850381"
+    },
+    {
+      "id": "20538284384",
+      "properties": {
+        "createdate": "2024-04-29T23:39:41.576Z",
+        "hs_lastmodifieddate": "2026-08-12T01:54:17.141Z",
+        "hs_object_id": "20538284384",
+        "lv_anti_icp_flag": "false",
+        "lv_country_region_normalized": "NZ",
+        "lv_icp_fit_score": "30",
+        "lv_icp_tier": "C",
+        "lv_org_type": null,
+        "name": "Waikato Racing Club Inc"
+      },
+      "createdAt": "2024-04-29T23:39:41.576Z",
+      "updatedAt": "2026-08-12T01:54:17.141Z",
+      "archived": false,
+      "url": "https://app-ap1.hubspot.com/contacts/22617666/record/0-2/20538284384"
+    },
+    {
+      "id": "20943964946",
+      "properties": {
+        "createdate": "2024-05-22T10:26:32.694Z",
+        "hs_lastmodifieddate": "2026-08-12T01:54:56.188Z",
+        "hs_object_id": "20943964946",
+        "lv_anti_icp_flag": "false",
+        "lv_country_region_normalized": "AU",
+        "lv_icp_fit_score": "40",
+        "lv_icp_tier": "B",
+        "lv_org_type": null,
+        "name": "The Rumble / Pacific Action Sports"
+      },
+      "createdAt": "2024-05-22T10:26:32.694Z",
+      "updatedAt": "2026-08-12T01:54:56.188Z",
+      "archived": false,
+      "url": "https://app-ap1.hubspot.com/contacts/22617666/record/0-2/20943964946"
+    }
+  ]
+}

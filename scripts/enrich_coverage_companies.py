@@ -177,6 +177,25 @@ def derive_population(searcher=search_records):
     }
 
 
+def reconcile_population(derived, literal=COVERAGE_COMPANY_ID_ORDER):
+    """Never mutates either set and never narrows the run -- returns the full expected
+    list even when drift is found, so a moved population is an operator decision, not
+    something this driver absorbs. CONTEXT.md's snapshot (5 ids, read 2026-08-12) is the
+    expectation; a different live count is a finding to disclose, not a reason to edit the
+    literal tuple silently."""
+    derived_ids = list(derived.get("ids") or [])
+    expected = list(literal)
+    missing = [cid for cid in expected if cid not in derived_ids]
+    unexpected = [cid for cid in derived_ids if cid not in expected]
+    return {
+        "expected": expected,
+        "derived": derived_ids,
+        "missing": missing,
+        "unexpected": unexpected,
+        "drift": bool(missing or unexpected),
+    }
+
+
 # --- the offline mapping pass (D-01/D-05) + the D-03 marker semantics ---------------------
 
 def _load_captured_research(company_id, path=RESEARCH_RESULTS_PATH):
@@ -321,7 +340,12 @@ def main(argv=None) -> int:
         population = derive_population()
         if args.population_out:
             Path(args.population_out).write_text(json.dumps(population, indent=2, default=str))
+        reconciliation = reconcile_population(population)
         print(f"POPULATION: {json.dumps(population, indent=2, default=str)}")
+        print(f"RECONCILE: {json.dumps(reconciliation, indent=2)}")
+        if reconciliation["drift"]:
+            print("DRIFT DETECTED -- live population diverges from the 5-id literal set. "
+                  "Disclosed, not silently absorbed. Operator decision required.")
     else:
         print("skipped (no credentials): HUBSPOT_PRIVATE_APP_TOKEN must be set for live "
               "population re-derivation. 48-POPULATION.json was not produced.")
