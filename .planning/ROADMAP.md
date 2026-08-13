@@ -346,13 +346,13 @@ did not change, no full re-score is owed and this phase proves the procedure wit
      milestone's re-scoring activity as a whole (veto clear, coverage enrichment, and any
      weight-driven full re-score).
 
-**Plans**: 7 plans
+**Plans**: 1/7 plans executed
 
 Plans:
 
 **Wave 1**
 
-- [ ] 49-01-PLAN.md — TRACER: the re-score driver end to end — exact-set population gate, component computation, `--plan` cost output, armed canary/execute write legs, `--snapshot` census mode
+- [x] 49-01-PLAN.md — TRACER: the re-score driver end to end — exact-set population gate, component computation, `--plan` cost output, armed canary/execute write legs, `--snapshot` census mode
 
 **Wave 2** *(blocked on Wave 1)*
 
@@ -385,7 +385,7 @@ Plans:
 | 47. Veto Remediation | v0.9 | 4/4 | Complete | 2026-08-12 |
 | 47.5. Veto Recompute Path | v0.9 | 6/6 | Complete | 2026-08-12 |
 | 48. Enrichment Coverage | v0.9 | 7/7 | Complete (verified) | 2026-08-13 |
-| 49. Re-score Strategy & Reporting | v0.9 | 0/? | Not started | - |
+| 49. Re-score Strategy & Reporting | v0.9 | 1/7 | In Progress|  |
 
 ## Ledger gaps (known)
 

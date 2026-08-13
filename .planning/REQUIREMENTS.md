@@ -121,11 +121,11 @@ traceable bar. They are new requirements, not a re-scoping of VETO-01/02/03, whi
 
 ### Re-score Strategy (RESCORE)
 
-- [ ] **RESCORE-01**: A rubric change triggers a defined, budget-bounded re-score of the affected
+- [x] **RESCORE-01**: A rubric change triggers a defined, budget-bounded re-score of the affected
       population rather than an ad-hoc sweep — including which records, in what chunk size, under
       which write window.
 
-- [ ] **RESCORE-02**: Because rubric-version segmentation is impossible without
+- [x] **RESCORE-02**: Because rubric-version segmentation is impossible without
       `lv_icp_scoring_version` (operator decision 2026-08-11: no new properties), any rubric
       change re-scores the ENTIRE scored population. The plan states that execution cost up front
       rather than discovering it mid-run.
