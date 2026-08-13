@@ -5,16 +5,16 @@ milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 49
 current_phase_name: re-score-strategy-reporting
 status: executing
-stopped_at: Completed 49-01-PLAN.md
-last_updated: "2026-08-13T03:59:05.062Z"
+stopped_at: Completed 49-02-PLAN.md
+last_updated: "2026-08-13T04:06:34.774Z"
 last_activity: 2026-08-13
 last_activity_desc: Phase 49 execution started
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 29
-  completed_plans: 23
-  percent: 79
+  completed_plans: 24
+  percent: 80
 ---
 
 # Project State
@@ -113,7 +113,7 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Phase: 49 (re-score-strategy-reporting) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
@@ -201,12 +201,12 @@ Last activity: 2026-08-13 — Phase 49 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [████████░░] 79% (v0.9 phase 47.5 of 46-49)
+Progress: [████████░░] 83% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-13T03:59:05.054Z
-**Stopped at:** Completed 49-01-PLAN.md
+**Last session:** 2026-08-13T04:06:34.767Z
+**Stopped at:** Completed 49-02-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -259,6 +259,7 @@ Progress: [████████░░] 79% (v0.9 phase 47.5 of 46-49)
 | Phase 48 P05 | 35min | 3 tasks | 5 files |
 | Phase 48 P06 | ~20min | 3 tasks | 3 files |
 | Phase 49 P01 | 32min | 3 tasks | 4 files |
+| Phase 49 P02 | 22min | 2 tasks | 3 files |
 
 ## Decisions
 
@@ -373,6 +374,8 @@ Progress: [████████░░] 79% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: Raised HARD_CEILING_RECORDS 25->100 as a strengthening (paired with a new exact-set gate), not a relaxation
 - [Phase ?]: rescore_population.py is a new thin wrapper importing compute_components/build_updates/_chunked/enforce_sample_cap/enforce_exact_population unchanged, never a fork
 - [Phase ?]: Population is re-derived TWICE (derive, then re-confirm) immediately before every write leg, refusing on any drift between the two reads
+- [Phase ?]: Captured --plan live against portal 22617666 through the absolute-path dotenv wrapper rather than reusing a fixture, so the runbook's numbers trace to a live capture (D-07).
+- [Phase ?]: Guard test pins config/icp_scoring.yaml's scoring surface as a key-by-key dict comparison (not a digest) so the D-09 failure message can name exactly which keys moved.
 
 ### Blockers
 
