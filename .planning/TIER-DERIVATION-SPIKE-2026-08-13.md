@@ -47,7 +47,12 @@ formula, PATCHed once per candidate, archived in a `finally` block and verified 
 (404). A 400 mutates nothing and its body enumerates every valid token at the failing parse
 position — that body is the authoritative grammar for this portal.
 
-Scripts: `spike_tier_formula.py`, `spike_tier_formula2.py` (session scratchpad).
+Scripts: `spike_tier_formula.py`, `spike_tier_formula2.py` — deliberately **not** kept in
+`scripts/`. They were one-shot probes gated on `ALLOW_SPIKE_PROPERTY_WRITE` alone, without the
+repo's paired `DRY_RUN=false` key, and a disposable live-write script with a non-standard gate is
+exactly the thing that should not sit in a permanent directory (Phase 49 code review, CR-01). The
+candidate formulas and every result are recorded in full below, so nothing is lost by their
+absence; a future phase re-probing this grammar should write a fresh, two-key-gated script.
 No company record was read or written. `lv_icp_tier` was never touched.
 
 ## Round 1 — 4/9

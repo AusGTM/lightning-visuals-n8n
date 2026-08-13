@@ -102,19 +102,37 @@ def _now_iso() -> str:
 
 # --- population -----------------------------------------------------------------------
 
+POPULATION_SEARCH_LIMIT = 100
+
+
 def select_scored_population() -> list:
     """The single live population definition this driver ever uses -- the same
     HAS_PROPERTY(lv_icp_fit_score) search shape as run_scoring_parity.py's
     _select_sample_ids() and simulate_rubric_weights.py's _select_row_ids(), never a
-    second definition (49-RESEARCH.md's "Don't Hand-Roll" table). limit=100 so the query
-    does not silently truncate if the scored population grows past the current 66."""
+    second definition (49-RESEARCH.md's "Don't Hand-Roll" table).
+
+    A page limit alone does NOT prevent silent truncation -- it only moves where the
+    truncation happens. Both reads of the exact-set gate call this function, so a
+    truncated page would make them agree on the same wrong set and the gate would pass
+    while operating on a subset. Compare the reported total against what we actually got
+    and REFUSE on any shortfall, the same refuse-rather-than-truncate contract
+    enforce_exact_population() and enforce_sample_cap() hold."""
     result = search_records(
         "companies",
         [{"propertyName": "lv_icp_fit_score", "operator": "HAS_PROPERTY"}],
         ["lv_icp_fit_score"],
-        limit=100,
+        limit=POPULATION_SEARCH_LIMIT,
     )
-    return sorted(r["id"] for r in result.get("results", []))
+    ids = sorted(r["id"] for r in result.get("results", []))
+    total = result.get("total")
+    if total is not None and total > len(ids):
+        raise RuntimeError(
+            f"REFUSED: the scored population is {total} records but this search returned "
+            f"only {len(ids)} (page limit {POPULATION_SEARCH_LIMIT}). Operating on a "
+            "truncated set would let the exact-set gate agree with itself on a subset. "
+            "Add pagination to select_scored_population() before re-running."
+        )
+    return ids
 
 
 # --- cost / plan -------------------------------------------------------------------------

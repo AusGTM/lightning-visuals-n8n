@@ -9,6 +9,8 @@ requests.post/get to raise, or exercises pure functions.
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))  # repo root on sys.path so `scripts.*` imports resolve
 
@@ -78,6 +80,33 @@ def test_select_scored_population_uses_limit_100(monkeypatch):
     monkeypatch.setattr(rp, "search_records", _fake)
     rp.select_scored_population()
     assert seen["limit"] == 100
+
+
+def test_select_scored_population_refuses_a_truncated_page(monkeypatch):
+    """A page limit alone does not prevent truncation -- it only relocates it. Both reads
+    of the exact-set gate call this function, so a truncated page would let the gate agree
+    with itself on a subset. Refuse on any shortfall against the reported total."""
+    def _fake(object_type, filters, properties, limit=100):
+        return {"total": 140, "results": [{"id": str(i)} for i in range(limit)]}
+
+    monkeypatch.setattr(rp, "search_records", _fake)
+    with pytest.raises(RuntimeError, match="REFUSED"):
+        rp.select_scored_population()
+
+
+def test_select_scored_population_accepts_a_complete_page(monkeypatch):
+    """The guard must not fire when the page holds the whole population -- the live case."""
+    def _fake(object_type, filters, properties, limit=100):
+        return {"total": 3, "results": [{"id": "2"}, {"id": "1"}, {"id": "3"}]}
+
+    monkeypatch.setattr(rp, "search_records", _fake)
+    assert rp.select_scored_population() == ["1", "2", "3"]
+
+
+def test_select_scored_population_tolerates_a_missing_total(monkeypatch):
+    """Some search stubs omit `total`; absence must not be read as a shortfall."""
+    monkeypatch.setattr(rp, "search_records", _fake_search_records_factory(["1", "2"]))
+    assert rp.select_scored_population() == ["1", "2"]
 
 
 # --- estimate_rescore_cost (RESCORE-01 precision truth) -----------------------------------
