@@ -77,11 +77,36 @@ def _diff_keys(pinned: dict, actual: dict) -> list:
 
 
 def assert_rubric_pinned(config: dict) -> None:
-    """RED (Task 49-02-02): stub -- not yet implemented. Comparison logic lands in the
-    GREEN commit. This stub deliberately never raises, so every mutation test below
-    (which expects an AssertionError) fails until the real comparison is written."""
-    # ponytail: RED stub, GREEN commit replaces this with the real comparison.
-    return None
+    """Raises AssertionError naming docs/OPERATOR-RESCORE.md and the re-score obligation
+    if config's base_score/graduated_deductions surface differs from the pinned baseline
+    above. This is the single comparison helper both the passing test and the mutation
+    tests exercise -- so the guard's teeth are proven directly, not just its current
+    pass/fail state against today's file."""
+    base_score = config.get("base_score", {})
+    graduated_deductions = config.get("graduated_deductions", {})
+
+    offenders = []
+    for component in ("org_type", "produces_content", "geography", "revenue_band"):
+        diff = _diff_keys(PINNED_BASE_SCORE[component], base_score.get(component, {}))
+        offenders.extend(f"base_score.{component}.{k}" for k in diff)
+    offenders.extend(
+        f"graduated_deductions.{k}"
+        for k in _diff_keys(PINNED_GRADUATED_DEDUCTIONS, graduated_deductions)
+    )
+
+    if offenders:
+        raise AssertionError(
+            "config/icp_scoring.yaml's scoring surface has changed: "
+            f"{sorted(offenders)}. "
+            "A rubric weight change obliges a full-population re-score of every "
+            "record that carries lv_icp_fit_score, because no lv_icp_scoring_version "
+            "property exists to segment scored records by which rubric version scored "
+            f"them. Read {RUNBOOK_PATH} and run the re-score procedure it describes "
+            "before re-baselining this test's PINNED_BASE_SCORE / "
+            "PINNED_GRADUATED_DEDUCTIONS literals. Re-baselining this test alone, "
+            "without running that re-score, is exactly the unaccompanied change this "
+            "guard exists to block."
+        )
 
 
 def test_pinned_rubric_matches_current_config():
