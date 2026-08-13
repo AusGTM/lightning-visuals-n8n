@@ -134,6 +134,31 @@ traceable bar. They are new requirements, not a re-scoping of VETO-01/02/03, whi
       and after any re-score — so a rubric change's effect on the target list is visible rather
       than inferred.
 
+### Tier Derivation (TIER)
+
+Added 2026-08-13, operator-directed during `/gsd-discuss-phase 50`. These close v0.9 debt rather
+than opening new scope: Phase 49 W1 disclosed 4 companies whose `lv_icp_tier` is stale against a
+correct `lv_icp_fit_score` and deferred the fix (`WINDOWS.md` ids 9–12). Evidence base is
+`.planning/TIER-DERIVATION-SPIKE-2026-08-13.md`.
+
+- [ ] **TIER-01**: `lv_icp_tier` no longer depends on a HubSpot property-change event to be
+      correct. A derived tier reproduces WF1's live ladder exactly — `lv_anti_icp_flag` → `D`,
+      `>= 70` → `A`, `40..69` → `B`, `15..39` → `C`, else `Unscored` — verified against real
+      records. The 4 stuck records (`9605273630`, `9604738976`, `17696004613`, `19100977027`)
+      read the tier their score already implies, with no event and no workflow run.
+
+- [ ] **TIER-02**: The blank-vs-`"Unscored"` semantics for never-scored companies are a recorded
+      decision, not an accident of formula shape. The spike could not settle this from syntax:
+      an uncoalesced score preserves today's blank behaviour, `coalesce(lv_icp_fit_score, -1)`
+      flips roughly 646 never-enriched companies to `"Unscored"`. The runtime null question is
+      answered against live records before the choice is committed.
+
+- [ ] **TIER-03**: Cutover is reversible and nothing silently breaks. Portal-side dependents on
+      the existing tier *select* — lists, views, saved filters, reports, invisible from the repo —
+      are enumerated first; the disposition of the old `lv_icp_tier` enum and of WF1 itself is
+      decided explicitly; and no record is re-tiered outside a deliberately armed, capped write
+      window, under the Phase 47–49 discipline.
+
 ## v1.0 Requirements (deferred)
 
 ### Outcome Evidence (EVID) — deferred from v0.9 on 2026-08-11
@@ -163,6 +188,13 @@ recoverable, only forward capture works, which cannot inform a v0.9 recalibratio
 - **New HubSpot properties of any kind** — same decision. `lv_closed_lost_reason` and
   `deal_source` already exist and may be used; the three §5.3 fields that do not exist are
   deferred rather than created.
+  *(Scope amended 2026-08-13, operator-directed during `/gsd-discuss-phase 50`: lifted for
+  **exactly one** derived-tier string property and nothing else. The lift is forced, not
+  preferred — `lv_icp_tier` is `type: enumeration, calculated: false`, zero of 264 portal
+  properties are calculated enumerations, and HubSpot does not support enumeration outputs for
+  calculation properties, so TIER-01 is unreachable without a new property. Everything else in
+  this bullet stands: `lv_icp_scoring_version` remains out of scope below, and the three §5.3
+  fields remain deferred to v1.0. See `50-CONTEXT.md`.)*
 
 - **Installing the sweep cron/launchd schedule** — an admin action on the operator's machine,
   carried from v0.8 where the burn-rate alarm shipped inert. Not a v0.9 deliverable.
@@ -194,6 +226,9 @@ recoverable, only forward capture works, which cannot inform a v0.9 recalibratio
 | RESCORE-01 | Phase 49 | **Complete** (all 4 declaring plans finished — 49-01: `docs/OPERATOR-RESCORE.md` runbook + `scripts/rescore_population.py --plan` mode + `test_rubric_change_guard.py`; 49-02: `scripts/backfill_seed_company_scores.py`'s consuming write path; 49-03: n8n research-prompt org-type-definitions fix built offline; 49-04: that fix deployed, bounced, and proven live — `49-DEPLOY-PROOF.md`) |
 | RESCORE-02 | Phase 49 | **Complete** (66/66 companies re-scored under the current rubric in one W1 window; `49-P2-SNAPSHOT.json`/`49-P3-SNAPSHOT.json`) |
 | RESCORE-03 | Phase 49 | **Complete** (P2/P3 tier distributions committed and compared against the pre-registered Phase 46 forecast, matched exactly: 14 rows C→B, all `individual_club_team`; `49-W1-ARM-RECORD.md`) |
+| TIER-01 | Phase 50 | Not started |
+| TIER-02 | Phase 50 | Not started |
+| TIER-03 | Phase 50 | Not started |
 
 *Phase column filled by the roadmapper.*
 

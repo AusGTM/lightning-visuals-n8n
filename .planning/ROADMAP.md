@@ -8,17 +8,18 @@
 - ✅ **v0.6 Claude Plugin Entrypoint** — Phases 23–32, workstream `plugin-entrypoint` (shipped 2026-08-04)
 - ✅ **v0.7 HubSpot Scoring Engine Remediation** — Phases 39–43 (shipped 2026-08-08)
 - ✅ **v0.8 Execution Budget Safety** — Phases 44–45 (shipped 2026-08-11)
-- 🚧 **v0.9 ICP Rubric Calibration & Veto Remediation** — Phases 46–49 (all 5 phases complete 2026-08-13; milestone close pending)
+- 🚧 **v0.9 ICP Rubric Calibration & Veto Remediation** — Phases 46–50 (Phases 46–49 complete 2026-08-13; Phase 50 added 2026-08-13 to close the stuck-tier debt Phase 49 disclosed, so the milestone does not ship with a known unmet truth)
 
 ## Phases
 
-### 🚧 v0.9 ICP Rubric Calibration & Veto Remediation (Phases 46–49)
+### 🚧 v0.9 ICP Rubric Calibration & Veto Remediation (Phases 46–50)
 
 - [x] **Phase 46: Rubric Decision, Simulation & Engine Parity** - Decide the org-type weights (`individual_club_team`, `regulator`, and the `gambling_operator` deduction) with evidence, simulate re-tiering with zero record writes, prove any change lands identically in all three scoring engines, and update every doc that prints the superseded rubric — before either downstream write phase runs
 - [x] **Phase 47: Veto Remediation** - Clear the 17 false non-ANZ vetoes under the settled rubric, inside a deliberately armed and capped write window, verifiable from HubSpot alone
 - [x] **Phase 47.5: Veto Recompute Path** (6/6 plans, completed 2026-08-12) - Three workstreams: (A) make a veto recomputable for a record whose inputs are already complete; (B) re-examine the four remaining non-ANZ vetoes under D-V6's operating-presence test — Ironman scores 70 and is suppressed on a Tampa HQ; (C) decide whether the hardware veto should key off `lv_org_type` rather than a boolean 1 of 66 records has set. `Company Gate` skips complete records and `Normalize + Score Company` drops every skipped row, so `Decide Company Action` — the only writer of `lv_anti_icp_flag`/`lv_anti_icp_reason` — never runs for them. Found live in Phase 47 (n8n execution `11846`, Simtech LED left reading `Non-ANZ geography` against `region=AU`)
 - [x] **Phase 48: Enrichment Coverage** - Fill or document `lv_org_type` for the 18 never-enriched companies, under a pre-estimated and budget-refusing armed write window
 - [x] **Phase 49: Re-score Strategy & Reporting** - Define and (if triggered) execute the budget-bounded full-population re-score procedure, and report the milestone's net tier-distribution effect in plain language
+- [ ] **Phase 50: Derived Tier Property** - Derive `lv_icp_tier` from `lv_icp_fit_score` the way the score already derives itself, so a value-identical PATCH can no longer leave the tier stale. WF1 (`4625147345`) is `EVENT_BASED` and the sole tier writer, so a no-op PATCH fires no event and it never re-enrols — 4 companies sat at `C` against a correct score of `45` in Phase 49 W1 (`WINDOWS.md` ids 9–12). Requires a scoped lift of v0.9's no-new-properties decision: enumerations cannot be calculated, so this is a new string property plus a migration. Evidence: `.planning/TIER-DERIVATION-SPIKE-2026-08-13.md`
 
 <details>
 <summary>✅ v0.8 Execution Budget Safety (Phases 44–45) — SHIPPED 2026-08-11</summary>
@@ -313,8 +314,6 @@ Plans:
 
 - [x] 48-06-PLAN.md — run report (actual vs estimate, window accounting), venue deferral amendment, traceability
 
----
-
 ### Phase 49: Re-score Strategy & Reporting
 
 **Goal**: A future rubric-triggered full-population re-score has a defined, budget-bounded
@@ -374,6 +373,62 @@ Plans:
 **Wave 6** *(blocked on Wave 5)*
 
 - [x] 49-07-PLAN.md — three-point tier-distribution report builder, the committed milestone report, the published private Artifact, and the phase run report with window accounting
+
+---
+
+### Phase 50: Derived Tier Property
+
+**Goal**: `lv_icp_tier` stops depending on a HubSpot property-change event to be correct. Today
+it is a plain `enumeration` written **only** by workflow WF1 (`4625147345`, `type: EVENT_BASED`),
+which enrols on property-change events for `lv_anti_icp_flag` and `lv_icp_fit_score`. A
+value-identical PATCH fires no event, so WF1 never re-enrols and the tier goes stale against a
+score that is already correct — observed live in Phase 49 W1 on 4 companies (`9605273630`,
+`9604738976`, `17696004613`, `19100977027`), which still read `C` while their score sits at `45`
+(tier `B`). Deriving the tier from the score the way `lv_icp_fit_score` already derives itself
+removes the event dependency, fixes those 4 as a side effect, and retires the bug class rather
+than the instance. Evidence: `.planning/TIER-DERIVATION-SPIKE-2026-08-13.md` (verdict
+CONCLUSIVE POSITIVE on grammar, 7/7 veto-guard ladders accepted).
+
+**Scope amendment (2026-08-13, operator-directed during `/gsd-discuss-phase 50`):** v0.9's
+"no new HubSpot properties of any kind" decision is lifted for **exactly one** derived-tier
+string property and nothing else. `lv_icp_scoring_version` remains out of scope, and the three
+CLAUDE.md §5.3 fields remain deferred to v1.0. The lift is required, not preferred: `lv_icp_tier`
+is `type: enumeration, calculated: false`; zero of 264 portal properties are calculated
+enumerations and HubSpot does not support enumeration outputs for calculation properties, so this
+is a new property plus a migration, not a formula edit on the existing one.
+
+**Depends on**: Phase 49
+
+**Requirements**: TIER-01, TIER-02, TIER-03
+
+**Success Criteria** (what must be TRUE):
+
+  1. A derived tier property reproduces WF1's live ladder exactly over the scored population —
+     `lv_anti_icp_flag` → `D`, then `>= 70` → `A`, `40..69` → `B`, `15..39` → `C`, else
+     `Unscored` — verified against real records, not just accepted by the API.
+
+  2. The 4 stuck records read the tier their score already implies, with no event, no
+     enrolment and no workflow run. These are v0.9 debt: Phase 49 disclosed them as unmet truth
+     (`WINDOWS.md` ids 9–12) and deferred the fix here.
+
+  3. The runtime null question the spike could not answer from syntax alone is answered against
+     live records, and the resulting semantics are a recorded choice rather than a side effect:
+     an uncoalesced score preserves today's blank-for-never-scored behaviour, while
+     `coalesce(lv_icp_fit_score, -1)` would flip roughly 646 never-enriched companies from blank
+     to `"Unscored"`.
+
+  4. Portal-side dependents on the existing tier *select* — lists, views, saved filters, reports —
+     are enumerated before any cutover, and the disposition of both the old `lv_icp_tier` enum
+     and WF1 itself is decided rather than left ambiguous.
+
+  5. No company record is silently re-tiered outside a deliberately armed, capped write window,
+     under the same discipline as Phases 47–49.
+
+**Plans**: 0 plans
+
+Plans:
+
+- [ ] TBD (run /gsd-plan-phase 50 to break down)
 
 ## Progress
 
