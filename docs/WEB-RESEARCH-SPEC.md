@@ -231,6 +231,16 @@ or bounce anything**; the built workflow JSON is committed but not yet live. Pla
 this phase's one declared deploy and bounce to make it live and closes the todo with that
 evidence. See `.planning/phases/49-re-score-strategy-reporting/49-03-SUMMARY.md`.
 
+**Update (2026-08-13, Phase 49 Plan 04) — deployed and live.** Phase 49's one declared
+deploy and bounce (D-05, waiver D-49-01) shipped this fix to `LV Enrichment (Cloud
+template)`. Proven from the RUNNING instance, not a stored read-back: execution `11871`'s
+own embedded `Build Research Request` jsCode (6928 → 9392 chars) was executed via `new
+Function` and its returned `research_request_body.system` string carries all nine org-type
+definitions, including the QRIC and Racing NSW anchor examples, with the enum constraint
+unweakened. The Python/n8n divergence recorded above is closed. Full evidence:
+`.planning/phases/49-re-score-strategy-reporting/49-DEPLOY-PROOF.md`. The todo is closed at
+`.planning/todos/completed/2026-08-13-n8n-research-prompt-lacks-org-type-definitions.md`.
+
 ### Adding a value later
 
 Edit `taxonomy.yaml` → rebuild workflows → run the HubSpot property sync → run the

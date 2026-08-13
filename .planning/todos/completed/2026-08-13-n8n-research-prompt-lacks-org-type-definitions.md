@@ -77,3 +77,55 @@ definition text, not just its bare key — mirroring
 on the Python side.
 
 Full context: `.planning/phases/48-enrichment-coverage/48-07-PLAN.md` Task 2.
+
+---
+
+## RESOLVED — Phase 49, plans 03-04 (2026-08-13)
+
+Fixed exactly the way "Suggested fix" above described, and deployed within the same phase.
+
+**Offline fix (plan 49-03).** `scripts/gen_taxonomy_js.py::render()` now emits an
+`ORG_TYPE_DEFINITIONS` const into `n8n/code/taxonomy.generated.js`, generated from
+`config/taxonomy.yaml`'s `definition:` key — the same source both Python prompts already
+render via `src.taxonomy.org_type_definitions_block()`. `COMPANIES_TARGET.research_system_prompt_fn_js`
+(the `Build Research Request` node) now builds its `lv_org_type option definitions:` line
+from that const and appends it to the returned system prompt, verified by executing the
+node's own committed jsCode (never by grepping it) — the QRIC / Racing NSW anchor examples
+are present, and the strict nine-key `allowed_org_types` enum constraint is unchanged.
+`tests/fixtures/companies_jscode_frozen.json` was re-baselined as the explicit, reviewed
+act its own header comment requires. New regression guard:
+`tests/n8n/orgTypeDefinitionsPrompt.test.mjs`, with a negative control proving the
+assertion has teeth.
+
+**Deployed and live (plan 49-04).** Phase 49's one declared deploy+bounce (D-05, authorised
+under waiver D-49-01 at the plan's checkpoint, operator selected `deploy-now`) put the
+built `n8n/wf_enrichment_cloud.json` on the running instance. Deploy: `DRY_RUN=false
+ALLOW_N8N_DEPLOY=true`, one invocation, all 5 Cloud workflows updated 200. Bounce:
+`LV Enrichment (Cloud template)` (`950HPb7a1GgSAIyZ`) deactivated then reactivated, both
+legs independently verified.
+
+**Proven from the RUNNING instance, not a stored read-back.** Execution `11871` (a
+disarmed recompute POST, 0 Anthropic calls, 0 provider credits, 0 HubSpot writes) supplied
+its own embedded `workflowData.nodes` — `Build Research Request`'s live jsCode grew 6928 →
+9392 chars and now carries `const ORG_TYPE_DEFINITIONS` with all nine org-type keys.
+Stronger than a structural check: that live jsCode was executed via `new Function` (the
+same harness `orgTypeDefinitionsPrompt.test.mjs` uses) and its RETURNED
+`research_request_body.system` string was inspected directly — it carries every org
+type's key and definition, including the QRIC/regulator and Racing NSW/governing-body
+anchor examples, with the enum constraint unweakened. Node count unchanged at 111 (a
+jsCode content change, not a topology change). Full detail:
+`.planning/phases/49-re-score-strategy-reporting/49-DEPLOY-PROOF.md`.
+
+**Post-deploy verification.** `scripts/verify_live_write_safety.py`'s disarmed pass
+returned PASS immediately after the bounce, and an independent fresh-shell invocation of
+the deploy script's dry path confirmed no arming variable survived the window.
+
+**Honest limitation, same shape as Phase 48's own D-04 gate closure.** The research
+branch's live FIRING with a genuine Anthropic call is not proven this phase — the
+recompute lane used for the proof execution bypasses providers/research/judge by design,
+and there is no supported way to force a live research call on demand without spending
+budget this plan declared zero of. Structural presence plus the executed-node behavioural
+proof above is the proof bar this phase meets, matching the offline test's own standard.
+
+Known-divergence note above is now closed: `docs/WEB-RESEARCH-SPEC.md` §2's TX-10
+amendment records both the build-time fix (49-03) and the deploy (49-04).
