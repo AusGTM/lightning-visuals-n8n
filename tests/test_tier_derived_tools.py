@@ -21,7 +21,11 @@ from check_tier_null_propagation import (  # noqa: E402
 )
 from check_tier_derived_parity import (  # noqa: E402
     KNOWN_STUCK_IDS,
+    build_census_points,
+    build_rows,
     classify_row,
+    render_census_markdown,
+    render_evidence_markdown,
     render_parity_markdown,
 )
 
@@ -230,3 +234,88 @@ def test_render_parity_markdown_sorted_by_record_id():
     ]
     text = render_parity_markdown(rows, 2)
     assert text.index("| 200 |") < text.index("| 9605273630 |")
+
+
+# --- Phase 50 Plan 03: render_evidence_markdown / build_census_points / -----------------
+# --- render_census_markdown (D-17 item 4, D-19) -----------------------------------------
+
+_STUCK_RECORDS = [
+    {"id": "9604738976", "name": "Bunbury Turf Club", "lv_icp_tier": "C",
+     "lv_icp_tier_derived": "B", "lv_icp_fit_score": "45", "lv_anti_icp_flag": "false"},
+    {"id": "9605273630", "name": "Port Macquarie Race Club", "lv_icp_tier": "C",
+     "lv_icp_tier_derived": "B", "lv_icp_fit_score": "45", "lv_anti_icp_flag": "false"},
+    {"id": "17696004613", "name": "Pinjarra Park", "lv_icp_tier": "C",
+     "lv_icp_tier_derived": "B", "lv_icp_fit_score": "45", "lv_anti_icp_flag": "false"},
+    {"id": "19100977027", "name": "Newcastle Harness Racing Club", "lv_icp_tier": "C",
+     "lv_icp_tier_derived": "B", "lv_icp_fit_score": "45", "lv_anti_icp_flag": "false"},
+]
+_CLEAN_RECORD = {"id": "111", "name": "Some Co", "lv_icp_tier": "A",
+                  "lv_icp_tier_derived": "A", "lv_icp_fit_score": "80",
+                  "lv_anti_icp_flag": "false"}
+
+
+def test_render_evidence_markdown_pass_verdict_and_denominator():
+    rows = build_rows(_STUCK_RECORDS + [_CLEAN_RECORD])
+    text = render_evidence_markdown(rows, len(rows), 712, "2026-08-14T00:00:00Z")
+    assert "Only 5 of 712 companies" in text
+    assert "D-07 VERDICT: PASS" in text
+    for windows_id in (9, 10, 11, 12):
+        assert f"| {windows_id} |" in text
+
+
+def test_render_evidence_markdown_fail_verdict_names_defect_rows():
+    broken = [dict(r) for r in _STUCK_RECORDS]
+    broken[0]["lv_icp_tier_derived"] = "A"  # a real defect: not the accepted C->B mismatch
+    rows = build_rows(broken + [_CLEAN_RECORD])
+    text = render_evidence_markdown(rows, len(rows), 712, "2026-08-14T00:00:00Z")
+    assert "D-07 VERDICT: FAIL" in text
+    assert "9604738976" in text
+
+
+def test_build_census_points_uses_blank_tier_key_for_none():
+    rows = build_rows([{"id": "222", "name": "Blank Co", "lv_icp_tier": None,
+                         "lv_icp_tier_derived": None, "lv_icp_fit_score": "0",
+                         "lv_anti_icp_flag": "false"}])
+    before, after = build_census_points(rows)
+    assert before["tier_distribution"] == {"Unscored-or-blank": 1}
+    assert after["tier_distribution"] == {"Unscored-or-blank": 1}
+
+
+def test_render_census_markdown_matches_pre_registered_expectation():
+    rows = build_rows(_STUCK_RECORDS + [_CLEAN_RECORD])
+    before, after = build_census_points(rows)
+    text = render_census_markdown(before, after, 646, "coalesced_minus_one", "2026-08-14T00:00:00Z")
+    assert "Census matches the pre-registered expectation." in text
+    assert "646 never-enriched companies" in text
+    for windows_record in _STUCK_RECORDS:
+        assert windows_record["id"] in text
+
+
+def test_render_census_markdown_flags_unexpected_movement_as_defect():
+    broken = [dict(r) for r in _STUCK_RECORDS]
+    broken[0]["lv_icp_tier"] = "A"  # unexpected: not the pre-registered C->B move
+    rows = build_rows(broken + [_CLEAN_RECORD])
+    before, after = build_census_points(rows)
+    text = render_census_markdown(before, after, 646, "coalesced_minus_one", "2026-08-14T00:00:00Z")
+    assert "DEFECT: the census diverges from the pre-registered expectation" in text
+
+
+def test_render_census_markdown_population_mismatch_raises():
+    """The census renderer must raise, not silently render a clean pass, when a
+    distribution does not sum to its stated population count -- reusing
+    scripts/build_rescore_report.py::_validate_point's own invariant."""
+    before = {"label": "Before (lv_icp_tier)", "population_count": 2,
+              "tier_distribution": {"A": 1}, "records": {}}
+    after = {"label": "After (lv_icp_tier_derived)", "population_count": 2,
+             "tier_distribution": {"A": 2}, "records": {}}
+    with pytest.raises(ValueError):
+        render_census_markdown(before, after, 0, "coalesced_minus_one", "2026-08-14T00:00:00Z")
+
+
+def test_render_census_markdown_empty_population_raises():
+    before = {"label": "Before (lv_icp_tier)", "population_count": 0,
+              "tier_distribution": {}, "records": {}}
+    after = {"label": "After (lv_icp_tier_derived)", "population_count": 0,
+             "tier_distribution": {}, "records": {}}
+    with pytest.raises(ValueError):
+        render_census_markdown(before, after, 0, "coalesced_minus_one", "2026-08-14T00:00:00Z")
