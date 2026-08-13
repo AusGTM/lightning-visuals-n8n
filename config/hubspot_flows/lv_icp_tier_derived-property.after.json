@@ -1,0 +1,27 @@
+{
+  "archived": false,
+  "calculated": true,
+  "calculationFormula": "if coalesce(lv_anti_icp_flag, 0) equals 1 then 'D'\nelseif coalesce(lv_icp_fit_score, -1) >= 70 then 'A'\nelseif coalesce(lv_icp_fit_score, -1) >= 40 then 'B'\nelseif coalesce(lv_icp_fit_score, -1) >= 15 then 'C' else 'Unscored'",
+  "createdAt": "2026-08-13T21:33:17.912Z",
+  "createdUserId": "87581729",
+  "dataSensitivity": "non_sensitive",
+  "description": "",
+  "displayOrder": -1,
+  "externalOptions": false,
+  "fieldType": "calculation_equation",
+  "formField": false,
+  "groupName": "companyinformation",
+  "hasUniqueValue": false,
+  "hidden": false,
+  "label": "ICP Tier (Derived)",
+  "modificationMetadata": {
+    "archivable": true,
+    "readOnlyDefinition": false,
+    "readOnlyValue": true
+  },
+  "name": "lv_icp_tier_derived",
+  "options": [],
+  "type": "string",
+  "updatedAt": "2026-08-13T21:33:17.912Z",
+  "updatedUserId": "87581729"
+}
