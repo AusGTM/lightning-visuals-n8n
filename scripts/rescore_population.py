@@ -42,6 +42,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -184,27 +185,179 @@ def assert_payload_scope(updates: list) -> None:
             )
 
 
-# --- CLI ---------------------------------------------------------------------------------
+# --- population re-confirm (D-03: never reuse a cached id list across the arm-time gate
+# and the write; re-derive live, immediately before every write leg) -----------------------
 
-def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--plan", action="store_true",
-                       help="Dry plan mode (default): re-derive the live scored population "
-                            "and print a budget-bounded plan. No writes of any kind.")
-    return parser
+def _derive_and_confirm_population():
+    """Derives the live scored population, then re-derives it a SECOND time immediately
+    before any write path is allowed to proceed, and refuses (returns None, prints a
+    refusal) unless the two derivations are exactly equal (enforce_exact_population).
+    Guards against a race between "what we planned to write" and "what is live right
+    now" within a single invocation -- population selection is a read, so this costs
+    one extra search_records call, never a write."""
+    ids = select_scored_population()
+    if not ids:
+        print("REFUSED: live population read returned zero ids -- refusing rather than "
+              "acting on an empty population. Check credentials/portal id and retry.")
+        return None
+    confirm_ids = select_scored_population()
+    if not enforce_exact_population(ids, confirm_ids):
+        print("REFUSED: the live scored population changed between derivation and "
+              "write -- refusing rather than acting on a stale sample. Re-run the driver.")
+        return None
+    if not enforce_sample_cap(ids):
+        print(f"REFUSED: resolved population has {len(ids)} records, exceeding the "
+              f"backfill cap ({backfill._resolved_max_records()}). No API call made.")
+        return None
+    return ids
 
 
-def main(argv=None) -> int:
-    parser = _build_parser()
-    parser.parse_args(argv)  # --plan is the only mode this task wires; also the default.
+def _fetch_records(ids: list, props: list) -> list:
+    return [{"id": i, "properties": get_record("companies", i, props)["properties"]} for i in ids]
 
-    _apply_max_records_default()
 
+# --- canary selection (D-04) ---------------------------------------------------------------
+
+def select_canary(records: list) -> str:
+    """records: [{"id": ..., "properties": {canonical inputs + currently stored
+    COMPONENT_PROPS}}], already sorted by id (callers pass ids from select_scored_population,
+    which sorts). Rule, never a hard-coded id: the first id whose lv_org_type reads
+    individual_club_team (the org type whose weight moved 5 -> 15 under Phase 46, so its
+    components are guaranteed to change). Falling back to the first id whose freshly
+    computed components differ from what is currently stored, if no individual_club_team
+    record exists. Last resort (neither condition matches any record): the first record in
+    sorted order, so a canary is always chosen when records is non-empty."""
+    for record in records:
+        if record["properties"].get("lv_org_type") == "individual_club_team":
+            return record["id"]
+    for record in records:
+        computed = compute_components(record["properties"])
+        stored = {k: record["properties"].get(k) for k in COMPONENT_PROPS}
+        if any(str(computed[k]) != str(stored.get(k)) for k in COMPONENT_PROPS):
+            return record["id"]
+    return records[0]["id"]
+
+
+# --- settle (D-04: poll until two consecutive reads agree, never a fixed sleep;
+# mirrors backfill_seed_company_scores.py's own _settle(), but a generous 300s default,
+# not the single-record 11s figure measured in Phase 40-07 -- a simultaneous multi-record
+# batch firing the calculated-property chain has never been timed at this scale,
+# 49-RESEARCH.md assumption A2) -----------------------------------------------------------
+
+def _settle_one(company_id: str, prop: str, timeout: float, interval: float):
+    start = time.monotonic()
+    previous = None
+    first_read = True
+    while True:
+        record = get_record("companies", company_id, [prop])
+        current = record.get("properties", {}).get(prop)
+        elapsed = time.monotonic() - start
+        if not first_read and current == previous:
+            print(f"  {company_id}: {prop}={current!r} (settled after {elapsed:.1f}s)")
+            return current
+        first_read = False
+        previous = current
+        if elapsed >= timeout:
+            print(f"  {company_id}: {prop}={current!r} (timed out after {elapsed:.1f}s)")
+            return current
+        time.sleep(interval)
+
+
+def settle_population(ids: list, prop: str, timeout: float = 300, interval: float = 5) -> dict:
+    """Polls prop for each id until it stops changing across two consecutive reads, or
+    timeout elapses. Prints a per-record settled/timed-out line; asserts nothing on the
+    values itself -- the parity sweep (scripts/run_scoring_parity.py) is what checks
+    correctness. Returns {id: final_value}."""
+    return {company_id: _settle_one(company_id, prop, timeout=timeout, interval=interval)
+            for company_id in ids}
+
+
+# --- write legs (T-49-01: both arm keys required; disarmed builds+prints, never calls
+# batch_update_companies at all) -------------------------------------------------------------
+
+def run_canary() -> int:
     if not _has_credentials():
         print("skipped (no credentials): HUBSPOT_PRIVATE_APP_TOKEN must be set to run this driver.")
         return 0
+    if not _portal_ok():
+        print(f"REFUSED: HUBSPOT_PORTAL_ID does not match the expected portal "
+              f"({EXPECTED_PORTAL_ID}). No API call made.")
+        return 1
 
+    ids = _derive_and_confirm_population()
+    if ids is None:
+        return 1
+
+    candidates = _fetch_records(ids, CANONICAL_INPUT_PROPS + COMPONENT_PROPS)
+    canary_id = select_canary(candidates)
+    canary_record = next(r for r in candidates if r["id"] == canary_id)
+    components = compute_components(canary_record["properties"])
+    update = [{"id": canary_id, "properties": components}]
+    assert_payload_scope(update)
+
+    print(json.dumps({"canary_id": canary_id, "components": components}, indent=2))
+
+    armed = _writes_allowed()
+    if not armed:
+        print("DISARMED -- no write performed. Set DRY_RUN=false and "
+              "ALLOW_SCORE_BACKFILL=true to arm.")
+        return 0
+
+    batch_update_companies(update, dry_run=False)
+    print(f"canary written -- settling {canary_id} (up to 300s)...")
+    fit_score = settle_population([canary_id], "lv_icp_fit_score", timeout=300)
+    tier = settle_population([canary_id], "lv_icp_tier", timeout=300)
+    print(json.dumps({"canary_id": canary_id, "lv_icp_fit_score": fit_score.get(canary_id),
+                       "lv_icp_tier": tier.get(canary_id)}, indent=2))
+    return 0
+
+
+def run_execute(already_written: list) -> int:
+    if not _has_credentials():
+        print("skipped (no credentials): HUBSPOT_PRIVATE_APP_TOKEN must be set to run this driver.")
+        return 0
+    if not _portal_ok():
+        print(f"REFUSED: HUBSPOT_PORTAL_ID does not match the expected portal "
+              f"({EXPECTED_PORTAL_ID}). No API call made.")
+        return 1
+
+    ids = _derive_and_confirm_population()
+    if ids is None:
+        return 1
+
+    already_written_set = set(already_written or [])
+    to_write_ids = [i for i in ids if i not in already_written_set]
+
+    if not to_write_ids:
+        print("nothing to write -- every derived id is already written.")
+        return 0
+
+    records = _fetch_records(to_write_ids, CANONICAL_INPUT_PROPS)
+    updates = build_updates(records)
+
+    armed = _writes_allowed()
+    for chunk in _chunked(updates, BATCH_CHUNK_SIZE):
+        assert_payload_scope(chunk)
+        print(json.dumps({"chunk_size": len(chunk), "ids": [u["id"] for u in chunk]}, indent=2))
+        if armed:
+            batch_update_companies(chunk, dry_run=False)
+
+    if not armed:
+        print("DISARMED -- no write performed. Set DRY_RUN=false and "
+              "ALLOW_SCORE_BACKFILL=true to arm.")
+        return 0
+
+    print(f"armed run complete -- {len(updates)} companies written. Settling (up to 300s each)...")
+    written_ids = [u["id"] for u in updates]
+    settle_population(written_ids, "lv_icp_fit_score", timeout=300)
+    settle_population(written_ids, "lv_icp_tier", timeout=300)
+    return 0
+
+
+def run_plan() -> int:
+    if not _has_credentials():
+        print("skipped (no credentials): HUBSPOT_PRIVATE_APP_TOKEN must be set to run this driver.")
+        return 0
     if not _portal_ok():
         print(f"REFUSED: HUBSPOT_PORTAL_ID does not match the expected portal "
               f"({EXPECTED_PORTAL_ID}). No API call made.")
@@ -222,6 +375,43 @@ def main(argv=None) -> int:
     plan = build_plan(ids)
     print(json.dumps(plan, indent=2, default=str))
     return 0
+
+
+# --- CLI ---------------------------------------------------------------------------------
+
+def _build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--plan", action="store_true",
+                       help="Dry plan mode (default): re-derive the live scored population "
+                            "and print a budget-bounded plan. No writes of any kind.")
+    mode.add_argument("--canary", action="store_true",
+                       help="Write exactly one record, chosen by rule, and settle it -- "
+                            "confirm before releasing --execute for the remainder. "
+                            "Requires DRY_RUN=false and ALLOW_SCORE_BACKFILL=true to "
+                            "actually write; disarmed, prints what would be written.")
+    mode.add_argument("--execute", action="store_true",
+                       help="Write the remainder of the live-derived population (minus "
+                            "any --already-written ids) and settle. Requires DRY_RUN=false "
+                            "and ALLOW_SCORE_BACKFILL=true to actually write; disarmed, "
+                            "prints what would be written.")
+    parser.add_argument("--already-written", action="append", default=[], dest="already_written",
+                         help="Company id already written by an earlier --canary step "
+                              "(repeatable); excluded from --execute's write set.")
+    return parser
+
+
+def main(argv=None) -> int:
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
+    _apply_max_records_default()
+
+    if args.canary:
+        return run_canary()
+    if args.execute:
+        return run_execute(args.already_written)
+    return run_plan()  # --plan is the default when no mode flag is given.
 
 
 if __name__ == "__main__":
