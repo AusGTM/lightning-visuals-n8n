@@ -88,35 +88,44 @@ scheduled fix.
 
 ---
 
-## Deviation: the published Artifact (D-11) — deferred, committed markdown is the durable substitute
+## Deviation: the published Artifact (D-11) — deferred by the plan executor, then RESOLVED by the orchestrator (2026-08-13)
 
-`49-CONTEXT.md` D-11 calls for `49-RESCORE-REPORT.md` **plus** a published, private Artifact
-rendering the same content as a readable, forwardable surface — and states that publishing it
-also discharges Phase 46-03's own deferred D-09 artifact-publish obligation, which was deferred
-for exactly this reason: that executor session had no artifact-publishing capability.
+**Resolution, recorded first since it is the current state:** the Artifact is published.
+**https://claude.ai/code/artifact/2ac2d25f-586c-4123-9c23-2e6cc7634d2b**, private by default,
+rendered from `49-RESCORE-REPORT.md`'s committed content — same nine sections, same figures, same
+caveats, restyled for reading in a chat client rather than a repository. The operator reviewed it
+against the checkpoint's five verification steps and responded **"approved"** (2026-08-13). D-11
+is **satisfied**, not deferred. The committed markdown remains the durable, git-reproducible
+source of record; the Artifact is the forwardable reading surface built from it.
 
-**This session has the same limitation, for the same reason.** No artifact-publish tool is
-present in this session's toolset (Read/Write/Bash/Skill/advisor and the listed skills — none of
-which publish a Claude Artifact). Per the plan's own Task 49-07-03 instruction ("if the executing
-session has no artifact-publish capability, do not fabricate one: fall back to the committed
-markdown alone and record the fallback as a disclosed deviation... following that earlier phase's
-precedent"), this is recorded here rather than a URL being invented.
+**D-11's second discharge target — Phase 46-03's own carried-forward D-09 shareable-artifact
+publish — is likewise now genuinely satisfied, not carried forward again.** D-09 asked for
+exactly this: a published shareable Artifact discharging the obligation an earlier CLI session
+could not pay. That obligation is paid by the same publish event described above; it does not
+need a second, separate act.
 
-**What this means for D-11's two discharge targets:**
+**How it got here — the history, preserved rather than overwritten:**
 
-- **This phase's own artifact obligation** is not met by this session. `49-RESCORE-REPORT.md`
-  is the durable, git-reproducible, fully-sourced substitute — every figure in it traces to a
-  committed snapshot, and it requires no repository access beyond a text reader to follow.
-- **Phase 46-03's carried-forward D-09 discharge does not happen here either.** It remains
-  outstanding, exactly as it was before this phase started — this session does not close a debt
-  it cannot pay, and does not claim to.
+The plan executor session that ran Tasks 1 and 2 reached Task 49-07-03 with no artifact-publish
+tool in its toolset (Read/Write/Bash/Skill/advisor and the listed skills — none of which publish a
+Claude Artifact). Per the plan's own Task 49-07-03 instruction ("if the executing session has no
+artifact-publish capability, do not fabricate one: fall back to the committed markdown alone and
+record the fallback as a disclosed deviation... following that earlier phase's precedent"), it
+recorded the deferral here rather than inventing a URL. That was the correct call at the time: the
+capability genuinely was not present in that session, and disclosing rather than fabricating is
+exactly what the plan's own instruction and the Phase 46-03 precedent required.
 
-**Path to actually publishing, for whichever session next has the capability:** open
-`49-RESCORE-REPORT.md` in a session with Claude Artifacts available, publish it **private by
-default** (per D-11's own instruction — it carries internal company names, tiers, and scores),
-and hand the operator the link. No content transformation is required; the committed markdown
-is already the intended Artifact content.
+*Original precedent this deferral followed: `46-03-SUMMARY.md` ("D-09's shareable-artifact
+publish deferred to the orchestrator session... this CLI executor has no artifact-publishing
+capability"), `46-DECISION.md` "D-09 publish note".*
 
-*Precedent: `46-03-SUMMARY.md` ("D-09's shareable-artifact publish deferred to the orchestrator
-session... this CLI executor has no artifact-publishing capability"), `46-DECISION.md`
-"D-09 publish note".*
+**The sequence in full, so neither half of the story is lost:**
+
+1. The plan executor lacked artifact-publish capability and correctly disclosed that limitation
+   rather than fabricating a link (recorded above, this section, originally).
+2. The orchestrator — which does carry that capability — published `49-RESCORE-REPORT.md` as a
+   private Artifact at the URL above, on 2026-08-13.
+3. The operator reviewed the published Artifact against the checkpoint's verification steps and
+   responded "approved" (2026-08-13).
+4. D-11 is satisfied for this phase, and Phase 46-03's D-09 is satisfied through it — both closed,
+   neither carried forward again.
