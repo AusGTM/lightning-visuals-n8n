@@ -631,10 +631,13 @@ still-open:
 reads this session (`[VERIFIED: path:lines]` tags throughout) rather than assumed from training
 knowledge, because the entire domain is this repo's own code.
 
-## Open Questions
+## Open Questions (RESOLVED)
 
-1. **Does `enforce_exact_population` re-derive the population at arm time, or assert against a
-   pre-arm snapshot?**
+*All three were closed at plan time (2026-08-13). Each recommendation below was adopted; the
+plan that adopted it is named inline.*
+
+1. **RESOLVED — Does `enforce_exact_population` re-derive the population at arm time, or assert
+   against a pre-arm snapshot?** Adopted: arm-time re-derivation, in plan **49-01**.
    - What we know: CONTEXT.md leaves this as Claude's discretion, with a stated preference for
      arm-time re-derivation.
    - What's unclear: whether a pre-arm snapshot introduces any race risk given the population
@@ -643,7 +646,9 @@ knowledge, because the entire domain is this repo's own code.
    - Recommendation: arm-time re-derivation, per CONTEXT.md's stated preference and the "Re-derive
      it live and stamp the date anyway" house rule — a snapshot is evidence, never a guarantee.
 
-2. **Does the settle timeout need raising for a 66-record simultaneous batch write?**
+2. **RESOLVED — Does the settle timeout need raising for a 66-record simultaneous batch write?**
+   Adopted: the generous 300s settle timeout, treated as its own verification step, in plan
+   **49-05**.
    - What we know: 11s was measured for one record (Phase 40-07).
    - What's unclear: whether HubSpot's calculation-property engine processes 66 simultaneous
      triggers in parallel or serially, and whether `_settle()`'s existing `timeout=120` default
@@ -652,8 +657,9 @@ knowledge, because the entire domain is this repo's own code.
      step with a generous timeout (e.g. 300s, matching `post_webhook_event`'s Trap-4-corrected
      read timeout) rather than assuming the single-record figure holds unchanged.
 
-3. **Where does the `--plan` mode live — on `backfill_seed_company_scores.py` directly, or a
-   thin wrapper?**
+3. **RESOLVED — Where does the `--plan` mode live — on `backfill_seed_company_scores.py`
+   directly, or a thin wrapper?** Adopted: the thin wrapper module (`rescore_population.py`),
+   in plan **49-01**; `enforce_sample_cap` is left untouched.
    - What we know: CONTEXT.md leaves this as Claude's discretion.
    - What's unclear: whether adding `--plan` to the existing module changes its existing
      10/25-record-scoped Phase 40 contract in a way that could affect other callers

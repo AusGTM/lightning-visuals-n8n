@@ -4,17 +4,17 @@ milestone: v0.9
 milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 48
 current_phase_name: Enrichment Coverage
-status: phase_complete
+status: executing
 stopped_at: Phase 49 context gathered
-last_updated: "2026-08-13T02:51:06.602Z"
+last_updated: "2026-08-13T03:40:50.240Z"
 last_activity: 2026-08-12
 last_activity_desc: Phase 48 execution started
 progress:
   total_phases: 5
   completed_phases: 4
-  total_plans: 22
+  total_plans: 29
   completed_plans: 22
-  percent: 80
+  percent: 76
 ---
 
 # Project State
@@ -114,7 +114,7 @@ predating the window. VETO-03 bar still 0.
 
 Phase: 48 (Enrichment Coverage) — EXECUTING
 Plan: 6 of 6
-Status: Phase complete — ready for verification
+Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
   has executed on a real record. **Nothing is armed** — windows #1 and #2 were each opened

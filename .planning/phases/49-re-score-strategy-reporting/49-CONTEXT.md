@@ -167,8 +167,8 @@ their scores move but their tiers do not.
     verbatim. A re-read of the stored PUT body is not evidence (Trap 3).
   - Arm and window run as **separate shell invocations** so a failed window start still has an
     explicit disarm path (48-05's precedent).
-  - **D-05's declaration is unchanged.** Delegation changes who types the command, not how many
-    times it may be typed.
+  - **The window declaration in D-05 is unchanged.** Delegation changes who types the command,
+    not how many times it may be typed.
   - **Project-level D-07 is unaffected** (see `<constraints>`).
 
 ### The reusable procedure (RESCORE-01)
