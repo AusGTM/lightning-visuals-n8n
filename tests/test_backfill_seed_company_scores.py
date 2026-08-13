@@ -208,6 +208,67 @@ def test_backfill_sample_cap_allows_sample_at_the_limit(monkeypatch):
     assert backfill.enforce_sample_cap(at_limit) is True
 
 
+def test_backfill_hard_ceiling_is_100_not_25():
+    # Phase 49 Plan 01 (D-03): raised from 25 so the module's own count cap no longer
+    # refuses the 66-record live scored population rescore_population.py re-derives.
+    backfill = _import_backfill()
+    assert backfill.HARD_CEILING_RECORDS == 100
+
+
+def test_backfill_sample_cap_at_new_ceiling_still_allowed(monkeypatch):
+    # The ceiling raise must not change enforce_sample_cap's own behaviour -- still True
+    # at exactly the resolved cap, False one above it, when the operator asks for the
+    # full new ceiling via BACKFILL_MAX_RECORDS.
+    backfill = _import_backfill()
+    monkeypatch.setenv("BACKFILL_MAX_RECORDS", "100")
+    at_ceiling = [str(i) for i in range(100)]
+    over_ceiling = [str(i) for i in range(101)]
+    assert backfill.enforce_sample_cap(at_ceiling) is True
+    assert backfill.enforce_sample_cap(over_ceiling) is False
+
+
+# --- Task 1 (Phase 49 Plan 01, D-03): enforce_exact_population -------------------------
+
+def test_enforce_exact_population_true_for_permuted_copy():
+    backfill = _import_backfill()
+    live_ids = ["1", "2", "3", "4", "5"]
+    permuted_sample = ["5", "3", "1", "4", "2"]
+    assert backfill.enforce_exact_population(permuted_sample, live_ids) is True
+
+
+def test_enforce_exact_population_false_for_subset_missing_one_id():
+    backfill = _import_backfill()
+    live_ids = ["1", "2", "3", "4", "5"]
+    missing_one = ["1", "2", "3", "4"]
+    assert backfill.enforce_exact_population(missing_one, live_ids) is False
+
+
+def test_enforce_exact_population_false_for_superset_extra_one_id():
+    backfill = _import_backfill()
+    live_ids = ["1", "2", "3", "4", "5"]
+    extra_one = ["1", "2", "3", "4", "5", "6"]
+    assert backfill.enforce_exact_population(extra_one, live_ids) is False
+
+
+def test_enforce_exact_population_false_for_empty_sample_against_nonempty_live():
+    backfill = _import_backfill()
+    live_ids = ["1", "2", "3"]
+    assert backfill.enforce_exact_population([], live_ids) is False
+
+
+def test_enforce_exact_population_true_for_both_empty():
+    backfill = _import_backfill()
+    assert backfill.enforce_exact_population([], []) is True
+
+
+def test_enforce_exact_population_is_a_second_predicate_not_a_replacement():
+    # enforce_sample_cap must remain callable and correct independently of the new
+    # exact-set gate -- both are add-alongside, per D-03.
+    backfill = _import_backfill()
+    assert callable(backfill.enforce_sample_cap)
+    assert callable(backfill.enforce_exact_population)
+
+
 def test_backfill_refuses_to_write_without_both_arming_keys(monkeypatch):
     backfill = _import_backfill()
     monkeypatch.delenv("ALLOW_SCORE_BACKFILL", raising=False)

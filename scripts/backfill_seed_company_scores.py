@@ -82,7 +82,15 @@ COMPONENT_PROPS = [
 # portfolio-wide 712-record run is Phase 41's job, not something a single env var typo
 # should be able to trigger here.
 DEFAULT_MAX_RECORDS = 10
-HARD_CEILING_RECORDS = 25
+# Phase 49 Plan 01 (D-03): raised 25 -> 100 so this module's cap no longer refuses the
+# 66-record live scored population that scripts/rescore_population.py re-derives. This is
+# a strengthening, not a relaxation: a count cap of 100 still permits ANY <=100-record
+# subset (a stale snapshot, a 60-of-66 typo, a race-polluted search result). The new,
+# separate enforce_exact_population() predicate below is what actually pins the sample to
+# the live-derived scored population -- the two checks are independent and both required.
+# See PINNED_COMPANY_ID_ORDER in scripts/remediate_veto_companies.py for the Phase 47
+# precedent of pinning an exact set rather than trusting a count.
+HARD_CEILING_RECORDS = 100
 
 BATCH_CHUNK_SIZE = 100
 
@@ -149,6 +157,21 @@ def enforce_sample_cap(sample_ids: list) -> bool:
     non-zero) rather than silently truncating -- D-09's scope boundary is enforced here,
     not trusted to the caller."""
     return len(sample_ids) <= _resolved_max_records()
+
+
+def enforce_exact_population(sample_ids: list, live_ids: list) -> bool:
+    """True only if sample_ids == the live-derived HAS_PROPERTY(lv_icp_fit_score) set,
+    exactly -- a second, independent predicate added ALONGSIDE enforce_sample_cap (D-03),
+    never in place of it. A count cap of 100 permits any <=100-record subset; this refuses
+    everything except the intended population, including a 65-of-66 subset, a 67-id
+    superset, or an empty set against a non-empty live set. Refuse (return False), never
+    truncate -- same contract as enforce_sample_cap.
+
+    Deliberately add-alongside, not in-place replacement: scripts/remediate_veto_companies.py
+    imports compute_components from this module, and this module's own Phase 40 contract is
+    proving the mechanism on a *small* sample -- a predicate that demanded set-equality with
+    the full scored population would make a 3-record proving run impossible."""
+    return set(sample_ids) == set(live_ids)
 
 
 def _has_credentials() -> bool:
