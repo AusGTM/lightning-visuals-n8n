@@ -85,3 +85,38 @@ window's declared write mechanism (a same-value PATCH fires no HubSpot workflow-
 event). This is reported as the true state of the milestone, not smoothed into a false PASS — see
 `49-RESCORE-REPORT.md` §9 and `.planning/WINDOWS.md` entries 9–12 for the full account and the
 scheduled fix.
+
+---
+
+## Deviation: the published Artifact (D-11) — deferred, committed markdown is the durable substitute
+
+`49-CONTEXT.md` D-11 calls for `49-RESCORE-REPORT.md` **plus** a published, private Artifact
+rendering the same content as a readable, forwardable surface — and states that publishing it
+also discharges Phase 46-03's own deferred D-09 artifact-publish obligation, which was deferred
+for exactly this reason: that executor session had no artifact-publishing capability.
+
+**This session has the same limitation, for the same reason.** No artifact-publish tool is
+present in this session's toolset (Read/Write/Bash/Skill/advisor and the listed skills — none of
+which publish a Claude Artifact). Per the plan's own Task 49-07-03 instruction ("if the executing
+session has no artifact-publish capability, do not fabricate one: fall back to the committed
+markdown alone and record the fallback as a disclosed deviation... following that earlier phase's
+precedent"), this is recorded here rather than a URL being invented.
+
+**What this means for D-11's two discharge targets:**
+
+- **This phase's own artifact obligation** is not met by this session. `49-RESCORE-REPORT.md`
+  is the durable, git-reproducible, fully-sourced substitute — every figure in it traces to a
+  committed snapshot, and it requires no repository access beyond a text reader to follow.
+- **Phase 46-03's carried-forward D-09 discharge does not happen here either.** It remains
+  outstanding, exactly as it was before this phase started — this session does not close a debt
+  it cannot pay, and does not claim to.
+
+**Path to actually publishing, for whichever session next has the capability:** open
+`49-RESCORE-REPORT.md` in a session with Claude Artifacts available, publish it **private by
+default** (per D-11's own instruction — it carries internal company names, tiers, and scores),
+and hand the operator the link. No content transformation is required; the committed markdown
+is already the intended Artifact content.
+
+*Precedent: `46-03-SUMMARY.md` ("D-09's shareable-artifact publish deferred to the orchestrator
+session... this CLI executor has no artifact-publishing capability"), `46-DECISION.md`
+"D-09 publish note".*
