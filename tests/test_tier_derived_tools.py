@@ -300,6 +300,29 @@ def test_render_census_markdown_flags_unexpected_movement_as_defect():
     assert "DEFECT: the census diverges from the pre-registered expectation" in text
 
 
+def test_render_census_markdown_severity_callout_for_d_tier_records():
+    """A vetoed record (Before tier D) that no longer reads D After triggers the explicit
+    SEVERITY callout -- not just the generic DEFECT line -- naming the record so the
+    consequence (derived property less safe than the stale enum for that record) is
+    visible to anyone reading only this artifact."""
+    vetoed = {"id": "18047161864", "name": "Simtech LED", "lv_icp_tier": "D",
+              "lv_icp_tier_derived": "B", "lv_icp_fit_score": "40",
+              "lv_anti_icp_flag": "true"}
+    rows = build_rows(_STUCK_RECORDS + [_CLEAN_RECORD, vetoed])
+    before, after = build_census_points(rows)
+    text = render_census_markdown(before, after, 646, "coalesced_minus_one", "2026-08-14T00:00:00Z")
+    assert "SEVERITY" in text
+    assert "Simtech LED" in text
+    assert "D-06/D-08 stay blocked" in text
+
+
+def test_render_census_markdown_no_severity_callout_when_no_d_tier_movement():
+    rows = build_rows(_STUCK_RECORDS + [_CLEAN_RECORD])
+    before, after = build_census_points(rows)
+    text = render_census_markdown(before, after, 646, "coalesced_minus_one", "2026-08-14T00:00:00Z")
+    assert "SEVERITY" not in text
+
+
 def test_render_census_markdown_population_mismatch_raises():
     """The census renderer must raise, not silently render a clean pass, when a
     distribution does not sum to its stated population count -- reusing

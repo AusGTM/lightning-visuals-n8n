@@ -96,3 +96,46 @@ Each is verified by read-back and by nothing else -- no PATCH, no event, no enro
 - **The 4 expected-mismatch rows are the ONLY accepted divergence class.** Any other row classified `defect` means D-07's gate has failed, not that a rounding difference occurred.
 - **This artifact does not itself retire `lv_icp_tier` or switch off WF1** (4625147345). D-06/D-08 remain gated on a human decision downstream of this evidence (Plan 04's checkpoint), not on this report alone.
 - **The D-16 zero-write claim is this script's own guarantee, not an external audit.** `scripts/check_tier_derived_parity.py` issues no `requests.{post,patch,delete}` call anywhere in this module; the claim is verifiable by reading the module, not merely asserted here.
+
+---
+
+## Operator-Facing Result: Before/After Tier Census (D-19)
+
+- **Before** (Before (lv_icp_tier)) and **after** (After (lv_icp_tier_derived)) are read live in the SAME run (2026-08-13T22:00:23.967741+00:00) against the same 66-company scored population, so the two distributions cannot drift apart from each other.
+- **Pre-registered expectation (D-19), stated before this run's result was known:** identical distribution except the 4 known stuck records (9604738976, 9605273630, 17696004613, 19100977027) moving C -> B. Any other movement is a defect signal, not a narrative to explain.
+
+### Tier Distribution
+
+| Point | A | B | C | D | Unscored |
+|---|---|---|---|---|---|
+| Before | 9 | 41 | 7 | 6 | 3 |
+| After | 9 | 47 | 6 | 0 | 4 |
+
+### Tier Movements: Before -> After
+
+| Name | HubSpot ID | Before Tier | After Tier | Before Score | After Score | Delta |
+|---|---|---|---|---|---|---|
+| Bunbury Turf Club | 9604738976 | C | B | 45 | 45 | +0 |
+| Port Macquarie Race Club | 9605273630 | C | B | 45 | 45 | +0 |
+| Coffs Harbour Racing Club | 14752488879 | Unscored | C | 25 | 25 | +0 |
+| Supertech Electronics | 15274105699 | D | Unscored | 10 | 10 | +0 |
+| Queensland Racing Integrity Commission | 16047156820 | D | Unscored | 0 | 0 | +0 |
+| Jam TV | 17317850381 | D | B | 40 | 40 | +0 |
+| Pinjarra Park | 17696004613 | C | B | 45 | 45 | +0 |
+| Big Screen Video | 17791151956 | D | C | 20 | 20 | +0 |
+| Sportsbet | 17861423879 | D | C | 20 | 20 | +0 |
+| Simtech LED | 18047161864 | D | B | 40 | 40 | +0 |
+| Newcastle Harness Racing Club | 19100977027 | C | B | 45 | 45 | +0 |
+
+**DEFECT: the census diverges from the pre-registered expectation -- see the movement table above for exactly which row(s) moved unexpectedly.**
+
+**SEVERITY: `lv_icp_tier_derived` is currently WORSE than the stale enum for vetoed records.** 6 of 11 unexpected movements are records correctly excluded on `lv_icp_tier` (Tier D) that read a workable score-based tier on `lv_icp_tier_derived` instead -- e.g. Supertech Electronics (15274105699), Queensland Racing Integrity Commission (16047156820). `lv_icp_tier_derived` must NOT be treated as authoritative for vetoed records until the veto guard is fixed and re-proven; D-06/D-08 stay blocked on this.
+
+### Never-scored population (D-04 disclosure)
+
+D-04's forced fallback fired (50-NULL-PROBE.json: `settled_variant=coalesced_minus_one`). A live `NOT_HAS_PROPERTY(lv_icp_fit_score)` count found **646 never-enriched companies**, each now reading `lv_icp_tier_derived="Unscored"` where `lv_icp_tier` stays blank. This is a disclosed, deliberate consequence of the forced coalesce fallback (Phase 49 unmet-truth style), not a surprise -- it is a SEPARATE population from the 66-company scored fraction above and is not folded into either distribution table.
+
+### What this does not say
+
+- **This census is a snapshot of one live run, not a monitor.** Both distributions are re-derived live in this same invocation; a later run against a changed population may differ.
+- **The never-scored count above is informational, not part of the movement verdict.** It is a disclosed side effect of the formula's null-handling variant, not a tier movement within the scored population being compared.

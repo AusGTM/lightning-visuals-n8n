@@ -379,6 +379,28 @@ def render_census_markdown(before_point, after_point, never_scored_count, null_v
     )
     lines.append("")
 
+    # Severity callout: a vetoed record (Before tier D) that no longer reads D After is
+    # not just "a defect row" -- it means lv_icp_tier_derived is actively LESS safe than
+    # the stale enum for that record (a workable score-based tier instead of the correct
+    # hard exclusion). Named explicitly, with examples, so this consequence is visible to
+    # anyone reading only this artifact -- not left implicit in a table cell.
+    d_to_other = [m for m in movements if m["from_tier"] == "D" and m["to_tier"] != "D"]
+    if d_to_other:
+        examples = ", ".join(
+            f"{m['name']} ({m['id']})"
+            for m in sorted(d_to_other, key=lambda m: _id_sort_key(m["id"]))[:2]
+        )
+        lines.append(
+            f"**SEVERITY: `lv_icp_tier_derived` is currently WORSE than the stale enum "
+            f"for vetoed records.** {len(d_to_other)} of {len(movements)} unexpected "
+            f"movements are records correctly excluded on `lv_icp_tier` (Tier D) that "
+            f"read a workable score-based tier on `lv_icp_tier_derived` instead -- e.g. "
+            f"{examples}. `lv_icp_tier_derived` must NOT be treated as authoritative for "
+            "vetoed records until the veto guard is fixed and re-proven; D-06/D-08 stay "
+            "blocked on this."
+        )
+        lines.append("")
+
     lines.append("### Never-scored population (D-04 disclosure)")
     lines.append("")
     if null_variant == "coalesced_minus_one":
