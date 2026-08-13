@@ -424,7 +424,7 @@ is a new property plus a migration, not a formula edit on the existing one.
   5. No company record is silently re-tiered outside a deliberately armed, capped write window,
      under the same discipline as Phases 47–49.
 
-**Plans**: 2/6 plans executed
+**Plans**: 3/6 plans executed
 
 Plans:
 **Wave 1**
@@ -438,7 +438,7 @@ Plans:
 
 **Wave 5** *(added 2026-08-14 — D-20/D-21 correction; must land BEFORE 50-04 and 50-05 despite its higher wave number, see the sequencing note below)*
 
-- [ ] 50-06-PLAN.md — Numeric veto mirror `lv_anti_icp_flag_num`, uncoalesced formula, both-engine drift control, and a re-run D-07 gate (wave 5)
+- [x] 50-06-PLAN.md — Numeric veto mirror `lv_anti_icp_flag_num`, uncoalesced formula, both-engine drift control, and a re-run D-07 gate (wave 5)
 
 **Wave 3** *(blocked on Wave 2 AND on 50-06)*
 
