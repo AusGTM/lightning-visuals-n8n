@@ -50,10 +50,12 @@ ORG_TYPE_DEFINITIONS = {k: v.get("definition", "") for k, v in ORG_TYPES.items()
 
 def org_type_definitions_block() -> str:
     """Deterministic single string listing every lv_org_type option with its semantic
-    definition, in config/taxonomy.yaml key order. gen_taxonomy_js.render() does NOT
-    read the `definition` key (it reads only the key list, synonyms, requires_evidence
-    and implies_content), so this block never reaches n8n/code/taxonomy.generated.js --
-    it is rendered ONLY into the two Python research prompts."""
+    definition, in config/taxonomy.yaml key order. As of Phase 49 Plan 03,
+    gen_taxonomy_js.render() ALSO reads the `definition` key and emits an
+    ORG_TYPE_DEFINITIONS const into n8n/code/taxonomy.generated.js, so the n8n research
+    prompt carries the same semantic content -- but rendered from that generated
+    const directly (scripts/build_cloud_workflows.py's researchSystemPrompt()), not by
+    calling this function, which remains the Python-prompt renderer only."""
     lines = ["lv_org_type option definitions:"]
     for key, definition in ORG_TYPE_DEFINITIONS.items():
         lines.append(f"- {key}: {definition}")

@@ -27,6 +27,7 @@ from src.taxonomy import (  # noqa: E402
     DEFAULT_CONTENT_TYPE,
     DEFAULT_ORG_TYPE,
     EVIDENCE_GATED_ORG_TYPES,
+    ORG_TYPE_DEFINITIONS,
     ORG_TYPES,
     VERSION,
     normalize_key,
@@ -68,6 +69,11 @@ def render() -> str:
         "",
         f"const ORG_TYPES = {json.dumps(org_types, indent=2)};",
         "",
+        # TX-10 (Phase 49 Plan 03): mirrors src.taxonomy.ORG_TYPE_DEFINITIONS so the n8n
+        # research prompt can carry the same discriminators as both Python prompts
+        # (org_type_definitions_block()) instead of a bare key list.
+        f"const ORG_TYPE_DEFINITIONS = {json.dumps(ORG_TYPE_DEFINITIONS, indent=2)};",
+        "",
         f"const ORG_TYPE_SYNONYMS = {json.dumps(org_synonyms, indent=2)};",
         "",
         f"const EVIDENCE_GATED_ORG_TYPES = {json.dumps(EVIDENCE_GATED_ORG_TYPES, indent=2)};",
@@ -85,6 +91,7 @@ def render() -> str:
         "module.exports = {",
         "  TAXONOMY_VERSION,",
         "  ORG_TYPES,",
+        "  ORG_TYPE_DEFINITIONS,",
         "  ORG_TYPE_SYNONYMS,",
         "  EVIDENCE_GATED_ORG_TYPES,",
         "  DEFAULT_ORG_TYPE,",

@@ -21,6 +21,18 @@ const ORG_TYPES = [
   "unknown"
 ];
 
+const ORG_TYPE_DEFINITIONS = {
+  "governing_body_league": "Holds commercial control of a sport or competition: sets the calendar or race programme, distributes prizemoney, and holds media rights and sponsorship, whether or not it ALSO carries statutory regulatory powers. Anchor example: Racing NSW, a statutory body that nonetheless programmes racing, distributes prizemoney, collects Race Fields fees and runs its own streaming.",
+  "content_producer": "Produces and distributes broadcast or streaming content but does not govern the sport it covers -- a media/production entity, not the competition's controlling body.",
+  "broadcaster": "A media company or network that airs or streams sport content, typically without governing the competition itself.",
+  "individual_club_team": "A single club, team, or venue-level sporting organisation -- not a governing body, league, or peak body for the wider sport.",
+  "regulator": "Integrity, licensing and stewarding ONLY, where a DIFFERENT body holds the commercial functions (calendar, prizemoney, media rights, sponsorship). Anchor example: QRIC, where Racing Queensland holds the commercial functions. Statutory origin is NOT the test -- both a pure regulator and a governing body can be created by an Act.",
+  "gambling_operator": "A bookmaker, betting exchange, or wagering/gaming operator -- takes bets or offers gambling products, rather than producing or governing sport.",
+  "hardware_vendor": "An AV/LED/display or systems-integration vendor supplying broadcast hardware -- not a sports-media buyer; a hard-veto trigger.",
+  "other": "A company that does not fit any other org_type option -- identity is known but the category is genuinely outside this list.",
+  "unknown": "Identity or category could not be established from the evidence available -- the default; never guessed into."
+};
+
 const ORG_TYPE_SYNONYMS = {
   "league": "governing_body_league",
   "governing body": "governing_body_league",
@@ -114,6 +126,7 @@ const DEFAULT_CONTENT_TYPE = "unknown";
 module.exports = {
   TAXONOMY_VERSION,
   ORG_TYPES,
+  ORG_TYPE_DEFINITIONS,
   ORG_TYPE_SYNONYMS,
   EVIDENCE_GATED_ORG_TYPES,
   DEFAULT_ORG_TYPE,
