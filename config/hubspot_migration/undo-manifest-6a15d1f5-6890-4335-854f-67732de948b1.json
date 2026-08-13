@@ -1,0 +1,16 @@
+[
+  {
+    "group_name": "companyinformation",
+    "kind": "property",
+    "name": "lv_anti_icp_flag_num",
+    "object_type": "companies",
+    "request_body": {
+      "fieldType": "number",
+      "groupName": "companyinformation",
+      "label": "Anti ICP Flag (Numeric)",
+      "name": "lv_anti_icp_flag_num",
+      "options": [],
+      "type": "number"
+    }
+  }
+]

@@ -1,0 +1,26 @@
+{
+  "archived": false,
+  "calculated": false,
+  "createdAt": "2026-08-13T23:07:58.411Z",
+  "createdUserId": "87581729",
+  "dataSensitivity": "non_sensitive",
+  "description": "",
+  "displayOrder": -1,
+  "externalOptions": false,
+  "fieldType": "number",
+  "formField": false,
+  "groupName": "companyinformation",
+  "hasUniqueValue": false,
+  "hidden": false,
+  "label": "Anti ICP Flag (Numeric)",
+  "modificationMetadata": {
+    "archivable": true,
+    "readOnlyDefinition": false,
+    "readOnlyValue": false
+  },
+  "name": "lv_anti_icp_flag_num",
+  "options": [],
+  "type": "number",
+  "updatedAt": "2026-08-13T23:07:58.411Z",
+  "updatedUserId": "87581729"
+}

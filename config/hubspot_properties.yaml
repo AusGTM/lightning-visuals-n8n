@@ -405,6 +405,12 @@ companies:
       value: 'false'
       displayOrder: 1
       hidden: false
+  - name: lv_anti_icp_flag_num
+    label: Anti ICP Flag (Numeric)
+    type: number
+    fieldType: number
+    groupName: companyinformation
+    options: []
   - name: lv_icp_tier
     label: ICP Tier
     type: enumeration
