@@ -308,9 +308,18 @@ their scores move but their tiers do not.
   read  lv_icp_tier          → D            (t0, independent read)
   write region + lv_produces_content
   poll  until lv_anti_icp_flag settles
-  read  lv_icp_tier          → B or C       (t1, independent read)
+  read  lv_icp_tier          → non-D        (t1, independent read)
   record t1 − t0
   ```
+
+  **Assert `≠ D`, never a specific tier.** The landing tier depends on Entain's
+  `lv_revenue_band`, which must be read in pre-flight rather than assumed: Entain plc is a
+  1.2B+-revenue company, and if that band is populated the rubric's **−50** deduction applies —
+  `produces_content +20`, `geography ANZ +10`, `org_type gambling_operator 0`, `revenue −50`
+  = **−20**, which grades `Unscored`. That is non-`D` and satisfies the transition proof, but it
+  is neither `B` nor `C`. A hard-coded `B or C` assertion is exactly the stale-literal class
+  Phases 45 and 47 each had to disclose after the fact — cheaper to prevent in the contract than
+  to relax in the run report.
 
   If Entain does not clear the bar, **no vehicle exists this phase** — the weight re-score moves
   `C→B` only — so re-defer it with that reason stated. It has now been deferred by 47.5, 48 and
