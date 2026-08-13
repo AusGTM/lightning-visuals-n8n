@@ -1,0 +1,27 @@
+{
+  "archived_listing_finding": {
+    "calculated_property_reappears": true,
+    "note": "True means the API DELETE performed a soft archive -- the disposable still appears under ?archived=true after being deleted. False means it does not reappear there.",
+    "numeric_property_reappears": false
+  },
+  "calculation_formula": "if coalesce(lv_anti_icp_flag, 0) = 1 then \"D\" elseif coalesce(lv_icp_fit_score, -1) >= 70 then \"A\" elseif coalesce(lv_icp_fit_score, -1) >= 40 then \"B\" elseif coalesce(lv_icp_fit_score, -1) >= 15 then \"C\" else \"Unscored\"",
+  "checked_at": "2026-08-13T21:23:57.483841+00:00",
+  "probe_verdict": "null_propagates",
+  "read_back_value": null,
+  "settled_variant": "coalesced_minus_one",
+  "teardown": {
+    "all_gone": false,
+    "calculated_property": {
+      "gone": true,
+      "name": "lv_tier_probe_calc_eb671fb7"
+    },
+    "company": {
+      "gone": true,
+      "id": "281675219408"
+    },
+    "numeric_property": {
+      "gone": false,
+      "name": "lv_tier_probe_score_eb671fb7"
+    }
+  }
+}
