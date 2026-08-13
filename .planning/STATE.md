@@ -5,15 +5,15 @@ milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 50
 current_phase_name: Derived Tier Property
 status: executing
-stopped_at: Completed 50-01-PLAN.md
-last_updated: "2026-08-13T21:39:07.239Z"
+stopped_at: Completed 50-03-PLAN.md (D-07 gate FAIL, D-19 census DEFECT)
+last_updated: "2026-08-13T22:07:32.061Z"
 last_activity: 2026-08-13
-last_activity_desc: Phase 49 execution started
+last_activity_desc: Phase 50 execution started
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 34
-  completed_plans: 30
+  completed_plans: 31
   percent: 83
 ---
 
@@ -113,7 +113,7 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Phase: 50 (Derived Tier Property) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
@@ -201,12 +201,12 @@ Last activity: 2026-08-13 — Phase 50 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████████░] 88% (v0.9 phase 47.5 of 46-49)
+Progress: [█████████░] 91% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-13T21:38:59.919Z
-**Stopped at:** Completed 50-01-PLAN.md
+**Last session:** 2026-08-13T22:07:23.133Z
+**Stopped at:** Completed 50-03-PLAN.md (D-07 gate FAIL, D-19 census DEFECT)
 **Resume file:** None
 
 ## Performance Metrics
@@ -266,12 +266,15 @@ Progress: [█████████░] 88% (v0.9 phase 47.5 of 46-49)
 | Phase 49 P06 | ~30min | 3 tasks | 4 files |
 | Phase 49 P07 | 12min | 3 tasks | 1 files |
 | Phase 50 P01 | ~35min | 4 tasks | 10 files |
+| Phase 50 P03 | 50min | 3 tasks | 6 files |
 
 ## Decisions
 
 - [Phase ?]: D-03 -> D-04: live probe found a null term inside an UNTAKEN calculation_equation branch still blanks the whole result; coalesce(lv_icp_fit_score, -1) forced into lv_icp_tier_derived's formula
 - [Phase ?]: lv_icp_tier_derived created live; all 4 stuck records (9605273630, 9604738976, 17696004613, 19100977027) confirmed reading B with zero writes; live search confirms 646 never-enriched companies now read Unscored
 - [Phase ?]: Live discovery: HubSpot's Properties API canonicalizes stored calculationFormula text on create (= -> equals, double -> single quotes, inserted line breaks) -- not byte-identical to the submitted literal though functionally equivalent; future formula-pin tests must compare against the live-read text, not the pre-creation literal
+- [Phase ?]: D-07's gate FAILS live: veto guard on lv_icp_tier_derived never fires for any of 6 real anti_icp_flag=true records (a defect never verified before this run); D-06/D-08 stay blocked
+- [Phase ?]: TIER-01 left NOT complete (ladder not verified against real records per its own text); TIER-02 marked complete (null semantics settled and disclosed independent of the veto bug)
 
 ### Roadmap Evolution
 
@@ -419,6 +422,7 @@ Progress: [█████████░] 88% (v0.9 phase 47.5 of 46-49)
 open (VETO-01/VETO-02 remain open requirements, not blockers — Phase 40 met its own scope; see WINDOWS.md id 5 and Decisions above).
 
 - Phase 49 Plan 05 Task 3 (W1 write window): 4 of 66 scored companies (9605273630 Port Macquarie Race Club, 9604738976 Bunbury Turf Club, 17696004613 Pinjarra Park, 19100977027 Newcastle Harness Racing Club) already carried correct new-weight components before W1 opened, so the component-only write was a genuine no-op for them and their lv_icp_tier stayed stale at C (oracle expects B, score 45). Parity sweep FAILs with these 4 real findings. No in-scope W1 mechanism can force WF1 to re-grade them (tier PATCH forbidden, n8n allowlist out of scope for W1). Awaiting operator decision at the checkpoint returned by Plan 05's continuation.
+- D-06 (retire lv_icp_tier) / D-08 (switch off WF1) blocked: lv_icp_tier_derived's veto guard never fires live for any of 6 real anti_icp_flag=true records (WINDOWS.md id 13) -- Plan 04's checkpoint must decide fix-vs-defer before retirement
 
 ## Deferred Items
 

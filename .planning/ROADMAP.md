@@ -424,7 +424,7 @@ is a new property plus a migration, not a formula edit on the existing one.
   5. No company record is silently re-tiered outside a deliberately armed, capped write window,
      under the same discipline as Phases 47–49.
 
-**Plans**: 1/5 plans executed
+**Plans**: 2/5 plans executed
 
 Plans:
 **Wave 1**
@@ -434,7 +434,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 50-03-PLAN.md — D-07's parity gate across all 66, the offline formula pin, and the operator-facing tier census (wave 2)
+- [x] 50-03-PLAN.md — D-07's parity gate across all 66, the offline formula pin, and the operator-facing tier census (wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 

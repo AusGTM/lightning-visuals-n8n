@@ -147,7 +147,7 @@ correct `lv_icp_fit_score` and deferred the fix (`WINDOWS.md` ids 9–12). Evide
       records. The 4 stuck records (`9605273630`, `9604738976`, `17696004613`, `19100977027`)
       read the tier their score already implies, with no event and no workflow run.
 
-- [ ] **TIER-02**: The blank-vs-`"Unscored"` semantics for never-scored companies are a recorded
+- [x] **TIER-02**: The blank-vs-`"Unscored"` semantics for never-scored companies are a recorded
       decision, not an accident of formula shape. The spike could not settle this from syntax:
       an uncoalesced score preserves today's blank behaviour, `coalesce(lv_icp_fit_score, -1)`
       flips roughly 646 never-enriched companies to `"Unscored"`. The runtime null question is
@@ -226,8 +226,8 @@ recoverable, only forward capture works, which cannot inform a v0.9 recalibratio
 | RESCORE-01 | Phase 49 | **Complete** (all 4 declaring plans finished — 49-01: `docs/OPERATOR-RESCORE.md` runbook + `scripts/rescore_population.py --plan` mode + `test_rubric_change_guard.py`; 49-02: `scripts/backfill_seed_company_scores.py`'s consuming write path; 49-03: n8n research-prompt org-type-definitions fix built offline; 49-04: that fix deployed, bounced, and proven live — `49-DEPLOY-PROOF.md`) |
 | RESCORE-02 | Phase 49 | **Complete** (66/66 companies re-scored under the current rubric in one W1 window; `49-P2-SNAPSHOT.json`/`49-P3-SNAPSHOT.json`) |
 | RESCORE-03 | Phase 49 | **Complete** (P2/P3 tier distributions committed and compared against the pre-registered Phase 46 forecast, matched exactly: 14 rows C→B, all `individual_club_team`; `49-W1-ARM-RECORD.md`) |
-| TIER-01 | Phase 50 | Not started |
-| TIER-02 | Phase 50 | Not started |
+| TIER-01 | Phase 50 | **Blocked** — Plan 03's D-07 live parity gate proved the ladder does NOT reproduce WF1 exactly: `lv_icp_tier_derived`'s veto guard never fires for any of the 6 real `lv_anti_icp_flag=true` scored companies (`WINDOWS.md` id 13). Ladder boundaries and null semantics are offline-pinned and correct (`tests/test_tier_formula_pin.py`), but "verified against real records" is not met while the veto branch is unreachable live. Not marked complete. |
+| TIER-02 | Phase 50 | **Complete** — D-04's live null probe (Plan 01) settled the runtime question against a real disposable record before commit; the ~646-record blank→`Unscored` flip is disclosed and live-confirmed (`50-TIER-PARITY-EVIDENCE.md` census). |
 | TIER-03 | Phase 50 | Not started |
 
 *Phase column filled by the roadmapper.*
