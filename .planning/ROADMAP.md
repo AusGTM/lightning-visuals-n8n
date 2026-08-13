@@ -8,17 +8,17 @@
 - ✅ **v0.6 Claude Plugin Entrypoint** — Phases 23–32, workstream `plugin-entrypoint` (shipped 2026-08-04)
 - ✅ **v0.7 HubSpot Scoring Engine Remediation** — Phases 39–43 (shipped 2026-08-08)
 - ✅ **v0.8 Execution Budget Safety** — Phases 44–45 (shipped 2026-08-11)
-- 📋 **v0.9 ICP Rubric Calibration & Veto Remediation** — Phases 46–49 (roadmapped, not started)
+- 🚧 **v0.9 ICP Rubric Calibration & Veto Remediation** — Phases 46–49 (all 5 phases complete 2026-08-13; milestone close pending)
 
 ## Phases
 
-### 📋 v0.9 ICP Rubric Calibration & Veto Remediation (Phases 46–49)
+### 🚧 v0.9 ICP Rubric Calibration & Veto Remediation (Phases 46–49)
 
-- [ ] **Phase 46: Rubric Decision, Simulation & Engine Parity** - Decide the org-type weights (`individual_club_team`, `regulator`, and the `gambling_operator` deduction) with evidence, simulate re-tiering with zero record writes, prove any change lands identically in all three scoring engines, and update every doc that prints the superseded rubric — before either downstream write phase runs
-- [ ] **Phase 47: Veto Remediation** - Clear the 17 false non-ANZ vetoes under the settled rubric, inside a deliberately armed and capped write window, verifiable from HubSpot alone
+- [x] **Phase 46: Rubric Decision, Simulation & Engine Parity** - Decide the org-type weights (`individual_club_team`, `regulator`, and the `gambling_operator` deduction) with evidence, simulate re-tiering with zero record writes, prove any change lands identically in all three scoring engines, and update every doc that prints the superseded rubric — before either downstream write phase runs
+- [x] **Phase 47: Veto Remediation** - Clear the 17 false non-ANZ vetoes under the settled rubric, inside a deliberately armed and capped write window, verifiable from HubSpot alone
 - [x] **Phase 47.5: Veto Recompute Path** (6/6 plans, completed 2026-08-12) - Three workstreams: (A) make a veto recomputable for a record whose inputs are already complete; (B) re-examine the four remaining non-ANZ vetoes under D-V6's operating-presence test — Ironman scores 70 and is suppressed on a Tampa HQ; (C) decide whether the hardware veto should key off `lv_org_type` rather than a boolean 1 of 66 records has set. `Company Gate` skips complete records and `Normalize + Score Company` drops every skipped row, so `Decide Company Action` — the only writer of `lv_anti_icp_flag`/`lv_anti_icp_reason` — never runs for them. Found live in Phase 47 (n8n execution `11846`, Simtech LED left reading `Non-ANZ geography` against `region=AU`)
 - [x] **Phase 48: Enrichment Coverage** - Fill or document `lv_org_type` for the 18 never-enriched companies, under a pre-estimated and budget-refusing armed write window
-- [ ] **Phase 49: Re-score Strategy & Reporting** - Define and (if triggered) execute the budget-bounded full-population re-score procedure, and report the milestone's net tier-distribution effect in plain language
+- [x] **Phase 49: Re-score Strategy & Reporting** - Define and (if triggered) execute the budget-bounded full-population re-score procedure, and report the milestone's net tier-distribution effect in plain language
 
 <details>
 <summary>✅ v0.8 Execution Budget Safety (Phases 44–45) — SHIPPED 2026-08-11</summary>
@@ -385,7 +385,7 @@ Plans:
 | 47. Veto Remediation | v0.9 | 4/4 | Complete | 2026-08-12 |
 | 47.5. Veto Recompute Path | v0.9 | 6/6 | Complete | 2026-08-12 |
 | 48. Enrichment Coverage | v0.9 | 7/7 | Complete (verified) | 2026-08-13 |
-| 49. Re-score Strategy & Reporting | v0.9 | 7/7 | In Progress|  |
+| 49. Re-score Strategy & Reporting | v0.9 | 7/7 | Complete (verified with gaps) | 2026-08-13 |
 
 ## Ledger gaps (known)
 

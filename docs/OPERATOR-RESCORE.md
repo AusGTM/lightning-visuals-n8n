@@ -1,5 +1,36 @@
 # Operator procedure: re-scoring the population after an ICP rubric change
 
+## AS-BUILT AMENDMENT — 2026-08-13 (Phase 49)
+
+**Corrects the `## Acceptance` section's line:** *"if it is red, the rubric and the live
+records still disagree, and the fix is to finish the re-score, not to loosen the
+comparison."*
+
+The first half stands; **the prescribed fix is incomplete**, and W1's live exercise proved
+it. A red sweep has two distinct causes, and only one of them is cured by finishing the
+re-score:
+
+1. **Records not yet written** — re-running `--execute` fixes these. This is the case the
+   original line assumed, and for it the original line is correct.
+2. **Records whose components were already correct before the window opened** — re-running
+   `--execute` can **never** fix these, no matter how many times it runs. Their PATCH is
+   value-identical, HubSpot treats a same-value write as a no-op, no property-change event
+   fires, and the workflow that grades `lv_icp_tier` from the score never re-enrolls. The
+   score is right and the tier is stale, permanently, from this mechanism's point of view.
+
+W1 hit case 2 on four records (`9605273630`, `9604738976`, `17696004613`, `19100977027` —
+logged as `.planning/WINDOWS.md` entries 9–12). **If a sweep is red and the affected
+records' components already match the oracle, stop — do not re-run `--execute` expecting a
+different result.** That is the signature of case 2, and the durable fix is to make the
+tier derive from the score rather than be written by a workflow — a design proved viable in
+`.planning/TIER-DERIVATION-SPIKE-2026-08-13.md` and scheduled as its own phase, since it
+requires a new CRM property.
+
+The sweep is still never edited to make it pass. That part of the original line is
+unconditional and unchanged.
+
+---
+
 **Applies from:** Phase 49 Plan 02 (RESCORE-01/RESCORE-02, D-07/D-08,
 `.planning/phases/49-re-score-strategy-reporting/49-CONTEXT.md`)
 
@@ -216,4 +247,6 @@ If something below turns out to be wrong or incomplete once exercised live, add 
 title, state plainly which line(s) it corrects, and leave the original prose in place
 underneath so the history of what was believed at each point stays readable.
 
-No amendments have been made to this document yet.
+One amendment has been made: **2026-08-13 (Phase 49)**, at the top of this document —
+correcting the `## Acceptance` section's prescribed fix for a red sweep, after W1's live
+exercise found a second cause the original line did not anticipate.
