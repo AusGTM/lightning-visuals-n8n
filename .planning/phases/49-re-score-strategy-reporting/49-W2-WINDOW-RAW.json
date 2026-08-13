@@ -1,0 +1,146 @@
+{
+  "company_id": "10024564084",
+  "domain": "www.entaingroup.com",
+  "t0": {
+    "read_at": "2026-08-13T06:38:49.476044+00:00",
+    "properties": {
+      "createdate": "2022-11-08T03:46:09.578Z",
+      "hs_lastmodifieddate": "2026-08-13T05:07:03.481Z",
+      "hs_object_id": "10024564084",
+      "lv_anti_icp_flag": "true",
+      "lv_anti_icp_reason": "Non-ANZ geography; No broadcast or streaming content",
+      "lv_country_region_normalized": "Other",
+      "lv_icp_tier": "D",
+      "lv_produces_content": "false"
+    }
+  },
+  "patch": {
+    "payload": {
+      "lv_country_region_normalized": "ANZ",
+      "lv_produces_content": "true"
+    },
+    "sent_at": "2026-08-13T06:38:50.000519+00:00",
+    "result_keys": [
+      "id",
+      "properties",
+      "createdAt",
+      "updatedAt",
+      "archived",
+      "url"
+    ]
+  },
+  "patch_readback": {
+    "createdate": "2022-11-08T03:46:09.578Z",
+    "hs_lastmodifieddate": "2026-08-13T06:38:52.899Z",
+    "hs_object_id": "10024564084",
+    "lv_country_region_normalized": "ANZ",
+    "lv_produces_content": "true"
+  },
+  "post": {
+    "sent_at": "2026-08-13T06:38:58.430522+00:00",
+    "http_status": 200,
+    "body": [
+      {
+        "action": "recompute_refused",
+        "object_type": "companies",
+        "hs_object_id": null,
+        "gap_flag": false,
+        "needs_review": false,
+        "row_id": null,
+        "mode": null,
+        "match": {
+          "tier": "unknown",
+          "auto": false,
+          "reason": "no searchable identity \u2014 the row has no email, object id, or name+company pair",
+          "candidates": []
+        },
+        "properties": {
+          "lv_anti_icp_flag": "false",
+          "lv_anti_icp_reason": ""
+        },
+        "remaining_credits": []
+      }
+    ]
+  },
+  "settle_flag": {
+    "value": "true",
+    "elapsed_s": 5.666666166856885
+  },
+  "t1": {
+    "read_at": "2026-08-13T06:39:08.670681+00:00",
+    "properties": {
+      "createdate": "2022-11-08T03:46:09.578Z",
+      "hs_lastmodifieddate": "2026-08-13T06:38:52.899Z",
+      "hs_object_id": "10024564084",
+      "lv_anti_icp_flag": "true",
+      "lv_anti_icp_reason": "Non-ANZ geography; No broadcast or streaming content",
+      "lv_country_region_normalized": "ANZ",
+      "lv_icp_fit_score": "-20",
+      "lv_icp_tier": "D",
+      "lv_org_type": "gambling_operator",
+      "lv_produces_content": "true",
+      "lv_revenue_band": "1.2B+"
+    }
+  },
+  "t1_minus_t0_seconds": 19.194637,
+  "assertion_tier_not_d": false,
+  "attempt_2": {
+    "post": {
+      "sent_at": "2026-08-13T06:42:00.170895+00:00",
+      "http_status": 200,
+      "body": [
+        {
+          "id": "10024564084",
+          "properties": {
+            "closedate": "2024-01-23T20:53:53.739Z",
+            "createdate": "2022-11-08T03:46:09.578Z",
+            "days_to_close": "441",
+            "hs_all_owner_ids": "225679910",
+            "hs_lastmodifieddate": "2026-08-13T06:42:03.380Z",
+            "hs_object_id": "10024564084",
+            "hs_object_source": "INTEGRATION",
+            "hs_object_source_id": "206398",
+            "hs_object_source_label": "INTEGRATION",
+            "hs_object_source_user_id": "",
+            "hs_pipeline": "companies-lifecycle-pipeline",
+            "hs_user_ids_of_all_owners": "46748158",
+            "hs_v2_date_entered_current_stage": "2024-01-23T20:53:53.739Z",
+            "hs_v2_time_in_current_stage": "2024-01-23T20:53:53.739Z",
+            "hubspot_owner_assigneddate": "2023-02-23T01:22:36.939Z",
+            "hubspot_owner_id": "225679910",
+            "lifecyclestage": "customer",
+            "lv_anti_icp_flag": "false",
+            "lv_anti_icp_reason": ""
+          },
+          "createdAt": "2022-11-08T03:46:09.578Z",
+          "updatedAt": "2026-08-13T06:42:03.380Z",
+          "archived": false,
+          "url": "https://app-ap1.hubspot.com/contacts/22617666/record/0-2/10024564084",
+          "remaining_credits": []
+        }
+      ]
+    },
+    "settle_flag": {
+      "value": "false",
+      "elapsed_s": 5.705925333779305
+    },
+    "t1": {
+      "read_at": "2026-08-13T06:42:09.793102+00:00",
+      "properties": {
+        "createdate": "2022-11-08T03:46:09.578Z",
+        "hs_lastmodifieddate": "2026-08-13T06:42:06.897Z",
+        "hs_object_id": "10024564084",
+        "lv_anti_icp_flag": "false",
+        "lv_anti_icp_reason": "",
+        "lv_country_region_normalized": "ANZ",
+        "lv_icp_fit_score": "-20",
+        "lv_icp_tier": "Unscored",
+        "lv_org_type": "gambling_operator",
+        "lv_produces_content": "true",
+        "lv_revenue_band": "1.2B+"
+      }
+    },
+    "t1_minus_original_t0_seconds": 200.317058,
+    "assertion_tier_not_d": true
+  }
+}
