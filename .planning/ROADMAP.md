@@ -427,11 +427,21 @@ is a new property plus a migration, not a formula edit on the existing one.
 **Plans**: 5 plans
 
 Plans:
+**Wave 1**
 
 - [ ] 50-01-PLAN.md — Tracer: settle TIER-02's null semantics live, then land `lv_icp_tier_derived` and read `B` off the 4 stuck records (wave 1)
 - [ ] 50-02-PLAN.md — Enumerate portal dependents on the `lv_icp_tier` select, scripted plus the API-blind manual half (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 50-03-PLAN.md — D-07's parity gate across all 66, the offline formula pin, and the operator-facing tier census (wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 50-04-PLAN.md — Name and prove D-18's forced re-enrolment mechanism while WF1 is still on; refresh the pre-cutover sweep (wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
 - [ ] 50-05-PLAN.md — Gated retirement: WF1 off with its definition kept, `lv_icp_tier` archived, drift guards made truthful in the same commit (wave 4)
 
 ## Progress

@@ -4,15 +4,15 @@ milestone: v0.9
 milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 49
 current_phase_name: re-score-strategy-reporting
-status: phase-complete
+status: executing
 stopped_at: Phase 50 context gathered
-last_updated: "2026-08-13T08:55:56.585Z"
+last_updated: "2026-08-13T10:54:45.758Z"
 last_activity: 2026-08-13
 last_activity_desc: Phase 49 execution started
 progress:
   total_phases: 6
   completed_phases: 5
-  total_plans: 29
+  total_plans: 34
   completed_plans: 29
   percent: 83
 ---
@@ -114,7 +114,7 @@ predating the window. VETO-03 bar still 0.
 
 Phase: 49 (re-score-strategy-reporting) — EXECUTING
 Plan: 7 of 7
-Status: Phase complete — ready for verification
+Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
   has executed on a real record. **Nothing is armed** — windows #1 and #2 were each opened
