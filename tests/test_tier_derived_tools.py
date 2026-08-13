@@ -180,6 +180,46 @@ def test_render_parity_markdown_is_deterministic():
     assert first == second
 
 
+# --- _teardown: archive order and loud partial-failure reporting -------------------------
+
+def test_teardown_archives_calculated_property_before_numeric_property(monkeypatch):
+    # The calculated property's formula references the numeric property; HubSpot 400s
+    # archiving a property a live calculation still depends on. Regression for the leaked
+    # lv_tier_probe_score_eb671fb7 disposable (2026-08-13 armed run).
+    import check_tier_null_propagation as ctnp
+    import src.hubspot_client as hsc
+
+    archive_order = []
+    monkeypatch.setattr(
+        ctnp, "_archive_and_confirm_gone",
+        lambda object_type, name: archive_order.append(name) or True,
+    )
+    monkeypatch.setattr(ctnp, "_company_gone", lambda company_id: True)
+    monkeypatch.setattr(hsc, "delete_record", lambda *a, **k: None)
+
+    result = ctnp._teardown("numeric_x", "calc_y", "company_z")
+
+    assert archive_order == ["calc_y", "numeric_x"], archive_order
+    assert result["all_gone"] is True
+
+
+def test_teardown_partial_failure_is_reported_not_hidden(monkeypatch, capsys):
+    import check_tier_null_propagation as ctnp
+    import src.hubspot_client as hsc
+
+    monkeypatch.setattr(
+        ctnp, "_archive_and_confirm_gone",
+        lambda object_type, name: name != "numeric_x",  # numeric leaks, calc archives clean
+    )
+    monkeypatch.setattr(ctnp, "_company_gone", lambda company_id: True)
+    monkeypatch.setattr(hsc, "delete_record", lambda *a, **k: None)
+
+    result = ctnp._teardown("numeric_x", "calc_y", "company_z")
+
+    assert result["all_gone"] is False
+    assert "TEARDOWN LEAKED" in capsys.readouterr().out
+
+
 def test_render_parity_markdown_sorted_by_record_id():
     rows = [
         {"record_id": "200", "name": "B Co", "live_tier": "A", "derived_tier": "A",

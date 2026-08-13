@@ -204,11 +204,17 @@ def _company_gone(company_id: str) -> bool:
 
 def _teardown(numeric_name: str, calc_name: str, company_id) -> dict:
     """Runs unconditionally from run_probe's `finally` block. Confirms every disposable is
-    gone by an independent re-read, never trusts the DELETE call's own status code alone."""
+    gone by an independent re-read, never trusts the DELETE call's own status code alone.
+
+    Order matters: the calculated property's `calculationFormula` references the numeric
+    property, and HubSpot refuses to archive a property a live calculation still depends on
+    (observed live 2026-08-13 -- archiving the numeric property first left it stranded with
+    an HTTP 400, while the calculated property that referenced it archived clean). Archive
+    the calculated (dependent) property FIRST, then the numeric (referenced) property."""
     from src.hubspot_client import delete_record
 
-    numeric_gone = _archive_and_confirm_gone("companies", numeric_name)
     calc_gone = _archive_and_confirm_gone("companies", calc_name)
+    numeric_gone = _archive_and_confirm_gone("companies", numeric_name)
 
     company_gone = True
     if company_id:
@@ -220,6 +226,12 @@ def _teardown(numeric_name: str, calc_name: str, company_id) -> dict:
         print(f"  deleted company {company_id} -> gone={company_gone}")
 
     all_gone = numeric_gone and calc_gone and company_gone
+    if not all_gone:
+        print(
+            "TEARDOWN LEAKED -- a disposable was not confirmed gone; this is NOT a clean "
+            f"run: numeric={numeric_name} gone={numeric_gone}, "
+            f"calc={calc_name} gone={calc_gone}, company={company_id} gone={company_gone}"
+        )
     return {
         "numeric_property": {"name": numeric_name, "gone": numeric_gone},
         "calculated_property": {"name": calc_name, "gone": calc_gone},
