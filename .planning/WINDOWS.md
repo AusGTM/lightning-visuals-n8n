@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 8
+open_count: 10
 waived_count: 0
 fixed_count: 4
-total_count: 12
-last_updated: 2026-08-13T06:18:43.329Z
+total_count: 14
+last_updated: 2026-08-13T22:01:07.000Z
 ---
 
 # Broken Windows Ledger
@@ -27,6 +27,8 @@ last_updated: 2026-08-13T06:18:43.329Z
 | 10 | 49 | unmet-truth | .planning/phases/49-re-score-strategy-reporting/49-PARITY-VERDICT.json |  | Company 9604738976 (Bunbury Turf Club): lv_icp_tier stuck at C, expected B. lv_icp_fit_score correctly 45. Same root cause as 9605273630 (same-value PATCH fires no HubSpot property-change event, so WF1 never re-enrolled). See PORTAL-FACTS.md 2026-08-13 entry and .planning/TIER-DERIVATION-SPIKE-2026-08-13.md (Phase 50 fix). | open |  | 2026-08-13T06:18:43.064Z |  |
 | 11 | 49 | unmet-truth | .planning/phases/49-re-score-strategy-reporting/49-PARITY-VERDICT.json |  | Company 17696004613 (Pinjarra Park): lv_icp_tier stuck at C, expected B. lv_icp_fit_score correctly 45. Same root cause as 9605273630 (same-value PATCH fires no HubSpot property-change event, so WF1 never re-enrolled). See PORTAL-FACTS.md 2026-08-13 entry and .planning/TIER-DERIVATION-SPIKE-2026-08-13.md (Phase 50 fix). | open |  | 2026-08-13T06:18:43.201Z |  |
 | 12 | 49 | unmet-truth | .planning/phases/49-re-score-strategy-reporting/49-PARITY-VERDICT.json |  | Company 19100977027 (Newcastle Harness Racing Club): lv_icp_tier stuck at C, expected B. lv_icp_fit_score correctly 45. Same root cause as 9605273630 (same-value PATCH fires no HubSpot property-change event, so WF1 never re-enrolled). See PORTAL-FACTS.md 2026-08-13 entry and .planning/TIER-DERIVATION-SPIKE-2026-08-13.md (Phase 50 fix). | open |  | 2026-08-13T06:18:43.329Z |  |
+| 13 | 50 | unmet-truth | .planning/phases/50-derived-tier-property/50-TIER-PARITY-EVIDENCE.md |  | `lv_icp_tier_derived`'s veto guard (`coalesce(lv_anti_icp_flag, 0) = 1`) never fires live: all 6 of the 6 scored companies carrying `lv_anti_icp_flag=true` (Supertech Electronics 15274105699, Queensland Racing Integrity Commission 16047156820, Jam TV 17317850381, Big Screen Video 17791151956, Sportsbet 17861423879, Simtech LED 18047161864) derive a score-based tier instead of "D" — the correctly-excluded Tier D bucket empties from 6 to 0 on the derived property. Re-run twice, byte-identical both times (not settling lag); independently re-confirmed via a direct single-record re-GET on 3 of the 6. Never actually verified against a real true-flag record before Phase 50 Plan 03's live run: the spike's Round 2 ("7/7") was formula-grammar acceptance only (HTTP 200 on property create), and D-05's null probe (Plan 01) never set `lv_anti_icp_flag` on its disposable company. `lv_icp_tier_derived` is currently WORSE than the stale `lv_icp_tier` enum for vetoed records and must not be treated as authoritative for them until the guard is fixed and re-proven. Blocks D-06 (retire `lv_icp_tier`) and D-08 (switch off WF1) until resolved. See `.planning/phases/50-derived-tier-property/50-TIER-PARITY-EVIDENCE.md`'s D-07 verdict and SEVERITY callout. | open |  | 2026-08-13T22:01:07.000Z |  |
+| 14 | 50 | unmet-truth | .planning/phases/50-derived-tier-property/50-TIER-PARITY-EVIDENCE.md |  | Company 14752488879 (Coffs Harbour Racing Club): a 5th instance of the WF1-staleness class ids 9-12 already log — `lv_icp_tier` reads `Unscored` while `lv_icp_fit_score` is 25 (correctly `C` per `config/icp_scoring.yaml`'s `tier_rules`, and `lv_icp_tier_derived` correctly reads `C`). Not one of WINDOWS.md ids 9-12; discovered live during Phase 50 Plan 03's D-07 parity gate run, same root cause (a value-identical PATCH fires no HubSpot property-change event, so WF1 never (re-)enrolled). Unlike the veto-guard defect (id 13), the derived property is CORRECT here and the stale enum is wrong — this is evidence for `lv_icp_tier_derived`, not against it. | open |  | 2026-08-13T22:01:07.000Z |  |
 
 ````json
 [
@@ -172,6 +174,30 @@ last_updated: 2026-08-13T06:18:43.329Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-08-13T06:18:43.329Z",
+    "resolved_at": null
+  },
+  {
+    "id": 13,
+    "kind": "unmet-truth",
+    "phase": "50",
+    "file": ".planning/phases/50-derived-tier-property/50-TIER-PARITY-EVIDENCE.md",
+    "line": null,
+    "description": "lv_icp_tier_derived's veto guard (coalesce(lv_anti_icp_flag, 0) = 1) never fires live: all 6 of the 6 scored companies carrying lv_anti_icp_flag=true (Supertech Electronics 15274105699, Queensland Racing Integrity Commission 16047156820, Jam TV 17317850381, Big Screen Video 17791151956, Sportsbet 17861423879, Simtech LED 18047161864) derive a score-based tier instead of \"D\" -- the correctly-excluded Tier D bucket empties from 6 to 0 on the derived property. Re-run twice, byte-identical both times (not settling lag); independently re-confirmed via a direct single-record re-GET on 3 of the 6. Never actually verified against a real true-flag record before Phase 50 Plan 03's live run: the spike's Round 2 (\"7/7\") was formula-grammar acceptance only (HTTP 200 on property create), and D-05's null probe (Plan 01) never set lv_anti_icp_flag on its disposable company. lv_icp_tier_derived is currently WORSE than the stale lv_icp_tier enum for vetoed records and must not be treated as authoritative for them until the guard is fixed and re-proven. Blocks D-06 (retire lv_icp_tier) and D-08 (switch off WF1) until resolved. See .planning/phases/50-derived-tier-property/50-TIER-PARITY-EVIDENCE.md's D-07 verdict and SEVERITY callout.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-08-13T22:01:07.000Z",
+    "resolved_at": null
+  },
+  {
+    "id": 14,
+    "kind": "unmet-truth",
+    "phase": "50",
+    "file": ".planning/phases/50-derived-tier-property/50-TIER-PARITY-EVIDENCE.md",
+    "line": null,
+    "description": "Company 14752488879 (Coffs Harbour Racing Club): a 5th instance of the WF1-staleness class ids 9-12 already log -- lv_icp_tier reads Unscored while lv_icp_fit_score is 25 (correctly C per config/icp_scoring.yaml's tier_rules, and lv_icp_tier_derived correctly reads C). Not one of WINDOWS.md ids 9-12; discovered live during Phase 50 Plan 03's D-07 parity gate run, same root cause (a value-identical PATCH fires no HubSpot property-change event, so WF1 never (re-)enrolled). Unlike the veto-guard defect (id 13), the derived property is CORRECT here and the stale enum is wrong -- this is evidence FOR lv_icp_tier_derived, not against it.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-08-13T22:01:07.000Z",
     "resolved_at": null
   }
 ]
