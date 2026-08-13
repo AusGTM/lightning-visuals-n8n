@@ -346,7 +346,7 @@ did not change, no full re-score is owed and this phase proves the procedure wit
      milestone's re-scoring activity as a whole (veto clear, coverage enrichment, and any
      weight-driven full re-score).
 
-**Plans**: 6/7 plans executed
+**Plans**: 7/7 plans executed
 
 Plans:
 
@@ -373,7 +373,7 @@ Plans:
 
 **Wave 6** *(blocked on Wave 5)*
 
-- [ ] 49-07-PLAN.md — three-point tier-distribution report builder, the committed milestone report, the published private Artifact, and the phase run report with window accounting
+- [x] 49-07-PLAN.md — three-point tier-distribution report builder, the committed milestone report, the published private Artifact, and the phase run report with window accounting
 
 ## Progress
 
@@ -385,7 +385,7 @@ Plans:
 | 47. Veto Remediation | v0.9 | 4/4 | Complete | 2026-08-12 |
 | 47.5. Veto Recompute Path | v0.9 | 6/6 | Complete | 2026-08-12 |
 | 48. Enrichment Coverage | v0.9 | 7/7 | Complete (verified) | 2026-08-13 |
-| 49. Re-score Strategy & Reporting | v0.9 | 6/7 | In Progress|  |
+| 49. Re-score Strategy & Reporting | v0.9 | 7/7 | In Progress|  |
 
 ## Ledger gaps (known)
 
