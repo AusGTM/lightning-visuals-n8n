@@ -24,7 +24,14 @@ PATCH it would make and exits 0 — no network write.
 
     .venv/bin/python scripts/apply_fit_score_formula.py                     # dry run
     ALLOW_FORMULA_WRITE=true .venv/bin/python scripts/apply_fit_score_formula.py
+
+Phase 50 Plan 01 (D-14): generalized with a `--property NAME` flag, defaulting to
+`lv_icp_fit_score` so the invocation above keeps working byte-for-byte. Both the archive
+path (`config/hubspot_flows/{NAME}-property.after.json`) and the property URL are derived
+from `--property`, so `--property lv_icp_tier_derived` is the repeatable path back into
+line if that property's live formula ever drifts from its archived source of truth.
 """
+import argparse
 import json
 import os
 import sys
@@ -41,22 +48,38 @@ load_dotenv()
 from src.hubspot_client import hs_headers  # noqa: E402
 
 EXPECTED_PORTAL_ID = "22617666"
-ARCHIVE = ROOT / "config" / "hubspot_flows" / "lv_icp_fit_score-property.after.json"
-PROP_URL = "https://api.hubapi.com/crm/v3/properties/companies/lv_icp_fit_score"
+DEFAULT_PROPERTY = "lv_icp_fit_score"
 
 
-def archived_formula() -> str:
-    with ARCHIVE.open() as f:
+def archive_path(property_name: str) -> Path:
+    return ROOT / "config" / "hubspot_flows" / f"{property_name}-property.after.json"
+
+
+def property_url(property_name: str) -> str:
+    return f"https://api.hubapi.com/crm/v3/properties/companies/{property_name}"
+
+
+def archived_formula(archive: Path) -> str:
+    with archive.open() as f:
         return json.load(f)["calculationFormula"]
 
 
-def live_formula() -> str:
-    r = requests.get(PROP_URL, headers=hs_headers(), timeout=30)
+def live_formula(url: str) -> str:
+    r = requests.get(url, headers=hs_headers(), timeout=30)
     r.raise_for_status()
     return r.json().get("calculationFormula")
 
 
-def main() -> int:
+def main(argv=None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__,
+                                      formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--property", default=DEFAULT_PROPERTY,
+                         help=f"Company property name to sync (default: {DEFAULT_PROPERTY}).")
+    args = parser.parse_args(argv)
+
+    archive = archive_path(args.property)
+    url = property_url(args.property)
+
     if not os.getenv("HUBSPOT_PRIVATE_APP_TOKEN"):
         print("skipped (no credentials): HUBSPOT_PRIVATE_APP_TOKEN must be set.")
         return 1
@@ -65,8 +88,8 @@ def main() -> int:
               "No API call made.")
         return 1
 
-    want = archived_formula()
-    have = live_formula()
+    want = archived_formula(archive)
+    have = live_formula(url)
     print(f"archived: {want}")
     print(f"live    : {have}")
     if have == want:
@@ -75,11 +98,11 @@ def main() -> int:
 
     if os.getenv("ALLOW_FORMULA_WRITE") != "true":
         print("\nDRY RUN (set ALLOW_FORMULA_WRITE=true to apply):")
-        print(json.dumps({"method": "PATCH", "url": PROP_URL,
+        print(json.dumps({"method": "PATCH", "url": url,
                           "payload": {"calculationFormula": want}}, indent=2))
         return 0
 
-    r = requests.patch(PROP_URL, headers=hs_headers(),
+    r = requests.patch(url, headers=hs_headers(),
                        json={"calculationFormula": want}, timeout=30)
     print(f"PATCH {r.status_code}")
     if r.status_code not in (200, 201, 204):
@@ -87,7 +110,7 @@ def main() -> int:
         return 1
 
     # Independent re-read, not the PATCH's own response body.
-    back = live_formula()
+    back = live_formula(url)
     ok = back == want
     print(f"verified by re-read: {ok}")
     if not ok:

@@ -28,6 +28,7 @@ VALID_TYPE_FIELDTYPE_PAIRS = {
     ("enumeration", "checkbox"),
     ("enumeration", "radio"),
     ("number", "calculation_equation"),
+    ("string", "calculation_equation"),  # Phase 50 Plan 01: lv_icp_tier_derived (D-14)
 }
 
 
@@ -145,8 +146,10 @@ def test_exact_counts_guard_against_manifest_drift():
     # 32 (the ten properties drift-report-phase42-pre.json classified missing_from_yaml).
     # Contacts and the group counts are untouched -- D-04 scopes the expansion to company
     # scoring properties only.
+    # Phase 50 Plan 01 (D-01/D-14) added exactly one company property, lv_icp_tier_derived,
+    # bumping the count 32 -> 33.
     cfg = load_config()
-    assert len(cfg["companies"]["properties"]) == 32
+    assert len(cfg["companies"]["properties"]) == 33
     assert len(cfg["contacts"]["properties"]) == 17
     assert len(cfg["companies"]["groups"]) == 1
     assert len(cfg["contacts"]["groups"]) == 1
