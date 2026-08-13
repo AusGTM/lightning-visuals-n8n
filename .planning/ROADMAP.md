@@ -424,12 +424,12 @@ is a new property plus a migration, not a formula edit on the existing one.
   5. No company record is silently re-tiered outside a deliberately armed, capped write window,
      under the same discipline as Phases 47–49.
 
-**Plans**: 5 plans
+**Plans**: 1/5 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 50-01-PLAN.md — Tracer: settle TIER-02's null semantics live, then land `lv_icp_tier_derived` and read `B` off the 4 stuck records (wave 1)
+- [x] 50-01-PLAN.md — Tracer: settle TIER-02's null semantics live, then land `lv_icp_tier_derived` and read `B` off the 4 stuck records (wave 1)
 - [ ] 50-02-PLAN.md — Enumerate portal dependents on the `lv_icp_tier` select, scripted plus the API-blind manual half (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*

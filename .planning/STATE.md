@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v0.9
 milestone_name: ICP Rubric Calibration & Veto Remediation
-current_phase: 49
-current_phase_name: re-score-strategy-reporting
+current_phase: 50
+current_phase_name: Derived Tier Property
 status: executing
-stopped_at: Phase 50 context gathered
-last_updated: "2026-08-13T10:54:45.758Z"
+stopped_at: Completed 50-01-PLAN.md
+last_updated: "2026-08-13T21:39:07.239Z"
 last_activity: 2026-08-13
 last_activity_desc: Phase 49 execution started
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 34
-  completed_plans: 29
+  completed_plans: 30
   percent: 83
 ---
 
@@ -112,8 +112,8 @@ predating the window. VETO-03 bar still 0.
 
 ## Current Position
 
-Phase: 49 (re-score-strategy-reporting) — EXECUTING
-Plan: 7 of 7
+Phase: 50 (Derived Tier Property) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
@@ -191,7 +191,7 @@ exactly what B and C now do): .planning/phases/47.5-veto-recompute-path/47.5-CON
 lv_org_type: Editix, Jam TV, Waikato, The Rumble). Not a 47.5 workstream.
 
 Previous status: Executing — Anthropic credit restored, Plan 03 completed
-Last activity: 2026-08-13 — Phase 49 execution started
+Last activity: 2026-08-13 — Phase 50 execution started
   the live property-existence guard (found 19 missing D-09 metadata properties, resolved
   via operator-confirmed D-21 narrowing), one live research pass over all 17 pinned
   companies (47-RESEARCH-RESULTS.json), two live-discovered data-quality fixes
@@ -201,13 +201,13 @@ Last activity: 2026-08-13 — Phase 49 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
+Progress: [█████████░] 88% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-13T08:55:56.576Z
-**Stopped at:** Phase 50 context gathered
-**Resume file:** .planning/phases/50-derived-tier-property/50-CONTEXT.md
+**Last session:** 2026-08-13T21:38:59.919Z
+**Stopped at:** Completed 50-01-PLAN.md
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -265,8 +265,13 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 | Phase 49 P05 | 45min | 3 tasks | 6 files |
 | Phase 49 P06 | ~30min | 3 tasks | 4 files |
 | Phase 49 P07 | 12min | 3 tasks | 1 files |
+| Phase 50 P01 | ~35min | 4 tasks | 10 files |
 
 ## Decisions
+
+- [Phase ?]: D-03 -> D-04: live probe found a null term inside an UNTAKEN calculation_equation branch still blanks the whole result; coalesce(lv_icp_fit_score, -1) forced into lv_icp_tier_derived's formula
+- [Phase ?]: lv_icp_tier_derived created live; all 4 stuck records (9605273630, 9604738976, 17696004613, 19100977027) confirmed reading B with zero writes; live search confirms 646 never-enriched companies now read Unscored
+- [Phase ?]: Live discovery: HubSpot's Properties API canonicalizes stored calculationFormula text on create (= -> equals, double -> single quotes, inserted line breaks) -- not byte-identical to the submitted literal though functionally equivalent; future formula-pin tests must compare against the live-read text, not the pre-creation literal
 
 ### Roadmap Evolution
 
