@@ -5,15 +5,15 @@ milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 49
 current_phase_name: re-score-strategy-reporting
 status: executing
-stopped_at: "Completed 49-05-PLAN.md (W1 re-score closed: 66/66 components correct, forecast matched exactly; parity RED at 4/66, accepted and disclosed per operator decision, unmet-truth WINDOWS.md ids 9-12)"
-last_updated: "2026-08-13T06:22:22.664Z"
+stopped_at: Completed 49-06-PLAN.md
+last_updated: "2026-08-13T06:47:39.626Z"
 last_activity: 2026-08-13
 last_activity_desc: Phase 49 execution started
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 29
-  completed_plans: 27
+  completed_plans: 28
   percent: 80
 ---
 
@@ -113,7 +113,7 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Phase: 49 (re-score-strategy-reporting) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
@@ -201,12 +201,12 @@ Last activity: 2026-08-13 — Phase 49 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████████░] 93% (v0.9 phase 47.5 of 46-49)
+Progress: [██████████] 97% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-13T06:22:22.652Z
-**Stopped at:** Completed 49-05-PLAN.md (W1 re-score closed: 66/66 components correct, forecast matched exactly; parity RED at 4/66, accepted and disclosed per operator decision, unmet-truth WINDOWS.md ids 9-12)
+**Last session:** 2026-08-13T06:47:39.617Z
+**Stopped at:** Completed 49-06-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -263,6 +263,7 @@ Progress: [█████████░] 93% (v0.9 phase 47.5 of 46-49)
 | Phase 49 P03 | 9min | 3 tasks | 12 files |
 | Phase 49 P04 | 8min | 3 tasks | 4 files |
 | Phase 49 P05 | 45min | 3 tasks | 6 files |
+| Phase 49 P06 | ~30min | 3 tasks | 4 files |
 
 ## Decisions
 
@@ -384,6 +385,8 @@ Progress: [█████████░] 93% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: Closed the folded todo (2026-08-13-n8n-research-prompt-lacks-org-type-definitions) in .planning/todos/completed/ with a dated RESOLVED block naming plans 49-03/49-04, execution 11871, and the regression test.
 - [Phase ?]: Operator resolved the W1 4-record tier-staleness finding as ACCEPT AND DISCLOSE: logged as unmet-truth entries (WINDOWS.md ids 9-12), fix deferred to a future phase (lv_icp_tier as calculation_equation, per TIER-DERIVATION-SPIKE-2026-08-13.md)
 - [Phase ?]: Parity verdict committed genuinely RED (4/66 real findings) rather than edited to pass; scripts/run_scoring_parity.py confirmed unedited via git diff
+- [Phase ?]: 49-06: W2 opened -- Entain's veto cleared live, D->non-D tier transition proven as a causal chain (t0=D, t1=Unscored), closing the gap 47.5-A left open.
+- [Phase ?]: 49-06: Domain-based arming fails for existing records whose stored domain carries a prefix n8n's search normalization strips -- use --ids + a bare event (fetch-by-id lane) instead.
 
 ### Blockers
 
