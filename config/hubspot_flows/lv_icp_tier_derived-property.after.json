@@ -1,7 +1,7 @@
 {
   "archived": false,
   "calculated": true,
-  "calculationFormula": "if coalesce(lv_anti_icp_flag, 0) equals 1 then 'D'\nelseif coalesce(lv_icp_fit_score, -1) >= 70 then 'A'\nelseif coalesce(lv_icp_fit_score, -1) >= 40 then 'B'\nelseif coalesce(lv_icp_fit_score, -1) >= 15 then 'C' else 'Unscored'",
+  "calculationFormula": "if coalesce(lv_anti_icp_flag_num, 0) equals 1 then 'D'\nelseif lv_icp_fit_score >= 70 then 'A'\nelseif lv_icp_fit_score >= 40 then 'B'\nelseif lv_icp_fit_score >= 15 then 'C' else 'Unscored'",
   "createdAt": "2026-08-13T21:33:17.912Z",
   "createdUserId": "87581729",
   "dataSensitivity": "non_sensitive",
@@ -22,6 +22,6 @@
   "name": "lv_icp_tier_derived",
   "options": [],
   "type": "string",
-  "updatedAt": "2026-08-13T21:33:17.912Z",
+  "updatedAt": "2026-08-13T23:19:45.872Z",
   "updatedUserId": "87581729"
 }

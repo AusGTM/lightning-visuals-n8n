@@ -449,7 +449,7 @@ companies:
     fieldType: calculation_equation
     groupName: companyinformation
     options: []
-    calculationFormula: 'if coalesce(lv_anti_icp_flag, 0) = 1 then "D" elseif coalesce(lv_icp_fit_score, -1) >= 70 then "A" elseif coalesce(lv_icp_fit_score, -1) >= 40 then "B" elseif coalesce(lv_icp_fit_score, -1) >= 15 then "C" else "Unscored"'
+    calculationFormula: 'if coalesce(lv_anti_icp_flag_num, 0) = 1 then "D" elseif lv_icp_fit_score >= 70 then "A" elseif lv_icp_fit_score >= 40 then "B" elseif lv_icp_fit_score >= 15 then "C" else "Unscored"'
   - name: org_type_score
     label: Org Type Score
     type: number

@@ -42,24 +42,26 @@ LIVE_SNAPSHOT_PATH = (
 )
 PARITY_SCRIPT = "scripts/check_tier_derived_parity.py"
 
-# Pinned 2026-08-13 against config/icp_scoring.yaml's tier_rules (A: min_score 70, B: 40,
-# C: 15) and the settled D-04 ladder (50-NULL-PROBE.json: settled_variant=coalesced_minus_one).
-# D as the hard-veto branch precedes every score branch; Unscored is the terminal else. Exactly
-# five labels per D-09 -- config/icp_scoring.yaml's `recommended_motion` map names a sixth,
-# "Needs Review", which is deliberately NOT added here (PARITY-01 stays a documented accepted
-# divergence); one mutation case below proves the guard rejects its introduction.
+# Re-pinned 2026-08-14 (D-20/D-21 amendment) against config/icp_scoring.yaml's tier_rules
+# (A: min_score 70, B: 40, C: 15). D as the hard-veto branch precedes every score branch;
+# Unscored is the terminal else. Exactly five labels per D-09 -- config/icp_scoring.yaml's
+# `recommended_motion` map names a sixth, "Needs Review", which is deliberately NOT added
+# here (PARITY-01 stays a documented accepted divergence); one mutation case below proves
+# the guard rejects its introduction.
 PINNED_TIER_LADDER = {
     "veto_tier": "D",
     "score_bounds": [("A", 70), ("B", 40), ("C", 15)],
     "else_tier": "Unscored",
 }
 
-# The veto guard's condition must compare numerically -- coalesce(lv_anti_icp_flag, 0) = 1 --
-# never a bare boolean and never coalesce(..., false). Both are live-proven 400s: the spike
-# (TIER-DERIVATION-SPIKE-2026-08-13.md Round 1) found HubSpot booleans arrive in formula-land
-# as BigDecimal, so a bare `lv_anti_icp_flag` in a condition and a `false` coalesce fallback
-# both reject at property-create time.
-PINNED_VETO_GUARD = "coalesce(lv_anti_icp_flag, 0) = 1"
+# D-20: the veto guard reads the NUMERIC MIRROR, lv_anti_icp_flag_num, not the boolean --
+# calculation_equation reads only numeric properties, so lv_anti_icp_flag (a
+# booleancheckbox) reads as null even when set and the veto branch never fired live
+# (50-03-SUMMARY.md's disclosed defect). The guard still compares numerically --
+# coalesce(lv_anti_icp_flag_num, 0) = 1 -- never a bare boolean and never
+# coalesce(..., false); both remain live-proven 400s (TIER-DERIVATION-SPIKE-2026-08-13.md
+# Round 1: HubSpot booleans arrive in formula-land as BigDecimal).
+PINNED_VETO_GUARD = "coalesce(lv_anti_icp_flag_num, 0) = 1"
 
 
 def load_rubric() -> dict:
@@ -227,16 +229,21 @@ def test_pinned_ladder_matches_current_config():
 
 
 def test_pinned_ladder_matches_declared_formula():
-    """The declared calculationFormula in config/hubspot_properties.yaml is byte-identical
-    to the literal 50-NULL-PROBE.json recorded (both are the pre-canonicalization text
-    submitted at create time -- 50-01-SUMMARY.md confirmed this identity independently),
-    and it parses back to the pinned per-tier bounds."""
+    """D-21 divergence assertion (replaces the pre-amendment byte-identity check). The
+    declared calculationFormula in config/hubspot_properties.yaml must now DIFFER from
+    50-NULL-PROBE.json's frozen literal -- the probe's coalesced, boolean-guard formula was
+    the D-04 fallback, since reversed: the guard now reads the numeric mirror
+    (lv_anti_icp_flag_num, D-20) and the score comparisons are uncoalesced (D-21). The
+    probe stays committed byte-unaltered as historical evidence of what was believed at
+    the time (its own file is never edited by this plan); the correction of record is this
+    divergence itself, plus 50-CONTEXT.md's amendment block. It still parses back to the
+    pinned per-tier bounds."""
     declared = load_declared_formula()
     probe_literal = load_null_probe_literal()
-    assert declared == probe_literal, (
-        "config/hubspot_properties.yaml's declared calculationFormula no longer matches "
-        "50-NULL-PROBE.json's recorded literal -- one of the two was edited without the "
-        "other. Both must stay byte-identical: they are the same pre-creation text."
+    assert declared != probe_literal, (
+        "D-21: the shipped formula must now DIFFER from 50-NULL-PROBE.json's frozen "
+        "coalesced/boolean-guard literal -- if this now matches, the D-20/D-21 correction "
+        "was not actually applied to config/hubspot_properties.yaml."
     )
     assert_tier_formula_pinned(declared)
 
@@ -265,7 +272,7 @@ def _mutate_bound(formula: str, old: str, new: str) -> str:
         pytest.param(lambda f: _mutate_bound(f, ">= 40", ">= 45"), id="B_moved_to_45"),
         pytest.param(lambda f: _mutate_bound(f, ">= 15", ">= 20"), id="C_moved_to_20"),
         pytest.param(
-            lambda f: f.replace('if coalesce(lv_anti_icp_flag, 0) = 1 then "D" ', ""),
+            lambda f: f.replace('if coalesce(lv_anti_icp_flag_num, 0) = 1 then "D" ', ""),
             id="D_veto_branch_removed",
         ),
         pytest.param(
@@ -274,9 +281,9 @@ def _mutate_bound(formula: str, old: str, new: str) -> str:
         ),
         pytest.param(
             lambda f: f.replace(
-                'elseif coalesce(lv_icp_fit_score, -1) >= 15 then "C" else "Unscored"',
-                'elseif coalesce(lv_icp_fit_score, -1) >= 15 then "C" '
-                'elseif coalesce(lv_icp_fit_score, -1) >= 5 then "E" else "Unscored"',
+                'elseif lv_icp_fit_score >= 15 then "C" else "Unscored"',
+                'elseif lv_icp_fit_score >= 15 then "C" '
+                'elseif lv_icp_fit_score >= 5 then "E" else "Unscored"',
             ),
             id="sixth_label_introduced",
         ),
@@ -286,10 +293,10 @@ def _mutate_bound(formula: str, old: str, new: str) -> str:
             # `elseif` -- no longer positionally first, which is exactly what "the veto
             # branch precedes every score branch" forbids.
             lambda f: (
-                'if coalesce(lv_icp_fit_score, -1) >= 70 then "A" '
-                'elseif coalesce(lv_anti_icp_flag, 0) = 1 then "D" '
-                'elseif coalesce(lv_icp_fit_score, -1) >= 40 then "B" '
-                'elseif coalesce(lv_icp_fit_score, -1) >= 15 then "C" else "Unscored"'
+                'if lv_icp_fit_score >= 70 then "A" '
+                'elseif coalesce(lv_anti_icp_flag_num, 0) = 1 then "D" '
+                'elseif lv_icp_fit_score >= 40 then "B" '
+                'elseif lv_icp_fit_score >= 15 then "C" else "Unscored"'
             ),
             id="veto_demoted_below_score_branches",
         ),
@@ -330,30 +337,27 @@ def test_boolean_guard_shape_is_numeric(guard_text):
         assert_tier_formula_pinned(guard_text)
 
 
-def test_sentinel_collision_is_behaviour_preserving():
-    """Under the coalesced variant (D-04, the settled fallback), a genuine score of
-    exactly -1 and a never-scored (null) company both derive "Unscored". This is a
-    behaviour-preserving collision, not a new ambiguity: WF1's own action graph
-    (4625147345, config/hubspot_flows/4625147345-wf1-set-icp-tier.after.json) has branches
-    only for >=70 / 40-69 / 15-39 -- no branch below 15 -- so a genuine -1 score was
-    already indistinguishable from a blank score under WF1 (neither ever matches a
-    branch, so WF1 writes nothing for either). The coalesce(lv_icp_fit_score, -1)
-    fallback therefore introduces no WF1-observable divergence between the two inputs;
-    it only replaces the derived property's OWN blank result with the literal label
-    "Unscored" for a never-scored company, which is D-04's disclosed ~646-record flip."""
-    import sys as _sys
-
-    _sys.path.insert(0, str(ROOT / "scripts"))
-    from check_tier_null_propagation import derived_tier, real_formula_for  # noqa: E402
-
-    assert derived_tier(-1, False) == "Unscored"
-    coalesced = real_formula_for("coalesced_minus_one")
-    assert coalesced.count("coalesce(lv_icp_fit_score, -1)") == 3, (
-        "every bare lv_icp_fit_score reference in the shipped ladder must be wrapped in "
-        "the -1 sentinel fallback, so a null score is coalesced to -1 before any "
-        "comparison runs -- landing it on the exact same 'Unscored' branch as a genuine "
-        "-1 score, rather than on a separate/undefined path."
+def test_shipped_ladder_is_uncoalesced_on_score():
+    """D-21 (replaces the pre-amendment test_sentinel_collision_is_behaviour_preserving,
+    which pinned the coalesced fallback that D-21 reverses). D-04 fired on a race, not a
+    finding: calculated properties backfill ~70-130s after create, and Plan 01's probe
+    read back immediately, recording "not computed yet" as null_propagates. Re-tested with
+    polling (D-22), a bare reference to a null lv_icp_fit_score fell through to its else
+    branch normally -- null does not propagate. The shipped formula must therefore end up
+    with exactly ONE coalesce( call in total -- the veto guard's own
+    coalesce(lv_anti_icp_flag_num, 0) -- and zero coalesce(lv_icp_fit_score, ...) wrapping,
+    so a never-scored company (blank lv_icp_fit_score) falls through every score branch and
+    lands on the terminal else, reading blank rather than the literal label "Unscored".
+    This is the un-flip of D-04's disclosed ~646-record flip."""
+    declared = load_declared_formula()
+    assert declared.count("coalesce(") == 1, (
+        f"D-21: exactly one coalesce( call expected (the veto guard's), found "
+        f"{declared.count('coalesce(')}: {declared!r}"
     )
+    assert "coalesce(lv_icp_fit_score" not in declared, (
+        "D-21: the score comparisons must reference lv_icp_fit_score bare, uncoalesced"
+    )
+    assert "lv_icp_fit_score >=" in declared
 
 
 def test_failure_message_names_the_reverification_obligation():
