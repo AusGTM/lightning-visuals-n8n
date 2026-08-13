@@ -5,15 +5,15 @@ milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 49
 current_phase_name: re-score-strategy-reporting
 status: executing
-stopped_at: Completed 49-04-PLAN.md (deploy, bounce, prove)
-last_updated: "2026-08-13T04:54:32.835Z"
+stopped_at: "Completed 49-05-PLAN.md (W1 re-score closed: 66/66 components correct, forecast matched exactly; parity RED at 4/66, accepted and disclosed per operator decision, unmet-truth WINDOWS.md ids 9-12)"
+last_updated: "2026-08-13T06:22:22.664Z"
 last_activity: 2026-08-13
 last_activity_desc: Phase 49 execution started
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 29
-  completed_plans: 26
+  completed_plans: 27
   percent: 80
 ---
 
@@ -113,7 +113,7 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Phase: 49 (re-score-strategy-reporting) — EXECUTING
-Plan: 5 of 7
+Plan: 6 of 7
 Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
@@ -201,12 +201,12 @@ Last activity: 2026-08-13 — Phase 49 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████████░] 90% (v0.9 phase 47.5 of 46-49)
+Progress: [█████████░] 93% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-13T04:54:32.827Z
-**Stopped at:** Completed 49-04-PLAN.md (deploy, bounce, prove)
+**Last session:** 2026-08-13T06:22:22.652Z
+**Stopped at:** Completed 49-05-PLAN.md (W1 re-score closed: 66/66 components correct, forecast matched exactly; parity RED at 4/66, accepted and disclosed per operator decision, unmet-truth WINDOWS.md ids 9-12)
 **Resume file:** None
 
 ## Performance Metrics
@@ -262,6 +262,7 @@ Progress: [█████████░] 90% (v0.9 phase 47.5 of 46-49)
 | Phase 49 P02 | 22min | 2 tasks | 3 files |
 | Phase 49 P03 | 9min | 3 tasks | 12 files |
 | Phase 49 P04 | 8min | 3 tasks | 4 files |
+| Phase 49 P05 | 45min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -381,10 +382,14 @@ Progress: [█████████░] 90% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: n8n research prompt now renders lv_org_type definitions (not just bare keys); frozen jsCode fixture re-baselined as an explicit reviewed act; contacts-target prompt confirmed to not enumerate org types and left unchanged
 - [Phase ?]: Deployed and bounced Phase 49's one declared n8n change (org-type-definitions research prompt fix), proven live via execution 11871's own embedded jsCode executed and its returned prompt string inspected (not just structural substring presence).
 - [Phase ?]: Closed the folded todo (2026-08-13-n8n-research-prompt-lacks-org-type-definitions) in .planning/todos/completed/ with a dated RESOLVED block naming plans 49-03/49-04, execution 11871, and the regression test.
+- [Phase ?]: Operator resolved the W1 4-record tier-staleness finding as ACCEPT AND DISCLOSE: logged as unmet-truth entries (WINDOWS.md ids 9-12), fix deferred to a future phase (lv_icp_tier as calculation_equation, per TIER-DERIVATION-SPIKE-2026-08-13.md)
+- [Phase ?]: Parity verdict committed genuinely RED (4/66 real findings) rather than edited to pass; scripts/run_scoring_parity.py confirmed unedited via git diff
 
 ### Blockers
 
-None open (VETO-01/VETO-02 remain open requirements, not blockers — Phase 40 met its own scope; see WINDOWS.md id 5 and Decisions above).
+open (VETO-01/VETO-02 remain open requirements, not blockers — Phase 40 met its own scope; see WINDOWS.md id 5 and Decisions above).
+
+- Phase 49 Plan 05 Task 3 (W1 write window): 4 of 66 scored companies (9605273630 Port Macquarie Race Club, 9604738976 Bunbury Turf Club, 17696004613 Pinjarra Park, 19100977027 Newcastle Harness Racing Club) already carried correct new-weight components before W1 opened, so the component-only write was a genuine no-op for them and their lv_icp_tier stayed stale at C (oracle expects B, score 45). Parity sweep FAILs with these 4 real findings. No in-scope W1 mechanism can force WF1 to re-grade them (tier PATCH forbidden, n8n allowlist out of scope for W1). Awaiting operator decision at the checkpoint returned by Plan 05's continuation.
 
 ## Deferred Items
 

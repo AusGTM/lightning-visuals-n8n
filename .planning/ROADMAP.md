@@ -346,7 +346,7 @@ did not change, no full re-score is owed and this phase proves the procedure wit
      milestone's re-scoring activity as a whole (veto clear, coverage enrichment, and any
      weight-driven full re-score).
 
-**Plans**: 4/7 plans executed
+**Plans**: 5/7 plans executed
 
 Plans:
 
@@ -365,7 +365,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3)*
 
-- [ ] 49-05-PLAN.md — W1, the ONE declared armed write window: P2 capture, canary, remainder, settle, disarm, P3 capture, parity sweep green
+- [x] 49-05-PLAN.md — W1, the ONE declared armed write window: P2 capture, canary, remainder, settle, disarm, P3 capture, parity sweep green
 
 **Wave 5** *(blocked on Wave 4)*
 
@@ -385,7 +385,7 @@ Plans:
 | 47. Veto Remediation | v0.9 | 4/4 | Complete | 2026-08-12 |
 | 47.5. Veto Recompute Path | v0.9 | 6/6 | Complete | 2026-08-12 |
 | 48. Enrichment Coverage | v0.9 | 7/7 | Complete (verified) | 2026-08-13 |
-| 49. Re-score Strategy & Reporting | v0.9 | 4/7 | In Progress|  |
+| 49. Re-score Strategy & Reporting | v0.9 | 5/7 | In Progress|  |
 
 ## Ledger gaps (known)
 

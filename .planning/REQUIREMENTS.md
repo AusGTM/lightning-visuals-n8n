@@ -130,7 +130,7 @@ traceable bar. They are new requirements, not a re-scoping of VETO-01/02/03, whi
       change re-scores the ENTIRE scored population. The plan states that execution cost up front
       rather than discovering it mid-run.
 
-- [ ] **RESCORE-03**: Operator is told, in plain language, what the tier distribution was before
+- [x] **RESCORE-03**: Operator is told, in plain language, what the tier distribution was before
       and after any re-score — so a rubric change's effect on the target list is visible rather
       than inferred.
 
@@ -192,8 +192,8 @@ recoverable, only forward capture works, which cannot inform a v0.9 recalibratio
 | COVER-01 | Phase 47 + 48 | Phase 48's share **complete** — live-derived 5-record population, all 5 now carry a real `lv_org_type` or the D-03 `unknown`+reason marker; `48-RUN-REPORT.md` § Per-record outcomes. Phase 47's 17 records tracked separately; joint closure not asserted here. |
 | COVER-02 | Phase 47 + 48 | Phase 48's share **complete** — estimate (`48-COST-ESTIMATE.md`) reported against actuals line by line, refuse-rather-than-truncate proven by test; `48-RUN-REPORT.md` § Cost actuals and § Window accounting. One disclosed gap: Anthropic-dollar spend is an unmeasured floor, not a measured actual. Joint closure not asserted here. |
 | RESCORE-01 | Phase 49 | **Complete** (all 4 declaring plans finished — 49-01: `docs/OPERATOR-RESCORE.md` runbook + `scripts/rescore_population.py --plan` mode + `test_rubric_change_guard.py`; 49-02: `scripts/backfill_seed_company_scores.py`'s consuming write path; 49-03: n8n research-prompt org-type-definitions fix built offline; 49-04: that fix deployed, bounced, and proven live — `49-DEPLOY-PROOF.md`) |
-| RESCORE-02 | Phase 49 | Not started |
-| RESCORE-03 | Phase 49 | Not started |
+| RESCORE-02 | Phase 49 | **Complete** (66/66 companies re-scored under the current rubric in one W1 window; `49-P2-SNAPSHOT.json`/`49-P3-SNAPSHOT.json`) |
+| RESCORE-03 | Phase 49 | **Complete** (P2/P3 tier distributions committed and compared against the pre-registered Phase 46 forecast, matched exactly: 14 rows C→B, all `individual_club_team`; `49-W1-ARM-RECORD.md`) |
 
 *Phase column filled by the roadmapper.*
 
