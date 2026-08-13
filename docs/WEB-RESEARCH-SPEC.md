@@ -214,6 +214,23 @@ plan's one-deploy budget (D-06, owned by plan 48-04). Tracked at
 `.planning/todos/pending/2026-08-13-n8n-research-prompt-lacks-org-type-definitions.md`.
 The Python and production prompts are knowingly divergent until that todo lands.
 
+**Update (2026-08-13, Phase 49 Plan 03).** Build-time source closed. `gen_taxonomy_js.render()`
+now emits `ORG_TYPE_DEFINITIONS` into `n8n/code/taxonomy.generated.js`, and
+`COMPANIES_TARGET.research_system_prompt_fn_js` now builds an `lv_org_type option
+definitions:` line from it — one `- <key>: <definition>` entry per org type, the same
+definitions-not-values shape `src.taxonomy.org_type_definitions_block()` renders into the
+Python prompts — in addition to (not instead of) the existing bare `allowed_org_types` enum
+line, so the strict nine-key constraint is unweakened. The frozen jsCode fixture
+(`tests/fixtures/companies_jscode_frozen.json`) was re-baselined as the explicit, reviewed
+act its own header requires, and `tests/n8n/orgTypeDefinitionsPrompt.test.mjs` now asserts
+the definitions text against the node's actually-returned system prompt string, not merely
+against the inlined module text, so a revert to a bare key list fails it. The contacts-target
+twin (`CONTACTS_TARGET.research_system_prompt_fn_js`) does not enumerate `lv_org_type` at all
+— it is a contact-role research prompt — and was left unchanged. **This plan did not deploy
+or bounce anything**; the built workflow JSON is committed but not yet live. Plan 49-04 spends
+this phase's one declared deploy and bounce to make it live and closes the todo with that
+evidence. See `.planning/phases/49-re-score-strategy-reporting/49-03-SUMMARY.md`.
+
 ### Adding a value later
 
 Edit `taxonomy.yaml` → rebuild workflows → run the HubSpot property sync → run the

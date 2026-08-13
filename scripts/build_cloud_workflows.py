@@ -2037,6 +2037,14 @@ function needsResearch(existingRecord) {
     gap_predicate_call_js="needsResearch(row.existingRecord)",
     research_inline_modules=("taxonomy.generated.js",),
     research_system_prompt_fn_js=r"""function researchSystemPrompt() {
+  // TX-10 (Phase 49 Plan 03): mirrors src.taxonomy.org_type_definitions_block() -- a
+  // discriminator present in the Python prompts and silently absent here is the root
+  // cause of the Racing NSW statutory-origin misclassification (Phase 48 Plan 07).
+  // ORG_TYPE_DEFINITIONS comes from n8n/code/taxonomy.generated.js (inlined above),
+  // generated from config/taxonomy.yaml -- the same one source both prompts render.
+  var orgTypeDefinitions = ORG_TYPES.map(
+    function (k) { return "- " + k + ": " + ORG_TYPE_DEFINITIONS[k]; }
+  ).join(" ");
   return [
     "You are an ICP research analyst for a sports-media/broadcast tech vendor.",
     "Research the company across three query intents: identity (<name> <domain> about),",
@@ -2044,6 +2052,7 @@ function needsResearch(existingRecord) {
     "revenue - only when a revenue band is not already known). First-party domains are",
     "preferred for identity and content; reputable secondary sources are fine for size.",
     "allowed_org_types: " + JSON.stringify(ORG_TYPES) + ".",
+    "lv_org_type option definitions: " + orgTypeDefinitions,
     "allowed_content_types: " + JSON.stringify(CONTENT_TYPES) + ".",
     "Prefer \"unknown\"/null over guessing - an absent search result is NOT evidence of",
     "absence. For every field you set in `data`, cite a supporting URL in",
