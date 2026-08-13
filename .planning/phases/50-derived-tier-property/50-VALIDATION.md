@@ -41,14 +41,18 @@ created: 2026-08-13
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| 50-W0-01 | TBD | 0 | TIER-01 | — | N/A | unit | `.venv/bin/python -m pytest tests/test_tier_formula_pin.py -x` | ❌ W0 | ⬜ pending |
-| 50-W0-02 | TBD | 0 | TIER-02 | T-50-write | Two-key gate blocks unarmed live property writes | live probe | `python scripts/check_tier_null_propagation.py` | ❌ W0 | ⬜ pending |
-| 50-W0-03 | TBD | 0 | TIER-03 | — | Read-only sweep, no writes | live read | `python scripts/sweep_tier_dependents.py` | ❌ W0 | ⬜ pending |
-| 50-W0-04 | TBD | 0 | TIER-01, TIER-03 | T-50-gate | Parity gate refuses cutover on any unexplained mismatch | live evidence | `python scripts/check_tier_derived_parity.py` | ❌ W0 | ⬜ pending |
-| 50-W0-05 | TBD | 0 | TIER-03 | — | Drift comparator stays truthful post-archive | offline comparator | `python scripts/check_schema_drift.py` | ✓ exists (needs edit) | ⬜ pending |
+| 50-03-01 | 50-03 | 2 | TIER-01 | T-50-14 | Threshold drift cannot land silently | unit | `.venv/bin/python -m pytest tests/test_tier_formula_pin.py -x` | ❌ W0 | ⬜ pending |
+| 50-01-01 | 50-01 | 1 | TIER-02 | T-50-02 | Two-key gate blocks unarmed live property writes | unit | `.venv/bin/python -m pytest tests/test_tier_derived_tools.py -x` | ❌ W0 | ⬜ pending |
+| 50-01-02 | 50-01 | 1 | TIER-02 | T-50-04 | Disposables torn down in `finally`, verified gone by 404 | live probe | `scripts/check_tier_null_propagation.py` (armed, operator-run) | ❌ W0 | ⬜ pending |
+| 50-02-01 | 50-02 | 1 | TIER-03 | T-50-08 | Read-only sweep, no writes | unit | `.venv/bin/python -m pytest tests/test_sweep_tier_dependents.py -x` | ❌ W0 | ⬜ pending |
+| 50-02-02 | 50-02 | 1 | TIER-03 | T-50-07 | Sweep artifact leaks no credentials | live read | `scripts/sweep_tier_dependents.py` | ❌ W0 | ⬜ pending |
+| 50-03-02 | 50-03 | 2 | TIER-01, TIER-03 | T-50-12 | Parity gate refuses cutover on any unexplained mismatch | live evidence | `scripts/check_tier_derived_parity.py` | ❌ W0 | ⬜ pending |
+| 50-05-02 | 50-05 | 4 | TIER-03 | T-50-23 | Drift comparator stays truthful post-archive | offline comparator | `.venv/bin/python -m pytest tests/test_check_schema_drift.py -x` then `scripts/check_schema_drift.py` | ✓ exists (needs edit) | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
-*Task IDs are provisional — the planner rebinds them to real `{phase}-{plan}-{task}` ids.*
+*Task IDs rebound by the planner 2026-08-13 from the provisional `50-W0-*` ids to real
+`{phase}-{plan}-{task}` ids. Wave column is the plan's execution wave; every row above is still a
+Wave-0 gap in the "artifact does not exist yet" sense.*
 
 ---
 
