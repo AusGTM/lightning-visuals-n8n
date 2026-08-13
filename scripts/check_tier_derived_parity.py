@@ -467,7 +467,7 @@ def render_census_markdown(before_point, after_point, never_scored_count, null_v
         )
         lines.append("")
 
-    lines.append("### Never-scored population (D-04 disclosure)")
+    lines.append("### Never-scored population (D-04/D-21 disclosure)")
     lines.append("")
     if null_variant == "coalesced_minus_one":
         lines.append(
@@ -487,6 +487,24 @@ def render_census_markdown(before_point, after_point, never_scored_count, null_v
             "`settled_variant=uncoalesced`). Never-scored companies keep today's blank "
             "tier on `lv_icp_tier_derived`; the count of blank-tier companies is "
             "unchanged."
+        )
+    elif null_variant == "uncoalesced_post_d21":
+        lines.append(
+            "**D-21 reversed D-04.** D-04's coalesced fallback shipped in Plan 01 on a "
+            "race, not a finding (50-NULL-PROBE.json's own `settled_variant="
+            "coalesced_minus_one` recorded an immediate read-back that never gave the "
+            "calculated property time to backfill -- D-22). Re-tested with polling, a "
+            "bare reference to a null `lv_icp_fit_score` fell through to its else branch "
+            "normally: null does not propagate. The shipped formula is now the D-03-"
+            "preferred UNCOALESCED variant (0 `coalesce(` calls on the score; the sole "
+            "`coalesce(` in the formula is the veto guard's, D-20). A live "
+            "`NOT_HAS_PROPERTY(lv_icp_fit_score)` count found "
+            f"**{never_scored_count} never-enriched companies**, each now reading blank "
+            "on `lv_icp_tier_derived` again -- the `\"Unscored\"` label the coalesced "
+            "fallback wrote is un-flipped. `50-NULL-PROBE.json` itself is NOT edited "
+            "(D-21) -- it stays historical evidence of what was believed at the time; "
+            "this correction of record lives in `50-CONTEXT.md`'s amendment block and "
+            "here."
         )
     else:
         lines.append(
@@ -548,8 +566,34 @@ def _count_never_scored_companies() -> int:
 
 
 def _read_settled_variant() -> str:
+    """The ORIGINAL Plan 01 probe result, frozen -- 50-NULL-PROBE.json is never edited
+    (D-21). Kept for historical reference only; _current_null_variant() below is what
+    main()'s --census branch actually uses, because D-21 reversed this probe's own
+    conclusion after a race condition was found in how it was read (D-22)."""
     doc = json.loads(NULL_PROBE_PATH.read_text())
     return doc["settled_variant"]
+
+
+CONFIG_PATH = ROOT / "config" / "hubspot_properties.yaml"
+
+
+def _current_null_variant() -> str:
+    """Phase 50 Plan 06 (D-21): the CURRENT live/declared formula's actual null-handling
+    shape, derived from config/hubspot_properties.yaml rather than trusted from the frozen
+    50-NULL-PROBE.json probe result -- D-21 reversed D-04 (a race, not a finding; see
+    50-CONTEXT.md's amendment), so the probe's own recorded settled_variant
+    (coalesced_minus_one) no longer describes what the shipped formula does. Returns
+    "uncoalesced_post_d21" (score references bare) or "coalesced_minus_one" (still
+    wrapped) -- never re-reads the probe file for this determination."""
+    import yaml
+
+    with CONFIG_PATH.open() as f:
+        doc = yaml.safe_load(f)
+    formula = next(
+        p["calculationFormula"] for p in doc["companies"]["properties"]
+        if p["name"] == "lv_icp_tier_derived"
+    )
+    return "coalesced_minus_one" if "coalesce(lv_icp_fit_score" in formula else "uncoalesced_post_d21"
 
 
 def main(argv=None) -> int:
@@ -595,7 +639,7 @@ def main(argv=None) -> int:
     if args.census:
         before_point, after_point = build_census_points(rows)
         never_scored_count = _count_never_scored_companies()
-        null_variant = _read_settled_variant()
+        null_variant = _current_null_variant()
         text = render_census_markdown(
             before_point, after_point, never_scored_count, null_variant, checked_at,
         )

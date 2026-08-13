@@ -29,6 +29,7 @@ from check_tier_derived_parity import (  # noqa: E402
     render_evidence_markdown,
     render_mirror_section,
     render_parity_markdown,
+    _current_null_variant,
 )
 
 
@@ -393,3 +394,24 @@ def test_render_mirror_section_flags_divergent_record():
     assert "DEFECT: 1 record(s)" in text
     assert "18047161864" in text
     assert "Simtech LED" in text
+
+
+# --- Phase 50 Plan 06 (D-21): _current_null_variant / the "uncoalesced_post_d21" ---------
+# --- census branch -------------------------------------------------------------------
+
+def test_current_null_variant_matches_the_shipped_uncoalesced_formula():
+    """The shipped config/hubspot_properties.yaml formula (this plan's own D-21
+    correction) must be classified uncoalesced_post_d21, not the frozen probe's
+    coalesced_minus_one -- the whole point of this helper is to stop trusting the frozen
+    probe for what the CURRENT formula does."""
+    assert _current_null_variant() == "uncoalesced_post_d21"
+
+
+def test_render_census_markdown_uncoalesced_post_d21_states_the_reversal_and_un_flip():
+    rows = build_rows(_STUCK_RECORDS + [_CLEAN_RECORD])
+    before, after = build_census_points(rows)
+    text = render_census_markdown(before, after, 646, "uncoalesced_post_d21", "2026-08-14T00:00:00Z")
+    assert "D-21 reversed D-04" in text
+    assert "646 never-enriched companies" in text
+    assert "reading blank" in text
+    assert '"Unscored"` label the coalesced' in text

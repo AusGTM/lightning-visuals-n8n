@@ -195,6 +195,15 @@ recoverable, only forward capture works, which cannot inform a v0.9 recalibratio
   calculation properties, so TIER-01 is unreachable without a new property. Everything else in
   this bullet stands: `lv_icp_scoring_version` remains out of scope below, and the three §5.3
   fields remain deferred to v1.0. See `50-CONTEXT.md`.)*
+  *(Scope amended again 2026-08-14, forced by a live finding during execution (D-20,
+  `50-CONTEXT.md`'s Amendment): `calculation_equation` reads only NUMERIC properties, so
+  `lv_anti_icp_flag` (a `booleancheckbox`) reads as null even when set and
+  `lv_icp_tier_derived`'s veto branch never fired live. The lift extends to a SECOND
+  property — `lv_anti_icp_flag_num`, a pipeline-written numeric 0/1 mirror of the same
+  single veto derivation (`Decide Company Action` / `src/icp_scoring.py`), never a second
+  derivation. Forced, not preferred, for the identical structural reason as the first
+  lift — the property/type combination this phase needs does not otherwise exist in the
+  portal. Everything else in this bullet still stands.)*
 
 - **Installing the sweep cron/launchd schedule** — an admin action on the operator's machine,
   carried from v0.8 where the burn-rate alarm shipped inert. Not a v0.9 deliverable.
@@ -226,8 +235,8 @@ recoverable, only forward capture works, which cannot inform a v0.9 recalibratio
 | RESCORE-01 | Phase 49 | **Complete** (all 4 declaring plans finished — 49-01: `docs/OPERATOR-RESCORE.md` runbook + `scripts/rescore_population.py --plan` mode + `test_rubric_change_guard.py`; 49-02: `scripts/backfill_seed_company_scores.py`'s consuming write path; 49-03: n8n research-prompt org-type-definitions fix built offline; 49-04: that fix deployed, bounced, and proven live — `49-DEPLOY-PROOF.md`) |
 | RESCORE-02 | Phase 49 | **Complete** (66/66 companies re-scored under the current rubric in one W1 window; `49-P2-SNAPSHOT.json`/`49-P3-SNAPSHOT.json`) |
 | RESCORE-03 | Phase 49 | **Complete** (P2/P3 tier distributions committed and compared against the pre-registered Phase 46 forecast, matched exactly: 14 rows C→B, all `individual_club_team`; `49-W1-ARM-RECORD.md`) |
-| TIER-01 | Phase 50 | **Blocked** — Plan 03's D-07 live parity gate proved the ladder does NOT reproduce WF1 exactly: `lv_icp_tier_derived`'s veto guard never fires for any of the 6 real `lv_anti_icp_flag=true` scored companies (`WINDOWS.md` id 13). Ladder boundaries and null semantics are offline-pinned and correct (`tests/test_tier_formula_pin.py`), but "verified against real records" is not met while the veto branch is unreachable live. Not marked complete. |
-| TIER-02 | Phase 50 | **Complete** — D-04's live null probe (Plan 01) settled the runtime question against a real disposable record before commit; the ~646-record blank→`Unscored` flip is disclosed and live-confirmed (`50-TIER-PARITY-EVIDENCE.md` census). |
+| TIER-01 | Phase 50 | **Blocked (residual, non-veto defect)** — Plan 06's re-run of D-07's gate (`50-TIER-PARITY-EVIDENCE.md`'s 2026-08-14 post-correction section) confirms the veto-guard defect (`WINDOWS.md` id 13) is FIXED: all 6 real `lv_anti_icp_flag=true` scored companies now correctly derive `D` (Simtech LED settled to `D` under a polled proof, D-22). The gate now reads 61 match / 4 expected_mismatch / 1 defect — exactly the pre-registered expectation. The 1 residual defect (Coffs Harbour Racing Club, `14752488879`, `WINDOWS.md` id 14) is the OPPOSITE polarity of the veto-guard class: the derived tier is CORRECT (`C`) and the stale `lv_icp_tier` enum is wrong (`Unscored`) — evidence FOR the derived property, not against it, and a pre-existing WF1-staleness case unrelated to this fix. Not marked complete: "verified against real records ... reproduces WF1's live ladder exactly" is not literally true while any gate row outside the 4 pre-registered ids is a `defect`; whether to extend the gate's exception list to absorb this class is Plan 04/05's operator decision, not taken here (`KNOWN_STUCK_IDS` unchanged, per this plan's own prohibition). |
+| TIER-02 | Phase 50 | **Complete, correction of record superseding the original evidence** — D-21 (`50-CONTEXT.md`'s 2026-08-14 amendment) reversed D-04: Plan 01's original null probe read back immediately after create and mistook an unsettled calculated property for null-propagation (a race, not a finding — D-22). Re-tested with polling, a bare reference to a null `lv_icp_fit_score` fell through to its else branch normally. The shipped formula is now D-03's originally-preferred UNCOALESCED variant; the ~646-record blank→`"Unscored"` flip this row previously described as settled fact is itself now REVERSED (un-flipped back to blank), live-confirmed by a ≥3-minute poll on a named never-scored company (`50-TIER-PARITY-EVIDENCE.md`'s post-correction census, `50-MIRROR-BACKFILL.md`). `50-NULL-PROBE.json` is unedited and stays historical evidence of what was believed at the time. |
 | TIER-03 | Phase 50 | Not started |
 
 *Phase column filled by the roadmapper.*
