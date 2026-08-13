@@ -232,3 +232,46 @@ def test_hardware_veto_keeps_third_position_in_the_join_via_the_org_type_trigger
         "No broadcast or streaming content",
         HARDWARE_REASON,
     ])
+
+
+# --- D-20: anti_icp_flag_properties -- one derivation, two serializations, never a
+# half-set pair -------------------------------------------------------------------------
+from src.icp_scoring import anti_icp_flag_properties, compute_icp_score  # noqa: E402
+
+
+def test_anti_icp_flag_properties_true_branch():
+    assert anti_icp_flag_properties(True) == {
+        "lv_anti_icp_flag": "true", "lv_anti_icp_flag_num": "1",
+    }
+
+
+def test_anti_icp_flag_properties_false_branch():
+    assert anti_icp_flag_properties(False) == {
+        "lv_anti_icp_flag": "false", "lv_anti_icp_flag_num": "0",
+    }
+
+
+def test_anti_icp_flag_properties_never_half_set():
+    for flag in (True, False):
+        props = anti_icp_flag_properties(flag)
+        flag_is_true = props["lv_anti_icp_flag"] == "true"
+        num_is_one = props["lv_anti_icp_flag_num"] == "1"
+        assert flag_is_true == num_is_one, props
+
+
+def test_anti_icp_flag_properties_round_trips_a_vetoed_fixture():
+    r = score({"lv_org_type": "hardware_vendor", "lv_produces_content": True,
+               "lv_country_region_normalized": "AU", "lv_revenue_band": "5-50M"})
+    assert r.anti_icp_flag is True
+    assert anti_icp_flag_properties(r.anti_icp_flag) == {
+        "lv_anti_icp_flag": "true", "lv_anti_icp_flag_num": "1",
+    }
+
+
+def test_anti_icp_flag_properties_round_trips_a_non_vetoed_fixture():
+    r = score({"lv_org_type": "governing_body_league", "lv_produces_content": True,
+               "lv_country_region_normalized": "AU", "lv_revenue_band": "5-50M"})
+    assert r.anti_icp_flag is False
+    assert anti_icp_flag_properties(r.anti_icp_flag) == {
+        "lv_anti_icp_flag": "false", "lv_anti_icp_flag_num": "0",
+    }

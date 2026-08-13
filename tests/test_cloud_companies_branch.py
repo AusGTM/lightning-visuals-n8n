@@ -259,9 +259,14 @@ def test_decide_company_action_veto_reason_strings_match_the_rubric_yaml_verbati
 def test_decide_company_action_veto_flag_assignment_is_a_quoted_string_literal():
     """D-04 / P4: a bare JS boolean written to lv_anti_icp_flag would silently break every
     HubSpot EQ filter/view/trigger reading it (the 36-07 precedent). Assert the assignment
-    is a quoted string literal, not a bare boolean expression."""
+    is a quoted string literal, not a bare boolean expression. Phase 50 Plan 06 (D-20):
+    the assignment now derives from the single `flagIsSet` local rather than re-evaluating
+    `vetoReasons.length > 0` inline -- both properties (this one and its numeric mirror)
+    read the same local."""
     code = _decide_company_action_jscode()
-    assert 'properties.lv_anti_icp_flag = vetoReasons.length > 0 ? "true" : "false";' in code
+    assert "const flagIsSet = vetoReasons.length > 0;" in code
+    assert 'properties.lv_anti_icp_flag = flagIsSet ? "true" : "false";' in code
+    assert 'properties.lv_anti_icp_flag_num = flagIsSet ? "1" : "0";' in code
     assert "properties.lv_anti_icp_flag = true;" not in code
     assert "properties.lv_anti_icp_flag = false;" not in code
 
@@ -311,11 +316,15 @@ def test_inventory_rows_6_7_8_remain_already_correct():
     before this phase and must stay that way — a regression at any one of these sites
     should fail here too, not just at whichever test happened to be written for its own
     phase. Assert the rows individually, never a count."""
-    # Row 6.
-    assert 'properties.lv_anti_icp_flag = vetoReasons.length > 0 ? "true" : "false";' in (
+    # Row 6. Phase 50 Plan 06 (D-20): re-derived through the single `flagIsSet` local.
+    assert "const flagIsSet = vetoReasons.length > 0;" in ENRICH_DECIDE_CO_CLOUD
+    assert 'properties.lv_anti_icp_flag = flagIsSet ? "true" : "false";' in (
         ENRICH_DECIDE_CO_CLOUD
     )
-    assert 'properties.lv_anti_icp_reason = vetoReasons.length > 0 ? vetoReasons.join("; ") : "";' in (
+    assert 'properties.lv_anti_icp_flag_num = flagIsSet ? "1" : "0";' in (
+        ENRICH_DECIDE_CO_CLOUD
+    )
+    assert 'properties.lv_anti_icp_reason = flagIsSet ? vetoReasons.join("; ") : "";' in (
         ENRICH_DECIDE_CO_CLOUD
     )
     # Row 7.

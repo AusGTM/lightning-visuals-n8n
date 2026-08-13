@@ -214,16 +214,24 @@ def test_lv_icp_tier_accepted_divergence_present_and_contributes_no_exit_code():
 
 # --- do-not-archive set consistency -----------------------------------------------------
 
+# Phase 50 Plan 06 (D-20): postdates the committed phase42-pre snapshot (2026-08-13) --
+# the property could not have existed in a Phase 42 capture, so it is carved out of the
+# committed-snapshot tripwire by name below rather than making that assertion fail on a
+# property the snapshot predates.
+_POSTDATES_PHASE42_SNAPSHOT = frozenset({"lv_anti_icp_flag_num"})
+
+
 def test_do_not_archive_sets_have_expected_sizes():
-    assert len(DO_NOT_ARCHIVE_COMPANY_PROPERTIES) == 11
+    assert len(DO_NOT_ARCHIVE_COMPANY_PROPERTIES) == 12
     assert len(DO_NOT_ARCHIVE_FLOW_IDS) == 6
-    assert len(D04_COMPANY_PROPERTY_SCOPE) == 15
+    assert len(D04_COMPANY_PROPERTY_SCOPE) == 16
 
 
 def test_do_not_archive_company_properties_appear_in_committed_snapshot():
     """Turns the committed phase42-pre snapshot into a permanent offline tripwire: if a
-    later change removes one of the eleven from the live schema and someone re-captures the
-    snapshot under the same label, this test goes red without needing a network call.
+    later change removes one of the do-not-archive names from the live schema and someone
+    re-captures the snapshot under the same label, this test goes red without needing a
+    network call.
 
     Skipped (not failed) until the live snapshot exists -- Task 1's live steps are an
     operator-run checkpoint, not something this offline test suite can produce itself."""
@@ -239,7 +247,8 @@ def test_do_not_archive_company_properties_appear_in_committed_snapshot():
     results = doc.get("results") or doc.get("body", {}).get("results") or []
     assert results, f"{BASELINE_SNAPSHOT.name} has no results[] -- snapshot shape changed"
     live_names = {p["name"] for p in results}
-    missing = DO_NOT_ARCHIVE_COMPANY_PROPERTIES - live_names
+    checked = DO_NOT_ARCHIVE_COMPANY_PROPERTIES - _POSTDATES_PHASE42_SNAPSHOT
+    missing = checked - live_names
     assert not missing, (
         f"do-not-archive propert(y/ies) absent from the committed phase42-pre snapshot: "
         f"{sorted(missing)} -- the live scoring engine may be damaged"

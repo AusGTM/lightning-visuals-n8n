@@ -74,7 +74,10 @@ KNOWN_STUCK_WINDOWS_IDS = {
 # been graded by WF1 at least once), but a blank must never silently vanish if it does.
 BLANK_TIER_KEY = "Unscored-or-blank"
 
-FETCH_PROPS = ["name", "lv_icp_tier", "lv_icp_tier_derived", "lv_icp_fit_score", "lv_anti_icp_flag"]
+FETCH_PROPS = [
+    "name", "lv_icp_tier", "lv_icp_tier_derived", "lv_icp_fit_score", "lv_anti_icp_flag",
+    "lv_anti_icp_flag_num",
+]
 
 
 def _has_credentials() -> bool:
@@ -164,9 +167,70 @@ def build_rows(records, known_stuck_ids=KNOWN_STUCK_IDS) -> list:
             "derived_tier": derived,
             "fit_score": r.get("lv_icp_fit_score"),
             "anti_icp_flag": r.get("lv_anti_icp_flag"),
+            "anti_icp_flag_num": r.get("lv_anti_icp_flag_num"),
             "classification": classify_row(rid, live_tier, derived, known_stuck_ids),
         })
     return rows
+
+
+# --- Phase 50 Plan 06 (D-20): population-level mirror-agreement check -------------------
+
+def mirror_disagrees(flag, num) -> bool:
+    """True only when lv_anti_icp_flag's "set-ness" (flag == "true", exactly) differs from
+    lv_anti_icp_flag_num's "set-ness" (parses to 1 -- None/"" guarded BEFORE any numeric
+    coercion, never crash on a blank mirror). Flag false-or-unset with a null mirror is
+    the normal, un-backfilled state for most of the population and is NOT a divergence;
+    flag true with a null/non-1 mirror IS the dangerous state this check exists to catch,
+    and a mirror of 1 on a false/unset flag is equally a divergence (the two must always
+    describe the same veto)."""
+    flag_is_true = flag == "true"
+    num_is_one = False
+    if num is not None and str(num) != "":
+        try:
+            num_is_one = int(float(num)) == 1
+        except (TypeError, ValueError):
+            num_is_one = False
+    return flag_is_true != num_is_one
+
+
+def render_mirror_section(rows) -> str:
+    """Lists every row where mirror_disagrees() is True. Pure function of rows -- called
+    twice on the same input returns byte-identical strings. Issues no HubSpot call of any
+    kind (this script's own D-16 zero-write guarantee stays load-bearing)."""
+    divergent = [
+        r for r in rows
+        if mirror_disagrees(r.get("anti_icp_flag"), r.get("anti_icp_flag_num"))
+    ]
+
+    lines = [
+        "## Numeric Mirror Agreement -- lv_anti_icp_flag vs lv_anti_icp_flag_num (D-20)",
+        "",
+    ]
+    if not divergent:
+        lines.append(
+            "**No divergence found.** Every live record's `lv_anti_icp_flag` and its "
+            "numeric mirror `lv_anti_icp_flag_num` agree. A `false`/unset flag paired "
+            "with a null mirror is the normal, un-backfilled state (most of the "
+            "population has never had the mirror written) and is correctly NOT reported "
+            "as a divergence."
+        )
+    else:
+        lines.append(
+            f"**DEFECT: {len(divergent)} record(s) where `lv_anti_icp_flag` and "
+            "`lv_anti_icp_flag_num` disagree.** A `true` flag with a null/non-1 mirror "
+            "means the record's veto is invisible to `lv_icp_tier_derived`'s formula; a "
+            "`1` mirror on a `false`/unset flag means a mirror was written for a record "
+            "that should not carry it."
+        )
+        lines.append("")
+        lines.append("| Record ID | Name | lv_anti_icp_flag | lv_anti_icp_flag_num |")
+        lines.append("|---|---|---|---|")
+        for r in sorted(divergent, key=lambda r: _id_sort_key(r["record_id"])):
+            lines.append(
+                f"| {r['record_id']} | {r.get('name') or '(name unavailable)'} | "
+                f"{r.get('anti_icp_flag')} | {r.get('anti_icp_flag_num')} |"
+            )
+    return "\n".join(lines) + "\n"
 
 
 # --- Task 2 (D-17 item 4): the evidence-artifact wrapper around render_parity_markdown ---
@@ -266,7 +330,9 @@ def render_evidence_markdown(rows, population_count, total_companies, checked_at
         "verifiable by reading the module, not merely asserted here.",
     ])
 
-    return "\n\n".join([denominator, table, cross_ref, verdict, limits]) + "\n"
+    mirror_section = render_mirror_section(rows)
+
+    return "\n\n".join([denominator, table, cross_ref, verdict, mirror_section, limits]) + "\n"
 
 
 # --- Task 3 (D-19): the operator-facing before/after tier census -------------------------

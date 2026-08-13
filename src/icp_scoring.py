@@ -31,6 +31,24 @@ def get_signal(record: HubSpotRecord, patch: dict, key: str, default=None):
     return record.properties.get(key, default)
 
 
+# Phase 50 Plan 06 (D-20): the veto is computed ONCE (compute_icp_score's own
+# `anti_icp_flag` below) and this is a second SERIALIZATION of that single value, never a
+# second derivation -- calculation_equation reads only numeric properties, so
+# lv_anti_icp_flag_num is the only way lv_icp_tier_derived's veto branch can read the
+# veto at all. src/merge_policy.py's Approach C removed the canonical write path in
+# Phase 15 -- Python never PATCHes either property to HubSpot; this function exists so
+# tests/test_icp_scoring.py can pin, offline, that the oracle's two serializations always
+# agree, mirroring the single `flagIsSet` local scripts/build_cloud_workflows.py's
+# `Decide Company Action` node assigns both properties from.
+def anti_icp_flag_properties(flag: bool) -> dict:
+    # D-04/P4 string-literal rule -- string values, never bare booleans, matching every
+    # other HubSpot PATCH body in this repo.
+    return {
+        "lv_anti_icp_flag": "true" if flag else "false",
+        "lv_anti_icp_flag_num": "1" if flag else "0",
+    }
+
+
 def compute_icp_score(record: HubSpotRecord, candidate_patch: dict, cfg: dict = None) -> ICPScoreResult:
     # Phase 46 Plan 01 (RUBRIC-02): additive, backward-compatible override -- every
     # existing two-positional-argument call site (tests/scoring_fixtures.py::expected_for,

@@ -351,7 +351,11 @@ def test_revenue_flow_matches_rubric(flow_path):
     )
 
 
-VETO_PROPERTY_NAMES = {"lv_anti_icp_flag", "lv_anti_icp_reason"}
+# Phase 50 Plan 06 (D-20, T-50-30): lv_anti_icp_flag_num added -- the numeric mirror is
+# the veto's second serialization (single derivation in Decide Company Action /
+# src/icp_scoring.py), so no HubSpot-native flow may ever become a second writer of it
+# either, same guarantee the boolean/reason pair already carries.
+VETO_PROPERTY_NAMES = {"lv_anti_icp_flag", "lv_anti_icp_reason", "lv_anti_icp_flag_num"}
 
 
 @pytest.mark.parametrize("flow_path", _after_json_paths())

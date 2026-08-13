@@ -65,6 +65,14 @@ EXPECTED_PORTAL_ID = os.getenv("HUBSPOT_EXPECTED_PORTAL_ID", "22617666")
 # D-01 (42-CONTEXT.md) -- the live scoring engine's company properties. NEVER archived by
 # anything in Phase 42. `39-DECISION.md:107-112` is superseded prose that, read literally,
 # points the other way; this frozenset is the machine-checked correction.
+#
+# Phase 50 Plan 06 (D-20/T-50-31): lv_anti_icp_flag_num added -- archiving it would
+# silently disable lv_icp_tier_derived's veto branch again (calculation_equation reads
+# only numeric properties, so the mirror is the ONLY readable veto signal). Postdates the
+# committed phase42-pre baseline snapshot (2026-08-13), so
+# test_do_not_archive_company_properties_appear_in_committed_snapshot carves it out of
+# that one assertion by name rather than failing on a property that could not have existed
+# in a Phase 42 snapshot.
 DO_NOT_ARCHIVE_COMPANY_PROPERTIES = frozenset({
     "org_type_score",
     "geography_score",
@@ -74,6 +82,7 @@ DO_NOT_ARCHIVE_COMPANY_PROPERTIES = frozenset({
     "lv_icp_fit_score",
     "lv_icp_tier",
     "lv_anti_icp_flag",
+    "lv_anti_icp_flag_num",
     "lv_org_type",
     "lv_produces_content",
     "lv_country_region_normalized",

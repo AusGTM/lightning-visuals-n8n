@@ -2874,11 +2874,19 @@ return $input.all().map((it) => {
   if (producesContent === false) vetoReasons.push("No broadcast or streaming content");
   if (isHardwareVendor === true || orgType === "hardware_vendor") vetoReasons.push("Hardware/AV/LED vendor, not sports-media buyer");
 
-  // D-04 / P4: string literals, never bare JS booleans — HubSpot EQ filters compare
-  // strings (the 36-07 precedent for lv_enrichment_requested). The BUG-27 loop below only
-  // joins arrays, so an unstringified boolean here would ship straight to the PATCH body.
-  properties.lv_anti_icp_flag = vetoReasons.length > 0 ? "true" : "false";
-  properties.lv_anti_icp_reason = vetoReasons.length > 0 ? vetoReasons.join("; ") : "";
+  // Phase 50 Plan 06 (D-20): the veto is derived ONCE into flagIsSet and BOTH properties
+  // are assigned from it, adjacent, in this same block — the structural guarantee that a
+  // future edit to the predicate changes both serializations together. lv_anti_icp_flag_num
+  // is the numeric mirror lv_icp_tier_derived's calculationFormula veto guard reads
+  // (calculation_equation reads only numeric properties — the boolean is unreadable
+  // there). D-04 / P4: string literals, never bare JS booleans — HubSpot EQ filters
+  // compare strings (the 36-07 precedent for lv_enrichment_requested). The BUG-27 loop
+  // below only joins arrays, so an unstringified boolean here would ship straight to the
+  // PATCH body.
+  const flagIsSet = vetoReasons.length > 0;
+  properties.lv_anti_icp_flag = flagIsSet ? "true" : "false";
+  properties.lv_anti_icp_flag_num = flagIsSet ? "1" : "0";
+  properties.lv_anti_icp_reason = flagIsSet ? vetoReasons.join("; ") : "";
 
   if (needsReview.length > 0) {
     // D-07 (43-01, PIPE-01, row 3): string literal, never a bare JS boolean — same class

@@ -147,9 +147,10 @@ def test_exact_counts_guard_against_manifest_drift():
     # Contacts and the group counts are untouched -- D-04 scopes the expansion to company
     # scoring properties only.
     # Phase 50 Plan 01 (D-01/D-14) added exactly one company property, lv_icp_tier_derived,
-    # bumping the count 32 -> 33.
+    # bumping the count 32 -> 33. Phase 50 Plan 06 (D-20) added a second,
+    # lv_anti_icp_flag_num (the numeric veto mirror), bumping 33 -> 34.
     cfg = load_config()
-    assert len(cfg["companies"]["properties"]) == 33
+    assert len(cfg["companies"]["properties"]) == 34
     assert len(cfg["contacts"]["properties"]) == 17
     assert len(cfg["companies"]["groups"]) == 1
     assert len(cfg["contacts"]["groups"]) == 1

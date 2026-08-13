@@ -24,8 +24,10 @@ from check_tier_derived_parity import (  # noqa: E402
     build_census_points,
     build_rows,
     classify_row,
+    mirror_disagrees,
     render_census_markdown,
     render_evidence_markdown,
+    render_mirror_section,
     render_parity_markdown,
 )
 
@@ -342,3 +344,52 @@ def test_render_census_markdown_empty_population_raises():
              "tier_distribution": {}, "records": {}}
     with pytest.raises(ValueError):
         render_census_markdown(before, after, 0, "coalesced_minus_one", "2026-08-14T00:00:00Z")
+
+
+# --- Phase 50 Plan 06 (D-20): mirror_disagrees / render_mirror_section -------------------
+
+def test_mirror_disagrees_flag_true_mirror_one_agrees():
+    assert mirror_disagrees("true", "1") is False
+
+
+def test_mirror_disagrees_flag_true_mirror_null_diverges():
+    assert mirror_disagrees("true", None) is True
+
+
+def test_mirror_disagrees_flag_false_mirror_null_agrees():
+    assert mirror_disagrees("false", None) is False
+
+
+def test_mirror_disagrees_flag_false_mirror_one_diverges():
+    assert mirror_disagrees("false", "1") is True
+
+
+def test_mirror_disagrees_guards_empty_string_mirror_before_coercion():
+    assert mirror_disagrees("false", "") is False
+
+
+def test_mirror_disagrees_flag_unset_treated_as_false():
+    assert mirror_disagrees(None, None) is False
+
+
+def test_render_mirror_section_no_divergence():
+    rows = build_rows([
+        {"id": "1", "name": "Vetoed Co", "lv_icp_tier": "D", "lv_icp_tier_derived": "D",
+         "lv_icp_fit_score": "10", "lv_anti_icp_flag": "true", "lv_anti_icp_flag_num": "1"},
+        {"id": "2", "name": "Clean Co", "lv_icp_tier": "A", "lv_icp_tier_derived": "A",
+         "lv_icp_fit_score": "80", "lv_anti_icp_flag": "false", "lv_anti_icp_flag_num": None},
+    ])
+    text = render_mirror_section(rows)
+    assert "No divergence found" in text
+
+
+def test_render_mirror_section_flags_divergent_record():
+    rows = build_rows([
+        {"id": "18047161864", "name": "Simtech LED", "lv_icp_tier": "D",
+         "lv_icp_tier_derived": "B", "lv_icp_fit_score": "40",
+         "lv_anti_icp_flag": "true", "lv_anti_icp_flag_num": None},
+    ])
+    text = render_mirror_section(rows)
+    assert "DEFECT: 1 record(s)" in text
+    assert "18047161864" in text
+    assert "Simtech LED" in text
