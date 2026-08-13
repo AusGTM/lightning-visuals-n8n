@@ -346,7 +346,7 @@ did not change, no full re-score is owed and this phase proves the procedure wit
      milestone's re-scoring activity as a whole (veto clear, coverage enrichment, and any
      weight-driven full re-score).
 
-**Plans**: 2/7 plans executed
+**Plans**: 3/7 plans executed
 
 Plans:
 
@@ -357,7 +357,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1)*
 
 - [x] 49-02-PLAN.md — `docs/OPERATOR-RESCORE.md` runbook (both branches, decision rule first, figures from a committed live `--plan` capture) and the D-09 guard test pinning the rubric table
-- [ ] 49-03-PLAN.md — folded todo, offline half: org-type definitions into the generated n8n taxonomy module and the production research prompt, frozen fixture re-baselined, new node test
+- [x] 49-03-PLAN.md — folded todo, offline half: org-type definitions into the generated n8n taxonomy module and the production research prompt, frozen fixture re-baselined, new node test
 
 **Wave 3** *(blocked on Wave 2)*
 
@@ -385,7 +385,7 @@ Plans:
 | 47. Veto Remediation | v0.9 | 4/4 | Complete | 2026-08-12 |
 | 47.5. Veto Recompute Path | v0.9 | 6/6 | Complete | 2026-08-12 |
 | 48. Enrichment Coverage | v0.9 | 7/7 | Complete (verified) | 2026-08-13 |
-| 49. Re-score Strategy & Reporting | v0.9 | 2/7 | In Progress|  |
+| 49. Re-score Strategy & Reporting | v0.9 | 3/7 | In Progress|  |
 
 ## Ledger gaps (known)
 
