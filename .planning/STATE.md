@@ -5,15 +5,15 @@ milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 49
 current_phase_name: re-score-strategy-reporting
 status: executing
-stopped_at: Completed 49-03-PLAN.md
-last_updated: "2026-08-13T04:24:49.543Z"
+stopped_at: Completed 49-04-PLAN.md (deploy, bounce, prove)
+last_updated: "2026-08-13T04:54:32.835Z"
 last_activity: 2026-08-13
 last_activity_desc: Phase 49 execution started
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 29
-  completed_plans: 25
+  completed_plans: 26
   percent: 80
 ---
 
@@ -113,7 +113,7 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Phase: 49 (re-score-strategy-reporting) — EXECUTING
-Plan: 4 of 7
+Plan: 5 of 7
 Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
@@ -201,12 +201,12 @@ Last activity: 2026-08-13 — Phase 49 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████████░] 86% (v0.9 phase 47.5 of 46-49)
+Progress: [█████████░] 90% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-13T04:24:49.534Z
-**Stopped at:** Completed 49-03-PLAN.md
+**Last session:** 2026-08-13T04:54:32.827Z
+**Stopped at:** Completed 49-04-PLAN.md (deploy, bounce, prove)
 **Resume file:** None
 
 ## Performance Metrics
@@ -261,6 +261,7 @@ Progress: [█████████░] 86% (v0.9 phase 47.5 of 46-49)
 | Phase 49 P01 | 32min | 3 tasks | 4 files |
 | Phase 49 P02 | 22min | 2 tasks | 3 files |
 | Phase 49 P03 | 9min | 3 tasks | 12 files |
+| Phase 49 P04 | 8min | 3 tasks | 4 files |
 
 ## Decisions
 
@@ -378,6 +379,8 @@ Progress: [█████████░] 86% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: Captured --plan live against portal 22617666 through the absolute-path dotenv wrapper rather than reusing a fixture, so the runbook's numbers trace to a live capture (D-07).
 - [Phase ?]: Guard test pins config/icp_scoring.yaml's scoring surface as a key-by-key dict comparison (not a digest) so the D-09 failure message can name exactly which keys moved.
 - [Phase ?]: n8n research prompt now renders lv_org_type definitions (not just bare keys); frozen jsCode fixture re-baselined as an explicit reviewed act; contacts-target prompt confirmed to not enumerate org types and left unchanged
+- [Phase ?]: Deployed and bounced Phase 49's one declared n8n change (org-type-definitions research prompt fix), proven live via execution 11871's own embedded jsCode executed and its returned prompt string inspected (not just structural substring presence).
+- [Phase ?]: Closed the folded todo (2026-08-13-n8n-research-prompt-lacks-org-type-definitions) in .planning/todos/completed/ with a dated RESOLVED block naming plans 49-03/49-04, execution 11871, and the regression test.
 
 ### Blockers
 

@@ -346,7 +346,7 @@ did not change, no full re-score is owed and this phase proves the procedure wit
      milestone's re-scoring activity as a whole (veto clear, coverage enrichment, and any
      weight-driven full re-score).
 
-**Plans**: 3/7 plans executed
+**Plans**: 4/7 plans executed
 
 Plans:
 
@@ -361,7 +361,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2)*
 
-- [ ] 49-04-PLAN.md — the ONE declared deploy and bounce, proven from the running instance; folded todo closed with evidence
+- [x] 49-04-PLAN.md — the ONE declared deploy and bounce, proven from the running instance; folded todo closed with evidence
 
 **Wave 4** *(blocked on Wave 3)*
 
@@ -385,7 +385,7 @@ Plans:
 | 47. Veto Remediation | v0.9 | 4/4 | Complete | 2026-08-12 |
 | 47.5. Veto Recompute Path | v0.9 | 6/6 | Complete | 2026-08-12 |
 | 48. Enrichment Coverage | v0.9 | 7/7 | Complete (verified) | 2026-08-13 |
-| 49. Re-score Strategy & Reporting | v0.9 | 3/7 | In Progress|  |
+| 49. Re-score Strategy & Reporting | v0.9 | 4/7 | In Progress|  |
 
 ## Ledger gaps (known)
 
