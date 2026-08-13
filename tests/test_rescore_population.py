@@ -31,19 +31,34 @@ def _fake_search_records_factory(ids):
     return _fake_search_records
 
 
-def _arm_credentials_and_env(monkeypatch, *, ids=None):
+def _fake_get_record_factory(props_by_id):
+    def _fake_get_record(object_type, record_id, properties):
+        assert object_type == "companies"
+        base = props_by_id.get(record_id, {})
+        return {"id": record_id, "properties": {k: base.get(k) for k in properties}}
+    return _fake_get_record
+
+
+def _arm_credentials_and_env(monkeypatch, *, ids=None, armed=False, props_by_id=None):
     monkeypatch.setenv("HUBSPOT_PRIVATE_APP_TOKEN", "fake-token")
     monkeypatch.setenv("HUBSPOT_PORTAL_ID", rp.EXPECTED_PORTAL_ID)
-    monkeypatch.delenv("DRY_RUN", raising=False)
-    monkeypatch.delenv("ALLOW_SCORE_BACKFILL", raising=False)
+    if armed:
+        monkeypatch.setenv("DRY_RUN", "false")
+        monkeypatch.setenv("ALLOW_SCORE_BACKFILL", "true")
+    else:
+        monkeypatch.delenv("DRY_RUN", raising=False)
+        monkeypatch.delenv("ALLOW_SCORE_BACKFILL", raising=False)
     # Always monkeypatch this one (even if unset) so pytest's monkeypatch fixture
     # cleans up whatever _apply_max_records_default()'s os.environ.setdefault leaves
     # behind at teardown -- see build_plan()'s docstring / the module's own comment.
     monkeypatch.delenv("BACKFILL_MAX_RECORDS", raising=False)
     monkeypatch.setattr("requests.post", _refuse_network)
     monkeypatch.setattr("requests.get", _refuse_network)
+    monkeypatch.setattr(rp.time, "sleep", lambda _s: None)  # settle-poll never really sleeps in tests
     if ids is not None:
         monkeypatch.setattr(rp, "search_records", _fake_search_records_factory(ids))
+    if props_by_id is not None:
+        monkeypatch.setattr(rp, "get_record", _fake_get_record_factory(props_by_id))
 
 
 # --- select_scored_population ------------------------------------------------------------
@@ -216,6 +231,176 @@ def test_main_skips_cleanly_with_no_credentials(monkeypatch, capsys):
     assert exit_code == 0
     out = capsys.readouterr().out
     assert "skipped" in out
+
+
+# --- CLI: --execute (Task 49-01-02) --------------------------------------------------------
+
+def test_execute_disarmed_no_arm_vars_builds_prints_no_write(monkeypatch, capsys):
+    _arm_credentials_and_env(monkeypatch, ids=STUB_66_IDS, props_by_id={})
+    batch_calls = []
+    monkeypatch.setattr(rp, "batch_update_companies", lambda updates, dry_run=True: batch_calls.append(updates))
+    exit_code = rp.main(["--execute"])
+    assert exit_code == 0
+    assert batch_calls == []
+
+
+def test_execute_dry_run_false_but_allow_unset_zero_writes(monkeypatch):
+    _arm_credentials_and_env(monkeypatch, ids=STUB_66_IDS, props_by_id={})
+    monkeypatch.setenv("DRY_RUN", "false")
+    monkeypatch.delenv("ALLOW_SCORE_BACKFILL", raising=False)
+    batch_calls = []
+    monkeypatch.setattr(rp, "batch_update_companies", lambda updates, dry_run=True: batch_calls.append(updates))
+    exit_code = rp.main(["--execute"])
+    assert exit_code == 0
+    assert batch_calls == []
+
+
+def test_execute_armed_population_drift_refuses_and_makes_no_write(monkeypatch):
+    calls = {"n": 0}
+    ids_first = STUB_66_IDS
+    ids_second = STUB_66_IDS[:-1] + ["99999"]  # one id different -- simulates a race
+
+    def _fake_search(object_type, filters, properties, limit=100):
+        calls["n"] += 1
+        return {"results": [{"id": i} for i in (ids_first if calls["n"] == 1 else ids_second)]}
+
+    _arm_credentials_and_env(monkeypatch, armed=True, props_by_id={})
+    monkeypatch.setattr(rp, "search_records", _fake_search)
+    batch_calls = []
+    monkeypatch.setattr(rp, "batch_update_companies", lambda updates, dry_run=True: batch_calls.append(updates))
+    exit_code = rp.main(["--execute"])
+    assert exit_code != 0
+    assert batch_calls == []
+
+
+def test_execute_armed_matching_sample_writes_all(monkeypatch):
+    ids = ["00010", "00020", "00030"]
+    _arm_credentials_and_env(monkeypatch, ids=ids, armed=True, props_by_id={})
+    batch_calls = []
+    monkeypatch.setattr(rp, "batch_update_companies", lambda updates, dry_run=True: batch_calls.append(updates))
+    exit_code = rp.main(["--execute"])
+    assert exit_code == 0
+    assert len(batch_calls) == 1
+    sent_ids = sorted(u["id"] for u in batch_calls[0])
+    assert sent_ids == ids
+
+
+def test_execute_already_written_excludes_canary_sends_65(monkeypatch):
+    ids = STUB_66_IDS
+    canary_id = ids[0]
+    _arm_credentials_and_env(monkeypatch, ids=ids, armed=True, props_by_id={})
+    batch_calls = []
+    monkeypatch.setattr(rp, "batch_update_companies", lambda updates, dry_run=True: batch_calls.append(updates))
+    exit_code = rp.main(["--execute", "--already-written", canary_id])
+    assert exit_code == 0
+    assert len(batch_calls) == 1
+    sent_ids = [u["id"] for u in batch_calls[0]]
+    assert len(sent_ids) == 65
+    assert canary_id not in sent_ids
+
+
+def test_execute_payload_component_keys_are_exact(monkeypatch):
+    ids = ["00010", "00020"]
+    _arm_credentials_and_env(monkeypatch, ids=ids, armed=True, props_by_id={})
+    batch_calls = []
+    monkeypatch.setattr(rp, "batch_update_companies", lambda updates, dry_run=True: batch_calls.append(updates))
+    rp.main(["--execute"])
+    assert len(batch_calls) == 1
+    for update in batch_calls[0]:
+        assert set(update["properties"].keys()) == set(rp.COMPONENT_PROPS)
+
+
+# --- CLI: --canary (Task 49-01-02) ----------------------------------------------------------
+
+def test_canary_armed_writes_exactly_one_record(monkeypatch):
+    ids = ["00010", "00020"]
+    props_by_id = {
+        "00010": {"lv_org_type": "individual_club_team"},
+        "00020": {"lv_org_type": "governing_body_league"},
+    }
+    _arm_credentials_and_env(monkeypatch, ids=ids, armed=True, props_by_id=props_by_id)
+    batch_calls = []
+    monkeypatch.setattr(rp, "batch_update_companies", lambda updates, dry_run=True: batch_calls.append(updates))
+    exit_code = rp.main(["--canary"])
+    assert exit_code == 0
+    assert len(batch_calls) == 1
+    assert len(batch_calls[0]) == 1
+
+
+def test_canary_selects_lower_sorted_individual_club_team_id(monkeypatch):
+    ids = ["00010", "00020", "00030"]
+    props_by_id = {
+        "00010": {"lv_org_type": "governing_body_league"},
+        "00020": {"lv_org_type": "individual_club_team"},
+        "00030": {"lv_org_type": "individual_club_team"},
+    }
+    _arm_credentials_and_env(monkeypatch, ids=ids, armed=True, props_by_id=props_by_id)
+    batch_calls = []
+    monkeypatch.setattr(rp, "batch_update_companies", lambda updates, dry_run=True: batch_calls.append(updates))
+    rp.main(["--canary"])
+    assert batch_calls[0][0]["id"] == "00020"
+
+
+def test_canary_selection_changes_when_stub_ids_change(monkeypatch):
+    # Proves selection is by rule (lower sorted individual_club_team id), not a literal:
+    # relabeling which id carries individual_club_team changes the chosen canary.
+    ids = ["00010", "00020", "00030"]
+    props_by_id = {
+        "00010": {"lv_org_type": "individual_club_team"},
+        "00020": {"lv_org_type": "governing_body_league"},
+        "00030": {"lv_org_type": "governing_body_league"},
+    }
+    _arm_credentials_and_env(monkeypatch, ids=ids, armed=True, props_by_id=props_by_id)
+    batch_calls = []
+    monkeypatch.setattr(rp, "batch_update_companies", lambda updates, dry_run=True: batch_calls.append(updates))
+    rp.main(["--canary"])
+    assert batch_calls[0][0]["id"] == "00010"
+
+
+def test_canary_fallback_when_no_individual_club_team_record(monkeypatch):
+    # No individual_club_team record -- falls back to the first id whose freshly
+    # computed components differ from what is currently stored.
+    ids = ["00010", "00020"]
+    props_by_id = {
+        # already has the CORRECT stored components for governing_body_league (40) --
+        # computed == stored, so this record should be skipped by the fallback.
+        "00010": {"lv_org_type": "governing_body_league", "org_type_score": 40,
+                  "geography_score": 0, "annual_revenue_score": 0,
+                  "produces_content_score": 0, "gambling_score": 0},
+        # stale stored components (0) that no longer match a fresh compute (20) --
+        # this is the one the fallback should pick.
+        "00020": {"lv_org_type": "content_producer", "org_type_score": 0,
+                  "geography_score": 0, "annual_revenue_score": 0,
+                  "produces_content_score": 0, "gambling_score": 0},
+    }
+    _arm_credentials_and_env(monkeypatch, ids=ids, armed=True, props_by_id=props_by_id)
+    batch_calls = []
+    monkeypatch.setattr(rp, "batch_update_companies", lambda updates, dry_run=True: batch_calls.append(updates))
+    rp.main(["--canary"])
+    assert batch_calls[0][0]["id"] == "00020"
+
+
+# --- settle_population -----------------------------------------------------------------------
+
+def test_settle_population_default_timeout_is_300():
+    import inspect
+    sig = inspect.signature(rp.settle_population)
+    assert sig.parameters["timeout"].default == 300
+
+
+def test_settle_population_polls_get_record_until_stable(monkeypatch):
+    reads = {"n": 0}
+    values = ["A", "A"]  # already stable on first read pair
+
+    def _fake_get_record(object_type, record_id, properties):
+        idx = min(reads["n"], len(values) - 1)
+        reads["n"] += 1
+        return {"id": record_id, "properties": {properties[0]: values[idx]}}
+
+    monkeypatch.setattr(rp, "get_record", _fake_get_record)
+    monkeypatch.setattr(rp.time, "sleep", lambda _s: None)
+    result = rp.settle_population(["1"], "lv_icp_tier", timeout=300, interval=1)
+    assert result == {"1": "A"}
 
 
 # --- module hygiene ------------------------------------------------------------------------
