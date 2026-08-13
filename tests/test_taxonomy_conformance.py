@@ -103,6 +103,24 @@ def test_taxonomy_generated_js_currency():
     )
 
 
+# --- TX-10 companion: generated JS carries the same definitions -------------
+def test_tx10_generated_js_carries_org_type_definitions():
+    """TX-10 (2026-08-13, Phase 49 Plan 03): the n8n vocabulary module MUST carry the
+    same ORG_TYPE_DEFINITIONS content the Python prompts already render, mirroring
+    test_tx10_every_org_type_has_a_definition_and_both_prompts_render_them above on the
+    generated-JS side -- closes the folded todo
+    .planning/todos/pending/2026-08-13-n8n-research-prompt-lacks-org-type-definitions.md."""
+    from src.taxonomy import ORG_TYPE_DEFINITIONS
+
+    generated = (ROOT / "n8n" / "code" / "taxonomy.generated.js").read_text()
+    assert "const ORG_TYPE_DEFINITIONS = " in generated
+    assert "ORG_TYPE_DEFINITIONS," in generated  # exported
+    for definition in ORG_TYPE_DEFINITIONS.values():
+        assert definition in generated, (
+            f"definition {definition!r} missing from n8n/code/taxonomy.generated.js"
+        )
+
+
 # --- TX-5: declared vetoes exist --------------------------------------------
 def test_tx5_declared_hard_vetoes_exist(taxonomy, scoring):
     """TX-5: any org_type declaring hard_veto names a real icp_scoring veto."""
