@@ -1,0 +1,217 @@
+{
+  "task": "49-06-01: re-examine Entain 10024564084's two veto inputs (D-13/D-14) against config/field_policy.yaml's bar",
+  "generated_at": "2026-08-13T06:30:28Z",
+  "company_id": "10024564084",
+  "company_name": "Entain",
+
+  "preflight": {
+    "read_at": "2026-08-13T06:20:00Z (approx, disarmed HubSpot GET)",
+    "portal_asserted": "22617666",
+    "properties": {
+      "name": "Entain",
+      "domain": "www.entaingroup.com",
+      "website": "www.entaingroup.com",
+      "country": "Isle of Man",
+      "industry": "Entertainment Providers",
+      "lv_country_region_normalized": "Other",
+      "lv_produces_content": "false",
+      "lv_revenue_band": "1.2B+",
+      "lv_org_type": "gambling_operator",
+      "lv_icp_fit_score": "-50",
+      "lv_icp_tier": "D",
+      "lv_anti_icp_flag": "true",
+      "lv_anti_icp_reason": "Non-ANZ geography; No broadcast or streaming content"
+    },
+    "note": "Confirms both hard vetoes are currently live and independent, per 47.5-B-EVIDENCE.md's 'Out of the write set' finding: the reason string carries two clauses. -50 (not the -70 recorded pre-Phase-49) reflects Phase 46's D-03 removal of the gambling_operator graduated deduction, landed by 49-05's W1 re-score: org_type gambling_operator=0, geography non_anz=0, produces_content false=0, revenue 1.2B+=-50 -> -50.",
+    "revenue_band_arithmetic": {
+      "lv_revenue_band": "1.2B+",
+      "revenue_score_if_unchanged": -50,
+      "source": "config/icp_scoring.yaml base_score.revenue_band['1.2B+'] = -50, read live, not transcribed",
+      "if_both_claims_clear_and_are_written": {
+        "org_type_score": 0,
+        "note_org_type": "lv_org_type stays gambling_operator (org_type is not part of this task's write set) -> base_score.org_type.gambling_operator = 0",
+        "geography_score": 10,
+        "note_geography": "any of AU/NZ/ANZ scores geography = 10",
+        "produces_content_score": 20,
+        "revenue_score": -50,
+        "sum": -20,
+        "implied_grade": "-20 has no hard veto but scores below the C floor (15) -> Unscored, per src/icp_scoring.py's tier_rules. This is NEITHER Tier B nor Tier C. It IS non-D, so it satisfies D-15's transition proof if the write proceeds. This is exactly why Task 49-06-03's post-write assertion must be 'tier != D', never a named tier -- a hard-coded B/C expectation would be wrong here."
+      }
+    }
+  },
+
+  "cost_estimate": {
+    "ex_ante": {
+      "web_research_calls": 1,
+      "redundant_research_calls": 0,
+      "n8n_executions": 0,
+      "n8n_budget_month": 2500,
+      "lusha_credits": 0,
+      "lusha_credits_note": "D-08: web research only, no provider waterfall -- zero Lusha credits drawn.",
+      "anthropic_estimate_usd": 0.0686,
+      "anthropic_estimate_note": "Derived from the Phase 20 canary figure ($0.0686/record), measured on the n8n Haiku-plus-Sonnet path -- NOT this task's single claude_web_research() + native web_search call, and excludes that call's per-search billing. An under-estimate, not a live-measured figure for this path. This is a FLOOR, never a measurement: claude_web_research() does not log msg.usage, so no dollar actual can be captured for this call -- same limitation D-12/A3 already documents for every prior phase's research call.",
+      "n8n_executions_note": "Task 1 is disarmed reads + research call(s) only; the D-18 recompute POST, if it ever runs, is Task 49-06-03 scope, not this one.",
+      "shape_source": "scripts/remediate_veto_companies.py::estimate_cost(['10024564084']), called live, not hand-typed"
+    },
+    "actuals": {
+      "anthropic_web_research_calls_made": 2,
+      "n8n_executions_consumed": 0,
+      "provider_credits_consumed": 0,
+      "anthropic_dollar_actual": "not captured -- floor only (see ex_ante note above)"
+    }
+  },
+
+  "deviation_disclosed": {
+    "what": "The objective's declared cost line says 'one Anthropic web-research call'. Two were made.",
+    "why": "The first call used src/web_research.py's default RESEARCH_SYSTEM prompt unmodified. Its schema asks general company-research questions and does not frame the region question on the D-V6 bright line ('substantive ANZ operating presence', not headquarters). That call returned lv_country_region_normalized = 'Isle of Man' -- a headquarters answer, unusable for the veto re-examination (src/normalizer's _normalize_region equivalent in remediate_veto_companies.py would map it to None, not a VALID_REGIONS member) and exactly the failure mode D-13/D-V6 exist to prevent.",
+    "fix": "A second call was made with RESEARCH_SYSTEM plus an explicit D-V6-framed addendum (quoted in research.verdict_call.system_prompt_addendum below), asking specifically for a substantive local operating ENTITY (subsidiary/office/staff/production operations), not a headquarters or ANZ-facing brand, and restating the tri-state positive-evidence-of-absence rule for content. That call is the one the verdict below rests on.",
+    "classification": "Rule 1 (auto-fix, the first call's framing was a bug relative to the task's own instruction to ask the D-V6-framed question) -- fixed inline, verdict-controlling call re-run, disclosed here and in the plan Summary rather than silently discarding the first call's record."
+  },
+
+  "research": {
+    "model": "claude-haiku-4-5",
+    "web_search_max_uses": 5,
+    "prompt_path": "src.web_research.claude_web_research(record, system_prompt=<custom>) -- the live path, not the n8n lane, per D-13's mandate",
+
+    "pilot_call_discarded": {
+      "system_prompt": "src.web_research.RESEARCH_SYSTEM (module default, unmodified)",
+      "reason_discarded": "no D-V6 framing -- region question answered with headquarters location, not operating presence",
+      "result": {
+        "provider": "claude_web",
+        "matched": true,
+        "confidence": 95,
+        "data": {
+          "lv_org_type": "gambling_operator",
+          "lv_produces_content": true,
+          "lv_content_type": ["horse_racing", "greyhound_racing", "documentaries", "sports_entertainment"],
+          "lv_is_hardware_vendor": false,
+          "lv_is_gambling_operator": true,
+          "lv_sponsorship_reliant": false,
+          "lv_country_region_normalized": "Isle of Man",
+          "lv_has_sports_media_fit": true,
+          "lv_has_broadcast_or_streaming_signals": true
+        },
+        "evidence": {
+          "last_seen": "2026-08-13",
+          "evidence_urls": [
+            "https://www.entaingroup.com/about-entain/",
+            "https://www.entaingroup.com/",
+            "https://en.wikipedia.org/wiki/Entain",
+            "https://www.mediaweek.com.au/entain-launches-four-live-racing-channels-to-boost-engagement-in-australia",
+            "https://www.gamblingnews.com/news/entain-enters-the-world-of-media-with-new-plans/",
+            "https://www.entaingroup.com/AnnualReport2024/documents/Entain_Annual_Report_2024_Financial_Statements.pdf",
+            "https://www.entaingroup.com/annualreport2025/"
+          ]
+        },
+        "evidence_by_field": {
+          "lv_country_region_normalized": "https://en.wikipedia.org/wiki/Entain"
+        }
+      }
+    },
+
+    "verdict_call": {
+      "system_prompt_addendum": "IMPORTANT -- this record is being re-examined against TWO specific hard-veto inputs, per the D-V6 bright line and the tri-state evidence rule. Answer both narrowly: 1. Region (lv_country_region_normalized) -- the bright line is SUBSTANTIVE LOCAL OPERATING PRESENCE, never headquarters or domicile. Set AU, NZ or ANZ ONLY if you find evidence of a real local operating entity in Australia or New Zealand -- a subsidiary, registered office, staff, or production operations (an ABN/ACN entity on the Australian Business Register, or an NZBN entity on the NZ Companies Register, is exactly this kind of evidence; a corporate/press page naming an Australian office or studio is acceptable corroboration). Explicitly NOT sufficient on their own: selling into the market from overseas, having ANZ customers/viewers/events, a reseller/distributor/agent relationship, or a domain/landing page/channel targeted at ANZ. The company's country of incorporation or head-office location is NOT the answer to this question. If no local operating entity is evidenced, answer 'Unknown' -- never 'Other' by default and never 'ANZ'/'AU'/'NZ' by inference from headquarters or an ANZ-facing brand alone. Put the operating-presence evidence URL in evidence_by_field.lv_country_region_normalized. 2. Content (lv_produces_content) -- the tri-state rule requires POSITIVE evidence either way; an absent search result is NOT evidence of absence. Set true only on positive evidence the company (or its owned brands) produces or broadcasts live, near-live, streaming, broadcast, or highlights content. Set false ONLY on positive evidence of its ABSENCE (e.g. an explicit statement the company does not produce such content) -- never on a mere lack of search results. If genuinely unresolved, answer null/unknown rather than guessing false.",
+      "result": {
+        "provider": "claude_web",
+        "matched": true,
+        "confidence": 95,
+        "data": {
+          "lv_org_type": "gambling_operator",
+          "lv_produces_content": true,
+          "lv_content_type": ["streaming", "live_broadcast", "documentary", "horse_racing_broadcast"],
+          "lv_sponsorship_reliant": false,
+          "lv_is_hardware_vendor": false,
+          "lv_is_gambling_operator": true,
+          "lv_country_region_normalized": "ANZ",
+          "lv_has_sports_media_fit": true,
+          "lv_has_broadcast_or_streaming_signals": true
+        },
+        "evidence": {
+          "last_seen": "2026-08-13",
+          "match_basis": [
+            "Substantive local operating presence in Australia via Entain Group Pty Ltd subsidiary",
+            "Produces broadcast and streaming content (live racing channels, documentaries)"
+          ],
+          "evidence_urls": [
+            "https://www.entaingroup.com/about-entain/",
+            "https://www.mediaweek.com.au/entain-launches-four-live-racing-channels-to-boost-engagement-in-australia",
+            "https://en.wikipedia.org/wiki/Entain",
+            "https://entaingroup.com.au/who-we-are/",
+            "https://www.austrac.gov.au/news-and-media/media-release/austrac-takes-ladbrokes-and-neds-operator-entain-federal-court-over-serious-non-compliance-australias-money-laundering-laws",
+            "https://www.entaingroup.com/annualreport2025/"
+          ],
+          "evidence_summary": "Entain is one of the world's largest sports betting and gaming groups. Entain launched online television channels in Australia through Ladbrokes and Neds, covering horse and greyhound racing (a team of 30). AUSTRAC has taken civil penalty proceedings against Entain Group Pty Ltd, which operates Ladbrokes, Neds and other online betting brands -- confirming registered local entity status. Entain entered the Australian market in 2013 (Bookmaker.com.au) and acquired Neds in November 2018."
+        },
+        "evidence_by_field": {
+          "lv_produces_content": "https://www.mediaweek.com.au/entain-launches-four-live-racing-channels-to-boost-engagement-in-australia",
+          "lv_country_region_normalized": "https://entaingroup.com.au/who-we-are/"
+        }
+      }
+    },
+
+    "independent_verification": {
+      "method": "Every URL the verdict below rests on was independently re-fetched by curl (User-Agent set, redirects followed) and grepped by hand for the claimed text, mirroring 47.5-B-EVIDENCE.md's registry-grade standard. All three returned HTTP 200 and matched the model's citation.",
+      "fetches": [
+        {
+          "url": "https://www.austrac.gov.au/news-and-media/media-release/austrac-takes-ladbrokes-and-neds-operator-entain-federal-court-over-serious-non-compliance-australias-money-laundering-laws",
+          "http_status": 200,
+          "fetched_at": "2026-08-13T06:24:00Z",
+          "supports_claim": "region (Australian operating entity)",
+          "quote_verified": "AUSTRAC commenced civil penalty proceedings in the Federal Court against Entain Group Pty Ltd (Entain), which operates online betting sites including Ladbrokes, Neds and other online betting brands. -- 16 December 2024",
+          "note": "A federal regulator naming and suing 'Entain Group Pty Ltd' in the Federal Court of Australia is registry-grade evidence of a real, registered Australian legal entity operating the Ladbrokes/Neds brands -- not a reseller, distributor, or landing page. Source: an Australian Commonwealth government agency, not the company's own marketing copy."
+        },
+        {
+          "url": "https://entaingroup.com.au/who-we-are/",
+          "http_status": 200,
+          "fetched_at": "2026-08-13T06:27:00Z",
+          "supports_claim": "region (Australia AND New Zealand operating presence)",
+          "quote_verified": "...in New Zealand and significant financial contributions to the sports and racing communities through Kiwis betting on their favourite events. ... Entain, or Ladbrokes as it was then, entered the Australian market in 2013 through its acquisition of Bookmaker.com.au. ... Our Leadership Team ... Chris Ward Managing Director Australia ... Christopher Haigh Managing Director New Zealand ...",
+          "note": "Country-specific Managing Directors for BOTH Australia and New Zealand on the company's own leadership page is evidence of substantive operating presence in both countries, not merely a brand or a market served -- this is what elevates the verdict to ANZ rather than AU alone (contrast Gravity Media's Phase 47.5 AU-only verdict, whose NZ leg stayed UNPROVEN)."
+        },
+        {
+          "url": "https://www.mediaweek.com.au/entain-launches-four-live-racing-channels-to-boost-engagement-in-australia",
+          "http_status": 200,
+          "fetched_at": "2026-08-13T06:22:00Z",
+          "supports_claim": "produces_content (positive evidence, not absence)",
+          "quote_verified": "Entain - the sports betting and gambling company behind Ladbrokes and Neds - has launched online television channels in Australia to increase engagement with punters. ... a team of 30 working on the four horse and greyhound racing channels ... It features three areas - live channels, digital media and broadcast (in a deal with racing.com), and long form video. The channels are currently running races through the Ladbrokes and Neds apps. -- published 18 Jul 2022",
+          "note": "Positive evidence of live/broadcast racing-content production via the Ladbrokes/Neds channels and a broadcast deal with racing.com -- directly satisfies the tri-state rule's positive-evidence bar for produces_content=true. Article is dated 2022-07-18 (older than the model's blanket 'last_seen: 2026-08-13'); recorded here as the true source date."
+        }
+      ]
+    }
+  },
+
+  "bar": {
+    "source": "config/field_policy.yaml, loaded live via yaml.safe_load, not transcribed",
+    "lv_produces_content": { "min_confidence": 85, "require_evidence_url": true },
+    "lv_country_region_normalized": { "min_confidence": 75, "require_evidence_url": false }
+  },
+
+  "verdict": {
+    "produces_content": {
+      "claim_field": "lv_produces_content",
+      "researched_value": true,
+      "confidence": 95,
+      "min_confidence_required": 85,
+      "confidence_clears_bar": true,
+      "evidence_url_required": true,
+      "evidence_url_present": true,
+      "evidence_url": "https://www.mediaweek.com.au/entain-launches-four-live-racing-channels-to-boost-engagement-in-australia",
+      "cleared": true,
+      "reason": "confidence 95 >= 85 required, AND an evidence_by_field URL is present and was independently re-fetched and verified to support the claim -- positive evidence of live/broadcast content production via the Ladbrokes/Neds racing channels, not an absent-search-result guess."
+    },
+    "region": {
+      "claim_field": "lv_country_region_normalized",
+      "researched_value": "ANZ",
+      "confidence": 95,
+      "min_confidence_required": 75,
+      "confidence_clears_bar": true,
+      "evidence_url_required": false,
+      "evidence_url_present": true,
+      "evidence_url": "https://entaingroup.com.au/who-we-are/",
+      "cleared": true,
+      "reason": "confidence 95 >= 75 required (config/field_policy.yaml does not require an evidence URL for this field, but one is present and was independently re-fetched anyway, exceeding the bar). Evidence is a substantive local operating entity per the D-V6 bright line -- Entain Group Pty Ltd, named and sued by AUSTRAC (an Australian Commonwealth regulator) in the Federal Court, operating Ladbrokes/Neds -- plus country-specific Managing Directors for both Australia and New Zealand on the company's own leadership page. This is operating-presence evidence, not a headquarters or domicile inference (Entain's domicile, Isle of Man, is explicitly NOT the answer per D-V6 and is recorded separately in preflight)."
+    }
+  },
+
+  "outcome_summary": "BOTH claims clear config/field_policy.yaml's bar. Per Task 49-06-02's checkpoint, this evidence is now presented to the operator for the W2 arming decision -- this file does not itself authorise or perform any write; D-07 (never PATCH derived fields) and the checkpoint gate both still apply."
+}
