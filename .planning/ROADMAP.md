@@ -346,7 +346,34 @@ did not change, no full re-score is owed and this phase proves the procedure wit
      milestone's re-scoring activity as a whole (veto clear, coverage enrichment, and any
      weight-driven full re-score).
 
-**Plans**: TBD
+**Plans**: 7 plans
+
+Plans:
+
+**Wave 1**
+
+- [ ] 49-01-PLAN.md — TRACER: the re-score driver end to end — exact-set population gate, component computation, `--plan` cost output, armed canary/execute write legs, `--snapshot` census mode
+
+**Wave 2** *(blocked on Wave 1)*
+
+- [ ] 49-02-PLAN.md — `docs/OPERATOR-RESCORE.md` runbook (both branches, decision rule first, figures from a committed live `--plan` capture) and the D-09 guard test pinning the rubric table
+- [ ] 49-03-PLAN.md — folded todo, offline half: org-type definitions into the generated n8n taxonomy module and the production research prompt, frozen fixture re-baselined, new node test
+
+**Wave 3** *(blocked on Wave 2)*
+
+- [ ] 49-04-PLAN.md — the ONE declared deploy and bounce, proven from the running instance; folded todo closed with evidence
+
+**Wave 4** *(blocked on Wave 3)*
+
+- [ ] 49-05-PLAN.md — W1, the ONE declared armed write window: P2 capture, canary, remainder, settle, disarm, P3 capture, parity sweep green
+
+**Wave 5** *(blocked on Wave 4)*
+
+- [ ] 49-06-PLAN.md — Entain's two veto inputs re-examined against the config bar; conditional W2 with D→non-D transition instrumentation, or a recorded re-deferral; Jam TV veto and non-ANZ census re-confirmed
+
+**Wave 6** *(blocked on Wave 5)*
+
+- [ ] 49-07-PLAN.md — three-point tier-distribution report builder, the committed milestone report, the published private Artifact, and the phase run report with window accounting
 
 ## Progress
 
