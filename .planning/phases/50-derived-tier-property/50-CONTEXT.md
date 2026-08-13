@@ -167,11 +167,57 @@ changes, `lv_icp_scoring_version`, the three CLAUDE.md §5.3 fields, or any chan
   **identical distribution except 4 records moving C→B**. Anything else is a defect signal. No
   separate published Artifact required for this phase.
 
+### Amendment 2026-08-14 (operator-directed, mid-execution) — D-20 … D-22
+
+Two live findings during Plan 03/execution invalidated assumptions D-04 and the veto guard rested
+on. Both were proven with disposable properties + a disposable company in portal `22617666`
+(zero population records touched). Recorded here as amendments rather than edits, so the original
+reasoning and the correction both stay visible.
+
+**The finding that forced this:** `calculation_equation` reads **only numeric properties**.
+A `booleancheckbox` reads as null even when set (`coalesce(lv_anti_icp_flag, -99)` discriminated
+to `NULL` on a company whose flag was genuinely `true`), and enumerations are rejected outright at
+property-create ("Sub-expression output type: String is not compatible with input type:
+BigDecimal") — as are string and boolean literal comparisons. So every input the veto is built
+from (`lv_anti_icp_flag`, `lv_produces_content`, `lv_is_hardware_vendor`, `lv_org_type`,
+`lv_country_region_normalized`) is unreadable, and `lv_anti_icp_flag → D` was silently never
+firing. The spike's "booleans arrive as BigDecimal" was correct about the declared *type* and
+silent about the *value*.
+
+- **D-20:** **A second new property is authorised — `lv_anti_icp_flag_num`** (numeric 0/1),
+  extending D-01's one-property lift. Required, not preferred: with bools and enums unreadable,
+  a numeric mirror is the only way the veto branch can be expressed at all.
+  — Operator raised the right objection ("shouldn't it be derived from the original, so it
+  references one boss number instead of being written twice?"). It **cannot** be derived: there is
+  no numeric upstream for a formula to read. But it is **not** a second derivation — the veto is
+  computed once, in `Decide Company Action` / `src/icp_scoring.py`, and the mirror is a second
+  *serialization* of that same computed value emitted in the same write. This is the **existing**
+  architecture, not a workaround: `lv_icp_fit_score` is itself a `calculation_equation` summing
+  five pipeline-written numeric properties, one of which (`produces_content_score`) is already a
+  boolean pre-translated to a number for exactly this reason.
+  — **Drift control is mandatory**, since the objection is legitimate: a test in BOTH engines
+  asserting the boolean and its mirror always agree, and a population-level agreement check.
+  — **Reversibility:** costly — a created property cannot be un-created, only archived, and
+  archived internal names are not reusable (proven: the API DELETE is a soft archive).
+
+- **D-21:** **D-04 is REVERSED — ship the uncoalesced formula D-03 preferred.** D-04 fired on a
+  race, not a finding: calculated properties backfill ~70–130s after create, and Plan 01's probe
+  read back immediately, recording "not computed yet" as `null_propagates`. Re-tested with
+  polling, a bare reference to a null `lv_icp_fit_score` fell through to its else branch normally
+  — **null does not propagate**. The ~646 never-enriched companies flipped blank → `"Unscored"`
+  must be flipped back. `50-NULL-PROBE.json` stays committed unaltered as historical evidence of
+  what was believed at the time; this amendment is the correction of record.
+
+- **D-22:** **Any probe of a calculated property MUST poll to a populated value** (or a fixed
+  ≥3 min ceiling) before concluding anything. A single immediate read-back is no evidence. This
+  is the process defect behind D-21 and applies to every future formula probe in this repo.
+
 ### Claude's Discretion
 
 None. Every question in this discussion was answered with an explicit choice — no "you decide"
 option was taken. Where judgement remains it is bounded by a named fallback (D-04, D-15) rather
-than left open.
+than left open. D-20 and D-21 were likewise explicit operator choices, made mid-execution when
+live evidence contradicted the original decisions.
 
 </decisions>
 
