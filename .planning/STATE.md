@@ -5,10 +5,10 @@ milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 48
 current_phase_name: Enrichment Coverage
 status: phase_complete
-stopped_at: Phase 48 complete (verified) — ready for Phase 49
-last_updated: "2026-08-13T00:00:00.000Z"
-last_activity: 2026-08-13
-last_activity_desc: Phase 48 complete — 7/7 plans, verification passed 5/5
+stopped_at: Phase 49 context gathered
+last_updated: "2026-08-13T02:51:06.602Z"
+last_activity: 2026-08-12
+last_activity_desc: Phase 48 execution started
 progress:
   total_phases: 5
   completed_phases: 4
@@ -47,6 +47,7 @@ The Anthropic *dollar* actual was never captured — `claude_web_research()` doe
 attempt printed `skipped (no n8n creds)` and made no PUT — disclosed, did not count.
 
 **Two mid-phase deviations, both disclosed:**
+
 1. **Plan 48-07 inserted mid-execution.** The paid research classified Racing NSW as `regulator`;
    the operator rejected it. Root cause: the prompts listed the 9 enum values but never *defined*
    them, so the model keyed on statutory origin — useless, since QRIC and Racing NSW are both
@@ -56,6 +57,7 @@ attempt printed `skipped (no n8n creds)` and made no PUT — disclosed, did not 
    `WEB-RESEARCH-SPEC` §9 golden case is now an executable test. Vindicated empirically — Racing
    NSW landed Tier A (80); `regulator` would have scored 20 (Tier C). 48-07 also fixed a live
    blocker that would have made 48-05 raise.
+
 2. **Waiver `D-48-01`** (operator, 2026-08-13, `375e919`) delegated the deploy+bounce and both
    arming surfaces to Claude **for Phase 48 only**. It does not revive the expired `D-47.5-01`
    and expires with this phase.
@@ -69,7 +71,6 @@ research branch and a 400 cannot be induced on demand.
 covers 17 records, Phase 48 the rest). Code review left 2 WARNINGs (bare `assert` for the D-07
 guard; partial audit-trail loss if an unexpected exception hits the armed loop) — latent
 robustness gaps for future re-invocation, neither affecting this run.
-
 
 ## ✅ PHASE 47.5 — ALL 6 PLANS COMPLETE, NOTHING ARMED (2026-08-12)
 
@@ -204,9 +205,9 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-12T22:48:18.756Z
-**Stopped at:** Completed 48-enrichment-coverage/48-06-PLAN.md
-**Resume file:** None
+**Last session:** 2026-08-13T02:51:06.587Z
+**Stopped at:** Phase 49 context gathered
+**Resume file:** .planning/phases/49-re-score-strategy-reporting/49-CONTEXT.md
 
 ## Performance Metrics
 
