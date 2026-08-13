@@ -1,0 +1,192 @@
+# tests/test_tier_derived_tools.py
+#
+# Phase 50 Plan 01 Task 1 -- offline test suite pinning the pure functions exposed by
+# scripts/check_tier_null_propagation.py (D-05's probe) and scripts/check_tier_derived_parity.py
+# (D-07's gate). Offline only: no network, no HubSpot credentials, no monkeypatched HTTP.
+import sys
+from pathlib import Path
+
+import pytest
+
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / "scripts"))
+
+from check_tier_null_propagation import (  # noqa: E402
+    _writes_allowed,
+    classify_probe_result,
+    derived_tier,
+    probe_formula_for,
+    real_formula_for,
+    settled_variant_for,
+)
+from check_tier_derived_parity import (  # noqa: E402
+    KNOWN_STUCK_IDS,
+    classify_row,
+    render_parity_markdown,
+)
+
+
+# --- derived_tier: the ladder, mirroring WF1 exactly (spike Round 2, 7/7 accepted) -------
+
+def test_derived_tier_boundary_70_69():
+    assert derived_tier(70, False) == "A"
+    assert derived_tier(69, False) == "B"
+
+
+def test_derived_tier_boundary_40_39():
+    assert derived_tier(40, False) == "B"
+    assert derived_tier(39, False) == "C"
+
+
+def test_derived_tier_boundary_15_14():
+    assert derived_tier(15, False) == "C"
+    assert derived_tier(14, False) == "Unscored"
+
+
+def test_derived_tier_veto_precedes_score():
+    assert derived_tier(85, True) == "D"
+
+
+def test_derived_tier_negative_one_sentinel_lands_unscored():
+    assert derived_tier(-1, False) == "Unscored"
+
+
+def test_derived_tier_none_score_returns_none():
+    # The blank branch under D-03's preferred uncoalesced variant.
+    assert derived_tier(None, False) is None
+
+
+# --- classify_probe_result ---------------------------------------------------------------
+
+def test_classify_probe_result_value_is_uncoalesced_ok():
+    assert classify_probe_result("Unscored") == "uncoalesced_ok"
+
+
+@pytest.mark.parametrize("blank", [None, ""])
+def test_classify_probe_result_blank_is_null_propagates(blank):
+    assert classify_probe_result(blank) == "null_propagates"
+
+
+# --- settled_variant_for / real_formula_for / probe_formula_for --------------------------
+
+def test_settled_variant_for_maps_verdicts():
+    assert settled_variant_for("uncoalesced_ok") == "uncoalesced"
+    assert settled_variant_for("null_propagates") == "coalesced_minus_one"
+
+
+def test_real_formula_for_uncoalesced_matches_spike_literal():
+    formula = real_formula_for("uncoalesced")
+    assert formula == (
+        'if coalesce(lv_anti_icp_flag, 0) = 1 then "D" '
+        'elseif lv_icp_fit_score >= 70 then "A" '
+        'elseif lv_icp_fit_score >= 40 then "B" '
+        'elseif lv_icp_fit_score >= 15 then "C" '
+        'else "Unscored"'
+    )
+
+
+def test_real_formula_for_coalesced_wraps_every_bare_reference():
+    formula = real_formula_for("coalesced_minus_one")
+    assert formula.count("lv_icp_fit_score") == 3
+    assert formula.count("coalesce(lv_icp_fit_score, -1)") == 3
+    assert "lv_icp_fit_score >=" not in formula
+
+
+def test_real_formula_for_unknown_variant_raises():
+    with pytest.raises(ValueError):
+        real_formula_for("bogus")
+
+
+def test_probe_formula_for_substitutes_stand_in_property():
+    formula = probe_formula_for("lv_tier_probe_score_abc")
+    assert "lv_tier_probe_score_abc >= 70" in formula
+    assert "lv_icp_fit_score" not in formula
+
+
+# --- _writes_allowed: two-key gate, exact-string, disarmed by default ---------------------
+
+@pytest.mark.parametrize(
+    "dry_run, allow, expected",
+    [
+        (None, None, False),
+        ("true", "true", False),
+        ("false", "false", False),
+        ("false", None, False),
+        (None, "true", False),
+        ("false", "true", True),
+        ("False", "True", True),  # .lower() normalizes case the same as every sibling gate
+    ],
+)
+def test_writes_allowed_only_when_both_keys_set(monkeypatch, dry_run, allow, expected):
+    if dry_run is None:
+        monkeypatch.delenv("DRY_RUN", raising=False)
+    else:
+        monkeypatch.setenv("DRY_RUN", dry_run)
+    if allow is None:
+        monkeypatch.delenv("ALLOW_TIER_NULL_PROBE", raising=False)
+    else:
+        monkeypatch.setenv("ALLOW_TIER_NULL_PROBE", allow)
+    assert _writes_allowed() is expected
+
+
+# --- classify_row ---------------------------------------------------------------------
+
+def test_classify_row_known_stuck_id_lands_expected_mismatch():
+    assert classify_row("9605273630", "C", "B", KNOWN_STUCK_IDS) == "expected_mismatch"
+
+
+def test_classify_row_known_stuck_id_not_fixed_is_defect():
+    assert classify_row("9605273630", "C", "C", KNOWN_STUCK_IDS) == "defect"
+
+
+def test_classify_row_non_stuck_id_matching_is_match():
+    assert classify_row("111", "A", "A", KNOWN_STUCK_IDS) == "match"
+
+
+def test_classify_row_non_stuck_id_diverging_is_defect():
+    assert classify_row("111", "A", "B", KNOWN_STUCK_IDS) == "defect"
+
+
+def test_known_stuck_ids_are_the_four_from_windows_md():
+    assert KNOWN_STUCK_IDS == frozenset({
+        "9605273630", "9604738976", "17696004613", "19100977027",
+    })
+
+
+# --- render_parity_markdown -------------------------------------------------------------
+
+def test_render_parity_markdown_empty_population_raises():
+    with pytest.raises(ValueError):
+        render_parity_markdown([], 0)
+
+
+def test_render_parity_markdown_row_count_population_mismatch_raises():
+    rows = [{"record_id": "1", "live_tier": "A", "derived_tier": "A",
+              "classification": "match"}]
+    with pytest.raises(ValueError):
+        render_parity_markdown(rows, 2)
+
+
+def test_render_parity_markdown_is_deterministic():
+    rows = [
+        {"record_id": "9605273630", "name": "Port Macquarie Race Club", "live_tier": "C",
+         "derived_tier": "B", "fit_score": "45", "anti_icp_flag": None,
+         "classification": "expected_mismatch"},
+        {"record_id": "111", "name": "Some Co", "live_tier": "A", "derived_tier": "A",
+         "fit_score": "80", "anti_icp_flag": None, "classification": "match"},
+    ]
+    first = render_parity_markdown(rows, 2)
+    second = render_parity_markdown(rows, 2)
+    assert first == second
+
+
+def test_render_parity_markdown_sorted_by_record_id():
+    rows = [
+        {"record_id": "200", "name": "B Co", "live_tier": "A", "derived_tier": "A",
+         "fit_score": "80", "anti_icp_flag": None, "classification": "match"},
+        {"record_id": "9605273630", "name": "Port Macquarie Race Club", "live_tier": "C",
+         "derived_tier": "B", "fit_score": "45", "anti_icp_flag": None,
+         "classification": "expected_mismatch"},
+    ]
+    text = render_parity_markdown(rows, 2)
+    assert text.index("| 200 |") < text.index("| 9605273630 |")
