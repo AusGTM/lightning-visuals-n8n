@@ -268,6 +268,25 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 
 ## Decisions
 
+### Roadmap Evolution
+
+- **Phase 50 added 2026-08-13: Derived Tier Property.** Added during `/gsd-discuss-phase 50`, which
+  found no roadmap entry (`init.phase-op 50` → `phase_found: false`). Operator directed adding it
+  and **extending v0.9** rather than opening v1.0, because it closes v0.9's own disclosed debt —
+  the 4 stuck-tier records logged as unmet truth by Phase 49 (`WINDOWS.md` ids 9–12). v0.9 is now
+  Phases 46–50 and its close is no longer imminent. Requirements TIER-01/02/03 added. Roadmap and
+  requirements committed as `4173da0`; context and discussion log as `4a8f896`.
+
+- **Scope lift 2026-08-13:** v0.9's "no new HubSpot properties of any kind" decision (operator,
+  2026-08-11) is lifted for **exactly one** derived-tier string property (`lv_icp_tier_derived`)
+  and nothing else. Forced, not preferred — `lv_icp_tier` is `type: enumeration,
+  calculated: false`, zero of 264 portal properties are calculated enumerations, and HubSpot does
+  not support enumeration outputs for calculation properties. `lv_icp_scoring_version` and the
+  three CLAUDE.md §5.3 fields remain excluded. Amendment lives in `.planning/REQUIREMENTS.md`
+  § Out of Scope; rationale in `50-CONTEXT.md` D-01.
+
+### Phase decisions
+
 - [Decision 2026-08-12]: `venue` org type LOCKED at weight 5 (no hard veto, motion work_via_league); on entity collision individual_club_team wins; three-layer org-type normalization (generation-time enum, deterministic alias table, Haiku fallback) LOCKED. Implement in Phase 48, score in Phase 49. Phase 47's window unaffected. Full record: .planning/decisions/2026-08-12-org-type-venue-and-normalization.md
 
 - [Phase 40-01]: D-05 round-trip verdict PROVEN — `PUT /automation/v4/flows/{id}` accepts STATIC_BRANCH action-content edits live; no portal-UI fallback needed for this edit shape. IS_BETWEEN edits (40-05) remain unverified.
@@ -413,4 +432,5 @@ across the next plugin update — it fails silently, which is the dangerous dire
 
 ## Operator Next Steps
 
-- Run /gsd-plan-phase 46 to plan Rubric Decision, Simulation & Engine Parity
+- Run /gsd-plan-phase 50 to plan Derived Tier Property (context gathered 2026-08-13,
+  `.planning/phases/50-derived-tier-property/50-CONTEXT.md`)
