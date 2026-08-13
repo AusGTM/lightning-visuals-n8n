@@ -4,11 +4,11 @@ milestone: v0.9
 milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 49
 current_phase_name: re-score-strategy-reporting
-status: verifying
-stopped_at: Completed 49-07-PLAN.md -- Phase 49 fully complete
-last_updated: "2026-08-13T08:02:56.652Z"
+status: phase-complete
+stopped_at: Phase 49 sealed -- 7/7 plans, verification passed_with_gaps (4/66 parity gap accepted and ledgered)
+last_updated: "2026-08-13T08:20:00.000Z"
 last_activity: 2026-08-13
-last_activity_desc: Phase 49 execution started
+last_activity_desc: Phase 49 complete -- verified passed_with_gaps, nothing armed
 progress:
   total_phases: 5
   completed_phases: 5
