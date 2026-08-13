@@ -403,6 +403,116 @@ def test_settle_population_polls_get_record_until_stable(monkeypatch):
     assert result == {"1": "A"}
 
 
+# --- CLI: --snapshot (Task 49-01-03) --------------------------------------------------------
+
+def _snapshot_props_by_id(ids):
+    props = {}
+    for idx, company_id in enumerate(ids):
+        tier = ["A", "B", "C", "D", "Unscored", "Needs Review"][idx % 6]
+        props[company_id] = {
+            "name": f"Company {company_id}",
+            "lv_icp_tier": tier,
+            "lv_icp_fit_score": str(idx),
+            "lv_org_type": "governing_body_league",
+            "lv_anti_icp_flag": "false",
+            "lv_anti_icp_reason": None,
+        }
+    return props
+
+
+def test_snapshot_population_count_and_tier_sum(monkeypatch, capsys):
+    ids = STUB_66_IDS
+    _arm_credentials_and_env(monkeypatch, ids=ids, props_by_id=_snapshot_props_by_id(ids))
+    exit_code = rp.main(["--snapshot"])
+    assert exit_code == 0
+    import json
+    printed = json.loads(capsys.readouterr().out)
+    assert printed["population_count"] == 66
+    assert sum(printed["tier_distribution"].values()) == 66
+
+
+def test_snapshot_records_sorted_by_id_with_seven_keys(monkeypatch, capsys):
+    ids = STUB_66_IDS
+    _arm_credentials_and_env(monkeypatch, ids=ids, props_by_id=_snapshot_props_by_id(ids))
+    rp.main(["--snapshot"])
+    import json
+    printed = json.loads(capsys.readouterr().out)
+    record_ids = [r["id"] for r in printed["records"]]
+    assert record_ids == sorted(record_ids)
+    for record in printed["records"]:
+        assert set(record.keys()) == {
+            "id", "name", "lv_icp_tier", "lv_icp_fit_score", "lv_org_type",
+            "lv_anti_icp_flag", "lv_anti_icp_reason",
+        }
+
+
+def test_snapshot_byte_identical_across_two_runs_except_derived_at(monkeypatch, capsys):
+    ids = ["00010", "00020", "00030"]
+    _arm_credentials_and_env(monkeypatch, ids=ids, props_by_id=_snapshot_props_by_id(ids))
+    rp.main(["--snapshot"])
+    first = capsys.readouterr().out
+    rp.main(["--snapshot"])
+    second = capsys.readouterr().out
+
+    import json
+
+    def _strip_derived_at(text):
+        parsed = json.loads(text)
+        assert "derived_at" in parsed
+        parsed.pop("derived_at")
+        return json.dumps(parsed, indent=2, sort_keys=False)
+
+    assert _strip_derived_at(first) == _strip_derived_at(second)
+
+
+def test_snapshot_makes_zero_writes_even_when_armed(monkeypatch, capsys):
+    ids = STUB_66_IDS
+    _arm_credentials_and_env(monkeypatch, ids=ids, armed=True, props_by_id=_snapshot_props_by_id(ids))
+    batch_calls = []
+    monkeypatch.setattr(rp, "batch_update_companies", lambda updates, dry_run=True: batch_calls.append(updates))
+    exit_code = rp.main(["--snapshot"])
+    assert exit_code == 0
+    assert batch_calls == []
+
+
+def test_snapshot_empty_population_refuses(monkeypatch, capsys):
+    _arm_credentials_and_env(monkeypatch, ids=[], props_by_id={})
+    exit_code = rp.main(["--snapshot"])
+    assert exit_code != 0
+    out = capsys.readouterr().out
+    assert "REFUSED" in out
+    assert "population_count" not in out
+
+
+def test_snapshot_none_tier_counted_as_distinct_key_not_dropped(monkeypatch, capsys):
+    ids = ["00010", "00020"]
+    props_by_id = {
+        "00010": {"name": "A", "lv_icp_tier": None, "lv_icp_fit_score": None,
+                  "lv_org_type": None, "lv_anti_icp_flag": None, "lv_anti_icp_reason": None},
+        "00020": {"name": "B", "lv_icp_tier": "A", "lv_icp_fit_score": "80",
+                  "lv_org_type": "governing_body_league", "lv_anti_icp_flag": "false",
+                  "lv_anti_icp_reason": None},
+    }
+    _arm_credentials_and_env(monkeypatch, ids=ids, props_by_id=props_by_id)
+    rp.main(["--snapshot"])
+    import json
+    printed = json.loads(capsys.readouterr().out)
+    assert sum(printed["tier_distribution"].values()) == 2
+    assert "Unscored-or-blank" in printed["tier_distribution"]
+    assert printed["tier_distribution"]["Unscored-or-blank"] == 1
+
+
+def test_snapshot_out_flag_writes_file(monkeypatch, tmp_path):
+    ids = ["00010"]
+    _arm_credentials_and_env(monkeypatch, ids=ids, props_by_id=_snapshot_props_by_id(ids))
+    out_file = tmp_path / "snapshot.json"
+    exit_code = rp.main(["--snapshot", "--out", str(out_file)])
+    assert exit_code == 0
+    import json
+    written = json.loads(out_file.read_text())
+    assert written["population_count"] == 1
+
+
 # --- module hygiene ------------------------------------------------------------------------
 
 def test_module_does_not_import_requests_directly():
