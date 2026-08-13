@@ -248,3 +248,72 @@ rule; arming an n8n allowlist for a weight re-score is explicitly prohibited by 
 `49-P3-SNAPSHOT.json` and `49-PARITY-VERDICT.json` are **not yet written** — both are
 committed only once the operator's resolution lands, so neither artifact is left
 recording a false or premature state.
+
+## Task 3 (continued) — operator resolution: ACCEPT AND DISCLOSE (2026-08-13)
+
+Operator reviewed the 4-record finding above and selected **accept and disclose** rather
+than any of the mechanisms Rule 4's halt explicitly ruled out (no blank-then-rewrite, no
+direct `lv_icp_tier` PATCH, no n8n allowlist arm). Root cause was already fully diagnosed
+above and in `PORTAL-FACTS.md`'s second 2026-08-13 entry; the durable fix (deriving
+`lv_icp_tier` as a `calculation_equation` property, removing the WF1 enrollment-event
+dependency entirely) is scoped to a new phase — see
+`.planning/TIER-DERIVATION-SPIKE-2026-08-13.md`, written this session as evidence for that
+future phase, not as Phase 49 scope (a new HubSpot property is out of v0.9 scope per
+`49-CONTEXT.md`'s 2026-08-11 operator decision).
+
+### P3 snapshot (report point 3 — after W1, disarmed, read-only)
+
+`scripts/rescore_population.py --snapshot --out .../49-P3-SNAPSHOT.json`, run disarmed
+(`DRY_RUN` default `'true'`, `ALLOW_SCORE_BACKFILL` unset — confirmed before the call):
+
+- **derived_at:** `2026-08-13T06:15:48.906191+00:00`
+- **population_count:** 66
+- **tier_distribution:** `A:9 B:41 C:7 D:7 Unscored:2` (sums to 66)
+
+Against P2 (`A:9 B:27 C:21 D:7 Unscored:2`): 14 rows moved C→B (matching the interim
+post-write census recorded above and the Phase 46 forecast exactly), A/D/Unscored held.
+The residual `C:7` is exactly: 21 pre-window C records − 14 moved = 7 remaining, of which
+the 4 finding records are a subset (score-correct, tier-stale) and the other 3 are
+genuine, unmoved C records whose new-weight oracle score is still in the C band.
+
+### Parity verdict (post-window acceptance sweep)
+
+`scripts/run_scoring_parity.py`, run disarmed (the script is read-only by construction
+regardless; `--write-breakdown` not passed), committed verbatim to
+`49-PARITY-VERDICT.json`:
+
+- **Exit code:** 1 (FAIL) — genuinely, not loosened.
+- **assertions_executed:** 67 (non-zero).
+- **real_findings:** 4 — the same 4 ids as the interim finding above, no others; both
+  `lv_icp_fit_score` and `lv_anti_icp_flag` match the oracle on all 4, only
+  `lv_icp_tier` diverges (live `C` vs. expected `B`).
+- **`git diff HEAD~1 -- scripts/run_scoring_parity.py`:** empty. The script was not
+  touched to reach this verdict; the RED result is the honest data outcome per the
+  operator's ACCEPT AND DISCLOSE decision, not an artifact of a loosened gate.
+
+**The plan's own automated `<verify>` for this task will exit non-zero** (it asserts
+`real_findings` is empty), which is expected and accepted: the operator's resolution
+explicitly calls for recording this outcome honestly rather than forcing green. This is
+disclosed here rather than silently absorbed.
+
+### Final window accounting (unchanged from the pre-resolution table above)
+
+| Item | Declared | Actual |
+|---|---|---|
+| Arm cycles | 1 | 1 |
+| HubSpot batch/PATCH calls | 2 (canary + remainder) | 3 (see gate-bypass disclosure) |
+| n8n executions | 0 | 0 |
+| Anthropic calls | 0 | 0 |
+| Provider credits | 0 | 0 |
+
+### Acceptance status: CLOSED, RED BY DATA — plan complete
+
+The parity sweep exits non-green **on genuine, diagnosed, disclosed grounds**: 66/66
+component writes are oracle-correct (independently re-read, both legs), the forecasted
+14-row C→B movement landed exactly, and the remaining divergence is 4 records whose
+*tier* is stale for a reason this window's declared write mechanism structurally cannot
+reach (a value-identical PATCH fires no HubSpot workflow-enrollment event). The 4 are
+logged as `unmet-truth` entries in `.planning/WINDOWS.md` (ids 9–12), each naming the
+record, the expected-vs-actual tier, the root cause, and the pointer to
+`.planning/TIER-DERIVATION-SPIKE-2026-08-13.md` / a future Phase 50. Nothing further is
+armed; W1 is closed for the duration of Phase 49.

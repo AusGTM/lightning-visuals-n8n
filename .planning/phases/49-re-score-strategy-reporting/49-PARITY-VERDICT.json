@@ -1,0 +1,2548 @@
+{
+  "rubric_version": "lv-icp-v0.1",
+  "checked_at_utc": "2026-08-13T06:16:42.362783+00:00",
+  "sample_ids": [
+    "9604614548",
+    "9605284724",
+    "9604738975",
+    "9604732797",
+    "9604794661",
+    "9605273630",
+    "9605291627",
+    "9604732795",
+    "9605244179",
+    "9605284723",
+    "9604738976",
+    "9604753960",
+    "9605284721",
+    "9605284722",
+    "9604787229",
+    "9648957286",
+    "9663194467",
+    "9680571285",
+    "9680907342",
+    "9681041418",
+    "9680908136",
+    "10021900550",
+    "10024564084",
+    "10152138518",
+    "10152245364",
+    "10215097384",
+    "12427415589",
+    "14748141740",
+    "14752422181",
+    "14752488879",
+    "15008671672",
+    "15042301818",
+    "15274105699",
+    "15387953738",
+    "15388186399",
+    "15860277364",
+    "15860116585",
+    "16047156820",
+    "17317337782",
+    "17317147787",
+    "17317184159",
+    "17317381378",
+    "17317850381",
+    "17696004613",
+    "17791151956",
+    "17861423879",
+    "18047161864",
+    "18647353914",
+    "18756544344",
+    "18756544347",
+    "18756544359",
+    "18756544407",
+    "18796602894",
+    "18811366029",
+    "18973591368",
+    "19099896622",
+    "19100977027",
+    "19154355339",
+    "19363725157",
+    "20538284384",
+    "20538599475",
+    "20943964946",
+    "22477285976",
+    "22477259590",
+    "26149144628",
+    "40613322263"
+  ],
+  "blank_score_detector_ran": true,
+  "blank_score_ids": [],
+  "comparisons": [
+    {
+      "company_id": "9604614548",
+      "live": {
+        "lv_icp_fit_score": "35",
+        "lv_icp_tier": "C",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "35",
+        "lv_icp_tier": "Needs Review",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": false,
+      "classification": "documented_needs_review_divergence",
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": "false",
+      "review_reason": "lv_produces_content: June (true) and fresh research (false) disagree on lv_produces_content."
+    },
+    {
+      "company_id": "9605284724",
+      "live": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "9604738975",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "9604732797",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_content_type",
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_produces_content: Best confidence 65 below threshold 85.; lv_sponsorship_reliant: Best confidence 65 below threshold 70."
+    },
+    {
+      "company_id": "9604794661",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_content_type",
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_sponsorship_reliant: Best confidence 65 below threshold 70.; lv_produces_content: June (true) and fresh research (false) disagree on lv_produces_content."
+    },
+    {
+      "company_id": "9605273630",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "C",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": false,
+      "classification": "real_finding",
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_produces_content: June (true) and fresh research (false) disagree on lv_produces_content."
+    },
+    {
+      "company_id": "9605291627",
+      "live": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "9604732795",
+      "live": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_content_type",
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_produces_content: Best confidence 65 below threshold 85.; lv_sponsorship_reliant: Best confidence 65 below threshold 70."
+    },
+    {
+      "company_id": "9605244179",
+      "live": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "9605284723",
+      "live": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "9604738976",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "C",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": false,
+      "classification": "real_finding",
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "june_2026"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_produces_content: Best confidence 65 below threshold 85."
+    },
+    {
+      "company_id": "9604753960",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "9605284721",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "9605284722",
+      "live": {
+        "lv_icp_fit_score": "80",
+        "lv_icp_tier": "A",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "80",
+        "lv_icp_tier": "A",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "9604787229",
+      "live": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_content_type",
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_produces_content: Best confidence 65 below threshold 85."
+    },
+    {
+      "company_id": "9648957286",
+      "live": {
+        "lv_icp_fit_score": "80",
+        "lv_icp_tier": "A",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "80",
+        "lv_icp_tier": "A",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "9663194467",
+      "live": {
+        "lv_icp_fit_score": "80",
+        "lv_icp_tier": "A",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "80",
+        "lv_icp_tier": "A",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "9680571285",
+      "live": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "9680907342",
+      "live": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "9681041418",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "9680908136",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "10021900550",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "10024564084",
+      "live": {
+        "lv_icp_fit_score": "-50",
+        "lv_icp_tier": "D",
+        "lv_anti_icp_flag": "true"
+      },
+      "expected": {
+        "lv_icp_fit_score": "-50",
+        "lv_icp_tier": "D",
+        "lv_anti_icp_flag": "true"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_is_gambling_operator",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "10152138518",
+      "live": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_produces_content: June (true) and fresh research (false) disagree on lv_produces_content."
+    },
+    {
+      "company_id": "10152245364",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "10215097384",
+      "live": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_content_type",
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_produces_content: Best confidence 65 below threshold 85."
+    },
+    {
+      "company_id": "12427415589",
+      "live": {
+        "lv_icp_fit_score": "50",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "50",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "14748141740",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "14752422181",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "14752488879",
+      "live": {
+        "lv_icp_fit_score": "25",
+        "lv_icp_tier": "Unscored",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "25",
+        "lv_icp_tier": "Needs Review",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": false,
+      "classification": "documented_needs_review_divergence",
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_produces_content: June (true) and fresh research (false) disagree on lv_produces_content."
+    },
+    {
+      "company_id": "15008671672",
+      "live": {
+        "lv_icp_fit_score": "80",
+        "lv_icp_tier": "A",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "80",
+        "lv_icp_tier": "A",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_content_type",
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_org_type: June (governing_body_league) and fresh research (regulator) disagree on lv_org_type."
+    },
+    {
+      "company_id": "15042301818",
+      "live": {
+        "lv_icp_fit_score": "60",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "60",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "15274105699",
+      "live": {
+        "lv_icp_fit_score": "10",
+        "lv_icp_tier": "D",
+        "lv_anti_icp_flag": "true"
+      },
+      "expected": {
+        "lv_icp_fit_score": "10",
+        "lv_icp_tier": "D",
+        "lv_anti_icp_flag": "true"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_is_hardware_vendor",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "15387953738",
+      "live": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "15388186399",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "15860277364",
+      "live": {
+        "lv_icp_fit_score": "60",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "60",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "15860116585",
+      "live": {
+        "lv_icp_fit_score": "80",
+        "lv_icp_tier": "A",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "80",
+        "lv_icp_tier": "A",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "16047156820",
+      "live": {
+        "lv_icp_fit_score": "0",
+        "lv_icp_tier": "D",
+        "lv_anti_icp_flag": "true"
+      },
+      "expected": {
+        "lv_icp_fit_score": "0",
+        "lv_icp_tier": "D",
+        "lv_anti_icp_flag": "true"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "17317337782",
+      "live": {
+        "lv_icp_fit_score": "60",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "60",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "17317147787",
+      "live": {
+        "lv_icp_fit_score": "60",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "60",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "17317184159",
+      "live": {
+        "lv_icp_fit_score": "80",
+        "lv_icp_tier": "A",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "80",
+        "lv_icp_tier": "A",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "17317381378",
+      "live": {
+        "lv_icp_fit_score": "0",
+        "lv_icp_tier": "Unscored",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "0",
+        "lv_icp_tier": "Unscored",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "june_2026"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "Web searches for 'Editix edetrix.com.au', 'Editix broadcast streaming live', and 'edetrix.com.au OR Editix Australia media' returned no results for a company matching this identity (matched=false, confidence=5, every data field null). Near-hits were EditiX (an XML editor), Editrix (an AI book-editing tool) and EditShare (media software) -- none matching the company name+domain. Identity is unresolvable, not merely unresearched."
+    },
+    {
+      "company_id": "17317850381",
+      "live": {
+        "lv_icp_fit_score": "40",
+        "lv_icp_tier": "D",
+        "lv_anti_icp_flag": "true"
+      },
+      "expected": {
+        "lv_icp_fit_score": "40",
+        "lv_icp_tier": "D",
+        "lv_anti_icp_flag": "true"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_content_type",
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_produces_content: Best confidence 65 below threshold 85.; lv_sponsorship_reliant: Best confidence 65 below threshold 70.; lv_org_type: June (broadcaster) and fresh research (content_producer) disagree on lv_org_type."
+    },
+    {
+      "company_id": "17696004613",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "C",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": false,
+      "classification": "real_finding",
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_produces_content: June (true) and fresh research (false) disagree on lv_produces_content."
+    },
+    {
+      "company_id": "17791151956",
+      "live": {
+        "lv_icp_fit_score": "20",
+        "lv_icp_tier": "D",
+        "lv_anti_icp_flag": "true"
+      },
+      "expected": {
+        "lv_icp_fit_score": "20",
+        "lv_icp_tier": "D",
+        "lv_anti_icp_flag": "true"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "17861423879",
+      "live": {
+        "lv_icp_fit_score": "20",
+        "lv_icp_tier": "D",
+        "lv_anti_icp_flag": "true"
+      },
+      "expected": {
+        "lv_icp_fit_score": "20",
+        "lv_icp_tier": "D",
+        "lv_anti_icp_flag": "true"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_is_gambling_operator",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "18047161864",
+      "live": {
+        "lv_icp_fit_score": "40",
+        "lv_icp_tier": "D",
+        "lv_anti_icp_flag": "true"
+      },
+      "expected": {
+        "lv_icp_fit_score": "40",
+        "lv_icp_tier": "D",
+        "lv_anti_icp_flag": "true"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_content_type",
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_is_gambling_operator",
+          "lv_is_hardware_vendor",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_is_hardware_vendor: Best confidence 65 below threshold 85.; lv_produces_content: Best confidence 65 below threshold 85."
+    },
+    {
+      "company_id": "18647353914",
+      "live": {
+        "lv_icp_fit_score": "70",
+        "lv_icp_tier": "A",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "70",
+        "lv_icp_tier": "A",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "18756544344",
+      "live": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "18756544347",
+      "live": {
+        "lv_icp_fit_score": "70",
+        "lv_icp_tier": "A",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "70",
+        "lv_icp_tier": "A",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "18756544359",
+      "live": {
+        "lv_icp_fit_score": "80",
+        "lv_icp_tier": "A",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "80",
+        "lv_icp_tier": "A",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "18756544407",
+      "live": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "18796602894",
+      "live": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "55",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_content_type",
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_produces_content: Best confidence 65 below threshold 85.; lv_sponsorship_reliant: Best confidence 65 below threshold 70."
+    },
+    {
+      "company_id": "18811366029",
+      "live": {
+        "lv_icp_fit_score": "30",
+        "lv_icp_tier": "C",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "30",
+        "lv_icp_tier": "C",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "18973591368",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "19099896622",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "19100977027",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "C",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": false,
+      "classification": "real_finding",
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_content_type",
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_sponsorship_reliant: Best confidence 65 below threshold 70.; lv_produces_content: June (true) and fresh research (false) disagree on lv_produces_content."
+    },
+    {
+      "company_id": "19154355339",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "19363725157",
+      "live": {
+        "lv_icp_fit_score": "60",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "60",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "20538284384",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_content_type",
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_is_gambling_operator",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_produces_content: Best confidence 65 below threshold 85.; lv_org_type: Best confidence 75 below threshold 80.; lv_is_gambling_operator: Best confidence 75 below threshold 85."
+    },
+    {
+      "company_id": "20538599475",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "20943964946",
+      "live": {
+        "lv_icp_fit_score": "60",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "60",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_content_type",
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_produces_content: Best confidence 65 below threshold 85.; lv_org_type: June (governing_body_league) and fresh research (content_producer) disagree on lv_org_type."
+    },
+    {
+      "company_id": "22477285976",
+      "live": {
+        "lv_icp_fit_score": "50",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "50",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "22477259590",
+      "live": {
+        "lv_icp_fit_score": "20",
+        "lv_icp_tier": "C",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "20",
+        "lv_icp_tier": "C",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "26149144628",
+      "live": {
+        "lv_icp_fit_score": "50",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "50",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    },
+    {
+      "company_id": "40613322263",
+      "live": {
+        "lv_icp_fit_score": "50",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "50",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": true,
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "june_2026"
+        ]
+      },
+      "needs_review": null,
+      "review_reason": null
+    }
+  ],
+  "mismatches": [
+    {
+      "company_id": "9604614548",
+      "live": {
+        "lv_icp_fit_score": "35",
+        "lv_icp_tier": "C",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "35",
+        "lv_icp_tier": "Needs Review",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": false,
+      "classification": "documented_needs_review_divergence",
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": "false",
+      "review_reason": "lv_produces_content: June (true) and fresh research (false) disagree on lv_produces_content."
+    },
+    {
+      "company_id": "9605273630",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "C",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": false,
+      "classification": "real_finding",
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_produces_content: June (true) and fresh research (false) disagree on lv_produces_content."
+    },
+    {
+      "company_id": "9604738976",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "C",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": false,
+      "classification": "real_finding",
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "june_2026"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_produces_content: Best confidence 65 below threshold 85."
+    },
+    {
+      "company_id": "14752488879",
+      "live": {
+        "lv_icp_fit_score": "25",
+        "lv_icp_tier": "Unscored",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "25",
+        "lv_icp_tier": "Needs Review",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": false,
+      "classification": "documented_needs_review_divergence",
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_produces_content: June (true) and fresh research (false) disagree on lv_produces_content."
+    },
+    {
+      "company_id": "17696004613",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "C",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": false,
+      "classification": "real_finding",
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_produces_content: June (true) and fresh research (false) disagree on lv_produces_content."
+    },
+    {
+      "company_id": "19100977027",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "C",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": false,
+      "classification": "real_finding",
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_content_type",
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_sponsorship_reliant: Best confidence 65 below threshold 70.; lv_produces_content: June (true) and fresh research (false) disagree on lv_produces_content."
+    }
+  ],
+  "real_findings": [
+    {
+      "company_id": "9605273630",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "C",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": false,
+      "classification": "real_finding",
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_produces_content: June (true) and fresh research (false) disagree on lv_produces_content."
+    },
+    {
+      "company_id": "9604738976",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "C",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": false,
+      "classification": "real_finding",
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "june_2026"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_produces_content: Best confidence 65 below threshold 85."
+    },
+    {
+      "company_id": "17696004613",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "C",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": false,
+      "classification": "real_finding",
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_produces_content: June (true) and fresh research (false) disagree on lv_produces_content."
+    },
+    {
+      "company_id": "19100977027",
+      "live": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "C",
+        "lv_anti_icp_flag": "false"
+      },
+      "expected": {
+        "lv_icp_fit_score": "45",
+        "lv_icp_tier": "B",
+        "lv_anti_icp_flag": "false"
+      },
+      "match": false,
+      "classification": "real_finding",
+      "provenance": {
+        "present": true,
+        "valid_json": true,
+        "fields": [
+          "lv_content_type",
+          "lv_country_region_normalized",
+          "lv_employee_band",
+          "lv_org_type",
+          "lv_produces_content",
+          "lv_revenue_band",
+          "lv_sponsorship_reliant"
+        ],
+        "sources": [
+          "claude_web",
+          "hubspot_native",
+          "june_2026"
+        ]
+      },
+      "needs_review": "true",
+      "review_reason": "lv_sponsorship_reliant: Best confidence 65 below threshold 70.; lv_produces_content: June (true) and fresh research (false) disagree on lv_produces_content."
+    }
+  ],
+  "assertions_executed": 67,
+  "breakdowns_written": 0,
+  "verdict": "FAIL: 4 of 66 sampled companies diverge from the oracle or could not be checked (not the documented Needs Review divergence)."
+}

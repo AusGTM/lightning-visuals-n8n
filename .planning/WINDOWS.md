@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 4
+open_count: 8
 waived_count: 0
 fixed_count: 4
-total_count: 8
-last_updated: 2026-08-12T05:46:01.400Z
+total_count: 12
+last_updated: 2026-08-13T06:18:43.329Z
 ---
 
 # Broken Windows Ledger
@@ -23,6 +23,10 @@ last_updated: 2026-08-12T05:46:01.400Z
 | 6 | 43 | deviation | tests/test_review_flag_eq_filter.py |  | test_corrected_string_patch_is_matched_by_the_awaiting_review_eq_filter flakes on first run: PATCHes a brand-new company then searches immediately, with no wait for HubSpot search-index lag (~20s observed). Direct reproduction with a poll confirms the EQ filter itself matches correctly; the test lacks a poll/wait between create+patch and search. | open |  | 2026-08-07T19:53:39.099Z |  |
 | 7 | 44 | deviation | scripts/verify_live_write_safety.py |  | Interim window until 44-03 deploys: live verifier's new 'drain authority' line reports FAIL (ALLOW_SJ3_DRAIN_WRITES not yet in live content) — plan-accepted, closed by the 44-03 deploy+bounce | open |  | 2026-08-10T01:45:26.187Z |  |
 | 8 | 47.5 | deviation | scripts/build_cloud_workflows.py |  | ENRICH_CO_GATE is shared by three workflows; only wf_enrichment_cloud has a Parse HubSpot Event node, so the request-level $() read is try/catch-guarded and fails to false | open |  | 2026-08-12T05:46:01.400Z |  |
+| 9 | 49 | unmet-truth | .planning/phases/49-re-score-strategy-reporting/49-PARITY-VERDICT.json |  | Company 9605273630 (Port Macquarie Race Club): lv_icp_tier stuck at C, expected B. lv_icp_fit_score correctly 45 (all five components correct new-weight values). Root cause: components already carried correct new-weight values before W1 opened (hs_lastmodifieddate 2026-08-12), so W1's PATCH was value-identical and HubSpot fired no property-change event, so WF1 (4625147345) never re-enrolled to re-grade the tier. See PORTAL-FACTS.md 2026-08-13 entry and .planning/TIER-DERIVATION-SPIKE-2026-08-13.md (Phase 50: deriving lv_icp_tier as a calculation_equation property removes the enrollment-event dependency and fixes this class as a side effect). | open |  | 2026-08-13T06:18:42.909Z |  |
+| 10 | 49 | unmet-truth | .planning/phases/49-re-score-strategy-reporting/49-PARITY-VERDICT.json |  | Company 9604738976 (Bunbury Turf Club): lv_icp_tier stuck at C, expected B. lv_icp_fit_score correctly 45. Same root cause as 9605273630 (same-value PATCH fires no HubSpot property-change event, so WF1 never re-enrolled). See PORTAL-FACTS.md 2026-08-13 entry and .planning/TIER-DERIVATION-SPIKE-2026-08-13.md (Phase 50 fix). | open |  | 2026-08-13T06:18:43.064Z |  |
+| 11 | 49 | unmet-truth | .planning/phases/49-re-score-strategy-reporting/49-PARITY-VERDICT.json |  | Company 17696004613 (Pinjarra Park): lv_icp_tier stuck at C, expected B. lv_icp_fit_score correctly 45. Same root cause as 9605273630 (same-value PATCH fires no HubSpot property-change event, so WF1 never re-enrolled). See PORTAL-FACTS.md 2026-08-13 entry and .planning/TIER-DERIVATION-SPIKE-2026-08-13.md (Phase 50 fix). | open |  | 2026-08-13T06:18:43.201Z |  |
+| 12 | 49 | unmet-truth | .planning/phases/49-re-score-strategy-reporting/49-PARITY-VERDICT.json |  | Company 19100977027 (Newcastle Harness Racing Club): lv_icp_tier stuck at C, expected B. lv_icp_fit_score correctly 45. Same root cause as 9605273630 (same-value PATCH fires no HubSpot property-change event, so WF1 never re-enrolled). See PORTAL-FACTS.md 2026-08-13 entry and .planning/TIER-DERIVATION-SPIKE-2026-08-13.md (Phase 50 fix). | open |  | 2026-08-13T06:18:43.329Z |  |
 
 ````json
 [
@@ -120,6 +124,54 @@ last_updated: 2026-08-12T05:46:01.400Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-08-12T05:46:01.400Z",
+    "resolved_at": null
+  },
+  {
+    "id": 9,
+    "kind": "unmet-truth",
+    "phase": "49",
+    "file": ".planning/phases/49-re-score-strategy-reporting/49-PARITY-VERDICT.json",
+    "line": null,
+    "description": "Company 9605273630 (Port Macquarie Race Club): lv_icp_tier stuck at C, expected B. lv_icp_fit_score correctly 45 (all five components correct new-weight values). Root cause: components already carried correct new-weight values before W1 opened (hs_lastmodifieddate 2026-08-12), so W1's PATCH was value-identical and HubSpot fired no property-change event, so WF1 (4625147345) never re-enrolled to re-grade the tier. See PORTAL-FACTS.md 2026-08-13 entry and .planning/TIER-DERIVATION-SPIKE-2026-08-13.md (Phase 50: deriving lv_icp_tier as a calculation_equation property removes the enrollment-event dependency and fixes this class as a side effect).",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-08-13T06:18:42.909Z",
+    "resolved_at": null
+  },
+  {
+    "id": 10,
+    "kind": "unmet-truth",
+    "phase": "49",
+    "file": ".planning/phases/49-re-score-strategy-reporting/49-PARITY-VERDICT.json",
+    "line": null,
+    "description": "Company 9604738976 (Bunbury Turf Club): lv_icp_tier stuck at C, expected B. lv_icp_fit_score correctly 45. Same root cause as 9605273630 (same-value PATCH fires no HubSpot property-change event, so WF1 never re-enrolled). See PORTAL-FACTS.md 2026-08-13 entry and .planning/TIER-DERIVATION-SPIKE-2026-08-13.md (Phase 50 fix).",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-08-13T06:18:43.064Z",
+    "resolved_at": null
+  },
+  {
+    "id": 11,
+    "kind": "unmet-truth",
+    "phase": "49",
+    "file": ".planning/phases/49-re-score-strategy-reporting/49-PARITY-VERDICT.json",
+    "line": null,
+    "description": "Company 17696004613 (Pinjarra Park): lv_icp_tier stuck at C, expected B. lv_icp_fit_score correctly 45. Same root cause as 9605273630 (same-value PATCH fires no HubSpot property-change event, so WF1 never re-enrolled). See PORTAL-FACTS.md 2026-08-13 entry and .planning/TIER-DERIVATION-SPIKE-2026-08-13.md (Phase 50 fix).",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-08-13T06:18:43.201Z",
+    "resolved_at": null
+  },
+  {
+    "id": 12,
+    "kind": "unmet-truth",
+    "phase": "49",
+    "file": ".planning/phases/49-re-score-strategy-reporting/49-PARITY-VERDICT.json",
+    "line": null,
+    "description": "Company 19100977027 (Newcastle Harness Racing Club): lv_icp_tier stuck at C, expected B. lv_icp_fit_score correctly 45. Same root cause as 9605273630 (same-value PATCH fires no HubSpot property-change event, so WF1 never re-enrolled). See PORTAL-FACTS.md 2026-08-13 entry and .planning/TIER-DERIVATION-SPIKE-2026-08-13.md (Phase 50 fix).",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-08-13T06:18:43.329Z",
     "resolved_at": null
   }
 ]
