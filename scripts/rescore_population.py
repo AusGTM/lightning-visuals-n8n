@@ -43,6 +43,7 @@ import json
 import os
 import sys
 import time
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -354,6 +355,86 @@ def run_execute(already_written: list) -> int:
     return 0
 
 
+# --- --snapshot census mode (RESCORE-03's P2/P3 report points, D-10) -----------------------
+
+# The seven per-record properties a census entry carries (id is the record id itself, not
+# a fetched property).
+SNAPSHOT_RECORD_PROPS = [
+    "name", "lv_icp_tier", "lv_icp_fit_score", "lv_org_type",
+    "lv_anti_icp_flag", "lv_anti_icp_reason",
+]
+
+# Fixed, deterministic tier-key iteration order so two snapshots of the same data render
+# byte-identically (a residual/unexpected tier value sorts after these, alphabetically).
+TIER_ORDER = ["A", "B", "C", "D", "Unscored", "Needs Review"]
+
+# A blank/None lv_icp_tier is counted under this literal key rather than dropped -- a
+# blank must never silently vanish from the distribution.
+BLANK_TIER_KEY = "Unscored-or-blank"
+
+
+def build_snapshot(ids: list) -> dict:
+    records = []
+    for company_id in sorted(ids):
+        props = get_record("companies", company_id, SNAPSHOT_RECORD_PROPS)["properties"]
+        records.append({
+            "id": company_id,
+            "name": props.get("name"),
+            "lv_icp_tier": props.get("lv_icp_tier"),
+            "lv_icp_fit_score": props.get("lv_icp_fit_score"),
+            "lv_org_type": props.get("lv_org_type"),
+            "lv_anti_icp_flag": props.get("lv_anti_icp_flag"),
+            "lv_anti_icp_reason": props.get("lv_anti_icp_reason"),
+        })
+
+    counts = Counter(
+        (r["lv_icp_tier"] if r["lv_icp_tier"] is not None else BLANK_TIER_KEY) for r in records
+    )
+    tier_distribution = {}
+    for tier in TIER_ORDER:
+        if tier in counts:
+            tier_distribution[tier] = counts.pop(tier)
+    for tier in sorted(counts.keys(), key=str):
+        tier_distribution[tier] = counts[tier]
+
+    return {
+        "derived_at": _now_iso(),
+        "population_count": len(records),
+        "tier_distribution": tier_distribution,
+        "records": records,
+    }
+
+
+def run_snapshot(out_path=None) -> int:
+    """Never consults _writes_allowed() and has no write path at all -- a HubSpot read
+    costs nothing against the 2,500/month n8n allowance (it makes zero n8n calls), which
+    is why D-10 can afford three of these across the phase."""
+    if not _has_credentials():
+        print("skipped (no credentials): HUBSPOT_PRIVATE_APP_TOKEN must be set to run this driver.")
+        return 0
+    if not _portal_ok():
+        print(f"REFUSED: HUBSPOT_PORTAL_ID does not match the expected portal "
+              f"({EXPECTED_PORTAL_ID}). No API call made.")
+        return 1
+
+    ids = select_scored_population()
+    if not ids:
+        print("REFUSED: live population read returned zero ids -- refusing to emit a "
+              "clean empty census (the false-green risk run_scoring_parity.py's "
+              "assertions_executed == 0 guard exists to prevent). Check "
+              "credentials/portal id and retry.")
+        return 1
+
+    snapshot = build_snapshot(ids)
+    text = json.dumps(snapshot, indent=2, default=str)
+    if out_path:
+        Path(out_path).write_text(text + "\n")
+        print(f"snapshot written to {out_path} ({snapshot['population_count']} records).")
+    else:
+        print(text)
+    return 0
+
+
 def run_plan() -> int:
     if not _has_credentials():
         print("skipped (no credentials): HUBSPOT_PRIVATE_APP_TOKEN must be set to run this driver.")
@@ -395,9 +476,16 @@ def _build_parser() -> argparse.ArgumentParser:
                             "any --already-written ids) and settle. Requires DRY_RUN=false "
                             "and ALLOW_SCORE_BACKFILL=true to actually write; disarmed, "
                             "prints what would be written.")
+    mode.add_argument("--snapshot", action="store_true",
+                       help="Dated JSON census of the live scored population (id, name, "
+                            "tier, score, org type, veto flag/reason) plus a tier-"
+                            "distribution roll-up. Read-only -- never writes, regardless "
+                            "of arm state.")
     parser.add_argument("--already-written", action="append", default=[], dest="already_written",
                          help="Company id already written by an earlier --canary step "
                               "(repeatable); excluded from --execute's write set.")
+    parser.add_argument("--out", default=None,
+                         help="Path to write --snapshot's census JSON to. Defaults to stdout.")
     return parser
 
 
@@ -411,6 +499,8 @@ def main(argv=None) -> int:
         return run_canary()
     if args.execute:
         return run_execute(args.already_written)
+    if args.snapshot:
+        return run_snapshot(args.out)
     return run_plan()  # --plan is the default when no mode flag is given.
 
 
