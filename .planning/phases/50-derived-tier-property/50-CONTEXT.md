@@ -212,6 +212,26 @@ silent about the *value*.
   ≥3 min ceiling) before concluding anything. A single immediate read-back is no evidence. This
   is the process defect behind D-21 and applies to every future formula probe in this repo.
 
+### Amendment 2026-08-14 (operator-directed) — D-23
+
+- **D-23:** **D-07's accepted-divergence class is extended from 4 records to 5**, adding Coffs
+  Harbour Racing Club `14752488879` (`WINDOWS.md` id 14) alongside ids 9–12.
+  — **Why it is legitimate:** it is the same WF1-staleness bug class the phase exists to retire —
+  a value-identical PATCH fires no property-change event, so WF1 never re-enrolled. Its `lv_icp_tier`
+  reads `Unscored` while `lv_icp_fit_score` is `25`, which `config/icp_scoring.yaml`'s `tier_rules`
+  grade as `C`. So `lv_icp_tier_derived` reads `C` and is **correct**; the stale enum is wrong. It
+  diverges in the *opposite* direction from ids 9–12 (`Unscored`→`C` rather than `C`→`B`), which is
+  the only reason it fell outside the original hardcoded list.
+  — **Why it is nonetheless recorded as an amendment, not a fix:** D-07 was pre-registered
+  specifically so a red result could not be explained away, and widening an exception list after
+  seeing the result is the exact move that pre-registration guards against. The operator was shown
+  that framing and chose to extend deliberately. Without this amendment the gate stays RED and
+  retirement stays blocked — on evidence that the new property is *better* than the old one.
+  — Encoded in `scripts/check_tier_derived_parity.py`'s `KNOWN_STUCK_IDS` / `KNOWN_STUCK_WINDOWS_IDS`
+  with the id tagged `D-23`, so the evidence artifact names the ledger entry rather than saying
+  "known exceptions" generically.
+  — **Reversibility:** cheap — narrowing the set back is a one-line edit and a re-run.
+
 ### Claude's Discretion
 
 None. Every question in this discussion was answered with an explicit choice — no "you decide"

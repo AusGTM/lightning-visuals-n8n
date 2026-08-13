@@ -154,9 +154,18 @@ def test_classify_row_non_stuck_id_diverging_is_defect():
     assert classify_row("111", "A", "B", KNOWN_STUCK_IDS) == "defect"
 
 
-def test_known_stuck_ids_are_the_four_from_windows_md():
+def test_known_stuck_ids_are_the_five_from_windows_md():
+    """D-07's accepted-divergence class, pinned by id so it cannot drift silently.
+
+    Four ids (WINDOWS.md 9-12) were pre-registered before the gate first ran. The fifth,
+    Coffs Harbour, was added by D-23 (operator, 2026-08-14) after this gate discovered it
+    live: same WF1-staleness class, but diverging Unscored->C rather than C->B, so the
+    DERIVED value is the correct one. Widening a pre-registered gate is exactly what D-07
+    guards against, so any further change here needs the same explicit amendment trail.
+    """
     assert KNOWN_STUCK_IDS == frozenset({
-        "9605273630", "9604738976", "17696004613", "19100977027",
+        "9605273630", "9604738976", "17696004613", "19100977027",  # ids 9-12
+        "14752488879",                                             # id 14, D-23
     })
 
 
@@ -251,6 +260,10 @@ _STUCK_RECORDS = [
      "lv_icp_tier_derived": "B", "lv_icp_fit_score": "45", "lv_anti_icp_flag": "false"},
     {"id": "19100977027", "name": "Newcastle Harness Racing Club", "lv_icp_tier": "C",
      "lv_icp_tier_derived": "B", "lv_icp_fit_score": "45", "lv_anti_icp_flag": "false"},
+    # D-23 (WINDOWS.md id 14): same WF1-staleness class, opposite direction -- the stale
+    # enum reads "Unscored" at score 25, so the DERIVED "C" is the correct value here.
+    {"id": "14752488879", "name": "Coffs Harbour Racing Club", "lv_icp_tier": "Unscored",
+     "lv_icp_tier_derived": "C", "lv_icp_fit_score": "25", "lv_anti_icp_flag": "false"},
 ]
 _CLEAN_RECORD = {"id": "111", "name": "Some Co", "lv_icp_tier": "A",
                   "lv_icp_tier_derived": "A", "lv_icp_fit_score": "80",
@@ -260,9 +273,9 @@ _CLEAN_RECORD = {"id": "111", "name": "Some Co", "lv_icp_tier": "A",
 def test_render_evidence_markdown_pass_verdict_and_denominator():
     rows = build_rows(_STUCK_RECORDS + [_CLEAN_RECORD])
     text = render_evidence_markdown(rows, len(rows), 712, "2026-08-14T00:00:00Z")
-    assert "Only 5 of 712 companies" in text
+    assert "Only 6 of 712 companies" in text
     assert "D-07 VERDICT: PASS" in text
-    for windows_id in (9, 10, 11, 12):
+    for windows_id in (9, 10, 11, 12, 14):  # 14 added by D-23
         assert f"| {windows_id} |" in text
 
 

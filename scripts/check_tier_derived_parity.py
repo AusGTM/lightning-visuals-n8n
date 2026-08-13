@@ -10,7 +10,7 @@ half of the phase.
 Phase 50 Plan 03 (this task's own additions, D-17 item 4 / D-19): the default mode now
 wraps the parity table in `render_evidence_markdown()` -- a "denominator" line stating
 what fraction of the portal the scored population represents, an explicit cross-reference
-of the 4 known stuck records to their WINDOWS.md ids (9-12), and a "what this does not
+of the known stuck records to their WINDOWS.md ids (9-12, plus 14 per D-23), and a "what this does not
 say" limits block, matching 49-RESCORE-REPORT.md's conventions. A new `--census` mode
 renders D-19's operator-facing before/after tier census (lv_icp_tier vs
 lv_icp_tier_derived) into the SAME artifact, reusing scripts/build_rescore_report.py's
@@ -24,9 +24,12 @@ scripts/rescore_population.py::select_scored_population() (the same
 simulate_rubric_weights.py already share) -- never trusts a stale local snapshot. `--ids`
 restricts the run to named records (the tracer task's own use).
 
-The 4 known stuck records (WINDOWS.md ids 9-12) are the ONE class of expected mismatch:
-`lv_icp_tier` stuck at "C" while `lv_icp_tier_derived` correctly reads "B". Any other
-divergence is a defect, not a rounding difference.
+The known stuck records are the ONE class of expected mismatch, each pinned to the exact
+transition it must show (KNOWN_STUCK_TRANSITIONS): WINDOWS.md ids 9-12 read `lv_icp_tier`
+stuck at "C" while `lv_icp_tier_derived` correctly reads "B"; id 14 (Coffs Harbour, added
+by D-23) is the opposite polarity -- stuck at "Unscored" while the derived value correctly
+reads "C". Any other divergence, including a known id moving to an unpinned value, is a
+defect, not a rounding difference.
 
 `.env` is Read/Bash permission-blocked this session -- the operator invocation is:
     .venv/bin/python -c \
@@ -54,18 +57,38 @@ NULL_PROBE_PATH = ROOT / ".planning" / "phases" / "50-derived-tier-property" / "
 
 # WINDOWS.md ids 9-12 -- the 4 stuck records, hard-coded per the plan (RESEARCH.md Code
 # Examples): score already correct at 45, tier stuck at "C" instead of "B".
-KNOWN_STUCK_IDS = frozenset({
-    "9605273630", "9604738976", "17696004613", "19100977027",
-})
+#
+# D-23 (operator, 2026-08-14) extends this set to FIVE. Coffs Harbour (id 14) is the same
+# WF1-staleness class -- a value-identical PATCH fires no property-change event, so WF1
+# never re-enrolled -- discovered live by this very gate rather than known up front. It
+# diverges in the opposite direction from ids 9-12: the stale enum reads "Unscored" while
+# the score is 25, so the DERIVED value ("C") is the correct one. Widening a pre-registered
+# gate after seeing its result is exactly what D-07 exists to prevent, so the amendment is
+# deliberate, dated, and justified in 50-CONTEXT.md rather than folded in silently.
+# Each known stuck id is pinned to the SPECIFIC transition it must show, not merely to
+# "differs somehow". Ids 9-12 all read stale "C" against a correct derived "B"; id 14 is
+# the opposite polarity (stale "Unscored" against a correct derived "C"). Keeping the
+# expected pair per id means a known record landing on some OTHER value is still a defect
+# -- the gate does not soften into "these five may do anything".
+KNOWN_STUCK_TRANSITIONS = {
+    "9605273630": ("C", "B"),
+    "9604738976": ("C", "B"),
+    "17696004613": ("C", "B"),
+    "19100977027": ("C", "B"),
+    "14752488879": ("Unscored", "C"),  # D-23
+}
+
+KNOWN_STUCK_IDS = frozenset(KNOWN_STUCK_TRANSITIONS)
 
 # Cross-reference from record id to its WINDOWS.md ledger id -- so the evidence artifact
 # can name the exact ledger entry each expected-mismatch row corresponds to, not just say
-# "known exceptions" generically (D-07's gate must encode the 4 by id, not by phrase).
+# "known exceptions" generically (D-07's gate must encode each by id, not by phrase).
 KNOWN_STUCK_WINDOWS_IDS = {
     "9605273630": 9,
     "9604738976": 10,
     "17696004613": 11,
     "19100977027": 12,
+    "14752488879": 14,  # D-23
 }
 
 # A blank/None tier is counted under this literal key rather than dropped -- matches
@@ -101,12 +124,14 @@ def _id_sort_key(rid: str):
 # --- pure functions pinned by tests/test_tier_derived_tools.py -------------------------
 
 def classify_row(record_id, live_tier, derived_tier, known_stuck_ids) -> str:
-    """"expected_mismatch" only for a known stuck id whose live tier is "C" and derived
-    tier is "B" -- the one class D-07's gate accepts. A known stuck id landing anywhere
-    else (including a live-tier match) is a "defect": the fix the phase exists to prove
-    did not happen. Any other id: "match" when the two tiers agree, "defect" otherwise."""
+    """"expected_mismatch" only for a known stuck id showing the EXACT transition pinned
+    for it in KNOWN_STUCK_TRANSITIONS -- (C -> B) for WINDOWS.md ids 9-12, (Unscored -> C)
+    for id 14 (D-23). A known stuck id landing anywhere else (including a live-tier match)
+    is a "defect": the fix the phase exists to prove did not happen, or it moved somewhere
+    unexpected. Any other id: "match" when the two tiers agree, "defect" otherwise."""
     if record_id in known_stuck_ids:
-        if live_tier == "C" and derived_tier == "B":
+        expected = KNOWN_STUCK_TRANSITIONS.get(record_id)
+        if expected is not None and (live_tier, derived_tier) == expected:
             return "expected_mismatch"
         return "defect"
     return "match" if live_tier == derived_tier else "defect"
@@ -299,7 +324,7 @@ def render_evidence_markdown(rows, population_count, total_companies, checked_at
         )
         verdict = (
             f"## D-07 VERDICT: FAIL -- {len(defects)} defect row(s): {offenders}. "
-            "A mismatch outside the 4 known stuck ids is a defect, not a rounding "
+            "A mismatch outside the known stuck ids is a defect, not a rounding "
             "difference; D-06/D-08 stay gated until this is zero."
         )
     elif defects:
@@ -308,8 +333,10 @@ def render_evidence_markdown(rows, population_count, total_companies, checked_at
         )
     else:
         verdict = (
-            "## D-07 VERDICT: PASS -- zero defect rows; all 4 known stuck records read "
-            "the expected mismatch (live C, derived B)."
+            "## D-07 VERDICT: PASS -- zero defect rows; all "
+            f"{len(KNOWN_STUCK_TRANSITIONS)} known stuck records read the exact expected "
+            "mismatch pinned for each (ids 9-12: live C, derived B; id 14: live "
+            "Unscored, derived C)."
         )
 
     limits = "\n".join([
@@ -318,7 +345,7 @@ def render_evidence_markdown(rows, population_count, total_companies, checked_at
         "- **This gate is a snapshot, not a monitor.** The population is re-derived live "
         "on every invocation and never trusted from a stale local capture; a re-run "
         "against a changed live population may produce a different result.",
-        "- **The 4 expected-mismatch rows are the ONLY accepted divergence class.** Any "
+        "- **The expected-mismatch rows are the ONLY accepted divergence class.** Any "
         "other row classified `defect` means D-07's gate has failed, not that a rounding "
         "difference occurred.",
         "- **This artifact does not itself retire `lv_icp_tier` or switch off WF1** "
@@ -394,9 +421,15 @@ def render_census_markdown(before_point, after_point, never_scored_count, null_v
 
     expected_ids = sorted(KNOWN_STUCK_IDS, key=_id_sort_key)
     actual_movement_ids = sorted((m["id"] for m in movements), key=_id_sort_key)
+    # Each mover must show the exact transition pinned for its id (D-23 made these two
+    # distinct shapes), not merely "some movement" -- otherwise a known record drifting to
+    # a wrong tier would still read as matching the pre-registration.
     matches_expectation = (
         actual_movement_ids == expected_ids
-        and all(m["from_tier"] == "C" and m["to_tier"] == "B" for m in movements)
+        and all(
+            (m["from_tier"], m["to_tier"]) == KNOWN_STUCK_TRANSITIONS.get(m["id"])
+            for m in movements
+        )
     )
 
     lines = ["## Operator-Facing Result: Before/After Tier Census (D-19)", ""]
@@ -408,9 +441,15 @@ def render_census_markdown(before_point, after_point, never_scored_count, null_v
     )
     lines.append(
         "- **Pre-registered expectation (D-19), stated before this run's result was "
-        f"known:** identical distribution except the 4 known stuck records "
-        f"({', '.join(expected_ids)}) moving C -> B. Any other movement is a defect "
-        "signal, not a narrative to explain."
+        f"known:** identical distribution except the {len(expected_ids)} known stuck "
+        "records, each moving exactly as pinned in KNOWN_STUCK_TRANSITIONS — "
+        + "; ".join(
+            f"{rid} {KNOWN_STUCK_TRANSITIONS[rid][0]} -> {KNOWN_STUCK_TRANSITIONS[rid][1]}"
+            for rid in sorted(expected_ids, key=_id_sort_key)
+        )
+        + ". Any other movement is a defect signal, not a narrative to explain. "
+        "(Ids 9-12 were pre-registered up front; id 14 was added by D-23 after this gate "
+        "discovered it live — a documented widening, not a silent one.)"
     )
     lines.append("")
 
