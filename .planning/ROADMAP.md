@@ -424,7 +424,7 @@ is a new property plus a migration, not a formula edit on the existing one.
   5. No company record is silently re-tiered outside a deliberately armed, capped write window,
      under the same discipline as Phases 47–49.
 
-**Plans**: 2/5 plans executed
+**Plans**: 2/6 plans executed
 
 Plans:
 **Wave 1**
@@ -436,13 +436,22 @@ Plans:
 
 - [x] 50-03-PLAN.md — D-07's parity gate across all 66, the offline formula pin, and the operator-facing tier census (wave 2)
 
-**Wave 3** *(blocked on Wave 2 completion)*
+**Wave 5** *(added 2026-08-14 — D-20/D-21 correction; must land BEFORE 50-04 and 50-05 despite its higher wave number, see the sequencing note below)*
+
+- [ ] 50-06-PLAN.md — Numeric veto mirror `lv_anti_icp_flag_num`, uncoalesced formula, both-engine drift control, and a re-run D-07 gate (wave 5)
+
+**Wave 3** *(blocked on Wave 2 AND on 50-06)*
 
 - [ ] 50-04-PLAN.md — Name and prove D-18's forced re-enrolment mechanism while WF1 is still on; refresh the pre-cutover sweep (wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [ ] 50-05-PLAN.md — Gated retirement: WF1 off with its definition kept, `lv_icp_tier` archived, drift guards made truthful in the same commit (wave 4)
+
+**Sequencing note (2026-08-14):** 50-06 was added additively after 50-04 and 50-05 were written, so
+its `wave: 5` frontmatter sits above theirs even though it must execute first — 50-04's rollback
+proof and 50-05's retirement decision both turn on the D-07 verdict 50-06 regenerates. Wave-based
+dispatch reads the frontmatter, not this note: run 50-06 before dispatching wave 3.
 
 ## Progress
 
