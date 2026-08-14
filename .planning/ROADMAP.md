@@ -424,7 +424,7 @@ is a new property plus a migration, not a formula edit on the existing one.
   5. No company record is silently re-tiered outside a deliberately armed, capped write window,
      under the same discipline as Phases 47–49.
 
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans executed
 
 Plans:
 **Wave 1**
@@ -446,7 +446,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 50-05-PLAN.md — Gated retirement: WF1 off with its definition kept, `lv_icp_tier` archived, drift guards made truthful in the same commit (wave 4)
+- [x] 50-05-PLAN.md — Gated retirement: WF1 off with its definition kept, `lv_icp_tier` archived, drift guards made truthful in the same commit (wave 4)
 
 **Sequencing note (2026-08-14):** 50-06 was added additively after 50-04 and 50-05 were written, so
 its `wave: 5` frontmatter sits above theirs even though it must execute first — 50-04's rollback

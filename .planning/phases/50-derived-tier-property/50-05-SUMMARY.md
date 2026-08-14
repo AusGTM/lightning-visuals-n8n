@@ -250,3 +250,11 @@ clean (`exit_code=0`).
 ---
 *Phase: 50-derived-tier-property*
 *Completed: 2026-08-14*
+
+## Self-Check: PASSED
+
+- FOUND: `.planning/phases/50-derived-tier-property/50-05-SUMMARY.md`
+- FOUND: `.planning/phases/50-derived-tier-property/50-RETIREMENT-RECORD.md`
+- FOUND: `scripts/check_schema_drift.py`
+- FOUND: `tests/test_check_schema_drift.py`
+- FOUND commit: `449b306`

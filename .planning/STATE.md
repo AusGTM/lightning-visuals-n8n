@@ -5,16 +5,16 @@ milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 50
 current_phase_name: Derived Tier Property
 status: verifying
-stopped_at: Completed 50-04-PLAN.md
-last_updated: "2026-08-14T00:44:16.678Z"
+stopped_at: "Halted 50-05: WF1 off live, lv_icp_tier archive blocked (see 50-RETIREMENT-RECORD.md)"
+last_updated: "2026-08-14T01:50:26.105Z"
 last_activity: 2026-08-13
 last_activity_desc: Phase 50 execution started
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 35
-  completed_plans: 34
-  percent: 83
+  completed_plans: 35
+  percent: 100
 ---
 
 # Project State
@@ -201,13 +201,13 @@ Last activity: 2026-08-13 — Phase 50 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [██████████] 97% (v0.9 phase 47.5 of 46-49)
+Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-14T00:44:16.670Z
-**Stopped at:** Completed 50-04-PLAN.md
-**Resume file:** None
+**Last session:** 2026-08-14T01:50:26.097Z
+**Stopped at:** Halted 50-05: WF1 off live, lv_icp_tier archive blocked (see 50-RETIREMENT-RECORD.md)
+**Resume file:** .planning/phases/50-derived-tier-property/50-RETIREMENT-RECORD.md
 
 ## Performance Metrics
 
@@ -270,6 +270,7 @@ Progress: [██████████] 97% (v0.9 phase 47.5 of 46-49)
 | Phase 50 P06 | ~110min | 5 tasks | 22 files |
 | Phase 50 P02 | ~13min (across checkpoint pause) | 3 tasks | 3 files |
 | Phase 50 P04 | 35min | 2 tasks | 3 files |
+| Phase 50 P05 | 55min | 1 tasks | 7 files |
 
 ## Decisions
 
@@ -283,6 +284,7 @@ Progress: [██████████] 97% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: [Phase 50-02]: Post-migration re-run of scripts/sweep_tier_dependents.py (D-13) found no delta from the pre-migration scripted findings (0 lists / 10 flows / 5 WF1-only findings) -- expected, since the script cannot see saved views.
 - [Phase ?]: D-18 rollback: portal-UI manual enrolment proven live against Melbourne Racing Club 9604614548 while WF1 was on; primary mechanism marked PROVEN in docs/OPERATOR-TIER-ROLLBACK.md
 - [Phase ?]: Reports/dashboards half of D-13's dependent sweep remains UNCONFIRMED -- carried unresolved into Plan 05's one-way retirement decision
+- [Phase ?]: Phase 50: WF1 switched off live (D-08 complete); lv_icp_tier archive blocked by HubSpot's property-in-use rejection (a disabled workflow's action still counts as usage) -- escalated per D-11 rather than forced through by deleting or editing WF1.
 
 ### Roadmap Evolution
 
@@ -431,6 +433,7 @@ open (VETO-01/VETO-02 remain open requirements, not blockers — Phase 40 met it
 
 - Phase 49 Plan 05 Task 3 (W1 write window): 4 of 66 scored companies (9605273630 Port Macquarie Race Club, 9604738976 Bunbury Turf Club, 17696004613 Pinjarra Park, 19100977027 Newcastle Harness Racing Club) already carried correct new-weight components before W1 opened, so the component-only write was a genuine no-op for them and their lv_icp_tier stayed stale at C (oracle expects B, score 45). Parity sweep FAILs with these 4 real findings. No in-scope W1 mechanism can force WF1 to re-grade them (tier PATCH forbidden, n8n allowlist out of scope for W1). Awaiting operator decision at the checkpoint returned by Plan 05's continuation.
 - D-06 (retire lv_icp_tier) / D-08 (switch off WF1) blocked: lv_icp_tier_derived's veto guard never fires live for any of 6 real anti_icp_flag=true records (WINDOWS.md id 13) -- Plan 04's checkpoint must decide fix-vs-defer before retirement
+- lv_icp_tier archive blocked: HubSpot rejects DELETE with CANNOT_DELETE_PROPERTY_IN_USE while WF1's actions reference the property, even disabled. Resolution requires a fresh operator decision among 3 options documented in 50-RETIREMENT-RECORD.md.
 
 ## Deferred Items
 
