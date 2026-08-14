@@ -424,7 +424,7 @@ is a new property plus a migration, not a formula edit on the existing one.
   5. No company record is silently re-tiered outside a deliberately armed, capped write window,
      under the same discipline as Phases 47–49.
 
-**Plans**: 4/6 plans executed
+**Plans**: 5/6 plans executed
 
 Plans:
 **Wave 1**
@@ -442,7 +442,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 AND on 50-06)*
 
-- [ ] 50-04-PLAN.md — Name and prove D-18's forced re-enrolment mechanism while WF1 is still on; refresh the pre-cutover sweep (wave 3)
+- [x] 50-04-PLAN.md — Name and prove D-18's forced re-enrolment mechanism while WF1 is still on; refresh the pre-cutover sweep (wave 3)
 
 **Wave 4** *(blocked on Wave 3 completion)*
 

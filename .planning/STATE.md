@@ -4,16 +4,16 @@ milestone: v0.9
 milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 50
 current_phase_name: Derived Tier Property
-status: executing
-stopped_at: Completed 50-02-PLAN.md (dependent sweep; saved views migrated, reports/dashboards residual open for Plan 05)
-last_updated: "2026-08-14T00:04:28.282Z"
+status: verifying
+stopped_at: Completed 50-04-PLAN.md
+last_updated: "2026-08-14T00:44:16.678Z"
 last_activity: 2026-08-13
 last_activity_desc: Phase 50 execution started
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 35
-  completed_plans: 33
+  completed_plans: 34
   percent: 83
 ---
 
@@ -114,7 +114,7 @@ predating the window. VETO-03 bar still 0.
 
 Phase: 50 (Derived Tier Property) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
   has executed on a real record. **Nothing is armed** — windows #1 and #2 were each opened
@@ -201,12 +201,12 @@ Last activity: 2026-08-13 — Phase 50 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████████░] 94% (v0.9 phase 47.5 of 46-49)
+Progress: [██████████] 97% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-14T00:04:28.273Z
-**Stopped at:** Completed 50-02-PLAN.md (dependent sweep; saved views migrated, reports/dashboards residual open for Plan 05)
+**Last session:** 2026-08-14T00:44:16.670Z
+**Stopped at:** Completed 50-04-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -269,6 +269,7 @@ Progress: [█████████░] 94% (v0.9 phase 47.5 of 46-49)
 | Phase 50 P03 | 50min | 3 tasks | 6 files |
 | Phase 50 P06 | ~110min | 5 tasks | 22 files |
 | Phase 50 P02 | ~13min (across checkpoint pause) | 3 tasks | 3 files |
+| Phase 50 P04 | 35min | 2 tasks | 3 files |
 
 ## Decisions
 
@@ -280,6 +281,8 @@ Progress: [█████████░] 94% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: D-16 spent exactly once (backfill-scoped): lv_anti_icp_flag_num=1 backfilled onto 6 checkpoint-authorised vetoed companies; D-21 reverses D-04 (uncoalesced formula ships, ~646-record Unscored flip undone); TIER-01 stays Blocked pending Plan 04/05's decision on the residual Coffs Harbour defect (WINDOWS.md id 14)
 - [Phase ?]: [Phase 50-02]: Saved views recorded CHECKED and MIGRATED on operator's dated 2026-08-14 attestation (not itemised); reports/dashboards left an explicit UNCONFIRMED residual carried forward to Plan 05's one-way retirement gate.
 - [Phase ?]: [Phase 50-02]: Post-migration re-run of scripts/sweep_tier_dependents.py (D-13) found no delta from the pre-migration scripted findings (0 lists / 10 flows / 5 WF1-only findings) -- expected, since the script cannot see saved views.
+- [Phase ?]: D-18 rollback: portal-UI manual enrolment proven live against Melbourne Racing Club 9604614548 while WF1 was on; primary mechanism marked PROVEN in docs/OPERATOR-TIER-ROLLBACK.md
+- [Phase ?]: Reports/dashboards half of D-13's dependent sweep remains UNCONFIRMED -- carried unresolved into Plan 05's one-way retirement decision
 
 ### Roadmap Evolution
 
