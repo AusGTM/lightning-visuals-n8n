@@ -59,23 +59,35 @@ wrong tool here: it can refresh `lv_anti_icp_flag`, but it cannot make WF1 itsel
 
 **The two real mechanisms, primary chosen:**
 
-- **Primary — portal-UI manual enrolment.** A human selects the record(s) needing a re-grade
-  on the companies index page, or from inside WF1 itself, and enrols them manually. This
-  requires WF1 to be **on** (Step 1 must have already run) — HubSpot's own documentation
-  states a workflow "must be turned on" to accept a manual enrolment and that re-enrolling a
-  record that already passed through the workflow requires re-enrolment triggers to be
-  selected. This is the mechanism proved live in `50-ROLLBACK-DRILL.md`, while WF1 was still
-  on, ahead of Plan 05 switching it off.
+- **Primary — portal-UI manual enrolment. PROVEN LIVE, 2026-08-14.** A human selects the
+  record(s) needing a re-grade on the companies index page, or from inside WF1 itself, and
+  enrols them manually. Proof: `.planning/phases/50-derived-tier-property/50-ROLLBACK-DRILL.md`
+  — Melbourne Racing Club `9604614548`, WF1 confirmed on, manual enrolment completed per WF1's
+  own execution history, tier read `C` before and `C` after (value-identical, as expected for a
+  record that was already correctly tiered). Read that artifact's limitations section before
+  treating this as a stronger result than it is: the drill proves the mechanism *runs and
+  completes*, not that WF1's grading logic re-tiers a stale record — that logic was never in
+  doubt and a genuinely stale record (Coffs Harbour `14752488879`) was deliberately excluded
+  because enrolling it would have broken a separate, already-settled parity gate (D-23).
+  — **Precondition, stated plainly — this is the rollback's own catch-22:** this mechanism
+  requires WF1 to be **on** (Step 1 must have already run). HubSpot's own documentation states a
+  workflow "must be turned on" to accept a manual enrolment. **Once WF1 is off, this mechanism
+  is unavailable until Step 1 re-enables it.** That is exactly why the drill had to run *before*
+  Plan 05 switches WF1 off — there is no window afterward in which it could be proven, or used,
+  without first completing Step 1.
 
-- **Fallback — armed, capped, disarm-verified perturb-then-restore double-write.** For a
-  record needing a forced re-grade, write a different value to the trigger property
-  (`lv_icp_fit_score` or `lv_anti_icp_flag`), let WF1 enrol and evaluate on that genuine
-  property-change event, then restore the original value. This is **labelled a deliberate
-  D-16 deviation requiring justification** the moment it is ever exercised — D-16 declares
-  zero company write windows for the whole of Phase 50, and this fallback is two real company
-  writes per record. It is available only on the emergency path, never the happy path, and
-  only under the same armed/capped/disarm-and-read-back discipline every write window in
-  Phases 47-49 already used. **Not exercised in this plan — documented only.**
+- **Fallback — armed, capped, disarm-verified perturb-then-restore double-write. Unexercised
+  secondary.** For a record needing a forced re-grade, write a different value to the trigger
+  property (`lv_icp_fit_score` or `lv_anti_icp_flag`), let WF1 enrol and evaluate on that
+  genuine property-change event, then restore the original value. This is **labelled a
+  deliberate D-16 deviation requiring justification** the moment it is ever exercised — D-16
+  declares zero company write windows for the whole of Phase 50, and this fallback is two real
+  company writes per record. It is available only on the emergency path, never the happy path,
+  and only under the same armed/capped/disarm-and-read-back discipline every write window in
+  Phases 47-49 already used. **Not exercised in this plan or any plan to date — documented
+  only.** Exercising it later requires its own fresh D-16 authorisation at the time; the drill
+  in `50-ROLLBACK-DRILL.md` proves the primary mechanism only and spends none of this fallback's
+  write budget.
 
 No third mechanism is named. A "poke" that PATCHes an unrelated property hoping it cascades,
 or any workaround with no live-proven precedent in this portal, does not belong in a rollback
@@ -89,7 +101,8 @@ mode breaking silently.
 - Step 1 (re-enable WF1): one `PUT /automation/v4/flows/4625147345` call. Free — no per-record
   cost.
 - Step 2 primary (manual UI enrolment): a human's time per record, no API calls, no n8n
-  executions, no Anthropic calls, no provider credits.
+  executions, no Anthropic calls, no provider credits. Measured live in the 2026-08-14 drill:
+  zero company writes (value-identical enrolment), zero Anthropic calls, zero provider credits.
 - Step 2 fallback (perturb-then-restore, if ever exercised): two HubSpot company writes per
   record, run under an armed/capped window exactly like Phase 47-49's write windows. No n8n
   execution, no Anthropic call, no provider credit — the cost is entirely the two writes
