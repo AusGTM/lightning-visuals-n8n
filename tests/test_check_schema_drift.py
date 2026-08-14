@@ -15,9 +15,11 @@ from check_schema_drift import (  # noqa: E402
     D04_COMPANY_PROPERTY_SCOPE,
     DO_NOT_ARCHIVE_COMPANY_PROPERTIES,
     DO_NOT_ARCHIVE_FLOW_IDS,
+    RETIRED_FLOW_IDS,
     ACCEPTED_DIVERGENCES,
     classify_property,
     exit_code_for,
+    _compute_do_not_archive,
 )
 
 BASELINE_SNAPSHOT = (
@@ -202,7 +204,7 @@ def test_lv_icp_tier_accepted_divergence_present_and_contributes_no_exit_code():
     ids = {d["id"] for d in ACCEPTED_DIVERGENCES}
     assert "PARITY-01-tier-label" in ids
     entry = next(d for d in ACCEPTED_DIVERGENCES if d["id"] == "PARITY-01-tier-label")
-    assert entry["property"] == "lv_icp_tier"
+    assert entry["property"] == "lv_icp_tier_derived"
 
     report = _report(
         properties=[{"name": "lv_icp_tier", "status": "in_sync"}],
@@ -222,9 +224,9 @@ _POSTDATES_PHASE42_SNAPSHOT = frozenset({"lv_anti_icp_flag_num"})
 
 
 def test_do_not_archive_sets_have_expected_sizes():
-    assert len(DO_NOT_ARCHIVE_COMPANY_PROPERTIES) == 12
-    assert len(DO_NOT_ARCHIVE_FLOW_IDS) == 6
-    assert len(D04_COMPANY_PROPERTY_SCOPE) == 16
+    assert len(DO_NOT_ARCHIVE_COMPANY_PROPERTIES) == 11
+    assert len(DO_NOT_ARCHIVE_FLOW_IDS) == 5
+    assert len(D04_COMPANY_PROPERTY_SCOPE) == 15
 
 
 def test_do_not_archive_company_properties_appear_in_committed_snapshot():
@@ -253,3 +255,47 @@ def test_do_not_archive_company_properties_appear_in_committed_snapshot():
         f"do-not-archive propert(y/ies) absent from the committed phase42-pre snapshot: "
         f"{sorted(missing)} -- the live scoring engine may be damaged"
     )
+
+
+# --- RETIRED_FLOW_IDS: live-AND-disabled invariant (D-08, Phase 50 Plan 05) -------------
+
+def _all_live_companies():
+    return {name: {"name": name} for name in DO_NOT_ARCHIVE_COMPANY_PROPERTIES}
+
+
+def _all_live_flows_enabled():
+    return {
+        flow_id: {"id": flow_id, "isEnabled": True}
+        for flow_id in DO_NOT_ARCHIVE_FLOW_IDS
+    }
+
+
+def test_retired_flow_live_and_disabled_is_ok():
+    live_flows = _all_live_flows_enabled()
+    live_flows["4625147345"] = {"id": "4625147345", "isEnabled": False}
+    result = _compute_do_not_archive(_all_live_companies(), live_flows)
+    assert result["ok"] is True
+    retired = next(rf for rf in result["retired_flows"] if rf["id"] == "4625147345")
+    assert retired["live"] is True and retired["is_enabled"] is False
+
+
+def test_retired_flow_absent_is_not_ok():
+    live_flows = _all_live_flows_enabled()
+    # "4625147345" deliberately absent -- deleted, not just disabled.
+    result = _compute_do_not_archive(_all_live_companies(), live_flows)
+    assert result["ok"] is False
+    retired = next(rf for rf in result["retired_flows"] if rf["id"] == "4625147345")
+    assert retired["live"] is False
+
+
+def test_retired_flow_live_and_enabled_is_not_ok():
+    live_flows = _all_live_flows_enabled()
+    live_flows["4625147345"] = {"id": "4625147345", "isEnabled": True}
+    result = _compute_do_not_archive(_all_live_companies(), live_flows)
+    assert result["ok"] is False
+    retired = next(rf for rf in result["retired_flows"] if rf["id"] == "4625147345")
+    assert retired["live"] is True and retired["is_enabled"] is True
+
+
+def test_retired_flow_ids_contains_wf1():
+    assert "4625147345" in RETIRED_FLOW_IDS

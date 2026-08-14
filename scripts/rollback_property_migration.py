@@ -149,6 +149,50 @@ def _get_live_properties(object_type: str) -> list:
     return r.json().get("results", [])
 
 
+def _writes_allowed() -> bool:
+    """Phase 50 Plan 05 (D-06) -- the two-key gate already established for property writes
+    by scripts/sync_hubspot_properties.py::_writes_allowed. --archive-property reuses this
+    exact idiom rather than introducing a third gate shape in this repo; the manifest-driven
+    bulk rollback above keeps its own --live/--confirm gate unchanged."""
+    dry_run = os.getenv("DRY_RUN", "true").lower() == "true"
+    allow = os.getenv("ALLOW_HUBSPOT_PROPERTY_WRITES", "false").lower() == "true"
+    return (not dry_run) and allow
+
+
+def archive_one_property(object_type: str, name: str, live_writes: bool) -> int:
+    """Phase 50 Plan 05 (D-06) -- archive a single property by name, independent of the
+    undo-manifest-driven bulk rollback above (this is a forward retirement, not an undo of
+    a migration this script ran). Reuses this script's existing 404-tolerant GET
+    (_get_property_live) and DELETE (_archive_property_live) helpers. Dry-run (the default)
+    prints the DELETE it would issue and returns 0 -- no network write."""
+    url_desc = f"/crm/v3/properties/{object_type}/{name}"
+    live = _get_property_live(object_type, name)
+    if live is None:
+        print(f"{object_type}/{name} is already absent (404) -- nothing to archive.")
+        return 0
+    if live.get("hubspotDefined"):
+        print(f"REFUSED to archive {object_type}/{name}: hubspotDefined=true "
+              "(belt-and-braces -- never touch a native property even by name)")
+        return 1
+
+    if not live_writes:
+        print(json.dumps({"dry_run": True, "method": "DELETE", "url": url_desc}, indent=2))
+        print("DRY RUN (default) -- set DRY_RUN=false AND ALLOW_HUBSPOT_PROPERTY_WRITES=true "
+              "to archive.")
+        return 0
+
+    status = _archive_property_live(object_type, name)
+    print(f"DELETE {url_desc} -> HTTP {status}")
+
+    # Independent re-read, never the DELETE's own response body.
+    after = _get_property_live(object_type, name)
+    ok = after is None
+    print(f"verified gone by re-read (404): {ok}")
+    if not ok:
+        print(f"  !! live still present: {after}")
+    return 0 if ok else 1
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--live", action="store_true",
@@ -161,6 +205,12 @@ def main(argv=None) -> int:
     parser.add_argument("--confirm", default=None,
                          help="Pre-supplied typed confirmation (for non-interactive callers). "
                               "Must be exactly 'yes' to proceed with --live.")
+    parser.add_argument("--archive-property", default=None,
+                         help="Archive a single property by name (Phase 50 Plan 05, D-06) -- "
+                              "independent of the undo-manifest bulk rollback below. Gated by "
+                              "DRY_RUN=false AND ALLOW_HUBSPOT_PROPERTY_WRITES=true.")
+    parser.add_argument("--object-type", default="companies",
+                         help="Object type for --archive-property (default: companies).")
     args = parser.parse_args(argv)
 
     if not _has_credentials():
@@ -171,6 +221,9 @@ def main(argv=None) -> int:
         print(f"REFUSED: HUBSPOT_PORTAL_ID does not match the expected portal "
               f"({EXPECTED_PORTAL_ID}). No API call made.")
         return 1
+
+    if args.archive_property:
+        return archive_one_property(args.object_type, args.archive_property, _writes_allowed())
 
     manifest_path = Path(args.manifest) if args.manifest else find_latest_manifest()
     if not manifest_path or not manifest_path.exists():

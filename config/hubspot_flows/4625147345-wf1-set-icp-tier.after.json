@@ -302,11 +302,11 @@
   },
   "flowType": "WORKFLOW",
   "id": "4625147345",
-  "isEnabled": true,
+  "isEnabled": false,
   "name": "WF1 Set ICP Tier based on ICP Score",
   "nextAvailableActionId": "9",
   "objectTypeId": "0-2",
-  "revisionId": "22",
+  "revisionId": "23",
   "startActionId": "2",
   "timeWindows": [],
   "type": "PLATFORM_FLOW"

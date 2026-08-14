@@ -70,11 +70,54 @@ def live_formula(url: str) -> str:
     return r.json().get("calculationFormula")
 
 
+def live_label(url: str) -> str:
+    r = requests.get(url, headers=hs_headers(), timeout=30)
+    r.raise_for_status()
+    return r.json().get("label")
+
+
+def sync_label(url: str, want_label: str) -> int:
+    """Phase 50 Plan 05 (D-15's fallback) -- PATCH only the property's display label, never
+    its internal name (immutable) or its calculationFormula. Reuses this script's existing
+    ALLOW_FORMULA_WRITE gate and independent-re-read verification, through the same PATCH
+    path as the formula sync below -- --label sends {"label": TEXT} instead of
+    {"calculationFormula": ...}."""
+    have = live_label(url)
+    print(f"want label: {want_label!r}")
+    print(f"live label: {have!r}")
+    if have == want_label:
+        print("in sync -- nothing to do.")
+        return 0
+
+    if os.getenv("ALLOW_FORMULA_WRITE") != "true":
+        print("\nDRY RUN (set ALLOW_FORMULA_WRITE=true to apply):")
+        print(json.dumps({"method": "PATCH", "url": url,
+                          "payload": {"label": want_label}}, indent=2))
+        return 0
+
+    r = requests.patch(url, headers=hs_headers(), json={"label": want_label}, timeout=30)
+    print(f"PATCH {r.status_code}")
+    if r.status_code not in (200, 201, 204):
+        print(r.text[:500])
+        return 1
+
+    # Independent re-read, not the PATCH's own response body.
+    back = live_label(url)
+    ok = back == want_label
+    print(f"verified by re-read: {ok}")
+    if not ok:
+        print(f"  !! live is now: {back}")
+    return 0 if ok else 1
+
+
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                       formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--property", default=DEFAULT_PROPERTY,
                          help=f"Company property name to sync (default: {DEFAULT_PROPERTY}).")
+    parser.add_argument("--label", default=None,
+                         help="If set, sync only the property's display label to this text "
+                              "instead of its calculationFormula (Phase 50 Plan 05, D-15).")
     args = parser.parse_args(argv)
 
     archive = archive_path(args.property)
@@ -87,6 +130,9 @@ def main(argv=None) -> int:
         print(f"REFUSED: HUBSPOT_PORTAL_ID does not match {EXPECTED_PORTAL_ID}. "
               "No API call made.")
         return 1
+
+    if args.label is not None:
+        return sync_label(url, args.label)
 
     want = archived_formula(archive)
     have = live_formula(url)

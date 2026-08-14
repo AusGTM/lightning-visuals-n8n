@@ -80,7 +80,6 @@ DO_NOT_ARCHIVE_COMPANY_PROPERTIES = frozenset({
     "produces_content_score",
     "gambling_score",
     "lv_icp_fit_score",
-    "lv_icp_tier",
     "lv_anti_icp_flag",
     "lv_anti_icp_flag_num",
     "lv_org_type",
@@ -88,15 +87,27 @@ DO_NOT_ARCHIVE_COMPANY_PROPERTIES = frozenset({
     "lv_country_region_normalized",
 })
 
-# D-01 -- the six live company scoring flows. Mirrors scripts/fetch_hubspot_flow.py's
-# FLOW_SLUGS mapping (four original + two added in Phase 40: produces-content, gambling).
+# D-01 -- the five remaining live company scoring flows. Mirrors
+# scripts/fetch_hubspot_flow.py's FLOW_SLUGS mapping minus 4625147345 (WF1), which moved to
+# RETIRED_FLOW_IDS below in Phase 50 Plan 05 (D-08).
 DO_NOT_ARCHIVE_FLOW_IDS = {
     "4626124224": "org-type-score",
     "4626722240": "geography-score",
     "4626722237": "annual-revenue-score",
-    "4625147345": "wf1-set-icp-tier",
     "4634822079": "produces-content-score",
     "4634822085": "gambling-score",
+}
+
+# Phase 50 Plan 05 (D-08, D-17 item 2) -- lv_icp_tier is archived and WF1 is switched off but
+# its DEFINITION is kept, never deleted. A flow moved here carries a DIFFERENT invariant than
+# DO_NOT_ARCHIVE_FLOW_IDS: "kept but deliberately off" -- live AND disabled -- rather than
+# "live and enabled". Damage for a retired flow means it was deleted OR re-enabled, either of
+# which puts a second writer back in play alongside lv_icp_tier_derived (D-08: "not deleted,
+# not left running alongside the derived property"). The prior conjunction
+# (`f["live"] and f["is_enabled"]`) has no way to express "kept but off"; this structure and
+# _compute_do_not_archive's separate fold give that state its own truth value.
+RETIRED_FLOW_IDS = {
+    "4625147345": "wf1-set-icp-tier",
 }
 
 # D-04's full-mirror scope for companies: the eleven do-not-archive names minus the one
@@ -125,15 +136,18 @@ D04_COMPANY_PROPERTY_SCOPE = frozenset(
 ACCEPTED_DIVERGENCES = [
     {
         "id": "PARITY-01-tier-label",
-        "property": "lv_icp_tier",
+        "property": "lv_icp_tier_derived",
         "description": (
-            "Live lv_icp_tier enum carries five values (A, B, C, D, Unscored). "
-            "config/icp_scoring.yaml's recommended_motion map additionally names a sixth "
-            "tier label, 'Needs Review', that the live enum does not have. This was "
-            "deliberately deferred in Phase 40 (40-06-SUMMARY.md, F8/ENGINE-07) and is a "
-            "documented, accepted divergence -- not a defect for this phase. Fixing it "
-            "would require a portal-side enum-option addition, which D-05's no-mutation "
-            "reconciliation does not authorize and D-07/D-08 do not cover."
+            "lv_icp_tier_derived's calculated ladder carries five labels (A, B, C, D, "
+            "Unscored) -- deliberately mirroring the retired lv_icp_tier enum's five values "
+            "(D-09), not the six recommended_motion labels config/icp_scoring.yaml's "
+            "recommended_motion map names. That map additionally names a sixth label, 'Needs "
+            "Review', which the derived ladder does not produce. Originally deferred in "
+            "Phase 40 (40-06-SUMMARY.md, F8/ENGINE-07) against the old enum; Phase 50 (D-09) "
+            "deliberately carried the same divergence into the derived property rather than "
+            "adding the sixth label alongside the mechanism change, to keep the derivation "
+            "change attributable to the mechanism, not a smuggled rubric change. Still a "
+            "documented, accepted divergence -- not a defect."
         ),
     },
 ]
@@ -251,8 +265,21 @@ def _compute_do_not_archive(live_companies_by_name: dict, live_flows_by_id: dict
             "live": live_flow is not None,
             "is_enabled": bool(live_flow.get("isEnabled")) if live_flow else False,
         })
-    ok = all(p["live"] for p in properties) and all(f["live"] and f["is_enabled"] for f in flows)
-    return {"properties": properties, "flows": flows, "ok": ok}
+    retired_flows = []
+    for flow_id, slug in RETIRED_FLOW_IDS.items():
+        live_flow = live_flows_by_id.get(flow_id)
+        retired_flows.append({
+            "id": flow_id,
+            "slug": slug,
+            "live": live_flow is not None,
+            "is_enabled": bool(live_flow.get("isEnabled")) if live_flow else False,
+        })
+    ok = (
+        all(p["live"] for p in properties)
+        and all(f["live"] and f["is_enabled"] for f in flows)
+        and all(rf["live"] and not rf["is_enabled"] for rf in retired_flows)
+    )
+    return {"properties": properties, "flows": flows, "retired_flows": retired_flows, "ok": ok}
 
 
 def build_report(desired: dict, live_companies: list, live_contacts: list, live_flows: list,
