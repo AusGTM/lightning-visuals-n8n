@@ -39,15 +39,22 @@ DEFAULT_OUT_DIR = ROOT / "config" / "hubspot_flows"
 EXPECTED_PORTAL_ID = "22617666"
 
 # HANDOVER-2026-08-06-icp-scoring.md §10.1 (that file was removed at the v0.7 close; it is
-# in git history, and PORTAL-FACTS.md carries the live flow inventory) — the six company scoring flows this phase
-# remediates (four original + two added by 40-04: produces-content, gambling). Module
-# constant, no CLI override for the slug mapping (the --flow-id list is the
+# in git history, and PORTAL-FACTS.md carries the live flow inventory) — the five LIVE company
+# scoring flows (four original + one added by 40-04: produces-content; gambling-score is the
+# sixth). Module constant, no CLI override for the slug mapping (the --flow-id list is the
 # operator-facing override surface; slugs stay tied to these known ids).
+#
+# Phase 50 Plan 05 (D-24): WF1 (4625147345, "wf1-set-icp-tier") was DELETED live, not merely
+# disabled -- removed from this default set so a no-args run of this script does not crash on
+# WF1's now-permanent 404 (fetch_flow() calls raise_for_status()). Its before/after JSON
+# snapshots remain committed at config/hubspot_flows/4625147345-wf1-set-icp-tier.*.json as the
+# only surviving record and rebuild source; they are simply never re-fetched by this script
+# again, since there is nothing left to fetch. An explicit `--flow-id 4625147345` invocation
+# still works mechanically (falls back to slug_for's id-as-slug default) but will 404 live.
 FLOW_SLUGS = {
     "4626124224": "org-type-score",
     "4626722240": "geography-score",
     "4626722237": "annual-revenue-score",
-    "4625147345": "wf1-set-icp-tier",
     "4634822079": "produces-content-score",
     "4634822085": "gambling-score",
 }
