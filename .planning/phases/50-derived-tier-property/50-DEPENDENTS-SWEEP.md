@@ -28,3 +28,36 @@ Saved views (companies index page) and reports/dashboards have no documented pub
 ### Post-migration re-run (D-13)
 
 Re-run same date as the manual check above, after the operator's view migration, to confirm the migration did not surface (or leave behind) any scripted dependent. **No delta:** scripted findings are byte-for-byte identical to the pre-migration run committed in `f27fef3` -- still 0 lists / 10 flows scanned, same 5 findings, all on WF1 (`4625147345`) itself, WF1's own known writer role (not an unexpected dependent; D-06/D-08 already cover its disposition). This is expected: the migration touched saved views only, which this script cannot see either before or after -- it is not evidence the view migration happened, only evidence that migrating views did not disturb the scripted (list/flow) surface.
+
+### Pre-cutover re-run (Plan 04, D-13)
+
+**Scripted sweep run:** 2026-08-14T00:07:12.902593+00:00
+**Lists scanned:** 0
+**Flows scanned:** 10
+
+Re-run immediately before cutover, as D-13 requires, to catch anything added to the portal
+since the post-migration re-run above.
+
+**No delta.** Scripted findings are byte-for-byte identical to both prior runs on this page --
+still 0 lists / 10 flows scanned, the same 5 findings, all on WF1 (`4625147345`) itself at the
+same 5 action paths (`$.actions[2..6].fields.property_name`). Nothing new appeared.
+
+| Object Type | ID | Name | JSON Path |
+|---|---|---|---|
+| flow | 4625147345 | WF1 Set ICP Tier based on ICP Score | `$.actions[2].fields.property_name` |
+| flow | 4625147345 | WF1 Set ICP Tier based on ICP Score | `$.actions[3].fields.property_name` |
+| flow | 4625147345 | WF1 Set ICP Tier based on ICP Score | `$.actions[4].fields.property_name` |
+| flow | 4625147345 | WF1 Set ICP Tier based on ICP Score | `$.actions[5].fields.property_name` |
+| flow | 4625147345 | WF1 Set ICP Tier based on ICP Score | `$.actions[6].fields.property_name` |
+
+**Manual half: not independently re-confirmed by this re-run.** `scripts/sweep_tier_dependents.py`
+cannot see saved views or reports/dashboards (D-12/D-13, no public API -- Q3); its own rendered
+manual section reads `UNCHECKED` on every invocation because it has no way to read back a prior
+attestation. The manual-check status above this section stands as the current record, unchanged
+by this pass:
+
+- **Saved views:** CHECKED and MIGRATED, per the operator's 2026-08-14 attestation above. Not
+  re-confirmed in this pass -- no new operator statement was sought or given for this re-run.
+- **Reports / dashboards: still UNCONFIRMED.** This residual is carried forward intact, exactly
+  as it stood after the post-migration re-run -- not resolved, not narrowed, not inferred either
+  way. It must reach Plan 05's one-way retirement decision unchanged.
