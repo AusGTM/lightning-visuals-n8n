@@ -257,7 +257,13 @@ def test_do_not_archive_company_properties_appear_in_committed_snapshot():
     )
 
 
-# --- RETIRED_FLOW_IDS: live-AND-disabled invariant (D-08, Phase 50 Plan 05) -------------
+# --- RETIRED_FLOW_IDS: deleted invariant (D-24, Phase 50 Plan 05, overrides D-08) -------
+#
+# D-24 flipped this invariant: the operator authorised DELETING WF1 outright (not merely
+# disabling it) after the archive of lv_icp_tier was blocked by CANNOT_DELETE_PROPERTY_IN_USE
+# while any workflow action -- disabled or not -- still referenced it. A retired flow's
+# healthy state is now "not live at all" (deleted); live in ANY state (enabled or disabled)
+# is damage.
 
 def _all_live_companies():
     return {name: {"name": name} for name in DO_NOT_ARCHIVE_COMPANY_PROPERTIES}
@@ -270,22 +276,24 @@ def _all_live_flows_enabled():
     }
 
 
-def test_retired_flow_live_and_disabled_is_ok():
+def test_retired_flow_deleted_is_ok():
     live_flows = _all_live_flows_enabled()
-    live_flows["4625147345"] = {"id": "4625147345", "isEnabled": False}
+    # "4625147345" deliberately absent -- deleted, per D-24.
     result = _compute_do_not_archive(_all_live_companies(), live_flows)
     assert result["ok"] is True
     retired = next(rf for rf in result["retired_flows"] if rf["id"] == "4625147345")
-    assert retired["live"] is True and retired["is_enabled"] is False
+    assert retired["live"] is False
 
 
-def test_retired_flow_absent_is_not_ok():
+def test_retired_flow_live_and_disabled_is_not_ok():
+    """Pre-D-24 this was the healthy state (kept but off). Post-D-24 it means the delete
+    did not take, or the flow was somehow recreated at this exact id -- damage either way."""
     live_flows = _all_live_flows_enabled()
-    # "4625147345" deliberately absent -- deleted, not just disabled.
+    live_flows["4625147345"] = {"id": "4625147345", "isEnabled": False}
     result = _compute_do_not_archive(_all_live_companies(), live_flows)
     assert result["ok"] is False
     retired = next(rf for rf in result["retired_flows"] if rf["id"] == "4625147345")
-    assert retired["live"] is False
+    assert retired["live"] is True and retired["is_enabled"] is False
 
 
 def test_retired_flow_live_and_enabled_is_not_ok():

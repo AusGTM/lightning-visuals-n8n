@@ -232,12 +232,46 @@ silent about the *value*.
   "known exceptions" generically.
   — **Reversibility:** cheap — narrowing the set back is a one-line edit and a re-run.
 
+### Amendment 2026-08-14 (operator-directed, mid-execution) — D-24
+
+- **D-24: D-08 overridden — WF1 deleted, not merely disabled.** Plan 05's first live window
+  switched WF1 (`4625147345`) off (D-08 as originally written) and then attempted to archive
+  `lv_icp_tier` (D-06). The archive was rejected live: `DELETE
+  /crm/v3/properties/companies/lv_icp_tier` returned HTTP 400
+  `PropertyValidationError.CANNOT_DELETE_PROPERTY_IN_USE` — HubSpot counts a workflow action's
+  reference to a property as "in use" regardless of whether the workflow is enabled, so
+  disabling WF1 did not release the reference. Neither `50-RESEARCH.md` nor `50-NULL-PROBE.json`
+  (RESEARCH Q6, which answered whether the DELETE is a soft archive) anticipated an in-use
+  rejection — this was new information discovered at execution time, not a documented risk the
+  operator had already weighed when D-08 was written.
+  — Presented with three options (accept the interim partial state; edit WF1's tier-write
+  actions to strip the property reference, forfeiting the proven one-action rollback; or delete
+  WF1 entirely, directly overriding D-08's "not deleted" prohibition), **the operator chose
+  deletion**, explicitly and in words, with the consequence stated plainly first: D-08's
+  "definition kept" is overridden, and rollback becomes rebuilding the workflow from
+  `config/hubspot_flows/4625147345-wf1-set-icp-tier.before.json` via `POST
+  /automation/v4/flows` rather than flipping one switch (a new flow id, no proven mechanism to
+  restore the manual-enrolment step described in `docs/OPERATOR-TIER-ROLLBACK.md`'s original
+  Step 2 primary).
+  — Executed same-date, second live window: WF1 deleted (`DELETE
+  /automation/v4/flows/4625147345` → 204, independently re-read → 404); `lv_icp_tier` archived
+  cleanly on the immediate retry (`DELETE /crm/v3/properties/companies/lv_icp_tier` → 204,
+  confirmed absent and present under `?archived=true`); `lv_icp_tier_derived` relabelled to
+  "ICP Tier" per D-15's fallback in the same window. Full record:
+  `50-RETIREMENT-RECORD.md`'s "D-24 resolution" section.
+  — **Reversibility:** one-way for WF1 (a deleted flow cannot be restored at the same id; only
+  rebuilt fresh from the committed JSON), compounding the archive's own one-way nature (D-06).
+  This is now the phase's most consequential irreversible act, superseding D-08's original
+  "reversible, one action" characterization of WF1's disposition.
+
 ### Claude's Discretion
 
 None. Every question in this discussion was answered with an explicit choice — no "you decide"
 option was taken. Where judgement remains it is bounded by a named fallback (D-04, D-15) rather
 than left open. D-20 and D-21 were likewise explicit operator choices, made mid-execution when
-live evidence contradicted the original decisions.
+live evidence contradicted the original decisions. D-24 is the same pattern: an explicit
+operator override, made mid-execution, when a live platform constraint contradicted D-08's
+original "kept, not deleted" assumption.
 
 </decisions>
 

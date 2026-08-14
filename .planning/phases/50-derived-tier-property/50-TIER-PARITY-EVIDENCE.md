@@ -137,3 +137,34 @@ Each is verified by read-back and by nothing else -- no PATCH, no event, no enro
 
 - **This census is a snapshot of one live run, not a monitor.** Both distributions are re-derived live in this same invocation; a later run against a changed population may differ.
 - **The never-scored count above is informational, not part of the movement verdict.** It is a disclosed side effect of the formula's null-handling variant, not a tier movement within the scored population being compared.
+
+---
+
+## AMENDMENT 2026-08-14 (post-D-24 retirement) — gate re-run after `lv_icp_tier` was archived
+
+D-24 authorised deleting WF1 and archiving `lv_icp_tier` (`50-RETIREMENT-RECORD.md`). This gate
+was re-run live afterward, expecting the comparator's read of `lv_icp_tier` to degrade to null on
+every record (archived properties commonly drop out of default object reads) — that expectation
+was WRONG and is corrected here rather than silently discarded.
+
+**Finding: an archived property's last value is still returned by a normal object GET/search when
+the property is explicitly named in `properties=`.** `scripts/check_tier_derived_parity.py`
+explicitly requests `lv_icp_tier` by name (`FETCH_PROPS`), and every one of the 66 scored records
+returned its correct pre-archive value — `lv_icp_tier` is not merely present in the
+`?archived=true` schema listing (which was already known and disclosed), its **per-record values**
+also remain live-readable this way. This was not verified before the archive and is recorded here
+as a live, positive finding, not an assumption carried over from before.
+
+**Re-run result: `population=66 match=61 expected_mismatch=5 defect=0` — byte-identical
+classification to the pre-archive run above.** Output written to a scratch path
+(`/tmp/post-archive-parity-check.md`), not over this artifact, per this phase's evidence-immutability
+convention — the pre-archive run above remains the D-07 verdict of record; this amendment
+re-confirms it still holds, it does not replace it.
+
+**What this does and does not mean going forward:** this is a live re-confirmation on
+2026-08-14, immediately after the archive — it says the archived property's value is
+*currently* still readable by name, not that this is guaranteed to remain true indefinitely
+(HubSpot's archived-property retention window is not documented anywhere this repo has found).
+Do not treat this as a standing guarantee for any future comparator; `lv_icp_tier_derived` is
+already the sole functional source of truth (WF1 no longer exists to write the enum at all), so
+nothing in the live pipeline depends on this continuing to work.

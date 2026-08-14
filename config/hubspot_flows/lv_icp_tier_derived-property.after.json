@@ -13,7 +13,7 @@
   "groupName": "companyinformation",
   "hasUniqueValue": false,
   "hidden": false,
-  "label": "ICP Tier (Derived)",
+  "label": "ICP Tier",
   "modificationMetadata": {
     "archivable": true,
     "readOnlyDefinition": false,
@@ -22,6 +22,6 @@
   "name": "lv_icp_tier_derived",
   "options": [],
   "type": "string",
-  "updatedAt": "2026-08-13T23:19:45.872Z",
+  "updatedAt": "2026-08-14T02:18:12.070Z",
   "updatedUserId": "87581729"
 }

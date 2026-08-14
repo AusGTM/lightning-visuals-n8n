@@ -6,8 +6,131 @@ WF1 off, archive `lv_icp_tier`, relabel the derived property to 'ICP Tier' (D-15
 **D-07 verdict this was taken against:** `50-TIER-PARITY-EVIDENCE.md` — "PASS -- zero defect rows;
 all 5 known stuck records read the exact expected mismatch."
 
-## Outcome: PARTIAL — WF1 off (complete); archive BLOCKED by a platform constraint not
-anticipated in this phase's research; relabel DEFERRED as a consequence
+## Outcome: COMPLETE (D-24 override) — WF1 deleted, `lv_icp_tier` archived, derived property
+relabelled "ICP Tier"
+
+**This closes the phase.** The session below narrates in order: the first attempt (WF1 switched
+off, archive blocked), the blocker, and the operator's D-24 resolution (delete WF1 outright,
+overriding D-08) that unblocked and completed everything `retire-and-relabel` originally
+authorised. Nothing in the "blocked" narrative below is stale error — it is exactly what
+happened, in the order it happened, and the reason a second live window (this one) was needed.
+
+### D-24 resolution (2026-08-14, second live window this same date)
+
+The operator was presented with three options at the blocker (see "What a future session needs
+to resolve" below, as it stood at the time): accept the interim state, edit WF1's tier-write
+actions to strip the property reference, or delete WF1 entirely. **The operator chose deletion,
+explicitly overriding D-08's "not deleted" prohibition**, accepting the stated consequence that
+rollback becomes rebuild-from-JSON (`config/hubspot_flows/4625147345-wf1-set-icp-tier.before.json`
+→ `POST /automation/v4/flows`) rather than a one-action re-enable.
+
+**Tooling built first, disarmed.** `scripts/put_hubspot_flow.py` gained a `--delete` mode
+(`DELETE /automation/v4/flows/{flow_id}`, no body — `--file` made optional for this action only),
+reusing the script's existing two-key gate (`DRY_RUN=false` AND `ALLOW_HUBSPOT_FLOW_WRITE=true`)
+rather than introducing a third gate idiom. Dry-run verified first.
+
+**Armed live mutation 1 — delete WF1.**
+```
+ALLOW_HUBSPOT_FLOW_WRITE=true DRY_RUN=false .venv/bin/python -c "... --flow-id 4625147345 --delete ..."
+-> {"status_code": 204, "text": ""}
+```
+**Independent re-read**: `GET /automation/v4/flows/4625147345` → **404**. WF1 no longer exists.
+The before/after JSON snapshots committed at the end of the first session (commit `449b306`) were
+confirmed present at HEAD before this delete ran — they are now the only copy of WF1's definition,
+and the sole rebuild source if it is ever recreated.
+
+**Armed live mutation 2 — archive `lv_icp_tier`, retried.** With WF1 gone, the same tool from the
+first session was re-run unchanged:
+```
+DRY_RUN=false ALLOW_HUBSPOT_PROPERTY_WRITES=true .venv/bin/python -c "... --archive-property lv_icp_tier ..."
+-> DELETE /crm/v3/properties/companies/lv_icp_tier -> HTTP 204
+-> verified gone by re-read (404): True
+```
+Succeeded on the **first retry** — no 30-60s settling wait was needed; the `CANNOT_DELETE_
+PROPERTY_IN_USE` counter cleared the moment WF1's action reference was gone. **Independent
+re-read via the archived-properties listing** (`GET /crm/v3/properties/companies?archived=true`,
+not the single-property GET, which would now itself 404): `lv_icp_tier` present, `archived: true`,
+`archivedAt: "2026-08-14T02:17:57.731Z"`. That entry was written verbatim to
+`config/hubspot_flows/lv_icp_tier-property.after.json`, replacing the pre-archive live snapshot.
+
+**Armed live mutation 3 — relabel `lv_icp_tier_derived` to "ICP Tier" (D-15's fallback).**
+```
+ALLOW_FORMULA_WRITE=true .venv/bin/python -c "... --property lv_icp_tier_derived --label 'ICP Tier' ..."
+-> PATCH 200
+-> verified by re-read: True
+```
+Refreshed `config/hubspot_flows/lv_icp_tier_derived-property.after.json` from the live re-read
+(`label: "ICP Tier"`, internal name unchanged, `readOnlyValue: true`, formula unchanged).
+
+**D-22 poll (two reads, ~40s apart) on three known records, confirming the relabel and archive
+disturbed nothing else:**
+
+| Record | `lv_icp_tier_derived` | `lv_icp_fit_score` | `lv_anti_icp_flag_num` | Class |
+|---|---|---|---|---|
+| `9605273630` Port Macquarie Race Club | B (both reads) | 45 | null | known stuck, correctly B |
+| `18047161864` Simtech LED | D (both reads) | 40 | 1 | vetoed hardware, correctly D |
+| `9604614548` Melbourne Racing Club | C (both reads) | 35 | 0 | match, non-vetoed |
+
+Byte-identical both reads — nothing regressed.
+
+**Config sync verified.** `config/hubspot_properties.yaml`: `lv_icp_tier` declaration removed,
+`lv_icp_tier_derived`'s label changed to `ICP Tier`. `scripts/sync_hubspot_properties.py` dry-run
+after the edit: `Properties to create (0): []` for both companies and contacts — the yaml does
+not propose re-creating the property it just archived.
+
+**`scripts/check_schema_drift.py` re-run live, post-retirement:**
+```
+summary: {'in_sync': 50, 'documented_gap': 5} | do_not_archive.ok=True | exit_code=0
+```
+`do_not_archive.ok=True` now asserts the D-24-flipped invariant: `RETIRED_FLOW_IDS`'s healthy
+state is **absence** (deleted), not "live and disabled" as originally designed under D-08 — see
+the guard-edit section below for the full before/after of that flip, including the three
+offline tests rewritten to pin the new semantics.
+
+**D-07's gate re-run live, post-archive — unexpected positive finding.**
+`scripts/check_tier_derived_parity.py` was re-run (output to a scratch path, not overwriting the
+evidence artifact) expecting `lv_icp_tier` to read null on every record once archived. It did
+not: **an archived property's last value is still returned by a normal object GET/search when
+the property is explicitly named in `properties=`** — not just present in the
+`?archived=true` schema listing (already known), its per-record *values* remain readable the
+same way. Re-run result: `population=66 match=61 expected_mismatch=5 defect=0` — byte-identical
+classification to the pre-archive gate. Full write-up, including the explicit caveat that this
+is a live finding on this date and not asserted as a standing guarantee, appended to
+`50-TIER-PARITY-EVIDENCE.md`'s AMENDMENT 2026-08-14 section.
+
+**Second D-16 deviation — the pipeline→calc-engine chain proven end-to-end (recorded here per
+the operator's explicit request).** D-16 declares zero company write windows for this phase; two
+deviations have now been authorised and BOTH ARE SPENT — no further company record writes remain
+available under this phase's authorisation:
+1. **50-06's 6-record backfill** (`lv_anti_icp_flag_num` mirror, the vetoed population) —
+   already recorded in that plan's summary.
+2. **This session's 1-record recompute proof**, subject Melbourne Racing Club `9604614548` — a
+   deliberate `match` (`C`/`C`) record, NOT one of the 5 pinned stuck records, so D-07's gate was
+   left undisturbed. Armed `scripts/june_run_arm.py --ids 9604614548` (allowlist of exactly one
+   id), dispatched an armed recompute POST (`recompute=True` — 0 provider credits, 0 Anthropic
+   calls, 1 n8n execution), then disarmed immediately and verified the disarm by read-back
+   (`ALLOW_HUBSPOT_RECORD_WRITES: "false"`, empty allowlists). Read-back:
+   `lv_anti_icp_flag_num` moved **null → `"0"`**, agreeing with `lv_anti_icp_flag='false'`;
+   `lv_icp_fit_score` 35, `lv_icp_tier` C, `lv_icp_tier_derived` C — all unchanged.
+   **What this proves, stated precisely:** the pipeline writes the numeric mirror onto a real
+   record end-to-end — not just to the node's output (execution `11879`, an earlier UNARMED
+   recompute, proved emission but never landed a write). The `"0"` branch is **directly
+   observed** on this record. The `"1"` branch (a vetoed record) is **inferred**, not
+   independently re-observed here — from the same shared derivation (`Decide Company Action` /
+   `src/icp_scoring.py` compute the veto once and serialize it twice) plus the drift tests in
+   both engines that assert the boolean and its mirror always agree. Do not overstate this as a
+   second direct observation of the `"1"` branch; it is not one.
+
+### Historical narrative below — the first session's blocked attempt
+
+The section immediately below ("Armed live mutation 1/2", "Relabel: DEFERRED", etc.) is the
+UNEDITED record of the first live window, before the blocker was discovered. It is kept verbatim
+as the accurate account of what was tried and why it stopped; the D-24 resolution above is what
+happened next, in a second live window the same date.
+
+## Outcome (as it stood after the FIRST live window): PARTIAL — WF1 off (complete); archive
+BLOCKED by a platform constraint not anticipated in this phase's research; relabel DEFERRED as a
+consequence
 
 This plan does not close in the fully-authorised `retire-and-relabel` end state. It closes in a
 new, previously undocumented intermediate state: **WF1 is off (D-08 satisfied in full), but
@@ -140,46 +263,53 @@ the yaml, so its continued (unarchived) live presence does not register as drift
 known leniency in the comparator's scope, not a defect introduced by this session; the comparator
 was never asked to track "declared and live but functionally orphaned."
 
-## Reports/dashboards residual — accepted risk (unchanged from the operator's original disclosure,
-## now describing the interim rather than the final state)
+## Reports/dashboards residual — accepted risk, STILL UNRESOLVED after the completed archive
+
+This section is not superseded by the D-24 resolution above — it is the one part of the original
+disclosure that stays exactly as stated, because archiving the property does not itself resolve
+it. Do not read the phase's completion as having closed this risk.
 
 **What was confirmed:** Saved views were found and migrated — operator-attested 2026-08-14 (per
 `50-DEPENDENTS-SWEEP.md`'s dated pre-cutover re-run).
 
-**What was NOT confirmed:** Reports and dashboards — HubSpot exposes no public API for enumerating
-either, so this category was never confirmed clean or dirty. This remains true regardless of
-whether the archive completes; it does not become more or less risky because the archive is
-currently blocked.
+**What was NOT confirmed, and remains not confirmed now that the archive has happened:** Reports
+and dashboards — HubSpot exposes no public API for enumerating either, so this category was never
+confirmed clean or dirty, before or after the archive.
 
-**Recovery path, as originally disclosed:** because the archive did not happen, this recovery path
-is currently moot — `lv_icp_tier` is still live, so any report or dashboard still pointed at it
-continues to work exactly as before, with no breakage. If a future session resolves the WF1-usage
-blocker and archives the property, the original disclosure applies unchanged: the archived
-property and its historical data persist under `GET /crm/v3/properties/companies?archived=true`,
-so a broken report can be repointed to `lv_icp_tier_derived` after the fact — but it breaks
-visibly and without warning first. Do not treat the interim safety (nothing currently breaks) as
-evidence the underlying unknown has been resolved; it has not.
+**Recovery path — this is now the live, active path, not a hypothetical.** `lv_icp_tier` is
+archived. Any report or dashboard still pointed at it may now be broken. The disclosed recovery
+remains: the archived property and its historical data persist under
+`GET /crm/v3/properties/companies?archived=true`, so a broken report can be repointed to
+`lv_icp_tier_derived` after the fact — but it breaks visibly and without warning first, and this
+record contains no evidence either way about whether any report or dashboard actually references
+`lv_icp_tier`. **Proceed and accept the risk** was the operator's earlier stated choice for this
+residual; nothing in this session narrows or resolves it further.
 
-## What a future session needs to resolve before re-attempting the archive
+## Resolution record — how the blocker below was actually resolved (superseded by D-24 above)
 
-The archive cannot proceed until one of the following is authorised at a fresh decision
-checkpoint (none is authorised by this record):
+The three options originally offered here (kept verbatim below for the historical record) were:
+accept the interim state, edit WF1's actions to strip the property reference, or delete WF1
+entirely. **The operator selected option 3 — delete WF1 entirely — explicitly overriding D-08.**
+See "D-24 resolution" at the top of this document for the full execution record.
 
 1. **Accept the interim state as the phase's closing state.** WF1 stays off with its definition
    intact; `lv_icp_tier` stays live but frozen (no writer — anyone still reading it gets silently
    stale data, since nothing updates it going forward); archive and relabel are deferred to a
    later phase that first resolves the WF1-usage reference. This is the D-06-style coherent
    partial state, just triggered by a platform constraint rather than a failed D-07 gate.
+   **NOT SELECTED.**
 2. **Authorise editing WF1's tier-write actions** (actions 4–8, which each write a static value to
    `lv_icp_tier`) to remove the property reference, keeping the flow object itself. This unblocks
    the archive but forfeits the proven one-action-rollback mechanism: re-enabling WF1 after this
    edit would no longer write anything to `lv_icp_tier` (which no longer exists) or anywhere else
-   — it becomes a no-op shell, not a real rollback path. Requires an explicit operator decision;
-   not something this plan's `retire-and-relabel` selection authorised.
+   — it becomes a no-op shell, not a real rollback path. **NOT SELECTED.**
 3. **Authorise deleting WF1 entirely.** Directly overrides D-08 and this plan's own prohibition
-   ("WF1 4625147345 is not deleted"). Requires the operator to say so in words, not to be inferred
-   from any existing authorisation.
+   ("WF1 4625147345 is not deleted"). **SELECTED.** Executed as recorded above: WF1 deleted
+   (`204`, independently re-read `404`), `lv_icp_tier` archived cleanly on retry, and
+   `lv_icp_tier_derived` relabelled "ICP Tier" alongside it in the same live window, per the
+   instruction below (kept because it was followed).
 
 Whichever path is chosen, the relabel of `lv_icp_tier_derived` should ride with it (relabel alone,
 with the old enum still live, creates the two-properties-same-label confusion noted above; relabel
-alongside a resolved archive is unambiguous).
+alongside a resolved archive is unambiguous). — Followed: the relabel rode with the archive in the
+same window, per D-24's own resolution above.

@@ -2,6 +2,55 @@
 
 **Applies from:** Phase 50 Plan 04 (D-18, `.planning/phases/50-derived-tier-property/50-CONTEXT.md`)
 
+## AMENDMENT 2026-08-14 — D-24: WF1 no longer exists; both mechanisms below are GONE
+
+**Read this before anything else in this document.** Everything below this amendment describes
+a rollback mechanism that assumed WF1 (`4625147345`) was switched off but kept, per D-08. That
+assumption no longer holds: **D-24 (operator, 2026-08-14) explicitly overrode D-08 and WF1 was
+DELETED**, not merely disabled, after `lv_icp_tier`'s archive was rejected live
+(`CANNOT_DELETE_PROPERTY_IN_USE` while WF1's disabled actions still referenced the property).
+`lv_icp_tier` itself is now also archived. Full record: `50-RETIREMENT-RECORD.md`'s "D-24
+resolution" section.
+
+**Step 1 below ("re-enable WF1") no longer works — there is nothing to re-enable.** `GET
+/automation/v4/flows/4625147345` now returns 404. The one-action restore this runbook was built
+around does not exist anymore.
+
+**Step 2's PRIMARY mechanism (portal-UI manual enrolment, proven live 2026-08-14) is ALSO GONE.**
+It required WF1 to be on; WF1 does not exist. There is no flow to manually enrol a record into.
+
+**What "rollback" now actually means, stated plainly, not softened:**
+1. **Rebuild WF1 from JSON**, not restore it: `POST /automation/v4/flows` with the body archived
+   at `config/hubspot_flows/4625147345-wf1-set-icp-tier.before.json`. This creates a **new flow
+   id** — HubSpot does not let you recreate a flow at its old id. Every downstream reference to
+   `4625147345` (this runbook, `RETIRED_FLOW_IDS` in `scripts/check_schema_drift.py`, any saved
+   view or report that referenced the flow by id rather than by name) needs updating to the new
+   id.
+2. **`lv_icp_tier`'s tier-write actions target a property that is itself now archived.** Rebuilding
+   WF1 alone does not restore a working tier-write flow — `lv_icp_tier` must first be restored
+   from its archived state. **Whether HubSpot's archived-property restore path actually works for
+   this property has NOT been verified by this session or any prior one.** Do not assert it works;
+   treat it as unverified until someone runs it. If it does not restore, the rebuilt WF1 has
+   nothing to write to and the only path forward is creating `lv_icp_tier` fresh under a new name
+   (the original internal name may or may not be reusable after an archive — also unverified).
+3. **The proven manual-enrolment mechanism (Step 2 primary, below) cannot be re-proven without
+   first completing both 1 and 2** — and even then, it would need a fresh live proof, not a
+   citation of the 2026-08-14 drill, because that drill ran against the flow at its *original* id
+   before it was deleted.
+
+**What did NOT change:** `lv_icp_tier_derived` is unaffected by any of this. It is a calculated
+property that computes itself from live inputs with zero dependency on WF1, rebuilt or not. If
+`lv_icp_tier_derived` itself needs correcting, the fix is to the formula
+(`scripts/apply_fit_score_formula.py --property lv_icp_tier_derived`) or the underlying pipeline
+that writes its inputs — never a WF1-based rollback, rebuilt or original.
+
+**Do not attempt any step below without first re-reading this amendment and confirming which of
+the above three gaps you are actually able to close.** The rest of this document is kept
+unedited below as the historical record of the mechanism that existed before D-24, and as the
+starting point for a future rebuild — not as a runbook you can execute as written today.
+
+---
+
 This runbook exists for one reason: if the derived property (`lv_icp_tier_derived`) turns out
 to be wrong after cutover, "just turn WF1 back on" does **not** fix anything by itself. Read
 Step 2 before you run Step 1 — Step 1 alone is not the rollback.

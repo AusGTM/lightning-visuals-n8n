@@ -411,32 +411,6 @@ companies:
     fieldType: number
     groupName: companyinformation
     options: []
-  - name: lv_icp_tier
-    label: ICP Tier
-    type: enumeration
-    fieldType: select
-    groupName: companyinformation
-    options:
-    - label: A
-      value: A
-      displayOrder: 0
-      hidden: false
-    - label: B
-      value: B
-      displayOrder: 1
-      hidden: false
-    - label: C
-      value: C
-      displayOrder: 2
-      hidden: false
-    - label: D
-      value: D
-      displayOrder: 3
-      hidden: false
-    - label: Unscored
-      value: Unscored
-      displayOrder: 4
-      hidden: false
   - name: lv_icp_fit_score
     label: ICP Fit Score
     type: number
@@ -444,7 +418,7 @@ companies:
     groupName: companyinformation
     options: []
   - name: lv_icp_tier_derived
-    label: ICP Tier (Derived)
+    label: ICP Tier
     type: string
     fieldType: calculation_equation
     groupName: companyinformation

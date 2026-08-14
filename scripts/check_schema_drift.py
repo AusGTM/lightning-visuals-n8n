@@ -98,14 +98,23 @@ DO_NOT_ARCHIVE_FLOW_IDS = {
     "4634822085": "gambling-score",
 }
 
-# Phase 50 Plan 05 (D-08, D-17 item 2) -- lv_icp_tier is archived and WF1 is switched off but
-# its DEFINITION is kept, never deleted. A flow moved here carries a DIFFERENT invariant than
-# DO_NOT_ARCHIVE_FLOW_IDS: "kept but deliberately off" -- live AND disabled -- rather than
-# "live and enabled". Damage for a retired flow means it was deleted OR re-enabled, either of
-# which puts a second writer back in play alongside lv_icp_tier_derived (D-08: "not deleted,
-# not left running alongside the derived property"). The prior conjunction
-# (`f["live"] and f["is_enabled"]`) has no way to express "kept but off"; this structure and
-# _compute_do_not_archive's separate fold give that state its own truth value.
+# Phase 50 Plan 05 (D-08, D-17 item 2; superseded by D-24) -- ORIGINAL invariant (D-08):
+# lv_icp_tier archived, WF1 switched off but its DEFINITION kept, never deleted -- a flow
+# moved here carried "kept but deliberately off" (live AND disabled) as its damage
+# condition, distinct from DO_NOT_ARCHIVE_FLOW_IDS' "live and enabled".
+#
+# D-24 (operator, 2026-08-14) OVERRODE D-08: `DELETE /crm/v3/properties/companies/
+# lv_icp_tier` refused with CANNOT_DELETE_PROPERTY_IN_USE while ANY workflow action --
+# including a disabled one -- still referenced the property. The only way to unblock the
+# archive without editing WF1's actions (which would forfeit the proven one-action
+# rollback) was to delete WF1 entirely. The operator chose deletion explicitly, with the
+# stated consequence that rollback becomes rebuild-from-JSON
+# (`config/hubspot_flows/4625147345-wf1-set-icp-tier.before.json` -> `POST
+# /automation/v4/flows`) rather than flipping one switch. So the invariant for a name in
+# this dict is now the OPPOSITE of the original: NOT live is the healthy state (deleted,
+# as intended); live at all -- enabled OR disabled -- is damage, because it would mean the
+# delete did not take or the flow was somehow recreated at this exact id. The dict is kept
+# (not deleted) as the historical/rebuild-source record of which flow id this refers to.
 RETIRED_FLOW_IDS = {
     "4625147345": "wf1-set-icp-tier",
 }
@@ -277,7 +286,10 @@ def _compute_do_not_archive(live_companies_by_name: dict, live_flows_by_id: dict
     ok = (
         all(p["live"] for p in properties)
         and all(f["live"] and f["is_enabled"] for f in flows)
-        and all(rf["live"] and not rf["is_enabled"] for rf in retired_flows)
+        # D-24: a retired flow's healthy state is DELETED (not live at all) -- the
+        # opposite of the original D-08 "live and disabled" invariant. See
+        # RETIRED_FLOW_IDS' module comment.
+        and all(not rf["live"] for rf in retired_flows)
     )
     return {"properties": properties, "flows": flows, "retired_flows": retired_flows, "ok": ok}
 
