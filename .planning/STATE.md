@@ -5,10 +5,10 @@ milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 50
 current_phase_name: Derived Tier Property
 status: verifying
-stopped_at: "Halted 50-05: WF1 off live, lv_icp_tier archive blocked (see 50-RETIREMENT-RECORD.md)"
-last_updated: "2026-08-14T01:50:26.105Z"
-last_activity: 2026-08-13
-last_activity_desc: Phase 50 execution started
+stopped_at: "Completed 50-05-PLAN.md: D-24 override executed -- WF1 deleted, lv_icp_tier archived, lv_icp_tier_derived relabelled 'ICP Tier'. Phase 50 and v0.9 milestone plans all complete; ready for ship review."
+last_updated: "2026-08-14T02:25:48.966Z"
+last_activity: 2026-08-14
+last_activity_desc: Phase 50 Plan 05 complete -- D-24 override executed (WF1 deleted, lv_icp_tier archived, relabelled). Phase 50 and v0.9 milestone fully complete.
 progress:
   total_phases: 6
   completed_phases: 6
@@ -18,6 +18,35 @@ progress:
 ---
 
 # Project State
+
+## ✅ PHASE 50 — ALL 6 PLANS COMPLETE, RETIREMENT DONE (D-24 override) (2026-08-14)
+
+**Plan 05 closed the phase.** First live window (earlier 2026-08-14) switched WF1 off and hit
+`CANNOT_DELETE_PROPERTY_IN_USE` archiving `lv_icp_tier` — HubSpot counts a disabled workflow's
+action reference as "in use". The operator was presented three options and **selected deleting
+WF1 outright, explicitly overriding D-08's "not deleted" prohibition (D-24)**. Second live
+window, same date: WF1 deleted (204, independently re-read 404); `lv_icp_tier` archived on the
+first retry (204, confirmed absent and present under `?archived=true`); `lv_icp_tier_derived`
+relabelled to "ICP Tier" (D-15's fallback), verified by re-read and a two-point D-22 poll on 3
+known records (B/D/C, byte-identical both reads). `scripts/check_schema_drift.py`'s
+`RETIRED_FLOW_IDS` invariant flipped from "live-and-disabled" to "must be absent" (D-24
+supersedes D-08's original semantics) — live post-retirement: `do_not_archive.ok=True,
+exit_code=0`. D-07's gate re-run live post-archive still passes byte-identical
+(`population=66 match=61 expected_mismatch=5 defect=0`) — an unexpected finding that an archived
+property's per-record values remain readable when named explicitly in `properties=`, documented
+as a live finding, not a standing guarantee. Rollback is now rebuild-from-JSON via `POST
+/automation/v4/flows`, not a one-action re-enable — the proven manual-enrolment mechanism no
+longer exists once WF1 is deleted (`docs/OPERATOR-TIER-ROLLBACK.md`'s 2026-08-14 amendment).
+Reports/dashboards residual remains an accepted, disclosed, UNRESOLVED risk (no public API to
+enumerate either) — not narrowed by this session. Second (and final, per D-16) authorised
+company-record deviation spent: a 1-record armed recompute proof (Melbourne Racing Club
+`9604614548`) confirmed the pipeline writes `lv_anti_icp_flag_num` onto a real record end-to-end
+(the `"0"` branch directly observed; the `"1"` branch inferred from the shared derivation and
+both-engine drift tests, not independently re-observed). Full record:
+`.planning/phases/50-derived-tier-property/50-RETIREMENT-RECORD.md`.
+
+**v0.9 milestone (ICP Rubric Calibration & Veto Remediation) plans all complete** — ready for
+`/gsd-ship` review, not yet shipped by this session.
 
 ## ✅ PHASE 48 — ALL 7 PLANS COMPLETE, NOTHING ARMED (2026-08-13)
 
@@ -205,9 +234,9 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-14T01:50:26.097Z
-**Stopped at:** Halted 50-05: WF1 off live, lv_icp_tier archive blocked (see 50-RETIREMENT-RECORD.md)
-**Resume file:** .planning/phases/50-derived-tier-property/50-RETIREMENT-RECORD.md
+**Last session:** 2026-08-14T02:25:48.953Z
+**Stopped at:** Completed 50-05-PLAN.md: D-24 override executed -- WF1 deleted, lv_icp_tier archived, lv_icp_tier_derived relabelled 'ICP Tier'. Phase 50 and v0.9 milestone plans all complete; ready for ship review.
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -271,6 +300,7 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 | Phase 50 P02 | ~13min (across checkpoint pause) | 3 tasks | 3 files |
 | Phase 50 P04 | 35min | 2 tasks | 3 files |
 | Phase 50 P05 | 55min | 1 tasks | 7 files |
+| Phase 50 P05 | 35min | 1 tasks | 9 files |
 
 ## Decisions
 
@@ -285,6 +315,8 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: D-18 rollback: portal-UI manual enrolment proven live against Melbourne Racing Club 9604614548 while WF1 was on; primary mechanism marked PROVEN in docs/OPERATOR-TIER-ROLLBACK.md
 - [Phase ?]: Reports/dashboards half of D-13's dependent sweep remains UNCONFIRMED -- carried unresolved into Plan 05's one-way retirement decision
 - [Phase ?]: Phase 50: WF1 switched off live (D-08 complete); lv_icp_tier archive blocked by HubSpot's property-in-use rejection (a disabled workflow's action still counts as usage) -- escalated per D-11 rather than forced through by deleting or editing WF1.
+- [Phase ?]: D-24: operator overrode D-08, WF1 (4625147345) deleted outright (not merely disabled) after lv_icp_tier's archive was rejected live (CANNOT_DELETE_PROPERTY_IN_USE); archive then succeeded and lv_icp_tier_derived was relabelled 'ICP Tier'
+- [Phase ?]: Second D-16 deviation spent: armed 1-record recompute proof (Melbourne Racing Club 9604614548) confirms the pipeline writes lv_anti_icp_flag_num onto a real record end-to-end (0->'0' branch directly observed; '1' branch inferred from shared derivation + drift tests, not independently re-observed)
 
 ### Roadmap Evolution
 

@@ -8,7 +8,7 @@
 - ✅ **v0.6 Claude Plugin Entrypoint** — Phases 23–32, workstream `plugin-entrypoint` (shipped 2026-08-04)
 - ✅ **v0.7 HubSpot Scoring Engine Remediation** — Phases 39–43 (shipped 2026-08-08)
 - ✅ **v0.8 Execution Budget Safety** — Phases 44–45 (shipped 2026-08-11)
-- 🚧 **v0.9 ICP Rubric Calibration & Veto Remediation** — Phases 46–50 (Phases 46–49 complete 2026-08-13; Phase 50 added 2026-08-13 to close the stuck-tier debt Phase 49 disclosed, so the milestone does not ship with a known unmet truth)
+- 🚧 **v0.9 ICP Rubric Calibration & Veto Remediation** — Phases 46–50 (Phases 46–49 complete 2026-08-13; Phase 50 added 2026-08-13 to close the stuck-tier debt Phase 49 disclosed, so the milestone does not ship with a known unmet truth; Phase 50 complete 2026-08-14, all 6 plans, `lv_icp_tier` retired and WF1 deleted per D-24)
 
 ## Phases
 
@@ -19,7 +19,7 @@
 - [x] **Phase 47.5: Veto Recompute Path** (6/6 plans, completed 2026-08-12) - Three workstreams: (A) make a veto recomputable for a record whose inputs are already complete; (B) re-examine the four remaining non-ANZ vetoes under D-V6's operating-presence test — Ironman scores 70 and is suppressed on a Tampa HQ; (C) decide whether the hardware veto should key off `lv_org_type` rather than a boolean 1 of 66 records has set. `Company Gate` skips complete records and `Normalize + Score Company` drops every skipped row, so `Decide Company Action` — the only writer of `lv_anti_icp_flag`/`lv_anti_icp_reason` — never runs for them. Found live in Phase 47 (n8n execution `11846`, Simtech LED left reading `Non-ANZ geography` against `region=AU`)
 - [x] **Phase 48: Enrichment Coverage** - Fill or document `lv_org_type` for the 18 never-enriched companies, under a pre-estimated and budget-refusing armed write window
 - [x] **Phase 49: Re-score Strategy & Reporting** - Define and (if triggered) execute the budget-bounded full-population re-score procedure, and report the milestone's net tier-distribution effect in plain language
-- [ ] **Phase 50: Derived Tier Property** - Derive `lv_icp_tier` from `lv_icp_fit_score` the way the score already derives itself, so a value-identical PATCH can no longer leave the tier stale. WF1 (`4625147345`) is `EVENT_BASED` and the sole tier writer, so a no-op PATCH fires no event and it never re-enrols — 4 companies sat at `C` against a correct score of `45` in Phase 49 W1 (`WINDOWS.md` ids 9–12). Requires a scoped lift of v0.9's no-new-properties decision: enumerations cannot be calculated, so this is a new string property plus a migration. Evidence: `.planning/TIER-DERIVATION-SPIKE-2026-08-13.md`
+- [x] **Phase 50: Derived Tier Property** - Derive `lv_icp_tier` from `lv_icp_fit_score` the way the score already derives itself, so a value-identical PATCH can no longer leave the tier stale. WF1 (`4625147345`) is `EVENT_BASED` and the sole tier writer, so a no-op PATCH fires no event and it never re-enrols — 4 companies sat at `C` against a correct score of `45` in Phase 49 W1 (`WINDOWS.md` ids 9–12). Requires a scoped lift of v0.9's no-new-properties decision: enumerations cannot be calculated, so this is a new string property plus a migration. Evidence: `.planning/TIER-DERIVATION-SPIKE-2026-08-13.md`. **Retired 2026-08-14**: WF1 deleted and `lv_icp_tier` archived (D-24, an operator-authorised override of D-08's original "not deleted" decision) after the archive was blocked by HubSpot counting a disabled workflow's action reference as "in use"; `lv_icp_tier_derived` relabelled to "ICP Tier".
 
 <details>
 <summary>✅ v0.8 Execution Budget Safety (Phases 44–45) — SHIPPED 2026-08-11</summary>
@@ -464,6 +464,7 @@ dispatch reads the frontmatter, not this note: run 50-06 before dispatching wave
 | 47.5. Veto Recompute Path | v0.9 | 6/6 | Complete | 2026-08-12 |
 | 48. Enrichment Coverage | v0.9 | 7/7 | Complete (verified) | 2026-08-13 |
 | 49. Re-score Strategy & Reporting | v0.9 | 7/7 | Complete (verified with gaps) | 2026-08-13 |
+| 50. Derived Tier Property | v0.9 | 6/6 | Complete (D-24 override: WF1 deleted, `lv_icp_tier` archived) | 2026-08-14 |
 
 ## Ledger gaps (known)
 

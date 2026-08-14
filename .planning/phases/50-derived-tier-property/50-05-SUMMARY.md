@@ -8,23 +8,28 @@ requires:
   - phase: 50-derived-tier-property
     provides: "lv_icp_tier_derived calculated property, proven live parity against lv_icp_tier (50-04)"
 provides:
-  - "WF1 (4625147345) switched off, definition kept, verified by independent re-read"
-  - "scripts/check_schema_drift.py RETIRED_FLOW_IDS structure with a live-AND-disabled invariant, distinct from the live-AND-enabled invariant for still-active flows"
-  - "scripts/rollback_property_migration.py --archive-property mode (dry-run and live-armed, built and proven against a real 400 rejection)"
-  - "scripts/apply_fit_score_formula.py --label mode (dry-run verified, not yet armed live)"
-  - "50-RETIREMENT-RECORD.md documenting a new platform constraint: HubSpot refuses to archive a property still referenced by any workflow action, even a disabled one"
-affects: [any future phase that resumes retirement of lv_icp_tier, any phase touching WF1's action definitions]
+  - "WF1 (4625147345) DELETED live (D-24, overriding D-08), verified by independent re-read"
+  - "lv_icp_tier ARCHIVED live (D-06), verified by independent re-read and the archived-properties listing"
+  - "lv_icp_tier_derived relabelled 'ICP Tier' (D-15's fallback), verified by re-read and a D-22 two-point poll"
+  - "scripts/check_schema_drift.py RETIRED_FLOW_IDS structure with a must-be-absent invariant (D-24 flip from the original live-AND-disabled design)"
+  - "scripts/rollback_property_migration.py --archive-property mode (dry-run and live-armed, proven against both a real 400 rejection AND a real successful archive)"
+  - "scripts/apply_fit_score_formula.py --label mode (dry-run and live-armed, proven)"
+  - "scripts/put_hubspot_flow.py --delete mode (dry-run and live-armed, proven against a real WF1 deletion)"
+  - "50-RETIREMENT-RECORD.md documenting the full arc: the platform constraint, D-24's override, and the completed retirement"
+  - "docs/OPERATOR-TIER-ROLLBACK.md amended: rollback is now rebuild-from-JSON, the proven manual-enrolment mechanism no longer exists"
+affects: [any future phase touching lv_icp_tier_derived, any phase that would have referenced WF1's flow id 4625147345 (now permanently gone)]
 
 actuals:
-  tokens: 6000
+  tokens: 15000
   tasks: 1
-  commits: 1
+  commits: 2
 
 tech-stack:
   added: []
   patterns:
-    - "Two-tier do-not-archive invariant in check_schema_drift.py: live-AND-enabled for active flows, live-AND-disabled for retired-but-kept flows (RETIRED_FLOW_IDS)"
-    - "Every archive/disable verified by an independent re-read, never the mutating call's own response body"
+    - "RETIRED_FLOW_IDS in check_schema_drift.py: healthy state is ABSENCE (deleted), not live-and-disabled — D-24 flipped this invariant mid-phase when the operator chose deletion over keep-but-off"
+    - "Every archive/disable/delete verified by an independent re-read, never the mutating call's own response body"
+    - "Two-key write gate (DRY_RUN=false + a dedicated ALLOW_* key) extended uniformly to a third HTTP verb (DELETE on a flow) without introducing a new gate idiom"
 
 key-files:
   created:
@@ -34,198 +39,217 @@ key-files:
     - tests/test_check_schema_drift.py
     - scripts/rollback_property_migration.py
     - scripts/apply_fit_score_formula.py
+    - scripts/put_hubspot_flow.py
+    - tests/test_hubspot_properties_config.py
     - config/hubspot_flows/4625147345-wf1-set-icp-tier.after.json
+    - config/hubspot_flows/lv_icp_tier-property.after.json
+    - config/hubspot_flows/lv_icp_tier_derived-property.after.json
+    - config/hubspot_properties.yaml
+    - docs/OPERATOR-TIER-ROLLBACK.md
+    - .planning/phases/50-derived-tier-property/50-CONTEXT.md
+    - .planning/phases/50-derived-tier-property/50-TIER-PARITY-EVIDENCE.md
+    - .planning/WINDOWS.md
 
 key-decisions:
-  - "Executed WF1 shutdown (D-08) live and verified — fully reversible, fully complete."
-  - "Discovered mid-execution that HubSpot's DELETE /crm/v3/properties refuses to archive a property still referenced by ANY workflow action, disabled or not (HTTP 400, PropertyValidationError.CANNOT_DELETE_PROPERTY_IN_USE) — not anticipated by 50-RESEARCH.md or the D-06 null-probe research."
-  - "Did not delete or edit WF1's actions to unblock the archive: both would violate this plan's explicit prohibition ('WF1 4625147345 is not deleted') or forfeit the proven one-action rollback mechanism. Escalated per D-11 instead of forcing the archive through."
-  - "Deferred the relabel of lv_icp_tier_derived to 'ICP Tier' even though independently authorised: with lv_icp_tier still live, relabelling would create two live properties both displaying 'ICP Tier', a new confusion outside what the operator signed up for."
-  - "Reverted an in-progress config/hubspot_properties.yaml edit that had prematurely removed the lv_icp_tier declaration and relabelled the derived property ahead of the live archive succeeding — the yaml now matches live truth exactly (both properties present, derived property's label unchanged)."
-  - "Committed all completed, correct work (guard edits, offline tests, both new CLI tool modes, refreshed WF1 snapshot, retirement record) in ONE commit rather than holding it pending the blocked archive — the guard edits are what make check_schema_drift.py report the WF1 shutdown as correct rather than as engine damage, and they are true regardless of the archive's outcome."
+  - "Session 1 (earlier 2026-08-14): executed WF1 shutdown (D-08 as originally written) and verified live. Archive of lv_icp_tier then rejected live (HTTP 400 CANNOT_DELETE_PROPERTY_IN_USE — WF1's disabled actions still referenced the property). Escalated per D-11 rather than forcing it through; three options documented for the operator."
+  - "Session 2 (same date, operator resolved the blocker): the operator selected deleting WF1 entirely, EXPLICITLY OVERRIDING D-08's 'not deleted' prohibition (D-24). Consequence accepted up front: rollback is now rebuild-from-JSON via POST /automation/v4/flows (a new flow id), not a one-action re-enable; the proven manual-enrolment rollback mechanism (proven live in Plan 04) no longer exists once WF1 is deleted."
+  - "Built scripts/put_hubspot_flow.py --delete mode (DELETE /automation/v4/flows/{id}, --file made optional for this action only), reusing the script's existing two-key gate rather than a new gate idiom. Dry-run verified, then armed: 204, independently re-read to 404."
+  - "Archive retried unchanged (same rollback_property_migration.py --archive-property tool from session 1) and succeeded on the first attempt once WF1's reference was gone: 204, independently re-read to 404, confirmed present under ?archived=true."
+  - "Relabelled lv_icp_tier_derived to 'ICP Tier' (D-15's fallback) in the same window as the archive, avoiding the two-properties-same-label confusion session 1 deliberately avoided by deferring it."
+  - "Flipped check_schema_drift.py's RETIRED_FLOW_IDS invariant from 'live AND disabled' (D-08's original design) to 'must be absent' (D-24's deletion) — rewrote 3 offline tests to match, added a 4th (test_retired_flow_ids_contains_wf1 unchanged)."
+  - "Post-archive re-run of D-07's parity gate (scripts/check_tier_derived_parity.py) unexpectedly still passed byte-identical (population=66 match=61 expected_mismatch=5 defect=0) — an archived property's per-record values remain readable when explicitly named in properties=, a live finding documented as such (not asserted as a standing guarantee) in 50-TIER-PARITY-EVIDENCE.md's amendment, output to a scratch path rather than overwriting the pre-archive evidence artifact."
+  - "Second (and final, per D-16) authorised company-record write of this phase: a 1-record armed recompute proof on Melbourne Racing Club (9604614548, a non-vetoed match record, deliberately not one of the 5 pinned stuck records) confirming the pipeline writes lv_anti_icp_flag_num onto a real record end-to-end. The '0' branch is directly observed; the '1' branch is inferred from the shared derivation plus both-engine drift tests, not independently re-observed — stated precisely, not overclaimed."
+  - "config/hubspot_properties.yaml: lv_icp_tier declaration removed (matches live archive), lv_icp_tier_derived relabelled to 'ICP Tier' (matches live relabel). scripts/sync_hubspot_properties.py dry-run after the edit proposes zero property creates."
 
-requirements-completed: [TIER-01]
+requirements-completed: [TIER-01, TIER-03]
 
 coverage:
   - id: D1
-    description: "WF1 (4625147345) switched off live, definition kept, verified by independent re-read (not the PUT's own response)"
-    requirement: "TIER-01"
+    description: "WF1 (4625147345) DELETED live (D-24), definition preserved only in the committed before/after JSON snapshots, verified by independent re-read (not the DELETE's own response)"
+    requirement: "TIER-03"
     verification:
       - kind: other
-        ref: "GET /automation/v4/flows/4625147345 -> 200, isEnabled: False (independent re-read, recorded in 50-RETIREMENT-RECORD.md)"
+        ref: "GET /automation/v4/flows/4625147345 -> 404 (independent re-read, recorded in 50-RETIREMENT-RECORD.md's 'D-24 resolution' section)"
         status: pass
     human_judgment: false
   - id: D2
-    description: "check_schema_drift.py's RETIRED_FLOW_IDS live-AND-disabled invariant, offline-pinned"
+    description: "check_schema_drift.py's RETIRED_FLOW_IDS must-be-absent invariant (D-24 flip), offline-pinned"
     requirement: "TIER-01"
     verification:
       - kind: unit
-        ref: "tests/test_check_schema_drift.py#test_retired_flow_live_and_disabled_is_ok"
+        ref: "tests/test_check_schema_drift.py#test_retired_flow_deleted_is_ok"
         status: pass
       - kind: unit
-        ref: "tests/test_check_schema_drift.py#test_retired_flow_absent_is_not_ok"
+        ref: "tests/test_check_schema_drift.py#test_retired_flow_live_and_disabled_is_not_ok"
         status: pass
       - kind: unit
         ref: "tests/test_check_schema_drift.py#test_retired_flow_live_and_enabled_is_not_ok"
         status: pass
     human_judgment: false
   - id: D3
-    description: "Archive lv_icp_tier (D-06) — NOT ACHIEVED, blocked by a newly discovered platform constraint"
+    description: "Archive lv_icp_tier (D-06) — ACHIEVED after D-24's override of D-08 unblocked it"
     requirement: "TIER-03"
-    verification: []
-    human_judgment: true
-    rationale: "The archive attempt returned HTTP 400 (property in use by WF1's workflow action, even disabled). Resolving this requires an operator decision among three tradeoffs documented in 50-RETIREMENT-RECORD.md (accept the interim state, edit WF1's actions and forfeit rollback, or delete WF1 outright) — none of which this plan is authorised to select on its own."
+    verification:
+      - kind: other
+        ref: "DELETE /crm/v3/properties/companies/lv_icp_tier -> HTTP 204; independent re-read -> 404; GET /crm/v3/properties/companies?archived=true confirms lv_icp_tier present with archived:true (50-RETIREMENT-RECORD.md 'D-24 resolution')"
+        status: pass
+    human_judgment: false
+  - id: D4
+    description: "lv_icp_tier_derived relabelled to 'ICP Tier' (D-15's fallback), values unaffected"
+    requirement: "TIER-03"
+    verification:
+      - kind: other
+        ref: "PATCH .../lv_icp_tier_derived {label: 'ICP Tier'} -> 200; independent re-read confirms label; D-22 two-point poll (~40s apart) on 3 known records (9605273630=B, 18047161864=D, 9604614548=C) byte-identical both reads"
+        status: pass
+    human_judgment: false
+  - id: D5
+    description: "Post-archive live re-run of check_schema_drift.py and D-07's parity gate confirm the archive did not damage the live scoring engine or disturb the gate's verdict"
+    requirement: "TIER-03"
+    verification:
+      - kind: other
+        ref: "check_schema_drift.py: do_not_archive.ok=True, exit_code=0; check_tier_derived_parity.py re-run to scratch path: population=66 match=61 expected_mismatch=5 defect=0 (byte-identical to the pre-archive evidence artifact)"
+        status: pass
+    human_judgment: false
 
-duration: 55min
+duration: ~90min (across two live windows the same date, plus this closing session)
 completed: 2026-08-14
-status: halted
+status: complete
 ---
 
-# Phase 50 Plan 05: Retirement Attempt (WF1 Off, Archive Blocked) Summary
+# Phase 50 Plan 05: Retirement Complete — D-24 Override (WF1 Deleted, `lv_icp_tier` Archived) Summary
 
-**WF1 (4625147345) switched off and verified live; `lv_icp_tier` archive blocked by a newly discovered HubSpot constraint (property in use by a disabled workflow's action) that this plan is not authorised to work around, so retirement stops here pending a fresh operator decision.**
+**WF1 (4625147345) DELETED live, explicitly overriding D-08 (D-24), after its disable alone left `lv_icp_tier`'s archive blocked by HubSpot counting a disabled workflow's action as "in use"; `lv_icp_tier` then archived cleanly and `lv_icp_tier_derived` relabelled "ICP Tier" — Phase 50 and the v0.9 milestone's plans are now fully complete.**
 
 ## Performance
 
-- **Duration:** 55 min (across two sessions — halted mid-Task-02 by a macOS TCC access loss,
-  resumed and completed this session)
-- **Started:** 2026-08-14T00:00:00Z (approx., prior session)
-- **Completed:** 2026-08-14T02:10:00Z (approx.)
-- **Tasks:** 1 of 2 fully executed (Task 50-05-01 decision was authorised in the prior session's
-  spawn prompt; Task 50-05-02 executed partially — WF1 shutdown complete, property archive
-  blocked)
-- **Files modified:** 5 (plus the new retirement record and this summary)
+- **Duration:** ~90 min across two live windows the same date (2026-08-14) plus this closing
+  session — session 1 switched WF1 off and hit the archive blocker; session 2 (this one)
+  resolved it per the operator's D-24 decision and completed the retirement.
+- **Session 1:** ~00:00–02:10 UTC (approx., prior session) — WF1 disabled, archive blocked,
+  escalated per D-11.
+- **Session 2 (this session):** WF1 deleted, `lv_icp_tier` archived, `lv_icp_tier_derived`
+  relabelled, all guard/doc updates landed, phase closed.
+- **Tasks:** 1 of 2 (Task 50-05-01's decision was authorised in a prior spawn prompt; Task
+  50-05-02 now fully executed across both sessions).
+- **Files modified:** 14 (10 code/config + 3 docs + this summary; see `key-files` above).
 
 ## Accomplishments
 
-- WF1 (`4625147345`) switched off live: `isEnabled` flipped `true` → `false` via
-  `put_hubspot_flow.py --disable`, verified by an independent re-read (never the PUT's own
-  response body), definition fully intact. Fully reversible per `docs/OPERATOR-TIER-ROLLBACK.md`
-  step 1.
-- `scripts/check_schema_drift.py` extended with a `RETIRED_FLOW_IDS` structure and a
-  live-AND-disabled invariant in `_compute_do_not_archive`, distinct from the live-AND-enabled
-  invariant the other five scoring flows still carry. Ran live post-mutation:
-  `do_not_archive.ok=True`, `exit_code=0` — the comparator now correctly reports WF1's shutdown
-  as the deliberate, correct state it is, not as engine damage.
-- Discovered and documented a HubSpot platform constraint not anticipated anywhere in this
-  phase's research: `DELETE /crm/v3/properties/companies/{name}` refuses to archive a property
-  still referenced by any workflow action, **including a disabled workflow's action**. This
-  blocked the `lv_icp_tier` archive outright (HTTP 400,
-  `PropertyValidationError.CANNOT_DELETE_PROPERTY_IN_USE`).
-- Two new CLI tool modes built and dry-run verified working correctly:
-  `rollback_property_migration.py --archive-property NAME` (proven against a real live 400
-  rejection, not just a mock) and `apply_fit_score_formula.py --label TEXT` (dry-run only, not
-  armed — see Decisions).
-- `tests/test_check_schema_drift.py` extended with 4 new offline tests pinning the
-  `RETIRED_FLOW_IDS` invariant and updated size assertions (11/5/15).
+- WF1 (`4625147345`) **DELETED** live via a new `scripts/put_hubspot_flow.py --delete` mode
+  (dry-run verified, then armed: `204`, independently re-read to `404`). This is the phase's
+  most consequential irreversible act — D-24 explicitly overrode D-08's original "kept, not
+  deleted" prohibition after the disable-only state proved insufficient to unblock the archive.
+- `lv_icp_tier` **ARCHIVED** live on the first retry once WF1's reference was gone: `204`,
+  independently re-read to `404`, confirmed present under `?archived=true` with
+  `archived: true`.
+- `lv_icp_tier_derived` **relabelled to "ICP Tier"** (D-15's fallback — the internal name stays
+  `lv_icp_tier_derived` permanently): `200`, independently re-read, and confirmed unaffected by
+  a D-22 two-point poll (~40s apart) on 3 known records (a stuck-B, a vetoed-D, a non-vetoed
+  match) — byte-identical both reads.
+- `scripts/check_schema_drift.py`'s `RETIRED_FLOW_IDS` invariant **flipped** from D-08's original
+  "live AND disabled" to D-24's "must be absent" — 3 offline tests rewritten to match the new
+  semantics, run live post-retirement: `do_not_archive.ok=True`, `exit_code=0`.
+- D-07's gate (`scripts/check_tier_derived_parity.py`) **re-run live post-archive**, expecting
+  degradation and instead finding an archived property's per-record values remain readable when
+  explicitly named in `properties=` — byte-identical result (`population=66 match=61
+  expected_mismatch=5 defect=0`) to the pre-archive verdict. Documented as a live finding, not a
+  standing guarantee, in `50-TIER-PARITY-EVIDENCE.md`'s amendment; output to a scratch path so
+  the original evidence artifact was never overwritten.
+- Second (and final, per D-16) authorised company-record write of this phase: a 1-record armed
+  recompute proof on Melbourne Racing Club (`9604614548`) confirming the pipeline writes
+  `lv_anti_icp_flag_num` onto a real record end-to-end (the `"0"` branch directly observed; the
+  `"1"` branch inferred from the shared derivation and both-engine drift tests).
+- `config/hubspot_properties.yaml` synced to live truth: `lv_icp_tier` declaration removed,
+  `lv_icp_tier_derived` relabelled. `sync_hubspot_properties.py` dry-run confirms zero property
+  creates proposed.
+- `docs/OPERATOR-TIER-ROLLBACK.md` amended: rollback is now rebuild-from-JSON via `POST
+  /automation/v4/flows` (a new flow id), and the proven manual-enrolment mechanism no longer
+  exists once WF1 is deleted — stated plainly, not softened.
+- `.planning/phases/50-derived-tier-property/50-CONTEXT.md` amended with **D-24**, dated,
+  recording the `CANNOT_DELETE_PROPERTY_IN_USE` cause, the operator's explicit choice, and the
+  rollback consequence.
+- `.planning/WINDOWS.md` id 15 (the blocked-archive deviation) marked `fixed` via
+  `gsd-tools windows fixed 15`, with a `RESOLVED WITH EVIDENCE` note appended to its description.
 - Full offline suite green: `.venv/bin/python -m pytest -q` (2821 passed, 154 skipped) and
-  `node --test tests/n8n/*.test.mjs` (683 passed).
+  `node --test tests/n8n/*.test.mjs` (683 passed) — one legitimate count-tripwire update
+  (`tests/test_hubspot_properties_config.py`, 34 → 33 company properties, matching the archived
+  `lv_icp_tier` declaration's removal).
 
 ## Task Commits
 
-Both the decision task (50-05-01) and this execution task (50-05-02) are represented in a single
-commit, since Task 02 could not reach its own committed end state (the archive) and the
-same-commit rule (guard edits must land with the mutations they accommodate) applied to the
-mutation that DID succeed (WF1 shutdown):
+Both the decision task (50-05-01) and this execution task (50-05-02) span two live windows;
+commits are split by window rather than forced into one, since the two windows are genuinely
+separate units of work (session 1's WF1-off-plus-guard-edits state was independently correct and
+committed on its own before the blocker was even discovered to need a D-24 decision):
 
-1. **Task 50-05-02 (partial): WF1 off + guard edits + new tooling + retirement record** -
-   see commit hash in the final PLAN COMPLETE block below.
-
-**Plan metadata:** committed together with the above (single commit; see note in Deviations).
+1. **Session 1 commit (`449b306`):** WF1 disabled + guard edits + new tooling + retirement
+   record (already landed before this session started).
+2. **Session 2 commit (this session):** D-24 execution — `put_hubspot_flow.py --delete` mode,
+   WF1 deleted, `lv_icp_tier` archived, `lv_icp_tier_derived` relabelled, `RETIRED_FLOW_IDS`
+   invariant flipped + tests rewritten, yaml synced, all docs updated (`50-RETIREMENT-RECORD.md`,
+   `50-CONTEXT.md`, `50-TIER-PARITY-EVIDENCE.md`, `OPERATOR-TIER-ROLLBACK.md`) — see commit hash
+   in the final PLAN COMPLETE block below.
+3. **Metadata commit:** this summary + STATE.md + ROADMAP.md + REQUIREMENTS.md + WINDOWS.md.
 
 ## Files Created/Modified
 
-- `scripts/check_schema_drift.py` - `RETIRED_FLOW_IDS` structure, `_compute_do_not_archive`
-  extended with the live-AND-disabled fold, `ACCEPTED_DIVERGENCES`'s `PARITY-01-tier-label`
-  entry restated against `lv_icp_tier_derived`
-- `tests/test_check_schema_drift.py` - 4 new tests pinning the retired-flow invariant, updated
-  size assertions (11/5/15), updated `PARITY-01-tier-label` property-name assertion
-- `scripts/rollback_property_migration.py` - `--archive-property NAME` mode (built, dry-run and
-  live-armed; the live archive itself failed for a portal-side reason, not a tool defect)
-- `scripts/apply_fit_score_formula.py` - `--label TEXT` mode (built, dry-run verified only)
-- `config/hubspot_flows/4625147345-wf1-set-icp-tier.after.json` - refreshed from a live
-  post-disable read-back (`isEnabled: false`)
-- `.planning/phases/50-derived-tier-property/50-RETIREMENT-RECORD.md` - full record of both
-  mutation attempts, the blocker discovery, and the accepted-risk disclosure
-- `config/hubspot_properties.yaml` - **left unchanged** from its pre-session state (an in-flight
-  edit that prematurely removed `lv_icp_tier` and relabelled the derived property was reverted
-  once the archive failed — the yaml stays truthful to live state)
+See `key-files` in the frontmatter above for the complete list across both sessions.
 
 ## Decisions Made
 
-- Executed WF1 shutdown live and verified it independently — this half of D-08 is complete and
-  needed no further authorisation once `retire-and-relabel` was selected.
-- On discovering the archive was blocked by a platform constraint that makes it impossible
-  without either deleting WF1 (explicitly prohibited by this plan) or editing WF1's actions
-  (which forfeits the proven rollback mechanism), stopped rather than forcing the archive through
-  or silently improvising a workaround — this is exactly the D-11 escalation path, applied to a
-  dependent (WF1's own action reference) that turned out to be un-migratable within this plan's
-  authorised means.
-- Deferred the relabel even though it was independently authorised and technically unblocked: with
-  the old enum still live, relabelling the derived property would put two properties on the portal
-  both displaying "ICP Tier" — a new confusion the operator did not sign up for when relabel was
-  framed as riding alongside a successful archive.
-- Reverted a premature yaml edit made before the live mutations were attempted, so
-  `config/hubspot_properties.yaml` matches live truth (`lv_icp_tier` still declared and live,
-  `lv_icp_tier_derived` still labelled "ICP Tier (Derived)") rather than describing a desired
-  end-state that did not happen.
-- Committed the guard edits, new tooling, refreshed snapshot, and retirement record as ONE commit
-  now rather than holding them pending a future successful archive — they are all independently
-  correct given the mutation that DID happen (WF1 off), and holding them uncommitted would leave
-  `check_schema_drift.py` reporting exit code 2 ("engine damaged") for the deliberate, correct
-  state WF1's shutdown actually is.
+See `key-decisions` in the frontmatter above for the complete, dated list. In summary: session 1
+executed WF1's disable and hit the archive blocker; the operator resolved it by explicitly
+authorising WF1's deletion (D-24, overriding D-08); session 2 executed that decision end to end
+and closed the phase.
 
 ## Deviations from Plan
 
 ### Auto-fixed Issues
 
-None — no bugs, missing functionality, or blocking issues in the Rule 1-3 sense were found in
-this session's own work; the two prior-session-completed scripts
-(`rollback_property_migration.py`, `apply_fit_score_formula.py`) were verified, not modified.
+None in the Rule 1-3 sense in this session's own new work. One legitimate, expected fallout
+fixed as part of landing the archive: `tests/test_hubspot_properties_config.py`'s manifest-drift
+count tripwire (34 → 33 company properties) — not a bug, the direct and anticipated consequence
+of removing `lv_icp_tier`'s yaml declaration.
 
-### Rule 4 escalation (architectural / cannot-proceed)
+### Rule 4 escalation, RESOLVED this session
 
 **1. [Rule 4 - Architectural] `lv_icp_tier` archive blocked by an undocumented HubSpot platform
-constraint**
-- **Found during:** Task 50-05-02, armed live mutation 2 (archive the enum)
+constraint — RESOLVED by an explicit operator override (D-24)**
+- **Found during (session 1):** Task 50-05-02, armed live mutation 2 (archive the enum).
 - **Issue:** `DELETE /crm/v3/properties/companies/lv_icp_tier` returned HTTP 400
-  (`PropertyValidationError.CANNOT_DELETE_PROPERTY_IN_USE`) because WF1's actions still reference
-  `lv_icp_tier` as a write target, and HubSpot counts this as "in use" regardless of whether the
-  workflow is enabled. Neither `50-RESEARCH.md` nor `50-NULL-PROBE.json` (which answered whether
-  the DELETE is a soft archive) anticipated an in-use rejection.
-- **Why not auto-fixed:** the only two paths that unblock the archive — deleting WF1 entirely, or
-  editing its actions to strip the `lv_icp_tier` reference — either directly violate this plan's
-  explicit prohibition ("WF1 4625147345 is not deleted") or destroy the proven one-action-rollback
-  guarantee D-08 and `50-ROLLBACK-DRILL.md` are built on. Both are architectural changes to what
-  this plan is authorised to touch, squarely Rule 4.
-- **Resolution:** documented in full in `50-RETIREMENT-RECORD.md`, including three concrete
-  options for a future decision checkpoint. Nothing was forced through; nothing was left in an
-  ambiguous or partially-mutated state (the failed DELETE left `lv_icp_tier` exactly as it was
-  before the attempt, confirmed by an independent re-read).
-- **Files modified:** none as a "fix" — this deviation resulted in NOT making the planned change,
-  documented instead.
-- **Verification:** `GET /crm/v3/properties/companies/lv_icp_tier` → 200, `archived: false`
-  (confirms clean, unmutated failure).
+  (`PropertyValidationError.CANNOT_DELETE_PROPERTY_IN_USE`) because WF1's actions still
+  referenced `lv_icp_tier` as a write target, and HubSpot counts this as "in use" regardless of
+  whether the workflow is enabled.
+- **Escalated per D-11** rather than forced through in session 1: three options were documented
+  in `50-RETIREMENT-RECORD.md` for the operator (accept the interim state; edit WF1's actions
+  and forfeit the proven rollback; delete WF1 entirely and override D-08).
+- **Resolution (session 2, this session):** the operator **selected deleting WF1 entirely**,
+  explicitly overriding D-08's "not deleted" prohibition, accepting the stated consequence that
+  rollback becomes rebuild-from-JSON. Executed: WF1 deleted (`204`/`404` re-read), archive
+  retried and succeeded (`204`/`404` re-read + `?archived=true` confirmation), relabel completed
+  in the same window. Full record in `50-RETIREMENT-RECORD.md`'s "D-24 resolution" section.
+- **Files modified:** `scripts/put_hubspot_flow.py` (new `--delete` mode), plus the guard/doc
+  updates listed in `key-files`.
+- **Verification:** independent re-reads at every step (never a mutating call's own response
+  body) — see coverage D1–D5 above.
 
 ---
 
-**Total deviations:** 1 escalated (Rule 4 — architectural, cannot proceed without a fresh
-operator decision).
-**Impact on plan:** The plan's fully-authorised end state (`retire-and-relabel`) was NOT reached.
-WF1 shutdown (D-08) is complete and correct. Property archive (D-06) and relabel (D-15's fallback)
-are both deferred pending a new decision. This is a disclosed, coherent partial state — closer in
-spirit to D-06's "gate failed, stop here" outcome than to full completion, except the gate
-(D-07) actually passed; it was a platform constraint discovered only at execution time that
-stopped the archive, not a data-quality gate.
+**Total deviations:** 1 escalated in session 1 (Rule 4), resolved this session by an explicit
+operator override (D-24) rather than by this plan improvising a workaround.
+**Impact on plan:** The plan's fully-authorised end state (`retire-and-relabel`) IS reached, via
+a path the plan's own text did not originally authorise (WF1 deletion) but that the operator
+explicitly selected when the authorised path proved insufficient. WF1 is gone, `lv_icp_tier` is
+archived, `lv_icp_tier_derived` carries the canonical display label. Phase 50 closes complete.
 
 ## Issues Encountered
 
-- **macOS TCC access loss (prior session):** `~/Desktop` became inaccessible mid-session with
-  `EPERM`, halting the prior executor with nothing committed and no HubSpot mutation run. Resolved
-  by the operator re-granting Full Disk Access; this session resumed cleanly from the durable
-  continuation note with all preconditions re-verified as unchanged.
-- **HubSpot property-in-use rejection (this session):** see Rule 4 escalation above — the
-  substantive issue this plan closes without resolving.
+- **macOS TCC access loss (session 1, prior):** `~/Desktop` became inaccessible mid-session with
+  `EPERM`, halting the prior executor with nothing committed and no HubSpot mutation run.
+  Resolved by the operator re-granting Full Disk Access.
+- **HubSpot property-in-use rejection (session 1):** see Rule 4 escalation above — resolved this
+  session via D-24.
+- **No issues in this session** beyond the expected count-tripwire test update.
 
 ## User Setup Required
 
@@ -233,19 +257,21 @@ None - no external service configuration required.
 
 ## Next Phase Readiness
 
-**Not ready to close Phase 50 as fully retired.** A future plan or session must:
-1. Bring `50-RETIREMENT-RECORD.md`'s three options to the operator (accept the interim state
-   permanently, authorise editing WF1's tier-write actions and accept the forfeited rollback
-   guarantee, or authorise deleting WF1 outright).
-2. Re-attempt the archive only after one of those is explicitly selected.
-3. Run the relabel (`apply_fit_score_formula.py --property lv_icp_tier_derived --label "ICP
-   Tier"`, already dry-run verified) alongside whichever archive resolution is chosen, not before.
+**Phase 50 is fully complete.** `lv_icp_tier` is archived, WF1 is deleted, `lv_icp_tier_derived`
+is the sole, canonically-labelled source of truth for ICP tier, live-proven with zero
+dependency on any HubSpot workflow or property-change event. The v0.9 milestone's 6 phases (46,
+47, 47.5, 48, 49, 50) are all plan-complete — ready for a `/gsd-ship` review, not shipped by this
+session.
 
-**What IS stable and safe to build on:** `lv_icp_tier_derived` remains live, proven (D-07 PASS),
-and is the functional source of truth for ICP tier going forward — WF1 is off, so nothing
-competes with it. `lv_icp_tier` is frozen (no writer) but still readable at its last-known value
-for anything not yet migrated. `check_schema_drift.py` correctly reports this interim state as
-clean (`exit_code=0`).
+**What remains an accepted, disclosed, unresolved residual — not closed by this or any prior
+session:** reports/dashboards possibly still referencing `lv_icp_tier` by name. HubSpot exposes
+no public API to enumerate either. The recovery path (repoint to `lv_icp_tier_derived` after a
+visible break) remains the operator's previously stated accepted risk.
+
+**What changed for future operators:** the rollback runbook (`docs/OPERATOR-TIER-ROLLBACK.md`)
+no longer describes a working one-action or even one-mechanism rollback — WF1 no longer exists,
+and its 2026-08-14 amendment states this plainly. Any future correction to
+`lv_icp_tier_derived` goes through the formula/pipeline, never a WF1-based path.
 
 ---
 *Phase: 50-derived-tier-property*
@@ -257,4 +283,9 @@ clean (`exit_code=0`).
 - FOUND: `.planning/phases/50-derived-tier-property/50-RETIREMENT-RECORD.md`
 - FOUND: `scripts/check_schema_drift.py`
 - FOUND: `tests/test_check_schema_drift.py`
+- FOUND: `scripts/put_hubspot_flow.py` (`--delete` mode present)
+- CONFIRMED live: `GET /automation/v4/flows/4625147345` → 404
+- CONFIRMED live: `GET /crm/v3/properties/companies/lv_icp_tier` → 404;
+  `?archived=true` listing contains it with `archived: true`
+- CONFIRMED live: `GET /crm/v3/properties/companies/lv_icp_tier_derived` → `label: "ICP Tier"`
 - FOUND commit: `449b306`
