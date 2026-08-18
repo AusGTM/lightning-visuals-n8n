@@ -169,7 +169,7 @@ write windows.
   3. Operator can search HubSpot alone — no scripts — for "non-ANZ veto reason with a blank
      `lv_country_region_normalized`" and get zero results.
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans executed
 
 Plans:
 
@@ -184,7 +184,7 @@ Plans:
       property-existence guard, the single live web-research pass, and the mandatory disarmed
       dry-run printing every exact payload (wave 2)
 
-- [ ] 47-04-PLAN.md — The one armed write window across both surfaces, the disarm with
+- [x] 47-04-PLAN.md — The one armed write window across both surfaces, the disarm with
       independent read-back, the after-diff and cost actuals, and the operator's script-free
       VETO-03 search (wave 3)
 
