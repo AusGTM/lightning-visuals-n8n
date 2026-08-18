@@ -1,5 +1,47 @@
 # Operator procedure: re-scoring the population after an ICP rubric change
 
+## AS-BUILT AMENDMENT — 2026-08-19 (Phase 50 follow-up)
+
+**Corrects the `## Acceptance` section's line:** *"The proof that a re-score landed is
+`scripts/run_scoring_parity.py`'s live population sweep exiting green."*
+
+**That sweep is no longer a valid acceptance gate, and it will not tell you so.** Its pass
+condition ANDs in `tier_match` (`scripts/run_scoring_parity.py:313`, used at `:315`), which
+compares against `lv_icp_tier` — a property Phase 50 archived on 2026-08-14 after deleting
+WF1 (`4625147345`), the only workflow that ever wrote it.
+
+An archived HubSpot property does not error and does not read null: it keeps returning its
+frozen last value indefinitely (proved in `50-TIER-PARITY-EVIDENCE.md`'s 2026-08-14
+addendum, where the gate re-ran byte-identical *after* the archive). So the sweep still
+runs, still prints a verdict, and silently compares every record against dead data.
+
+Why that is worse than a crash: for the historically-stuck records it reproduces the
+already-disclosed red state, which looks familiar and harmless. But after **any future
+rubric change**, every newly-tier-changed company will also read red — permanently, and
+indistinguishably from "the re-score has not finished yet". That is precisely the
+misdiagnosis the 2026-08-13 amendment below was written to prevent; it has simply moved
+into a different clause of this same document.
+
+**Use `scripts/check_tier_derived_parity.py` instead.** It compares `lv_icp_tier_derived`
+(computed server-side from `lv_icp_fit_score` and `lv_anti_icp_flag_num`, with no workflow
+and no property-change event in the path) and carries a known-stuck allowance list pinned
+per record id. Phase 50 built and live-proved it: `population=66 match=61
+expected_mismatch=5 defect=0`.
+
+Two cautions when you run it:
+
+- **Poll, never single-read.** A calculated property backfills roughly 70–130 seconds after
+  its inputs change. A read issued immediately after a write returns `null` for a property
+  that will compute correctly, and reading that as "the value is null" is a real error this
+  project has already made once — it produced a wrong decision that had to be reversed.
+- **A red result still means what the line below says it means.** The gate is never edited
+  to make it pass. Only the property it reads has changed.
+
+`scripts/run_scoring_parity.py` is otherwise unchanged and its score and veto comparisons
+remain sound — it is specifically and only the tier leg that is now dead.
+
+---
+
 ## AS-BUILT AMENDMENT — 2026-08-13 (Phase 49)
 
 **Corrects the `## Acceptance` section's line:** *"if it is red, the rubric and the live
@@ -255,6 +297,6 @@ If something below turns out to be wrong or incomplete once exercised live, add 
 title, state plainly which line(s) it corrects, and leave the original prose in place
 underneath so the history of what was believed at each point stays readable.
 
-One amendment has been made: **2026-08-13 (Phase 49)**, at the top of this document —
+Two amendments have been made, newest first: **2026-08-19 (Phase 50 follow-up)**, repointing the `## Acceptance` gate off the archived `lv_icp_tier` and onto `scripts/check_tier_derived_parity.py`; and **2026-08-13 (Phase 49)**, at the top of this document —
 correcting the `## Acceptance` section's prescribed fix for a red sweep, after W1's live
 exercise found a second cause the original line did not anticipate.
