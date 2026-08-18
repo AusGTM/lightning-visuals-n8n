@@ -1,7 +1,7 @@
 ---
 phase: 49-re-score-strategy-reporting
 verified: 2026-08-13T08:00:00Z
-verification_status: passed_with_gaps
+status: passed_with_gaps
 score: 4/4 success criteria substantively met; 1 acceptance-gate honestly red (disclosed, root-caused, scheduled fix)
 overrides_applied: 0
 gaps:

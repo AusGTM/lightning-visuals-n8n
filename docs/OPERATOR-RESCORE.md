@@ -23,8 +23,16 @@ logged as `.planning/WINDOWS.md` entries 9–12). **If a sweep is red and the af
 records' components already match the oracle, stop — do not re-run `--execute` expecting a
 different result.** That is the signature of case 2, and the durable fix is to make the
 tier derive from the score rather than be written by a workflow — a design proved viable in
-`.planning/TIER-DERIVATION-SPIKE-2026-08-13.md` and scheduled as its own phase, since it
-requires a new CRM property.
+`.planning/TIER-DERIVATION-SPIKE-2026-08-13.md` and **shipped by Phase 50 on 2026-08-14**.
+
+**Update (Phase 50, 2026-08-14):** this failure class is now closed at the mechanism level.
+`lv_icp_tier_derived` is a calculated property computing the tier from `lv_icp_fit_score` and
+`lv_anti_icp_flag_num` server-side, with no workflow and no property-change event involved, so a
+value-identical PATCH can no longer strand a tier. The old `lv_icp_tier` enum is archived and the
+workflow that wrote it (`4625147345`) is deleted. Ids 9-12 read their correct tier with no record
+write at all. Evidence:
+`.planning/phases/50-derived-tier-property/50-TIER-PARITY-EVIDENCE.md`. Case 2 above is retained
+as the historical explanation of why a red sweep could not be fixed by re-running `--execute`.
 
 The sweep is still never edited to make it pass. That part of the original line is
 unconditional and unchanged.
