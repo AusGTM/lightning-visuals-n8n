@@ -1,13 +1,14 @@
 ---
 phase: 50-derived-tier-property
 verified: 2026-08-14T00:00:00Z
-status: human_needed
+status: passed
 score: 5/5 must-haves verified (all 5 roadmap success criteria hold; 1 accepted open risk disclosed, not counted against the score)
 behavior_unverified: 0
 overrides_applied: 0
-human_verification:
+accepted_risks:
   - test: "Search the HubSpot Reports/Dashboards library (not saved views, which are already confirmed migrated) for any report, dashboard widget, or chart that groups by, filters on, or displays lv_icp_tier."
     expected: "Either no such report/dashboard exists, or every one found is repointed to lv_icp_tier_derived."
+    disposition: "ACCEPTED BY OPERATOR 2026-08-19 — reviewed twice (at the retirement decision gate and again at seal) and knowingly accepted rather than closed. Recovery if a report does break: lv_icp_tier and its data persist under ?archived=true, so a broken report can be repointed to lv_icp_tier_derived after the fact; the cost is that it breaks visibly first."
     why_human: "HubSpot exposes no public API to enumerate reports or dashboards. This is explicitly disclosed in 50-DEPENDENTS-SWEEP.md and 50-RETIREMENT-RECORD.md as UNCONFIRMED, not resolved — the operator's prior attestation covered saved views only and the operator chose to proceed and accept this risk. It cannot be closed by any script in this repo; it can only be resolved by a human opening the HubSpot UI."
 ---
 
