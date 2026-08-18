@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 9
+open_count: 10
 waived_count: 1
 fixed_count: 6
-total_count: 16
-last_updated: 2026-08-18T23:18:22.149Z
+total_count: 17
+last_updated: 2026-08-18T23:22:00.492Z
 ---
 
 # Broken Windows Ledger
@@ -31,6 +31,7 @@ last_updated: 2026-08-18T23:18:22.149Z
 | 14 | 50 | unmet-truth | .planning/phases/50-derived-tier-property/50-TIER-PARITY-EVIDENCE.md |  | Company 14752488879 (Coffs Harbour Racing Club): a 5th instance of the WF1-staleness class ids 9-12 already log -- lv_icp_tier reads Unscored while lv_icp_fit_score is 25 (correctly C per config/icp_scoring.yaml's tier_rules, and lv_icp_tier_derived correctly reads C). Not one of WINDOWS.md ids 9-12; discovered live during Phase 50 Plan 03's D-07 parity gate run, same root cause (a value-identical PATCH fires no HubSpot property-change event, so WF1 never (re-)enrolled). Unlike the veto-guard defect (id 13), the derived property is CORRECT here and the stale enum is wrong -- this is evidence FOR lv_icp_tier_derived, not against it. | open |  | 2026-08-13T22:01:07.000Z |  |
 | 15 | 50 | deviation | .planning/phases/50-derived-tier-property/50-RETIREMENT-RECORD.md |  | lv_icp_tier archive blocked live: HubSpot rejected DELETE /crm/v3/properties/companies/lv_icp_tier with 400 CANNOT_DELETE_PROPERTY_IN_USE -- WF1's (4625147345) workflow actions still reference the property as a write target, and HubSpot counts this as "in use" regardless of the workflow's isEnabled state. Not anticipated by 50-RESEARCH.md or 50-NULL-PROBE.json (RESEARCH Q6). WF1 itself IS switched off live and verified (D-08 complete). Neither deleting WF1 nor editing its actions to strip the reference was attempted -- both are outside this plan's authorised means (the former violates the plan's explicit "WF1 is not deleted" prohibition; the latter forfeits the proven one-action rollback mechanism in 50-ROLLBACK-DRILL.md). Retirement (D-06) and the dependent relabel (D-15's fallback) were deferred pending a fresh operator decision among 3 documented options. RESOLVED WITH EVIDENCE (2026-08-14, same-date second live window, Phase 50 Plan 05): the operator selected option 3 -- delete WF1 entirely -- explicitly overriding D-08 (D-24, 50-CONTEXT.md). scripts/put_hubspot_flow.py gained a --delete mode; WF1 deleted (204, independently re-read 404); the archive retried and succeeded (204, confirmed absent and present under ?archived=true); lv_icp_tier_derived relabelled to "ICP Tier" in the same window and verified by a two-point D-22 poll. Rollback is now rebuild-from-JSON via POST /automation/v4/flows, not a one-action re-enable -- docs/OPERATOR-TIER-ROLLBACK.md's 2026-08-14 amendment states the mechanism is gone. Full trail: 50-RETIREMENT-RECORD.md's "D-24 resolution" section. | fixed |  | 2026-08-14T02:30:00.000Z | 2026-08-14T02:23:24.962Z |
 | 16 | 47 | deviation | docs/OPERATOR-VETO-REFRESH.md |  | Phase 47 declared ONE armed write window and spent FIVE. Genuinely disclosed at the time in 47-04-SUMMARY.md, 47-RUN-REPORT.md and REQUIREMENTS.md's VETO-02 row, but never registered in this cross-phase ledger -- the register /gsd-ship actually gates on -- so a disclosure present in three phase-local documents was invisible to the one check designed to catch it. Recorded retrospectively by Phase 47's first verification run (2026-08-19, 8 days late; the phase had been sealed without a verifier ever running). No record was harmed: the overrun was in window COUNT, not scope -- every window stayed record-scoped and each disarm was read back and confirmed. Registered for ledger completeness and as the standing reminder that a per-phase disclosure is not a ledger entry. | waived | Historical, retroactively unfixable: the five windows were spent on 2026-08-12 and every one was record-scoped with a read-back-confirmed disarm. The defect this entry records is the MISSING LEDGER ROW, and appending this row is itself the remedy -- there is no further action available. Not marked 'fixed', because that would imply the overrun was undone; it was not, it was disclosed. Waived so the ledger stays honest without blocking ship on a closed piece of history. | 2026-08-18T23:18:10.283Z | 2026-08-18T23:18:22.149Z |
+| 17 | 50 | unmet-truth | tests/test_scoring_parity.py | 289 | The @live parity tests still assert against lv_icp_tier, which Phase 50 archived on 2026-08-14 (7 references: lines 289, 292, 401, 403, 404, 427, 494, including settle()/settle_until() polls that will now block to timeout rather than fail fast). They are env-gated behind RUN_LIVE_PARITY, so the offline suite stays green and nothing caught it -- 2821 offline tests pass. Correct migration is to lv_icp_tier_derived, whose values these assertions already match, EXCEPT that it is computed server-side with a ~70-130s backfill, so the settle helpers' timeouts must be re-checked against that latency rather than assumed. Surfaced by Phase 47.5's retrospective verification as a forward-looking item; not a 47.5 defect. Left OPEN deliberately -- unlike the historical entries this one is fixable, and it will bite the next person to run the live suite. | open |  | 2026-08-18T23:22:00.492Z |  |
 
 ````json
 [
@@ -225,6 +226,18 @@ last_updated: 2026-08-18T23:18:22.149Z
     "reason": "Historical, retroactively unfixable: the five windows were spent on 2026-08-12 and every one was record-scoped with a read-back-confirmed disarm. The defect this entry records is the MISSING LEDGER ROW, and appending this row is itself the remedy -- there is no further action available. Not marked 'fixed', because that would imply the overrun was undone; it was not, it was disclosed. Waived so the ledger stays honest without blocking ship on a closed piece of history.",
     "recorded_at": "2026-08-18T23:18:10.283Z",
     "resolved_at": "2026-08-18T23:18:22.149Z"
+  },
+  {
+    "id": 17,
+    "kind": "unmet-truth",
+    "phase": "50",
+    "file": "tests/test_scoring_parity.py",
+    "line": 289,
+    "description": "The @live parity tests still assert against lv_icp_tier, which Phase 50 archived on 2026-08-14 (7 references: lines 289, 292, 401, 403, 404, 427, 494, including settle()/settle_until() polls that will now block to timeout rather than fail fast). They are env-gated behind RUN_LIVE_PARITY, so the offline suite stays green and nothing caught it -- 2821 offline tests pass. Correct migration is to lv_icp_tier_derived, whose values these assertions already match, EXCEPT that it is computed server-side with a ~70-130s backfill, so the settle helpers' timeouts must be re-checked against that latency rather than assumed. Surfaced by Phase 47.5's retrospective verification as a forward-looking item; not a 47.5 defect. Left OPEN deliberately -- unlike the historical entries this one is fixable, and it will bite the next person to run the live suite.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-08-18T23:22:00.492Z",
+    "resolved_at": null
   }
 ]
 ````
