@@ -604,3 +604,16 @@ All 7 round-2 files verified present on disk (`scripts/backfill_dry_run.py`,
 git log (`255fc38`, `d9d3c32`, `ee83b78`, `e622e53`, `6f249b1`, `c0a4e41`); no credential
 material found in `51-RESEARCH-REPRODUCIBILITY.json`; no HubSpot write call site in
 `scripts/measure_research_reproducibility.py`.
+
+## Self-Check (checkpoint round 3): PASSED
+
+All 8 round-3 files verified present on disk (`src/validator_sonnet.py`,
+`scripts/backfill_dry_run.py`, `tests/test_backfill_dry_run.py`,
+`tests/test_validator_sonnet.py`, `51-DRYRUN-PREDICTIONS.json`,
+`51-DRYRUN-PREDICTIONS-run2-diversified.json`, `51-SIZING.md`, `51-03-SUMMARY.md`);
+full test suite green (2874 passed, 154 skipped, `node --test tests/n8n/*.test.mjs`:
+683 passed); both round-3 commit hashes verified in git log (`d6451d7`, `a5212f3`);
+no credential material found in `51-DRYRUN-PREDICTIONS.json` /
+`51-DRYRUN-PREDICTIONS-run2-diversified.json`; predictions/skip-log partition clean
+(8 rows, 2 skipped, zero overlap); `research_calls_made=24`, `judge_calls_made=3`,
+`judge_cap_hit=false` on the committed Run 3 artifact.
