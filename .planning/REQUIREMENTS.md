@@ -24,7 +24,7 @@ those records acquire a real `lv_icp_fit_score` and `lv_icp_tier_derived`. Execu
       by a test. Raw pass-through puts every company one band too low and inverts the scoring; this
       is a known landmine from prior provider work, not a hypothetical.
 
-- [ ] **FILL-04**: Research is used only to fill specific fields ZoomInfo cannot answer, on records
+- [x] **FILL-04**: Research is used only to fill specific fields ZoomInfo cannot answer, on records
       ZoomInfo already matched. A record ZoomInfo cannot match is **skipped and logged unenriched**,
       never rescued by whole-record research (operator: too expensive) and never scored on guessed
       data. "Not yet enriched" stays distinguishable from "enriched and genuinely low-fit".
@@ -54,11 +54,11 @@ those records acquire a real `lv_icp_fit_score` and `lv_icp_tier_derived`. Execu
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FILL-01 | Phase 51 | Not started |
+| FILL-01 | Phase 51 | Complete |
 | FILL-02 | Phase 52 | Not started |
-| FILL-03 | Phase 51 | Not started |
-| FILL-04 | Phase 51 | Not started |
-| SAFE-01 | Phase 51 | Not started |
+| FILL-03 | Phase 51 | Complete |
+| FILL-04 | Phase 51 | Complete |
+| SAFE-01 | Phase 51 | Complete |
 | SAFE-02 | Phase 52 | Not started |
 | SAFE-03 | Phase 52 | Not started |
 | SAFE-04 | Phase 52 | Not started |

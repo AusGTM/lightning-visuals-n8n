@@ -5,15 +5,15 @@ milestone_name: Direct Backfill & Scoring Coverage
 current_phase: 51
 current_phase_name: Backfill Pipeline, Credit Sizing & Dry Run
 status: executing
-stopped_at: "Completed 51-01-PLAN.md: tracer dry-run pipeline proven live on one record, zero HubSpot writes, zero n8n executions"
-last_updated: "2026-08-19T03:10:20.653Z"
+stopped_at: "Completed 51-02-PLAN.md: gap-fill research lane, D-04 skip contract, D-03 sizing gate, live 10-record capped sample (8 predictions + 2 skips), zero HubSpot writes, zero n8n executions"
+last_updated: "2026-08-19T03:29:32.064Z"
 last_activity: 2026-08-19
 last_activity_desc: Phase 51 execution started
 progress:
   total_phases: 2
   completed_phases: 0
   total_plans: 3
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -142,7 +142,7 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Phase: 51 (Backfill Pipeline, Credit Sizing & Dry Run) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
@@ -230,12 +230,12 @@ Last activity: 2026-08-19 — Phase 51 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [███░░░░░░░] 33% (v0.9 phase 47.5 of 46-49)
+Progress: [███████░░░] 67% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-19T03:10:20.645Z
-**Stopped at:** Completed 51-01-PLAN.md: tracer dry-run pipeline proven live on one record, zero HubSpot writes, zero n8n executions
+**Last session:** 2026-08-19T03:29:32.056Z
+**Stopped at:** Completed 51-02-PLAN.md: gap-fill research lane, D-04 skip contract, D-03 sizing gate, live 10-record capped sample (8 predictions + 2 skips), zero HubSpot writes, zero n8n executions
 **Resume file:** None
 
 ## Performance Metrics
@@ -302,6 +302,7 @@ Progress: [███░░░░░░░] 33% (v0.9 phase 47.5 of 46-49)
 | Phase 50 P05 | 55min | 1 tasks | 7 files |
 | Phase 50 P05 | 35min | 1 tasks | 9 files |
 | Phase 51 P01 | ~15min | 3 tasks | 5 files |
+| Phase 51 P02 | ~25min | 3 tasks | 5 files |
 
 ## Decisions
 
@@ -319,6 +320,8 @@ Progress: [███░░░░░░░] 33% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: D-24: operator overrode D-08, WF1 (4625147345) deleted outright (not merely disabled) after lv_icp_tier's archive was rejected live (CANNOT_DELETE_PROPERTY_IN_USE); archive then succeeded and lv_icp_tier_derived was relabelled 'ICP Tier'
 - [Phase ?]: Second D-16 deviation spent: armed 1-record recompute proof (Melbourne Racing Club 9604614548) confirms the pipeline writes lv_anti_icp_flag_num onto a real record end-to-end (0->'0' branch directly observed; '1' branch inferred from shared derivation + drift tests, not independently re-observed)
 - [Phase ?]: Phase 51 Plan 01: measured ZoomInfo companies/enrich per-match cost live (100 hundredths, vs the 108 documented floor) via --measure-cost, retiring research Assumption A1; credits_per_match_hundredths_used is max(measured, fallback)
+- [Phase ?]: Sample size sized to 10 (not the research doc's default 12) after Task 2's live sizing read discovered MAX_WEB_RESEARCH_PER_RUN=10 in the live .env -- respected the operator's configured research budget rather than overriding it.
+- [Phase ?]: select_never_scored_sample fixed to sort by numeric id (int(r['id'])) instead of lexicographic string order -- this portal mixes 10- and 11-digit HubSpot ids, and the old sort both misordered rows and could select a different sample slice.
 
 ### Roadmap Evolution
 
