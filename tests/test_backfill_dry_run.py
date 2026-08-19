@@ -435,3 +435,80 @@ def test_sample_order_is_ascending_id_stable(monkeypatch):
     # Numeric order, not lexicographic: "9604614548" < "10021111653" numerically but
     # would sort AFTER it as a plain string.
     assert ids1 == ["9604614548", "10021111653", "17317381378"]
+
+
+def test_diversified_sample_stratifies_by_industry(monkeypatch):
+    # 2 media-bucket companies (unsorted ids) + 3 plain ones (unsorted ids) -- mirrors the
+    # live population's GAMBLING_CASINOS-cluster-vs-SPORTS/BROADCAST_MEDIA split.
+    def mock_search(object_type, filters, properties, limit=100):
+        return {"total": 5, "results": [
+            {"id": "300", "properties": {"name": "Gambling Co", "domain": "g.com", "industry": "GAMBLING_CASINOS"}},
+            {"id": "100", "properties": {"name": "Broadcaster", "domain": "b.com", "industry": "BROADCAST_MEDIA"}},
+            {"id": "500", "properties": {"name": "Sports League", "domain": "s.com", "industry": "SPORTS"}},
+            {"id": "200", "properties": {"name": "Gambling Co 2", "domain": "g2.com", "industry": "GAMBLING_CASINOS"}},
+            {"id": "400", "properties": {"name": "Amusement Park", "domain": "a.com", "industry": "Amusement Parks, Arcades & Attractions"}},
+        ]}
+
+    monkeypatch.setattr(b, "search_records", mock_search)
+
+    sample = b.select_diversified_never_scored_sample(4, media_slots=2)
+    ids = [c["id"] for c in sample]
+
+    # Media bucket (BROADCAST_MEDIA id=100, SPORTS id=500) first, ascending id within the
+    # bucket; then the residual pool fills the rest by ascending id, excluding the two
+    # media picks.
+    assert ids == ["100", "500", "200", "300"]
+    assert [c["industry"] for c in sample] == [
+        "BROADCAST_MEDIA", "SPORTS", "GAMBLING_CASINOS", "GAMBLING_CASINOS",
+    ]
+
+    # Deterministic: a second call with the same mocked page returns the same order.
+    assert [c["id"] for c in b.select_diversified_never_scored_sample(4, media_slots=2)] == ids
+
+
+def test_diversified_sample_media_slots_short_falls_back_to_fill(monkeypatch):
+    # Only 1 media-bucket company exists -- media_slots=2 cannot be satisfied; the fill
+    # pool must make up the difference rather than returning a short sample.
+    def mock_search(object_type, filters, properties, limit=100):
+        return {"total": 3, "results": [
+            {"id": "100", "properties": {"name": "Broadcaster", "domain": "b.com", "industry": "BROADCAST_MEDIA"}},
+            {"id": "200", "properties": {"name": "Club", "domain": "c.com", "industry": "GAMBLING_CASINOS"}},
+            {"id": "300", "properties": {"name": "Club 2", "domain": "c2.com", "industry": "GAMBLING_CASINOS"}},
+        ]}
+
+    monkeypatch.setattr(b, "search_records", mock_search)
+
+    sample = b.select_diversified_never_scored_sample(3, media_slots=2)
+    assert [c["id"] for c in sample] == ["100", "200", "300"]
+
+
+def test_run_dry_run_diversified_records_selection_rule(monkeypatch):
+    def mock_search(object_type, filters, properties, limit=100):
+        return {"total": 2, "results": [
+            {"id": "100", "properties": {"name": "Broadcaster", "domain": "b.com", "industry": "BROADCAST_MEDIA"}},
+            {"id": "200", "properties": {"name": "Club", "domain": "c.com", "industry": "GAMBLING_CASINOS"}},
+        ]}
+
+    monkeypatch.setattr(b, "search_records", mock_search)
+    monkeypatch.setattr(b, "enrich_company", _mock_enrich_company_au_match)
+    monkeypatch.setattr(b, "zoominfo_credit_balance", lambda: 1000)
+    monkeypatch.setattr(b, "_mint_zoominfo_token", lambda: "fake-token")
+
+    result = b.run_dry_run(sample_size=2, diversified=True, media_slots=1)
+
+    assert result["sample_selection_rule"] == "diversified_industry_stratified"
+    assert result["media_slots"] == 1
+    assert [row["id"] for row in result["rows"]] == ["100", "200"]
+    assert [row["industry"] for row in result["rows"]] == ["BROADCAST_MEDIA", "GAMBLING_CASINOS"]
+
+
+def test_run_dry_run_default_records_ascending_id_rule(monkeypatch):
+    monkeypatch.setattr(b, "search_records", _mock_search_records_one_company)
+    monkeypatch.setattr(b, "enrich_company", _mock_enrich_company_au_match)
+    monkeypatch.setattr(b, "zoominfo_credit_balance", lambda: 1000)
+    monkeypatch.setattr(b, "_mint_zoominfo_token", lambda: "fake-token")
+
+    result = b.run_dry_run(sample_size=1)
+
+    assert result["sample_selection_rule"] == "ascending_id"
+    assert result["media_slots"] is None

@@ -189,6 +189,71 @@ def select_never_scored_sample(size: int) -> list:
     ]
 
 
+# Diversification rule (operator ruling, 2026-08-19, the Gold Coast Turf Club checkpoint):
+# the plain ascending-id sample landed entirely on one org-type cluster -- 8/8 racing/turf
+# clubs, HubSpot native `industry` GAMBLING_CASINOS for every one (live-confirmed against
+# three of the eight ids). This allowlist names the native `industry` values plausibly
+# associated with governing bodies, leagues, broadcasters and content producers -- the org
+# types that could score Tier A/B -- deliberately EXCLUDING GAMBLING_CASINOS (the cluster
+# already sampled) and the population's single largest bucket, "Amusement Parks, Arcades &
+# Attractions" (venues, not a plausible governing-body/broadcaster signal). Live-observed
+# industry distribution over the population's first page recorded in 51-SIZING.md.
+DIVERSIFICATION_INDUSTRIES = frozenset({
+    "BROADCAST_MEDIA", "Broadcasting", "Media & Internet", "SPORTS",
+    "ENTERTAINMENT", "Entertainment Providers", "Social Networks",
+})
+
+
+def select_diversified_never_scored_sample(size: int, media_slots: int) -> list:
+    """Deterministic stratified sample over the SAME single bounded page
+    select_never_scored_sample() draws from -- same refuse-rather-than-truncate contract,
+    same numeric-id ordering, same row shape. Up to `media_slots` records whose native
+    HubSpot `industry` is in DIVERSIFICATION_INDUSTRIES (ascending numeric id within that
+    subset), then the remaining `size - len(media_selected)` slots filled by ascending
+    numeric id from the rest of the page (excluding the media slots already taken) -- the
+    same rule select_never_scored_sample() uses, applied to the residual pool, so the
+    "some of the small clubs" half of the sample stays exactly as reproducible as before."""
+    if size > SAMPLE_SEARCH_LIMIT:
+        raise RuntimeError(
+            f"REFUSED: requested sample size {size} exceeds the single-page search limit "
+            f"({SAMPLE_SEARCH_LIMIT}). Add pagination before requesting a larger sample."
+        )
+    result = search_records(
+        "companies",
+        [{"propertyName": "lv_icp_fit_score", "operator": "NOT_HAS_PROPERTY"}],
+        ["name", "domain", "website", "country", "industry"],
+        limit=SAMPLE_SEARCH_LIMIT,
+    )
+    rows = sorted(result.get("results", []), key=lambda r: int(r["id"]))
+    total = result.get("total")
+    if total is not None and len(rows) < size and total > len(rows):
+        raise RuntimeError(
+            f"REFUSED: this search returned only {len(rows)} rows (page limit "
+            f"{SAMPLE_SEARCH_LIMIT}) but the reported population is {total}. Add "
+            "pagination to select_diversified_never_scored_sample() before requesting a "
+            "sample this size."
+        )
+
+    def _as_dict(row):
+        props = row.get("properties", {})
+        return {
+            "id": row["id"],
+            "name": props.get("name"),
+            "domain": props.get("domain"),
+            "website": props.get("website"),
+            "country": props.get("country"),
+            "industry": props.get("industry"),
+        }
+
+    media_rows = [r for r in rows if r.get("properties", {}).get("industry") in DIVERSIFICATION_INDUSTRIES]
+    media_selected = media_rows[:media_slots]
+    media_ids = {r["id"] for r in media_selected}
+    fill_rows = [r for r in rows if r["id"] not in media_ids]
+    fill_selected = fill_rows[: max(size - len(media_selected), 0)]
+
+    return [_as_dict(r) for r in media_selected] + [_as_dict(r) for r in fill_selected]
+
+
 def build_candidate_patch(zi_attributes: dict, hubspot_country=None):
     """Builds the scoring inputs ZoomInfo can actually answer. Any key whose value is
     None is OMITTED from the returned dict entirely -- HubSpot must not receive nulls, and
@@ -487,7 +552,9 @@ def run_dry_run(sample_size: int = DEFAULT_SAMPLE_SIZE,
                  credits_per_match_hundredths: int = CREDITS_PER_MATCH_HUNDREDTHS_FALLBACK,
                  measure_cost: bool = False,
                  research: bool = False,
-                 max_research_calls: int = None) -> dict:
+                 max_research_calls: int = None,
+                 diversified: bool = False,
+                 media_slots: int = None) -> dict:
     """Orchestrates the single path: build_sizing_plan() (balance read -> cap ->
     population count, refusing before any enrich request if sample_size exceeds the cap)
     -> bounded sample -> per record, skip-log-and-continue (via build_skip_entry) when
@@ -496,6 +563,15 @@ def run_dry_run(sample_size: int = DEFAULT_SAMPLE_SIZE,
     record ZoomInfo did not match structurally can never reach research_gap_fields (D-04:
     no whole-record research rescue) -- a property of control flow, not a conditional a
     later edit could invert.
+
+    diversified=True (operator ruling, 2026-08-19) swaps select_never_scored_sample() for
+    select_diversified_never_scored_sample() -- same page, same refuse contract, but
+    stratified by native `industry` (DIVERSIFICATION_INDUSTRIES) instead of pure ascending
+    id, so the sample is not entirely one org-type cluster. media_slots defaults to half of
+    sample_size, rounded up (ceil), when not given. The chosen rule and slot count are
+    recorded on the returned result (`sample_selection_rule`, `media_slots`) so the
+    artifact states which rule produced it, exactly as the plain rule already did
+    implicitly by being the only rule that existed.
 
     research=True gates the D-02 gap-fill lane; max_research_calls (default
     MAX_RESEARCH_CALLS_DEFAULT, itself read from MAX_WEB_RESEARCH_PER_RUN) refuses the run
@@ -526,7 +602,12 @@ def run_dry_run(sample_size: int = DEFAULT_SAMPLE_SIZE,
                 "ZoomInfo companies/enrich call and no research call was issued."
             )
 
-    sample = select_never_scored_sample(sample_size)
+    if diversified:
+        slots = media_slots if media_slots is not None else -(-sample_size // 2)  # ceil half
+        sample = select_diversified_never_scored_sample(sample_size, slots)
+    else:
+        slots = None
+        sample = select_never_scored_sample(sample_size)
 
     token = _mint_zoominfo_token() if sample else None
 
@@ -573,6 +654,7 @@ def run_dry_run(sample_size: int = DEFAULT_SAMPLE_SIZE,
         row["research_filled"] = research_filled
         row["evidence_urls"] = evidence_urls
         row["country_conflict"] = country_conflict  # None unless HubSpot/ZoomInfo regions disagreed
+        row["industry"] = company.get("industry")  # native HubSpot value; shows which diversification bucket a row came from
         row["matched_attributes"] = {
             k: zi_attributes[k] for k in _MATCHED_ATTRIBUTES_USED if k in zi_attributes
         }
@@ -602,6 +684,8 @@ def run_dry_run(sample_size: int = DEFAULT_SAMPLE_SIZE,
         "rows": rows,
         "skipped": skipped,
         "research_calls_made": research_calls_made,
+        "sample_selection_rule": "diversified_industry_stratified" if diversified else "ascending_id",
+        "media_slots": slots,
     }
 
     if measure_cost:
@@ -642,6 +726,14 @@ def main(argv=None) -> int:
                          help="Bracket the sample's enrich calls with a second ZoomInfo "
                               "credit-balance read and measure the real per-match cost "
                               "(retires research Assumption A1).")
+    parser.add_argument("--diversified", action="store_true",
+                         help="Stratify the sample by native HubSpot `industry` "
+                              "(DIVERSIFICATION_INDUSTRIES) instead of pure ascending id, "
+                              "so it is not one homogeneous org-type cluster (operator "
+                              "ruling 2026-08-19).")
+    parser.add_argument("--media-slots", type=int, default=None,
+                         help="Max records drawn from DIVERSIFICATION_INDUSTRIES when "
+                              "--diversified is set (default: half of --sample, rounded up).")
     args = parser.parse_args(argv)
 
     if not _has_credentials() or not zoominfo_credentials_present():
@@ -660,7 +752,8 @@ def main(argv=None) -> int:
         print(json.dumps(plan, indent=2, default=str))
         return 0
 
-    result = run_dry_run(sample_size=args.sample, measure_cost=args.measure_cost, research=args.research)
+    result = run_dry_run(sample_size=args.sample, measure_cost=args.measure_cost, research=args.research,
+                          diversified=args.diversified, media_slots=args.media_slots)
     run_at = datetime.now(timezone.utc).isoformat()
 
     for row in result["rows"]:
@@ -678,6 +771,8 @@ def main(argv=None) -> int:
         "credits_spent": result["credits_spent"],
         "research_calls_made": result["research_calls_made"],
         "predicted_tier_values_allowed": ["A", "B", "C", "D", "Unscored"],
+        "sample_selection_rule": result["sample_selection_rule"],
+        "media_slots": result["media_slots"],
         "rows": result["rows"],
     }
     skip_log = {
