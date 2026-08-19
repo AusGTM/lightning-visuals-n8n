@@ -374,7 +374,10 @@ def _research_result(produces_content, confidence=90, with_evidence=True, org_ty
 def test_majority_vote_picks_majority_bool_and_confidence_of_agreeing_calls_only(monkeypatch):
     # 2 of 3 calls say True (confidence 90, 92); the outvoted False call (confidence 60)
     # must NOT drag the returned confidence down -- mean of the 2 agreeing calls (91), not
-    # the mean of all 3 (~80.7).
+    # the mean of all 3 (~80.7). This is a genuine 2-1 lv_produces_content disagreement, so
+    # (checkpoint round 3) it now escalates to the judge -- mocked here to agree with the
+    # natural majority (True), keeping this test's original assertions meaningful for what
+    # they actually test: the confidence-of-agreeing-calls averaging, not the judge path.
     sequence = [
         _research_result(True, confidence=90),
         _research_result(False, confidence=60),
@@ -387,7 +390,11 @@ def test_majority_vote_picks_majority_bool_and_confidence_of_agreeing_calls_only
         calls["n"] += 1
         return result
 
+    def mock_judge(record, field, current_value, candidates, haiku_result, policy):
+        return _judge_result(chosen_value=True, evidence_url="https://example.com/watch-live")
+
     monkeypatch.setattr(b, "claude_web_research", mock_research)
+    monkeypatch.setattr(b, "validate_conflict_with_sonnet", mock_judge)
     record = HubSpotRecord(object_type="companies", id="1", properties={"name": "X"})
     result = b.research_with_majority_vote(record)
 
@@ -400,7 +407,10 @@ def test_majority_vote_picks_majority_bool_and_confidence_of_agreeing_calls_only
 def test_majority_vote_tie_resolves_to_absent_not_false(monkeypatch):
     # 2 repetitions, one True one False -- a tie must resolve to "no majority" (key absent
     # from the returned data), never a defaulted False (which would wrongly fire the
-    # no-content hard veto on a genuinely disputed answer).
+    # no-content hard veto on a genuinely disputed answer). This tie is ALSO a genuine
+    # disagreement, so it escalates to the judge (checkpoint round 3) -- mocked here to a
+    # deliberate needs_review so the absent outcome is asserted explicitly, not an
+    # accident of whatever ANTHROPIC_API_KEY happens to be set in the ambient environment.
     sequence = [_research_result(True), _research_result(False)]
     calls = {"n": 0}
 
@@ -409,7 +419,11 @@ def test_majority_vote_tie_resolves_to_absent_not_false(monkeypatch):
         calls["n"] += 1
         return result
 
+    def mock_judge(record, field, current_value, candidates, haiku_result, policy):
+        return _judge_result(decision="needs_review", chosen_value=None, confidence=50)
+
     monkeypatch.setattr(b, "claude_web_research", mock_research)
+    monkeypatch.setattr(b, "validate_conflict_with_sonnet", mock_judge)
     record = HubSpotRecord(object_type="companies", id="1", properties={"name": "X"})
     result = b.research_with_majority_vote(record, repetitions=2)
 
@@ -447,6 +461,114 @@ def test_research_gap_fields_routes_through_majority_vote(monkeypatch):
 
     assert calls["n"] == b.RESEARCH_VOTE_REPETITIONS
     assert result.data["lv_produces_content"] is True
+
+
+def _judge_result(decision="promote", chosen_value=True, confidence=90, evidence_url="https://example.com/e"):
+    return {
+        "decision": decision, "chosen_provider": "claude_web", "chosen_value": chosen_value,
+        "confidence": confidence, "reason": "test", "validation_status": "sonnet_validated",
+        "evidence_url": evidence_url, "evidence_summary": "test",
+    }
+
+
+def test_conflicting_produces_content_escalates_to_judge_and_overrides_majority(monkeypatch):
+    # 2 True, 1 False -- majority is True, but votes are NOT unanimous, so this must
+    # escalate. The judge's answer (False here) must win over the raw majority (True),
+    # proving the escalation actually overrides the vote rather than just annotating it.
+    sequence = [_research_result(True), _research_result(True), _research_result(False)]
+    calls = {"n": 0}
+
+    def mock_research(record):
+        result = sequence[calls["n"]]
+        calls["n"] += 1
+        return result
+
+    judge_calls = {"n": 0}
+
+    def mock_judge(record, field, current_value, candidates, haiku_result, policy):
+        judge_calls["n"] += 1
+        assert field == "lv_produces_content"
+        assert len(candidates) == 3  # one candidate per repetition that answered the field
+        return _judge_result(chosen_value=False)
+
+    monkeypatch.setattr(b, "claude_web_research", mock_research)
+    monkeypatch.setattr(b, "validate_conflict_with_sonnet", mock_judge)
+    record = HubSpotRecord(object_type="companies", id="1", properties={"name": "X"})
+    judge_state = {"calls_made": 0, "cap_hit": False}
+    result = b.research_with_majority_vote(record, judge_state=judge_state)
+
+    assert judge_calls["n"] == 1
+    assert judge_state["calls_made"] == 1
+    assert result.data["lv_produces_content"] is False
+    assert result.evidence_by_field["lv_produces_content"] == "https://example.com/e"
+
+
+def test_judge_low_confidence_leaves_produces_content_absent(monkeypatch):
+    # SS15.1 human_review: sonnet_confidence_below 80 -> the field stays absent, never a
+    # defaulted False (a defaulted False on lv_produces_content IS the hard veto).
+    sequence = [_research_result(True), _research_result(True), _research_result(False)]
+    calls = {"n": 0}
+
+    def mock_research(record):
+        result = sequence[calls["n"]]
+        calls["n"] += 1
+        return result
+
+    def mock_judge(record, field, current_value, candidates, haiku_result, policy):
+        return _judge_result(confidence=70)  # below the 80 threshold
+
+    monkeypatch.setattr(b, "claude_web_research", mock_research)
+    monkeypatch.setattr(b, "validate_conflict_with_sonnet", mock_judge)
+    record = HubSpotRecord(object_type="companies", id="1", properties={"name": "X"})
+    result = b.research_with_majority_vote(record, judge_state={"calls_made": 0, "cap_hit": False})
+
+    assert "lv_produces_content" not in result.data
+    assert "lv_produces_content" not in result.evidence_by_field
+
+
+def test_non_conflicting_produces_content_never_calls_the_judge(monkeypatch):
+    # All 3 repetitions agree -- research_with_majority_vote must never escalate a
+    # unanimous field. This is what keeps judge spend proportional to actual conflicts.
+    def mock_research(record):
+        return _research_result(True)
+
+    def mock_judge(*args, **kwargs):
+        raise AssertionError("judge must not be called for a non-conflicting field")
+
+    monkeypatch.setattr(b, "claude_web_research", mock_research)
+    monkeypatch.setattr(b, "validate_conflict_with_sonnet", mock_judge)
+    record = HubSpotRecord(object_type="companies", id="1", properties={"name": "X"})
+    judge_state = {"calls_made": 0, "cap_hit": False}
+    result = b.research_with_majority_vote(record, judge_state=judge_state)
+
+    assert result.data["lv_produces_content"] is True
+    assert judge_state["calls_made"] == 0
+
+
+def test_judge_cap_asserted_before_spending(monkeypatch):
+    # Cap already spent -- must refuse to spend another judge call (fail safe: leave the
+    # field absent) rather than raising or silently exceeding MAX_JUDGE_VALIDATIONS_PER_RUN.
+    sequence = [_research_result(True), _research_result(True), _research_result(False)]
+    calls = {"n": 0}
+
+    def mock_research(record):
+        result = sequence[calls["n"]]
+        calls["n"] += 1
+        return result
+
+    def mock_judge(*args, **kwargs):
+        raise AssertionError("judge must not be called once the cap is already spent")
+
+    monkeypatch.setattr(b, "claude_web_research", mock_research)
+    monkeypatch.setattr(b, "validate_conflict_with_sonnet", mock_judge)
+    monkeypatch.setattr(b, "MAX_JUDGE_VALIDATIONS_DEFAULT", 1)
+    record = HubSpotRecord(object_type="companies", id="1", properties={"name": "X"})
+    judge_state = {"calls_made": 1, "cap_hit": False}  # cap of 1 already spent
+    result = b.research_with_majority_vote(record, judge_state=judge_state)
+
+    assert "lv_produces_content" not in result.data
+    assert judge_state["cap_hit"] is True
+    assert judge_state["calls_made"] == 1  # unchanged -- no call was spent
 
 
 def test_run_dry_run_research_cap_budgets_for_vote_repetitions(monkeypatch):

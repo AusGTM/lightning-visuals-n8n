@@ -55,10 +55,15 @@ def validate_conflict_with_sonnet(record, field, current_value, candidates, haik
         }
     }
 
+    # No explicit temperature: claude-sonnet-5 (the ANTHROPIC_JUDGE_MODEL default)
+    # rejects a non-default temperature with a 400 (confirmed via the claude-api skill --
+    # sampling params were removed starting with the Opus/Sonnet 4.6+ family). temperature=0
+    # here was a live 400 waiting to happen the first time this function's live branch ran
+    # against that default model -- fixed at the one call site every caller routes through
+    # (src/merge_policy.py, scripts/backfill_dry_run.py) rather than patched per-caller.
     msg = client.messages.create(
         model=model,
         max_tokens=1200,
-        temperature=0,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": json.dumps(payload)}]
     )

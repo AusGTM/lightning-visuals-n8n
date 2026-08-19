@@ -41,8 +41,9 @@ sys.path.insert(0, str(ROOT))  # repo root on sys.path so `src.*`/`scripts.*` im
 
 from src.hubspot_client import patch_record, search_records  # noqa: E402
 from src.icp_scoring import anti_icp_flag_properties, compute_icp_score  # noqa: E402
-from src.schemas import HubSpotRecord, ProviderEvidence, ProviderResult  # noqa: E402
+from src.schemas import CandidateValue, HubSpotRecord, ProviderEvidence, ProviderResult  # noqa: E402
 from src.taxonomy import normalize_org_type  # noqa: E402
+from src.validator_sonnet import validate_conflict_with_sonnet  # noqa: E402
 from src.web_research import claude_web_research  # noqa: E402
 from scripts.backfill_seed_company_scores import COMPONENT_PROPS, compute_components  # noqa: E402 -- import, never re-derive
 from scripts.check_provider_credits import _mint_zoominfo_token  # noqa: E402
@@ -332,6 +333,112 @@ def build_candidate_patch(zi_attributes: dict, hubspot_country=None):
 # majority (None), never a guessed value.
 RESEARCH_VOTE_REPETITIONS = 3
 
+# Operator ruling, checkpoint round 3 (2026-08-19), work item 1: the decisive measurement
+# was Gold Coast's lv_produces_content still flipping under majority-of-3, at confidence
+# 82-89 WITH a cited evidence URL on every observation -- genuine high-confidence model
+# disagreement, not low-confidence noise. CLAUDE.md SS15.1 names exactly this case
+# (lv_produces_content_conflict / hard_veto_possible / anti_icp_flag_would_change) as a
+# Sonnet-5 escalation, a mechanism this dry-run lane had never actually called. Honors the
+# existing MAX_JUDGE_VALIDATIONS_PER_RUN env contract (SS11.2/SS21.1) rather than inventing a
+# parallel knob; ALLOW_JUDGE_ESCALATION and ANTHROPIC_JUDGE_MODEL are honored inside
+# src.validator_sonnet.validate_conflict_with_sonnet itself (reused verbatim, Phase 46
+# no-reimplementation discipline -- the same function src/merge_policy.py already calls
+# live; its one temperature=0 bug, which would have 400'd against the claude-sonnet-5
+# default, was fixed at that shared call site, not forked here).
+MAX_JUDGE_VALIDATIONS_DEFAULT = int(os.getenv("MAX_JUDGE_VALIDATIONS_PER_RUN", "50"))
+
+
+def _candidates_from_raw_votes(field: str, raw_results) -> list:
+    """Builds CandidateValue objects for the judge payload directly from the raw
+    per-repetition ProviderResult observations -- one candidate per repetition that
+    actually answered `field` -- so the judge sees the real disagreement (e.g. 2 calls
+    True, 1 False), not just the majority-folded answer that already discarded it."""
+    candidates = []
+    for r in raw_results:
+        data = getattr(r, "data", None) or {}
+        if field not in data:
+            continue
+        confidence = getattr(r, "confidence", None)
+        candidates.append(CandidateValue(
+            canonical_field=field,
+            provider="claude_web",
+            value=data[field],
+            normalized_value=data[field],
+            confidence=confidence if isinstance(confidence, (int, float)) and not isinstance(confidence, bool) else 0,
+            evidence=getattr(r, "evidence", None) or ProviderEvidence(),
+            model_trace=getattr(r, "model_trace", None) or {},
+        ))
+    return candidates
+
+
+def escalate_produces_content_conflict(record: HubSpotRecord, raw_results, judge_state: dict):
+    """Escalates a genuine lv_produces_content disagreement to
+    validate_conflict_with_sonnet. Called ONLY by research_with_majority_vote, and only
+    when the raw votes for this field are not unanimous -- a record whose 3 repeated
+    calls agree never reaches this function, which is what keeps judge spend proportional
+    to actual conflicts rather than firing on every record.
+
+    `judge_state` is a caller-owned {"calls_made": int, "cap_hit": bool} dict, mutated in
+    place so run_dry_run can report an accurate running total across every company in the
+    sample. The MAX_JUDGE_VALIDATIONS_PER_RUN cap is asserted BEFORE spending a call (same
+    discipline as the ZoomInfo sizing gate) -- once hit, every further conflict in the run
+    is left unresolved (not raised, per the operator's explicit "stop and report rather
+    than raising it") and judge_state["cap_hit"] is set so the artifact records why.
+
+    Returns (resolved_value, evidence_url) -- resolved_value is None -- meaning "leave
+    lv_produces_content absent for this record" -- when: the cap is already spent;
+    validate_conflict_with_sonnet raises; the judge's own confidence is below CLAUDE.md
+    SS15.1's human_review threshold (80); the field's require_evidence_url policy is set
+    and the judge supplied no evidence_url; or the judge's decision/chosen_value don't
+    resolve to a clean boolean promotion (evidence_url is None in every not-resolved
+    case). None is NEVER coerced to False -- a defaulted False on lv_produces_content IS
+    the no-content hard veto, exactly the outcome an unresolved conflict must not silently
+    produce. The evidence_url is returned so the caller can attach it to
+    evidence_by_field["lv_produces_content"] -- the pre-escalation majority-vote evidence
+    (built from the raw votes' OWN majority, which the judge may have overridden) would
+    otherwise be stale or absent, and apply_research_to_patch's generic field-policy gate
+    would then wrongly reject the judge's own resolved, evidenced answer."""
+    if judge_state["calls_made"] >= MAX_JUDGE_VALIDATIONS_DEFAULT:
+        judge_state["cap_hit"] = True
+        return None, None
+
+    judge_state["calls_made"] += 1
+    field_policy = _load_field_policy().get("lv_produces_content", {})
+    candidates = _candidates_from_raw_votes("lv_produces_content", raw_results)
+    haiku_result = {
+        "decision": "needs_review",
+        "confidence": 0,
+        "reason": "No Haiku classification step in this dry-run lane -- majority-of-3 "
+                  "research votes disagreed on lv_produces_content; escalating directly "
+                  "to Sonnet per CLAUDE.md SS15.1.",
+        "requires_sonnet_validation": True,
+    }
+
+    try:
+        judge_result = validate_conflict_with_sonnet(
+            record=record,
+            field="lv_produces_content",
+            current_value=None,
+            candidates=candidates,
+            haiku_result=haiku_result,
+            policy=field_policy,
+        )
+    except Exception:
+        return None, None
+
+    confidence = judge_result.get("confidence")
+    if not isinstance(confidence, (int, float)) or isinstance(confidence, bool) or confidence < 80:
+        return None, None  # SS15.1 human_review: sonnet_confidence_below 80 -> absent
+    evidence_url = judge_result.get("evidence_url")
+    if field_policy.get("require_evidence_url") and not evidence_url:
+        return None, None  # SS15.1 human_review: no_evidence_url_for_required_field -> absent
+    if judge_result.get("decision") not in ("promote", "stage_only"):
+        return None, None
+    chosen_value = judge_result.get("chosen_value")
+    if not isinstance(chosen_value, bool):
+        return None, None
+    return chosen_value, evidence_url
+
 
 def _majority_bool(values):
     """None entries are non-votes (abstentions), never counted as a False vote -- a tied
@@ -361,7 +468,7 @@ def _majority_str(values):
     return tied[0] if len(tied) == 1 else None
 
 
-def research_with_majority_vote(record: HubSpotRecord, repetitions: int = RESEARCH_VOTE_REPETITIONS):
+def research_with_majority_vote(record: HubSpotRecord, repetitions: int = RESEARCH_VOTE_REPETITIONS, judge_state: dict = None):
     """Calls claude_web_research `repetitions` times and folds the results into a single
     ProviderResult carrying the MAJORITY answer per GAP_FILL_FIELDS name (see
     RESEARCH_VOTE_REPETITIONS' comment for why: temperature=0 is unavailable on
@@ -369,6 +476,15 @@ def research_with_majority_vote(record: HubSpotRecord, repetitions: int = RESEAR
     instead). A single failed repetition is dropped, never raised (mirrors
     research_gap_fields' own never-crash discipline); if every repetition fails, returns
     None exactly as a single failed call would.
+
+    When the raw votes for lv_produces_content genuinely disagree (not unanimous),
+    escalates to escalate_produces_content_conflict() instead of trusting the majority
+    fold for that one field (operator ruling, checkpoint round 3 -- the majority answer
+    alone was shown NOT reliable enough for this specific field: Gold Coast still flipped
+    2-1 under majority vote in the round-2 measurement). `judge_state` threads the
+    caller's running MAX_JUDGE_VALIDATIONS_PER_RUN budget through; pass None only for
+    isolated/test calls where no cross-call budget tracking is needed (defaults to a
+    fresh, unshared counter).
 
     `confidence` on the returned result is the mean confidence of the calls that agree
     with the majority on every field that HAS a majority (the calls whose answer the
@@ -397,8 +513,10 @@ def research_with_majority_vote(record: HubSpotRecord, repetitions: int = RESEAR
 
     majority_data = {}
     majority_evidence_by_field = {}
+    raw_values_by_field = {}
     for field in GAP_FILL_FIELDS:
         raw_values = [(getattr(r, "data", None) or {}).get(field) for r in results]
+        raw_values_by_field[field] = raw_values
         majority = _majority_str(raw_values) if field == "lv_org_type" else _majority_bool(raw_values)
         if majority is None:
             continue
@@ -409,6 +527,23 @@ def research_with_majority_vote(record: HubSpotRecord, repetitions: int = RESEAR
                 if field in evidence_by_field:
                     majority_evidence_by_field[field] = evidence_by_field[field]
                 break
+
+    # CLAUDE.md SS15.1 escalation (operator ruling, checkpoint round 3): a genuine
+    # disagreement on lv_produces_content overrides whatever the majority vote alone
+    # would have produced for that one field -- promote/absent per the judge, never the
+    # raw vote winner. Unanimous votes never reach the judge (zero-cost for non-conflicts).
+    content_votes = [v for v in raw_values_by_field.get("lv_produces_content", []) if isinstance(v, bool)]
+    if len(set(content_votes)) > 1:
+        resolved, evidence_url = escalate_produces_content_conflict(
+            record, results, judge_state if judge_state is not None else {"calls_made": 0, "cap_hit": False}
+        )
+        if resolved is None:
+            majority_data.pop("lv_produces_content", None)
+            majority_evidence_by_field.pop("lv_produces_content", None)
+        else:
+            majority_data["lv_produces_content"] = resolved
+            if evidence_url:
+                majority_evidence_by_field["lv_produces_content"] = evidence_url
 
     def _agrees_with_majority(r) -> bool:
         data = getattr(r, "data", None) or {}
@@ -442,14 +577,17 @@ def research_with_majority_vote(record: HubSpotRecord, repetitions: int = RESEAR
     )
 
 
-def research_gap_fields(company: dict, zi_attributes: dict, candidate_patch: dict):
+def research_gap_fields(company: dict, zi_attributes: dict, candidate_patch: dict, judge_state: dict = None):
     """D-02 gap-fill lane. Returns None -- issuing NO call at all -- when every name in
     GAP_FILL_FIELDS is already present in `candidate_patch` (ZoomInfo already answered
     everything research could add). Otherwise builds a HubSpotRecord carrying the
     record's name/domain/website/country/industry and calls
-    research_with_majority_vote(record) -- RESEARCH_VOTE_REPETITIONS live calls folded
-    into one majority-voted answer (operator ruling, checkpoint round 2: see that
-    function's docstring for why a single call was not reproducible enough). NOTE: the
+    research_with_majority_vote(record, judge_state=judge_state) -- RESEARCH_VOTE_REPETITIONS
+    live calls folded into one majority-voted answer, escalating a genuine
+    lv_produces_content disagreement to a Sonnet judge (operator rulings, checkpoint
+    rounds 2 and 3: see that function's docstring). `judge_state` (a caller-owned
+    {"calls_made", "cap_hit"} dict) is threaded straight through so run_dry_run can track
+    the MAX_JUDGE_VALIDATIONS_PER_RUN budget across every company in the sample. NOTE: the
     underlying claude_web_research() call returns the mock fixture unless
     USE_MOCK_WEB_RESEARCH is explicitly set to a false value in the process environment --
     a live invocation that forgets to set it produces fixture data silently, REPETITIONS
@@ -470,7 +608,7 @@ def research_gap_fields(company: dict, zi_attributes: dict, candidate_patch: dic
         },
     )
     try:
-        return research_with_majority_vote(record)
+        return research_with_majority_vote(record, judge_state=judge_state)
     except Exception:
         return None
 
@@ -792,6 +930,10 @@ def run_dry_run(sample_size: int = DEFAULT_SAMPLE_SIZE,
     skipped = []
     enrich_calls_issued = 0
     research_calls_made = 0
+    # Threaded through every research_gap_fields() call so the MAX_JUDGE_VALIDATIONS_PER_RUN
+    # budget is tracked across the WHOLE sample, not reset per company (operator ruling,
+    # checkpoint round 3).
+    judge_state = {"calls_made": 0, "cap_hit": False}
     for company in sample:
         domain = company.get("domain")
         if not domain:
@@ -812,7 +954,7 @@ def run_dry_run(sample_size: int = DEFAULT_SAMPLE_SIZE,
         evidence_urls = []
 
         if research:
-            research_result = research_gap_fields(company, zi_attributes, candidate_patch)
+            research_result = research_gap_fields(company, zi_attributes, candidate_patch, judge_state=judge_state)
             if research_result is not None:
                 # Ceiling projection, RESEARCH_VOTE_REPETITIONS raw calls per company --
                 # matches this function's existing credits_spent ceiling-projection
@@ -866,6 +1008,8 @@ def run_dry_run(sample_size: int = DEFAULT_SAMPLE_SIZE,
         "skipped": skipped,
         "research_calls_made": research_calls_made,
         "research_vote_repetitions": RESEARCH_VOTE_REPETITIONS if research else None,
+        "judge_calls_made": judge_state["calls_made"],
+        "judge_cap_hit": judge_state["cap_hit"],
         "sample_selection_rule": "diversified_industry_stratified" if diversified else "ascending_id",
         "media_slots": slots,
     }
@@ -952,6 +1096,8 @@ def main(argv=None) -> int:
         "sample_size": result["sample_size"],
         "credits_spent": result["credits_spent"],
         "research_calls_made": result["research_calls_made"],
+        "judge_calls_made": result["judge_calls_made"],
+        "judge_cap_hit": result["judge_cap_hit"],
         "predicted_tier_values_allowed": ["A", "B", "C", "D", "Unscored"],
         "sample_selection_rule": result["sample_selection_rule"],
         "media_slots": result["media_slots"],
