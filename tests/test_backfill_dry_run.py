@@ -179,7 +179,10 @@ def test_payload_key_set():
         "lv_is_gambling_operator": False,
     }
     row = b.build_dry_run_row("999", patch)
-    assert set(row["payload"].keys()) == b.PERMITTED_PAYLOAD_KEYS
+    # A fully-answered patch (no review flag -- lv_produces_content resolved) uses every
+    # PERMITTED_PAYLOAD_KEYS name EXCEPT REVIEW_FLAG_PROPS, which only appear on a row
+    # whose lv_produces_content conflict never resolved (checkpoint round 4).
+    assert set(row["payload"].keys()) == b.PERMITTED_PAYLOAD_KEYS - set(b.REVIEW_FLAG_PROPS)
     for forbidden in ("lv_icp_fit_score", "lv_icp_tier_derived", "lv_anti_icp_flag", "lv_anti_icp_reason"):
         assert forbidden not in row["payload"]
 
@@ -569,6 +572,58 @@ def test_judge_cap_asserted_before_spending(monkeypatch):
     assert "lv_produces_content" not in result.data
     assert judge_state["cap_hit"] is True
     assert judge_state["calls_made"] == 1  # unchanged -- no call was spent
+
+
+def test_apply_review_flag_flags_unresolved_conflict(monkeypatch):
+    # Checkpoint round 4: a record whose conflict never resolved (majority disagreed AND
+    # the judge could not settle it) must carry the review marker.
+    sequence = [_research_result(True), _research_result(True), _research_result(False)]
+    calls = {"n": 0}
+
+    def mock_research(record):
+        result = sequence[calls["n"]]
+        calls["n"] += 1
+        return result
+
+    def mock_judge(record, field, current_value, candidates, haiku_result, policy):
+        return _judge_result(confidence=50)  # below threshold -- unresolved
+
+    monkeypatch.setattr(b, "claude_web_research", mock_research)
+    monkeypatch.setattr(b, "validate_conflict_with_sonnet", mock_judge)
+    record = HubSpotRecord(object_type="companies", id="1", properties={"name": "X"})
+    research_result = b.research_with_majority_vote(record)
+
+    patch = b.apply_review_flag({}, research_result)
+    assert patch["lv_icp_needs_review"] is True
+    assert patch["lv_enrichment_review_reason"] == b.PRODUCES_CONTENT_UNRESOLVED_REASON
+    assert "lv_produces_content" not in patch
+
+
+def test_apply_review_flag_does_not_flag_a_resolved_unanimous_false():
+    # A genuinely-assessed record (all 3 calls agree False -- the real, reproducible
+    # no-content reading) must NOT be flagged -- only an unresolved conflict is.
+    research_result = ProviderResult(
+        provider="claude_web", object_type="companies", matched=True, confidence=90,
+        data={},  # lv_produces_content absent, but for a DIFFERENT reason (never a conflict)
+        evidence=ProviderEvidence(),
+        model_trace={"produces_content_conflict_unresolved": False},
+    )
+    patch = b.apply_review_flag({"lv_org_type": "individual_club_team"}, research_result)
+    assert "lv_icp_needs_review" not in patch
+    assert "lv_enrichment_review_reason" not in patch
+
+
+def test_apply_review_flag_does_not_flag_a_judge_resolved_record():
+    # The field IS present (judge or vote resolved it) -- a real reading, never flagged,
+    # even if the marker happened to be set (defensive: presence of the field wins).
+    research_result = ProviderResult(
+        provider="claude_web", object_type="companies", matched=True, confidence=90,
+        data={"lv_produces_content": True},
+        evidence=ProviderEvidence(),
+        model_trace={"produces_content_conflict_unresolved": True},
+    )
+    patch = b.apply_review_flag({"lv_produces_content": True}, research_result)
+    assert "lv_icp_needs_review" not in patch
 
 
 def test_run_dry_run_research_cap_budgets_for_vote_repetitions(monkeypatch):

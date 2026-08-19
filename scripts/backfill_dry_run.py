@@ -110,13 +110,26 @@ PAYLOAD_INPUT_PROPS = [
     "lv_is_gambling_operator",
 ]
 
-# The twelve names a dry-run payload may EVER contain: the six lv_* inputs (a matched
-# row's candidate patch is always a subset of these), the five component scores, and the
-# single veto-number serialization. lv_icp_fit_score / lv_icp_tier_derived /
-# lv_anti_icp_flag / lv_anti_icp_reason are owned by other producers (HubSpot's own
-# calculation engine and this repo's n8n pipeline respectively) and must never appear
-# here.
-PERMITTED_PAYLOAD_KEYS = frozenset(PAYLOAD_INPUT_PROPS + COMPONENT_PROPS + ["lv_anti_icp_flag_num"])
+# Operator ruling, checkpoint round 4 (2026-08-19): a record whose lv_produces_content
+# conflict never resolved (majority vote disagreed AND the Sonnet judge escalation could
+# not confidently settle it) still gets its predicted payload, but must carry a marker
+# distinguishing it from a genuinely-assessed record -- both confirmed live via
+# GET /crm/v3/properties/companies/{name} before use (type bool / textarea respectively,
+# neither archived nor hidden): lv_icp_needs_review (live, contra CLAUDE.md SS4.0's stale
+# claim that it was "never created" -- re-listed per that section's own instruction rather
+# than trusted) and lv_enrichment_review_reason (the existing general review-reason
+# textarea, reused rather than requesting a new ICP-specific property -- a schema change
+# is out of Phase 51's dry-run scope).
+REVIEW_FLAG_PROPS = ["lv_icp_needs_review", "lv_enrichment_review_reason"]
+
+# The fourteen names a dry-run payload may EVER contain: the six lv_* inputs (a matched
+# row's candidate patch is always a subset of these), the five component scores, the
+# single veto-number serialization, and the two review-flag properties (present ONLY on a
+# row whose lv_produces_content conflict never resolved). lv_icp_fit_score /
+# lv_icp_tier_derived / lv_anti_icp_flag / lv_anti_icp_reason are owned by other producers
+# (HubSpot's own calculation engine and this repo's n8n pipeline respectively) and must
+# never appear here.
+PERMITTED_PAYLOAD_KEYS = frozenset(PAYLOAD_INPUT_PROPS + COMPONENT_PROPS + REVIEW_FLAG_PROPS + ["lv_anti_icp_flag_num"])
 
 # Operator ruling, checkpoint round 2 (2026-08-19): apply_research_to_patch() was
 # promoting any well-typed research answer regardless of confidence or evidence -- the
@@ -533,6 +546,11 @@ def research_with_majority_vote(record: HubSpotRecord, repetitions: int = RESEAR
     # would have produced for that one field -- promote/absent per the judge, never the
     # raw vote winner. Unanimous votes never reach the judge (zero-cost for non-conflicts).
     content_votes = [v for v in raw_values_by_field.get("lv_produces_content", []) if isinstance(v, bool)]
+    # Operator ruling, checkpoint round 4: a record whose disagreement never resolved
+    # still needs to be findable as such downstream (run_dry_run reads this to set
+    # REVIEW_FLAG_PROPS on the row) -- distinct from a field that was simply never
+    # attempted or answered unanimously, neither of which is a "conflict."
+    produces_content_conflict_unresolved = False
     if len(set(content_votes)) > 1:
         resolved, evidence_url = escalate_produces_content_conflict(
             record, results, judge_state if judge_state is not None else {"calls_made": 0, "cap_hit": False}
@@ -540,6 +558,7 @@ def research_with_majority_vote(record: HubSpotRecord, repetitions: int = RESEAR
         if resolved is None:
             majority_data.pop("lv_produces_content", None)
             majority_evidence_by_field.pop("lv_produces_content", None)
+            produces_content_conflict_unresolved = True
         else:
             majority_data["lv_produces_content"] = resolved
             if evidence_url:
@@ -573,6 +592,7 @@ def research_with_majority_vote(record: HubSpotRecord, repetitions: int = RESEAR
         confidence=avg_confidence,
         data=majority_data,
         evidence=evidence,
+        model_trace={"produces_content_conflict_unresolved": produces_content_conflict_unresolved},
         evidence_by_field=majority_evidence_by_field,
     )
 
@@ -670,6 +690,37 @@ def apply_research_to_patch(candidate_patch: dict, research_result) -> dict:
             if field_policy.get("require_evidence_url") and field not in evidence_by_field:
                 continue  # e.g. lv_produces_content requires a cited evidence URL
             patch[field] = value
+    return patch
+
+
+PRODUCES_CONTENT_UNRESOLVED_REASON = (
+    "lv_produces_content did not resolve: majority-of-3 live research calls disagreed, "
+    "and the Sonnet judge escalation (CLAUDE.md SS15.1) could not confidently settle the "
+    "conflict (confidence below the SS15.1 human_review threshold, or no cited evidence "
+    "URL). Scored without a content signal or a no-content veto -- verify content output "
+    "manually before treating this tier as final."
+)
+
+
+def apply_review_flag(candidate_patch: dict, research_result) -> dict:
+    """Operator ruling, checkpoint round 4: a record whose lv_produces_content conflict
+    never resolved (research_with_majority_vote's model_trace carries
+    produces_content_conflict_unresolved=True) still gets its predicted payload -- coverage
+    is kept, the D-04 no-record-dropped guarantee is unaffected -- but the payload must
+    carry REVIEW_FLAG_PROPS so the record is findable as "scored on an unresolved field",
+    distinguishable from a genuinely-assessed Tier C/D. Fires ONLY when the conflict marker
+    is set AND lv_produces_content is still absent from candidate_patch after
+    apply_research_to_patch -- a record whose conflict the judge actually DID resolve (the
+    field is present) is a real, reproducible reading and must NOT be flagged; neither must
+    the five unanimous-False records, which never set the marker in the first place."""
+    patch = dict(candidate_patch)
+    if "lv_produces_content" in patch:
+        return patch  # resolved (by vote or judge) -- a real reading, not a review case
+    model_trace = getattr(research_result, "model_trace", None) or {}
+    if not model_trace.get("produces_content_conflict_unresolved"):
+        return patch  # never a conflict -- e.g. simply never attempted
+    patch["lv_icp_needs_review"] = True
+    patch["lv_enrichment_review_reason"] = PRODUCES_CONTENT_UNRESOLVED_REASON
     return patch
 
 
@@ -969,6 +1020,7 @@ def run_dry_run(sample_size: int = DEFAULT_SAMPLE_SIZE,
                 evidence = getattr(research_result, "evidence", None)
                 if evidence is not None:
                     evidence_urls = list(evidence.evidence_urls)
+                candidate_patch = apply_review_flag(candidate_patch, research_result)
 
         row = build_dry_run_row(company["id"], candidate_patch)
         row["name"] = company.get("name")
