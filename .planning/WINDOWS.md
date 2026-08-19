@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 10
+open_count: 11
 waived_count: 1
 fixed_count: 6
-total_count: 17
-last_updated: 2026-08-18T23:22:00.492Z
+total_count: 18
+last_updated: 2026-08-19T00:42:55.199Z
 ---
 
 # Broken Windows Ledger
@@ -32,6 +32,7 @@ last_updated: 2026-08-18T23:22:00.492Z
 | 15 | 50 | deviation | .planning/phases/50-derived-tier-property/50-RETIREMENT-RECORD.md |  | lv_icp_tier archive blocked live: HubSpot rejected DELETE /crm/v3/properties/companies/lv_icp_tier with 400 CANNOT_DELETE_PROPERTY_IN_USE -- WF1's (4625147345) workflow actions still reference the property as a write target, and HubSpot counts this as "in use" regardless of the workflow's isEnabled state. Not anticipated by 50-RESEARCH.md or 50-NULL-PROBE.json (RESEARCH Q6). WF1 itself IS switched off live and verified (D-08 complete). Neither deleting WF1 nor editing its actions to strip the reference was attempted -- both are outside this plan's authorised means (the former violates the plan's explicit "WF1 is not deleted" prohibition; the latter forfeits the proven one-action rollback mechanism in 50-ROLLBACK-DRILL.md). Retirement (D-06) and the dependent relabel (D-15's fallback) were deferred pending a fresh operator decision among 3 documented options. RESOLVED WITH EVIDENCE (2026-08-14, same-date second live window, Phase 50 Plan 05): the operator selected option 3 -- delete WF1 entirely -- explicitly overriding D-08 (D-24, 50-CONTEXT.md). scripts/put_hubspot_flow.py gained a --delete mode; WF1 deleted (204, independently re-read 404); the archive retried and succeeded (204, confirmed absent and present under ?archived=true); lv_icp_tier_derived relabelled to "ICP Tier" in the same window and verified by a two-point D-22 poll. Rollback is now rebuild-from-JSON via POST /automation/v4/flows, not a one-action re-enable -- docs/OPERATOR-TIER-ROLLBACK.md's 2026-08-14 amendment states the mechanism is gone. Full trail: 50-RETIREMENT-RECORD.md's "D-24 resolution" section. | fixed |  | 2026-08-14T02:30:00.000Z | 2026-08-14T02:23:24.962Z |
 | 16 | 47 | deviation | docs/OPERATOR-VETO-REFRESH.md |  | Phase 47 declared ONE armed write window and spent FIVE. Genuinely disclosed at the time in 47-04-SUMMARY.md, 47-RUN-REPORT.md and REQUIREMENTS.md's VETO-02 row, but never registered in this cross-phase ledger -- the register /gsd-ship actually gates on -- so a disclosure present in three phase-local documents was invisible to the one check designed to catch it. Recorded retrospectively by Phase 47's first verification run (2026-08-19, 8 days late; the phase had been sealed without a verifier ever running). No record was harmed: the overrun was in window COUNT, not scope -- every window stayed record-scoped and each disarm was read back and confirmed. Registered for ledger completeness and as the standing reminder that a per-phase disclosure is not a ledger entry. | waived | Historical, retroactively unfixable: the five windows were spent on 2026-08-12 and every one was record-scoped with a read-back-confirmed disarm. The defect this entry records is the MISSING LEDGER ROW, and appending this row is itself the remedy -- there is no further action available. Not marked 'fixed', because that would imply the overrun was undone; it was not, it was disclosed. Waived so the ledger stays honest without blocking ship on a closed piece of history. | 2026-08-18T23:18:10.283Z | 2026-08-18T23:18:22.149Z |
 | 17 | 50 | unmet-truth | tests/test_scoring_parity.py | 289 | The @live parity tests still assert against lv_icp_tier, which Phase 50 archived on 2026-08-14 (7 references: lines 289, 292, 401, 403, 404, 427, 494, including settle()/settle_until() polls that will now block to timeout rather than fail fast). They are env-gated behind RUN_LIVE_PARITY, so the offline suite stays green and nothing caught it -- 2821 offline tests pass. Correct migration is to lv_icp_tier_derived, whose values these assertions already match, EXCEPT that it is computed server-side with a ~70-130s backfill, so the settle helpers' timeouts must be re-checked against that latency rather than assumed. Surfaced by Phase 47.5's retrospective verification as a forward-looking item; not a 47.5 defect. Left OPEN deliberately -- unlike the historical entries this one is fixable, and it will bite the next person to run the live suite. | open |  | 2026-08-18T23:22:00.492Z |  |
+| 18 | 50 | unmet-truth | scripts/run_scoring_parity.py | 313 | Residual lv_icp_tier readers after the 2026-08-19 confirmation-path fix (0e351e1). Phase 50 archived the property, and an archived HubSpot property returns its frozen last value rather than erroring or nulling, so every reader below silently reports dead data. CORRECT BY DESIGN, leave alone: sweep_tier_dependents.py:51 (TARGET_PROPERTY -- its whole job is finding references to the OLD property) and check_tier_derived_parity.py:186 (compares old against derived; needs both). ARGUABLY CORRECT: snapshot_hubspot_schema.py:45 (schema audit -- records what exists, and the archived property does still exist). GENUINELY STALE, needs repointing to lv_icp_tier_derived: run_scoring_parity.py:258/301/306/313 -- highest value, its tier_match is ANDed into the pass condition so the whole sweep verdict now rests on dead data (docs/OPERATOR-RESCORE.md's 2026-08-19 amendment already redirects operators to check_tier_derived_parity.py, but the script itself was left unfixed); build_loss_reason_report.py:128/211; simulate_rubric_weights.py:163; enrich_coverage_companies.py:321/513/787; build_rescore_report.py:84; build_cloud_workflows.py:1794/6564 (property FETCH lists -- lowest severity, HubSpot ignores unknown names, but they pull a dead field into every record read). Deliberately NOT fixed in one sweep during a milestone seal: each needs its own judgement about whether the derived value is the right substitute, and a blanket rename would be exactly the unreviewed change this ledger exists to prevent. | open |  | 2026-08-19T00:42:55.199Z |  |
 
 ````json
 [
@@ -237,6 +238,18 @@ last_updated: 2026-08-18T23:22:00.492Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-08-18T23:22:00.492Z",
+    "resolved_at": null
+  },
+  {
+    "id": 18,
+    "kind": "unmet-truth",
+    "phase": "50",
+    "file": "scripts/run_scoring_parity.py",
+    "line": 313,
+    "description": "Residual lv_icp_tier readers after the 2026-08-19 confirmation-path fix (0e351e1). Phase 50 archived the property, and an archived HubSpot property returns its frozen last value rather than erroring or nulling, so every reader below silently reports dead data. CORRECT BY DESIGN, leave alone: sweep_tier_dependents.py:51 (TARGET_PROPERTY -- its whole job is finding references to the OLD property) and check_tier_derived_parity.py:186 (compares old against derived; needs both). ARGUABLY CORRECT: snapshot_hubspot_schema.py:45 (schema audit -- records what exists, and the archived property does still exist). GENUINELY STALE, needs repointing to lv_icp_tier_derived: run_scoring_parity.py:258/301/306/313 -- highest value, its tier_match is ANDed into the pass condition so the whole sweep verdict now rests on dead data (docs/OPERATOR-RESCORE.md's 2026-08-19 amendment already redirects operators to check_tier_derived_parity.py, but the script itself was left unfixed); build_loss_reason_report.py:128/211; simulate_rubric_weights.py:163; enrich_coverage_companies.py:321/513/787; build_rescore_report.py:84; build_cloud_workflows.py:1794/6564 (property FETCH lists -- lowest severity, HubSpot ignores unknown names, but they pull a dead field into every record read). Deliberately NOT fixed in one sweep during a milestone seal: each needs its own judgement about whether the derived value is the right substitute, and a blanket rename would be exactly the unreviewed change this ledger exists to prevent.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-08-19T00:42:55.199Z",
     "resolved_at": null
   }
 ]
