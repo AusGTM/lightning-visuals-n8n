@@ -440,7 +440,9 @@ for this one (any use of it burns an n8n execution).
 | A2 | `ANTHROPIC_PER_RECORD_ESTIMATE_USD = 0.0686` is a reasonable ballpark for a bare `claude_web_research()` call in this phase, even though it was measured under the n8n pipeline's combined Haiku-research + Sonnet-judge nodes, and this milestone's design (per MILESTONE-CONTEXT.md D-01..D-06) has no Sonnet/judge step at all | Standard Stack table, Open Questions | The research-cost estimate (criterion 2) could overstate or understate actual per-record cost; the artifact should label this figure "prior-pipeline estimate, not measured for this call pattern" rather than presenting it as precise |
 | A3 | `ANTHROPIC_RESEARCH_MODEL` is `claude-haiku-4-5` per `.env.example` in CLAUDE.md §11.2 — not independently re-verified against the live `.env` this session (permission-blocked) | Environment Availability | Low risk — `.env` is unreadable this session by design; the model name only affects a cost estimate's precision, not correctness |
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+Both questions were resolved at plan time (2026-08-19). Each carries its `RESOLVED:` line below.
 
 1. **Is the ZoomInfo `companies/enrich` per-call credit cost actually 1.08, or something else?**
    - What we know: `1.08 credits/match` is documented for "match" generally, sourced to a
@@ -454,6 +456,15 @@ for this one (any use of it burns an n8n execution).
      (well within budget) bracketed by two credit-balance reads, to replace the inferred 1.08
      figure with a measured one before deriving the population cap — cheap insurance against a
      wrong cap.
+   - **RESOLVED (2026-08-19, plan time):** adopted. `51-01-PLAN.md` task 3 adds a `--measure-cost`
+     flag that brackets the single live `companies/enrich` call with two `users/usage` balance
+     reads and records `credit_balance_before`, `credit_balance_after` and
+     `measured_credits_per_match_hundredths` in `51-TRACER-DRYRUN.json`. The run's
+     `credits_per_match_hundredths` is the LARGER of the measured figure and the documented
+     `CREDITS_PER_MATCH_HUNDREDTHS_FALLBACK = 108`, so a zero or free-cached measurement cannot
+     produce a division by zero or an unbounded cap, and a measurement above 1.08 tightens the cap
+     rather than being ignored. This retires Assumptions Log row **A1**. Cost of resolution: one
+     ZoomInfo credit, bounded by the cap check that precedes it.
 
 2. **What "representative sample" selection rule should the dry run use?**
    - What we know: no existing script defines a stratified/representative sampling rule for this
@@ -464,6 +475,15 @@ for this one (any use of it burns an n8n execution).
    - Recommendation: default to a small, deterministic, sorted-id slice (matches every existing
      population-selection precedent's determinism convention) unless the discuss-phase or planner
      wants explicit stratification — flag this as a planner decision point, not a research gap.
+   - **RESOLVED (2026-08-19, plan time, planner discretion):** the recommendation was taken. The
+     sample is a **deterministic ascending-id slice** of the never-scored population,
+     `DEFAULT_SAMPLE_SIZE = 12`, sized against the credit cap committed in `51-SIZING.md`. NOT
+     stratified by org_type or geography: no existing script defines a stratification rule, and
+     inventing one would make the sample non-reproducible across runs — which would break Phase
+     52's per-record comparison against the committed prediction artifact. The ordering is pinned
+     by `tests/test_backfill_dry_run.py::test_sample_order_is_ascending_id_stable` and recorded as
+     a `must_haves` truth in `51-02-PLAN.md` (the SAFE-01 ordering edge probe). Credit arithmetic
+     for the whole phase: 1 (tracer) + 12 (sample) = 13 ZoomInfo credits maximum.
 
 ## Environment Availability
 
