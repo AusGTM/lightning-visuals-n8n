@@ -1,0 +1,23 @@
+{
+  "run_at": "2026-08-19T03:26:18.909974+00:00",
+  "portal_id_verified": "22617666",
+  "entries": [
+    {
+      "id": "9604623716",
+      "name": "Taree Wingham Race Club",
+      "domain": null,
+      "reason": "no domain on record"
+    },
+    {
+      "id": "9604726292",
+      "name": "Narromine Turf Club",
+      "domain": "www.narromineraces.com",
+      "reason": "no_match"
+    }
+  ],
+  "counts": {
+    "rows": 8,
+    "skipped": 2,
+    "sample_size": 10
+  }
+}

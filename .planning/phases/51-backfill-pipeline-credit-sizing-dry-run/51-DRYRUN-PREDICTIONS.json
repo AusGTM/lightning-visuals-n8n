@@ -1,0 +1,366 @@
+{
+  "run_at": "2026-08-19T03:26:18.909974+00:00",
+  "portal_id_verified": "22617666",
+  "population_filter": "NOT_HAS_PROPERTY(lv_icp_fit_score)",
+  "population_total": 646,
+  "credit_balance": 9396,
+  "credit_cap": 8700,
+  "sample_size": 10,
+  "credits_spent": 10,
+  "research_calls_made": 8,
+  "predicted_tier_values_allowed": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "Unscored"
+  ],
+  "rows": [
+    {
+      "id": "9604630688",
+      "payload": {
+        "lv_revenue_band": "5-50M",
+        "lv_country_region_normalized": "AU",
+        "lv_org_type": "individual_club_team",
+        "lv_produces_content": false,
+        "org_type_score": 15,
+        "geography_score": 10,
+        "annual_revenue_score": 10,
+        "produces_content_score": 0,
+        "gambling_score": 0,
+        "lv_anti_icp_flag_num": "1"
+      },
+      "predicted_tier": "D",
+      "score": 35,
+      "anti_icp_flag": true,
+      "anti_icp_reason": "No broadcast or streaming content",
+      "name": "Shoalhaven City Turf Club",
+      "domain": "sctcnowra.com.au",
+      "sources": {
+        "lv_revenue_band": "zoominfo",
+        "lv_country_region_normalized": "zoominfo",
+        "lv_org_type": "claude_web",
+        "lv_produces_content": "claude_web"
+      },
+      "research_filled": [
+        "lv_org_type",
+        "lv_produces_content"
+      ],
+      "evidence_urls": [
+        "https://sctcnowra.com.au/",
+        "https://sctcnowra.com.au/about/",
+        "https://racingnswcountry.com.au/club/shoalhaven-city-turf-club/"
+      ],
+      "matched_attributes": {
+        "revenue": 5248,
+        "revenueRange": "$5 mil. - $10 mil.",
+        "country": "Australia"
+      }
+    },
+    {
+      "id": "9604630690",
+      "payload": {
+        "lv_revenue_band": "5-50M",
+        "lv_country_region_normalized": "Other",
+        "lv_org_type": "individual_club_team",
+        "lv_produces_content": false,
+        "lv_is_hardware_vendor": false,
+        "lv_is_gambling_operator": false,
+        "org_type_score": 15,
+        "geography_score": 0,
+        "annual_revenue_score": 10,
+        "produces_content_score": 0,
+        "gambling_score": 0,
+        "lv_anti_icp_flag_num": "1"
+      },
+      "predicted_tier": "D",
+      "score": 25,
+      "anti_icp_flag": true,
+      "anti_icp_reason": "Non-ANZ geography; No broadcast or streaming content",
+      "name": "Gold Coast Turf Club",
+      "domain": "gctc.com.au",
+      "sources": {
+        "lv_revenue_band": "zoominfo",
+        "lv_country_region_normalized": "zoominfo",
+        "lv_is_gambling_operator": "claude_web",
+        "lv_is_hardware_vendor": "claude_web",
+        "lv_org_type": "claude_web",
+        "lv_produces_content": "claude_web"
+      },
+      "research_filled": [
+        "lv_is_gambling_operator",
+        "lv_is_hardware_vendor",
+        "lv_org_type",
+        "lv_produces_content"
+      ],
+      "evidence_urls": [
+        "https://en.wikipedia.org/wiki/Gold_Coast_Turf_Club",
+        "https://gctc.com.au/",
+        "https://www.racingqueensland.com.au/racing/profiles/track/thoroughbred/gcst",
+        "https://rocketreach.co/aquis-park-home-of-the-gold-coast-turf-club-and-event-centre-profile_b5a7067cf68cb401"
+      ],
+      "matched_attributes": {
+        "revenue": 29407,
+        "revenueRange": "$25 mil. - $50 mil.",
+        "country": "Netherlands"
+      }
+    },
+    {
+      "id": "9604726291",
+      "payload": {
+        "lv_revenue_band": "5-50M",
+        "lv_country_region_normalized": "AU",
+        "lv_org_type": "individual_club_team",
+        "lv_produces_content": false,
+        "lv_is_hardware_vendor": false,
+        "lv_is_gambling_operator": false,
+        "org_type_score": 15,
+        "geography_score": 10,
+        "annual_revenue_score": 10,
+        "produces_content_score": 0,
+        "gambling_score": 0,
+        "lv_anti_icp_flag_num": "1"
+      },
+      "predicted_tier": "D",
+      "score": 35,
+      "anti_icp_flag": true,
+      "anti_icp_reason": "No broadcast or streaming content",
+      "name": "Ipswich Turf Club",
+      "domain": "ipswichturfclub.com.au",
+      "sources": {
+        "lv_revenue_band": "zoominfo",
+        "lv_country_region_normalized": "zoominfo",
+        "lv_is_gambling_operator": "claude_web",
+        "lv_is_hardware_vendor": "claude_web",
+        "lv_org_type": "claude_web",
+        "lv_produces_content": "claude_web"
+      },
+      "research_filled": [
+        "lv_is_gambling_operator",
+        "lv_is_hardware_vendor",
+        "lv_org_type",
+        "lv_produces_content"
+      ],
+      "evidence_urls": [
+        "https://ipswichturfclub.com.au/",
+        "https://ieec.com.au/about-us-ipswich-events-and-entertainment-centre",
+        "https://ipswichturfclub.com.au/events-blog/annual-report-2023-2024"
+      ],
+      "matched_attributes": {
+        "revenue": 11263,
+        "revenueRange": "$10 mil. - $25 mil.",
+        "country": "Australia"
+      }
+    },
+    {
+      "id": "9604732796",
+      "payload": {
+        "lv_revenue_band": "1-5M",
+        "lv_country_region_normalized": "AU",
+        "lv_org_type": "individual_club_team",
+        "lv_produces_content": false,
+        "org_type_score": 15,
+        "geography_score": 10,
+        "annual_revenue_score": 0,
+        "produces_content_score": 0,
+        "gambling_score": 0,
+        "lv_anti_icp_flag_num": "1"
+      },
+      "predicted_tier": "D",
+      "score": 25,
+      "anti_icp_flag": true,
+      "anti_icp_reason": "No broadcast or streaming content",
+      "name": "Warwick Turf Club",
+      "domain": "warwickturfclub.org.au",
+      "sources": {
+        "lv_revenue_band": "zoominfo",
+        "lv_country_region_normalized": "zoominfo",
+        "lv_org_type": "claude_web",
+        "lv_produces_content": "claude_web"
+      },
+      "research_filled": [
+        "lv_org_type",
+        "lv_produces_content"
+      ],
+      "evidence_urls": [
+        "https://warwickturfclub.org.au/our-club",
+        "https://www.racingqueensland.com.au/racing/club-details/thoroughbred/53674/warwick-turf-club",
+        "https://warwickturfclub.org.au/sponsorship-opportunities"
+      ],
+      "matched_attributes": {
+        "revenue": 2470,
+        "revenueRange": "$1 mil. - $5 mil.",
+        "country": "Australia"
+      }
+    },
+    {
+      "id": "9604732798",
+      "payload": {
+        "lv_revenue_band": "<1M",
+        "lv_country_region_normalized": "AU",
+        "lv_org_type": "individual_club_team",
+        "lv_produces_content": false,
+        "org_type_score": 15,
+        "geography_score": 10,
+        "annual_revenue_score": 0,
+        "produces_content_score": 0,
+        "gambling_score": 0,
+        "lv_anti_icp_flag_num": "1"
+      },
+      "predicted_tier": "D",
+      "score": 25,
+      "anti_icp_flag": true,
+      "anti_icp_reason": "No broadcast or streaming content",
+      "name": "Mudgee Race Club",
+      "domain": "mudgeeraceclubinc.com",
+      "sources": {
+        "lv_revenue_band": "zoominfo",
+        "lv_country_region_normalized": "zoominfo",
+        "lv_org_type": "claude_web",
+        "lv_produces_content": "claude_web"
+      },
+      "research_filled": [
+        "lv_org_type",
+        "lv_produces_content"
+      ],
+      "evidence_urls": [
+        "https://mudgeeraceclub.com.au/about-us/",
+        "https://mudgeeraceclub.com.au/sponsorship/",
+        "https://mudgeeraceclub.com.au/",
+        "https://mudgeeraceclub.com.au/race-meetings/"
+      ],
+      "matched_attributes": {
+        "revenue": 989,
+        "revenueRange": "$500,000 - $1 mil.",
+        "country": "Australia"
+      }
+    },
+    {
+      "id": "9604738974",
+      "payload": {
+        "lv_revenue_band": "<1M",
+        "lv_country_region_normalized": "AU",
+        "lv_org_type": "individual_club_team",
+        "lv_produces_content": false,
+        "org_type_score": 15,
+        "geography_score": 10,
+        "annual_revenue_score": 0,
+        "produces_content_score": 0,
+        "gambling_score": 0,
+        "lv_anti_icp_flag_num": "1"
+      },
+      "predicted_tier": "D",
+      "score": 25,
+      "anti_icp_flag": true,
+      "anti_icp_reason": "No broadcast or streaming content",
+      "name": "Tasmanian Turf Club",
+      "domain": "goracingtasmania.com.au",
+      "sources": {
+        "lv_revenue_band": "zoominfo",
+        "lv_country_region_normalized": "zoominfo",
+        "lv_org_type": "claude_web",
+        "lv_produces_content": "claude_web"
+      },
+      "research_filled": [
+        "lv_org_type",
+        "lv_produces_content"
+      ],
+      "evidence_urls": [
+        "https://www.tasmanianturfclub.com/",
+        "https://goracingtasmania.com.au/tasmanian-turf-club/",
+        "https://tasracing.com.au/live",
+        "https://tasracing.com.au/corporate/who-we-are-at-tasracing",
+        "https://www.treasury.tas.gov.au/Documents/Tasracing%20Review%20Report%202020%20-FINAL.pdf"
+      ],
+      "matched_attributes": {
+        "revenue": 989,
+        "revenueRange": "$500,000 - $1 mil.",
+        "country": "Australia"
+      }
+    },
+    {
+      "id": "9604746906",
+      "payload": {
+        "lv_revenue_band": "1-5M",
+        "lv_country_region_normalized": "AU",
+        "lv_org_type": "individual_club_team",
+        "lv_produces_content": false,
+        "org_type_score": 15,
+        "geography_score": 10,
+        "annual_revenue_score": 0,
+        "produces_content_score": 0,
+        "gambling_score": 0,
+        "lv_anti_icp_flag_num": "1"
+      },
+      "predicted_tier": "D",
+      "score": 25,
+      "anti_icp_flag": true,
+      "anti_icp_reason": "No broadcast or streaming content",
+      "name": "Broome Turf Club",
+      "domain": "broometurfclub.com.au",
+      "sources": {
+        "lv_revenue_band": "zoominfo",
+        "lv_country_region_normalized": "zoominfo",
+        "lv_org_type": "claude_web",
+        "lv_produces_content": "claude_web"
+      },
+      "research_filled": [
+        "lv_org_type",
+        "lv_produces_content"
+      ],
+      "evidence_urls": [
+        "https://broometurfclub.com.au/",
+        "https://racingwa.com.au/clubs/broome",
+        "https://rocketreach.co/broome-turf-club-profile_b7e46e8bc0703c9d",
+        "https://www.zoominfo.com/c/broome-turf-club-inc/357350110"
+      ],
+      "matched_attributes": {
+        "revenue": 4101,
+        "revenueRange": "$1 mil. - $5 mil.",
+        "country": "Australia"
+      }
+    },
+    {
+      "id": "9604746907",
+      "payload": {
+        "lv_revenue_band": "1-5M",
+        "lv_country_region_normalized": "AU",
+        "lv_org_type": "individual_club_team",
+        "lv_produces_content": false,
+        "org_type_score": 15,
+        "geography_score": 10,
+        "annual_revenue_score": 0,
+        "produces_content_score": 0,
+        "gambling_score": 0,
+        "lv_anti_icp_flag_num": "1"
+      },
+      "predicted_tier": "D",
+      "score": 25,
+      "anti_icp_flag": true,
+      "anti_icp_reason": "No broadcast or streaming content",
+      "name": "Narrogin Racing",
+      "domain": "narroginracing.com.au",
+      "sources": {
+        "lv_revenue_band": "zoominfo",
+        "lv_country_region_normalized": "zoominfo",
+        "lv_org_type": "claude_web",
+        "lv_produces_content": "claude_web"
+      },
+      "research_filled": [
+        "lv_org_type",
+        "lv_produces_content"
+      ],
+      "evidence_urls": [
+        "https://www.narroginracing.com.au/",
+        "https://racingwa.com.au/clubs/narrogin",
+        "https://www.narroginracing.com.au/about-us/",
+        "https://www.zoominfo.com/c/narrogin-racing/399467413"
+      ],
+      "matched_attributes": {
+        "revenue": 1594,
+        "revenueRange": "$1 mil. - $5 mil.",
+        "country": "Australia"
+      }
+    }
+  ]
+}
