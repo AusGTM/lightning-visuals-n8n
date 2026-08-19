@@ -240,6 +240,9 @@ via `load_dotenv()`.
 *Phase: 51-backfill-pipeline-credit-sizing-dry-run*
 *Completed: 2026-08-19 (Tasks 1-2; Task 3 pending operator approval)*
 
-## Self-Check: PENDING
+## Self-Check: PASSED
 
-Run below.
+All 4 files verified present on disk (`scripts/scored_population_snapshot.py`,
+`tests/test_scored_population_snapshot.py`, `51-BEFORE-SNAPSHOT.json`,
+`51-03-SUMMARY.md`); all 3 commit hashes verified in git log (`ed1844a`, `c1a8734`,
+`8eb301b`).
