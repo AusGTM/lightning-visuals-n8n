@@ -1,0 +1,44 @@
+{
+  "population_total": 646,
+  "credit_balance_before": 9397,
+  "credits_per_match_hundredths_used": 108,
+  "credit_cap": 8700,
+  "sample_size": 1,
+  "rows": [
+    {
+      "id": "10021111653",
+      "payload": {
+        "lv_revenue_band": "5-50M",
+        "lv_country_region_normalized": "AU",
+        "org_type_score": 0,
+        "geography_score": 10,
+        "annual_revenue_score": 10,
+        "produces_content_score": 0,
+        "gambling_score": 0,
+        "lv_anti_icp_flag_num": "0"
+      },
+      "predicted_tier": "C",
+      "score": 20,
+      "anti_icp_flag": false,
+      "anti_icp_reason": null,
+      "matched_attributes": {
+        "revenue": 20957,
+        "revenueRange": "$10 mil. - $25 mil.",
+        "country": "Australia"
+      }
+    }
+  ],
+  "skipped": [],
+  "credit_balance_after": 9396,
+  "measured_credits_per_match_hundredths": 100,
+  "run_at": "2026-08-19T03:07:27.130950+00:00",
+  "portal_id_verified": "22617666",
+  "population_filter": "NOT_HAS_PROPERTY(lv_icp_fit_score)",
+  "predicted_tier_values_allowed": [
+    "A",
+    "B",
+    "C",
+    "D",
+    "Unscored"
+  ]
+}

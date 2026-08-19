@@ -30,6 +30,7 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -208,21 +209,37 @@ def build_dry_run_row(company_id: str, candidate_patch: dict) -> dict:
     }
 
 
+# Only the attributes build_candidate_patch actually consumes -- trimmed before the row
+# is recorded, so a committed artifact never drags in ZoomInfo marketing text
+# (descriptionList etc) that this driver never reads.
+_MATCHED_ATTRIBUTES_USED = ("revenue", "revenueRange", "country")
+
+
 def run_dry_run(sample_size: int = DEFAULT_SAMPLE_SIZE,
-                 credits_per_match_hundredths: int = CREDITS_PER_MATCH_HUNDREDTHS_FALLBACK) -> dict:
+                 credits_per_match_hundredths: int = CREDITS_PER_MATCH_HUNDREDTHS_FALLBACK,
+                 measure_cost: bool = False) -> dict:
     """Orchestrates the single path: balance read -> cap -> population count -> bounded
     sample -> per record, skip-log and continue when `domain` is blank or when
     `enrich_company` reports unmatched, otherwise build the row. Refuses (raises
     RuntimeError) when `sample_size` exceeds the derived cap, BEFORE issuing any enrich
-    request -- the credit balance read gates the sample size, never the reverse."""
-    balance_before = zoominfo_credit_balance()
-    cap = derive_credit_cap(balance_before, credits_per_match_hundredths)
+    request -- the credit balance read gates the sample size, never the reverse. The
+    pre-spend gate always uses `credits_per_match_hundredths` (the documented fallback,
+    or a caller-supplied floor) -- no measurement exists yet at gate time.
 
-    if sample_size > cap:
+    measure_cost=True brackets the sample's enrich calls with a second balance read and
+    replaces `credits_per_match_hundredths_used`/`credit_cap` in the returned result with
+    figures derived from the LARGER of the measured per-match cost and the fallback, so a
+    zero or free-cached measurement can never produce a division by zero or an unbounded
+    cap, and a measurement above the fallback tightens the cap rather than being
+    ignored (research Assumption A1)."""
+    balance_before = zoominfo_credit_balance()
+    gate_cap = derive_credit_cap(balance_before, credits_per_match_hundredths)
+
+    if sample_size > gate_cap:
         raise RuntimeError(
             f"REFUSED: requested sample size {sample_size} exceeds the derived credit "
-            f"cap ({cap}, balance {balance_before!r}). No ZoomInfo companies/enrich call "
-            "was issued."
+            f"cap ({gate_cap}, balance {balance_before!r}). No ZoomInfo companies/enrich "
+            "call was issued."
         )
 
     population_total = count_never_scored_companies()
@@ -232,12 +249,14 @@ def run_dry_run(sample_size: int = DEFAULT_SAMPLE_SIZE,
 
     rows = []
     skipped = []
+    enrich_calls_issued = 0
     for company in sample:
         domain = company.get("domain")
         if not domain:
             skipped.append({"id": company["id"], "reason": "no domain on record"})
             continue
         match = enrich_company(domain, token)
+        enrich_calls_issued += 1
         if not match.get("matched"):
             skipped.append({
                 "id": company["id"],
@@ -246,18 +265,34 @@ def run_dry_run(sample_size: int = DEFAULT_SAMPLE_SIZE,
             continue
         candidate_patch = build_candidate_patch(match["attributes"])
         row = build_dry_run_row(company["id"], candidate_patch)
-        row["matched_attributes"] = match["attributes"]
+        row["matched_attributes"] = {
+            k: match["attributes"][k] for k in _MATCHED_ATTRIBUTES_USED if k in match["attributes"]
+        }
         rows.append(row)
 
-    return {
+    result = {
         "population_total": population_total,
         "credit_balance_before": balance_before,
         "credits_per_match_hundredths_used": credits_per_match_hundredths,
-        "credit_cap": cap,
+        "credit_cap": gate_cap,
         "sample_size": sample_size,
         "rows": rows,
         "skipped": skipped,
     }
+
+    if measure_cost:
+        balance_after = zoominfo_credit_balance()
+        result["credit_balance_after"] = balance_after
+        measured = 0
+        if enrich_calls_issued > 0 and balance_before is not None and balance_after is not None:
+            spent = balance_before - balance_after
+            measured = max((spent * 100) // enrich_calls_issued, 0)
+        result["measured_credits_per_match_hundredths"] = measured
+        used = max(measured, credits_per_match_hundredths)
+        result["credits_per_match_hundredths_used"] = used
+        result["credit_cap"] = derive_credit_cap(balance_before, used)
+
+    return result
 
 
 def main(argv=None) -> int:
@@ -267,6 +302,10 @@ def main(argv=None) -> int:
                               f"(default {DEFAULT_SAMPLE_SIZE}).")
     parser.add_argument("--out", default=None,
                          help="Optional path to write the collected dry-run result as JSON.")
+    parser.add_argument("--measure-cost", action="store_true",
+                         help="Bracket the sample's enrich calls with a second ZoomInfo "
+                              "credit-balance read and measure the real per-match cost "
+                              "(retires research Assumption A1).")
     args = parser.parse_args(argv)
 
     if not _has_credentials() or not zoominfo_credentials_present():
@@ -279,7 +318,11 @@ def main(argv=None) -> int:
               f"({EXPECTED_PORTAL_ID}). No API call made.")
         return 1
 
-    result = run_dry_run(sample_size=args.sample)
+    result = run_dry_run(sample_size=args.sample, measure_cost=args.measure_cost)
+    result["run_at"] = datetime.now(timezone.utc).isoformat()
+    result["portal_id_verified"] = EXPECTED_PORTAL_ID
+    result["population_filter"] = "NOT_HAS_PROPERTY(lv_icp_fit_score)"
+    result["predicted_tier_values_allowed"] = ["A", "B", "C", "D", "Unscored"]
 
     for row in result["rows"]:
         # dry_run is a hard-coded literal True -- this driver has no live-write code path.
