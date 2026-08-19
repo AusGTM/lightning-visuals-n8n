@@ -222,3 +222,7 @@ None - no external service configuration required. Live credentials
 ---
 *Phase: 51-backfill-pipeline-credit-sizing-dry-run*
 *Completed: 2026-08-19*
+
+## Self-Check: PASSED
+
+All 6 files verified present on disk; all 4 commit hashes verified in git log.
