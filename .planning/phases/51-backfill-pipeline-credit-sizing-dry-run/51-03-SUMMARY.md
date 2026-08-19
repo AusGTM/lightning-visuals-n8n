@@ -512,3 +512,14 @@ All 10 files verified present on disk (`scripts/scored_population_snapshot.py`,
 `51-SKIP-LOG-run1-ascending-id.json`, `51-03-SUMMARY.md`); all 8 commit hashes verified in
 git log (`ed1844a`, `c1a8734`, `8eb301b`, `de6a39e`, `45d871b`, `993e062`, `a9783ea`,
 `b782cfa`).
+
+## Self-Check (checkpoint round 2): PASSED
+
+All 7 round-2 files verified present on disk (`scripts/backfill_dry_run.py`,
+`scripts/measure_research_reproducibility.py`, `tests/test_backfill_dry_run.py`,
+`tests/test_measure_research_reproducibility.py`, `51-RESEARCH-REPRODUCIBILITY.json`,
+`51-SIZING.md`, `51-03-SUMMARY.md`); full test suite green (2868 passed, 154 skipped,
+`node --test tests/n8n/*.test.mjs`: 683 passed); all 6 round-2 commit hashes verified in
+git log (`255fc38`, `d9d3c32`, `ee83b78`, `e622e53`, `6f249b1`, `c0a4e41`); no credential
+material found in `51-RESEARCH-REPRODUCIBILITY.json`; no HubSpot write call site in
+`scripts/measure_research_reproducibility.py`.
