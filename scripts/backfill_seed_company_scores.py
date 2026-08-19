@@ -15,11 +15,22 @@ inputs (`lv_org_type`, `lv_produces_content`, `lv_country_region_normalized`,
 `lv_revenue_band`, `lv_is_gambling_operator`) via `src/icp_scoring.py`'s loaded
 `config/icp_scoring.yaml`, and batch-PATCHes those five component properties only. Writing
 all five (never a subset — a missing term blanks the sum) makes the calculated sum
-recompute and WF1 fire, which is what actually populates `lv_icp_fit_score`/`lv_icp_tier`
-for a pre-existing record. It NEVER computes or writes `lv_icp_fit_score`, `lv_icp_tier`,
-`lv_anti_icp_flag` or `lv_anti_icp_reason` — the calculated property, WF1, and the n8n
-pipeline already own those respectively; a second producer on a field that already has one
-is exactly what D-01's veto handover in 40-05 removed.
+recompute, which is what actually populates `lv_icp_fit_score` and, from it,
+`lv_icp_tier_derived` for a pre-existing record. It NEVER computes or writes
+`lv_icp_fit_score`, `lv_icp_tier_derived`, `lv_anti_icp_flag` or `lv_anti_icp_reason` —
+the calculated properties and the n8n pipeline already own those respectively; a second
+producer on a field that already has one is exactly what D-01's veto handover in 40-05
+removed.
+
+AS-BUILT CORRECTION (2026-08-19, Phase 50 follow-up): this docstring previously said the
+component write makes "WF1 fire", and the settle below polled `lv_icp_tier`. Phase 50
+deleted WF1 (`4625147345`) on 2026-08-14 and archived `lv_icp_tier`, so that premise is
+now categorically false — no workflow grades the tier at all. The tier is a calculated
+property (`lv_icp_tier_derived`) computed server-side from `lv_icp_fit_score` and
+`lv_anti_icp_flag_num`, with no event and no workflow in the path. The write path here was
+always correct and is unchanged; only the post-write confirmation needed repointing. Note
+an archived property does not error or read null — it returns its frozen last value — so
+the old poll would have settled instantly on stale data and reported it as proof.
 
 D-09 scopes THIS phase to proving the mechanism on a small sample — a hard cap enforced by
 this script itself, never trusted to the caller. The portfolio-wide 712-record run is
@@ -267,7 +278,7 @@ def main(argv=None) -> int:
     print(f"armed run complete -- {len(updates)} companies seeded. Waiting for the "
           "calculated sum and WF1 to settle (up to 120s)...")
     for update in updates:
-        _settle(update["id"], "lv_icp_tier")
+        _settle(update["id"], "lv_icp_tier_derived")
 
     return 0
 

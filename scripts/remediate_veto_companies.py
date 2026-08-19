@@ -103,11 +103,19 @@ assert PINNED_COMPANY_IDS.isdisjoint(EXCLUDED_COMPANY_IDS), (
     "a pinned id and an excluded id collided -- this must never happen"
 )
 
-# Derived fields owned by the calculated property, WF1, and the n8n Decide node
-# respectively (D-07). Every payload-building function below asserts its output is
-# disjoint from this set before returning.
+# Derived fields owned by the calculated properties and the n8n Decide node (D-07).
+# Every payload-building function below asserts its output is disjoint from this set
+# before returning.
+#
+# 2026-08-19 (Phase 50 follow-up): WF1 (4625147345) no longer exists -- Phase 50 deleted
+# it and archived lv_icp_tier. Both names STAY in this set: a never-write guard is
+# additive, and writing an archived property is no more legitimate than writing it was
+# before. lv_icp_tier_derived is added because it is a calculated property
+# (readOnlyValue) -- HubSpot itself would reject a write, and this guard should fail
+# loudly in our own code first rather than surfacing as an API error.
 FORBIDDEN_PROPS = frozenset({
-    "lv_icp_fit_score", "lv_icp_tier", "lv_anti_icp_flag", "lv_anti_icp_reason",
+    "lv_icp_fit_score", "lv_icp_tier", "lv_icp_tier_derived",
+    "lv_anti_icp_flag", "lv_anti_icp_reason",
 })
 
 # D-05: the widened scoring-input set this phase enriches (not lv_org_type alone).
@@ -530,7 +538,7 @@ def settle_tier(company_id: str, expected_tier: str, timeout=120, interval=5,
                  reader=get_record, sleeper=time.sleep):
     """The pure-HubSpot chain: component PATCH -> lv_icp_fit_score (calculated property)
     -> WF1 -> lv_icp_tier. Measured latency is seconds."""
-    return settle_and_assert(company_id, "lv_icp_tier", expected_tier, timeout, interval,
+    return settle_and_assert(company_id, "lv_icp_tier_derived", expected_tier, timeout, interval,
                               reader=reader, sleeper=sleeper)
 
 

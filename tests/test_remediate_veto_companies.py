@@ -213,9 +213,9 @@ def test_settle_tier_and_settle_veto_have_different_default_timeouts():
     assert inspect.signature(m.settle_veto).parameters["timeout"].default == 900
 
 
-def test_settle_tier_delegates_to_settle_and_assert_with_lv_icp_tier(monkeypatch):
+def test_settle_tier_delegates_to_settle_and_assert_with_lv_icp_tier_derived(monkeypatch):
     monkeypatch.setattr(m.time, "monotonic", _fake_clock())
-    reader = _reader_for({"lv_icp_tier": ["Unscored", "A", "A"]})
+    reader = _reader_for({"lv_icp_tier_derived": ["Unscored", "A", "A"]})
 
     value, _elapsed = m.settle_tier(
         "9604732797", "A", timeout=60, interval=5, reader=reader, sleeper=_no_sleep,

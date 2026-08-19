@@ -31,7 +31,7 @@ _ROW_TEMPLATE = {
     "lv_produces_content": None,
     "lv_country_region_normalized": None,
     "lv_icp_fit_score": None,
-    "lv_icp_tier": None,
+    "lv_icp_tier_derived": None,
     "lv_anti_icp_flag": None,
     "lv_anti_icp_reason": None,
 }
@@ -151,11 +151,11 @@ def test_diff_reports_id_present_on_only_one_side_rather_than_dropping_it():
 
 def test_diff_reports_changed_properties_and_classification_for_a_cleared_record():
     before_rows = [_row(
-        PINNED_ID, lv_org_type=None, lv_icp_tier="D",
+        PINNED_ID, lv_org_type=None, lv_icp_tier_derived="D",
         lv_anti_icp_flag="true", lv_anti_icp_reason="Non-ANZ geography",
     )]
     after_rows = [_row(
-        PINNED_ID, lv_org_type="individual_club_team", lv_icp_tier="C",
+        PINNED_ID, lv_org_type="individual_club_team", lv_icp_tier_derived="C",
         lv_anti_icp_flag="false", lv_anti_icp_reason="",
     )]
 
@@ -165,7 +165,7 @@ def test_diff_reports_changed_properties_and_classification_for_a_cleared_record
     assert result[PINNED_ID]["present_after"] is True
     assert result[PINNED_ID]["classification"] == "cleared"
     assert "lv_org_type" in result[PINNED_ID]["changed"]
-    assert "lv_icp_tier" in result[PINNED_ID]["changed"]
+    assert "lv_icp_tier_derived" in result[PINNED_ID]["changed"]
     assert "name" not in result[PINNED_ID]["changed"]  # unchanged (both None)
 
 
@@ -211,7 +211,7 @@ def test_live_property_names_delegates_to_injected_lister_and_returns_name_set()
 def test_checked_name_set_includes_derived_read_only_fields_and_veto_03_search_names():
     # The four derived read-only fields (never written, always read) plus the two
     # VETO-03 acceptance-search property names -- all must be inside OBSERVED_PROPS.
-    derived = {"lv_icp_fit_score", "lv_icp_tier", "lv_anti_icp_flag", "lv_anti_icp_reason"}
+    derived = {"lv_icp_fit_score", "lv_icp_tier_derived", "lv_anti_icp_flag", "lv_anti_icp_reason"}
     veto_03_search_names = {"lv_anti_icp_reason", "lv_country_region_normalized"}
 
     assert derived <= set(m.OBSERVED_PROPS)

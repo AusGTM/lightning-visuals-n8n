@@ -47,7 +47,8 @@ from scripts.remediate_veto_companies import (  # noqa: E402
 )
 
 # The 8 observed properties per row (VETO-01/COVER-01's per-id before/after cohort
-# report). Includes the four derived read-only fields (lv_icp_fit_score, lv_icp_tier,
+# report). Includes the four derived read-only fields (lv_icp_fit_score,
+# lv_icp_tier_derived — repointed 2026-08-19 from the lv_icp_tier Phase 50 archived,
 # lv_anti_icp_flag, lv_anti_icp_reason) this phase never writes, and both VETO-03
 # acceptance-search property names (lv_anti_icp_reason, lv_country_region_normalized).
 OBSERVED_PROPS = (
@@ -56,7 +57,7 @@ OBSERVED_PROPS = (
     "lv_produces_content",
     "lv_country_region_normalized",
     "lv_icp_fit_score",
-    "lv_icp_tier",
+    "lv_icp_tier_derived",
     "lv_anti_icp_flag",
     "lv_anti_icp_reason",
 )

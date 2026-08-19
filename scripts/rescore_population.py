@@ -21,7 +21,7 @@ properties -- zero n8n executions, zero Anthropic calls, zero provider credits
 -- do not copy Phase 48's "both arming surfaces must be armed together" rule here, there is
 no n8n allowlist anywhere in this window's write path (Pitfall 3, 49-RESEARCH.md).
 
-Never writes lv_icp_fit_score, lv_icp_tier, lv_anti_icp_flag or lv_anti_icp_reason -- those
+Never writes lv_icp_fit_score, lv_icp_tier_derived, lv_anti_icp_flag or lv_anti_icp_reason -- those
 are derived by HubSpot's calculated property, WF1, and the n8n Decide Company Action node
 respectively (project D-07); assert_payload_scope() enforces this on every payload this
 driver builds by requiring an exact match against COMPONENT_PROPS.
@@ -325,9 +325,9 @@ def run_canary() -> int:
     batch_update_companies(update, dry_run=False)
     print(f"canary written -- settling {canary_id} (up to 300s)...")
     fit_score = settle_population([canary_id], "lv_icp_fit_score", timeout=300)
-    tier = settle_population([canary_id], "lv_icp_tier", timeout=300)
+    tier = settle_population([canary_id], "lv_icp_tier_derived", timeout=300)
     print(json.dumps({"canary_id": canary_id, "lv_icp_fit_score": fit_score.get(canary_id),
-                       "lv_icp_tier": tier.get(canary_id)}, indent=2))
+                       "lv_icp_tier_derived": tier.get(canary_id)}, indent=2))
     return 0
 
 
@@ -369,7 +369,7 @@ def run_execute(already_written: list) -> int:
     print(f"armed run complete -- {len(updates)} companies written. Settling (up to 300s each)...")
     written_ids = [u["id"] for u in updates]
     settle_population(written_ids, "lv_icp_fit_score", timeout=300)
-    settle_population(written_ids, "lv_icp_tier", timeout=300)
+    settle_population(written_ids, "lv_icp_tier_derived", timeout=300)
     return 0
 
 
@@ -378,7 +378,7 @@ def run_execute(already_written: list) -> int:
 # The seven per-record properties a census entry carries (id is the record id itself, not
 # a fetched property).
 SNAPSHOT_RECORD_PROPS = [
-    "name", "lv_icp_tier", "lv_icp_fit_score", "lv_org_type",
+    "name", "lv_icp_tier_derived", "lv_icp_fit_score", "lv_org_type",
     "lv_anti_icp_flag", "lv_anti_icp_reason",
 ]
 
@@ -398,7 +398,7 @@ def build_snapshot(ids: list) -> dict:
         records.append({
             "id": company_id,
             "name": props.get("name"),
-            "lv_icp_tier": props.get("lv_icp_tier"),
+            "lv_icp_tier": props.get("lv_icp_tier_derived"),
             "lv_icp_fit_score": props.get("lv_icp_fit_score"),
             "lv_org_type": props.get("lv_org_type"),
             "lv_anti_icp_flag": props.get("lv_anti_icp_flag"),

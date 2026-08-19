@@ -428,7 +428,7 @@ def test_settle_population_polls_get_record_until_stable(monkeypatch):
 
     monkeypatch.setattr(rp, "get_record", _fake_get_record)
     monkeypatch.setattr(rp.time, "sleep", lambda _s: None)
-    result = rp.settle_population(["1"], "lv_icp_tier", timeout=300, interval=1)
+    result = rp.settle_population(["1"], "lv_icp_tier_derived", timeout=300, interval=1)
     assert result == {"1": "A"}
 
 
@@ -440,7 +440,7 @@ def _snapshot_props_by_id(ids):
         tier = ["A", "B", "C", "D", "Unscored", "Needs Review"][idx % 6]
         props[company_id] = {
             "name": f"Company {company_id}",
-            "lv_icp_tier": tier,
+            "lv_icp_tier_derived": tier,
             "lv_icp_fit_score": str(idx),
             "lv_org_type": "governing_body_league",
             "lv_anti_icp_flag": "false",
@@ -516,9 +516,9 @@ def test_snapshot_empty_population_refuses(monkeypatch, capsys):
 def test_snapshot_none_tier_counted_as_distinct_key_not_dropped(monkeypatch, capsys):
     ids = ["00010", "00020"]
     props_by_id = {
-        "00010": {"name": "A", "lv_icp_tier": None, "lv_icp_fit_score": None,
+        "00010": {"name": "A", "lv_icp_tier_derived": None, "lv_icp_fit_score": None,
                   "lv_org_type": None, "lv_anti_icp_flag": None, "lv_anti_icp_reason": None},
-        "00020": {"name": "B", "lv_icp_tier": "A", "lv_icp_fit_score": "80",
+        "00020": {"name": "B", "lv_icp_tier_derived": "A", "lv_icp_fit_score": "80",
                   "lv_org_type": "governing_body_league", "lv_anti_icp_flag": "false",
                   "lv_anti_icp_reason": None},
     }
