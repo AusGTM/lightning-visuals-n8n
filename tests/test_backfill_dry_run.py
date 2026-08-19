@@ -276,12 +276,15 @@ def test_research_only_fills_missing_fields():
         provider="claude_web", object_type="companies", matched=True, confidence=80,
         data={"lv_org_type": "content producer", "lv_produces_content": None},
         evidence=ProviderEvidence(),
+        evidence_by_field={"lv_org_type": "https://example.com/about"},
     )
     merged = b.apply_research_to_patch(already_filled, research_result)
     assert merged["lv_org_type"] == "governing_body_league"
 
     # Missing lv_org_type receives the NORMALIZED research value (raw "content producer"
-    # -> canonical "content_producer" via src.taxonomy.normalize_org_type).
+    # -> canonical "content_producer" via src.taxonomy.normalize_org_type), gated by
+    # config/field_policy.yaml's min_confidence=80 (met exactly) and require_evidence_url_for
+    # (content_producer is listed; evidence_by_field supplies it above).
     merged2 = b.apply_research_to_patch({}, research_result)
     assert merged2["lv_org_type"] == "content_producer"
 
@@ -295,6 +298,67 @@ def test_research_only_fills_missing_fields():
 
     # A None research_result (research call failed/degraded) is a safe no-op.
     assert b.apply_research_to_patch({"lv_revenue_band": "5-50M"}, None) == {"lv_revenue_band": "5-50M"}
+
+
+def test_field_policy_gate_rejects_below_min_confidence():
+    # config/field_policy.yaml: lv_produces_content min_confidence=85. confidence=84 is
+    # one point below the gate -- must be treated as absent, never promoted.
+    research_result = ProviderResult(
+        provider="claude_web", object_type="companies", matched=True, confidence=84,
+        data={"lv_produces_content": True},
+        evidence=ProviderEvidence(),
+        evidence_by_field={"lv_produces_content": "https://example.com/watch-live"},
+    )
+    merged = b.apply_research_to_patch({}, research_result)
+    assert "lv_produces_content" not in merged
+
+
+def test_field_policy_gate_rejects_missing_required_evidence_url():
+    # confidence clears the gate (90 >= 85) but lv_produces_content requires an evidence
+    # URL and none is supplied -- must still be treated as absent.
+    research_result = ProviderResult(
+        provider="claude_web", object_type="companies", matched=True, confidence=90,
+        data={"lv_produces_content": True},
+        evidence=ProviderEvidence(),
+        evidence_by_field={},
+    )
+    merged = b.apply_research_to_patch({}, research_result)
+    assert "lv_produces_content" not in merged
+
+
+def test_field_policy_gate_accepts_at_exact_threshold_with_evidence():
+    # confidence == min_confidence (85, inclusive) plus a cited evidence URL -- promoted.
+    research_result = ProviderResult(
+        provider="claude_web", object_type="companies", matched=True, confidence=85,
+        data={"lv_produces_content": True},
+        evidence=ProviderEvidence(),
+        evidence_by_field={"lv_produces_content": "https://example.com/watch-live"},
+    )
+    merged = b.apply_research_to_patch({}, research_result)
+    assert merged["lv_produces_content"] is True
+
+
+def test_field_policy_gate_org_type_only_requires_evidence_for_gated_types():
+    # individual_club_team is NOT in require_evidence_url_for -- confidence alone (>=80)
+    # is enough, no evidence_by_field entry needed.
+    research_result = ProviderResult(
+        provider="claude_web", object_type="companies", matched=True, confidence=80,
+        data={"lv_org_type": "individual club team"},
+        evidence=ProviderEvidence(),
+        evidence_by_field={},
+    )
+    merged = b.apply_research_to_patch({}, research_result)
+    assert merged["lv_org_type"] == "individual_club_team"
+
+    # governing_body_league IS gated -- same confidence, no evidence -- stays absent.
+    research_result_gated = ProviderResult(
+        provider="claude_web", object_type="companies", matched=True, confidence=80,
+        data={"lv_org_type": "governing body league"},
+        evidence=ProviderEvidence(),
+        evidence_by_field={},
+    )
+    merged_gated = b.apply_research_to_patch({}, research_result_gated)
+    assert "lv_org_type" not in merged_gated
 
 
 def test_partition_exclusive_and_total(monkeypatch):

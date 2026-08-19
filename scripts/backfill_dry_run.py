@@ -33,6 +33,8 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))  # repo root on sys.path so `src.*`/`scripts.*` imports resolve
 
@@ -113,6 +115,21 @@ PAYLOAD_INPUT_PROPS = [
 # calculation engine and this repo's n8n pipeline respectively) and must never appear
 # here.
 PERMITTED_PAYLOAD_KEYS = frozenset(PAYLOAD_INPUT_PROPS + COMPONENT_PROPS + ["lv_anti_icp_flag_num"])
+
+# Operator ruling, checkpoint round 2 (2026-08-19): apply_research_to_patch() was
+# promoting any well-typed research answer regardless of confidence or evidence -- the
+# SAME field_policy.yaml this repo's live merge engine (src/merge_policy.py) already
+# enforces elsewhere declares min_confidence/require_evidence_url(_for) gates for every
+# GAP_FILL_FIELDS name. This driver's own promotion path was the one place that skipped
+# them. Loaded fresh per call (not cached), matching src/icp_scoring.py's own
+# load_yaml("config/icp_scoring.yaml") convention -- an edited policy takes effect
+# immediately and no import-time file read is required for an offline test to import
+# this module.
+FIELD_POLICY_PATH = ROOT / "config" / "field_policy.yaml"
+
+
+def _load_field_policy() -> dict:
+    return (yaml.safe_load(FIELD_POLICY_PATH.read_text()) or {}).get("companies", {})
 
 
 def _has_credentials() -> bool:
@@ -332,35 +349,60 @@ def research_gap_fields(company: dict, zi_attributes: dict, candidate_patch: dic
 
 def apply_research_to_patch(candidate_patch: dict, research_result) -> dict:
     """Merges ONLY the GAP_FILL_FIELDS names still absent from `candidate_patch`, and only
-    when the research result's value for that name is present and well-formed. NEVER
-    overwrites a value ZoomInfo already supplied (T-51-07). lv_org_type passes through
-    src.taxonomy.normalize_org_type so only live enum values reach the oracle -- but only
-    when the raw value is not None; normalize_org_type(None) returns the "unknown"
-    default, which IS a guess and must not be written. Boolean fields accept only real
-    booleans (isinstance check, no string coercion): a null/non-bool answer leaves the key
-    absent rather than defaulting to False, because a defaulted False on
-    lv_produces_content would fire the no-content hard veto on a record nobody actually
-    researched -- an absent key is exactly what compute_icp_score's blank-input guards
-    read as "not yet enriched"."""
+    when the research result's value for that name is present, well-formed, AND clears
+    config/field_policy.yaml's own gate for that field (operator ruling, checkpoint round
+    2, 2026-08-19 -- see FIELD_POLICY_PATH's comment). NEVER overwrites a value ZoomInfo
+    already supplied (T-51-07). lv_org_type passes through src.taxonomy.normalize_org_type
+    so only live enum values reach the oracle -- but only when the raw value is not None;
+    normalize_org_type(None) returns the "unknown" default, which IS a guess and must not
+    be written. Boolean fields accept only real booleans (isinstance check, no string
+    coercion): a null/non-bool answer leaves the key absent rather than defaulting to
+    False, because a defaulted False on lv_produces_content would fire the no-content hard
+    veto on a record nobody actually researched -- an absent key is exactly what
+    compute_icp_score's blank-input guards read as "not yet enriched".
+
+    Field-policy gate: a research answer below its field's `min_confidence`, or missing a
+    URL required by `require_evidence_url` (lv_produces_content) / `require_evidence_url_for`
+    (lv_org_type, only for the listed org types), is treated exactly like an absent
+    answer -- the key stays out of the patch rather than being promoted on a low-confidence
+    or uncorroborated guess. lv_is_hardware_vendor/lv_is_gambling_operator carry a
+    min_confidence gate in the same policy but no evidence-url requirement."""
     patch = dict(candidate_patch)
     if research_result is None:
         return patch
     data = getattr(research_result, "data", None)
     if not isinstance(data, dict):
         return patch
+
+    confidence = getattr(research_result, "confidence", None)
+    evidence_by_field = getattr(research_result, "evidence_by_field", None) or {}
+    policy = _load_field_policy()
+
     for field in GAP_FILL_FIELDS:
         if field in patch:
             continue  # never overwrite a ZoomInfo-supplied value
         if field not in data:
             continue
         value = data[field]
+
+        field_policy = policy.get(field, {})
+        min_confidence = field_policy.get("min_confidence", 0)
+        if not isinstance(confidence, (int, float)) or isinstance(confidence, bool) or confidence < min_confidence:
+            continue  # below the declared confidence gate -- treat as absent, never guess
+
         if field == "lv_org_type":
             if value is None:
                 continue
-            patch[field] = normalize_org_type(value)
+            normalized = normalize_org_type(value)
+            evidence_required_for = field_policy.get("require_evidence_url_for", [])
+            if normalized in evidence_required_for and field not in evidence_by_field:
+                continue  # gated org type with no cited evidence -- stays absent
+            patch[field] = normalized
         else:
             if not isinstance(value, bool):
                 continue
+            if field_policy.get("require_evidence_url") and field not in evidence_by_field:
+                continue  # e.g. lv_produces_content requires a cited evidence URL
             patch[field] = value
     return patch
 
