@@ -643,3 +643,14 @@ no credential material found in `51-DRYRUN-PREDICTIONS.json` /
 `51-DRYRUN-PREDICTIONS-run2-diversified.json`; predictions/skip-log partition clean
 (8 rows, 2 skipped, zero overlap); `research_calls_made=24`, `judge_calls_made=3`,
 `judge_cap_hit=false` on the committed Run 3 artifact.
+
+## Self-Check (checkpoint round 4): PASSED
+
+All 5 round-4 files verified present on disk (`scripts/backfill_dry_run.py`,
+`tests/test_backfill_dry_run.py`, `51-DRYRUN-PREDICTIONS.json`,
+`51-DRYRUN-PREDICTIONS-run3-judge-escalation.json`, `51-03-SUMMARY.md`); full test
+suite green (2877 passed, 154 skipped, `node --test tests/n8n/*.test.mjs`: 683
+passed); both round-4 commit hashes verified in git log (`aee80e3`, `b9e2985`); no
+credential material found in either predictions artifact; exactly 3 of 8 rows carry
+`lv_icp_needs_review`/`lv_enrichment_review_reason` on the committed
+`51-DRYRUN-PREDICTIONS.json` (Warwick, Gold Coast, Tasmanian), the other 5 do not.
