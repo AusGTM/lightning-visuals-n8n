@@ -9,11 +9,129 @@
 - ✅ **v0.7 HubSpot Scoring Engine Remediation** — Phases 39–43 (shipped 2026-08-08)
 - ✅ **v0.8 Execution Budget Safety** — Phases 44–45 (shipped 2026-08-11)
 - ✅ **v0.9 ICP Rubric Calibration & Veto Remediation** — Phases 46–50, archived (`milestones/v0.9-ROADMAP.md`, `milestones/v0.9-REQUIREMENTS.md`) (shipped 2026-08-19)
+- 🚧 **v1.0 Direct Backfill & Scoring Coverage** — Phases 51–52 (in progress)
 
 ## Phases
 
-*No active milestone.* v0.9's phases 46–50 are archived in full at
-`milestones/v0.9-ROADMAP.md`. Run `/gsd-new-milestone` to define the next one.
+### 🚧 v1.0 Direct Backfill & Scoring Coverage (Phases 51–52)
+
+Backfill the ~646 never-scored HubSpot companies with ZoomInfo firmographics plus targeted
+research, in-session, writing the scoring inputs and the six numeric properties HubSpot's
+calculation engine reads. Zero n8n executions — the operator has no credits for it, and none are
+needed: HubSpot already derives `lv_icp_fit_score` and `lv_icp_tier_derived` from those six
+numbers on its own. Decisions in `.planning/MILESTONE-CONTEXT.md`; requirements in
+`.planning/REQUIREMENTS.md`.
+
+- [ ] **Phase 51: Backfill Pipeline, Credit Sizing & Dry Run** - Size the population and the
+      ZoomInfo credit cap live, pin the thousands-to-dollars revenue conversion, and dry-run a
+      sample's exact PATCH payloads and pre-registered tier predictions — zero writes
+- [ ] **Phase 52: Staged Canary Execution & Safety Verification** - Write the credit-capped
+      population in gated stages (1 → 5 → 25 → chunked remainder), polling every result against
+      its committed prediction, and close by proving the 66 already-scored companies are untouched
+
+## Phase Details
+
+### Phase 51: Backfill Pipeline, Credit Sizing & Dry Run
+
+**Goal**: Before any HubSpot write, the operator can see the live-derived population of
+never-scored companies, a ZoomInfo-credit-sized cap on how many can be attempted, and — for a
+representative sample of that capped population — the exact PATCH payload and predicted
+`lv_icp_tier_derived` for every record, computed entirely by reusing `src/icp_scoring.py`
+(never a reimplementation), with zero n8n executions and zero live writes.
+
+**Depends on**: Nothing (first phase of milestone)
+
+**Requirements**: FILL-01, FILL-03, FILL-04, SAFE-01
+
+**Success Criteria** (what must be TRUE):
+
+  1. The never-scored population is re-derived live (`NOT_HAS_PROPERTY(lv_icp_fit_score)`, ~646
+     expected) and the count is recorded in a committed artifact — never a stale census carried
+     over from `.planning/MILESTONE-CONTEXT.md`'s estimate, mirroring the D-01/Phase-48 lesson
+     that a population must be re-derived, not trusted from a prior snapshot.
+
+  2. Operator can see the live ZoomInfo credit balance, a population cap derived from it, and an
+     Anthropic research-cost estimate for the gap-fill fields, all recorded in a committed
+     artifact before any record is enriched. A run whose estimated cost would exceed the balance
+     is capped up front — discovering exhaustion partway through a run is a failure of this
+     criterion, not bad luck.
+
+  3. A committed unit test pins that ZoomInfo GTM revenue (returned in THOUSANDS, per the landmine
+     carried in from prior provider work) is converted to dollars before banding; the dry run's
+     revenue-band outputs reflect that conversion, not a raw thousands pass-through that would put
+     every company one band too low.
+
+  4. Over a representative sample of the capped population, the dry run separates matched from
+     unmatched records: every unmatched sample record appears in a skip log with a stated reason
+     and carries no write payload of any kind — no company is scored on guessed data, and "not yet
+     enriched" stays distinguishable from "enriched and genuinely low-fit."
+
+  5. For every matched sample record, the dry run prints the exact PATCH payload — the `lv_*`
+     scoring inputs (`lv_org_type`, `lv_produces_content`, `lv_country_region_normalized`,
+     `lv_revenue_band`, `lv_is_gambling_operator`, `lv_is_hardware_vendor`) plus the six numeric
+     properties (`org_type_score`, `geography_score`, `annual_revenue_score`,
+     `produces_content_score`, `gambling_score`, `lv_anti_icp_flag_num`) — alongside its
+     pre-registered predicted `lv_icp_tier_derived`, all committed to an artifact before any write.
+
+  6. A before-snapshot of the 66 already-scored companies is committed, read-only, as the SAFE-04
+     baseline Phase 52 will diff against at close.
+
+  7. Operator has explicitly approved the dry-run artifacts before Phase 52 opens any write
+     window. This approval is the phase's exit gate — structurally, not as a task inside a
+     write-capable phase — per the locked sequence: plan → dry run → **operator approval** →
+     canary execution.
+
+**Plans**: TBD
+
+---
+
+### Phase 52: Staged Canary Execution & Safety Verification
+
+**Goal**: The credit-capped population of never-scored, ZoomInfo-matched companies is written in
+operator-gated stages — 1 → 5 → 25 → chunked remainder — with each record's prediction committed
+before it is written and its actual tier confirmed by polling against that prediction, and the
+milestone closes with proof that the 66 already-scored companies and the D-07/Phase 49 parity
+evidence are unchanged.
+
+**Depends on**: Phase 51, gated on explicit operator approval of the dry-run artifacts — no write
+in this phase precedes that approval.
+
+**Requirements**: FILL-02, SAFE-02, SAFE-03, SAFE-04
+
+**Success Criteria** (what must be TRUE):
+
+  1. For every stage, each record's prediction (computed by `src/icp_scoring.py`, identical to
+     Phase 51's method) is appended to the prediction artifact BEFORE that record is written — no
+     record is ever written before its prediction is committed.
+
+  2. Each matched company written in this phase shows non-blank `lv_org_type`,
+     `lv_produces_content`, `lv_country_region_normalized`, `lv_revenue_band`,
+     `lv_is_gambling_operator`, `lv_is_hardware_vendor`, and the six numeric properties, matching
+     `src/icp_scoring.py`'s computed values for that record — the observable acquisition of
+     scoring inputs FILL-02 requires.
+
+  3. Execution proceeded in exactly four stages — 1, then 5, then 25, then the chunked remainder —
+     with an explicit operator gate before each stage and a checkpoint between remainder chunks;
+     no stage began without a recorded operator go-ahead, and the remainder was never written as
+     one ~615-record batch.
+
+  4. Every write happened inside a deliberately armed, record-scoped window — the Python-side
+     two-key gate (`DRY_RUN=false` plus a dedicated allow-key), portal-id-guarded, under the same
+     discipline as `scripts/rescore_population.py`'s W1 window. This is a zero-n8n write path, so
+     there is no second, n8n-side allowlist to arm alongside it (do not carry over Phase 48's
+     dual-surface arming rule here). Every window was disarmed afterward, with the disarmed state
+     read back and confirmed.
+
+  5. Every written record's `lv_icp_tier_derived` was confirmed by polling (never a single
+     immediate read — calculated properties backfill ~70–130s) and compared against its committed
+     prediction; any mismatch is surfaced as a defect — a bad provider value or a wrong
+     normalization — never narrated after the fact as an expected outcome.
+
+  6. After the run, the 66 already-scored companies read identically to the Phase 51 before-
+     snapshot, and re-running `scripts/check_tier_derived_parity.py`'s D-07 gate still passes —
+     the committed parity evidence and Phase 49's settled tiers are re-verified, not assumed.
+
+**Plans**: TBD
 
 ## Progress
 
@@ -27,6 +145,8 @@
 | 48. Enrichment Coverage | v0.9 | 7/7 | Complete (verified) | 2026-08-13 |
 | 49. Re-score Strategy & Reporting | v0.9 | 7/7 | Complete (verified) | 2026-08-13 |
 | 50. Derived Tier Property | v0.9 | 6/6 | Complete (verified) | 2026-08-14 |
+| 51. Backfill Pipeline, Credit Sizing & Dry Run | v1.0 | 0/TBD | Not started | - |
+| 52. Staged Canary Execution & Safety Verification | v1.0 | 0/TBD | Not started | - |
 
 ## Ledger gaps (known)
 

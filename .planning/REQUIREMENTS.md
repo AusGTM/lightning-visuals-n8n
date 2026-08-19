@@ -54,14 +54,14 @@ those records acquire a real `lv_icp_fit_score` and `lv_icp_tier_derived`. Execu
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FILL-01 | TBD | Not started |
-| FILL-02 | TBD | Not started |
-| FILL-03 | TBD | Not started |
-| FILL-04 | TBD | Not started |
-| SAFE-01 | TBD | Not started |
-| SAFE-02 | TBD | Not started |
-| SAFE-03 | TBD | Not started |
-| SAFE-04 | TBD | Not started |
+| FILL-01 | Phase 51 | Not started |
+| FILL-02 | Phase 52 | Not started |
+| FILL-03 | Phase 51 | Not started |
+| FILL-04 | Phase 51 | Not started |
+| SAFE-01 | Phase 51 | Not started |
+| SAFE-02 | Phase 52 | Not started |
+| SAFE-03 | Phase 52 | Not started |
+| SAFE-04 | Phase 52 | Not started |
 
 ## Out of Scope
 
