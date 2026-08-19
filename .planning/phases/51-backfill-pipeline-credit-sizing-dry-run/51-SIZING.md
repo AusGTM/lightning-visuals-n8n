@@ -263,13 +263,90 @@ effect on `lv_icp_fit_score`/`lv_icp_tier`. A future rubric change that reactiva
 deduction would make this instability live and score-relevant; flagged for whoever next
 edits `graduated_deductions`.
 
-**Running totals, phase-to-date (actual, not projected):** 13 ZoomInfo credits (1 tracer +
-10 Run 1 + 2 Run 2, live balance deltas). Anthropic research calls: 16 (Run 1 + Run 2 dry
-runs) + 24 (before-measurement) + 36 (after-measurement, capped at 4 of 8 companies per
-operator cost-discipline ruling) = **76 calls**. The phase's originally sized research
-budget was <=12 calls for the dry-run sample itself; this reproducibility investigation
-(triggered by the checkpoint hold, not part of the original sizing) added 60 calls on top
-of that, disclosed here in full rather than absorbed silently into `research_calls_made`.
+**Running totals through checkpoint round 2 (actual, not projected):** 13 ZoomInfo credits
+(1 tracer + 10 Run 1 + 2 Run 2, live balance deltas). Anthropic research calls: 16 (Run 1 +
+Run 2 dry runs) + 24 (before-measurement) + 36 (after-measurement, capped at 4 of 8
+companies per operator cost-discipline ruling) = **76 calls**. The phase's originally sized
+research budget was <=12 calls for the dry-run sample itself; this reproducibility
+investigation (triggered by the checkpoint hold, not part of the original sizing) added 60
+calls on top of that, disclosed here in full rather than absorbed silently into
+`research_calls_made`.
+
+## Run 3 -- Sonnet judge escalation + predictions regeneration (operator ruling, checkpoint round 3, 2026-08-19)
+
+**Work item 1: the judge lane.** `research_with_majority_vote()` now escalates a genuine
+(non-unanimous) `lv_produces_content` disagreement among its 3 raw votes to
+`src.validator_sonnet.validate_conflict_with_sonnet` -- reused verbatim (Phase 46
+no-reimplementation discipline; the same function `src/merge_policy.py` already calls
+live), never forked. CLAUDE.md SS15.1 names exactly this case
+(`lv_produces_content_conflict` / `hard_veto_possible` / `anti_icp_flag_would_change`) as a
+Sonnet-5 escalation -- a mechanism the dry-run lane had never actually called before this
+round. A unanimous field never reaches the judge, so spend stays proportional to actual
+conflicts. Fixed a real bug found while wiring this in: `validate_conflict_with_sonnet`
+hardcoded `temperature=0`, which 400s on `claude-sonnet-5` (the `ANTHROPIC_JUDGE_MODEL`
+default) -- fixed at the one shared call site (commit `d6451d7`), not forked per-caller.
+Fail-safe per SS15.1's `human_review` block: judge confidence < 80, or no `evidence_url`
+when the field requires one, leaves `lv_produces_content` **absent** rather than defaulting
+to `False` (a defaulted `False` on this field IS the no-content hard veto -- the exact
+outcome an unresolved conflict must never silently produce).
+
+**Work item 2: predictions regenerated.** `51-DRYRUN-PREDICTIONS.json` was regenerated over
+the SAME 8 matched companies as Run 2, re-derived via
+`select_diversified_never_scored_sample()` (zero ZoomInfo cost -- pure HubSpot search) and
+reusing each row's stored `matched_attributes` from Run 2 (zero ZoomInfo cost -- no
+`companies/enrich` call made). Only the research+judge lane re-ran, live, one company per
+foreground invocation (9 candidate raw calls max per company: 3 research + up to 1 judge --
+comfortably under `MAX_WEB_RESEARCH_PER_RUN=10` per invocation). Run 2's artifacts are
+archived, not overwritten, as `*-run2-diversified.json`; Run 1's `*-run1-ascending-id.json`
+remains untouched from checkpoint round 1.
+
+**Actual spend, this regeneration:** 24 research calls (8 companies x 3, ceiling
+projection) + **3 judge calls** (well under `MAX_JUDGE_VALIDATIONS_PER_RUN=50` -- the cap
+was never approached, let alone hit) = **27 Anthropic calls**. Zero ZoomInfo credits.
+
+**Per-record diff, Run 2 -> Run 3:**
+
+| Company | Run 2 tier / score / `lv_produces_content` | Run 3 tier / score / `lv_produces_content` | Judge escalated? |
+|---|---|---|---|
+| Warwick Turf Club | B / 45 / `True` | **C / 25 / absent** | Yes -- confidence/evidence check failed |
+| Mudgee Race Club | D / 25 / `False` | D / 25 / `False` | No -- unanimous |
+| Clare Valley Racing Club | D / 25 / `False` | D / 25 / `False` | No -- unanimous |
+| Bairnsdale Racing Club | D / 35 / `False` | D / 35 / `False` | No -- unanimous |
+| Shoalhaven City Turf Club | D / 35 / `False` | D / 35 / `False` | No -- unanimous |
+| Gold Coast Turf Club | B / 55 / `True` | **C / 35 / absent** | Yes -- confidence/evidence check failed |
+| Ipswich Turf Club | D / 35 / `False` | D / 35 / `False` | No -- unanimous |
+| Tasmanian Turf Club | D / 25 / `False` | **C / 25 / absent** | Yes -- confidence/evidence check failed |
+
+**Tier distribution, Run 3: C x3, D x5. Zero A, zero B.**
+
+**Stated loudly, per the operator's own instruction, because it did not match their stated
+expectation:** the operator's expectation, from the round-2 minority-draw finding, was that
+Gold Coast and Warwick would **settle at D** once the judge resolved the conflict. They did
+not. Both settled at **C**, and so did Tasmanian -- a company the before/after
+reproducibility measurement had never flagged as unstable, which flipped fresh on this live
+run (further, direct evidence of the underlying research-answer instability: it is not
+confined to the two companies measured earlier). The reason is mechanical, not a bug: the
+no-content hard veto in `src/icp_scoring.py` fires only when `lv_produces_content is
+False` -- an **absent** value clears no veto and adds no content points, so a record whose
+conflict the judge could not confidently resolve lands wherever its other components
+(org type, geography, revenue) put it. For these three records that happens to be Tier C
+(scores 25/35/25), not D. This is the fail-safe working exactly as designed -- an
+unresolved conflict must never be punished with a guessed veto -- but it means "the judge
+resolved the conflict to absent" and "the record is Tier D" are NOT the same outcome, and
+this document is not going to claim they are.
+
+**No Tier A or Tier B has been produced by this regeneration.** The two Run 2 rows that
+were Tier B under a single-call research draw are now Tier C under the majority-vote +
+judge-escalation lane. Combined with the round-2 minority-draw finding (3-of-5 historic
+observations favored `False` for both), this is a second, independent line of evidence that
+neither Gold Coast nor Warwick was ever genuinely Tier B -- Run 2's B was an artifact of
+research-answer instability, now corrected.
+
+**Running totals, phase-to-date (actual, not projected):** 13 ZoomInfo credits (unchanged --
+Run 3 spent zero). Anthropic calls: 76 (through checkpoint round 2) + 27 (Run 3: 24 research
++ 3 judge) = **103 calls**, against a phase originally sized for <=12. Every call beyond
+that figure is disclosed here, not absorbed silently into any single artifact's own
+`research_calls_made`/`judge_calls_made` fields.
 
 ## Assumptions (labelled)
 

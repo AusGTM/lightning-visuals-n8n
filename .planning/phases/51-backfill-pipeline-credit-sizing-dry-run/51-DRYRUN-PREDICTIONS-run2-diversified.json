@@ -1,5 +1,5 @@
 {
-  "run_at": "2026-08-19T09:00:00Z",
+  "run_at": "2026-08-19T04:23:47.043976+00:00",
   "portal_id_verified": "22617666",
   "population_filter": "NOT_HAS_PROPERTY(lv_icp_fit_score)",
   "population_total": 646,
@@ -7,7 +7,7 @@
   "credit_cap": 8694,
   "sample_size": 10,
   "credits_spent": 10,
-  "research_calls_made": 24,
+  "research_calls_made": 8,
   "predicted_tier_values_allowed": [
     "A",
     "B",
@@ -24,15 +24,16 @@
         "lv_revenue_band": "1-5M",
         "lv_country_region_normalized": "AU",
         "lv_org_type": "individual_club_team",
+        "lv_produces_content": true,
         "org_type_score": 15,
         "geography_score": 10,
         "annual_revenue_score": 0,
-        "produces_content_score": 0,
+        "produces_content_score": 20,
         "gambling_score": 0,
         "lv_anti_icp_flag_num": "0"
       },
-      "predicted_tier": "C",
-      "score": 25,
+      "predicted_tier": "B",
+      "score": 45,
       "anti_icp_flag": false,
       "anti_icp_reason": null,
       "name": "Warwick Turf Club",
@@ -40,16 +41,19 @@
       "sources": {
         "lv_revenue_band": "zoominfo",
         "lv_country_region_normalized": "zoominfo",
-        "lv_org_type": "claude_web"
+        "lv_org_type": "claude_web",
+        "lv_produces_content": "claude_web"
       },
       "research_filled": [
-        "lv_org_type"
+        "lv_org_type",
+        "lv_produces_content"
       ],
       "evidence_urls": [
-        "https://warwickturfclub.org.au/our-club",
         "https://warwickturfclub.org.au/",
         "https://www.racingqueensland.com.au/racing/club-details/thoroughbred/53674/warwick-turf-club",
-        "https://www.facebook.com/warwickturfclub/"
+        "https://www.facebook.com/warwickturfclub/",
+        "https://warwickturfclub.org.au/our-club",
+        "https://www.youtube.com/watch?v=rmVUlm1TC_g"
       ],
       "country_conflict": null,
       "industry": "SPORTS",
@@ -91,8 +95,9 @@
       ],
       "evidence_urls": [
         "https://mudgeeraceclub.com.au/about-us/",
+        "https://mudgeeraceclub.com.au/sponsorship/",
         "https://mudgeeraceclub.com.au/race-meetings/",
-        "https://mudgeeraceclub.com.au/"
+        "https://abdirectory.com.au/places/australia/new-south-wales/bombira/race-club/mudgee-race-club-inc/"
       ],
       "country_conflict": null,
       "industry": "ENTERTAINMENT",
@@ -140,9 +145,9 @@
       ],
       "evidence_urls": [
         "https://en.wikipedia.org/wiki/Clare_Valley_Racecourse",
-        "https://countryracingsa.com.au/racing-club/clare-valley",
-        "https://sacommunity.org/org/199679-Clare_Valley_Racing_Club_Inc.",
-        "https://www.clarevalley.com.au/contact/directory-listing/clare-valley-racing-club/"
+        "https://www.countryracingsa.com.au/racing-club/clare-valley/",
+        "https://www.clarevalley.com.au/contact/directory-listing/clare-valley-racing-club/",
+        "https://countryracingsa.com.au/racing-club/clare-valley"
       ],
       "country_conflict": null,
       "industry": "SPORTS",
@@ -159,8 +164,6 @@
         "lv_country_region_normalized": "AU",
         "lv_org_type": "individual_club_team",
         "lv_produces_content": false,
-        "lv_is_hardware_vendor": false,
-        "lv_is_gambling_operator": false,
         "org_type_score": 15,
         "geography_score": 10,
         "annual_revenue_score": 10,
@@ -177,22 +180,17 @@
       "sources": {
         "lv_revenue_band": "zoominfo",
         "lv_country_region_normalized": "zoominfo",
-        "lv_is_gambling_operator": "claude_web",
-        "lv_is_hardware_vendor": "claude_web",
         "lv_org_type": "claude_web",
         "lv_produces_content": "claude_web"
       },
       "research_filled": [
-        "lv_is_gambling_operator",
-        "lv_is_hardware_vendor",
         "lv_org_type",
         "lv_produces_content"
       ],
       "evidence_urls": [
-        "https://horseracing.com.au/racecourses/bairnsdale/",
-        "https://ingippsland.com.au/businesses/bairnsdale-racing-club-inc/",
-        "https://bairnsdale.tickets.countryracing.com.au/",
-        "https://www.facebook.com/Bairnsdaleracingclub/"
+        "https://www.progroupracing.com.au/australian-racecourses/victorian-racecourses/bairnsdale-racecourse",
+        "https://www.facebook.com/Bairnsdaleracingclub/",
+        "https://modernslaveryregister.gov.au/statements/UidE0gwyyJCBzE7/pdf/"
       ],
       "country_conflict": null,
       "industry": "SPORTS",
@@ -209,8 +207,7 @@
         "lv_country_region_normalized": "AU",
         "lv_org_type": "individual_club_team",
         "lv_produces_content": false,
-        "lv_is_hardware_vendor": false,
-        "lv_is_gambling_operator": false,
+        "lv_is_gambling_operator": true,
         "org_type_score": 15,
         "geography_score": 10,
         "annual_revenue_score": 10,
@@ -228,20 +225,20 @@
         "lv_revenue_band": "zoominfo",
         "lv_country_region_normalized": "zoominfo",
         "lv_is_gambling_operator": "claude_web",
-        "lv_is_hardware_vendor": "claude_web",
         "lv_org_type": "claude_web",
         "lv_produces_content": "claude_web"
       },
       "research_filled": [
         "lv_is_gambling_operator",
-        "lv_is_hardware_vendor",
         "lv_org_type",
         "lv_produces_content"
       ],
       "evidence_urls": [
+        "https://sctcnowra.com.au/about/",
         "https://sctcnowra.com.au/",
         "https://racingnswcountry.com.au/club/shoalhaven-city-turf-club/",
-        "https://sctcnowra.com.au/about/"
+        "https://www.zoominfo.com/c/shoalhaven-city-turf-club/355667447",
+        "https://www.tripleu.org.au/sponsor/shoalhaven-city-turf-club/"
       ],
       "country_conflict": null,
       "industry": "GAMBLING_CASINOS",
@@ -257,17 +254,18 @@
         "lv_revenue_band": "5-50M",
         "lv_country_region_normalized": "AU",
         "lv_org_type": "individual_club_team",
+        "lv_produces_content": true,
         "lv_is_hardware_vendor": false,
-        "lv_is_gambling_operator": true,
+        "lv_is_gambling_operator": false,
         "org_type_score": 15,
         "geography_score": 10,
         "annual_revenue_score": 10,
-        "produces_content_score": 0,
+        "produces_content_score": 20,
         "gambling_score": 0,
         "lv_anti_icp_flag_num": "0"
       },
-      "predicted_tier": "C",
-      "score": 35,
+      "predicted_tier": "B",
+      "score": 55,
       "anti_icp_flag": false,
       "anti_icp_reason": null,
       "name": "Gold Coast Turf Club",
@@ -277,19 +275,22 @@
         "lv_country_region_normalized": "hubspot",
         "lv_is_gambling_operator": "claude_web",
         "lv_is_hardware_vendor": "claude_web",
-        "lv_org_type": "claude_web"
+        "lv_org_type": "claude_web",
+        "lv_produces_content": "claude_web"
       },
       "research_filled": [
         "lv_is_gambling_operator",
         "lv_is_hardware_vendor",
-        "lv_org_type"
+        "lv_org_type",
+        "lv_produces_content"
       ],
       "evidence_urls": [
         "https://gctc.com.au/",
-        "https://gctc.com.au/contact-gctc/",
         "https://en.wikipedia.org/wiki/Gold_Coast_Turf_Club",
-        "https://www.zoominfo.com/c/gold-coast-turf-club/50857588",
-        "https://rocketreach.co/aquis-park-home-of-the-gold-coast-turf-club-and-event-centre-profile_b5a7067cf68cb401"
+        "https://gctc.com.au/contact-gctc/",
+        "https://gctc.com.au/current-sponsors/",
+        "https://gctc.com.au/about/",
+        "https://www.racingqueensland.com.au/racing/profiles/track/thoroughbred/gcst"
       ],
       "country_conflict": {
         "hubspot_country": "Australia",
@@ -343,7 +344,7 @@
       ],
       "evidence_urls": [
         "https://ipswichturfclub.com.au/",
-        "https://www.racingqueensland.com.au/racing/club-details/thoroughbred/50072/ipswich-turf-club",
+        "https://ieec.com.au/about-us-ipswich-events-and-entertainment-centre",
         "https://www.racingqueensland.com.au/racing/profiles/track/thoroughbred/ipsw",
         "https://ipswichturfclub.com.au/events-blog/annual-report-2023-2024"
       ],
@@ -361,32 +362,36 @@
         "lv_revenue_band": "<1M",
         "lv_country_region_normalized": "AU",
         "lv_org_type": "individual_club_team",
+        "lv_produces_content": false,
         "org_type_score": 15,
         "geography_score": 10,
         "annual_revenue_score": 0,
         "produces_content_score": 0,
         "gambling_score": 0,
-        "lv_anti_icp_flag_num": "0"
+        "lv_anti_icp_flag_num": "1"
       },
-      "predicted_tier": "C",
+      "predicted_tier": "D",
       "score": 25,
-      "anti_icp_flag": false,
-      "anti_icp_reason": null,
+      "anti_icp_flag": true,
+      "anti_icp_reason": "No broadcast or streaming content",
       "name": "Tasmanian Turf Club",
       "domain": "goracingtasmania.com.au",
       "sources": {
         "lv_revenue_band": "zoominfo",
         "lv_country_region_normalized": "zoominfo",
-        "lv_org_type": "claude_web"
+        "lv_org_type": "claude_web",
+        "lv_produces_content": "claude_web"
       },
       "research_filled": [
-        "lv_org_type"
+        "lv_org_type",
+        "lv_produces_content"
       ],
       "evidence_urls": [
+        "https://www.tasmanianturfclub.com/about-the-club",
         "https://www.tasmanianturfclub.com/",
-        "https://tasracing.com.au/corporate/who-we-are-at-tasracing",
         "https://rocketreach.co/tasmanian-turf-club-profile_b47d91a6fc4c4654",
-        "https://www.zoominfo.com/c/tasmanian-turf-club/1123027054"
+        "https://www.zoominfo.com/c/tasmanian-turf-club/1123027054",
+        "https://tasracing.com.au/"
       ],
       "country_conflict": null,
       "industry": "GAMBLING_CASINOS",
@@ -396,9 +401,5 @@
         "country": "Australia"
       }
     }
-  ],
-  "judge_calls_made": 3,
-  "judge_cap_hit": false,
-  "run_label": "run3_judge_escalation",
-  "run3_note": "Regenerated (checkpoint round 3, 2026-08-19) over the SAME 8 matched companies as Run 2, re-derived via select_diversified_never_scored_sample (zero ZoomInfo cost) and reusing each row stored matched_attributes from Run 2 (zero ZoomInfo cost) -- only the research+judge lane re-ran, live, majority-of-3 vote plus Sonnet judge escalation on lv_produces_content conflicts (research_with_majority_vote, escalate_produces_content_conflict)."
+  ]
 }

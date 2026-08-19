@@ -6,7 +6,7 @@ current_phase: 51
 current_phase_name: Backfill Pipeline, Credit Sizing & Dry Run
 status: executing
 stopped_at: "51-03: checkpoint round 2 addressed (field-policy gate + majority-of-3 research vote + before/after reproducibility measurement); Gold Coast attribution corrected; minority-draw finding -- no Tier A/B genuinely observed; Task 3 re-presented to orchestrator unanswered -- Phase 52 blocked pending operator approval"
-last_updated: "2026-08-19T06:36:24.766Z"
+last_updated: "2026-08-19T07:05:09.143Z"
 last_activity: 2026-08-19
 last_activity_desc: Phase 51 execution started
 progress:
@@ -327,6 +327,7 @@ Progress: [███████░░░] 67% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: Phase 51 Plan 03: COVERAGE.md and 51-VALIDATION.md reconciled against shipped code -- zero divergence, all 8 automated per-task rows green; Task 3 (operator approval, gate=blocking) returned unanswered, Phase 52 does not open until approved
 - [Phase ?]: Phase 51 Plan 03 checkpoint round 1 (operator ruling): fixed HubSpot/ZoomInfo country-conflict guard first (HubSpot's own country wins on disagreement, conflict recorded visibly), then re-ran the dry-run sample diversified (industry-stratified, deterministic) -- tier B x2/D x6 observed, Gold Coast Turf Club confirmed fixed live (D->B). FILL-04's third disposition explicitly deferred to Phase 52 planning per operator ruling, recorded in ROADMAP.md
 - [Phase ?]: Checkpoint round 2: Gold Coast attribution corrected (lv_produces_content flip caused the D->B move, not the country guard alone); field-policy gate shipped and empirically exonerated as the reproducibility root cause; majority-of-3 research vote shipped instead because claude-sonnet-5 rejects an explicit temperature; live before/after measurement shows both Run 2 Tier B rows rest on a minority draw and revert to Tier D under the majority answer -- no Tier A/B genuinely observed; regenerate-or-not put to the operator
+- [Phase ?]: Checkpoint round 3: Sonnet judge escalation wired into the dry-run research lane (CLAUDE.md SS15.1, reusing src.validator_sonnet.validate_conflict_with_sonnet verbatim; fixed a shared temperature=0 bug that 400s on claude-sonnet-5); Run 3 predictions regenerated over the same 8 companies at zero additional ZoomInfo cost. Result: Gold Coast and Warwick both settle at Tier C (unresolved conflict left absent, clears no hard veto), not the Tier D expected -- reported as observed, not smoothed. No Tier A/B produced across three runs. 27 Anthropic calls this round (24 research + 3 judge), zero ZoomInfo credits
 
 ### Roadmap Evolution
 
