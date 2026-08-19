@@ -27,9 +27,9 @@ provides:
 affects: [52-backfill-execution]
 
 actuals:
-  tokens: 78000
-  tasks: 2
-  commits: 21
+  tokens: 80000
+  tasks: 3
+  commits: 22
 
 tech-stack:
   added: []
@@ -277,19 +277,19 @@ coverage:
         status: pass
     human_judgment: false
   - id: D38
-    description: "Operator approval of the dry-run artifacts -- the phase's own exit gate. Not yet obtained; checkpoint re-presented after checkpoint-round-1's two work items, checkpoint-round-2's two work items, checkpoint-round-3's two work items, AND checkpoint-round-4's review-flag ruling all landed."
+    description: "Operator approval of the dry-run artifacts -- the phase's own exit gate. APPROVED 2026-08-19 after five checkpoint rounds. Round 1: country-conflict guard + diversified re-run. Round 2: field-policy gate (checked, exonerated) + majority-of-3 research vote + before/after reproducibility measurement + corrected Gold Coast attribution. Round 3: Sonnet judge escalation (CLAUDE.md SS15.1) + Run 3 predictions regeneration -- both Run 2 Tier B rows settle at Tier C, not the Tier D expected. Round 4: unresolved-conflict review flag (lv_icp_needs_review/lv_enrichment_review_reason) on the 3 records that stayed absent, zero additional spend. Round 5: approved; n8n's matching country blind spot recorded as tracked debt (WINDOWS.md id 19) rather than fixed, per explicit operator ruling not to touch n8n this phase."
     verification: []
     human_judgment: true
-    rationale: "A judgement about whether the sample's payloads, bands, regions, predicted tiers, and the new review-flag payload shape are plausible and complete for accounts the operator knows -- no automated check can decide this. This plan stops here by design (gate=\"blocking\", autonomous: false) and does not self-approve."
+    rationale: "A judgement about whether the sample's payloads, bands, regions, predicted tiers, and the review-flag payload shape are plausible and complete for accounts the operator knows -- no automated check could decide this. The plan stopped here by design (gate=\"blocking\", autonomous: false) and never self-approved across all five rounds."
 
-duration: ~3.5h across five rounds
+duration: ~4h across five checkpoint rounds
 completed: 2026-08-19
-status: checkpoint-pending
+status: complete
 ---
 
 # Phase 51 Plan 03: Before-Snapshot, Coverage Reconciliation and the Operator Approval Gate Summary
 
-**Read-only before-snapshot of all 66 already-scored companies committed, COVERAGE.md/51-VALIDATION.md reconciled with zero divergence, a live HubSpot/ZoomInfo country-conflict guard shipped and proven, a field-policy promotion gate and a majority-of-3 research vote shipped to address research-answer instability, a Sonnet judge escalation wired in for genuine lv_produces_content conflicts (CLAUDE.md SS15.1), the dry-run predictions regenerated under that judge lane (Run 3: Gold Coast and Warwick -- the two apparent Tier B rows from Run 2 -- both settle at Tier C; Tasmanian also flipped fresh), and finally (Run 4) the 3 unresolved-conflict rows flagged `lv_icp_needs_review=true` with a specific reason, distinguishing them from a genuinely-assessed Tier C/D, at zero additional API spend. No Tier A or Tier B has been produced anywhere in this population across three independent research runs. Task 3, the phase's own blocking operator-approval gate, is re-presented to the orchestrator unanswered after five rounds of operator-directed work.**
+**PLAN COMPLETE -- operator approved 2026-08-19 after five checkpoint rounds. Read-only before-snapshot of all 66 already-scored companies committed, COVERAGE.md/51-VALIDATION.md reconciled with zero divergence, a live HubSpot/ZoomInfo country-conflict guard shipped and proven, a field-policy promotion gate and a majority-of-3 research vote shipped to address research-answer instability, a Sonnet judge escalation wired in for genuine lv_produces_content conflicts (CLAUDE.md SS15.1), the dry-run predictions regenerated under that judge lane (Run 3: Gold Coast and Warwick -- the two apparent Tier B rows from Run 2 -- both settle at Tier C; Tasmanian also flipped fresh), and (Run 4) the 3 unresolved-conflict rows flagged `lv_icp_needs_review=true` with a specific reason, at zero additional API spend. No Tier A or Tier B has been produced anywhere in this population across three independent research runs. n8n's matching country blind spot is recorded as tracked debt (WINDOWS.md id 19), not fixed, per explicit operator ruling. Final totals: 13 ZoomInfo credits, 103 Anthropic calls, zero HubSpot writes, zero n8n executions.**
 
 ## Performance
 
@@ -414,6 +414,18 @@ the ordered sequence: measure first, then fix):
     Run 3 section (per-record diff, running totals)** - committed with this summary update
     (see final commit list at close).
 
+**Checkpoint round-4 response commits:**
+
+16. **Unresolved-conflict review flag wired into the payload; live property confirmed
+    first** - `aee80e3` (feat)
+17. **Review flag applied to Run 3; Run 3 pre-flag archived** - `b9e2985` (docs)
+18. **Self-check result for checkpoint round 4** - `0a92658` (docs)
+
+**Checkpoint round 5: APPROVED.** Task 3 (`type="checkpoint:human-verify"`,
+`gate="blocking"`) is now complete. n8n's matching country blind spot recorded as
+tracked debt (`WINDOWS.md` id 19), not fixed, per explicit operator ruling not to
+touch n8n this phase. Plan sealed with this final commit.
+
 ## Files Created/Modified
 
 - `scripts/scored_population_snapshot.py` - Read-only before-snapshot driver (146 lines)
@@ -450,6 +462,7 @@ the ordered sequence: measure first, then fix):
 - `.planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-DRYRUN-PREDICTIONS-run3-judge-escalation.json` (new) - Run 3 (pre-flag) archived (not overwritten)
 - `.planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-SKIP-LOG-run3-judge-escalation.json` (new) - Run 3 skip log archived (not overwritten)
 - `.planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-SIZING.md` - New "Round 4" section: live property confirmation evidence, payload delta, zero-spend confirmation
+- `.planning/WINDOWS.md` (checkpoint round 5) - New entry id 19: n8n's country blind spot (`n8n/code/normalizeProviders.js:420-422`), recorded as tracked debt per operator ruling, not fixed. `n8n/code/*`, `scripts/build_cloud_workflows.py`, and every deployed flow are otherwise untouched this plan.
 
 ## Decisions Made
 
@@ -559,56 +572,63 @@ None -- no external service configuration required. Live credentials
 (`HUBSPOT_PRIVATE_APP_TOKEN`, `HUBSPOT_PORTAL_ID`) already resolved from the repo-root `.env`
 via `load_dotenv()`.
 
-## Next Phase Readiness
+## Next Phase Readiness -- Phase 52 handoff
 
-- **Phase 52 does NOT open until the operator approves the re-presented Task 3 checkpoint.**
-  This plan structurally cannot self-approve (`gate="blocking"`, `autonomous: false`), and
-  `state.advance-plan` was deliberately skipped this session so a later reader of
-  `STATE.md` does not see the phase marked complete without the recorded go-ahead.
-- The re-presented checkpoint states plainly, per the operator's own requested framing:
-  what the judge lane does and where it lives (`escalate_produces_content_conflict()`,
-  reusing `src.validator_sonnet.validate_conflict_with_sonnet` verbatim per CLAUDE.md
-  SS15.1, escalating only on a genuine non-unanimous vote, fail-safe to absent on low
-  confidence/missing evidence rather than a guessed value); the Run 2 -> Run 3 per-record
-  diff (Gold Coast and Warwick both moved from Tier B to Tier C, NOT the Tier D the
-  operator expected from the round-2 minority-draw finding -- an absent field clears no
-  hard veto, only `lv_produces_content=False` does; Tasmanian also flipped fresh on this
-  run and landed at C); how many judge calls were spent (3, well under the 50 cap) and how
-  many records ended with the field absent (3 of 8: Gold Coast, Warwick, Tasmanian); that
-  FILL-04's third disposition remains deferred to Phase 52 by explicit operator ruling; and
-  the phase's actual (not projected) running totals: 13 ZoomInfo credits, 103 Anthropic
-  calls (76 through checkpoint round 2 + 27 in Run 3: 24 research + 3 judge).
-- `51-BEFORE-SNAPSHOT.json` is the artifact Phase 52's closing safety diff will read against
-  -- its id set (66) and property list (18 names) are now the contract that diff is taken
-  over. Unaffected by any round's changes (no HubSpot write occurred; every round is
-  dry-run-only).
-- `51-DRYRUN-PREDICTIONS.json` / `51-SKIP-LOG.json` now reflect Run 3 plus the checkpoint
-  round 4 review flag -- this is the set Phase 52's per-record comparison should read
-  against. **Phase 52 must honor `lv_icp_needs_review`/`lv_enrichment_review_reason` on the
-  3 flagged rows** -- these are unresolved-conflict records scored without a content
-  signal, not genuinely-assessed Tier C, and should route to the SS22.2 human review flow
-  rather than being written as final. Run 1's artifacts remain on disk under
-  `*-run1-ascending-id.json`, Run 2's under `*-run2-diversified.json`, and Run 3
-  pre-flag under `*-run3-judge-escalation.json`. No Tier A or Tier B record has been
-  produced anywhere in this population across all three research runs -- Phase 52's
-  planner should treat that as an established fact about this never-scored population's
-  first page, not an artifact of any one run's methodology.
-- **Phase 52's planner must resolve the FILL-04 third-disposition question before building
-  the write path** -- recorded as a required decision in `ROADMAP.md`'s Phase 52 entry, not
-  left implicit.
-- **Phase 52's planner should also weigh the diversification finding**: native HubSpot
-  `industry` did not reliably surface a governing-body/broadcaster/content-producer org
-  type in this population's first page -- a real Tier A record has still never been
-  observed live. Whether that changes anything about staged execution order is a Phase 52
-  planning question, not resolved here.
-- Zero HubSpot writes and zero n8n executions occurred this plan (both rounds), consistent
-  with Phase 51's structural constraint (confirmed via the read-only source-inspection
-  test, both artifacts' credential-leak/mock-fixture-contamination greps, and the
-  full-suite regression pass, re-run after both checkpoint-response commits).
+**Task 3 approved 2026-08-19; this plan is complete.** Five checkpoint rounds, none
+self-approved (`gate="blocking"`, `autonomous: false` held throughout).
+
+Six things Phase 52's planner needs, all landing in this plan's artifacts:
+
+1. **FILL-04's third-disposition question is deferred, not decided** -- explicit operator
+   ruling, round 1. Recorded as a required decision in `ROADMAP.md`'s Phase 52 entry.
+2. **The 3 `lv_icp_needs_review`-flagged records** (Warwick `9604732796`, Gold Coast
+   `9604630690`, Tasmanian `9604738974`) are unresolved-conflict rows -- their
+   `lv_produces_content` never settled (majority-of-3 disagreed, Sonnet judge could not
+   confidently resolve it), so they are scored without a content signal or veto, currently
+   Tier C. `lv_enrichment_review_reason` states why. **Phase 52 must route these through
+   the SS22.2 human review flow, not write them as final tier decisions.**
+3. **`select_never_scored_sample()`/`select_diversified_never_scored_sample()` have no
+   pagination** -- `SAMPLE_SEARCH_LIMIT` bounds every call to one page. Sufficient for the
+   population count plus this phase's bounded samples (max 10 records); insufficient for
+   the full ~646-record never-scored remainder. Phase 52 needs pagination before it can
+   iterate the whole population.
+4. **The Anthropic per-record cost estimate (`ANTHROPIC_PER_RECORD_ESTIMATE_USD=$0.0686`,
+   `51-SIZING.md` Assumption A2) was measured under a combined Haiku-research-plus-Sonnet-
+   judge n8n pipeline this milestone does not use** -- this dry-run's actual pattern is a
+   bare `claude_web_research()` call, now majority-voted (3x) with judge escalation on top.
+   Treat A2 as a rough prior, not a validated cost basis for Phase 52's own budget.
+5. **n8n has the same country blind spot this plan's guard fixes in the dry-run lane
+   -- recorded as tracked debt (`WINDOWS.md` id 19), not fixed, per explicit operator
+   ruling.** `n8n/code/normalizeProviders.js:420-422` pushes ZoomInfo's raw country
+   straight through with no comparison against the record's own native HubSpot country;
+   `mergeCompanies.js` gates against the existing derived region, not the native field.
+   Currently latent (a ZoomInfo-only candidate scores under the 75 `min_confidence` gate),
+   reachable once a `claude_web` candidate agrees with the wrong country (score jumps to
+   ~0.90, clears the gate, fires a false non-ANZ veto on a real company) -- Gold Coast
+   `9604630690` is the live proof case for the underlying defect, not (yet) for the n8n
+   path specifically. `scripts/backfill_dry_run.py`'s `build_candidate_patch` guard is the
+   reference fix. The entry's own score-vs-threshold arithmetic is flagged unverified (0-1
+   vs 0-100 scale assumed, not confirmed live) -- Phase 52 should confirm before acting.
+6. **Final actual totals, this plan:** 13 ZoomInfo credits, 103 Anthropic calls, **zero
+   HubSpot writes, zero n8n executions** -- confirmed via the read-only source-inspection
+   test, every artifact's credential-leak/mock-fixture-contamination greps, and the
+   full-suite regression pass (2877 passed, 154 skipped) re-run after every round.
+
+`51-BEFORE-SNAPSHOT.json` (66 ids, 18 properties) is the contract Phase 52's closing
+safety diff is taken against -- unaffected by any round (dry-run-only throughout).
+`51-DRYRUN-PREDICTIONS.json` / `51-SKIP-LOG.json` (Run 3 + round-4 review flag) are the set
+Phase 52's per-record comparison should read against; Run 1 (`*-run1-ascending-id.json`),
+Run 2 (`*-run2-diversified.json`), and Run 3 pre-flag (`*-run3-judge-escalation.json`) all
+remain on disk. No Tier A or Tier B record has been produced anywhere in this population
+across three independent research runs -- treat that as an established fact about this
+never-scored population's first page, not an artifact of any one run's methodology.
+Phase 52's planner should also weigh the diversification finding: native HubSpot
+`industry` did not reliably surface a governing-body/broadcaster/content-producer org type
+in this population's first page.
 
 ---
 *Phase: 51-backfill-pipeline-credit-sizing-dry-run*
-*Completed: 2026-08-19 (Tasks 1-2 plus both checkpoint-round-1 work items; Task 3 re-presented, pending operator approval)*
+*Completed: 2026-08-19 -- all 3 tasks done, Task 3 approved after five checkpoint rounds*
 
 ## Self-Check: PASSED
 
@@ -654,3 +674,14 @@ passed); both round-4 commit hashes verified in git log (`aee80e3`, `b9e2985`); 
 credential material found in either predictions artifact; exactly 3 of 8 rows carry
 `lv_icp_needs_review`/`lv_enrichment_review_reason` on the committed
 `51-DRYRUN-PREDICTIONS.json` (Warwick, Gold Coast, Tasmanian), the other 5 do not.
+
+## Self-Check (checkpoint round 5 -- plan close): PASSED
+
+`.planning/WINDOWS.md` id 19 verified present (n8n country blind spot, tracked debt,
+status `open`, phase `51`); `51-03-SUMMARY.md` `status: complete` and all 3 tasks
+accounted for; full test suite green (2877 passed, 154 skipped,
+`node --test tests/n8n/*.test.mjs`: 683 passed) -- zero code changed this round, only
+docs and the tracked-debt ledger; `state.advance-plan` reports
+`status: ready_for_verification` (last plan in Phase 51); no HubSpot write call site
+and no n8n deploy/activation call site anywhere in this plan's changes across all
+five rounds (confirmed by grep, not assumed).
