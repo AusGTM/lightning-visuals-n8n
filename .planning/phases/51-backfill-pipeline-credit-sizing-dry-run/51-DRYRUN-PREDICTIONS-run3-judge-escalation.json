@@ -29,9 +29,7 @@
         "annual_revenue_score": 0,
         "produces_content_score": 0,
         "gambling_score": 0,
-        "lv_anti_icp_flag_num": "0",
-        "lv_icp_needs_review": true,
-        "lv_enrichment_review_reason": "lv_produces_content did not resolve: majority-of-3 live research calls disagreed, and the Sonnet judge escalation (CLAUDE.md SS15.1) could not confidently settle the conflict (confidence below the SS15.1 human_review threshold, or no cited evidence URL). Scored without a content signal or a no-content veto -- verify content output manually before treating this tier as final."
+        "lv_anti_icp_flag_num": "0"
       },
       "predicted_tier": "C",
       "score": 25,
@@ -42,13 +40,9 @@
       "sources": {
         "lv_revenue_band": "zoominfo",
         "lv_country_region_normalized": "zoominfo",
-        "lv_org_type": "claude_web",
-        "lv_icp_needs_review": "review_flag",
-        "lv_enrichment_review_reason": "review_flag"
+        "lv_org_type": "claude_web"
       },
       "research_filled": [
-        "lv_enrichment_review_reason",
-        "lv_icp_needs_review",
         "lv_org_type"
       ],
       "evidence_urls": [
@@ -270,9 +264,7 @@
         "annual_revenue_score": 10,
         "produces_content_score": 0,
         "gambling_score": 0,
-        "lv_anti_icp_flag_num": "0",
-        "lv_icp_needs_review": true,
-        "lv_enrichment_review_reason": "lv_produces_content did not resolve: majority-of-3 live research calls disagreed, and the Sonnet judge escalation (CLAUDE.md SS15.1) could not confidently settle the conflict (confidence below the SS15.1 human_review threshold, or no cited evidence URL). Scored without a content signal or a no-content veto -- verify content output manually before treating this tier as final."
+        "lv_anti_icp_flag_num": "0"
       },
       "predicted_tier": "C",
       "score": 35,
@@ -285,13 +277,9 @@
         "lv_country_region_normalized": "hubspot",
         "lv_is_gambling_operator": "claude_web",
         "lv_is_hardware_vendor": "claude_web",
-        "lv_org_type": "claude_web",
-        "lv_icp_needs_review": "review_flag",
-        "lv_enrichment_review_reason": "review_flag"
+        "lv_org_type": "claude_web"
       },
       "research_filled": [
-        "lv_enrichment_review_reason",
-        "lv_icp_needs_review",
         "lv_is_gambling_operator",
         "lv_is_hardware_vendor",
         "lv_org_type"
@@ -378,9 +366,7 @@
         "annual_revenue_score": 0,
         "produces_content_score": 0,
         "gambling_score": 0,
-        "lv_anti_icp_flag_num": "0",
-        "lv_icp_needs_review": true,
-        "lv_enrichment_review_reason": "lv_produces_content did not resolve: majority-of-3 live research calls disagreed, and the Sonnet judge escalation (CLAUDE.md SS15.1) could not confidently settle the conflict (confidence below the SS15.1 human_review threshold, or no cited evidence URL). Scored without a content signal or a no-content veto -- verify content output manually before treating this tier as final."
+        "lv_anti_icp_flag_num": "0"
       },
       "predicted_tier": "C",
       "score": 25,
@@ -391,13 +377,9 @@
       "sources": {
         "lv_revenue_band": "zoominfo",
         "lv_country_region_normalized": "zoominfo",
-        "lv_org_type": "claude_web",
-        "lv_icp_needs_review": "review_flag",
-        "lv_enrichment_review_reason": "review_flag"
+        "lv_org_type": "claude_web"
       },
       "research_filled": [
-        "lv_enrichment_review_reason",
-        "lv_icp_needs_review",
         "lv_org_type"
       ],
       "evidence_urls": [
@@ -418,6 +400,5 @@
   "judge_calls_made": 3,
   "judge_cap_hit": false,
   "run_label": "run3_judge_escalation",
-  "run3_note": "Regenerated (checkpoint round 3, 2026-08-19) over the SAME 8 matched companies as Run 2, re-derived via select_diversified_never_scored_sample (zero ZoomInfo cost) and reusing each row stored matched_attributes from Run 2 (zero ZoomInfo cost) -- only the research+judge lane re-ran, live, majority-of-3 vote plus Sonnet judge escalation on lv_produces_content conflicts (research_with_majority_vote, escalate_produces_content_conflict).",
-  "review_flag_note": "Checkpoint round 4 (2026-08-19): payload-shape change over the existing Run 3 results, zero new research/judge calls. lv_icp_needs_review/lv_enrichment_review_reason added to exactly the 3 rows whose lv_produces_content conflict never resolved (9604732796 Warwick, 9604630690 Gold Coast, 9604738974 Tasmanian). Both properties confirmed live via GET /crm/v3/properties/companies/{name} before this change."
+  "run3_note": "Regenerated (checkpoint round 3, 2026-08-19) over the SAME 8 matched companies as Run 2, re-derived via select_diversified_never_scored_sample (zero ZoomInfo cost) and reusing each row stored matched_attributes from Run 2 (zero ZoomInfo cost) -- only the research+judge lane re-ran, live, majority-of-3 vote plus Sonnet judge escalation on lv_produces_content conflicts (research_with_majority_vote, escalate_produces_content_conflict)."
 }

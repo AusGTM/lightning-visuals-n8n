@@ -27,9 +27,9 @@ provides:
 affects: [52-backfill-execution]
 
 actuals:
-  tokens: 73000
+  tokens: 78000
   tasks: 2
-  commits: 19
+  commits: 21
 
 tech-stack:
   added: []
@@ -259,20 +259,37 @@ coverage:
         ref: ".planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-DRYRUN-PREDICTIONS.json (Run 3, 8 rows / 2 skipped, partition-clean, no credential material) + 51-DRYRUN-PREDICTIONS-run2-diversified.json (archived) + 51-SIZING.md's Run 3 section (per-record diff table)"
         status: pass
     human_judgment: false
-  - id: D36
-    description: "Operator approval of the dry-run artifacts -- the phase's own exit gate. Not yet obtained; checkpoint re-presented after checkpoint-round-1's two work items (country guard, diversified re-run), checkpoint-round-2's two work items (reproducibility measurement, majority-vote fix), AND checkpoint-round-3's two work items (Sonnet judge escalation, Run 3 regeneration) all landed, plus the corrected Gold Coast attribution and the finding -- now confirmed a second, independent way in Run 3 -- that no Tier A/B has actually been observed."
+  - id: D37
+    description: "Checkpoint round 4: a record whose lv_produces_content conflict never resolved (Warwick, Gold Coast, Tasmanian -- exactly the 3 rows Run 3 left absent) still gets its predicted payload, now also carrying lv_icp_needs_review=true and a lv_enrichment_review_reason explaining WHY (majority-of-3 disagreed, Sonnet judge could not confidently settle it). Both properties re-listed live before writing any code (CLAUDE.md SS4.0's own instruction) -- lv_icp_needs_review is confirmed live (bool, not archived/hidden) despite SS4.0's stale claim it was never created; lv_enrichment_review_reason (textarea) reused rather than requesting a new ICP-specific property. Zero additional API spend -- a payload-shape change over Run 3's already-settled results. Run 3 (pre-flag) archived as *-run3-judge-escalation.json."
+    requirement: "SAFE-01"
+    verification:
+      - kind: unit
+        ref: "tests/test_backfill_dry_run.py::test_apply_review_flag_flags_unresolved_conflict"
+        status: pass
+      - kind: unit
+        ref: "tests/test_backfill_dry_run.py::test_apply_review_flag_does_not_flag_a_resolved_unanimous_false"
+        status: pass
+      - kind: unit
+        ref: "tests/test_backfill_dry_run.py::test_apply_review_flag_does_not_flag_a_judge_resolved_record"
+        status: pass
+      - kind: other
+        ref: ".planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-DRYRUN-PREDICTIONS.json (exactly 3 of 8 rows carry the flag; the 5 unanimous-False rows do not; no credential material)"
+        status: pass
+    human_judgment: false
+  - id: D38
+    description: "Operator approval of the dry-run artifacts -- the phase's own exit gate. Not yet obtained; checkpoint re-presented after checkpoint-round-1's two work items, checkpoint-round-2's two work items, checkpoint-round-3's two work items, AND checkpoint-round-4's review-flag ruling all landed."
     verification: []
     human_judgment: true
-    rationale: "A judgement about whether the sample's payloads, bands, regions and predicted tiers are plausible for accounts the operator knows, and whether the round-3 judge-escalation lane and its regenerated Run 3 predictions fully close the operator's concern -- no automated check can decide either. This plan stops here by design (gate=\"blocking\", autonomous: false) and does not self-approve."
+    rationale: "A judgement about whether the sample's payloads, bands, regions, predicted tiers, and the new review-flag payload shape are plausible and complete for accounts the operator knows -- no automated check can decide this. This plan stops here by design (gate=\"blocking\", autonomous: false) and does not self-approve."
 
-duration: ~3h across four rounds
+duration: ~3.5h across five rounds
 completed: 2026-08-19
 status: checkpoint-pending
 ---
 
 # Phase 51 Plan 03: Before-Snapshot, Coverage Reconciliation and the Operator Approval Gate Summary
 
-**Read-only before-snapshot of all 66 already-scored companies committed, COVERAGE.md/51-VALIDATION.md reconciled with zero divergence, a live HubSpot/ZoomInfo country-conflict guard shipped and proven, a field-policy promotion gate and a majority-of-3 research vote shipped to address research-answer instability, a Sonnet judge escalation wired in for genuine lv_produces_content conflicts (CLAUDE.md SS15.1), and the dry-run predictions regenerated a second time (Run 3) under that judge lane. Result: Gold Coast and Warwick -- the two apparent Tier B rows from Run 2 -- both settle at Tier C (unresolved conflict, field left absent, no false veto and no false content bonus), and a third company (Tasmanian) flipped fresh on this very run, further evidence the underlying instability is not confined to the two companies flagged earlier. No Tier A or Tier B has been produced anywhere in this population across three independent runs. Task 3, the phase's own blocking operator-approval gate, is re-presented to the orchestrator unanswered after four rounds of operator-directed work.**
+**Read-only before-snapshot of all 66 already-scored companies committed, COVERAGE.md/51-VALIDATION.md reconciled with zero divergence, a live HubSpot/ZoomInfo country-conflict guard shipped and proven, a field-policy promotion gate and a majority-of-3 research vote shipped to address research-answer instability, a Sonnet judge escalation wired in for genuine lv_produces_content conflicts (CLAUDE.md SS15.1), the dry-run predictions regenerated under that judge lane (Run 3: Gold Coast and Warwick -- the two apparent Tier B rows from Run 2 -- both settle at Tier C; Tasmanian also flipped fresh), and finally (Run 4) the 3 unresolved-conflict rows flagged `lv_icp_needs_review=true` with a specific reason, distinguishing them from a genuinely-assessed Tier C/D, at zero additional API spend. No Tier A or Tier B has been produced anywhere in this population across three independent research runs. Task 3, the phase's own blocking operator-approval gate, is re-presented to the orchestrator unanswered after five rounds of operator-directed work.**
 
 ## Performance
 
@@ -427,6 +444,12 @@ the ordered sequence: measure first, then fix):
 - `.planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-SKIP-LOG.json` - Unchanged content, re-stamped for Run 3 (same 2 skip entries)
 - `.planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-DRYRUN-PREDICTIONS-run2-diversified.json` (new) - Run 2 archived (not overwritten)
 - `.planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-SKIP-LOG-run2-diversified.json` (new) - Run 2 skip log archived (not overwritten)
+- `scripts/backfill_dry_run.py` - `REVIEW_FLAG_PROPS`, `PRODUCES_CONTENT_UNRESOLVED_REASON`, `apply_review_flag()`; `model_trace["produces_content_conflict_unresolved"]` tag on `research_with_majority_vote()`'s return; `PERMITTED_PAYLOAD_KEYS` extended (checkpoint round 4)
+- `tests/test_backfill_dry_run.py` - 3 new tests pinning the review flag (flags an unresolved conflict, does not flag a resolved unanimous-False record, does not flag a judge-resolved record); `test_payload_key_set` updated for the extended key set
+- `.planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-DRYRUN-PREDICTIONS.json` - Payload-shape change over Run 3 (zero new API calls): 3 rows (Warwick, Gold Coast, Tasmanian) gain `lv_icp_needs_review`/`lv_enrichment_review_reason`
+- `.planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-DRYRUN-PREDICTIONS-run3-judge-escalation.json` (new) - Run 3 (pre-flag) archived (not overwritten)
+- `.planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-SKIP-LOG-run3-judge-escalation.json` (new) - Run 3 skip log archived (not overwritten)
+- `.planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-SIZING.md` - New "Round 4" section: live property confirmation evidence, payload delta, zero-spend confirmation
 
 ## Decisions Made
 
@@ -559,14 +582,17 @@ via `load_dotenv()`.
   -- its id set (66) and property list (18 names) are now the contract that diff is taken
   over. Unaffected by any round's changes (no HubSpot write occurred; every round is
   dry-run-only).
-- `51-DRYRUN-PREDICTIONS.json` / `51-SKIP-LOG.json` now reflect Run 3 (judge-escalation
-  lane) -- this is the set Phase 52's per-record comparison should read against. Run 1's
-  artifacts remain on disk under `*-run1-ascending-id.json` (checkpoint round 1's
-  racing-club-cluster-only finding) and Run 2's under `*-run2-diversified.json` (checkpoint
-  round 2's single-call research draw, now superseded). No Tier A or Tier B record has been
-  produced anywhere in this population across all three runs -- Phase 52's planner should
-  treat that as an established fact about this never-scored population's first page, not
-  an artifact of any one run's methodology.
+- `51-DRYRUN-PREDICTIONS.json` / `51-SKIP-LOG.json` now reflect Run 3 plus the checkpoint
+  round 4 review flag -- this is the set Phase 52's per-record comparison should read
+  against. **Phase 52 must honor `lv_icp_needs_review`/`lv_enrichment_review_reason` on the
+  3 flagged rows** -- these are unresolved-conflict records scored without a content
+  signal, not genuinely-assessed Tier C, and should route to the SS22.2 human review flow
+  rather than being written as final. Run 1's artifacts remain on disk under
+  `*-run1-ascending-id.json`, Run 2's under `*-run2-diversified.json`, and Run 3
+  pre-flag under `*-run3-judge-escalation.json`. No Tier A or Tier B record has been
+  produced anywhere in this population across all three research runs -- Phase 52's
+  planner should treat that as an established fact about this never-scored population's
+  first page, not an artifact of any one run's methodology.
 - **Phase 52's planner must resolve the FILL-04 third-disposition question before building
   the write path** -- recorded as a required decision in `ROADMAP.md`'s Phase 52 entry, not
   left implicit.

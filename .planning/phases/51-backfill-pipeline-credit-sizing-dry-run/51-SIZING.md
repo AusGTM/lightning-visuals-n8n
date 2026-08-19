@@ -348,6 +348,38 @@ Run 3 spent zero). Anthropic calls: 76 (through checkpoint round 2) + 27 (Run 3:
 that figure is disclosed here, not absorbed silently into any single artifact's own
 `research_calls_made`/`judge_calls_made` fields.
 
+## Round 4 -- unresolved-conflict review flag (operator ruling, checkpoint round 4, 2026-08-19)
+
+A record whose `lv_produces_content` conflict never resolved still gets its predicted
+payload (coverage kept, D-04 unaffected), but now also carries `lv_icp_needs_review=true`
+and a `lv_enrichment_review_reason` explaining WHY -- exactly the 3 Run 3 rows whose field
+stayed absent (Warwick `9604732796`, Gold Coast `9604630690`, Tasmanian `9604738974`). The
+5 unanimous-`False` rows are untouched -- their veto is a real, reproducible reading, not a
+review case.
+
+**Property check, live, before any code was written** (per CLAUDE.md SS4.0's own
+"re-list before writing" instruction -- its claim that `lv_icp_needs_review` was "never
+created" is stale, checked and found wrong):
+
+```
+GET /crm/v3/properties/companies/lv_icp_needs_review -> 200, type=bool, fieldType=booleancheckbox,
+    createdAt=2026-07-22T01:29:26Z, archived=false, hidden=false
+```
+
+Confirmed via the bulk `GET /crm/v3/properties/companies` listing that `lv_icp_needs_review`
+is already the OR-search target in the documented review workflow (SS22.2:
+`lv_enrichment_needs_review=true OR lv_icp_needs_review=true`) and that
+`lv_enrichment_review_reason` (textarea) exists live too -- reused for the reason text
+rather than requesting a new ICP-specific property, which would be a schema change outside
+Phase 51's dry-run scope.
+
+**Zero additional API spend.** This is a payload-shape change over Run 3's already-settled
+results -- no new research or judge calls. Running totals unchanged: 13 ZoomInfo credits,
+103 Anthropic calls.
+
+Run 3 (pre-flag) archived as `*-run3-judge-escalation.json`, not overwritten, alongside
+Run 1's and Run 2's existing archives.
+
 ## Assumptions (labelled)
 
 - **A1 (retired):** the ZoomInfo per-match cost is now measured live by the Phase 51 Plan 01 tracer (100 hundredths-of-a-credit/match), not the previously inferred pre-v3 1.08 credits/match figure. This sizing uses the LARGER of that measured figure and the documented CREDITS_PER_MATCH_HUNDREDTHS_FALLBACK=108, so a zero or free-cached measurement can never produce an unbounded cap.
