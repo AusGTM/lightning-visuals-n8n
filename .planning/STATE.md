@@ -1,10 +1,10 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.9-SHIPPED
-milestone_name: ICP Rubric Calibration & Veto Remediation
+milestone: v1.0
+milestone_name: Direct Backfill & Scoring Coverage
 current_phase: 50
 current_phase_name: Derived Tier Property
-status: milestone-complete
+status: defining
 stopped_at: "Completed 50-05-PLAN.md: D-24 override executed -- WF1 deleted, lv_icp_tier archived, lv_icp_tier_derived relabelled 'ICP Tier'. Phase 50 and v0.9 milestone plans all complete; ready for ship review."
 last_updated: "2026-08-14T02:25:48.966Z"
 last_activity: 2026-08-14

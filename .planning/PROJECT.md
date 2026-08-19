@@ -26,7 +26,11 @@ set, enumerations are rejected at create. Anything a formula needs must be writt
 first. And calculated values backfill ~70–130s after their inputs change, so a read issued
 immediately after a write returns null for a property that will compute correctly.
 
-**Next milestone goals:** not yet defined — run `/gsd-new-milestone`.
+**Next milestone — v1.0 Direct Backfill & Scoring Coverage.** Backfill the ~646 never-scored
+companies with ZoomInfo firmographics plus targeted research, in-session, writing the scoring
+inputs and the six numeric properties HubSpot's calculation engine reads. No n8n executions — the
+operator has no credits for it, and none are needed: HubSpot already derives score and tier from
+those six numbers on its own. Decisions in `.planning/MILESTONE-CONTEXT.md`.
 
 
 ## Current Milestone: v0.9 ICP Rubric Calibration & Veto Remediation
