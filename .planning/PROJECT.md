@@ -9,47 +9,25 @@ mock Claude web research, a Haiku→Sonnet LLM cascade, and a non-clobber merge 
 emitting dry-run HubSpot PATCH payloads. It is internal RevOps tooling for LV's sales
 team, not a customer-facing product.
 
-## Current State
+## Current State (as of 2026-08-19)
 
-**v0.8 closed 2026-08-11 (verified_closeout).** Both phases verified: Phase 44 (SJ-3 dispatch
-gate, drain, budget-derived cap) 5/5 must-haves — its `44-VERIFICATION.md` was written
-retroactively at close, having been sealed at plan level only; Phase 45 (burn-rate alarm,
-runtime cadence budget floor, time-windowed sweep lookback) 26/26 with all 6 code-review
-findings fixed. Phase 45 ships **inert** — installing the sweep cron/launchd schedule is an
-admin action on the operator's machine and was never in scope, so the alarm is unit-proven
-against synthetic execution history rather than observed firing on a schedule.
+**Shipped: v0.9 — ICP Rubric Calibration & Veto Remediation.** 6 phases, 35 plans, 18
+requirements, all verified `passed`. Archived at `.planning/milestones/v0.9-ROADMAP.md`.
 
-**Live remediation carried into v0.9 (2026-08-11).** A blank `lv_country_region_normalized` was
-firing the non-ANZ hard veto — treating *absence of enrichment* as a positive non-ANZ finding.
-Root cause was a split-brain: the same bug in `src/icp_scoring.py` (oracle) and in the
-hand-ported `_regionKey` baked into the armed `n8n/wf_enrichment_cloud.json`, the latter being
-the actual live producer (traced via HubSpot property history, `sourceType=INTEGRATION`). Fixed,
-deployed, bounced, and proven live by executing the running node's own `_regionKey`. **17
-companies still carry false vetoes** — they were requeued, but SJ-3 found the write gate closed,
-marked them `skipped` and self-cleared the flags, so nothing re-scored. Clearing them needs a
-deliberate armed write window. Tier distribution across the 66 scored is A:7 B:18 C:17 D:24,
-where 17 of the D are these false vetoes; post-remediation D should fall to ~7.
+The ICP tier is no longer written by a workflow. `lv_icp_tier_derived` is a HubSpot calculated
+property computed server-side from `lv_icp_fit_score` and `lv_anti_icp_flag_num`, both written
+by the n8n pipeline as plain numerics. There is no property-change event anywhere in the path,
+which is what retired the stale-tier bug class rather than its instances. The old `lv_icp_tier`
+enum is archived and the workflow that wrote it (`4625147345`) is deleted.
 
-**v0.8 — Execution Budget Safety (shipped 2026-08-11).** The n8n Cloud plan allows 2,500 executions
-per month, and on 2026-08-09 the backend spent them on work it could not complete: 61
-companies carried `lv_enrichment_requested=true`, SJ-3 re-dispatched all 61 every 15 minutes,
-and the step that would have cleared the flag is a HubSpot write the (correctly) closed write
-gate refuses. Measured at a flat **253 executions/hour — a ~182,000/month run rate against a
-2,500 allowance**. Remediated by hand the same day (61 flags cleared; the three sub-daily
-triggers moved to daily, dropping the idle floor from ~6,500 to ~95/month). This milestone
-makes that fix structural: the poller must not start work it cannot finish, a stuck flag must
-not survive forever, one tick must not be able to spend the month, and the sweep must say so
-before a human notices at 80%.
+Load-bearing constraint discovered this milestone, worth carrying forward: HubSpot's
+`calculation_equation` reads **only numeric properties** — booleans evaluate as null even when
+set, enumerations are rejected at create. Anything a formula needs must be written as a number
+first. And calculated values backfill ~70–130s after their inputs change, so a read issued
+immediately after a write returns null for a property that will compute correctly.
 
-**Shipped: v0.7 — HubSpot Scoring Engine Remediation (2026-08-08).** 5 phases (39–43),
-16/16 requirements. All ten validated defects (F1–F10) closed on the fix-in-place path: a
-textbook Tier-A company scores 80/A entirely inside HubSpot off canonical `lv_*` inputs;
-vetoes set and clear symmetrically with rubric-exact reasons; a two-tier parity harness stands
-guard (`tests/test_scoring_parity.py` + `scripts/run_scoring_parity.py`); the 66 web-researched
-validation companies landed and scored with provenance at zero provider spend (A:7 B:18 C:17
-D:24); `config/hubspot_properties.yaml` reconciles clean against the live portal. A same-day
-follow-up made `lv_icp_fit_score`'s formula null-safe — a bare sum blanked the entire score on
-any null term, which had left 63 of 66 records unscored while the sweep still reported PASS.
+**Next milestone goals:** not yet defined — run `/gsd-new-milestone`.
+
 
 ## Current Milestone: v0.9 ICP Rubric Calibration & Veto Remediation
 

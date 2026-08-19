@@ -1,10 +1,10 @@
 ---
 gsd_state_version: 1.0
-milestone: v0.9
+milestone: v0.9-SHIPPED
 milestone_name: ICP Rubric Calibration & Veto Remediation
 current_phase: 50
 current_phase_name: Derived Tier Property
-status: verifying
+status: milestone-complete
 stopped_at: "Completed 50-05-PLAN.md: D-24 override executed -- WF1 deleted, lv_icp_tier archived, lv_icp_tier_derived relabelled 'ICP Tier'. Phase 50 and v0.9 milestone plans all complete; ready for ship review."
 last_updated: "2026-08-14T02:25:48.966Z"
 last_activity: 2026-08-14
@@ -486,3 +486,21 @@ across the next plugin update — it fails silently, which is the dangerous dire
 
 - Run /gsd-plan-phase 50 to plan Derived Tier Property (context gathered 2026-08-13,
   `.planning/phases/50-derived-tier-property/50-CONTEXT.md`)
+
+## Deferred Items
+
+Items acknowledged and deferred at the v0.9 milestone close on 2026-08-19
+(`closeout_type: override_closeout`). All six phases were `complete` + `verified passed`;
+these are open *artifacts*, not unverified work.
+
+| Category | Item | Status |
+|----------|------|--------|
+| todo | 2026-08-04-enrichment-throughput-ceiling | pending — v0.8-era; 82% of a full run is two sequential Anthropic calls. Reviewed during Phase 50 discussion and explicitly not folded (that phase made zero Anthropic calls). |
+| todo | 2026-08-04-sweep-crontab-pins-a-versioned-plugin-path | pending — v0.8-era operator-plugin packaging fragility. Unrelated to v0.9's scope. |
+| todo | 2026-08-04-uat-22-names-aliases-the-mapping-lacks | pending — v0.8-era contact-upload column mapping. Unrelated to v0.9's scope. |
+| context-questions | Phase 46 CONTEXT open questions (3) | answered in-phase by 46-SIMULATION-REPORT.md and 46-DECISION.md; the CONTEXT block was never edited to mark them closed. Documentation lag, not open work. |
+
+Also carried forward: `WINDOWS.md` has 11 open entries. Ids 9–12 and 14 are permanent by
+nature (the archived `lv_icp_tier` values are frozen-wrong and never self-correct). Ids 17
+and 18 are genuinely fixable and should be closed rather than waived before any `/gsd-ship`,
+which blocks while `open_count > 0`.
