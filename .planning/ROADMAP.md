@@ -81,7 +81,14 @@ representative sample of that capped population — the exact PATCH payload and 
      write-capable phase — per the locked sequence: plan → dry run → **operator approval** →
      canary execution.
 
-**Plans**: TBD
+**Plans**: 3 plans
+
+- [ ] 51-01-PLAN.md — Tracer: one never-scored company, credit-gated, end-to-end dry run (ZoomInfo
+      client, revenue thousands→dollars, None-safe region, four-branch tier prediction)
+- [ ] 51-02-PLAN.md — Gap-fill research lane, skip-log partition, credit/cost sizing artifact, and
+      the pre-registered prediction artifact over the capped sample
+- [ ] 51-03-PLAN.md — Read-only before-snapshot of the already-scored population, API coverage
+      matrix, validation contract, and the operator approval exit gate
 
 ---
 
@@ -145,7 +152,7 @@ in this phase precedes that approval.
 | 48. Enrichment Coverage | v0.9 | 7/7 | Complete (verified) | 2026-08-13 |
 | 49. Re-score Strategy & Reporting | v0.9 | 7/7 | Complete (verified) | 2026-08-13 |
 | 50. Derived Tier Property | v0.9 | 6/6 | Complete (verified) | 2026-08-14 |
-| 51. Backfill Pipeline, Credit Sizing & Dry Run | v1.0 | 0/TBD | Not started | - |
+| 51. Backfill Pipeline, Credit Sizing & Dry Run | v1.0 | 0/3 | Planned | - |
 | 52. Staged Canary Execution & Safety Verification | v1.0 | 0/TBD | Not started | - |
 
 ## Ledger gaps (known)
