@@ -1,16 +1,18 @@
 # tests/test_backfill_dry_run.py
 #
-# Phase 51 Plan 01 -- offline, mocked tests for scripts/backfill_dry_run.py. Plain
+# Phase 51 Plan 01/02 -- offline, mocked tests for scripts/backfill_dry_run.py. Plain
 # pytest, plain asserts, no classes/fixtures beyond plain helper functions (matches
-# tests/test_icp_scoring.py's style). No live HubSpot or ZoomInfo call happens in this
-# suite -- every network-touching function is monkeypatched.
+# tests/test_icp_scoring.py's style). No live HubSpot, ZoomInfo or Anthropic call happens
+# in this suite -- every network-touching function is monkeypatched.
+import json
+
 import pytest
 
 import scripts.backfill_seed_company_scores as backfill_seed
 import src.icp_scoring as icp_scoring
 from scripts import backfill_dry_run as b
 from src.icp_scoring import compute_icp_score
-from src.schemas import HubSpotRecord
+from src.schemas import HubSpotRecord, ProviderEvidence, ProviderResult
 
 
 def _mock_search_records_one_company(object_type, filters, properties, limit=100):
@@ -156,3 +158,226 @@ def test_imports_oracle_functions():
     assert b.compute_components is backfill_seed.compute_components
     assert b.compute_icp_score is icp_scoring.compute_icp_score
     assert b.anti_icp_flag_properties is icp_scoring.anti_icp_flag_properties
+
+
+# --- Plan 02 Task 1: gap-fill research lane + matched/unmatched partition contract ------
+
+def test_unmatched_skip_log(monkeypatch):
+    def mock_search(object_type, filters, properties, limit=100):
+        return {"total": 1, "results": [
+            {"id": "1", "properties": {"name": "NoMatch Co", "domain": "nomatch.com"}},
+        ]}
+
+    def mock_enrich(domain, token):
+        return {"matched": False, "attributes": {}, "reason": "no_match"}
+
+    monkeypatch.setattr(b, "search_records", mock_search)
+    monkeypatch.setattr(b, "enrich_company", mock_enrich)
+    monkeypatch.setattr(b, "zoominfo_credit_balance", lambda: 1000)
+    monkeypatch.setattr(b, "_mint_zoominfo_token", lambda: "fake-token")
+
+    result = b.run_dry_run(sample_size=1)
+
+    assert result["rows"] == []
+    assert len(result["skipped"]) == 1
+    entry = result["skipped"][0]
+    assert entry["reason"]
+    assert "payload" not in entry
+    assert entry["id"] == "1"
+    assert entry["domain"] == "nomatch.com"
+
+
+def test_no_research_for_unmatched_record(monkeypatch):
+    calls = []
+
+    def mock_research(record):
+        calls.append(record)
+        raise AssertionError("claude_web_research must never be called for an unmatched record")
+
+    def mock_search(object_type, filters, properties, limit=100):
+        return {"total": 1, "results": [
+            {"id": "1", "properties": {"name": "NoMatch Co", "domain": "nomatch.com"}},
+        ]}
+
+    def mock_enrich(domain, token):
+        return {"matched": False, "attributes": {}, "reason": "no_match"}
+
+    monkeypatch.setattr(b, "search_records", mock_search)
+    monkeypatch.setattr(b, "enrich_company", mock_enrich)
+    monkeypatch.setattr(b, "claude_web_research", mock_research)
+    monkeypatch.setattr(b, "zoominfo_credit_balance", lambda: 1000)
+    monkeypatch.setattr(b, "_mint_zoominfo_token", lambda: "fake-token")
+
+    result = b.run_dry_run(sample_size=1, research=True)
+
+    assert calls == []
+    assert result["rows"] == []
+    assert result["research_calls_made"] == 0
+
+
+def test_research_only_fills_missing_fields():
+    # ZoomInfo already answered lv_org_type -- research's answer must NOT overwrite it.
+    already_filled = {"lv_org_type": "governing_body_league"}
+    research_result = ProviderResult(
+        provider="claude_web", object_type="companies", matched=True, confidence=80,
+        data={"lv_org_type": "content producer", "lv_produces_content": None},
+        evidence=ProviderEvidence(),
+    )
+    merged = b.apply_research_to_patch(already_filled, research_result)
+    assert merged["lv_org_type"] == "governing_body_league"
+
+    # Missing lv_org_type receives the NORMALIZED research value (raw "content producer"
+    # -> canonical "content_producer" via src.taxonomy.normalize_org_type).
+    merged2 = b.apply_research_to_patch({}, research_result)
+    assert merged2["lv_org_type"] == "content_producer"
+
+    # A null answer (lv_produces_content) leaves the key absent -- never defaulted.
+    assert "lv_produces_content" not in merged2
+
+    # research_gap_fields must issue NO call at all when every gap field is already
+    # answered by ZoomInfo (matched attributes irrelevant here, patch is what's checked).
+    full_patch = {f: True for f in b.GAP_FILL_FIELDS}
+    assert b.research_gap_fields({"id": "1", "name": "X", "domain": "x.com"}, {}, full_patch) is None
+
+    # A None research_result (research call failed/degraded) is a safe no-op.
+    assert b.apply_research_to_patch({"lv_revenue_band": "5-50M"}, None) == {"lv_revenue_band": "5-50M"}
+
+
+def test_partition_exclusive_and_total(monkeypatch):
+    def mock_search(object_type, filters, properties, limit=100):
+        return {"total": 4, "results": [
+            {"id": "1", "properties": {"name": "Matched Co", "domain": "matched.com"}},
+            {"id": "2", "properties": {"name": "Unmatched Co", "domain": "unmatched.com"}},
+            {"id": "3", "properties": {"name": "NoDomain Co", "domain": ""}},
+            {"id": "4", "properties": {"name": "MatchedEmpty Co", "domain": "matchedempty.com"}},
+        ]}
+
+    def mock_enrich(domain, token):
+        if domain == "matched.com":
+            return {"matched": True, "attributes": {"revenue": 268163, "country": "Australia"}, "reason": None}
+        if domain == "matchedempty.com":
+            # Exactly-touching case: matched=True but yielded an empty attributes dict.
+            return {"matched": True, "attributes": {}, "reason": None}
+        return {"matched": False, "attributes": {}, "reason": "no_match"}
+
+    monkeypatch.setattr(b, "search_records", mock_search)
+    monkeypatch.setattr(b, "enrich_company", mock_enrich)
+    monkeypatch.setattr(b, "zoominfo_credit_balance", lambda: 1000)
+    monkeypatch.setattr(b, "_mint_zoominfo_token", lambda: "fake-token")
+
+    result = b.run_dry_run(sample_size=4)
+
+    row_ids = {row["id"] for row in result["rows"]}
+    skip_ids = {entry["id"] for entry in result["skipped"]}
+
+    assert row_ids.isdisjoint(skip_ids)
+    assert row_ids | skip_ids == {"1", "2", "3", "4"}
+    assert len(row_ids) + len(skip_ids) == 4
+    # the exactly-touching record lands on exactly one side -- the matched (rows) side.
+    assert "4" in row_ids
+    assert "4" not in skip_ids
+
+
+# --- Plan 02 Task 2: sizing plan gate (FILL-01/D-03) -------------------------------------
+
+def test_sizing_plan_recorded_before_enrich(monkeypatch):
+    calls = []
+
+    def mock_enrich(domain, token):
+        calls.append(domain)
+        return {"matched": True, "attributes": {"revenue": 268163, "country": "Australia"}, "reason": None}
+
+    def mock_search(object_type, filters, properties, limit=100):
+        return {"total": 5, "results": [
+            {"id": str(i), "properties": {"name": f"C{i}", "domain": f"c{i}.com"}} for i in range(1, 6)
+        ]}
+
+    monkeypatch.setattr(b, "search_records", mock_search)
+    monkeypatch.setattr(b, "enrich_company", mock_enrich)
+    monkeypatch.setattr(b, "zoominfo_credit_balance", lambda: 1)
+    monkeypatch.setattr(b, "_mint_zoominfo_token", lambda: "fake-token")
+
+    # balance 1, 108 hundredths/match -> cap = (1*100)//108 = 0. sample_size=1 > cap -> refused.
+    with pytest.raises(RuntimeError):
+        b.run_dry_run(sample_size=1, credits_per_match_hundredths=108)
+    assert calls == []
+
+
+def test_sample_above_cap_refused(monkeypatch):
+    def mock_search(object_type, filters, properties, limit=100):
+        return {"total": 0, "results": []}
+
+    monkeypatch.setattr(b, "search_records", mock_search)
+    monkeypatch.setattr(b, "zoominfo_credit_balance", lambda: 108)
+
+    # cap = (108*100)//108 = 100 -- sample_size == cap is accepted.
+    plan = b.build_sizing_plan(100, credits_per_match_hundredths=108)
+    assert plan["credit_cap"] == 100
+    assert plan["sample_size"] == 100
+
+    # cap + 1 refuses, both numbers named in the message.
+    with pytest.raises(RuntimeError) as exc_info:
+        b.build_sizing_plan(101, credits_per_match_hundredths=108)
+    message = str(exc_info.value)
+    assert "101" in message
+    assert "100" in message
+
+
+# --- Plan 02 Task 3: empty-sample and ordering edge probes -------------------------------
+
+def test_empty_sample_writes_valid_artifacts(monkeypatch, tmp_path):
+    def mock_search(object_type, filters, properties, limit=100):
+        return {"total": 2, "results": [
+            {"id": "1", "properties": {"name": "A", "domain": "a.com"}},
+            {"id": "2", "properties": {"name": "B", "domain": "b.com"}},
+        ]}
+
+    def mock_enrich(domain, token):
+        return {"matched": False, "attributes": {}, "reason": "no_match"}
+
+    monkeypatch.setattr(b, "search_records", mock_search)
+    monkeypatch.setattr(b, "enrich_company", mock_enrich)
+    monkeypatch.setattr(b, "zoominfo_credit_balance", lambda: 1000)
+    monkeypatch.setattr(b, "_mint_zoominfo_token", lambda: "fake-token")
+    monkeypatch.setattr(b, "_has_credentials", lambda: True)
+    monkeypatch.setattr(b, "zoominfo_credentials_present", lambda: True)
+    monkeypatch.setattr(b, "_portal_ok", lambda: True)
+    monkeypatch.setattr(b, "patch_record", lambda *a, **k: {"dry_run": True})
+
+    out_path = tmp_path / "predictions.json"
+    skip_path = tmp_path / "skip.json"
+
+    exit_code = b.main(["--sample", "2", "--out", str(out_path), "--skip-out", str(skip_path)])
+    assert exit_code == 0
+
+    predictions = json.loads(out_path.read_text())
+    assert predictions["rows"] == []
+    assert predictions["population_total"] is not None
+    assert predictions["credit_cap"] is not None
+    assert predictions["sample_size"] == 2
+
+    skip_log = json.loads(skip_path.read_text())
+    assert len(skip_log["entries"]) == 2
+    assert skip_log["counts"]["rows"] == 0
+    assert skip_log["counts"]["skipped"] == 2
+
+
+def test_sample_order_is_ascending_id_stable(monkeypatch):
+    def mock_search(object_type, filters, properties, limit=100):
+        return {"total": 3, "results": [
+            {"id": "10021111653", "properties": {"name": "Big", "domain": "big.com"}},
+            {"id": "9604614548", "properties": {"name": "Small", "domain": "small.com"}},
+            {"id": "17317381378", "properties": {"name": "Mid", "domain": "mid.com"}},
+        ]}
+
+    monkeypatch.setattr(b, "search_records", mock_search)
+
+    sample1 = b.select_never_scored_sample(3)
+    sample2 = b.select_never_scored_sample(3)
+    ids1 = [c["id"] for c in sample1]
+    ids2 = [c["id"] for c in sample2]
+
+    assert ids1 == ids2
+    # Numeric order, not lexicographic: "9604614548" < "10021111653" numerically but
+    # would sort AFTER it as a plain string.
+    assert ids1 == ["9604614548", "10021111653", "17317381378"]
