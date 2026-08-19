@@ -25,6 +25,7 @@ numbers on its own. Decisions in `.planning/MILESTONE-CONTEXT.md`; requirements 
 - [ ] **Phase 51: Backfill Pipeline, Credit Sizing & Dry Run** - Size the population and the
       ZoomInfo credit cap live, pin the thousands-to-dollars revenue conversion, and dry-run a
       sample's exact PATCH payloads and pre-registered tier predictions — zero writes
+
 - [ ] **Phase 52: Staged Canary Execution & Safety Verification** - Write the credit-capped
       population in gated stages (1 → 5 → 25 → chunked remainder), polling every result against
       its committed prediction, and close by proving the 66 already-scored companies are untouched
@@ -85,8 +86,10 @@ representative sample of that capped population — the exact PATCH payload and 
 
 - [ ] 51-01-PLAN.md — Tracer: one never-scored company, credit-gated, end-to-end dry run (ZoomInfo
       client, revenue thousands→dollars, None-safe region, four-branch tier prediction)
+
 - [ ] 51-02-PLAN.md — Gap-fill research lane, skip-log partition, credit/cost sizing artifact, and
       the pre-registered prediction artifact over the capped sample
+
 - [ ] 51-03-PLAN.md — Read-only before-snapshot of the already-scored population, API coverage
       matrix, validation contract, and the operator approval exit gate
 
