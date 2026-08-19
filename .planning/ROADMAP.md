@@ -106,6 +106,16 @@ evidence are unchanged.
 **Depends on**: Phase 51, gated on explicit operator approval of the dry-run artifacts — no write
 in this phase precedes that approval.
 
+**Carried forward from Phase 51 (operator ruling, 2026-08-19, explicitly deferred — not an
+oversight):** the FILL-04 third-disposition question is unresolved by design. Today a company
+ZoomInfo matches but for which no scoring input at all could be resolved lands in the predictions
+side with a mostly-empty payload — there is no separate "matched but unscoreable" disposition
+distinct from "predicted" and "skipped". The operator was asked to rule on this at the Phase 51
+checkpoint and explicitly declined to decide it there, directing it to be decided during Phase 52
+planning instead. This phase's planner must resolve it (either confirm the current two-way
+partition is sufficient or add a third disposition) before Phase 52's write path is built — do not
+silently inherit Phase 51's placeholder behavior without a decision.
+
 **Requirements**: FILL-02, SAFE-02, SAFE-03, SAFE-04
 
 **Success Criteria** (what must be TRUE):

@@ -5,8 +5,8 @@ milestone_name: Direct Backfill & Scoring Coverage
 current_phase: 51
 current_phase_name: Backfill Pipeline, Credit Sizing & Dry Run
 status: executing
-stopped_at: "51-03: Tasks 1-2 complete (before-snapshot + coverage/validation reconciliation); Task 3 (operator approval checkpoint) returned to orchestrator unanswered -- Phase 52 blocked pending approval"
-last_updated: "2026-08-19T03:41:58.739Z"
+stopped_at: "51-03: checkpoint round 1 addressed (country guard + diversified re-run); Task 3 re-presented to orchestrator unanswered -- Phase 52 blocked pending operator approval"
+last_updated: "2026-08-19T04:29:36.064Z"
 last_activity: 2026-08-19
 last_activity_desc: Phase 51 execution started
 progress:
@@ -234,8 +234,8 @@ Progress: [███████░░░] 67% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-19T03:41:58.728Z
-**Stopped at:** 51-03: Tasks 1-2 complete (before-snapshot + coverage/validation reconciliation); Task 3 (operator approval checkpoint) returned to orchestrator unanswered -- Phase 52 blocked pending approval
+**Last session:** 2026-08-19T04:29:36.055Z
+**Stopped at:** 51-03: checkpoint round 1 addressed (country guard + diversified re-run); Task 3 re-presented to orchestrator unanswered -- Phase 52 blocked pending operator approval
 **Resume file:** None
 
 ## Performance Metrics
@@ -325,6 +325,7 @@ Progress: [███████░░░] 67% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: select_never_scored_sample fixed to sort by numeric id (int(r['id'])) instead of lexicographic string order -- this portal mixes 10- and 11-digit HubSpot ids, and the old sort both misordered rows and could select a different sample slice.
 - [Phase ?]: Phase 51 Plan 03: 51-BEFORE-SNAPSHOT.json committed (66 already-scored companies, ascending numeric id, 18 properties each) as the read-only baseline Phase 52's closing diff is taken against; scored(66)+never-scored(646)=712 live-reconfirmed
 - [Phase ?]: Phase 51 Plan 03: COVERAGE.md and 51-VALIDATION.md reconciled against shipped code -- zero divergence, all 8 automated per-task rows green; Task 3 (operator approval, gate=blocking) returned unanswered, Phase 52 does not open until approved
+- [Phase ?]: Phase 51 Plan 03 checkpoint round 1 (operator ruling): fixed HubSpot/ZoomInfo country-conflict guard first (HubSpot's own country wins on disagreement, conflict recorded visibly), then re-ran the dry-run sample diversified (industry-stratified, deterministic) -- tier B x2/D x6 observed, Gold Coast Turf Club confirmed fixed live (D->B). FILL-04's third disposition explicitly deferred to Phase 52 planning per operator ruling, recorded in ROADMAP.md
 
 ### Roadmap Evolution
 
