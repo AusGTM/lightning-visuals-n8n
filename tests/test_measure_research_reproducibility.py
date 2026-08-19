@@ -66,3 +66,45 @@ def test_observation_records_confidence_and_evidence_presence():
     assert obs["confidence"] == 60
     assert obs["fields"]["lv_produces_content"]["has_evidence_url"] is False
     assert obs["fields"]["lv_produces_content"]["value"] is True
+
+
+def test_observation_handles_none_result_without_crashing():
+    # research_with_majority_vote returns None when every internal repetition fails --
+    # _observation must record that as a valid, empty observation, not raise.
+    obs = m._observation(None)
+    assert obs["confidence"] is None
+    assert obs["fields"]["lv_produces_content"]["value"] is None
+    assert obs["fields"]["lv_produces_content"]["has_evidence_url"] is False
+
+
+def test_matched_companies_respects_ids_filter(monkeypatch):
+    def mock_sample(size, media_slots):
+        return [
+            {"id": "9604630690", "name": "Gold Coast Turf Club"},
+            {"id": "9604732796", "name": "Warwick Turf Club"},
+        ]
+
+    monkeypatch.setattr(m, "select_diversified_never_scored_sample", mock_sample)
+
+    companies = m.matched_companies(ids={"9604732796"})
+    assert [c["id"] for c in companies] == ["9604732796"]
+
+
+def test_measure_majority_vote_mode_calls_wrapper_and_counts_raw_calls(monkeypatch):
+    # --mode majority_vote must call research_with_majority_vote (not claude_web_research
+    # directly) and count RESEARCH_VOTE_REPETITIONS raw calls per invocation -- a ceiling
+    # projection matching scripts.backfill_dry_run's own convention.
+    calls = {"n": 0}
+
+    def mock_vote(record):
+        calls["n"] += 1
+        return _result(True)
+
+    monkeypatch.setattr(m, "research_with_majority_vote", mock_vote)
+
+    companies = [{"id": "A", "name": "Company A"}]
+    result = m.measure(companies, repetitions=2, mode="majority_vote")
+
+    assert calls["n"] == 2  # 2 repetitions, one wrapper call each
+    assert result["anthropic_calls_made"] == 2 * m.RESEARCH_VOTE_REPETITIONS
+    assert result["mode"] == "majority_vote"
