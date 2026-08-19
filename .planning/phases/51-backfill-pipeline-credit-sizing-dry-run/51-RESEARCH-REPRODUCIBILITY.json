@@ -1,809 +1,1227 @@
 {
-  "measured_at": "2026-08-19T06:00:54.836761+00:00",
-  "portal_id_verified": "22617666",
-  "repetitions": 3,
-  "companies_measured": 8,
-  "anthropic_calls_made": 24,
-  "gap_fill_fields": [
-    "lv_org_type",
-    "lv_produces_content",
-    "lv_is_hardware_vendor",
-    "lv_is_gambling_operator"
-  ],
-  "per_field_flip_counts": {
-    "lv_org_type": 0,
-    "lv_produces_content": 3,
-    "lv_is_hardware_vendor": 3,
-    "lv_is_gambling_operator": 5
+  "before": {
+    "measured_at": "2026-08-19T06:00:54.836761+00:00",
+    "portal_id_verified": "22617666",
+    "repetitions": 3,
+    "companies_measured": 8,
+    "anthropic_calls_made": 24,
+    "gap_fill_fields": [
+      "lv_org_type",
+      "lv_produces_content",
+      "lv_is_hardware_vendor",
+      "lv_is_gambling_operator"
+    ],
+    "per_field_flip_counts": {
+      "lv_org_type": 0,
+      "lv_produces_content": 3,
+      "lv_is_hardware_vendor": 3,
+      "lv_is_gambling_operator": 5
+    },
+    "per_company": {
+      "9604732796": {
+        "name": "Warwick Turf Club",
+        "fields": {
+          "lv_org_type": {
+            "observations": [
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 95
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 85
+              }
+            ],
+            "distinct_values": [
+              "individual_club_team"
+            ],
+            "flipped": false
+          },
+          "lv_produces_content": {
+            "observations": [
+              {
+                "value": true,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 95
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              }
+            ],
+            "distinct_values": [
+              false,
+              true
+            ],
+            "flipped": true
+          },
+          "lv_is_hardware_vendor": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 95
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              }
+            ],
+            "distinct_values": [
+              false,
+              null
+            ],
+            "flipped": true
+          },
+          "lv_is_gambling_operator": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 95
+              },
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 85
+              }
+            ],
+            "distinct_values": [
+              false,
+              null
+            ],
+            "flipped": true
+          }
+        }
+      },
+      "9604732798": {
+        "name": "Mudgee Race Club",
+        "fields": {
+          "lv_org_type": {
+            "observations": [
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 90
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 92
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 85
+              }
+            ],
+            "distinct_values": [
+              "individual_club_team"
+            ],
+            "flipped": false
+          },
+          "lv_produces_content": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 90
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 92
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              }
+            ],
+            "distinct_values": [
+              false
+            ],
+            "flipped": false
+          },
+          "lv_is_hardware_vendor": {
+            "observations": [
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 90
+              },
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 92
+              },
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 85
+              }
+            ],
+            "distinct_values": [
+              null
+            ],
+            "flipped": false
+          },
+          "lv_is_gambling_operator": {
+            "observations": [
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 90
+              },
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 92
+              },
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 85
+              }
+            ],
+            "distinct_values": [
+              null
+            ],
+            "flipped": false
+          }
+        }
+      },
+      "9605259523": {
+        "name": "Clare Valley Racing Club (Thoroughbred Racing South Australia)",
+        "fields": {
+          "lv_org_type": {
+            "observations": [
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 78
+              }
+            ],
+            "distinct_values": [
+              "individual_club_team"
+            ],
+            "flipped": false
+          },
+          "lv_produces_content": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 78
+              }
+            ],
+            "distinct_values": [
+              false
+            ],
+            "flipped": false
+          },
+          "lv_is_hardware_vendor": {
+            "observations": [
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 85
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 78
+              }
+            ],
+            "distinct_values": [
+              false,
+              null
+            ],
+            "flipped": true
+          },
+          "lv_is_gambling_operator": {
+            "observations": [
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 85
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 78
+              }
+            ],
+            "distinct_values": [
+              false,
+              null
+            ],
+            "flipped": true
+          }
+        }
+      },
+      "9605259524": {
+        "name": "Bairnsdale Racing Club",
+        "fields": {
+          "lv_org_type": {
+            "observations": [
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 88
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 92
+              }
+            ],
+            "distinct_values": [
+              "individual_club_team"
+            ],
+            "flipped": false
+          },
+          "lv_produces_content": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 88
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 92
+              }
+            ],
+            "distinct_values": [
+              false
+            ],
+            "flipped": false
+          },
+          "lv_is_hardware_vendor": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 88
+              },
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 92
+              }
+            ],
+            "distinct_values": [
+              false,
+              null
+            ],
+            "flipped": true
+          },
+          "lv_is_gambling_operator": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 88
+              },
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 92
+              }
+            ],
+            "distinct_values": [
+              false,
+              null
+            ],
+            "flipped": true
+          }
+        }
+      },
+      "9604630688": {
+        "name": "Shoalhaven City Turf Club",
+        "fields": {
+          "lv_org_type": {
+            "observations": [
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 82
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 92
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 95
+              }
+            ],
+            "distinct_values": [
+              "individual_club_team"
+            ],
+            "flipped": false
+          },
+          "lv_produces_content": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 82
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 92
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 95
+              }
+            ],
+            "distinct_values": [
+              false
+            ],
+            "flipped": false
+          },
+          "lv_is_hardware_vendor": {
+            "observations": [
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 82
+              },
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 92
+              },
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 95
+              }
+            ],
+            "distinct_values": [
+              null
+            ],
+            "flipped": false
+          },
+          "lv_is_gambling_operator": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 82
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 92
+              },
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 95
+              }
+            ],
+            "distinct_values": [
+              false,
+              null
+            ],
+            "flipped": true
+          }
+        }
+      },
+      "9604630690": {
+        "name": "Gold Coast Turf Club",
+        "fields": {
+          "lv_org_type": {
+            "observations": [
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 92
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 90
+              }
+            ],
+            "distinct_values": [
+              "individual_club_team"
+            ],
+            "flipped": false
+          },
+          "lv_produces_content": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 92
+              },
+              {
+                "value": true,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 90
+              }
+            ],
+            "distinct_values": [
+              false,
+              true
+            ],
+            "flipped": true
+          },
+          "lv_is_hardware_vendor": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 92
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 90
+              }
+            ],
+            "distinct_values": [
+              false
+            ],
+            "flipped": false
+          },
+          "lv_is_gambling_operator": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 92
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 90
+              }
+            ],
+            "distinct_values": [
+              false
+            ],
+            "flipped": false
+          }
+        }
+      },
+      "9604726291": {
+        "name": "Ipswich Turf Club",
+        "fields": {
+          "lv_org_type": {
+            "observations": [
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 92
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 85
+              }
+            ],
+            "distinct_values": [
+              "individual_club_team"
+            ],
+            "flipped": false
+          },
+          "lv_produces_content": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 92
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": true,
+                "has_evidence_url": true,
+                "confidence": 85
+              }
+            ],
+            "distinct_values": [
+              false,
+              true
+            ],
+            "flipped": true
+          },
+          "lv_is_hardware_vendor": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 92
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              }
+            ],
+            "distinct_values": [
+              false
+            ],
+            "flipped": false
+          },
+          "lv_is_gambling_operator": {
+            "observations": [
+              {
+                "value": true,
+                "has_evidence_url": true,
+                "confidence": 92
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              }
+            ],
+            "distinct_values": [
+              false,
+              true
+            ],
+            "flipped": true
+          }
+        }
+      },
+      "9604738974": {
+        "name": "Tasmanian Turf Club",
+        "fields": {
+          "lv_org_type": {
+            "observations": [
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 82
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 92
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 85
+              }
+            ],
+            "distinct_values": [
+              "individual_club_team"
+            ],
+            "flipped": false
+          },
+          "lv_produces_content": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 82
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 92
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              }
+            ],
+            "distinct_values": [
+              false
+            ],
+            "flipped": false
+          },
+          "lv_is_hardware_vendor": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": false,
+                "confidence": 82
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 92
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              }
+            ],
+            "distinct_values": [
+              false
+            ],
+            "flipped": false
+          },
+          "lv_is_gambling_operator": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 82
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 92
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              }
+            ],
+            "distinct_values": [
+              false
+            ],
+            "flipped": false
+          }
+        }
+      }
+    },
+    "label": "before"
   },
-  "per_company": {
-    "9604732796": {
-      "name": "Warwick Turf Club",
-      "fields": {
-        "lv_org_type": {
-          "observations": [
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 85
-            },
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 95
-            },
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 85
-            }
-          ],
-          "distinct_values": [
-            "individual_club_team"
-          ],
-          "flipped": false
-        },
-        "lv_produces_content": {
-          "observations": [
-            {
-              "value": true,
-              "has_evidence_url": true,
-              "confidence": 85
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 95
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 85
-            }
-          ],
-          "distinct_values": [
-            false,
-            true
-          ],
-          "flipped": true
-        },
-        "lv_is_hardware_vendor": {
-          "observations": [
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 85
-            },
-            {
-              "value": null,
-              "has_evidence_url": false,
-              "confidence": 95
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 85
-            }
-          ],
-          "distinct_values": [
-            false,
-            null
-          ],
-          "flipped": true
-        },
-        "lv_is_gambling_operator": {
-          "observations": [
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 85
-            },
-            {
-              "value": null,
-              "has_evidence_url": false,
-              "confidence": 95
-            },
-            {
-              "value": null,
-              "has_evidence_url": false,
-              "confidence": 85
-            }
-          ],
-          "distinct_values": [
-            false,
-            null
-          ],
-          "flipped": true
+  "after": {
+    "mode": "majority_vote",
+    "repetitions": 3,
+    "companies_measured": 4,
+    "companies_measured_denominator_note": "4 of 8 -- NOT a like-for-like sweep of the same 8-company population as 'before'. Selection rule: re-measure only the companies that showed >=1 flip in the before (raw) measurement (targeted, cost-capped per operator ruling, checkpoint round 2). The 4 omitted companies (Shoalhaven, Tasmanian, Clare Valley, Bairnsdale) were 0-flip before the fix and were not re-measured -- their absence here is NOT evidence the fix helped or hurt them; report per_field_flip_counts as N/4 (this targeted set), never blended with the before N/8 into one percentage.",
+    "anthropic_calls_made": 36,
+    "gap_fill_fields": [
+      "lv_org_type",
+      "lv_produces_content",
+      "lv_is_hardware_vendor",
+      "lv_is_gambling_operator"
+    ],
+    "per_field_flip_counts": {
+      "lv_org_type": 0,
+      "lv_produces_content": 1,
+      "lv_is_hardware_vendor": 1,
+      "lv_is_gambling_operator": 3
+    },
+    "per_company": {
+      "9604630690": {
+        "name": "Gold Coast Turf Club",
+        "fields": {
+          "lv_org_type": {
+            "observations": [
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 89
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 89
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 82
+              }
+            ],
+            "distinct_values": [
+              "individual_club_team"
+            ],
+            "flipped": false
+          },
+          "lv_produces_content": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 89
+              },
+              {
+                "value": true,
+                "has_evidence_url": true,
+                "confidence": 89
+              },
+              {
+                "value": true,
+                "has_evidence_url": true,
+                "confidence": 82
+              }
+            ],
+            "distinct_values": [
+              false,
+              true
+            ],
+            "flipped": true
+          },
+          "lv_is_hardware_vendor": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 89
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 89
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 82
+              }
+            ],
+            "distinct_values": [
+              false
+            ],
+            "flipped": false
+          },
+          "lv_is_gambling_operator": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 89
+              },
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 89
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 82
+              }
+            ],
+            "distinct_values": [
+              false,
+              null
+            ],
+            "flipped": true
+          }
+        }
+      },
+      "9604726291": {
+        "name": "Ipswich Turf Club",
+        "fields": {
+          "lv_org_type": {
+            "observations": [
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 93
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 92
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 89
+              }
+            ],
+            "distinct_values": [
+              "individual_club_team"
+            ],
+            "flipped": false
+          },
+          "lv_produces_content": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 93
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 92
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 89
+              }
+            ],
+            "distinct_values": [
+              false
+            ],
+            "flipped": false
+          },
+          "lv_is_hardware_vendor": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 93
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 92
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 89
+              }
+            ],
+            "distinct_values": [
+              false
+            ],
+            "flipped": false
+          },
+          "lv_is_gambling_operator": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 93
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 92
+              },
+              {
+                "value": true,
+                "has_evidence_url": true,
+                "confidence": 89
+              }
+            ],
+            "distinct_values": [
+              false,
+              true
+            ],
+            "flipped": true
+          }
+        }
+      },
+      "9604732796": {
+        "name": "Warwick Turf Club",
+        "fields": {
+          "lv_org_type": {
+            "observations": [
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 86
+              }
+            ],
+            "distinct_values": [
+              "individual_club_team"
+            ],
+            "flipped": false
+          },
+          "lv_produces_content": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 86
+              }
+            ],
+            "distinct_values": [
+              false
+            ],
+            "flipped": false
+          },
+          "lv_is_hardware_vendor": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 86
+              }
+            ],
+            "distinct_values": [
+              false
+            ],
+            "flipped": false
+          },
+          "lv_is_gambling_operator": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 86
+              }
+            ],
+            "distinct_values": [
+              false
+            ],
+            "flipped": false
+          }
+        }
+      },
+      "9604732798": {
+        "name": "Mudgee Race Club",
+        "fields": {
+          "lv_org_type": {
+            "observations": [
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 88
+              },
+              {
+                "value": "individual_club_team",
+                "has_evidence_url": true,
+                "confidence": 85
+              }
+            ],
+            "distinct_values": [
+              "individual_club_team"
+            ],
+            "flipped": false
+          },
+          "lv_produces_content": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 88
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              }
+            ],
+            "distinct_values": [
+              false
+            ],
+            "flipped": false
+          },
+          "lv_is_hardware_vendor": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 88
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              }
+            ],
+            "distinct_values": [
+              false,
+              null
+            ],
+            "flipped": true
+          },
+          "lv_is_gambling_operator": {
+            "observations": [
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              },
+              {
+                "value": null,
+                "has_evidence_url": false,
+                "confidence": 88
+              },
+              {
+                "value": false,
+                "has_evidence_url": true,
+                "confidence": 85
+              }
+            ],
+            "distinct_values": [
+              false,
+              null
+            ],
+            "flipped": true
+          }
         }
       }
     },
-    "9604732798": {
-      "name": "Mudgee Race Club",
-      "fields": {
-        "lv_org_type": {
-          "observations": [
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 90
-            },
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 92
-            },
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 85
-            }
-          ],
-          "distinct_values": [
-            "individual_club_team"
-          ],
-          "flipped": false
-        },
-        "lv_produces_content": {
-          "observations": [
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 90
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 92
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 85
-            }
-          ],
-          "distinct_values": [
-            false
-          ],
-          "flipped": false
-        },
-        "lv_is_hardware_vendor": {
-          "observations": [
-            {
-              "value": null,
-              "has_evidence_url": false,
-              "confidence": 90
-            },
-            {
-              "value": null,
-              "has_evidence_url": false,
-              "confidence": 92
-            },
-            {
-              "value": null,
-              "has_evidence_url": false,
-              "confidence": 85
-            }
-          ],
-          "distinct_values": [
-            null
-          ],
-          "flipped": false
-        },
-        "lv_is_gambling_operator": {
-          "observations": [
-            {
-              "value": null,
-              "has_evidence_url": false,
-              "confidence": 90
-            },
-            {
-              "value": null,
-              "has_evidence_url": false,
-              "confidence": 92
-            },
-            {
-              "value": null,
-              "has_evidence_url": false,
-              "confidence": 85
-            }
-          ],
-          "distinct_values": [
-            null
-          ],
-          "flipped": false
-        }
-      }
-    },
-    "9605259523": {
-      "name": "Clare Valley Racing Club (Thoroughbred Racing South Australia)",
-      "fields": {
-        "lv_org_type": {
-          "observations": [
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 85
-            },
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 85
-            },
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 78
-            }
-          ],
-          "distinct_values": [
-            "individual_club_team"
-          ],
-          "flipped": false
-        },
-        "lv_produces_content": {
-          "observations": [
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 85
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 85
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 78
-            }
-          ],
-          "distinct_values": [
-            false
-          ],
-          "flipped": false
-        },
-        "lv_is_hardware_vendor": {
-          "observations": [
-            {
-              "value": null,
-              "has_evidence_url": false,
-              "confidence": 85
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 85
-            },
-            {
-              "value": null,
-              "has_evidence_url": false,
-              "confidence": 78
-            }
-          ],
-          "distinct_values": [
-            false,
-            null
-          ],
-          "flipped": true
-        },
-        "lv_is_gambling_operator": {
-          "observations": [
-            {
-              "value": null,
-              "has_evidence_url": false,
-              "confidence": 85
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 85
-            },
-            {
-              "value": null,
-              "has_evidence_url": false,
-              "confidence": 78
-            }
-          ],
-          "distinct_values": [
-            false,
-            null
-          ],
-          "flipped": true
-        }
-      }
-    },
-    "9605259524": {
-      "name": "Bairnsdale Racing Club",
-      "fields": {
-        "lv_org_type": {
-          "observations": [
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 85
-            },
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 88
-            },
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 92
-            }
-          ],
-          "distinct_values": [
-            "individual_club_team"
-          ],
-          "flipped": false
-        },
-        "lv_produces_content": {
-          "observations": [
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 85
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 88
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 92
-            }
-          ],
-          "distinct_values": [
-            false
-          ],
-          "flipped": false
-        },
-        "lv_is_hardware_vendor": {
-          "observations": [
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 85
-            },
-            {
-              "value": null,
-              "has_evidence_url": false,
-              "confidence": 88
-            },
-            {
-              "value": null,
-              "has_evidence_url": false,
-              "confidence": 92
-            }
-          ],
-          "distinct_values": [
-            false,
-            null
-          ],
-          "flipped": true
-        },
-        "lv_is_gambling_operator": {
-          "observations": [
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 85
-            },
-            {
-              "value": null,
-              "has_evidence_url": false,
-              "confidence": 88
-            },
-            {
-              "value": null,
-              "has_evidence_url": false,
-              "confidence": 92
-            }
-          ],
-          "distinct_values": [
-            false,
-            null
-          ],
-          "flipped": true
-        }
-      }
-    },
-    "9604630688": {
-      "name": "Shoalhaven City Turf Club",
-      "fields": {
-        "lv_org_type": {
-          "observations": [
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 82
-            },
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 92
-            },
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 95
-            }
-          ],
-          "distinct_values": [
-            "individual_club_team"
-          ],
-          "flipped": false
-        },
-        "lv_produces_content": {
-          "observations": [
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 82
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 92
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 95
-            }
-          ],
-          "distinct_values": [
-            false
-          ],
-          "flipped": false
-        },
-        "lv_is_hardware_vendor": {
-          "observations": [
-            {
-              "value": null,
-              "has_evidence_url": false,
-              "confidence": 82
-            },
-            {
-              "value": null,
-              "has_evidence_url": false,
-              "confidence": 92
-            },
-            {
-              "value": null,
-              "has_evidence_url": false,
-              "confidence": 95
-            }
-          ],
-          "distinct_values": [
-            null
-          ],
-          "flipped": false
-        },
-        "lv_is_gambling_operator": {
-          "observations": [
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 82
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 92
-            },
-            {
-              "value": null,
-              "has_evidence_url": false,
-              "confidence": 95
-            }
-          ],
-          "distinct_values": [
-            false,
-            null
-          ],
-          "flipped": true
-        }
-      }
-    },
-    "9604630690": {
-      "name": "Gold Coast Turf Club",
-      "fields": {
-        "lv_org_type": {
-          "observations": [
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 92
-            },
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 85
-            },
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 90
-            }
-          ],
-          "distinct_values": [
-            "individual_club_team"
-          ],
-          "flipped": false
-        },
-        "lv_produces_content": {
-          "observations": [
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 92
-            },
-            {
-              "value": true,
-              "has_evidence_url": true,
-              "confidence": 85
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 90
-            }
-          ],
-          "distinct_values": [
-            false,
-            true
-          ],
-          "flipped": true
-        },
-        "lv_is_hardware_vendor": {
-          "observations": [
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 92
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 85
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 90
-            }
-          ],
-          "distinct_values": [
-            false
-          ],
-          "flipped": false
-        },
-        "lv_is_gambling_operator": {
-          "observations": [
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 92
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 85
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 90
-            }
-          ],
-          "distinct_values": [
-            false
-          ],
-          "flipped": false
-        }
-      }
-    },
-    "9604726291": {
-      "name": "Ipswich Turf Club",
-      "fields": {
-        "lv_org_type": {
-          "observations": [
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 92
-            },
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 85
-            },
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 85
-            }
-          ],
-          "distinct_values": [
-            "individual_club_team"
-          ],
-          "flipped": false
-        },
-        "lv_produces_content": {
-          "observations": [
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 92
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 85
-            },
-            {
-              "value": true,
-              "has_evidence_url": true,
-              "confidence": 85
-            }
-          ],
-          "distinct_values": [
-            false,
-            true
-          ],
-          "flipped": true
-        },
-        "lv_is_hardware_vendor": {
-          "observations": [
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 92
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 85
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 85
-            }
-          ],
-          "distinct_values": [
-            false
-          ],
-          "flipped": false
-        },
-        "lv_is_gambling_operator": {
-          "observations": [
-            {
-              "value": true,
-              "has_evidence_url": true,
-              "confidence": 92
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 85
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 85
-            }
-          ],
-          "distinct_values": [
-            false,
-            true
-          ],
-          "flipped": true
-        }
-      }
-    },
-    "9604738974": {
-      "name": "Tasmanian Turf Club",
-      "fields": {
-        "lv_org_type": {
-          "observations": [
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 82
-            },
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 92
-            },
-            {
-              "value": "individual_club_team",
-              "has_evidence_url": true,
-              "confidence": 85
-            }
-          ],
-          "distinct_values": [
-            "individual_club_team"
-          ],
-          "flipped": false
-        },
-        "lv_produces_content": {
-          "observations": [
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 82
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 92
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 85
-            }
-          ],
-          "distinct_values": [
-            false
-          ],
-          "flipped": false
-        },
-        "lv_is_hardware_vendor": {
-          "observations": [
-            {
-              "value": false,
-              "has_evidence_url": false,
-              "confidence": 82
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 92
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 85
-            }
-          ],
-          "distinct_values": [
-            false
-          ],
-          "flipped": false
-        },
-        "lv_is_gambling_operator": {
-          "observations": [
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 82
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 92
-            },
-            {
-              "value": false,
-              "has_evidence_url": true,
-              "confidence": 85
-            }
-          ],
-          "distinct_values": [
-            false
-          ],
-          "flipped": false
-        }
-      }
-    }
-  },
-  "label": "before"
+    "label": "after",
+    "note": "4 separate invocations (one per company, --ids), 9 raw calls each (3 repetitions x RESEARCH_VOTE_REPETITIONS=3), each run in the foreground sequentially (not backgrounded) after a backgrounded first attempt was killed by a session boundary partway through company 3 of 8 -- see 51-SIZING.md's reproducibility section for the full disclosure. Each 'observation' here is one research_with_majority_vote() call -- itself an internal 3-call vote -- so a 'flip' means the WRAPPER's promoted answer changed across 3 repeated wrapper calls, not that the raw model disagreed with itself (that raw variance is unchanged by design -- temperature=0 is unavailable on claude-sonnet-5)."
+  }
 }

@@ -25,9 +25,9 @@ provides:
 affects: [52-backfill-execution]
 
 actuals:
-  tokens: 37400
+  tokens: 53600
   tasks: 2
-  commits: 9
+  commits: 13
 
 tech-stack:
   added: []
@@ -49,12 +49,16 @@ key-files:
     - scripts/backfill_dry_run.py
     - tests/test_backfill_dry_run.py
     - tests/test_zoominfo_company_client.py
+  created_round2:
+    - scripts/measure_research_reproducibility.py
+    - tests/test_measure_research_reproducibility.py
   artifacts:
     - .planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-BEFORE-SNAPSHOT.json
     - .planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-DRYRUN-PREDICTIONS.json
     - .planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-SKIP-LOG.json
     - .planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-DRYRUN-PREDICTIONS-run1-ascending-id.json
     - .planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-SKIP-LOG-run1-ascending-id.json
+    - .planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-RESEARCH-REPRODUCIBILITY.json
 
 key-decisions:
   - "SNAPSHOT_PROPS re-sorted by int(id) inside capture_snapshot(), not by the imported select_scored_population()'s own lexicographic string sort -- guards against the same mixed-digit-id misordering 51-02 found and fixed for the never-scored sample, applied here even though this session's 66-record scored population happened not to need it (no divergence observed live)."
@@ -66,6 +70,13 @@ key-decisions:
   - "HubSpot's own country wins a HubSpot/ZoomInfo disagreement (trust_rank 90 > zoominfo's 85, CLAUDE.md 6.3), and the guard is explicitly scoped to NOT invent a fallback policy for a blank-HubSpot-country case (out of scope per the operator's own note) -- ZoomInfo remains the only value there, unchanged behavior."
   - "The diversification rule (native-industry stratification) was tried once, produced 2 Tier B outcomes (satisfying the operator's own stop condition), and was NOT re-tuned further -- per the explicit instruction not to chase a Tier A. Its own limitation (industry tagging does not reliably discriminate org type on this population) is disclosed in 51-SIZING.md rather than papered over."
   - "FILL-04's third-disposition question: operator ruling explicitly DEFERRED it to Phase 52 planning, not decided now and not silently dropped -- recorded in ROADMAP.md's Phase 52 entry so Phase 52's planner sees it as a required decision, not an inherited default."
+  - "Checkpoint round 2 (operator ruling): Gold Coast Turf Club's D -> B was misattributed in round 1 to the country guard alone. Corrected in 51-SIZING.md and here: the guard added +10 geography only (25 -> 35, insufficient to clear the no-content hard veto); lv_produces_content flipping false -> true between two live research calls is what actually moved the tier, the same mechanism that moved Warwick. A wrong causal attribution in the committed record is worse than the original bug -- corrected rather than left standing."
+  - "Root cause of the research-answer instability tested empirically, not assumed: every observed lv_produces_content flip already clears config/field_policy.yaml's min_confidence/require_evidence_url gate. The operator's own lead (SS9.2) was checked and exonerated for this field; the gate fix (real, shipped) could not have been the reproducibility fix on its own."
+  - "claude-sonnet-5 rejects an explicit temperature parameter (400) -- confirmed via the claude-api skill. Deterministic decoding is not an available lever on this model; majority-of-3 vote (RESEARCH_VOTE_REPETITIONS=3, research_with_majority_vote()) is the fix used instead, precisely because temperature could not be."
+  - "Research reproducibility measurement capped at 4 of 8 companies (not the originally intended full 8) after a backgrounded first attempt was killed by a session boundary partway through company 3 -- 2 companies' results (Warwick, Mudgee) were kept rather than re-spent, and the remaining budget capped at the 2 other companies whose before-fix flip touched the tier-relevant lv_produces_content field (Gold Coast, Ipswich), run in the foreground one at a time. Before/after rates reported over their own denominators (8 vs 4), never blended into one percentage -- an unmeasured company's absence from the after-run is not evidence either way."
+  - "Corrected a second misattribution, this one in an instruction received rather than self-authored: the stated reason for skipping Shoalhaven/Clare Valley/Bairnsdale ('no flips before the fix') was checked against the actual before-measurement data and found wrong for 2 of the 3 -- they did flip (hardware/gambling only, never lv_produces_content). The decision to skip them stands on its own merits (score-inert, lower priority); the stated reason does not, and is corrected in 51-SIZING.md rather than repeated."
+  - "Minority-draw finding: across all 5 historic observations (Run 1 + Run 2 + 3 before-measurement reps), both Gold Coast and Warwick read lv_produces_content=False on 3 of 5 -- the committed Run 2 Tier B rows for both companies rest on the minority answer. Under the majority-of-5 answer both revert to Tier D; no Tier A or Tier B record has been genuinely, reproducibly observed anywhere in this population. The earlier 'diversification found a Tier B' framing is corrected, not merely appended to."
+  - "Whether to regenerate 51-DRYRUN-PREDICTIONS.json under research_with_majority_vote() before Phase 52 reads it is put to the operator as a question (cost/benefit laid out in 51-SIZING.md), not decided by this agent."
 
 patterns-established:
   - "Before-snapshot captured in a phase with no write path at all, so the baseline cannot have been influenced by a write -- the structural argument for why this snapshot (not a later one) is the trustworthy baseline Phase 52's closing diff needs."
@@ -150,27 +161,72 @@ coverage:
         status: pass
     human_judgment: false
   - id: D27
-    description: "Live diversified re-run (Run 2, portal 22617666): 10-record sample, sample_selection_rule=diversified_industry_stratified, media_slots=5, 8 matched/2 skipped (same skip ids as Run 1), tier distribution B x2 / D x6 -- a non-D tier was observed. Gold Coast Turf Club independently confirms the country guard live: D -> B, country_conflict populated, lv_country_region_normalized now AU. Real ZoomInfo spend (2 credits, live balance delta) far below the projected ceiling (10) because 8/10 sampled companies were already enriched in Run 1. Run 1's artifacts archived, not overwritten."
+    description: "Live diversified re-run (Run 2, portal 22617666): 10-record sample, sample_selection_rule=diversified_industry_stratified, media_slots=5, 8 matched/2 skipped (same skip ids as Run 1), tier distribution B x2 / D x6 -- a non-D tier was observed. CORRECTED (checkpoint round 2, per-record operator diff): Gold Coast Turf Club's D -> B is NOT attributable to the country guard alone -- the guard fired and added +10 geography (25 -> 35), confirmed via country_conflict/lv_country_region_normalized=AU, but that alone cannot clear the no-content hard veto. What moved the tier is lv_produces_content flipping false -> true between two live Claude web research calls on the same company (the same run-to-run variance that also moved Warwick Turf Club's tier). Real ZoomInfo spend (2 credits, live balance delta) far below the projected ceiling (10) because 8/10 sampled companies were already enriched in Run 1. Run 1's artifacts archived, not overwritten."
     requirement: "SAFE-01"
     verification:
       - kind: other
         ref: ".planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-DRYRUN-PREDICTIONS.json + 51-SKIP-LOG.json + 51-SIZING.md Run 2 section (schema, partition, credential-leak, mock-fixture-contamination checks run this session)"
         status: pass
     human_judgment: false
-  - id: D28
-    description: "Operator approval of the dry-run artifacts -- the phase's own exit gate. Not yet obtained; checkpoint re-presented after both checkpoint-round-1 work items (country guard, diversified re-run) landed."
+  - id: D29
+    description: "scripts/backfill_dry_run.py::apply_research_to_patch() now enforces config/field_policy.yaml's min_confidence and require_evidence_url(_for) gates for every GAP_FILL_FIELDS name -- the same gate src/merge_policy.py already enforced elsewhere, previously missing from this driver's own promotion path. Checked against the before-measurement data (D31): the gate changes zero of the observed lv_produces_content flip outcomes (every flip observation already cleared it) and has near-zero observable effect on the hardware/gambling flips (those are a None-vs-False absence pattern, not a wrongly-promoted high-confidence guess) -- the gate is real and correct but was empirically exonerated as the reproducibility root cause, not assumed to be it."
+    requirement: "SAFE-01"
+    verification:
+      - kind: unit
+        ref: "tests/test_backfill_dry_run.py::test_field_policy_gate_rejects_below_min_confidence"
+        status: pass
+      - kind: unit
+        ref: "tests/test_backfill_dry_run.py::test_field_policy_gate_rejects_missing_required_evidence_url"
+        status: pass
+      - kind: unit
+        ref: "tests/test_backfill_dry_run.py::test_field_policy_gate_accepts_at_exact_threshold_with_evidence"
+        status: pass
+      - kind: unit
+        ref: "tests/test_backfill_dry_run.py::test_field_policy_gate_org_type_only_requires_evidence_for_gated_types"
+        status: pass
+    human_judgment: false
+  - id: D30
+    description: "research_with_majority_vote() (RESEARCH_VOTE_REPETITIONS=3) added because claude-sonnet-5 rejects an explicit temperature parameter with a 400 (claude-api skill, model migration notes) -- deterministic decoding is not an available lever on this model, so majority vote across repeated live calls is the reproducibility fix used instead. Ties/all-abstain resolve to absent, never a defaulted False. Cap check and call accounting updated for the 3x call multiplier (research_vote_repetitions result field added)."
+    requirement: "SAFE-01"
+    verification:
+      - kind: unit
+        ref: "tests/test_backfill_dry_run.py::test_majority_vote_picks_majority_bool_and_confidence_of_agreeing_calls_only"
+        status: pass
+      - kind: unit
+        ref: "tests/test_backfill_dry_run.py::test_majority_vote_tie_resolves_to_absent_not_false"
+        status: pass
+      - kind: unit
+        ref: "tests/test_backfill_dry_run.py::test_majority_vote_all_calls_fail_returns_none"
+        status: pass
+      - kind: unit
+        ref: "tests/test_backfill_dry_run.py::test_research_gap_fields_routes_through_majority_vote"
+        status: pass
+      - kind: unit
+        ref: "tests/test_backfill_dry_run.py::test_run_dry_run_research_cap_budgets_for_vote_repetitions"
+        status: pass
+    human_judgment: false
+  - id: D31
+    description: "Live before/after reproducibility measurement (51-RESEARCH-REPRODUCIBILITY.json): before (8 companies x 3 reps, 24 calls) shows lv_produces_content flipping on 3/8 companies, lv_is_hardware_vendor 3/8, lv_is_gambling_operator 5/8. After (capped at 4 of 8 companies -- Warwick + Mudgee survived a killed backgrounded run, Gold Coast + Ipswich added as the two remaining tier-relevant flippers -- 36 calls) shows Warwick fully stabilized (0/4 fields flip) but Gold Coast's lv_produces_content still flips at the wrapper level (False/True/True across 3 repetitions) -- majority-of-3 is a large improvement, not a guarantee, for a company sitting near a genuine split. Cross-checking all 5 historic observations per company (Run 1 + Run 2 + 3 before-reps): both Gold Coast and Warwick read lv_produces_content=False on 3 of 5 -- the committed Run 2 Tier B rows for both rest on the minority answer, and revert to Tier D under the majority-of-5 answer. No Tier A or Tier B has been genuinely, reproducibly observed anywhere in this population. Ipswich's lv_is_gambling_operator flips True/False/False in both before and after measurements with evidence every time -- a persistent genuine disagreement, score-inert only because graduated_deductions is {} since Phase 46 D-03."
+    requirement: "SAFE-01"
+    verification:
+      - kind: other
+        ref: ".planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-RESEARCH-REPRODUCIBILITY.json (live, portal 22617666, 60 total Anthropic calls this measurement) + 51-SIZING.md's Research reproducibility section"
+        status: pass
+    human_judgment: false
+  - id: D32
+    description: "Operator approval of the dry-run artifacts -- the phase's own exit gate. Not yet obtained; checkpoint re-presented after checkpoint-round-1's two work items (country guard, diversified re-run) AND checkpoint-round-2's two work items (reproducibility measurement, majority-vote fix) landed, plus the corrected Gold Coast attribution and the minority-draw finding that no Tier A/B has actually been observed."
     verification: []
     human_judgment: true
-    rationale: "A judgement about whether the sample's payloads, bands, regions and predicted tiers are plausible for accounts the operator knows, plus confirmation the country-guard fix and the diversified re-run addressed the operator's round-1 concerns -- no automated check can decide either. This plan stops here by design (gate=\"blocking\", autonomous: false) and does not self-approve."
+    rationale: "A judgement about whether the sample's payloads, bands, regions and predicted tiers are plausible for accounts the operator knows; whether the majority-vote fix and its measured before/after rates address the operator's round-2 concern; and whether 51-DRYRUN-PREDICTIONS.json should be regenerated under majority vote before Phase 52 reads it -- no automated check can decide any of these. This plan stops here by design (gate=\"blocking\", autonomous: false) and does not self-approve."
 
-duration: ~40min
+duration: ~2h across three rounds
 completed: 2026-08-19
 status: checkpoint-pending
 ---
 
 # Phase 51 Plan 03: Before-Snapshot, Coverage Reconciliation and the Operator Approval Gate Summary
 
-**Read-only before-snapshot of all 66 already-scored companies committed, COVERAGE.md/51-VALIDATION.md reconciled with zero divergence, a live HubSpot/ZoomInfo country-conflict guard shipped and proven, and a diversified re-run of the dry-run sample committed (Tier B observed) -- Task 3, the phase's own blocking operator-approval gate, is re-presented to the orchestrator unanswered after addressing the operator's round-1 checkpoint response.**
+**Read-only before-snapshot of all 66 already-scored companies committed, COVERAGE.md/51-VALIDATION.md reconciled with zero divergence, a live HubSpot/ZoomInfo country-conflict guard shipped and proven, a field-policy promotion gate and a majority-of-3 research vote shipped to address research-answer instability, and a live before/after reproducibility measurement showing the committed Run 2 sample's two apparent Tier B rows actually rest on a minority draw and revert to Tier D under the majority answer -- no Tier A/B has been genuinely, reproducibly observed in this population. Task 3, the phase's own blocking operator-approval gate, is re-presented to the orchestrator unanswered after three rounds of operator-directed work.**
 
 ## Performance
 
@@ -225,15 +281,41 @@ status: checkpoint-pending
   (`DIVERSIFICATION_INDUSTRIES`), deterministic and reproducible (pinned by 3 new tests).
   Re-ran the dry run live: 10-record diversified sample, 8 matched/2 skipped, **tier
   distribution B x2, D x6** -- a non-D tier was observed, satisfying the operator's own stop
-  condition, so the selection was not tuned further. Gold Coast Turf Club independently
-  confirms the country guard: D -> B live. Run 1's artifacts archived (not overwritten) as
+  condition, so the selection was not tuned further. **Corrected (checkpoint round 2):**
+  Gold Coast Turf Club's D -> B is NOT solely attributable to the country guard -- the
+  guard is real (+10 geography, `country_conflict` populated) but that alone cannot clear
+  the no-content hard veto; `lv_produces_content` flipping false -> true across two live
+  research calls on the same company is what moved the tier, the same variance that also
+  moved Warwick Turf Club. Run 1's artifacts archived (not overwritten) as
   `*-run1-ascending-id.json`. Full accounting, including the honest finding that the
   diversification rule's "media bucket" still landed on the same racing-club population
-  (just differently industry-tagged) and that one Tier B traces to live research-answer
-  variance rather than the rule itself, recorded in `51-SIZING.md`'s new Run 2 section.
+  (just differently industry-tagged) and that BOTH observed Tier B outcomes trace to live
+  research-answer variance rather than the rule itself, recorded in `51-SIZING.md`'s Run 2
+  section (corrected).
 - **FILL-04's third-disposition question:** per the operator's explicit ruling, deferred to
   Phase 52 planning (not decided now, not silently dropped) -- recorded in `ROADMAP.md`'s
   Phase 52 entry as a required planning decision.
+- **Checkpoint round 2 (operator ruling): field-policy gate shipped and exonerated,
+  majority-of-3 research vote shipped, live before/after reproducibility measurement run,
+  minority-draw finding corrects the Run 2 framing above.**
+  `apply_research_to_patch()` now enforces `config/field_policy.yaml`'s
+  `min_confidence`/`require_evidence_url(_for)` gates (the operator's own lead, checked
+  first per instruction) -- real and shipped, but checked against the before-measurement
+  data and found to change ZERO of the observed `lv_produces_content` flip outcomes
+  (every flip observation already cleared it). `research_with_majority_vote()`
+  (`RESEARCH_VOTE_REPETITIONS=3`) was added instead, because `claude-sonnet-5` rejects an
+  explicit `temperature` parameter with a 400 -- deterministic decoding is not an
+  available lever on this model. A live before (8 companies x 3 reps, 24 calls) / after
+  (4 of 8 companies x 3 reps, 36 calls -- capped after a backgrounded run was killed by a
+  session boundary, see Issues Encountered) measurement shows Warwick fully stabilized but
+  Gold Coast's `lv_produces_content` still flipping at the wrapper level. Cross-checking
+  all 5 historic observations per company shows **both Gold Coast and Warwick actually
+  read `lv_produces_content=False` on 3 of 5 -- the Run 2 Tier B rows above rest on the
+  minority answer and revert to Tier D under the majority-of-5 answer. No Tier A or Tier
+  B has been genuinely, reproducibly observed anywhere in this population** -- correcting
+  the "BOTH observed Tier B outcomes" framing two bullets above. Full detail, including
+  the corrected Gold Coast attribution and a second correction to a received instruction's
+  stated skip rationale, in `51-SIZING.md`'s Research reproducibility section.
 
 ## Task Commits
 
@@ -248,6 +330,18 @@ Each completed task was committed atomically:
 4. **Country guard: HubSpot wins a HubSpot/ZoomInfo region conflict, visibly recorded** - `45d871b` (fix)
 5. **Diversified sample selector: deterministic industry-stratified selection** - `993e062` (feat)
 6. **Live diversified re-run committed; Run 1 archived** - `a9783ea` (feat)
+
+**Checkpoint round-2 response commits** (both work items the operator's ruling required, in
+the ordered sequence: measure first, then fix):
+
+7. **Research reproducibility measurement tool built** - `255fc38` (feat)
+8. **Field-policy confidence/evidence gate enforced in the research merge path** - `d9d3c32` (fix)
+9. **Before-fix reproducibility measurement committed (24 live calls)** - `ee83b78` (docs)
+10. **Majority-of-3 research vote shipped (`research_with_majority_vote`)** - `e622e53` (fix)
+11. **Measurement tool extended with `--mode majority_vote`/`--ids` for the after-run** - `6f249b1` (feat)
+12. **After-fix reproducibility measurement merged; Gold Coast attribution corrected in
+    `51-SIZING.md`/`51-03-SUMMARY.md`; minority-draw finding recorded** - committed with
+    this summary update (see final commit list at close).
 
 ## Files Created/Modified
 
@@ -265,6 +359,12 @@ Each completed task was committed atomically:
 - `.planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-DRYRUN-PREDICTIONS-run1-ascending-id.json` - Run 1 archived (not overwritten)
 - `.planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-SKIP-LOG-run1-ascending-id.json` - Run 1 archived (not overwritten)
 - `.planning/ROADMAP.md` - Phase 52 entry: FILL-04 third-disposition deferral recorded as an explicit carried-forward decision
+- `scripts/measure_research_reproducibility.py` (new) - Live before/after reproducibility measurement tool; `--mode {raw,majority_vote}`, `--ids`
+- `tests/test_measure_research_reproducibility.py` (new) - 10 offline tests (flip detection, id-filter, mode dispatch, None-result handling)
+- `scripts/backfill_dry_run.py` - Field-policy gate in `apply_research_to_patch()`; `research_with_majority_vote()`, `_majority_bool`/`_majority_str`, `RESEARCH_VOTE_REPETITIONS=3`; cap check and `research_calls_made`/`research_vote_repetitions` updated for the 3x call multiplier
+- `tests/test_backfill_dry_run.py` - 10 new tests: field-policy gate (4), majority vote (6)
+- `.planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-RESEARCH-REPRODUCIBILITY.json` (new) - Committed before+after measurement, merged into one artifact
+- `.planning/phases/51-backfill-pipeline-credit-sizing-dry-run/51-SIZING.md` - Corrected Gold Coast attribution; new "Research reproducibility" section (before/after rates, minority-draw finding, regenerate-or-not question, running totals)
 
 ## Decisions Made
 
@@ -294,6 +394,29 @@ Each completed task was committed atomically:
   or silently overwritten -- the operator's explicit "must not erase the evidence"
   instruction, and the all-Tier-D outcome on the racing-club cluster is itself a finding
   worth keeping.
+- Checked the operator's own field-policy hypothesis FIRST, before reaching for any other
+  lever, per explicit instruction -- and reported it exonerated rather than silently
+  dropping the lead once it didn't pan out. The record shows the gate was tested, not
+  assumed correct and not assumed wrong.
+- Majority-of-3 vote, not temperature: confirmed via the claude-api skill that
+  `claude-sonnet-5` rejects an explicit `temperature` parameter (400), so deterministic
+  decoding was never an available option to try. Documented explicitly so a later reader
+  does not "simplify" the fix back to a temperature setting that cannot work on this model.
+- The after-measurement was capped at 4 of 8 companies, not the originally intended 8,
+  after a backgrounded first attempt was killed by a session boundary -- 2 companies'
+  results were kept (not re-spent) and the remaining budget capped at the 2 companies
+  whose before-fix flip touched the tier-relevant field, run in the foreground one company
+  at a time. The before (n=8) and after (n=4, targeted selection) rates are reported over
+  their own denominators throughout, never blended into one percentage.
+- A second misattribution was caught and corrected -- this one in an instruction received,
+  not self-authored: the stated reason for skipping 3 companies ("no flips before the
+  fix") was checked against the actual data and found wrong for 2 of them. The skip
+  decision itself still stands (score-inert, lower priority); only the stated reason was
+  corrected, applying the same fact-check discipline to received instructions as to
+  self-authored claims.
+- Whether to regenerate `51-DRYRUN-PREDICTIONS.json` under majority vote before Phase 52
+  reads it is left as an explicit question for the operator (cost/benefit laid out in
+  `51-SIZING.md`), not decided by this agent.
 
 ## Deviations from Plan
 
@@ -313,6 +436,14 @@ ruling itself is the disposition recorded here.
   The subsequent Edit inserting new tests split that assertion into an orphaned,
   undefined-name fragment; caught immediately by the failing test run and fixed before any
   commit (Rule 1, self-caused, in-scope) -- no bad state was ever committed.
+- Round 2's first after-measurement attempt was launched as a backgrounded shell loop over
+  all 8 companies; the agent session ended mid-run (partway through company 3 of 8), which
+  killed the background process (confirmed via `ps` -- no live process, exit 143/SIGTERM).
+  Two companies' results (Warwick, Mudgee) had already been written to disk and were kept
+  rather than re-spent; a stray still-running process for a 3rd company (Clare Valley, not
+  in the eventual capped target list) was found and killed before it could spend further
+  budget. The remaining measurement was re-run in the foreground, one company at a time,
+  specifically so a dropped session could not silently strand it again.
 
 ## User Setup Required
 
@@ -326,12 +457,22 @@ via `load_dotenv()`.
   This plan structurally cannot self-approve (`gate="blocking"`, `autonomous: false`), and
   `state.advance-plan` was deliberately skipped this session so a later reader of
   `STATE.md` does not see the phase marked complete without the recorded go-ahead.
-- The re-presented checkpoint states plainly, per the operator's own requested framing:
-  what the country guard changed and which row (Gold Coast Turf Club, `9604630690`) had a
-  provider/HubSpot country conflict; the diversified sample's tier distribution (B x2, D
-  x6) and that a Tier A/B record WAS observed; that FILL-04's third disposition was
-  deferred to Phase 52 by explicit operator ruling; and the phase's running credit/research
-  totals (13 ZoomInfo credits, 16 Anthropic research calls, to date).
+- The re-presented checkpoint states plainly, per the operator's own requested framing: the
+  corrected Gold Coast attribution (the country guard is real but only added +10
+  geography; `lv_produces_content` flipping is what actually moved the tier); the measured
+  before (8 companies, 3/8 `lv_produces_content` flip, 3/8 `lv_is_hardware_vendor`, 5/8
+  `lv_is_gambling_operator`) and after (4 of 8 targeted companies, 1/4, 1/4, 3/4 --
+  denominators kept separate, not blended) reproducibility rates; that the field-policy
+  gate was checked and exonerated as the root cause while the `claude-sonnet-5`
+  temperature constraint made majority-of-3 vote the fix instead; **the minority-draw
+  finding that both Run 2 Tier B rows rest on a 2-of-5 answer and revert to Tier D under
+  the majority-of-5 answer, so no Tier A or Tier B has been genuinely, reproducibly
+  observed in this population**; the regenerate-or-not question for
+  `51-DRYRUN-PREDICTIONS.json` put to the operator rather than decided; that FILL-04's
+  third disposition remains deferred to Phase 52 by explicit operator ruling; and the
+  phase's actual (not projected) running totals: 13 ZoomInfo credits, 76 Anthropic
+  research calls (16 dry-run + 24 before-measurement + 36 after-measurement, the latter
+  capped at 4 of 8 companies per operator cost-discipline ruling).
 - `51-BEFORE-SNAPSHOT.json` is the artifact Phase 52's closing safety diff will read against
   -- its id set (66) and property list (18 names) are now the contract that diff is taken
   over. Unaffected by this round's changes (no HubSpot write occurred; the guard and the
@@ -339,7 +480,12 @@ via `load_dotenv()`.
 - `51-DRYRUN-PREDICTIONS.json` / `51-SKIP-LOG.json` now reflect Run 2 (diversified,
   guard-fixed) -- this is the set Phase 52's per-record comparison should read against.
   Run 1's artifacts remain on disk under `*-run1-ascending-id.json` for anyone who wants to
-  see the racing-club-cluster-only finding that motivated the re-run.
+  see the racing-club-cluster-only finding that motivated the re-run. **Two of Run 2's 8
+  rows (Gold Coast, Warwick) are now documented as resting on a minority/unstable
+  `lv_produces_content` answer** (`51-SIZING.md`'s Research reproducibility section) --
+  whether to regenerate them under `research_with_majority_vote()` (24 more calls, zero
+  more ZoomInfo credits) before Phase 52 reads this artifact is an explicit open question
+  for the operator, not resolved here.
 - **Phase 52's planner must resolve the FILL-04 third-disposition question before building
   the write path** -- recorded as a required decision in `ROADMAP.md`'s Phase 52 entry, not
   left implicit.
