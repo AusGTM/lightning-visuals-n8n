@@ -361,6 +361,103 @@ def test_field_policy_gate_org_type_only_requires_evidence_for_gated_types():
     assert "lv_org_type" not in merged_gated
 
 
+def _research_result(produces_content, confidence=90, with_evidence=True, org_type="individual club team"):
+    return ProviderResult(
+        provider="claude_web", object_type="companies", matched=True, confidence=confidence,
+        data={"lv_org_type": org_type, "lv_produces_content": produces_content,
+              "lv_is_hardware_vendor": None, "lv_is_gambling_operator": None},
+        evidence=ProviderEvidence(evidence_urls=[f"https://example.com/{produces_content}"]),
+        evidence_by_field={"lv_produces_content": "https://example.com/watch-live"} if with_evidence else {},
+    )
+
+
+def test_majority_vote_picks_majority_bool_and_confidence_of_agreeing_calls_only(monkeypatch):
+    # 2 of 3 calls say True (confidence 90, 92); the outvoted False call (confidence 60)
+    # must NOT drag the returned confidence down -- mean of the 2 agreeing calls (91), not
+    # the mean of all 3 (~80.7).
+    sequence = [
+        _research_result(True, confidence=90),
+        _research_result(False, confidence=60),
+        _research_result(True, confidence=92),
+    ]
+    calls = {"n": 0}
+
+    def mock_research(record):
+        result = sequence[calls["n"]]
+        calls["n"] += 1
+        return result
+
+    monkeypatch.setattr(b, "claude_web_research", mock_research)
+    record = HubSpotRecord(object_type="companies", id="1", properties={"name": "X"})
+    result = b.research_with_majority_vote(record)
+
+    assert calls["n"] == 3
+    assert result.data["lv_produces_content"] is True
+    assert result.confidence == 91
+    assert result.evidence_by_field["lv_produces_content"] == "https://example.com/watch-live"
+
+
+def test_majority_vote_tie_resolves_to_absent_not_false(monkeypatch):
+    # 2 repetitions, one True one False -- a tie must resolve to "no majority" (key absent
+    # from the returned data), never a defaulted False (which would wrongly fire the
+    # no-content hard veto on a genuinely disputed answer).
+    sequence = [_research_result(True), _research_result(False)]
+    calls = {"n": 0}
+
+    def mock_research(record):
+        result = sequence[calls["n"]]
+        calls["n"] += 1
+        return result
+
+    monkeypatch.setattr(b, "claude_web_research", mock_research)
+    record = HubSpotRecord(object_type="companies", id="1", properties={"name": "X"})
+    result = b.research_with_majority_vote(record, repetitions=2)
+
+    assert "lv_produces_content" not in result.data
+
+
+def test_majority_vote_all_calls_fail_returns_none(monkeypatch):
+    def mock_research(record):
+        raise RuntimeError("simulated live-call failure")
+
+    monkeypatch.setattr(b, "claude_web_research", mock_research)
+    record = HubSpotRecord(object_type="companies", id="1", properties={"name": "X"})
+    assert b.research_with_majority_vote(record) is None
+
+
+def test_majority_bool_and_majority_str_helpers_never_guess_on_a_tie():
+    assert b._majority_bool([True, False]) is None
+    assert b._majority_bool([None, None]) is None
+    assert b._majority_bool([True, True, False]) is True
+    assert b._majority_str(["a", "b"]) is None
+    assert b._majority_str(["a", "a", "b"]) == "a"
+
+
+def test_research_gap_fields_routes_through_majority_vote(monkeypatch):
+    # research_gap_fields must issue RESEARCH_VOTE_REPETITIONS raw calls, not one, and the
+    # returned result must be the majority-voted answer.
+    calls = {"n": 0}
+
+    def mock_research(record):
+        calls["n"] += 1
+        return _research_result(True)
+
+    monkeypatch.setattr(b, "claude_web_research", mock_research)
+    result = b.research_gap_fields({"id": "1", "name": "X", "domain": "x.com"}, {}, {})
+
+    assert calls["n"] == b.RESEARCH_VOTE_REPETITIONS
+    assert result.data["lv_produces_content"] is True
+
+
+def test_run_dry_run_research_cap_budgets_for_vote_repetitions(monkeypatch):
+    # sample_size=4 at RESEARCH_VOTE_REPETITIONS=3 projects 12 calls -- must refuse against
+    # a cap of 10, even though 4 alone would have fit the old one-call-per-company budget.
+    monkeypatch.setattr(b, "search_records", _mock_search_records_one_company)
+    monkeypatch.setattr(b, "zoominfo_credit_balance", lambda: 1000)
+    with pytest.raises(RuntimeError, match="exceeds the research call cap"):
+        b.run_dry_run(sample_size=4, research=True, max_research_calls=10)
+
+
 def test_partition_exclusive_and_total(monkeypatch):
     def mock_search(object_type, filters, properties, limit=100):
         return {"total": 4, "results": [

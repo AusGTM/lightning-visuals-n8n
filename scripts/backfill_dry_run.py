@@ -30,6 +30,7 @@ import argparse
 import json
 import os
 import sys
+from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -40,7 +41,7 @@ sys.path.insert(0, str(ROOT))  # repo root on sys.path so `src.*`/`scripts.*` im
 
 from src.hubspot_client import patch_record, search_records  # noqa: E402
 from src.icp_scoring import anti_icp_flag_properties, compute_icp_score  # noqa: E402
-from src.schemas import HubSpotRecord  # noqa: E402
+from src.schemas import HubSpotRecord, ProviderEvidence, ProviderResult  # noqa: E402
 from src.taxonomy import normalize_org_type  # noqa: E402
 from src.web_research import claude_web_research  # noqa: E402
 from scripts.backfill_seed_company_scores import COMPONENT_PROPS, compute_components  # noqa: E402 -- import, never re-derive
@@ -316,18 +317,145 @@ def build_candidate_patch(zi_attributes: dict, hubspot_country=None):
     return patch, country_conflict
 
 
+# Operator ruling, checkpoint round 2 (2026-08-19), work item 2 second lever: measured
+# claude_web_research() flip rate (51-RESEARCH-REPRODUCIBILITY.json, "before" label) showed
+# lv_produces_content/lv_is_hardware_vendor/lv_is_gambling_operator flipping across
+# repeated live calls at confidence/evidence levels that ALREADY clear the field_policy
+# gate above -- so the gate alone (lever one) cannot fix it. The claude-api skill's
+# migration notes confirm claude-sonnet-5 (this project's ANTHROPIC_RESEARCH_MODEL
+# default, src/web_research.py) rejects any explicit `temperature` with a 400 -- so
+# deterministic decoding (temperature=0) is not an available lever on this model.
+# Majority-of-3 vote across repeated live calls is the remaining lever the operator
+# explicitly sanctioned ("deterministic decoding, repeated-call majority, requiring
+# corroborating evidence"). Odd number so a boolean vote never ties by construction;
+# lv_org_type (string) CAN still tie (three distinct answers) -- ties resolve to no
+# majority (None), never a guessed value.
+RESEARCH_VOTE_REPETITIONS = 3
+
+
+def _majority_bool(values):
+    """None entries are non-votes (abstentions), never counted as a False vote -- a tied
+    or all-abstain vote resolves to None (absent), never a defaulted False, for the same
+    reason apply_research_to_patch never defaults a missing boolean to False."""
+    votes = [v for v in values if isinstance(v, bool)]
+    if not votes:
+        return None
+    true_count = sum(votes)
+    false_count = len(votes) - true_count
+    if true_count > false_count:
+        return True
+    if false_count > true_count:
+        return False
+    return None
+
+
+def _majority_str(values):
+    """Most-common non-empty string value; ties resolve to None (no majority), never an
+    arbitrary tie-break guess."""
+    votes = [v for v in values if isinstance(v, str) and v]
+    if not votes:
+        return None
+    counts = Counter(votes)
+    top_count = max(counts.values())
+    tied = [v for v in counts if counts[v] == top_count]
+    return tied[0] if len(tied) == 1 else None
+
+
+def research_with_majority_vote(record: HubSpotRecord, repetitions: int = RESEARCH_VOTE_REPETITIONS):
+    """Calls claude_web_research `repetitions` times and folds the results into a single
+    ProviderResult carrying the MAJORITY answer per GAP_FILL_FIELDS name (see
+    RESEARCH_VOTE_REPETITIONS' comment for why: temperature=0 is unavailable on
+    claude-sonnet-5, so voting across repeated calls is the reproducibility lever used
+    instead). A single failed repetition is dropped, never raised (mirrors
+    research_gap_fields' own never-crash discipline); if every repetition fails, returns
+    None exactly as a single failed call would.
+
+    `confidence` on the returned result is the mean confidence of the calls that agree
+    with the majority on every field that HAS a majority (the calls whose answer the
+    majority patch actually reflects) -- not a mean over all calls including outvoted
+    ones, which would understate how confident the winning answer actually was. Falls
+    back to the mean of all calls only if no single call agreed with the majority on
+    every field (can happen when different fields' majorities come from different
+    subsets of calls).
+
+    Top-level `evidence` (the evidence_urls list surfaced in the dry-run row) is taken
+    from the first call whose lv_produces_content answer matches that field's majority --
+    the single highest-leverage GAP_FILL_FIELDS name (CLAUDE.md SS10.1: 20 base-score
+    points AND the sole no-content hard-veto trigger) -- falling back to the first call
+    when lv_produces_content had no majority, so the evidence shown always supports an
+    answer this function actually promoted, never an outvoted one."""
+    results = []
+    for _ in range(repetitions):
+        try:
+            result = claude_web_research(record)
+        except Exception:
+            continue
+        if result is not None:
+            results.append(result)
+    if not results:
+        return None
+
+    majority_data = {}
+    majority_evidence_by_field = {}
+    for field in GAP_FILL_FIELDS:
+        raw_values = [(getattr(r, "data", None) or {}).get(field) for r in results]
+        majority = _majority_str(raw_values) if field == "lv_org_type" else _majority_bool(raw_values)
+        if majority is None:
+            continue
+        majority_data[field] = majority
+        for r in results:
+            if (getattr(r, "data", None) or {}).get(field) == majority:
+                evidence_by_field = getattr(r, "evidence_by_field", None) or {}
+                if field in evidence_by_field:
+                    majority_evidence_by_field[field] = evidence_by_field[field]
+                break
+
+    def _agrees_with_majority(r) -> bool:
+        data = getattr(r, "data", None) or {}
+        return all(data.get(field) == value for field, value in majority_data.items())
+
+    agreeing = [r for r in results if _agrees_with_majority(r)]
+    confidence_pool = agreeing if agreeing else results
+    confidences = [
+        c for c in (getattr(r, "confidence", None) for r in confidence_pool)
+        if isinstance(c, (int, float)) and not isinstance(c, bool)
+    ]
+    avg_confidence = int(sum(confidences) / len(confidences)) if confidences else 0
+
+    content_majority = majority_data.get("lv_produces_content")
+    evidence_source = results[0]
+    if content_majority is not None:
+        for r in results:
+            if (getattr(r, "data", None) or {}).get("lv_produces_content") == content_majority:
+                evidence_source = r
+                break
+    evidence = getattr(evidence_source, "evidence", None) or ProviderEvidence()
+
+    return ProviderResult(
+        provider="claude_web",
+        object_type=record.object_type,
+        matched=True,
+        confidence=avg_confidence,
+        data=majority_data,
+        evidence=evidence,
+        evidence_by_field=majority_evidence_by_field,
+    )
+
+
 def research_gap_fields(company: dict, zi_attributes: dict, candidate_patch: dict):
     """D-02 gap-fill lane. Returns None -- issuing NO call at all -- when every name in
     GAP_FILL_FIELDS is already present in `candidate_patch` (ZoomInfo already answered
     everything research could add). Otherwise builds a HubSpotRecord carrying the
     record's name/domain/website/country/industry and calls
-    src.web_research.claude_web_research(record). NOTE: that function returns the mock
-    fixture unless USE_MOCK_WEB_RESEARCH is explicitly set to a false value in the process
-    environment -- a live invocation that forgets to set it produces fixture data
-    silently. Any exception from the research call is caught and degraded to None here --
-    never raised -- so a malformed/failed research call becomes a skip-logged reason at
-    the call site, never a crash (mirrors scripts/check_provider_credits.py's never-crash
-    discipline)."""
+    research_with_majority_vote(record) -- RESEARCH_VOTE_REPETITIONS live calls folded
+    into one majority-voted answer (operator ruling, checkpoint round 2: see that
+    function's docstring for why a single call was not reproducible enough). NOTE: the
+    underlying claude_web_research() call returns the mock fixture unless
+    USE_MOCK_WEB_RESEARCH is explicitly set to a false value in the process environment --
+    a live invocation that forgets to set it produces fixture data silently, REPETITIONS
+    times. Any exception is caught and degraded to None here -- never raised -- so a
+    malformed/failed research call becomes a skip-logged reason at the call site, never a
+    crash (mirrors scripts/check_provider_credits.py's never-crash discipline)."""
     if all(field in candidate_patch for field in GAP_FILL_FIELDS):
         return None
     record = HubSpotRecord(
@@ -342,7 +470,7 @@ def research_gap_fields(company: dict, zi_attributes: dict, candidate_patch: dic
         },
     )
     try:
-        return claude_web_research(record)
+        return research_with_majority_vote(record)
     except Exception:
         return None
 
@@ -637,11 +765,18 @@ def run_dry_run(sample_size: int = DEFAULT_SAMPLE_SIZE,
         effective_max_research = (
             max_research_calls if max_research_calls is not None else MAX_RESEARCH_CALLS_DEFAULT
         )
-        if sample_size > effective_max_research:
+        # research_gap_fields now issues RESEARCH_VOTE_REPETITIONS raw calls per company
+        # (majority vote, operator ruling checkpoint round 2) -- the cap check must budget
+        # for that multiplier, not just one call per company, or a run could silently
+        # exceed MAX_WEB_RESEARCH_PER_RUN.
+        projected_calls = sample_size * RESEARCH_VOTE_REPETITIONS
+        if projected_calls > effective_max_research:
             raise RuntimeError(
-                f"REFUSED: requested sample size {sample_size} exceeds the research call "
-                f"cap ({effective_max_research}, from MAX_WEB_RESEARCH_PER_RUN). No "
-                "ZoomInfo companies/enrich call and no research call was issued."
+                f"REFUSED: requested sample size {sample_size} at "
+                f"{RESEARCH_VOTE_REPETITIONS} majority-vote calls/company "
+                f"({projected_calls} total) exceeds the research call cap "
+                f"({effective_max_research}, from MAX_WEB_RESEARCH_PER_RUN). No ZoomInfo "
+                "companies/enrich call and no research call was issued."
             )
 
     if diversified:
@@ -679,7 +814,11 @@ def run_dry_run(sample_size: int = DEFAULT_SAMPLE_SIZE,
         if research:
             research_result = research_gap_fields(company, zi_attributes, candidate_patch)
             if research_result is not None:
-                research_calls_made += 1
+                # Ceiling projection, RESEARCH_VOTE_REPETITIONS raw calls per company --
+                # matches this function's existing credits_spent ceiling-projection
+                # convention (comment above, "not a live re-measurement") rather than
+                # metering exactly how many of the REPETITIONS calls actually succeeded.
+                research_calls_made += RESEARCH_VOTE_REPETITIONS
                 before_keys = set(candidate_patch)
                 candidate_patch = apply_research_to_patch(candidate_patch, research_result)
                 research_filled = sorted(set(candidate_patch) - before_keys)
@@ -726,6 +865,7 @@ def run_dry_run(sample_size: int = DEFAULT_SAMPLE_SIZE,
         "rows": rows,
         "skipped": skipped,
         "research_calls_made": research_calls_made,
+        "research_vote_repetitions": RESEARCH_VOTE_REPETITIONS if research else None,
         "sample_selection_rule": "diversified_industry_stratified" if diversified else "ascending_id",
         "media_slots": slots,
     }
