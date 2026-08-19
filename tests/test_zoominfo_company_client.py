@@ -59,8 +59,9 @@ def test_country_region_blank_is_none():
     from src.icp_scoring import compute_icp_score
     from src.schemas import HubSpotRecord
 
-    patch = build_candidate_patch({"country": "", "revenue": 268163})
+    patch, conflict = build_candidate_patch({"country": "", "revenue": 268163})
     assert "lv_country_region_normalized" not in patch
+    assert conflict is None
 
     record = HubSpotRecord(object_type="companies", id="999", properties={})
     result = compute_icp_score(record, patch)

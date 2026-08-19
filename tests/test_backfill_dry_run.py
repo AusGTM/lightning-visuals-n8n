@@ -48,6 +48,60 @@ def test_end_to_end_one_record_dry_run(monkeypatch):
     assert row["payload"]["lv_revenue_band"] == "50-500M"
     assert row["payload"]["lv_country_region_normalized"] == "AU"
     assert row["predicted_tier"] in {"A", "B", "C", "D", "Unscored"}
+    # Baseline (agreeing/no-HubSpot-country) case: no conflict, source stays zoominfo.
+    assert row["country_conflict"] is None
+    assert row["sources"]["lv_country_region_normalized"] == "zoominfo"
+
+
+def _mock_search_records_gold_coast(object_type, filters, properties, limit=100):
+    return {
+        "total": 1,
+        "results": [
+            {"id": "9604630690", "properties": {
+                "name": "Gold Coast Turf Club", "domain": "gctc.com.au",
+                "website": "https://gctc.com.au", "country": "Australia",
+                "industry": "Sports",
+            }},
+        ],
+    }
+
+
+def _mock_enrich_company_wrong_country(domain, token):
+    # The real Gold Coast Turf Club shape (51-03 checkpoint finding): ZoomInfo returned
+    # "Netherlands" for an Australian turf club, which would otherwise fire a spurious
+    # non-ANZ hard veto on top of the (separate, legitimate) no-content veto.
+    return {
+        "matched": True,
+        "attributes": {"revenue": 29407, "country": "Netherlands"},
+        "reason": None,
+    }
+
+
+def test_country_conflict_hubspot_wins(monkeypatch):
+    monkeypatch.setattr(b, "search_records", _mock_search_records_gold_coast)
+    monkeypatch.setattr(b, "enrich_company", _mock_enrich_company_wrong_country)
+    monkeypatch.setattr(b, "zoominfo_credit_balance", lambda: 1000)
+    monkeypatch.setattr(b, "_mint_zoominfo_token", lambda: "fake-token")
+
+    result = b.run_dry_run(sample_size=1)
+
+    assert result["skipped"] == []
+    row = result["rows"][0]
+
+    # HubSpot's own country (Australia) wins over ZoomInfo's disagreeing value
+    # (Netherlands) -- no false non-ANZ veto.
+    assert row["payload"]["lv_country_region_normalized"] == "AU"
+    assert row["sources"]["lv_country_region_normalized"] == "hubspot"
+    assert "Non-ANZ geography" not in (row["anti_icp_reason"] or "")
+
+    # The conflict is visible in the artifact, not silently resolved.
+    conflict = row["country_conflict"]
+    assert conflict is not None
+    assert conflict["hubspot_country"] == "Australia"
+    assert conflict["hubspot_region"] == "AU"
+    assert conflict["zoominfo_country"] == "Netherlands"
+    assert conflict["zoominfo_region"] == "Other"
+    assert conflict["resolved_region"] == "AU"
 
 
 def test_cap_derivation():

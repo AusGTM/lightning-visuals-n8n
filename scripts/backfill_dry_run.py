@@ -189,20 +189,49 @@ def select_never_scored_sample(size: int) -> list:
     ]
 
 
-def build_candidate_patch(zi_attributes: dict) -> dict:
+def build_candidate_patch(zi_attributes: dict, hubspot_country=None):
     """Builds the scoring inputs ZoomInfo can actually answer. Any key whose value is
     None is OMITTED from the returned dict entirely -- HubSpot must not receive nulls, and
     an absent lv_country_region_normalized is exactly the input compute_icp_score's
     blank-region guard reads as "not yet enriched" rather than as a non-ANZ
-    determination."""
+    determination.
+
+    Country guard (operator ruling, 2026-08-19, the Gold Coast Turf Club finding):
+    ZoomInfo's own `country` attribute drives the region by default, same as before. But
+    when the record's OWN HubSpot `country` and ZoomInfo's `country` normalize to
+    DIFFERENT non-blank regions, HubSpot's value wins -- CLAUDE.md Section 6.3 ranks
+    `hubspot` trust_rank 90 above `zoominfo`'s 85, and a provider disagreeing with the
+    record's own CRM data is not grounds to silently override it. Returns
+    (patch, country_conflict): country_conflict is None when there was nothing to
+    disagree about (including the out-of-scope case where hubspot_country is blank --
+    ZoomInfo is then the only value, not a contradiction), otherwise a dict naming both
+    countries/regions and which one won, so the caller can surface it in the artifact
+    rather than resolve it invisibly."""
     patch = {}
     band = zoominfo_revenue_band(zi_attributes)
     if band is not None:
         patch["lv_revenue_band"] = band
-    region = zoominfo_country_region(zi_attributes.get("country") if isinstance(zi_attributes, dict) else None)
+
+    zi_country = zi_attributes.get("country") if isinstance(zi_attributes, dict) else None
+    zi_region = zoominfo_country_region(zi_country)
+    hs_region = zoominfo_country_region(hubspot_country)
+
+    country_conflict = None
+    region = zi_region
+    if hs_region is not None and zi_region is not None and hs_region != zi_region:
+        region = hs_region  # HubSpot's own record wins (trust_rank 90 > zoominfo's 85)
+        country_conflict = {
+            "hubspot_country": hubspot_country,
+            "hubspot_region": hs_region,
+            "zoominfo_country": zi_country,
+            "zoominfo_region": zi_region,
+            "resolved_region": region,
+        }
+
     if region is not None:
         patch["lv_country_region_normalized"] = region
-    return patch
+
+    return patch, country_conflict
 
 
 def research_gap_fields(company: dict, zi_attributes: dict, candidate_patch: dict):
@@ -517,8 +546,10 @@ def run_dry_run(sample_size: int = DEFAULT_SAMPLE_SIZE,
             continue
 
         zi_attributes = match.get("attributes") if isinstance(match.get("attributes"), dict) else {}
-        candidate_patch = build_candidate_patch(zi_attributes)
+        candidate_patch, country_conflict = build_candidate_patch(zi_attributes, hubspot_country=company.get("country"))
         sources = {field: "zoominfo" for field in candidate_patch}
+        if country_conflict is not None:
+            sources["lv_country_region_normalized"] = "hubspot"  # guard overrode ZoomInfo's disagreeing value
         research_filled = []
         evidence_urls = []
 
@@ -541,6 +572,7 @@ def run_dry_run(sample_size: int = DEFAULT_SAMPLE_SIZE,
         row["sources"] = sources
         row["research_filled"] = research_filled
         row["evidence_urls"] = evidence_urls
+        row["country_conflict"] = country_conflict  # None unless HubSpot/ZoomInfo regions disagreed
         row["matched_attributes"] = {
             k: zi_attributes[k] for k in _MATCHED_ATTRIBUTES_USED if k in zi_attributes
         }
