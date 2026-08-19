@@ -9,7 +9,7 @@ those records acquire a real `lv_icp_fit_score` and `lv_icp_tier_derived`. Execu
 
 ## Backfill Coverage (FILL)
 
-- [ ] **FILL-01**: The run is sized to the ZoomInfo credit balance BEFORE it starts. The balance is
+- [x] **FILL-01**: The run is sized to the ZoomInfo credit balance BEFORE it starts. The balance is
       queried live, the population is capped to what it actually supports, and the cap is recorded.
       Discovering exhaustion partway through a run is a failure of this requirement, not bad luck.
 
@@ -20,7 +20,7 @@ those records acquire a real `lv_icp_fit_score` and `lv_icp_tier_derived`. Execu
       `produces_content_score`, `gambling_score`, `lv_anti_icp_flag_num`). The six numbers come
       from `src/icp_scoring.py` — the existing oracle — never a reimplementation.
 
-- [ ] **FILL-03**: ZoomInfo revenue is converted from THOUSANDS to dollars before banding, pinned
+- [x] **FILL-03**: ZoomInfo revenue is converted from THOUSANDS to dollars before banding, pinned
       by a test. Raw pass-through puts every company one band too low and inverts the scoring; this
       is a known landmine from prior provider work, not a hypothetical.
 
@@ -31,7 +31,7 @@ those records acquire a real `lv_icp_fit_score` and `lv_icp_tier_derived`. Execu
 
 ## Evidence and Safety (SAFE)
 
-- [ ] **SAFE-01**: A dry run over the sample produces every exact PATCH payload for review, and
+- [x] **SAFE-01**: A dry run over the sample produces every exact PATCH payload for review, and
       commits a **pre-registered prediction artifact** naming each record's expected
       `lv_icp_tier_derived` BEFORE any live write. Post-write reads are compared against it, so a
       surprising tier is a defect — bad provider value or wrong normalisation — not a result
@@ -67,6 +67,7 @@ those records acquire a real `lv_icp_fit_score` and `lv_icp_tier_derived`. Execu
 
 - **n8n execution of any kind.** The entire premise is that n8n credits are unavailable. Any design
   requiring an n8n run fails the milestone's core constraint.
+
 - **The 66 already-scored companies** (SAFE-04).
 - **Contacts.** Companies only.
 - **Rubric weight changes.** The rubric settled in Phase 46 is applied as-is; this milestone changes
@@ -79,6 +80,8 @@ those records acquire a real `lv_icp_fit_score` and `lv_icp_tier_derived`. Execu
   from v0.9 on 2026-08-11. They are **not** this milestone — the operator's stated next goal is
   backfill coverage. Re-earmarked to the milestone after this one. Flagged rather than silently
   re-labelled, since the v0.9 archive names v1.0 as their destination.
+
 - **WINDOWS.md ids 17 and 18** — stale `lv_icp_tier` readers. Fixable, and they block `/gsd-ship`
   while open.
+
 - **Nyquist NOT-VALIDATED** across all v0.9 phases (`VALIDATION.md` files still `status: draft`).

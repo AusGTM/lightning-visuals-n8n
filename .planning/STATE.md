@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: Direct Backfill & Scoring Coverage
-current_phase: 50
-current_phase_name: Derived Tier Property
+current_phase: 51
+current_phase_name: Backfill Pipeline, Credit Sizing & Dry Run
 status: executing
-stopped_at: "Completed 50-05-PLAN.md: D-24 override executed -- WF1 deleted, lv_icp_tier archived, lv_icp_tier_derived relabelled 'ICP Tier'. Phase 50 and v0.9 milestone plans all complete; ready for ship review."
-last_updated: "2026-08-19T02:51:55.842Z"
-last_activity: 2026-08-14
-last_activity_desc: Phase 50 Plan 05 complete -- D-24 override executed (WF1 deleted, lv_icp_tier archived, relabelled). Phase 50 and v0.9 milestone fully complete.
+stopped_at: "Completed 51-01-PLAN.md: tracer dry-run pipeline proven live on one record, zero HubSpot writes, zero n8n executions"
+last_updated: "2026-08-19T03:10:20.653Z"
+last_activity: 2026-08-19
+last_activity_desc: Phase 51 execution started
 progress:
   total_phases: 2
-  completed_phases: 6
+  completed_phases: 0
   total_plans: 3
-  completed_plans: 35
+  completed_plans: 1
   percent: 0
 ---
 
@@ -141,8 +141,8 @@ predating the window. VETO-03 bar still 0.
 
 ## Current Position
 
-Phase: 50 (Derived Tier Property) — EXECUTING
-Plan: 5 of 5
+Phase: 51 (Backfill Pipeline, Credit Sizing & Dry Run) — EXECUTING
+Plan: 2 of 3
 Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
@@ -220,7 +220,7 @@ exactly what B and C now do): .planning/phases/47.5-veto-recompute-path/47.5-CON
 lv_org_type: Editix, Jam TV, Waikato, The Rumble). Not a 47.5 workstream.
 
 Previous status: Executing — Anthropic credit restored, Plan 03 completed
-Last activity: 2026-08-13 — Phase 50 execution started
+Last activity: 2026-08-19 — Phase 51 execution started
   the live property-existence guard (found 19 missing D-09 metadata properties, resolved
   via operator-confirmed D-21 narrowing), one live research pass over all 17 pinned
   companies (47-RESEARCH-RESULTS.json), two live-discovered data-quality fixes
@@ -230,12 +230,12 @@ Last activity: 2026-08-13 — Phase 50 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
+Progress: [███░░░░░░░] 33% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-14T02:25:48.953Z
-**Stopped at:** Completed 50-05-PLAN.md: D-24 override executed -- WF1 deleted, lv_icp_tier archived, lv_icp_tier_derived relabelled 'ICP Tier'. Phase 50 and v0.9 milestone plans all complete; ready for ship review.
+**Last session:** 2026-08-19T03:10:20.645Z
+**Stopped at:** Completed 51-01-PLAN.md: tracer dry-run pipeline proven live on one record, zero HubSpot writes, zero n8n executions
 **Resume file:** None
 
 ## Performance Metrics
@@ -301,6 +301,7 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 | Phase 50 P04 | 35min | 2 tasks | 3 files |
 | Phase 50 P05 | 55min | 1 tasks | 7 files |
 | Phase 50 P05 | 35min | 1 tasks | 9 files |
+| Phase 51 P01 | ~15min | 3 tasks | 5 files |
 
 ## Decisions
 
@@ -317,6 +318,7 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: Phase 50: WF1 switched off live (D-08 complete); lv_icp_tier archive blocked by HubSpot's property-in-use rejection (a disabled workflow's action still counts as usage) -- escalated per D-11 rather than forced through by deleting or editing WF1.
 - [Phase ?]: D-24: operator overrode D-08, WF1 (4625147345) deleted outright (not merely disabled) after lv_icp_tier's archive was rejected live (CANNOT_DELETE_PROPERTY_IN_USE); archive then succeeded and lv_icp_tier_derived was relabelled 'ICP Tier'
 - [Phase ?]: Second D-16 deviation spent: armed 1-record recompute proof (Melbourne Racing Club 9604614548) confirms the pipeline writes lv_anti_icp_flag_num onto a real record end-to-end (0->'0' branch directly observed; '1' branch inferred from shared derivation + drift tests, not independently re-observed)
+- [Phase ?]: Phase 51 Plan 01: measured ZoomInfo companies/enrich per-match cost live (100 hundredths, vs the 108 documented floor) via --measure-cost, retiring research Assumption A1; credits_per_match_hundredths_used is max(measured, fallback)
 
 ### Roadmap Evolution
 
