@@ -22,7 +22,7 @@ needed: HubSpot already derives `lv_icp_fit_score` and `lv_icp_tier_derived` fro
 numbers on its own. Decisions in `.planning/MILESTONE-CONTEXT.md`; requirements in
 `.planning/REQUIREMENTS.md`.
 
-- [ ] **Phase 51: Backfill Pipeline, Credit Sizing & Dry Run** - Size the population and the
+- [x] **Phase 51: Backfill Pipeline, Credit Sizing & Dry Run** - Size the population and the
       ZoomInfo credit cap live, pin the thousands-to-dollars revenue conversion, and dry-run a
       sample's exact PATCH payloads and pre-registered tier predictions — zero writes
 
@@ -165,7 +165,7 @@ silently inherit Phase 51's placeholder behavior without a decision.
 | 48. Enrichment Coverage | v0.9 | 7/7 | Complete (verified) | 2026-08-13 |
 | 49. Re-score Strategy & Reporting | v0.9 | 7/7 | Complete (verified) | 2026-08-13 |
 | 50. Derived Tier Property | v0.9 | 6/6 | Complete (verified) | 2026-08-14 |
-| 51. Backfill Pipeline, Credit Sizing & Dry Run | v1.0 | 3/3 | In Progress|  |
+| 51. Backfill Pipeline, Credit Sizing & Dry Run | v1.0 | 3/3 | Complete (verified) | 2026-08-19 |
 | 52. Staged Canary Execution & Safety Verification | v1.0 | 0/TBD | Not started | - |
 
 ## Ledger gaps (known)
