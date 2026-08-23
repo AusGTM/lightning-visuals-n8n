@@ -459,9 +459,10 @@ def test_fit_score_formula_guards_every_nullable_component():
 
 # Quick task 260823-ono -- matches ANY occurrence of the bare token, so long as it is not
 # immediately preceded by `coalesce(`. A formula may legally contain org_type_score both
-# guarded (inside the core_racing override branch) and unguarded (in the else/default
-# branch every non-override record still takes) at the same time.
+# guarded (inside the lv_named_account_score_floor override branch) and unguarded (in the
+# else/default branch every non-override record still takes) at the same time.
 FIT_SCORE_UNGUARDED_ORG_TYPE_RE = re.compile(r"(?<!coalesce\()org_type_score")
+FIT_SCORE_FLOOR_PROPERTY = "lv_named_account_score_floor"
 
 
 def test_fit_score_formula_leaves_org_type_score_unguarded_as_the_sentinel():
@@ -472,17 +473,20 @@ def test_fit_score_formula_leaves_org_type_score_unguarded_as_the_sentinel():
     one of them in the tier flow -- blank must keep meaning 'never scored'.
 
     Quick task 260823-ono restates this BRANCH-SCOPED rather than whole-formula: the
-    metro peak-body named-account override (CONTEXT.md) legally coalesces org_type_score
-    INSIDE the core_racing branch only (so Perth Racing's all-blank inputs can float to
-    the 60 floor), while the else/default branch -- what every non-override record still
-    takes -- must keep it bare. Two assertions, both regex/substring-based on the bare
-    token `core_racing` (never a quoted form, never a whole-line match), so this passes
-    unchanged against BOTH the submitted formula text (this commit, pre-push) and the
-    server-echoed canonicalized text (post-push, which HubSpot rewrites with different
-    quote style and inserted newlines between branches -- see RESEARCH.md's
-    canonicalization trap). Before this quick task's CP2 push, the formula has no
-    core_racing branch at all, so both assertions still pass unchanged against today's
-    formula (the first finds the one bare occurrence; the second is vacuously true)."""
+    metro peak-body named-account override (CONTEXT.md amendment, post-CP1 halt-b) legally
+    coalesces org_type_score INSIDE the lv_named_account_score_floor override branch only
+    (so Perth Racing's all-blank inputs can float to the 60 floor), while the else/default
+    branch -- what every non-override record still takes -- must keep it bare. Two
+    assertions, both regex/substring-based on the bare token `lv_named_account_score_floor`
+    (never a quoted form, never a whole-line match), so this passes unchanged against BOTH
+    the submitted formula text (this commit, pre-push) and the server-echoed canonicalized
+    text (post-push, which HubSpot rewrites with different quote style and inserted
+    newlines between branches -- see RESEARCH.md's canonicalization trap). Before this
+    quick task's CP2 push, the formula has no floor branch at all, so both assertions
+    still pass unchanged against today's formula (the first finds the one bare occurrence;
+    the second is vacuously true). Superseded design: CP1 proved a `core_racing` enum
+    branch value unreadable in this portal's calculation_equation (halt-b) -- the operator
+    retargeted to a number-typed floor property instead of an enum branch value."""
     if not FIT_SCORE_PROPERTY_PATH.exists():
         pytest.skip(f"{FIT_SCORE_PROPERTY_PATH} not archived yet")
 
@@ -495,10 +499,11 @@ def test_fit_score_formula_leaves_org_type_score_unguarded_as_the_sentinel():
         f"Formula: '{formula}'"
     )
     if f"coalesce({FIT_SCORE_SENTINEL_COMPONENT}" in formula:
-        assert "core_racing" in formula, (
+        assert FIT_SCORE_FLOOR_PROPERTY in formula, (
             f"'{FIT_SCORE_SENTINEL_COMPONENT}' is coalesced somewhere in the formula, "
-            "which is only legal inside the core_racing override branch -- but "
-            f"'core_racing' does not appear in the formula at all. Formula: '{formula}'"
+            f"which is only legal inside the '{FIT_SCORE_FLOOR_PROPERTY}' override branch "
+            f"-- but '{FIT_SCORE_FLOOR_PROPERTY}' does not appear in the formula at all. "
+            f"Formula: '{formula}'"
         )
 
 

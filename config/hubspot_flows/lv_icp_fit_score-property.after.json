@@ -1,7 +1,7 @@
 {
   "archived": false,
   "calculated": true,
-  "calculationFormula": "org_type_score + coalesce(geography_score, 0) + coalesce(annual_revenue_score, 0) + coalesce(produces_content_score, 0) + coalesce(gambling_score, 0)",
+  "calculationFormula": "if coalesce(lv_named_account_score_floor, 0) > 0 then max(coalesce(org_type_score, 0) + coalesce(geography_score, 0) + coalesce(annual_revenue_score, 0) + coalesce(produces_content_score, 0) + coalesce(gambling_score, 0), coalesce(lv_named_account_score_floor, 0)) else org_type_score + coalesce(geography_score, 0) + coalesce(annual_revenue_score, 0) + coalesce(produces_content_score, 0) + coalesce(gambling_score, 0)",
   "createdAt": "2026-07-17T08:20:55.049Z",
   "createdUserId": "93450314",
   "dataSensitivity": "non_sensitive",
