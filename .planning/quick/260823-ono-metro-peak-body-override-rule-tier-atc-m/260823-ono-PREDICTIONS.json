@@ -17,7 +17,7 @@
         "lv_icp_tier": "A",
         "lv_icp_tier_derived": "A"
       },
-      "expectation": "lv_icp_fit_score and lv_icp_tier_derived unchanged from baseline -- this record never carries lv_named_account_priority=core_racing, so it always takes the else branch.",
+      "expectation": "lv_icp_fit_score and lv_icp_tier_derived unchanged from baseline -- this record never carries lv_named_account_score_floor=60, so it always takes the else branch.",
       "id": "9605284722",
       "name": "Racing and Wagering Western Australia",
       "role": "tier_a"
@@ -31,6 +31,7 @@
   "portal_id": "22617666",
   "quick_id": "260823-ono",
   "recorded_at": "2026-08-23T08:54:31.078860+00:00",
+  "retarget_note": "2026-08-23: CP1 returned halt-b (enums are unreadable in a calculation_equation on this portal -- 260823-ono-PROBE-VERDICT.json). Operator selected Option 1 (CONTEXT.md 'Amendment 2026-08-23'): the input field changed from an enumeration (lv_named_account_priority=core_racing) to a plain number (lv_named_account_score_floor=60). Predicted scores and tiers are unchanged -- ATC/SSR/BRC 55->60 B, MRC 35->60 B, Perth blank->60 B -- as are the baselines, controls, N/N+1 and the rollback string.",
   "rollback_formula": "org_type_score + coalesce(geography_score, 0) + coalesce(annual_revenue_score, 0) + coalesce(produces_content_score, 0) + coalesce(gambling_score, 0)",
   "rollback_formula_note": "Verbatim calculationFormula live-read from GET crm/v3/properties/companies/lv_icp_fit_score on 2026-08-23 (Task 1), before any push -- pushing this exact string is the CP2 rollback procedure.",
   "targets": [
@@ -44,7 +45,7 @@
         "lv_icp_tier": "B",
         "lv_icp_tier_derived": "B",
         "lv_icp_tier_derived_raw": "B",
-        "lv_named_account_priority": null,
+        "lv_named_account_score_floor": null,
         "lv_org_type": "individual_club_team",
         "org_type_score": "15",
         "produces_content_score": "20"
@@ -67,7 +68,7 @@
         "lv_icp_tier": "C",
         "lv_icp_tier_derived": "C",
         "lv_icp_tier_derived_raw": "C",
-        "lv_named_account_priority": null,
+        "lv_named_account_score_floor": null,
         "lv_org_type": "individual_club_team",
         "org_type_score": "15",
         "produces_content_score": "0"
@@ -90,7 +91,7 @@
         "lv_icp_tier": "B",
         "lv_icp_tier_derived": "B",
         "lv_icp_tier_derived_raw": "B",
-        "lv_named_account_priority": null,
+        "lv_named_account_score_floor": null,
         "lv_org_type": "individual_club_team",
         "org_type_score": "15",
         "produces_content_score": "20"
@@ -113,7 +114,7 @@
         "lv_icp_tier": "B",
         "lv_icp_tier_derived": "B",
         "lv_icp_tier_derived_raw": "B",
-        "lv_named_account_priority": null,
+        "lv_named_account_score_floor": null,
         "lv_org_type": "individual_club_team",
         "org_type_score": "15",
         "produces_content_score": "20"
@@ -136,7 +137,7 @@
         "lv_icp_tier": null,
         "lv_icp_tier_derived": null,
         "lv_icp_tier_derived_raw": "",
-        "lv_named_account_priority": null,
+        "lv_named_account_score_floor": null,
         "lv_org_type": null,
         "org_type_score": null,
         "produces_content_score": null

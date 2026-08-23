@@ -135,7 +135,7 @@ D04_COMPANY_PROPERTY_SCOPE = frozenset(
         "lv_recommended_motion",
         "lv_icp_scored_at",
         "lv_icp_scoring_version",
-        "lv_named_account_priority",
+        "lv_named_account_score_floor",
     }
 )
 

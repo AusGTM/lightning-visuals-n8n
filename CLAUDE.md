@@ -214,6 +214,12 @@ under §11–§12 (local MVP) legitimately use bare names and are left unchanged
 `lv_icp_scored_at`, `lv_icp_scoring_version`, `lv_icp_confidence`, `lv_recommended_motion`,
 `lv_named_account_priority`.
 
+`lv_named_account_priority` stays roadmap-only: calculation formulas cannot read
+enumerations on this portal -- D-20 reconfirmed live 2026-08-23 (quick 260823-ono CP1:
+`string(<enum>)` parses but computes null once the enum has a value; 5 variants, evidence
+in `260823-ono-PROBE-VERDICT.json`). Any operator-facing vocabulary that must drive a
+formula has to be a number.
+
 Treat §4/§5 as the roadmap, not an inventory. Re-list the portal before writing to any property
 named there.
 

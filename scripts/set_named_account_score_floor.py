@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
-"""scripts/set_named_account_priority.py
+"""scripts/set_named_account_score_floor.py
 
-Quick task 260823-ono, write surface 3 -- PATCH `lv_named_account_priority=core_racing`
+Quick task 260823-ono, write surface 3 -- PATCH `lv_named_account_score_floor=60`
 onto exactly the five named metro peak-body companies (ATC, MRC, SSR, BRC, Perth Racing),
 and the operator's standing tool for "add a 6th named account" going forward (edit
 NAMED_ACCOUNTS, run --plan, arm --execute, poll --verify).
+
+Retargeted post-CP1 (halt-b: enums are unreadable in a `calculation_equation` on this
+portal -- CONTEXT.md's "Amendment 2026-08-23", operator Option 1). Formerly
+scripts/set_named_account_priority.py, PATCHing `lv_named_account_priority=core_racing`
+(an enumeration); renamed via `git mv` in the same commit that retargets the mechanism.
+The write surface it gates is unchanged -- a PATCH on the same 5 company ids -- only the
+filename and the payload's key changed, so ALLOW_NAMED_ACCOUNT_WRITE is kept rather than
+minted fresh.
 
 Three modes, one script:
     --plan (default, zero writes) -- prints the 5 single-key PATCH payloads. Also
@@ -14,11 +22,16 @@ Three modes, one script:
         formula push already damaged the population and arming the PATCH is the wrong
         next move.
     --execute (armed) -- PATCHes each of the 5 with a payload whose key set is asserted
-        to be exactly {"lv_named_account_priority"} (never a wider write), then verifies
-        each write by an INDEPENDENT per-record re-read (never the PATCH response body).
-    --verify -- polls lv_icp_fit_score + lv_icp_tier_derived on the 5 ids under D-22
-        (>=2 reads >=90s apart, 300s ceiling or until stable) and diffs the final reads
-        against the predictions JSON, exiting non-zero on ANY mismatch.
+        to be exactly {"lv_named_account_score_floor"} (never a wider write), then
+        verifies each write by an INDEPENDENT per-record re-read (never the PATCH
+        response body).
+    --verify -- polls lv_icp_fit_score + lv_icp_tier_derived on the 5 ids under the
+        corrected D-22 poll shape (poll until the record reaches its expected
+        score/tier or a 300s ceiling; a stability stop -- two consecutive reads
+        agreeing -- is accepted only once >=180s have elapsed, never on an early
+        two-reads-agree that could both be the stale pre-write value during the
+        ~70-130s calculation backfill window) and diffs the final reads against the
+        predictions JSON, exiting non-zero on ANY mismatch.
 
 Two-key write gate for --execute (repo idiom, its OWN dedicated key -- never
 ALLOW_HUBSPOT_PROPERTY_WRITES or ALLOW_FORMULA_WRITE, which are scoped to property-create
@@ -31,19 +44,19 @@ never a webhook POST.
     # preflight (unarmed, always run first)
     .venv/bin/python -c \
         "from dotenv import load_dotenv; load_dotenv(); import runpy; \
-         runpy.run_path('scripts/set_named_account_priority.py', run_name='__main__')"
+         runpy.run_path('scripts/set_named_account_score_floor.py', run_name='__main__')"
 
     # armed
     DRY_RUN=false ALLOW_NAMED_ACCOUNT_WRITE=true .venv/bin/python -c \
         "from dotenv import load_dotenv; load_dotenv(); import runpy, sys; \
-         sys.argv = ['set_named_account_priority.py', '--execute']; \
-         runpy.run_path('scripts/set_named_account_priority.py', run_name='__main__')"
+         sys.argv = ['set_named_account_score_floor.py', '--execute']; \
+         runpy.run_path('scripts/set_named_account_score_floor.py', run_name='__main__')"
 
     # verify
     .venv/bin/python -c \
         "from dotenv import load_dotenv; load_dotenv(); import runpy, sys; \
-         sys.argv = ['set_named_account_priority.py', '--verify']; \
-         runpy.run_path('scripts/set_named_account_priority.py', run_name='__main__')"
+         sys.argv = ['set_named_account_score_floor.py', '--verify']; \
+         runpy.run_path('scripts/set_named_account_score_floor.py', run_name='__main__')"
 """
 import argparse
 import json
@@ -61,8 +74,8 @@ PREDICTIONS_PATH = (
     / "260823-ono-PREDICTIONS.json"
 )
 
-CORE_RACING = "core_racing"
-NAMED_PROP = "lv_named_account_priority"
+FLOOR_VALUE = 60
+FLOOR_PROP = "lv_named_account_score_floor"
 
 # The exactly-five metro peak bodies this quick task exists for. To add a 6th named
 # account later, add an entry here and re-run --plan / --execute / --verify -- this dict
@@ -75,9 +88,11 @@ NAMED_ACCOUNTS = {
     "9604794662": "Perth Racing",
 }
 
-# D-22 poll shape for --verify -- matches probe_enum_in_formula.py's own constants.
+# D-22 poll shape for --verify -- matches probe_number_floor_in_formula.py's own
+# constants and its corrected stop condition (Task 1b step 7).
 POLL_CEILING_SECONDS = 300.0
 POLL_INTERVAL_SECONDS = 90.0
+POLL_STABILITY_MIN_ELAPSED = 180.0
 
 
 def _has_credentials() -> bool:
@@ -96,12 +111,12 @@ def _writes_allowed() -> bool:
 
 def build_payloads() -> dict:
     """{company_id: {property: value}} -- the exact, single-key PATCH bodies. A payload
-    key set that is ever anything other than exactly {NAMED_PROP} is a bug, asserted at
+    key set that is ever anything other than exactly {FLOOR_PROP} is a bug, asserted at
     every call site below, never trusted from this function's return alone."""
-    payloads = {cid: {NAMED_PROP: CORE_RACING} for cid in NAMED_ACCOUNTS}
+    payloads = {cid: {FLOOR_PROP: FLOOR_VALUE} for cid in NAMED_ACCOUNTS}
     for cid, payload in payloads.items():
-        assert set(payload) == {NAMED_PROP}, (
-            f"payload-scope assertion failed for {cid}: {set(payload)} != {{{NAMED_PROP!r}}}"
+        assert set(payload) == {FLOOR_PROP}, (
+            f"payload-scope assertion failed for {cid}: {set(payload)} != {{{FLOOR_PROP!r}}}"
         )
     return payloads
 
@@ -127,12 +142,12 @@ def _control_prediction(predictions: dict, company_id: str) -> dict:
 def check_drift(predictions: dict) -> list:
     """Live re-read of the 5 target ids AND the 2 control ids; returns a list of
     human-readable drift descriptions (empty list == no drift). Compares
-    lv_icp_fit_score/lv_icp_tier_derived/lv_named_account_priority against the baseline
-    recorded in predictions -- NOT the predicted post-write values, since this check runs
-    BEFORE any write in --plan/--execute's preflight."""
+    lv_icp_fit_score/lv_icp_tier_derived/lv_named_account_score_floor against the
+    baseline recorded in predictions -- NOT the predicted post-write values, since this
+    check runs BEFORE any write in --plan/--execute's preflight."""
     from src.hubspot_client import get_record
 
-    props = [NAMED_PROP, "lv_icp_fit_score", "lv_icp_tier_derived"]
+    props = [FLOOR_PROP, "lv_icp_fit_score", "lv_icp_tier_derived"]
     drift = []
 
     for cid in NAMED_ACCOUNTS:
@@ -146,10 +161,10 @@ def check_drift(predictions: dict) -> list:
                 f"TARGET {cid} ({pred['name']}): lv_icp_fit_score drifted "
                 f"{baseline_score!r} -> {live_score!r} since Task 1's baseline read"
             )
-        if (live.get("lv_named_account_priority") or None) != baseline.get("lv_named_account_priority"):
+        if (live.get(FLOOR_PROP) or None) != baseline.get(FLOOR_PROP):
             drift.append(
-                f"TARGET {cid} ({pred['name']}): lv_named_account_priority already "
-                f"{live.get('lv_named_account_priority')!r} (expected still unset)"
+                f"TARGET {cid} ({pred['name']}): {FLOOR_PROP} already "
+                f"{live.get(FLOOR_PROP)!r} (expected still unset)"
             )
 
     for control in predictions["controls"]:
@@ -187,22 +202,30 @@ def _patch_and_verify(company_id: str, payload: dict) -> bool:
     resp = patch_record("companies", company_id, payload, dry_run=False)
     status_ok = "properties" in resp  # patch_record raises on non-2xx via r.raise_for_status()
     back = get_record("companies", company_id, list(payload))["properties"]
-    verified = all(back.get(k) == v for k, v in payload.items())
+    verified = all(str(back.get(k)) == str(v) for k, v in payload.items())
     print(f"  {company_id}: PATCH ok={status_ok}, verified by independent re-read: "
           f"{verified} (live now: {back})")
     return verified
 
 
-def poll_d22(company_id: str, props: list, ceiling: float = POLL_CEILING_SECONDS,
-             interval: float = POLL_INTERVAL_SECONDS):
-    """D-22: immediate first read, then re-reads >=`interval` apart until two consecutive
-    reads agree on every prop or `ceiling` elapses. Returns (final_properties_dict,
-    elapsed_seconds, all_reads)."""
+def poll_until(company_id: str, props: list, is_expected, ceiling: float = POLL_CEILING_SECONDS,
+               interval: float = POLL_INTERVAL_SECONDS,
+               stability_min: float = POLL_STABILITY_MIN_ELAPSED):
+    """Corrected D-22 poll shape (Task 1b step 7 -- do NOT copy the old two-consecutive-
+    agree stop, which false-passes a still-stale pre-write value). Polls until
+    `is_expected(value)` is True or `ceiling` elapses. A stability stop (two consecutive
+    reads agreeing on every prop) is accepted only once elapsed >= `stability_min` --
+    HubSpot's calculation backfill is ~70-130s, so two early reads can both be the stale
+    pre-write value, agree, and stop, falsely reporting the old value as "stable".
+    Returns (final_properties_dict, elapsed_seconds, all_reads)."""
     from src.hubspot_client import get_record
 
     start = time.monotonic()
     value = get_record("companies", company_id, props)["properties"]
     reads = [{"elapsed": 0.0, **{p: value.get(p) for p in props}}]
+    if is_expected(value):
+        return value, 0.0, reads
+
     while True:
         elapsed = time.monotonic() - start
         remaining = ceiling - elapsed
@@ -212,7 +235,10 @@ def poll_d22(company_id: str, props: list, ceiling: float = POLL_CEILING_SECONDS
         new_value = get_record("companies", company_id, props)["properties"]
         elapsed = time.monotonic() - start
         reads.append({"elapsed": round(elapsed, 1), **{p: new_value.get(p) for p in props}})
-        if all(new_value.get(p) == value.get(p) for p in props):
+        if is_expected(new_value):
+            return new_value, elapsed, reads
+        stable = all(new_value.get(p) == value.get(p) for p in props)
+        if stable and elapsed >= stability_min:
             return new_value, elapsed, reads
         value = new_value
 
@@ -264,7 +290,7 @@ def run_execute() -> int:
         return 1
 
     payloads = build_payloads()
-    print(f"ARMED: PATCHing {len(payloads)} records with {NAMED_PROP}={CORE_RACING!r}")
+    print(f"ARMED: PATCHing {len(payloads)} records with {FLOOR_PROP}={FLOOR_VALUE!r}")
     all_ok = True
     for cid, payload in payloads.items():
         print(f"\n{cid} ({NAMED_ACCOUNTS[cid]}):")
@@ -295,8 +321,17 @@ def run_verify() -> int:
         wanted_score = pred["predicted"]["lv_icp_fit_score"]
         wanted_tier = pred["predicted"]["lv_icp_tier_derived"]
         print(f"\npolling {cid} ({NAMED_ACCOUNTS[cid]}) -- expect score>={wanted_score}, "
-              f"tier={wanted_tier} (D-22) ...")
-        final, elapsed, reads = poll_d22(cid, props)
+              f"tier={wanted_tier} (corrected D-22 poll) ...")
+
+        def _is_expected(value, wanted_score=wanted_score, wanted_tier=wanted_tier):
+            raw = value.get("lv_icp_fit_score")
+            try:
+                s = int(raw) if raw not in (None, "") else None
+            except (TypeError, ValueError):
+                s = None
+            return s is not None and s >= wanted_score and value.get("lv_icp_tier_derived") == wanted_tier
+
+        final, elapsed, reads = poll_until(cid, props, _is_expected)
         score_raw = final.get("lv_icp_fit_score")
         tier = final.get("lv_icp_tier_derived")
         score = int(score_raw) if score_raw not in (None, "") else None
@@ -323,7 +358,7 @@ def main(argv=None) -> int:
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--execute", action="store_true", help="Armed PATCH of the 5 ids.")
     mode.add_argument("--verify", action="store_true",
-                       help="Poll and diff the 5 ids against predictions (D-22).")
+                       help="Poll and diff the 5 ids against predictions (corrected D-22).")
     args = parser.parse_args(argv)
 
     if args.execute:

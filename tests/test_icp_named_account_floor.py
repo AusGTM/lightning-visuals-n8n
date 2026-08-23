@@ -1,10 +1,11 @@
 # tests/test_icp_named_account_floor.py
 #
-# Quick task 260823-ono -- offline proof for src/icp_scoring.py's core_racing floor.
-# `lv_named_account_priority == "core_racing"` floors the score at 60 (no cap) for the
-# five AU metro racing peak bodies (ATC, MRC, SSR, BRC, Perth Racing). Mirrors
-# tests/test_icp_scoring.py's plain-assert style (score() helper on an empty-properties
-# record, driven purely through candidate_patch).
+# Quick task 260823-ono -- offline proof for src/icp_scoring.py's
+# lv_named_account_score_floor floor (retargeted post-CP1 from an enum to a number --
+# CONTEXT.md's "Amendment 2026-08-23", operator Option 1). A floor value > 0 floors the
+# score at that value (no cap) for the five AU metro racing peak bodies (ATC, MRC, SSR,
+# BRC, Perth Racing). Mirrors tests/test_icp_scoring.py's plain-assert style (score()
+# helper on an empty-properties record, driven purely through candidate_patch).
 from src.schemas import HubSpotRecord
 from src.icp_scoring import compute_icp_score
 
@@ -16,7 +17,7 @@ def score(patch):
 
 def named_account_component(result):
     for c in result.breakdown["components"]:
-        if c["signal"] == "named_account_priority":
+        if c["signal"] == "named_account_score_floor":
             return c
     return None
 
@@ -27,13 +28,13 @@ def test_base_35_floors_to_60_tier_b():
     # revenue "1-5M"(0) = 35 pre-floor -- below Tier B's 40 cutoff on its own.
     r = score({
         "lv_org_type": "individual_club_team", "lv_produces_content": True,
-        "lv_revenue_band": "1-5M", "lv_named_account_priority": "core_racing",
+        "lv_revenue_band": "1-5M", "lv_named_account_score_floor": 60,
     })
     assert r.score == 60
     assert r.tier == "B"
     assert r.anti_icp_flag is False
     comp = named_account_component(r)
-    assert comp == {"signal": "named_account_priority", "value": "core_racing", "points": 25}
+    assert comp == {"signal": "named_account_score_floor", "value": 60.0, "points": 25}
 
 
 def test_earned_base_above_70_is_not_capped():
@@ -42,14 +43,14 @@ def test_earned_base_above_70_is_not_capped():
     r = score({
         "lv_org_type": "governing_body_league", "lv_produces_content": True,
         "lv_country_region_normalized": "AU", "lv_revenue_band": "5-50M",
-        "lv_named_account_priority": "core_racing",
+        "lv_named_account_score_floor": 60,
     })
     assert r.score == 80
     assert r.tier == "A"
     comp = named_account_component(r)
     # Delta is 0 (max(80, 60) == 80) but the breakdown entry is still present -- the
     # override must be visible whether or not it actually bit.
-    assert comp == {"signal": "named_account_priority", "value": "core_racing", "points": 0}
+    assert comp == {"signal": "named_account_score_floor", "value": 60.0, "points": 0}
 
 
 def test_all_blank_inputs_floors_to_60_tier_b_not_needs_review():
@@ -58,13 +59,13 @@ def test_all_blank_inputs_floors_to_60_tier_b_not_needs_review():
     # region_key "unknown" -> 0, revenue "unknown" -> 0). Pre-floor score is 0. Without
     # the override guard this would hit the "unknown org_type" downgrade block and land
     # on "Unscored"/"Needs Review" instead of the floored tier.
-    r = score({"lv_named_account_priority": "core_racing"})
+    r = score({"lv_named_account_score_floor": 60})
     assert r.score == 60
     assert r.tier == "B"
     assert r.anti_icp_flag is False
     assert r.confidence == 55  # inputs really are missing -- that stays visible
     comp = named_account_component(r)
-    assert comp == {"signal": "named_account_priority", "value": "core_racing", "points": 60}
+    assert comp == {"signal": "named_account_score_floor", "value": 60.0, "points": 60}
 
 
 def test_veto_fired_keeps_tier_d_even_with_a_floored_score():
@@ -74,7 +75,7 @@ def test_veto_fired_keeps_tier_d_even_with_a_floored_score():
     r = score({
         "lv_org_type": "hardware_vendor", "lv_produces_content": True,
         "lv_country_region_normalized": "AU", "lv_revenue_band": "1-5M",
-        "lv_named_account_priority": "core_racing",
+        "lv_named_account_score_floor": 60,
     })
     assert r.score == 60  # hardware_vendor(0) + content(20) + AU(10) + 1-5M(0) = 30 -> 60
     assert r.tier == "D"
@@ -82,8 +83,8 @@ def test_veto_fired_keeps_tier_d_even_with_a_floored_score():
     assert "Hardware/AV/LED vendor" in r.anti_icp_reason
 
 
-def test_record_without_the_enum_is_unaffected():
-    # No lv_named_account_priority at all -- byte-identical to tests/test_icp_scoring.py's
+def test_record_without_the_floor_is_unaffected():
+    # No lv_named_account_score_floor at all -- byte-identical to tests/test_icp_scoring.py's
     # test_case_1_au_governing_body_tier_a. The addition is purely additive.
     r = score({
         "lv_org_type": "governing_body_league", "lv_produces_content": True,
@@ -95,12 +96,46 @@ def test_record_without_the_enum_is_unaffected():
     assert named_account_component(r) is None
 
 
-def test_non_core_racing_enum_value_is_unaffected():
-    # An enum value OTHER than "core_racing" has no scoring effect (CONTEXT.md: "Other
-    # enum values: no scoring effect yet").
-    r = score({
+def test_blank_string_floor_is_byte_identical_to_no_floor():
+    # "" is the shape HubSpot returns for an unset number property -- must parse to "no
+    # floor", never raise, and produce the exact same result as omitting the key entirely.
+    no_floor = score({
         "lv_org_type": "individual_club_team", "lv_produces_content": True,
-        "lv_revenue_band": "1-5M", "lv_named_account_priority": "non_racing_best_fit",
+        "lv_revenue_band": "1-5M",
     })
-    assert r.score == 35
-    assert named_account_component(r) is None
+    blank_floor = score({
+        "lv_org_type": "individual_club_team", "lv_produces_content": True,
+        "lv_revenue_band": "1-5M", "lv_named_account_score_floor": "",
+    })
+    assert blank_floor.score == no_floor.score == 35
+    assert blank_floor.tier == no_floor.tier
+    assert named_account_component(blank_floor) is None
+
+
+def test_string_floor_parses_and_floors_exactly_as_the_int():
+    # HubSpot returns numbers as strings over the API -- "60" must parse and floor
+    # identically to the int 60.
+    int_floor = score({
+        "lv_org_type": "individual_club_team", "lv_produces_content": True,
+        "lv_revenue_band": "1-5M", "lv_named_account_score_floor": 60,
+    })
+    string_floor = score({
+        "lv_org_type": "individual_club_team", "lv_produces_content": True,
+        "lv_revenue_band": "1-5M", "lv_named_account_score_floor": "60",
+    })
+    assert string_floor.score == int_floor.score == 60
+    assert string_floor.tier == int_floor.tier == "B"
+    assert named_account_component(string_floor) == named_account_component(int_floor)
+
+
+def test_zero_floor_has_no_effect():
+    # 0 is not an override -- max(score, 0) is always score, and floor_active must be
+    # False so the breakdown entry is not appended at all. Both the int and string shape.
+    for zero in (0, "0"):
+        r = score({
+            "lv_org_type": "individual_club_team", "lv_produces_content": True,
+            "lv_revenue_band": "1-5M", "lv_named_account_score_floor": zero,
+        })
+        assert r.score == 35
+        assert r.tier == "C"
+        assert named_account_component(r) is None

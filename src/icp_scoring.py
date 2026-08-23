@@ -31,6 +31,19 @@ def get_signal(record: HubSpotRecord, patch: dict, key: str, default=None):
     return record.properties.get(key, default)
 
 
+def _parse_named_account_score_floor(value):
+    """Defensive parse of lv_named_account_score_floor -- a plain HubSpot `number`
+    property, but HubSpot returns numbers as strings over the API. None, "" and any
+    non-numeric value all mean "no floor" and are returned as None (never raise); "60"
+    and 60 both parse to 60.0. Quick task 260823-ono, post-CP1 retarget."""
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
 # Phase 50 Plan 06 (D-20): the veto is computed ONCE (compute_icp_score's own
 # `anti_icp_flag` below) and this is a second SERIALIZATION of that single value, never a
 # second derivation -- calculation_equation reads only numeric properties, so
@@ -74,7 +87,14 @@ def compute_icp_score(record: HubSpotRecord, candidate_patch: dict, cfg: dict = 
 
     is_hardware_vendor = boolish(get_signal(record, candidate_patch, "lv_is_hardware_vendor"))
     is_gambling_operator = boolish(get_signal(record, candidate_patch, "lv_is_gambling_operator"))
-    named_priority = get_signal(record, candidate_patch, "lv_named_account_priority", None)
+    # Quick task 260823-ono, retargeted post-CP1 (halt-b: enums are unreadable in a
+    # calculation_equation on this portal -- CONTEXT.md's "Amendment 2026-08-23", operator
+    # Option 1). floor_raw is defensively parsed: HubSpot returns numbers as strings, so
+    # None, "" and any non-numeric junk all mean "no floor" -- never raise -- while "60"
+    # and 60 both mean 60.0.
+    floor_raw = get_signal(record, candidate_patch, "lv_named_account_score_floor", None)
+    floor = _parse_named_account_score_floor(floor_raw)
+    floor_active = floor is not None and floor > 0
 
     score = 0
     breakdown = {
@@ -122,24 +142,29 @@ def compute_icp_score(record: HubSpotRecord, candidate_patch: dict, cfg: dict = 
         if deduction:
             breakdown["graduated_deductions"].append({"signal": "gambling_operator", "points": deduction})
 
-    # Quick task 260823-ono (CONTEXT.md): `lv_named_account_priority == "core_racing"`
-    # floors the score at 60 for the five AU metro racing peak bodies (ATC, MRC, SSR, BRC,
-    # Perth Racing) -- they govern and own tracks for smaller child clubs and influence
-    # broadcasting via partner connections, which individual_club_team's base weight
-    # under-values. Mirrors the HubSpot lv_icp_fit_score calculation_equation floor
-    # (config/hubspot_flows/lv_icp_fit_score-property.after.json) exactly -- no n8n
-    # mirror exists or is needed (Approach C removed the canonical score/tier write from
-    # the n8n lane in Phase 15; see the quick task's PLAN.md "Scope disclosures").
+    # Quick task 260823-ono, retargeted post-CP1 (CONTEXT.md's "Amendment 2026-08-23" --
+    # supersedes the original enum decision). CP1 proved live that a `calculation_equation`
+    # on this portal parses `string(<enum>)` but silently blanks once the enum has a value
+    # (halt-b, 260823-ono-PROBE-VERDICT.json) -- so the mechanism is a plain operator-
+    # editable NUMBER property, `lv_named_account_score_floor`, not an enumeration. A floor
+    # value > 0 floors the score at that value for the five AU metro racing peak bodies
+    # (ATC, MRC, SSR, BRC, Perth Racing) -- they govern and own tracks for smaller child
+    # clubs and influence broadcasting via partner connections, which
+    # individual_club_team's base weight under-values. Mirrors the HubSpot lv_icp_fit_score
+    # calculation_equation floor (config/hubspot_flows/lv_icp_fit_score-property.after.json,
+    # FORMULA-F) exactly -- no n8n mirror exists or is needed (Approach C removed the
+    # canonical score/tier write from the n8n lane in Phase 15; see the quick task's
+    # PLAN.md "Scope disclosures").
     #
-    # Two pinned semantics:
+    # Two pinned semantics, unchanged by the enum->number retarget:
     #   (a) NO CAP -- an earned base already >= 70 passes through `max()` untouched, same
-    #       as the HubSpot formula's `max(<coalesced base>, 60)`.
+    #       as the HubSpot formula's `max(<coalesced base>, <coalesced floor>)`.
     #   (b) The breakdown entry is appended even when the delta is 0 -- the override must
     #       be visible in the breakdown whether or not it actually raised the score.
-    if named_priority == "core_racing":
-        floored_score = max(score, 60)
+    if floor_active:
+        floored_score = max(score, int(floor))
         breakdown["components"].append({
-            "signal": "named_account_priority", "value": named_priority,
+            "signal": "named_account_score_floor", "value": floor,
             "points": floored_score - score,
         })
         score = floored_score
@@ -191,14 +216,14 @@ def compute_icp_score(record: HubSpotRecord, candidate_patch: dict, cfg: dict = 
     confidence = 85
     if org_type == "unknown" or produces_content is None:
         confidence = 55
-        # Quick task 260823-ono: the downgrade is guarded on the OVERRIDE
-        # (named_priority != "core_racing"), not on whether the floor actually raised the
-        # score. The live lv_icp_tier_derived ladder has no "Needs Review" branch at all
-        # (PARITY-01, an accepted divergence) -- guarding on the override maximises
-        # parity with the live ladder, and this is the exact record this task exists for:
-        # Perth Racing has every input blank (org_type unknown, produces_content null)
-        # and must still land on the floored score's tier, "B", not "Needs Review".
-        if not anti_icp_flag and named_priority != "core_racing":
+        # Quick task 260823-ono: the downgrade is guarded on WHETHER A FLOOR IS SET
+        # (floor_active), not on whether the floor actually raised the score. The live
+        # lv_icp_tier_derived ladder has no "Needs Review" branch at all (PARITY-01, an
+        # accepted divergence) -- guarding on the override maximises parity with the live
+        # ladder, and this is the exact record this task exists for: Perth Racing has
+        # every input blank (org_type unknown, produces_content null) and must still land
+        # on the floored score's tier, "B", not "Needs Review".
+        if not anti_icp_flag and not floor_active:
             tier = "Needs Review" if score >= 15 else "Unscored"
             recommended_motion = "research_more"
 

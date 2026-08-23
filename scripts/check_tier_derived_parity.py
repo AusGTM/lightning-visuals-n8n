@@ -34,7 +34,7 @@ defect, not a rounding difference.
 Quick task 260823-ono (metro peak-body named-account override) adds a SECOND, PERMANENT
 class of expected mismatch (WINDOWS.md ids 20-21, both waived at registration -- "permanent
 by construction", not "will be fixed later"): MRC and Perth Racing carry
-`lv_named_account_priority=core_racing`, which floors `lv_icp_tier_derived` (the live,
+`lv_named_account_score_floor=60`, which floors `lv_icp_tier_derived` (the live,
 correct value) but has no effect on the archived, unwritable `lv_icp_tier`. Unlike ids
 9-12/14 (WF1-staleness -- fixable in principle by a fresh non-identical write), this
 divergence never closes.
@@ -90,7 +90,7 @@ KNOWN_STUCK_TRANSITIONS = {
     # re-enrolled -- fixable in principle by a fresh non-identical write). These two are
     # PERMANENT BY CONSTRUCTION: lv_icp_tier was archived in Phase 50 (D-24) and can never
     # be recalculated again by anything -- it is frozen forever at whatever value it held
-    # (or never held) the moment it was archived. `lv_named_account_priority=core_racing`
+    # (or never held) the moment it was archived. `lv_named_account_score_floor=60`
     # floors lv_icp_tier_derived (the LIVE, correct value) but has no effect on the
     # archived lv_icp_tier (which cannot change), so this divergence is intentional and
     # never closes -- the derived value is the correct one, same polarity as id 14, NOT

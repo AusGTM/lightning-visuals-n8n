@@ -163,7 +163,7 @@ def test_known_stuck_ids_are_the_seven_from_windows_md():
     DERIVED value is the correct one. The sixth and seventh, MRC and Perth Racing, were
     added by quick task 260823-ono (2026-08-23, WINDOWS.md ids 20-21, both waived at
     registration): a DIFFERENT, PERMANENT class -- lv_icp_tier is archived and can never
-    be recalculated, while lv_named_account_priority=core_racing floors
+    be recalculated, while lv_named_account_score_floor=60 floors
     lv_icp_tier_derived (the correct, live value). Widening a pre-registered gate is
     exactly what D-07 guards against, so any further change here needs the same explicit
     amendment trail.
@@ -272,7 +272,7 @@ _STUCK_RECORDS = [
      "lv_icp_tier_derived": "C", "lv_icp_fit_score": "25", "lv_anti_icp_flag": "false"},
     # Quick task 260823-ono (WINDOWS.md ids 20-21, waived, permanent-by-construction
     # class -- see KNOWN_STUCK_TRANSITIONS' module comment). lv_icp_tier is archived and
-    # frozen; lv_named_account_priority=core_racing floors lv_icp_tier_derived only.
+    # frozen; lv_named_account_score_floor=60 floors lv_icp_tier_derived only.
     {"id": "9604614548", "name": "Melbourne Racing Club", "lv_icp_tier": "C",
      "lv_icp_tier_derived": "B", "lv_icp_fit_score": "60", "lv_anti_icp_flag": "false"},
     # Perth's archived lv_icp_tier was never enriched -- the live GET returns the key
