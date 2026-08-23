@@ -7,6 +7,37 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Quick task 260823-ono — Metro peak-body named-account score floor (live 2026-08-23).**
+  Five AU metro racing peak bodies — Australian Turf Club, Melbourne Racing Club, Southside
+  Racing, Brisbane Racing Club, Perth Racing — now tier at a floored `lv_icp_fit_score` >= 60
+  / `lv_icp_tier_derived` "B", correcting an under-weighting of their governing/owning role
+  over smaller clubs that the `individual_club_team` org type alone did not capture. The
+  mechanism is a new operator-editable `number` company property,
+  `lv_named_account_score_floor`: `60` on a record floors that record's score at 60 (`max`,
+  no cap — an earned base above 60 passes through unchanged) via a change to the
+  `lv_icp_fit_score` calculation formula; blank/0 means no override. The first design tried
+  — reading an enumeration property (`lv_named_account_priority`) from the formula — was
+  proven live to be dead on arrival before any production write: a CP1 probe (5 formula
+  variants, all armed and live) showed `string(<enum>)` parses in a `calculation_equation`
+  on this portal but silently computes null once the enum has a value (`halt-b`, evidence
+  in `260823-ono-PROBE-VERDICT.json`; D-20 reconfirmed). The operator selected a plain
+  number instead. Before the production formula push, a second live probe (CP1b, two
+  disposable properties, three records written and cleared) proved five specific
+  behaviours the operator required: a null floor computes the record's true existing score
+  (not blank, not altered); a null floor on a never-enriched record stays blank; a set
+  floor computes 60 on all-blank inputs; a set floor does not cap an already-higher base;
+  and a set floor overrides a lower base (`all_pass: true`,
+  `260823-ono-FLOOR-PROBE-VERDICT.json`). Only after that all-pass did the property get
+  created and the formula pushed to all ~712 companies, then the floor value written to the
+  5 named records. Post-write: `check_tier_derived_parity.py` `defect=0`
+  (`population=67 match=60 expected_mismatch=7`, MRC and Perth Racing pre-registered as
+  permanent expected mismatches against the archived, now-unwritable `lv_icp_tier` —
+  `.planning/WINDOWS.md` ids 20-22); `check_schema_drift.py` exit 0; both suites green.
+  Disclosed non-change: the n8n `Decide Company Action` node computes no score and no tier
+  at all (Approach C, Phase 15), so nothing on that lane needed a matching change — zero n8n
+  changes, zero n8n executions, zero provider credits, zero Anthropic calls across the whole
+  task. Zero properties leaked across both probes (10 disposables created and archived
+  across CP1 + CP1b).
 - **v0.8 Phase 45 — Burn-Rate Alarm, Cadence Budget Floor & Windowed Lookback (sealed
   2026-08-10).** Phase 44 stopped the runaway; this phase reports one before a human reads the
   billing page. A new `burn_rate_alarm` sweep condition samples the execution rate over a bounded

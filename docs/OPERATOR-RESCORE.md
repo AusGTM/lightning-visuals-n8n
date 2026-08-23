@@ -1,5 +1,60 @@
 # Operator procedure: re-scoring the population after an ICP rubric change
 
+## AS-BUILT AMENDMENT — 2026-08-23 (quick 260823-ono) — adding a named-account score floor
+
+This is a **different, narrower** write than the whole-population re-score this document
+otherwise covers: it touches at most a handful of specific company records, not the scored
+population, and it does not go through `scripts/rescore_population.py` at all.
+
+**What it is.** `lv_named_account_score_floor` is a `number` company property. Setting it
+to `60` on a record floors that record's `lv_icp_fit_score` at 60 (`max(base, 60)`, no cap —
+an earned base above 60 is untouched). Blank or `0` means no override. Five records carry
+it as of 2026-08-23: Australian Turf Club, Melbourne Racing Club, Southside Racing,
+Brisbane Racing Club, Perth Racing.
+
+**To add a 6th named account (or a 7th, etc.):**
+
+1. Edit `NAMED_ACCOUNTS` in `scripts/set_named_account_score_floor.py` — add the new
+   company id and a display label.
+2. Run `--plan` (unarmed, default) first. It prints the exact single-key PATCH payload for
+   every id in `NAMED_ACCOUNTS` and refuses (exit 1) if any target or control record has
+   drifted from `260823-ono-PREDICTIONS.json` since the baseline read — review this output
+   before arming anything.
+3. Arm with `DRY_RUN=false ALLOW_NAMED_ACCOUNT_WRITE=true ... --execute`. Each PATCH is
+   verified by an independent per-record re-read (never the PATCH response body).
+4. Run `--verify` to poll `lv_icp_fit_score` / `lv_icp_tier_derived` on every id in
+   `NAMED_ACCOUNTS` until each reaches its expected floored value or a 300s ceiling
+   (corrected D-22 poll shape — never a single immediate read, never an early
+   two-reads-agree stop before 180s elapsed).
+
+**Manual path (no script, direct in HubSpot):** open the company record, set
+`lv_named_account_score_floor` to `60`, save. To remove the override, blank the field (do
+not set it to `0` and leave it — either is treated as "no floor" by the formula, but blank
+is the documented "unset" state). **Wait 70-130s** before reading `lv_icp_fit_score` back —
+that is the calculated property's backfill window; a read issued immediately after the
+save returns the pre-change value and is not evidence the write failed.
+
+**Same-value-PATCH-is-a-no-op warning, for corrections.** If a record already carries
+`lv_named_account_score_floor=60` and a correction PATCH sends `60` again, HubSpot treats
+it as a no-op — no property-change event fires, and if anything downstream depended on that
+event (nothing currently does for this property; the calculated formula recomputes on ANY
+input change, not specifically this one) it would not re-run. To force a recompute of a
+record that already carries the correct floor value, change an actual scoring input
+(`lv_org_type`, etc.) or use the on-demand recompute path described in CLAUDE.md §13.0 —
+do not re-PATCH the same floor value expecting a different result.
+
+**Why this is not in n8n.** The `Decide Company Action` node computes no score and no tier
+at all (Approach C, Phase 15 removed the canonical `lv_icp_fit_score`/`lv_icp_tier` write
+there) — there is nothing on that lane for the floor to mirror, and the Phase 46 parity rule
+binds the two *scoring* engines only where a shared predicate exists. Zero n8n changes for
+this feature, by design, not by omission.
+
+**Evidence:** `.planning/quick/260823-ono-metro-peak-body-override-rule-tier-atc-m/`
+(PREDICTIONS.json, PROBE-VERDICT.json, FLOOR-PROBE-VERDICT.json, SUMMARY.md);
+`.planning/WINDOWS.md` ids 20-22.
+
+---
+
 ## AS-BUILT AMENDMENT — 2026-08-19 (Phase 50 follow-up)
 
 **Corrects the `## Acceptance` section's line:** *"The proof that a re-score landed is
@@ -297,6 +352,10 @@ If something below turns out to be wrong or incomplete once exercised live, add 
 title, state plainly which line(s) it corrects, and leave the original prose in place
 underneath so the history of what was believed at each point stays readable.
 
-Two amendments have been made, newest first: **2026-08-19 (Phase 50 follow-up)**, repointing the `## Acceptance` gate off the archived `lv_icp_tier` and onto `scripts/check_tier_derived_parity.py`; and **2026-08-13 (Phase 49)**, at the top of this document —
-correcting the `## Acceptance` section's prescribed fix for a red sweep, after W1's live
-exercise found a second cause the original line did not anticipate.
+Three amendments have been made, newest first: **2026-08-23 (quick 260823-ono)**, adding
+the narrower named-account score-floor procedure (a different write path than the
+whole-population re-score this document otherwise covers); **2026-08-19 (Phase 50
+follow-up)**, repointing the `## Acceptance` gate off the archived `lv_icp_tier` and onto
+`scripts/check_tier_derived_parity.py`; and **2026-08-13 (Phase 49)**, at the top of this
+document — correcting the `## Acceptance` section's prescribed fix for a red sweep, after
+W1's live exercise found a second cause the original line did not anticipate.

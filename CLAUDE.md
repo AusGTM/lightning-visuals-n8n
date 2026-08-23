@@ -220,6 +220,15 @@ enumerations on this portal -- D-20 reconfirmed live 2026-08-23 (quick 260823-on
 in `260823-ono-PROBE-VERDICT.json`). Any operator-facing vocabulary that must drive a
 formula has to be a number.
 
+**`lv_named_account_score_floor` now exists live (created 2026-08-23, quick 260823-ono, CP2
+surface 1).** A `number` company property. When set to `60` on a record, it floors that
+record's `lv_icp_fit_score` at 60 in the calculated property's formula (`max(base, floor)`,
+no cap on a base already above the floor). Blank/`0` = no override. Live on exactly 5
+records as of this task: ATC `9605284724`, MRC `9604614548`, SSR `18756544344`, BRC
+`9605284723`, Perth Racing `9604794662` -- all confirmed at score 60 / `lv_icp_tier_derived`
+`B` by independent post-write poll. Mirrored in the Python oracle
+(`src/icp_scoring.py`) only, deliberately not in n8n (§10's floor entry explains why).
+
 Treat §4/§5 as the roadmap, not an inventory. Re-list the portal before writing to any property
 named there.
 
@@ -926,6 +935,44 @@ node built by `scripts/build_cloud_workflows.py`. Any change lands in both, in o
 **§12.7's `compute_icp_score` listing is the local-MVP prototype, not the live rule** — it keys
 the hardware veto off the boolean only, and its `graduated_deductions["gambling_operator"]`
 lookup would now `KeyError` against the shipped config.
+
+### 10.3.2 Named-account score floor (live 2026-08-23, quick 260823-ono)
+
+An operator-editable `number` company property, `lv_named_account_score_floor`, floors
+`lv_icp_fit_score` for named accounts whose org-type weighting under-represents them (metro
+racing peak bodies that govern/own tracks for smaller clubs and influence broadcasting via
+partner connections — `individual_club_team` at 15 pts alone under-weights that).
+
+```text
+if lv_named_account_score_floor > 0 then max(base_score, lv_named_account_score_floor)
+else base_score
+```
+
+- **Floor only, no cap.** A record whose earned base already exceeds the floor keeps its
+  earned score untouched (proved live: Tier A control base 80, floor 60 → stays 80).
+- **A fired hard veto still wins.** The floor raises the *score*; it never clears
+  `lv_anti_icp_flag` or moves tier D back to B.
+- **Blank inputs still floor.** The floor branch coalesces every component score to 0
+  before taking `max`, so an all-blank-inputs record (never enriched) reaches the floor
+  value instead of staying blank — this is the mechanism, not a side effect (Perth Racing,
+  all inputs blank, floored to 60/B).
+- **Blank floor changes nothing.** `coalesce(lv_named_account_score_floor, 0) > 0` is false
+  for `null`/`""`/`0`, so the else-branch — byte-identical to the pre-floor formula — runs
+  for the other ~707 companies.
+- **Set 60 on exactly 5 records to date:** ATC `9605284724`, MRC `9604614548`, SSR
+  `18756544344`, BRC `9605284723`, Perth Racing `9604794662`. Operator tool:
+  `scripts/set_named_account_score_floor.py` (`--plan`/`--execute`/`--verify`; edit
+  `NAMED_ACCOUNTS` to add a 6th).
+- **Lives in the HubSpot calculated property and `src/icp_scoring.py` only — not in n8n.**
+  The `Decide Company Action` n8n node computes no score and no tier at all (Approach C,
+  Phase 15 removed the canonical `lv_icp_fit_score`/`lv_icp_tier` write there), so there is
+  nothing on that lane for the floor to mirror; the Phase 46 parity rule binds the two
+  *scoring* engines only where a shared predicate exists, and the floor is not a veto
+  predicate. Zero n8n changes, zero n8n executions for this feature.
+- Enum readability was tried first and rejected: `string(<enum>)` parses in a
+  `calculation_equation` on this portal but computes null once the enum has a value (D-20,
+  reconfirmed live 2026-08-23, `260823-ono-PROBE-VERDICT.json`) — any operator-facing
+  vocabulary driving a formula on this portal has to be a plain number.
 
 ---
 

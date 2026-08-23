@@ -1,4 +1,84 @@
 {
+  "actuals": {
+    "note": "Task 3 post-write verification, polled via scripts/set_named_account_score_floor.py --verify (corrected D-22 poll shape) and cross-checked by an independent scripts/hubspot_client.get_record call per id. All 5 already stable at the expected value on the first read (0s elapsed) -- the CP3 armed PATCH ran at 13:35:45-13:36:19Z and Task 3 ran well after the 70-130s backfill window, so an immediate match is a legitimate poll outcome (is_expected true at t=0), not a single-immediate-read violation of D-22.",
+    "recorded_at": "2026-08-23T13:47:00+00:00",
+    "targets": [
+      {
+        "id": "9605284724",
+        "label": "ATC",
+        "lv_icp_fit_score": 60,
+        "lv_icp_tier_derived": "B",
+        "lv_named_account_score_floor": "60",
+        "hs_lastmodifieddate": "2026-08-23T13:35:45.599Z",
+        "matches_prediction": true
+      },
+      {
+        "id": "9604614548",
+        "label": "MRC",
+        "lv_icp_fit_score": 60,
+        "lv_icp_tier_derived": "B",
+        "lv_named_account_score_floor": "60",
+        "hs_lastmodifieddate": "2026-08-23T13:35:46.607Z",
+        "matches_prediction": true
+      },
+      {
+        "id": "18756544344",
+        "label": "SSR",
+        "lv_icp_fit_score": 60,
+        "lv_icp_tier_derived": "B",
+        "lv_named_account_score_floor": "60",
+        "hs_lastmodifieddate": "2026-08-23T13:35:47.523Z",
+        "matches_prediction": true
+      },
+      {
+        "id": "9605284723",
+        "label": "BRC",
+        "lv_icp_fit_score": 60,
+        "lv_icp_tier_derived": "B",
+        "lv_named_account_score_floor": "60",
+        "hs_lastmodifieddate": "2026-08-23T13:35:48.371Z",
+        "matches_prediction": true
+      },
+      {
+        "id": "9604794662",
+        "label": "Perth Racing",
+        "lv_icp_fit_score": 60,
+        "lv_icp_tier_derived": "B",
+        "lv_named_account_score_floor": "60",
+        "hs_lastmodifieddate": "2026-08-23T13:36:19.409Z",
+        "matches_prediction": true
+      }
+    ],
+    "controls": [
+      {
+        "id": "9604773165",
+        "role": "never_enriched",
+        "lv_icp_fit_score": "",
+        "lv_icp_tier_derived": "",
+        "lv_named_account_score_floor": null,
+        "hs_lastmodifieddate": "2026-08-23T09:26:29.496Z",
+        "matches_baseline": true
+      },
+      {
+        "id": "9605284722",
+        "role": "tier_a",
+        "lv_icp_fit_score": "80",
+        "lv_icp_tier_derived": "A",
+        "lv_named_account_score_floor": null,
+        "hs_lastmodifieddate": "2026-08-23T12:03:11.700Z",
+        "matches_baseline": true
+      }
+    ],
+    "gates": {
+      "check_tier_derived_parity_default": "population=67 match=60 expected_mismatch=7 defect=0",
+      "check_tier_derived_parity_census": "matches pre-registered expectation (7 known-stuck rows, +0 movement each)",
+      "check_schema_drift": "in_sync=51 documented_gap=4 do_not_archive.ok=True exit_code=0; lv_named_account_score_floor status=in_sync",
+      "apply_fit_score_formula_unarmed": "in sync — nothing to do (archive == live, no canonicalization drift)",
+      "pytest": "2885 passed, 154 skipped",
+      "node_test": "683 pass, 0 fail"
+    },
+    "defects_found": 0
+  },
   "controls": [
     {
       "baseline": {

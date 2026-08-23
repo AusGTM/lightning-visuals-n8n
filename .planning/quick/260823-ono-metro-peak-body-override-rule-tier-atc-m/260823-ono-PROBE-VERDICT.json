@@ -1,0 +1,182 @@
+{
+  "all_disposables_confirmed_gone": true,
+  "attempts": [
+    {
+      "atc_reads": [
+        {
+          "elapsed": 0.0,
+          "value": null
+        },
+        {
+          "elapsed": 90.9,
+          "value": null
+        }
+      ],
+      "atc_value": null,
+      "create_status": 201,
+      "formula": "if string(lv_org_type) equals 'individual_club_team' then 'HIT' else 'MISS'",
+      "never_enriched_id": "9604773165",
+      "never_enriched_reads": [
+        {
+          "elapsed": 0.0,
+          "value": null
+        },
+        {
+          "elapsed": 90.8,
+          "value": null
+        }
+      ],
+      "never_enriched_value": null,
+      "p1_parses": true,
+      "p2_reads_value": false,
+      "p3_null_falls_through": false,
+      "property_name": "zz_probe_enum_read_425a980b",
+      "teardown_gone": true,
+      "variant": "p1_equals_single_quote"
+    },
+    {
+      "atc_reads": [
+        {
+          "elapsed": 0.0,
+          "value": null
+        },
+        {
+          "elapsed": 90.9,
+          "value": null
+        }
+      ],
+      "atc_value": null,
+      "create_status": 201,
+      "formula": "if string(lv_org_type) = 'individual_club_team' then 'HIT' else 'MISS'",
+      "never_enriched_id": "9604773165",
+      "never_enriched_reads": [
+        {
+          "elapsed": 0.0,
+          "value": null
+        },
+        {
+          "elapsed": 90.8,
+          "value": null
+        }
+      ],
+      "never_enriched_value": null,
+      "p1_parses": true,
+      "p2_reads_value": false,
+      "p3_null_falls_through": false,
+      "property_name": "zz_probe_enum_read_db88f58d",
+      "teardown_gone": true,
+      "variant": "p1b_eq_sign"
+    },
+    {
+      "atc_reads": [
+        {
+          "elapsed": 0.0,
+          "value": null
+        },
+        {
+          "elapsed": 90.9,
+          "value": null
+        }
+      ],
+      "atc_value": null,
+      "create_status": 201,
+      "formula": "if string(lv_org_type) equals \"individual_club_team\" then 'HIT' else 'MISS'",
+      "never_enriched_id": "9604773165",
+      "never_enriched_reads": [
+        {
+          "elapsed": 0.0,
+          "value": null
+        },
+        {
+          "elapsed": 90.9,
+          "value": null
+        }
+      ],
+      "never_enriched_value": null,
+      "p1_parses": true,
+      "p2_reads_value": false,
+      "p3_null_falls_through": false,
+      "property_name": "zz_probe_enum_read_fc4e05ad",
+      "teardown_gone": true,
+      "variant": "p1c_double_quote"
+    },
+    {
+      "atc_reads": [
+        {
+          "elapsed": 0.0,
+          "value": null
+        },
+        {
+          "elapsed": 90.8,
+          "value": null
+        }
+      ],
+      "atc_value": null,
+      "create_status": 201,
+      "formula": "if contains(string(lv_org_type), 'individual_club_team') then 'HIT' else 'MISS'",
+      "never_enriched_id": "9604773165",
+      "never_enriched_reads": [
+        {
+          "elapsed": 0.0,
+          "value": null
+        },
+        {
+          "elapsed": 90.8,
+          "value": null
+        }
+      ],
+      "never_enriched_value": null,
+      "p1_parses": true,
+      "p2_reads_value": false,
+      "p3_null_falls_through": false,
+      "property_name": "zz_probe_enum_read_c96023f7",
+      "teardown_gone": true,
+      "variant": "p1d_contains"
+    },
+    {
+      "atc_reads": [
+        {
+          "elapsed": 0.0,
+          "value": null
+        },
+        {
+          "elapsed": 90.9,
+          "value": null
+        }
+      ],
+      "atc_value": null,
+      "create_status": 201,
+      "formula": "if is_present(string(lv_org_type)) and string(lv_org_type) equals 'individual_club_team' then 'HIT' else 'MISS'",
+      "never_enriched_id": "9604773165",
+      "never_enriched_reads": [
+        {
+          "elapsed": 0.0,
+          "value": null
+        },
+        {
+          "elapsed": 90.8,
+          "value": "MISS"
+        },
+        {
+          "elapsed": 181.3,
+          "value": "MISS"
+        }
+      ],
+      "never_enriched_value": "MISS",
+      "p1_parses": true,
+      "p2_reads_value": false,
+      "p3_null_falls_through": true,
+      "property_name": "zz_probe_enum_read_4c55971d",
+      "teardown_gone": true,
+      "variant": "p1e_is_present_guarded"
+    }
+  ],
+  "checked_at": "2026-08-23T09:29:31.257608+00:00",
+  "leaked_properties": [],
+  "never_enriched_id": "9604773165",
+  "p1": true,
+  "p2": false,
+  "p3": true,
+  "winning_condition": null,
+  "winning_variant": null
+}

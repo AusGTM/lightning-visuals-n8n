@@ -1,0 +1,135 @@
+{
+  "all_pass": true,
+  "checked_at": "2026-08-23T12:03:13.524319+00:00",
+  "checks": {
+    "a_atc_null_floor_equals_live_base": {
+      "expected": 55.0,
+      "observed": "55",
+      "pass": true
+    },
+    "b_never_enriched_stays_blank": {
+      "early_fail": false,
+      "expected": null,
+      "observed": null,
+      "pass": true
+    },
+    "c_perth_floored_to_60_production_still_blank": {
+      "expected": {
+        "disposable_calc": 60.0,
+        "production": null
+      },
+      "observed": {
+        "disposable_calc": "60",
+        "production": ""
+      },
+      "pass": true
+    },
+    "d_tier_a_control_not_capped": {
+      "expected": {
+        "disposable_calc": 80.0,
+        "gt": 60.0
+      },
+      "observed": {
+        "disposable_calc": "80"
+      },
+      "pass": true
+    },
+    "e_atc_floored_to_60_ne_production": {
+      "expected": {
+        "disposable_calc": 60.0,
+        "ne_production": 55.0
+      },
+      "observed": {
+        "disposable_calc": "60",
+        "production": 55.0
+      },
+      "pass": true
+    }
+  },
+  "create_attempts": [
+    {
+      "status": 201,
+      "variant": "formula_f"
+    }
+  ],
+  "disposable_calculated_property": "zz_probe_fitscore_4fac9f06",
+  "disposable_number_property": "zz_probe_floor_4fac9f06",
+  "formula_shipped": "if coalesce(zz_probe_floor_4fac9f06, 0) > 0 then max(coalesce(org_type_score, 0) + coalesce(geography_score, 0) + coalesce(annual_revenue_score, 0) + coalesce(produces_content_score, 0) + coalesce(gambling_score, 0), coalesce(zz_probe_floor_4fac9f06, 0)) else org_type_score + coalesce(geography_score, 0) + coalesce(annual_revenue_score, 0) + coalesce(produces_content_score, 0) + coalesce(gambling_score, 0)",
+  "leaked_properties": [],
+  "phase1_elapsed": 182.26318274997175,
+  "phase1_reads": {
+    "9604773165": [
+      {
+        "elapsed": 0.0,
+        "value": null
+      },
+      {
+        "elapsed": 91.4,
+        "value": null
+      },
+      {
+        "elapsed": 182.3,
+        "value": null
+      }
+    ],
+    "9605284724": [
+      {
+        "elapsed": 0.0,
+        "value": null
+      },
+      {
+        "elapsed": 91.4,
+        "value": null
+      },
+      {
+        "elapsed": 182.3,
+        "value": "55"
+      }
+    ]
+  },
+  "phase2_elapsed": 1.416075974702835e-06,
+  "phase2_reads": {
+    "9604794662": [
+      {
+        "elapsed": 0.0,
+        "value": "60"
+      }
+    ],
+    "9605284722": [
+      {
+        "elapsed": 0.0,
+        "value": "80"
+      }
+    ],
+    "9605284724": [
+      {
+        "elapsed": 0.0,
+        "value": "60"
+      }
+    ]
+  },
+  "portal_id": "22617666",
+  "production_baselines": {
+    "9604773165": "",
+    "9604794662": "",
+    "9605284722": 80.0,
+    "9605284724": 55.0
+  },
+  "quick_id": "260823-ono",
+  "teardown": {
+    "calculated_property": {
+      "gone": true,
+      "name": "zz_probe_fitscore_4fac9f06"
+    },
+    "number_property": {
+      "gone": true,
+      "name": "zz_probe_floor_4fac9f06"
+    }
+  },
+  "which_formula": "formula_f",
+  "written_ids": [
+    "9605284724",
+    "9604794662",
+    "9605284722"
+  ]
+}

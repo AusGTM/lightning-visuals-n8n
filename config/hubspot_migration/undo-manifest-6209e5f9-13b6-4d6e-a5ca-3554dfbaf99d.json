@@ -1,0 +1,16 @@
+[
+  {
+    "group_name": "companyinformation",
+    "kind": "property",
+    "name": "lv_named_account_score_floor",
+    "object_type": "companies",
+    "request_body": {
+      "fieldType": "number",
+      "groupName": "companyinformation",
+      "label": "Named Account Score Floor",
+      "name": "lv_named_account_score_floor",
+      "options": [],
+      "type": "number"
+    }
+  }
+]
