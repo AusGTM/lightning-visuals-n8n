@@ -151,8 +151,10 @@ def test_exact_counts_guard_against_manifest_drift():
     # lv_anti_icp_flag_num (the numeric veto mirror), bumping 33 -> 34. Phase 50 Plan 05
     # (D-06, D-24) removed lv_icp_tier's declaration after it was archived live, bumping
     # 34 -> 33.
+    # Quick task 260823-ono added one company property, lv_named_account_priority (the
+    # metro peak-body override enum), bumping 33 -> 34.
     cfg = load_config()
-    assert len(cfg["companies"]["properties"]) == 33
+    assert len(cfg["companies"]["properties"]) == 34
     assert len(cfg["contacts"]["properties"]) == 17
     assert len(cfg["companies"]["groups"]) == 1
     assert len(cfg["contacts"]["groups"]) == 1

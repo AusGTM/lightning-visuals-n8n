@@ -154,18 +154,24 @@ def test_classify_row_non_stuck_id_diverging_is_defect():
     assert classify_row("111", "A", "B", KNOWN_STUCK_IDS) == "defect"
 
 
-def test_known_stuck_ids_are_the_five_from_windows_md():
+def test_known_stuck_ids_are_the_seven_from_windows_md():
     """D-07's accepted-divergence class, pinned by id so it cannot drift silently.
 
     Four ids (WINDOWS.md 9-12) were pre-registered before the gate first ran. The fifth,
     Coffs Harbour, was added by D-23 (operator, 2026-08-14) after this gate discovered it
     live: same WF1-staleness class, but diverging Unscored->C rather than C->B, so the
-    DERIVED value is the correct one. Widening a pre-registered gate is exactly what D-07
-    guards against, so any further change here needs the same explicit amendment trail.
+    DERIVED value is the correct one. The sixth and seventh, MRC and Perth Racing, were
+    added by quick task 260823-ono (2026-08-23, WINDOWS.md ids 20-21, both waived at
+    registration): a DIFFERENT, PERMANENT class -- lv_icp_tier is archived and can never
+    be recalculated, while lv_named_account_priority=core_racing floors
+    lv_icp_tier_derived (the correct, live value). Widening a pre-registered gate is
+    exactly what D-07 guards against, so any further change here needs the same explicit
+    amendment trail.
     """
     assert KNOWN_STUCK_IDS == frozenset({
         "9605273630", "9604738976", "17696004613", "19100977027",  # ids 9-12
         "14752488879",                                             # id 14, D-23
+        "9604614548", "9604794662",                                # ids 20-21, 260823-ono
     })
 
 
@@ -264,6 +270,15 @@ _STUCK_RECORDS = [
     # enum reads "Unscored" at score 25, so the DERIVED "C" is the correct value here.
     {"id": "14752488879", "name": "Coffs Harbour Racing Club", "lv_icp_tier": "Unscored",
      "lv_icp_tier_derived": "C", "lv_icp_fit_score": "25", "lv_anti_icp_flag": "false"},
+    # Quick task 260823-ono (WINDOWS.md ids 20-21, waived, permanent-by-construction
+    # class -- see KNOWN_STUCK_TRANSITIONS' module comment). lv_icp_tier is archived and
+    # frozen; lv_named_account_priority=core_racing floors lv_icp_tier_derived only.
+    {"id": "9604614548", "name": "Melbourne Racing Club", "lv_icp_tier": "C",
+     "lv_icp_tier_derived": "B", "lv_icp_fit_score": "60", "lv_anti_icp_flag": "false"},
+    # Perth's archived lv_icp_tier was never enriched -- the live GET returns the key
+    # entirely absent, i.e. None (not ""), 260823-ono Task 1 step 1's observed read.
+    {"id": "9604794662", "name": "Perth Racing", "lv_icp_tier": None,
+     "lv_icp_tier_derived": "B", "lv_icp_fit_score": "60", "lv_anti_icp_flag": "false"},
 ]
 _CLEAN_RECORD = {"id": "111", "name": "Some Co", "lv_icp_tier": "A",
                   "lv_icp_tier_derived": "A", "lv_icp_fit_score": "80",
@@ -273,9 +288,9 @@ _CLEAN_RECORD = {"id": "111", "name": "Some Co", "lv_icp_tier": "A",
 def test_render_evidence_markdown_pass_verdict_and_denominator():
     rows = build_rows(_STUCK_RECORDS + [_CLEAN_RECORD])
     text = render_evidence_markdown(rows, len(rows), 712, "2026-08-14T00:00:00Z")
-    assert "Only 6 of 712 companies" in text
+    assert "Only 8 of 712 companies" in text
     assert "D-07 VERDICT: PASS" in text
-    for windows_id in (9, 10, 11, 12, 14):  # 14 added by D-23
+    for windows_id in (9, 10, 11, 12, 14, 20, 21):  # 14: D-23; 20-21: 260823-ono
         assert f"| {windows_id} |" in text
 
 

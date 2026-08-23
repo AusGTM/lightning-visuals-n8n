@@ -31,6 +31,14 @@ by D-23) is the opposite polarity -- stuck at "Unscored" while the derived value
 reads "C". Any other divergence, including a known id moving to an unpinned value, is a
 defect, not a rounding difference.
 
+Quick task 260823-ono (metro peak-body named-account override) adds a SECOND, PERMANENT
+class of expected mismatch (WINDOWS.md ids 20-21, both waived at registration -- "permanent
+by construction", not "will be fixed later"): MRC and Perth Racing carry
+`lv_named_account_priority=core_racing`, which floors `lv_icp_tier_derived` (the live,
+correct value) but has no effect on the archived, unwritable `lv_icp_tier`. Unlike ids
+9-12/14 (WF1-staleness -- fixable in principle by a fresh non-identical write), this
+divergence never closes.
+
 `.env` is Read/Bash permission-blocked this session -- the operator invocation is:
     .venv/bin/python -c \
         "from dotenv import load_dotenv; load_dotenv(); import runpy, sys; \
@@ -76,6 +84,27 @@ KNOWN_STUCK_TRANSITIONS = {
     "17696004613": ("C", "B"),
     "19100977027": ("C", "B"),
     "14752488879": ("Unscored", "C"),  # D-23
+    # Quick task 260823-ono (metro peak-body named-account override, WINDOWS.md ids
+    # TBD -- see .planning/WINDOWS.md). DIFFERENT CLASS from ids 9-12/14 above: those are
+    # WF1-staleness (a value-identical PATCH fired no property-change event, so WF1 never
+    # re-enrolled -- fixable in principle by a fresh non-identical write). These two are
+    # PERMANENT BY CONSTRUCTION: lv_icp_tier was archived in Phase 50 (D-24) and can never
+    # be recalculated again by anything -- it is frozen forever at whatever value it held
+    # (or never held) the moment it was archived. `lv_named_account_priority=core_racing`
+    # floors lv_icp_tier_derived (the LIVE, correct value) but has no effect on the
+    # archived lv_icp_tier (which cannot change), so this divergence is intentional and
+    # never closes -- the derived value is the correct one, same polarity as id 14, NOT
+    # the WF1-staleness cause of ids 9-12.
+    #
+    # MRC (Melbourne Racing Club): archived lv_icp_tier frozen at "C" (its pre-override
+    # value, live-read 2026-08-23); lv_icp_tier_derived correctly floors to "B".
+    "9604614548": ("C", "B"),
+    # Perth Racing: NEVER had a value on the archived lv_icp_tier (never-enriched before
+    # this override; live-read 2026-08-23 shows the key entirely ABSENT from the
+    # properties response). classify_row reads r.get("lv_icp_tier") raw -- an absent key
+    # is None, NOT "" -- pinned to the OBSERVED representation, not guessed. Post-write,
+    # lv_icp_tier_derived correctly floors to "B" via the core_racing override.
+    "9604794662": (None, "B"),
 }
 
 KNOWN_STUCK_IDS = frozenset(KNOWN_STUCK_TRANSITIONS)
@@ -89,6 +118,8 @@ KNOWN_STUCK_WINDOWS_IDS = {
     "17696004613": 11,
     "19100977027": 12,
     "14752488879": 14,  # D-23
+    "9604614548": 20,   # quick task 260823-ono -- MRC, waived (permanent by construction)
+    "9604794662": 21,   # quick task 260823-ono -- Perth, waived (permanent by construction)
 }
 
 # A blank/None tier is counted under this literal key rather than dropped -- matches
@@ -423,11 +454,28 @@ def render_census_markdown(before_point, after_point, never_scored_count, null_v
     actual_movement_ids = sorted((m["id"] for m in movements), key=_id_sort_key)
     # Each mover must show the exact transition pinned for its id (D-23 made these two
     # distinct shapes), not merely "some movement" -- otherwise a known record drifting to
-    # a wrong tier would still read as matching the pre-registration.
+    # a wrong tier would still read as matching the pre-registration. Quick task
+    # 260823-ono's Perth Racing entry is the first KNOWN_STUCK_TRANSITIONS value to pin a
+    # bare `None` (classify_row's own raw r.get("lv_icp_tier") representation of an
+    # absent key) -- but build_census_points() has already substituted BLANK_TIER_KEY for
+    # None by the time a movement reaches this function (same rule
+    # test_build_census_points_uses_blank_tier_key_for_none pins), so the pinned tuple
+    # must be normalized the same way before comparison, or a correctly-behaving Perth
+    # movement would read as "unexpected".
+    def _normalized_expected(record_id):
+        expected = KNOWN_STUCK_TRANSITIONS.get(record_id)
+        if expected is None:
+            return None
+        before, after = expected
+        return (
+            BLANK_TIER_KEY if before is None else before,
+            BLANK_TIER_KEY if after is None else after,
+        )
+
     matches_expectation = (
         actual_movement_ids == expected_ids
         and all(
-            (m["from_tier"], m["to_tier"]) == KNOWN_STUCK_TRANSITIONS.get(m["id"])
+            (m["from_tier"], m["to_tier"]) == _normalized_expected(m["id"])
             for m in movements
         )
     )

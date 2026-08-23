@@ -67,6 +67,14 @@ FIT_SCORE_PROPS = [
     # property --write-breakdown writes; the live round trip KeyErrors on every run
     # without this, regardless of timing, because the property was never in this list.
     "lv_icp_score_breakdown",
+    # Quick task 260823-ono -- appended, not inserted, so the entries above stay
+    # byte-identical. This is the oracle's ONLY live read path for the metro peak-body
+    # named-account floor (src/icp_scoring.py's core_racing branch); without it,
+    # expected_for() scores the five named accounts without the floor. Requesting an
+    # unknown property name in a HubSpot properties GET list is a documented no-op, so
+    # this is safe on a portal where the property does not exist yet (before CP2's
+    # create).
+    "lv_named_account_priority",
 ]
 
 

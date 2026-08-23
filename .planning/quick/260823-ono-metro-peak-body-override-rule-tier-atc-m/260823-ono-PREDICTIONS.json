@@ -1,0 +1,153 @@
+{
+  "controls": [
+    {
+      "baseline": {
+        "lv_icp_fit_score": "",
+        "lv_icp_tier": null,
+        "lv_icp_tier_derived": ""
+      },
+      "expectation": "lv_icp_fit_score stays blank (key absent or empty string) -- the else-branch sentinel survives; a value appearing here is a stop-and-roll-back signal.",
+      "id": "9604773165",
+      "name": "Newcastle Jockey Club",
+      "role": "never_enriched"
+    },
+    {
+      "baseline": {
+        "lv_icp_fit_score": "80",
+        "lv_icp_tier": "A",
+        "lv_icp_tier_derived": "A"
+      },
+      "expectation": "lv_icp_fit_score and lv_icp_tier_derived unchanged from baseline -- this record never carries lv_named_account_priority=core_racing, so it always takes the else branch.",
+      "id": "9605284722",
+      "name": "Racing and Wagering Western Australia",
+      "role": "tier_a"
+    }
+  ],
+  "population_baseline": {
+    "N": 66,
+    "N_plus_1": 67,
+    "note": "N re-derived live via check_tier_derived_parity.py (default mode, HAS_PROPERTY(lv_icp_fit_score)) on 2026-08-23: population=66 match=61 expected_mismatch=5 defect=0 -- matches STATE.md shape, confirming the D-07 gate is operative (RESEARCH A3 was wrong; see 260823-ono-PLAN.md Scope disclosures). N+1=67 is the pre-registered post-write population once Perth Racing's floored score backfills and it starts satisfying HAS_PROPERTY(lv_icp_fit_score)."
+  },
+  "portal_id": "22617666",
+  "quick_id": "260823-ono",
+  "recorded_at": "2026-08-23T08:54:31.078860+00:00",
+  "rollback_formula": "org_type_score + coalesce(geography_score, 0) + coalesce(annual_revenue_score, 0) + coalesce(produces_content_score, 0) + coalesce(gambling_score, 0)",
+  "rollback_formula_note": "Verbatim calculationFormula live-read from GET crm/v3/properties/companies/lv_icp_fit_score on 2026-08-23 (Task 1), before any push -- pushing this exact string is the CP2 rollback procedure.",
+  "targets": [
+    {
+      "baseline": {
+        "annual_revenue_score": "10",
+        "gambling_score": "0",
+        "geography_score": "10",
+        "lv_icp_fit_score": 55,
+        "lv_icp_fit_score_raw": "55",
+        "lv_icp_tier": "B",
+        "lv_icp_tier_derived": "B",
+        "lv_icp_tier_derived_raw": "B",
+        "lv_named_account_priority": null,
+        "lv_org_type": "individual_club_team",
+        "org_type_score": "15",
+        "produces_content_score": "20"
+      },
+      "id": "9605284724",
+      "label": "ATC",
+      "name": "Australian Turf Club",
+      "predicted": {
+        "lv_icp_fit_score": 60,
+        "lv_icp_tier_derived": "B"
+      }
+    },
+    {
+      "baseline": {
+        "annual_revenue_score": "10",
+        "gambling_score": "0",
+        "geography_score": "10",
+        "lv_icp_fit_score": 35,
+        "lv_icp_fit_score_raw": "35",
+        "lv_icp_tier": "C",
+        "lv_icp_tier_derived": "C",
+        "lv_icp_tier_derived_raw": "C",
+        "lv_named_account_priority": null,
+        "lv_org_type": "individual_club_team",
+        "org_type_score": "15",
+        "produces_content_score": "0"
+      },
+      "id": "9604614548",
+      "label": "MRC",
+      "name": "Melbourne Racing Club",
+      "predicted": {
+        "lv_icp_fit_score": 60,
+        "lv_icp_tier_derived": "B"
+      }
+    },
+    {
+      "baseline": {
+        "annual_revenue_score": "10",
+        "gambling_score": "0",
+        "geography_score": "10",
+        "lv_icp_fit_score": 55,
+        "lv_icp_fit_score_raw": "55",
+        "lv_icp_tier": "B",
+        "lv_icp_tier_derived": "B",
+        "lv_icp_tier_derived_raw": "B",
+        "lv_named_account_priority": null,
+        "lv_org_type": "individual_club_team",
+        "org_type_score": "15",
+        "produces_content_score": "20"
+      },
+      "id": "18756544344",
+      "label": "SSR",
+      "name": "Southside Racing",
+      "predicted": {
+        "lv_icp_fit_score": 60,
+        "lv_icp_tier_derived": "B"
+      }
+    },
+    {
+      "baseline": {
+        "annual_revenue_score": "10",
+        "gambling_score": "0",
+        "geography_score": "10",
+        "lv_icp_fit_score": 55,
+        "lv_icp_fit_score_raw": "55",
+        "lv_icp_tier": "B",
+        "lv_icp_tier_derived": "B",
+        "lv_icp_tier_derived_raw": "B",
+        "lv_named_account_priority": null,
+        "lv_org_type": "individual_club_team",
+        "org_type_score": "15",
+        "produces_content_score": "20"
+      },
+      "id": "9605284723",
+      "label": "BRC",
+      "name": "Brisbane Racing Club (BRC)",
+      "predicted": {
+        "lv_icp_fit_score": 60,
+        "lv_icp_tier_derived": "B"
+      }
+    },
+    {
+      "baseline": {
+        "annual_revenue_score": null,
+        "gambling_score": null,
+        "geography_score": null,
+        "lv_icp_fit_score": null,
+        "lv_icp_fit_score_raw": "",
+        "lv_icp_tier": null,
+        "lv_icp_tier_derived": null,
+        "lv_icp_tier_derived_raw": "",
+        "lv_named_account_priority": null,
+        "lv_org_type": null,
+        "org_type_score": null,
+        "produces_content_score": null
+      },
+      "id": "9604794662",
+      "label": "Perth Racing",
+      "name": "Perth Racing (Previously WA Turf Club)",
+      "predicted": {
+        "lv_icp_fit_score": 60,
+        "lv_icp_tier_derived": "B"
+      }
+    }
+  ]
+}

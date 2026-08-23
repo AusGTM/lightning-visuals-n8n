@@ -8,6 +8,7 @@
 # own .after.json and its own extractor. Zero network — pure JSON/YAML reads.
 import glob
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -456,23 +457,49 @@ def test_fit_score_formula_guards_every_nullable_component():
         )
 
 
+# Quick task 260823-ono -- matches ANY occurrence of the bare token, so long as it is not
+# immediately preceded by `coalesce(`. A formula may legally contain org_type_score both
+# guarded (inside the core_racing override branch) and unguarded (in the else/default
+# branch every non-override record still takes) at the same time.
+FIT_SCORE_UNGUARDED_ORG_TYPE_RE = re.compile(r"(?<!coalesce\()org_type_score")
+
+
 def test_fit_score_formula_leaves_org_type_score_unguarded_as_the_sentinel():
-    """org_type_score stays bare ON PURPOSE. The org-type mapper writes it for every
-    enriched company ('unknown' scores 0, so it is never skipped), which makes it the
-    'this record has been through the pipeline' sentinel. Guarding it too would make all
-    646 never-enriched companies compute to 0 and enroll every one of them in the tier
-    flow -- blank must keep meaning 'never scored'."""
+    """org_type_score stays bare in the else/default branch ON PURPOSE. The org-type
+    mapper writes it for every enriched company ('unknown' scores 0, so it is never
+    skipped), which makes it the 'this record has been through the pipeline' sentinel.
+    Guarding it too would make all never-enriched companies compute to 0 and enroll every
+    one of them in the tier flow -- blank must keep meaning 'never scored'.
+
+    Quick task 260823-ono restates this BRANCH-SCOPED rather than whole-formula: the
+    metro peak-body named-account override (CONTEXT.md) legally coalesces org_type_score
+    INSIDE the core_racing branch only (so Perth Racing's all-blank inputs can float to
+    the 60 floor), while the else/default branch -- what every non-override record still
+    takes -- must keep it bare. Two assertions, both regex/substring-based on the bare
+    token `core_racing` (never a quoted form, never a whole-line match), so this passes
+    unchanged against BOTH the submitted formula text (this commit, pre-push) and the
+    server-echoed canonicalized text (post-push, which HubSpot rewrites with different
+    quote style and inserted newlines between branches -- see RESEARCH.md's
+    canonicalization trap). Before this quick task's CP2 push, the formula has no
+    core_racing branch at all, so both assertions still pass unchanged against today's
+    formula (the first finds the one bare occurrence; the second is vacuously true)."""
     if not FIT_SCORE_PROPERTY_PATH.exists():
         pytest.skip(f"{FIT_SCORE_PROPERTY_PATH} not archived yet")
 
     with FIT_SCORE_PROPERTY_PATH.open() as f:
         formula = json.load(f)["calculationFormula"]
 
-    assert f"coalesce({FIT_SCORE_SENTINEL_COMPONENT}" not in formula, (
-        f"'{FIT_SCORE_SENTINEL_COMPONENT}' must NOT be null-guarded -- see docstring. "
+    assert FIT_SCORE_UNGUARDED_ORG_TYPE_RE.search(formula), (
+        f"'{FIT_SCORE_SENTINEL_COMPONENT}' must appear at least once NOT preceded by "
+        f"'coalesce(' -- the else/default branch's sentinel must stay bare. "
         f"Formula: '{formula}'"
     )
-    assert FIT_SCORE_SENTINEL_COMPONENT in formula
+    if f"coalesce({FIT_SCORE_SENTINEL_COMPONENT}" in formula:
+        assert "core_racing" in formula, (
+            f"'{FIT_SCORE_SENTINEL_COMPONENT}' is coalesced somewhere in the formula, "
+            "which is only legal inside the core_racing override branch -- but "
+            f"'core_racing' does not appear in the formula at all. Formula: '{formula}'"
+        )
 
 
 # ----------------------------------------------------------------------------------

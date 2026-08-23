@@ -74,6 +74,7 @@ def compute_icp_score(record: HubSpotRecord, candidate_patch: dict, cfg: dict = 
 
     is_hardware_vendor = boolish(get_signal(record, candidate_patch, "lv_is_hardware_vendor"))
     is_gambling_operator = boolish(get_signal(record, candidate_patch, "lv_is_gambling_operator"))
+    named_priority = get_signal(record, candidate_patch, "lv_named_account_priority", None)
 
     score = 0
     breakdown = {
@@ -120,6 +121,28 @@ def compute_icp_score(record: HubSpotRecord, candidate_patch: dict, cfg: dict = 
         score += deduction
         if deduction:
             breakdown["graduated_deductions"].append({"signal": "gambling_operator", "points": deduction})
+
+    # Quick task 260823-ono (CONTEXT.md): `lv_named_account_priority == "core_racing"`
+    # floors the score at 60 for the five AU metro racing peak bodies (ATC, MRC, SSR, BRC,
+    # Perth Racing) -- they govern and own tracks for smaller child clubs and influence
+    # broadcasting via partner connections, which individual_club_team's base weight
+    # under-values. Mirrors the HubSpot lv_icp_fit_score calculation_equation floor
+    # (config/hubspot_flows/lv_icp_fit_score-property.after.json) exactly -- no n8n
+    # mirror exists or is needed (Approach C removed the canonical score/tier write from
+    # the n8n lane in Phase 15; see the quick task's PLAN.md "Scope disclosures").
+    #
+    # Two pinned semantics:
+    #   (a) NO CAP -- an earned base already >= 70 passes through `max()` untouched, same
+    #       as the HubSpot formula's `max(<coalesced base>, 60)`.
+    #   (b) The breakdown entry is appended even when the delta is 0 -- the override must
+    #       be visible in the breakdown whether or not it actually raised the score.
+    if named_priority == "core_racing":
+        floored_score = max(score, 60)
+        breakdown["components"].append({
+            "signal": "named_account_priority", "value": named_priority,
+            "points": floored_score - score,
+        })
+        score = floored_score
 
     anti_icp_flag = False
     anti_reasons = []
@@ -168,7 +191,14 @@ def compute_icp_score(record: HubSpotRecord, candidate_patch: dict, cfg: dict = 
     confidence = 85
     if org_type == "unknown" or produces_content is None:
         confidence = 55
-        if not anti_icp_flag:
+        # Quick task 260823-ono: the downgrade is guarded on the OVERRIDE
+        # (named_priority != "core_racing"), not on whether the floor actually raised the
+        # score. The live lv_icp_tier_derived ladder has no "Needs Review" branch at all
+        # (PARITY-01, an accepted divergence) -- guarding on the override maximises
+        # parity with the live ladder, and this is the exact record this task exists for:
+        # Perth Racing has every input blank (org_type unknown, produces_content null)
+        # and must still land on the floored score's tier, "B", not "Needs Review".
+        if not anti_icp_flag and named_priority != "core_racing":
             tier = "Needs Review" if score >= 15 else "Unscored"
             recommended_motion = "research_more"
 

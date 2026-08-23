@@ -454,6 +454,32 @@ companies:
     fieldType: number
     groupName: companyinformation
     options: []
+  - name: lv_named_account_priority
+    label: Named Account Priority
+    type: enumeration
+    fieldType: select
+    groupName: companyinformation
+    options:
+    - label: Core Racing
+      value: core_racing
+      displayOrder: 0
+      hidden: false
+    - label: Non-Racing Best Fit
+      value: non_racing_best_fit
+      displayOrder: 1
+      hidden: false
+    - label: Producer Secondary
+      value: producer_secondary
+      displayOrder: 2
+      hidden: false
+    - label: Low Priority
+      value: low_priority
+      displayOrder: 3
+      hidden: false
+    - label: Unknown
+      value: unknown
+      displayOrder: 4
+      hidden: false
 contacts:
   groups:
   - name: lv_enrichment_contacts
