@@ -175,7 +175,7 @@ evidence for `halt-b` and are left **untouched** — deleting the tool would orp
 `scripts/check_schema_drift.py`, `scripts/set_named_account_score_floor.py` (git mv from
 `set_named_account_priority.py`), `scripts/probe_number_floor_in_formula.py` (new),
 `scripts/check_tier_derived_parity.py`, `tests/test_tier_derived_tools.py`,
-`tests/test_hubspot_properties_config.py`, `.planning/WINDOWS.md`,
+`tests/test_hubspot_properties_config.py`, `CLAUDE.md`, `.planning/WINDOWS.md`,
 `.planning/quick/260823-ono-metro-peak-body-override-rule-tier-atc-m/260823-ono-PREDICTIONS.json`
 
 **action:**
@@ -245,6 +245,14 @@ evidence for `halt-b` and are left **untouched** — deleting the tool would orp
      ids in one loop per tick (one read cycle across the ids, then one wait) rather than serially —
      serial 90s waits per record is what made CP1 a 20-minute run. Record every read with its
      elapsed time in the verdict either way.
+   - **No-change checks never exit early on a match.** (b) expects blank and *starts* blank; (d)
+     expects 80 and already reads 80 from the else-branch before the floor is written — so a
+     poll-to-expected rule would exit them at t=0, which is the single-immediate-read D-22 forbids
+     and proves nothing about whether the portal has recomputed yet. (b) and (d) pass only once
+     their phase's **transition** checks have landed — (a) reaching the record's live base for
+     phase 1, (c) and (e) reaching 60 for phase 2 — or at the ceiling. The batched per-tick loop
+     makes this free: the sibling transitions are the timestamp evidence that the portal recomputed.
+     Any non-blank read on (b) at any tick is an immediate FAIL, not something to poll past.
    - **Checks, run in two phases. Every comparison is self-calibrating against the record's own
      live production `lv_icp_fit_score`, compared as floats (HubSpot returns `"55"`, not `55`) —
      never against a hard-coded 55/80, which would false-fail if a base has drifted since Task 1.**
@@ -283,6 +291,16 @@ evidence for `halt-b` and are left **untouched** — deleting the tool would orp
    (~lines 37, 93), `tests/test_tier_derived_tools.py` (~lines 166, 275) and
    `tests/test_hubspot_properties_config.py:154`. The ledger ids, the pinned id sets and the
    property count all stay as they are — only the mechanism prose moves.
+
+   **`CLAUDE.md` §5.2 — record the finding HERE, not at Task 3.** The evidence exists now, and if
+   the plan halts at CP1b the repo would otherwise carry an unexplained enum revert with nothing
+   saying why. `lv_named_account_priority` stays in the "documented but never created" list,
+   annotated: *"calculation formulas cannot read enumerations on this portal — D-20 reconfirmed
+   live 2026-08-23 (quick 260823-ono CP1: `string(<enum>)` parses but computes null once the enum
+   has a value; 5 variants, evidence in 260823-ono-PROBE-VERDICT.json). Any operator-facing
+   vocabulary that must drive a formula has to be a number."* This is the only CLAUDE.md edit in
+   Task 1b — §4.0's as-built line and §10's rubric entry are Task 3's, because they assert live
+   state that does not exist until CP2/CP3.
 9. **`260823-ono-PREDICTIONS.json`** — rename the per-target baseline key
    `lv_named_account_priority` to `lv_named_account_score_floor` (value stays `null`) and add a
    one-line `retarget_note` recording that CP1 returned `halt-b` and the input field changed from
@@ -513,11 +531,8 @@ and tiers will NOT be correct immediately — they backfill ~70-130s later and T
 6. **Docs.**
    - `CLAUDE.md` §4.0: add a dated as-built line for `lv_named_account_score_floor` — it now exists,
      it is a number, `60` on a record floors that record's `lv_icp_fit_score` at 60.
-   - `CLAUDE.md` §5.2: `lv_named_account_priority` stays in the "documented but never created" list,
-     annotated: *"calculation formulas cannot read enumerations on this portal — D-20 reconfirmed
-     live 2026-08-23 (quick 260823-ono CP1: `string(<enum>)` parses but computes null once the enum
-     has a value; 5 variants, evidence in 260823-ono-PROBE-VERDICT.json). Any operator-facing
-     vocabulary that must drive a formula has to be a number."*
+   - `CLAUDE.md` §5.2: already annotated in Task 1b — verify the note is still present and
+     accurate, do not duplicate it.
    - `CLAUDE.md` §10: add the floor rule to the rubric section — floor 60 on
      `lv_named_account_score_floor`, no cap, veto still wins, the floor lives in the HubSpot
      calculated property and is mirrored in `src/icp_scoring.py` only — **not** in n8n, with the
