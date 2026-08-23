@@ -7,8 +7,8 @@ current_phase_name: Backfill Pipeline, Credit Sizing & Dry Run
 status: phase-complete
 stopped_at: "51-03: COMPLETE -- operator approved after five checkpoint rounds. Phase 51 dry-run artifacts final. n8n country debt tracked as WINDOWS.md id 19. Ready for Phase 52 planning"
 last_updated: "2026-08-19T07:49:43.397Z"
-last_activity: 2026-08-19
-last_activity_desc: Phase 51 verified complete (7/7 criteria) -- ready to plan Phase 52
+last_activity: 2026-08-23
+last_activity_desc: Quick task 260823-ono complete (named-account score floor live, 5/5 at 60/B) -- Phase 52 still to plan
 progress:
   total_phases: 2
   completed_phases: 1
@@ -220,7 +220,7 @@ exactly what B and C now do): .planning/phases/47.5-veto-recompute-path/47.5-CON
 lv_org_type: Editix, Jam TV, Waikato, The Rumble). Not a 47.5 workstream.
 
 Previous status: Executing — Anthropic credit restored, Plan 03 completed
-Last activity: 2026-08-19 — Phase 51 execution started
+Last activity: 2026-08-23 — Completed quick task 260823-ono: metro peak-body named-account score floor (live, verified)
   the live property-existence guard (found 19 missing D-09 metadata properties, resolved
   via operator-confirmed D-21 narrowing), one live research pass over all 17 pinned
   companies (47-RESEARCH-RESULTS.json), two live-discovered data-quality fixes
@@ -480,6 +480,12 @@ open (VETO-01/VETO-02 remain open requirements, not blockers — Phase 40 met it
 - Phase 49 Plan 05 Task 3 (W1 write window): 4 of 66 scored companies (9605273630 Port Macquarie Race Club, 9604738976 Bunbury Turf Club, 17696004613 Pinjarra Park, 19100977027 Newcastle Harness Racing Club) already carried correct new-weight components before W1 opened, so the component-only write was a genuine no-op for them and their lv_icp_tier stayed stale at C (oracle expects B, score 45). Parity sweep FAILs with these 4 real findings. No in-scope W1 mechanism can force WF1 to re-grade them (tier PATCH forbidden, n8n allowlist out of scope for W1). Awaiting operator decision at the checkpoint returned by Plan 05's continuation.
 - D-06 (retire lv_icp_tier) / D-08 (switch off WF1) blocked: lv_icp_tier_derived's veto guard never fires live for any of 6 real anti_icp_flag=true records (WINDOWS.md id 13) -- Plan 04's checkpoint must decide fix-vs-defer before retirement
 - lv_icp_tier archive blocked: HubSpot rejects DELETE with CANNOT_DELETE_PROPERTY_IN_USE while WF1's actions reference the property, even disabled. Resolution requires a fresh operator decision among 3 options documented in 50-RETIREMENT-RECORD.md.
+
+### Quick Tasks Completed
+
+| # | Description | Date | Commit | Status | Directory |
+|---|-------------|------|--------|--------|-----------|
+| 260823-ono | Metro peak-body named-account floor: `lv_named_account_score_floor` (number) read by `lv_icp_fit_score` FORMULA-F; ATC/MRC/SSR/BRC/Perth at 60/B live; enum rejected (D-20 reconfirmed) | 2026-08-23 | f1105dd | Verified | [260823-ono-metro-peak-body-override-rule-tier-atc-m](./quick/260823-ono-metro-peak-body-override-rule-tier-atc-m/) |
 
 ## Deferred Items
 
