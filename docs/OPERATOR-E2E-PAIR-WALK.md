@@ -40,7 +40,7 @@ initialize; it should report setup complete and change nothing.
 | Expected ICP | ANZ governing body that streams its own racing content — Tier A or B, no veto |
 | Contact | **Damien Ractliffe, Head of Public Affairs** — his address is published on `https://grv.org.au/about/contact-us/`; **copy it from that page**. A role inbox (`media@grv.org.au`) works too if you prefer not to use a named person. |
 
-Nothing here invents an email address. Paste the published one at step 2.
+Nothing here invents an email address. Paste the published one at step 3.
 
 **Expected spend for the whole walk:** ~2–3 provider credits and one Anthropic research
 call (~$0.07–0.20) on the company; the contact ingest lane calls no providers. Roughly
