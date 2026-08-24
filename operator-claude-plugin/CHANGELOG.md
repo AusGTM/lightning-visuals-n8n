@@ -16,6 +16,37 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-08-25
+
+### Added
+
+- **A companies form for `enrich-records`.** The operator can now name companies that may
+  not be in HubSpot yet — `{"companies": [{"name": "...", "domain": "..."}]}` — and the
+  backend's existing company lane matches each on its domain, enriches an existing record
+  in place, and creates one only where nothing matched and creation is armed. This is the
+  first client path that can create a HubSpot record other than a contact, and the preview
+  says so in those words before anything is armed. **Domain is mandatory** and a company
+  given without one is refused by name: domain is the identity anchor the backend searches
+  on, so a domainless company could only ever be created, never matched — the duplicate
+  shape the form exists to avoid. The envelope carries no `mode`, deliberately: a
+  `propose` mode would have the backend report success having written nothing.
+  `chunking.plan_chunks` chunks the form and `preview_enrichment.records_block` prices it
+  like any other batch.
+
+### Changed
+
+- **`contact-upload` and `enrich-before-ingest` now report the company association.** The
+  backend stopped creating unassociated contacts on 2026-08-25: a new contact whose
+  company cannot be resolved is held for review instead of landing orphaned. The preview
+  step says what that means for the file in hand *before* arming (a company that is not in
+  HubSpot yet will hold every one of its rows), and the outcome step reports each row's
+  `association` — `associated`, `not_confirmed`, `not_attempted` or `none` — alongside the
+  write, names held rows individually with their reason, and offers the one-line manual
+  override (`<row>. company: <hubspot company id>`) that resolves them on a re-send.
+- **`company_id` is a recognised column** (`company id`, `hubspot company id`,
+  `associatedcompanyid`). It is not a HubSpot contact property and is never written as
+  one: it carries the operator's manual contact -> company association for a held row.
+
 ## [0.13.0] - 2026-08-10
 
 ### Added
