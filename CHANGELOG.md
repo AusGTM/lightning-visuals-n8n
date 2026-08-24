@@ -7,6 +7,36 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ## [Unreleased]
 
 ### Added
+- **Contact -> company association in the ingest lane (2026-08-25).** A contact is never
+  created in HubSpot unassociated any more, and an existing company is never recreated to
+  achieve that. `wf_contact_ingest_cloud` gained a resolve-then-associate subgraph
+  (`Build Company Link` -> two credential-bound company searches -> `Adapt Company Link`,
+  then `Build Association Request` -> a gated `HubSpot Associate Company` PUT ->
+  `Build Ingest Response`): each row resolves a company by **manual `company_id` column
+  first, then exact email-domain match, then exact company-name match**, and the v4
+  `associations/default` endpoint links the contact after the write. Resolution only — the
+  lane creates no company, because a junk company shell is worse than a held row. A create
+  that resolves no company is downgraded to `review` at `Decide Action` with the reason
+  kept; an update is not held (it may already carry an association this lane cannot see)
+  and simply has nothing to associate. New `company_id` column alias
+  (`company id` / `hubspot company id` / `associatedcompanyid`) carries the operator's
+  manual override for a held row. The association PUT is spliced through
+  `splice_write_gates` like every other write, so it needs the same arming as the write
+  that preceded it. `Build Ingest Response` now returns one row-identifying item per
+  decided row (`action`, `contact_id`, `company_id`, `association`, `reason`), which
+  `report.py::sync_response_is_sufficient` accepts — previously the response was whichever
+  branch happened to run last.
+- **Companies spec form in the plugin (2026-08-25).** `enrichment.build_envelope` accepts
+  `{"companies": [{"name", "domain"}]}` and emits a write-mode `companies` events array,
+  making the backend's existing `HubSpot Company Create` lane reachable from Claude for
+  the first time. `domain` is mandatory and a company without one is refused by name:
+  domain is the identity anchor the company lane searches on, so a domainless company
+  could only be created, never matched. The form carries **no** `mode`, deliberately — a
+  `propose` mode would report success having written nothing. `chunking.plan_chunks` and
+  `preview_enrichment.records_block` handle the form; the preview states plainly that an
+  existing company is enriched in place and never duplicated, and one with no match is
+  created if creation is armed.
+
 - **Quick task 260823-ono — Metro peak-body named-account score floor (live 2026-08-23).**
   Five AU metro racing peak bodies — Australian Turf Club, Melbourne Racing Club, Southside
   Racing, Brisbane Racing Club, Perth Racing — now tier at a floored `lv_icp_fit_score` >= 60
@@ -174,6 +204,12 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Current state
 - **Five** workflows deployed on n8n Cloud (contact ingest, enrichment, scheduled maintenance, backend status active; `LV Review Decision` inactive at rest), write gates **disarmed** at rest (armed only inside deliberate, audited, single-record-allowlisted windows with symmetric read-backs and post-deploy bounces). Offline suite: **1784 pytest / 550 node**; committed workflow JSON carries zero armed literals (gated by `operator-claude-plugin/tests/test_control_disarmed_artifacts.py`). v0.6 sealed 2026-08-04 (`.planning/MILESTONES.md`). Remaining deliberate deferrals: HubSpot-side ICP formula (placeholder), dedupe-lane native-search transport swap, per-provider disagreement persistence for the review queue, sweep lookback time-window + workflow-name resolution.
+
+### Known debt
+- The **enrichment** lane's own contact create (`wf_enrichment_cloud`) does not associate:
+  the 2026-08-25 rule is implemented in the ingest lane only. That lane's create requires
+  `ALLOW_HUBSPOT_CREATE` plus an allowlist match, so it cannot fire unattended, but a
+  contact created through it lands unassociated.
 
 ## [0.4.0] - 2026-07-15
 

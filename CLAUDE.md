@@ -2319,6 +2319,39 @@ Regression coverage: `node --test tests/n8n/*.test.mjs` (glob form — the direc
 on node 24). Acceptance test: `tests/test_scoring_parity.py::test_veto_clear_after_correction`
 (`@live`), green since 2026-08-12 after being red since Phase 40-07.
 
+### 13.0.1 As-built delta — contact->company association (ingest lane, 2026-08-25)
+
+Operator ruling: **a contact must ALWAYS be associated with a company, and a company that
+already exists must NEVER be recreated.** §13.1's node list for the ingest lane predates it.
+
+`wf_contact_ingest_cloud` (built by `scripts/build_cloud_workflows.py::build_cloud`, never
+hand-edited) now carries eight more nodes:
+
+| Node | Does |
+| --- | --- |
+| `Build Company Link` | derives the row's company search keys (`.invalid` sentinels when absent) |
+| `HubSpot Company Search by Domain` | companies search, `domain` EQ |
+| `HubSpot Company Search by Name` | companies search, `name` EQ — reads its key from `Build Company Link` by node name (its own `$json` is the prior search's response) |
+| `Adapt Company Link` | `n8n/code/companyLink.js::resolveCompanyLink` -> `company_id` + `company_match` + `company_hold_reason` |
+| `Build Association Request` | joins each write RESPONSE back to its row **by value** (update by `id`, create by `properties.email`) — index alignment is gone downstream of the write IFs |
+| `HubSpot Associate Company Write Gate` | the same spliced write-safety gate every other write node gets |
+| `HubSpot Associate Company` | `PUT /crm/v4/objects/contacts/{id}/associations/default/companies/{id}` — idempotent, no body, no `onError` |
+| `Build Ingest Response` | one row-identifying item per decided row: `action`, `contact_id`, `company_id`, `association`, `reason` |
+
+Resolution order: **manual `company_id` column, then exact email-domain match (freemail and
+AU ISP domains resolve nothing), then exact company-name match** (a name matching two
+companies is ambiguity, not a match). The lane **resolves only — it never creates a
+company**: a `create` that resolves no company is downgraded to `review` at `Decide Action`
+with the reason kept. An `update` is never held — it may already carry an association this
+lane cannot see — it simply has nothing to associate.
+
+Company creation stays where dedupe already lives: the companies branch of
+`wf_enrichment_cloud`, now reachable from the plugin via the `{"companies": [{"name",
+"domain"}]}` spec form (`enrichment.build_envelope`, domain mandatory, no `mode`).
+
+**Known gap:** `wf_enrichment_cloud`'s own contact create does not associate. The rule is
+implemented in the ingest lane only.
+
 ## 13.1 Workflow A: HubSpot private-app webhook receiver
 
 Purpose:

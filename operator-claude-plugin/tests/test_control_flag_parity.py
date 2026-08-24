@@ -115,7 +115,9 @@ def test_a_declaration_the_plugin_writes_is_read_back_by_phase_27s_reader():
     observed = n8n_read.read_write_safety(armed, "ALLOW_HUBSPOT_RECORD_WRITES")
     assert observed["value"] == "true"
     assert observed["disagreement"] is None
-    assert counts["ALLOW_HUBSPOT_RECORD_WRITES"] == 2
+    # 3 declaring nodes since 2026-08-25: the update and create gates plus the
+    # association gate, all embedding the same shared write-safety blob.
+    assert counts["ALLOW_HUBSPOT_RECORD_WRITES"] == 3
 
     allowlist = n8n_read.read_write_safety(armed, "TEST_RECORD_IDS")
     assert allowlist["value"] == "12345,67890"
@@ -135,11 +137,12 @@ def test_maintenance_workflow_rewrite_counts():
 
 def test_contact_ingest_rewrite_counts_create_leads_by_one():
     """The create constant appears in one more node than the record-writes constant,
-    added by 23-01."""
+    added by 23-01. Counts rose by one each on 2026-08-25: the association lane's own
+    write gate embeds the same shared write-safety blob as every other gate."""
     workflow = _workflow("wf_contact_ingest_cloud.json")
     _, counts = n8n_arming.set_write_safety(
         workflow, {"ALLOW_HUBSPOT_RECORD_WRITES": True, "ALLOW_HUBSPOT_CREATE": True})
-    assert counts == {"ALLOW_HUBSPOT_RECORD_WRITES": 2, "ALLOW_HUBSPOT_CREATE": 3}
+    assert counts == {"ALLOW_HUBSPOT_RECORD_WRITES": 3, "ALLOW_HUBSPOT_CREATE": 4}
 
 
 def test_rewrite_counts_are_derived_across_every_committed_cloud_workflow():
@@ -206,7 +209,9 @@ def test_an_armed_workflow_can_be_set_back_and_the_rescan_passes():
 
     assert n8n_read.read_write_safety(disarmed, "ALLOW_HUBSPOT_RECORD_WRITES")["value"] == "false"
     assert n8n_read.read_write_safety(disarmed, "TEST_RECORD_IDS")["value"] == ""
-    assert counts["ALLOW_HUBSPOT_RECORD_WRITES"] == 2
+    # 3 declaring nodes since 2026-08-25: the update and create gates plus the
+    # association gate, all embedding the same shared write-safety blob.
+    assert counts["ALLOW_HUBSPOT_RECORD_WRITES"] == 3
 
 
 def test_the_input_workflow_is_never_mutated():

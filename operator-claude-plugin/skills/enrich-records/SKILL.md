@@ -41,10 +41,20 @@ capability; claiming it here would be a guess dressed as a report.
    **disarmed** for this conversation. Say this even if the operator only asked a
    question, before doing anything else.
 
-2. **Resolve which records.** Three forms, and only two of them are supported:
+2. **Resolve which records.** Four forms, and only three of them are supported:
 
    - **Record IDs** — the operator pastes HubSpot record IDs. Spec:
      `{"record_ids": ["101","102"], "object_type": "companies"}` (or `"contacts"`).
+   - **Companies that may not be in HubSpot yet** — the operator names companies by name
+     and website domain. Spec: `{"companies": [{"name": "Perth Racing", "domain":
+     "perthracing.com.au"}]}`. **Domain is mandatory** and the client refuses a company
+     without one, by name: domain is what the backend searches HubSpot on, so a
+     domainless company could only ever be created, never matched — the duplicate-company
+     shape this form exists to avoid. Each company is matched on its domain first: an
+     existing record is enriched in place and never duplicated; one with no match is
+     created, and only if creation is armed on the backend. Say that distinction plainly
+     before the preview — the operator is deciding whether new records may appear in
+     their CRM, which no other form of this skill can do.
    - **A HubSpot list** — the operator names a saved list. Spec:
      `{"list": "<the list name>", "object_type": "contacts"}`. **Do not resolve or count
      the list yourself.** The backend resolves it with the one HubSpot credential that
@@ -61,6 +71,11 @@ capability; claiming it here would be a guess dressed as a report.
      error at all.
 
    If the object type is anything other than contacts or companies, ask — do not guess.
+
+   **A contact is never created by this skill.** The backend holds any contact it cannot
+   associate to a company (2026-08-25 ruling), so the order that works is companies first,
+   contacts second: enrich or create the company, confirm it is searchable by its domain,
+   then ingest the contacts that belong to it.
 
 3. **Resolve the provider selection.** The admin default lives in
    `operator.local.json` as `enrichment_providers` and ships as the **full

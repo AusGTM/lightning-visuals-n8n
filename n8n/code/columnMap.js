@@ -43,6 +43,13 @@ const ALIASES = {
   "organisation": "company",
   "account": "company",
   "org.": "company",
+  // company_id — manual contact->company association override (2026-08-25). Rides the
+  // row for Build Company Link; never written as a HubSpot contact property.
+  "company_id": "company_id",
+  "company id": "company_id",
+  "hubspot company id": "company_id",
+  "associated company id": "company_id",
+  "associatedcompanyid": "company_id",
 };
 
 function _normHeader(header) {

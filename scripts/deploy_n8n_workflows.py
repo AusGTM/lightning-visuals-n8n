@@ -63,6 +63,12 @@ NODE_CREDENTIAL_MAP = {
     "HubSpot List By Name": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot List Memberships": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot Company Search": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    # 2026-08-25, contact->company association lane (ingest): registered in the SAME
+    # commit as the nodes' creation, per this repo's convention. An unmapped HubSpot node
+    # deploys UNBOUND and silently 401s at runtime — sixth repetition of that lesson.
+    "HubSpot Company Search by Domain": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    "HubSpot Company Search by Name": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    "HubSpot Associate Company": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     # Phase 16.4 Task 2: companies mirror of "HubSpot Fetch By Id" above.
     "HubSpot Company Fetch By Id": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot Company Create": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},

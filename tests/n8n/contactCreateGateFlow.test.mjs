@@ -52,6 +52,12 @@ function netNewRow() {
     email: "new.contact@example.com",
     firstname: "New",
     lastname: "Contact",
+    // 2026-08-25: a create is HELD unless the row resolved to a company. Every create
+    // case below is about the create GATE, so each row arrives already associated —
+    // the hold itself is pinned by its own test in companyAssociationFlow.test.mjs.
+    company_id: "9600000001",
+    company_match: "domain",
+    company_domain: "example.com",
   };
 }
 

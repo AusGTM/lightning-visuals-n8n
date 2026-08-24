@@ -101,6 +101,23 @@ def records_block(spec, plan):
             f"**not** in HubSpot yet — nothing is created there by enriching them."
         )
 
+    if spec.get("companies") is not None:
+        # A companies spec makes a THIRD claim, distinct from both branches above: these
+        # companies may or may not already be in HubSpot, and which it is decides whether
+        # anything is created there. Saying "these already exist" (the ids branch) or
+        # "nothing is created" (the rows branch) would each be false for half the batch.
+        count = getattr(plan, "record_count", UNKNOWN)
+        named = ", ".join(
+            str((c or {}).get("name") or (c or {}).get("domain") or "?")
+            for c in (spec.get("companies") or [])[:5]
+        )
+        more = "" if not isinstance(count, int) or count <= 5 else f", and {count - 5} more"
+        return (
+            f"**Records:** {count} companies — {named}{more}. Each is matched in HubSpot "
+            f"by its **domain** first: an existing company is enriched in place and never "
+            f"duplicated; one with no match is **created** if creation is armed."
+        )
+
     count = getattr(plan, "record_count", UNKNOWN)
     if not isinstance(count, int):
         return (

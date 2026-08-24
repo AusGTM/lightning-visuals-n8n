@@ -366,6 +366,159 @@ return $input.all().map((it) => {
 });
 """
 
+# ---- contact -> company association lane (ingest, 2026-08-25) ---------------
+# Operator ruling: a contact must ALWAYS be associated with a company, and a company that
+# already exists must NEVER be recreated. The lane resolves — it never creates a company:
+# an unresolved row is HELD at Decide Action rather than landing an orphan contact or a
+# junk company shell. The company lane in wf_enrichment_cloud already owns company
+# creation + dedupe on the same `domain` anchor.
+
+BUILD_COMPANY_LINK = inline("companyLink.js") + r"""
+
+// --- n8n wrapper: per-row company search keys (one item in, one item out) ---
+// The `.invalid` sentinels are the Phase 36 Finding B idiom: a filter value that is
+// `undefined` makes HubSpot reject the whole search (swallowed by
+// onError:continueRegularOutput into an error item), while an RFC 2606 `.invalid` value
+// returns a clean 200 with zero hits. Sentinel in, empty result out, row order preserved.
+return $input.all().map((it) => {
+  const row = it.json;
+  return { json: { ...row,
+    company_search_domain: companyDomainForRow(row) || "no-company-domain.invalid",
+    company_search_name: companyNameForRow(row) || "no company name .invalid",
+  }};
+});
+"""
+
+CO_LINK_DOMAIN_SEARCH_BODY = (
+    '={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: "domain", '
+    'operator: "EQ", value: $json.company_search_domain } ] } ], '
+    'properties: ["name","domain"], limit: 5 }) }}'
+)
+
+# Reads its key from "Build Company Link" BY NODE NAME, not $json: this node is chained
+# after the domain search, whose HTTP response has already replaced $json (the same hop
+# that makes every provider node in the enrichment lane recover its identity by node
+# reference). `.item` is the paired-item form already used by "IF Company Bare Event".
+CO_LINK_NAME_SEARCH_BODY = (
+    '={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: "name", '
+    'operator: "EQ", value: $(\'Build Company Link\').item.json.company_search_name } ] } ], '
+    'properties: ["name","domain"], limit: 5 }) }}'
+)
+
+ADAPT_COMPANY_LINK = inline("companyLink.js") + r"""
+
+// --- n8n wrapper: resolve each row's company id from the two searches ---
+// Index alignment is safe here and only here: both search nodes run once per input item
+// on an UNBRANCHED chain, so search[i] is row i's own answer. (Downstream of the write
+// IFs that stops being true — which is why Build Association Request joins by value.)
+function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
+const rows = $('Build Company Link').all();
+const byDomain = nodeAll('HubSpot Company Search by Domain');
+const byName = nodeAll('HubSpot Company Search by Name');
+return rows.map((it, i) => {
+  const row = it.json;
+  const link = resolveCompanyLink(
+    row,
+    byDomain[i] && byDomain[i].json,
+    byName[i] && byName[i].json,
+  );
+  return { json: { ...row, ...link } };
+});
+"""
+
+BUILD_ASSOCIATION_REQUEST = inline("companyLink.js") + r"""
+
+// --- n8n wrapper: written contact -> association request (join by VALUE, not index) ---
+// Input is the create/update HTTP response, downstream of the write IFs, so this node's
+// item i is NOT Decide Action's row i. Join instead on what the response actually
+// carries: an update response's `id` IS the row's hs_object_id; a create response has no
+// upstream id, but its `properties.email` is the identity seed the create branch wrote.
+// A response with no id at all (a write that failed) is dropped — fail closed, never
+// associate a record we cannot name.
+function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
+const decided = nodeAll('Decide Action').map((it) => it.json);
+const out = [];
+for (const it of $input.all()) {
+  const res = it.json || {};
+  const contactId = res.id != null ? String(res.id) : null;
+  if (!contactId) continue;
+  const email = String((res.properties && res.properties.email) || "").toLowerCase();
+  let row = decided.find((r) => r.hs_object_id && String(r.hs_object_id) === contactId) || null;
+  if (!row && email) {
+    row = decided.find(
+      (r) => String((r.properties && r.properties.email) || "").toLowerCase() === email
+    ) || null;
+  }
+  const company_id = row && row.company_id ? String(row.company_id) : null;
+  // An UPDATE with no resolved company is not held (the contact already exists, and it
+  // may already carry an association this lane cannot see) — it simply has nothing to
+  // associate. Only creates are held, at Decide Action.
+  if (!company_id) continue;
+  out.push({ json: {
+    action: "enrich",
+    hs_object_id: contactId,
+    contact_id: contactId,
+    email: email || (row && row.email) || null,
+    domain: (row && row.company_domain) || null,
+    company_id,
+    company_match: (row && row.company_match) || null,
+    assoc_url: associationUrl(contactId, company_id),
+  }});
+}
+return out;
+"""
+
+BUILD_INGEST_RESPONSE = r"""// Build Ingest Response — the lane's per-row synchronous body.
+// Every row Decide Action produced, with what actually happened to it, in a shape
+// report.py's sync_response_is_sufficient() accepts (each item carries contact_id /
+// hs_object_id / email). A row that never reached the association subgraph still appears
+// here — the alternative is a response that silently omits held and gated rows.
+function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
+const decided = nodeAll('Decide Action').map((it) => it.json);
+const requested = nodeAll('Build Association Request').map((it) => it.json);
+const gatedRows = nodeAll('HubSpot Associate Company Write Gate').map((it) => it.json);
+const results = $input.all();
+// results[i] is gatedRows[i]'s own response — the association HTTP node runs once per
+// item on a straight chain out of its gate.
+const associated = {};
+gatedRows.forEach((g, i) => {
+  const r = results[i] && results[i].json;
+  if (r && !r.error) associated[String(g.contact_id)] = true;
+});
+const requestedByEmail = {};
+const requestedById = {};
+for (const r of requested) {
+  if (r.email) requestedByEmail[String(r.email).toLowerCase()] = r;
+  if (r.contact_id) requestedById[String(r.contact_id)] = r;
+}
+return decided.map((row) => {
+  const email = String((row.properties && row.properties.email) || row.email || "").toLowerCase();
+  const req = (row.hs_object_id && requestedById[String(row.hs_object_id)]) ||
+              (email && requestedByEmail[email]) || null;
+  const contactId = (req && req.contact_id) || row.hs_object_id || row.contact_id || null;
+  let association;
+  if (!req) {
+    association = row.company_id ? "not_attempted" : "none";
+  } else if (associated[String(req.contact_id)]) {
+    association = "associated";
+  } else {
+    association = "not_confirmed";  // the write gate dropped it, or HubSpot refused it
+  }
+  return { json: {
+    action: row.action,
+    outcome: row.outcome || null,
+    contact_id: contactId,
+    hs_object_id: contactId,
+    email: email || null,
+    company_id: row.company_id || null,
+    company_match: row.company_match || null,
+    association,
+    reason: row.reason || null,
+    email_status: row.email_status || null,
+  }};
+});
+"""
+
 DECIDE_CLOUD = r"""// Decide Action — CLOUD variant.
 // Computes action + the HubSpot property patch, then the IF nodes route to the
 // real HubSpot update/create (gated) / Set review nodes.
@@ -411,6 +564,17 @@ return $input.all().map((it) => {
   // Fail-closed, mirroring the enrichment lanes' lookup_failed -> never-create override:
   // a "net_new" produced by a FAILED search is not a new contact, it is an unknown.
   if (row.lookup_failed === true && action === "create") action = "review";
+  // Operator ruling 2026-08-25: a contact must ALWAYS be associated with a company. A
+  // create with no resolved company is HELD, not landed — an orphan contact is silent
+  // and permanent, a held row is visible and one operator answer away (name the company
+  // record id on the row, or create/enrich the company first). Creates only: an update
+  // targets a record that already exists and may already carry an association this lane
+  // cannot see, so holding it would block ordinary enrichment for no gain.
+  let company_hold = null;
+  if (action === "create" && !row.company_id) {
+    action = "review";
+    company_hold = row.company_hold_reason || "no company matched this contact";
+  }
   if (action === "create") {
     // BUG 19: identity is never in canonicalPatch (manual_protected), so a create without
     // this seed writes a record the by-email search can never find again — and the next
@@ -439,8 +603,15 @@ return $input.all().map((it) => {
     // the response path still read it.
     contact_id: id.contact_id || null,
     hs_object_id: id.contact_id || null,
-    reason: id.reason || row.reject_reason || null,
+    reason: company_hold || id.reason || row.reject_reason || null,
     email_status: row.email_status || null,
+    // The association lane's row context (2026-08-25). `company_id` is what Build
+    // Association Request joins on; `email` makes a created row identifiable in the
+    // synchronous response before HubSpot has minted its id.
+    email: row.email_normalized || row.email || null,
+    company_id: row.company_id || null,
+    company_match: row.company_match || null,
+    company_domain: row.company_domain || null,
     properties
   }};
 });
@@ -698,6 +869,26 @@ return $input.all().map((it) => ({
     for name, js in [("Adapt Search Results", ADAPT_SEARCH_RESULTS),
                      ("Resolve Identity", RESOLVE_IDENTITY),
                      ("Merge Contacts", MERGE_CONTACTS),
+                     ("Build Company Link", BUILD_COMPANY_LINK)]:
+        x += 220
+        nodes.append(code_node(name, js, x, y))
+
+    # Contact -> company resolution (2026-08-25). Both searches fire for every row —
+    # ponytail: two reads per row instead of a branch that would break index alignment;
+    # HubSpot search calls are free and this lane is batch-sized, not per-request. Upgrade
+    # path if the rate limit ever bites: skip the name search when the domain hit.
+    x += 220
+    nodes.append(_http_node(
+        "HubSpot Company Search by Domain",
+        "https://api.hubapi.com/crm/v3/objects/companies/search", x, y,
+        auth="hubspot", json_body=CO_LINK_DOMAIN_SEARCH_BODY))
+    x += 220
+    nodes.append(_http_node(
+        "HubSpot Company Search by Name",
+        "https://api.hubapi.com/crm/v3/objects/companies/search", x, y,
+        auth="hubspot", json_body=CO_LINK_NAME_SEARCH_BODY))
+
+    for name, js in [("Adapt Company Link", ADAPT_COMPANY_LINK),
                      ("Decide Action", decide_action_js)]:
         x += 220
         nodes.append(code_node(name, js, x, y))
@@ -727,12 +918,42 @@ return $input.all().map((it) => ({
     }
     nodes.append(set_review)
 
+    # Association subgraph (2026-08-25). Both write branches converge here; the v4
+    # `default` endpoint is idempotent (re-running an ingest re-asserts the same
+    # HubSpot-defined contact->company association rather than duplicating it), takes no
+    # body, and needs no association-type ids.
+    nodes.append(code_node("Build Association Request", BUILD_ASSOCIATION_REQUEST,
+                           x + 660, y - 20))
+    assoc = {
+        "parameters": {"method": "PUT", "url": "={{ $json.assoc_url }}",
+                       "authentication": "predefinedCredentialType",
+                       "nodeCredentialType": "hubspotAppToken",
+                       "options": {"timeout": 20000}},
+        "id": nid("h"), "name": "HubSpot Associate Company",
+        "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.2,
+        "position": [x + 880, y - 20],
+        # No onError: a refused association must fail the execution like every other
+        # write node in this lane, not flow on as a healthy item (BUG 11 family).
+    }
+    nodes.append(assoc)
+    nodes.append(code_node("Build Ingest Response", BUILD_INGEST_RESPONSE,
+                           x + 1100, y - 20))
+
     conns = chain([
         "Webhook Trigger", "Set Config", "Extract From File", "Map Columns",
         "Normalize Phone", "Build Verify Batch", "Verify Emails (batch)", "Apply Email",
         "HubSpot Search by Email", "Adapt Search Results", "Resolve Identity",
-        "Merge Contacts", "Decide Action", "IF Update",
+        "Merge Contacts", "Build Company Link", "HubSpot Company Search by Domain",
+        "HubSpot Company Search by Name", "Adapt Company Link",
+        "Decide Action", "IF Update",
     ])
+    conns.update(chain([
+        "Build Association Request", "HubSpot Associate Company", "Build Ingest Response",
+    ]))
+    for write_node in ("HubSpot Update", "HubSpot Create"):
+        conns[write_node] = {"main": [
+            [{"node": "Build Association Request", "type": "main", "index": 0}]
+        ]}
     # IF branches
     conns["IF Update"] = {"main": [
         [{"node": "HubSpot Update", "type": "main", "index": 0}],   # true
@@ -765,6 +986,11 @@ return $input.all().map((it) => ({
     splice_write_gates(nodes, conns, {
         "HubSpot Update": "enrich",
         "HubSpot Create": "create",
+        # The association PUT is a HubSpot write and is gated like one, even though it
+        # only ever runs downstream of a write that already passed a gate. "enrich": it
+        # touches an EXISTING contact record (the one just created or updated), and the
+        # row carries both its id and the company domain the allowlist can match on.
+        "HubSpot Associate Company": "enrich",
     })
 
     return {

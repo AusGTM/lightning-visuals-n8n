@@ -42,6 +42,15 @@ aliases:
   account: company
   "org.": company
 
+  # company_id — the operator's manual contact->company association override
+  # (2026-08-25). Not a HubSpot contact property: it rides the row, is read only by the
+  # ingest lane's Build Company Link, and is never written as a property.
+  company_id: company_id
+  "company id": company_id
+  "hubspot company id": company_id
+  "associated company id": company_id
+  "associatedcompanyid": company_id
+
 required_identity:
   any_of:
     - [email]

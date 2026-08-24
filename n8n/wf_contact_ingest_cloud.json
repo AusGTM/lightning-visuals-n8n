@@ -51,7 +51,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "// columnMap.js \u2014 pure-JS header remap for n8n Code nodes.\n//\n// Mirrors src/column_mapper.py + config/column_mapping.yaml: arbitrary source\n// headers -> canonical HubSpot contact props via case-insensitive / whitespace-\n// collapsed aliases; unmapped columns are dropped. requiredIdentity mirrors the\n// column_mapping required_identity reject rule (email OR firstname+lastname+company).\n\n// Embedded alias table (source of truth: config/column_mapping.yaml). Keys are\n// already lowercased/whitespace-collapsed, matching _normHeader.\nconst ALIASES = {\n  // email\n  \"email\": \"email\",\n  \"email address\": \"email\",\n  \"e-mail\": \"email\",\n  \"e-mail address\": \"email\",\n  // firstname\n  \"firstname\": \"firstname\",\n  \"first name\": \"firstname\",\n  \"fname\": \"firstname\",\n  \"given name\": \"firstname\",\n  // lastname\n  \"lastname\": \"lastname\",\n  \"last name\": \"lastname\",\n  \"surname\": \"lastname\",\n  // jobtitle\n  \"jobtitle\": \"jobtitle\",\n  \"job title\": \"jobtitle\",\n  \"title\": \"jobtitle\",\n  \"position\": \"jobtitle\",\n  // linkedin_url\n  \"linkedin_url\": \"linkedin_url\",\n  \"linkedin\": \"linkedin_url\",\n  \"linkedin url\": \"linkedin_url\",\n  \"li\": \"linkedin_url\",\n  \"linkedin profile\": \"linkedin_url\",\n  // phone\n  \"phone\": \"phone\",\n  \"mobile\": \"phone\",\n  \"tel\": \"phone\",\n  // company\n  \"company\": \"company\",\n  \"organization\": \"company\",\n  \"organisation\": \"company\",\n  \"account\": \"company\",\n  \"org.\": \"company\",\n};\n\nfunction _normHeader(header) {\n  // Trim, collapse internal whitespace, lowercase \u2014 matches column_mapper._norm_header.\n  return String(header).split(/\\s+/).filter(Boolean).join(\" \").toLowerCase();\n}\n\n// mapRow(rawRow, mapping?) \u2014 mapping optional; defaults to embedded ALIASES.\n// Accepts either a full column_mapping object ({aliases:{...}}) or a bare alias map.\nfunction mapRow(rawRow, mapping) {\n  let aliases = ALIASES;\n  if (mapping) aliases = mapping.aliases || mapping;\n  const out = {};\n  for (const key of Object.keys(rawRow || {})) {\n    if (typeof key !== \"string\") continue; // malformed header -> skip, never throw\n    const canonical = aliases[_normHeader(key)];\n    if (canonical) out[canonical] = rawRow[key];\n  }\n  return out;\n}\n\nfunction _present(v) {\n  return v !== null && v !== undefined && String(v).trim() !== \"\";\n}\n\n// requiredIdentity(row) \u2014 email OR (firstname AND lastname AND company).\nfunction requiredIdentity(row) {\n  if (!row) return false;\n  if (_present(row.email)) return true;\n  return _present(row.firstname) && _present(row.lastname) && _present(row.company);\n}\n\n// --- n8n wrapper: map arbitrary upload headers -> canonical props ---\nconst rows = $input.all();\nconst out = [];\nfor (const it of rows) {\n  const raw = it.json;\n  const mapped = mapRow(raw);\n  const ok = requiredIdentity(mapped);\n  out.push({ json: {\n    ...mapped,\n    allow_create: raw.allow_create === true,\n    reject: !ok,\n    ...(ok ? {} : {\n      outcome: \"rejected\",\n      reject_reason: \"missing required identity (need email OR firstname+lastname+company)\"\n    })\n  }});\n}\nreturn out;\n"
+        "jsCode": "// columnMap.js \u2014 pure-JS header remap for n8n Code nodes.\n//\n// Mirrors src/column_mapper.py + config/column_mapping.yaml: arbitrary source\n// headers -> canonical HubSpot contact props via case-insensitive / whitespace-\n// collapsed aliases; unmapped columns are dropped. requiredIdentity mirrors the\n// column_mapping required_identity reject rule (email OR firstname+lastname+company).\n\n// Embedded alias table (source of truth: config/column_mapping.yaml). Keys are\n// already lowercased/whitespace-collapsed, matching _normHeader.\nconst ALIASES = {\n  // email\n  \"email\": \"email\",\n  \"email address\": \"email\",\n  \"e-mail\": \"email\",\n  \"e-mail address\": \"email\",\n  // firstname\n  \"firstname\": \"firstname\",\n  \"first name\": \"firstname\",\n  \"fname\": \"firstname\",\n  \"given name\": \"firstname\",\n  // lastname\n  \"lastname\": \"lastname\",\n  \"last name\": \"lastname\",\n  \"surname\": \"lastname\",\n  // jobtitle\n  \"jobtitle\": \"jobtitle\",\n  \"job title\": \"jobtitle\",\n  \"title\": \"jobtitle\",\n  \"position\": \"jobtitle\",\n  // linkedin_url\n  \"linkedin_url\": \"linkedin_url\",\n  \"linkedin\": \"linkedin_url\",\n  \"linkedin url\": \"linkedin_url\",\n  \"li\": \"linkedin_url\",\n  \"linkedin profile\": \"linkedin_url\",\n  // phone\n  \"phone\": \"phone\",\n  \"mobile\": \"phone\",\n  \"tel\": \"phone\",\n  // company\n  \"company\": \"company\",\n  \"organization\": \"company\",\n  \"organisation\": \"company\",\n  \"account\": \"company\",\n  \"org.\": \"company\",\n  // company_id \u2014 manual contact->company association override (2026-08-25). Rides the\n  // row for Build Company Link; never written as a HubSpot contact property.\n  \"company_id\": \"company_id\",\n  \"company id\": \"company_id\",\n  \"hubspot company id\": \"company_id\",\n  \"associated company id\": \"company_id\",\n  \"associatedcompanyid\": \"company_id\",\n};\n\nfunction _normHeader(header) {\n  // Trim, collapse internal whitespace, lowercase \u2014 matches column_mapper._norm_header.\n  return String(header).split(/\\s+/).filter(Boolean).join(\" \").toLowerCase();\n}\n\n// mapRow(rawRow, mapping?) \u2014 mapping optional; defaults to embedded ALIASES.\n// Accepts either a full column_mapping object ({aliases:{...}}) or a bare alias map.\nfunction mapRow(rawRow, mapping) {\n  let aliases = ALIASES;\n  if (mapping) aliases = mapping.aliases || mapping;\n  const out = {};\n  for (const key of Object.keys(rawRow || {})) {\n    if (typeof key !== \"string\") continue; // malformed header -> skip, never throw\n    const canonical = aliases[_normHeader(key)];\n    if (canonical) out[canonical] = rawRow[key];\n  }\n  return out;\n}\n\nfunction _present(v) {\n  return v !== null && v !== undefined && String(v).trim() !== \"\";\n}\n\n// requiredIdentity(row) \u2014 email OR (firstname AND lastname AND company).\nfunction requiredIdentity(row) {\n  if (!row) return false;\n  if (_present(row.email)) return true;\n  return _present(row.firstname) && _present(row.lastname) && _present(row.company);\n}\n\n// --- n8n wrapper: map arbitrary upload headers -> canonical props ---\nconst rows = $input.all();\nconst out = [];\nfor (const it of rows) {\n  const raw = it.json;\n  const mapped = mapRow(raw);\n  const ok = requiredIdentity(mapped);\n  out.push({ json: {\n    ...mapped,\n    allow_create: raw.allow_create === true,\n    reject: !ok,\n    ...(ok ? {} : {\n      outcome: \"rejected\",\n      reject_reason: \"missing required identity (need email OR firstname+lastname+company)\"\n    })\n  }});\n}\nreturn out;\n"
       },
       "id": "c00040000-0000-4000-8000-000000000000",
       "name": "Map Columns",
@@ -193,14 +193,88 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const ALLOW_HUBSPOT_CREATE = \"false\";\n// Decide Action \u2014 CLOUD variant.\n// Computes action + the HubSpot property patch, then the IF nodes route to the\n// real HubSpot update/create (gated) / Set review nodes.\n// Phase 15: this is the SINGLE serialization point for the provenance blob \u2014 the\n// stamper (mergeContacts.js) returns the parsed provenance object, never a string.\nfunction _sortedForStringify(v) {\n  if (Array.isArray(v)) return v.map(_sortedForStringify);\n  if (v !== null && typeof v === \"object\") {\n    const out = {};\n    for (const k of Object.keys(v).sort()) out[k] = _sortedForStringify(v[k]);\n    return out;\n  }\n  return v;\n}\nfunction _stableStringify(v) { return JSON.stringify(_sortedForStringify(v)); }\nfunction _buildContactPatch(merge) {\n  if (!merge) return {};\n  const patch = { ...merge.canonicalPatch, ...(merge.cacheKeys || {}) };\n  if (merge.provenance && Object.keys(merge.provenance).length) {\n    patch.lv_contact_enrichment_provenance = _stableStringify(merge.provenance).slice(0, 60000);\n  }\n  return patch;\n}\n\nreturn $input.all().map((it) => {\n  const row = it.json;\n  const id = row.identity || {};\n  const outcome = id.outcome || \"rejected\";\n  // D-16/D-16a/D-16b: this used to read row.allow_create, a field seeded on the webhook\n  // item at Set Config \u2014 but Extract From File emits fresh items parsed from the binary\n  // CSV, so nothing seeded upstream of it survives to here (BUG 12/BUG 21 row-loss\n  // family). The sole authority is the baked ALLOW_HUBSPOT_CREATE constant this node\n  // declares (composed at the build site, prepended ahead of this jsCode) \u2014 the SAME\n  // overlayable constant HubSpot Create Write Gate downstream already reads, so arming\n  // creation here still requires that gate's allowlist too. Not OR'd with a row value.\n  const allow_create = String(ALLOW_HUBSPOT_CREATE).toLowerCase() === \"true\";\n  const properties = _buildContactPatch(row.merge);\n  let action;\n  if (outcome === \"match\") action = \"update\";\n  else if (outcome === \"net_new\") action = allow_create ? \"create\" : \"review\";\n  else if (outcome === \"ambiguous\") action = \"review\";\n  else action = \"skip\";\n  // Fail-closed, mirroring the enrichment lanes' lookup_failed -> never-create override:\n  // a \"net_new\" produced by a FAILED search is not a new contact, it is an unknown.\n  if (row.lookup_failed === true && action === \"create\") action = \"review\";\n  if (action === \"create\") {\n    // BUG 19: identity is never in canonicalPatch (manual_protected), so a create without\n    // this seed writes a record the by-email search can never find again \u2014 and the next\n    // run creates another. Create branch ONLY; on update this would be a clobber.\n    if (row.email) properties.email = row.email;\n    if (row.firstname) properties.firstname = row.firstname;\n    if (row.lastname) properties.lastname = row.lastname;\n    // 37-CONTEXT.md \u00a713(b) / operator's option-b ruling (resolves 37-07's checkpoint):\n    // stamp the poller's work-queue flag so a freshly created contact is swept by the\n    // already-deployed scheduled poller (daily cadence since 2026-08-10) with no further operator action. This\n    // is a work-queue flag the poller searches for, NOT a write gate \u2014 it grants no\n    // permission and opens no write path (ALLOW_HUBSPOT_CREATE above already gates this\n    // whole branch). Create branch ONLY for the same reason the identity seeds above are:\n    // an update targets a record whose enrichment state the operator may already have\n    // curated, and re-flagging it would re-queue work that was deliberately finished.\n    properties.lv_enrichment_requested = \"true\";\n  }\n  return { json: {\n    action,\n    outcome,\n    // BUG 16: this lane historically emitted only `contact_id`, while the write nodes and\n    // the write-safety gates spliced in Phase 16.10 both read `hs_object_id` \u2014 so the\n    // gates evaluated _writeSafetyAllows(action, null, null) and denied unconditionally,\n    // whatever the allowlist said. Emitting both converges this lane on the same row\n    // contract the enrichment lane uses. `contact_id` is retained: Resolve Identity and\n    // the response path still read it.\n    contact_id: id.contact_id || null,\n    hs_object_id: id.contact_id || null,\n    reason: id.reason || row.reject_reason || null,\n    email_status: row.email_status || null,\n    properties\n  }};\n});\n"
+        "jsCode": "// companyLink.js \u2014 contact -> company resolution for the ingest lane.\n//\n// A contact must never land in HubSpot unassociated (operator ruling, 2026-08-25). This\n// module answers ONE question per row: which company record does this contact belong to?\n// It resolves, it never creates \u2014 an unresolved row is HELD for review, because a junk\n// company shell is worse than a held row, and an existing company must never be\n// duplicated (the company lane already dedupes on `domain`; this keeps ingest honest to\n// the same anchor).\n//\n// Resolution order, strongest first:\n//   1. manual  \u2014 the operator named the company id on the row itself (`company_id`).\n//   2. domain  \u2014 the contact's email domain matched a company's `domain` EXACTLY.\n//   3. name    \u2014 the row's company name matched a company's `name` EXACTLY.\n//\n// ponytail: name matching is exact-EQ only. CONTAINS_TOKEN would raise the hit rate and\n// mis-associate \"Racing Victoria\" onto \"Racing Victoria Foundation\" \u2014 a wrong association\n// is silent and worse than the hold lane it would bypass. Upgrade path if hit rate hurts:\n// a candidate-list return the operator confirms, the way preingest confirms matches.\n//\n// NO npm, dependency-free \u2014 this module is inline()'d verbatim into n8n Code nodes.\n\n// Free/consumer mail domains: an @gmail.com address says nothing about the employer, and\n// searching companies for domain=\"gmail.com\" would associate every such contact onto one\n// arbitrary record. AU ISP domains included \u2014 they are the local shape of the same trap.\nconst FREEMAIL_DOMAINS = new Set([\n  \"gmail.com\", \"googlemail.com\", \"outlook.com\", \"outlook.com.au\", \"hotmail.com\",\n  \"hotmail.com.au\", \"live.com\", \"live.com.au\", \"msn.com\", \"yahoo.com\", \"yahoo.com.au\",\n  \"ymail.com\", \"icloud.com\", \"me.com\", \"mac.com\", \"aol.com\", \"protonmail.com\", \"proton.me\",\n  \"gmx.com\", \"mail.com\", \"zoho.com\",\n  // AU consumer ISPs\n  \"bigpond.com\", \"bigpond.net.au\", \"bigpond.com.au\", \"optusnet.com.au\", \"iinet.net.au\",\n  \"tpg.com.au\", \"internode.on.net\", \"westnet.com.au\", \"dodo.com.au\", \"iprimus.com.au\",\n  \"exemail.com.au\", \"ozemail.com.au\",\n]);\n\n// Same normalisation the companies lane's Build Company Identity applies, so a domain\n// resolved here and a domain the company lane stored are the same string.\nfunction cleanCompanyDomain(raw) {\n  if (!raw) return null;\n  let d = String(raw).trim().toLowerCase();\n  d = d.replace(/^https?:\\/\\//, \"\").replace(/^www\\./, \"\").split(\"/\")[0];\n  return d || null;\n}\n\nfunction emailDomain(email) {\n  const e = String(email || \"\").trim().toLowerCase();\n  if (!e || e.indexOf(\"@\") === -1) return null;\n  const d = e.split(\"@\").pop();\n  return d || null;\n}\n\n// The domain to search companies by, or null when the row gives no usable one.\n// An explicit column wins; otherwise the email domain, unless it is freemail.\nfunction companyDomainForRow(row) {\n  const explicit = cleanCompanyDomain((row || {}).company_domain || (row || {}).website);\n  if (explicit) return explicit;\n  const d = emailDomain((row || {}).email_normalized || (row || {}).email);\n  if (!d || FREEMAIL_DOMAINS.has(d)) return null;\n  return d;\n}\n\nfunction companyNameForRow(row) {\n  const n = String(((row || {}).company) || \"\").trim();\n  return n || null;\n}\n\n// HubSpot CRM v3 search envelope -> [{id, properties}]. Tolerates an error item (the\n// search nodes run with onError: continueRegularOutput) by returning [].\nfunction searchResults(response) {\n  const res = (response && response.json) || response || {};\n  if (res.error || (res.json && res.json.error)) return [];\n  const results = res.results;\n  if (!Array.isArray(results)) return [];\n  return results.filter((r) => r && r.id);\n}\n\nfunction domainMatchId(response, domain) {\n  if (!domain) return null;\n  const wanted = String(domain).toLowerCase();\n  for (const r of searchResults(response)) {\n    const got = cleanCompanyDomain((r.properties || {}).domain);\n    if (got && got === wanted) return String(r.id);\n  }\n  return null;\n}\n\nfunction nameMatchId(response, name) {\n  if (!name) return null;\n  const wanted = String(name).trim().toLowerCase();\n  const hits = searchResults(response).filter(\n    (r) => String((r.properties || {}).name || \"\").trim().toLowerCase() === wanted\n  );\n  // Two companies with the identical name is an ambiguity, not a match \u2014 hold it.\n  if (hits.length !== 1) return null;\n  return String(hits[0].id);\n}\n\n// The one entry point the n8n node calls. `row` is the ingest row; the two responses are\n// the domain-search and name-search HTTP node outputs for THAT row.\nfunction resolveCompanyLink(row, domainResponse, nameResponse) {\n  const company_domain = companyDomainForRow(row);\n  const company_name = companyNameForRow(row);\n  const manual = String(((row || {}).company_id) || \"\").trim();\n  if (manual) {\n    return {\n      company_id: manual,\n      company_match: \"manual\",\n      company_domain,\n      company_name,\n      company_hold_reason: null,\n    };\n  }\n  const byDomain = domainMatchId(domainResponse, company_domain);\n  if (byDomain) {\n    return { company_id: byDomain, company_match: \"domain\", company_domain, company_name,\n             company_hold_reason: null };\n  }\n  const byName = nameMatchId(nameResponse, company_name);\n  if (byName) {\n    return { company_id: byName, company_match: \"name\", company_domain, company_name,\n             company_hold_reason: null };\n  }\n  let reason;\n  if (!company_domain && !company_name) {\n    reason = \"no company domain or name on the row \u2014 nothing to match a company on\";\n  } else {\n    const tried = [];\n    if (company_domain) tried.push(\"domain \" + company_domain);\n    if (company_name) tried.push(\"name \\\"\" + company_name + \"\\\"\");\n    reason = \"no company in HubSpot matched \" + tried.join(\" or \") +\n             \" \u2014 create or enrich the company first, or name its record id on the row\";\n  }\n  return { company_id: null, company_match: null, company_domain, company_name,\n           company_hold_reason: reason };\n}\n\n// v4 default association: HubSpot-defined contact->company, idempotent, no body.\nfunction associationUrl(contactId, companyId) {\n  if (!contactId || !companyId) return null;\n  return \"https://api.hubapi.com/crm/v4/objects/contacts/\" + String(contactId) +\n         \"/associations/default/companies/\" + String(companyId);\n}\n\n// --- n8n wrapper: per-row company search keys (one item in, one item out) ---\n// The `.invalid` sentinels are the Phase 36 Finding B idiom: a filter value that is\n// `undefined` makes HubSpot reject the whole search (swallowed by\n// onError:continueRegularOutput into an error item), while an RFC 2606 `.invalid` value\n// returns a clean 200 with zero hits. Sentinel in, empty result out, row order preserved.\nreturn $input.all().map((it) => {\n  const row = it.json;\n  return { json: { ...row,\n    company_search_domain: companyDomainForRow(row) || \"no-company-domain.invalid\",\n    company_search_name: companyNameForRow(row) || \"no company name .invalid\",\n  }};\n});\n"
       },
       "id": "c00130000-0000-4000-8000-000000000000",
-      "name": "Decide Action",
+      "name": "Build Company Link",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         2860,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/companies/search",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"domain\", operator: \"EQ\", value: $json.company_search_domain } ] } ], properties: [\"name\",\"domain\"], limit: 5 }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
+      },
+      "id": "h00140000-0000-4000-8000-000000000000",
+      "name": "HubSpot Company Search by Domain",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3080,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/companies/search",
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"name\", operator: \"EQ\", value: $('Build Company Link').item.json.company_search_name } ] } ], properties: [\"name\",\"domain\"], limit: 5 }) }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken"
+      },
+      "id": "h00150000-0000-4000-8000-000000000000",
+      "name": "HubSpot Company Search by Name",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3300,
+        300
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// companyLink.js \u2014 contact -> company resolution for the ingest lane.\n//\n// A contact must never land in HubSpot unassociated (operator ruling, 2026-08-25). This\n// module answers ONE question per row: which company record does this contact belong to?\n// It resolves, it never creates \u2014 an unresolved row is HELD for review, because a junk\n// company shell is worse than a held row, and an existing company must never be\n// duplicated (the company lane already dedupes on `domain`; this keeps ingest honest to\n// the same anchor).\n//\n// Resolution order, strongest first:\n//   1. manual  \u2014 the operator named the company id on the row itself (`company_id`).\n//   2. domain  \u2014 the contact's email domain matched a company's `domain` EXACTLY.\n//   3. name    \u2014 the row's company name matched a company's `name` EXACTLY.\n//\n// ponytail: name matching is exact-EQ only. CONTAINS_TOKEN would raise the hit rate and\n// mis-associate \"Racing Victoria\" onto \"Racing Victoria Foundation\" \u2014 a wrong association\n// is silent and worse than the hold lane it would bypass. Upgrade path if hit rate hurts:\n// a candidate-list return the operator confirms, the way preingest confirms matches.\n//\n// NO npm, dependency-free \u2014 this module is inline()'d verbatim into n8n Code nodes.\n\n// Free/consumer mail domains: an @gmail.com address says nothing about the employer, and\n// searching companies for domain=\"gmail.com\" would associate every such contact onto one\n// arbitrary record. AU ISP domains included \u2014 they are the local shape of the same trap.\nconst FREEMAIL_DOMAINS = new Set([\n  \"gmail.com\", \"googlemail.com\", \"outlook.com\", \"outlook.com.au\", \"hotmail.com\",\n  \"hotmail.com.au\", \"live.com\", \"live.com.au\", \"msn.com\", \"yahoo.com\", \"yahoo.com.au\",\n  \"ymail.com\", \"icloud.com\", \"me.com\", \"mac.com\", \"aol.com\", \"protonmail.com\", \"proton.me\",\n  \"gmx.com\", \"mail.com\", \"zoho.com\",\n  // AU consumer ISPs\n  \"bigpond.com\", \"bigpond.net.au\", \"bigpond.com.au\", \"optusnet.com.au\", \"iinet.net.au\",\n  \"tpg.com.au\", \"internode.on.net\", \"westnet.com.au\", \"dodo.com.au\", \"iprimus.com.au\",\n  \"exemail.com.au\", \"ozemail.com.au\",\n]);\n\n// Same normalisation the companies lane's Build Company Identity applies, so a domain\n// resolved here and a domain the company lane stored are the same string.\nfunction cleanCompanyDomain(raw) {\n  if (!raw) return null;\n  let d = String(raw).trim().toLowerCase();\n  d = d.replace(/^https?:\\/\\//, \"\").replace(/^www\\./, \"\").split(\"/\")[0];\n  return d || null;\n}\n\nfunction emailDomain(email) {\n  const e = String(email || \"\").trim().toLowerCase();\n  if (!e || e.indexOf(\"@\") === -1) return null;\n  const d = e.split(\"@\").pop();\n  return d || null;\n}\n\n// The domain to search companies by, or null when the row gives no usable one.\n// An explicit column wins; otherwise the email domain, unless it is freemail.\nfunction companyDomainForRow(row) {\n  const explicit = cleanCompanyDomain((row || {}).company_domain || (row || {}).website);\n  if (explicit) return explicit;\n  const d = emailDomain((row || {}).email_normalized || (row || {}).email);\n  if (!d || FREEMAIL_DOMAINS.has(d)) return null;\n  return d;\n}\n\nfunction companyNameForRow(row) {\n  const n = String(((row || {}).company) || \"\").trim();\n  return n || null;\n}\n\n// HubSpot CRM v3 search envelope -> [{id, properties}]. Tolerates an error item (the\n// search nodes run with onError: continueRegularOutput) by returning [].\nfunction searchResults(response) {\n  const res = (response && response.json) || response || {};\n  if (res.error || (res.json && res.json.error)) return [];\n  const results = res.results;\n  if (!Array.isArray(results)) return [];\n  return results.filter((r) => r && r.id);\n}\n\nfunction domainMatchId(response, domain) {\n  if (!domain) return null;\n  const wanted = String(domain).toLowerCase();\n  for (const r of searchResults(response)) {\n    const got = cleanCompanyDomain((r.properties || {}).domain);\n    if (got && got === wanted) return String(r.id);\n  }\n  return null;\n}\n\nfunction nameMatchId(response, name) {\n  if (!name) return null;\n  const wanted = String(name).trim().toLowerCase();\n  const hits = searchResults(response).filter(\n    (r) => String((r.properties || {}).name || \"\").trim().toLowerCase() === wanted\n  );\n  // Two companies with the identical name is an ambiguity, not a match \u2014 hold it.\n  if (hits.length !== 1) return null;\n  return String(hits[0].id);\n}\n\n// The one entry point the n8n node calls. `row` is the ingest row; the two responses are\n// the domain-search and name-search HTTP node outputs for THAT row.\nfunction resolveCompanyLink(row, domainResponse, nameResponse) {\n  const company_domain = companyDomainForRow(row);\n  const company_name = companyNameForRow(row);\n  const manual = String(((row || {}).company_id) || \"\").trim();\n  if (manual) {\n    return {\n      company_id: manual,\n      company_match: \"manual\",\n      company_domain,\n      company_name,\n      company_hold_reason: null,\n    };\n  }\n  const byDomain = domainMatchId(domainResponse, company_domain);\n  if (byDomain) {\n    return { company_id: byDomain, company_match: \"domain\", company_domain, company_name,\n             company_hold_reason: null };\n  }\n  const byName = nameMatchId(nameResponse, company_name);\n  if (byName) {\n    return { company_id: byName, company_match: \"name\", company_domain, company_name,\n             company_hold_reason: null };\n  }\n  let reason;\n  if (!company_domain && !company_name) {\n    reason = \"no company domain or name on the row \u2014 nothing to match a company on\";\n  } else {\n    const tried = [];\n    if (company_domain) tried.push(\"domain \" + company_domain);\n    if (company_name) tried.push(\"name \\\"\" + company_name + \"\\\"\");\n    reason = \"no company in HubSpot matched \" + tried.join(\" or \") +\n             \" \u2014 create or enrich the company first, or name its record id on the row\";\n  }\n  return { company_id: null, company_match: null, company_domain, company_name,\n           company_hold_reason: reason };\n}\n\n// v4 default association: HubSpot-defined contact->company, idempotent, no body.\nfunction associationUrl(contactId, companyId) {\n  if (!contactId || !companyId) return null;\n  return \"https://api.hubapi.com/crm/v4/objects/contacts/\" + String(contactId) +\n         \"/associations/default/companies/\" + String(companyId);\n}\n\n// --- n8n wrapper: resolve each row's company id from the two searches ---\n// Index alignment is safe here and only here: both search nodes run once per input item\n// on an UNBRANCHED chain, so search[i] is row i's own answer. (Downstream of the write\n// IFs that stops being true \u2014 which is why Build Association Request joins by value.)\nfunction nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }\nconst rows = $('Build Company Link').all();\nconst byDomain = nodeAll('HubSpot Company Search by Domain');\nconst byName = nodeAll('HubSpot Company Search by Name');\nreturn rows.map((it, i) => {\n  const row = it.json;\n  const link = resolveCompanyLink(\n    row,\n    byDomain[i] && byDomain[i].json,\n    byName[i] && byName[i].json,\n  );\n  return { json: { ...row, ...link } };\n});\n"
+      },
+      "id": "c00160000-0000-4000-8000-000000000000",
+      "name": "Adapt Company Link",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3520,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const ALLOW_HUBSPOT_CREATE = \"false\";\n// Decide Action \u2014 CLOUD variant.\n// Computes action + the HubSpot property patch, then the IF nodes route to the\n// real HubSpot update/create (gated) / Set review nodes.\n// Phase 15: this is the SINGLE serialization point for the provenance blob \u2014 the\n// stamper (mergeContacts.js) returns the parsed provenance object, never a string.\nfunction _sortedForStringify(v) {\n  if (Array.isArray(v)) return v.map(_sortedForStringify);\n  if (v !== null && typeof v === \"object\") {\n    const out = {};\n    for (const k of Object.keys(v).sort()) out[k] = _sortedForStringify(v[k]);\n    return out;\n  }\n  return v;\n}\nfunction _stableStringify(v) { return JSON.stringify(_sortedForStringify(v)); }\nfunction _buildContactPatch(merge) {\n  if (!merge) return {};\n  const patch = { ...merge.canonicalPatch, ...(merge.cacheKeys || {}) };\n  if (merge.provenance && Object.keys(merge.provenance).length) {\n    patch.lv_contact_enrichment_provenance = _stableStringify(merge.provenance).slice(0, 60000);\n  }\n  return patch;\n}\n\nreturn $input.all().map((it) => {\n  const row = it.json;\n  const id = row.identity || {};\n  const outcome = id.outcome || \"rejected\";\n  // D-16/D-16a/D-16b: this used to read row.allow_create, a field seeded on the webhook\n  // item at Set Config \u2014 but Extract From File emits fresh items parsed from the binary\n  // CSV, so nothing seeded upstream of it survives to here (BUG 12/BUG 21 row-loss\n  // family). The sole authority is the baked ALLOW_HUBSPOT_CREATE constant this node\n  // declares (composed at the build site, prepended ahead of this jsCode) \u2014 the SAME\n  // overlayable constant HubSpot Create Write Gate downstream already reads, so arming\n  // creation here still requires that gate's allowlist too. Not OR'd with a row value.\n  const allow_create = String(ALLOW_HUBSPOT_CREATE).toLowerCase() === \"true\";\n  const properties = _buildContactPatch(row.merge);\n  let action;\n  if (outcome === \"match\") action = \"update\";\n  else if (outcome === \"net_new\") action = allow_create ? \"create\" : \"review\";\n  else if (outcome === \"ambiguous\") action = \"review\";\n  else action = \"skip\";\n  // Fail-closed, mirroring the enrichment lanes' lookup_failed -> never-create override:\n  // a \"net_new\" produced by a FAILED search is not a new contact, it is an unknown.\n  if (row.lookup_failed === true && action === \"create\") action = \"review\";\n  // Operator ruling 2026-08-25: a contact must ALWAYS be associated with a company. A\n  // create with no resolved company is HELD, not landed \u2014 an orphan contact is silent\n  // and permanent, a held row is visible and one operator answer away (name the company\n  // record id on the row, or create/enrich the company first). Creates only: an update\n  // targets a record that already exists and may already carry an association this lane\n  // cannot see, so holding it would block ordinary enrichment for no gain.\n  let company_hold = null;\n  if (action === \"create\" && !row.company_id) {\n    action = \"review\";\n    company_hold = row.company_hold_reason || \"no company matched this contact\";\n  }\n  if (action === \"create\") {\n    // BUG 19: identity is never in canonicalPatch (manual_protected), so a create without\n    // this seed writes a record the by-email search can never find again \u2014 and the next\n    // run creates another. Create branch ONLY; on update this would be a clobber.\n    if (row.email) properties.email = row.email;\n    if (row.firstname) properties.firstname = row.firstname;\n    if (row.lastname) properties.lastname = row.lastname;\n    // 37-CONTEXT.md \u00a713(b) / operator's option-b ruling (resolves 37-07's checkpoint):\n    // stamp the poller's work-queue flag so a freshly created contact is swept by the\n    // already-deployed scheduled poller (daily cadence since 2026-08-10) with no further operator action. This\n    // is a work-queue flag the poller searches for, NOT a write gate \u2014 it grants no\n    // permission and opens no write path (ALLOW_HUBSPOT_CREATE above already gates this\n    // whole branch). Create branch ONLY for the same reason the identity seeds above are:\n    // an update targets a record whose enrichment state the operator may already have\n    // curated, and re-flagging it would re-queue work that was deliberately finished.\n    properties.lv_enrichment_requested = \"true\";\n  }\n  return { json: {\n    action,\n    outcome,\n    // BUG 16: this lane historically emitted only `contact_id`, while the write nodes and\n    // the write-safety gates spliced in Phase 16.10 both read `hs_object_id` \u2014 so the\n    // gates evaluated _writeSafetyAllows(action, null, null) and denied unconditionally,\n    // whatever the allowlist said. Emitting both converges this lane on the same row\n    // contract the enrichment lane uses. `contact_id` is retained: Resolve Identity and\n    // the response path still read it.\n    contact_id: id.contact_id || null,\n    hs_object_id: id.contact_id || null,\n    reason: company_hold || id.reason || row.reject_reason || null,\n    email_status: row.email_status || null,\n    // The association lane's row context (2026-08-25). `company_id` is what Build\n    // Association Request joins on; `email` makes a created row identifiable in the\n    // synchronous response before HubSpot has minted its id.\n    email: row.email_normalized || row.email || null,\n    company_id: row.company_id || null,\n    company_match: row.company_match || null,\n    company_domain: row.company_domain || null,\n    properties\n  }};\n});\n"
+      },
+      "id": "c00170000-0000-4000-8000-000000000000",
+      "name": "Decide Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3740,
         300
       ]
     },
@@ -215,7 +289,7 @@
           "combinator": "and",
           "conditions": [
             {
-              "id": "i00140000-0000-4000-8000-000000000000",
+              "id": "i00180000-0000-4000-8000-000000000000",
               "leftValue": "={{ $json.action }}",
               "rightValue": "update",
               "operator": {
@@ -226,12 +300,12 @@
           ]
         }
       },
-      "id": "if00150000-0000-4000-8000-000000000000",
+      "id": "if00190000-0000-4000-8000-000000000000",
       "name": "IF Update",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        3080,
+        3960,
         300
       ]
     },
@@ -248,12 +322,12 @@
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "h00160000-0000-4000-8000-000000000000",
+      "id": "h00200000-0000-4000-8000-000000000000",
       "name": "HubSpot Update",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3300,
+        4180,
         180
       ]
     },
@@ -268,7 +342,7 @@
           "combinator": "and",
           "conditions": [
             {
-              "id": "i00170000-0000-4000-8000-000000000000",
+              "id": "i00210000-0000-4000-8000-000000000000",
               "leftValue": "={{ $json.action }}",
               "rightValue": "create",
               "operator": {
@@ -279,12 +353,12 @@
           ]
         }
       },
-      "id": "if00180000-0000-4000-8000-000000000000",
+      "id": "if00220000-0000-4000-8000-000000000000",
       "name": "IF Create",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        3300,
+        4180,
         360
       ]
     },
@@ -301,12 +375,12 @@
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "hubspotAppToken"
       },
-      "id": "h00190000-0000-4000-8000-000000000000",
+      "id": "h00230000-0000-4000-8000-000000000000",
       "name": "HubSpot Create",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        3520,
+        4400,
         280
       ]
     },
@@ -315,7 +389,7 @@
         "assignments": {
           "assignments": [
             {
-              "id": "a00200000-0000-4000-8000-000000000000",
+              "id": "a00240000-0000-4000-8000-000000000000",
               "name": "queue",
               "value": "needs_review",
               "type": "string"
@@ -324,13 +398,60 @@
         },
         "options": {}
       },
-      "id": "r00210000-0000-4000-8000-000000000000",
+      "id": "r00250000-0000-4000-8000-000000000000",
       "name": "Set Review",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
       "position": [
-        3520,
+        4400,
         440
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// companyLink.js \u2014 contact -> company resolution for the ingest lane.\n//\n// A contact must never land in HubSpot unassociated (operator ruling, 2026-08-25). This\n// module answers ONE question per row: which company record does this contact belong to?\n// It resolves, it never creates \u2014 an unresolved row is HELD for review, because a junk\n// company shell is worse than a held row, and an existing company must never be\n// duplicated (the company lane already dedupes on `domain`; this keeps ingest honest to\n// the same anchor).\n//\n// Resolution order, strongest first:\n//   1. manual  \u2014 the operator named the company id on the row itself (`company_id`).\n//   2. domain  \u2014 the contact's email domain matched a company's `domain` EXACTLY.\n//   3. name    \u2014 the row's company name matched a company's `name` EXACTLY.\n//\n// ponytail: name matching is exact-EQ only. CONTAINS_TOKEN would raise the hit rate and\n// mis-associate \"Racing Victoria\" onto \"Racing Victoria Foundation\" \u2014 a wrong association\n// is silent and worse than the hold lane it would bypass. Upgrade path if hit rate hurts:\n// a candidate-list return the operator confirms, the way preingest confirms matches.\n//\n// NO npm, dependency-free \u2014 this module is inline()'d verbatim into n8n Code nodes.\n\n// Free/consumer mail domains: an @gmail.com address says nothing about the employer, and\n// searching companies for domain=\"gmail.com\" would associate every such contact onto one\n// arbitrary record. AU ISP domains included \u2014 they are the local shape of the same trap.\nconst FREEMAIL_DOMAINS = new Set([\n  \"gmail.com\", \"googlemail.com\", \"outlook.com\", \"outlook.com.au\", \"hotmail.com\",\n  \"hotmail.com.au\", \"live.com\", \"live.com.au\", \"msn.com\", \"yahoo.com\", \"yahoo.com.au\",\n  \"ymail.com\", \"icloud.com\", \"me.com\", \"mac.com\", \"aol.com\", \"protonmail.com\", \"proton.me\",\n  \"gmx.com\", \"mail.com\", \"zoho.com\",\n  // AU consumer ISPs\n  \"bigpond.com\", \"bigpond.net.au\", \"bigpond.com.au\", \"optusnet.com.au\", \"iinet.net.au\",\n  \"tpg.com.au\", \"internode.on.net\", \"westnet.com.au\", \"dodo.com.au\", \"iprimus.com.au\",\n  \"exemail.com.au\", \"ozemail.com.au\",\n]);\n\n// Same normalisation the companies lane's Build Company Identity applies, so a domain\n// resolved here and a domain the company lane stored are the same string.\nfunction cleanCompanyDomain(raw) {\n  if (!raw) return null;\n  let d = String(raw).trim().toLowerCase();\n  d = d.replace(/^https?:\\/\\//, \"\").replace(/^www\\./, \"\").split(\"/\")[0];\n  return d || null;\n}\n\nfunction emailDomain(email) {\n  const e = String(email || \"\").trim().toLowerCase();\n  if (!e || e.indexOf(\"@\") === -1) return null;\n  const d = e.split(\"@\").pop();\n  return d || null;\n}\n\n// The domain to search companies by, or null when the row gives no usable one.\n// An explicit column wins; otherwise the email domain, unless it is freemail.\nfunction companyDomainForRow(row) {\n  const explicit = cleanCompanyDomain((row || {}).company_domain || (row || {}).website);\n  if (explicit) return explicit;\n  const d = emailDomain((row || {}).email_normalized || (row || {}).email);\n  if (!d || FREEMAIL_DOMAINS.has(d)) return null;\n  return d;\n}\n\nfunction companyNameForRow(row) {\n  const n = String(((row || {}).company) || \"\").trim();\n  return n || null;\n}\n\n// HubSpot CRM v3 search envelope -> [{id, properties}]. Tolerates an error item (the\n// search nodes run with onError: continueRegularOutput) by returning [].\nfunction searchResults(response) {\n  const res = (response && response.json) || response || {};\n  if (res.error || (res.json && res.json.error)) return [];\n  const results = res.results;\n  if (!Array.isArray(results)) return [];\n  return results.filter((r) => r && r.id);\n}\n\nfunction domainMatchId(response, domain) {\n  if (!domain) return null;\n  const wanted = String(domain).toLowerCase();\n  for (const r of searchResults(response)) {\n    const got = cleanCompanyDomain((r.properties || {}).domain);\n    if (got && got === wanted) return String(r.id);\n  }\n  return null;\n}\n\nfunction nameMatchId(response, name) {\n  if (!name) return null;\n  const wanted = String(name).trim().toLowerCase();\n  const hits = searchResults(response).filter(\n    (r) => String((r.properties || {}).name || \"\").trim().toLowerCase() === wanted\n  );\n  // Two companies with the identical name is an ambiguity, not a match \u2014 hold it.\n  if (hits.length !== 1) return null;\n  return String(hits[0].id);\n}\n\n// The one entry point the n8n node calls. `row` is the ingest row; the two responses are\n// the domain-search and name-search HTTP node outputs for THAT row.\nfunction resolveCompanyLink(row, domainResponse, nameResponse) {\n  const company_domain = companyDomainForRow(row);\n  const company_name = companyNameForRow(row);\n  const manual = String(((row || {}).company_id) || \"\").trim();\n  if (manual) {\n    return {\n      company_id: manual,\n      company_match: \"manual\",\n      company_domain,\n      company_name,\n      company_hold_reason: null,\n    };\n  }\n  const byDomain = domainMatchId(domainResponse, company_domain);\n  if (byDomain) {\n    return { company_id: byDomain, company_match: \"domain\", company_domain, company_name,\n             company_hold_reason: null };\n  }\n  const byName = nameMatchId(nameResponse, company_name);\n  if (byName) {\n    return { company_id: byName, company_match: \"name\", company_domain, company_name,\n             company_hold_reason: null };\n  }\n  let reason;\n  if (!company_domain && !company_name) {\n    reason = \"no company domain or name on the row \u2014 nothing to match a company on\";\n  } else {\n    const tried = [];\n    if (company_domain) tried.push(\"domain \" + company_domain);\n    if (company_name) tried.push(\"name \\\"\" + company_name + \"\\\"\");\n    reason = \"no company in HubSpot matched \" + tried.join(\" or \") +\n             \" \u2014 create or enrich the company first, or name its record id on the row\";\n  }\n  return { company_id: null, company_match: null, company_domain, company_name,\n           company_hold_reason: reason };\n}\n\n// v4 default association: HubSpot-defined contact->company, idempotent, no body.\nfunction associationUrl(contactId, companyId) {\n  if (!contactId || !companyId) return null;\n  return \"https://api.hubapi.com/crm/v4/objects/contacts/\" + String(contactId) +\n         \"/associations/default/companies/\" + String(companyId);\n}\n\n// --- n8n wrapper: written contact -> association request (join by VALUE, not index) ---\n// Input is the create/update HTTP response, downstream of the write IFs, so this node's\n// item i is NOT Decide Action's row i. Join instead on what the response actually\n// carries: an update response's `id` IS the row's hs_object_id; a create response has no\n// upstream id, but its `properties.email` is the identity seed the create branch wrote.\n// A response with no id at all (a write that failed) is dropped \u2014 fail closed, never\n// associate a record we cannot name.\nfunction nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }\nconst decided = nodeAll('Decide Action').map((it) => it.json);\nconst out = [];\nfor (const it of $input.all()) {\n  const res = it.json || {};\n  const contactId = res.id != null ? String(res.id) : null;\n  if (!contactId) continue;\n  const email = String((res.properties && res.properties.email) || \"\").toLowerCase();\n  let row = decided.find((r) => r.hs_object_id && String(r.hs_object_id) === contactId) || null;\n  if (!row && email) {\n    row = decided.find(\n      (r) => String((r.properties && r.properties.email) || \"\").toLowerCase() === email\n    ) || null;\n  }\n  const company_id = row && row.company_id ? String(row.company_id) : null;\n  // An UPDATE with no resolved company is not held (the contact already exists, and it\n  // may already carry an association this lane cannot see) \u2014 it simply has nothing to\n  // associate. Only creates are held, at Decide Action.\n  if (!company_id) continue;\n  out.push({ json: {\n    action: \"enrich\",\n    hs_object_id: contactId,\n    contact_id: contactId,\n    email: email || (row && row.email) || null,\n    domain: (row && row.company_domain) || null,\n    company_id,\n    company_match: (row && row.company_match) || null,\n    assoc_url: associationUrl(contactId, company_id),\n  }});\n}\nreturn out;\n"
+      },
+      "id": "c00260000-0000-4000-8000-000000000000",
+      "name": "Build Association Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4620,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $json.assoc_url }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "h00270000-0000-4000-8000-000000000000",
+      "name": "HubSpot Associate Company",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4840,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Build Ingest Response \u2014 the lane's per-row synchronous body.\n// Every row Decide Action produced, with what actually happened to it, in a shape\n// report.py's sync_response_is_sufficient() accepts (each item carries contact_id /\n// hs_object_id / email). A row that never reached the association subgraph still appears\n// here \u2014 the alternative is a response that silently omits held and gated rows.\nfunction nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }\nconst decided = nodeAll('Decide Action').map((it) => it.json);\nconst requested = nodeAll('Build Association Request').map((it) => it.json);\nconst gatedRows = nodeAll('HubSpot Associate Company Write Gate').map((it) => it.json);\nconst results = $input.all();\n// results[i] is gatedRows[i]'s own response \u2014 the association HTTP node runs once per\n// item on a straight chain out of its gate.\nconst associated = {};\ngatedRows.forEach((g, i) => {\n  const r = results[i] && results[i].json;\n  if (r && !r.error) associated[String(g.contact_id)] = true;\n});\nconst requestedByEmail = {};\nconst requestedById = {};\nfor (const r of requested) {\n  if (r.email) requestedByEmail[String(r.email).toLowerCase()] = r;\n  if (r.contact_id) requestedById[String(r.contact_id)] = r;\n}\nreturn decided.map((row) => {\n  const email = String((row.properties && row.properties.email) || row.email || \"\").toLowerCase();\n  const req = (row.hs_object_id && requestedById[String(row.hs_object_id)]) ||\n              (email && requestedByEmail[email]) || null;\n  const contactId = (req && req.contact_id) || row.hs_object_id || row.contact_id || null;\n  let association;\n  if (!req) {\n    association = row.company_id ? \"not_attempted\" : \"none\";\n  } else if (associated[String(req.contact_id)]) {\n    association = \"associated\";\n  } else {\n    association = \"not_confirmed\";  // the write gate dropped it, or HubSpot refused it\n  }\n  return { json: {\n    action: row.action,\n    outcome: row.outcome || null,\n    contact_id: contactId,\n    hs_object_id: contactId,\n    email: email || null,\n    company_id: row.company_id || null,\n    company_match: row.company_match || null,\n    association,\n    reason: row.reason || null,\n    email_status: row.email_status || null,\n  }};\n});\n"
+      },
+      "id": "c00280000-0000-4000-8000-000000000000",
+      "name": "Build Ingest Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5060,
+        280
       ]
     },
     {
@@ -339,7 +460,7 @@
         "height": 360,
         "width": 460
       },
-      "id": "s00220000-0000-4000-8000-000000000000",
+      "id": "s00290000-0000-4000-8000-000000000000",
       "name": "Sticky Note",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
@@ -353,12 +474,12 @@
         "mode": "runOnceForAllItems",
         "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Drops any row the allowlist does not permit. An empty allowlist denies all.\nreturn $input.all().filter((it) => _writeSafetyAllows(\n  'enrich',\n  it.json.hs_object_id || (it.json.existingRecord && it.json.existingRecord.hs_object_id) || null,\n  (it.json.identity_keys && it.json.identity_keys.domain) || it.json.domain || null,\n));\n"
       },
-      "id": "c00230000-0000-4000-8000-000000000000",
+      "id": "c00300000-0000-4000-8000-000000000000",
       "name": "HubSpot Update Write Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3150,
+        4030,
         180
       ]
     },
@@ -367,12 +488,26 @@
         "mode": "runOnceForAllItems",
         "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Drops any row the allowlist does not permit. An empty allowlist denies all.\nreturn $input.all().filter((it) => _writeSafetyAllows(\n  'create',\n  it.json.hs_object_id || (it.json.existingRecord && it.json.existingRecord.hs_object_id) || null,\n  (it.json.identity_keys && it.json.identity_keys.domain) || it.json.domain\n    || ((it.json.properties && it.json.properties.email && String(it.json.properties.email).indexOf('@') !== -1) ? String(it.json.properties.email).split('@').pop() : null)\n    || ((it.json.email && String(it.json.email).indexOf('@') !== -1) ? String(it.json.email).split('@').pop() : null),\n));\n"
       },
-      "id": "c00240000-0000-4000-8000-000000000000",
+      "id": "c00310000-0000-4000-8000-000000000000",
       "name": "HubSpot Create Write Gate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        3370,
+        4250,
+        280
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const ALLOW_HUBSPOT_RECORD_WRITES = \"false\";\nconst ALLOW_HUBSPOT_CREATE = \"false\";\nconst ALLOW_HUBSPOT_REVIEW_WRITES = \"false\";\nconst TEST_RECORD_DOMAINS = \"\";\nconst TEST_RECORD_IDS = \"\";\nconst ALLOW_SJ3_DRAIN_WRITES = \"true\";\nfunction _writeSafetyAllows(action, hsObjectId, domain) {\n  // Review writeback has its OWN authority (D-02): the review action never consults\n  // ALLOW_HUBSPOT_RECORD_WRITES, and no other action consults ALLOW_HUBSPOT_REVIEW_WRITES,\n  // so arming either gate grants nothing on the other path. The allowlist below is\n  // shared and mandatory for both.\n  if (action === \"review\") {\n    if (String(ALLOW_HUBSPOT_REVIEW_WRITES).toLowerCase() !== \"true\") return false;\n  } else {\n    if (String(ALLOW_HUBSPOT_RECORD_WRITES).toLowerCase() !== \"true\") return false;\n    if (action === \"create\" && String(ALLOW_HUBSPOT_CREATE).toLowerCase() !== \"true\") return false;\n  }\n  const allowedDomains = String(TEST_RECORD_DOMAINS).split(\",\").map((s) => s.trim().toLowerCase()).filter(Boolean);\n  const allowedIds = String(TEST_RECORD_IDS).split(\",\").map((s) => s.trim()).filter(Boolean);\n  if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything\n  if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;\n  if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;\n  return false;\n}\n\n// Drops any row the allowlist does not permit. An empty allowlist denies all.\nreturn $input.all().filter((it) => _writeSafetyAllows(\n  'enrich',\n  it.json.hs_object_id || (it.json.existingRecord && it.json.existingRecord.hs_object_id) || null,\n  (it.json.identity_keys && it.json.identity_keys.domain) || it.json.domain || null,\n));\n"
+      },
+      "id": "c00320000-0000-4000-8000-000000000000",
+      "name": "HubSpot Associate Company Write Gate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4690,
         280
       ]
     }
@@ -503,6 +638,50 @@
       "main": [
         [
           {
+            "node": "Build Company Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Company Link": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Company Search by Domain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Company Search by Domain": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Company Search by Name",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Company Search by Name": {
+      "main": [
+        [
+          {
+            "node": "Adapt Company Link",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Adapt Company Link": {
+      "main": [
+        [
+          {
             "node": "Decide Action",
             "type": "main",
             "index": 0
@@ -515,6 +694,50 @@
         [
           {
             "node": "IF Update",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Association Request": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Associate Company Write Gate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Associate Company": {
+      "main": [
+        [
+          {
+            "node": "Build Ingest Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Update": {
+      "main": [
+        [
+          {
+            "node": "Build Association Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Create": {
+      "main": [
+        [
+          {
+            "node": "Build Association Request",
             "type": "main",
             "index": 0
           }
@@ -573,6 +796,17 @@
         [
           {
             "node": "HubSpot Create",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot Associate Company Write Gate": {
+      "main": [
+        [
+          {
+            "node": "HubSpot Associate Company",
             "type": "main",
             "index": 0
           }

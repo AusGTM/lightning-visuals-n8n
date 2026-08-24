@@ -22,6 +22,7 @@ extra event keys onto the row for a direct-field test payload, which does nothin
 record that already exists in HubSpot and only widens what crosses the boundary.
 """
 import json
+import re
 
 import requests
 
@@ -155,6 +156,19 @@ def normalize_object_type(value):
     return normalized
 
 
+def _clean_domain(raw):
+    """The deployed `Build Company Identity`'s cleanDomain(), mirrored: lowercase, strip
+    scheme and `www.`, keep the host only. Same string on both sides of the boundary or
+    the backend searches for something the operator never saw."""
+    if not raw:
+        return None
+    domain = str(raw).strip().lower()
+    domain = re.sub(r"^https?://", "", domain)
+    domain = re.sub(r"^www\.", "", domain)
+    domain = domain.split("/")[0]
+    return domain or None
+
+
 def build_envelope(spec, providers):
     """The POST body, from a record specification and an already-resolved selection.
 
@@ -162,6 +176,7 @@ def build_envelope(spec, providers):
       {"record_ids": [...], "object_type": "companies"}  -> an events array
       {"list": "<name>", "object_type": "contacts"}      -> the identifier, verbatim
       {"rows": [...], "object_type": "contacts"}         -> a `mode: "propose"` events array
+      {"companies": [{"name","domain"}]}                 -> a WRITE-mode events array
       {"view": "<name>"}                                 -> refused (amendment #7)
 
     A list identifier is carried through untouched: the client does not resolve it, does
@@ -222,6 +237,40 @@ def build_envelope(spec, providers):
                 event[key] = _lookup_value(row, key)
             events.append(event)
         envelope["mode"] = "propose"
+        envelope["events"] = events
+        return envelope
+
+    if "companies" in spec:
+        # A COMPANIES form describes companies that may not be in HubSpot yet
+        # (2026-08-25). It is the only write-mode form built from operator-typed input,
+        # and `domain` is mandatory for exactly that reason: domain is the identity
+        # anchor the backend's company lane searches on, and a domainless company can
+        # neither be deduped nor matched — it could only ever be created, which is the
+        # duplicate-company shape this form exists to avoid.
+        companies = spec["companies"]
+        if not isinstance(companies, (list, tuple)) or not companies:
+            raise RecordSpecError(
+                "No companies were given, so there is nothing to enrich or create. "
+                "Name at least one company with its website domain."
+            )
+        events = []
+        for company in companies:
+            if not isinstance(company, dict):
+                raise RecordSpecError(
+                    "Each company must give a name and a domain."
+                )
+            domain = _clean_domain(company.get("domain") or company.get("website"))
+            if not domain:
+                raise RecordSpecError(
+                    f"{company.get('name') or 'A company'} was given without a website "
+                    f"domain. Domain is how HubSpot is searched for an existing record; "
+                    f"without one the company could only be created, never matched."
+                )
+            event = {"objectType": "companies", "domain": domain}
+            name = str(company.get("name") or "").strip()
+            if name:
+                event["name"] = name
+            events.append(event)
         envelope["events"] = events
         return envelope
 

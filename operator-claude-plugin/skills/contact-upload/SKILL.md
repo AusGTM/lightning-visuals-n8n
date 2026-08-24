@@ -162,6 +162,17 @@ be sent, and — only when explicitly armed — send it.
    the preview as a prediction of what the backend will do, not a transformation this
    plugin performed.
 
+   **Say what the company rule means for this file, here, before any arming.** Since
+   2026-08-25 the backend never creates a contact it cannot associate to a company: a new
+   contact whose company cannot be resolved is **held for review**, not created. The
+   backend resolves it from the contact's email domain first (a free/consumer address —
+   gmail, bigpond, optusnet — resolves nothing), then from an exact company-name match,
+   and it never creates a company itself. So an upload of new contacts at a company that
+   is not in HubSpot yet will hold every one of those rows. If that is this file, say so
+   now and offer the two ways through: enrich or create the company first with
+   `enrich-records`, or give the rows a `company_id` column naming the HubSpot company
+   record id directly.
+
    Render the result as a **markdown table in chat by default.** Only publish it as an
    Artifact if the operator asks for one. Always show:
    - the total row count (`row_count`)
@@ -256,6 +267,26 @@ be sent, and — only when explicitly armed — send it.
       printing it — full per-row detail can carry contact PII (email, phone, name),
       so keep it to the actionable subset or an explicit ask. Never paste a raw
       execution payload into the conversation.
+
+   **Report the association, per row, alongside the write.** Each row in the
+   synchronous body carries `association`: `associated` (the contact is now linked to
+   `company_id`), `not_confirmed` (the association was gated or HubSpot refused it —
+   the contact landed, the link did not), `not_attempted`, or `none` (no company was
+   resolved for this row). A row whose `action` is `review` with a `reason` mentioning a
+   company was **held on purpose** — nothing was written for it, and it is not a failure
+   to retry blindly. Name those rows individually with their reason.
+
+   **Offer the manual override for held rows, once, in that same message.** The operator
+   can answer with the company for any held row, in one line per row:
+
+   - `<row>. company: <hubspot company id>` — associate this row to that company record.
+   - `<row>. company: <domain>` — the company's website domain, if they have that rather
+     than the id; look it up with `enrich-records`' companies form first, then use the id
+     it resolves.
+
+   Apply the answers by adding a `company_id` column to that row in a **new** dispatch CSV
+   (never the operator's original file) and re-sending it through step 6's arming gate — a
+   re-send is a send. Do not carry an answer over to a row the operator did not name.
 
    If a row's `email_status` is `NO_EMAIL` and its outcome is `ambiguous`, say
    plainly that this row cannot resolve on retry — the deployed workflow searches

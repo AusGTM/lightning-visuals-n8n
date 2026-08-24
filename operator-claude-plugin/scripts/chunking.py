@@ -157,6 +157,26 @@ def plan_chunks(spec, ceiling):
             record_count=len(rows),
         )
 
+    if "companies" in spec:
+        # 2026-08-25: companies that may not be in HubSpot yet. Chunked exactly like a
+        # rows batch — the backend matches each on `domain` and creates only what it
+        # cannot find, so a chunk boundary changes nothing about the outcome.
+        companies = spec["companies"]
+        if not isinstance(companies, (list, tuple)) or not companies:
+            raise ChunkPlanError(
+                "No companies were given, so there is nothing to enrich and nothing to "
+                "plan. Name at least one company with its website domain."
+            )
+        chunks = tuple(
+            {"companies": list(companies[start:start + ceiling])}
+            for start in range(0, len(companies), ceiling)
+        )
+        return ChunkPlan(
+            chunks=chunks,
+            row_counts=tuple(len(chunk["companies"]) for chunk in chunks),
+            record_count=len(companies),
+        )
+
     record_ids = spec.get("record_ids")
     if not isinstance(record_ids, (list, tuple)) or not record_ids:
         raise ChunkPlanError(
