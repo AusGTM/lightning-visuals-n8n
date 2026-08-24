@@ -62,33 +62,43 @@ these words, that the company is matched on its **domain** first, that an existi
 is enriched in place and **never duplicated**, and that one with no match is **created if
 creation is armed**. If it does not say that, stop — you are on the old plugin.
 
-**Then arm, in one decision.** Say:
+**Then send it, as ONE decision.** Arming, sending and disarming are a single action —
+`control_actions.execute_action` opens an armed window, runs the dispatch inside it, and
+disarms on the way out, whatever happens in between. Do not ask for them separately. Say:
 
-> Enable live writes for this send: workflow LV Enrichment, domain grv.org.au, allow
-> create.
+> Send this batch with live writes on, bounded to grv.org.au, and allow it to create the
+> company.
 
-The control surface reads the current state, shows you the consequence (live writes on
-for this send only, bounded to that one domain, off again when the send finishes) and
-waits for an explicit yes. Say yes only to that exact statement.
+The control surface reads the backend's current state and shows you one consequence: live
+writes on for this send only, bounded to that one domain (the backend cannot write any
+record outside the allowlist), off again the moment the send finishes. Say **yes** to that
+exact statement — one yes, one cycle. The arm and the disarm each deactivate and
+reactivate the workflow, which is what makes the running instance pick up the change; a
+bare write to n8n would not.
 
-Then: **"arm the enrichment"**, and let it dispatch.
+The result reports `verified` only after an independent re-read of the backend. If it
+comes back **`disarm_failed`**, that is its own state and outranks everything else in the
+report: live writes may still be on and an admin must check n8n directly.
 
 **Read the outcome.** The lane reports at chunk granularity. Ask for backend status, or
 ask it to check the company, to see the record itself. Expect a new company with
 `lv_org_type`, `lv_produces_content`, an ICP score and a tier.
 
-**If the disarm did not confirm**, that outranks everything else in the report: live
-writes may still be on and an admin must check n8n. Do not continue the walk until it is
-confirmed off.
+Do not continue the walk until the disarm is confirmed.
 
 ## 2. Confirm the company is findable before touching contacts
 
 HubSpot's search index is eventually consistent — a company created seconds ago may not
-answer a domain search yet. Ask:
+answer a domain search yet. Ask for the same enrich-records form again, **with providers
+set to none, and do not arm anything**:
 
-> Check whether Greyhound Racing Victoria is in HubSpot now, by domain.
+> Run enrich-records for Greyhound Racing Victoria, grv.org.au, with providers none. Don't
+> arm anything — I just want to know whether it resolves now.
 
-Nothing here is armed and nothing costs anything. **Do not go to step 3 until the company
+Expect the backend to report the record as already existing (its gate says `skip` or
+`enrich`, with a record id) rather than proposing to create it. Providers `none` makes
+that check structurally free rather than accidentally free — do not run it with the
+default full waterfall. **Do not go to step 3 until the company
 comes back with a record id.** Skipping this wait is the one way to make a correct walk
 look broken: the contact would be held for "no company matched", which is the system
 working exactly as designed on a company it cannot yet see.
@@ -114,12 +124,14 @@ will not create a contact it cannot associate to a company, how it resolves one 
 domain, then exact company name), and what would happen to this file if the company were
 missing. Read that and check it matches what step 2 confirmed.
 
-**Arm, in one decision:**
+**Send it, as one decision** — same single arm-send-disarm cycle as step 1, on the other
+workflow:
 
-> Enable live writes for this send: workflow LV Contact Ingest, domain grv.org.au, allow
-> create.
+> Send this upload with live writes on, bounded to grv.org.au, and allow it to create the
+> contact.
 
-Confirm the consequence, then say **"arm the upload"**.
+Read the consequence back, say **yes** once, and let the cycle run. Again: a
+`disarm_failed` result outranks everything else.
 
 **Read the per-row outcome.** Each row now reports an `association` alongside its write:
 
