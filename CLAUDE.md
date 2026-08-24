@@ -2345,6 +2345,14 @@ company**: a `create` that resolves no company is downgraded to `review` at `Dec
 with the reason kept. An `update` is never held — it may already carry an association this
 lane cannot see — it simply has nothing to associate.
 
+The **companies branch resolves the same two keys** as of the same date: `HubSpot Company
+Search` (domain EQ) then, on the search branch only, `HubSpot Company Name Search` ->
+`Adapt Company Name Search` (exact name, single hit, never overriding a domain hit, never
+firing when `lookup_failed`). Before that it resolved on domain alone, and a company held
+in the portal under a different domain read as absent — live proof: Harness Racing NSW,
+company `18756544347` under `www.harnessmediacentre.com.au`, would have been duplicated by
+a `hrnsw.com.au` request (execution `11922`).
+
 Company creation stays where dedupe already lives: the companies branch of
 `wf_enrichment_cloud`, now reachable from the plugin via the `{"companies": [{"name",
 "domain"}]}` spec form (`enrichment.build_envelope`, domain mandatory, no `mode`).

@@ -26,6 +26,16 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   decided row (`action`, `contact_id`, `company_id`, `association`, `reason`), which
   `report.py::sync_response_is_sufficient` accepts — previously the response was whichever
   branch happened to run last.
+- **Company-lane name fallback (2026-08-25), found live.** The companies branch of
+  `wf_enrichment_cloud` resolved on `domain` alone, so a company already in the portal
+  under a *different* domain read as absent and the gate said "create". Proven live by the
+  ingest lane's own rehearsal (n8n execution `11922`): Harness Racing NSW is company
+  `18756544347` under `www.harnessmediacentre.com.au`, and a `hrnsw.com.au` request would
+  have duplicated it. Two nodes added on the search branch only (`HubSpot Company Name
+  Search` -> `Adapt Company Name Search`): an EXACT single-hit name match, applied only
+  where the domain search found nothing, never overriding a domain hit and never firing on
+  a failed lookup (an unknown is not an absence). The fetch-by-id branch is untouched.
+
 - **Companies spec form in the plugin (2026-08-25).** `enrichment.build_envelope` accepts
   `{"companies": [{"name", "domain"}]}` and emits a write-mode `companies` events array,
   making the backend's existing `HubSpot Company Create` lane reachable from Claude for

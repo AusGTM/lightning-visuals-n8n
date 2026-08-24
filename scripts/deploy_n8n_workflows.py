@@ -63,6 +63,8 @@ NODE_CREDENTIAL_MAP = {
     "HubSpot List By Name": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot List Memberships": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot Company Search": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    # 2026-08-25 company name fallback (dedupe by name when domain misses).
+    "HubSpot Company Name Search": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     # 2026-08-25, contact->company association lane (ingest): registered in the SAME
     # commit as the nodes' creation, per this repo's convention. An unmapped HubSpot node
     # deploys UNBOUND and silently 401s at runtime — sixth repetition of that lesson.

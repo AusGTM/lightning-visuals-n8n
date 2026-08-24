@@ -2050,6 +2050,52 @@ return rows.map((it, i) => {
 });
 """
 
+# 2026-08-25: domain-only resolution proved insufficient LIVE — Harness Racing NSW sits in
+# portal 22617666 as company 18756544347 under domain `www.harnessmediacentre.com.au`, so a
+# `hrnsw.com.au` request resolved to NOTHING and the gate said "create". That is the
+# duplicate-company outcome the operator ruled out ("if that company already exists in
+# HubSpot, it should never be recreated"). The name search is the same second key the ingest
+# lane resolves on (n8n/code/companyLink.js), applied here as the fallback: EXACT name only,
+# and only when exactly one company carries that name — two same-named companies is an
+# ambiguity, and picking either would be the mis-association a domain miss was already
+# safer than.
+HS_CO_NAME_SEARCH_FILTERS = [[{
+    "propertyName": "name", "operator": "EQ",
+    # `.invalid` sentinel, the Phase 36 Finding B idiom: an `undefined` filter value makes
+    # HubSpot reject the whole search, which onError:continueRegularOutput would then
+    # swallow into an item; a sentinel returns a clean 200 with zero hits.
+    "value": ("={{ $('Build Company Identity').item.json.identity_keys.companyName "
+              "|| 'no company name .invalid' }}"),
+}]]
+
+ENRICH_ADAPT_CO_NAME_SEARCH = r"""// Adapt Company Name Search — the domain miss's second chance.
+// Only rows whose domain search found NOTHING are eligible: a domain hit is the stronger
+// key and is never overridden by a name. A failed domain lookup (lookup_failed) is left
+// exactly as it is — fail-closed, an unknown is not an absence.
+function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
+const rows = $('Adapt Company Search').all();
+const search = nodeAll('HubSpot Company Name Search');
+return rows.map((it, i) => {
+  const row = it.json;
+  const existing = row.existingRecord || {};
+  if (row.lookup_failed === true || existing.hs_object_id) return { json: row };
+  const wanted = String((row.identity_keys && row.identity_keys.companyName) || "").trim().toLowerCase();
+  if (!wanted) return { json: row };
+  const item = search[i];
+  const res = (item && item.json) || {};
+  if (item && (item.error || res.error)) return { json: row };
+  const hits = (Array.isArray(res.results) ? res.results : []).filter(
+    (r) => r && r.id &&
+      String((r.properties || {}).name || "").trim().toLowerCase() === wanted
+  );
+  if (hits.length !== 1) return { json: row };
+  return { json: { ...row,
+    existingRecord: { ...(hits[0].properties || {}), hs_object_id: String(hits[0].id) },
+    company_match_basis: "name",
+  }};
+});
+"""
+
 # Company staleness gate. Different REQUIRED + TTL anchor from contacts — this is exactly
 # why the branches are siblings and not one shared gate node.
 #
@@ -4889,6 +4935,16 @@ def build_enrichment_cloud():
     cx += 220
     adapt_co_search_x = cx
     nodes.append(code_node("Adapt Company Search", ENRICH_ADAPT_CO_SEARCH, cx, cy))
+    # 2026-08-25 name fallback — see HS_CO_NAME_SEARCH_FILTERS. Sits on the SEARCH branch
+    # only: the fetch-by-id branch already has its record and never needs resolving.
+    cx += 220
+    nodes.append(_hs_http_search_node(
+        "HubSpot Company Name Search", "company", cx, cy,
+        filter_groups=HS_CO_NAME_SEARCH_FILTERS,
+        properties_csv=ENRICH_COMPANY_SEARCH_PROPERTIES_CSV,
+    ))
+    cx += 220
+    nodes.append(code_node("Adapt Company Name Search", ENRICH_ADAPT_CO_NAME_SEARCH, cx, cy))
     cx += 220
     nodes.append(code_node("Company Gate", ENRICH_CO_GATE, cx, cy))
     cx += 220
@@ -5319,7 +5375,8 @@ return $input.all().map((it, i) => {
     ]))
     conns.update(chain([
         "HubSpot Company Search",
-        "Adapt Company Search", "Company Gate",
+        "Adapt Company Search", "HubSpot Company Name Search",
+        "Adapt Company Name Search", "Company Gate",
     ]))
     # Phase 47.5 Plan 01: Company Gate's single outgoing edge is no longer
     # "Build Company Requests" — it is the recompute lane's entry. Both chain() calls above
