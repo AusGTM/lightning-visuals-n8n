@@ -46,6 +46,7 @@ variable), and a design that runs the provider waterfall twice per written recor
 - [ ] **Phase 53: Operator-openable write grant** - Replace the interactive path's
       `ALLOW_N8N_ARM` dependency with an admin-enabled capability plus an operator-opened session
       grant that is bounded, expiring and revocable — no terminal, no loss of record scoping
+      — **4 plans** (`53-01` .. `53-04`), planned 2026-08-25
 
 - [ ] **Phase 54: Single-pass armed dispatch** - A record is enriched once: no
       derive-then-rearm-then-derive-again, and the measured saving proven live before it is claimed
