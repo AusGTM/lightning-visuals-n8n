@@ -5,7 +5,7 @@ milestone_name: Unattended Session Runs
 current_phase: 53
 current_phase_name: Operator-openable write grant
 status: awaiting-operator-walk
-stopped_at: "Phase 53: all 4 plans have SUMMARYs; 53-04 tasks 1-2 done. BLOCKING: task 3, the operator walk, is outstanding and is the only evidence GRANT-01 accepts. An admin has set allow_write_grants (done). Three gap fixes landed FROM the partial walk: 0.15.1 (D-53-06, a grant must remove BOTH asks), 0.16.0 (people form; LinkedIn URL was normalising to the domain linkedin.com), 0.16.1 (accept a company by name alone). Phases 58-59 recorded from the same walk. Phase 52 (v1.0) still deferred."
+stopped_at: "HANDOVER: read .planning/HANDOVER-2026-08-25.md first. Phase 53 code complete at plugin 0.16.2; the operator walk is the outstanding blocker and it is what keeps finding the defects (four so far, none visible to 3084 passing tests). NEXT TASK: implement VOCAB-05 (kill the arming phrase, keep the consent) -- scope and safety property in the handover section 1. Then finish the walk, then Phase 58, then Phase 54."
 last_updated: "2026-08-25T08:10:00.000Z"
 last_activity: 2026-08-25
 last_activity_desc: "Phase 53 code complete at plugin 0.16.1; the walk is the outstanding blocker. Operator set the order: finish the walk, then Phase 58 (take what the operator actually has), then Phase 54 (single-pass dispatch)"
