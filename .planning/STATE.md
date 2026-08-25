@@ -1,14 +1,14 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: Direct Backfill & Scoring Coverage
-current_phase: 51
-current_phase_name: Backfill Pipeline, Credit Sizing & Dry Run
-status: phase-complete
-stopped_at: "51-03: COMPLETE -- operator approved after five checkpoint rounds. Phase 51 dry-run artifacts final. n8n country debt tracked as WINDOWS.md id 19. Ready for Phase 52 planning"
-last_updated: "2026-08-19T07:49:43.397Z"
-last_activity: 2026-08-23
-last_activity_desc: Quick task 260823-ono complete (named-account score floor live, 5/5 at 60/B) -- Phase 52 still to plan
+milestone: v1.1
+milestone_name: Unattended Session Runs
+current_phase: 53
+current_phase_name: Operator-openable write grant
+status: planning
+stopped_at: "v1.1 Phase 53 (operator-openable write grant) about to be discussed. Phase 52 (v1.0 staged canary) DEFERRED by operator 2026-08-25 -- on resume, re-derive Phase 51 population/credit sizing (artifacts dated 2026-08-19, they drift) and resolve the deferred FILL-04 third disposition."
+last_updated: "2026-08-25T01:35:00.000Z"
+last_activity: 2026-08-25
+last_activity_desc: "v1.1 defined and planned (phases 53-57) after a client UAT; Phase 52 deferred by the operator; starting Phase 53"
 progress:
   total_phases: 2
   completed_phases: 1

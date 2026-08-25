@@ -9,7 +9,8 @@
 - ✅ **v0.7 HubSpot Scoring Engine Remediation** — Phases 39–43 (shipped 2026-08-08)
 - ✅ **v0.8 Execution Budget Safety** — Phases 44–45 (shipped 2026-08-11)
 - ✅ **v0.9 ICP Rubric Calibration & Veto Remediation** — Phases 46–50, archived (`milestones/v0.9-ROADMAP.md`, `milestones/v0.9-REQUIREMENTS.md`) (shipped 2026-08-19)
-- 🚧 **v1.0 Direct Backfill & Scoring Coverage** — Phases 51–52 (in progress)
+- ⏸️ **v1.0 Direct Backfill & Scoring Coverage** — Phases 51–52 (Phase 51 complete; **Phase 52 deferred by the operator 2026-08-25** in favour of v1.1)
+- 🚧 **v1.1 Unattended Session Runs** — Phases 53–57 (`milestones/v1.1-ROADMAP.md`, `milestones/v1.1-REQUIREMENTS.md`)
 
 ## Phases
 
@@ -26,9 +27,37 @@ numbers on its own. Decisions in `.planning/MILESTONE-CONTEXT.md`; requirements 
       ZoomInfo credit cap live, pin the thousands-to-dollars revenue conversion, and dry-run a
       sample's exact PATCH payloads and pre-registered tier predictions — zero writes
 
-- [ ] **Phase 52: Staged Canary Execution & Safety Verification** - Write the credit-capped
-      population in gated stages (1 → 5 → 25 → chunked remainder), polling every result against
-      its committed prediction, and close by proving the 66 already-scored companies are untouched
+- [ ] **Phase 52: Staged Canary Execution & Safety Verification** — ⏸️ **DEFERRED 2026-08-25**
+      (operator, in favour of v1.1 Phase 53 — the client is blocked on the write path). Write the
+      credit-capped population in gated stages (1 → 5 → 25 → chunked remainder), polling every
+      result against its committed prediction, and close by proving the 66 already-scored
+      companies are untouched. **On resume:** re-derive Phase 51's population and credit sizing
+      before planning — the dry-run artifacts were finalized 2026-08-19 and drift with every
+      enrichment run — and resolve the deferred FILL-04 third-disposition question.
+
+### 🚧 v1.1 Unattended Session Runs (Phases 53–57)
+
+One operator grant at session start carries a batch through ingest → enrichment → HubSpot write,
+unattended. Driven by a client UAT on 2026-08-25 that found three arming surfaces for one write,
+a write path unreachable from the operator's own surface (`ALLOW_N8N_ARM` is a shell environment
+variable), and a design that runs the provider waterfall twice per written record. Full detail:
+`milestones/v1.1-ROADMAP.md`; evidence: `quick/260825-contact-company-association/UAT.md`.
+
+- [ ] **Phase 53: Operator-openable write grant** - Replace the interactive path's
+      `ALLOW_N8N_ARM` dependency with an admin-enabled capability plus an operator-opened session
+      grant that is bounded, expiring and revocable — no terminal, no loss of record scoping
+
+- [ ] **Phase 54: Single-pass armed dispatch** - A record is enriched once: no
+      derive-then-rearm-then-derive-again, and the measured saving proven live before it is claimed
+
+- [ ] **Phase 55: Async run — submit, poll, resume** - A batch stops being bounded by n8n Cloud's
+      ~100s response window; run state survives a restart or fails loudly
+
+- [ ] **Phase 56: The unattended pair pipeline** - One grant carries ingest → enrich → create →
+      associate, creates included, held rows queued rather than guessed
+
+- [ ] **Phase 57: Ceilings, refusal-before-start, and post-run proof** - A run cannot spend what
+      it does not have, and proves afterwards it wrote only what it was granted
 
 ## Phase Details
 
