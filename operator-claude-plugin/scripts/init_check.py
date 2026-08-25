@@ -36,6 +36,28 @@ import durable_paths
 # fails with an auth error nobody can trace back to here.
 PLACEHOLDER_MARKERS = ("<", ">")
 
+# ADMIN-SET SETTINGS, REPORTED SEPARATELY FROM CAPABILITIES (D-53-01, 53-03).
+#
+# A capability row means "these keys are present". A setting means "an admin AUTHORIZED
+# this". They are different questions and the initialize surface is exactly where an
+# operator would form the wrong impression if they were mixed, so the write-grant key is
+# deliberately NOT in `config_gate.CAPABILITY_KEYS` and is reported in its own section.
+#
+# Consequence, and it is the point: this section never moves the overall status. That is
+# computed from capability readiness alone, so an existing operator's file — which predates
+# this key and will not have it — keeps reporting exactly the status it reported before.
+#
+# A table rather than a single field because a second admin-set setting is already coming
+# (Phase 57's ceilings). The predicate is `config_gate`'s own, never a second copy of the
+# comparison: a surface that said "enabled" for a value the gate refuses would be worse
+# than one that said nothing at all.
+REPORTABLE_SETTINGS = {
+    config_gate.WRITE_GRANT_SETTINGS_KEY: (
+        "letting an operator open a write grant (live HubSpot writes for a named batch)",
+        config_gate.write_grants_enabled,
+    ),
+}
+
 STATUS_READY = "ready"
 STATUS_NEEDS_VALUES = "needs_values"
 STATUS_NO_FILE = "no_file"
@@ -89,6 +111,7 @@ def inspect(config_path=None) -> dict:
         "exists": path.exists(),
         "keys": {},
         "capabilities": {},
+        "settings": {},
         "status": STATUS_NO_FILE,
     }
 
@@ -119,6 +142,12 @@ def inspect(config_path=None) -> dict:
             "does": config_gate._CAPABILITY_DESCRIPTIONS.get(capability, capability),
         }
 
+    report["settings"] = {
+        key: {"enabled": bool(predicate(cfg)), "does": does}
+        for key, (does, predicate) in REPORTABLE_SETTINGS.items()
+    }
+
+    # Deliberately computed from capabilities ONLY — see REPORTABLE_SETTINGS' note.
     report["status"] = (STATUS_READY
                         if all(row["ready"] for row in report["capabilities"].values())
                         else STATUS_NEEDS_VALUES)
@@ -154,6 +183,22 @@ _LOCATION_REASSURANCE = {
 }
 
 
+def _settings_lines(report: dict) -> list:
+    """The admin-set switches, as their own block. NEVER phrased as a fault: a file
+    without these keys is a correctly-configured file with an optional switch left off,
+    which is what every operator's file looked like the day the switch shipped."""
+    rows = report.get("settings") or {}
+    if not rows:
+        return []
+
+    lines = ["", "Optional settings your n8n admin controls:"]
+    for key, row in sorted(rows.items()):
+        state = ("on" if row["enabled"]
+                 else "off — set it to true in the settings file above to turn it on")
+        lines.append(f"  - {row['does']}: {state}  ({key})")
+    return lines
+
+
 def render(report: dict) -> str:
     """Plain language for the operator. Names keys and paths; never a value."""
     lines = []
@@ -176,6 +221,7 @@ def render(report: dict) -> str:
         lines.append("Everything is configured:")
         for name, row in sorted(report["capabilities"].items()):
             lines.append(f"  - {row['does']}: ready")
+        lines.extend(_settings_lines(report))
         return "\n".join(lines)
 
     if report["status"] == STATUS_NO_FILE:
@@ -213,6 +259,8 @@ def render(report: dict) -> str:
             lines.append(f"  - {row['does']}: ready")
         else:
             lines.append(f"  - {row['does']}: needs {', '.join(row['needs'])}")
+
+    lines.extend(_settings_lines(report))
 
     lines.append("")
     lines.append("Ask your n8n admin for those values. I never see them — you type them "

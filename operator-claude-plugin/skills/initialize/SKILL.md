@@ -67,7 +67,12 @@ Give them, in this order:
 3. **That they type these into the file, not to you.**
 
 Then say what each missing value costs them, using the capability lines the command
-printed. Do not say the plugin is "broken" when one capability is unconfigured — a config
+printed.
+
+Relay the **optional settings** block too, exactly as `init_check.py` printed it. It is a
+separate block from the capability lines on purpose: those say which keys are present,
+while a setting says an admin *authorized* something. A setting that is off is not a fault
+and must never be reported as one — it is a switch nobody has needed yet. Do not say the plugin is "broken" when one capability is unconfigured — a config
 with no `n8n_api_key` still uploads contacts perfectly well, and over-refusing is exactly
 what PLUGIN-03 forbids.
 
@@ -76,6 +81,27 @@ what PLUGIN-03 forbids.
 When they say they have filled it in, run step 1 again. Report the result. If a value is
 still showing as a placeholder, say which one and that the template text is still in there
 — that is the common miss, because the file looks filled in at a glance.
+
+## If they ask to let operators authorize HubSpot writes
+
+An admin who wants operators to be able to turn live HubSpot writes on from a conversation
+sets one key in the same settings file:
+
+```json
+"allow_write_grants": true
+```
+
+It must be the JSON boolean `true`. The string `"true"`, `1` and `"yes"` all read as **not
+authorized**, by design. Absent means off, which is why an older settings file simply
+reports the setting as off rather than as missing something.
+
+Say plainly what setting it does and does not do. **It does:** let an operator name a batch,
+see the worst-case spend, say yes once, and have each send in that batch arm live writes for
+exactly the records in the grant. **It does not:** turn on unattended writing. Every send is
+still bounded to a named record set, the arithmetic is still shown before the yes, and writes
+are still disarmed after every send. And it does **not** replace `ALLOW_N8N_ARM` — that
+environment variable is still the sole authority for the headless and cron paths, which have
+no operator to confirm anything. The two are not alternatives.
 
 ## What this skill must never do
 

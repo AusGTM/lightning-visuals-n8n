@@ -244,3 +244,112 @@ def test_rendered_output_for_a_durable_config_never_mentions_migration(tmp_path,
 
     assert report["config_location"] == "durable"
     assert "migrat" not in rendered.lower()
+
+
+# --- the admin-set settings section (53-03) ----------------------------------------------
+#
+# D-53-01: the write-grant key is a SETTING, not a capability row. `CAPABILITY_KEYS` means
+# "these keys are present"; a setting means "an admin authorized this". The initialize
+# surface is exactly where an operator would form the wrong impression if the two were
+# mixed, so it reports them in separate sections and these tests hold them apart.
+
+def test_the_write_grant_key_set_to_true_reports_write_grants_enabled(config_path):
+    _write(config_path, n8n_url="https://real.n8n.cloud", webhook_secret=SECRET,
+           n8n_api_key="k", **{config_gate.WRITE_GRANT_SETTINGS_KEY: True})
+
+    report = init_check.inspect(config_path)
+
+    assert report["settings"][config_gate.WRITE_GRANT_SETTINGS_KEY]["enabled"] is True
+    assert "write grant" in init_check.render(report).lower()
+
+
+@pytest.mark.parametrize("value", [False, "true", "True", "yes", 1, 1.0, "", None])
+def test_every_near_miss_settings_value_reports_write_grants_NOT_enabled(
+        config_path, value):
+    """The same identity comparison the gate itself uses — reported through
+    `config_gate.write_grants_enabled`, never a second copy of `is True`. A surface that
+    said "enabled" for a value the gate refuses would be worse than saying nothing."""
+    _write(config_path, n8n_url="https://real.n8n.cloud", webhook_secret=SECRET,
+           n8n_api_key="k", **{config_gate.WRITE_GRANT_SETTINGS_KEY: value})
+
+    report = init_check.inspect(config_path)
+
+    assert report["settings"][config_gate.WRITE_GRANT_SETTINGS_KEY]["enabled"] is False
+
+
+def test_a_file_without_the_key_reports_not_enabled_and_keeps_its_status(config_path):
+    """THE DEGRADE-SAFELY CASE, and it is what every existing operator's file looks like on
+    the day this ships. A new optional key must not make a working setup start reading as
+    needing values — the overall status is computed from capability readiness, and this key
+    is not a capability."""
+    _write(config_path, n8n_url="https://real.n8n.cloud", webhook_secret=SECRET,
+           n8n_api_key="k")
+
+    report = init_check.inspect(config_path)
+
+    assert report["status"] == init_check.STATUS_READY
+    assert report["settings"][config_gate.WRITE_GRANT_SETTINGS_KEY]["enabled"] is False
+
+
+def test_the_settings_section_is_separate_from_the_keys_and_capability_sections(
+        config_path):
+    """D-53-01, pinned on the surface an operator actually reads."""
+    _write(config_path, n8n_url="https://real.n8n.cloud", webhook_secret=SECRET,
+           n8n_api_key="k", **{config_gate.WRITE_GRANT_SETTINGS_KEY: True})
+
+    report = init_check.inspect(config_path)
+
+    assert config_gate.WRITE_GRANT_SETTINGS_KEY in report["settings"]
+    assert config_gate.WRITE_GRANT_SETTINGS_KEY not in report["keys"]
+    assert config_gate.WRITE_GRANT_SETTINGS_KEY not in report["capabilities"]
+    assert config_gate.WRITE_GRANT_SETTINGS_KEY not in config_gate.CAPABILITY_KEYS
+
+
+def test_every_report_state_carries_a_settings_section(config_path):
+    """Including the early returns — a caller reading `report["settings"]` must not have to
+    know which of the four states it got."""
+    assert init_check.inspect(config_path)["settings"] == {}      # no file
+
+    config_path.write_text("{not json")
+    report = init_check.inspect(config_path)
+    assert report["status"] == init_check.STATUS_UNREADABLE
+    assert report["settings"] == {}
+
+
+def test_reporting_the_settings_writes_nothing_and_creates_nothing(config_path):
+    """`init_check` never writes a grant, never writes the key, and never migrates the
+    file into having one (GRANT-06)."""
+    _write(config_path, n8n_url="https://real.n8n.cloud", webhook_secret=SECRET,
+           n8n_api_key="k")
+    before = config_path.read_text()
+    siblings = sorted(p.name for p in config_path.parent.iterdir())
+
+    init_check.inspect(config_path)
+
+    assert config_path.read_text() == before
+    assert sorted(p.name for p in config_path.parent.iterdir()) == siblings
+
+
+def test_the_shipped_example_does_not_enable_write_grants():
+    """T-53-13. An example that ships enabled is an example that enables by being copied —
+    and `--create` copies it verbatim."""
+    example = json.loads(
+        (config_gate.PLUGIN_ROOT / "config" / config_gate.EXAMPLE_CONFIG_NAME).read_text())
+
+    assert example[config_gate.WRITE_GRANT_SETTINGS_KEY] is False
+    assert config_gate.write_grants_enabled(example) is False
+
+
+def test_the_examples_note_says_what_the_key_does_and_what_it_does_not_replace():
+    """The four things an admin needs and cannot infer: what it authorizes, who sets it,
+    that absent means off, and that it does NOT replace ALLOW_N8N_ARM for the headless
+    paths. The last is the one they will need most, because the two now look like
+    alternatives and are not."""
+    example = json.loads(
+        (config_gate.PLUGIN_ROOT / "config" / config_gate.EXAMPLE_CONFIG_NAME).read_text())
+    note = example[f"_{config_gate.WRITE_GRANT_SETTINGS_KEY}_note"]
+
+    assert "write grant" in note.lower()
+    assert "admin" in note.lower()
+    assert "off" in note.lower()
+    assert "ALLOW_N8N_ARM" in note
