@@ -16,6 +16,20 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.16.2] - 2026-08-25
+
+### Fixed
+
+- **The `people` form is now documented where the model actually reads it.** 0.16.0 shipped the
+  form in `enrichment.py` with 20 passing tests, but the patch that was supposed to add it to
+  `enrich-records/SKILL.md` raised partway through and aborted before writing the file. Only
+  the second half landed. So the capability existed, every test passed, and an operator asking
+  "update John Tsatsimas from Football NSW" was still told there is no search-a-contact-by-name
+  path — correctly, because the skill is what the model reads and the skill did not know. A
+  contract test now asserts the form, the three identities, and the held-match rule are present
+  in the SKILL, because a module test proves the machinery and only this proves the operator
+  can reach it.
+
 ## [0.16.1] - 2026-08-25
 
 ### Changed

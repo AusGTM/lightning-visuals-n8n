@@ -41,10 +41,24 @@ capability; claiming it here would be a guess dressed as a report.
    **disarmed** for this conversation. Say this even if the operator only asked a
    question, before doing anything else.
 
-2. **Resolve which records.** Four forms, and only three of them are supported:
+2. **Resolve which records.** Five forms, and only four of them are supported:
 
    - **Record IDs** — the operator pastes HubSpot record IDs. Spec:
      `{"record_ids": ["101","102"], "object_type": "companies"}` (or `"contacts"`).
+   - **People, named the way you would name them** — "John Tsatsimas at Football NSW", or a
+     name with an email address or a LinkedIn profile URL. Spec:
+     `{"people": [{"firstname": "John", "lastname": "Tsatsimas", "company": "Football NSW"}]}`.
+     **Prefer this over asking for a record id.** An operator does not carry HubSpot ids in
+     their head, and the backend has resolved contacts by name since Phase 36 — asking for an
+     id when a name was given is the client refusing what the backend already supports. Any ONE
+     of: an email, a LinkedIn URL, or surname + company. Less than that is refused by name,
+     saying which of the three would fix it.
+
+     Say how the match is decided, because it governs what gets written: an exact identity
+     (email or LinkedIn URL) enriches that record; a same-surname, same-company match with no
+     exact identity is **held for the operator to confirm**, never written over — so a second
+     John Tsatsimas is surfaced rather than silently overwritten.
+
    - **Companies that may not be in HubSpot yet** — the operator names companies by name
      and website domain. Spec: `{"companies": [{"name": "Perth Racing", "domain":
      "perthracing.com.au"}]}`. A LinkedIn or Facebook page is **not** a domain — the client

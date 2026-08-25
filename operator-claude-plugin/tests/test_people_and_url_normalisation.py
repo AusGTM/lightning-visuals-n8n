@@ -162,3 +162,18 @@ def test_the_preview_says_how_a_person_is_matched_and_what_is_held():
     assert "John Tsatsimas" in block
     # The operator must be able to read that a same-surname match is not written over.
     assert "held" in block
+
+
+def test_the_SKILL_documents_the_people_form_not_just_the_code():
+    """Caught live 2026-08-25, the hard way. The `people` form shipped in enrichment.py with
+    20 passing tests while SKILL.md never mentioned it — an earlier patch raised partway and
+    aborted before writing the file. Every test passed, and the operator's Desktop still said
+    "there's no search-a-contact-by-name path in this lane", because the SKILL is what the
+    model reads. A module test proves the machinery; only this proves the operator can reach
+    it."""
+    skill = (PLUGIN_ROOT / "skills" / "enrich-records" / "SKILL.md").read_text(encoding="utf-8")
+    assert '"people"' in skill, "the people form must be documented where the model reads it"
+    assert "surname + company" in skill, "the three identities must be stated"
+    assert "held for the operator to confirm" in skill, (
+        "the skill must say a same-surname match is held rather than written over"
+    )
