@@ -2499,11 +2499,20 @@ function needsResearch(existingRecord, scored) {
     // comment above) - a 2-field contact response needs far less headroom than the
     // 5-field company ICP object, but 2048 still clears that floor with margin.
     max_tokens: 2048,""",
+    # BUG (live, execution 11934, 2026-08-25): `contactName` is set by NOTHING — Build
+    # Identity emits firstName/lastName — so `name` was always null and the research call
+    # for a contact with no company/domain carried no identity at all. Haiku answered "I
+    # need more information to research this contact", which is prose, so validation
+    # extracted nothing and the row reported a clean empty result. Compose the name from
+    # the keys the identity actually has, and pass the LinkedIn URL, which for a
+    # name-and-profile-only contact is the ONLY strong identifier on the record.
     research_payload_body_js=r"""      task: "contact_role_research",
       contact: {
-        name: id.contactName || row.contactName || null,
+        name: id.contactName || row.contactName ||
+              ([id.firstName, id.lastName].filter(Boolean).join(" ") || null),
         company: id.companyName || row.company || null,
         domain: id.domain || row.domain || null,
+        linkedin_url: id.linkedin_url || row.linkedin_url || null,
       },
       required_fields: ["jobtitle", "seniority"],
       return_only_json: true,""",
@@ -4754,7 +4763,15 @@ def build_enrichment_cloud():
             "const gate = $('Enrichment Gate').item.json.gate || {}; "
             "const missing = gate.missingFields || []; "
             "const REVEAL_MAP = { email: 'emails', mobilephone: 'phones' }; "
-            "const revealed = missing.filter((f) => Object.prototype.hasOwnProperty.call(REVEAL_MAP, f)).map((f) => REVEAL_MAP[f]).sort(); "
+            # BUG (live, execution 11934, 2026-08-25): `Object.prototype` in an n8n EXPRESSION is
+            # refused by the expression sandbox — "Cannot access \"prototype\" due to security
+            # concerns" — and `onError: continueRegularOutput` turned that refusal into a
+            # normal-looking item, so EVERY contact run since b7428af (2026-07-30) lost Lusha
+            # silently. The Code nodes that use Object.prototype run in a different sandbox and
+            # are unaffected; this was the only expression in any deployed workflow touching it.
+            # Plain lookup is sandbox-safe and equivalent here: REVEAL_MAP is an object literal
+            # declared one line above, so no inherited key can shadow a miss.
+            "const revealed = missing.filter((f) => REVEAL_MAP[f] !== undefined).map((f) => REVEAL_MAP[f]).sort(); "
             "const reveal = revealed.length ? revealed : ['emails']; "
             "const existingRecord = $('Enrichment Gate').item.json.existingRecord || {}; "
             "const storedId = existingRecord.lusha_contact_id; "
