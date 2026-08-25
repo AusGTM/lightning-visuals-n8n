@@ -51,12 +51,19 @@ def _refusal(detail):
 
 
 def _out_of_allowlist(asked_for):
+    """This message is the operator's map of what this plugin can do, which is why the
+    write-grant clause belongs on it (53-03). An operator who asks to turn writes on for a
+    batch must not be told the plugin cannot do that, when it now can — being sent back to
+    a terminal for something reachable from the chair is G-1, the defect being fixed."""
     return _refusal(
         f"I can't do that: {asked_for}. This plugin operates the backend — it can turn "
         f"a workflow on or off, switch an individual scheduled job on or off, change a "
-        f"job's schedule, and enable live writes for one specific send. It does not "
-        f"change workflow structure, nodes, or credentials; an admin does that from the "
-        f"repository. Ask your n8n admin if that's what you need."
+        f"job's schedule, and enable live writes for one specific send. It can also open "
+        f"a write grant covering a whole batch — you name the records, I show the "
+        f"worst-case spend, you confirm once, and each send in that batch may then write "
+        f"to exactly those records — if your n8n admin has enabled write grants in the "
+        f"settings file. It does not change workflow structure, nodes, or credentials; an "
+        f"admin does that from the repository. Ask your n8n admin if that's what you need."
     )
 
 

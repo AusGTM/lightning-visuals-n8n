@@ -29,6 +29,17 @@ Three things a reader needs and cannot infer from the code:
    "a failed disarm fails that send only" presupposes: there has to BE a per-send disarm
    for one to fail. A reader looking here for a disarm will not find one, and that is not
    an omission — see `close_grant`.
+
+4. **Opening a grant is deliberately NOT in `control_actions.ACTION_KINDS`** (53-03). A
+   reader comparing the two surfaces will notice a second confirmation gate here and
+   wonder why it is not one gate in one place. `ACTION_KINDS` is the allowlist
+   `execute_action` checks, and `execute_action` is documented as the only MUTATING path;
+   opening a grant reads, computes and returns — it mutates nothing. Putting a read-only
+   action on a mutation allowlist blurs the same capability-versus-authorization
+   distinction D-53-01 keeps the settings key out of `CAPABILITY_KEYS` for. The cost is
+   two confirmation gates, and it is paid by pinning them BEHAVIOURALLY: one shared
+   near-miss list is driven through both `execute_action` and `open_grant`
+   (`test_write_grant.py`, 53-01 Task 2), never a source-text pin.
 """
 import copy
 from datetime import date, datetime, timezone
@@ -625,8 +636,9 @@ CLOSE_REASONS = GRANT_04_REASONS | GUARDRAIL_B_REASONS
 # read this gap as an oversight; it is a designed one with a named counterpart.
 
 
-def revoke(grant):
-    """Operator revocation. Returns a closed COPY — the caller replaces its handle.
+def revoke_grant(grant):
+    """Operator revocation, reachable by the name a request maps onto (GRANT-05). Returns
+    a closed COPY — the caller replaces its handle.
 
     WHAT REVOCATION BUYS, AND WHAT IT DOES NOT (GRANT-05, re-scoped by the operator
     2026-08-25 from "within one chunk boundary" to "at the next SEND").
@@ -641,8 +653,25 @@ def revoke(grant):
     That is a real reduction in what a revoke is worth, it is tested rather than claimed
     away (`test_a_revocation_midway_does_not_stop_a_running_dispatch`), and anyone who
     needs chunk-granular revocation has to make `dispatch_plan` grant-aware first.
+
+    IDEMPOTENT, AND REASON-PRESERVING BECAUSE OF IT. An operator who says stop twice has
+    not made a mistake, so an already-closed grant comes back unchanged rather than
+    raising. Returning it UNCHANGED rather than re-closing it is the load-bearing half:
+    `close_grant` does not inspect state, so a plain re-close would overwrite
+    `closed_reason` — and a grant that guardrail B closed for
+    `two_consecutive_disarm_failures` re-reading as `operator_revocation` would misreport
+    the one close the operator most needs to read correctly, which is exactly the
+    confusion 53-02 gave guardrail B its own reason set to prevent.
     """
+    if isinstance(grant, dict) and grant.get("state") == CLOSED:
+        return grant
     return close_grant(grant, CLOSED_REVOKED)
+
+
+# The wave-2 name, kept so callers written against it keep working. One implementation:
+# `revoke_grant` is the operator-facing name 53-03 added because GRANT-05 asks for
+# revocation to be REACHABLE, and a reachable thing needs a name a request maps onto.
+revoke = revoke_grant
 
 
 def check_before_send(grant, *, lane=None, workflow_id, record_ids, record_domains):
