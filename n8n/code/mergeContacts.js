@@ -7,9 +7,18 @@
 // them; escalation happens in a downstream node). So the decision IS the gate's
 // decision. Source = "csv" @ confidence 80 (matches src/ingest.py row_to_provider_result).
 //
-// Email can NEVER land in canonicalPatch on this enrich path (belt-and-braces: the
-// manual_protected class + the 95 threshold already prevent it, and an explicit
-// guard enforces it regardless of policy edits).
+// EMAIL PERMISSIVE PROMOTION (260826-20w, T-20w-01, operator ruling): email now
+// promotes into a BLANK contact record exactly like every other fill_blank_only field —
+// it is no longer forced to stage_only regardless of policy. HubSpot's own dedupe/merge
+// handles identity collisions on write; this client does not rebuild that logic
+// client-side. What changed instead of a hard withhold: a promoted email's provenance
+// entry (and the decisions-array row) carries the human-review validation status, so the
+// decide node can flag the record for a human to see in the triage queue. An email that
+// already exists on the record is completely unaffected — fill_blank_only's existing-
+// value branch still routes to stage_only, the same non-clobber guarantee every other
+// field in this policy carries. See 260826-20w-CALIBRATION.md for the threshold
+// calibration (min_confidence 80, chosen to admit all three real contact-enrichment
+// ingest lanes: waterfall 85, hubspot_native 85, csv 80).
 //
 // PROVENANCE MODEL (Phase 15): per-field metadata/staging is ONE provenance object keyed
 // by field ({source, confidence, verified_at, validation_status, value}), not flat
@@ -22,13 +31,21 @@
 // PN-1: linkedin_url/persona_group are NOT HubSpot-native (absent from the verified-
 // native list) -> lv_-prefixed canonical field keys.
 //
+// email: fill_blank_only @ 80 (260826-20w, T-20w-01 — was manual_protected @ 95, which
+// no real candidate ever cleared). 80 is the highest confidence bar that still admits all
+// three real ingest-lane constants this repo has (waterfall 85, hubspot_native 85, csv
+// 80 — scripts/build_cloud_workflows.py) — the merge boundary discards per-candidate
+// accuracy and always passes one of exactly these three flat numbers, so there is no
+// finer distribution to calibrate against. See 260826-20w-CALIBRATION.md.
+//
 // city/state/country/hs_state_code/hs_country_region_code: fill_blank_only @ 80
 // (260826-20w Task 2 commit 1) — five HubSpot-native contact properties, confirmed
 // present/string/writable in the operator's 2026-08-26 portal export. 80 is at/below the
 // only confidence these fields' one live source (the waterfall path) ever carries (85),
-// so any threshold at or below 85 is behaviourally identical today.
+// so any threshold at or below 85 is behaviourally identical today; 80 is chosen to match
+// the email threshold above rather than invent a second number.
 const DEFAULT_CONTACT_POLICY = {
-  email:           { class: "manual_protected",  min_confidence: 95 },
+  email:                   { class: "fill_blank_only", min_confidence: 80 },
   phone:                   { class: "fill_blank_only",   min_confidence: 80 },
   mobilephone:             { class: "fill_blank_only",   min_confidence: 85 },
   jobtitle:                { class: "stale_refreshable", min_confidence: 75 },
@@ -178,12 +195,16 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
     const confidence = confidenceByField[field] != null ? confidenceByField[field] : flatConfidence;
 
     const gate = _gate(field, currentValue, confidence, fieldPol, evidenceUrl, value);
-    let decision = gate.decision;
+    const decision = gate.decision;
 
-    // HARD GUARD: email never promotes to canonical on the enrich path.
-    if (field === "email" && decision === "promote") decision = "stage_only";
-
-    const validationStatus = _statusFor(decision);
+    // EMAIL PERMISSIVE PROMOTION (260826-20w, T-20w-01): a promoted email keeps its
+    // promotion (no demotion to stage_only) but its validation_status is redirected to
+    // the human-review literal, so the decide node's review-flag predicate (promote AND
+    // human-review status) picks it up. Every other field's promotion is unaffected.
+    const isEmailField = field === "email";
+    const promoted = decision === "promote";
+    let validationStatus = _statusFor(decision);
+    if (isEmailField && promoted) validationStatus = "human_review_required";
 
     // ONE provenance entry per field — replaces the old flat metadataPatch/stagingPatch.
     const entry = { source, confidence, verified_at: verifiedAt,

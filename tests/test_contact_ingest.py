@@ -7,7 +7,10 @@
 # post/patch are sentinels that raise if a live call ever leaks in dry-run.
 #
 # The load-bearing correctness claim proven here is BOTH DIRECTIONS of email handling:
-#   * ENRICH (match): email is manual_protected -> NEVER promoted to canonical from csv.
+#   * ENRICH (match): email is fill_blank_only (260826-20w T-20w-01 — was
+#     manual_protected/95) -> this file's matched-record fixture always carries an
+#     EXISTING email, so the non-blank branch still routes to stage_only and is NEVER
+#     promoted to canonical from csv, same outcome as before the relaxation.
 #   * CREATE (net_new): email IS written as the new record's identity (create bypasses
 #     the merge policy — nothing to protect on a record that does not exist yet).
 import json
@@ -40,7 +43,8 @@ def make_search(email_seq, other=None):
 
 def make_get():
     # A matched contact with a BLANK phone (fill_blank_only fills it) and a PRESENT
-    # jobtitle (stale_refreshable -> needs_review) and a present email (manual_protected).
+    # jobtitle (stale_refreshable -> needs_review) and a present email (fill_blank_only,
+    # 260826-20w T-20w-01 — existing non-blank value still routes to stage_only).
     def hs_get(object_type, record_id, properties):
         return {"id": "123", "properties": {
             "email": "bob.smith@example.com",
@@ -87,7 +91,8 @@ def test_matched_row_patches_without_canonical_email():
     # Phase 15: csv value is staged INSIDE the provenance blob (no flat staging keys) ...
     provenance = json.loads(m["payload"]["lv_contact_enrichment_provenance"])
     assert provenance["email"]["source"] == "csv"
-    # ... but email is manual_protected: NEVER a bare canonical email write.
+    # ... but the existing email is non-blank: fill_blank_only stage_only, NEVER a bare
+    # canonical email write (260826-20w T-20w-01: unaffected — only a BLANK email promotes).
     assert "email" not in m["canonical_patch"]
     assert "email" not in m["payload"]
     # blank phone (fill_blank_only) is filled; present jobtitle (stale) is withheld.

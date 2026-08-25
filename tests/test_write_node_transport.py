@@ -140,8 +140,11 @@ def test_create_nodes_post_the_computed_patch(name, resource):
          emit exactly {action, object_type, hs_object_id, gap_flag, needs_review, properties}
          (verified from live execution 12's runData), yet HubSpot Company Create read
          `$json.name || $json.identity_keys.companyName || $json.identity_keys.domain` and
-         HubSpot Create read `$json.properties.email` — which is never present, because
-         email is manual_protected and can never promote into the patch.
+         HubSpot Create read `$json.properties.email` — which is never present in this
+         fixture, because it comes from `identity_keys`/BUG-19's create-seed, not from the
+         merge policy (260826-20w T-20w-01 reclassified contact email fill_blank_only,
+         which can now promote into a BLANK canonicalPatch — orthogonal to this
+         create-node-wiring test).
 
     Both now POST {"properties": $json.properties} to the CRM v3 collection endpoint."""
     doc = _load()

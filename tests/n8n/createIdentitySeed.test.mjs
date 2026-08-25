@@ -5,8 +5,11 @@
 //   create -> the payload MUST carry identity (else the record is invisible to the very
 //             search that gated the create; confirmed live 2026-07-29, name=None/
 //             domain=None, search total=0).
-//   enrich -> the payload MUST NOT carry the seed (identity is manual_protected on
-//             updates; an unconditional seed would clobber the human's value).
+//   enrich -> the payload MUST NOT carry the seed (an unconditional seed would clobber
+//             an existing human value on update, regardless of the field's policy class —
+//             260826-20w T-20w-01 reclassified contact email fill_blank_only, which
+//             already protects an existing value via its own non-blank branch; the SEED
+//             is a separate, additive guard this file tests, not a restatement of it).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -74,5 +77,8 @@ test("contacts enrich: payload does NOT receive the email seed (non-clobber)", (
     merge: { canonicalPatch: { seniority: "Manager" }, cacheKeys: {}, provenance: {} },
   }]);
   assert.equal(out.properties.email, undefined,
-    "email is manual_protected AND hard-forced to stage_only on enrich — the seed must never reach an update");
+    "this fixture's merge object carries no email candidate at all, and the identity " +
+    "seed only fires on create — the seed must never reach an update (260826-20w T-20w-01 " +
+    "reclassified email fill_blank_only, but this test proves the SEED guard, not the " +
+    "merge policy, so it is unaffected)");
 });

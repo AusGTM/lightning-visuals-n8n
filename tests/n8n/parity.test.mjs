@@ -211,7 +211,9 @@ test("mergeContacts: email not canonical, blank phone filled, jobtitle conflict 
   const candidate = { email: "new@corp.com", phone: "+61412345678", jobtitle: "Engineer" };
   const { canonicalPatch, provenance, decisions } = mergeContacts(existing, candidate);
 
-  // email (manual_protected, min_conf 95 > csv 80) -> never canonical
+  // email (fill_blank_only, min_conf 80) -> existing value present ("old@corp.com") ->
+  // stage_only, never canonical (260826-20w T-20w-01: unchanged non-clobber behaviour
+  // for an EXISTING value; only a BLANK email now promotes).
   assert.ok(!("email" in canonicalPatch), "email must not be canonical");
   // blank phone (fill_blank_only, 80>=80) -> promote
   assert.equal(canonicalPatch.phone, "+61412345678");

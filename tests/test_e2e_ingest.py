@@ -42,7 +42,8 @@ def hs_get(object_type, record_id, properties):
     # Row-A existing contact for the enrich invariants: present+DIFFERENT jobtitle
     # (stale_refreshable -> needs_review, withheld), BLANK phone (fill_blank_only fills),
     # PRESENT linkedin (fill_blank_only staged, never clobbered), present email
-    # (manual_protected, never a bare canonical write).
+    # (fill_blank_only, 260826-20w T-20w-01 -- existing non-blank value still routes to
+    # stage_only, never a bare canonical write).
     return {"id": "123", "properties": {
         "email": "bob.smith@example.com",
         "firstname": "Bob",
@@ -106,7 +107,9 @@ def test_match_row_field_invariants():
 
     # Phase 15: staged INSIDE the provenance blob (no flat staging keys).
     provenance = json.loads(m["payload"]["lv_contact_enrichment_provenance"])
-    # email: staged, but manual_protected -> NEVER canonical.
+    # email: staged, but the existing value is non-blank -> fill_blank_only routes to
+    # stage_only, NEVER canonical (260826-20w T-20w-01: unaffected, only a BLANK email
+    # now promotes).
     assert provenance["email"]["source"] == "csv"
     assert "email" not in m["canonical_patch"]
     assert "email" not in m["payload"]

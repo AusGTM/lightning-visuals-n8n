@@ -107,14 +107,35 @@ test("mergeContacts: recorded confidence matches deciding confidence for an over
   assert.equal(decisions.find((d) => d.field === "jobtitle").confidence, 90);
 });
 
-// --- Existing behavior stays unchanged (email hard-guard, cache keys) -----------------
-test("mergeContacts: email hard guard still forces stage_only even when opts carries evidence/confidenceByField", () => {
-  const overridePolicy = { ...DEFAULT_CONTACT_POLICY, email: { class: "system_owned", min_confidence: 0 } };
-  const { canonicalPatch, decisions } = mergeContacts({}, { email: "new@example.com" },
-    overridePolicy, { source: "claude_web", confidence: 100, confidenceByField: { email: 100 } });
-  assert.ok(!("email" in canonicalPatch), "email must never appear in canonicalPatch");
+// --- 260826-20w Task 2 commit 2: email now PROMOTES into a blank field + is flagged ----
+test("mergeContacts: email with a blank existing value promotes at the default policy's threshold, flagged human-review", () => {
+  const { canonicalPatch, provenance, decisions } = mergeContacts(
+    {}, { email: "new@example.com" }, undefined, { source: "waterfall", confidence: 85 });
+  assert.equal(canonicalPatch.email, "new@example.com", "email promotes into a blank field");
+  assert.equal(provenance.email.validation_status, "human_review_required",
+    "the promoted email's provenance entry is flagged for human review");
+  const d = decisions.find((x) => x.field === "email");
+  assert.equal(d.decision, "promote");
+  assert.equal(d.validation_status, "human_review_required");
+});
+
+test("mergeContacts: email with an EXISTING non-blank value is still stage_only — non-clobber unchanged", () => {
+  const { canonicalPatch, decisions } = mergeContacts(
+    { email: "old@example.com" }, { email: "new@example.com" }, undefined,
+    { source: "waterfall", confidence: 85 });
+  assert.ok(!("email" in canonicalPatch), "an existing email must never be overwritten");
   const d = decisions.find((x) => x.field === "email");
   assert.equal(d.decision, "stage_only");
+  // Not the permissive-promotion flag path (decision isn't "promote") — an ordinary
+  // stage_only carries the routine provider_only status, same as any other field.
+  assert.equal(d.validation_status, "provider_only");
+});
+
+test("mergeContacts: email below the calibrated confidence threshold still withholds (needs_review), even blank", () => {
+  const { canonicalPatch, decisions } = mergeContacts(
+    {}, { email: "new@example.com" }, undefined, { source: "csv", confidence: 50 });
+  assert.ok(!("email" in canonicalPatch));
+  assert.equal(decisions.find((d) => d.field === "email").decision, "needs_review");
 });
 
 test("mergeContacts: cache-key mapping for jobtitle is unaffected by the port", () => {

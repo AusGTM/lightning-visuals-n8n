@@ -1565,6 +1565,33 @@ return $input.all().map((it) => {
   // shared two-state predicate — never a third mode name, never an ALLOW_* constant.
   const returnOnly = isReturnOnly(row.mode);
   const properties = { ..._buildContactPatch(row.merge), ...(row.lusha_ids || {}) };
+
+  // REVIEW FLAG (260826-20w, T-20w-01): mirrors ENRICH_DECIDE_CO_CLOUD's needs-review
+  // block, narrowed to the ONE predicate this relaxation introduces — a decision that is
+  // BOTH a promote AND carries the human-review validation status. That pair exists only
+  // because of the email permissive-promotion change (mergeContacts.js); it must NOT be
+  // widened to "any needs_review decision" — jobtitle's routine stale_refreshable refresh
+  // conflicts are needs_review + human_review_required too, and flagging those would
+  // flood the triage queue with ordinary enrichment, defeating the point of the flag.
+  // Deliberately does NOT write lv_enrichment_review_candidate_json: that property means
+  // "a held candidate awaiting a human's apply", and this module has already WRITTEN the
+  // value (it is in `properties` above) — staging it as a candidate too would make the
+  // review-apply lane try to re-apply a value that is already live.
+  const contactDecisions = (row.merge && row.merge.decisions) || [];
+  const permissivelyFlagged = contactDecisions.filter(
+    (d) => d.decision === "promote" && d.validation_status === "human_review_required");
+  if (permissivelyFlagged.length > 0) {
+    // String literals, never bare JS booleans — the BUG-27 loop below only joins arrays
+    // and stringifies booleans, and D-07's companies precedent is explicit about this.
+    properties.lv_enrichment_needs_review = "true";
+    properties.lv_enrichment_status = "needs_review";
+    properties.lv_enrichment_review_reason = permissivelyFlagged
+      .map((d) => `${d.field}: promoted into a blank field at confidence ${d.confidence} — verify before relying on it`)
+      .join("; ").slice(0, 60000);
+  } else if (row.merge) {
+    properties.lv_enrichment_status = "complete";
+  }
+
   const hs_object_id = (row.existingRecord && row.existingRecord.hs_object_id) || null;
   const id = row.identity_keys || {};
   const domain = id.domain;
@@ -1614,6 +1641,7 @@ return $input.all().map((it) => {
     object_type: row.object_type || "contacts",
     hs_object_id,
     gap_flag: row.gap_flag === true,
+    needs_review: permissivelyFlagged.length > 0,
     row_id: row.row_id ?? null,
     mode: row.mode ?? null,
     match: row.match ?? summarizeMatch({ lane: row.lane }),

@@ -109,17 +109,26 @@ companies:
     recompute_always: true
 
 contacts:
+  # EMAIL PERMISSIVE PROMOTION (260826-20w, T-20w-01, operator ruling): was
+  # manual_protected/95, which no real candidate ever cleared (the three real ingest
+  # lanes flat-confidence at 85/85/80 -- 260826-20w-CALIBRATION.md). HubSpot's own
+  # dedupe/merge handles identity collisions on write; this client does not rebuild that
+  # logic. 80 is the highest bar that still admits all three lanes. The n8n JS engine
+  # (mergeContacts.js) redirects a promoted email's validation_status to the human-review
+  # literal so it lands in the triage queue -- this config change alone gives the Python
+  # oracle (src/merge_policy.py's shared deterministic_gate) the same promote/stage_only
+  # split; the oracle does not (yet) carry an equivalent review-flag redirect.
   email:
-    class: manual_protected
-    promote_to_canonical: false
-    stage_only: true
-    min_confidence: 95
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 80
+    protect_if_current_present: true
 
   # 260826-20w Task 2 commit 1: five HubSpot-native contact location properties,
   # confirmed present/string/writable in the operator's 2026-08-26 portal export
   # (docs/hs_props/hubspot-properties-export-contacts-19-other-objects-2026-08-26/contact.csv).
-  # 80 is at/below the only confidence these fields' one live source (waterfall) ever
-  # carries (85), so any value at or below 85 is behaviourally identical today.
+  # 80 matches the email threshold above; the only live source (waterfall) is at 85, so
+  # any value at or below 85 is behaviourally identical today.
   city:
     class: fill_blank_only
     promote_to_canonical: true

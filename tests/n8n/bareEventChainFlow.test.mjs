@@ -346,8 +346,10 @@ test("BUG 23: a no-match search reaches action:create through the gate, write-ga
   assert.equal(final.action, "write_blocked",
     "write-gated by default — WRITE_SAFETY_DEFAULTS ships every allowlist empty");
   assert.equal(final.properties.email, "lv-bug23-canary-delete-me@lv-canary-delete-me.example",
-    "the BUG 19 create-seed: canonicalPatch never carries email (manual_protected), so a " +
-    "create must seed it directly from identity_keys");
+    "the BUG 19 create-seed: this chain's Lusha/Apollo mocks are both {}, so the merge " +
+    "carries no email candidate at all and canonicalPatch is empty on that field " +
+    "regardless of policy (260826-20w T-20w-01) — the create must still seed identity " +
+    "directly from identity_keys");
 });
 
 // --- (3) CALLER-ENVELOPE BACK-COMPAT: the direct-field envelope the WHOLE existing offline

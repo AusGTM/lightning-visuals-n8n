@@ -119,11 +119,12 @@ function buildOutboundPatchRequest(node, item) {
 // Carmody, brendan@lightningvisuals.com) — the exact record Plan 02's armed window will
 // target.
 //
-// Expected per-field outcome, derived from DEFAULT_CONTACT_POLICY (mergeContacts.js
-// lines 24-32) and _gate (lines 85-122) against a flat candidate confidence of 85 (the
-// literal `mergeContacts(existingRecord, candidate, undefined, { confidence: 85 })` call
-// "Merge Winners" makes):
-//   email     class manual_protected,  min_confidence 95 -> 85 < 95            -> needs_review (never promotes; also hard-guarded regardless of class)
+// Expected per-field outcome, derived from DEFAULT_CONTACT_POLICY (mergeContacts.js,
+// 260826-20w update) and _gate against a flat candidate confidence of 85 (the literal
+// `mergeContacts(existingRecord, candidate, undefined, { confidence: 85 })` call "Merge
+// Winners" makes):
+//   email     class fill_blank_only,   min_confidence 80 -> 85 >= 80, but the existing
+//             value is NON-BLANK ("brendan@lightningvisuals.com")               -> stage_only (non-clobber unchanged by 260826-20w T-20w-01's promote-into-blank relaxation — an EXISTING email is still never overwritten)
 //   phone     class fill_blank_only,   min_confidence 80 -> 85 >= 80, but the existing
 //             value is NON-BLANK ("+61399999999", the protected-field probe)    -> stage_only (non-clobber: this is the behaviour the whole phase exists to prove)
 //   jobtitle  class stale_refreshable, min_confidence 75 -> 85 >= 75, existing value
@@ -185,7 +186,8 @@ test("armed (in-test constant rewrite, mirrors enable_baked_flags): Decide Actio
   assert.ok(item.properties.lv_jobtitle_verified_at, "cache-key datetime present for the promoted field");
   assert.ok(item.properties.lv_contact_enrichment_provenance, "provenance blob present");
 
-  // Excluded: email (85 < 95 threshold, plus the hard email guard regardless of class).
+  // Excluded: email (fill_blank_only, existing value non-blank -> stage_only; same
+  // non-clobber outcome as before 260826-20w T-20w-01, different reason).
   assert.equal(item.properties.email, undefined);
   // Excluded: phone (fill_blank_only, existing value non-blank) — THE non-clobber proof.
   assert.equal(item.properties.phone, undefined);

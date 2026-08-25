@@ -162,14 +162,22 @@ def test_the_unprefixed_spelling_is_never_assigned():
 
 
 def test_the_policy_classes_that_motivated_bug_19_are_unchanged():
-    """Anchor the design, not just the fix. The seed is only coherent while `domain`/`email`
-    stay manual_protected (never promoted by candidates). If someone reclassifies them, the
-    seed and the policy start competing for the same field and this file needs re-thinking."""
+    """Anchor the design, not just the fix — for the half of it that IS unchanged.
+
+    Company `domain` stays manual_protected — BUG 19's create-seed reasoning for companies
+    is untouched by 260826-20w. Contact `email` is NOT: T-20w-01 (260826-20w, operator
+    ruling) reclassified it to fill_blank_only so a discovered email can promote into a
+    BLANK record (flagged for human review — mergeContacts.js's module header). BUG 19's
+    actual fix — the create-branch identity seed itself (`properties.email = id.email`
+    under `action === "create"`, ENRICH_DECIDE_CLOUD/DECIDE_CLOUD) — is untouched and is
+    what this test now anchors for contacts: it still exists, and it can still coexist
+    with the now-permissive policy because the seed only fires on create (where no record,
+    and therefore no existing email, exists yet) — see 260826-20w-CALIBRATION.md pin (e)."""
     companies = (ROOT / "n8n" / "code" / "mergeCompanies.js").read_text()
     contacts = (ROOT / "n8n" / "code" / "mergeContacts.js").read_text()
     assert re.search(r"domain:\s*\{\s*class:\s*\"manual_protected\"", companies), \
         "company `domain` is no longer manual_protected — re-read BUG 19's root cause"
-    assert re.search(r"email:\s*\{\s*class:\s*\"manual_protected\"", contacts), \
-        "contact `email` is no longer manual_protected — re-read BUG 19's root cause"
-    assert 'field === "email" && decision === "promote"' in contacts, \
-        "the explicit email->stage_only hard-force is gone — re-read BUG 19's root cause"
+    assert re.search(r"email:\s*\{\s*class:\s*\"fill_blank_only\"", contacts), \
+        "contact `email` is no longer fill_blank_only — re-read 260826-20w T-20w-01"
+    assert _assigns_identity_on_create(B.ENRICH_DECIDE_CLOUD, "email"), \
+        "the BUG 19 create-seed for contact email is gone — re-read BUG 19's root cause"
