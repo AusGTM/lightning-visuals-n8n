@@ -37,6 +37,7 @@ import chunking
 import config_gate
 import cost_guard
 import executions_client
+import n8n_arming
 import n8n_read
 import scheduled_arm
 
@@ -510,6 +511,12 @@ def close_grant(grant, reason):
     itself on the way out. 53-02 adds the two guardrail-B paths that DO disarm, for the
     specific reason that those two have just observed or inferred a live-write state.
     """
+    if reason not in CLOSE_REASONS:
+        raise ValueError(
+            f"{reason!r} is not a close reason this system can report on. A grant closes "
+            f"for one of: {', '.join(sorted(CLOSE_REASONS))}. GRANT-04 requires each "
+            f"expiry to be REPORTED, and a free-text reason is one nobody can report on.")
+
     closed = copy.deepcopy(grant if isinstance(grant, dict) else {})
     closed["state"] = CLOSED
     closed["closed_reason"] = reason
@@ -563,3 +570,120 @@ def covers(grant, *, lane=None, workflow_id, record_ids, record_domains):
             outside_record_ids=outside_ids, outside_record_domains=outside_domains)
 
     return None
+
+
+# --------------------------------------------- GRANT-04/GRANT-05: lifetime and revocation
+#
+# THE FIVE WAYS A GRANT ENDS (GRANT-04). Named constants, not free text: a close reason
+# that can be anything is a close reason nobody can report on, and GRANT-04 requires each
+# expiry to be REPORTED, which means each has to be recognisable.
+CLOSED_BATCH_COMPLETE = "batch_complete"
+CLOSED_CEILING_BREACH = "ceiling_breach"
+CLOSED_REVOKED = "operator_revocation"
+CLOSED_SESSION_END = "session_end"
+CLOSED_UNHANDLED_ERROR = "unhandled_error"
+
+GRANT_04_REASONS = frozenset({
+    CLOSED_BATCH_COMPLETE, CLOSED_CEILING_BREACH, CLOSED_REVOKED,
+    CLOSED_SESSION_END, CLOSED_UNHANDLED_ERROR,
+})
+
+# Guardrail B's own close reasons (53-02 Task 3). They are NOT folded into one of the five
+# above: "two consecutive disarm failures" is not batch completion, not a ceiling breach,
+# not a revocation, not a session end, and not an unhandled error — nothing raised. Folding
+# it into one of those would misreport the one close the operator most needs to read
+# correctly. GRANT_04_REASONS stays exactly five and is pinned by name.
+GUARDRAIL_B_REASONS = frozenset()
+
+CLOSE_REASONS = GRANT_04_REASONS | GUARDRAIL_B_REASONS
+
+# WHERE GRANT-04'S "each expiry disarms the backend" ACTUALLY BITES.
+#
+# On batch completion, revocation and session end it is VACUOUSLY satisfied: every send
+# opens and closes its own `n8n_arming.armed_window`, so at close time there is no window
+# open to disarm. `close_grant` therefore makes no call, and that is a consequence of the
+# per-send design rather than a skipped step.
+#
+# The two paths where it is NOT vacuous are guardrail B's, and both of those DO attempt a
+# disarm (Task 3): each closes having just observed live writes or having twice failed to
+# turn them off, which is exactly when walking away would leave a live record-scoped
+# allowlist behind.
+#
+# SESSION END AND UNHANDLED ERROR ARE CALLER-MADE CLOSES, AND THERE IS NO PROCESS TO MAKE
+# THEM FOR A SESSION THAT DIES MID-TURN. That is D-53-03's accepted risk, put to the
+# operator on 2026-08-25 and accepted after the alternative (an expiry inside the shared
+# write-safety gate) was offered and declined. The thing that catches the case where nobody
+# made the call is GUARDRAIL A: the next session's plan reads the live write-safety state
+# and refuses to open over an armed backend. A reader who cannot connect those two will
+# read this gap as an oversight; it is a designed one with a named counterpart.
+
+
+def revoke(grant):
+    """Operator revocation. Returns a closed COPY — the caller replaces its handle.
+
+    WHAT REVOCATION BUYS, AND WHAT IT DOES NOT (GRANT-05, re-scoped by the operator
+    2026-08-25 from "within one chunk boundary" to "at the next SEND").
+
+    It refuses the NEXT SEND. `chunking.dispatch_plan` loops over every chunk of an
+    approved plan internally and never consults a grant; there is no per-chunk hook and
+    none is added here, because adding one changes the shared dispatch loop every lane in
+    this plugin uses. So a dispatch already running COMPLETES ITS REMAINING CHUNKS under
+    the arm it opened with. At the shipped `max_records_per_chunk` of 2, a 40-record send
+    is 20 chunks, and a revoke arriving at chunk three stops none of them.
+
+    That is a real reduction in what a revoke is worth, it is tested rather than claimed
+    away (`test_a_revocation_midway_does_not_stop_a_running_dispatch`), and anyone who
+    needs chunk-granular revocation has to make `dispatch_plan` grant-aware first.
+    """
+    return close_grant(grant, CLOSED_REVOKED)
+
+
+def check_before_send(grant, *, lane=None, workflow_id, record_ids, record_domains):
+    """The ONE question every send asks: may this send go? None, or a refusal.
+
+    Composes the state check and the scope check (`covers`) so there is exactly one place
+    a send is refused and exactly one wording for each refusal. A closed grant refuses and
+    names the reason it closed; an open grant whose record set does not cover the send
+    refuses and names the offending ids and domains.
+    """
+    return covers(grant, lane=lane, workflow_id=workflow_id,
+                  record_ids=record_ids, record_domains=record_domains)
+
+
+def record_send_outcome(grant, outcome, config=None, *, transport=None):
+    """Fold one send's result into the grant. Returns a new grant; never mutates.
+
+    `outcome` is a dict a send composes. Two keys are read and both are optional:
+
+    * `disarm` — `n8n_arming.disarm`'s result (or an `armed_window`'s `disarm_result`).
+      A verified disarm RESETS `consecutive_disarm_failures` to zero; a
+      `disarm_failed` increments it. An outcome carrying no disarm verdict leaves the
+      counter alone: there is no verdict to read, and inventing one in either direction
+      is worse than carrying the unknown forward.
+    * `ceiling_breach` — truthy closes the grant rather than continuing. Nothing in this
+      phase MEASURES spend as it happens, so this reason has no producer here and is
+      reached only by a caller that supplies it; Phase 57 is what makes it fire on its
+      own. Named now so its emptiness is deliberate rather than a missed wire.
+
+    ONE FAILED DISARM FAILS THAT SEND ONLY and the session continues (D-53-04, chosen
+    deliberately so a transient blip does not abort a long run). The bound is on the
+    SECOND — 53-02 Task 3 adds it on top of this counter.
+
+    Pure, and returns a new dict, because the grant round-trips through the conversation
+    between turns: any state that mutates in place is state that is lost. `config` and
+    `transport` are here for the closing disarm Task 3 performs.
+    """
+    updated = copy.deepcopy(grant if isinstance(grant, dict) else {})
+    outcome = outcome if isinstance(outcome, dict) else {}
+
+    verdict = (outcome.get("disarm") or {}).get("outcome")
+    if verdict == n8n_arming.DISARMED:
+        updated["consecutive_disarm_failures"] = 0
+    elif verdict == n8n_arming.DISARM_FAILED:
+        updated["consecutive_disarm_failures"] = \
+            int(updated.get("consecutive_disarm_failures") or 0) + 1
+
+    if outcome.get("ceiling_breach"):
+        return close_grant(updated, CLOSED_CEILING_BREACH)
+
+    return updated

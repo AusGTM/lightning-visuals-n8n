@@ -225,14 +225,14 @@ def test_a_closed_grant_refuses_and_names_why_it_closed(granting_config,
                                                         stub_module_transport_factory):
     resolve_transport = stub_module_transport_factory([_workflow_list()])
     grant = write_grant.close_grant(_open(granting_config, resolve_transport),
-                                    "the operator revoked it")
+                                    write_grant.CLOSED_REVOKED)
 
     transport = stub_module_transport_factory([_base_workflow()])
     result = n8n_arming.arm_for_dispatch(WORKFLOW_ID, [RECORD_ID], [], False,
                                          granting_config, transport=transport, grant=grant)
 
     assert result["outcome"] == n8n_arming.REFUSED
-    assert "the operator revoked it" in result["detail"]
+    assert write_grant.CLOSED_REVOKED in result["detail"]
     assert transport.calls == []
 
 
@@ -395,10 +395,10 @@ def test_close_grant_returns_a_copy_and_makes_no_network_call(
     grant = _open(granting_config, transport)
     before = len(transport.calls)
 
-    closed = write_grant.close_grant(grant, "the batch finished")
+    closed = write_grant.close_grant(grant, write_grant.CLOSED_BATCH_COMPLETE)
 
     assert closed["state"] == write_grant.CLOSED
-    assert closed["closed_reason"] == "the batch finished"
+    assert closed["closed_reason"] == write_grant.CLOSED_BATCH_COMPLETE
     assert grant["state"] == write_grant.OPEN, "the input must never be mutated"
     assert len(transport.calls) == before
 
@@ -413,7 +413,7 @@ def test_nothing_about_a_grant_is_written_to_disk_or_to_the_environment(
     transport = stub_module_transport_factory([_workflow_list()])
 
     grant = _open(granting_config, transport)
-    write_grant.close_grant(grant, "done")
+    write_grant.close_grant(grant, write_grant.CLOSED_BATCH_COMPLETE)
 
     assert list(tmp_path.iterdir()) == []
     assert dict(os.environ) == env_before
@@ -845,3 +845,230 @@ def test_the_consequence_carries_the_arm_dispatch_register_in_full(
     assert "OWN armed window" in consequence                         # what turns it off
     assert "disarm fails" in consequence                             # and if that fails
     assert "an admin must check n8n" in consequence
+
+
+# =========================================================================================
+# 53-02 Task 2 — lifetime and revocation: the five ways a grant ends, and the next send
+# =========================================================================================
+
+def test_grant_04s_expiry_set_is_exactly_the_five_it_names():
+    """Pinned by NAME, not by cardinality: guardrail B adds close reasons of its own
+    (Task 3), and a `len(CLOSE_REASONS) == 5` assertion would break on that while proving
+    nothing about which five GRANT-04 requires."""
+    assert write_grant.GRANT_04_REASONS == {
+        write_grant.CLOSED_BATCH_COMPLETE,
+        write_grant.CLOSED_CEILING_BREACH,
+        write_grant.CLOSED_REVOKED,
+        write_grant.CLOSED_SESSION_END,
+        write_grant.CLOSED_UNHANDLED_ERROR,
+    }
+    assert write_grant.GRANT_04_REASONS <= write_grant.CLOSE_REASONS
+
+
+@pytest.mark.parametrize("reason", sorted({
+    "batch_complete", "ceiling_breach", "operator_revocation", "session_end",
+    "unhandled_error"}))
+def test_a_grant_closed_for_each_reason_carries_that_reason_by_name(
+        granting_config, stub_module_transport_factory, reason):
+    transport = stub_module_transport_factory([_workflow_list()])
+    grant = _open(granting_config, transport)
+
+    closed = write_grant.close_grant(grant, reason)
+
+    assert closed["state"] == write_grant.CLOSED
+    assert closed["closed_reason"] == reason
+
+
+def test_close_grant_refuses_a_free_text_reason(granting_config,
+                                                stub_module_transport_factory):
+    """A close reason that can be anything is a close reason nobody can report on."""
+    transport = stub_module_transport_factory([_workflow_list()])
+    grant = _open(granting_config, transport)
+
+    with pytest.raises(ValueError) as raised:
+        write_grant.close_grant(grant, "the batch sort of finished I think")
+
+    assert "batch_complete" in str(raised.value)
+    assert grant["state"] == write_grant.OPEN
+
+
+def test_check_before_send_refuses_a_closed_grant_and_names_the_closing_reason(
+        granting_config, stub_module_transport_factory):
+    transport = stub_module_transport_factory([_workflow_list()])
+    grant = write_grant.close_grant(_open(granting_config, transport),
+                                    write_grant.CLOSED_SESSION_END)
+
+    refusal = write_grant.check_before_send(
+        grant, lane="enrichment", workflow_id=WORKFLOW_ID,
+        record_ids=[RECORD_ID], record_domains=[])
+
+    assert refusal["outcome"] == write_grant.REFUSED
+    assert write_grant.CLOSED_SESSION_END in refusal["detail"]
+
+
+def test_check_before_send_names_the_records_a_send_would_have_reached_outside_the_grant(
+        granting_config, stub_module_transport_factory):
+    transport = stub_module_transport_factory([_workflow_list()])
+    grant = _open(granting_config, transport)
+
+    refusal = write_grant.check_before_send(
+        grant, lane="enrichment", workflow_id=WORKFLOW_ID,
+        record_ids=[RECORD_ID, "99999"], record_domains=["outside.example"])
+
+    assert refusal["outcome"] == write_grant.REFUSED
+    assert refusal["outside_record_ids"] == ["99999"]
+    assert refusal["outside_record_domains"] == ["outside.example"]
+
+
+def test_check_before_send_passes_a_send_inside_the_grant(
+        granting_config, stub_module_transport_factory):
+    transport = stub_module_transport_factory([_workflow_list()])
+    grant = _open(granting_config, transport)
+
+    assert write_grant.check_before_send(
+        grant, lane="enrichment", workflow_id=WORKFLOW_ID,
+        record_ids=[RECORD_ID], record_domains=[]) is None
+
+
+# --- GRANT-05: the boundary is the SEND, and a running dispatch finishes ------------------
+
+class _RevokingTransport:
+    """A module-shaped transport that revokes the grant partway through a real
+    `dispatch_plan`, so the limitation is exercised rather than described."""
+
+    def __init__(self, inner, held, revoke_after_chunk):
+        self._inner = inner
+        self._held = held
+        self._revoke_after = revoke_after_chunk
+        self.sent = 0
+
+    def post(self, *args, **kwargs):
+        self.sent += 1
+        response = self._inner.post(*args, **kwargs)
+        if self.sent == self._revoke_after:
+            self._held["grant"] = write_grant.revoke(self._held["grant"])
+        return response
+
+    def get(self, *args, **kwargs):
+        return self._inner.get(*args, **kwargs)
+
+
+def test_a_revocation_midway_does_not_stop_a_running_dispatch(
+        granting_config, stub_module_transport_factory):
+    """GRANT-05, as re-scoped by the operator 2026-08-25 — driven through the REAL
+    dispatch loop, not two hand calls to `check_before_send`.
+
+    Calling `check_before_send` twice by hand and asserting the second refuses would pass
+    while GRANT-05 was entirely unimplemented. What is actually true, and what this pins,
+    is that `chunking.dispatch_plan` never consults the grant: every remaining chunk goes,
+    and the revoke bites on the NEXT SEND.
+    """
+    import chunking
+
+    ids = [str(n) for n in range(1, 7)]
+    grant_transport = stub_module_transport_factory([_workflow_list()])
+    grant = _open(granting_config, grant_transport, ids=tuple(ids))
+    held = {"grant": grant}
+
+    plan = chunking.plan_chunks({"record_ids": ids, "object_type": "companies"}, 2)
+    assert plan.chunk_count == 3, "the point of the test is that it is multi-chunk"
+
+    transport = _RevokingTransport(stub_module_transport_factory(), held,
+                                   revoke_after_chunk=1)
+    outcome = chunking.dispatch_plan(plan, ["lusha"], True, granting_config,
+                                     transport=transport)
+
+    # EVERY chunk still went, including the two after the revoke.
+    assert transport.sent == 3
+    assert [r.ok for r in outcome.results] == [True, True, True]
+    assert [[event["objectId"] for event in call["json"]["events"]]
+            for call in transport._inner.calls] == [["1", "2"], ["3", "4"], ["5", "6"]]
+
+    # And the revoke bites on the NEXT send.
+    assert held["grant"]["state"] == write_grant.CLOSED
+    assert held["grant"]["closed_reason"] == write_grant.CLOSED_REVOKED
+    refusal = write_grant.check_before_send(
+        held["grant"], lane="enrichment", workflow_id=WORKFLOW_ID,
+        record_ids=["1"], record_domains=[])
+    assert refusal["outcome"] == write_grant.REFUSED
+    assert write_grant.CLOSED_REVOKED in refusal["detail"]
+
+
+def test_dispatch_plan_has_no_grant_aware_hook_to_revoke_against():
+    """The structural reason the boundary is the send. If a `grant` parameter ever appears
+    on the dispatch loop, GRANT-05's scope can be tightened — and this test should be the
+    thing that notices."""
+    import inspect
+
+    import chunking
+
+    assert "grant" not in inspect.signature(chunking.dispatch_plan).parameters
+
+
+# --- the disarm-failure counter -----------------------------------------------------------
+
+def test_a_verified_disarm_resets_the_consecutive_failure_counter(
+        granting_config, stub_module_transport_factory):
+    transport = stub_module_transport_factory([_workflow_list()])
+    grant = _open(granting_config, transport)
+    grant["consecutive_disarm_failures"] = 1
+
+    updated = write_grant.record_send_outcome(
+        grant, {"disarm": {"outcome": n8n_arming.DISARMED}}, granting_config)
+
+    assert updated["consecutive_disarm_failures"] == 0
+    assert updated["state"] == write_grant.OPEN
+    assert grant["consecutive_disarm_failures"] == 1, "the input must never be mutated"
+
+
+def test_one_disarm_failure_increments_the_counter_and_leaves_the_grant_open(
+        granting_config, stub_module_transport_factory):
+    """D-53-04: one failure fails that send only, so a transient blip cannot abort a long
+    run. The bound is on the SECOND."""
+    transport = stub_module_transport_factory([_workflow_list()])
+    grant = _open(granting_config, transport)
+
+    updated = write_grant.record_send_outcome(
+        grant, {"disarm": {"outcome": n8n_arming.DISARM_FAILED}}, granting_config)
+
+    assert updated["consecutive_disarm_failures"] == 1
+    assert updated["state"] == write_grant.OPEN
+
+
+def test_an_outcome_carrying_no_disarm_verdict_leaves_the_counter_alone(
+        granting_config, stub_module_transport_factory):
+    transport = stub_module_transport_factory([_workflow_list()])
+    grant = _open(granting_config, transport)
+    grant["consecutive_disarm_failures"] = 1
+
+    updated = write_grant.record_send_outcome(grant, {}, granting_config)
+
+    assert updated["consecutive_disarm_failures"] == 1
+
+
+def test_a_ceiling_breach_closes_the_grant_rather_than_continuing(
+        granting_config, stub_module_transport_factory):
+    transport = stub_module_transport_factory([_workflow_list()])
+    grant = _open(granting_config, transport)
+
+    updated = write_grant.record_send_outcome(
+        grant, {"ceiling_breach": True}, granting_config)
+
+    assert updated["state"] == write_grant.CLOSED
+    assert updated["closed_reason"] == write_grant.CLOSED_CEILING_BREACH
+
+
+def test_closing_a_grant_makes_no_network_call_on_the_three_vacuous_paths(
+        granting_config, stub_module_transport_factory):
+    """GRANT-04's disarm clause is VACUOUS on completion, revocation and session end —
+    under per-send windows there is no window open at close time. Guardrail B's two paths
+    are the ones where it is not, and they are Task 3's."""
+    transport = stub_module_transport_factory([_workflow_list()])
+    grant = _open(granting_config, transport)
+    before = len(transport.calls)
+
+    for reason in (write_grant.CLOSED_BATCH_COMPLETE, write_grant.CLOSED_REVOKED,
+                   write_grant.CLOSED_SESSION_END):
+        write_grant.close_grant(grant, reason)
+
+    assert len(transport.calls) == before
