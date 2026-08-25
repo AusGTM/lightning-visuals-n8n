@@ -122,8 +122,18 @@ capability; claiming it here would be a guess dressed as a report.
    it and a better API key would not produce one. Do not present it as broken, and do not
    suggest anyone fix it.
 
-5. **Ask for approval.** If the operator declines, STOP here. Nothing is sent. The only
-   thing that has happened is one read of the status endpoint, which costs nothing.
+5. **Ask for approval — unless a grant already carries it.** With no grant open: if the
+   operator declines, STOP here. Nothing is sent. The only thing that has happened is one
+   read of the status endpoint, which costs nothing.
+
+   **Under an open grant covering this lane and these records, do not ask again.** The
+   operator already approved this send when they opened the grant: the envelope's
+   arithmetic and the consequence sentence were what they said yes to, and that yes was
+   given *before* the run rather than during it (D-53-06, operator 2026-08-25). Asking
+   "shall I proceed?" here would restore the very stop-and-ask the grant exists to remove —
+   half the friction, none of the protection. Say which grant the send runs under, then go
+   straight on. The preview above is still rendered and still shown; under a grant it
+   informs rather than gates, because the gate moved earlier.
 
 6. **Check arming.** Disarmed is the default and the state of every new conversation. Say
    plainly that sending is off, and that the operator can turn it on **for this
@@ -169,7 +179,8 @@ capability; claiming it here would be a guess dressed as a report.
    it runs under; a skill that passed the grant's full list would widen every window to the
    whole batch and every test would still pass.
 
-7. **Dispatch the plan the operator approved — only after they have said the arming phrase
+7. **Dispatch the plan the operator approved — under an open grant, or otherwise only
+   after they have said the arming phrase
    this turn.** `scripts/chunking.py` is a library here (the same way `scripts/report.py`
    already is, not a CLI): rebuild the plan from the same spec and the same configured
    ceiling — it is deterministic, so it is the same plan that was previewed — and send it:

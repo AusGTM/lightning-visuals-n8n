@@ -16,6 +16,21 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.15.1] - 2026-08-25
+
+### Fixed
+
+- **A grant now removes BOTH asks, not one of them (D-53-06).** 0.15.0 made the arming phrase
+  conditional on an open grant but left the older "Ask for approval" step unconditional, so the
+  first grant ever opened was followed immediately by "want to run the send now?" — half the
+  friction removed and none of the protection given back. Under an open grant covering the lane
+  and the records, `enrich-records`, `contact-upload` and `enrich-before-ingest` now proceed
+  straight to the send, naming the grant it runs under. With no grant open, every ask is
+  unchanged. The approval a grant carries is the yes given to the envelope before the run; the
+  preview is still rendered under a grant but informs rather than gates, because the gate moved
+  earlier rather than disappearing. Pinned by contract assertions in both skill-contract tests
+  so it cannot regress into a re-ask.
+
 ## [0.15.0] - 2026-08-25
 
 ### Added

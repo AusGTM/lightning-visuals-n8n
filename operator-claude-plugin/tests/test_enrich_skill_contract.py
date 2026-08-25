@@ -124,3 +124,22 @@ def test_the_grant_branch_shows_the_window_scoped_to_this_sends_records():
     assert "write_grant.authorize_send" in body
     assert "n8n_arming.armed_window" in body
     assert "never the grant's whole record set" in body.lower()
+
+
+def test_the_skill_does_not_re_ask_for_approval_under_a_grant():
+    """D-53-06 (operator, 2026-08-25), found by the walk of Phase 53 itself.
+
+    53-04 made the ARMING PHRASE conditional on an open grant, and stopped there. The
+    "Ask for approval" step is older than grants and was left unconditional, so a grant
+    removed one ask and left the other standing: the operator opened a grant and was
+    immediately asked "want to run the send now?" — half the friction removed, none of
+    the protection given back. The approval a grant carries is the yes given to the
+    envelope BEFORE the run; asking again during it is the stop-and-ask the grant exists
+    to remove.
+    """
+    body = _normalized(_text()).lower()
+    assert "under an open grant covering this lane and these records, do not ask again" in body
+    assert "informs rather than gates" in body, (
+        "the skill must say what happens to the preview under a grant — it is still shown, "
+        "but it no longer gates, because the gate moved earlier"
+    )

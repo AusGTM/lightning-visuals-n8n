@@ -379,3 +379,17 @@ def test_the_skill_never_widens_a_window_to_the_grants_whole_record_set():
     window to the whole batch while every test in the suite still passed."""
     body = _normalized(_text()).lower()
     assert "never the grant's whole record set" in body
+
+
+def test_the_skill_asks_nothing_at_the_waterfall_step_under_a_grant():
+    """D-53-06 (operator, 2026-08-25), found by the Phase 53 operator walk.
+
+    Step 5's arming phrase was made grant-conditional by 53-04; the ask around it was not.
+    Under a grant the operator already approved this send when they opened it — and for a
+    two-lane grant they were told AT THAT MOMENT that the HubSpot write was being
+    authorized before this preview existed (D-53-05). Re-asking here would restore the
+    stop-and-ask while giving back none of the protection that was traded for it.
+    """
+    body = _normalized(_text()).lower()
+    assert "if a write grant covering this lane and these rows is open, ask for nothing here" in body
+    assert "d-53-06" in body

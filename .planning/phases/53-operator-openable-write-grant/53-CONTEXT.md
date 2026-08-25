@@ -117,6 +117,26 @@ Raised by the planner as risk #2 and **accepted by the operator explicitly, for 
   until the enriched preview lands. Keeps both properties; it is a different design and its own
   phase.
 
+### D-53-06 — Opening a grant IS the approval; no per-send ask survives it (operator, 2026-08-25)
+
+Found by the Phase 53 operator walk itself, on the first grant ever opened.
+
+- 53-04 made the ARMING PHRASE conditional on an open grant and stopped there. The "Ask for
+  approval" step in `enrich-records` / `contact-upload`, and the ask around step 5 of
+  `enrich-before-ingest`, are older than grants and were left unconditional. So opening a grant
+  removed one ask and left the other standing — the operator opened a grant and was immediately
+  asked "want to run the enrichment send now?". Half the friction removed, none of the
+  protection given back, which is the worst of both.
+- **The approval a grant carries is the yes given to the envelope BEFORE the run.** The
+  arithmetic and the consequence sentence are what the operator approved; asking again during
+  the run is exactly the stop-and-ask the grant exists to remove.
+- Under an open grant covering the lane and the records, the skills proceed straight to the
+  send, naming which grant it runs under. With no grant open, every ask is unchanged.
+- **Consequence, stated once:** the preview is still rendered under a grant, but it now
+  *informs rather than gates* — for every lane, not just the enrich-before-ingest case D-53-05
+  already collapsed. The gate moved earlier rather than disappearing: it is the envelope, read
+  before the yes.
+
 ### Claude's Discretion
 
 - The settings key's exact name and where it sits in the file.

@@ -209,9 +209,18 @@ be sent, and — only when explicitly armed — send it.
    decision that cannot matter wastes it. (Same reasoning as the `can_send: false` branch in
    step 1.)
 
-4. **Ask for approval.** If the operator declines, STOP here — nothing is sent, and
-   nothing beyond reading the file has happened. Declining costs nothing beyond that one
-   read.
+4. **Ask for approval — unless a grant already carries it.** With no grant open: if the
+   operator declines, STOP here — nothing is sent, and nothing beyond reading the file has
+   happened. Declining costs nothing beyond that one read.
+
+   **Under an open grant covering this lane and these records, do not ask again.** The
+   operator already approved this send when they opened the grant: the envelope's
+   arithmetic and the consequence sentence were what they said yes to, and that yes was
+   given *before* the run rather than during it (D-53-06, operator 2026-08-25). Asking
+   "shall I proceed?" here would restore the very stop-and-ask the grant exists to remove —
+   half the friction, none of the protection. Say which grant the send runs under, then go
+   straight on. The preview above is still rendered and still shown; under a grant it
+   informs rather than gates, because the gate moved earlier.
 
 5. **Check arming.** Skip this step entirely when step 1 reported `"can_send": false` —
    see there. Otherwise: disarmed is the default and the state of every new conversation.
@@ -255,7 +264,8 @@ be sent, and — only when explicitly armed — send it.
    it runs under; passing the grant's full list would widen every window to the whole batch
    and every test would still pass.
 
-6. **Dispatch only once the operator has said the arming phrase this turn.**
+6. **Dispatch under an open grant, or otherwise only once the operator has said the
+   arming phrase this turn.**
 
    ```
    python3 scripts/dispatch.py <path> armed

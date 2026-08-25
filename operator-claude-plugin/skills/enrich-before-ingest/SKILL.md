@@ -190,7 +190,16 @@ whatever seven columns happened to be in the source file.
    preview says — do not summarise that away. Print the `"preview"."markdown"` block
    as a markdown table in chat by default.
 
-5. **Say "arm the enrichment," then run the waterfall.** Disarmed is the default and
+5. **Say "arm the enrichment," then run the waterfall — or, under a grant, just run it.**
+
+   **If a write grant covering this lane and these rows is open, ask for nothing here.**
+   The operator approved this send when they opened the grant, and for a two-lane grant
+   they were told at that moment that the HubSpot write was being authorized before this
+   preview existed (D-53-05). Re-asking now would restore the stop-and-ask the grant
+   exists to remove while giving back none of the protection that was traded (D-53-06,
+   operator 2026-08-25). Name the grant the send runs under and continue.
+
+   With no grant open, everything below is exactly as it was. Disarmed is the default and
    the state of every new conversation. Say plainly that sending is off, and that the
    operator can turn it on **for this conversation only** by saying: **"arm the
    enrichment"**. This state is never written to disk — it exists only as the `armed`
