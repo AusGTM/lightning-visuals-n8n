@@ -16,6 +16,18 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-08-25
+
+### Changed
+
+- **A company can be named with no domain at all.** 0.16.0 refused a profile URL and asked the
+  operator for the company's website — which hands the research back to someone who does not
+  want to do it. The guard that survives is *never silently invent a domain* (a LinkedIn host
+  is dropped, never passed through as one), not *go and find one yourself*: a company with a
+  name is now accepted and looked up by the exact-name search the companies branch gained the
+  same day. Creating a NEW company still requires a domain, because domain is the dedupe
+  anchor. The superseded test records why it was superseded rather than being deleted.
+
 ## [0.16.0] - 2026-08-25
 
 Both entries below came out of the Phase 53 operator walk, from a non-technical operator

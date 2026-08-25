@@ -46,11 +46,20 @@ def test_the_companies_form_never_carries_propose_mode():
     )
 
 
-def test_a_company_without_a_domain_is_refused_by_name():
-    with pytest.raises(enrichment.RecordSpecError) as excinfo:
-        enrichment.build_envelope({"companies": [{"name": "No Domain Ltd"}]}, [])
-    assert "No Domain Ltd" in str(excinfo.value)
-    assert "domain" in str(excinfo.value).lower()
+def test_a_company_with_only_a_name_is_accepted_and_looked_up_by_name():
+    """SUPERSEDED 2026-08-25 by the operator's ruling from the Phase 53 walk. This test
+    previously asserted that a domainless company was REFUSED, on the reasoning that domain
+    is the only identity the backend searches on. That stopped being true the same day: the
+    companies branch gained an exact-name fallback search, so a company already in HubSpot
+    resolves by name alone.
+
+    The operator's ruling is the deciding half: a blanket refusal hands the research back to
+    an operator who does not want to do it. The guard that survives is "never silently invent
+    a domain" — a profile URL is dropped rather than passed through — not "go and find one
+    yourself". Creating a NEW company still needs a domain, because domain is the dedupe
+    anchor; that half is unchanged and is pinned by the create-path tests."""
+    envelope = enrichment.build_envelope({"companies": [{"name": "No Domain Ltd"}]}, [])
+    assert envelope["events"] == [{"objectType": "companies", "name": "No Domain Ltd"}]
 
 
 def test_an_empty_companies_list_is_refused_rather_than_dispatched():

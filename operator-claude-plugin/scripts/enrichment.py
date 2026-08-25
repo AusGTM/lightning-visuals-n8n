@@ -339,23 +339,27 @@ def build_envelope(spec, providers):
                     "Each company must give a name and a domain."
                 )
             domain = _clean_domain(company.get("domain") or company.get("website"))
-            if not domain:
-                given = str(company.get("domain") or company.get("website") or "").strip()
-                if given:
-                    raise RecordSpecError(
-                        f"{company.get('name') or 'That company'} was given "
-                        f"{given!r}, which is a profile page rather than the company's own "
-                        f"website. Searching HubSpot for that host would match no company "
-                        f"and create one whose domain is the social network — give the "
-                        f"company's own website address instead, or its HubSpot record id."
-                    )
-                raise RecordSpecError(
-                    f"{company.get('name') or 'A company'} was given without a website "
-                    f"domain. Domain is how HubSpot is searched for an existing record; "
-                    f"without one the company could only be created, never matched."
-                )
-            event = {"objectType": "companies", "domain": domain}
             name = str(company.get("name") or "").strip()
+            # 2026-08-25, operator ruling from the Phase 53 walk: a blanket refusal hands
+            # the research back to the operator, who does not want to do it. The guard is
+            # "never silently invent a domain", not "go and find one yourself". So a
+            # company with no usable domain is ACCEPTED when it has a name — the backend's
+            # exact-name company search (added 2026-08-25) can resolve it — and only the
+            # CREATE path still needs a domain, because domain is the dedupe anchor and a
+            # domainless new company poisons every later match against it.
+            if not domain and not name:
+                given = str(company.get("domain") or company.get("website") or "").strip()
+                raise RecordSpecError(
+                    f"{given!r} is a profile page rather than a company's own website, and "
+                    f"no company name came with it, so there is nothing to look up. Give "
+                    f"the company's name — the backend can match that on its own."
+                    if given else
+                    "A company was given with neither a name nor a website domain, so "
+                    "there is nothing to look up."
+                )
+            event = {"objectType": "companies"}
+            if domain:
+                event["domain"] = domain
             if name:
                 event["name"] = name
             events.append(event)

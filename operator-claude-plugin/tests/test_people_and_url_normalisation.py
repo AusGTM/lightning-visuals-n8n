@@ -56,17 +56,36 @@ def test_a_real_website_still_normalises(url, expected):
     assert enrichment._clean_domain(url) == expected
 
 
-def test_a_linkedin_page_is_refused_with_guidance_not_a_bare_error():
+def test_a_linkedin_page_plus_a_name_is_ACCEPTED_by_name_not_refused():
+    """Operator ruling, 2026-08-25 walk: a blanket refusal hands the research back to the
+    operator, who does not want to do it. The guard is "never silently invent a domain",
+    not "go and find one yourself" — so the unusable host is dropped and the company is
+    looked up by its name, which the backend's exact-name search can resolve."""
+    envelope = enrichment.build_envelope(
+        {"companies": [{"name": "Futsal Australia",
+                        "domain": "https://www.linkedin.com/company/futsal-australia/"}]},
+        [],
+    )
+    assert envelope["events"] == [{"objectType": "companies", "name": "Futsal Australia"}], (
+        "the profile host must be dropped, not passed through as a domain, and the name "
+        "must survive as the thing to look up"
+    )
+
+
+def test_a_company_with_only_a_name_is_accepted():
+    envelope = enrichment.build_envelope(
+        {"companies": [{"name": "Harness Racing New South Wales"}]}, [])
+    assert envelope["events"][0] == {
+        "objectType": "companies", "name": "Harness Racing New South Wales"}
+
+
+def test_only_an_unusable_url_and_no_name_is_refused_because_nothing_can_be_looked_up():
     with pytest.raises(enrichment.RecordSpecError) as excinfo:
         enrichment.build_envelope(
-            {"companies": [{"name": "Futsal Australia",
-                            "domain": "https://www.linkedin.com/company/futsal-australia/"}]},
-            [],
-        )
+            {"companies": [{"domain": "https://linkedin.com/company/x"}]}, [])
     message = str(excinfo.value)
-    assert "Futsal Australia" in message, "the refusal must name the company"
     assert "profile page" in message
-    assert "own website" in message, "a refusal that does not say what to give instead is a wall"
+    assert "name" in message, "the refusal must say what would make it work"
 
 
 def test_the_two_engines_agree_on_what_is_not_a_company_domain():
