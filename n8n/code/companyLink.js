@@ -33,13 +33,37 @@ const FREEMAIL_DOMAINS = new Set([
   "exemail.com.au", "ozemail.com.au",
 ]);
 
+// Hosts that are somebody's PROFILE PAGE, never a company's own domain. Found live
+// 2026-08-25 during the Phase 53 operator walk: an operator with only a LinkedIn URL is the
+// normal case, and the naive host extraction turned
+// `linkedin.com/company/futsal-australia` into the domain `linkedin.com`. That would search
+// HubSpot for domain=linkedin.com, find nothing, create a company whose domain IS
+// linkedin.com — and then every later LinkedIn-sourced company would MATCH that one poisoned
+// record. One bad row swallowing every future company, silently.
+//
+// These are not the same thing as FREEMAIL_DOMAINS (a personal mailbox); they are hosts where
+// a URL identifies a page ABOUT a company rather than the company's own site. Both are
+// unusable as a company domain, for different reasons, so both are refused here.
+const NOT_A_COMPANY_DOMAIN = new Set([
+  "linkedin.com", "lnkd.in", "facebook.com", "fb.com", "instagram.com", "twitter.com",
+  "x.com", "youtube.com", "youtu.be", "tiktok.com", "threads.net", "medium.com",
+  "crunchbase.com", "wikipedia.org", "en.wikipedia.org", "bloomberg.com", "zoominfo.com",
+  "apollo.io", "abn.business.gov.au", "linktr.ee", "about.me", "sites.google.com",
+  "wixsite.com", "squarespace.com", "godaddysites.com",
+]);
+
 // Same normalisation the companies lane's Build Company Identity applies, so a domain
-// resolved here and a domain the company lane stored are the same string.
+// resolved here and a domain the company lane stored are the same string. Returns null for
+// anything that cannot BE a company domain — the caller then falls through to the exact-name
+// match rather than resolving against a host that identifies no company.
 function cleanCompanyDomain(raw) {
   if (!raw) return null;
   let d = String(raw).trim().toLowerCase();
-  d = d.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0];
-  return d || null;
+  d = d.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0].split("?")[0];
+  if (!d) return null;
+  if (NOT_A_COMPANY_DOMAIN.has(d)) return null;
+  if (FREEMAIL_DOMAINS.has(d)) return null;
+  return d;
 }
 
 function emailDomain(email) {
@@ -142,7 +166,7 @@ function associationUrl(contactId, companyId) {
 }
 
 module.exports = {
-  FREEMAIL_DOMAINS, cleanCompanyDomain, emailDomain, companyDomainForRow,
+  FREEMAIL_DOMAINS, NOT_A_COMPANY_DOMAIN, cleanCompanyDomain, emailDomain, companyDomainForRow,
   companyNameForRow, searchResults, domainMatchId, nameMatchId, resolveCompanyLink,
   associationUrl,
 };

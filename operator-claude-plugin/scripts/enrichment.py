@@ -156,17 +156,42 @@ def normalize_object_type(value):
     return normalized
 
 
+# Hosts that are somebody's PROFILE PAGE, never a company's own domain. Mirrors
+# n8n/code/companyLink.js's NOT_A_COMPANY_DOMAIN — the two must agree, because the client
+# refuses here and the backend resolves there, and a domain one accepts and the other
+# rejects is a silent divergence.
+#
+# Found live 2026-08-25 during the Phase 53 operator walk: an operator holding only a
+# LinkedIn URL is the NORMAL case, and naive host extraction turned
+# `linkedin.com/company/futsal-australia` into the domain `linkedin.com`. That searches
+# HubSpot for domain=linkedin.com, finds nothing, and creates a company whose domain IS
+# linkedin.com — after which every later LinkedIn-sourced company MATCHES that one poisoned
+# record. One bad row swallowing every future company, with no error anywhere.
+NOT_A_COMPANY_DOMAIN = frozenset({
+    "linkedin.com", "lnkd.in", "facebook.com", "fb.com", "instagram.com", "twitter.com",
+    "x.com", "youtube.com", "youtu.be", "tiktok.com", "threads.net", "medium.com",
+    "crunchbase.com", "wikipedia.org", "en.wikipedia.org", "bloomberg.com", "zoominfo.com",
+    "apollo.io", "abn.business.gov.au", "linktr.ee", "about.me", "sites.google.com",
+    "wixsite.com", "squarespace.com", "godaddysites.com",
+})
+
+
 def _clean_domain(raw):
     """The deployed `Build Company Identity`'s cleanDomain(), mirrored: lowercase, strip
     scheme and `www.`, keep the host only. Same string on both sides of the boundary or
-    the backend searches for something the operator never saw."""
+    the backend searches for something the operator never saw.
+
+    Returns None for a host that cannot BE a company domain, so the caller refuses by name
+    with guidance rather than searching HubSpot for a social-network host."""
     if not raw:
         return None
     domain = str(raw).strip().lower()
     domain = re.sub(r"^https?://", "", domain)
     domain = re.sub(r"^www\.", "", domain)
-    domain = domain.split("/")[0]
-    return domain or None
+    domain = domain.split("/")[0].split("?")[0]
+    if not domain or domain in NOT_A_COMPANY_DOMAIN:
+        return None
+    return domain
 
 
 def build_envelope(spec, providers):
@@ -177,6 +202,7 @@ def build_envelope(spec, providers):
       {"list": "<name>", "object_type": "contacts"}      -> the identifier, verbatim
       {"rows": [...], "object_type": "contacts"}         -> a `mode: "propose"` events array
       {"companies": [{"name","domain"}]}                 -> a WRITE-mode events array
+      {"people": [{firstname,lastname,company|email|linkedin_url}]} -> a WRITE-mode events array
       {"view": "<name>"}                                 -> refused (amendment #7)
 
     A list identifier is carried through untouched: the client does not resolve it, does
@@ -240,6 +266,59 @@ def build_envelope(spec, providers):
         envelope["events"] = events
         return envelope
 
+    if "people" in spec:
+        # A PEOPLE form names contacts the way an operator does — "John Tsatsimas at
+        # Football NSW" — rather than by a HubSpot record id nobody carries in their head.
+        # Found live 2026-08-25 in the Phase 53 walk: the backend has resolved contacts by
+        # name since Phase 36 (`IF Name Searchable` -> `HubSpot Name Search` ->
+        # `Adapt Name Search`, and `Build Identity` reads firstname/lastname/company), but
+        # no client form emitted it, so the one sentence a non-technical operator would
+        # actually say hit a wall between two halves that both supported it.
+        #
+        # This is deliberately NOT the `rows` form. Rows describes people who are NOT in
+        # HubSpot and is pinned to `mode: propose` for that reason. This form describes
+        # someone the operator believes IS in HubSpot, so it carries no mode and may write.
+        #
+        # Safety is inherited, not re-invented: the backend's own match lane decides. An
+        # exact identity (email or LinkedIn URL) writes; a MEDIUM name+company match
+        # becomes `needs_match_review` at Decide Action rather than writing, so a
+        # same-named person is surfaced, never silently overwritten (36-CONTEXT §4).
+        people = spec["people"]
+        if not isinstance(people, (list, tuple)) or not people:
+            raise RecordSpecError(
+                "No people were given, so there is nothing to enrich. Name at least one "
+                "person — a full name and their company, or an email address."
+            )
+        events = []
+        for person in people:
+            if not isinstance(person, dict):
+                raise RecordSpecError("Each person must give a name, an email, or a "
+                                      "LinkedIn URL.")
+            event = {"objectType": "contacts"}
+            for key in ("firstname", "lastname", "company", "email", "linkedin_url"):
+                value = str(person.get(key) or "").strip()
+                if value:
+                    event[key] = value
+            # The backend's own gate skips a row with no email, no linkedin_url and not
+            # both a surname and a company — it would burn three provider calls on a row
+            # that can only return nothing. Refuse it here instead, where the operator can
+            # still fix it, and say which of the three would resolve it.
+            has_identity = (
+                event.get("email")
+                or event.get("linkedin_url")
+                or (event.get("lastname") and event.get("company"))
+            )
+            if not has_identity:
+                named = event.get("firstname") or event.get("lastname") or "that person"
+                raise RecordSpecError(
+                    f"There is not enough to find {named} in HubSpot or at any provider. "
+                    f"Add their company, or an email address, or a LinkedIn profile URL — "
+                    f"any one of the three is enough."
+                )
+            events.append(event)
+        envelope["events"] = events
+        return envelope
+
     if "companies" in spec:
         # A COMPANIES form describes companies that may not be in HubSpot yet
         # (2026-08-25). It is the only write-mode form built from operator-typed input,
@@ -261,6 +340,15 @@ def build_envelope(spec, providers):
                 )
             domain = _clean_domain(company.get("domain") or company.get("website"))
             if not domain:
+                given = str(company.get("domain") or company.get("website") or "").strip()
+                if given:
+                    raise RecordSpecError(
+                        f"{company.get('name') or 'That company'} was given "
+                        f"{given!r}, which is a profile page rather than the company's own "
+                        f"website. Searching HubSpot for that host would match no company "
+                        f"and create one whose domain is the social network — give the "
+                        f"company's own website address instead, or its HubSpot record id."
+                    )
                 raise RecordSpecError(
                     f"{company.get('name') or 'A company'} was given without a website "
                     f"domain. Domain is how HubSpot is searched for an existing record; "

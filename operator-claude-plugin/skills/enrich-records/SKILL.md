@@ -47,7 +47,11 @@ capability; claiming it here would be a guess dressed as a report.
      `{"record_ids": ["101","102"], "object_type": "companies"}` (or `"contacts"`).
    - **Companies that may not be in HubSpot yet** — the operator names companies by name
      and website domain. Spec: `{"companies": [{"name": "Perth Racing", "domain":
-     "perthracing.com.au"}]}`. **Domain is mandatory** and the client refuses a company
+     "perthracing.com.au"}]}`. A LinkedIn or Facebook page is **not** a domain — the client
+     refuses one by name and asks for the company's own website, because searching HubSpot
+     for `linkedin.com` matches nothing and would create a company whose domain IS the
+     social network, after which every later LinkedIn-sourced company matches that one
+     poisoned record. **Domain is mandatory** and the client refuses a company
      without one, by name: domain is what the backend searches HubSpot on, so a
      domainless company could only ever be created, never matched — the duplicate-company
      shape this form exists to avoid. Each company is matched on its domain first: an

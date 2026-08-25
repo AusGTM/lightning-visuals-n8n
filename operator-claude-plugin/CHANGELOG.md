@@ -16,6 +16,39 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-08-25
+
+Both entries below came out of the Phase 53 operator walk, from a non-technical operator
+saying ordinary sentences. Both are the same shape: the backend could already do the thing,
+and the client stood in the way.
+
+### Added
+
+- **Name a person the way you would name them.** `{"people": [{"firstname", "lastname",
+  "company"}]}` — or a name with an email or a LinkedIn URL. The backend has resolved
+  contacts by name since Phase 36; no client form emitted it, so the skill asked for a
+  HubSpot record id, which no operator carries in their head. Any ONE of email, LinkedIn URL,
+  or surname + company is enough; less than that is refused by name, saying which of the three
+  would fix it, rather than spending three provider calls on a row that can only return
+  nothing. Match safety is inherited rather than reinvented: an exact identity enriches that
+  record, while a same-surname, same-company match with no exact identity is **held for the
+  operator to confirm** — a second John Tsatsimas is surfaced, never silently overwritten.
+  This is NOT the `rows` form, which describes people who are not in HubSpot and stays pinned
+  to `mode: propose`.
+
+### Fixed
+
+- **A LinkedIn URL is no longer mistaken for a company domain.** Naive host extraction turned
+  `linkedin.com/company/futsal-australia` into the domain `linkedin.com`, which would search
+  HubSpot for that host, find nothing, and create a company whose domain IS linkedin.com —
+  after which every later LinkedIn-sourced company would MATCH that one poisoned record. One
+  bad row swallowing every future company, with no error at any point. Profile hosts
+  (LinkedIn, Facebook, X, Crunchbase and the rest) now normalise to no domain: the companies
+  form refuses them by name and asks for the company's own website, and the ingest lane's
+  resolver falls through to its exact-name match instead of associating a contact to whatever
+  record happens to hold `linkedin.com`. The two engines' host tables are pinned equal by
+  test, because a host one accepts and the other rejects is a silent divergence.
+
 ## [0.15.1] - 2026-08-25
 
 ### Fixed

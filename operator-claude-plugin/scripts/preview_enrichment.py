@@ -101,6 +101,25 @@ def records_block(spec, plan):
             f"**not** in HubSpot yet — nothing is created there by enriching them."
         )
 
+    if spec.get("people") is not None:
+        # A FOURTH claim, distinct from the other three: these people are believed to be in
+        # HubSpot but were named the way an operator names them, so the backend resolves
+        # them. Whether each one resolves is not knowable here, and pretending otherwise
+        # would be the same fabrication the list branch refuses.
+        count = getattr(plan, "record_count", UNKNOWN)
+        named = ", ".join(
+            " ".join(x for x in [(p or {}).get("firstname"), (p or {}).get("lastname")] if x)
+            or (p or {}).get("email") or (p or {}).get("linkedin_url") or "?"
+            for p in (spec.get("people") or [])[:5]
+        )
+        more = "" if not isinstance(count, int) or count <= 5 else f", and {count - 5} more"
+        return (
+            f"**Records:** {count} contacts, named by person — {named}{more}. The backend "
+            f"looks each one up in HubSpot by email, LinkedIn URL, or surname plus company. "
+            f"An exact match is enriched in place; a same-surname, same-company match with "
+            f"no exact identity is held for you to confirm rather than written over."
+        )
+
     if spec.get("companies") is not None:
         # A companies spec makes a THIRD claim, distinct from both branches above: these
         # companies may or may not already be in HubSpot, and which it is decides whether
