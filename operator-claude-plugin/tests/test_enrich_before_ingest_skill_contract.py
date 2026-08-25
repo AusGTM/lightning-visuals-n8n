@@ -4,9 +4,12 @@ idiom, deliberately kept a SEPARATE file rather than folded into that one -- sam
 reasoning that file states about not colliding with work in flight elsewhere.
 
 The two pins that matter most here are NOT wording assertions: they are a
-character-offset comparison (the enriched-preview heading must precede the ingest-arm
-heading) and a same-numbered-step exclusion (the two arming phrases must never share a
-step).
+character-offset comparison (the enriched-preview heading must precede the ingest-ask
+heading) and a same-numbered-step exclusion (the two consents must never share a step).
+
+VOCAB-05 (2026-08-25) killed the two literal arming phrases those pins used to locate;
+they locate the two per-send consent sentences now. What the pins defend is unchanged:
+this flow asks twice, once per irreversible consequence, and never in one step.
 
 WHAT THOSE TWO PINS DEFEND CHANGED ON 2026-08-25, and this file no longer claims
 otherwise. Under D-53-05 -- taken by the operator, deliberately, for speed -- ONE write

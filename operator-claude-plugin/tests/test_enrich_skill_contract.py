@@ -116,9 +116,15 @@ def test_the_skill_refuses_to_claim_per_record_outcomes():
 
 # ---------------------------------------------------------------------------------
 # D-53-04 (2026-08-25): while a write grant covering this lane and these records is
-# open, the per-turn arming phrase is not asked again. All ADDITIVE -- every pin above
-# stays exactly as it was, including the phrase, the disk clause and the scope clause,
-# which bind the ungranted path this decision leaves untouched.
+# open, the per-send ask is not made again. All ADDITIVE -- the pins above bind the
+# ungranted path this decision leaves untouched.
+#
+# AMENDED VOCAB-05 (2026-08-25): this block used to say the pins above stay exactly as
+# they were "including the phrase". They do not any more -- the phrase pin was rewritten
+# in place (see its own RECORDED EDIT docstring) because the literal string died and the
+# attached-consent property it stood for did not. The disk clause and the scope clause
+# survive, the scope narrowed from the conversation to the send, and D-53-04 itself is
+# untouched by any of it.
 # ---------------------------------------------------------------------------------
 
 
