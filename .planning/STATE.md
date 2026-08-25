@@ -19,6 +19,16 @@ progress:
 
 # Project State
 
+## 📋 NEXT MILESTONE DEFINED — v1.1 Unattended Session Runs (2026-08-25, not started)
+
+Client UAT verdict: the flow is "incredibly halting" — one grant per send does not scale. One
+session grant, then an unattended run through to HubSpot write. Requirements:
+`.planning/milestones/v1.1-REQUIREMENTS.md`; MILESTONES.md carries the summary. Phases
+unplanned. Note the milestone's own framing: consent and throughput are two problems, and the
+2-record request ceiling plus the 2,500/month execution budget mean auto-approval alone does
+not deliver an unattended batch.
+
+
 ## ✅ PHASE 50 — ALL 6 PLANS COMPLETE, RETIREMENT DONE (D-24 override) (2026-08-14)
 
 **Plan 05 closed the phase.** First live window (earlier 2026-08-14) switched WF1 off and hit

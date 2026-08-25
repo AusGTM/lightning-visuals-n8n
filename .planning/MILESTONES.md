@@ -1,5 +1,26 @@
 # Milestones
 
+## v1.1 Unattended Session Runs (Defined 2026-08-25 — NOT STARTED)
+
+**Requirements:** `.planning/milestones/v1.1-REQUIREMENTS.md`. Phases unplanned.
+
+**Source:** a UAT walkthrough with the end client, 2026-08-25. Their verdict: the flow is
+"incredibly halting" — every send needs its own preview, arming phrase and confirmation, which
+is unfeasible at scale. They want one grant at the start of a session and an unattended run
+through to HubSpot write.
+
+**The distinction the milestone turns on:** this is two requests, not one. Fewer decisions is a
+consent problem; finishing a batch of hundreds is a throughput problem, and auto-approval does
+not touch it — the per-request ceiling is a measured 2 records against n8n Cloud's ~100 s
+response window, and every record costs executions against a 2,500/month plan. Building only
+the consent half produces a system that asks once and then takes hours anyway.
+
+**What may not regress:** record-scoped write allowlists (the backend must stay incapable of
+writing a record outside the run), guaranteed disarm with `disarm_failed` reported loudly, cost
+ceilings that bind before spend, per-record audit stamps, and the held-row contract — a contact
+whose company cannot be resolved is held, never landed to keep a batch moving.
+
+
 ## v0.8 Execution Budget Safety (Shipped: 2026-08-11)
 
 **Phases completed:** 2 phases (44–45), 6 plans, 9 tasks
