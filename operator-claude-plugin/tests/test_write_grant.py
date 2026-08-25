@@ -58,6 +58,22 @@ def _workflow_list():
     ]}
 
 
+def _plan_reads(lanes=1, balances=None, guardrail=None):
+    """Everything ONE `plan_grant` consumes, in `plan_grant`'s frozen call order:
+
+        one /api/v1/workflows read per lane   (id resolution)
+        one status POST                       (balances — only when a provider is priced)
+        one workflow read per lane            (GUARDRAIL A's live write-safety read)
+
+    The guardrail reads default to DISARMED bodies, because a scripted transport that runs
+    out answers `{}` — which guardrail A correctly treats as unreadable and refuses on.
+    """
+    reads = [_workflow_list()] * lanes
+    if balances is not None:
+        reads.append(balances)
+    return reads + [guardrail if guardrail is not None else _base_workflow()] * lanes
+
+
 @pytest.fixture(autouse=True)
 def _clean_arm_env(monkeypatch):
     """The whole point of this phase is arming with NO environment variable, so every test
@@ -102,6 +118,7 @@ def test_a_send_arms_under_an_opened_grant_with_no_environment_variable_set(
     dispatch -> verified disarm, with no shell anywhere in it."""
     transport = stub_module_transport_factory([
         _workflow_list(),                                       # plan_grant's lane resolve
+        _base_workflow(),                                       # guardrail A's live read
         _base_workflow(), _base_workflow(), {}, {}, {},         # the arm
         _base_workflow(record_writes='"true"', ids=f'"{RECORD_ID}"'),   # arm verification
         _armed_workflow(), _armed_workflow(), {}, {}, {}, _base_workflow(),   # the disarm
@@ -130,7 +147,7 @@ def test_a_record_outside_the_grant_is_refused_before_any_transport_call(
     """An EMPTY call log, not merely an empty mutating one — that is what distinguishes a
     refusal that happened before transport construction from one that merely did not
     mutate."""
-    resolve_transport = stub_module_transport_factory([_workflow_list()])
+    resolve_transport = stub_module_transport_factory(_plan_reads())
     grant = _open(granting_config, resolve_transport)
 
     transport = stub_module_transport_factory([_base_workflow()])
@@ -144,7 +161,7 @@ def test_a_record_outside_the_grant_is_refused_before_any_transport_call(
 
 def test_a_domain_outside_the_grant_is_refused_before_any_transport_call(
         granting_config, stub_module_transport_factory):
-    resolve_transport = stub_module_transport_factory([_workflow_list()])
+    resolve_transport = stub_module_transport_factory(_plan_reads())
     grant = _open(granting_config, resolve_transport, ids=(), domains=("known.example",))
 
     transport = stub_module_transport_factory([_base_workflow()])
@@ -160,7 +177,7 @@ def test_a_grant_on_one_lane_cannot_arm_another_lanes_workflow(
         granting_config, stub_module_transport_factory):
     """The scope check is on the workflow id, not only on the records: a grant over the
     enrichment lane must not arm the contact-ingest workflow for the same records."""
-    resolve_transport = stub_module_transport_factory([_workflow_list()])
+    resolve_transport = stub_module_transport_factory(_plan_reads())
     grant = _open(granting_config, resolve_transport, lanes=("enrichment",))
 
     transport = stub_module_transport_factory([_base_workflow()])
@@ -178,7 +195,7 @@ def test_a_grant_spanning_both_lanes_arms_either_of_them(granting_config,
     enrich-before-ingest. What it must NOT do is widen beyond the named record set — that
     is what the two refusals above hold."""
     # Two lanes, two distinct workflow names, so two collection reads.
-    resolve_transport = stub_module_transport_factory([_workflow_list(), _workflow_list()])
+    resolve_transport = stub_module_transport_factory(_plan_reads(lanes=2))
     grant = _open(granting_config, resolve_transport, lanes=("enrichment", "contacts"))
 
     for workflow_id in (WORKFLOW_ID, CONTACTS_WORKFLOW_ID):
@@ -190,7 +207,7 @@ def test_the_empty_allowlist_refusal_still_fires_under_a_grant(
         granting_config, stub_module_transport_factory):
     """`covers` is a subset check, and the empty set is trivially a subset — so the
     grant must not become a way past the empty-allowlist refusal."""
-    resolve_transport = stub_module_transport_factory([_workflow_list()])
+    resolve_transport = stub_module_transport_factory(_plan_reads())
     grant = _open(granting_config, resolve_transport)
 
     transport = stub_module_transport_factory([_base_workflow()])
@@ -223,7 +240,7 @@ def test_a_grant_presented_against_a_config_without_the_key_refuses(
 
 def test_a_closed_grant_refuses_and_names_why_it_closed(granting_config,
                                                         stub_module_transport_factory):
-    resolve_transport = stub_module_transport_factory([_workflow_list()])
+    resolve_transport = stub_module_transport_factory(_plan_reads())
     grant = write_grant.close_grant(_open(granting_config, resolve_transport),
                                     write_grant.CLOSED_REVOKED)
 
@@ -266,20 +283,21 @@ def test_the_no_grant_refusal_names_both_routes(granting_config,
 
 def test_plan_grant_makes_no_mutating_call_of_any_kind(granting_config,
                                                        stub_module_transport_factory):
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
 
     proposal = _proposal(granting_config, transport)
 
     assert proposal["kind"] == write_grant.PROPOSAL_KIND
     assert transport.mutating_calls == []
-    assert transport.verbs == ["get"]
+    # Id resolution, then GUARDRAIL A's live write-safety read. Reads only.
+    assert transport.verbs == ["get", "get"]
 
 
 def test_plan_grant_refuses_an_empty_record_set_at_plan_time(granting_config,
                                                              stub_module_transport_factory):
     """Refused at PLAN time, not deferred to the arm: a grant over nothing would read as a
     grant while granting nothing."""
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
 
     result = _proposal(granting_config, transport, ids=(), domains=())
 
@@ -290,7 +308,7 @@ def test_plan_grant_refuses_an_empty_record_set_at_plan_time(granting_config,
 
 def test_plan_grant_refuses_an_unknown_lane_by_name(granting_config,
                                                     stub_module_transport_factory):
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
 
     result = _proposal(granting_config, transport, lanes=("review",))
 
@@ -319,7 +337,7 @@ def test_plan_grant_refuses_when_a_lane_does_not_resolve(granting_config,
 
 def test_plan_grant_refuses_without_the_settings_key(fake_config,
                                                      stub_module_transport_factory):
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
 
     result = _proposal(fake_config, transport)
 
@@ -332,7 +350,7 @@ def test_plan_grant_refuses_without_the_settings_key(fake_config,
 def test_the_preflight_seam_can_refuse_before_a_proposal_exists(
         granting_config, stub_module_transport_factory):
     """53-02's guardrail A lands as a fill, not a reshape."""
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
     seen = {}
 
     def _preflight(config, workflow_ids, given_transport):
@@ -353,7 +371,7 @@ def test_the_preflight_seam_can_refuse_before_a_proposal_exists(
 
 def test_open_grant_without_a_confirmation_raises_type_error(granting_config,
                                                              stub_module_transport_factory):
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
     proposal = _proposal(granting_config, transport)
 
     with pytest.raises(TypeError):
@@ -371,7 +389,7 @@ def test_open_grant_refuses_anything_that_is_not_a_proposal(granting_config):
 def test_the_grant_carries_what_it_covers(granting_config, stub_module_transport_factory):
     """GRANT-01: object types, the record set, whether creates are included, and the lanes
     it covers — all stated on the grant itself."""
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
     grant = _open(granting_config, transport, allow_create=True,
                   ids=(RECORD_ID,), domains=("known.example",))
 
@@ -391,7 +409,7 @@ def test_the_grant_carries_what_it_covers(granting_config, stub_module_transport
 
 def test_close_grant_returns_a_copy_and_makes_no_network_call(
         granting_config, stub_module_transport_factory):
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
     grant = _open(granting_config, transport)
     before = len(transport.calls)
 
@@ -410,7 +428,7 @@ def test_nothing_about_a_grant_is_written_to_disk_or_to_the_environment(
     """GRANT-06 / D-53-03: the grant exists only as a value in the conversation."""
     monkeypatch.setattr(config_gate, "config_path", lambda *a, **k: tmp_path / "nope.json")
     env_before = dict(os.environ)
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
 
     grant = _open(granting_config, transport)
     write_grant.close_grant(grant, write_grant.CLOSED_BATCH_COMPLETE)
@@ -464,7 +482,7 @@ def test_every_near_miss_settings_value_refuses_the_arm(near_miss, fake_config,
 def test_every_near_miss_settings_value_refuses_the_plan(near_miss, fake_config,
                                                          stub_module_transport_factory):
     config = _config_with(fake_config, near_miss)
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
 
     result = _proposal(config, transport)
 
@@ -486,7 +504,7 @@ def test_a_config_missing_the_key_entirely_refuses_by_name(fake_config,
     """The degrade-safely-when-absent path — which is what an existing operator's settings
     file looks like the day this ships."""
     assert config_gate.WRITE_GRANT_SETTINGS_KEY not in fake_config
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
 
     result = _proposal(fake_config, transport)
 
@@ -503,7 +521,7 @@ def test_no_configured_value_reaches_any_refusal_string(stub_module_transport_fa
                config_gate.WRITE_GRANT_SETTINGS_KEY: "true"}   # a near miss, so it refuses
 
     refusals = [
-        _proposal(secrets, stub_module_transport_factory([_workflow_list()])),
+        _proposal(secrets, stub_module_transport_factory(_plan_reads())),
         write_grant.open_grant({"kind": write_grant.PROPOSAL_KIND}, "yes", secrets),
         n8n_arming.arm_for_dispatch(
             WORKFLOW_ID, [RECORD_ID], [], False, secrets,
@@ -547,7 +565,7 @@ def _bogus_proposal(kind):
 @pytest.mark.parametrize("confirmation", _NOT_YES)
 def test_neither_confirmation_gate_accepts_anything_but_the_exact_string_yes(
         confirmation, granting_config, stub_module_transport_factory):
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
     proposal = _proposal(granting_config, transport)
 
     opened = write_grant.open_grant(proposal, confirmation, granting_config)
@@ -567,7 +585,7 @@ def test_both_confirmation_gates_proceed_on_the_exact_string_yes(
     parametrisation above. `execute_action` is given an out-of-allowlist proposal, so
     getting PAST the confirmation gate is visible as a different refusal, with no
     transport call."""
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
     proposal = _proposal(granting_config, transport)
 
     opened = write_grant.open_grant(proposal, "yes", granting_config)
@@ -589,7 +607,7 @@ def test_both_confirmation_gates_raise_type_error_when_the_argument_is_omitted(
         granting_config, stub_module_transport_factory):
     """No default, on both — a caller that forgets the confirmation gets a TypeError, never
     a silent yes."""
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
     proposal = _proposal(granting_config, transport)
 
     with pytest.raises(TypeError):
@@ -628,9 +646,9 @@ def _balances(lusha=50, zoominfo=None, apollo=None):
 
 
 def _priced_plan_reads(balances=None, lanes=1):
-    """The frozen call order a priced `plan_grant` consumes: one workflow-collection read
-    per lane, then ONE status POST for balances."""
-    return [_workflow_list()] * lanes + [balances if balances is not None else _balances()]
+    """A priced plan: the same frozen order, with the balances POST populated."""
+    return _plan_reads(lanes=lanes,
+                       balances=balances if balances is not None else _balances())
 
 
 def _priced_proposal(config, transport, **kwargs):
@@ -733,7 +751,7 @@ def test_a_missing_chunk_ceiling_degrades_the_projection_not_the_grant(
         granting_config, stub_module_transport_factory):
     """`chunk_ceiling` refuses to guess a timeout bound — correctly, for a dispatch. A
     PROJECTION must not inherit that refusal and take the whole grant down with it."""
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
     proposal = _proposal(granting_config, transport)   # fake_config has no ceiling key
 
     figures = proposal["envelope"]
@@ -793,10 +811,11 @@ def test_a_refused_open_still_tells_the_operator_what_the_batch_would_have_cost(
 def test_no_status_post_is_made_when_the_batch_prices_no_provider(
         granting_config, stub_module_transport_factory):
     """A grant that runs no provider has no balance to read, so it reads none."""
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
     figures = _proposal(granting_config, transport)["envelope"]
 
-    assert transport.verbs == ["get"]
+    # One id-resolution read and one guardrail-A read. No POST: no provider, no balance.
+    assert transport.verbs == ["get", "get"]
     assert figures["provider_credits"] == {}
     assert "No provider credits: **0**" in figures["block"]
 
@@ -808,7 +827,7 @@ def test_a_two_lane_grant_names_both_lanes_and_states_the_preview_trade(
     """D-53-05's traded protection, pinned by a test rather than by prose. This is the ONE
     rendering the operator reads AT THE YES — the skill contract pins SKILL.md and the
     53-04 checkpoint pins the human walk, but neither pins this sentence."""
-    transport = stub_module_transport_factory([_workflow_list(), _workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads(lanes=2))
     proposal = _proposal(granting_config, transport, lanes=("enrichment", "contacts"))
 
     consequence = proposal["consequence"]
@@ -823,7 +842,7 @@ def test_a_two_lane_grant_names_both_lanes_and_states_the_preview_trade(
 
 def test_a_single_lane_grant_claims_no_preview_trade_that_is_not_happening(
         granting_config, stub_module_transport_factory):
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
     consequence = _proposal(granting_config, transport)["consequence"]
 
     assert "enrichment lane" in consequence
@@ -836,7 +855,7 @@ def test_the_consequence_carries_the_arm_dispatch_register_in_full(
     """53-CONTEXT's <specifics>: what turns on, bounded to what, what turns it off, and
     what happens if turning it off fails. All four, or the operator is approving a
     sentence that answers three of their questions."""
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
     consequence = _proposal(granting_config, transport, domains=("known.example",))[
         "consequence"]
 
@@ -870,7 +889,7 @@ def test_grant_04s_expiry_set_is_exactly_the_five_it_names():
     "unhandled_error"}))
 def test_a_grant_closed_for_each_reason_carries_that_reason_by_name(
         granting_config, stub_module_transport_factory, reason):
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
     grant = _open(granting_config, transport)
 
     closed = write_grant.close_grant(grant, reason)
@@ -882,7 +901,7 @@ def test_a_grant_closed_for_each_reason_carries_that_reason_by_name(
 def test_close_grant_refuses_a_free_text_reason(granting_config,
                                                 stub_module_transport_factory):
     """A close reason that can be anything is a close reason nobody can report on."""
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
     grant = _open(granting_config, transport)
 
     with pytest.raises(ValueError) as raised:
@@ -894,7 +913,7 @@ def test_close_grant_refuses_a_free_text_reason(granting_config,
 
 def test_check_before_send_refuses_a_closed_grant_and_names_the_closing_reason(
         granting_config, stub_module_transport_factory):
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
     grant = write_grant.close_grant(_open(granting_config, transport),
                                     write_grant.CLOSED_SESSION_END)
 
@@ -908,7 +927,7 @@ def test_check_before_send_refuses_a_closed_grant_and_names_the_closing_reason(
 
 def test_check_before_send_names_the_records_a_send_would_have_reached_outside_the_grant(
         granting_config, stub_module_transport_factory):
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
     grant = _open(granting_config, transport)
 
     refusal = write_grant.check_before_send(
@@ -922,7 +941,7 @@ def test_check_before_send_names_the_records_a_send_would_have_reached_outside_t
 
 def test_check_before_send_passes_a_send_inside_the_grant(
         granting_config, stub_module_transport_factory):
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
     grant = _open(granting_config, transport)
 
     assert write_grant.check_before_send(
@@ -966,7 +985,7 @@ def test_a_revocation_midway_does_not_stop_a_running_dispatch(
     import chunking
 
     ids = [str(n) for n in range(1, 7)]
-    grant_transport = stub_module_transport_factory([_workflow_list()])
+    grant_transport = stub_module_transport_factory(_plan_reads())
     grant = _open(granting_config, grant_transport, ids=tuple(ids))
     held = {"grant": grant}
 
@@ -1009,7 +1028,7 @@ def test_dispatch_plan_has_no_grant_aware_hook_to_revoke_against():
 
 def test_a_verified_disarm_resets_the_consecutive_failure_counter(
         granting_config, stub_module_transport_factory):
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
     grant = _open(granting_config, transport)
     grant["consecutive_disarm_failures"] = 1
 
@@ -1025,7 +1044,7 @@ def test_one_disarm_failure_increments_the_counter_and_leaves_the_grant_open(
         granting_config, stub_module_transport_factory):
     """D-53-04: one failure fails that send only, so a transient blip cannot abort a long
     run. The bound is on the SECOND."""
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
     grant = _open(granting_config, transport)
 
     updated = write_grant.record_send_outcome(
@@ -1037,7 +1056,7 @@ def test_one_disarm_failure_increments_the_counter_and_leaves_the_grant_open(
 
 def test_an_outcome_carrying_no_disarm_verdict_leaves_the_counter_alone(
         granting_config, stub_module_transport_factory):
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
     grant = _open(granting_config, transport)
     grant["consecutive_disarm_failures"] = 1
 
@@ -1048,7 +1067,7 @@ def test_an_outcome_carrying_no_disarm_verdict_leaves_the_counter_alone(
 
 def test_a_ceiling_breach_closes_the_grant_rather_than_continuing(
         granting_config, stub_module_transport_factory):
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
     grant = _open(granting_config, transport)
 
     updated = write_grant.record_send_outcome(
@@ -1063,7 +1082,7 @@ def test_closing_a_grant_makes_no_network_call_on_the_three_vacuous_paths(
     """GRANT-04's disarm clause is VACUOUS on completion, revocation and session end —
     under per-send windows there is no window open at close time. Guardrail B's two paths
     are the ones where it is not, and they are Task 3's."""
-    transport = stub_module_transport_factory([_workflow_list()])
+    transport = stub_module_transport_factory(_plan_reads())
     grant = _open(granting_config, transport)
     before = len(transport.calls)
 

@@ -367,15 +367,17 @@ def plan_grant(config, *, lanes, object_type, record_ids, record_domains, allow_
     `None` means the configured selection in `enrichment_providers`, the same default
     every other lane in this plugin resolves to.
 
-    `preflight` is the seam guardrail A fills (53-02 Task 3): refuse to plan a grant when
-    a live read finds writes already armed. When callable it is invoked with
-    `(config, workflow_ids, transport)` and its return value, when truthy, is returned as
-    the refusal — with the envelope attached.
+    `preflight` IS GUARDRAIL A, and it is not optional. `None` means the real one; a
+    caller may substitute another callable (a test does), but a non-callable value is a
+    TypeError rather than a skipped check. There is no config key, environment variable
+    or phrase that turns it off — an off switch on a guardrail is the guardrail's absence
+    with extra steps (T-53-12). It is invoked with `(config, workflow_ids, transport)` and
+    its refusal is returned with the envelope attached.
 
     CALL ORDER, frozen because every scripted test depends on it: the cheap refusals
     (authority, lanes, record set) cost nothing; then one workflow-collection GET per
     lane to resolve ids; then ONE status POST for provider balances, and only when the
-    batch actually prices a provider; then guardrail A's own reads (53-02 Task 3).
+    batch actually prices a provider; then one workflow GET per lane for guardrail A.
     The envelope is computed BEFORE guardrail A so that a refused open still tells the
     operator what the batch would have cost.
     """
@@ -433,13 +435,18 @@ def plan_grant(config, *, lanes, object_type, record_ids, record_domains, allow_
         else (config or {}).get("enrichment_providers"),
         transport=transport, today=today)
 
-    if callable(preflight):
-        blocked = preflight(config, workflow_ids, transport)
-        if blocked:
-            # The envelope rides along on the refusal: an operator who is refused still
-            # learns what the batch would have cost, and can act on the refusal without
-            # re-planning to find out.
-            return {**blocked, "envelope": figures}
+    preflight = guardrail_a if preflight is None else preflight
+    if not callable(preflight):
+        raise TypeError(
+            "guardrail A is not optional: `preflight` must be callable. Passing a "
+            "non-callable would make the live write-safety read skippable by argument, "
+            "which is the toggle this guardrail may not have.")
+    blocked = preflight(config, workflow_ids, transport)
+    if blocked:
+        # The envelope rides along on the refusal: an operator who is refused still
+        # learns what the batch would have cost, and can act on the refusal without
+        # re-planning to find out.
+        return {**blocked, "envelope": figures}
 
     return {
         "kind": PROPOSAL_KIND,
@@ -686,4 +693,240 @@ def record_send_outcome(grant, outcome, config=None, *, transport=None):
     if outcome.get("ceiling_breach"):
         return close_grant(updated, CLOSED_CEILING_BREACH)
 
+    # GUARDRAIL B, path 1 (D-53-04): the SECOND consecutive disarm failure closes the
+    # grant. The first does not — a transient blip must not abort a long run — but an
+    # unbounded march of writes over a backend nobody can confirm is disarmed must not be
+    # possible either. That is the whole distinction, and it is why the bound is on 2.
+    #
+    # The close ATTEMPTS a disarm because this path has now failed twice to turn writes
+    # off: closing and walking away would leave a live record-scoped allowlist behind at
+    # exactly the moment the system knows one is there.
+    if updated["consecutive_disarm_failures"] >= 2:
+        failed_on = (outcome.get("disarm") or {}).get("workflow_id")
+        return _close_with_disarm(
+            updated, CLOSED_DISARM_UNCONFIRMED, config,
+            [failed_on] if failed_on else _covered_workflow_ids(updated), transport)
+
     return updated
+
+
+# =========================================================================================
+# 53-02 Task 3 — THE TWO GUARDRAILS (D-53-03 and D-53-04's proposed defences)
+#
+# Both were PROPOSED in 53-CONTEXT.md and neither may be assumed away. They are built here
+# as working code, and NEITHER IS REACHABLE BY AN ENVIRONMENT VARIABLE, A CONFIG KEY OR A
+# PHRASE. An off switch on a guardrail is the guardrail's absence with extra steps.
+#
+# THE CONTRAST BETWEEN THEM IS DELIBERATE AND ASYMMETRIC, and it lives here so a later edit
+# cannot "harmonise" them:
+#
+#   GUARDRAIL A found a state IT DID NOT CREATE. It names what it found, offers a disarm,
+#   and takes none — D-53-03 mandates offer-only. A guardrail that silently repaired the
+#   state would remove the evidence that a previous session died armed, and that evidence
+#   is the one signal telling the operator the client-held design is costing them.
+#
+#   GUARDRAIL B is closing a window ITS OWN RUN OPENED and is responsible for. Both of its
+#   close paths ATTEMPT a disarm, carry its verdict on the closed grant, and CLOSE EITHER
+#   WAY. `n8n_arming.disarm` is ungated by design, so this adds no authority anywhere.
+# =========================================================================================
+
+# The two flags that actually enable a write. TEST_RECORD_IDS / TEST_RECORD_DOMAINS bound a
+# write that is already enabled; they cannot enable one on their own (the deployed
+# `_writeSafetyAllows` denies everything on an empty allowlist), so they are REPORTED by
+# guardrail A rather than treated as an armed state.
+WRITE_ENABLING_FLAGS = ("ALLOW_HUBSPOT_RECORD_WRITES", "ALLOW_HUBSPOT_CREATE")
+
+CLOSED_DISARM_UNCONFIRMED = "two_consecutive_disarm_failures"
+CLOSED_WRITES_STILL_LIVE = "writes_still_live_at_next_send"
+
+GUARDRAIL_B_REASONS = frozenset({CLOSED_DISARM_UNCONFIRMED, CLOSED_WRITES_STILL_LIVE})
+CLOSE_REASONS = GRANT_04_REASONS | GUARDRAIL_B_REASONS
+
+
+def _enabled(value):
+    """A declaration reads ENABLED. Compared as text because the declaration is a JS
+    literal read back out of the deployed workflow, where `true` and `"true"` are both
+    what an arm can leave behind."""
+    return str(value).strip().strip('"').strip("'").lower() == "true"
+
+
+def read_live_write_state(config, workflow_ids, transport=None):
+    """What the LIVE workflows say about writes right now, one read per covered lane.
+
+    Reads through `n8n_read.get_workflow` + `n8n_read.read_write_safety` over
+    `n8n_arming.DISPATCH_FLAGS` — the shipped reader, never a second declaration regex.
+
+    This is NOT a call into `status.describe_workflow`, and that is not duplication:
+    `describe_workflow` reads only two of the four dispatch flags and returns no
+    allowlists, while a refusal an operator can act on has to name the allowlist that is
+    currently in force. Narrow read, on purpose.
+
+    Returns `{lane: {workflow_id, workflow_name, readable, flags, disagreements}}`.
+    """
+    import requests as _requests
+    transport = transport if transport is not None else _requests
+    get_transport = transport.get if hasattr(transport, "get") else transport
+
+    state = {}
+    for lane, workflow_id in (workflow_ids or {}).items():
+        body = n8n_read.get_workflow(config, workflow_id, transport=get_transport)
+        if not isinstance(body, dict):
+            state[lane] = {"workflow_id": workflow_id, "workflow_name": None,
+                           "readable": False, "flags": {}, "disagreements": {}}
+            continue
+
+        flags = {}
+        disagreements = {}
+        for flag in n8n_arming.DISPATCH_FLAGS:
+            reading = n8n_read.read_write_safety(body, flag)
+            flags[flag] = reading.get("value")
+            if reading.get("disagreement"):
+                disagreements[flag] = reading["nodes"]
+
+        readable = all(flags.get(flag) is not None for flag in WRITE_ENABLING_FLAGS)
+        state[lane] = {"workflow_id": workflow_id, "workflow_name": body.get("name"),
+                       "readable": readable, "flags": flags,
+                       "disagreements": disagreements}
+    return state
+
+
+def _live_write_faults(state):
+    """The three states that refuse an open, per lane. Order is presentation only — a lane
+    can be in more than one."""
+    faults = {}
+    for lane, reading in (state or {}).items():
+        why = []
+        if not reading.get("readable"):
+            # THE ONE A HURRIED IMPLEMENTATION GETS WRONG. An unreadable write-safety state
+            # is not evidence of a disarmed backend, and this guardrail exists precisely
+            # for the case where something is already wrong.
+            why.append("its write-safety state could not be read at all")
+        if reading.get("disagreements"):
+            why.append("its declaring nodes disagree with each other")
+        live = [flag for flag in WRITE_ENABLING_FLAGS
+                if _enabled((reading.get("flags") or {}).get(flag))]
+        if live:
+            why.append(f"{', '.join(live)} reads enabled")
+        if why:
+            faults[lane] = {"reasons": why, "live_flags": live, **reading}
+    return faults
+
+
+def guardrail_a(config, workflow_ids, transport=None):
+    """GUARDRAIL A (D-53-03): refuse to plan a grant over a backend where writes are
+    already live — or where nobody can tell. None when the open may proceed.
+
+    WHAT THIS PROVES AND WHAT IT DOES NOT. It proves that at THIS plan, on the lanes this
+    grant covers, live writes were off and readable. It proves nothing about a session
+    that died between an arm and a disarm inside the same turn and was then cleaned up by
+    something else, and it cannot see a lane this grant does not name (a backend armed on
+    some other workflow stays unnoticed — widening it to every workflow the API key can
+    see would train the operator to override refusals citing unrelated work). It is the
+    only cheap defence available under a client-held grant, and D-53-03 recorded that
+    plainly when the alternative was offered and declined.
+
+    IT NEVER DISARMS. It names what it found and offers the disarm as the operator's next
+    step. Turning D-53-03's accepted risk from silent into loud is the whole job; a
+    guardrail that quietly repaired the state would destroy the evidence.
+    """
+    state = read_live_write_state(config, workflow_ids, transport)
+    faults = _live_write_faults(state)
+    if not faults:
+        return None
+
+    lines = []
+    for lane, fault in sorted(faults.items()):
+        flags = fault.get("flags") or {}
+        lines.append(
+            f"[{lane}] {fault.get('workflow_name') or 'unnamed workflow'} "
+            f"({fault.get('workflow_id')}): {'; '.join(fault['reasons'])}. "
+            f"Flags read: "
+            f"{', '.join(f'{flag}={flags.get(flag)!r}' for flag in n8n_arming.DISPATCH_FLAGS)}."
+            f" Records currently allowlisted: "
+            f"ids={flags.get('TEST_RECORD_IDS')!r}, "
+            f"domains={flags.get('TEST_RECORD_DOMAINS')!r}.")
+
+    return _refusal(
+        "refusing to open a write grant: this backend is not in a known-disarmed state. "
+        + " ".join(lines)
+        + " I have NOT changed anything. A previous session may have ended without "
+          "disarming, which is exactly what this check exists to make visible. Your next "
+          "step, if you recognise this state as stale: ask me to disarm those workflows, "
+          "then plan the grant again. If you do not recognise it, an admin should look at "
+          "n8n before anything else writes.",
+        guardrail="A", live_write_state=state, faults=faults,
+        offered_action="disarm")
+
+
+# ------------------------------------------------------------------------- GUARDRAIL B
+
+
+def _close_with_disarm(grant, reason, config, workflow_ids, transport=None):
+    """Close a grant AND attempt to disarm the workflows it may have left live.
+
+    THE CLOSE HAPPENS EITHER WAY. A failed closing disarm must never be a reason to leave
+    the grant open — that would let the run continue over exactly the state that triggered
+    the guardrail. The verdict rides on the closed grant under `closing_disarm` so the
+    operator reads whether it worked.
+
+    `n8n_arming.disarm` is ungated by design (a kill switch that blocked disarming would
+    strand an armed backend), so closing with a disarm adds no new authority anywhere.
+    """
+    verdicts = []
+    for workflow_id in workflow_ids or []:
+        try:
+            result = n8n_arming.disarm(workflow_id, config, transport=transport)
+            verdicts.append({"workflow_id": workflow_id,
+                             "outcome": result.get("outcome"),
+                             "detail": result.get("detail")})
+        except Exception as failure:      # noqa: BLE001 — the close must survive anything
+            verdicts.append({"workflow_id": workflow_id,
+                             "outcome": n8n_arming.DISARM_FAILED,
+                             "detail": f"the disarm raised: {type(failure).__name__}"})
+
+    closed = close_grant(grant, reason)
+    closed["closing_disarm"] = verdicts
+    closed["closing_disarm_verified"] = bool(verdicts) and all(
+        v["outcome"] == n8n_arming.DISARMED for v in verdicts)
+    return closed
+
+
+def _covered_workflow_ids(grant, lane=None):
+    ids = (grant or {}).get("workflow_ids") or {}
+    if lane is not None and lane in ids:
+        return [ids[lane]]
+    return list(ids.values())
+
+
+def preflight_before_send(grant, config, lane, transport=None):
+    """GUARDRAIL B, path 2: read the lane's live write state BEFORE a send.
+
+    Writes still live means the previous window's disarm did not take, whatever the
+    failure counter reads — so the grant closes, a disarm is ATTEMPTED, its verdict is
+    carried, and that send is refused. Returns `(grant, refusal_or_None)`; the caller
+    replaces its handle with the returned grant either way.
+
+    An unreadable or disagreeing state does NOT close here. Guardrail A refuses at the
+    open for that, where refusing costs nothing; mid-run, a single unreadable read is more
+    likely a transient API blip than a live-write state, and D-53-04's whole point is that
+    a blip must not abort a long run. Only an actually-live write closes.
+    """
+    granted = (grant or {}).get("workflow_ids") or {}
+    workflow_ids = {lane: granted[lane]} if lane in granted else {}
+
+    state = read_live_write_state(config, workflow_ids, transport)
+    live = {name: reading for name, reading in state.items()
+            if any(_enabled((reading.get("flags") or {}).get(flag))
+                   for flag in WRITE_ENABLING_FLAGS)}
+    if not live:
+        return grant, None
+
+    closed = _close_with_disarm(grant, CLOSED_WRITES_STILL_LIVE, config,
+                                [r["workflow_id"] for r in live.values()], transport)
+    return closed, _refusal(
+        f"refusing this send: a pre-flight read found live writes still enabled on "
+        f"{', '.join(sorted(live))}, which means the previous send's disarm did not take. "
+        f"The grant is closed and a disarm was attempted — "
+        f"{'it verified' if closed['closing_disarm_verified'] else 'IT DID NOT VERIFY, so an admin must check n8n'}. "
+        f"Nothing further will be sent under this grant.",
+        guardrail="B", live_write_state=state)
