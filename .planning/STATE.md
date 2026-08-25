@@ -5,16 +5,16 @@ milestone_name: Unattended Session Runs
 current_phase: 53
 current_phase_name: Operator-openable write grant
 status: executing
-stopped_at: "53-02 COMPLETE (envelope arithmetic, five named close reasons, revocation at the next SEND, and BOTH proposed guardrails -- 3 commits, full suite green, zero n8n executions). Next: 53-03 (the one-exchange operator surface). Phase 52 (v1.0 staged canary) DEFERRED by operator 2026-08-25 -- on resume, re-derive Phase 51 population/credit sizing (artifacts dated 2026-08-19, they drift) and resolve the deferred FILL-04 third disposition."
-last_updated: "2026-08-25T07:20:00.000Z"
+stopped_at: "53-03 COMPLETE (the operator surface: allow_write_grants in the example config + init_check's own settings section, revoke_grant by name and idempotent, the out-of-allowlist wording naming the grant path, authorize_send bridging a grant to a dispatch, and every must-not-lose invariant re-asserted -- 3 commits, full suite green, zero n8n executions). Next: 53-04 (the four lane skills, the README, the release cut, the D-53-05 contract-test edit, and the blocking operator walk from Claude Desktop). Phase 52 (v1.0 staged canary) DEFERRED by operator 2026-08-25 -- on resume, re-derive Phase 51 population/credit sizing (artifacts dated 2026-08-19, they drift) and resolve the deferred FILL-04 third disposition."
+last_updated: "2026-08-25T08:05:00.000Z"
 last_activity: 2026-08-25
-last_activity_desc: Phase 53 plan 02 complete -- the grant shows its arithmetic before the yes, ends in five named ways, revocation bites at the next send, and both proposed guardrails are working code
+last_activity_desc: Phase 53 plan 03 complete -- an admin sets one key and sees it reported, revocation is reachable by name and reason-preserving, the plugin's map of what it can do names the grant path, and the bridge to a dispatch never widens the window past the send's own records
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 4
-  completed_plans: 2
-  percent: 50
+  completed_plans: 3
+  percent: 75
 ---
 
 # Project State
@@ -316,6 +316,7 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 | Phase 51 P03 | 4h | 3 tasks | 30 files |
 | Phase 53 P01 | 4min | 3 tasks | 5 files |
 | Phase 53 P02 | 35min | 3 tasks | 3 files |
+| Phase 53 P03 | 12min | 3 tasks | 7 files |
 
 ## Decisions
 
