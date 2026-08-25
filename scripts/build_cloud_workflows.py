@@ -4347,24 +4347,56 @@ return rows.map((it, i) => {
 # writing it into `existingRecord` would hand the gate a confirmation it never received.
 ENRICH_ADAPT_NAME_SEARCH = inline("matchProposal.js") + r"""
 
-// --- n8n wrapper: adapt "HubSpot Name Search" -> match proposal (never existingRecord) ---
+// --- n8n wrapper: adapt "HubSpot Name Search" (+ its fallback) -> match proposal (never
+// existingRecord) ---
+//
+// F1 (2026-08-25, debug/walk-write-path-defects.md): the primary search filters
+// lastname EQ AND company CONTAINS_TOKEN against the contact's `company` TEXT PROPERTY.
+// A contact created by the ingest lane is associated to a company OBJECT and leaves that
+// text property null — live-proven on contact 347569451461 / Football NSW, execution
+// 11948: the primary search returned zero hits for a contact that genuinely exists, and
+// the row fell through to a "create" attempt (blocked only because writes are off in
+// this environment — armed, it would have DUPLICATED the record).
+//
+// "HubSpot Name Search Fallback" runs UNCONDITIONALLY for every "name"-lane row,
+// SEQUENTIALLY after the primary search (never a parallel fan-out — a Code node reading
+// an unexecuted node via $() throws), so item alignment stays 1:1 by row regardless of
+// whether the primary search found anything. Its own filter drops the company clause
+// entirely (lastname EQ only) — the weaker key the debug file's fix direction names.
+// mediumCandidates({requireCompanyToken:false}) re-verifies lastname (and, when the row
+// supplied one, firstname) instead of company token overlap, so a hit whose `company` is
+// blank by construction is no longer filtered out. The result is still `tier: "medium"`
+// / `auto: false` either way — a weaker search key surfaces MORE candidates for the
+// caller to judge, never an auto-match (matchProposal.js summarizeMatch's own contract).
 const rows = $('Build Identity').all().filter((it) => it.json.lane === "name");
-const search = $('HubSpot Name Search').all();
+const primary = $('HubSpot Name Search').all();
+const fallback = $('HubSpot Name Search Fallback').all();
+
+function candidatesFrom(item, identityKeys, opts) {
+  const failed = !item || item.error || (item.json && item.json.error);
+  if (failed) return null;                       // null = "could not look", not "found none"
+  const res = item.json || {};
+  const results = Array.isArray(res.results) ? res.results : [];
+  return mediumCandidates(results, identityKeys, opts);
+}
+
 return rows.map((it, i) => {
   const row = it.json;
-  const item = search[i];
-  const failed = !item || item.error || (item.json && item.json.error);
-  if (failed) {
+  const primaryCandidates = candidatesFrom(primary[i], row.identity_keys, undefined);
+  if (primaryCandidates === null) {
     const match = summarizeMatch({ lane: "name", lookupFailed: true });
     return { json: { ...row, existingRecord: {}, lookup_failed: true, match } };
   }
-  const res = item.json || {};
-  const results = Array.isArray(res.results) ? res.results : [];
-  // mediumCandidates re-verifies every hit BY VALUE (case-insensitive lastname equality
-  // AND company token overlap) — CONTAINS_TOKEN is fuzzy by design; a hit surviving the
-  // server-side filter is not yet a verified match (the BUG 22b lesson, applied
-  // prophylactically here — never trust that the search already filtered).
-  const candidates = mediumCandidates(results, row.identity_keys);
+
+  // Only fall back when the primary (company-token-verified) search found nothing —
+  // a primary hit is the stronger signal and is never discarded in favor of the weaker
+  // key.
+  let candidates = primaryCandidates;
+  if (candidates.length === 0) {
+    const fallbackCandidates = candidatesFrom(fallback[i], row.identity_keys, { requireCompanyToken: false });
+    if (fallbackCandidates !== null) candidates = fallbackCandidates;
+  }
+
   const match = summarizeMatch({ lane: "name", existingRecord: {}, lookupFailed: false, candidates });
   return { json: { ...row, existingRecord: {}, lookup_failed: false, match } };
 });
@@ -4673,6 +4705,28 @@ def build_enrichment_cloud():
         properties_csv=ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV,
     )
     nodes.append(hs_name_search)
+
+    # F1 (2026-08-25, debug/walk-write-path-defects.md): runs UNCONDITIONALLY for every
+    # "name"-lane row, SEQUENTIALLY after "HubSpot Name Search" — never a parallel
+    # fan-out (a Code node reading an unexecuted node via $() throws) — so item alignment
+    # stays 1:1 by row whether or not the primary search found anything. Drops the
+    # company CONTAINS_TOKEN clause entirely (lastname EQ only): the weaker key the debug
+    # file's fix direction names, re-verified in ENRICH_ADAPT_NAME_SEARCH by
+    # mediumCandidates({requireCompanyToken:false}) rather than loosened at the HubSpot
+    # filter itself. Its filter value reads "Build Identity" BY NODE NAME, never bare
+    # $json (the bd682a2 idiom every other post-HTTP-node adapter/filter in this lane
+    # already follows) — its own predecessor, "HubSpot Name Search", is an HTTP node and
+    # has already REPLACED $json with its own response by the time this node's
+    # expressions evaluate.
+    hs_name_search_fallback = _hs_http_search_node(
+        "HubSpot Name Search Fallback", "contact", hs_search_x + 110, mby - 100,
+        filter_groups=[[
+            {"propertyName": "lastname", "operator": "EQ",
+             "value": "={{ $('Build Identity').item.json.identity_keys.lastName }}"},
+        ]],
+        properties_csv=ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV,
+    )
+    nodes.append(hs_name_search_fallback)
     nodes.append(code_node("Adapt Name Search", ENRICH_ADAPT_NAME_SEARCH, adapt_search_x, mby))
 
     # Phase 16.1 (reviews A1): a SINGLE `action != "skip"` dispatch lane feeds the
@@ -5315,7 +5369,13 @@ return $input.all().map((it, i) => {
         [{"node": "HubSpot Name Search", "type": "main", "index": 0}],  # true: name lane
         [{"node": "Enrichment Gate", "type": "main", "index": 0}],      # false: unmatchable
     ]}
-    conns.update(chain(["HubSpot Name Search", "Adapt Name Search", "Enrichment Gate"]))
+    # F1 (2026-08-25): the fallback search sits SEQUENTIALLY between the primary search
+    # and its adapter — never a parallel fan-out from "IF Name Searchable" — so
+    # "Adapt Name Search" can read both by name with 1:1 item alignment guaranteed.
+    conns.update(chain([
+        "HubSpot Name Search", "HubSpot Name Search Fallback", "Adapt Name Search",
+        "Enrichment Gate",
+    ]))
     conns.update(chain(["HubSpot Search", "Adapt Search",
                         "Enrichment Gate", "IF Provider Processing Needed"]))
     # Phase 16.1 (reviews A1): a SINGLE lane feeds the provider gate chain — the

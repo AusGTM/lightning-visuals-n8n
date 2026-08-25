@@ -56,6 +56,20 @@ NODES = {
             "$('Build Identity').item.json.object_id",
         ],
     },
+    # F1 (2026-08-25): the weaker fallback search — lastname EQ only, no company clause
+    # at all (dropped entirely rather than loosened; see test_hubspot_name_search_
+    # fallback_carries_no_company_filter below). Its own predecessor is "HubSpot Name
+    # Search", an HTTP node that has already replaced $json with its own response by the
+    # time this node's expressions evaluate — so its filter value reads "Build Identity"
+    # BY NODE NAME, never bare $json (the bd682a2 idiom "HubSpot Fetch By Id" already
+    # follows, mirrored here for the same reason).
+    "HubSpot Name Search Fallback": {
+        "properties_csv": ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV,
+        "filter_tokens": [
+            'propertyName: "lastname"', 'operator: "EQ"',
+            "$('Build Identity').item.json.identity_keys.lastName",
+        ],
+    },
 }
 
 
@@ -189,6 +203,44 @@ def test_hubspot_name_search_has_shape_parity_with_hubspot_search():
         assert name_search["parameters"].get(key) == email_search["parameters"].get(key), (
             f"HubSpot Name Search.{key} diverges from HubSpot Search.{key}"
         )
+
+
+# --- F1 (2026-08-25): the fallback search's own shape and wiring --------------------------
+
+def test_hubspot_name_search_fallback_has_shape_parity_with_hubspot_name_search():
+    doc = _load()
+    primary = _node(doc, "HubSpot Name Search")
+    fallback = _node(doc, "HubSpot Name Search Fallback")
+    assert fallback["type"] == primary["type"]
+    assert fallback["typeVersion"] == primary["typeVersion"]
+    assert fallback.get("onError") == primary.get("onError")
+    for key in ("authentication", "nodeCredentialType", "method", "url"):
+        assert fallback["parameters"].get(key) == primary["parameters"].get(key), (
+            f"HubSpot Name Search Fallback.{key} diverges from HubSpot Name Search.{key}"
+        )
+
+
+def test_hubspot_name_search_fallback_carries_no_company_filter_at_all():
+    """The fallback drops the company clause entirely rather than loosening it — company
+    re-verification for a hit found this way happens in Adapt Name Search's own JS
+    (mediumCandidates({requireCompanyToken: false})), never at the HubSpot filter.
+    `company` still appears in the requested PROPERTIES list (mediumCandidates' output
+    projects it onto every candidate) — this checks the filterGroups only."""
+    doc = _load()
+    body = _node(doc, "HubSpot Name Search Fallback")["parameters"]["jsonBody"]
+    assert 'propertyName: "company"' not in body
+    operators = re.findall(r'operator:\s*"([A-Z_]+)"', body)
+    assert operators == ["EQ"], operators
+
+
+def test_the_fallback_sits_sequentially_between_the_primary_search_and_its_adapter():
+    """Never a parallel fan-out from IF Name Searchable — a Code node reading an
+    unexecuted node via $() throws, and item alignment across primary/fallback must stay
+    1:1 by row."""
+    doc = _load()
+    conns = doc["connections"]
+    assert conns["HubSpot Name Search"]["main"][0][0]["node"] == "HubSpot Name Search Fallback"
+    assert conns["HubSpot Name Search Fallback"]["main"][0][0]["node"] == "Adapt Name Search"
 
 
 def test_no_native_hubspot_node_remains_in_enrichment_contacts_lane():

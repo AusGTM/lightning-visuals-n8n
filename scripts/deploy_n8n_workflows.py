@@ -54,6 +54,9 @@ NODE_CREDENTIAL_MAP = {
     # node. Registered in the SAME commit as the node's creation in
     # scripts/build_cloud_workflows.py, per this repo's own convention.
     "HubSpot Name Search": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    # F1 (2026-08-25): the weaker fallback search — same lesson, sixth time. Registered
+    # in the SAME commit as the node's creation in scripts/build_cloud_workflows.py.
+    "HubSpot Name Search Fallback": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot Create": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot Update": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     # Phase 25 Plan 03 (same gpt #9 lesson, third time): the two Lists API GETs of the

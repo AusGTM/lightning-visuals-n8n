@@ -151,6 +151,69 @@ test("a row with no lastName or no companyName yields zero candidates", () => {
   assert.deepEqual(mediumCandidates(hit, { lastName: "Doe" }), []);
 });
 
+// --------------------------------------------------------------------------------------
+// F1 (2026-08-25) — requireCompanyToken:false, the weaker fallback search's
+// re-verification. A contact created by the ingest lane leaves `company` (text) null
+// (associated to a company OBJECT instead) — the exact live mechanism proven on contact
+// 347569451461 / Football NSW, execution 11948.
+// --------------------------------------------------------------------------------------
+
+test("requireCompanyToken:false keeps a lastname-matching hit even with a blank company property", () => {
+  const hits = [{ id: "347569451461", properties: {
+    lastname: "Tsatsimas", firstname: "John", email: null, jobtitle: null, company: null,
+  } }];
+  const out = mediumCandidates(hits, { lastName: "Tsatsimas", companyName: "Football NSW" },
+    { requireCompanyToken: false });
+  assert.deepEqual(out, [{
+    hs_object_id: "347569451461", firstname: "John", lastname: "Tsatsimas",
+    email: null, jobtitle: null, company: null,
+  }]);
+});
+
+test("requireCompanyToken defaults to true — a 2-arg call is byte-identical to before this option existed", () => {
+  const hits = [{ id: "1", properties: { lastname: "Doe", company: "Unrelated Enterprises" } }];
+  assert.deepEqual(mediumCandidates(hits, IDENTITY), []);
+});
+
+test("requireCompanyToken:false still enforces lastname equality", () => {
+  const hits = [{ id: "1", properties: { lastname: "Smith", company: null } }];
+  const out = mediumCandidates(hits, { lastName: "Tsatsimas", companyName: "Football NSW" },
+    { requireCompanyToken: false });
+  assert.deepEqual(out, []);
+});
+
+test("requireCompanyToken:false narrows to a matching firstname when one was supplied", () => {
+  const hits = [
+    { id: "1", properties: { lastname: "Tsatsimas", firstname: "John", company: null } },
+    { id: "2", properties: { lastname: "Tsatsimas", firstname: "Maria", company: null } },
+  ];
+  const out = mediumCandidates(
+    hits, { firstName: "John", lastName: "Tsatsimas", companyName: "Football NSW" },
+    { requireCompanyToken: false });
+  assert.deepEqual(out.map((c) => c.hs_object_id), ["1"]);
+});
+
+test("requireCompanyToken:false keeps every lastname hit when no firstname was supplied", () => {
+  const hits = [
+    { id: "1", properties: { lastname: "Tsatsimas", firstname: "John", company: null } },
+    { id: "2", properties: { lastname: "Tsatsimas", firstname: "Maria", company: null } },
+  ];
+  const out = mediumCandidates(
+    hits, { lastName: "Tsatsimas", companyName: "Football NSW" },
+    { requireCompanyToken: false });
+  assert.deepEqual(out.map((c) => c.hs_object_id), ["1", "2"]);
+});
+
+test("a firstname on the company-token-verified (default) path is never filtered on — scoped to the fallback only", () => {
+  const hits = [{ id: "1", properties: {
+    lastname: "Doe", firstname: "Someone Else", company: "Gold Coast Turf Club",
+  } }];
+  const out = mediumCandidates(hits, { firstName: "Jane", ...IDENTITY });
+  assert.deepEqual(out.map((c) => c.hs_object_id), ["1"], (
+    "the default (company-token-verified) path must ignore firstName entirely"
+  ));
+});
+
 test("order is input order — no sort, no tie-break", () => {
   const hits = [
     { id: "1", properties: { lastname: "Doe", company: "Gold Coast Turf Club B" } },

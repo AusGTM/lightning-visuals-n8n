@@ -59,24 +59,47 @@ function sharesToken(a, b) {
   return false;
 }
 
-// mediumCandidates(searchResults, identityKeys) — re-verifies every HubSpot search hit
-// BY VALUE before reporting it as a candidate. `CONTAINS_TOKEN` is fuzzy by design; a
+// mediumCandidates(searchResults, identityKeys, opts) — re-verifies every HubSpot search
+// hit BY VALUE before reporting it as a candidate. `CONTAINS_TOKEN` is fuzzy by design; a
 // hit surviving the server-side filter is not yet a verified match (the BUG 22b lesson,
 // applied prophylactically here — never trust that the search already filtered).
-function mediumCandidates(searchResults, identityKeys) {
+//
+// `opts.requireCompanyToken` (F1, 2026-08-25, default true — every existing 2-arg call
+// site is byte-identical): false is the WEAKER fallback search's re-verification, used
+// when the lastname+company search returns zero hits. Live mechanism: a contact created
+// by the ingest lane is associated to a company OBJECT and leaves the `company` TEXT
+// property null (contact 347569451461 / Football NSW, execution 11948) — re-checking a
+// company token that is blank by construction would filter the one true candidate back
+// out, which is exactly why the fallback search drops the company filter in the first
+// place rather than loosening it. In that mode `firstName` (when the caller supplied
+// one) narrows the match instead: the weaker search has no company signal at all, so a
+// common surname would otherwise surface every namesake in the portal as an "ambiguous"
+// candidate. The company-token-verified path already has a strong signal and gains
+// nothing from a nickname/spelling firstname mismatch silently dropping a true
+// candidate, so this narrowing is scoped to the fallback path only.
+function mediumCandidates(searchResults, identityKeys, opts) {
   const idKeys = isPlainObject(identityKeys) ? identityKeys : {};
   const lastName = trimmedOrValue(idKeys.lastName);
   const companyName = trimmedOrValue(idKeys.companyName);
   if (!lastName || !companyName || !Array.isArray(searchResults)) return [];
 
+  const options = isPlainObject(opts) ? opts : {};
+  const requireCompanyToken = options.requireCompanyToken !== false;
+  const firstName = requireCompanyToken ? null : trimmedOrValue(idKeys.firstName);
+
   const wantLastName = String(lastName).toLowerCase();
+  const wantFirstName = firstName ? String(firstName).toLowerCase() : null;
   const out = [];
   for (const hit of searchResults) {
     if (!isPlainObject(hit) || !isPlainObject(hit.properties)) continue;
     const props = hit.properties;
     const hitLastName = props.lastname == null ? "" : String(props.lastname).toLowerCase();
     if (hitLastName !== wantLastName) continue;
-    if (!sharesToken(props.company, companyName)) continue;
+    if (requireCompanyToken && !sharesToken(props.company, companyName)) continue;
+    if (wantFirstName) {
+      const hitFirstName = props.firstname == null ? "" : String(props.firstname).toLowerCase();
+      if (hitFirstName !== wantFirstName) continue;
+    }
     out.push({
       hs_object_id: hit.id,
       firstname: props.firstname != null ? props.firstname : null,
