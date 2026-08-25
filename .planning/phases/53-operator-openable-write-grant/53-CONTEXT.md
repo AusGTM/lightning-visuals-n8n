@@ -91,6 +91,32 @@ HubSpot write this client has seen land was landed by an admin from a terminal.
   failure does not abort the run" while stopping an unbounded march of writes over an unknown
   backend state.
 
+### D-53-05 — One grant spans both lanes of `enrich-before-ingest` (operator, 2026-08-25)
+
+Raised by the planner as risk #2 and **accepted by the operator explicitly, for speed.**
+
+- A single grant covers the enrich lane and the ingest lane of `enrich-before-ingest`. The
+  operator is not asked a second time between them.
+- **What this collapses, stated so nobody rediscovers it as a surprise:**
+  `operator-claude-plugin/tests/test_enrich_before_ingest_skill_contract.py` currently forbids
+  a combined arming phrase and pins the enriched-preview heading as strictly preceding the
+  ingest-arm heading. Its recorded reason (37-CONTEXT §6.3) is that a combined authorization is
+  necessarily given **before the enriched preview exists** — so the HubSpot write is approved
+  before the operator can see what they are approving. The enriched preview is the only place
+  held rows and merge conflicts (source value kept over a differing provider value) become
+  visible ahead of a write. Under D-53-05 those rows are authorized unseen.
+- **What still holds:** the allowlist remains record-scoped to that batch, so the collapse
+  widens *when* the approval is given, never *what* it covers. The enriched preview is still
+  rendered, and revocation (GRANT-05) still works — the default flips from ask-again to
+  proceed-unless-stopped, rather than removing the operator's ability to stop it.
+- **Implementation discipline, same as the parity pin (D-53-01):** that contract test is
+  changed by ONE deliberate edit that records this decision, its date, and who took it, inside
+  the test file. It is never deleted and never weakened by a sweep. A future reader must be
+  able to find out that the ordering protection was removed on purpose and by whom.
+- Declined alternative, buildable and now deferred: one grant whose ingest half stays withheld
+  until the enriched preview lands. Keeps both properties; it is a different design and its own
+  phase.
+
 ### Claude's Discretion
 
 - The settings key's exact name and where it sits in the file.
