@@ -16,6 +16,51 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-08-25
+
+### Changed
+
+- **The arming phrase is gone. The consent it carried is not (VOCAB-05).** Every send used to
+  demand a literal string — "arm the enrichment", "arm the upload", "arm review writeback" —
+  and the walk showed what that costs: the operator was handed a preview ending "Proceed?",
+  answered **"yes"**, and was told a yes does not dispatch, say the exact phrase. A magic
+  string demanded at the precise moment they were trying to consent.
+
+  An operator now answers the question they were asked, in their own words. **An affirmative
+  answering the send just described — "yes", "go ahead", "do it", "please" — arms that send
+  and nothing else.**
+
+  **What made the phrase safe was never its spelling: it was that a casual "ok" could not
+  become a write.** That property is preserved by binding the affirmative to *this send's
+  shown consequence, in the same turn*. An affirmative answering nothing, answering some
+  other question, or arriving before the send has been described arms nothing — the skill
+  asks once more, naming what will happen. Ambiguity resolves to not-armed, always. And
+  `armed` still has no default in code (`dispatch()` and `dispatch_plan()` raise without it);
+  that structural guarantee did not move, and its tests pass byte-identical.
+
+  Scope: `enrich-records`, `contact-upload`, `enrich-before-ingest` (both of its asks) and
+  `review-triage`, plus the operator-facing refusal text in `dispatch.py`, `enrichment.py`,
+  `review_decision.py` and `preingest.py`, and README/USAGE.
+
+- **`review-triage`'s session arm folded into the per-record confirmation.** That lane already
+  read the exact write back and took an explicit yes for each record, never skipped. That yes
+  *is* the arm now: it sets `review_armed=True` for that one submit and nothing else. One
+  fewer thing to say, and consent moves from session-scoped to per-record — the scope the rest
+  of the plugin already uses. A yes on either dispatch lane still authorizes no review write,
+  and vice versa.
+
+- **Consent scope narrowed from the conversation to the send.** The skills previously said an
+  arm lasted "for this conversation only" while the code passed it per call; the prose now
+  matches the code. Arming a send arms nothing else — not the next send on the same lane, not
+  another lane.
+
+### Note
+
+- Every phrase pin in the test suite was **rewritten in place with its reason recorded, never
+  deleted** — `test_enrich_skill_contract.py`, `test_enrich_before_ingest_skill_contract.py`,
+  `test_config_gate.py`, `test_preview_empty_input.py`, `test_preingest_preview.py`. The dead
+  spellings are kept as a negative pin so a later edit cannot quietly reintroduce them.
+
 ## [0.16.2] - 2026-08-25
 
 ### Fixed

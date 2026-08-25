@@ -38,9 +38,9 @@ Give Claude a CSV or XLSX (drag it into the chat or name the path). You get:
 
 1. **A preview first, always.** How many rows, how the columns mapped, what looks wrong
    (bad emails, duplicates, unmapped headers). Nothing is sent yet.
-2. **Your approval, then an explicit arm.** Approving the preview sends nothing by itself;
-   nothing reaches the backend until you also say **"arm the upload"** — and that arm lasts
-   for this conversation only.
+2. **Your yes to the send itself.** Approving the preview sends nothing by itself; Claude
+   then asks for the send, naming what it will do, and a plain "yes" arms **that send
+   only** — not the next one, and nothing in another lane.
 3. **A per-record outcome report.** Created / updated / refused, each with a reason, and a
    safe retry path for transport failures. (A row with no email address is called out
    separately — it cannot resolve on retry and needs an email or manual handling in HubSpot.)
@@ -67,8 +67,8 @@ Works by record ID or by naming a HubSpot list — you never need a HubSpot logi
 the backend resolves list names itself. Before anything runs you see a **cost guard**: how
 many records (for a list, the honest word "unknown" — the backend resolves list counts, and
 the plugin won't invent a number), which providers will be called, and the estimated credit
-spend. Approve, say **"arm the enrichment"**, and Claude dispatches, watches the run until
-it settles, and reports per-record outcomes read back from the run itself.
+spend. Approve, answer the send question with a plain "yes", and Claude dispatches, watches
+the run until it settles, and reports per-record outcomes read back from the run itself.
 
 Two things to know:
 
@@ -129,7 +129,8 @@ schedule's declared interval.
 
 Records the pipeline flagged for a human decision, one at a time, in plain language: what
 the conflict is, what each source claims, and the exact property write that approval would
-send — computed by the backend, shown to you *before* it happens. Approve, say **"arm review writeback"**, and — provided
+send — computed by the backend, shown to you *before* it happens. Say yes to that exact
+write — your yes arms that one record and nothing else — and, provided
 the admin-set submit switch is on — the write is made and then **re-read to confirm it
 landed**; reject and your reason is recorded and the record stays queued (rejection never silently clears anything). Protected fields are
 labelled; the backend, not the client, is what enforces protection.

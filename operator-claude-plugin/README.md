@@ -226,12 +226,13 @@ own mapping will do:
 
 **Approving** the preview does not send anything by itself — sending is off by default for
 every new conversation. **Declining** ends things right there: nothing is sent, and
-nothing beyond reading the file has happened. To actually send, say **"arm the upload"**
-after approving; arming lasts for that conversation only, is never written to disk, and
-has to be said again in a new conversation.
+nothing beyond reading the file has happened. To actually send, answer the send question
+Claude asks after the preview — a plain "yes", "go ahead" or "do it" is enough. That yes
+arms **that send only**: it is never written to disk, it does not carry to the next send,
+and an answer that is not attached to a send Claude just described does not arm anything.
 
 If a **write grant** covering this lane and these records is already open, you are not
-asked for the phrase again — see *Write grants* below.
+asked again — see *Write grants* below.
 
 ---
 
@@ -316,12 +317,12 @@ go one at a time; if one fails the rest still go, and the failed records come ba
 **batch you can re-send** rather than a list of errors.
 
 Sending is disarmed by default here as everywhere else. Approving the preview sends
-nothing; say **"arm the enrichment"** to turn sending on for that conversation only.
-Arming this lane does not arm the contact-upload lane, or the review lane, in either
-direction.
+nothing on its own; Claude asks for the send, naming what it will do, and your plain "yes"
+arms that one send. Arming a send does not arm the next one, the contact-upload lane, or
+the review lane, in either direction.
 
-With a **write grant** covering this lane and these records open, the phrase is not asked
-for again — see *Write grants* below.
+With a **write grant** covering this lane and these records open, you are not asked again
+— see *Write grants* below.
 
 ## Write grants
 
@@ -538,7 +539,7 @@ nothing is written:
 | Gate | Where it lives | Who opens it |
 |---|---|---|
 | `ALLOW_REVIEW_SUBMIT` | environment variable on the machine this plugin runs on, read by Python **before a request is even built** | an **administrator**, out of band |
-| The session arm | this conversation only, never written to disk | **you**, by saying "arm review writeback" |
+| The per-record arm | this one record's write, never written to disk | **you**, by saying yes to the exact write Claude reads back |
 | `ALLOW_HUBSPOT_REVIEW_WRITES` + its record allowlist | a constant compiled into the n8n workflow, read **inside n8n** | an admin, by a **deploy** — not by this plugin |
 
 **The first and the third are different variables, in different processes, on different

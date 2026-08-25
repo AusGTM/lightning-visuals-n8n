@@ -441,5 +441,8 @@ def test_skill_documents_the_can_send_contract():
              / "skills" / "contact-upload" / "SKILL.md").read_text()
     assert "can_send" in skill, "step 1 must read the send-readiness verdict"
     assert "send_blocked_reason" in skill, "and relay the reason it carries"
-    assert "do not offer the arming phrase" in skill, \
-        "an operator who cannot send must not be invited to arm"
+    # RECORDED EDIT -- VOCAB-05, 2026-08-25. Was `"do not offer the arming phrase"`.
+    # The phrase died; the property did not: an operator whose config cannot send must
+    # not be invited to consent to a send that will be refused.
+    assert "do not ask for this send at all" in skill, \
+        "an operator who cannot send must not be invited to consent to one"

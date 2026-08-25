@@ -27,18 +27,27 @@ import yaml
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 SKILL_PATH = PLUGIN_ROOT / "skills" / "enrich-before-ingest" / "SKILL.md"
 
-ARM_ENRICHMENT_PHRASE = '"arm the enrichment"'
-ARM_UPLOAD_PHRASE = '"arm the upload"'
+# RECORDED EDIT -- VOCAB-05, 2026-08-25, taken by the operator. These two names used to
+# hold the literal arming phrases this skill demanded. The phrases are dead: an operator
+# answering the question they were asked, in their own words, arms the send that question
+# described. What the phrases protected -- consent that is unambiguous and ATTACHED to a
+# shown consequence -- survives as the two per-send consent sentences below, which are what
+# the pins now locate. The dead spellings are kept as a NEGATIVE pin so a later edit cannot
+# quietly reintroduce them.
+DEAD_ARMING_PHRASES = ('"arm the enrichment"', '"arm the upload"')
+ENRICHMENT_CONSENT = "arms this run and nothing else"
+INGEST_CONSENT = "arms this write and nothing else"
 
 # Literal, unique substrings that locate each section's own heading -- not full
 # sentences, so a later wording tweak elsewhere in the step doesn't break the find().
 ENRICHED_PREVIEW_HEADING = "6. **The enriched preview"
-INGEST_ARM_HEADING = '7. **Say "arm the upload,"'
+INGEST_ARM_HEADING = '7. **Ask for the HubSpot write,'
 
 # The exact heading text of contact-upload/SKILL.md's steps 6-10 (37-RESEARCH.md sec
 # C.13), which this skill must reference rather than duplicate.
 CONTACT_UPLOAD_HANDOFF_HEADINGS = (
-    "Dispatch only once the operator has said the arming phrase this turn.",
+    "Dispatch under an open grant, or otherwise only once the operator has said yes to "
+    "this send.",
     "Report the outcome — per record, not a bare acceptance.",
     "Re-check, only when the operator asks.",
     "Retry a transport failure — same dispatch, same arming gate.",
@@ -121,13 +130,23 @@ def test_every_script_the_skill_names_exists_on_disk():
         )
 
 
-def test_both_arming_phrases_appear():
-    # Normalized because the second occurrence of the enrichment phrase (inside the
-    # bold marker in prose) wraps across a markdown line break — a reflow that does
-    # not change what the operator reads and must not fail this assertion.
+def test_both_sends_are_asked_for_separately_and_neither_asks_with_a_phrase():
+    """RECORDED EDIT -- VOCAB-05, 2026-08-25. Was `test_both_arming_phrases_appear`.
+
+    The property was never that two PHRASES appear -- it is that this flow asks TWICE, on
+    the ungranted path, for two different irreversible things: provider credit at step 5,
+    a HubSpot write at step 7. That is asserted directly now. The phrases themselves are
+    pinned absent, because an operator asked to produce the system's wording at the moment
+    they are saying yes is the defect VOCAB-05 removed.
+    """
     body = _normalized(_text())
-    assert ARM_ENRICHMENT_PHRASE in body
-    assert ARM_UPLOAD_PHRASE in body
+    assert ENRICHMENT_CONSENT in body, "step 5 must ask for the waterfall run itself"
+    assert INGEST_CONSENT in body, "step 7 must ask separately for the HubSpot write"
+    for dead in DEAD_ARMING_PHRASES:
+        assert dead not in body, (
+            f"the dead arming phrase {dead} reappeared -- consent is bound to the send "
+            "just described, never to a string the operator has to be taught"
+        )
 
 
 def test_no_combined_or_third_arming_phrase_appears():
@@ -151,9 +170,11 @@ def test_no_combined_or_third_arming_phrase_appears():
     for spelling in _COMBINED_PHRASE_SPELLINGS:
         assert spelling not in normalized, (
             f"a combined arming PHRASE slipped into SKILL.md: {spelling!r} -- with no "
-            "write grant open this flow still asks twice, and the two phrases are what "
-            "it asks with (D-53-04). A combined authorization is expressible only as a "
-            "write grant, which is disclosed rather than phrased"
+            "write grant open this flow still asks twice, once per consequence "
+            "(D-53-04). A combined authorization is expressible only as a write grant, "
+            "which is disclosed rather than phrased. (VOCAB-05, 2026-08-25: the per-send "
+            "phrases died and the asks did not -- this list still guards the shape of a "
+            "single combined arm, whatever words a paraphrase reaches for)"
         )
     assert "the enrichment lane and the contacts lane" in normalized, (
         "the skill must name which lanes one grant may cover (D-53-05) -- an operator "
@@ -207,17 +228,18 @@ def test_the_ingest_arm_heading_is_strictly_after_the_enriched_preview_heading()
     )
 
 
-def test_the_two_arming_phrases_never_share_a_numbered_step():
-    """A step containing both phrases would necessarily ask for the write grant
-    before the enriched preview exists (37-CONTEXT.md sec 6.2) -- they guard two
-    different irreversible things at two different moments."""
+def test_no_single_numbered_step_solicits_both_consents():
+    """RECORDED EDIT -- VOCAB-05, 2026-08-25. Was
+    `test_the_two_arming_phrases_never_share_a_numbered_step`; the phrases are gone, the
+    property is not. A step soliciting both consents would necessarily take the HubSpot
+    write's yes before the enriched preview exists (37-CONTEXT.md sec 6.2) -- they guard
+    two different irreversible things at two different moments."""
     for number, span in _numbered_step_spans(_text()):
         normalized_span = _normalized(span)
-        has_enrichment_phrase = ARM_ENRICHMENT_PHRASE in normalized_span
-        has_upload_phrase = ARM_UPLOAD_PHRASE in normalized_span
-        assert not (has_enrichment_phrase and has_upload_phrase), (
-            f"numbered step {number} contains both arming phrases -- they must be "
-            "spoken in different turns, never both granted by one step's own text"
+        assert not (ENRICHMENT_CONSENT in normalized_span
+                    and INGEST_CONSENT in normalized_span), (
+            f"numbered step {number} solicits both consents -- they must be given in "
+            "different turns, never both taken by one step's own text"
         )
 
 
@@ -332,9 +354,12 @@ def test_the_skill_states_the_grant_never_outlives_its_turn_and_arms_no_other_la
 # ---------------------------------------------------------------------------------
 
 
-def test_the_skill_says_the_grant_branch_does_not_ask_for_the_phrase_again():
+def test_the_skill_says_the_grant_branch_does_not_ask_again():
+    """RECORDED EDIT -- VOCAB-05, 2026-08-25. Was
+    `test_the_skill_says_the_grant_branch_does_not_ask_for_the_phrase_again`. The phrase is
+    dead; the ask it used to spell is not, and a grant still removes it."""
     body = _normalized(_text()).lower()
-    assert "do not ask for the phrase again" in body
+    assert "do not ask at all" in body and "do not ask again" in body
     assert "with no grant open" in body, (
         "D-53-04: the grant is an ADDITION. The skill must say that with no grant open "
         "today's two-ask behaviour is unchanged, or an operator reads the grant as having "

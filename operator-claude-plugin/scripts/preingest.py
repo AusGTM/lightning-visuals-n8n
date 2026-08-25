@@ -711,7 +711,7 @@ def rows_from_table(path, mapping_path=None):
 
 _NOTHING_REACHED_HUBSPOT = (
     "Nothing here has reached HubSpot yet — this is the last look before "
-    '"arm the upload" grants the write.'
+    "the operator's yes grants the write."
 )
 
 

@@ -5,10 +5,10 @@ milestone_name: Unattended Session Runs
 current_phase: 53
 current_phase_name: Operator-openable write grant
 status: awaiting-operator-walk
-stopped_at: "HANDOVER: read .planning/HANDOVER-2026-08-25.md first. Phase 53 code complete at plugin 0.16.2; the operator walk is the outstanding blocker and it is what keeps finding the defects (four so far, none visible to 3084 passing tests). NEXT TASK: implement VOCAB-05 (kill the arming phrase, keep the consent) -- scope and safety property in the handover section 1. Then finish the walk, then Phase 58, then Phase 54."
-last_updated: "2026-08-25T08:10:00.000Z"
+stopped_at: "HANDOVER: read .planning/HANDOVER-2026-08-25.md first (section 1 is now DONE). VOCAB-05 is implemented and released at plugin 0.17.0 -- the arming phrase is gone from all four skills, the operator-facing refusals and README/USAGE; every phrase pin was rewritten in place with its reason; review-triage's session arm folded into its per-record confirmation. Invariants held: 3084 passed / 154 skipped, 711 node, frozen set (n8n/, scripts/, scheduled_arm.py) untouched. NEXT: the operator walk -- it must confirm a plain \"yes\" arms the send and that contact 347569451461 (John Tsatsimas) enriches AND writes. Then Phase 58, then Phase 54. RELEASE IS NOT LIVE until master is pushed, the marketplace clone is reset --hard to FETCH_HEAD, and Update is clicked in Desktop."
+last_updated: "2026-08-25T09:30:00.000Z"
 last_activity: 2026-08-25
-last_activity_desc: "Phase 53 code complete at plugin 0.16.1; the walk is the outstanding blocker. Operator set the order: finish the walk, then Phase 58 (take what the operator actually has), then Phase 54 (single-pass dispatch)"
+last_activity_desc: "VOCAB-05 implemented and released at plugin 0.17.0: an affirmative answering the send just described arms that send and nothing else; the literal arming phrases are dead and pinned absent. Walk remains the blocker -- per VOCAB-04 only a walk transcript proves the wording works"
 progress:
   total_phases: 7
   completed_phases: 0

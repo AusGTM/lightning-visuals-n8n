@@ -71,11 +71,37 @@ def test_the_skill_states_the_endpoint_and_the_disarmed_state_before_any_work():
     assert "disarmed" in first_step
 
 
-def test_the_skill_names_the_arming_phrase_and_scopes_it_to_the_conversation():
+def test_the_skill_binds_consent_to_this_send_and_scopes_it_there():
+    """RECORDED EDIT -- VOCAB-05, 2026-08-25, taken by the operator.
+
+    This pin used to assert the literal string `"arm the enrichment"` and the clause "for
+    this conversation only". Observed live on that day's walk: the operator was shown a
+    preview ending "Proceed?", answered "yes", and was told a yes does not dispatch -- say
+    the exact phrase. A magic string demanded at the moment they were trying to consent.
+
+    The safety property was never the spelling. It is that consent is unambiguous and
+    ATTACHED: a casual "ok" answering nothing must not become a write. So the phrase
+    assertion is REPLACED by the clauses carrying that property -- an affirmative arms the
+    send it answers, an unattached or ambiguous one arms nothing -- and the scope narrows
+    from the conversation to the send, which is what "arms that send only" means. The
+    disk clause is unchanged. `armed` still has no default in code (`dispatch_plan` raises
+    without it); that structural guarantee is pinned in test_chunking.py and does not move.
+    """
     body = _normalized(_text())
-    assert '"arm the enrichment"' in body
+    assert '"arm the enrichment"' not in body, (
+        "the arming phrase is dead (VOCAB-05) -- an operator must never have to produce "
+        "the system's wording to say yes"
+    )
+    assert "arms this send and nothing else" in body, (
+        "the affirmative must be bound to THIS send -- a yes that arms more than the send "
+        "it answers is the unattached consent the phrase used to prevent"
+    )
+    assert "does not arm anything" in body, (
+        "an affirmative answering nothing, or some other question, must arm nothing"
+    )
+    assert "ambiguous is not consent" in body
     assert "never written to disk" in body
-    assert "for this conversation only" in body
+    assert "for this send only" in body
 
 
 def test_the_skill_says_a_list_count_is_unknown_rather_than_zero():
@@ -96,10 +122,14 @@ def test_the_skill_refuses_to_claim_per_record_outcomes():
 # ---------------------------------------------------------------------------------
 
 
-def test_the_skill_says_an_open_grant_replaces_the_per_turn_phrase():
+def test_the_skill_says_an_open_grant_replaces_the_per_send_ask():
+    """RECORDED EDIT -- VOCAB-05, 2026-08-25. Was
+    `test_the_skill_says_an_open_grant_replaces_the_per_turn_phrase`, asserting the words
+    "do not ask for the phrase again". There is no phrase to ask for any more; there is
+    still an ask, and a grant still removes it. Same property, current words."""
     body = _normalized(_text()).lower()
     assert "if a write grant covering this lane and these records is already open" in body
-    assert "do not ask for the phrase again" in body
+    assert "do not ask at all" in body
     assert "with no grant open, everything above is exactly as it is today" in body
 
 

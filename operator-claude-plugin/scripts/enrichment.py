@@ -404,8 +404,9 @@ def dispatch_enrichment(envelope, armed, config, transport=requests):
 
     if not armed:
         raise NotArmedError(
-            "Live writes are off for this conversation — nothing was sent. Say the "
-            "arming phrase to turn sending on for this conversation only."
+            "Live writes are off for this send — nothing was sent. They turn on only "
+            "when the operator says yes to the send just described, and that yes "
+            "covers that one send."
         )
 
     headers = {"X-Enrichment-Secret": config["webhook_secret"]}

@@ -64,7 +64,7 @@ by design).
   read differently.
 - **2.6** — `26-photo-no-text.pdf` refuses by type (`Unsupported file extension: .pdf`).
   `26-empty.csv` must say the file carried **no data rows** and name the likely causes — and must
-  **not** offer the arming phrase (added in plugin 0.7.1; before that it previewed a silent zero).
+  **not** ask for the send at all (added in plugin 0.7.1; before that it previewed a silent zero).
 - **2.7** — inspect any row where the source had no value. It must be **empty**.
 
 ## What counts as a FAIL

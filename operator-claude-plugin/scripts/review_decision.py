@@ -112,10 +112,11 @@ _ENV_REFUSAL = (
 )
 
 _NOT_ARMED_REFUSAL = (
-    "Review writeback is off for this conversation — nothing was sent. The write shown is "
-    "exactly what would be sent, computed by the backend rather than guessed at here. Say "
-    "the review arming phrase to turn review writeback on for this conversation only. "
-    "Arming contact dispatch does not arm this, and arming this does not arm that."
+    "Review writeback is off — nothing was sent. The write shown is exactly what would be "
+    "sent, computed by the backend rather than guessed at here. It turns on only when the "
+    "operator says yes to this record's exact write, and that yes covers this record "
+    "alone: a yes given on contact dispatch does not authorize a review write, and this "
+    "one does not authorize a dispatch."
 )
 
 

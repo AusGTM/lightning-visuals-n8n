@@ -703,7 +703,7 @@ def authorize_send(grant, *, lane, record_ids, record_domains):
       own, which is what keeps the guaranteed disarm (53-01's flagged assumption).
 
     WITH NO GRANT THIS IS NOT A REFUSAL. D-53-04 is explicit that the grant is an ADDITION
-    rather than a replacement: with no grant open, today's per-send arming phrase is
+    rather than a replacement: with no grant open, today's per-send confirmation is
     unchanged. A bridge that refused the ungranted case would have removed the path it was
     supposed to leave alone, so `grant=None` returns `armed=False` with `refusal=None` and
     a detail naming the per-send phrase.
@@ -718,7 +718,7 @@ def authorize_send(grant, *, lane, record_ids, record_domains):
         return {
             "armed": False, "workflow_id": None, "grant": None, "refusal": None,
             "detail": ("no write grant is open, so this send is on the ordinary per-send "
-                       "path: confirm the arming phrase for this one send, as before."),
+                       "path: confirm this one send with the operator, as before."),
         }
 
     workflow_id = ((grant or {}).get("workflow_ids") or {}).get(lane)

@@ -14,8 +14,7 @@ import tabular
 
 
 class NotArmedError(Exception):
-    """Raised when dispatch is attempted without the operator's arming phrase spoken
-    this turn."""
+    """Raised when dispatch is attempted without the operator's yes to this send."""
 
 
 class DispatchError(Exception):
@@ -31,8 +30,9 @@ def dispatch(file_path, armed, config, transport=requests.post):
 
     if not armed:
         raise NotArmedError(
-            "Live writes are off for this conversation — nothing was sent. Say the "
-            "arming phrase to turn sending on for this conversation only."
+            "Live writes are off for this send — nothing was sent. They turn on only "
+            "when the operator says yes to the send just described, and that yes "
+            "covers that one send."
         )
 
     csv_bytes = tabular.to_csv_bytes(file_path)

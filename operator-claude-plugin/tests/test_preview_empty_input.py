@@ -47,10 +47,15 @@ def test_the_skill_names_the_likely_causes_rather_than_just_reporting_zero():
         assert cause in SKILL, f"the zero-row branch should name {cause!r} as a likely cause"
 
 
-def test_the_skill_does_not_invite_arming_for_an_empty_batch():
+def test_the_skill_does_not_invite_consent_for_an_empty_batch():
     """The 0.6.2 lesson, applied to a second case: never offer a decision that cannot be
-    honoured. Scoped to the zero-row paragraph so the legitimate arming instructions in
-    steps 5-6 do not satisfy it by accident."""
+    honoured. Scoped to the zero-row paragraph so the legitimate consent instructions in
+    steps 5-6 do not satisfy it by accident.
+
+    RECORDED EDIT -- VOCAB-05, 2026-08-25. Was
+    `test_the_skill_does_not_invite_arming_for_an_empty_batch`, asserting the words "do not
+    offer the arming phrase". The phrase died; the property is unchanged -- a batch that
+    cannot be sent must not have its send asked for."""
     para = re.search(r"\*\*If `row_count` is 0.*?(?=\n\n4\. )", SKILL, re.S)
     assert para, "zero-row branch not found"
-    assert "do not offer the arming phrase" in para.group(0).lower()
+    assert "do not ask for this send at all" in para.group(0).lower()

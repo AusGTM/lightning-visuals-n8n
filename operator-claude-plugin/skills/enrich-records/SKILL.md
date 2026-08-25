@@ -153,15 +153,23 @@ capability; claiming it here would be a guess dressed as a report.
    straight on. The preview above is still rendered and still shown; under a grant it
    informs rather than gates, because the gate moved earlier.
 
-6. **Check arming.** Disarmed is the default and the state of every new conversation. Say
-   plainly that sending is off, and that the operator can turn it on **for this
-   conversation only** by saying: **"arm the enrichment"**. This state is never written to
-   disk — it exists only as the `armed` argument passed to the dispatch call below, for
-   this turn only. Arming this lane does not arm the contact-upload lane, or the review
-   lane, in either direction.
+6. **Ask for this send, in the operator's own words.** Disarmed is the default and the
+   state of every new conversation. Say plainly that sending is off, then ask for this send
+   by naming what it will do — how many records, and that it writes them to HubSpot. **An
+   affirmative answering that question — "yes", "go ahead", "do it", "please" — arms this
+   send and nothing else.** There is no phrase to learn: an operator saying yes must never
+   have to produce the system's wording to be heard (VOCAB-05).
 
-   **If a write grant covering this lane and these records is already open, do not ask for
-   the phrase again.** Say which grant the send is running under and dispatch under it —
+   **Consent counts only where it is attached to what was shown.** An affirmative that
+   answers nothing, or answers some other question, or arrives before this send has been
+   described, does **not** arm anything — ask once more, naming what will happen, and take
+   that answer. Anything ambiguous is not consent: treat it as not armed, and ask. This
+   state is never written to disk — it exists only as the `armed` argument passed to the
+   dispatch call below, for this send only. Arming this send arms nothing else: not the
+   next send on this lane, not the contact-upload lane, not the review lane.
+
+   **If a write grant covering this lane and these records is already open, do not ask at
+   all.** Say which grant the send is running under and dispatch under it —
    not asking twice is the whole point of a grant. With no grant open, everything above is
    exactly as it is today.
 
@@ -198,8 +206,7 @@ capability; claiming it here would be a guess dressed as a report.
    whole batch and every test would still pass.
 
 7. **Dispatch the plan the operator approved — under an open grant, or otherwise only
-   after they have said the arming phrase
-   this turn.** `scripts/chunking.py` is a library here (the same way `scripts/report.py`
+   after they have said yes to this send.** `scripts/chunking.py` is a library here (the same way `scripts/report.py`
    already is, not a CLI): rebuild the plan from the same spec and the same configured
    ceiling — it is deterministic, so it is the same plan that was previewed — and send it:
 
@@ -213,7 +220,7 @@ capability; claiming it here would be a guess dressed as a report.
 
    Chunks go one at a time, in plan order. A chunk that fails is skipped and the rest
    continue — one bad chunk does not abandon the batch. `armed` has no default: if the
-   operator has not said the arming phrase this turn, pass nothing and do not call this at
+   operator has not said yes to this send, pass nothing and do not call this at
    all.
 
 8. **Report what was sent, and no more than that.** From `outcome.results`, say how many

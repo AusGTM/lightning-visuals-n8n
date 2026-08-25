@@ -39,8 +39,8 @@ whatever seven columns happened to be in the source file.
    and the ingest write itself — the same endpoint `"target"` names — once armed a
    second time. Then read `"can_send"` exactly as `contact-upload/SKILL.md` step 1
    does: when it is `false`, say so with the relayed `"send_blocked_reason"`, and carry
-   on building previews (they cost nothing), but do not offer either arming phrase or
-   ask whether to send for the rest of this conversation.
+   on building previews (they cost nothing), but do not ask for either send for the
+   rest of this conversation.
 
    Say up front, before any other work, that this flow will ask for permission
    **twice, at two different moments** — once before any provider credit is spent, and
@@ -190,7 +190,7 @@ whatever seven columns happened to be in the source file.
    preview says — do not summarise that away. Print the `"preview"."markdown"` block
    as a markdown table in chat by default.
 
-5. **Say "arm the enrichment," then run the waterfall — or, under a grant, just run it.**
+5. **Ask for this waterfall run, then run it — or, under a grant, just run it.**
 
    **If a write grant covering this lane and these rows is open, ask for nothing here.**
    The operator approved this send when they opened the grant, and for a two-lane grant
@@ -200,16 +200,22 @@ whatever seven columns happened to be in the source file.
    operator 2026-08-25). Name the grant the send runs under and continue.
 
    With no grant open, everything below is exactly as it was. Disarmed is the default and
-   the state of every new conversation. Say plainly that sending is off, and that the
-   operator can turn it on **for this conversation only** by saying: **"arm the
-   enrichment"**. This state is never written to disk — it exists only as the `armed`
-   argument passed to the dispatch call below, for this turn only.
+   the state of every new conversation. Say plainly that sending is off, then ask for this
+   run by naming what it will do — how many rows, which providers, and that it spends
+   provider credit. **An affirmative answering that question — "yes", "go ahead", "do it",
+   "please" — arms this run and nothing else.** There is no phrase to learn: an operator
+   saying yes must never have to produce the system's wording to be heard (VOCAB-05). An
+   affirmative that answers nothing, answers some other question, or arrives before this
+   run has been described does **not** arm it — ask once more, naming what will happen, and
+   take that answer; anything ambiguous is not consent. This state is never written to disk
+   — it exists only as the `armed` argument passed to the dispatch call below, for this run
+   only.
 
-   **If a write grant covering this lane and these records is already open, do not ask for
-   the phrase again.** Under D-53-05 (the operator's own decision, 2026-08-25) one grant may
+   **If a write grant covering this lane and these records is already open, do not ask at
+   all.** Under D-53-05 (the operator's own decision, 2026-08-25) one grant may
    cover **both lanes of this flow — the enrichment lane and the contacts lane**. Say which
    lanes the open grant covers, in those words, rather than leaving the operator to infer
-   it: when it covers both, neither of this flow's two phrases is asked for and step 7 does
+   it: when it covers both, neither of this flow's two asks is made and step 7 does
    not ask a second time. With no grant open, everything above is exactly as it is today,
    and step 7 asks again on its own.
 
@@ -284,15 +290,19 @@ whatever seven columns happened to be in the source file.
    is actually deciding something, not a status update on the way to a decision
    already made.
 
-7. **Say "arm the upload," then ingest.** Skip this step entirely if step 1 reported
-   `can_send: false`. Otherwise: disarmed is the default here too. Say plainly that
-   sending is off, and that the operator can turn it on **for this conversation only**
-   by saying: **"arm the upload"**. This grant is never written to disk, it exists
-   only as the `armed` flag on the one dispatch call below, for this turn only, and it
-   does not carry over from anything said earlier in the conversation — with no write
-   grant open, an operator who already said the first phrase is still asked for this one.
+7. **Ask for the HubSpot write, then ingest.** Skip this step entirely if step 1 reported
+   `can_send: false`. Otherwise: disarmed is the default here too. Say plainly that sending
+   is off, then ask for this write by naming what it will do — how many rows, and that they
+   are written to HubSpot. **An affirmative answering that question — "yes", "go ahead",
+   "do it", "please" — arms this write and nothing else.** An affirmative that answers
+   nothing, answers some other question, or arrives before this write has been described
+   does **not** arm it; anything ambiguous is not consent. This state is never written to
+   disk, it exists only as the `armed` flag on the one dispatch call below, for this write
+   only, and it does not carry over from anything said earlier in the conversation — with
+   no write grant open, an operator who already said yes to the waterfall at step 5 is
+   still asked for this one, because it is a different consequence.
 
-   **If the write grant opened at step 5 covers this lane too, do not ask for the phrase
+   **If the write grant opened at step 5 covers this lane too, do not ask
    again** — that is the single ask D-53-05 bought, and asking again here would take the
    protection and leave the cost. Run the dispatch below inside this send's own window:
 
@@ -337,8 +347,8 @@ whatever seven columns happened to be in the source file.
    — their mechanics are untouched by this flow and a second copy of them here is
    exactly the drift risk this plugin avoids everywhere else:
 
-   - "Dispatch only once the operator has said the arming phrase this turn." — the
-     call above.
+   - "Dispatch under an open grant, or otherwise only once the operator has said yes to
+     this send." — the call above.
    - "Report the outcome — per record, not a bare acceptance." — summary counts,
      failing rows in full, successful rows only for a small batch.
    - "Re-check, only when the operator asks."
@@ -368,7 +378,7 @@ whatever seven columns happened to be in the source file.
    reaches them: this flow always sends a **rewritten** CSV of exactly the approved
    rows, never the operator's own file, because holding a row back is impossible any
    other way; a confirmed match with no email keeps its id and nothing else, as just
-   described; and the two arming phrases are per-call arguments that never outlive the
+   described; and the two consents are per-call arguments that never outlive the
    turn that gave them, while a write grant, where one is open, lasts the conversation,
    is **never written to disk**, and ends on completion, revocation, session end, error
    or a ceiling breach.

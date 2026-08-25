@@ -1,5 +1,6 @@
 """Tests for preingest.render_enriched_preview — the operator's one look at exactly
-what will reach HubSpot before "arm the upload" can be spoken (37-CONTEXT §5 step 6).
+what will reach HubSpot before the operator's yes can grant the write (37-CONTEXT §5
+step 6).
 
 The weight-bearing assertion is the monkeypatch test: the SEND/HELD verdict must come
 from `extraction.hold_emailless`, never a second predicate re-derived here, because

@@ -40,9 +40,9 @@ be sent, and — only when explicitly armed — send it.
    relaying `"send_blocked_reason"` exactly as given (it names the key, the file, and who
    has the value). Then carry on and build the preview normally: previewing costs nothing
    and showing the operator their own file parsed is useful even when sending is
-   unavailable. But for the rest of this conversation, **do not offer the arming phrase
-   and do not ask whether to send** — there is nothing to arm, and inviting an operator to
-   arm a send that will be refused wastes their decision. Step 5's arming paragraph is
+   unavailable. But for the rest of this conversation, **do not ask for this send at all** —
+   there is nothing to arm, and inviting an operator to approve a send that will be refused
+   wastes their decision. Step 5's consent paragraph is
    skipped entirely; step 6 is unreachable. If they ask to send anyway, repeat the reason
    and name the admin as the person who can fix it.
 
@@ -205,7 +205,7 @@ be sent, and — only when explicitly armed — send it.
    row, an export of the wrong sheet, or a sheet whose data starts below some other content.
    Check `headers` and say which case it looks like — headers present with no rows is a
    different mistake from no headers at all. Then ask for a different file. **Do not ask for
-   approval and do not offer the arming phrase**: there is nothing to approve, and inviting a
+   approval and do not ask for this send at all**: there is nothing to approve, and inviting a
    decision that cannot matter wastes it. (Same reasoning as the `can_send: false` branch in
    step 1.)
 
@@ -222,15 +222,24 @@ be sent, and — only when explicitly armed — send it.
    straight on. The preview above is still rendered and still shown; under a grant it
    informs rather than gates, because the gate moved earlier.
 
-5. **Check arming.** Skip this step entirely when step 1 reported `"can_send": false` —
-   see there. Otherwise: disarmed is the default and the state of every new conversation.
-   Say plainly that sending is off, and that the operator can turn it on for this
-   conversation only by saying: **"arm the upload"**. This state is never written to
-   disk — it exists only as the `armed` flag passed to the one dispatch call below, for
-   this turn only.
+5. **Ask for this send, in the operator's own words.** Skip this step entirely when step 1
+   reported `"can_send": false` — see there. Otherwise: disarmed is the default and the
+   state of every new conversation. Say plainly that sending is off, then ask for this send
+   by naming what it will do — how many rows, and that it writes them to HubSpot. **An
+   affirmative answering that question — "yes", "go ahead", "do it", "please" — arms this
+   send and nothing else.** There is no phrase to learn: an operator saying yes must never
+   have to produce the system's wording to be heard (VOCAB-05).
 
-   **If a write grant covering this lane and these records is already open, do not ask for
-   the phrase again.** Say which grant the send is running under and dispatch under it —
+   **Consent counts only where it is attached to what was shown.** An affirmative that
+   answers nothing, or answers some other question, or arrives before this send has been
+   described, does **not** arm anything — ask once more, naming what will happen, and take
+   that answer. Anything ambiguous is not consent: treat it as not armed, and ask. This
+   state is never written to disk — it exists only as the `armed` flag passed to the one
+   dispatch call below, for this send only. Arming this send arms nothing else: not the
+   next send on this lane, not the enrichment lane, not the review lane.
+
+   **If a write grant covering this lane and these records is already open, do not ask at
+   all.** Say which grant the send is running under and dispatch under it —
    not asking twice is the whole point of a grant. With no grant open, everything above is
    exactly as it is today.
 
@@ -264,8 +273,8 @@ be sent, and — only when explicitly armed — send it.
    it runs under; passing the grant's full list would widen every window to the whole batch
    and every test would still pass.
 
-6. **Dispatch under an open grant, or otherwise only once the operator has said the
-   arming phrase this turn.**
+6. **Dispatch under an open grant, or otherwise only once the operator has said yes to
+   this send.**
 
    ```
    python3 scripts/dispatch.py <path> armed
@@ -377,7 +386,7 @@ be sent, and — only when explicitly armed — send it.
    ```
 
    — the same function, the same arguments, the same arming gate as step 6. A re-send
-   is a send: if the operator has not said the arming phrase again this turn, this call
+   is a send: if the operator has not said yes to this re-send, this call
    refuses exactly as an original send refuses. There is no separate retry function and
    nothing to parse out of the failed subset — reuse the send you already have. Then
    return to step 7 to report the new outcome.

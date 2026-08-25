@@ -38,8 +38,9 @@ written, and a second opinion here would be a second authority that drifts from 
    — it already names the missing key, where to fix it, and what still works — and STOP.
    Never show, echo, or ask for a secret.
 
-   Then say, before answering anything else, that **review writeback is currently disarmed
-   for this conversation.** Say it even if the operator only asked a question.
+   Then say, before answering anything else, that **review writeback is disarmed: nothing
+   reaches HubSpot until the operator says yes to a specific record's exact write.** Say it
+   even if the operator only asked a question.
 
 2. **Fetch the queue.**
 
@@ -121,19 +122,24 @@ written, and a second opinion here would be a second authority that drifts from 
      There is a reason to record, but nothing to approve.
    - `not_flagged` — the record is not in the queue. Nothing to decide.
 
-6. **Confirm, then check arming, then submit.**
+6. **Confirm this record's exact write, then submit it.**
 
    Read the exact write back to the operator and get an explicit yes for **this record**.
-   Arming once covers the session; the exact-write confirmation is per decision and is
-   never skipped, however many records have already been worked.
+   **That yes is the arm.** An affirmative answering the exact write just shown — "yes",
+   "go ahead", "do it", "please" — arms `review_armed=True` for that one submit and nothing
+   else. There is no phrase to learn: an operator saying yes must never have to produce the
+   system's wording to be heard (VOCAB-05).
 
-   Disarmed is the default and the state of every new conversation. The operator turns
-   review writeback on for this conversation only by saying: **"arm review writeback"**.
+   Disarmed is the default and the state of every new conversation, and it is the state
+   again after every submit: consent here is per record, never per session, however many
+   records have already been worked. An affirmative that answers nothing, answers some
+   other question, or arrives before the exact write has been read back does **not** arm
+   anything — read the write back and ask again. Anything ambiguous is not consent.
 
-   **This arm and the contact-upload arm are separate switches.** Saying "arm the upload"
-   does not arm review writeback, and saying "arm review writeback" does not arm uploads.
-   Say so plainly if the operator has armed one and expects the other. Nothing about either
-   arm is written to disk; both exist only as an argument passed for this turn.
+   **A yes here authorizes this record's write and nothing else.** It does not arm the
+   contact-upload lane or the enrichment lane, and a yes given on either of those does not
+   authorize a review write. Say so plainly if the operator seems to expect otherwise.
+   None of it is written to disk; it exists only as an argument passed for this one call.
 
    ```
    review_decision.submit_decision(config, object_type, record_id, decision, reason,
