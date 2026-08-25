@@ -200,15 +200,47 @@ class DisarmFailed(Exception):
         self.outcome = outcome
 
 
-def _arm_gate():
-    """The env kill switch, checked BEFORE any transport is constructed, so a missing gate
-    costs zero HTTP calls.
+def _arm_gate(config=None, grant=None):
+    """AUTHORITY to arm — checked BEFORE any transport is constructed, so a missing gate
+    costs zero HTTP calls. Scope is a separate decision, made in `arm_for_dispatch`.
 
-    Semantics are character-identical to `ALLOW_N8N_PROBE` (28-02) and `ALLOW_N8N_DEPLOY`:
-    the value must read EXACTLY 'true'. This module is the only one in the milestone that
-    writes an *enabled* write-safety literal to a live workflow, so shipping it behind a
-    weaker gate than the read-only probe would invert the repo's convention (D-34).
+    TWO BRANCHES, and the split is deliberate (53-01, D-53-01, 2026-08-25):
+
+    * WITH a grant (the INTERACTIVE path): authority is the admin-set settings key
+      `config_gate.WRITE_GRANT_SETTINGS_KEY` in operator.local.json, re-read from config on
+      every arm and never cached — so a fabricated grant cannot arm a backend whose admin
+      never enabled write grants. This is the repository's first deliberate exception to
+      D-34's "authority gates are environment variables". It exists because an operator in
+      Claude Desktop cannot set a shell variable, which made the documented operator path
+      end in a refusal only an admin with terminal access could clear (G-2, live UAT).
+
+    * WITHOUT a grant (the HEADLESS path, `scheduled_arm.py` and every existing caller):
+      unchanged. The env kill switch, whose value must read EXACTLY 'true' — semantics
+      character-identical to `ALLOW_N8N_PROBE` (28-02) and `ALLOW_N8N_DEPLOY`. Nothing in
+      53-01 widens this path; `grant` defaults to None precisely so those callers stay on
+      it untouched.
     """
+    if grant is not None:
+        import config_gate
+        if not config_gate.write_grants_enabled(config):
+            return {
+                "outcome": REFUSED,
+                "detail": (
+                    f"refusing to arm live writes under a grant: "
+                    f"{config_gate.WRITE_GRANT_SETTINGS_KEY!r} is not set to true in "
+                    f"operator.local.json. Your n8n admin sets it — a grant object alone "
+                    f"is not authority. No API call was made."),
+            }
+        if grant.get("state") != "open":
+            return {
+                "outcome": REFUSED,
+                "detail": (
+                    f"refusing to arm live writes: this write grant is closed and "
+                    f"authorizes nothing further. It closed because: "
+                    f"{grant.get('closed_reason')!r}. No API call was made."),
+            }
+        return None
+
     import os
     value = os.environ.get(ARM_ENV_VAR)
     if value != "true":
@@ -216,7 +248,10 @@ def _arm_gate():
             "outcome": REFUSED,
             "detail": (f"refusing to arm live writes: {ARM_ENV_VAR} is not set to exactly "
                        f"'true' (it reads {value!r}). Your n8n admin sets it, for one shell "
-                       f"only: {ARM_ENV_VAR}=true. No API call was made."),
+                       f"only: {ARM_ENV_VAR}=true. The other route is an open write grant, "
+                       f"which an operator can open in conversation once an n8n admin has "
+                       f"set 'allow_write_grants' to true in operator.local.json — that "
+                       f"route needs no shell at all. No API call was made."),
         }
     return None
 
@@ -262,24 +297,46 @@ def _assert_only_declaration_lines_changed(original, modified, node_names, flags
 
 
 def arm_for_dispatch(workflow_id, record_ids, record_domains, allow_create, config,
-                     transport=None):
+                     transport=None, grant=None):
     """Grant live writes for ONE dispatch, bounded to exactly the records in it.
 
     The allowlist is derived from the batch about to be dispatched, so the grant is
     record-scoped as well as operation-scoped: during the armed window the backend cannot
     write a record that was not in the dispatch. That is the strongest safety property this
     phase has, and it is reported back to the operator rather than left implicit.
+
+    `grant` is keyword-only-by-default (None), so every existing caller —
+    `scheduled_arm.py` included — stays on the environment gate with no edit. When a grant
+    IS supplied, two decisions are made separately and both must pass: `_arm_gate` decides
+    AUTHORITY (the admin's settings key), and the block below decides SCOPE (GRANT-03).
     """
     import requests as _requests
 
-    refusal = _arm_gate()
+    refusal = _arm_gate(config, grant)
     if refusal:
         return refusal
 
-    transport = transport if transport is not None else _requests
-
     ids = [str(v).strip() for v in (record_ids or []) if str(v).strip()]
     domains = [str(v).strip() for v in (record_domains or []) if str(v).strip()]
+
+    # SCOPE, enforced HERE rather than only at a helper a lane skill is supposed to call:
+    # a caller can reach `arm_for_dispatch` directly, and a scope check that can be
+    # bypassed is not a scope check. `write_grant.covers` is the one implementation, so
+    # this and any lane skill refuse in one wording. Before the transport is constructed,
+    # so a refusal leaves an EMPTY call log rather than merely an empty mutating one.
+    #
+    # Imported inside the function (this module's house style — see `import os` above):
+    # `write_grant` imports `scheduled_arm`, which imports this module, so a top-level
+    # import here would be a cycle.
+    if grant is not None:
+        import write_grant
+        out_of_scope = write_grant.covers(
+            grant, workflow_id=workflow_id, record_ids=ids, record_domains=domains)
+        if out_of_scope:
+            return {"outcome": REFUSED,
+                    "detail": f"refusing to arm: {out_of_scope['detail']}"}
+
+    transport = transport if transport is not None else _requests
 
     if not ids and not domains:
         return {
@@ -426,15 +483,19 @@ class armed_window:
     """
 
     def __init__(self, workflow_id, record_ids, record_domains, allow_create, config,
-                 transport=None):
+                 transport=None, grant=None):
         self._args = (workflow_id, record_ids, record_domains, allow_create, config)
         self._transport = transport
+        # Pass-through only. The window's own behaviour — arm, run, guaranteed disarm on
+        # both paths — is identical whichever authority the arm used (53-01).
+        self._grant = grant
         self.workflow_id = workflow_id
         self.arm_result = None
         self.disarm_result = None
 
     def __enter__(self):
-        self.arm_result = arm_for_dispatch(*self._args, transport=self._transport)
+        self.arm_result = arm_for_dispatch(*self._args, transport=self._transport,
+                                           grant=self._grant)
         if self.arm_result.get("outcome") != ARMED:
             raise ArmingRefused(self.arm_result.get("detail", "the arm did not succeed"))
         return self

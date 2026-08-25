@@ -87,6 +87,39 @@ _CAPABILITY_DESCRIPTIONS = {
 }
 
 
+# --- the write-grant settings key (53-01, D-53-01) ---------------------------------------
+#
+# NOT a capability row, and deliberately NOT in CAPABILITY_KEYS or
+# _CAPABILITY_DESCRIPTIONS above. `CAPABILITY_KEYS` means "these keys are PRESENT" — a
+# missing entry there says the plugin is unconfigured for something. This key means "an
+# admin AUTHORIZED live writes to be opened from a conversation", which is a different
+# claim, and the refusal wording depends on the distinction. Living in the same MODULE as
+# CAPABILITY_KEYS is not the same as living in the table; a later edit that folds it in is
+# pinned as a failure by tests/test_write_grant.py.
+#
+# This is the repository's FIRST deliberate exception to "authority gates are environment
+# variables compared against the exact string 'true'" (D-34). The probe, deploy and
+# headless-arm gates stay environment-gated; only the interactive arm moved here, because
+# an operator in Claude Desktop cannot set a shell variable (G-2, live UAT 2026-08-25).
+WRITE_GRANT_SETTINGS_KEY = "allow_write_grants"
+
+
+def write_grants_enabled(config: dict) -> bool:
+    """True only when the admin set the key to the JSON boolean `true`.
+
+    The ONE definition of this comparison — `n8n_arming` and `write_grant` both import it
+    rather than restating it, so there are no two copies to hold in agreement.
+
+    Identity (`is True`), not truthiness, and the reason is the same gotcha
+    `n8n_cadence._read_positive_float`'s WR-03 comment documents: `bool` is an `int`
+    subclass in Python, so a truthiness test would accept the string "true", the string
+    "yes", the integer 1 and the float 1.0 as authority. This key REPLACES an exact-string
+    comparison on the interactive path; a `1` that parsed as authority would make the new
+    gate silently weaker than the one it replaced.
+    """
+    return (config or {}).get(WRITE_GRANT_SETTINGS_KEY) is True
+
+
 class ConfigError(Exception):
     """Raised when the plugin's local config is missing or invalid.
 
