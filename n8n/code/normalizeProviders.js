@@ -30,6 +30,21 @@ function _iso2(nameOrCode) {
   return _COUNTRY_ISO2[v.toLowerCase()];
 }
 
+// 260826-20w Task 2: hs_country_region_code / hs_state_code candidates are derived ONLY
+// from a value that is ALREADY code-shaped (an ISO2 country code, a 2-3 char state
+// abbreviation) — deliberately NOT a name->code lookup table. Task 1's live sample found
+// Apollo returns full names for both ("New South Wales", "Australia") 100% of the time it
+// returns anything at all, and Lusha has no `state` field whatsoever — so a name-lookup
+// table here would either be untestable against real traffic or duplicate the existing
+// (deliberately narrower) `_iso2` name map that phone normalization owns. Returns the
+// UPPERCASED code, or null when the value is not already code-shaped (a full name never
+// produces a candidate).
+function _codeShaped(value, minLen, maxLen) {
+  if (value === null || value === undefined) return null;
+  const s = String(value).trim();
+  return new RegExp(`^[A-Za-z]{${minLen},${maxLen}}$`).test(s) ? s.toUpperCase() : null;
+}
+
 // ---- local value normalizers (mirror src/normalizer.py band logic) ----------
 // Parse a revenue value (number OR range string like "10M-25M") to lower-bound
 // dollars, then map to the CLAUDE.md revenue bands. Range strings use the LOWER
@@ -270,6 +285,26 @@ function lushaCandidates(rawResponse, objectType) {
       const persona = _personaGroup(raw.jobTitle.departments);
       _push(out, "persona_group", src, persona, _norm(persona), 0.6, updated);
     }
+    // 260826-20w Task 2 commit 1: five HubSpot-native contact location properties.
+    // Lusha v3 contacts (_lushaV3Contact) carry location.{city,country,countryIso2,
+    // state?} (countryIso2 renamed to country_iso2 above) — city/country observed live
+    // (execs 11935/37/48/56: "Sydney"/"Australia"); `state` has never been observed
+    // present on a live contact or in the offline fixture. `country_iso2` is a DEDICATED
+    // code field (distinct from the free-text `country` name), guaranteed code-shaped by
+    // Lusha's own contract, so it feeds hs_country_region_code directly. No name->code
+    // lookup for hs_state_code — Lusha never supplies a state value to begin with.
+    const loc = raw.location || {};
+    _push(out, "city", src, loc.city, _norm(loc.city), 0.6, updated);
+    _push(out, "state", src, loc.state, _norm(loc.state), 0.6, updated);
+    _push(out, "country", src, loc.country, _norm(loc.country), 0.6, updated);
+    const lushaCountryCode = _codeShaped(loc.country_iso2, 2, 2);
+    if (lushaCountryCode) {
+      _push(out, "hs_country_region_code", src, loc.country_iso2, lushaCountryCode, 0.6, updated);
+    }
+    const lushaStateCode = _codeShaped(loc.state, 2, 3);
+    if (lushaStateCode) {
+      _push(out, "hs_state_code", src, loc.state, lushaStateCode, 0.6, updated);
+    }
   } else {
     // company firmographics — no per-field grade -> base 0.6. `raw.company` serves the
     // contacts/person endpoint's nested company object (extraction, not envelope -- kept
@@ -339,6 +374,24 @@ function apolloCandidates(raw, objectType) {
     // COPY-02: same persona_group producer, reading Apollo's own department field.
     const persona = _personaGroup(person.departments);
     _push(out, "persona_group", src, persona, _norm(persona), 0.6, updated);
+    // 260826-20w Task 2 commit 1: Apollo's person record carries flat city/state/country
+    // (live exec 11948: "Sydney"/"New South Wales"/"Australia" — full names, no dedicated
+    // ISO/code field at all). hs_country_region_code/hs_state_code candidates are only
+    // emitted when the raw value already happens to be code-shaped (_codeShaped) — Task
+    // 1's live sample never observed that from Apollo, so in practice these two never
+    // fire from Apollo today; the tests exercise the code-shaped path with a synthetic
+    // fixture to prove the logic itself.
+    _push(out, "city", src, person.city, _norm(person.city), 0.6, updated);
+    _push(out, "state", src, person.state, _norm(person.state), 0.6, updated);
+    _push(out, "country", src, person.country, _norm(person.country), 0.6, updated);
+    const apolloCountryCode = _codeShaped(person.country, 2, 2);
+    if (apolloCountryCode) {
+      _push(out, "hs_country_region_code", src, person.country, apolloCountryCode, 0.6, updated);
+    }
+    const apolloStateCode = _codeShaped(person.state, 2, 3);
+    if (apolloStateCode) {
+      _push(out, "hs_state_code", src, person.state, apolloStateCode, 0.6, updated);
+    }
   } else {
     const org = (raw.person && raw.person.organization) || raw.organization || raw.org || raw;
     // Live org revenue is `organization_revenue` (number); flat fixtures use `annual_revenue`.
@@ -380,6 +433,13 @@ function zoominfoCandidates(rawResponse, objectType) {
   const raw = _zoomRecord(rawResponse) || {};
   const recency = raw.validDate || raw.lastUpdatedDate;
   if (objectType === "contacts") {
+    // 260826-20w Task 2 commit 1: NO location candidates added here, deliberately. Live
+    // GTM contact enrich (execution 11948) returned attributes {company,
+    // contactAccuracyScore, directPhoneDoNotCall, firstName, jobTitle, lastName,
+    // lastUpdatedDate, managementLevel, mobilePhone, mobilePhoneDoNotCall, validDate} —
+    // no city/state/country/location field of any shape. There is no verified outputField
+    // to map (260826-20w-CALIBRATION.md §f); mapping one blind would risk staging a
+    // field ZoomInfo never actually returns.
     const fullMatch = raw.matchStatus === "FULL_MATCH" || raw.matchStatus === undefined;
     // matchStatus != FULL_MATCH drops person fields entirely (§2).
     if (!fullMatch) return out;

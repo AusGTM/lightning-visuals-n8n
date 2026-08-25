@@ -21,14 +21,25 @@
 // Default contacts field policy (source of truth: config/field_policy.yaml `contacts`).
 // PN-1: linkedin_url/persona_group are NOT HubSpot-native (absent from the verified-
 // native list) -> lv_-prefixed canonical field keys.
+//
+// city/state/country/hs_state_code/hs_country_region_code: fill_blank_only @ 80
+// (260826-20w Task 2 commit 1) — five HubSpot-native contact properties, confirmed
+// present/string/writable in the operator's 2026-08-26 portal export. 80 is at/below the
+// only confidence these fields' one live source (the waterfall path) ever carries (85),
+// so any threshold at or below 85 is behaviourally identical today.
 const DEFAULT_CONTACT_POLICY = {
   email:           { class: "manual_protected",  min_confidence: 95 },
-  phone:           { class: "fill_blank_only",   min_confidence: 80 },
-  mobilephone:     { class: "fill_blank_only",   min_confidence: 85 },
-  jobtitle:        { class: "stale_refreshable", min_confidence: 75 },
-  lv_linkedin_url: { class: "fill_blank_only",   min_confidence: 85 },
-  seniority:       { class: "system_owned",      min_confidence: 75 },
-  lv_persona_group:{ class: "system_owned",      min_confidence: 75 },
+  phone:                   { class: "fill_blank_only",   min_confidence: 80 },
+  mobilephone:             { class: "fill_blank_only",   min_confidence: 85 },
+  jobtitle:                { class: "stale_refreshable", min_confidence: 75 },
+  lv_linkedin_url:         { class: "fill_blank_only",   min_confidence: 85 },
+  seniority:               { class: "system_owned",      min_confidence: 75 },
+  lv_persona_group:        { class: "system_owned",      min_confidence: 75 },
+  city:                    { class: "fill_blank_only",   min_confidence: 80 },
+  state:                   { class: "fill_blank_only",   min_confidence: 80 },
+  country:                 { class: "fill_blank_only",   min_confidence: 80 },
+  hs_state_code:           { class: "fill_blank_only",   min_confidence: 80 },
+  hs_country_region_code:  { class: "fill_blank_only",   min_confidence: 80 },
 };
 
 function _isBlank(v) {

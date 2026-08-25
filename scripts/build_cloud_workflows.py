@@ -1296,7 +1296,10 @@ return $input.all().map((it) => {
   if (!row.scored) return { json: { ...row, merge: null } };  // skip branch
   const winners = row.scored.winners || {};
   const candidate = {};
-  for (const f of ["email", "mobilephone", "phone", "jobtitle", "seniority"]) {
+  // 260826-20w Task 2 commit 1: the five location winners ride the same plain-key path
+  // as email/phone/etc — they are already HubSpot-native names (no PN-1 rename needed).
+  for (const f of ["email", "mobilephone", "phone", "jobtitle", "seniority",
+                    "city", "state", "country", "hs_state_code", "hs_country_region_code"]) {
     if (winners[f] != null && String(winners[f]).trim() !== "") candidate[f] = winners[f];
   }
   if (winners.linkedin_url != null && String(winners.linkedin_url).trim() !== "") {
@@ -4299,11 +4302,16 @@ def _credit_http_node(name, url, method, x, y, auth=None, extra_headers=None):
 #
 # Extracted verbatim from the existing "HubSpot Search" node (byte-identical emitted
 # string) so the fetch-by-id property list can share it without drift.
+# 260826-20w Task 2 commit 1: the five location properties MUST land in this same commit
+# as the location candidates (normalizeProviders.js) — fill_blank_only decides from
+# existingRecord, and a property that was never fetched here reads as blank regardless of
+# what is actually stored live, silently turning non-clobber into clobber.
 ENRICH_CONTACT_SEARCH_PROPERTIES_CSV = (
     "email,firstname,lastname,jobtitle,phone,"
     "mobilephone,hs_object_id,lv_jobtitle_verified_at,"
     "lv_mobilephone_verified_at,seniority,"
-    "lv_contact_enrichment_provenance,lusha_contact_id"
+    "lv_contact_enrichment_provenance,lusha_contact_id,"
+    "city,state,country,hs_state_code,hs_country_region_code"
 )
 # The fetch-by-id list adds `company`/`lv_linkedin_url` — HubSpot's default contact
 # freetext-company property and the PN-1-renamed LinkedIn property, feeding

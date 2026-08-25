@@ -126,7 +126,7 @@ test("toCandidates: v3 US contact -> +1 E.164 via location.countryIso2; region-l
 test("toCandidates: v3 contacts field set is exactly the v2 contacts field set", () => {
   const c = toCandidates("lusha", lushaV3Contact, "contacts");
   const fields = [...new Set(c.map((x) => x.field))].sort();
-  assert.deepEqual(fields, ["email", "jobtitle", "mobilephone", "persona_group", "phone", "seniority"]);
+  assert.deepEqual(fields, ["city", "country", "email", "hs_country_region_code", "jobtitle", "mobilephone", "persona_group", "phone", "seniority"]);
 });
 
 test("toCandidates: v3 A+ email confidence grades to accuracy 1.0; job title/seniority/department extracted", () => {
@@ -180,7 +180,11 @@ test("toCandidates: v3 contacts candidate set deep-equals the flat pre-envelope 
     jobTitle: { title: "Head of Broadcast", seniority: "Director", departments: ["Broadcast"] },
     updateDate: "2026-05-01",
   };
-  const flatRaw = { ...shared, location: { country_iso2: "AU" } };
+  // 260826-20w Task 2: location must carry the SAME keys on both sides (country
+  // included, not just country_iso2) or the comparison spuriously fails once city/
+  // country/hs_country_region_code candidates exist -- this asymmetry is a test-fixture
+  // artifact, not a real product divergence.
+  const flatRaw = { ...shared, location: { country: "Australia", country_iso2: "AU" } };
   const v3Raw = { requestId: "x", results: [{ ...shared, location: { country: "Australia", countryIso2: "AU" } }],
     billing: { creditsCharged: 1, resultsReturned: 1 } };
   assert.deepEqual(
@@ -259,7 +263,7 @@ test("toCandidates: the /contacts/enrich (stored-id reuse) envelope parses throu
   // raw.phoneNumbers || raw.phones || [] fallback already tolerates an absent key.
   const c = toCandidates("lusha", lushaV3ContactEnrichById, "contacts");
   const fields = [...new Set(c.map((x) => x.field))].sort();
-  assert.deepEqual(fields, ["email", "jobtitle", "seniority"]);
+  assert.deepEqual(fields, ["city", "country", "email", "hs_country_region_code", "jobtitle", "seniority"]);
   assert.equal(find(c, "email", "lusha").normalizedValue, "redacted-synthetic@example-corp.com.au");
 });
 
@@ -272,7 +276,7 @@ test("toCandidates: lushaCandidates()'s field set is unchanged by the presence o
   // leak into the candidate stream as a new field, even though it is now extractable.
   const contactFields = new Set(toCandidates("lusha", lushaV3Contact, "contacts").map((c) => c.field));
   assert.deepEqual([...contactFields].sort(),
-    ["email", "jobtitle", "mobilephone", "persona_group", "phone", "seniority"]);
+    ["city", "country", "email", "hs_country_region_code", "jobtitle", "mobilephone", "persona_group", "phone", "seniority"]);
   assert.ok(!contactFields.has("id"), "id must never appear as a candidate field");
   assert.ok(!contactFields.has("lusha_contact_id"), "lusha_contact_id must never appear as a candidate field");
 

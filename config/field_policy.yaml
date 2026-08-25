@@ -115,6 +115,41 @@ contacts:
     stage_only: true
     min_confidence: 95
 
+  # 260826-20w Task 2 commit 1: five HubSpot-native contact location properties,
+  # confirmed present/string/writable in the operator's 2026-08-26 portal export
+  # (docs/hs_props/hubspot-properties-export-contacts-19-other-objects-2026-08-26/contact.csv).
+  # 80 is at/below the only confidence these fields' one live source (waterfall) ever
+  # carries (85), so any value at or below 85 is behaviourally identical today.
+  city:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 80
+    protect_if_current_present: true
+
+  state:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 80
+    protect_if_current_present: true
+
+  country:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 80
+    protect_if_current_present: true
+
+  hs_state_code:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 80
+    protect_if_current_present: true
+
+  hs_country_region_code:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 80
+    protect_if_current_present: true
+
   phone:
     class: fill_blank_only
     promote_to_canonical: true
