@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Unattended Session Runs
-current_phase: 53
-current_phase_name: Operator-openable write grant
-status: awaiting-operator-walk
-stopped_at: "HANDOVER: read .planning/HANDOVER-2026-08-25.md first (section 1 is now DONE). VOCAB-05 is implemented and released at plugin 0.17.0 -- the arming phrase is gone from all four skills, the operator-facing refusals and README/USAGE; every phrase pin was rewritten in place with its reason; review-triage's session arm folded into its per-record confirmation. Invariants held: 3084 passed / 154 skipped, 711 node, frozen set (n8n/, scripts/, scheduled_arm.py) untouched. NEXT: the operator walk -- it must confirm a plain \"yes\" arms the send and that contact 347569451461 (John Tsatsimas) enriches AND writes. Then Phase 58, then Phase 54. RELEASE IS NOT LIVE until master is pushed, the marketplace clone is reset --hard to FETCH_HEAD, and Update is clicked in Desktop."
-last_updated: "2026-08-25T09:30:00.000Z"
+current_phase: 58
+current_phase_name: Take what the operator actually has
+status: phase-complete
+stopped_at: "Phase 53 COMPLETE 2026-08-26: walk executed and every leftover closed. VOCAB-05 proven live (plain yes armed), John Tsatsimas 347569451461 fully written (title/phones/email/city/country), F3/F1/F2 fixed (0.17.1-0.18.0), permissive contact stance shipped (quick 260826-20w: email fill_blank_only@80, 5 location fields, review flag), ZoomInfo location outputFields probe-verified and wired, review lane ACTIVATED and proven (company approve applied live on 9604732797), revocation-at-next-send ACCEPTED by operator (grant-aware dispatch phase dead). OPEN: contacts get flagged for review but no lane clears a contact flag (fold into 58/54). NEXT: plan Phase 58 (take what the operator actually has -- company-lane extraction), then Phase 54 (single-pass dispatch, also kills the name-form two-pass gap)."
+last_updated: "2026-08-26T00:15:00.000Z"
 last_activity: 2026-08-25
-last_activity_desc: "VOCAB-05 implemented and released at plugin 0.17.0: an affirmative answering the send just described arms that send and nothing else; the literal arming phrases are dead and pinned absent. Walk remains the blocker -- per VOCAB-04 only a walk transcript proves the wording works"
+last_activity_desc: "Phase 53 closed: walk complete, review lane live-proven, permissive enrichment shipped and deployed. Operator rulings recorded: provider-data-only locations, revocation-at-next-send acceptable"
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 4
   completed_plans: 4
   percent: 0
