@@ -86,12 +86,48 @@ def test_every_near_miss_value_refuses(near_miss, monkeypatch, fake_config,
     assert transport.calls == []
 
 
-def test_the_probe_and_the_arm_gate_use_the_same_comparison():
-    """Pinned by reading both sources: both compare against the exact string 'true'."""
+def test_the_probe_and_the_arm_gates_HEADLESS_branch_use_the_same_comparison():
+    """Re-pointed once, deliberately, on 2026-08-25 (53-01, D-53-01). Do not sweep this
+    file; this is the only test here that moved.
+
+    This test used to be called `test_the_probe_and_the_arm_gate_use_the_same_comparison`
+    and claimed the arm gate AS A WHOLE was coupled to `ALLOW_N8N_PROBE`'s comparison. Its
+    assertion still passes after 53-01 — the environment branch still compares against the
+    exact string "true" — but its CLAIM had become false, and a test whose assertion passes
+    while its claim is false is worse than a failing one: it reads as evidence for
+    something nobody checked. So the name and the reason moved with the code.
+
+    THE GATE SPLIT IS NOW THREE-WAY:
+
+      1. The probe gate (`ALLOW_N8N_PROBE`) and the deploy gate (`ALLOW_N8N_DEPLOY`) stay
+         environment-gated, unchanged.
+      2. The arm gate's HEADLESS branch — no grant, which is `scheduled_arm.py` and every
+         pre-53 caller — stays environment-gated on `ALLOW_N8N_ARM`, unchanged, and is what
+         this test pins against the probe.
+      3. The arm gate's INTERACTIVE branch — a grant present — moved to an admin-set key in
+         operator.local.json, compared by IDENTITY against the JSON boolean `true` in
+         `config_gate.write_grants_enabled`, which is the single definition of that
+         comparison.
+
+    Why (3) had to move: `_arm_gate()` required `ALLOW_N8N_ARM=true` in the session's SHELL
+    environment, and an operator in Claude Desktop cannot set a shell variable — so the
+    documented operator path ended in a refusal only an admin with terminal access could
+    clear (G-2, live client UAT 2026-08-25). This is the repository's first deliberate
+    exception to D-34's "authority gates are environment variables compared against the
+    exact string true". A reader who changes one of the three gates must NOT assume the
+    others followed.
+    """
     arming_src = Path(n8n_arming.__file__).read_text()
     probe_src = (Path(n8n_arming.__file__).parent / "probe_n8n_semantics.py").read_text()
     assert re.search(r'!=\s*"true"', arming_src)
     assert re.search(r'!=\s*"true"', probe_src)
+
+    # (3): the interactive branch's own comparison, pinned where it actually lives — in
+    # config_gate, not here. Identity against the JSON boolean, never truthiness: `bool` is
+    # an `int` subclass, so a truthiness test would accept 1, 1.0 and the string "true" as
+    # authority and be silently weaker than the exact-string gate it replaces.
+    config_gate_src = (Path(n8n_arming.__file__).parent / "config_gate.py").read_text()
+    assert re.search(r"WRITE_GRANT_SETTINGS_KEY\)\s+is\s+True", config_gate_src)
 
 
 def test_the_disarm_is_NOT_gated_on_the_kill_switch(fake_config,
