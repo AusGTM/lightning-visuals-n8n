@@ -16,6 +16,57 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-08-25
+
+### Added
+
+- **An admin can enable write grants with one key, and an operator can then authorize
+  HubSpot writes from inside Claude with no terminal.** Set `"allow_write_grants": true`
+  (the JSON boolean, not the string) in `operator.local.json` and the interactive path no
+  longer needs the `ALLOW_N8N_ARM` shell variable. This is what made the documented write
+  path reachable at all: it required a variable set in the shell the session runs in, which
+  an operator in Claude Desktop cannot set — so every documented operator path to a live
+  write ended in a refusal only an admin with terminal access could clear.
+- **The write grant itself.** You name a batch of records and the lanes it covers; the
+  plugin shows the record count, worst-case provider credits per provider, worst-case
+  Anthropic dollars, projected n8n executions and the configured monthly allowance; you
+  say yes once. The grant is bounded to exactly those records on exactly those lanes, and
+  it ends on completion, revocation, session end, an error, a ceiling breach, or two
+  consecutive failures to turn writes back off. It is never written to disk.
+- **Opening a grant first reads the live write-safety state and refuses to open if writes
+  are already armed**, naming what it found and offering to turn them off.
+
+### Changed
+
+- **While a grant is open, the per-send arming phrase is not asked again.** `enrich-records`,
+  `contact-upload` and `enrich-before-ingest` each say so in their own arming step, and each
+  says what a grant does *not* remove: the preview still runs, the records are still named,
+  every send still turns writes on and off around itself bounded to **that send's** records
+  (never the grant's whole set), and a failed disarm is still reported as its own state.
+- **With no grant open, nothing changes.** The phrases, the previews and the per-send gates
+  are exactly what they were.
+- **`backend-control` now lists opening, revoking and closing a grant** among the actions it
+  can take, inside its existing one-action-one-confirmation shape.
+
+### Honest limits
+
+- **`ALLOW_N8N_ARM` is unchanged and remains the authority for the scheduled and cron
+  paths.** It was not replaced — it was narrowed to where it belongs, the unattended paths
+  that have no operator to confirm anything. Do not remove it.
+- **The cost figure shown at grant open discloses what the batch can cost; it does not
+  prevent it.** It is computed from the batch you named, so it cannot refuse anything that
+  batch already implies, and the remaining monthly execution allowance is not checked before
+  a run starts. Refusing on the allowance is a later phase. This is not a spend guard.
+- **One grant may cover both lanes of `enrich-before-ingest`, which means the HubSpot write
+  is authorized before the enriched preview exists** (D-53-05, the operator's decision,
+  2026-08-25, taken deliberately for speed). Rows held for review, and merge conflicts where
+  the source file's own value was kept over a differing provider value, are authorized before
+  anyone has seen them. The enriched preview is still rendered and still worth reading; under
+  a two-lane grant it is a report rather than a gate.
+- **Revoking a grant refuses the next send. It does not stop a dispatch already running.**
+  At the two-record chunk ceiling a forty-record send is twenty chunks, and all twenty go out
+  after a revoke.
+
 ## [0.14.0] - 2026-08-25
 
 ### Added

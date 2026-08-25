@@ -230,6 +230,9 @@ nothing beyond reading the file has happened. To actually send, say **"arm the u
 after approving; arming lasts for that conversation only, is never written to disk, and
 has to be said again in a new conversation.
 
+If a **write grant** covering this lane and these records is already open, you are not
+asked for the phrase again — see *Write grants* below.
+
 ---
 
 ## Beyond spreadsheets: pasted text, JSON, a URL, or screenshots
@@ -316,6 +319,49 @@ Sending is disarmed by default here as everywhere else. Approving the preview se
 nothing; say **"arm the enrichment"** to turn sending on for that conversation only.
 Arming this lane does not arm the contact-upload lane, or the review lane, in either
 direction.
+
+With a **write grant** covering this lane and these records open, the phrase is not asked
+for again — see *Write grants* below.
+
+## Write grants
+
+**For your n8n admin, once:** set `"allow_write_grants": true` in `operator.local.json`
+— the same settings file as everything else, at the durable path
+`/operator-claude-plugin:initialize` reports. It must be the JSON boolean `true`; the
+string `"true"`, `1` and `"yes"` all read as *not enabled*, on purpose. Until it is set,
+asking to open a grant is refused by name, and the refusal says which key, which file, and
+that an admin sets it. Ask the plugin whether it is set up and it will tell you whether
+write grants are enabled — never the value of anything.
+
+**This does not replace `ALLOW_N8N_ARM`, and it did not turn it off.** That environment
+variable is unchanged and remains the only authority for the scheduled and cron paths,
+which have no operator to confirm anything. The settings key is the authority for the
+interactive path only. An admin who finds both documented is looking at two paths, not two
+switches for one.
+
+**For you, per batch:** ask to open a write grant. You name the records and the lanes;
+the plugin shows the record count, the worst-case provider credits per provider, the
+worst-case Anthropic dollars, the projected n8n executions and the configured monthly
+allowance; you say yes once. Every send in that batch then turns live writes on and off
+again around itself, bounded to **that send's** records — never the whole batch at once —
+without asking again.
+
+Four things worth knowing before you use one:
+
+- **The cost figure discloses; it does not prevent.** It is computed from the batch you
+  named, so it cannot refuse anything that batch already implies, and the remaining
+  monthly execution allowance is not yet checked before a run starts.
+- **Revoking refuses the *next send*.** It does not stop a dispatch already running: at
+  the two-record chunk ceiling a forty-record send is twenty chunks, and all twenty go out
+  after you revoke.
+- **On `enrich-before-ingest`, one grant can cover both lanes** — the enrichment lane and
+  the contacts lane — so you are asked once instead of twice. What that costs you, plainly:
+  the HubSpot write is authorized before the enriched preview exists, so rows held for
+  review and merge conflicts are authorized before you have seen them. The preview is still
+  rendered; under a two-lane grant it is a report rather than a gate.
+- **A grant lives in the conversation and is never written to disk.** It ends on
+  completion, revocation, session end, an error, a ceiling breach, or two consecutive
+  failures to turn writes back off.
 
 ## Asking what the backend is doing
 

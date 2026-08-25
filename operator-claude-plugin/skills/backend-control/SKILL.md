@@ -17,7 +17,9 @@ description: Turn backend workflows on or off, switch an individual scheduled jo
 what will change, in plain language, and nothing mutates until they have said an explicit
 yes to that exact statement. Everything runs through `scripts/control_actions.py` — never
 call `n8n_control`, `n8n_arming`, or `n8n_cadence` directly, and never touch the n8n API
-yourself. Any path around the choke point is a path around the confirmation.
+yourself. Any path around the choke point is a path around the confirmation. Write grants
+have their own choke point, `scripts/write_grant.py`, with the same rule: plan, show,
+confirm with an explicit yes, and never arm around it.
 
 ## The shape of every action
 
@@ -89,6 +91,35 @@ If the result comes back `disarm_failed`, that is its own state, and the operato
 be told in so many words: **live writes may still be enabled, and an admin needs to
 check n8n directly.** Never summarize that away, and never report the send as cleanly
 finished around it.
+
+**Opening a write grant** — the same shape one step larger: one action, one confirmation,
+for a whole named batch instead of one send. `write_grant.plan_grant(...)` composes the
+proposal and `write_grant.open_grant(proposal, "yes", config)` opens it; only the exact
+string `yes` proceeds, exactly as `execute_action` does. Show the operator the envelope as
+arithmetic before the yes — the record count, worst-case provider credits per provider,
+worst-case Anthropic dollars, projected n8n executions and the configured monthly
+allowance — plus which lanes it covers, which records, and whether creates are included.
+Then ask once. **Say what the figure is:** it discloses what the batch can cost, it does
+not prevent it, and the remaining monthly allowance is not yet checked before starting.
+
+While the grant is open, each send in that batch arms and disarms its own window bounded
+to that send's records — never the grant's whole set — without asking again. The grant
+needs `allow_write_grants` set to the JSON boolean `true` in `operator.local.json` by an
+n8n admin; with it unset, `plan_grant` refuses and names the key, the file, and who sets
+it. Do not tell the operator to set a shell environment variable: `ALLOW_N8N_ARM` still
+gates the scheduled and cron paths, and it is not something an operator in this
+conversation can set.
+
+**Revoking a grant** — `write_grant.revoke_grant(grant)`, and it is idempotent. Say
+plainly when it bites: it **refuses the next SEND**, and it **does not stop a dispatch
+already running**. At the two-record chunk ceiling a forty-record send is twenty chunks,
+and all twenty go out after a revoke. Never describe revoking as stopping the run.
+
+**Closing a grant** — `write_grant.close_grant(grant, reason)`, with a reason from the
+recorded set; a free-text reason raises rather than being silently accepted. A grant also
+closes on its own on completion, session end, an error, a ceiling breach, or two
+consecutive disarm failures. Closing arms nothing and disarms nothing by itself — each
+send already disarmed its own window.
 
 ## What gets refused, and how to say it
 
