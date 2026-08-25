@@ -382,8 +382,9 @@ def test_the_grant_carries_what_it_covers(granting_config, stub_module_transport
     assert grant["lanes"] == ["enrichment"]
     assert grant["label"] == "the 2026-08-25 batch"
     assert grant["opened_at"].endswith("+00:00")
-    # 53-02 fills these; initialised here so its guardrails are a fill, not a reshape.
-    assert grant["envelope"] is None
+    # 53-02 filled the envelope (GRANT-02); the two below stay initialised-and-unwritten
+    # until a close or a send outcome writes them.
+    assert grant["envelope"]["record_count"] == 2
     assert grant["closed_reason"] is None
     assert grant["consecutive_disarm_failures"] == 0
 
@@ -596,3 +597,251 @@ def test_both_confirmation_gates_raise_type_error_when_the_argument_is_omitted(
     with pytest.raises(TypeError):
         control_actions.execute_action(_bogus_proposal("workflow_active"),
                                        config=granting_config)
+
+
+# =========================================================================================
+# 53-02 Task 1 — the envelope: the arithmetic the operator reads BEFORE the yes (GRANT-02)
+# =========================================================================================
+
+PRICED_PROVIDERS = ["lusha", "zoominfo", "apollo"]
+
+
+@pytest.fixture
+def priced_config(granting_config):
+    """A config that actually prices a batch: a provider selection and the chunk ceiling.
+
+    `fake_config` deliberately carries neither, which is why the wave-1 tests above cost
+    no status POST — that split is load-bearing for their scripted transports.
+    """
+    return {**granting_config,
+            "enrichment_providers": list(PRICED_PROVIDERS),
+            "max_records_per_chunk": 2}
+
+
+def _balances(lusha=50, zoominfo=None, apollo=None):
+    """What `hubspot/backend-status` answers. A `None` credit reads as unreadable in
+    `cost_guard.fetch_balances` — the tri-state's `unknown`, not a zero."""
+    rows = [{"provider": "lusha", "credits": lusha},
+            {"provider": "zoominfo", "credits": zoominfo},
+            {"provider": "apollo", "credits": apollo, "error": "403 — not a master key"}]
+    return {"balances": rows}
+
+
+def _priced_plan_reads(balances=None, lanes=1):
+    """The frozen call order a priced `plan_grant` consumes: one workflow-collection read
+    per lane, then ONE status POST for balances."""
+    return [_workflow_list()] * lanes + [balances if balances is not None else _balances()]
+
+
+def _priced_proposal(config, transport, **kwargs):
+    return _proposal(config, transport, **kwargs)
+
+
+def test_the_envelope_reports_every_figure_grant_02_names(
+        priced_config, stub_module_transport_factory):
+    """Record count, worst-case credits PER PROVIDER, worst-case Anthropic dollars, a
+    projected execution count and the configured monthly allowance — all before a yes."""
+    transport = stub_module_transport_factory(_priced_plan_reads())
+    proposal = _priced_proposal(priced_config, transport, ids=("1", "2", "3", "4"))
+
+    figures = proposal["envelope"]
+    assert figures["record_count"] == 4
+    assert set(figures["provider_credits"]) == {"lusha", "zoominfo", "apollo"}
+    assert figures["provider_credits"]["lusha"]["credits"] == 8       # 2 credits/company
+    assert figures["provider_credits"]["zoominfo"]["credits"] == pytest.approx(4.32)
+    assert figures["anthropic_usd"] == pytest.approx(0.274496)
+    # 4 records at a ceiling of 2 = 2 chunks; 2 webhook executions + 4 sub-executions.
+    assert figures["chunk_count"] == 2
+    assert figures["projected_executions"] == 6
+    assert figures["monthly_execution_allowance"] == 2500
+
+
+def test_the_execution_count_is_labelled_projected_and_never_measured(
+        priced_config, stub_module_transport_factory):
+    transport = stub_module_transport_factory(_priced_plan_reads())
+    figures = _priced_proposal(priced_config, transport, ids=("1", "2"))["envelope"]
+
+    assert figures["basis"]["projected_executions"] == write_grant.PROJECTED
+    assert figures["basis"]["record_count"] == write_grant.MEASURED
+    assert "projected, not measured" in figures["block"]
+
+
+def test_an_unreadable_provider_balance_reads_unconfirmed_never_as_headroom(
+        priced_config, stub_module_transport_factory):
+    """cost_guard's tri-state, carried through unchanged: Apollo exposes no credit pool on
+    this account, and rendering that as zero would be a standing false alarm."""
+    transport = stub_module_transport_factory(_priced_plan_reads())
+    figures = _priced_proposal(priced_config, transport, ids=("1",))["envelope"]
+
+    assert figures["verdicts"]["apollo"]["verdict"] == "unknown"
+    assert figures["verdicts"]["apollo"]["remaining_credits"] is None
+    assert figures["verdicts"]["lusha"]["verdict"] == "ok"
+
+    block = figures["block"]
+    assert "unconfirmed" in block
+    assert "| apollo | unknown | unknown | unconfirmed |" in block
+
+
+def test_an_insufficient_balance_is_not_collapsed_into_unconfirmed(
+        priced_config, stub_module_transport_factory):
+    """The other side of the same branch: a READ balance that is genuinely too small must
+    read as too small, not as unknown."""
+    transport = stub_module_transport_factory(_priced_plan_reads(_balances(lusha=1)))
+    figures = _priced_proposal(priced_config, transport, ids=("1", "2"))["envelope"]
+
+    assert figures["verdicts"]["lusha"]["verdict"] == "insufficient"
+    assert "NOT ENOUGH" in figures["block"]
+
+
+def test_the_envelope_carries_the_rate_tables_measured_on_date_and_its_age(
+        priced_config, stub_module_transport_factory):
+    from datetime import date
+
+    transport = stub_module_transport_factory(_priced_plan_reads())
+    proposal = write_grant.plan_grant(
+        priced_config, lanes=["enrichment"], object_type="companies",
+        record_ids=["1"], record_domains=[], allow_create=False, label="dated",
+        transport=transport, today=date(2026, 8, 25))
+
+    figures = proposal["envelope"]
+    assert figures["rates_measured_on"] == "2026-07-30"
+    assert figures["rate_table_age_days"] == 26
+    assert "Rates measured **2026-07-30**, 26 days ago" in figures["block"]
+
+
+def test_a_config_with_no_allowance_key_degrades_one_line_not_the_whole_open(
+        priced_config, stub_module_transport_factory):
+    config = {k: v for k, v in priced_config.items()
+              if k != "n8n_monthly_execution_allowance"}
+    transport = stub_module_transport_factory(_priced_plan_reads())
+
+    proposal = _priced_proposal(config, transport, ids=("1", "2"))
+    figures = proposal["envelope"]
+
+    assert proposal["kind"] == write_grant.PROPOSAL_KIND, "an absent key must not refuse"
+    assert figures["allowance_configured"] is False
+    assert figures["monthly_execution_allowance"] is None
+    assert figures["basis"]["monthly_execution_allowance"] == write_grant.UNCONFIGURED
+    # Every other figure still computed.
+    assert figures["record_count"] == 2
+    assert figures["projected_executions"] == 3
+    assert figures["anthropic_usd"] is not None
+    assert "unconfigured" in figures["block"]
+
+
+def test_a_missing_chunk_ceiling_degrades_the_projection_not_the_grant(
+        granting_config, stub_module_transport_factory):
+    """`chunk_ceiling` refuses to guess a timeout bound — correctly, for a dispatch. A
+    PROJECTION must not inherit that refusal and take the whole grant down with it."""
+    transport = stub_module_transport_factory([_workflow_list()])
+    proposal = _proposal(granting_config, transport)   # fake_config has no ceiling key
+
+    figures = proposal["envelope"]
+    assert proposal["kind"] == write_grant.PROPOSAL_KIND
+    assert figures["projected_executions"] is None
+    assert figures["basis"]["projected_executions"] == write_grant.UNCONFIGURED
+    assert figures["anthropic_usd"] is not None
+    assert "not projected" in figures["block"]
+
+
+def test_the_block_says_the_ceiling_discloses_rather_than_constrains(
+        priced_config, stub_module_transport_factory):
+    """D-53-02, in the operator's own register and not only in a docstring. A number
+    labelled ceiling that cannot refuse anything must say so where it is read."""
+    transport = stub_module_transport_factory(_priced_plan_reads())
+    block = _priced_proposal(priced_config, transport)["envelope"]["block"]
+
+    assert "they do not prevent it" in block
+    assert "name a smaller batch" in block.lower()
+
+
+def test_the_block_states_the_remaining_allowance_gap(
+        priced_config, stub_module_transport_factory):
+    """An operator reading a share-of-allowance figure will otherwise assume it accounts
+    for what the schedulers have already spent this month. It does not."""
+    transport = stub_module_transport_factory(_priced_plan_reads())
+    figures = _priced_proposal(priced_config, transport)["envelope"]
+
+    assert figures["remaining_allowance_sampled"] is False
+    assert "not against what is left of it this month" in figures["block"]
+
+
+def test_the_envelope_is_attached_to_the_grant_unchanged(
+        priced_config, stub_module_transport_factory):
+    """What was shown and what the grant is bound to are the same figures — not a
+    recomputation that could differ from the one the operator read."""
+    transport = stub_module_transport_factory(_priced_plan_reads())
+    proposal = _priced_proposal(priced_config, transport, ids=("1", "2", "3"))
+
+    grant = write_grant.open_grant(proposal, "yes", priced_config)
+
+    assert grant["envelope"] == proposal["envelope"]
+    assert grant["envelope"]["record_count"] == 3
+
+
+def test_a_refused_open_still_tells_the_operator_what_the_batch_would_have_cost(
+        priced_config, stub_module_transport_factory):
+    transport = stub_module_transport_factory(_priced_plan_reads())
+    proposal = _priced_proposal(priced_config, transport, ids=("1", "2"))
+
+    refused = write_grant.open_grant(proposal, "no", priced_config)
+
+    assert refused["outcome"] == write_grant.REFUSED
+    assert refused["envelope"]["record_count"] == 2
+
+
+def test_no_status_post_is_made_when_the_batch_prices_no_provider(
+        granting_config, stub_module_transport_factory):
+    """A grant that runs no provider has no balance to read, so it reads none."""
+    transport = stub_module_transport_factory([_workflow_list()])
+    figures = _proposal(granting_config, transport)["envelope"]
+
+    assert transport.verbs == ["get"]
+    assert figures["provider_credits"] == {}
+    assert "No provider credits: **0**" in figures["block"]
+
+
+# --- the at-the-yes disclosure (D-53-05) --------------------------------------------------
+
+def test_a_two_lane_grant_names_both_lanes_and_states_the_preview_trade(
+        granting_config, stub_module_transport_factory):
+    """D-53-05's traded protection, pinned by a test rather than by prose. This is the ONE
+    rendering the operator reads AT THE YES — the skill contract pins SKILL.md and the
+    53-04 checkpoint pins the human walk, but neither pins this sentence."""
+    transport = stub_module_transport_factory([_workflow_list(), _workflow_list()])
+    proposal = _proposal(granting_config, transport, lanes=("enrichment", "contacts"))
+
+    consequence = proposal["consequence"]
+    # Both lanes NAMED INDIVIDUALLY — never collapsed into a collective phrase.
+    assert "enrichment lane" in consequence
+    assert "contacts lane" in consequence
+    assert write_grant.LANES["enrichment"] in consequence
+    assert write_grant.LANES["contacts"] in consequence
+    # And the sentence the ordering protection was traded FOR.
+    assert "BEFORE the enriched preview exists" in consequence
+
+
+def test_a_single_lane_grant_claims_no_preview_trade_that_is_not_happening(
+        granting_config, stub_module_transport_factory):
+    transport = stub_module_transport_factory([_workflow_list()])
+    consequence = _proposal(granting_config, transport)["consequence"]
+
+    assert "enrichment lane" in consequence
+    assert "contacts" not in consequence
+    assert "enriched preview" not in consequence
+
+
+def test_the_consequence_carries_the_arm_dispatch_register_in_full(
+        granting_config, stub_module_transport_factory):
+    """53-CONTEXT's <specifics>: what turns on, bounded to what, what turns it off, and
+    what happens if turning it off fails. All four, or the operator is approving a
+    sentence that answers three of their questions."""
+    transport = stub_module_transport_factory([_workflow_list()])
+    consequence = _proposal(granting_config, transport, domains=("known.example",))[
+        "consequence"]
+
+    assert "live writes will be enabled" in consequence.lower()      # what turns on
+    assert "bounded to exactly" in consequence                       # bounded to what
+    assert "OWN armed window" in consequence                         # what turns it off
+    assert "disarm fails" in consequence                             # and if that fails
+    assert "an admin must check n8n" in consequence
