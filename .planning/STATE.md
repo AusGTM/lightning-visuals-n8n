@@ -8,7 +8,7 @@ status: awaiting-operator-walk
 stopped_at: "Phase 53: all 4 plans have SUMMARYs; 53-04 tasks 1-2 done. BLOCKING: task 3, the operator walk, is outstanding and is the only evidence GRANT-01 accepts. An admin has set allow_write_grants (done). Three gap fixes landed FROM the partial walk: 0.15.1 (D-53-06, a grant must remove BOTH asks), 0.16.0 (people form; LinkedIn URL was normalising to the domain linkedin.com), 0.16.1 (accept a company by name alone). Phases 58-59 recorded from the same walk. Phase 52 (v1.0) still deferred."
 last_updated: "2026-08-25T08:10:00.000Z"
 last_activity: 2026-08-25
-last_activity_desc: "Phase 53 code complete and released at plugin 0.16.1; the walk itself surfaced three defects the tests could not, all fixed; the walk is unfinished"
+last_activity_desc: "Phase 53 code complete at plugin 0.16.1; the walk is the outstanding blocker. Operator set the order: finish the walk, then Phase 58 (take what the operator actually has), then Phase 54 (single-pass dispatch)"
 progress:
   total_phases: 7
   completed_phases: 0
