@@ -1,10 +1,10 @@
 ---
 schema_version: 1
-open_count: 13
+open_count: 15
 waived_count: 3
 fixed_count: 6
-total_count: 22
-last_updated: 2026-08-23T08:58:35.944Z
+total_count: 24
+last_updated: 2026-08-25T06:10:09.525Z
 ---
 
 # Broken Windows Ledger
@@ -37,6 +37,8 @@ last_updated: 2026-08-23T08:58:35.944Z
 | 20 | 260823-ono | deviation | scripts/check_tier_derived_parity.py |  | Quick task 260823-ono (metro peak-body named-account override): MRC (Melbourne Racing Club, 9604614548) now diverges between lv_icp_tier (archived, frozen at 'C') and lv_icp_tier_derived (correctly floors to 'B' via lv_named_account_score_floor=60). Pre-registered in KNOWN_STUCK_TRANSITIONS before the CP2 formula push / CP3 record PATCH, not discovered after. Permanent by construction: lv_icp_tier was archived in Phase 50 (D-24) and can never be recalculated again -- unlike WINDOWS.md ids 9-12/14 (WF1-staleness, fixable in principle by a fresh non-identical write), this divergence never closes. The derived value is the correct one. | waived | deliberate consequence of the approved lv_named_account_score_floor=60 override; the archived enum is frozen by construction and the derived value is the correct one | 2026-08-23T08:58:13.393Z | 2026-08-23T08:58:35.792Z |
 | 21 | 260823-ono | deviation | scripts/check_tier_derived_parity.py |  | Quick task 260823-ono (metro peak-body named-account override): Perth Racing (9604794662) now diverges between lv_icp_tier (archived; live-read 2026-08-23 shows the key entirely absent -- it was never enriched before this override, so the archived enum never held a value) and lv_icp_tier_derived (correctly floors to 'B' via lv_named_account_score_floor=60 on all-blank inputs). Pre-registered in KNOWN_STUCK_TRANSITIONS as (None, 'B') before the CP2 formula push / CP3 record PATCH, not discovered after. Same class as MRC's entry (permanent by construction, archived property frozen forever) and the same polarity as WINDOWS.md id 14, NOT the WF1-staleness cause of ids 9-12: the derived value is the correct one. | waived | deliberate consequence of the approved lv_named_account_score_floor=60 override; the archived enum is frozen by construction and the derived value is the correct one | 2026-08-23T08:58:20.790Z | 2026-08-23T08:58:35.944Z |
 | 22 | 260823-ono | deviation | scripts/backfill_dry_run.py |  | Quick task 260823-ono (metro peak-body named-account override): a forward-looking CLASS, not one script (same pattern as WINDOWS.md id 18) -- oracle consumers whose fetch lists lack lv_named_account_score_floor will under-score the five named accounts (ATC, MRC, SSR, BRC, Perth Racing), scoring them without the score floor. scripts/backfill_dry_run.py is the Phase-52-urgent instance: build_dry_run_row builds HubSpotRecord(properties={}) and PAYLOAD_INPUT_PROPS has no entry for the number property, so a dry-run row for any of the five would compute the pre-floor score. simulate_rubric_weights.py and enrich_coverage_companies.py are in the same family (same missing-fetch-list shape). tests/scoring_fixtures.py::FIT_SCORE_PROPS was updated in this same commit (the oracle's own comparison-harness read path), but that fix does not propagate to these other consumers. | open |  | 2026-08-23T08:58:29.783Z |  |
+| 23 | 53 | stub | operator-claude-plugin/scripts/write_grant.py |  | grant['envelope'] is always None -- GRANT-02's arithmetic is 53-02 T1 (deliberate seam, initialised so 53-02 fills rather than reshapes) | open |  | 2026-08-25T06:10:09.375Z |  |
+| 24 | 53 | stub | operator-claude-plugin/scripts/write_grant.py |  | grant['consecutive_disarm_failures'] is always 0 -- D-53-04's guardrail B is 53-02 T2/T3 (deliberate seam) | open |  | 2026-08-25T06:10:09.525Z |  |
 
 ````json
 [
@@ -302,6 +304,30 @@ last_updated: 2026-08-23T08:58:35.944Z
     "status": "open",
     "reason": "",
     "recorded_at": "2026-08-23T08:58:29.783Z",
+    "resolved_at": null
+  },
+  {
+    "id": 23,
+    "kind": "stub",
+    "phase": "53",
+    "file": "operator-claude-plugin/scripts/write_grant.py",
+    "line": null,
+    "description": "grant['envelope'] is always None -- GRANT-02's arithmetic is 53-02 T1 (deliberate seam, initialised so 53-02 fills rather than reshapes)",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-08-25T06:10:09.375Z",
+    "resolved_at": null
+  },
+  {
+    "id": 24,
+    "kind": "stub",
+    "phase": "53",
+    "file": "operator-claude-plugin/scripts/write_grant.py",
+    "line": null,
+    "description": "grant['consecutive_disarm_failures'] is always 0 -- D-53-04's guardrail B is 53-02 T2/T3 (deliberate seam)",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-08-25T06:10:09.525Z",
     "resolved_at": null
   }
 ]

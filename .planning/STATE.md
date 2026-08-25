@@ -2,18 +2,18 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Unattended Session Runs
-current_phase: 53
+current_phase: 51
 current_phase_name: Operator-openable write grant
-status: discussed
-stopped_at: "53-CONTEXT.md written (4 decisions D-53-01..04, two proposed guardrails the planner must surface as tasks). Ready for /gsd-plan-phase 53. Phase 52 (v1.0 staged canary) DEFERRED by operator 2026-08-25 -- on resume, re-derive Phase 51 population/credit sizing (artifacts dated 2026-08-19, they drift) and resolve the deferred FILL-04 third disposition."
-last_updated: "2026-08-25T01:45:00.000Z"
+status: executing
+stopped_at: "53-01 COMPLETE (write grant: authority + shape + scope, 3 commits, full suite green). Next: 53-02 (envelope, revocation/expiry, the two guardrails). Phase 52 (v1.0 staged canary) DEFERRED by operator 2026-08-25 -- on resume, re-derive Phase 51 population/credit sizing (artifacts dated 2026-08-19, they drift) and resolve the deferred FILL-04 third disposition."
+last_updated: "2026-08-25T06:08:56.417Z"
 last_activity: 2026-08-25
-last_activity_desc: "v1.1 defined and planned (phases 53-57) after a client UAT; Phase 52 deferred by the operator; starting Phase 53"
+last_activity_desc: Phase 53 plan 01 complete -- an operator-openable write grant arms live writes with no shell (G-2 removed on the interactive path)
 progress:
   total_phases: 2
   completed_phases: 1
-  total_plans: 3
-  completed_plans: 3
+  total_plans: 7
+  completed_plans: 4
   percent: 50
 ---
 
@@ -27,7 +27,6 @@ session grant, then an unattended run through to HubSpot write. Requirements:
 planned 2026-08-25 as phases 53-57 (`.planning/milestones/v1.1-ROADMAP.md`); Phase 52 remains v1.0's. Client UAT of the operator write path recorded four gaps (`.planning/quick/260825-contact-company-association/UAT.md`) — G-2 is a blocker: `ALLOW_N8N_ARM` must be set in the session's shell environment, which an operator in Claude Desktop cannot do, so every write to date was landed by an admin from a terminal. Note the milestone's own framing: consent and throughput are two problems, and the
 2-record request ceiling plus the 2,500/month execution budget mean auto-approval alone does
 not deliver an unattended batch.
-
 
 ## ✅ PHASE 50 — ALL 6 PLANS COMPLETE, RETIREMENT DONE (D-24 override) (2026-08-14)
 
@@ -244,8 +243,8 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-19T07:49:43.387Z
-**Stopped at:** 51-03: COMPLETE -- operator approved after five checkpoint rounds. Phase 51 dry-run artifacts final. n8n country debt tracked as WINDOWS.md id 19. Ready for Phase 52 planning
+**Last session:** 2026-08-25T06:08:01.756Z
+**Stopped at:** 53-01 COMPLETE — write grant authority, shape and scope. Next: 53-02
 **Resume file:** None
 
 ## Performance Metrics
@@ -315,6 +314,7 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 | Phase 51 P02 | ~25min | 3 tasks | 5 files |
 | Phase 51 P03 | ~15min | 2 tasks | 5 files |
 | Phase 51 P03 | 4h | 3 tasks | 30 files |
+| Phase 53 P01 | 4min | 3 tasks | 5 files |
 
 ## Decisions
 
@@ -341,6 +341,9 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: Checkpoint round 3: Sonnet judge escalation wired into the dry-run research lane (CLAUDE.md SS15.1, reusing src.validator_sonnet.validate_conflict_with_sonnet verbatim; fixed a shared temperature=0 bug that 400s on claude-sonnet-5); Run 3 predictions regenerated over the same 8 companies at zero additional ZoomInfo cost. Result: Gold Coast and Warwick both settle at Tier C (unresolved conflict left absent, clears no hard veto), not the Tier D expected -- reported as observed, not smoothed. No Tier A/B produced across three runs. 27 Anthropic calls this round (24 research + 3 judge), zero ZoomInfo credits
 - [Phase ?]: Checkpoint round 4: unresolved lv_produces_content conflicts (Warwick, Gold Coast, Tasmanian) now flagged lv_icp_needs_review=true with a specific reason in the predicted payload, distinguishing them from genuinely-assessed Tier C/D. lv_icp_needs_review confirmed live (contra CLAUDE.md SS4.0's stale never-created claim); lv_enrichment_review_reason reused for the reason text. Zero additional API spend -- payload-shape change over Run 3's settled results. Run 3 pre-flag archived as *-run3-judge-escalation.json
 - [Phase ?]: Checkpoint round 5: OPERATOR APPROVED the dry-run artifacts -- Phase 51 Plan 03 (and Phase 51) complete after five checkpoint rounds. n8n's matching country blind spot (normalizeProviders.js:420-422, same defect the dry-run's country guard fixes) recorded as tracked debt (WINDOWS.md id 19) rather than fixed -- explicit operator ruling not to touch n8n this phase (zero n8n changes/executions is v1.0's binding constraint). Final totals: 13 ZoomInfo credits, 103 Anthropic calls, zero HubSpot writes, zero n8n executions
+- [Phase ?]: [Phase 53-01]: D-53-01 landed: the interactive arm's authority is config_gate.WRITE_GRANT_SETTINGS_KEY ('allow_write_grants') in operator.local.json, compared by identity against the JSON boolean true. ALLOW_N8N_ARM is unchanged and remains the sole authority for headless/cron (scheduled_arm.py, unedited).
+- [Phase ?]: [Phase 53-01]: GRANT-03 is enforced inside n8n_arming.arm_for_dispatch's grant branch, before any transport is constructed, via the single write_grant.covers implementation -- not only at a helper a caller could bypass.
+- [Phase ?]: [Phase 53-01]: The grant is a plain JSON-shaped dict held in the conversation only: no file, no env var, no default (GRANT-06/D-53-03). Per-send armed windows are retained, so the guaranteed disarm is untouched.
 
 ### Roadmap Evolution
 
