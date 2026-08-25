@@ -388,12 +388,24 @@ def test_authorize_ungranted_send_never_widens_beyond_this_sends_own_records(
     assert decision["grant"]["lanes"] == ["enrichment"]
 
 
-def test_authorize_ungranted_send_returns_the_same_shape_authorize_send_does():
+def test_authorize_ungranted_send_returns_the_same_shape_authorize_send_does(
+        granting_config, stub_module_transport_factory):
     """A lane skill's dispatch code branches on `decision["armed"]` identically whichever
-    function produced it — both must return exactly these five keys."""
+    function produced it — both must return exactly these five keys. RECORDED EDIT
+    (F2 archive follow-up, 2026-08-25): the original body only ever called
+    `authorize_send(None, ...)` and never touched `authorize_ungranted_send` at all, so
+    the docstring's "both must return exactly these five keys" claim was unverified for
+    one of the two named functions. Now calls both against the same shape assertion."""
     with_grant = write_grant.authorize_send(
         None, lane="enrichment", record_ids=[RECORD_ID], record_domains=[])
     assert set(with_grant) == {"armed", "workflow_id", "grant", "refusal", "detail"}
+
+    transport = stub_module_transport_factory(_plan_reads())
+    ungranted = write_grant.authorize_ungranted_send(
+        granting_config, lane="enrichment", object_type="companies",
+        record_ids=[RECORD_ID], record_domains=[], allow_create=False,
+        label="this send", transport=transport)
+    assert set(ungranted) == {"armed", "workflow_id", "grant", "refusal", "detail"}
 
 
 def test_authorize_ungranted_sends_grant_never_reaches_arm_for_dispatch_with_grant_none():
