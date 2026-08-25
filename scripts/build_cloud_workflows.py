@@ -1748,6 +1748,9 @@ ENRICH_ZOOMINFO_CACHED = _zoom_preamble(
 const ZOOM_OUTPUT_FIELDS = [
   "id", "firstName", "lastName", "email", "phone", "mobilePhone", "jobTitle",
   "managementLevel", "contactAccuracyScore", "validDate", "lastUpdatedDate",
+  // city/state/country: LIVE-verified valid on this account 2026-08-26
+  // (scripts/probe_zoominfo_location_fields.mjs; zipCode/metroArea also valid, unused).
+  "city", "state", "country",
 ];
 function toMatchPersonInput(id) {
   const m = {};
@@ -3791,6 +3794,9 @@ const sd = $getWorkflowStaticData("global");
 const ZOOM_OUTPUT_FIELDS = [
   "id", "firstName", "lastName", "email", "phone", "mobilePhone", "jobTitle",
   "managementLevel", "contactAccuracyScore", "validDate", "lastUpdatedDate",
+  // city/state/country: LIVE-verified valid on this account 2026-08-26
+  // (scripts/probe_zoominfo_location_fields.mjs; zipCode/metroArea also valid, unused).
+  "city", "state", "country",
 ];
 function toMatchPersonInput(id) {
   const m = {};

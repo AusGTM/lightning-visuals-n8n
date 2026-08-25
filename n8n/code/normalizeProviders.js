@@ -433,13 +433,14 @@ function zoominfoCandidates(rawResponse, objectType) {
   const raw = _zoomRecord(rawResponse) || {};
   const recency = raw.validDate || raw.lastUpdatedDate;
   if (objectType === "contacts") {
-    // 260826-20w Task 2 commit 1: NO location candidates added here, deliberately. Live
-    // GTM contact enrich (execution 11948) returned attributes {company,
-    // contactAccuracyScore, directPhoneDoNotCall, firstName, jobTitle, lastName,
-    // lastUpdatedDate, managementLevel, mobilePhone, mobilePhoneDoNotCall, validDate} —
-    // no city/state/country/location field of any shape. There is no verified outputField
-    // to map (260826-20w-CALIBRATION.md §f); mapping one blind would risk staging a
-    // field ZoomInfo never actually returns.
+    // Location candidates: LIVE-verified 2026-08-26 (scripts/
+    // probe_zoominfo_location_fields.mjs, FULL_MATCH probe on this account): GTM
+    // contacts/enrich ACCEPTS outputFields city/state/country/zipCode/metroArea —
+    // `country` came back populated ("Australia"), city/state null for that contact
+    // but schema-valid. Requested in ZOOM_OUTPUT_FIELDS (build_cloud_workflows.py)
+    // as city/state/country; mapped below with the same code-shaped-only rule for
+    // hs_* codes as Lusha/Apollo. rejected by the same probe: location, region,
+    // personCity/personState/personCountry (400 PFAPI0009).
     const fullMatch = raw.matchStatus === "FULL_MATCH" || raw.matchStatus === undefined;
     // matchStatus != FULL_MATCH drops person fields entirely (§2).
     if (!fullMatch) return out;
@@ -449,9 +450,9 @@ function zoominfoCandidates(rawResponse, objectType) {
       ? scoreNum / 100 : 0.6;
     _push(out, "email", src, raw.email, normalizeEmailBasic(raw.email), acc, recency);
     // Phones: structural 0.8 (no per-field grade) per §2 "mobilePhone present=0.8".
-    // ZoomInfo GTM enrich returns no country field, so region falls back to the AU
-    // heuristic; E.164 numbers pass through, non-AU national is null-dropped (safe).
-    // (Add a verified `country` outputField later to parse non-AU ZoomInfo nationals.)
+    // `country` is now a verified, requested outputField (probe 2026-08-26), so non-AU
+    // ZoomInfo nationals parse with their real region; absent country still falls back
+    // to the AU heuristic inside normalizePhone.
     const region = _iso2(raw.country);
     const phone = normalizePhone(raw.phone, region);
     if (phone) _push(out, "phone", src, raw.phone, phone, 0.8, recency);
@@ -461,6 +462,19 @@ function zoominfoCandidates(rawResponse, objectType) {
     // managementLevel is an array (["Director"]) in the live GTM response; take the first.
     const ml = Array.isArray(raw.managementLevel) ? raw.managementLevel[0] : raw.managementLevel;
     _push(out, "seniority", src, ml, _norm(ml), acc, recency);
+    // Location (probe-verified outputFields, 2026-08-26). Same shape as Lusha/Apollo:
+    // names as-is; hs_* codes only from an already-code-shaped value, never a lookup.
+    _push(out, "city", src, raw.city, _norm(raw.city), 0.6, recency);
+    _push(out, "state", src, raw.state, _norm(raw.state), 0.6, recency);
+    _push(out, "country", src, raw.country, _norm(raw.country), 0.6, recency);
+    const ziCountryCode = _codeShaped(raw.country, 2, 2);
+    if (ziCountryCode) {
+      _push(out, "hs_country_region_code", src, raw.country, ziCountryCode, 0.6, recency);
+    }
+    const ziStateCode = _codeShaped(raw.state, 2, 3);
+    if (ziStateCode) {
+      _push(out, "hs_state_code", src, raw.state, ziStateCode, 0.6, recency);
+    }
   } else {
     // UNITS: GTM `revenue` is in THOUSANDS, not dollars — confirmed live against three
     // records (Racing NSW 268163 + revenueRange "$250 mil. - $500 mil."; ZoomInfo 1254000

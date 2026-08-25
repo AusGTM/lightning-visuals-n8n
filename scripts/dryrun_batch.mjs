@@ -133,8 +133,10 @@ async function apollo(id) {
 
 // --- ZoomInfo GTM: mint token (Basic client creds) then enrich (Bearer) ------
 // LIVE-verified valid outputFields (matchStatus is in meta, not an outputField).
+// city/state/country verified 2026-08-26 via scripts/probe_zoominfo_location_fields.mjs.
 const ZOOM_OUTPUT_FIELDS = ["id", "firstName", "lastName", "email", "phone", "mobilePhone",
-  "jobTitle", "managementLevel", "contactAccuracyScore", "validDate", "lastUpdatedDate"];
+  "jobTitle", "managementLevel", "contactAccuracyScore", "validDate", "lastUpdatedDate",
+  "city", "state", "country"];
 let _zoomToken = null;
 async function zoomMint() {
   const cid = process.env.ZOOMINFO_CLIENT_ID, csec = process.env.ZOOMINFO_CLIENT_SECRET;

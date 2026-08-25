@@ -116,3 +116,44 @@ test("toCandidates('zoominfo', ..., 'contacts') emits no location candidates (no
     assert.ok(!byField(cands, f), `zoominfo must not emit a ${f} candidate`);
   }
 });
+
+// --- ZoomInfo: flat attributes city/state/country -> same five candidates -------------
+// outputFields city/state/country LIVE-verified on this account 2026-08-26 via
+// scripts/probe_zoominfo_location_fields.mjs (HTTP 200, FULL_MATCH, country populated).
+test("toCandidates('zoominfo', <GTM attrs with city/state/country>, 'contacts') yields the location candidates", () => {
+  const raw = {
+    data: [{
+      type: "Contact", id: "1",
+      meta: { matchStatus: "FULL_MATCH" },
+      attributes: {
+        firstName: "John", lastName: "Tsatsimas", jobTitle: "CEO",
+        contactAccuracyScore: "91.0", validDate: "2026-08-01",
+        city: "Sydney", state: "NSW", country: "Australia",
+      },
+    }],
+  };
+  const cands = toCandidates("zoominfo", raw, "contacts");
+  assert.equal(byField(cands, "city").value, "Sydney");
+  assert.equal(byField(cands, "state").value, "NSW");
+  assert.equal(byField(cands, "country").value, "Australia");
+  // "NSW" is code-shaped (2-3 chars) -> hs_state_code; "Australia" is a name -> no
+  // hs_country_region_code (code-shaped-only rule, no name->code lookup).
+  assert.equal(byField(cands, "hs_state_code").normalizedValue, "NSW");
+  assert.ok(!byField(cands, "hs_country_region_code"),
+    "country NAME must not become hs_country_region_code (code-shaped only)");
+});
+
+test("toCandidates('zoominfo', ...): null city/state (the live John probe shape) emits no null candidates", () => {
+  const raw = {
+    data: [{
+      type: "Contact", id: "1",
+      meta: { matchStatus: "FULL_MATCH" },
+      attributes: { firstName: "John", lastName: "Tsatsimas", country: "Australia",
+        city: null, state: null, contactAccuracyScore: "91.0" },
+    }],
+  };
+  const cands = toCandidates("zoominfo", raw, "contacts");
+  assert.ok(!byField(cands, "city"), "null city emits no candidate");
+  assert.ok(!byField(cands, "state"), "null state emits no candidate");
+  assert.equal(byField(cands, "country").value, "Australia");
+});
