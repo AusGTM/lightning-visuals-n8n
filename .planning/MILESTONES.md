@@ -2,7 +2,9 @@
 
 ## v1.1 Unattended Session Runs (Defined 2026-08-25 — NOT STARTED)
 
-**Requirements:** `.planning/milestones/v1.1-REQUIREMENTS.md`. Phases unplanned.
+**Requirements:** `.planning/milestones/v1.1-REQUIREMENTS.md`. **Roadmap:** `.planning/milestones/v1.1-ROADMAP.md` — 5 phases, 53–57 (52 stays v1.0's). **UAT evidence:** `.planning/quick/260825-contact-company-association/UAT.md` (G-1..G-4).
+
+**Decisions taken 2026-08-25:** the grant is operator-openable in Claude (the `ALLOW_N8N_ARM` env var stops being the interactive authority); grant first, then a single async pass; first slice is the full pair pipeline with creates included.
 
 **Source:** a UAT walkthrough with the end client, 2026-08-25. Their verdict: the flow is
 "incredibly halting" — every send needs its own preview, arming phrase and confirmation, which

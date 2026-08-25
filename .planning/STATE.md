@@ -24,7 +24,7 @@ progress:
 Client UAT verdict: the flow is "incredibly halting" — one grant per send does not scale. One
 session grant, then an unattended run through to HubSpot write. Requirements:
 `.planning/milestones/v1.1-REQUIREMENTS.md`; MILESTONES.md carries the summary. Phases
-unplanned. Note the milestone's own framing: consent and throughput are two problems, and the
+planned 2026-08-25 as phases 53-57 (`.planning/milestones/v1.1-ROADMAP.md`); Phase 52 remains v1.0's. Client UAT of the operator write path recorded four gaps (`.planning/quick/260825-contact-company-association/UAT.md`) — G-2 is a blocker: `ALLOW_N8N_ARM` must be set in the session's shell environment, which an operator in Claude Desktop cannot do, so every write to date was landed by an admin from a terminal. Note the milestone's own framing: consent and throughput are two problems, and the
 2-record request ceiling plus the 2,500/month execution budget mean auto-approval alone does
 not deliver an unattended batch.
 
