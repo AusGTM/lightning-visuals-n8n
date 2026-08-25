@@ -343,7 +343,35 @@ shell — from being achieved.
 
 ## Issues Encountered
 
-None. No auth gates, no architectural decisions, no package installs.
+No auth gates, no architectural decisions, no package installs. One tooling defect, worth
+recording because the next executor will hit it:
+
+**`gsd-tools query state.advance-plan` corrupted `.planning/STATE.md` and was repaired by
+hand.** Run at closeout, the verb set `current_phase: 53 -> 51`, reported
+`{reason: "last_plan", current_plan: 3, total_plans: 3}` (phase 51's shape, not phase 53's
+four plans), and flattened both `stopped_at` and `last_activity_desc`, discarding the
+carried Phase-52-deferral context the previous session had left there. The follow-on
+`state.update-progress` then recomputed the body's legacy `Progress:` line against the same
+stale v0.9 scan (100% -> 57%).
+
+Repaired by hand in the same session: `current_phase` back to 53, `status: executing`,
+`stopped_at` restored *with* the Phase 52 deferral note plus the 53-01 completion,
+`progress` set to honest v1.1 values (5 phases, 4 plans in phase 53, 1 complete), and the
+legacy `Progress:` line restored. The metric row and session timestamp the verbs added are
+correct and were kept. Same family as the already-recorded
+`phase-complete-workstream-guard-misfires` note: **read `git diff .planning/STATE.md` after
+running these verbs — do not assume they wrote what they reported.**
+
+**`gsd-tools query requirements.mark-complete` was a no-op** (`not_found` for all three
+GRANT ids): it reads `.planning/REQUIREMENTS.md`, while v1.1's requirements live at
+`.planning/milestones/v1.1-REQUIREMENTS.md`. That file was edited directly instead — see
+Deviations for why only GRANT-03 was ticked.
+
+**`gsd-tools query roadmap.update-plan-progress 53` was also a no-op** (reported
+`status: "In Progress"` but modified no file): phase 53 has no plans-progress row in
+`.planning/ROADMAP.md`; its plan list is a checkbox block in
+`.planning/milestones/v1.1-ROADMAP.md`. `53-01-PLAN.md`'s checkbox was ticked there
+directly.
 
 ## User Setup Required
 
