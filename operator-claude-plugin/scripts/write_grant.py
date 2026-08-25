@@ -674,6 +674,69 @@ def revoke_grant(grant):
 revoke = revoke_grant
 
 
+def authorize_send(grant, *, lane, record_ids, record_domains):
+    """The ONE function a lane skill calls to turn an open grant into the `armed` argument
+    `chunking.dispatch_plan` already takes. Returns a dict carrying:
+
+        armed        the bool `dispatch_plan`/`dispatch_enrichment` take, with no default
+        workflow_id  the lane's id, for `armed_window`
+        grant        the grant to hand to `armed_window` (unchanged)
+        refusal      `check_before_send`'s refusal, or None
+        detail       one sentence for the operator
+
+    NOTHING ELSE ABOUT THE DISPATCH PATH CHANGES. The arm is still
+    `n8n_arming.arm_for_dispatch`, the window is still `armed_window`, the allowlist is
+    still the send's own records, and the arm is still verified by `apply_mutation`'s
+    independent re-read.
+
+    WHAT IT DELIBERATELY DOES NOT DO, both because a later reader will be tempted:
+
+    * **It does not widen the allowlist to the grant's whole record set.** Each send's
+      window stays scoped to THAT SEND's records, which is strictly narrower than the
+      grant. That is the milestone's "arming a session must widen the allowlist to the
+      batch, never to everything", and with D-53-05 accepted it is the only remaining
+      structural protection on the enrich-before-ingest path — the collapse there widened
+      WHEN the approval is given, and this is what keeps it from widening WHAT it covers.
+      This function returns a workflow id and a bool; it never returns a record list, so
+      there is nothing here for a caller to pass to the arm by mistake.
+    * **It does not hold a window open across sends.** Every send opens and closes its
+      own, which is what keeps the guaranteed disarm (53-01's flagged assumption).
+
+    WITH NO GRANT THIS IS NOT A REFUSAL. D-53-04 is explicit that the grant is an ADDITION
+    rather than a replacement: with no grant open, today's per-send arming phrase is
+    unchanged. A bridge that refused the ungranted case would have removed the path it was
+    supposed to leave alone, so `grant=None` returns `armed=False` with `refusal=None` and
+    a detail naming the per-send phrase.
+
+    Pure: no config, no transport, no network. `preflight_before_send` is guardrail B's
+    live read and is a SEPARATE call a lane skill makes with a config in hand — it returns
+    `(grant, None)` on a lane the grant does not cover, so it is not a lane gate and must
+    not be mistaken for one. `check_before_send`, composed here, is the one place a send
+    is refused.
+    """
+    if grant is None:
+        return {
+            "armed": False, "workflow_id": None, "grant": None, "refusal": None,
+            "detail": ("no write grant is open, so this send is on the ordinary per-send "
+                       "path: confirm the arming phrase for this one send, as before."),
+        }
+
+    workflow_id = ((grant or {}).get("workflow_ids") or {}).get(lane)
+    refusal = check_before_send(grant, lane=lane, workflow_id=workflow_id,
+                                record_ids=record_ids, record_domains=record_domains)
+    if refusal:
+        return {"armed": False, "workflow_id": workflow_id, "grant": grant,
+                "refusal": refusal, "detail": refusal["detail"]}
+
+    return {
+        "armed": True, "workflow_id": workflow_id, "grant": grant, "refusal": None,
+        "detail": (f"authorized by the open write grant: live writes for this send only, "
+                   f"bounded to this send's {len(_normalise(record_ids))} record id(s) "
+                   f"and {len(_normalise(record_domains))} domain(s) — narrower than the "
+                   f"grant, never wider."),
+    }
+
+
 def check_before_send(grant, *, lane=None, workflow_id, record_ids, record_domains):
     """The ONE question every send asks: may this send go? None, or a refusal.
 
