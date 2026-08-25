@@ -313,10 +313,10 @@ last_updated: 2026-08-25T06:10:09.525Z
     "file": "operator-claude-plugin/scripts/write_grant.py",
     "line": null,
     "description": "grant['envelope'] is always None -- GRANT-02's arithmetic is 53-02 T1 (deliberate seam, initialised so 53-02 fills rather than reshapes)",
-    "status": "open",
-    "reason": "",
+    "status": "resolved",
+    "reason": "filled by 53-02 T1: plan_grant computes write_grant.envelope() and attaches it",
     "recorded_at": "2026-08-25T06:10:09.375Z",
-    "resolved_at": null
+    "resolved_at": "2026-08-25T00:00:00.000Z"
   },
   {
     "id": 24,
@@ -325,9 +325,33 @@ last_updated: 2026-08-25T06:10:09.525Z
     "file": "operator-claude-plugin/scripts/write_grant.py",
     "line": null,
     "description": "grant['consecutive_disarm_failures'] is always 0 -- D-53-04's guardrail B is 53-02 T2/T3 (deliberate seam)",
+    "status": "resolved",
+    "reason": "filled by 53-02 T2/T3: record_send_outcome writes the counter and guardrail B bounds it",
+    "recorded_at": "2026-08-25T06:10:09.525Z",
+    "resolved_at": "2026-08-25T00:00:00.000Z"
+  },
+  {
+    "id": 25,
+    "kind": "stub",
+    "phase": "53",
+    "file": "operator-claude-plugin/scripts/write_grant.py",
+    "line": null,
+    "description": "CLOSED_CEILING_BREACH has no producer in Phase 53 -- nothing here measures spend as it happens, so the reason is reachable only by a caller that supplies it. Phase 57 makes it fire on its own.",
     "status": "open",
     "reason": "",
-    "recorded_at": "2026-08-25T06:10:09.525Z",
+    "recorded_at": "2026-08-25T00:00:00.000Z",
+    "resolved_at": null
+  },
+  {
+    "id": 26,
+    "kind": "deviation",
+    "phase": "53",
+    "file": "operator-claude-plugin/scripts/write_grant.py",
+    "line": null,
+    "description": "envelope()'s projected_executions (1 webhook execution per chunk + 1 sub-execution per record) is PROJECTED, never measured -- nobody has counted executions for a multi-chunk grant end to end. Labelled projected everywhere it appears; measure in Phase 54.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-08-25T00:00:00.000Z",
     "resolved_at": null
   }
 ]

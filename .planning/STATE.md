@@ -5,15 +5,15 @@ milestone_name: Unattended Session Runs
 current_phase: 53
 current_phase_name: Operator-openable write grant
 status: executing
-stopped_at: "53-01 COMPLETE (write grant: authority + shape + scope, 3 commits, full suite green). Next: 53-02 (envelope, revocation/expiry, the two guardrails). Phase 52 (v1.0 staged canary) DEFERRED by operator 2026-08-25 -- on resume, re-derive Phase 51 population/credit sizing (artifacts dated 2026-08-19, they drift) and resolve the deferred FILL-04 third disposition."
-last_updated: "2026-08-25T06:08:56.417Z"
+stopped_at: "53-02 COMPLETE (envelope arithmetic, five named close reasons, revocation at the next SEND, and BOTH proposed guardrails -- 3 commits, full suite green, zero n8n executions). Next: 53-03 (the one-exchange operator surface). Phase 52 (v1.0 staged canary) DEFERRED by operator 2026-08-25 -- on resume, re-derive Phase 51 population/credit sizing (artifacts dated 2026-08-19, they drift) and resolve the deferred FILL-04 third disposition."
+last_updated: "2026-08-25T07:20:00.000Z"
 last_activity: 2026-08-25
-last_activity_desc: Phase 53 plan 01 complete -- an operator-openable write grant arms live writes with no shell (G-2 removed on the interactive path)
+last_activity_desc: Phase 53 plan 02 complete -- the grant shows its arithmetic before the yes, ends in five named ways, revocation bites at the next send, and both proposed guardrails are working code
 progress:
   total_phases: 5
   completed_phases: 0
   total_plans: 4
-  completed_plans: 1
+  completed_plans: 2
   percent: 50
 ---
 
@@ -243,8 +243,8 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-25T06:08:01.756Z
-**Stopped at:** 53-01 COMPLETE — write grant authority, shape and scope. Next: 53-02
+**Last session:** 2026-08-25T07:20:00.000Z
+**Stopped at:** 53-02 COMPLETE — envelope, five named closes, revocation at the next send, both guardrails. Next: 53-03
 **Resume file:** None
 
 ## Performance Metrics
@@ -315,6 +315,7 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 | Phase 51 P03 | ~15min | 2 tasks | 5 files |
 | Phase 51 P03 | 4h | 3 tasks | 30 files |
 | Phase 53 P01 | 4min | 3 tasks | 5 files |
+| Phase 53 P02 | 35min | 3 tasks | 3 files |
 
 ## Decisions
 
@@ -344,6 +345,10 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: [Phase 53-01]: D-53-01 landed: the interactive arm's authority is config_gate.WRITE_GRANT_SETTINGS_KEY ('allow_write_grants') in operator.local.json, compared by identity against the JSON boolean true. ALLOW_N8N_ARM is unchanged and remains the sole authority for headless/cron (scheduled_arm.py, unedited).
 - [Phase ?]: [Phase 53-01]: GRANT-03 is enforced inside n8n_arming.arm_for_dispatch's grant branch, before any transport is constructed, via the single write_grant.covers implementation -- not only at a helper a caller could bypass.
 - [Phase ?]: [Phase 53-01]: The grant is a plain JSON-shaped dict held in the conversation only: no file, no env var, no default (GRANT-06/D-53-03). Per-send armed windows are retained, so the guaranteed disarm is untouched.
+- [Phase ?]: [Phase 53-02]: D-53-02 landed as DISCLOSURE, and the block says so where the operator reads it: write_grant.envelope() computes the four GRANT-02 figures out of cost_guard + chunking (no second cost model), labels each measured/projected/unconfigured, and states plainly that the projection is against the CONFIGURED monthly allowance rather than what is left of it this month. Phase 57 still carries all the actual spend protection.
+- [Phase ?]: [Phase 53-02]: GRANT_04_REASONS is exactly GRANT-04's five and is pinned BY NAME; guardrail B's two closes are their own constants in GUARDRAIL_B_REASONS. Folding "two consecutive disarm failures" into one of the five would misreport the close the operator most needs to read correctly. close_grant RAISES on free text.
+- [Phase ?]: [Phase 53-02]: GRANT-05 bites at the next SEND, proven by driving a real 3-chunk dispatch_plan with a mid-run revoke and asserting every chunk STILL ran. The drafted two-hand-calls test was refused: it would have passed while GRANT-05 was entirely unimplemented.
+- [Phase ?]: [Phase 53-02]: Both proposed guardrails are working code and neither is switchable (T-53-12). A is plan_grant's MANDATORY preflight and is offer-only (its transport log is pinned to reads only); B's two closes ATTEMPT a disarm through the ungated n8n_arming.disarm, carry the verdict, and CLOSE EVEN WHEN THAT DISARM FAILS.
 
 ### Roadmap Evolution
 
