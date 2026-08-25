@@ -128,8 +128,26 @@ def _row_identity(row, row_number):
     return row.get("hs_object_id") or f"row {row_number}"
 
 
+# `match` (matchProposal.js's `summarizeMatch`) is a SEPARATE fact from `action`: it says
+# how the row's identity was resolved (an exact hit, a same-surname-and-company proposal,
+# no hit, or "could not look"), independent of whether the write-safety gate then allowed
+# the write. Surfacing it is F3's other half — the 2026-08-25 walk's body carried
+# `match.reason: "searched, no hit"` alongside `action: "write_blocked"` and neither
+# reached the operator. The dict key is `match_level`, never `match_tier` — this module's
+# own report is scanned by `test_built_report_object_carries_no_icp_trace_anywhere` for
+# the literal substring "tier" (an ICP-scoping guard, D-10a/D-10b), and `match_tier` would
+# trip a ban that has nothing to do with ICP scoring. `summarizeMatch`'s own field is still
+# named `tier` in the n8n code this reads from; only the PYTHON key changes name.
+def _match_info_for_row(row):
+    match = row.get("match")
+    if not isinstance(match, dict):
+        return None, None
+    return match.get("tier"), match.get("reason")
+
+
 def _build_row_report(row, row_number):
     outcome = _outcome_for_row(row)
+    match_level, match_reason = _match_info_for_row(row)
     return {
         "row_number": row_number,
         "_identity": _row_identity(row, row_number),
@@ -137,6 +155,8 @@ def _build_row_report(row, row_number):
         "outcome": outcome,
         "review_state": _review_state_for_row(row),
         "reason": _OUTCOME_REASON.get(outcome),
+        "match_level": match_level,
+        "match_reason": match_reason,
     }
 
 
@@ -189,6 +209,53 @@ def remaining_credits_from_response(execution):
             return {provider: "unknown" for provider in requested if provider}
 
     return {}
+
+
+# =====================================================================================
+# build_sync_report (F3, 2026-08-25) — the SYNCHRONOUS webhook body, read the same way
+# enrichment_row_ledger() reads the executions API, so a chunk's own response can be
+# relayed honestly without a second fetch and without a lane skill re-deriving the
+# write_blocked -> "blocked" mapping in prose. The 2026-08-25 walk's defect was never
+# that this mapping was missing (it existed here, unused) — it was that
+# `skills/enrich-records/SKILL.md` step 8 never called anything that read the body's
+# `action`/`match` fields at all, and its own "do not claim per-record outcomes" rule
+# (written to stop the client INVENTING outcomes) was read broadly enough to suppress a
+# RECEIVED one instead.
+# =====================================================================================
+
+def build_sync_report(body):
+    """Shape one chunk's synchronous webhook body — `chunking.DispatchOutcome.responses`
+    already carries these, one per chunk that reached the backend — into the same
+    outcome/reason/match shape `_build_row_report` computes from the executions API.
+
+    `body` is whatever `enrichment.dispatch_enrichment` returned for that chunk: normally
+    a JSON array (n8n's `respondWith: allIncomingItems` on "Respond to Webhook" — ONE item
+    per row in the chunk, each carrying the same action/match/hs_object_id/object_type
+    shape `Decide Action`/`Decide Company Action` emit, live-confirmed on execution
+    11948), a bare object for a caller that still hands one row un-wrapped, or
+    `{status_code, text}` — `dispatch_enrichment`'s own fallback when the body could not
+    be parsed as JSON at all.
+
+    Returns `(rows, reason)`. `reason` is `None` on success; `rows` is `[]` and `reason`
+    names what was missing when nothing usable could be read — never an exception, never
+    a partial guess, the same contract `enrichment_row_ledger()` holds. This is a
+    WHOLE-BODY refusal (not best-effort per item): a body shaped unlike a decision
+    response at all (e.g. the `{status_code, text}` fallback) means nothing here can be
+    trusted, not that everything except the odd item can be.
+    """
+    if not isinstance(body, (list, dict)):
+        return [], "the response body was not a JSON object or array"
+    items = body if isinstance(body, list) else [body]
+    if not items:
+        return [], "the response body was an empty array"
+
+    rows = []
+    for i, item in enumerate(items, start=1):
+        if not isinstance(item, dict) or "action" not in item:
+            return [], "the response body did not carry a per-row action"
+        lane = "companies" if item.get("object_type") == "companies" else "contacts"
+        rows.append(_build_row_report({**item, "_lane": lane}, i))
+    return rows, None
 
 
 # =====================================================================================

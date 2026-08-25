@@ -223,18 +223,38 @@ capability; claiming it here would be a guess dressed as a report.
    operator has not said yes to this send, pass nothing and do not call this at
    all.
 
-8. **Report what was sent, and no more than that.** From `outcome.results`, say how many
-   chunks the backend accepted and how many rows were in them. For any chunk that failed,
-   give its short reason as recorded — a non-2xx, an unreachable webhook, or a response
-   that could not be read. A timeout counts as a failure here even though the backend may
-   still be working; say so rather than implying the records were rejected.
+8. **Report what was sent, and relay what the backend actually said about it.** From
+   `outcome.results`, say how many chunks the backend accepted and how many rows were in
+   them. For any chunk that failed, give its short reason as recorded — a non-2xx, an
+   unreachable webhook, or a response that could not be read. A timeout counts as a
+   failure here even though the backend may still be working; say so rather than implying
+   the records were rejected.
+
+   **For every response in `outcome.responses`, read what it actually says before calling
+   that chunk sent.** Import `scripts/report_enrichment.py` (a library here, the same way
+   `scripts/report.py` already is, not a CLI) and call `build_sync_report(response)` on
+   each one. It returns `(rows, reason)`: one row per record the body itself decided on,
+   each carrying `outcome` (created / enriched / blocked / skipped / unknown), `reason`
+   (present for `blocked`/`skipped`), and `match_level`/`match_reason` (how the record was
+   found — high / medium / none / unknown, and why). Relay every one of them by name: a
+   chunk the transport accepted can still carry a `blocked` or `unknown` row inside it, and
+   "the backend accepted 1 chunk, 1 row" must never stand in for that when the row itself
+   says otherwise.
+
+   RECORDED EDIT (F3, 2026-08-25) — never invent what the body does not carry; always
+   relay what it does. This step used to carry a blanket rule against stating any
+   per-record outcome at all, written to stop the client INVENTING an outcome the
+   synchronous body never carried. A live walk hit the old rule read too broadly: a body
+   reading `action: "write_blocked"`, `match.reason: "searched, no hit"` was received and
+   reported as "no failures, nothing to re-send" anyway. The property was never "withhold
+   per-record detail" — it is "never guess beyond what the body says". When
+   `build_sync_report` returns a `reason` instead of rows (the body was not shaped like a
+   decision response at all — the `{status_code, text}` fallback, or an empty or malformed
+   body), say plainly that this lane reports at chunk granularity for that chunk and point
+   the operator at the record in HubSpot — that is the one case where a real gap in the
+   body limits what can be said, not a habit of withholding what it does carry.
 
    If `outcome.failed_batch` is present, say that the failed records have been collected as
    **a batch that can be re-sent** — one well-formed enrichment request, not a list of
    errors — and that re-sending it goes through this same arming gate, because a re-send is
    a send. Name it as the thing to hand to a retry.
-
-   **Do not claim per-record outcomes.** The synchronous response does not carry them, and
-   inventing them from an accepted chunk would report success for records nothing has
-   confirmed. If the operator asks what happened to a specific record, say plainly that
-   this lane reports at chunk granularity and point them at the record in HubSpot.

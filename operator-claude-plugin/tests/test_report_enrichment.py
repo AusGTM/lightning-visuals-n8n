@@ -86,6 +86,122 @@ def test_unrecognised_action_renders_as_unknown_never_a_success():
 
 
 # =====================================================================================
+# match_level/match_reason (F3, 2026-08-25) — matchProposal.js's `summarizeMatch` is a
+# SEPARATE fact from `action`, and the 2026-08-25 walk's body carried both
+# `action: "write_blocked"` and `match.reason: "searched, no hit"` with neither reaching
+# the operator. The dict key is `match_level`, never `match_tier` — see
+# `_scan_text_for_forbidden_terms` below, which bans the literal substring "tier" from
+# every serialized report (D-10a/D-10b, an ICP-scoping guard with no relation to this
+# identity-match concept, but the ban is by substring and does not discriminate).
+# =====================================================================================
+
+def test_match_info_is_surfaced_as_match_level_never_a_key_named_match_tier():
+    row = {"_lane": "contacts", "action": "write_blocked",
+           "match": {"tier": "none", "auto": False, "reason": "searched, no hit"}}
+
+    rendered = report_enrichment._build_row_report(row, 1)
+
+    assert rendered["match_level"] == "none"
+    assert rendered["match_reason"] == "searched, no hit"
+    assert "match_tier" not in rendered
+
+
+def test_a_row_with_no_match_field_at_all_renders_match_info_as_none_not_missing():
+    row = {"_lane": "contacts", "action": "enrich"}
+
+    rendered = report_enrichment._build_row_report(row, 1)
+
+    assert rendered["match_level"] is None
+    assert rendered["match_reason"] is None
+
+
+# =====================================================================================
+# build_sync_report — the SYNCHRONOUS webhook body, live-shaped from execution 11948.
+# =====================================================================================
+
+def _walk_11948_body():
+    """The execution 11948 body, as `respondWith: allIncomingItems` actually returns it:
+    a JSON array of one item per row in the chunk (F3's evidence quote in the debug file
+    showed the one element unwrapped)."""
+    return [{
+        "action": "write_blocked",
+        "object_type": "contacts",
+        "hs_object_id": None,
+        "gap_flag": False,
+        "row_id": None,
+        "mode": None,
+        "match": {"tier": "none", "auto": False, "reason": "searched, no hit", "candidates": []},
+        "properties": {"jobtitle": "CEO"},
+    }]
+
+
+def test_build_sync_report_relays_write_blocked_and_the_no_hit_match_reason():
+    rows, reason = report_enrichment.build_sync_report(_walk_11948_body())
+
+    assert reason is None
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["outcome"] == "blocked"
+    assert row["outcome"] != "created" and row["outcome"] not in report_enrichment.SUCCESS_OUTCOMES
+    assert "write-safety gate" in row["reason"]
+    assert row["match_level"] == "none"
+    assert row["match_reason"] == "searched, no hit"
+    assert row["lane"] == "contacts"
+
+
+def test_build_sync_report_accepts_a_bare_object_never_only_an_array():
+    rows, reason = report_enrichment.build_sync_report(_walk_11948_body()[0])
+
+    assert reason is None
+    assert rows[0]["outcome"] == "blocked"
+
+
+def test_build_sync_report_unrecognised_action_renders_unknown_never_a_success():
+    body = [{**_walk_11948_body()[0], "action": "some-future-action-never-seen"}]
+
+    rows, reason = report_enrichment.build_sync_report(body)
+
+    assert reason is None
+    assert rows[0]["outcome"] == "unknown"
+    assert rows[0]["outcome"] not in report_enrichment.SUCCESS_OUTCOMES
+
+
+def test_build_sync_report_company_lane_row_carries_needs_review():
+    body = [{"action": "enrich", "object_type": "companies", "hs_object_id": "co-1",
+             "needs_review": True, "match": {"tier": "high", "auto": True, "reason": "matched by email"}}]
+
+    rows, reason = report_enrichment.build_sync_report(body)
+
+    assert reason is None
+    assert rows[0]["lane"] == "companies"
+    assert rows[0]["review_state"] == "needs_review"
+    assert rows[0]["match_level"] == "high"
+
+
+def test_build_sync_report_empty_array_is_a_named_refusal_not_a_silent_empty_success():
+    rows, reason = report_enrichment.build_sync_report([])
+
+    assert rows == []
+    assert reason is not None
+
+
+def test_build_sync_report_status_code_shim_refuses_it_never_pretends_it_is_a_decision():
+    """`dispatch_enrichment`'s own fallback for an unparseable body — `{status_code,
+    text}` — carries no `action` at all and must refuse whole, not partially guess."""
+    rows, reason = report_enrichment.build_sync_report({"status_code": 502, "text": "Bad Gateway"})
+
+    assert rows == []
+    assert reason is not None
+
+
+def test_build_sync_report_never_raises_on_malformed_input():
+    for bad in (None, "garbage", 42, [None], [42], ["garbage"]):
+        rows, reason = report_enrichment.build_sync_report(bad)
+        assert rows == []
+        assert reason is not None
+
+
+# =====================================================================================
 # Review flag — company lane has it, contact lane never does (D-11a, the trap).
 # =====================================================================================
 
@@ -254,6 +370,17 @@ def test_built_report_object_carries_no_icp_trace_anywhere():
 
     hits = _scan_text_for_forbidden_terms(serialized)
     assert not hits, f"rendered report carries a forbidden ICP/tier trace: {hits}"
+
+
+def test_build_sync_report_output_also_carries_no_icp_trace_anywhere():
+    """F3's new function is not called by `build_enrichment_report`, so the guard above
+    does not exercise it — asserted separately rather than assumed covered."""
+    rows, _ = report_enrichment.build_sync_report(_walk_11948_body())
+
+    serialized = json.dumps(rows, default=str)
+
+    hits = _scan_text_for_forbidden_terms(serialized)
+    assert not hits, f"build_sync_report output carries a forbidden ICP/tier trace: {hits}"
 
 
 def test_no_operator_facing_skill_body_mentions_icp_or_tier_not_even_a_placeholder():

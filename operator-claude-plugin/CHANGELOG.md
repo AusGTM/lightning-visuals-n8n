@@ -16,6 +16,27 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-08-25
+
+### Fixed
+
+- **F3 — a synchronous body carrying a real refusal was reported as a clean send.** The
+  operator walk of 0.17.0 sent one record, the backend answered
+  `action: "write_blocked"`, `match.reason: "searched, no hit"`, and the client said
+  "Sent. Backend accepted 1 chunk, 1 row. No failures, nothing to re-send" anyway.
+  `skills/enrich-records/SKILL.md` step 8 carried a blanket "do not claim per-record
+  outcomes" rule, written to stop the client INVENTING an outcome the synchronous body
+  never carried — read too broadly, it also suppressed one the body DID carry.
+  `scripts/report_enrichment.py`'s `write_blocked` → "blocked" mapping already existed
+  and was never reached on this path.
+- Added `report_enrichment.build_sync_report(body)`: shapes a chunk's own synchronous
+  response into the same created/enriched/blocked/skipped/unknown outcome, reason, and
+  match-level/match-reason shape the executions-API report already computes — one
+  mapping, not a second copy left to prose. Step 8 now calls it for every response and
+  relays what it returns, never inventing beyond it.
+- `contact-upload` and `enrich-before-ingest` were checked and do not carry the same
+  defect — neither has an equivalent suppression clause.
+
 ## [0.17.0] - 2026-08-25
 
 ### Changed

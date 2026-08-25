@@ -110,8 +110,31 @@ def test_the_skill_says_a_list_count_is_unknown_rather_than_zero():
     assert "does not mean zero" in body
 
 
-def test_the_skill_refuses_to_claim_per_record_outcomes():
-    assert "Do not claim per-record outcomes" in _normalized(_text())
+def test_the_skill_relays_what_the_sync_body_says_never_inventing_beyond_it():
+    """RECORDED EDIT -- F3, 2026-08-25, live walk of plugin 0.17.0.
+
+    This pin used to assert the literal string "Do not claim per-record outcomes". Read
+    too broadly, that sentence told the model to suppress a per-record outcome the
+    synchronous body DID carry, not only one it would have had to invent: the walk's body
+    read `action: "write_blocked"`, `match.reason: "searched, no hit"`, and the client
+    reported "Sent. Backend accepted 1 chunk, 1 row. No failures, nothing to re-send"
+    anyway (see .planning/debug/resolved/walk-write-path-defects.md).
+
+    The safety property was never "withhold per-record detail" -- it is "never guess
+    beyond what the body says". The string assertion is REPLACED by the clauses carrying
+    that property, and by the call into `report_enrichment.build_sync_report`, which now
+    computes the created/enriched/blocked/skipped/unknown + match mapping instead of
+    leaving it to prose the model could read either way.
+    """
+    body = _normalized(_text())
+    assert "Do not claim per-record outcomes" not in body, (
+        "the withhold-everything rule is dead (F3) -- a synchronous body's own action "
+        "and match fields must be relayed, not suppressed"
+    )
+    assert "build_sync_report" in body
+    assert "never invent what the body does not carry" in body.lower()
+    assert "always relay what it does" in body.lower()
+    assert "match_level" in body and "match_reason" in body
 
 
 # ---------------------------------------------------------------------------------
