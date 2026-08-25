@@ -6,8 +6,18 @@ reasoning that file states about not colliding with work in flight elsewhere.
 The two pins that matter most here are NOT wording assertions: they are a
 character-offset comparison (the enriched-preview heading must precede the ingest-arm
 heading) and a same-numbered-step exclusion (the two arming phrases must never share a
-step). Both are the mechanism that stops a later edit from silently collapsing the
-two-grant design into one.
+step).
+
+WHAT THOSE TWO PINS DEFEND CHANGED ON 2026-08-25, and this file no longer claims
+otherwise. Under D-53-05 -- taken by the operator, deliberately, for speed -- ONE write
+grant may authorize both lanes of this flow, which means the HubSpot write can be
+authorized before the enriched preview exists. The pins below therefore no longer stop
+that collapse; they bind the UNGRANTED path (unchanged by D-53-04) and they carry the
+record that the ordering protection was removed on purpose and by whom. The protections
+that remain are asserted here too: the allowlist stays record-scoped to the named batch,
+and the disclosure the operator was given in exchange -- that the write is authorized
+before the enriched preview exists -- is pinned so a later edit cannot quietly drop it
+after the protection was already traded for it.
 """
 import re
 from pathlib import Path
@@ -121,23 +131,54 @@ def test_both_arming_phrases_appear():
 
 
 def test_no_combined_or_third_arming_phrase_appears():
+    """RECORDED EDIT -- D-53-05, 2026-08-25, taken by the operator.
+
+    This pin used to mean "a single combined authorization must not exist here", because
+    such an authorization is necessarily given before the enriched preview exists. The
+    operator was shown that cost in full and accepted it, for speed. A single combined
+    authorization now DOES exist: the write grant, which may cover both lanes at once. What
+    it costs, in plain prose: rows held for review, and merge conflicts where the source
+    file's own value was kept over a differing provider value, are authorized UNSEEN --
+    the enriched preview is the only place either becomes visible ahead of a write.
+
+    What this pin holds now: the two per-send arming PHRASES are still never combined. That
+    is the ungranted path, which D-53-04 leaves exactly as it was, and it is a real
+    property -- with no grant open this flow still asks twice. The new truth is asserted
+    alongside it rather than instead of it, so neither the removal nor the disclosure can
+    be lost by a later sweep.
+    """
     normalized = _normalized(_text()).lower()
     for spelling in _COMBINED_PHRASE_SPELLINGS:
         assert spelling not in normalized, (
-            f"a combined arming phrase slipped into SKILL.md: {spelling!r} -- a "
-            "combined phrase would necessarily be spoken before the enriched preview "
-            "exists, granting the HubSpot write before the operator can see what "
-            "they are approving"
+            f"a combined arming PHRASE slipped into SKILL.md: {spelling!r} -- with no "
+            "write grant open this flow still asks twice, and the two phrases are what "
+            "it asks with (D-53-04). A combined authorization is expressible only as a "
+            "write grant, which is disclosed rather than phrased"
         )
+    assert "the enrichment lane and the contacts lane" in normalized, (
+        "the skill must name which lanes one grant may cover (D-53-05) -- an operator "
+        "left to infer that a single grant spans both lanes is exactly the surprise the "
+        "old two-phrase design existed to prevent"
+    )
 
 
 def test_the_ingest_arm_heading_is_strictly_after_the_enriched_preview_heading():
-    """The ordering IS the safety property (37-CONTEXT.md sec 6.3): the enriched
-    preview must land in the operator's turn before the ingest arm can be spoken,
-    which is what makes the two `armed` arguments necessarily fall in different
-    turns. A later edit that reorders these two sections would collapse the design
-    with no other test noticing -- so the offsets are compared directly rather than
-    inferred from any other property of the document."""
+    """RECORDED EDIT -- D-53-05, 2026-08-25, taken by the operator.
+
+    This ordering USED TO BE the safety property (37-CONTEXT.md sec 6.3): the enriched
+    preview had to land in the operator's turn before the ingest arm could be spoken, so
+    the HubSpot write could not be approved before the operator saw what they were
+    approving. That protection was REMOVED ON PURPOSE. One write grant may now cover both
+    lanes, and when it does the write is authorized before the enriched preview exists --
+    so held rows and merge conflicts (a source value kept over a differing provider value),
+    which the enriched preview is the only place to see before a write, are authorized
+    unseen. The operator was shown that in full and took it for speed.
+
+    The offset comparison is kept because it is still true, and still load-bearing, on the
+    UNGRANTED path: with no grant open this flow asks twice and the preview still lands
+    between the asks. It is no longer evidence that the write cannot be authorized early.
+    What replaced the protection is the DISCLOSURE, asserted below in the same function so
+    a later edit cannot drop the sentence the operator was given in exchange."""
     text = _text()
     preview_offset = text.find(ENRICHED_PREVIEW_HEADING)
     ingest_offset = text.find(INGEST_ARM_HEADING)
@@ -155,8 +196,14 @@ def test_the_ingest_arm_heading_is_strictly_after_the_enriched_preview_heading()
     assert ingest_offset > preview_offset, (
         f"the ingest-arm heading (character offset {ingest_offset}) must appear "
         f"strictly after the enriched-preview heading (character offset "
-        f"{preview_offset}) -- the enriched preview must land in the operator's turn "
-        "before the ingest arm can be spoken"
+        f"{preview_offset}) -- on the ungranted path the enriched preview must still "
+        "land in the operator's turn before the ingest arm can be spoken"
+    )
+    assert "authorized before the enriched preview exists" in _normalized(text).lower(), (
+        "D-53-05 traded the ordering protection for one thing only: the operator being "
+        "told, at the yes, that a grant covering both lanes authorizes the HubSpot write "
+        "before the enriched preview exists. Without that sentence the trade is worse "
+        "than the one the operator agreed to"
     )
 
 
@@ -276,3 +323,59 @@ def test_the_skill_states_the_grant_never_outlives_its_turn_and_arms_no_other_la
     body = _normalized(_text()).lower()
     assert "never outlives" in body or "never written to disk" in body
     assert "arming one lane does not arm any other lane" in body
+
+
+# ---------------------------------------------------------------------------------
+# D-53-05 / D-53-04 (2026-08-25): one write grant may cover both lanes, and while it
+# is open neither per-send arming phrase is asked for. These pins are ADDITIVE -- the
+# only rewrite in this file is the recorded edit to the two pins above.
+# ---------------------------------------------------------------------------------
+
+
+def test_the_skill_says_the_grant_branch_does_not_ask_for_the_phrase_again():
+    body = _normalized(_text()).lower()
+    assert "do not ask for the phrase again" in body
+    assert "with no grant open" in body, (
+        "D-53-04: the grant is an ADDITION. The skill must say that with no grant open "
+        "today's two-ask behaviour is unchanged, or an operator reads the grant as having "
+        "replaced the careful path rather than added to it"
+    )
+
+
+def test_the_skill_says_what_a_grant_does_not_remove():
+    body = _normalized(_text()).lower()
+    assert "a grant removes the question, not the safety" in body
+    assert "bounded to that send's records" in body
+    assert "reported loudly" in body
+
+
+def test_the_skill_says_revocation_bites_at_the_next_send_not_mid_dispatch():
+    """GRANT-05 as re-scoped: a revoke refuses the NEXT send. At the 2-record chunk
+    ceiling a 40-record send is 20 chunks and all of them run after a revoke, because
+    `dispatch_plan` loops its chunks with no grant-aware hook. A skill that said
+    "revoking stops the run" would be describing something that does not exist."""
+    body = _normalized(_text()).lower()
+    assert "refuses the next send" in body
+    assert "does not stop a dispatch already running" in body
+
+
+def test_the_skill_distinguishes_the_grant_that_spans_lanes_from_the_arm_that_does_not():
+    """The pin above (`arming one lane does not arm any other lane`) stays TRUE under
+    D-53-05 and stays in the file -- but a reader who sees a grant spanning two lanes
+    will draw the wrong conclusion from it unless the skill writes the distinction down.
+    D-53-05 collapsed the asks at the level of the GRANT (the authorization); each ARM
+    still opens its own window over one lane and only that send's records, which is what
+    53-01's scope check inside `arm_for_dispatch` enforces. Pinning the prose is the same
+    fix 53-01 Task 3 applied to the parity pin: a literal that survives while its claim
+    has quietly changed meaning is worse than no pin."""
+    body = _normalized(_text()).lower()
+    assert "each individual arm still opens its own window over one lane" in body
+    assert "only that send's records" in body
+
+
+def test_the_skill_never_widens_a_window_to_the_grants_whole_record_set():
+    """T-53-18b. The collapse widened WHEN the approval is given, never WHAT it covers.
+    A skill that handed the grant's full record list to `armed_window` would widen every
+    window to the whole batch while every test in the suite still passed."""
+    body = _normalized(_text()).lower()
+    assert "never the grant's whole record set" in body

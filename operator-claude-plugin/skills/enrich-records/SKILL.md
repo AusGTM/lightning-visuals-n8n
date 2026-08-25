@@ -132,6 +132,43 @@ capability; claiming it here would be a guess dressed as a report.
    this turn only. Arming this lane does not arm the contact-upload lane, or the review
    lane, in either direction.
 
+   **If a write grant covering this lane and these records is already open, do not ask for
+   the phrase again.** Say which grant the send is running under and dispatch under it —
+   not asking twice is the whole point of a grant. With no grant open, everything above is
+   exactly as it is today.
+
+   **A grant removes the question, not the safety.** The preview still runs and is still
+   shown, the records are still named, each send still arms and disarms its own window
+   bounded to that send's records, and a failed disarm is still reported loudly as its own
+   state. Revoking a grant **refuses the next send** — it **does not stop a dispatch already
+   running**, so a revoke arriving mid-dispatch still lets every remaining chunk of that
+   send go out.
+
+   Under a grant, the dispatch in step 7 is wrapped in this send's own window:
+
+   ```python
+   import chunking, config_gate, enrichment, n8n_arming, write_grant
+
+   cfg = config_gate.load_config()
+   decision = write_grant.authorize_send(
+       grant, lane="enrichment",
+       record_ids=<this send's ids>, record_domains=<this send's domains>)
+   if not decision["armed"]:
+       # revoked, closed, or outside the grant — STOP and report decision["detail"]
+       ...
+   providers = enrichment.resolve_providers(<override or None>, cfg)
+   plan = chunking.plan_chunks(<spec>, chunking.chunk_ceiling(cfg))
+   with n8n_arming.armed_window(decision["workflow_id"],
+                                <this send's ids>, <this send's domains>,
+                                <allow_create>, cfg, grant=decision["grant"]):
+       outcome = chunking.dispatch_plan(plan, providers, True, cfg)
+   ```
+
+   The allowlist handed to `armed_window` is **this send's records, never the grant's whole
+   record set**. That narrowing is what keeps every window strictly smaller than the grant
+   it runs under; a skill that passed the grant's full list would widen every window to the
+   whole batch and every test would still pass.
+
 7. **Dispatch the plan the operator approved — only after they have said the arming phrase
    this turn.** `scripts/chunking.py` is a library here (the same way `scripts/report.py`
    already is, not a CLI): rebuild the plan from the same spec and the same configured

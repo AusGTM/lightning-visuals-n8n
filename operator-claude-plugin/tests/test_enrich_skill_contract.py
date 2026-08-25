@@ -86,3 +86,41 @@ def test_the_skill_says_a_list_count_is_unknown_rather_than_zero():
 
 def test_the_skill_refuses_to_claim_per_record_outcomes():
     assert "Do not claim per-record outcomes" in _normalized(_text())
+
+
+# ---------------------------------------------------------------------------------
+# D-53-04 (2026-08-25): while a write grant covering this lane and these records is
+# open, the per-turn arming phrase is not asked again. All ADDITIVE -- every pin above
+# stays exactly as it was, including the phrase, the disk clause and the scope clause,
+# which bind the ungranted path this decision leaves untouched.
+# ---------------------------------------------------------------------------------
+
+
+def test_the_skill_says_an_open_grant_replaces_the_per_turn_phrase():
+    body = _normalized(_text()).lower()
+    assert "if a write grant covering this lane and these records is already open" in body
+    assert "do not ask for the phrase again" in body
+    assert "with no grant open, everything above is exactly as it is today" in body
+
+
+def test_the_skill_says_what_a_grant_does_not_remove():
+    """Without this line an operator reasonably concludes the safety went away with the
+    question (T-53-19). It did not: the preview, the record scoping, the per-send window
+    and the loud disarm failure are all unchanged by a grant."""
+    body = _normalized(_text()).lower()
+    assert "a grant removes the question, not the safety" in body
+    assert "bounded to that send's records" in body
+    assert "reported loudly" in body
+
+
+def test_the_skill_says_revocation_bites_at_the_next_send_not_mid_dispatch():
+    body = _normalized(_text()).lower()
+    assert "refuses the next send" in body
+    assert "does not stop a dispatch already running" in body
+
+
+def test_the_grant_branch_shows_the_window_scoped_to_this_sends_records():
+    body = _normalized(_text())
+    assert "write_grant.authorize_send" in body
+    assert "n8n_arming.armed_window" in body
+    assert "never the grant's whole record set" in body.lower()

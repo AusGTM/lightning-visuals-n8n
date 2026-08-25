@@ -51,6 +51,12 @@ whatever seven columns happened to be in the source file.
    turns later — an operator surprised by the second ask learns to pre-grant both,
    which is exactly the shortcut this design exists to prevent.
 
+   **The one exception, and say it here rather than at step 5:** if a write grant covering
+   both of this flow's lanes is open, the operator is asked once instead of twice — that is
+   D-53-05, their own decision of 2026-08-25. Name which lanes the open grant covers and say
+   what the single ask costs them: the HubSpot write is authorized before the enriched
+   preview exists. With no grant open, this flow asks twice, exactly as described above.
+
 2. **Resolve rows, then match them against HubSpot — unarmed.** For a spreadsheet
    (CSV/XLSX), read it with:
 
@@ -190,6 +196,51 @@ whatever seven columns happened to be in the source file.
    enrichment"**. This state is never written to disk — it exists only as the `armed`
    argument passed to the dispatch call below, for this turn only.
 
+   **If a write grant covering this lane and these records is already open, do not ask for
+   the phrase again.** Under D-53-05 (the operator's own decision, 2026-08-25) one grant may
+   cover **both lanes of this flow — the enrichment lane and the contacts lane**. Say which
+   lanes the open grant covers, in those words, rather than leaving the operator to infer
+   it: when it covers both, neither of this flow's two phrases is asked for and step 7 does
+   not ask a second time. With no grant open, everything above is exactly as it is today,
+   and step 7 asks again on its own.
+
+   **Say what the operator accepted when they opened a grant covering both lanes, and say it
+   at the yes rather than after it:** the HubSpot write is **authorized before the enriched
+   preview exists**. Every row held for review, and every merge conflict where the source
+   file's own value was kept over a differing provider value, is authorized before they have
+   seen it — the enriched preview at step 6 is the only place those become visible ahead of a
+   write. It is still rendered and still worth reading; under a two-lane grant it is a report
+   rather than a gate. They can still stop the run by revoking the grant, and revoking
+   **refuses the next send** — it **does not stop a dispatch already running**, so a revoke
+   arriving mid-dispatch still lets every remaining chunk of that send go out.
+
+   **A grant removes the question, not the safety.** The previews still run and are still
+   shown, the rows are still named individually, each send still arms and disarms its own
+   window bounded to that send's records, and a failed disarm is still reported loudly as
+   its own state.
+
+   Under a grant, this step's dispatch is wrapped in this send's own window:
+
+   ```python
+   import n8n_arming, write_grant
+
+   decision = write_grant.authorize_send(
+       grant, lane="enrichment",
+       record_ids=<this send's ids>, record_domains=<this send's domains>)
+   if not decision["armed"]:
+       # revoked, closed, or outside the grant — STOP and report decision["detail"]
+       ...
+   with n8n_arming.armed_window(decision["workflow_id"],
+                                <this send's ids>, <this send's domains>,
+                                <allow_create>, cfg, grant=decision["grant"]):
+       outcome = chunking.dispatch_plan(plan, providers, True, cfg)
+   ```
+
+   The allowlist handed to `armed_window` is **this send's records, never the grant's whole
+   record set** — that narrowing is what keeps every window strictly smaller than the grant
+   it runs under, and it is the only structural protection left on this path once D-53-05
+   collapsed the two asks into one.
+
    Once said this turn, dispatch and merge:
 
    ```python
@@ -229,8 +280,31 @@ whatever seven columns happened to be in the source file.
    sending is off, and that the operator can turn it on **for this conversation only**
    by saying: **"arm the upload"**. This grant is never written to disk, it exists
    only as the `armed` flag on the one dispatch call below, for this turn only, and it
-   does not carry over from anything said earlier in the conversation — an operator
-   who already said the first phrase is still asked for this one.
+   does not carry over from anything said earlier in the conversation — with no write
+   grant open, an operator who already said the first phrase is still asked for this one.
+
+   **If the write grant opened at step 5 covers this lane too, do not ask for the phrase
+   again** — that is the single ask D-53-05 bought, and asking again here would take the
+   protection and leave the cost. Run the dispatch below inside this send's own window:
+
+   ```python
+   import n8n_arming, write_grant
+
+   decision = write_grant.authorize_send(
+       grant, lane="contacts",
+       record_ids=<this send's ids>, record_domains=<this send's domains>)
+   if not decision["armed"]:
+       # revoked, closed, or outside the grant — STOP and report decision["detail"]
+       ...
+   with n8n_arming.armed_window(decision["workflow_id"],
+                                <this send's ids>, <this send's domains>,
+                                <allow_create>, cfg, grant=decision["grant"]):
+       result = dispatch.dispatch(out_path, True, cfg)
+   ```
+
+   Same rule as step 5: the allowlist is **this send's records, never the grant's whole
+   record set**. And the same honesty about stopping it — revoking the grant **refuses the
+   next send** and **does not stop a dispatch already running**.
 
    Build and send a CSV of exactly the rows the preview marked SEND — never the
    operator's original file, which is what makes holding a row back possible at all:
@@ -285,10 +359,18 @@ whatever seven columns happened to be in the source file.
    reaches them: this flow always sends a **rewritten** CSV of exactly the approved
    rows, never the operator's own file, because holding a row back is impossible any
    other way; a confirmed match with no email keeps its id and nothing else, as just
-   described; and every grant in this flow is a per-call argument that never outlives
-   the turn that gave it — arming one lane does not arm any other lane, in either
-   direction, and saying a grant early does not carry it forward to a moment that has
-   not happened yet.
+   described; and the two arming phrases are per-call arguments that never outlive the
+   turn that gave them, while a write grant, where one is open, lasts the conversation,
+   is **never written to disk**, and ends on completion, revocation, session end, error
+   or a ceiling breach.
+
+   **Arming one lane does not arm any other lane**, in either direction — and that stays
+   true under a grant, which is worth saying because a grant spanning two lanes reads as
+   if it contradicted it. It does not. D-53-05 collapsed the two asks at the level of the
+   **grant**, the authorization; it changed nothing at the level of the **arm**. A grant
+   may authorize both lanes, but **each individual arm still opens its own window over one
+   lane's workflow and only that send's records**. Saying a phrase early still does not
+   carry it forward to a moment that has not happened yet.
 
 8. **Resuming a broken batch.** If a chunk failure, a dropped connection, or an
    operator stopping mid-batch leaves rows unfinished, this flow does not have to
