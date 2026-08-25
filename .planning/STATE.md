@@ -4,17 +4,17 @@ milestone: v1.1
 milestone_name: Unattended Session Runs
 current_phase: 53
 current_phase_name: Operator-openable write grant
-status: executing
-stopped_at: "53-04 TASKS 1-2 COMPLETE, BLOCKED AT THE OPERATOR WALK (task 3, checkpoint:human-verify, gate=blocking). Shipped: the grant conditional inside each lane skill's own arming step with the concrete authorize_send -> armed_window -> dispatch sequence scoped to THAT SEND's records; the one recorded D-53-05 edit in test_enrich_before_ingest_skill_contract.py (module docstring + the ordering and combined-phrase pins carry the decision, its date and its author; nothing deleted) with the at-the-yes disclosure pinned beside it; backend-control listing open/revoke/close; the README's admin key + ALLOW_N8N_ARM-narrowed-not-replaced clause; and the 0.15.0 release cut (bump + CHANGELOG in one commit). NEXT AND BLOCKING: an admin sets \"allow_write_grants\": true in operator.local.json, then the operator walks set key -> open grant -> send -> revoke -> close from Claude Desktop and answers the revocation-at-the-next-SEND question (53-04-SUMMARY.md 'Outstanding' section has the script). The push to master and the marketplace clone refresh are the operator's two steps and were deliberately NOT run -- until the clone is fetched, 0.15.0 is invisible to an installed plugin. Phase 52 (v1.0 staged canary) DEFERRED by operator 2026-08-25 -- on resume, re-derive Phase 51 population/credit sizing (artifacts dated 2026-08-19, they drift) and resolve the deferred FILL-04 third disposition."
-last_updated: "2026-08-25T09:20:00.000Z"
+status: awaiting-operator-walk
+stopped_at: "Phase 53: all 4 plans have SUMMARYs; 53-04 tasks 1-2 done. BLOCKING: task 3, the operator walk, is outstanding and is the only evidence GRANT-01 accepts. An admin has set allow_write_grants (done). Three gap fixes landed FROM the partial walk: 0.15.1 (D-53-06, a grant must remove BOTH asks), 0.16.0 (people form; LinkedIn URL was normalising to the domain linkedin.com), 0.16.1 (accept a company by name alone). Phases 58-59 recorded from the same walk. Phase 52 (v1.0) still deferred."
+last_updated: "2026-08-25T08:10:00.000Z"
 last_activity: 2026-08-25
-last_activity_desc: Phase 53 plan 04 tasks 1-2 complete -- every lane skill carries the grant branch and what a grant does not remove, the traded ordering pin records D-53-05 with the disclosure it bought pinned beside it, and the client is cut at 0.15.0; the blocking operator walk is outstanding
+last_activity_desc: "Phase 53 code complete and released at plugin 0.16.1; the walk itself surfaced three defects the tests could not, all fixed; the walk is unfinished"
 progress:
-  total_phases: 5
+  total_phases: 7
   completed_phases: 0
   total_plans: 4
-  completed_plans: 3
-  percent: 75
+  completed_plans: 4
+  percent: 0
 ---
 
 # Project State
