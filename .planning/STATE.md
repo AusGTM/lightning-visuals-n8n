@@ -505,6 +505,7 @@ open (VETO-01/VETO-02 remain open requirements, not blockers — Phase 40 met it
 | # | Description | Date | Commit | Status | Directory |
 |---|-------------|------|--------|--------|-----------|
 | 260823-ono | Metro peak-body named-account floor: `lv_named_account_score_floor` (number) read by `lv_icp_fit_score` FORMULA-F; ATC/MRC/SSR/BRC/Perth at 60/B live; enum rejected (D-20 reconfirmed) | 2026-08-23 | f1105dd | Verified | [260823-ono-metro-peak-body-override-rule-tier-atc-m](./quick/260823-ono-metro-peak-body-override-rule-tier-atc-m/) |
+| 260826-20w | Permissive contact enrichment: email reclassified `fill_blank_only`@80 (was `manual_protected`@95), promotes into a blank + flags `lv_enrichment_needs_review`; five HubSpot-native location properties (city/state/country/hs_state_code/hs_country_region_code) added to the waterfall; live proof execution 11958 | 2026-08-26 | a583c29 | Verified | [260826-20w-permissive-contact-enrichment-location-f](./quick/260826-20w-permissive-contact-enrichment-location-f/) |
 
 ## Deferred Items
 
