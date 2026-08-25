@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 import config_gate
+import control_actions
 import executions_client
 import n8n_arming
 import write_grant
@@ -420,3 +421,178 @@ def test_nothing_about_a_grant_is_written_to_disk_or_to_the_environment(
     for forbidden in ("open(", "write_text", "os.environ[", "setenv", "json.dump("):
         assert forbidden not in source, (
             f"{forbidden!r} in write_grant.py — a grant must never become durable")
+
+
+# --- Task 2: the authority's edges ---------------------------------------------------------
+#
+# Only the JSON boolean `true` authorizes. Parametrised the way
+# `test_control_arming.py::test_every_near_miss_value_refuses` is, so a future edit that
+# loosens the comparison fails on eleven rows rather than one.
+
+_NEAR_MISS_SETTINGS_VALUES = [
+    "true", "True", "TRUE", "1", "yes", 1, 1.0, "", False, None, "__absent__",
+]
+
+
+def _config_with(fake_config, value):
+    if value == "__absent__":
+        return dict(fake_config)
+    return {**fake_config, config_gate.WRITE_GRANT_SETTINGS_KEY: value}
+
+
+@pytest.mark.parametrize("near_miss", _NEAR_MISS_SETTINGS_VALUES)
+def test_every_near_miss_settings_value_refuses_the_arm(near_miss, fake_config,
+                                                        stub_module_transport_factory):
+    """`bool` is an `int` subclass, so 1, 1.0 and True are indistinguishable under a
+    truthiness test — and the string "true" is what this key REPLACED. Any of them parsing
+    as authority would make the new gate silently weaker than the old one."""
+    config = _config_with(fake_config, near_miss)
+    grant = {"kind": write_grant.KIND, "state": write_grant.OPEN, "lanes": ["enrichment"],
+             "workflow_ids": {"enrichment": WORKFLOW_ID}, "record_ids": [RECORD_ID],
+             "record_domains": [], "closed_reason": None}
+
+    transport = stub_module_transport_factory([_base_workflow()])
+    result = n8n_arming.arm_for_dispatch(WORKFLOW_ID, [RECORD_ID], [], False, config,
+                                         transport=transport, grant=grant)
+
+    assert result["outcome"] == n8n_arming.REFUSED
+    assert transport.calls == []
+
+
+@pytest.mark.parametrize("near_miss", _NEAR_MISS_SETTINGS_VALUES)
+def test_every_near_miss_settings_value_refuses_the_plan(near_miss, fake_config,
+                                                         stub_module_transport_factory):
+    config = _config_with(fake_config, near_miss)
+    transport = stub_module_transport_factory([_workflow_list()])
+
+    result = _proposal(config, transport)
+
+    assert result["outcome"] == write_grant.REFUSED
+    assert transport.calls == []
+
+
+def test_only_the_json_boolean_true_authorizes(fake_config):
+    """The positive half of the parametrisation above — without it, a `write_grants_enabled`
+    that returned False unconditionally would pass every row."""
+    assert config_gate.write_grants_enabled(
+        {**fake_config, config_gate.WRITE_GRANT_SETTINGS_KEY: True}) is True
+    for near_miss in _NEAR_MISS_SETTINGS_VALUES:
+        assert config_gate.write_grants_enabled(_config_with(fake_config, near_miss)) is False
+
+
+def test_a_config_missing_the_key_entirely_refuses_by_name(fake_config,
+                                                           stub_module_transport_factory):
+    """The degrade-safely-when-absent path — which is what an existing operator's settings
+    file looks like the day this ships."""
+    assert config_gate.WRITE_GRANT_SETTINGS_KEY not in fake_config
+    transport = stub_module_transport_factory([_workflow_list()])
+
+    result = _proposal(fake_config, transport)
+
+    assert config_gate.WRITE_GRANT_SETTINGS_KEY in result["detail"]
+    assert "operator.local.json" in result["detail"]
+    assert "admin" in result["detail"]
+
+
+def test_no_configured_value_reaches_any_refusal_string(stub_module_transport_factory):
+    """T-27-12's convention: refusals name keys and files, never values."""
+    secrets = {"n8n_url": "https://secret-tenant.n8n.cloud",
+               "webhook_secret": "SECRET-WEBHOOK-VALUE",
+               "n8n_api_key": "SECRET-API-KEY-VALUE",
+               config_gate.WRITE_GRANT_SETTINGS_KEY: "true"}   # a near miss, so it refuses
+
+    refusals = [
+        _proposal(secrets, stub_module_transport_factory([_workflow_list()])),
+        write_grant.open_grant({"kind": write_grant.PROPOSAL_KIND}, "yes", secrets),
+        n8n_arming.arm_for_dispatch(
+            WORKFLOW_ID, [RECORD_ID], [], False, secrets,
+            transport=stub_module_transport_factory([_base_workflow()]),
+            grant={"kind": write_grant.KIND, "state": write_grant.OPEN,
+                   "workflow_ids": {"enrichment": WORKFLOW_ID},
+                   "record_ids": [RECORD_ID], "record_domains": []}),
+    ]
+
+    for refusal in refusals:
+        assert refusal["outcome"] == write_grant.REFUSED, refusal
+        for value in ("SECRET-WEBHOOK-VALUE", "SECRET-API-KEY-VALUE",
+                      "secret-tenant.n8n.cloud"):
+            assert value not in refusal["detail"]
+
+
+def test_the_settings_key_is_not_a_capability_row():
+    """D-53-01: `CAPABILITY_KEYS` means "these keys are PRESENT", not "an admin authorized
+    this". Folding the key in would quietly change what a refusal MEANS, so a later
+    well-meaning edit that does it fails here loudly."""
+    assert config_gate.WRITE_GRANT_SETTINGS_KEY not in config_gate.CAPABILITY_KEYS
+    assert config_gate.WRITE_GRANT_SETTINGS_KEY not in config_gate._CAPABILITY_DESCRIPTIONS
+    for required_keys in config_gate.CAPABILITY_KEYS.values():
+        assert config_gate.WRITE_GRANT_SETTINGS_KEY not in required_keys
+
+
+# --- the two confirmation gates, checked behaviourally against one shared list --------------
+#
+# NOT by inspecting source text for a literal. A source pin asserting a string appears in
+# two files proves TOKEN PRESENCE, not semantic agreement: a `.strip().lower()` added on one
+# side still contains the literal and still matches, while accepting inputs the other
+# refuses. Driving one list through both functions checks the property directly.
+
+_NOT_YES = ["y", "Y", "YES", "Yes", "yes ", " yes", "ok", "sure", "", None, True]
+
+
+def _bogus_proposal(kind):
+    return {"kind": kind, "workflow_id": WORKFLOW_ID}
+
+
+@pytest.mark.parametrize("confirmation", _NOT_YES)
+def test_neither_confirmation_gate_accepts_anything_but_the_exact_string_yes(
+        confirmation, granting_config, stub_module_transport_factory):
+    transport = stub_module_transport_factory([_workflow_list()])
+    proposal = _proposal(granting_config, transport)
+
+    opened = write_grant.open_grant(proposal, confirmation, granting_config)
+    executed = control_actions.execute_action(
+        _bogus_proposal("workflow_active"), confirmation, granting_config,
+        transport=stub_module_transport_factory([]))
+
+    assert opened["outcome"] == write_grant.REFUSED
+    assert "not confirmed" in opened["detail"]
+    assert executed["outcome"] == control_actions.REFUSED
+    assert "not confirmed" in executed["detail"]
+
+
+def test_both_confirmation_gates_proceed_on_the_exact_string_yes(
+        granting_config, stub_module_transport_factory):
+    """The positive half: without it, two functions that refused everything would pass the
+    parametrisation above. `execute_action` is given an out-of-allowlist proposal, so
+    getting PAST the confirmation gate is visible as a different refusal, with no
+    transport call."""
+    transport = stub_module_transport_factory([_workflow_list()])
+    proposal = _proposal(granting_config, transport)
+
+    opened = write_grant.open_grant(proposal, "yes", granting_config)
+    assert opened["kind"] == write_grant.KIND
+    assert opened["state"] == write_grant.OPEN
+
+    control_transport = stub_module_transport_factory([])
+    executed = control_actions.execute_action(
+        _bogus_proposal("not_an_action_kind"), "yes", granting_config,
+        transport=control_transport)
+    assert executed["outcome"] == control_actions.REFUSED
+    assert "not confirmed" not in executed["detail"], (
+        "it must have got PAST the confirmation gate")
+    assert "I can't do that" in executed["detail"]
+    assert control_transport.calls == []
+
+
+def test_both_confirmation_gates_raise_type_error_when_the_argument_is_omitted(
+        granting_config, stub_module_transport_factory):
+    """No default, on both — a caller that forgets the confirmation gets a TypeError, never
+    a silent yes."""
+    transport = stub_module_transport_factory([_workflow_list()])
+    proposal = _proposal(granting_config, transport)
+
+    with pytest.raises(TypeError):
+        write_grant.open_grant(proposal, config=granting_config)
+    with pytest.raises(TypeError):
+        control_actions.execute_action(_bogus_proposal("workflow_active"),
+                                       config=granting_config)
