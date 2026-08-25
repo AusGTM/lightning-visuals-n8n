@@ -2,7 +2,7 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Unattended Session Runs
-current_phase: 51
+current_phase: 53
 current_phase_name: Operator-openable write grant
 status: executing
 stopped_at: "53-01 COMPLETE (write grant: authority + shape + scope, 3 commits, full suite green). Next: 53-02 (envelope, revocation/expiry, the two guardrails). Phase 52 (v1.0 staged canary) DEFERRED by operator 2026-08-25 -- on resume, re-derive Phase 51 population/credit sizing (artifacts dated 2026-08-19, they drift) and resolve the deferred FILL-04 third disposition."
@@ -10,10 +10,10 @@ last_updated: "2026-08-25T06:08:56.417Z"
 last_activity: 2026-08-25
 last_activity_desc: Phase 53 plan 01 complete -- an operator-openable write grant arms live writes with no shell (G-2 removed on the interactive path)
 progress:
-  total_phases: 2
-  completed_phases: 1
-  total_plans: 7
-  completed_plans: 4
+  total_phases: 5
+  completed_phases: 0
+  total_plans: 4
+  completed_plans: 1
   percent: 50
 ---
 
