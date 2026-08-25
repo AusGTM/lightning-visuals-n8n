@@ -180,20 +180,46 @@ capability; claiming it here would be a guess dressed as a report.
    running**, so a revoke arriving mid-dispatch still lets every remaining chunk of that
    send go out.
 
-   Under a grant, the dispatch in step 7 is wrapped in this send's own window:
+   Whichever consent applies — a standing grant, or this send's own yes — step 7's dispatch
+   opens the same kind of record-scoped armed window; see there for the code (F2,
+   2026-08-25: the yes now arms a window for this send, where it used to arm the client's
+   own POST only, and nothing on the backend).
+
+7. **Dispatch the plan the operator approved — under an open grant, or otherwise only
+   after they have said yes to this send.** `scripts/chunking.py` is a library here (the same way `scripts/report.py`
+   already is, not a CLI): rebuild the plan from the same spec and the same configured
+   ceiling — it is deterministic, so it is the same plan that was previewed — and send it.
+
+   **Every send opens its own record-scoped armed window — never a bare dispatch with the
+   backend still disarmed.** Under a grant, `write_grant.authorize_send` builds the
+   decision from it. With no grant open, this send's own yes is what authorizes it:
+   `write_grant.authorize_ungranted_send` builds a single-use grant scoped to exactly this
+   send's records — using the SAME `allow_write_grants` authority and the SAME Guardrail A
+   dirty-backend refusal a standing grant gets — and discards it once this dispatch
+   finishes; it is never remembered as a standing grant, never written to disk. Both
+   functions return the identical `{armed, workflow_id, grant, refusal, detail}` shape, so
+   the dispatch is the same call either way:
 
    ```python
    import chunking, config_gate, enrichment, n8n_arming, write_grant
 
    cfg = config_gate.load_config()
-   decision = write_grant.authorize_send(
-       grant, lane="enrichment",
-       record_ids=<this send's ids>, record_domains=<this send's domains>)
-   if not decision["armed"]:
-       # revoked, closed, or outside the grant — STOP and report decision["detail"]
-       ...
    providers = enrichment.resolve_providers(<override or None>, cfg)
    plan = chunking.plan_chunks(<spec>, chunking.chunk_ceiling(cfg))
+   decision = (
+       write_grant.authorize_send(
+           grant, lane="enrichment",
+           record_ids=<this send's ids>, record_domains=<this send's domains>)
+       if grant is not None else
+       write_grant.authorize_ungranted_send(
+           cfg, lane="enrichment", object_type=<object_type>,
+           record_ids=<this send's ids>, record_domains=<this send's domains>,
+           allow_create=<allow_create>, label="this send")
+   )
+   if not decision["armed"]:
+       # revoked, closed, outside the grant, the admin has not enabled write grants, or
+       # the backend is not in a known-disarmed state — STOP and report decision["detail"]
+       ...
    with n8n_arming.armed_window(decision["workflow_id"],
                                 <this send's ids>, <this send's domains>,
                                 <allow_create>, cfg, grant=decision["grant"]):
@@ -205,23 +231,10 @@ capability; claiming it here would be a guess dressed as a report.
    it runs under; a skill that passed the grant's full list would widen every window to the
    whole batch and every test would still pass.
 
-7. **Dispatch the plan the operator approved — under an open grant, or otherwise only
-   after they have said yes to this send.** `scripts/chunking.py` is a library here (the same way `scripts/report.py`
-   already is, not a CLI): rebuild the plan from the same spec and the same configured
-   ceiling — it is deterministic, so it is the same plan that was previewed — and send it:
-
-   ```python
-   import chunking, config_gate, enrichment
-   cfg = config_gate.load_config()
-   providers = enrichment.resolve_providers(<override or None>, cfg)
-   plan = chunking.plan_chunks(<spec>, chunking.chunk_ceiling(cfg))
-   outcome = chunking.dispatch_plan(plan, providers, True, cfg)
-   ```
-
    Chunks go one at a time, in plan order. A chunk that fails is skipped and the rest
-   continue — one bad chunk does not abandon the batch. `armed` has no default: if the
-   operator has not said yes to this send, pass nothing and do not call this at
-   all.
+   continue — one bad chunk does not abandon the batch. The consent itself has no default:
+   if the operator has not said yes to this send and no grant is open, pass nothing and do
+   not call this at all.
 
 8. **Report what was sent, and relay what the backend actually said about it.** From
    `outcome.results`, say how many chunks the backend accepted and how many rows were in

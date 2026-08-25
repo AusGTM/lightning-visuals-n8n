@@ -16,6 +16,31 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.18.0] - 2026-08-25
+
+### Added
+
+- **F2 — a per-send "yes" with no standing grant open can now actually write.** Before
+  this, an ungranted send's yes armed the client's own POST only; it never reached
+  `n8n_arming`, so the deployed workflow's `ALLOW_HUBSPOT_RECORD_WRITES` stayed `false`
+  and every ungranted write returned `write_blocked` regardless of consent (executions
+  11934/11935/11937 — every write to date had to be landed by an admin from a terminal).
+  The operator's decision (2026-08-25): the per-send yes now opens a per-send armed
+  window scoped to that send's records, using the same machinery a standing write grant
+  uses; a standing grant remains the wrap-around option that skips the per-send ask.
+- Added `write_grant.authorize_ungranted_send()`: composes the existing
+  `plan_grant()`/`open_grant()` into a single-lane, single-use grant scoped to exactly
+  one send's records, gated on the SAME `allow_write_grants` admin setting a standing
+  grant needs (no new key), and getting the SAME Guardrail A dirty-backend refusal for
+  free. The grant it returns is used for exactly one `armed_window` call and discarded —
+  never remembered, never written to disk. `n8n_arming.arm_for_dispatch`/`_arm_gate`/
+  `authorize_send` are untouched; the headless `ALLOW_N8N_ARM` env-var gate
+  (`scheduled_arm.py`) is unaffected.
+- Updated the dispatch step of `enrich-records`, `contact-upload`, and both lanes of
+  `enrich-before-ingest` to open a record-scoped armed window on every send, whichever
+  consent authorized it — collapsing "grant open -> skip the ask" / "yes -> window for
+  this send" into one shared dispatch pattern.
+
 ## [0.17.1] - 2026-08-25
 
 ### Fixed

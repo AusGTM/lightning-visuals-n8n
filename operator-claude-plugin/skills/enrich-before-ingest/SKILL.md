@@ -234,21 +234,40 @@ whatever seven columns happened to be in the source file.
    window bounded to that send's records, and a failed disarm is still reported loudly as
    its own state.
 
-   Under a grant, this step's dispatch is wrapped in this send's own window:
+   **Every send opens its own record-scoped armed window — never a bare dispatch with the
+   backend still disarmed (F2, 2026-08-25).** Under a grant, `write_grant.authorize_send`
+   builds the decision from it. With no grant open, this run's own yes is what authorizes
+   it: `write_grant.authorize_ungranted_send` builds a single-use grant scoped to exactly
+   this send's records — using the SAME `allow_write_grants` authority and the SAME
+   Guardrail A dirty-backend refusal a standing grant gets — and discards it once this
+   dispatch finishes; it is never remembered as a standing grant, never written to disk.
+   Once said this turn, dispatch and merge:
 
    ```python
-   import n8n_arming, write_grant
+   import chunking, config_gate, enrichment, n8n_arming, preingest, write_grant
 
-   decision = write_grant.authorize_send(
-       grant, lane="enrichment",
-       record_ids=<this send's ids>, record_domains=<this send's domains>)
+   cfg = config_gate.load_config()
+   providers = enrichment.resolve_providers(<override or None>, cfg)
+   plan = chunking.plan_chunks(spec, chunking.chunk_ceiling(cfg))
+   decision = (
+       write_grant.authorize_send(
+           grant, lane="enrichment",
+           record_ids=<this send's ids>, record_domains=<this send's domains>)
+       if grant is not None else
+       write_grant.authorize_ungranted_send(
+           cfg, lane="enrichment", object_type=<object_type>,
+           record_ids=<this send's ids>, record_domains=<this send's domains>,
+           allow_create=<allow_create>, label="this run")
+   )
    if not decision["armed"]:
-       # revoked, closed, or outside the grant — STOP and report decision["detail"]
+       # revoked, closed, outside the grant, the admin has not enabled write grants, or
+       # the backend is not in a known-disarmed state — STOP and report decision["detail"]
        ...
    with n8n_arming.armed_window(decision["workflow_id"],
                                 <this send's ids>, <this send's domains>,
                                 <allow_create>, cfg, grant=decision["grant"]):
        outcome = chunking.dispatch_plan(plan, providers, True, cfg)
+   merge_report = preingest.merge_enriched(unmatched_rows, outcome.responses)
    ```
 
    The allowlist handed to `armed_window` is **this send's records, never the grant's whole
@@ -256,21 +275,9 @@ whatever seven columns happened to be in the source file.
    it runs under, and it is the only structural protection left on this path once D-53-05
    collapsed the two asks into one.
 
-   Once said this turn, dispatch and merge:
-
-   ```python
-   import chunking, config_gate, enrichment, preingest
-
-   cfg = config_gate.load_config()
-   providers = enrichment.resolve_providers(<override or None>, cfg)
-   plan = chunking.plan_chunks(spec, chunking.chunk_ceiling(cfg))
-   outcome = chunking.dispatch_plan(plan, providers, True, cfg)
-   merge_report = preingest.merge_enriched(unmatched_rows, outcome.responses)
-   ```
-
    Chunks go one at a time, in plan order; a chunk that fails is skipped and the rest
-   continue. `armed` has no default — if the operator has not said the phrase this
-   turn, do not call `dispatch_plan` at all.
+   continue. The consent itself has no default — if the operator has not said yes this
+   turn and no grant is open, do not call `dispatch_plan` at all.
 
 6. **The enriched preview — the last look before anything reaches HubSpot.** Render
    it:
@@ -304,16 +311,35 @@ whatever seven columns happened to be in the source file.
 
    **If the write grant opened at step 5 covers this lane too, do not ask
    again** — that is the single ask D-53-05 bought, and asking again here would take the
-   protection and leave the cost. Run the dispatch below inside this send's own window:
+   protection and leave the cost.
+
+   **Every send opens its own record-scoped armed window — never a bare dispatch with the
+   backend still disarmed (F2, 2026-08-25).** Under a grant that covers this lane,
+   `write_grant.authorize_send` builds the decision from it. Otherwise — no grant, or a
+   grant that covers only the enrichment lane — this write's own yes is what authorizes
+   it: `write_grant.authorize_ungranted_send` builds a single-use grant scoped to exactly
+   this send's records — using the SAME `allow_write_grants` authority and the SAME
+   Guardrail A dirty-backend refusal a standing grant gets — and discards it once this
+   dispatch finishes; it is never remembered as a standing grant, never written to disk.
+   Run the dispatch below inside this send's own window either way:
 
    ```python
-   import n8n_arming, write_grant
+   import config_gate, dispatch, n8n_arming, write_grant
 
-   decision = write_grant.authorize_send(
-       grant, lane="contacts",
-       record_ids=<this send's ids>, record_domains=<this send's domains>)
+   cfg = config_gate.load_config()
+   decision = (
+       write_grant.authorize_send(
+           grant, lane="contacts",
+           record_ids=<this send's ids>, record_domains=<this send's domains>)
+       if grant is not None else
+       write_grant.authorize_ungranted_send(
+           cfg, lane="contacts", object_type="contacts",
+           record_ids=<this send's ids>, record_domains=<this send's domains>,
+           allow_create=<allow_create>, label="this write")
+   )
    if not decision["armed"]:
-       # revoked, closed, or outside the grant — STOP and report decision["detail"]
+       # revoked, closed, outside the grant, the admin has not enabled write grants, or
+       # the backend is not in a known-disarmed state — STOP and report decision["detail"]
        ...
    with n8n_arming.armed_window(decision["workflow_id"],
                                 <this send's ids>, <this send's domains>,
@@ -338,10 +364,6 @@ whatever seven columns happened to be in the source file.
    `write_dispatch_csv` raises, and writes nothing, if a held row ever slipped through
    this far — treat that raise as a bug to stop and report, not something to retry
    around.
-
-   ```
-   python3 scripts/dispatch.py <out_path> armed
-   ```
 
    From here, follow `contact-upload/SKILL.md`'s own steps **by heading, unmodified**
    — their mechanics are untouched by this flow and a second copy of them here is

@@ -737,6 +737,85 @@ def authorize_send(grant, *, lane, record_ids, record_domains):
     }
 
 
+def authorize_ungranted_send(config, *, lane, object_type, record_ids, record_domains,
+                             allow_create, label, providers=None, transport=None,
+                             preflight=None, today=None):
+    """The per-send counterpart to `authorize_send`, for a send with NO standing grant
+    open (F2, 2026-08-25, debug/resolved/walk-write-path-defects.md). Before this, an
+    ungranted send's per-send "yes" (VOCAB-05 consent) armed the client's own POST only —
+    it never reached `n8n_arming`, so `ALLOW_HUBSPOT_RECORD_WRITES` stayed false on the
+    deployed workflow and every ungranted write returned `write_blocked` regardless of
+    consent (executions 11934/11935/11937, F2's live proof). The operator's decision
+    (2026-08-25, verbatim in the debug file): the per-send yes now opens a PER-SEND armed
+    window scoped to that send's records, using the SAME machinery a standing grant uses.
+
+    Composes `plan_grant()` + `open_grant(proposal, "yes", config)` into a single-lane,
+    single-use grant scoped to EXACTLY this send's records, and returns the identical
+    `{armed, workflow_id, grant, refusal, detail}` shape `authorize_send` returns — a lane
+    skill's dispatch code branches on `decision["armed"]` the same way whichever function
+    produced it.
+
+    WHY plan_grant()/open_grant() RATHER THAN A LIGHTER HAND-BUILT GRANT DICT. Composing
+    the real functions is what gives this path the SAME guardrails a standing grant gets,
+    for free, rather than as a second implementation to keep in sync:
+
+    * Authority — `plan_grant`'s own `config_gate.write_grants_enabled(config)` check.
+      No new settings key: the admin's existing `allow_write_grants: true` is what turns
+      this path on, exactly as it does for a standing grant.
+    * Guardrail A (the dirty-backend refusal) — `plan_grant` calls it internally, at THE
+      MOMENT OF THIS SEND (there is no earlier "plan" turn on this path the way a
+      standing grant has one), so a backend a previous session left armed is caught here
+      too, not only under a grant.
+    * Scope — the proposal (and the grant `open_grant` returns) covers ONLY the record
+      ids/domains this send names, so `armed_window`'s own scope check (`covers`, via
+      `arm_for_dispatch`'s grant branch) narrows it no further than it already is.
+
+    Guardrail B (the failed-disarm loud report) needs NOTHING extra here: it lives in
+    `n8n_arming.armed_window.__exit__`'s `DisarmFailed` raise, which fires unconditionally
+    on any window regardless of what authorized it. What does NOT carry over from a
+    standing grant is `consecutive_disarm_failures` accumulation — that counter lives on
+    a grant object across MULTIPLE sends, and this grant is used for exactly one before
+    being discarded, so it never has a second send to accumulate a failure against.
+
+    THE GRANT THIS RETURNS IS NEVER REMEMBERED. The caller uses it for exactly one
+    `armed_window` call and then discards it — never held open for a later send, never
+    treated as a standing grant an operator could later revoke by name, never written to
+    disk (GRANT-06, unchanged: this function calls nothing that writes anything).
+
+    `n8n_arming.arm_for_dispatch`/`_arm_gate`/`authorize_send` are UNTOUCHED by this
+    function's existence — the headless env-var gate (`scheduled_arm.py` and everything
+    that calls `arm_for_dispatch` with no `grant` argument) stays exactly as it was.
+
+    `record_ids`/`record_domains` are THIS SEND's records — never a wider batch — the
+    same narrowing rule `authorize_send` already documents.
+    """
+    proposal = plan_grant(
+        config, lanes=[lane], object_type=object_type, record_ids=record_ids,
+        record_domains=record_domains, allow_create=allow_create, label=label,
+        providers=providers, transport=transport, preflight=preflight, today=today)
+    if proposal.get("kind") != PROPOSAL_KIND:
+        # plan_grant's own refusal (authority, empty record set, an unresolved workflow,
+        # or Guardrail A) — relayed verbatim, never re-worded into a second message.
+        return {"armed": False, "workflow_id": None, "grant": None,
+                "refusal": proposal, "detail": proposal.get("detail")}
+
+    grant = open_grant(proposal, "yes", config)
+    if grant.get("kind") != KIND:
+        return {"armed": False, "workflow_id": None, "grant": None,
+                "refusal": grant, "detail": grant.get("detail")}
+
+    ids = _normalise(record_ids)
+    domains = _normalise(record_domains)
+    return {
+        "armed": True, "workflow_id": (grant.get("workflow_ids") or {}).get(lane),
+        "grant": grant, "refusal": None,
+        "detail": (
+            f"authorized by a one-time window for this send only: live writes for this "
+            f"send, bounded to this send's {len(ids)} record id(s) and {len(domains)} "
+            f"domain(s) — never wider, and discarded once this dispatch finishes."),
+    }
+
+
 def check_before_send(grant, *, lane=None, workflow_id, record_ids, record_domains):
     """The ONE question every send asks: may this send go? None, or a refusal.
 

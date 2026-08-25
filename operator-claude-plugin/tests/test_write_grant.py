@@ -253,6 +253,16 @@ def test_a_closed_grant_refuses_and_names_why_it_closed(granting_config,
     assert transport.calls == []
 
 
+# F2 (2026-08-25, debug/resolved/walk-write-path-defects.md): the two pins immediately
+# below are LEFT UNMODIFIED on purpose, not overlooked. F2 gives a per-send "yes" with no
+# STANDING grant a path to arm — but it does so by having the SKILL layer synthesize a
+# single-use grant via `write_grant.authorize_ungranted_send()` (which composes
+# `plan_grant()` + `open_grant()`) and hand THAT to `n8n_arming.armed_window(...,
+# grant=...)`. It never calls `arm_for_dispatch`/`armed_window` with `grant=None` for an
+# interactive send. These two tests exercise EXACTLY that `grant=None` call shape, which
+# stays reachable only from the headless path (`scheduled_arm.py`) and is untouched by F2
+# — so both pins remain true and are kept byte-identical rather than rewritten for a
+# design this session did not take.
 def test_with_no_grant_and_no_environment_variable_the_arm_refuses_at_zero_http_cost(
         granting_config, stub_module_transport_factory):
     """Today's behaviour, unchanged — and unchanged even on a config that HAS the settings
@@ -277,6 +287,128 @@ def test_the_no_grant_refusal_names_both_routes(granting_config,
 
     assert n8n_arming.ARM_ENV_VAR in result["detail"]
     assert config_gate.WRITE_GRANT_SETTINGS_KEY in result["detail"]
+
+
+# --- F2 (2026-08-25): authorize_ungranted_send — the per-send bridge with NO standing --
+# --- grant open. Composes plan_grant()+open_grant() into a single-use grant. -------------
+
+def test_authorize_ungranted_send_arms_with_the_same_guardrails_a_standing_grant_gets(
+        granting_config, stub_module_transport_factory):
+    """The tracer: settings key already on, no environment variable anywhere, one
+    synthesized single-use grant, one armed window, one verified disarm."""
+    transport = stub_module_transport_factory([
+        _workflow_list(),                                       # plan_grant's lane resolve
+        _base_workflow(),                                       # guardrail A's live read
+        _base_workflow(), _base_workflow(), {}, {}, {},         # the arm
+        _base_workflow(record_writes='"true"', ids=f'"{RECORD_ID}"'),   # arm verification
+        _armed_workflow(), _armed_workflow(), {}, {}, {}, _base_workflow(),   # the disarm
+    ])
+
+    decision = write_grant.authorize_ungranted_send(
+        granting_config, lane="enrichment", object_type="companies",
+        record_ids=[RECORD_ID], record_domains=[], allow_create=False,
+        label="this send", transport=transport)
+
+    assert decision["armed"] is True
+    assert decision["refusal"] is None
+    assert decision["workflow_id"] == WORKFLOW_ID
+    grant = decision["grant"]
+    assert grant["kind"] == write_grant.KIND
+    assert grant["state"] == write_grant.OPEN
+    assert grant["record_ids"] == [RECORD_ID], "the grant must cover THIS send's records, never wider"
+
+    with n8n_arming.armed_window(decision["workflow_id"], [RECORD_ID], [], False,
+                                 granting_config, transport=transport,
+                                 grant=decision["grant"]) as window:
+        pass
+
+    assert window.arm_result["outcome"] == n8n_arming.ARMED
+    assert window.disarm_result["outcome"] == n8n_arming.DISARMED
+    assert os.environ.get(n8n_arming.ARM_ENV_VAR) is None
+
+
+def test_authorize_ungranted_send_refuses_when_the_admin_has_not_enabled_write_grants(
+        fake_config, stub_module_transport_factory):
+    """No new settings key — the same `allow_write_grants` gate a standing grant needs."""
+    transport = stub_module_transport_factory([])
+
+    decision = write_grant.authorize_ungranted_send(
+        fake_config, lane="enrichment", object_type="companies",
+        record_ids=[RECORD_ID], record_domains=[], allow_create=False,
+        label="this send", transport=transport)
+
+    assert decision["armed"] is False
+    assert decision["grant"] is None
+    assert config_gate.WRITE_GRANT_SETTINGS_KEY in decision["detail"]
+    assert transport.calls == []
+
+
+def test_authorize_ungranted_send_refuses_over_a_dirty_backend_guardrail_a(
+        granting_config, stub_module_transport_factory):
+    """Guardrail A fires HERE too, at the moment of the send — there is no earlier "plan"
+    turn on the ungranted path the way a standing grant has one."""
+    transport = stub_module_transport_factory([
+        _workflow_list(),
+        _armed_workflow(),   # guardrail A's live read: writes already enabled
+    ])
+
+    decision = write_grant.authorize_ungranted_send(
+        granting_config, lane="enrichment", object_type="companies",
+        record_ids=[RECORD_ID], record_domains=[], allow_create=False,
+        label="this send", transport=transport)
+
+    assert decision["armed"] is False
+    assert decision["refusal"]["guardrail"] == "A"
+    assert transport.mutating_calls == []
+
+
+def test_authorize_ungranted_send_refuses_an_empty_record_set(
+        granting_config, stub_module_transport_factory):
+    transport = stub_module_transport_factory([])
+
+    decision = write_grant.authorize_ungranted_send(
+        granting_config, lane="enrichment", object_type="companies",
+        record_ids=[], record_domains=[], allow_create=False,
+        label="this send", transport=transport)
+
+    assert decision["armed"] is False
+    assert "empty" in decision["detail"]
+
+
+def test_authorize_ungranted_send_never_widens_beyond_this_sends_own_records(
+        granting_config, stub_module_transport_factory):
+    transport = stub_module_transport_factory(_plan_reads())
+
+    decision = write_grant.authorize_ungranted_send(
+        granting_config, lane="enrichment", object_type="companies",
+        record_ids=[RECORD_ID], record_domains=[], allow_create=False,
+        label="this send", transport=transport)
+
+    assert decision["grant"]["record_ids"] == [RECORD_ID]
+    assert decision["grant"]["lanes"] == ["enrichment"]
+
+
+def test_authorize_ungranted_send_returns_the_same_shape_authorize_send_does():
+    """A lane skill's dispatch code branches on `decision["armed"]` identically whichever
+    function produced it — both must return exactly these five keys."""
+    with_grant = write_grant.authorize_send(
+        None, lane="enrichment", record_ids=[RECORD_ID], record_domains=[])
+    assert set(with_grant) == {"armed", "workflow_id", "grant", "refusal", "detail"}
+
+
+def test_authorize_ungranted_sends_grant_never_reaches_arm_for_dispatch_with_grant_none():
+    """The ungranted bridge is a DIFFERENT call shape from the two pins directly above —
+    it always hands `arm_for_dispatch`/`armed_window` a real (non-None) grant object,
+    never `grant=None`. Documented here as the structural fact those two pins' comment
+    depends on, rather than left implicit."""
+    import inspect
+    source = inspect.getsource(write_grant.authorize_ungranted_send)
+    assert "grant=None" not in source
+    assert "arm_for_dispatch(" not in source, (
+        "authorize_ungranted_send must never CALL arm_for_dispatch directly — it builds "
+        "a grant and lets the caller's own armed_window(..., grant=...) do that, exactly "
+        "like authorize_send's contract (naming it in a comment/docstring is fine)"
+    )
 
 
 # --- planning reads, never mutates --------------------------------------------------------

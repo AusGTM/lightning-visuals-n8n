@@ -1,8 +1,8 @@
 ---
-status: fixing
+status: awaiting_human_verify
 trigger: "Fix F3 first then F1, and choose to allow ungranted send for F2, wrap the grant in the ability to set a standing session grant."
 created: 2026-08-25T10:40:00Z
-updated: 2026-08-25T10:40:00Z
+updated: 2026-08-25T12:30:00Z
 ---
 
 # Debug: operator walk write-path defects (F3, F1, F2)
@@ -213,6 +213,46 @@ node --test tests/n8n/*.test.mjs         # was 711 passed
   Suite: 3101 passed/154 skipped, node 717/717 (all additive, byte-identical for existing
   2-arg mediumCandidates callers).
 
+- timestamp: 2026-08-25T12:20 — F2 RESOLVED. Added
+  write_grant.authorize_ungranted_send(config, *, lane, object_type, record_ids,
+  record_domains, allow_create, label, ...) composing the EXISTING plan_grant()+
+  open_grant(proposal, "yes", config) into a single-lane, single-use grant scoped to
+  exactly one send's records; returns the identical {armed, workflow_id, grant, refusal,
+  detail} shape authorize_send returns. Gated on the SAME config_gate.
+  WRITE_GRANT_SETTINGS_KEY (allow_write_grants) plan_grant already checks -- confirmed
+  already true in the live durable operator.local.json, no admin action needed. Gets
+  Guardrail A (dirty-backend refusal) for free via plan_grant's own call; Guardrail B
+  (failed-disarm loud report) needs nothing extra -- n8n_arming.armed_window.__exit__'s
+  DisarmFailed raise already fires unconditionally on any window. Does NOT touch
+  n8n_arming.arm_for_dispatch/_arm_gate/authorize_send/scheduled_arm.py at all --
+  confirmed via git status those files are untouched (byte-identical). The two named
+  pins (test_with_no_grant_and_no_environment_variable_the_arm_refuses_at_zero_http_cost,
+  test_the_no_grant_refusal_names_both_routes) verified PASSING UNMODIFIED and left as-is
+  -- recorded reason in place in test_write_grant.py: this design never calls
+  arm_for_dispatch/armed_window with grant=None for an interactive send, so the grant=None
+  call shape those two tests exercise stays reachable only from the headless path and is
+  genuinely untouched (advisor-confirmed: "the debug file anticipated a gate-loosening
+  design you didn't need").
+  Updated all four dispatch blocks (enrich-records step 7; contact-upload step 6;
+  enrich-before-ingest step 5 enrichment-lane + step 7 contacts-lane) to build a decision
+  via authorize_send(grant,...) when a grant is open or authorize_ungranted_send(cfg,...)
+  otherwise, then wrap dispatch in the SAME armed_window either way -- collapsing "grant
+  open -> skip ask" / "yes -> window for this send" into one shared pattern per lane.
+  Rewrote each SKILL's transitional prose (never the pinned consent/safety sentences) to
+  point at the unified step; removed two now-incorrect bare `python3 scripts/dispatch.py
+  <path> armed` CLI examples that bypassed the window entirely.
+  NOT live-verified with a real HubSpot write: doing so requires genuine operator consent
+  to a real write in a live conversation, which this debugging session should not
+  fabricate. Structurally verified instead: 7 new tests exercise the full
+  plan->open->arm->dispatch->disarm cycle with a scripted transport (mirrors
+  test_write_grant.py's own tracer pattern byte-for-byte), plus the guardrail-A refusal,
+  the empty-record-set refusal, the no-grant-settings-key refusal, and the returned
+  shape/scope. Recommend a real operator walk (the same John Tsatsimas send, now that F1
+  finds the record) to close the loop with a genuine end-to-end write.
+  Version bumped 0.17.1 -> 0.18.0 (minor), CHANGELOG entry added same commit.
+  Suite: 3108 passed/154 skipped (+7 python), node 717/717 unchanged (F2 touches no
+  backend/n8n files at all).
+
 ## Eliminated
 
 - hypothesis: network/dispatch failure — eliminated: execution 11948 exists with status
@@ -228,35 +268,13 @@ node --test tests/n8n/*.test.mjs         # was 711 passed
 hypothesis: "Root causes established for all three defects; work is fixes, not investigation."
 test: "After F3: a synchronous body carrying write_blocked/no-hit is relayed as blocked/no-match, pinned by contract test. After F1: rebuilt workflow searches fall back on 0 hits and route multi-hits as candidates, node tests pass. After F2: an ungranted send under allow_write_grants:true opens a record-scoped armed window and the walk send writes contact 347569451461."
 expecting: "All existing suites stay green except pins rewritten in place with recorded reasons."
-next_action: "F1 DONE and deployed+verified live (not yet committed to git). Fix F2 next
-(design already decided, see F2 section above): in write_grant.py add a new function
-(e.g. authorize_ungranted_send or open_per_send_window) that, given a per-send 'yes' with
-NO standing grant open, composes plan_grant(...) + open_grant(proposal, 'yes', cfg) to
-synthesize a single-lane, single-use grant scoped to EXACTLY this send's record_ids/
-record_domains, then returns the SAME decision shape authorize_send already returns
-({armed, workflow_id, grant, refusal, detail}) so a lane skill's dispatch code branches
-identically whichever path produced the decision. This reuses plan_grant's own Guardrail
-A (dirty-backend refusal) and n8n_arming.armed_window's own guaranteed disarm (Guardrail
-B's single-failure loud report, DisarmFailed, fires unconditionally regardless of grant)
--- no new mechanism, no new settings key (operator.local.json already has
-allow_write_grants:true). Gated by the SAME config_gate.WRITE_GRANT_SETTINGS_KEY via
-plan_grant/open_grant's own checks. Do NOT touch n8n_arming.arm_for_dispatch/_arm_gate/
-authorize_send at all -- advisor-confirmed design decision: this preserves
-arm_for_dispatch(grant=None) byte-identical, so the two pins the debug file named
-(test_with_no_grant_and_no_environment_variable_the_arm_refuses_at_zero_http_cost,
-test_the_no_grant_refusal_names_both_routes) do NOT need rewriting -- verify they still
-pass unmodified and record in the commit body why (per advisor: 'the debug file
-anticipated a gate-loosening design you didn't need'). Do NOT touch scheduled_arm.py or
-its test (byte-identical, unrelated to this path). Update the FOUR dispatch blocks
-(enrich-records step 6/7 already read; contact-upload step 5/6; enrich-before-ingest's
-two lanes) to call the new function when no grant is open and thread its 'grant' into
-armed_window exactly like the granted branch already does. Rewrite affected contract-test
-pins in place with RECORDED EDIT reasons only where wording actually changes -- preserve
-every pinned sentence advisor listed ('with no grant open, everything above is exactly as
-it is today', 'arms this send and nothing else', 'never written to disk'). Check
-test_no_grant_and_no_bridge_state_reaches_disk_or_the_environment (greps write_grant.py
-source for open(/json.dump(/etc) -- name the new function/helper so it doesn't trip this)
-and test_the_shared_dispatch_loop_is_still_grant_unaware (chunking.dispatch_plan must
-stay grant-unaware). Plugin version bump 0.17.1 -> 0.18.0 (minor, per instructions) +
-CHANGELOG entry in the same commit as the code. Run full suite after.">
+next_action: "All three fixes DONE. F1 deployed+verified live. F3 and F2 code-complete,
+tested, not yet committed as of this Current Focus write (commit immediately after).
+Remaining work: git add+commit F2's changes (write_grant.py, test_write_grant.py, the
+four SKILL.md dispatch blocks, plugin.json 0.18.0, CHANGELOG.md), then archive this
+session per the standard protocol (move to resolved/, append knowledge-base.md entry,
+commit), then return the final DEBUG COMPLETE summary. Recommend the operator run one
+real live walk (re-send John Tsatsimas; F1 now finds the record; a genuine yes should now
+actually write it) to close the loop end-to-end, since this session could not ethically
+fabricate a real HubSpot write without genuine operator consent in a live conversation.">
 

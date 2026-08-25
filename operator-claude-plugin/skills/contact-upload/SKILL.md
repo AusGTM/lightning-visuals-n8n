@@ -249,18 +249,41 @@ be sent, and — only when explicitly armed — send it.
    state. Revoking a grant **refuses the next send** — it **does not stop a dispatch already
    running**, so a revoke arriving mid-dispatch still lets that send finish.
 
-   Under a grant, step 6's dispatch runs inside this send's own window instead of on the
-   command line:
+   Whichever consent applies — a standing grant, or this send's own yes — step 6's dispatch
+   opens the same kind of record-scoped armed window; see there for the code (F2,
+   2026-08-25: the yes now arms a window for this send, where it used to arm the command
+   line's own POST only, and nothing on the backend).
+
+6. **Dispatch under an open grant, or otherwise only once the operator has said yes to
+   this send.**
+
+   **Every send opens its own record-scoped armed window — never a bare dispatch with the
+   backend still disarmed.** Under a grant, `write_grant.authorize_send` builds the
+   decision from it. With no grant open, this send's own yes is what authorizes it:
+   `write_grant.authorize_ungranted_send` builds a single-use grant scoped to exactly this
+   send's records — using the SAME `allow_write_grants` authority and the SAME Guardrail A
+   dirty-backend refusal a standing grant gets — and discards it once this dispatch
+   finishes; it is never remembered as a standing grant, never written to disk. Both
+   functions return the identical `{armed, workflow_id, grant, refusal, detail}` shape, so
+   the dispatch is the same call either way:
 
    ```python
    import config_gate, dispatch, n8n_arming, write_grant
 
    cfg = config_gate.load_config()
-   decision = write_grant.authorize_send(
-       grant, lane="contacts",
-       record_ids=<this send's ids>, record_domains=<this send's domains>)
+   decision = (
+       write_grant.authorize_send(
+           grant, lane="contacts",
+           record_ids=<this send's ids>, record_domains=<this send's domains>)
+       if grant is not None else
+       write_grant.authorize_ungranted_send(
+           cfg, lane="contacts", object_type="contacts",
+           record_ids=<this send's ids>, record_domains=<this send's domains>,
+           allow_create=<allow_create>, label="this send")
+   )
    if not decision["armed"]:
-       # revoked, closed, or outside the grant — STOP and report decision["detail"]
+       # revoked, closed, outside the grant, the admin has not enabled write grants, or
+       # the backend is not in a known-disarmed state — STOP and report decision["detail"]
        ...
    with n8n_arming.armed_window(decision["workflow_id"],
                                 <this send's ids>, <this send's domains>,
@@ -272,13 +295,6 @@ be sent, and — only when explicitly armed — send it.
    record set**. That narrowing is what keeps every window strictly smaller than the grant
    it runs under; passing the grant's full list would widen every window to the whole batch
    and every test would still pass.
-
-6. **Dispatch under an open grant, or otherwise only once the operator has said yes to
-   this send.**
-
-   ```
-   python3 scripts/dispatch.py <path> armed
-   ```
 
    The webhook response you get back here is the raw JSON body `dispatch.py` printed
    under `"response"` — hand it to the next step exactly as returned, unparsed.
