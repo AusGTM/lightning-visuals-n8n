@@ -348,10 +348,22 @@ last_updated: 2026-08-25T06:10:09.525Z
     "phase": "53",
     "file": "operator-claude-plugin/scripts/write_grant.py",
     "line": null,
-    "description": "envelope()'s projected_executions (1 webhook execution per chunk + 1 sub-execution per record) is PROJECTED, never measured -- nobody has counted executions for a multi-chunk grant end to end. Labelled projected everywhere it appears; measure in Phase 54.",
+    "description": "envelope()'s projected_executions (1 webhook execution per chunk + 1 sub-execution per record) is PROJECTED, never measured -- nobody has counted executions for a multi-chunk grant end to end. NARROWED 2026-08-27 (Phase 54-01, 54-MEASUREMENT.md): the chunk_count==1 (single-record) case IS now measured against live execution history (executions 11934/11935/11937 pre-F2, 11956/11958/11960 post-fix; execution 11960 isolates one bare-object dispatch to exactly one measured n8n execution) -- and the measurement DIFFERS from the projection (measured 1, projected chunk_count+record_count=2 for that same record set), the first real data point against this formula. What remains genuinely open, unchanged from the original claim: the MULTI-CHUNK case (chunk_count > 1, several webhook executions in one grant) has still never been counted end to end -- this plan's execution budget named no multi-chunk send in reachable history to read.",
     "status": "open",
     "reason": "",
     "recorded_at": "2026-08-25T00:00:00.000Z",
+    "resolved_at": null
+  },
+  {
+    "id": 27,
+    "kind": "deviation",
+    "phase": "54",
+    "file": "operator-claude-plugin/scripts/scheduled_arm.py",
+    "line": null,
+    "description": "The SJ-3 scheduled-poller companion's double pass, recorded per OP-54-02: scheduled_arm.py's companion cannot straddle SJ-3's own in-n8n Execute-Workflow dispatch (that dispatch runs unarmed, always returns write_blocked, inside SJ-3's own single n8n execution with no external hook point), so every record SJ-3 matches costs one unarmed full waterfall that is always refused, plus one armed re-run through this companion's own external webhook path -- two full passes per flagged record, daily (the SJ-3 cadence), bounded by the flagged-record count, arming admin-only via ALLOW_N8N_ARM (the headless/cron authority, unchanged, D-1.1-01). This is architecturally the same full-pass-refused-then-full-pass-again shape G-3 names for the interactive lanes, and it is NOT fixed by F2 (F2 only touches the interactive lane skills' arm-before-dispatch ordering) or by this phase's measurement task. DELIBERATELY LEFT UNFIXED BY OPERATOR RULING OP-54-02, not overlooked -- the v1.1 milestone's D-1.1-01 explicitly carves headless/cron paths out of the grant redesign, and this phase's scope is measuring and naming the interactive case honestly, not rebuilding the scheduled companion's architecture.",
+    "status": "open",
+    "reason": "",
+    "recorded_at": "2026-08-27T00:00:00.000Z",
     "resolved_at": null
   }
 ]
