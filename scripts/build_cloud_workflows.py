@@ -2797,7 +2797,8 @@ ENRICH_APPLY_JUDGE_VERDICT = _enrich_apply_judge_verdict_js()
 # (Phase 31): mergeCompanies() now requires ./hubspotEnums for its own enum guard, so any
 # node inlining it without the validator throws at runtime inside n8n.
 ENRICH_MERGE_CO = JUNE_CANDIDATES_JS + inline(
-    "taxonomy.generated.js", "hubspotEnums.generated.js", "hubspotEnums.js", "mergeCompanies.js") + r"""
+    "taxonomy.generated.js", "hubspotEnums.generated.js", "hubspotEnums.js", "mergeCompanies.js",
+    "escalation.generated.js", "providerConflict.js") + r"""
 
 // --- n8n wrapper: mergeCompanies(existingRecord, winners) non-clobber ---
 // lv_org_type / lv_produces_content resolve via Claude web research (see the Research
@@ -2823,6 +2824,29 @@ ENRICH_MERGE_CO = JUNE_CANDIDATES_JS + inline(
 //    any branch), so a size disagreement IS the franchise/subsidiary detector. Conflicted
 //    fields never promote — CLAUDE.md §17.2 "NEEDS_REVIEW if providers materially conflict".
 const CONFLICT_WATCH = ["lv_revenue_band", "lv_employee_band"];
+
+// T-58-26/§21.2 (gap-closure 58-06, 2026-08-26, execution 11983): CONFLICT_WATCH above
+// only ever covered the two size fields — a disagreement that can invert a franchise/
+// subsidiary size guess, never one that can fire a hard veto. lv_country_region_normalized
+// sat in the candidate loop below but OUTSIDE any watch list, so a cross-provider
+// disagreement on it (ZoomInfo "United States" vs Lusha "AU") promoted the trust-rank
+// winner unadjudicated and fired the Non-ANZ veto with no judge call and no review flag —
+// a direct §21.2 violation. The five decision-driving fields (operator ruling 2026-08-26)
+// get their OWN watch, modelled as GROUPS (MATERIAL_CONFLICT_GROUPS, from
+// escalation.generated.js / config/escalation_policy.yaml) because
+// lv_country_region_normalized and native `country` are one disputed fact with two
+// HubSpot serializations — a conflict on either must suppress both under one reason
+// (providerConflict.js's groupConflicts()). Size fields are modelled as their own
+// singleton groups purely so ONE suppression pass below covers both watches uniformly —
+// a size "group" can never be adjudicated (judge_confidence_by_field never carries a size
+// field name, RO-2 keeps the size list out of Judge Gate entirely), so a size conflict
+// always suppresses. That is the §17.2 review flag CONFLICT_WATCH's own comment above
+// always claimed but the cloud lane never actually wrote (ENRICH_DECIDE_CO_CLOUD never
+// read row.conflicts at all before this change).
+const MATERIAL_WATCH = MATERIAL_CONFLICT_GROUPS.reduce((acc, g) => acc.concat(g.fields), []);
+const SIZE_GROUPS = CONFLICT_WATCH.map((f) => ({ name: f, fields: [f] }));
+const ALL_CONFLICT_GROUPS = [...SIZE_GROUPS, ...MATERIAL_CONFLICT_GROUPS];
+const ALL_WATCHED_FIELDS = [...CONFLICT_WATCH, ...MATERIAL_WATCH];
 
 // Phase 41 Task 3 (F1): native firmographic band derivation, reproducing
 // src/normalizer.py's normalize_revenue_band / normalize_employee_band cut points
@@ -2876,19 +2900,13 @@ return $input.all().map((it) => {
   const best = row.scored.best || {};
   const existingRecord = row.existingRecord || {};
 
-  // Distinct normalized values per field, across distinct sources.
-  const conflicts = [];
-  for (const f of CONFLICT_WATCH) {
-    const b = best[f];
-    if (!b) continue;
-    const others = (b.agreedBy || []).length;
-    const sources = row.scored.sourcesByField && row.scored.sourcesByField[f];
-    if (sources && sources.length > 1 && others === 0) {
-      conflicts.push({ field: f, chosen: b.normalizedValue, chosen_source: b.source,
-                       candidates: sources });
-    }
-  }
+  // Distinct normalized values per field, across distinct sources — providerConflict.js's
+  // shared predicate, called here with BOTH watches (size + material). Task 2 (gap-closure
+  // 58-06) calls the SAME function from Judge Gate with the material fields ONLY — never
+  // the size list, which is what keeps RO-2 true there.
+  const conflicts = detectConflicts(row.scored, ALL_WATCHED_FIELDS);
   const conflicted = new Set(conflicts.map((c) => c.field));
+  const groupedConflicts = groupConflicts(conflicts, ALL_CONFLICT_GROUPS);
 
   const candidate = {};
   for (const f of ["domain", "industry", "lv_revenue_band", "lv_employee_band",
@@ -2909,6 +2927,14 @@ return $input.all().map((it) => {
   // these three fields, the one this plan's gap_closure_context did not name.
   const winners = (row.scored && row.scored.winners) || {};
   for (const f of ["country", "city", "numberofemployees"]) {
+    // T-58-26 (gap-closure 58-06): this raw-value loop had NO conflict guard at all.
+    // Catches `country` conflicting on ITS OWN raw values; when only its sibling
+    // lv_country_region_normalized conflicts (11983's exact shape: lusha/apollo agree
+    // "Australia" here, only the region enum disagreed), this per-field check stays
+    // false and the post-spread GROUP suppression below is what actually withholds it —
+    // both members of the country_region group are suppressed together regardless of
+    // which one individually conflicted.
+    if (conflicted.has(f)) continue;
     const v = winners[f];
     if (v != null && String(v).trim() !== "") candidate[f] = v;
   }
@@ -3059,6 +3085,48 @@ return $input.all().map((it) => {
         verified_at: disagreementVerifiedAt,
       });
     }
+  }
+
+  // T-58-26/§21.2 (gap-closure 58-06): material/size-conflict suppression. Runs AFTER
+  // every spread above (same discipline as the D-04 juneDisagreements block below it in
+  // source order historically, and immediately above here in execution order) so no
+  // candidate fold — waterfall, native band, June, or research — can resurrect a
+  // conflicted field. SUPPRESS-UNLESS-ADJUDICATED: a group is skipped when the judge lane
+  // already adjudicated one of its member fields — row.judge_confidence_by_field carries
+  // that field's name (Apply Judge Verdict / TA-8 is the ONLY writer of that map, keyed
+  // on the verdict's own chosen_field) — so a legitimate judge-confirmed value, including
+  // one that fires the veto, is never deleted by its own suppressor. A size group can
+  // never satisfy this check (RO-2 keeps size fields out of judge_confidence_by_field
+  // entirely), so a size conflict always suppresses.
+  const judgeConfidenceByField = row.judge_confidence_by_field || {};
+  const conflictVerifiedAt = new Date().toISOString();
+  for (const g of groupedConflicts) {
+    const adjudicated = g.fields.some(
+      (f) => Object.prototype.hasOwnProperty.call(judgeConfidenceByField, f));
+    if (adjudicated) continue;
+    for (const f of g.fields) {
+      delete finalMerge.canonicalPatch[f];
+      // Only lv_org_type/lv_produces_content carry a cache key (COMPANY_CACHE_KEY_FIELDS,
+      // mergeCompanies.js) — reuses the same map JUNE_RESEARCH_CACHE_KEYS above defines
+      // for exactly those two fields, never a second hand-typed copy.
+      const cacheKey = JUNE_RESEARCH_CACHE_KEYS[f];
+      if (cacheKey) delete finalMerge.cacheKeys[cacheKey];
+    }
+    const detail = g.conflicts
+      .map((c) => `${c.field}: ` + c.candidates.map((s) => `${s.source}=${s.value}`).join(" vs "))
+      .join("; ");
+    finalMerge.decisions.push({
+      field: g.conflicts.map((c) => c.field).join(", "),
+      current_value: g.fields.map((f) => (existingRecord[f] === undefined ? null : existingRecord[f])),
+      chosen_value: null,
+      source_provider: "provider_conflict",
+      decision: "needs_review",
+      confidence: null,
+      reason: detail,
+      validation_status: "human_review_required",
+      evidence_url: null,
+      verified_at: conflictVerifiedAt,
+    });
   }
 
   return { json: { ...row, merge: finalMerge, conflicts } };

@@ -27,6 +27,7 @@ from src.judge import (  # noqa: E402
     JUDGE_MIN_CONFIDENCE,
     JUDGE_OUTPUT_REQUIRED,
     KNOWN_VIDEO_HOSTS,
+    MATERIAL_CONFLICT_GROUPS,
 )
 
 OUT = ROOT / "n8n" / "code" / "escalation.generated.js"
@@ -50,11 +51,14 @@ def render() -> str:
         "",
         f"const KNOWN_VIDEO_HOSTS = {json.dumps(KNOWN_VIDEO_HOSTS, indent=2)};",
         "",
+        f"const MATERIAL_CONFLICT_GROUPS = {json.dumps(MATERIAL_CONFLICT_GROUPS, indent=2)};",
+        "",
         "module.exports = {",
         "  ESCALATION_CONFIDENCE_BAND,",
         "  JUDGE_MIN_CONFIDENCE,",
         "  JUDGE_OUTPUT_REQUIRED,",
         "  KNOWN_VIDEO_HOSTS,",
+        "  MATERIAL_CONFLICT_GROUPS,",
         "};",
         "",
     ]

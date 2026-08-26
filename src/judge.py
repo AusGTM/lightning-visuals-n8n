@@ -43,6 +43,13 @@ JUDGE_OUTPUT_REQUIRED = list(_POLICY["sonnet_5"]["output_required"])
 # JG-4: hosts that substantiate content output even when not the company's own domain.
 KNOWN_VIDEO_HOSTS = sorted(_POLICY["evidence_sufficiency"]["known_video_hosts"])
 
+# Gap-closure 58-06 (operator ruling 2026-08-26): the decision-driving field groups a
+# cross-provider conflict must always suppress-unless-adjudicated. Read verbatim from the
+# YAML (list of {name, fields} dicts) -- gen_escalation_js.py emits this list, never
+# re-derives it, so the JS side agrees by construction (same discipline as the three
+# constants above).
+MATERIAL_CONFLICT_GROUPS = list(_POLICY["sonnet_5"]["material_conflict_field_groups"])
+
 
 def is_citation_sufficient(url, company_domain) -> bool:
     """JG-4/TS-1 Python twin of n8n/code/judge.js's isCitationSufficient — same contract,
@@ -70,6 +77,12 @@ if __name__ == "__main__":
     assert JUDGE_MIN_CONFIDENCE == 80
     assert "youtube.com" in KNOWN_VIDEO_HOSTS
     assert KNOWN_VIDEO_HOSTS == sorted(KNOWN_VIDEO_HOSTS)
+    assert {g["name"] for g in MATERIAL_CONFLICT_GROUPS} == {
+        "country_region", "org_type", "produces_content",
+        "hardware_vendor", "gambling_operator",
+    }
+    country_region = next(g for g in MATERIAL_CONFLICT_GROUPS if g["name"] == "country_region")
+    assert set(country_region["fields"]) == {"lv_country_region_normalized", "country"}
     assert is_citation_sufficient(
         "https://www.youtube.com/user/AtcracesTV?cbrd=1", "australianturfclub.com.au"
     ) is True

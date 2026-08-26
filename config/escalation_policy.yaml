@@ -26,6 +26,27 @@ sonnet_5:
     # parsed by any code — this is the first real consumer.)
     - confidence_between: [75, 85]
     - multiple_sources_disagree: true
+    - field_conflict: true
+  # Operator ruling 2026-08-26 (gap-closure 58-06, execution 11983): the decision-driving
+  # field groups that ALWAYS route to judge-or-review on a cross-provider disagreement --
+  # CLAUDE.md §21.2's veto-flip gate, enforced structurally rather than by convention.
+  # Modelled as GROUPS, not bare field names, because lv_country_region_normalized and
+  # native `country` are one disputed fact with two HubSpot serializations: a conflict on
+  # EITHER member suppresses BOTH under one reason (n8n/code/providerConflict.js's
+  # groupConflicts()). src/judge.py reads this list the way it reads confidence_between
+  # above; scripts/gen_escalation_js.py emits it into n8n/code/escalation.generated.js as
+  # MATERIAL_CONFLICT_GROUPS -- there is no second hand-typed copy.
+  material_conflict_field_groups:
+    - name: country_region
+      fields: [lv_country_region_normalized, country]
+    - name: org_type
+      fields: [lv_org_type]
+    - name: produces_content
+      fields: [lv_produces_content]
+    - name: hardware_vendor
+      fields: [lv_is_hardware_vendor]
+    - name: gambling_operator
+      fields: [lv_is_gambling_operator]
   output_required:
     - decision
     - chosen_value

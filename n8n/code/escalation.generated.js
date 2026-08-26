@@ -27,9 +27,44 @@ const KNOWN_VIDEO_HOSTS = [
   "youtube.com"
 ];
 
+const MATERIAL_CONFLICT_GROUPS = [
+  {
+    "name": "country_region",
+    "fields": [
+      "lv_country_region_normalized",
+      "country"
+    ]
+  },
+  {
+    "name": "org_type",
+    "fields": [
+      "lv_org_type"
+    ]
+  },
+  {
+    "name": "produces_content",
+    "fields": [
+      "lv_produces_content"
+    ]
+  },
+  {
+    "name": "hardware_vendor",
+    "fields": [
+      "lv_is_hardware_vendor"
+    ]
+  },
+  {
+    "name": "gambling_operator",
+    "fields": [
+      "lv_is_gambling_operator"
+    ]
+  }
+];
+
 module.exports = {
   ESCALATION_CONFIDENCE_BAND,
   JUDGE_MIN_CONFIDENCE,
   JUDGE_OUTPUT_REQUIRED,
   KNOWN_VIDEO_HOSTS,
+  MATERIAL_CONFLICT_GROUPS,
 };
