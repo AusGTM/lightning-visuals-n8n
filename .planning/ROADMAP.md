@@ -60,7 +60,27 @@ variable), and a design that runs the provider waterfall twice per written recor
 - [ ] **Phase 57: Ceilings, refusal-before-start, and post-run proof** - A run cannot spend what
       it does not have, and proves afterwards it wrote only what it was granted
 
+- [ ] **Phase 58: Take what the operator actually has** - Every input an operator holds
+      (screenshot, paste, URL, bare name) resolves to a company the backend can act on; missing
+      domains researched then confirmed before write; refusal is the last resort — promoted
+      ahead of 54–57 by operator decision 2026-08-25
+
 ## Phase Details
+
+### Phase 58: Take what the operator actually has
+
+**Goal**: Every input an operator holds resolves to something the backend can act on, and a
+refusal is the last resort rather than the first answer. Extend the contact lane's extraction
+adapters (pasted text, foreign JSON, public URL, screenshots — Phase 35) to companies; when no
+usable domain is present, research one and confirm it before writing (a wrong domain poisons
+the dedupe anchor); never silently invent a domain — a profile URL is dropped, not passed
+through. Closes INPUT-01..04. Research cost must be priced in the envelope and be declinable.
+Full detail: `milestones/v1.1-ROADMAP.md` § Phase 58; decisions:
+`phases/58-take-what-the-operator-actually-has/58-CONTEXT.md`.
+
+**Requirements**: INPUT-01, INPUT-02, INPUT-03, INPUT-04
+
+**Plans**: TBD
 
 ### Phase 51: Backfill Pipeline, Credit Sizing & Dry Run
 
