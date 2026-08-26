@@ -5,16 +5,16 @@ milestone_name: Unattended Session Runs
 current_phase: 58
 current_phase_name: take-what-the-operator-actually-has
 status: verifying
-stopped_at: Completed 58-05-PLAN.md
-last_updated: "2026-08-26T10:22:25.747Z"
+stopped_at: Completed 58-06-PLAN.md (Task 4 checkpoint resolved)
+last_updated: "2026-08-26T11:33:23.229Z"
 last_activity: 2026-08-26
 last_activity_desc: Phase 58 execution started
 progress:
   total_phases: 3
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 13
-  completed_plans: 12
-  percent: 67
+  completed_plans: 13
+  percent: 100
 ---
 
 # Project State
@@ -151,7 +151,7 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Phase: 58 (take-what-the-operator-actually-has) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Executing — 58-05 complete (native fields at landing + SFV corrective window); 58-06 (wave 5, judge escalation for material property conflicts) next
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
@@ -239,12 +239,12 @@ Last activity: 2026-08-26 — Phase 58 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████████░] 92% (v0.9 phase 47.5 of 46-49)
+Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-26T10:22:25.732Z
-**Stopped at:** Completed 58-05-PLAN.md
+**Last session:** 2026-08-26T11:33:23.221Z
+**Stopped at:** Completed 58-06-PLAN.md (Task 4 checkpoint resolved)
 **Resume file:** None
 
 ## Performance Metrics
@@ -322,6 +322,7 @@ Progress: [█████████░] 92% (v0.9 phase 47.5 of 46-49)
 | Phase 58 P03 | ~15min | 4 tasks | 9 files |
 | Phase 58 P04 | 25min | 3 tasks | 5 files |
 | Phase 58 P05 | ~75min | 4 tasks | 14 files |
+| Phase 58 P06 | ~110min | 4 tasks | 16 files |
 
 ## Decisions
 
@@ -363,6 +364,7 @@ Progress: [█████████░] 92% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: Phase 58-03: operator ruling on walk finding -- native industry/country/city/employee-count promotion gap folds into Phase 58 as orchestrator-planned gap-closure plan 58-05; CLAUDE.md Section29 numberofemployees never-write ban LIFTED for this lane only, scoped fill_blank_only provider-sourced
 - [Phase ?]: 58-04: research-line pricing is default-on and declinable; a struck line converges on the existing DECLINE_DOMAIN sentinel (no new bucket). INPUT-02 residual (backend research node not extended to seek a domain) remains deferred per operator decision, 2026-08-26.
 - [Phase ?]: Phase 58-05: Task 4 superseded by events -- operator's own walk dispatch (exec 11983) armed a full enrich before Task 4 resumed, landing the plan's native fields but also flipping a false Non-ANZ veto via an unwatched ZoomInfo region conflict (root cause scoped to gap-closure plan 58-06); Task 4 executed instead as a corrective window (scripts/fix_sfv_region.py, commit 11b17c0), clearing the veto without re-running the same wrong provider match
+- [Phase ?]: Phase 58-06: Task 4 checkpoint resolved 2026-08-26 -- size disagreements stay flag-only permanently (RO-2 untouched, no follow-up); forensic's 70-vs-75 confidence rejection accepted as correct behavior, region min_confidence stays 75, no follow-up opened. Plan complete; INPUT-01/03/04 ticked in v1.1-REQUIREMENTS.md, INPUT-02 stays open per its recorded defer-residual.
 
 ### Roadmap Evolution
 

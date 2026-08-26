@@ -80,7 +80,7 @@ Full detail: `milestones/v1.1-ROADMAP.md` § Phase 58; decisions:
 
 **Requirements**: INPUT-01, INPUT-02, INPUT-03, INPUT-04
 
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans executed
 
 Plans:
 **Wave 1**
@@ -102,7 +102,7 @@ Plans:
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
-- [ ] 58-06-PLAN.md — gap closure: judge escalation for material property conflicts; no anti-ICP veto flip without a judge verdict or human review (wave 5)
+- [x] 58-06-PLAN.md — gap closure: judge escalation for material property conflicts; no anti-ICP veto flip without a judge verdict or human review (wave 5)
 
 ### Phase 51: Backfill Pipeline, Credit Sizing & Dry Run
 
