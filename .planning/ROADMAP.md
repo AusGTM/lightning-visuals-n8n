@@ -80,7 +80,7 @@ Full detail: `milestones/v1.1-ROADMAP.md` § Phase 58; decisions:
 
 **Requirements**: INPUT-01, INPUT-02, INPUT-03, INPUT-04
 
-**Plans**: 4/5 plans executed
+**Plans**: 4/6 plans executed
 
 Plans:
 **Wave 1**
@@ -99,6 +99,10 @@ Plans:
 **Wave 4** *(blocked on Wave 3 completion)*
 
 - [ ] 58-05-PLAN.md — gap closure: native country/city/employee-count written at landing, blank-fill only; native industry stays unwritten (Phase 31 refusal upheld 2026-08-26) (wave 4)
+
+**Wave 5** *(blocked on Wave 4 completion)*
+
+- [ ] 58-06-PLAN.md — gap closure: judge escalation for material property conflicts; no anti-ICP veto flip without a judge verdict or human review (wave 5)
 
 ### Phase 51: Backfill Pipeline, Credit Sizing & Dry Run
 
