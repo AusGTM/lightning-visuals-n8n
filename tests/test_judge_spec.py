@@ -213,13 +213,21 @@ def test_ta2_judge_eligible_and_deterministic_fields_are_disjoint():
     firmographic fields that are never research-eligible, spec §8.5/RESEARCH.md's Tier
     Boundary table) MUST be disjoint. Both are read from their REAL homes — judge.js's
     own source text, and the BUILT Merge Company node's jsCode — never hand-retyped as a
-    second Python literal, so a future edit to either cannot drift past this test."""
+    second Python literal, so a future edit to either cannot drift past this test.
+
+    UPDATED (gap-closure 58-06, operator ruling 2026-08-26, T-58-26/§21.2):
+    lv_country_region_normalized moved from deterministic-only to judge-eligible —
+    execution 11983 proved a cross-provider disagreement on this exact field can fire the
+    Non-ANZ hard veto unadjudicated, so the judge must be able to see and adjudicate the
+    disputed value. It remains disjoint from CONFLICT_WATCH's size fields (RO-2 is
+    unaffected — this is a size/material boundary, not a deterministic/judge one)."""
     judge_src = (ROOT / "n8n" / "code" / "judge.js").read_text()
     judge_eligible = _extract_string_array(judge_src, "_JUDGE_DATA_FIELDS = [")
 
     assert judge_eligible == {
         "lv_org_type", "lv_produces_content", "lv_content_type",
         "lv_is_hardware_vendor", "lv_is_gambling_operator",
+        "lv_country_region_normalized",
     }
 
     doc = _load_workflow("wf_enrichment_local_live.json")
@@ -230,7 +238,6 @@ def test_ta2_judge_eligible_and_deterministic_fields_are_disjoint():
 
     deterministic_only = conflict_watch | {
         "domain", "industry", "numberofemployees", "annualrevenue",
-        "lv_country_region_normalized",
     }
 
     assert judge_eligible.isdisjoint(conflict_watch)

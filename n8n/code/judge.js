@@ -115,6 +115,22 @@ function computeEscalation(researchCandidate, existingRecord) {
     reasons.push("org_type_conflict");
   }
 
+  // Gap-closure 58-06 Task 2 (T-58-26/§21.2): the research-vs-existing analog of
+  // org_type_conflict above, for the region that feeds the Non-ANZ hard veto. Exact same
+  // shape: a KNOWN existing value (blank/"unknown" is absence of enrichment, never a
+  // conflict — the same three-state rule _regionKey uses in ENRICH_DECIDE_CO_CLOUD)
+  // disagreeing with a freshly-researched one is a conflict; a first-time resolution is
+  // not. This is the ONLY new reason computeEscalation gains — the provider-vs-provider
+  // axis (ZoomInfo vs Lusha) is a SEPARATE mechanism, detected from row.scored in the
+  // Judge Gate WRAPPER (never inside this function), which is what keeps this function's
+  // 2-argument arity and RO-2 exactly as they were.
+  const existingRegion = existing.lv_country_region_normalized;
+  const existingRegionKnown = !!existingRegion && existingRegion !== "unknown";
+  if (existingRegionKnown && data.lv_country_region_normalized &&
+      data.lv_country_region_normalized !== existingRegion) {
+    reasons.push("region_conflict");
+  }
+
   if (data.lv_produces_content === false) {
     reasons.push("produces_content_false");
   }
@@ -159,6 +175,13 @@ function applyUnadjudicated(researchCandidate, reasons) {
     delete data.lv_org_type;
     delete evidence_by_field.lv_org_type;
   }
+  // Gap-closure 58-06 Task 2: same fail-safe for a research-vs-existing region conflict —
+  // an unadjudicated re-research must never flip the region (and therefore never flip the
+  // Non-ANZ veto) on its own say-so.
+  if ((reasons || []).includes("region_conflict")) {
+    delete data.lv_country_region_normalized;
+    delete evidence_by_field.lv_country_region_normalized;
+  }
   // lv_produces_content: UNCHANGED (D5 table) — an evidenced `false` still flows
   // (Phase 13 TS-3); not this phase's call to neuter it.
 
@@ -195,15 +218,22 @@ function applyCostCap(rows, maxPerRun) {
 }
 
 // buildJudgeRequestBody(row, model, maxTokens) -> the Anthropic Messages body. JG-2:
-// identity + classification ONLY — no revenue/employee size-band field, no raw
-// annualrevenue/numberofemployees, anywhere in the serialized body, and NO tools key at
-// all (Pitfall 5 — the judge reasons over evidence already retrieved, it must never
-// re-search). Field-name-agnostic on purpose: this whole file gets inlined into the
-// Judge Gate node, whose built jsCode Task 4's own verify step greps for zero size-field
-// name references at all, not merely zero references inside the payload builder.
+// identity + classification ONLY — no size-band field, no raw firmographic size figure,
+// anywhere in the serialized body, and NO tools key at all (Pitfall 5 — the judge reasons
+// over evidence already retrieved, it must never re-search). Field-name-agnostic on
+// purpose (deliberately not naming the size fields in this very comment): this whole file
+// gets inlined into the Judge Gate node, whose built jsCode gap-closure 58-06 Task 2's
+// own verify step greps for zero size-field name references at all, not merely zero
+// references inside the payload builder.
+// Gap-closure 58-06 Task 2: lv_country_region_normalized joins this list so the judge
+// payload can actually carry the disputed value to adjudicate (it could not resolve a
+// region conflict it was never shown). Still no size field, ever — RO-2 is unaffected
+// since this list only ever grows with fields _carriesClassification-adjacent, never a
+// firmographic one.
 const _JUDGE_DATA_FIELDS = [
   "lv_org_type", "lv_produces_content", "lv_content_type",
   "lv_is_hardware_vendor", "lv_is_gambling_operator",
+  "lv_country_region_normalized",
 ];
 
 // Source trust for the two candidates scoreResearchCandidates ever constructs. Passed
@@ -350,6 +380,11 @@ function buildJudgeRequestBody(row, model, maxTokens) {
     name: id.companyName || existing.name || null,
     domain: id.domain || existing.domain || null,
     existing_lv_org_type: existing.lv_org_type || null,
+    // Gap-closure 58-06 Task 2: the existing region, alongside org_type above, so the
+    // judge sees what a "conflict" is being measured against for the new region_conflict
+    // reason (same JG-2 field-name-agnostic discipline — a plain enum string, never a
+    // size/firmographic value).
+    existing_lv_country_region_normalized: existing.lv_country_region_normalized || null,
     research_candidate: {
       data: restrictedData,
       evidence_by_field: rc.evidence_by_field || {},
@@ -360,6 +395,11 @@ function buildJudgeRequestBody(row, model, maxTokens) {
     // field is ever in the list.
     scoring: restrictedScoring,
     escalation_reasons: (row && row.judge_reasons) || [],
+    // Gap-closure 58-06 Task 2: the cross-PROVIDER disagreement (WHO said WHAT), never
+    // the size list — the Judge Gate wrapper builds this exclusively from the material
+    // field groups (n8n/code/providerConflict.js), so a size-band candidates array can
+    // never reach this key even if row carried one under a different name.
+    provider_conflicts: (row && row.material_conflicts) || [],
   };
 
   const system = [
@@ -377,6 +417,9 @@ function buildJudgeRequestBody(row, model, maxTokens) {
     "being old. prior_on_file is NOT an independent corroborating source - it is what is",
     "already recorded, which may itself derive from an earlier unverified research pass,",
     "so agreement with it is not evidence; ground the decision in the cited URLs only.",
+    "provider_conflicts, when present, lists firmographic providers that disagreed on a",
+    "field (e.g. company country) BEFORE this research ran - it is background on why",
+    "this case reached you, not evidence itself; adjudicate strictly from evidence_by_field.",
     "Return ONLY one JSON object (no prose, no markdown fences) with exactly these keys: " +
       JSON.stringify([...JUDGE_OUTPUT_REQUIRED, "chosen_field"]) + ".",
   ].join(" ");

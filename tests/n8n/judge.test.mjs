@@ -293,3 +293,255 @@ test("buildJudgeRequestBody: a row with no research_scoring at all still produce
   assert.deepEqual(parsed.company.scoring, {});
   assert.equal(body.max_tokens, 4096);
 });
+
+// === Gap-closure 58-06 Task 2: region_conflict / provider-conflict routing ===========
+
+test("region_conflict: a KNOWN existing region differing from a fresh research answer -> needsJudge:true", () => {
+  const r = computeEscalation(
+    { matched: true, confidence: 92, data: { lv_country_region_normalized: "AU" } },
+    { lv_country_region_normalized: "Other" },
+  );
+  assert.equal(r.needsJudge, true);
+  assert.ok(r.reasons.includes("region_conflict"));
+});
+
+test("region_conflict: existing region BLANK -> first-time resolution is NOT a conflict", () => {
+  const r = computeEscalation(
+    { matched: true, confidence: 92, data: { lv_country_region_normalized: "AU" } },
+    { lv_country_region_normalized: undefined },
+  );
+  assert.ok(!r.reasons.includes("region_conflict"));
+});
+
+test('region_conflict: existing region "unknown" -> not a conflict either (same three-state rule as _regionKey)', () => {
+  const r = computeEscalation(
+    { matched: true, confidence: 92, data: { lv_country_region_normalized: "AU" } },
+    { lv_country_region_normalized: "unknown" },
+  );
+  assert.ok(!r.reasons.includes("region_conflict"));
+});
+
+test("region_conflict: arity stays 2 (RO-2) even with the new reason", () => {
+  assert.equal(computeEscalation.length, 2);
+});
+
+test("applyUnadjudicated: region_conflict drops the candidate's region value entirely, evidence key too", () => {
+  const candidate = {
+    data: { lv_country_region_normalized: "Other", lv_org_type: "content_producer" },
+    evidence_by_field: { lv_country_region_normalized: "https://x/about" },
+  };
+  const result = applyUnadjudicated(candidate, ["region_conflict"]);
+  assert.ok(!("lv_country_region_normalized" in result.data));
+  assert.ok(!("lv_country_region_normalized" in result.evidence_by_field));
+  assert.equal(result.data.lv_org_type, "content_producer", "unrelated fields untouched");
+});
+
+test("buildJudgeRequestBody: carries existing_lv_country_region_normalized and provider_conflicts " +
+     "with {source,value} pairs, no size field, no tools key", () => {
+  const row = {
+    identity_keys: { companyName: "Series Futsal Victoria", domain: "seriesfutsal.com" },
+    existingRecord: { lv_country_region_normalized: undefined },
+    research_candidate: { matched: false, data: {}, evidence_by_field: {} },
+    judge_reasons: ["provider_conflict:country_region"],
+    material_conflicts: [{
+      group: "country_region",
+      fields: ["lv_country_region_normalized", "country"],
+      conflicts: [{
+        field: "lv_country_region_normalized", chosen: "Other", chosen_source: "zoominfo",
+        candidates: [{ source: "lusha", value: "AU" }, { source: "zoominfo", value: "Other" }],
+      }],
+    }],
+  };
+  const body = buildJudgeRequestBody(row, "claude-sonnet-5", 4096);
+  const parsed = JSON.parse(body.messages[0].content);
+  assert.deepEqual(parsed.company.provider_conflicts, row.material_conflicts);
+  assert.equal(parsed.company.existing_lv_country_region_normalized, null);
+  const serialized = JSON.stringify(body);
+  assert.ok(!/revenue/i.test(serialized));
+  assert.ok(!/employee/i.test(serialized));
+  assert.ok(!("tools" in body), "JG-2: still no tools key with the new provider_conflicts key");
+});
+
+// === Gap-closure 58-06 Task 2: Judge Gate WRAPPER — RO-2 grep + routing + degradation ===
+
+function loadNodeJsCode(name) {
+  const wf = JSON.parse(fs.readFileSync(path.join(ROOT, "n8n/wf_enrichment_cloud.json"), "utf8"));
+  const node = wf.nodes.find((n) => n.name === name);
+  return node.parameters.jsCode;
+}
+
+function runCodeNode(jsCode, row) {
+  const $input = { all: () => [{ json: row }], get item() { return { json: row }; } };
+  const $ = () => ({ all: () => [], get item() { return { json: undefined }; } });
+  const $now = new Date();
+  const fn = new Function("$", "$input", "$json", "$node", "$now", "$today",
+    `"use strict";\n${jsCode}`);
+  const out = fn($, $input, row, {}, $now, $now) || [];
+  return (out[0] && out[0].json) || {};
+}
+
+const JUDGE_GATE_BODY = loadNodeJsCode("Judge Gate");
+const BUILD_JUDGE_REQUEST_BODY = loadNodeJsCode("Build Judge Request");
+const APPLY_JUDGE_VERDICT_BODY = loadNodeJsCode("Apply Judge Verdict");
+const MERGE_COMPANY_BODY_2 = loadNodeJsCode("Merge Company");
+const DECIDE_COMPANY_ACTION_BODY_2 = loadNodeJsCode("Decide Company Action");
+
+test("RO-2: the built Judge Gate jsCode contains no occurrence of any size field name", () => {
+  for (const f of ["lv_revenue_band", "lv_employee_band", "annualrevenue", "numberofemployees"]) {
+    assert.ok(!JUDGE_GATE_BODY.includes(f), `Judge Gate jsCode must not contain "${f}"`);
+  }
+});
+
+// The 11983 shape, matched:false research candidate -- ONLY the provider-vs-provider
+// axis (row.scored) can fire a reason here, isolating the NEW mechanism from
+// computeEscalation's pre-existing research-vs-existing checks.
+function providerConflictRow(overrides = {}) {
+  return {
+    identity_keys: { domain: "seriesfutsal.com" },
+    existingRecord: {
+      hs_object_id: "283816805830", domain: "seriesfutsal.com",
+      lv_country_region_normalized: undefined, lv_produces_content: true,
+      lv_is_hardware_vendor: false, lv_org_type: "content_producer",
+    },
+    scored: {
+      best: {
+        lv_country_region_normalized: {
+          field: "lv_country_region_normalized", value: "United States",
+          normalizedValue: "Other", source: "zoominfo", agreedBy: [],
+        },
+      },
+      winners: { country: "Australia" },
+      sourcesByField: {
+        lv_country_region_normalized: [
+          { source: "lusha", value: "AU" }, { source: "zoominfo", value: "Other" },
+        ],
+      },
+    },
+    research_candidate: { matched: false, confidence: 0, data: {}, evidence_by_field: {} },
+    ...overrides,
+  };
+}
+
+test("a material provider conflict yields a judge reason; a size-only conflict yields none " +
+     "(the size watch never reaches Judge Gate at all)", () => {
+  const out = runCodeNode(JUDGE_GATE_BODY, providerConflictRow());
+  assert.equal(out.needs_judge, true);
+  assert.ok(out.judge_reasons.some((r) => r.startsWith("provider_conflict:country_region")));
+
+  // A row whose ONLY scored conflict is a size field must produce no judge reason at all --
+  // Judge Gate never watches size fields, by construction (RO-2).
+  const sizeOnlyRow = providerConflictRow({
+    scored: {
+      best: {
+        lv_revenue_band: { field: "lv_revenue_band", value: "1-5M", normalizedValue: "1-5M", source: "zoominfo", agreedBy: [] },
+      },
+      winners: {},
+      sourcesByField: { lv_revenue_band: [{ source: "zoominfo", value: "1-5M" }, { source: "lusha", value: "5-50M" }] },
+    },
+  });
+  const sizeOut = runCodeNode(JUDGE_GATE_BODY, sizeOnlyRow);
+  assert.equal(sizeOut.needs_judge, false);
+  assert.deepEqual(sizeOut.judge_reasons, []);
+});
+
+// Degradation: whatever way the judge fails to run/answer, the row must reach Merge
+// Company / Decide Company Action with the SAME outcome Task 1 already pins for an
+// unadjudicated conflict — value absent, no flip, review flag set.
+function runMergeThenDecide(row) {
+  const merged = runCodeNode(MERGE_COMPANY_BODY_2, row);
+  return runCodeNode(DECIDE_COMPANY_ACTION_BODY_2, { ...row, merge: merged.merge, conflicts: merged.conflicts });
+}
+
+function assertDegradedOutcome(out) {
+  assert.ok(!("lv_country_region_normalized" in out.properties));
+  assert.ok(!("country" in out.properties));
+  assert.equal(out.properties.lv_anti_icp_flag, "false");
+  assert.equal(out.properties.lv_anti_icp_reason, "");
+  assert.equal(out.properties.lv_enrichment_needs_review, "true");
+}
+
+test("degradation (kill switch off): ALLOW_JUDGE_ESCALATION=false -> row never reaches the " +
+     "judge, still lands absent + no flip + flagged", () => {
+  const killedBody = JUDGE_GATE_BODY.replace(
+    "const ALLOW_JUDGE_ESCALATION = true;", "const ALLOW_JUDGE_ESCALATION = false;");
+  assert.notEqual(killedBody, JUDGE_GATE_BODY, "the rewrite must actually match something");
+  const gated = runCodeNode(killedBody, providerConflictRow());
+  assert.equal(gated.needs_judge, false, "kill switch caps every row, including this one");
+  const out = runMergeThenDecide(gated);
+  assertDegradedOutcome(out);
+});
+
+test("degradation (cap exhausted): MAX_JUDGE_VALIDATIONS_PER_RUN=0 -> same outcome", () => {
+  const cappedBody = JUDGE_GATE_BODY.replace(
+    "const MAX_JUDGE_VALIDATIONS_PER_RUN = 50;", "const MAX_JUDGE_VALIDATIONS_PER_RUN = 0;");
+  assert.notEqual(cappedBody, JUDGE_GATE_BODY, "the rewrite must actually match something");
+  const gated = runCodeNode(cappedBody, providerConflictRow());
+  assert.equal(gated.needs_judge, false, "a zero-budget cap caps every row");
+  const out = runMergeThenDecide(gated);
+  assertDegradedOutcome(out);
+});
+
+test("degradation (judge HTTP error): the judge runs but the HTTP call errors -> the D5 " +
+     "fail-safe applies, same outcome", () => {
+  const gated = runCodeNode(JUDGE_GATE_BODY, providerConflictRow());
+  assert.equal(gated.needs_judge, true, "vacuity: the judge really was invoked this run");
+  const built = runCodeNode(BUILD_JUDGE_REQUEST_BODY, gated);
+  assert.ok(built.judge_request_body, "vacuity: a real request body was built");
+
+  // Judge Call HTTP node errors under onError:continueRegularOutput, replacing $json with
+  // the error item -- Apply Judge Verdict recovers the REAL row by paired index from
+  // "Build Judge Request", exactly as researchChainRowFlow.test.mjs's row-recovery
+  // pattern proves for the research hop. $() must therefore actually resolve that node
+  // name, unlike runCodeNode's plain stub above.
+  const httpErrorItem = { error: "ETIMEDOUT: connect ETIMEDOUT" };
+  const $ = (name) => ({
+    all: () => (name === "Build Judge Request" ? [{ json: built }] : []),
+    get item() { return { json: undefined }; },
+  });
+  const $input = { all: () => [{ json: httpErrorItem }], get item() { return { json: httpErrorItem }; } };
+  const $now = new Date();
+  const fn = new Function("$", "$input", "$json", "$node", "$now", "$today",
+    `"use strict";\n${APPLY_JUDGE_VERDICT_BODY}`);
+  const out2 = fn($, $input, httpErrorItem, {}, $now, $now) || [];
+  const applied = (out2[0] && out2[0].json) || {};
+
+  assert.equal(applied.judge_verdict.decision, "needs_review", "vacuity: the error really produced a needs_review verdict");
+  assert.ok(applied.judge_confidence_by_field === undefined ||
+    Object.keys(applied.judge_confidence_by_field).length === 0,
+    "an errored judge call must never populate judge_confidence_by_field");
+  const out = runMergeThenDecide(applied);
+  assertDegradedOutcome(out);
+});
+
+// === Gap-closure 58-06 Task 2: the deliberate non-addition ==========================
+
+test("the three company provider adapters emit none of the four research-only material fields", () => {
+  const normalizeProvidersSrc = fs.readFileSync(
+    path.join(ROOT, "n8n/code/normalizeProviders.js"), "utf8");
+  // toCandidates() builds the company candidate field list from literal `field:` keys in
+  // each provider's branch -- reading the SOURCE (never a second hand-typed list) is what
+  // proves the absence is structural, not merely unexercised in today's fixtures.
+  const RESEARCH_ONLY_FIELDS = [
+    "lv_org_type", "lv_produces_content", "lv_is_hardware_vendor", "lv_is_gambling_operator",
+  ];
+  for (const f of RESEARCH_ONLY_FIELDS) {
+    assert.ok(!normalizeProvidersSrc.includes(`field: "${f}"`),
+      `no company provider branch may emit a "${f}" candidate -- these are research-only`);
+  }
+});
+
+test("their research-vs-existing axis already escalates (asserted, not rebuilt)", () => {
+  for (const [field, value] of [
+    ["lv_produces_content", false],
+    ["lv_is_hardware_vendor", "true"],
+    ["lv_is_gambling_operator", "true"],
+  ]) {
+    const r = computeEscalation({ matched: true, confidence: 92, data: { [field]: value } }, {});
+    assert.equal(r.needsJudge, true, `${field}=${value} must already escalate`);
+  }
+  const orgTypeConflict = computeEscalation(
+    { matched: true, confidence: 92, data: { lv_org_type: "content_producer" } },
+    { lv_org_type: "governing_body_league" },
+  );
+  assert.ok(orgTypeConflict.reasons.includes("org_type_conflict"));
+});

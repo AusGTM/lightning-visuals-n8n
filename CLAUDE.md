@@ -2608,6 +2608,56 @@ Use Claude web research when:
 
 # 15. Haiku vs Sonnet Escalation Policy
 
+## 15.0 As-built delta — material-conflict suppression (gap-closure 58-06, operator
+## ruling 2026-08-26)
+
+Execution `11983` (2026-08-26) walked straight through §21.2's veto-flip gate: providers
+disagreed on Series Futsal Victoria's country (ZoomInfo "United States" vs Lusha "AU"),
+the trust-rank winner promoted unadjudicated, and `lv_anti_icp_flag` moved false→true with
+no judge call and no human review. `CONFLICT_WATCH`
+(`scripts/build_cloud_workflows.py`) had only ever watched the two size fields
+(`lv_revenue_band`/`lv_employee_band`) — a disagreement that can invert a franchise/
+subsidiary size guess, never one that can fire a hard veto.
+
+**The ruling, in tiers:**
+
+| Tier | Rule |
+|---|---|
+| ALWAYS judge | a cross-provider or research-vs-existing conflict on `lv_country_region_normalized`/`country`, `lv_org_type`, `lv_produces_content`, `lv_is_hardware_vendor` or `lv_is_gambling_operator` — anything that can fire a veto or move a tier |
+| never judge | values that normalize to the SAME answer — `agreedBy` non-empty, deterministic pick stands |
+| unresolved / judge unavailable | the disputed value is left ABSENT (never the winner, never a default), the record is flagged `needs_review` naming the field and the disagreeing sources, and the veto is derived from the pre-existing value instead |
+
+**Mechanism.** `config/escalation_policy.yaml`'s `sonnet_5.material_conflict_field_groups`
+(§15.1 below) is the single source, read by `src/judge.py`, emitted into
+`n8n/code/escalation.generated.js` by `scripts/gen_escalation_js.py` as
+`MATERIAL_CONFLICT_GROUPS` — GROUPS, not bare fields, because `lv_country_region_normalized`
+and native `country` are one disputed fact with two HubSpot serializations: a conflict on
+either suppresses both under one reason. `n8n/code/providerConflict.js` is the shared, pure
+predicate (`detectConflicts`/`groupConflicts`) — the watched field list is always a
+PARAMETER, never a module-level constant, which is what lets the SAME module be inlined
+into both `Merge Company` (watches size + material) and `Judge Gate` (watches material
+ONLY) without leaking the size list into the gate's own jsCode.
+
+`Merge Company`'s suppression is **suppress-unless-adjudicated**: it runs after every
+candidate fold, deletes every group member from the canonical patch (and any cache key)
+unless the judge lane already adjudicated one of that group's fields
+(`row.judge_confidence_by_field`), in which case the group is treated as resolved and the
+adjudicated value promotes normally — including a verdict that legitimately fires the
+veto. This is not a blanket ban on the veto; it is a ban on an UNADJUDICATED conflict
+firing it.
+
+**RO-2 is unchanged.** Size-field disagreements still never trigger a model call — the
+Judge Gate wrapper calls `providerConflict.js` with the material field list only, the size
+list is computed downstream inside `Merge Company` and is never referenced in Judge Gate's
+jsCode, and `tests/test_judge_spec.py::test_ro2_judge_gate_cannot_see_size_conflicts`
+passed unmodified. Size conflicts gain the review flag §17.2 always asked for (the cloud
+lane never actually wrote it before this change) and gain nothing else — a size
+disagreement is flagged for human review, never checked by the judge.
+
+**The hard-veto predicate itself is untouched** in both engines (`src/icp_scoring.py` and
+`Decide Company Action`'s veto block) — this change alters the predicate's INPUT
+(withholding a disputed value), never its text.
+
 ## 15.1 Escalation config
 
 ```yaml

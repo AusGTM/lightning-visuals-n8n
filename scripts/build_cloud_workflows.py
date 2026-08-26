@@ -2406,10 +2406,17 @@ function needsResearch(existingRecord) {
 // provider rows via $('Company Gate'). Without this, existingRecord/scored are lost for the
 // rest of the research→judge→merge lane and Merge Company returns merge:null.""",
     research_pre_http_node="Build Research Request",
-    judge_gate_inline_modules=("escalation.generated.js", "scoreEnrichment.js", "judge.js"),
+    judge_gate_inline_modules=("escalation.generated.js", "scoreEnrichment.js", "judge.js",
+                                "providerConflict.js"),
     judge_gate_header_comment_js=r"""// RO-2: size-band disagreement is detected downstream inside Merge Company and is
 // deliberately invisible here — this gate runs before that node, so no model call can
-// ever be triggered by a size disagreement alone.""",
+// ever be triggered by a size disagreement alone.
+// Gap-closure 58-06 Task 2 (operator ruling 2026-08-26, T-58-26/§21.2): the five
+// decision-driving material field groups (MATERIAL_CONFLICT_GROUPS) are the opposite of
+// size — a cross-provider disagreement on one of them (detected here, from row.scored,
+// via the SAME providerConflict.js predicate Merge Company uses) DOES route to the judge.
+// RO-2 still holds: the size list is never passed to that call here, so no size field
+// name is ever inlined into this node's jsCode.""",
     judge_pass1_block_js=r"""// Phase-15 provenance blob is a JSON string property that may be absent, empty, or
 // malformed (truncated at the 60000-char cap, or simply never written yet) — a parse
 // failure yields an empty object and must never throw (D1: without a parseable
@@ -2448,8 +2455,23 @@ const gated = $input.all().map((it) => {
     researchCandidate, row.existingRecord || {}, provenance, { now: NOW });
 
   const { needsJudge, reasons } = computeEscalation(researchCandidate, row.existingRecord || {});
+
+  // Gap-closure 58-06 Task 2 (T-58-26/§21.2): the provider-vs-provider axis, detected
+  // from row.scored (the cross-provider waterfall scoring) — a SEPARATE mechanism from
+  // computeEscalation's research-vs-existing checks above, added HERE in the wrapper
+  // rather than inside that function so the material field list never enters its closure
+  // (RO-2's 2-arg arity, judge.js:97-102, is unaffected by this addition). Material
+  // fields ONLY — never the size watch-list, which is computed inside Merge Company,
+  // downstream of this node, and never referenced here.
+  const materialConflicts = detectConflicts(row.scored, MATERIAL_CONFLICT_GROUPS.reduce(
+    (acc, g) => acc.concat(g.fields), []));
+  const material_conflicts = groupConflicts(materialConflicts, MATERIAL_CONFLICT_GROUPS);
+  const providerConflictReasons = material_conflicts.map((g) => "provider_conflict:" + g.group);
+  const allReasons = reasons.concat(providerConflictReasons);
+
   return { ...row, research_candidate: researchCandidate, research_scoring,
-           needs_judge: needsJudge, judge_reasons: reasons };
+           needs_judge: allReasons.length > 0, judge_reasons: allReasons,
+           material_conflicts };
 });""",
     judge_pass3_unadjudicated_call_js=r"""    const researchCandidate = applyUnadjudicated(row.research_candidate, row.judge_reasons);
     return { json: { ...row, research_candidate: researchCandidate } };""",

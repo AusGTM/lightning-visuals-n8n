@@ -12,7 +12,7 @@
 // n8n/code/judge.js's computeEscalation.
 //
 // detectConflicts(scored, watchFields) -> per-field conflict records, same shape the
-// original inline CONFLICT_WATCH loop in ENRICH_MERGE_CO produced:
+// original inline size watch-list loop in ENRICH_MERGE_CO produced:
 //   { field, chosen, chosen_source, candidates }
 // A conflict fires when 2+ distinct sources answered a watched field and NONE of them
 // agree (best[f].agreedBy is empty) while sourcesByField[f] has more than one entry. A

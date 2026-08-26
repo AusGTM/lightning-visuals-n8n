@@ -232,9 +232,13 @@ test("The ranked array is ordered by the same deterministic tie-break as the arg
 });
 
 // --- TA-2 tier boundary sanity (full static proof lives in tests/test_judge_spec.py) --
-test("TA-2: _JUDGE_DATA_FIELDS is exactly the 5 expected classification fields", () => {
+// UPDATED (gap-closure 58-06, operator ruling 2026-08-26, T-58-26/§21.2):
+// lv_country_region_normalized joined the judge-eligible set — execution 11983 proved a
+// cross-provider region conflict can fire the Non-ANZ hard veto unadjudicated, so the
+// judge must be able to see and adjudicate the disputed region.
+test("TA-2: _JUDGE_DATA_FIELDS is exactly the 6 expected classification fields", () => {
   assert.deepEqual([..._JUDGE_DATA_FIELDS].sort(), [
-    "lv_content_type", "lv_is_gambling_operator", "lv_is_hardware_vendor",
-    "lv_org_type", "lv_produces_content",
+    "lv_content_type", "lv_country_region_normalized", "lv_is_gambling_operator",
+    "lv_is_hardware_vendor", "lv_org_type", "lv_produces_content",
   ].sort());
 });
