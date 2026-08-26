@@ -246,3 +246,18 @@ def test_the_skill_does_not_re_ask_for_approval_under_a_grant():
         "the skill must say what happens to the preview under a grant — it is still shown, "
         "but it no longer gates, because the gate moved earlier"
     )
+
+
+# ---------------------------------------------------------------------------------
+# Phase 54-02 Task 2 (T-54-06) — the identity-hold paragraph must also say what
+# confirming a held match costs, not just that it is held.
+# ---------------------------------------------------------------------------------
+
+
+def test_the_skill_states_the_second_pass_cost_of_confirming_a_held_identity_match():
+    body = _normalized(_text()).lower()
+    assert "held for the operator to confirm" in body, (
+        "the identity-hold sentence this task extends must still be present"
+    )
+    assert "confirming a held match and sending it again re-runs the whole lookup" in body
+    assert "costs the same as this run did" in body

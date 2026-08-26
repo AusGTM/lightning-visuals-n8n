@@ -57,7 +57,9 @@ capability; claiming it here would be a guess dressed as a report.
      Say how the match is decided, because it governs what gets written: an exact identity
      (email or LinkedIn URL) enriches that record; a same-surname, same-company match with no
      exact identity is **held for the operator to confirm**, never written over — so a second
-     John Tsatsimas is surfaced rather than silently overwritten.
+     John Tsatsimas is surfaced rather than silently overwritten. Say the cost of confirming
+     it too: confirming a held match and sending it again re-runs the whole lookup for that
+     person, and costs the same as this run did.
 
    - **Companies that may not be in HubSpot yet** — the operator names companies by name
      and website domain. Spec: `{"companies": [{"name": "Perth Racing", "domain":
