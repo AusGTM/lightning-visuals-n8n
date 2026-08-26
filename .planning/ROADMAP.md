@@ -67,6 +67,25 @@ variable), and a design that runs the provider waterfall twice per written recor
 
 ## Phase Details
 
+### Phase 54: Single-pass armed dispatch
+
+**Goal**: A record is enriched once — no derive-then-rearm-then-derive-again. When a grant is
+open the dispatch runs inside the armed window from the start, so there is no unarmed first
+pass to throw away. The `write_blocked`-then-arm path stays reachable for the ungranted case
+and is reported as what it is: a rehearsal that costs a second pass if it proceeds to a write.
+The saving is **measured live on one record before it is claimed** (projection: 2 provider
+passes → 1, ~$0.07 → ~$0.035 Anthropic, 2 executions → 1). Full detail:
+`milestones/v1.1-ROADMAP.md` § Phase 54; defect: `milestones/v1.1-REQUIREMENTS.md` § G-3.
+
+**Depends on**: Phase 53 (the grant this dispatch runs inside)
+
+**Requirements**: G-3
+
+**Also carries** (deferred here 2026-08-26): the contact review-flag lane — contacts get
+flagged `lv_enrichment_needs_review` but no lane clears a contact flag.
+
+**Plans**: TBD
+
 ### Phase 58: Take what the operator actually has
 
 **Goal**: Every input an operator holds resolves to something the backend can act on, and a
