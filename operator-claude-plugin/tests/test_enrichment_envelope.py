@@ -288,3 +288,59 @@ def test_dispatch_persists_nothing_about_the_grant(
     with pytest.raises(enrichment.NotArmedError):
         enrichment.dispatch_enrichment(_envelope(), False, fake_config, transport=transport)
     assert len(transport.calls) == 1
+
+
+# =====================================================================================
+# Phase 58 Plan 03 Task 2 — the companies form's propose intent and new refusal paths.
+# =====================================================================================
+
+def test_companies_form_with_no_propose_intent_carries_no_mode_key_anywhere():
+    """Pre-existing callers are unmoved: no `propose` key in the spec means no `mode`
+    key on the envelope OR on any event — byte-identical to the pre-Phase-58 shape."""
+    envelope = enrichment.build_envelope(
+        {"companies": [{"name": "A", "domain": "a.example"}]}, []
+    )
+    assert "mode" not in envelope
+    assert all("mode" not in event for event in envelope["events"])
+
+
+def test_companies_form_with_propose_intent_sets_mode_on_every_event():
+    spec = {
+        "companies": [
+            {"name": "A", "domain": "a.example"},
+            {"name": "B", "domain": "b.example"},
+            {"name": "C"},
+        ],
+        "propose": True,
+    }
+    envelope = enrichment.build_envelope(spec, [])
+    assert envelope["mode"] == "propose"
+    assert len(envelope["events"]) == 3
+    assert all(event["mode"] == "propose" for event in envelope["events"])
+
+
+def test_a_company_from_a_bare_name_list_with_a_blank_name_raises_naming_the_fix():
+    with pytest.raises(enrichment.RecordSpecError) as exc:
+        enrichment.build_envelope({"companies": [{"name": "  "}]}, [])
+    message = str(exc.value)
+    assert "name" in message.lower()
+    assert "blank" in message.lower()
+
+
+def test_a_company_whose_name_never_came_through_raises_naming_the_fix():
+    with pytest.raises(enrichment.RecordSpecError) as exc:
+        enrichment.build_envelope({"companies": [{}]}, [])
+    message = str(exc.value)
+    assert "name" in message.lower()
+
+
+def test_a_company_whose_only_address_is_a_profile_page_keeps_its_existing_message():
+    """Reused verbatim (2026-08-25) — churning it would cost a pin for nothing."""
+    with pytest.raises(enrichment.RecordSpecError) as exc:
+        enrichment.build_envelope(
+            {"companies": [{"domain": "https://www.linkedin.com/company/futsal-australia"}]},
+            [],
+        )
+    message = str(exc.value)
+    assert "profile page" in message
+    assert "linkedin.com" in message

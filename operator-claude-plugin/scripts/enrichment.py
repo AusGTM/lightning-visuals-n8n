@@ -202,6 +202,7 @@ def build_envelope(spec, providers):
       {"list": "<name>", "object_type": "contacts"}      -> the identifier, verbatim
       {"rows": [...], "object_type": "contacts"}         -> a `mode: "propose"` events array
       {"companies": [{"name","domain"}]}                 -> a WRITE-mode events array
+      {"companies": [...], "propose": True}              -> a `mode: "propose"` events array
       {"people": [{firstname,lastname,company|email|linkedin_url}]} -> a WRITE-mode events array
       {"view": "<name>"}                                 -> refused (amendment #7)
 
@@ -326,12 +327,25 @@ def build_envelope(spec, providers):
         # anchor the backend's company lane searches on, and a domainless company can
         # neither be deduped nor matched — it could only ever be created, which is the
         # duplicate-company shape this form exists to avoid.
+        #
+        # `mode: "propose"` (2026-08-26, Phase 58) — set on this branch ONLY when the
+        # caller opts in via `spec.get("propose")`; the default (no `propose` key) leaves
+        # every event exactly as before: mode-less, write-mode. Per
+        # `58-SPIKE-VERDICT.md` (live execution `11972`, OBSERVED rather than merely
+        # traced from source), a request-level `mode` key on a companies event rides
+        # `Parse HubSpot Event`'s row spread intact and IS read by `Decide Company
+        # Action`'s `isReturnOnly`, forcing the non-writing `action: "proposed"` branch
+        # before the write-safety allowlist check ever runs. The key is set PER EVENT —
+        # that is the exact shape 58-02's probe exercised and the shape `isReturnOnly`
+        # reads — the envelope-level key is set too, for parity with the `rows` form's
+        # `envelope["mode"]`, but is harmless/unproven rather than the load-bearing one.
         companies = spec["companies"]
         if not isinstance(companies, (list, tuple)) or not companies:
             raise RecordSpecError(
                 "No companies were given, so there is nothing to enrich or create. "
                 "Name at least one company with its website domain."
             )
+        propose = bool(spec.get("propose"))
         events = []
         for company in companies:
             if not isinstance(company, dict):
@@ -349,20 +363,40 @@ def build_envelope(spec, providers):
             # domainless new company poisons every later match against it.
             if not domain and not name:
                 given = str(company.get("domain") or company.get("website") or "").strip()
+                if given:
+                    # UNCHANGED verbatim (2026-08-25) — pinned by not being reworded here.
+                    raise RecordSpecError(
+                        f"{given!r} is a profile page rather than a company's own "
+                        f"website, and no company name came with it, so there is "
+                        f"nothing to look up. Give the company's name — the backend "
+                        f"can match that on its own."
+                    )
+                if "name" in company:
+                    # New 2026-08-26 (Phase 58): a bare-name-list row, or a mixed-lane
+                    # row, that carried an empty/blank name and no website at all.
+                    raise RecordSpecError(
+                        "A company's name came through blank, and no website came "
+                        "with it either, so there is nothing to look up. Give the "
+                        "company's actual name — a blank line in a name list can't "
+                        "be matched on its own."
+                    )
+                # New 2026-08-26 (Phase 58): the row never carried a `name` key at all
+                # — e.g. a search-results-screenshot row whose name never rendered.
                 raise RecordSpecError(
-                    f"{given!r} is a profile page rather than a company's own website, and "
-                    f"no company name came with it, so there is nothing to look up. Give "
-                    f"the company's name — the backend can match that on its own."
-                    if given else
-                    "A company was given with neither a name nor a website domain, so "
-                    "there is nothing to look up."
+                    "This company's name never came through, and it has no website "
+                    "either, so there is nothing to look up. Give the company's "
+                    "name, or its own website."
                 )
             event = {"objectType": "companies"}
             if domain:
                 event["domain"] = domain
             if name:
                 event["name"] = name
+            if propose:
+                event["mode"] = "propose"
             events.append(event)
+        if propose:
+            envelope["mode"] = "propose"
         envelope["events"] = events
         return envelope
 
