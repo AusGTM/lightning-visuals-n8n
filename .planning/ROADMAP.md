@@ -80,12 +80,12 @@ Full detail: `milestones/v1.1-ROADMAP.md` § Phase 58; decisions:
 
 **Requirements**: INPUT-01, INPUT-02, INPUT-03, INPUT-04
 
-**Plans**: 4 plans
+**Plans**: 1/4 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 58-01-PLAN.md — company rows through the extraction machinery: identity config, record-type-aware validator, six source adapters (wave 1, tracer)
+- [x] 58-01-PLAN.md — company rows through the extraction machinery: identity config, record-type-aware validator, six source adapters (wave 1, tracer)
 - [ ] 58-02-PLAN.md — live spike: does a request-level propose mode reach the company decision node; operator decides the backend research node's scope (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*

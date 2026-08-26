@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Unattended Session Runs
-current_phase: 51
-current_phase_name: Take what the operator actually has
+current_phase: 58
+current_phase_name: take-what-the-operator-actually-has
 status: executing
-stopped_at: Phase 58 context gathered
-last_updated: "2026-08-26T01:34:30.762Z"
-last_activity: 2026-08-25
-last_activity_desc: "Phase 53 closed: walk complete, review lane live-proven, permissive enrichment shipped and deployed. Operator rulings recorded: provider-data-only locations, revocation-at-next-send acceptable"
+stopped_at: Completed 58-01-PLAN.md
+last_updated: "2026-08-26T01:50:32.998Z"
+last_activity: 2026-08-26
+last_activity_desc: Phase 58 execution started
 progress:
   total_phases: 3
   completed_phases: 2
   total_plans: 11
-  completed_plans: 7
-  percent: 64
+  completed_plans: 8
+  percent: 67
 ---
 
 # Project State
@@ -150,8 +150,8 @@ predating the window. VETO-03 bar still 0.
 
 ## Current Position
 
-Phase: 51 (Backfill Pipeline, Credit Sizing & Dry Run) — EXECUTING
-Plan: 3 of 3
+Phase: 58 (take-what-the-operator-actually-has) — EXECUTING
+Plan: 2 of 4
 Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
@@ -229,7 +229,7 @@ exactly what B and C now do): .planning/phases/47.5-veto-recompute-path/47.5-CON
 lv_org_type: Editix, Jam TV, Waikato, The Rumble). Not a 47.5 workstream.
 
 Previous status: Executing — Anthropic credit restored, Plan 03 completed
-Last activity: 2026-08-23 — Completed quick task 260823-ono: metro peak-body named-account score floor (live, verified)
+Last activity: 2026-08-26 — Phase 58 execution started
   the live property-existence guard (found 19 missing D-09 metadata properties, resolved
   via operator-confirmed D-21 narrowing), one live research pass over all 17 pinned
   companies (47-RESEARCH-RESULTS.json), two live-discovered data-quality fixes
@@ -239,13 +239,13 @@ Last activity: 2026-08-23 — Completed quick task 260823-ono: metro peak-body n
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
+Progress: [███████░░░] 73% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-26T00:12:53.615Z
-**Stopped at:** Phase 58 context gathered
-**Resume file:** .planning/phases/58-take-what-the-operator-actually-has/58-CONTEXT.md
+**Last session:** 2026-08-26T01:50:32.990Z
+**Stopped at:** Completed 58-01-PLAN.md
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -317,6 +317,7 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 | Phase 53 P01 | 4min | 3 tasks | 5 files |
 | Phase 53 P02 | 35min | 3 tasks | 3 files |
 | Phase 53 P03 | 12min | 3 tasks | 7 files |
+| Phase 58 P01 | ~35min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -350,6 +351,8 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: [Phase 53-02]: GRANT_04_REASONS is exactly GRANT-04's five and is pinned BY NAME; guardrail B's two closes are their own constants in GUARDRAIL_B_REASONS. Folding "two consecutive disarm failures" into one of the five would misreport the close the operator most needs to read correctly. close_grant RAISES on free text.
 - [Phase ?]: [Phase 53-02]: GRANT-05 bites at the next SEND, proven by driving a real 3-chunk dispatch_plan with a mid-run revoke and asserting every chunk STILL ran. The drafted two-hand-calls test was refused: it would have passed while GRANT-05 was entirely unimplemented.
 - [Phase ?]: [Phase 53-02]: Both proposed guardrails are working code and neither is switchable (T-53-12). A is plan_grant's MANDATORY preflight and is offer-only (its transport log is pinned to reads only); B's two closes ATTEMPT a disarm through the ungated n8n_arming.disarm, carry the verdict, and CLOSE EVEN WHEN THAT DISARM FAILS.
+- [Phase ?]: [Phase 58-01]: domain and website kept as two separate canonical company props (not merged) -- mirrors CLAUDE.md's HubSpot company fixture shape where both properties exist independently
+- [Phase ?]: [Phase 58-01]: dedupe()/D-07 made record-type-aware by splitting the accepted list into per-type sublists and calling dedupe() once per sublist with explicit index remapping on reassembly, rather than adding a record_type parameter to dedupe() itself
 
 ### Roadmap Evolution
 
