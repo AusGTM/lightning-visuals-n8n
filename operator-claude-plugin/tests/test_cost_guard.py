@@ -77,6 +77,15 @@ def test_an_unknown_rate_and_a_measured_zero_are_not_the_same_value(rates):
     assert rates["rates"]["lusha_contacts_stored_id_reuse"]["value"] == 0
 
 
+def test_the_company_domain_research_rate_is_null_following_the_apollo_precedent(rates):
+    """D-58-08/09: no measured figure exists yet for backend domain research, so it
+    ships null like `apollo_per_match` — never a fabricated number, never a zero."""
+    entry = rates["rates"]["company_domain_research"]
+    assert entry["value"] is None
+    assert set(entry) == set(rates["rates"]["apollo_per_match"])
+    assert "unknown" in entry["confidence"]
+
+
 # ---------------------------------------------------------------------------- estimate
 
 
