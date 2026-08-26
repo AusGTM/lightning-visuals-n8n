@@ -2,11 +2,54 @@
 
 Task 1 proves ONE path end to end: a company known only by its name travels
 artifact -> extraction.validate() -> enrichment.build_envelope()'s companies form ->
-a single companies envelope event. Later tasks in this plan extend this file with the
-mixed-artifact, dedupe, D-07, and adapter-prose pins named in 58-01-PLAN.md.
+a single companies envelope event. Task 2 extends validate() itself to be fully
+type-aware over a mixed artifact. Task 3 pins extraction.md's company adapter prose
+against the same config the code reads, structurally rather than by a retyped list.
 """
+from pathlib import Path
+
+import yaml
+
 import extraction
 import enrichment
+
+PLUGIN_ROOT = Path(__file__).resolve().parent.parent
+EXTRACTION_MD = PLUGIN_ROOT / "skills" / "contact-upload" / "extraction.md"
+
+# The six adapter headings Task 3 adds, verbatim. Structural: a test below asserts
+# each exists in extraction.md by reading the file, never by re-describing the
+# adapter in the test's own words.
+COMPANY_ADAPTER_HEADINGS = (
+    "### Company adapter: pasted freeform text",
+    "### Company adapter: foreign-shaped JSON",
+    "### Company adapter: a public URL",
+    "### Company adapter: operator-supplied screenshots",
+    "### Company adapter: a bare name list",
+    "### Company adapter: a search-results-page screenshot",
+)
+
+COMPANY_CANONICAL_PROPS_HEADING = "### Company canonical props — the entire vocabulary"
+COMPANY_IDENTITY_RULE_HEADING = "### Company identity rule"
+
+
+def _extraction_md_text() -> str:
+    return EXTRACTION_MD.read_text(encoding="utf-8")
+
+
+def _section(text: str, heading: str) -> str:
+    """The text from `heading` up to (not including) the next line starting with
+    `#` — the same structural slicing convention test_extraction_contract.py's
+    `_url_adapter_regions()` already uses, so a section can be read without
+    retyping its content into the test."""
+    start = text.index(heading)
+    rest = text[start + len(heading):]
+    next_heading = None
+    for line in rest.splitlines():
+        if line.startswith("#"):
+            next_heading = line
+            break
+    end = len(text) if next_heading is None else text.index(next_heading, start)
+    return text[start:end]
 
 
 def test_company_mapping_yaml_has_exactly_five_canonical_props():
@@ -241,3 +284,58 @@ def test_extraction_contract_backwards_compat_pin_absent_record_type_routes_to_c
             ),
         }
     ]
+
+
+# =====================================================================================
+# Task 3 — the six company source adapters: prose contract and structural pins.
+# =====================================================================================
+
+
+def test_all_six_company_adapter_headings_are_present():
+    text = _extraction_md_text()
+    for heading in COMPANY_ADAPTER_HEADINGS:
+        assert heading in text, f"missing company adapter heading: {heading!r}"
+
+
+def test_company_canonical_props_section_matches_the_config_file_exactly():
+    """No prop list retyped as a literal here — read company_column_mapping.yaml,
+    derive the same sorted(set(aliases.values())) canonical_props() itself computes,
+    and assert every one of those names appears in extraction.md's own company
+    canonical-props section."""
+    mapping = yaml.safe_load(extraction.COMPANY_MAPPING_PATH.read_text(encoding="utf-8"))
+    props = sorted(set(dict(mapping["aliases"]).values()))
+    assert props == extraction.canonical_props(mapping_path=extraction.COMPANY_MAPPING_PATH)
+
+    section = _section(_extraction_md_text(), COMPANY_CANONICAL_PROPS_HEADING)
+    for prop in props:
+        assert prop in section, f"canonical company prop {prop!r} not named in {COMPANY_CANONICAL_PROPS_HEADING!r}"
+
+
+def test_extraction_md_documents_the_record_type_field_and_both_values():
+    text = _extraction_md_text()
+    assert "record_type" in text
+    assert '"contacts"' in text
+    assert '"companies"' in text
+
+
+def test_company_identity_rule_section_matches_identity_groups():
+    """The prose's stated company identity rule must match
+    identity_groups(mapping_path=COMPANY_MAPPING_PATH) — a single group of one field,
+    `name` — read from the config rather than retyped."""
+    groups = extraction.identity_groups(mapping_path=extraction.COMPANY_MAPPING_PATH)
+    assert groups == [["name"]]
+
+    section = _section(_extraction_md_text(), COMPANY_IDENTITY_RULE_HEADING)
+    (only_field,) = groups[0]
+    assert only_field in section
+    assert "alone" in section
+    # No contact identity field is named as an alternative way to satisfy a company's
+    # identity — companies have exactly one identity group, unlike contacts' two.
+    assert "email" not in section
+    assert "firstname" not in section
+
+
+def test_profile_page_never_becomes_a_company_domain_is_documented():
+    text = _extraction_md_text()
+    assert "linkedin" in text.lower()
+    assert "never recorded as that company" in text or "never recorded as the company" in text

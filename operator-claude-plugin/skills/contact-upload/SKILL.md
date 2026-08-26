@@ -58,9 +58,14 @@ be sent, and — only when explicitly armed — send it.
    **If the input is not a spreadsheet** — pasted text, a JSON blob, a URL, or one or
    more images — the file-reading path above does not apply. Read
    `extraction.md` in this skill's own directory and follow it instead: it is the
-   extraction contract for everything that isn't already tabular. Once it hands you the
-   validator's accepted rows, continue at step 3 below with those rows in place of a
-   read file — everything from the preview onward is identical either way.
+   extraction contract for everything that isn't already tabular, for **people and
+   companies both** (Phase 58). One read of the input produces both kinds of row in a
+   single artifact, companies first (D-58-13) — never a second pass over the same
+   source looking for what the first pass skipped. Once it hands you the validator's
+   accepted rows, continue at step 3 below with the **contact** rows in place of a
+   read file — everything from the preview onward is identical either way. The
+   **company** rows do not continue in this skill: they leave for the company lane
+   (`enrich-records`' companies form), never folded into this contact-ingest request.
 
 2b. **Check the headers before you preview.** (Lettered, not renumbered — this file
    cross-references its own step numbers in eight places, and renumbering ten steps to
