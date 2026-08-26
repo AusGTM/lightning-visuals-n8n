@@ -828,6 +828,24 @@ def test_the_execution_count_is_labelled_projected_and_never_measured(
     assert "projected, not measured" in figures["block"]
 
 
+def test_the_anthropic_figure_is_labelled_projected_never_measured(
+        priced_config, stub_module_transport_factory):
+    """Phase 54 Task 3, 2026-08-27: `anthropic_usd` is a static rate-table multiplication
+    (`record_count * config/cost_rates.json`'s dated per-record rate) — no code path in
+    this repo reads back Anthropic's real token usage, so this figure has never been a
+    measurement (OP-54-05). Before this date it was pinned to `write_grant.MEASURED`,
+    which is the exact false audit trail T-54-03 exists to close. The executions and
+    record_count bases are untouched by this change."""
+    transport = stub_module_transport_factory(_priced_plan_reads())
+    figures = _priced_proposal(priced_config, transport, ids=("1", "2"))["envelope"]
+
+    assert figures["basis"]["anthropic_usd"] == write_grant.PROJECTED
+    assert figures["basis"]["anthropic_usd"] != write_grant.MEASURED
+    assert figures["basis"]["projected_executions"] == write_grant.PROJECTED
+    assert figures["basis"]["record_count"] == write_grant.MEASURED
+    assert "floor" in figures["block"].lower()
+
+
 def test_an_unreadable_provider_balance_reads_unconfirmed_never_as_headroom(
         priced_config, stub_module_transport_factory):
     """cost_guard's tri-state, carried through unchanged: Apollo exposes no credit pool on
