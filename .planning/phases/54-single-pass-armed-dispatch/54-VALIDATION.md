@@ -1,9 +1,9 @@
 ---
 phase: 54
 slug: single-pass-armed-dispatch
-status: draft
-nyquist_compliant: false
-wave_0_complete: false
+status: planned
+nyquist_compliant: true
+wave_0_complete: true
 created: 2026-08-27
 ---
 
@@ -38,7 +38,22 @@ created: 2026-08-27
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| (filled by planner) | | | G-3 | — | no write without an armed, record-scoped window | unit | see plan | | ⬜ pending |
+| 01-T1 | 54-01 | 1 | G-3 | T-54-01 | measurement module may only read executions; never arms | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_measure_dispatch.py -q` | ❌ created by task | ⬜ pending |
+| 01-T2 | 54-01 | 1 | G-3 | T-54-02 | report records ids and counts, no credentials | doc assert | `grep -q "OP-54-05" .../54-MEASUREMENT.md` | ❌ created by task | ⬜ pending |
+| 01-T3 | 54-01 | 1 | G-3 | T-54-03, T-54-04 | a computed figure is never labelled measured | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_write_grant.py -q` | ✅ | ⬜ pending |
+| 02-T1 | 54-02 | 1 | G-3 | T-54-05 | no reachable outcome renders as unknown | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_report_enrichment.py operator-claude-plugin/tests/test_report_sufficiency.py -q` | ✅ | ⬜ pending |
+| 02-T2 | 54-02 | 1 | G-3 | T-54-06 | the second-pass cost is stated before it is incurred | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_enrich_skill_contract.py -q` | ✅ | ⬜ pending |
+| 02-T3 | 54-02 | 1 | G-3 | T-54-07 | scoped Edit only; no phase entry lost | doc assert | `test "$(grep -c '^### Phase ' .planning/milestones/v1.1-ROADMAP.md)" -ge 5` | ✅ | ⬜ pending |
+| 03-T1 | 54-03 | 1 | G-3 | T-54-09 | read-only property listing; patch names only live properties | doc assert | `grep -qE "lv_enrichment_reviewed_at" .../54-CONTACTS-PROPERTY-CHECK.md` | ❌ created by task | ⬜ pending |
+| 03-T2 | 54-03 | 1 | G-3 | T-54-13 | operator decides the mirror's reach with the flood consequence in view | checkpoint | manual (blocking) | — | ⬜ pending |
+| 03-T3 | 54-03 | 1 | G-3 | T-54-09, T-54-10, T-54-11, T-54-12 | same write gate, same compare-and-set, policy-correct protected-class filter | unit (node) | `node --test tests/n8n/*.test.mjs` | ✅ | ⬜ pending |
+| 03-T4 | 54-03 | 1 | G-3 | T-54-12 | pins rewritten in place with dated reasons, never deleted | unit (node) | `node --test tests/n8n/*.test.mjs` | ✅ | ⬜ pending |
+| 04-T1 | 54-04 | 2 | G-3 | T-54-15 | builder-authored JSON only; no node added | unit + build | `python3 scripts/build_cloud_workflows.py && .venv/bin/python -m pytest operator-claude-plugin/tests/test_review_outcome_parity.py -q` | ✅ | ⬜ pending |
+| 04-T2 | 54-04 | 2 | G-3 | T-54-14, T-54-16 | disarmed deploy, bounce, fresh-GET read-back | live (recorded) | `grep -qiE "bounce\|deactivat" .../54-DEPLOY-RECORD.md` | ❌ created by task | ⬜ pending |
+| 04-T3 | 54-04 | 2 | G-3 | T-54-17 | step 6 consent ceremony untouched | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/ -q -k review` | ✅ | ⬜ pending |
+| 05-T1 | 54-05 | 3 | G-3 | T-54-20 | preview only; nothing armed, nothing submitted | doc assert | `grep -qiE "branch" .../54-LIVE-PROOF.md` | ❌ created by task | ⬜ pending |
+| 05-T2 | 54-05 | 3 | G-3 | T-54-18, T-54-19 | operator-opened record-scoped window; consent binds to the shown patch | checkpoint (blocking) | manual | — | ⬜ pending |
+| 05-T3 | 54-05 | 3 | G-3 | T-54-20, T-54-21 | disarm verified by re-read; unexercised branch not claimed | doc assert | `grep -qiE "disarm" .../54-LIVE-PROOF.md` | ❌ created by task | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
@@ -69,4 +84,6 @@ created: 2026-08-27
 - [ ] Feedback latency < 180s
 - [ ] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** planner-filled 2026-08-27. Every code-producing task carries an `<automated>` verify;
+the three checkpoint/live rows are the manual-only verifications already declared above, each with
+its own recorded-evidence artifact. No 3 consecutive tasks lack an automated verify.
