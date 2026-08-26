@@ -80,7 +80,7 @@ Full detail: `milestones/v1.1-ROADMAP.md` § Phase 58; decisions:
 
 **Requirements**: INPUT-01, INPUT-02, INPUT-03, INPUT-04
 
-**Plans**: 3/4 plans executed
+**Plans**: 3/5 plans executed
 
 Plans:
 **Wave 1**
@@ -95,6 +95,10 @@ Plans:
 **Wave 3** *(blocked on Wave 2 completion)*
 
 - [ ] 58-04-PLAN.md — the research line priced, named and declinable; backend website-seeking extension or a written INPUT-02 residual (wave 3)
+
+**Wave 4** *(blocked on Wave 3 completion)*
+
+- [ ] 58-05-PLAN.md — gap closure: native industry/country/city/employee-count written at landing; curated industry alias table superseding the Phase 31 refusal (wave 4)
 
 ### Phase 51: Backfill Pipeline, Credit Sizing & Dry Run
 
