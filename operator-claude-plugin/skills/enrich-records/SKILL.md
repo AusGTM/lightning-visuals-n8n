@@ -97,6 +97,19 @@ capability; claiming it here would be a guess dressed as a report.
      does `company_domain.to_envelope_spec` turn the table into the spec this step's
      preview is built from; an undecided row stops the whole batch rather than
      defaulting either way.
+
+     **Below that table, one more line: domain research.** `company_domain.needs_research`
+     names every row you could not confidently propose a website for, plus any row the
+     operator asked to have checked. Show how many companies that is, which ones, and
+     what `cost_guard.research_line` says it would cost — a dollar figure when the rate
+     is measured, or plainly that the cost is not measured when it is not; never a
+     figure for zero rows, and never a "$0" standing in for either. Say, in your own
+     words, that saying nothing about this line means it goes ahead as part of the same
+     batch yes, and that they can strike it with one sentence instead. State what
+     striking it costs them plainly: those companies are matched by name instead of by
+     website, which is less certain. A struck line moves those rows onto the exact same
+     name-only path a declined row already takes — `company_domain.decline_research`
+     feeds them into `apply_domain_decisions` as declines, never a second path.
    - **A HubSpot list** — the operator names a saved list. Spec:
      `{"list": "<the list name>", "object_type": "contacts"}`. **Do not resolve or count
      the list yourself.** The backend resolves it with the one HubSpot credential that

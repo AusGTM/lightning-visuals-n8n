@@ -131,15 +131,15 @@ def test_a_row_with_nothing_proposed_and_a_row_the_operator_asked_to_check_are_b
 def test_with_no_research_decisions_every_needs_research_row_is_still_treated_as_researching():
     proposals = [_proposal("row-1", "Futsal Australia", domain=None)]
     needs = company_domain.needs_research(proposals)
+    # No strike happened -- `decline_research` was never called on this batch's `resolved`
+    # in the caller's flow, so the row's own domain decision is untouched: it is still
+    # priced by `research_line` (default-on) and remains exactly where it started —
+    # undecided, not auto-dropped and not auto-declined.
     resolved = {}
-    declined = company_domain.decline_research(resolved, needs)
-    # No strike happened — decline_research was never called by the caller in this path,
-    # so resolved is untouched and the row is exactly where it started: undecided, still
-    # priced and still slated to research, not silently dropped or auto-declined.
-    assert resolved == {}
-    assert declined == resolved  # sanity: this test does not call decline_research for real
     decided = company_domain.apply_domain_decisions(proposals, resolved)
     assert {row["row_id"] for row in decided["undecided"]} == {"row-1"}
+    line = cost_guard.research_line(needs, cost_guard.load_rates())
+    assert line["row_ids"] == {"row-1"}
 
 
 def test_striking_the_line_moves_exactly_the_needs_research_rows_to_name_only_and_nothing_else():

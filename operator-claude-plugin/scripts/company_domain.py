@@ -151,6 +151,50 @@ def apply_domain_decisions(proposals, resolved):
     }
 
 
+def needs_research(proposals, requested_check=None):
+    """Which rows need backend domain research (D-58-08/09), and their identity.
+
+    A row needs it when Claude proposed nothing for it (`domain` is falsy), or when the
+    operator asked to have it checked regardless of what was proposed -- named in
+    `requested_check`, a set of `row_id`s. A row Claude already proposed a domain for,
+    and that the operator did not ask to double-check, is not in this set: the free
+    in-conversation proposal is the primary path and spends nothing (D-58-01).
+
+    Pure -- no I/O, no network, no research call. This only names the rows; pricing
+    them is `cost_guard.research_line`'s job, and actually researching them is neither
+    function's job. Each returned row carries `row_id` and `name` only, so a caller
+    (an envelope line, a report) can name the row without reaching back into
+    `proposals`.
+    """
+    requested_check = set(requested_check or [])
+    return [
+        {"row_id": p["row_id"], "name": p["name"]}
+        for p in proposals
+        if not p.get("domain") or p["row_id"] in requested_check
+    ]
+
+
+def decline_research(resolved, needs_research_rows):
+    """Strike the research line: route every needs-research row not already decided to
+    the SAME `DECLINE_DOMAIN` sentinel a manual decline uses, so it converges on
+    `apply_domain_decisions`'s existing name-only path rather than a second one
+    (D-58-10) -- one story for every no-domain row, not two that must be reconciled.
+
+    Never overrides an entry already present in `resolved`: an explicit operator
+    decision (a confirm, a correction, or an earlier decline) stands. Marks nothing
+    else -- a row outside `needs_research_rows` is untouched.
+
+    Pure -- returns a NEW dict; `resolved` is never mutated. Feed the result straight
+    into `apply_domain_decisions`, unchanged.
+    """
+    struck = dict(resolved)
+    for row in needs_research_rows:
+        row_id = row["row_id"]
+        if row_id not in struck:
+            struck[row_id] = DECLINE_DOMAIN
+    return struck
+
+
 def to_envelope_spec(decided):
     """Turn a decided set (as returned by `apply_domain_decisions`) into the
     `{"companies": [...]}` spec `enrichment.build_envelope` consumes.
