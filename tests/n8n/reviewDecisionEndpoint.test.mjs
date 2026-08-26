@@ -222,10 +222,22 @@ test("a forged candidate naming a manual_protected / review_required field canno
     "and the operator is told which fields were withheld");
 });
 
-test("approve on a contact writes nothing: no contacts candidate producer exists in this repo", () => {
+// 2026-08-27, Phase 54 Plan 03 (OP-54-03/OP-54-04, operator decision `engine-only` --
+// recorded in 54-03-SUMMARY.md): a contacts approve now clears the queue through the SAME
+// apply engine companies use, rather than refusing outright -- was `no_candidate` with
+// empty properties before this date. See the module header's CONTACTS paragraph and
+// 54-RESEARCH.md §6. This fixture's default candidate (flaggedRow()) carries only
+// company-shaped fields (lv_org_type/lv_produces_content), none of which is a
+// DEFAULT_CONTACT_POLICY key, so the engine drops all of them and still returns the clear
+// patch -- outcome `applied`, same word a companies approve uses.
+test("approve on a contact clears the queue through the shared engine when its candidate holds no DEFAULT_CONTACT_POLICY field", () => {
   const out = approve({ objectType: "contacts" });
-  assert.equal(out.outcome, "no_candidate");
-  assert.deepEqual(out.properties, {});
+  assert.equal(out.outcome, "applied");
+  assert.equal(out.properties[P_NEEDS_REVIEW], "false",
+    "a string, not a bare JS boolean -- HubSpot EQ filters compare strings");
+  assert.equal(typeof out.properties[P_REVIEWED_AT], "string", "reviewed-at is stamped");
+  assert.equal("lv_org_type" in out.properties, false,
+    "a company-shaped field never promotes onto a contact");
 });
 
 // --- contacts apply engine (Phase 54 Plan 03, OP-54-03/OP-54-04, `engine-only`) --------
@@ -720,25 +732,52 @@ test("(g3) a contacts REJECTION works exactly as a company one, and the contacts
     "arming dispatch must never authorise a review write (D-02)");
 });
 
-test("(g4) a contacts APPROVE writes nothing and says why — no contact candidate is ever produced", () => {
+// 2026-08-27, Phase 54 Plan 03 (OP-54-03/OP-54-04, operator decision `engine-only`): a
+// contacts approve with no held candidate is now a REAL write that reaches the write gate
+// -- was `no_candidate`/dry_run true before this date (see the module-level pin above and
+// 54-RESEARCH.md §6). The committed `Build Review Decision` node's baked jsCode is a
+// build artifact this plan does not touch (rebuilding it is 54-04's job -- see this
+// plan's <verification>: `git status --porcelain n8n/wf_review_decision_cloud.json` stays
+// empty), so this test drives the LIVE n8n/code/reviewDecision.js source directly (via
+// `buildReviewDecision`, imported at the top of this file) to get the post-Phase-54
+// shape, then feeds that shape into the two COMMITTED, UNCHANGED downstream nodes -- the
+// write gate and the response builder -- exactly the isolation technique test (b) already
+// established for proving a gate's own behavior independent of the node that feeds it.
+test("(g4) a contacts APPROVE with no held candidate is now a real write reaching the write gate", () => {
   const contactRow = {
     hs_object_id: "4242", record_found: true, email: "person@example.com",
     [P_NEEDS_REVIEW]: "true", [P_CANDIDATE_JSON]: "",
   };
-  // Phase 31 Plan 02: arm the pre-check too — `no_candidate` is the CONTACTS-specific
-  // refusal this test pins, distinct from `not_allowlisted`, and the row must clear the
-  // allowlist check first to reach it.
-  const { built } = drive(
-    { ...REJECT_BODY, object_type: "contacts", decision: "approve", dry_run: false },
-    contactRow, { ALLOW_HUBSPOT_REVIEW_WRITES: "true", TEST_RECORD_IDS: "4242" });
-  assert.equal(built.outcome, "no_candidate");
-  assert.deepEqual(built.would_write, {});
-  assert.equal(built.dry_run, true, "nothing to write must never reach a write gate");
+  const result = buildReviewDecision({
+    objectType: "contacts", decision: "approve", reason: REJECT_BODY.reason,
+    reviewedBy: REJECT_BODY.reviewed_by, row: contactRow, nowIso: NOW, writeAllowed: true,
+  });
+  assert.equal(result.outcome, "applied", "the clear branch is a real write, not a refusal");
+  const hasWrite = Object.keys(result.properties).length > 0;
+  assert.equal(hasWrite, true);
+
+  // Hand-shaped exactly as the committed wrapper's own formula produces (REVIEW_BUILD_
+  // DECISION, scripts/build_cloud_workflows.py): `dry_run = !(parsed.dry_run === false &&
+  // hasWrite)`. A real submit (dry_run: false) against a non-empty write resolves false.
+  const built = {
+    ...contactRow, hs_object_id: contactRow.hs_object_id, properties: result.properties,
+    would_write: { ...result.properties }, outcome: result.outcome, message: result.message,
+    dry_run: false,
+  };
+  assert.equal(built.would_write[P_NEEDS_REVIEW], "false", "an approval clears the queue");
+
+  // Mirrors (g5)'s armed case and (g3)'s disarmed one, for the CONTACT gate specifically.
+  assert.equal(runNode(jsCodeOf(CONTACT_GATE), [built], {}).length, 0, "committed and disarmed");
+  const armed = armConstants(jsCodeOf(CONTACT_GATE), {
+    ALLOW_HUBSPOT_REVIEW_WRITES: "true", TEST_RECORD_IDS: "4242",
+  });
+  assert.equal(runNode(armed, [built], {}).length, 1,
+    "review arming must authorise this contact's real write");
 
   const out = respond(built, built);
   assert.deepEqual(Object.keys(out).sort(), CONTRACT_KEYS);
-  assert.equal(out.verified_properties, null);
-  assert.equal(out.verified, null);
+  assert.equal(out.outcome, "applied");
+  assert.equal(out.would_write[P_NEEDS_REVIEW], "false");
 });
 
 test("(g5) an APPROVE on a company routes through the endpoint's own inlined reviewApply", () => {
