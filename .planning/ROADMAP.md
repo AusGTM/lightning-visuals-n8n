@@ -83,9 +83,17 @@ Full detail: `milestones/v1.1-ROADMAP.md` § Phase 58; decisions:
 **Plans**: 4 plans
 
 Plans:
+**Wave 1**
+
 - [ ] 58-01-PLAN.md — company rows through the extraction machinery: identity config, record-type-aware validator, six source adapters (wave 1, tracer)
 - [ ] 58-02-PLAN.md — live spike: does a request-level propose mode reach the company decision node; operator decides the backend research node's scope (wave 1)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
 - [ ] 58-03-PLAN.md — propose/confirm/decline/correct: the domain decision lane, its envelope consumption, and the operator-facing confirm table (wave 2)
+
+**Wave 3** *(blocked on Wave 2 completion)*
+
 - [ ] 58-04-PLAN.md — the research line priced, named and declinable; backend website-seeking extension or a written INPUT-02 residual (wave 3)
 
 ### Phase 51: Backfill Pipeline, Credit Sizing & Dry Run

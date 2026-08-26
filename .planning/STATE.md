@@ -4,17 +4,17 @@ milestone: v1.1
 milestone_name: Unattended Session Runs
 current_phase: 51
 current_phase_name: Take what the operator actually has
-status: phase-complete
+status: executing
 stopped_at: Phase 58 context gathered
-last_updated: "2026-08-26T00:12:53.630Z"
+last_updated: "2026-08-26T01:34:30.762Z"
 last_activity: 2026-08-25
 last_activity_desc: "Phase 53 closed: walk complete, review lane live-proven, permissive enrichment shipped and deployed. Operator rulings recorded: provider-data-only locations, revocation-at-next-send acceptable"
 progress:
-  total_phases: 2
+  total_phases: 3
   completed_phases: 2
-  total_plans: 7
+  total_plans: 11
   completed_plans: 7
-  percent: 100
+  percent: 64
 ---
 
 # Project State
@@ -152,7 +152,7 @@ predating the window. VETO-03 bar still 0.
 
 Phase: 51 (Backfill Pipeline, Credit Sizing & Dry Run) — EXECUTING
 Plan: 3 of 3
-Status: Phase complete — ready for verification
+Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
   has executed on a real record. **Nothing is armed** — windows #1 and #2 were each opened
