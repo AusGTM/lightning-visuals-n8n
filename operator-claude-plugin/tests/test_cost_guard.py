@@ -7,6 +7,7 @@ The first pins D-10's distinction; the second pins that the implementation *bran
 on readability rather than computing first and relabelling afterwards — a verdict-string
 assertion alone passes against that defect (25-CONTEXT D-17).
 """
+import json
 from datetime import date
 from pathlib import Path
 
@@ -139,6 +140,27 @@ def test_a_backend_resolved_record_count_says_so_rather_than_inventing_a_number(
     for figure in estimate["provider_credits"].values():
         assert figure["credits"] is None
         assert figure["known"] is False
+
+
+# -------------------------------------------------------------------- domain research
+
+
+def test_research_line_result_is_json_serializable_with_sorted_row_ids(rates):
+    """WR-01 (58-REVIEW.md): row_ids was a Python set, which json.dumps refuses. The
+    whole result must serialize, and row_ids must come back deterministically sorted
+    rather than in set-iteration order."""
+    rows = [{"row_id": "r2"}, {"row_id": "r1"}]
+    line = cost_guard.research_line(rows, rates)
+
+    dumped = json.dumps(line)
+    assert json.loads(dumped)["row_ids"] == ["r1", "r2"]
+    assert line["row_ids"] == ["r1", "r2"]
+
+
+def test_research_line_tolerates_a_missing_row_id_without_raising(rates):
+    line = cost_guard.research_line([{"row_id": "r1"}, {"name": "no row_id"}], rates)
+    assert json.dumps(line)
+    assert line["row_ids"] == ["r1", None]
 
 
 # ----------------------------------------------------------------------------- balances

@@ -203,7 +203,7 @@ def research_line(rows, rates: dict) -> dict:
     return {
         "count": count,
         "rows": rows,
-        "row_ids": {row.get("row_id") for row in rows},
+        "row_ids": sorted((row.get("row_id") for row in rows), key=lambda v: (v is None, v)),
         "state": state,
         "known": state == "measured",
         "cost_usd": cost_usd,

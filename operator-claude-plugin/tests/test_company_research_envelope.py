@@ -48,7 +48,7 @@ def test_pricing_research_for_rows_returns_their_count_and_identity(rates):
             {"row_id": "row-2", "name": "No Domain Ltd"}]
     line = cost_guard.research_line(rows, rates)
     assert line["count"] == 2
-    assert line["row_ids"] == {"row-1", "row-2"}
+    assert line["row_ids"] == ["row-1", "row-2"]
     assert line["rows"] == rows
 
 
@@ -102,8 +102,8 @@ def test_the_named_rows_and_the_decision_structures_needs_research_rows_are_the_
     ]
     needs = company_domain.needs_research(proposals, requested_check={"row-3"})
     line = cost_guard.research_line(needs, rates)
-    assert line["row_ids"] == {row["row_id"] for row in needs}
-    assert line["row_ids"] == {"row-2", "row-3"}
+    assert line["row_ids"] == sorted(row["row_id"] for row in needs)
+    assert line["row_ids"] == ["row-2", "row-3"]
 
 
 # ============================================================================= Task 2
@@ -139,7 +139,7 @@ def test_with_no_research_decisions_every_needs_research_row_is_still_treated_as
     decided = company_domain.apply_domain_decisions(proposals, resolved)
     assert {row["row_id"] for row in decided["undecided"]} == {"row-1"}
     line = cost_guard.research_line(needs, cost_guard.load_rates())
-    assert line["row_ids"] == {"row-1"}
+    assert line["row_ids"] == ["row-1"]
 
 
 def test_striking_the_line_moves_exactly_the_needs_research_rows_to_name_only_and_nothing_else():
