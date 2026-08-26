@@ -60,7 +60,7 @@ variable), and a design that runs the provider waterfall twice per written recor
 - [ ] **Phase 57: Ceilings, refusal-before-start, and post-run proof** - A run cannot spend what
       it does not have, and proves afterwards it wrote only what it was granted
 
-- [ ] **Phase 58: Take what the operator actually has** - Every input an operator holds
+- [x] **Phase 58: Take what the operator actually has** *(complete 2026-08-26, verified 31/31)* - Every input an operator holds
       (screenshot, paste, URL, bare name) resolves to a company the backend can act on; missing
       domains researched then confirmed before write; refusal is the last resort — promoted
       ahead of 54–57 by operator decision 2026-08-25
@@ -238,7 +238,9 @@ silently inherit Phase 51's placeholder behavior without a decision.
 | 49. Re-score Strategy & Reporting | v0.9 | 7/7 | Complete (verified) | 2026-08-13 |
 | 50. Derived Tier Property | v0.9 | 6/6 | Complete (verified) | 2026-08-14 |
 | 51. Backfill Pipeline, Credit Sizing & Dry Run | v1.0 | 3/3 | Complete (verified) | 2026-08-19 |
-| 52. Staged Canary Execution & Safety Verification | v1.0 | 0/TBD | Not started | - |
+| 52. Staged Canary Execution & Safety Verification | v1.0 | 0/TBD | Deferred (operator, 2026-08-25) | - |
+| 53. Operator-openable Write Grant | v1.1 | 4/4 | Complete (verified) | 2026-08-26 |
+| 58. Take What the Operator Actually Has | v1.1 | 6/6 | Complete (verified) | 2026-08-26 |
 
 ## Ledger gaps (known)
 
