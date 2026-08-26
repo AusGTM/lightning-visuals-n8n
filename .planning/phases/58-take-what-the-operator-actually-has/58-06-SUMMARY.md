@@ -20,7 +20,7 @@ actuals:
                 # re-baselined frozen fixture add ~1.15M chars of MECHANICAL regeneration
                 # on top, not hand-written content -- reported separately below, not folded
                 # into this figure, since the estimate this pairs against was for authored work
-  tasks: 3      # Task 4 (checkpoint) not yet resolved by the operator -- see below
+  tasks: 4      # Task 4 (checkpoint) resolved by the operator 2026-08-26 -- see below
   commits: 2
 
 tech-stack:
@@ -92,24 +92,24 @@ coverage:
         status: pass
     human_judgment: false
   - id: D4
-    description: "Operator decides (a) whether size disagreements stay flag-only or should also be judge-checked (a structural change colliding with RO-2), and (b) what to do with the forensic's finding -- both disclosed at Task 4, unanswered"
+    description: "Operator decides (a) whether size disagreements stay flag-only or should also be judge-checked (a structural change colliding with RO-2), and (b) what to do with the forensic's finding -- both disclosed at Task 4, ANSWERED 2026-08-26"
     verification: []
     human_judgment: true
-    rationale: "Both questions are policy/architecture decisions the plan's own Task 4 explicitly reserves to the operator (gate=\"blocking\", autonomous: false per this plan's objective) -- automation cannot answer them."
+    rationale: "Both questions are policy/architecture decisions the plan's own Task 4 explicitly reserves to the operator (gate=\"blocking\", autonomous: false per this plan's objective) -- automation cannot answer them. Operator ruling: (a) flag-only stays permanently, RO-2 untouched, no follow-up work opened; (b) forensic finding accepted as-is, the 70-vs-75 confidence rejection was correct behavior, no threshold change, no follow-up opened -- the material-conflict guard this plan built is the fix for the incident class."
 
 duration: ~110min
 completed: 2026-08-26
-status: halted
+status: complete
 ---
 
 # Phase 58 Plan 06: Material-Conflict Suppression (Judge Escalation for Property Conflicts) Summary
 
-**A cross-provider disagreement on any of five decision-driving company fields — starting with the exact `lv_country_region_normalized`/`country` shape that fired a false Non-ANZ veto on Series Futsal Victoria in execution 11983 — can no longer promote unadjudicated and flip `lv_anti_icp_flag`; it is withheld, the record is flagged naming the disagreeing sources, and the existing Sonnet judge can resolve it (including a resolution that legitimately fires the veto). Tasks 1-3 complete and live-proven (execution 11987); Task 4 is an unresolved operator checkpoint.**
+**A cross-provider disagreement on any of five decision-driving company fields — starting with the exact `lv_country_region_normalized`/`country` shape that fired a false Non-ANZ veto on Series Futsal Victoria in execution 11983 — can no longer promote unadjudicated and flip `lv_anti_icp_flag`; it is withheld, the record is flagged naming the disagreeing sources, and the existing Sonnet judge can resolve it (including a resolution that legitimately fires the veto). Tasks 1-3 complete and live-proven (execution 11987); Task 4 resolved by the operator 2026-08-26 -- plan complete.**
 
 ## Performance
 
-- **Duration:** ~110min (Task 1 ~45min including the forensic; Task 2 ~45min; Task 3 ~20min)
-- **Tasks:** 3 of 4 complete (Task 4 is a `checkpoint:human-verify` awaiting the operator)
+- **Duration:** ~110min (Task 1 ~45min including the forensic; Task 2 ~45min; Task 3 ~20min; Task 4 checkpoint answered same day on resume)
+- **Tasks:** 4 of 4 complete
 - **Files modified:** 16 across 2 commits (3 created, 13 modified)
 
 ## Accomplishments
@@ -124,7 +124,7 @@ status: halted
 1. **Task 1: The structural guarantee — one material field, suppressed unless adjudicated, and visibly flagged** — `169b35f` (feat)
 2. **Task 2: Route material conflicts to the existing judge, and give size conflicts the flag they always needed** — `d5d08ae` (feat)
 3. **Task 3: Deploy, bounce, and prove the deployed lane on one live execution** — no code commit (deploy/bounce/trigger only; the code deployed was already committed in Tasks 1-2). Evidence recorded in this SUMMARY.
-4. **Task 4: Operator decides the two disclosed behaviour changes** — NOT YET ANSWERED. See "Checkpoint" below.
+4. **Task 4: Operator decides the two disclosed behaviour changes** — ANSWERED 2026-08-26, no code change required. See "Task 4 Resolution" below.
 
 **Plan metadata:** (this commit, following the SUMMARY)
 
@@ -210,21 +210,33 @@ Pulled via plain `urllib` (project memory: `requests` fails against this n8n exe
 - Anthropic calls: `Claude Web Research` + `Judge Call` — 2 calls total, bounded by the measured all-in `anthropic_usd_per_record = 0.068624 USD` figure per the declared budget; no per-call rate invented.
 - No `ALLOW_HUBSPOT_*` or `ALLOW_N8N_ARM` flag was set at any point. Nothing was armed.
 
-## Checkpoint: Task 4 (unanswered)
+## Task 4 Resolution (operator, 2026-08-26)
 
 **Type:** human-verify
 **Gate:** blocking
-**Status:** awaiting operator decision — this plan does not proceed further until answered.
+**Status:** RESOLVED — both questions answered, plan proceeds to completion.
 
 **What's built** (see the checkpoint task's own `<what-built>`/`<how-to-verify>` in `58-06-PLAN.md` for the full operator-facing text): the suppress-unless-adjudicated guarantee, judge routing for material conflicts, and one live execution proving the deployed lane carries it. Nothing has been written to any real record by this plan, and nothing was armed.
 
-**Two things need the operator, per the plan's own Task 4:**
-1. **Size (revenue/headcount) disagreements** now flag the company for review but are never checked by the judge — RO-2 (Phase 14) structurally forbids a model call from a size disagreement alone, and this plan upholds that. Decide: is flag-but-never-check the right permanent treatment for size, or should the model be asked about size too (a separate, structural piece of work that would need to revisit RO-2's own pinning test)?
-2. **The forensic's finding** (documented above): no second latent defect was found — the research candidate's correct "AU" answer was rejected purely on a confidence-threshold technicality (70 < 75), fully explaining the mechanism. Decide: is this acceptable as-is, or does the `lv_country_region_normalized` confidence threshold itself warrant separate review (a different, not-yet-scoped question about whether 75 is the right bar for a research-sourced answer specifically)?
+**Decision 1 — size (revenue/headcount) disagreements: flag-only stays, permanently.** The operator confirmed RO-2 stays untouched — no model call on a size disagreement alone. The review flag this plan added for size conflicts (where before there was silent, unflagged dropping) is the accepted end state, not an interim step toward judge-checking size. No follow-up work opened; RO-2's pinning test (`test_ro2_judge_gate_cannot_see_size_conflicts`) remains the standing guarantee.
 
-**Additionally, disclosed for the operator's awareness alongside the above** (not a question requiring a separate answer, but material to evaluating Task 4): the plan's own literal verification bullet "`git diff --stat ... tests/test_judge_spec.py` is empty" is NOT met. See "Deviations from Plan" item 2 above for the full reasoning — the two SPECIFICALLY protected tests (RO-2, escalation currency) are unmodified and green; one other pre-existing test's hardcoded boundary was updated because Task 2's own explicit instruction required it.
+**Decision 2 — the forensic's finding: accepted as-is.** The 70-vs-75 confidence rejection (the research candidate's correct "AU" answer, held below `lv_country_region_normalized`'s `min_confidence: 75` threshold) was correct behavior, not a defect. The operator ruled the threshold stays at 75 and opened no follow-up to revisit it — the new material-conflict guard this plan built (suppress-unless-adjudicated, routed to the judge) is the fix for the incident *class* execution 11983 represents, independent of where any single confidence threshold sits.
 
-**Resume-signal:** "Say whether size disagreements stay flag-only or should also be checked by the model, and what to do with anything the forensic turned up — or 'leave both.'"
+**Also acknowledged by the operator:** the disclosed `tests/test_judge_spec.py` diff (item 2 under "Deviations from Plan" above) is accepted as a disclosed deviation, not a plan miss requiring correction — it is a necessary consequence of Task 2's own explicit instruction to add the region to `_JUDGE_DATA_FIELDS`, and the two specifically-protected tests (`test_ro2_judge_gate_cannot_see_size_conflicts`, `test_escalation_generated_js_is_current`) remain unmodified and green.
+
+**No code change resulted from Task 4.** Both rulings confirm the plan's existing behavior is the intended end state; nothing further to build.
+
+## Re-verification (post-checkpoint, 2026-08-26)
+
+Full plan-level `<verification>` re-run after Task 4's resolution, to confirm nothing drifted between the halt and this resume:
+
+- `node --test tests/n8n/*.test.mjs` — **772/772 pass, 0 fail.**
+- `.venv/bin/python -m pytest -q` — **3198 passed, 154 skipped, 4 failed** (all 4 failures pre-existing and unrelated: `tests/test_merge_policy.py::test_sc3_e2e_promote_forced_still_protects_manual`, `::test_sc4_full_source_attribution`, `::test_sc4b_cache_key_not_stamped_unless_promoted`, `::test_integ_wires_icp_scorer` — a `pydantic`/`anthropic` SDK version mismatch (`ThinkingBlock` has no `.text` attribute) unrelated to this plan's changes and known/deferred per project convention).
+- `git diff --stat HEAD~3 HEAD -- src/icp_scoring.py tests/test_scoring_parity.py` — **empty**, confirming the veto predicate did not drift.
+- `git diff --stat HEAD~3 HEAD -- tests/test_judge_spec.py` — **not empty** (the disclosed, operator-accepted deviation above); the two specifically-protected tests within it remain green and unmodified.
+- `git status --porcelain n8n/wf_*.json scripts/` — **clean**, no uncommitted drift.
+
+All plan-level acceptance criteria hold, modulo the one disclosed and now operator-accepted deviation.
 
 ## Known Stubs
 
@@ -236,11 +248,13 @@ None — no external service configuration required.
 
 ## Next Phase Readiness
 
-Tasks 1-3 are complete, tested (39 + 9 + 4 new node tests, 772/772 node tests green overall, 3198/3202 Python tests green with 4 pre-existing unrelated failures), deployed, and live-proven. **This plan does not advance to STATE.md/ROADMAP.md completion, and Phase 58 is not sealed, until Task 4 is answered** — per this plan's `autonomous: false` and the checkpoint's `gate="blocking"`. On resume: apply whatever the operator decides for the two disclosed items, then run the plan-level `<verification>` checks one more time (already green except the disclosed `tests/test_judge_spec.py` diff), and complete state/roadmap updates.
+All 4 tasks complete, tested (39 + 9 + 4 new node tests, 772/772 node tests green overall, 3198/3202 Python tests green with 4 pre-existing unrelated failures), deployed, and live-proven. Task 4 answered by the operator 2026-08-26 (both disclosed behaviour changes accepted as-is, no follow-up work opened). This plan closes INPUT-01 (its final closing plan, alongside 58-01 and 58-05); the milestone checkbox lives in `.planning/milestones/v1.1-REQUIREMENTS.md`, not the root `REQUIREMENTS.md` (which lacks v1.1 IDs) — ticked as part of this completion. INPUT-03 and INPUT-04 are also ticked, since their own closing plans (58-01/58-02/58-03/58-04) are all independently complete. INPUT-02 stays open with its recorded defer-residual (`58-SPIKE-VERDICT.md`): the backend research node was deliberately not extended to seek a domain this phase, so rows where Claude cannot confidently propose one and the operator cannot supply one still fall to the accept-by-name path rather than a backend-researched domain.
+
+Phase 58 as a whole: plans 01-06 all complete. Ready for phase seal / `/gsd-ship` review at the orchestrator's discretion — not performed by this execution, which was scoped to plan 58-06 only.
 
 ---
 *Phase: 58-take-what-the-operator-actually-has*
-*Completed: 2026-08-26 (Tasks 1-3; Task 4 pending)*
+*Completed: 2026-08-26 (all 4 tasks)*
 
 ## Self-Check: PASSED
 
@@ -249,3 +263,4 @@ Tasks 1-3 are complete, tested (39 + 9 + 4 new node tests, 772/772 node tests gr
 - FOUND: `tests/n8n/materialConflictNoVetoFlip.test.mjs`
 - FOUND commit `169b35f` (Task 1)
 - FOUND commit `d5d08ae` (Task 2)
+- FOUND commit `37a95f4` (Tasks 1-3 SUMMARY, pre-checkpoint)
