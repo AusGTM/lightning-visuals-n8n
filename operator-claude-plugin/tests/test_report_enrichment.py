@@ -86,6 +86,34 @@ def test_unrecognised_action_renders_as_unknown_never_a_success():
 
 
 # =====================================================================================
+# Phase 54-02 (T-54-05) — the two legitimate two-pass shapes must never render "unknown".
+# Neither is a success (nothing was written on either path), and each must say plainly
+# that proceeding costs a second full pass.
+# =====================================================================================
+
+def test_needs_match_review_row_renders_as_held_never_unknown_or_a_success():
+    row = {"_lane": "contacts", "action": "needs_match_review"}
+
+    rendered = report_enrichment._build_row_report(row, 1)
+
+    assert rendered["outcome"] == "held"
+    assert rendered["outcome"] != "unknown"
+    assert rendered["outcome"] not in report_enrichment.SUCCESS_OUTCOMES
+    assert "costs" in rendered["reason"] and "again" in rendered["reason"]
+
+
+def test_proposed_row_renders_as_previewed_never_unknown_or_a_success():
+    row = {"_lane": "companies", "action": "proposed"}
+
+    rendered = report_enrichment._build_row_report(row, 1)
+
+    assert rendered["outcome"] == "previewed"
+    assert rendered["outcome"] != "unknown"
+    assert rendered["outcome"] not in report_enrichment.SUCCESS_OUTCOMES
+    assert "costs" in rendered["reason"] and "again" in rendered["reason"]
+
+
+# =====================================================================================
 # match_level/match_reason (F3, 2026-08-25) — matchProposal.js's `summarizeMatch` is a
 # SEPARATE fact from `action`, and the 2026-08-25 walk's body carried both
 # `action: "write_blocked"` and `match.reason: "searched, no hit"` with neither reaching
@@ -306,7 +334,15 @@ def test_build_enrichment_report_counts_and_total_sum_correctly():
 
     assert r["total"] == 6
     assert sum(r["counts"].values()) == 6
-    assert r["counts"] == {"created": 2, "enriched": 2, "blocked": 1, "skipped": 1, "unknown": 0}
+    # 2026-08-27, Phase 54-02: this exact-dict-equality pin now carries two more keys
+    # (`held`, `previewed`) that `_empty_counts()` grew when `needs_match_review` and
+    # `proposed` joined `_ACTION_TO_OUTCOME` (T-54-05). The fixture's six rows carry
+    # neither action, so both new keys read 0 here — a deliberate, predicted move
+    # (54-RESEARCH.md §5), not a sweep.
+    assert r["counts"] == {
+        "created": 2, "enriched": 2, "blocked": 1, "skipped": 1,
+        "held": 0, "previewed": 0, "unknown": 0,
+    }
 
 
 def test_build_enrichment_report_failing_rows_include_blocked_skipped_and_needs_review():

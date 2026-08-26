@@ -28,16 +28,24 @@ DECIDE_CONTACT_ACTION_NODE = "Decide Action"
 BUILD_RESPONSE_NODE = "Build Response"
 PARSE_EVENT_NODE = "Parse HubSpot Event"
 
-# The four values the deployed decision nodes emit (write_blocked comes from the
+# The six values the deployed decision nodes emit (write_blocked comes from the
 # write-safety gate refusing a create/enrich, computed downstream of the original
-# create/enrich/skip intent — see Enrichment Gate / Company Gate). Anything else is
-# an anomaly this module has never seen and renders "unknown" — conservative, same
-# "never guess a success" discipline Phase 25 D-10 applies to credit balances.
+# create/enrich/skip intent — see Enrichment Gate / Company Gate; needs_match_review
+# and proposed are two more non-writing exits, added Phase 54-02 — see the two entries
+# below). Anything else is an anomaly this module has never seen and renders "unknown"
+# — conservative, same "never guess a success" discipline Phase 25 D-10 applies to
+# credit balances.
 _ACTION_TO_OUTCOME = {
     "create": "created",
     "enrich": "enriched",
     "write_blocked": "blocked",
     "skip": "skipped",
+    # Phase 54-02: a MEDIUM identity match (same surname, same company, no exact hit)
+    # — Decide Action holds it rather than writing over a possible different person.
+    "needs_match_review": "held",
+    # Phase 54-02: the look-only/rehearsal mode (`isReturnOnly`) — either lane, forced
+    # BEFORE the write-safety gate ever runs. Nothing was saved on this pass.
+    "proposed": "previewed",
 }
 SUCCESS_OUTCOMES = {"created", "enriched"}
 
@@ -49,13 +57,24 @@ _OUTCOME_REASON = {
     "blocked": "the write-safety gate did not allow this write "
                "(ALLOW_HUBSPOT_RECORD_WRITES / ALLOW_HUBSPOT_CREATE / the test-record allowlist)",
     "skipped": "no enrichment needed: required fields were present, fresh and valid",
+    # Phase 54-02 (T-54-05/T-54-06): the two shapes that still cost a second full pass —
+    # named where the operator reads the result, not just in the skill that requests it.
+    "held": "this row matched somebody with the same surname at the same company and "
+            "was held rather than written over; confirming it and sending it again "
+            "re-runs the whole lookup for that person, so it costs the same as this "
+            "run did",
+    "previewed": "this was a look; nothing was saved. Saving it means running the same "
+                 "look again, and that costs the same as this run did",
 }
 
 _ACTION_LANE_ORDER = (("companies", DECIDE_COMPANY_ACTION_NODE), ("contacts", DECIDE_CONTACT_ACTION_NODE))
 
 
 def _empty_counts():
-    return {"created": 0, "enriched": 0, "blocked": 0, "skipped": 0, "unknown": 0}
+    return {
+        "created": 0, "enriched": 0, "blocked": 0, "skipped": 0,
+        "held": 0, "previewed": 0, "unknown": 0,
+    }
 
 
 def _empty_review_counts():
