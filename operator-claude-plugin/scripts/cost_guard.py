@@ -56,6 +56,10 @@ PROVIDER_RATE_KEYS = {
 
 ANTHROPIC_RATE_KEY = "anthropic_usd_per_record"
 
+# The rate key for backend domain research (D-58-08/09) -- unmeasured, ships null, same
+# apollo_per_match precedent estimate_batch already leans on.
+RESEARCH_RATE_KEY = "company_domain_research"
+
 
 class CostRateError(Exception):
     """Raised when the plugin's rate table is missing or unreadable. Names the file."""
@@ -153,6 +157,61 @@ def estimate_batch(record_count, object_type: str, providers, rates: dict) -> di
         "anthropic_usd_per_record": anthropic_rate,
         "rates_version": rates.get("version"),
         "rates_measured_on": rates.get("measured_on"),
+    }
+
+
+# --------------------------------------------------------------------- domain research
+
+
+def research_line(rows, rates: dict) -> dict:
+    """Price backend domain research for a set of company rows needing it (D-58-08/09).
+
+    `rows` is expected to be the SAME needs-research row set a caller's decision
+    structure (`company_domain.needs_research`) already named -- this function does not
+    derive that set itself, it only prices whatever it is handed, so the priced count
+    and the decided count can never silently diverge into two different numbers.
+
+    Zero rows and an unmeasured rate are two DIFFERENT kinds of nothing, checked in that
+    order: zero rows means no company needs it (checked first, regardless of whether the
+    rate is known); an unmeasured rate on a non-empty set means the price is genuinely
+    unknown. Neither is ever rendered as a $0 figure -- inheriting `compare()`'s
+    readability-before-magnitude discipline rather than reimplementing it.
+    """
+    rows = list(rows or [])
+    entry = _rate_entry(rates, RESEARCH_RATE_KEY)
+    rate = entry.get("value")
+    count = len(rows)
+
+    if count == 0:
+        state = "no_rows"
+        cost_usd = None
+        line = "Domain research: no company needs it."
+    elif rate is None:
+        state = "unmeasured"
+        cost_usd = None
+        noun = "company" if count == 1 else "companies"
+        line = f"Domain research: {count} {noun} -- cost not measured."
+    else:
+        state = "measured"
+        cost_usd = rate * count
+        noun = "company" if count == 1 else "companies"
+        line = (
+            f"Domain research: {count} {noun} × ${rate:,.2f}/company = "
+            f"${cost_usd:,.2f}."
+        )
+
+    return {
+        "count": count,
+        "rows": rows,
+        "row_ids": {row.get("row_id") for row in rows},
+        "state": state,
+        "known": state == "measured",
+        "cost_usd": cost_usd,
+        "rate": rate,
+        "unit": entry.get("unit"),
+        "confidence": entry.get("confidence"),
+        "citation": entry.get("citation"),
+        "line": line,
     }
 
 

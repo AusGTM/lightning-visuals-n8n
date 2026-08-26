@@ -33,6 +33,12 @@
       "citation": "No committed figure exists for this account. Apollo's usage endpoint (POST /api/v1/usage_stats/api_usage_stats) returns per-endpoint RATE LIMITS — limit/consumed/left_over by day, hour and minute — not a depleting credit pool, so even a successful read yields no per-match credit price. Confirmed live 2026-07-31 (HTTP 200 with the master key).",
       "confidence": "unknown — Apollo does not expose a per-match credit cost for this account; do not substitute a guess"
     },
+    "company_domain_research": {
+      "value": null,
+      "unit": "USD/company",
+      "citation": "No measured rate exists for backend domain research (Phase 58, D-58-08/09). This is a distinct call from the all-in anthropic_usd_per_record chain and must be measured on its own before it is disclosed as anything but unmeasured -- do not scale another rate to fill this in.",
+      "confidence": "unknown -- not yet measured, do not substitute a guess"
+    },
     "anthropic_usd_per_record": {
       "value": 0.068624,
       "unit": "USD/record (full provider + Haiku research + Sonnet judge chain)",
