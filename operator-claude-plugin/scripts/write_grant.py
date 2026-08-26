@@ -250,7 +250,13 @@ def envelope(config, *, object_type, record_ids, record_domains, providers,
         "basis": {
             "record_count": MEASURED,
             "provider_credits": MEASURED,
-            "anthropic_usd": MEASURED,
+            # 2026-08-27, Phase 54 Task 3 (OP-54-05): this was MEASURED before this date.
+            # It is a static rate-table multiplication (record_count * config/
+            # cost_rates.json's dated anthropic_usd_per_record) — no code path anywhere
+            # in this repo reads back Anthropic's real token usage for a real execution,
+            # so it was never a measurement. Relabelled PROJECTED; the figure itself is
+            # unchanged, only the label an operator reads it under.
+            "anthropic_usd": PROJECTED,
             "projected_executions": executions_basis,
             "monthly_execution_allowance": (
                 MEASURED if allowance_configured else UNCONFIGURED),
@@ -296,7 +302,8 @@ def _envelope_block(figures):
         lines += ["", "No provider credits: **0** — this grant runs no provider."]
 
     lines += ["", f"Anthropic model spend: **{_usd(figures.get('anthropic_usd'))}** "
-                  f"worst case."]
+                  f"worst case — a floor from the dated rate table above, not a "
+                  f"measurement (this repo never reads back real Anthropic usage)."]
 
     executions = figures.get("projected_executions")
     if isinstance(executions, int):
