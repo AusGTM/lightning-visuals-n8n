@@ -259,6 +259,73 @@ def test_company_record_flagging_domain_ambiguous_with_a_value_is_rejected():
     assert "D-07" in result.rejected[0]["reason"]
 
 
+def test_mixed_batch_ambiguity_on_a_contact_survives_companies_first_reassembly():
+    """CR-01 (58-REVIEW.md): an artifact-supplied ambiguity is written against the RAW
+    `records` index, before validate() ever splits by type and reassembles
+    companies-first. A company record ordered before the contact record it names
+    must not cause the ambiguity to land on the wrong (company) row post-reassembly
+    — the exact repro from 58-REVIEW.md's CR-01."""
+    artifact = {
+        "batch_id": "b1",
+        "source": {"kind": "prose", "detail": "x"},
+        "records": [
+            {
+                "row": {"email": "a@x.com", "jobtitle": "Snr Producer"},
+                "provenance": {"input": "pasted_text", "locator": "l1"},
+            },
+            {
+                "row": {"name": "Acme"},
+                "provenance": {"input": "pasted_text", "locator": "l2"},
+                "record_type": "companies",
+            },
+        ],
+        "ambiguities": [
+            {"record_index": 0, "field": "jobtitle", "reason": "title looked uncertain"}
+        ],
+    }
+
+    result = extraction.validate(artifact)
+
+    assert len(result.rejected) == 1
+    assert "D-07" in result.rejected[0]["reason"]
+    assert len(result.accepted) == 1
+    assert result.accepted[0]["row"] == {"name": "Acme"}
+    for entry in result.accepted:
+        assert "_raw_index" not in entry
+        assert "_raw_indices" not in entry
+
+
+def test_mixed_batch_ambiguity_on_a_company_survives_contacts_first_input_order():
+    """The inverse ordering: the ambiguous record is submitted second (a contact
+    first, a company second) yet still targets the company by its raw index. The
+    companies-first reassembly must still resolve it correctly."""
+    artifact = {
+        "batch_id": "b2",
+        "source": {"kind": "prose", "detail": "x"},
+        "records": [
+            {
+                "row": {"email": "a@x.com"},
+                "provenance": {"input": "pasted_text", "locator": "l1"},
+            },
+            {
+                "row": {"name": "Acme", "domain": "maybe.example"},
+                "provenance": {"input": "pasted_text", "locator": "l2"},
+                "record_type": "companies",
+            },
+        ],
+        "ambiguities": [
+            {"record_index": 1, "field": "domain", "reason": "unclear which domain is theirs"}
+        ],
+    }
+
+    result = extraction.validate(artifact)
+
+    assert len(result.rejected) == 1
+    assert "D-07" in result.rejected[0]["reason"]
+    assert len(result.accepted) == 1
+    assert result.accepted[0]["row"] == {"email": "a@x.com"}
+
+
 def test_extraction_contract_backwards_compat_pin_absent_record_type_routes_to_contacts():
     """The property everything else in test_extraction_contract.py depends on: a
     record with no `record_type` key is judged exactly as it is today, byte-for-byte
@@ -284,6 +351,34 @@ def test_extraction_contract_backwards_compat_pin_absent_record_type_routes_to_c
             ),
         }
     ]
+
+
+def test_unrecognized_record_type_is_rejected_by_name_not_silently_coerced():
+    """WR-02 (58-REVIEW.md): a near-miss spelling like 'Companies' must be a named
+    rejection, not a silent fall-through to the contact lane's identity rule (which
+    would give a misleading "needs email/firstname+lastname+company" reason for what
+    was actually a mistyped company row)."""
+    artifact = {
+        "batch_id": "batch-58-wr02",
+        "source": {"kind": "prose", "detail": "pasted text"},
+        "records": [
+            {
+                "row": {"name": "Acme"},
+                "provenance": {"input": "pasted_text", "locator": "l1"},
+                "record_type": "Companies",
+            },
+        ],
+        "ambiguities": [],
+    }
+
+    result = extraction.validate(artifact)
+
+    assert result.accepted == []
+    assert len(result.rejected) == 1
+    reason = result.rejected[0]["reason"]
+    assert "record_type" in reason
+    assert "Companies" in reason
+    assert "email" not in reason
 
 
 # =====================================================================================

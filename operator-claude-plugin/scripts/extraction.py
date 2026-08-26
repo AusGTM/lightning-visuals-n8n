@@ -247,6 +247,12 @@ def _merge_cluster(entries: list) -> tuple:
     record_type = entries[0].get("record_type")
     if record_type is not None:
         merged["record_type"] = record_type
+    # Carry every contributing entry's pre-flight raw index through the merge, so an
+    # artifact-supplied ambiguity naming one of them can still be remapped onto this
+    # merged row's final position (see validate()'s raw_to_final lookup).
+    raw_indices = [e["_raw_index"] for e in entries if e.get("_raw_index") is not None]
+    if raw_indices:
+        merged["_raw_indices"] = raw_indices
     return merged, conflicts
 
 
@@ -450,8 +456,17 @@ def validate(artifact: dict, mapping_path=None) -> ExtractionResult:
     onto its final position in that combined list before ambiguity aggregation runs
     — never left to be re-derived from list position alone, since a group-split
     reassembly bug would otherwise point an ambiguity at the wrong record silently.
-    Ambiguity aggregation itself stays ONE sorted list across the whole artifact
-    (D-06), and the D-07 check still keys on that combined `record_index`.
+    The artifact's OWN ambiguities get the identical treatment: each pre-flight
+    `accepted` entry is tagged with its raw `records` index before the type split
+    (`_raw_index`, carried through a merge as `_raw_indices`), and every
+    artifact-supplied ambiguity's `record_index` is translated through a
+    raw-index -> final-position lookup built from the reassembled list before D-07
+    runs — never trusted to already name the post-reassembly position, since nothing
+    requires (or can require) the extractor to have predicted that index by hand.
+    An ambiguity whose raw index does not resolve to any surviving row is dropped
+    rather than guessed at. Ambiguity aggregation itself stays ONE sorted list
+    across the whole artifact (D-06), and the D-07 check still keys on that combined
+    `record_index`.
     """
     contact_props = set(canonical_props(mapping_path))
     contact_groups = identity_groups(mapping_path)
@@ -468,7 +483,19 @@ def validate(artifact: dict, mapping_path=None) -> ExtractionResult:
                 rejected.append({"index": i, "reason": "record is not an object"})
                 continue
 
-            record_type = "companies" if record.get("record_type") == "companies" else "contacts"
+            raw_type = record.get("record_type")
+            if raw_type is not None and raw_type not in ("contacts", "companies"):
+                rejected.append(
+                    {
+                        "index": i,
+                        "reason": (
+                            f"unrecognized record_type {raw_type!r}: expected "
+                            "'companies' or 'contacts' (or omit the key for a contact)"
+                        ),
+                    }
+                )
+                continue
+            record_type = "companies" if raw_type == "companies" else "contacts"
             props = company_props if record_type == "companies" else contact_props
             record_groups = company_groups if record_type == "companies" else contact_groups
 
@@ -512,7 +539,17 @@ def validate(artifact: dict, mapping_path=None) -> ExtractionResult:
                 rejected.append({"index": i, "reason": reason})
                 continue
 
-            accepted.append({"row": clean_row, "provenance": provenance, "record_type": record_type})
+            accepted.append(
+                {
+                    "row": clean_row,
+                    "provenance": provenance,
+                    "record_type": record_type,
+                    # Internal bookkeeping only, stripped before this entry can ever
+                    # reach ExtractionResult.accepted — see the raw_to_final lookup
+                    # below, which is the only reader.
+                    "_raw_index": i,
+                }
+            )
         except Exception as e:  # one bad record must never crash the batch
             rejected.append({"index": i, "reason": f"parse error: {e}"})
 
@@ -557,7 +594,38 @@ def validate(artifact: dict, mapping_path=None) -> ExtractionResult:
         _remap_ambiguity(a, contact_offset) for a in contact_ambiguities
     ]
 
-    all_ambiguities = list(artifact.get("ambiguities") or []) + dedupe_ambiguities
+    # Artifact-supplied ambiguities are written by the extractor against the RAW
+    # `records` index, before the per-type split/reassembly ever happens — they need
+    # the same remap dedupe-generated ambiguities already get above. Build a
+    # raw-index -> final-position lookup from deduped_accepted itself (single entries
+    # carry their own `_raw_index`; merged entries carry `_raw_indices` from every
+    # contributor), then translate each artifact ambiguity through it. An ambiguity
+    # whose raw index doesn't resolve to any surviving row (already rejected in the
+    # pre-flight, or simply malformed) is dropped rather than guessed at.
+    raw_to_final: dict = {}
+    for i, entry in enumerate(deduped_accepted):
+        raw_indices = entry.get("_raw_indices")
+        if raw_indices is None:
+            single = entry.get("_raw_index")
+            raw_indices = [single] if single is not None else []
+        for raw_i in raw_indices:
+            raw_to_final[raw_i] = i
+
+    remapped_artifact_ambiguities = []
+    for amb in artifact.get("ambiguities") or []:
+        if not isinstance(amb, dict):
+            continue
+        ri = amb.get("record_index")
+        if not isinstance(ri, int) or ri not in raw_to_final:
+            continue
+        remapped = dict(amb)
+        remapped["record_index"] = raw_to_final[ri]
+        other = remapped.get("other_record_index")
+        if isinstance(other, int) and other in raw_to_final:
+            remapped["other_record_index"] = raw_to_final[other]
+        remapped_artifact_ambiguities.append(remapped)
+
+    all_ambiguities = remapped_artifact_ambiguities + dedupe_ambiguities
     all_ambiguities.sort(key=_ambiguity_sort_key)
 
     final_accepted: list = []
@@ -583,7 +651,8 @@ def validate(artifact: dict, mapping_path=None) -> ExtractionResult:
                 }
             )
         else:
-            final_accepted.append(entry)
+            clean_entry = {k: v for k, v in entry.items() if k not in ("_raw_index", "_raw_indices")}
+            final_accepted.append(clean_entry)
 
     return ExtractionResult(
         accepted=final_accepted,
