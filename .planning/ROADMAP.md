@@ -80,7 +80,7 @@ Full detail: `milestones/v1.1-ROADMAP.md` § Phase 58; decisions:
 
 **Requirements**: INPUT-01, INPUT-02, INPUT-03, INPUT-04
 
-**Plans**: 2/4 plans executed
+**Plans**: 3/4 plans executed
 
 Plans:
 **Wave 1**
@@ -90,7 +90,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 58-03-PLAN.md — propose/confirm/decline/correct: the domain decision lane, its envelope consumption, and the operator-facing confirm table (wave 2)
+- [x] 58-03-PLAN.md — propose/confirm/decline/correct: the domain decision lane, its envelope consumption, and the operator-facing confirm table (wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
