@@ -6,7 +6,28 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.19.0] - 2026-08-26
+
 ### Added
+- **Company-lane extraction (Phase 58, plans 01–03).** A company can now be named by
+  anything the operator holds — a bare name list, pasted text, foreign JSON, a public URL,
+  a LinkedIn company page, a screenshot (including a search-results page). Company rows ride
+  the same Claude-as-extractor machinery as contacts (`company_column_mapping.yaml`,
+  record-type-aware `extraction.py`, single identity group: name alone), with mixed
+  people+companies input read in one pass, companies first.
+- **Domain propose/confirm/decline/correct lane (`company_domain.py`).** When a row has no
+  usable domain, Claude proposes one (marked unverified, source + one-line reason). The
+  operator answers a batch confirm table — approve wholesale, type the correct website over
+  a row, or reject a row. A rejected/declined row is never dropped: it proceeds looked up by
+  name, and the report says so. The envelope refuses undecided rows; nothing is sent until
+  the table is answered. Operator-typed domains pass the NOT_A_COMPANY_DOMAIN/freemail
+  guards only. A profile URL is never recorded as a website.
+- **Propose-mode spike proven live (execution 11972).** A request-level `mode: "propose"`
+  on a company event survives `Parse HubSpot Event` and reaches `Decide Company Action`,
+  producing the non-writing `action: "proposed"` — 0 provider credits, 0 Anthropic calls,
+  no write. Backend research-node domain extension deferred by operator ruling 2026-08-26
+  (`58-SPIKE-VERDICT.md`); rows Claude cannot propose fall back to name-only.
+
 - **Contact -> company association in the ingest lane (2026-08-25).** A contact is never
   created in HubSpot unassociated any more, and an existing company is never recreated to
   achieve that. `wf_contact_ingest_cloud` gained a resolve-then-associate subgraph
