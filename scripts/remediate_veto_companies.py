@@ -566,7 +566,7 @@ def settle_veto(company_id: str, timeout=900, interval=15, reader=get_record, sl
 # --- the D-18 webhook POST leg (no analog in the repo -- small and local) -----------------
 
 def build_webhook_event(company_id: str, property_name: str = "lv_country_region_normalized",
-                        recompute: bool = False, domain: str = None):
+                        recompute: bool = False, domain: str = None, mode: str = None):
     """The raw HubSpot-shaped property-change event array D-18 specifies. Proven live in
     Phase 40-03 -- the workflow's `IF Company Bare Event` -> `HubSpot Company Fetch By Id`
     path accepts a bare object-id event with no domain match required.
@@ -579,13 +579,22 @@ def build_webhook_event(company_id: str, property_name: str = "lv_country_region
     every non-"write" mode as return-only, so a mode-borne intent would report success and
     write nothing.
 
+    `mode` is the opposite case, and IS carried on this key precisely BECAUSE isReturnOnly()
+    treats every non-"write" value as return-only (Phase 58 Plan 02): the exact property
+    that makes a recompute intent unsafe on `mode` is exactly the property a PROPOSE intent
+    wants. Sending `mode="propose"` (or any string other than "write") forces
+    `Decide Company Action`'s `action` to "proposed" before the write-safety allowlist check
+    even runs (scripts/build_cloud_workflows.py:3234-3242) -- a request-level, non-writing
+    read of what the waterfall would have decided.
+
     `domain` routes the event through `HubSpot Company Search` (domain EQ) instead of the
     bare-event fetch-by-id lane, which is what populates identity_keys.domain so
     _writeSafetyAllows can match a TEST_RECORD_DOMAINS allowlist -- the only allowlist that
     can be armed for a company that does not exist yet.
 
-    BOTH keys are added only when set. An always-present `recompute: false` / `domain: null`
-    would change the event body shape for every existing caller.
+    ALL THREE keys are added only when set. An always-present `recompute: false` /
+    `domain: null` / `mode: null` would change the event body shape for every existing
+    caller.
     """
     event = {
         "objectId": str(company_id),
@@ -598,11 +607,14 @@ def build_webhook_event(company_id: str, property_name: str = "lv_country_region
         event["recompute"] = True
     if domain:
         event["domain"] = domain
+    if mode:
+        event["mode"] = mode
     return [event]
 
 
 def post_webhook_event(company_id: str, armed, config: dict, transport=requests,
-                       recompute: bool = False, domain: str = None, timeout: float = 300):
+                       recompute: bool = False, domain: str = None, mode: str = None,
+                       timeout: float = 300):
     """`armed` has NO default, mirroring operator-claude-plugin/scripts/dispatch.py --
     raises NotArmedError when falsy before any network call. Target is config_gate-
     resolved n8n_url joined with webhook/hubspot/enrichment/event; header
@@ -615,6 +627,9 @@ def post_webhook_event(company_id: str, armed, config: dict, transport=requests,
     patched into a throwaway driver's transport wrapper
     (.planning/phases/47-veto-remediation/47-armed-driver.py) rather than here, so the next
     caller inherited the same bug. It belongs in the script.
+
+    `mode` is forwarded to build_webhook_event unchanged (Phase 58 Plan 02) -- same
+    optional, only-added-when-set treatment as `recompute`/`domain` already get.
     """
     if not armed:
         raise NotArmedError(
@@ -626,7 +641,7 @@ def post_webhook_event(company_id: str, armed, config: dict, transport=requests,
     headers = {"X-Enrichment-Secret": config["webhook_secret"]}
     response = transport.post(
         url, headers=headers,
-        json=build_webhook_event(company_id, recompute=recompute, domain=domain),
+        json=build_webhook_event(company_id, recompute=recompute, domain=domain, mode=mode),
         timeout=timeout,
     )
     response.raise_for_status()
