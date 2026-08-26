@@ -5,8 +5,8 @@ milestone_name: Unattended Session Runs
 current_phase: 54
 current_phase_name: single-pass-armed-dispatch
 status: executing
-stopped_at: Completed 54-01-PLAN.md
-last_updated: "2026-08-26T21:47:51.867Z"
+stopped_at: Completed 54-02-PLAN.md
+last_updated: "2026-08-26T21:56:07.941Z"
 last_activity: 2026-08-27
 last_activity_desc: Phase 54 execution started
 progress:
@@ -151,7 +151,7 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Phase: 54 (single-pass-armed-dispatch) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
@@ -243,8 +243,8 @@ Progress: [████████░░] 78% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-26T21:47:51.858Z
-**Stopped at:** Completed 54-01-PLAN.md
+**Last session:** 2026-08-26T21:56:07.932Z
+**Stopped at:** Completed 54-02-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -324,6 +324,7 @@ Progress: [████████░░] 78% (v0.9 phase 47.5 of 46-49)
 | Phase 58 P05 | ~75min | 4 tasks | 14 files |
 | Phase 58 P06 | ~110min | 4 tasks | 16 files |
 | Phase 54 P01 | ~35min | 3 tasks | 6 files |
+| Phase 54 P02 | ~25min | 3 tasks | 7 files |
 
 ## Decisions
 
@@ -368,6 +369,9 @@ Progress: [████████░░] 78% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: Phase 58-06: Task 4 checkpoint resolved 2026-08-26 -- size disagreements stay flag-only permanently (RO-2 untouched, no follow-up); forensic's 70-vs-75 confidence rejection accepted as correct behavior, region min_confidence stays 75, no follow-up opened. Plan complete; INPUT-01/03/04 ticked in v1.1-REQUIREMENTS.md, INPUT-02 stays open per its recorded defer-residual.
 - [Phase ?]: 54-01: envelope() single-record execution count DIFFERS from live measurement (measured 1, projected chunk_count+record_count=2) -- reported, not reconciled; multi-chunk case (WINDOWS id 26) still open
 - [Phase ?]: 54-01: anthropic_usd basis relabelled PROJECTED (was falsely MEASURED) per OP-54-05; SJ-3 double pass recorded WINDOWS id 27 per OP-54-02, deliberately left unfixed
+- [Phase ?]: 54-02: needs_match_review -> held, proposed -> previewed added to report_enrichment._ACTION_TO_OUTCOME, neither a success; both reasons state the second-pass cost
+- [Phase ?]: 54-02: no operator-facing look-only surface exists today for the companies propose=True form (only the Phase 58 spike uses it) -- confirmed by grep, no wording invented for it
+- [Phase ?]: 54-02: G-3 amended in place (not overwritten) in v1.1-REQUIREMENTS.md and v1.1-ROADMAP.md, pointing at 54-MEASUREMENT.md and naming the two legitimate two-pass shapes plus the SJ-3 residual (OP-54-02)
 
 ### Roadmap Evolution
 
