@@ -45,6 +45,11 @@ const DEFAULT_COMPANY_POLICY = {
   // provider certainty here would leave it effectively stage-only and defeat the
   // purpose. This threshold is a reviewable judgment, not a derived constant.
   lv_country_region_normalized: { class: "system_owned", min_confidence: 75 },
+  // 58-05 Task 1: native `country` -- fill_blank_only mirrors the class already used
+  // elsewhere in this file for exactly this behaviour (a blank fills, a non-blank is
+  // protected). 75 mirrors lv_country_region_normalized's threshold above, since both
+  // are derived from the same provider location signal.
+  country:                 { class: "fill_blank_only",   min_confidence: 75 },
   lv_org_type:             { class: "system_owned",      min_confidence: 80,
                              require_evidence_url_for: EVIDENCE_GATED_ORG_TYPES },
   lv_produces_content:     { class: "system_owned",      min_confidence: 85,

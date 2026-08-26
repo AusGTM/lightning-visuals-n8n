@@ -326,6 +326,13 @@ function lushaCandidates(rawResponse, objectType) {
     _push(out, "industry", src, industry && industry.raw, industry && industry.key, 0.6, updated);
     const country = (co.location && co.location.countryIso2) || co.countryIso2;
     _push(out, "lv_country_region_normalized", src, country, normalizeCountryRegion(country), 0.6, updated);
+    // 58-05 Task 1: native `country` candidate — the human-readable name already present
+    // alongside the ISO2 code the lv_* derivation above uses (live evidence execs
+    // 11932/11979: co.location.{country:"Australia", countryIso2:"AU"} both present).
+    // Matches the shape the portal's `country` property already holds on real records
+    // (checked live: MRC/ATC/Newcastle Jockey Club etc. all carry "Australia", never "AU").
+    const countryName = co.location && co.location.country;
+    _push(out, "country", src, countryName, _norm(countryName), 0.6, updated);
   }
   return out;
 }
@@ -400,6 +407,12 @@ function apolloCandidates(raw, objectType) {
     _push(out, "lv_employee_band", src, org.estimated_num_employees, normalizeEmployeeBand(org.estimated_num_employees), 0.6, updated);
     // Apollo org industry is free-text (no NAICS in this contract) -> lowercase text key.
     _push(out, "industry", src, org.industry, _norm(org.industry), 0.6, updated);
+    // 58-05 Task 1: native `country` candidate. Apollo's org record has no dedicated
+    // lv_country_region_normalized candidate today (unlike Lusha/ZoomInfo) -- this is the
+    // first location signal this branch emits for companies. Live evidence (execs
+    // 11929/11932/11975/11979): org.country is a flat full name ("Australia") 4/4 times,
+    // same shape the portal's `country` property already holds.
+    _push(out, "country", src, org.country, _norm(org.country), 0.6, updated);
   }
   return out;
 }
@@ -494,6 +507,13 @@ function zoominfoCandidates(rawResponse, objectType) {
     const ziCountry = _iso2(raw.country);
     _push(out, "lv_country_region_normalized", src, raw.country,
       normalizeCountryRegion(ziCountry || raw.country), 0.6, recency);
+    // 58-05 Task 1: native `country` candidate — the same raw.country value the
+    // lv_country_region_normalized derivation above already reads, already a full name
+    // (live evidence execs 11929/11932/11975/11979: "Australia"/"United States").
+    // ZoomInfo GTM company enrich requests no `city` outputField (ZOOM_CO_OUTPUT_FIELDS
+    // has no city entry) and none of the 4 sampled live company executions carried one —
+    // documented absence, not a gap (Task 2 leaves this branch without a city push).
+    _push(out, "country", src, raw.country, _norm(raw.country), 0.6, recency);
     // Live GTM naicsCodes are OBJECTS ({id,name}, most-general first); the flat fixtures
     // are bare code strings. String(obj) would have staged "[object Object]" as industry.
     // primaryIndustry is an array in the live response (["Hospitality", "Sports Teams ..."]).

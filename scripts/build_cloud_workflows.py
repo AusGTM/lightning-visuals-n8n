@@ -2898,6 +2898,20 @@ return $input.all().map((it) => {
     const v = b && b.normalizedValue;                 // NORMALIZED, not raw
     if (v != null && String(v).trim() !== "") candidate[f] = v;
   }
+  // 58-05: native `country`/`city`/`numberofemployees` -- these are free-text/numeric
+  // HubSpot-native fields, not enums or bands, so (mirroring ENRICH_MERGE's identical
+  // contacts-side city/state/country loop, not the enum-normalizing loop directly above)
+  // they read `winners[f]` (the RAW provider value) rather than `best[f].normalizedValue`
+  // (which is lowercased for cross-source agreement matching and would write "australia"
+  // instead of the portal's existing "Australia" shape). Without THIS loop, a candidate
+  // normalizeProviders.js emits and scoreCandidates() scores would be silently dropped
+  // here before ever reaching mergeCompanies() -- this loop is the write-map allowlist for
+  // these three fields, the one this plan's gap_closure_context did not name.
+  const winners = (row.scored && row.scored.winners) || {};
+  for (const f of ["country", "city", "numberofemployees"]) {
+    const v = winners[f];
+    if (v != null && String(v).trim() !== "") candidate[f] = v;
+  }
   const merged = mergeCompanies(existingRecord, candidate, undefined,
                                 { source: "waterfall", confidence: 85 });
 
@@ -4479,12 +4493,18 @@ return rows.map((it, i) => {
 # GENUINELY never been enriched still resolves to `undefined`/`null` here even with the
 # fixed CSV, and `_regionKey` now treats that as "unknown" (no veto), not "non_anz" — see
 # the `_regionKey` definition in ENRICH_DECIDE_CO_CLOUD above.
+# 58-05 Task 1/2: `country`/`city` added -- without them here the fetch returns no
+# current value for the two new native candidates, the non-clobber comparison in
+# mergeCompanies sees `undefined` instead of a real existing value, and the fill_blank_only
+# guard that is supposed to protect a populated field silently permits overwriting it
+# (same class of defect WR-01/VETO-01 already fixed for lv_sponsorship_reliant/
+# lv_country_region_normalized above). `numberofemployees` was already present.
 ENRICH_COMPANY_SEARCH_PROPERTIES_CSV = (
     "name,domain,industry,annualrevenue,"
     "numberofemployees,hs_object_id,lv_org_type,"
     "lv_produces_content,lv_content_type,lv_sponsorship_reliant,"
     "lv_is_hardware_vendor,lv_is_gambling_operator,"
-    "lv_country_region_normalized,"
+    "lv_country_region_normalized,country,city,"
     "lv_enrichment_provenance,lv_org_type_verified_at,"
     "lv_produces_content_verified_at,lusha_company_id"
 )

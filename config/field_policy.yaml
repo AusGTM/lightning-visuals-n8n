@@ -47,6 +47,17 @@ companies:
     promote_to_canonical: true
     min_confidence: 75
 
+  # 58-05 Task 1: native `country` -- fill_blank_only (a blank fills, a non-blank existing
+  # value is protected), sourced from the same provider location signal as
+  # lv_country_region_normalized above, hence the same 75 threshold. Live evidence: the
+  # portal's existing `country` values are full names ("Australia"), matching the shape
+  # every provider's own country field already carries (see normalizeProviders.js).
+  country:
+    class: fill_blank_only
+    promote_to_canonical: true
+    min_confidence: 75
+    protect_if_current_present: true
+
   lv_org_type:
     class: system_owned
     promote_to_canonical: true
