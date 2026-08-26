@@ -5,15 +5,15 @@ milestone_name: Unattended Session Runs
 current_phase: 58
 current_phase_name: take-what-the-operator-actually-has
 status: verifying
-stopped_at: Completed 58-04-PLAN.md
-last_updated: "2026-08-26T07:37:34.510Z"
+stopped_at: Completed 58-05-PLAN.md
+last_updated: "2026-08-26T10:22:25.747Z"
 last_activity: 2026-08-26
 last_activity_desc: Phase 58 execution started
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 12
-  completed_plans: 11
+  total_plans: 13
+  completed_plans: 12
   percent: 67
 ---
 
@@ -151,8 +151,8 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Phase: 58 (take-what-the-operator-actually-has) — EXECUTING
-Plan: 4 of 4
-Status: Phase complete — ready for verification
+Plan: 5 of 6
+Status: Executing — 58-05 complete (native fields at landing + SFV corrective window); 58-06 (wave 5, judge escalation for material property conflicts) next
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
   has executed on a real record. **Nothing is armed** — windows #1 and #2 were each opened
@@ -243,8 +243,8 @@ Progress: [█████████░] 92% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-26T07:35:37.389Z
-**Stopped at:** Completed 58-04-PLAN.md
+**Last session:** 2026-08-26T10:22:25.732Z
+**Stopped at:** Completed 58-05-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -321,6 +321,7 @@ Progress: [█████████░] 92% (v0.9 phase 47.5 of 46-49)
 | Phase 58 P02 | ~10min | 3 tasks | 4 files |
 | Phase 58 P03 | ~15min | 4 tasks | 9 files |
 | Phase 58 P04 | 25min | 3 tasks | 5 files |
+| Phase 58 P05 | ~75min | 4 tasks | 14 files |
 
 ## Decisions
 
@@ -361,6 +362,7 @@ Progress: [█████████░] 92% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: Phase 58-03: Task 4 walk verdict APPROVED (operator, 2026-08-26, plugin 0.19.0 marketplace 16b8641) -- no wording flagged; LinkedIn-URL-input and reject-a-row moves not exercised live, covered by Tasks 1-3 automated tests instead
 - [Phase ?]: Phase 58-03: operator ruling on walk finding -- native industry/country/city/employee-count promotion gap folds into Phase 58 as orchestrator-planned gap-closure plan 58-05; CLAUDE.md Section29 numberofemployees never-write ban LIFTED for this lane only, scoped fill_blank_only provider-sourced
 - [Phase ?]: 58-04: research-line pricing is default-on and declinable; a struck line converges on the existing DECLINE_DOMAIN sentinel (no new bucket). INPUT-02 residual (backend research node not extended to seek a domain) remains deferred per operator decision, 2026-08-26.
+- [Phase ?]: Phase 58-05: Task 4 superseded by events -- operator's own walk dispatch (exec 11983) armed a full enrich before Task 4 resumed, landing the plan's native fields but also flipping a false Non-ANZ veto via an unwatched ZoomInfo region conflict (root cause scoped to gap-closure plan 58-06); Task 4 executed instead as a corrective window (scripts/fix_sfv_region.py, commit 11b17c0), clearing the veto without re-running the same wrong provider match
 
 ### Roadmap Evolution
 

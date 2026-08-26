@@ -80,7 +80,7 @@ Full detail: `milestones/v1.1-ROADMAP.md` § Phase 58; decisions:
 
 **Requirements**: INPUT-01, INPUT-02, INPUT-03, INPUT-04
 
-**Plans**: 4/6 plans executed
+**Plans**: 5/6 plans executed
 
 Plans:
 **Wave 1**
@@ -98,7 +98,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 58-05-PLAN.md — gap closure: native country/city/employee-count written at landing, blank-fill only; native industry stays unwritten (Phase 31 refusal upheld 2026-08-26) (wave 4)
+- [x] 58-05-PLAN.md — gap closure: native country/city/employee-count written at landing, blank-fill only; native industry stays unwritten (Phase 31 refusal upheld 2026-08-26) (wave 4)
 
 **Wave 5** *(blocked on Wave 4 completion)*
 
