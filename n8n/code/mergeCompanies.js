@@ -34,7 +34,11 @@ const { normalizeEnumValue } = require("./hubspotEnums");
 const DEFAULT_COMPANY_POLICY = {
   domain:                  { class: "manual_protected",  min_confidence: 95 },
   industry:                { class: "stale_refreshable", min_confidence: 75 },
-  numberofemployees:       { class: "stale_refreshable", min_confidence: 70 },
+  // 58-05 Task 2: reclassified stale_refreshable -> fill_blank_only (operator ruling,
+  // 2026-08-26, 58-03-SUMMARY.md Decisions Made item (b); CLAUDE.md §29 amended to match).
+  // Scope: THIS lane only, blank-fill, provider-sourced values -- a non-blank existing
+  // headcount is now protected outright rather than routed to needs_review.
+  numberofemployees:       { class: "fill_blank_only",   min_confidence: 70 },
   annualrevenue:           { class: "review_required",   min_confidence: 85 },
   lv_revenue_band:         { class: "system_owned",      min_confidence: 75 },
   lv_employee_band:        { class: "system_owned",      min_confidence: 70 },
@@ -50,6 +54,9 @@ const DEFAULT_COMPANY_POLICY = {
   // protected). 75 mirrors lv_country_region_normalized's threshold above, since both
   // are derived from the same provider location signal.
   country:                 { class: "fill_blank_only",   min_confidence: 75 },
+  // 58-05 Task 2: native `city` -- same class/confidence reasoning as `country` above
+  // (same fill_blank_only behaviour, same provider location signal family).
+  city:                    { class: "fill_blank_only",   min_confidence: 75 },
   lv_org_type:             { class: "system_owned",      min_confidence: 80,
                              require_evidence_url_for: EVIDENCE_GATED_ORG_TYPES },
   lv_produces_content:     { class: "system_owned",      min_confidence: 85,

@@ -108,6 +108,20 @@ function normalizeEmployeeBand(value) {
   return "1001+";
 }
 
+// 58-05 Task 2: guard for the native `numberofemployees` candidate — HubSpot's property is
+// a NUMBER, and Lusha's/ZoomInfo's headcount fallbacks are SPACED RANGE STRINGS ("51 - 200",
+// "10 - 20") that normalizeEmployeeBand happily accepts for the band enum but that would be
+// a fabricated point-estimate if parsed into a single number (CLAUDE.md T-58-21). A
+// candidate is admitted ONLY from a value that is already numeric — never parsed, rounded,
+// or endpoint-taken from a range. Also rejects <= 0, mirroring normalizeEmployeeBand's own
+// zero-is-no-data rule (a provider's 0 means "unknown", never a real company of size zero).
+function _numericHeadcount(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const n = typeof value === "number" ? value
+    : (/^\d+(\.\d+)?$/.test(String(value).trim()) ? Number(value) : NaN);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 function normalizeCountryRegion(value) {
   if (!value) return null;
   const v = String(value).trim().toLowerCase();
@@ -321,6 +335,13 @@ function lushaCandidates(rawResponse, objectType) {
       : (co.companySize != null ? co.companySize
         : (co.employeeCount != null ? co.employeeCount : co.employees));
     _push(out, "lv_employee_band", src, emp, normalizeEmployeeBand(emp), 0.6, updated);
+    // 58-05 Task 2: native `numberofemployees` candidate — SAME `emp` value as the band
+    // above, but admitted only when already numeric (_numericHeadcount rejects the
+    // "51 - 200" spaced-range shape the /v2/company legacy fallback comment above
+    // documents; live v3 execs 11929/11932/11975/11979 all carried a plain number here
+    // via _lushaV3Company's employeeCount reshaping, so the guard has never fired live).
+    const empCount = _numericHeadcount(emp);
+    _push(out, "numberofemployees", src, empCount, empCount, 0.6, updated);
     const naics0 = (co.naicsCodes || [])[0];
     const industry = _industryText(naics0, co.mainIndustry);
     _push(out, "industry", src, industry && industry.raw, industry && industry.key, 0.6, updated);
@@ -333,6 +354,11 @@ function lushaCandidates(rawResponse, objectType) {
     // (checked live: MRC/ATC/Newcastle Jockey Club etc. all carry "Australia", never "AU").
     const countryName = co.location && co.location.country;
     _push(out, "country", src, countryName, _norm(countryName), 0.6, updated);
+    // 58-05 Task 2: native `city` candidate — live evidence execs 11932/11979:
+    // co.location.city present ("Glenwood"/"Brunswick") when Lusha matched; absent
+    // (empty location) in the 2/4 sampled executions where Lusha found no match.
+    const cityName = co.location && co.location.city;
+    _push(out, "city", src, cityName, _norm(cityName), 0.6, updated);
   }
   return out;
 }
@@ -405,6 +431,12 @@ function apolloCandidates(raw, objectType) {
     const revenue = org.annual_revenue != null ? org.annual_revenue : org.organization_revenue;
     _push(out, "lv_revenue_band", src, revenue, normalizeRevenueBand(revenue), 0.6, updated);
     _push(out, "lv_employee_band", src, org.estimated_num_employees, normalizeEmployeeBand(org.estimated_num_employees), 0.6, updated);
+    // 58-05 Task 2: native `numberofemployees` candidate — SAME org.estimated_num_employees
+    // value as the band above, guarded through _numericHeadcount for parity with the other
+    // two branches even though Apollo's own field is already a plain integer (live evidence
+    // execs 11929/11932/11975/11979: 8/13/9/11).
+    const empCount = _numericHeadcount(org.estimated_num_employees);
+    _push(out, "numberofemployees", src, empCount, empCount, 0.6, updated);
     // Apollo org industry is free-text (no NAICS in this contract) -> lowercase text key.
     _push(out, "industry", src, org.industry, _norm(org.industry), 0.6, updated);
     // 58-05 Task 1: native `country` candidate. Apollo's org record has no dedicated
@@ -413,6 +445,9 @@ function apolloCandidates(raw, objectType) {
     // 11929/11932/11975/11979): org.country is a flat full name ("Australia") 4/4 times,
     // same shape the portal's `country` property already holds.
     _push(out, "country", src, org.country, _norm(org.country), 0.6, updated);
+    // 58-05 Task 2: native `city` candidate — live evidence execs 11929/11932/11975/11979:
+    // org.city present 4/4 times ("Cairns"/"Sydney"/"Cairns"/"Melbourne").
+    _push(out, "city", src, org.city, _norm(org.city), 0.6, updated);
   }
   return out;
 }
@@ -504,6 +539,13 @@ function zoominfoCandidates(rawResponse, objectType) {
     // lv_employee_band enum value, so it is only a last resort.
     _push(out, "lv_employee_band", src, raw.employeeCount != null ? raw.employeeCount : raw.employeeRange,
       normalizeEmployeeBand(raw.employeeCount != null ? raw.employeeCount : raw.employeeRange), 0.6, recency);
+    // 58-05 Task 2: native `numberofemployees` candidate — from raw.employeeCount ONLY,
+    // NEVER the raw.employeeRange fallback the band above accepts ("10 - 20" is exactly
+    // the spaced-range shape _numericHeadcount exists to refuse). Live evidence execs
+    // 11929/11932/11975/11979 all carried employeeCount as a plain integer, so the
+    // employeeRange-only case is untested against live traffic here (offline fixture only).
+    const empCount = _numericHeadcount(raw.employeeCount);
+    _push(out, "numberofemployees", src, empCount, empCount, 0.6, recency);
     const ziCountry = _iso2(raw.country);
     _push(out, "lv_country_region_normalized", src, raw.country,
       normalizeCountryRegion(ziCountry || raw.country), 0.6, recency);

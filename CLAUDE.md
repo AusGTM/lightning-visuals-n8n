@@ -3718,6 +3718,27 @@ Production storage:
 
 # 29. MVP Scope Cut
 
+## 29.1 As-built delta — `numberofemployees` ban lifted for the enrichment lane (2026-08-26)
+
+The "Never write automatically in MVP" list below still names `numberofemployees`, and for
+every other lane in this document that ban is unchanged. **One narrow, scoped exception now
+exists in code:** the company enrichment lane (`n8n/code/normalizeProviders.js`'s three
+company branches → `mergeCompanies.js` → `ENRICH_DECIDE_CO_CLOUD`) writes native
+`numberofemployees` from a provider-supplied value.
+
+- **Authority:** operator ruling, 2026-08-26, recorded in
+  `.planning/phases/58-take-what-the-operator-actually-has/58-03-SUMMARY.md` § Decisions
+  Made, item (b) — "CLAUDE.md §29's `numberofemployees` never-write ban is LIFTED for this
+  lane specifically, scoped to `fill_blank_only`, provider-sourced values only."
+- **Scope:** this lane only. `numberofemployees` is `fill_blank_only` in both
+  `config/field_policy.yaml` and `mergeCompanies.js`'s `DEFAULT_COMPANY_POLICY` (reclassified
+  from `stale_refreshable`, 58-05 Task 2) — a blank existing value fills, a non-blank one is
+  never overwritten. A candidate is admitted only from an already-numeric provider value
+  (never a range string like Lusha's "51 - 200" or ZoomInfo's `employeeRange`) — no parsing,
+  rounding, or endpoint-taking from a band.
+- **Unchanged:** every other field on the list below, and every other lane (the Python MVP
+  in §12, any future ingest path) that does not route through this specific merge.
+
 For the first proof, only score companies.
 
 Only enrich and score these fields:

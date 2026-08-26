@@ -158,12 +158,14 @@ test("toCandidates: v3 un-normalizable phone produces no candidate", () => {
   assert.equal(c.filter((x) => x.value === "123").length, 0);
 });
 
-test("toCandidates: v3 companies field set is exactly country/lv_revenue_band/lv_employee_band/industry/lv_country_region_normalized", () => {
+test("toCandidates: v3 companies field set is exactly city/country/numberofemployees/lv_revenue_band/lv_employee_band/industry/lv_country_region_normalized", () => {
   const c = toCandidates("lusha", lushaV3Company, "companies");
   const fields = [...new Set(c.map((x) => x.field))].sort();
-  // 58-05 Task 1: "country" joins this set (native candidate, same location.country value
-  // the lv_country_region_normalized derivation already reads).
-  assert.deepEqual(fields, ["country", "industry", "lv_country_region_normalized", "lv_employee_band", "lv_revenue_band"]);
+  // 58-05: "country"/"city"/"numberofemployees" join this set (native candidates,
+  // sourced from the same location/headcount values lv_country_region_normalized and
+  // lv_employee_band already read).
+  assert.deepEqual(fields, ["city", "country", "industry", "lv_country_region_normalized",
+    "lv_employee_band", "lv_revenue_band", "numberofemployees"]);
   assert.equal(find(c, "lv_revenue_band", "lusha").normalizedValue, "5-50M");
   assert.equal(find(c, "lv_employee_band", "lusha").normalizedValue, "51-200");
   assert.equal(find(c, "industry", "lusha").normalizedValue, "entertainment");
@@ -283,10 +285,11 @@ test("toCandidates: lushaCandidates()'s field set is unchanged by the presence o
   assert.ok(!contactFields.has("lusha_contact_id"), "lusha_contact_id must never appear as a candidate field");
 
   const companyFields = new Set(toCandidates("lusha", lushaV3Company, "companies").map((c) => c.field));
-  // 58-05 Task 1: "country" joins this set -- a native candidate alongside the
-  // lv_country_region_normalized derivation, from the SAME location.country value.
+  // 58-05: "country"/"city"/"numberofemployees" join this set -- native candidates
+  // alongside the lv_* derivations, from the SAME location/headcount values.
   assert.deepEqual([...companyFields].sort(),
-    ["country", "industry", "lv_country_region_normalized", "lv_employee_band", "lv_revenue_band"]);
+    ["city", "country", "industry", "lv_country_region_normalized", "lv_employee_band",
+      "lv_revenue_band", "numberofemployees"]);
   assert.ok(!companyFields.has("id"), "id must never appear as a candidate field");
   assert.ok(!companyFields.has("lusha_company_id"), "lusha_company_id must never appear as a candidate field");
 });

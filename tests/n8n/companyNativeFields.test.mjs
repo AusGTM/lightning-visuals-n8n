@@ -184,3 +184,93 @@ test("ENRICH_DECIDE_CO_CLOUD builds its properties patch with an unfiltered cano
   assert.equal(properties.country, "Australia");
   assert.equal(properties.an_arbitrary_future_field, "x", "an arbitrary promoted key survives the spread untouched");
 });
+
+// ---------------------------------------------------------------------------------------
+// --- Task 2: city + numberofemployees, all three company branches -----------------------
+// ---------------------------------------------------------------------------------------
+
+// --- city: present/absent per branch, live-shaped fixtures -------------------------------
+
+test("toCandidates('lusha', <fixture with location.city>, 'companies') yields a city candidate; no location -> none", () => {
+  const withCity = { requestId: "r1", results: [{ id: "v1.SYNTHETIC",
+    location: { city: "Brunswick", country: "Australia" }, updateDate: "2026-08-26" }] };
+  assert.equal(byField(toCandidates("lusha", withCity, "companies"), "city").value, "Brunswick");
+  const noLocation = { requestId: "r1", results: [{ id: "v1.SYNTHETIC", updateDate: "2026-08-26" }] };
+  assert.ok(!byField(toCandidates("lusha", noLocation, "companies"), "city"));
+});
+
+test("toCandidates('apollo', <fixture with organization.city>, 'companies') yields a city candidate; no city key -> none", () => {
+  const withCity = { organization: { city: "Melbourne", country: "Australia" } };
+  assert.equal(byField(toCandidates("apollo", withCity, "companies"), "city").value, "Melbourne");
+  const noCity = { organization: { country: "Australia" } };
+  assert.ok(!byField(toCandidates("apollo", noCity, "companies"), "city"));
+});
+
+test("toCandidates('zoominfo', <company fixture>, 'companies') never yields a city candidate -- ZOOM_CO_OUTPUT_FIELDS requests no city outputField (documented absence, not a gap)", () => {
+  const raw = { data: [{ attributes: { country: "Australia", city: "should never appear" }, id: "1", meta: { matchStatus: "FULL_MATCH" } }] };
+  const cands = toCandidates("zoominfo", raw, "companies");
+  assert.ok(!byField(cands, "city"),
+    "even if a fixture smuggled a city key into attributes, the ZoomInfo companies branch must not read it -- the live outputFields list never requests it");
+});
+
+// --- numberofemployees: numeric-only guard, all three branches ---------------------------
+
+test("toCandidates('lusha', <numeric employeeCount>, 'companies') yields numberofemployees; a spaced range string yields none, and lv_employee_band is unaffected either way", () => {
+  const numeric = { requestId: "r1", results: [{ id: "v1.SYNTHETIC", employeeCount: 12, updateDate: "2026-08-26" }] };
+  const numericCands = toCandidates("lusha", numeric, "companies");
+  assert.equal(byField(numericCands, "numberofemployees").value, 12);
+  assert.equal(byField(numericCands, "lv_employee_band").normalizedValue, "10-50");
+
+  const ranged = { company: { employees: "51 - 200" } }; // legacy /v2/company shape
+  const rangedCands = toCandidates("lusha", ranged, "companies");
+  assert.ok(!byField(rangedCands, "numberofemployees"),
+    "a spaced range string must never become a numberofemployees candidate");
+  assert.equal(byField(rangedCands, "lv_employee_band").normalizedValue, "51-200",
+    "the guard narrows nothing about the pre-existing band candidate");
+});
+
+test("toCandidates('apollo', <fixture with estimated_num_employees>, 'companies') yields numberofemployees", () => {
+  const raw = { organization: { estimated_num_employees: 11 } };
+  assert.equal(byField(toCandidates("apollo", raw, "companies"), "numberofemployees").value, 11);
+});
+
+test("toCandidates('zoominfo', <numeric employeeCount>, 'companies') yields numberofemployees; employeeRange alone (no employeeCount) yields none, and lv_employee_band still promotes from the range", () => {
+  const numeric = { data: [{ attributes: { employeeCount: 13, employeeRange: "10 - 20" }, id: "1", meta: { matchStatus: "FULL_MATCH" } }] };
+  const numericCands = toCandidates("zoominfo", numeric, "companies");
+  assert.equal(byField(numericCands, "numberofemployees").value, 13);
+
+  const rangeOnly = { data: [{ attributes: { employeeRange: "10 - 20" }, id: "1", meta: { matchStatus: "FULL_MATCH" } }] };
+  const rangeCands = toCandidates("zoominfo", rangeOnly, "companies");
+  assert.ok(!byField(rangeCands, "numberofemployees"),
+    "employeeRange alone must never become a numberofemployees candidate");
+  assert.equal(byField(rangeCands, "lv_employee_band").normalizedValue, "10-20",
+    "the guard narrows nothing about the pre-existing band candidate's own fallback");
+});
+
+test("toCandidates: a zero headcount is treated as no-data, not a candidate, on every branch that can supply one", () => {
+  assert.ok(!byField(toCandidates("apollo", { organization: { estimated_num_employees: 0 } }, "companies"), "numberofemployees"));
+  assert.ok(!byField(toCandidates("zoominfo",
+    { data: [{ attributes: { employeeCount: 0 }, id: "1", meta: { matchStatus: "FULL_MATCH" } }] }, "companies"),
+    "numberofemployees"));
+});
+
+// --- mergeCompanies: fill_blank_only behaviour for city + numberofemployees --------------
+
+test("mergeCompanies: city and numberofemployees each fill a blank existing value and stay out of a non-blank one", () => {
+  const blank = mergeCompanies({ city: "", numberofemployees: "" },
+    { city: "Brunswick", numberofemployees: 12 }, undefined, { source: "waterfall", confidence: 85 });
+  assert.equal(blank.canonicalPatch.city, "Brunswick");
+  assert.equal(blank.canonicalPatch.numberofemployees, 12);
+
+  const nonBlank = mergeCompanies({ city: "Sydney", numberofemployees: 500 },
+    { city: "Brunswick", numberofemployees: 12 }, undefined, { source: "waterfall", confidence: 85 });
+  assert.equal(nonBlank.canonicalPatch.city, undefined);
+  assert.equal(nonBlank.canonicalPatch.numberofemployees, undefined);
+});
+
+// --- Cross-engine parity, extended to all three fields -----------------------------------
+
+test("config/field_policy.yaml and DEFAULT_COMPANY_POLICY agree on city's and numberofemployees' class and min_confidence", () => {
+  assertParity("city");
+  assertParity("numberofemployees");
+});
