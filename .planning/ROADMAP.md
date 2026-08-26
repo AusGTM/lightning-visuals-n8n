@@ -98,7 +98,7 @@ Plans:
 
 **Wave 4** *(blocked on Wave 3 completion)*
 
-- [ ] 58-05-PLAN.md — gap closure: native industry/country/city/employee-count written at landing; curated industry alias table superseding the Phase 31 refusal (wave 4)
+- [ ] 58-05-PLAN.md — gap closure: native country/city/employee-count written at landing, blank-fill only; native industry stays unwritten (Phase 31 refusal upheld 2026-08-26) (wave 4)
 
 ### Phase 51: Backfill Pipeline, Credit Sizing & Dry Run
 
