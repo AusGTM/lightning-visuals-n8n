@@ -4,16 +4,16 @@ milestone: v1.1
 milestone_name: Unattended Session Runs
 current_phase: 58
 current_phase_name: take-what-the-operator-actually-has
-status: executing
-stopped_at: Completed 58-03-PLAN.md
-last_updated: "2026-08-26T06:40:34.752Z"
+status: verifying
+stopped_at: Completed 58-04-PLAN.md
+last_updated: "2026-08-26T07:37:34.510Z"
 last_activity: 2026-08-26
 last_activity_desc: Phase 58 execution started
 progress:
   total_phases: 3
   completed_phases: 2
-  total_plans: 11
-  completed_plans: 10
+  total_plans: 12
+  completed_plans: 11
   percent: 67
 ---
 
@@ -152,7 +152,7 @@ predating the window. VETO-03 bar still 0.
 
 Phase: 58 (take-what-the-operator-actually-has) — EXECUTING
 Plan: 4 of 4
-Status: Ready to execute
+Status: Phase complete — ready for verification
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
   has executed on a real record. **Nothing is armed** — windows #1 and #2 were each opened
@@ -239,12 +239,12 @@ Last activity: 2026-08-26 — Phase 58 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████████░] 91% (v0.9 phase 47.5 of 46-49)
+Progress: [█████████░] 92% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-26T06:40:34.740Z
-**Stopped at:** Completed 58-03-PLAN.md
+**Last session:** 2026-08-26T07:35:37.389Z
+**Stopped at:** Completed 58-04-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -320,6 +320,7 @@ Progress: [█████████░] 91% (v0.9 phase 47.5 of 46-49)
 | Phase 58 P01 | ~35min | 3 tasks | 6 files |
 | Phase 58 P02 | ~10min | 3 tasks | 4 files |
 | Phase 58 P03 | ~15min | 4 tasks | 9 files |
+| Phase 58 P04 | 25min | 3 tasks | 5 files |
 
 ## Decisions
 
@@ -359,6 +360,7 @@ Progress: [█████████░] 91% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: [Phase 58-02]: Operator (2026-08-26) selected defer-residual over extend-now -- backend research node not extended to seek domains this phase; residual named against INPUT-02 for 58-04 to read
 - [Phase ?]: Phase 58-03: Task 4 walk verdict APPROVED (operator, 2026-08-26, plugin 0.19.0 marketplace 16b8641) -- no wording flagged; LinkedIn-URL-input and reject-a-row moves not exercised live, covered by Tasks 1-3 automated tests instead
 - [Phase ?]: Phase 58-03: operator ruling on walk finding -- native industry/country/city/employee-count promotion gap folds into Phase 58 as orchestrator-planned gap-closure plan 58-05; CLAUDE.md Section29 numberofemployees never-write ban LIFTED for this lane only, scoped fill_blank_only provider-sourced
+- [Phase ?]: 58-04: research-line pricing is default-on and declinable; a struck line converges on the existing DECLINE_DOMAIN sentinel (no new bucket). INPUT-02 residual (backend research node not extended to seek a domain) remains deferred per operator decision, 2026-08-26.
 
 ### Roadmap Evolution
 
