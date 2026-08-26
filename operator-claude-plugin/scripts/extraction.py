@@ -70,6 +70,13 @@ from preview import resolve_mapping_path
 
 SCRATCH_DIR = Path(__file__).resolve().parent.parent / "scratch"
 
+# The company-lane mapping file (Phase 58) — same directory convention as
+# preview.py's PLUGIN_MAPPING_PATH, but company extraction has no repo-root fallback
+# copy: it is a plugin-only config, never duplicated the way column_mapping.yaml is
+# for a dev-checkout convenience. Passed explicitly as `mapping_path` wherever a
+# record's own `record_type` selects the company lane.
+COMPANY_MAPPING_PATH = Path(__file__).resolve().parent.parent / "config" / "company_column_mapping.yaml"
+
 
 class ExtractionError(Exception):
     """Raised when the extraction artifact cannot be validated at all: missing file,
@@ -104,8 +111,10 @@ def _load_mapping(mapping_path=None) -> dict:
         with Path(resolved).open(encoding="utf-8") as f:
             data = yaml.safe_load(f)
     except Exception as e:
+        # Names whichever mapping file was actually being resolved — a missing
+        # COMPANY_MAPPING_PATH must not report column_mapping.yaml's absence.
         raise ExtractionError(
-            "mapping_unreadable", f"config/column_mapping.yaml could not be read: {e}"
+            "mapping_unreadable", f"{resolved} could not be read: {e}"
         ) from None
     return data or {}
 
@@ -413,9 +422,24 @@ def validate(artifact: dict, mapping_path=None) -> ExtractionResult:
       3. D-07 enforcement: a record whose row carries a value for a field one of the
          now-aggregated ambiguities names on that same record is a contradiction — the
          extraction step said it was unsure, then filled it anyway — and is rejected.
+
+    Each record carries its own `record_type` (`"contacts"` or `"companies"`); an
+    absent key means `"contacts"` — every artifact and test that predates Phase 58
+    keeps working unchanged. The per-record pre-flight below (non-canonical key
+    stripping, identity check) reads whichever mapping — `mapping_path` for contacts,
+    `COMPANY_MAPPING_PATH` for companies — that record's own type selects, rather than
+    resolving one prop set and one group set once for the whole batch. `dedupe()` and
+    the D-07 contradiction pass below are unchanged by this — they remain
+    identity-group-driven, with no field-name assumption baked in (58-RESEARCH.md).
     """
-    props = set(canonical_props(mapping_path))
-    groups = identity_groups(mapping_path)
+    contact_props = set(canonical_props(mapping_path))
+    contact_groups = identity_groups(mapping_path)
+    company_props = set(canonical_props(COMPANY_MAPPING_PATH))
+    company_groups = identity_groups(COMPANY_MAPPING_PATH)
+    # dedupe()'s own identity-group argument: this task threads per-record type only
+    # through the pre-flight pass below, so dedupe()/D-07 keep operating on the
+    # contact-lane's groups exactly as before an accepted batch was ever mixed-type.
+    groups = contact_groups
 
     accepted: list = []
     rejected: list = []
@@ -426,6 +450,10 @@ def validate(artifact: dict, mapping_path=None) -> ExtractionResult:
             if not isinstance(record, dict):
                 rejected.append({"index": i, "reason": "record is not an object"})
                 continue
+
+            record_type = "companies" if record.get("record_type") == "companies" else "contacts"
+            props = company_props if record_type == "companies" else contact_props
+            record_groups = company_groups if record_type == "companies" else contact_groups
 
             row = record.get("row")
             if not isinstance(row, dict):
@@ -456,16 +484,15 @@ def validate(artifact: dict, mapping_path=None) -> ExtractionResult:
                 else:
                     dropped_keys.append({"index": i, "key": key})
 
-            if not has_identity(clean_row, groups):
-                rejected.append(
-                    {
-                        "index": i,
-                        "reason": (
-                            "no identity present: needs a non-blank 'email', or all "
-                            "three of 'firstname'/'lastname'/'company' non-blank"
-                        ),
-                    }
-                )
+            if not has_identity(clean_row, record_groups):
+                if record_type == "companies":
+                    reason = "no identity present: give the company's name — that alone is enough"
+                else:
+                    reason = (
+                        "no identity present: needs a non-blank 'email', or all "
+                        "three of 'firstname'/'lastname'/'company' non-blank"
+                    )
+                rejected.append({"index": i, "reason": reason})
                 continue
 
             accepted.append({"row": clean_row, "provenance": provenance})

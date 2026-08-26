@@ -1,0 +1,43 @@
+# config/company_column_mapping.yaml
+#
+# One source of truth for company extraction (Phase 58):
+#   aliases:           lowercased/trimmed source header -> canonical HubSpot company prop
+#   required_identity: the reject rule — name alone (D-58-11)
+# Header lookup is case-insensitive and whitespace-collapsed, mirroring
+# column_mapping.yaml's contact-lane convention.
+#
+# Exactly five canonical company props (D-58-12, enrichment seeds only): name, domain,
+# country, industry, website. No employee count, no revenue — the provider waterfall
+# fills those once a record exists. `domain` and `website` are kept as separate HubSpot
+# properties (see CLAUDE.md company fixtures) — `domain` is the cleaned host, `website`
+# the literal URL as given; enrichment.py's `_clean_domain` reads either at write time.
+
+aliases:
+  # name
+  name: name
+  "company name": name
+  company: name
+  organization: name
+  organisation: name
+  org: name
+  # domain
+  domain: domain
+  "company domain": domain
+  "domain name": domain
+  # website
+  website: website
+  "website url": website
+  "company website": website
+  url: website
+  webaddress: website
+  # country
+  country: country
+  location: country
+  # industry
+  industry: industry
+  sector: industry
+  vertical: industry
+
+required_identity:
+  any_of:
+    - [name]
