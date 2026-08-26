@@ -52,8 +52,14 @@ def test_settled_report_renders_the_same_counts_as_report_enrichment_directly():
     )
 
     assert watched["kind"] == "settled"
+    # 2026-08-27, Phase 54-02: `report_enrichment._empty_counts()` grew two more keys
+    # (`held`, `previewed`) when `needs_match_review`/`proposed` joined
+    # `_ACTION_TO_OUTCOME` (T-54-05). This fixture's six rows carry neither action, so
+    # both read 0 here — this test reuses that same fixture and moves in lockstep with
+    # `test_report_enrichment.py`'s own re-pointed pin, not a second decision.
     assert watched["counts"] == direct["counts"] == {
-        "created": 2, "enriched": 2, "blocked": 1, "skipped": 1, "unknown": 0,
+        "created": 2, "enriched": 2, "blocked": 1, "skipped": 1,
+        "held": 0, "previewed": 0, "unknown": 0,
     }
     assert watched["total"] == direct["total"] == 6
     assert watched["failing_rows"] == direct["failing_rows"]
