@@ -211,6 +211,36 @@ def test_url_adapter_states_the_no_same_url_retry_rule():
     assert "do not re-fetch the same url" in adapter_text.lower()
 
 
+def test_a_record_with_no_record_type_key_still_routes_to_the_contact_rules():
+    """Phase 58 added a per-record `record_type` discriminator (`"contacts"` or
+    `"companies"`) to `validate()`. This is the backwards-compatibility property
+    every other test in this file depends on without saying so: an artifact with no
+    `record_type` key anywhere — every artifact this file's fenced examples and every
+    pre-Phase-58 test builds — must be judged by the contact identity rule exactly as
+    it always has been, byte-for-byte the same rejection sentence."""
+    artifact = {
+        "batch_id": "batch-58-pin",
+        "source": {"kind": "prose", "detail": "pasted text"},
+        "records": [
+            {"row": {}, "provenance": {"input": "pasted_text", "locator": "line 1"}},
+        ],
+        "ambiguities": [],
+    }
+
+    result = extraction.validate(artifact)
+
+    assert result.accepted == []
+    assert result.rejected == [
+        {
+            "index": 0,
+            "reason": (
+                "no identity present: needs a non-blank 'email', or all "
+                "three of 'firstname'/'lastname'/'company' non-blank"
+            ),
+        }
+    ]
+
+
 def test_client_rendered_verdict_is_nowhere_in_extraction_md():
     """T-35-10: the unevidenced 'likely a client-rendered page' verdict returning and
     being repeated to an operator as fact. Live evidence (35-CONTEXT.md Section 2): the

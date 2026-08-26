@@ -221,7 +221,12 @@ def _merge_cluster(entries: list) -> tuple:
     row: each field is taken where the cluster agrees (the union of what either side
     supplied); a field the cluster disagrees on is dropped from the merged row and its
     name returned as a conflict, rather than one source winning. Provenance becomes a
-    list naming every source the merged row was read from."""
+    list naming every source the merged row was read from.
+
+    `record_type` carries through from the cluster's own entries (all entries in one
+    dedupe() call share the same type since Phase 58's per-type grouping runs
+    dedupe() separately per type — see `validate()`) — absent on entries that predate
+    the `record_type` field, in which case the merged entry carries none either."""
     keys = set()
     for e in entries:
         keys.update(e["row"].keys())
@@ -238,7 +243,11 @@ def _merge_cluster(entries: list) -> tuple:
             conflicts.append(key)
 
     provenance = [e["provenance"] for e in entries]
-    return {"row": merged_row, "provenance": provenance}, conflicts
+    merged = {"row": merged_row, "provenance": provenance}
+    record_type = entries[0].get("record_type")
+    if record_type is not None:
+        merged["record_type"] = record_type
+    return merged, conflicts
 
 
 def dedupe(accepted: list, groups=None) -> tuple:
@@ -428,18 +437,26 @@ def validate(artifact: dict, mapping_path=None) -> ExtractionResult:
     keeps working unchanged. The per-record pre-flight below (non-canonical key
     stripping, identity check) reads whichever mapping — `mapping_path` for contacts,
     `COMPANY_MAPPING_PATH` for companies — that record's own type selects, rather than
-    resolving one prop set and one group set once for the whole batch. `dedupe()` and
-    the D-07 contradiction pass below are unchanged by this — they remain
-    identity-group-driven, with no field-name assumption baked in (58-RESEARCH.md).
+    resolving one prop set and one group set once for the whole batch.
+
+    `dedupe()` and the D-07 contradiction pass are identity-group-driven with no
+    field-name assumption baked in (58-RESEARCH.md), so they run TWICE — once per
+    record type, each against its own identity groups, on the two type-partitioned
+    accepted lists — rather than once over a mixed batch. The results are then
+    reassembled companies-first (D-58-13, operator ruling 2026-08-25) into one
+    combined `accepted` list, each entry stamped with its own `record_type` so a
+    caller can route it without re-reading the artifact. Every per-group local index
+    dedupe() returns (`record_index`/`other_record_index`/`merged_from`) is remapped
+    onto its final position in that combined list before ambiguity aggregation runs
+    — never left to be re-derived from list position alone, since a group-split
+    reassembly bug would otherwise point an ambiguity at the wrong record silently.
+    Ambiguity aggregation itself stays ONE sorted list across the whole artifact
+    (D-06), and the D-07 check still keys on that combined `record_index`.
     """
     contact_props = set(canonical_props(mapping_path))
     contact_groups = identity_groups(mapping_path)
     company_props = set(canonical_props(COMPANY_MAPPING_PATH))
     company_groups = identity_groups(COMPANY_MAPPING_PATH)
-    # dedupe()'s own identity-group argument: this task threads per-record type only
-    # through the pre-flight pass below, so dedupe()/D-07 keep operating on the
-    # contact-lane's groups exactly as before an accepted batch was ever mixed-type.
-    groups = contact_groups
 
     accepted: list = []
     rejected: list = []
@@ -495,11 +512,50 @@ def validate(artifact: dict, mapping_path=None) -> ExtractionResult:
                 rejected.append({"index": i, "reason": reason})
                 continue
 
-            accepted.append({"row": clean_row, "provenance": provenance})
+            accepted.append({"row": clean_row, "provenance": provenance, "record_type": record_type})
         except Exception as e:  # one bad record must never crash the batch
             rejected.append({"index": i, "reason": f"parse error: {e}"})
 
-    deduped_accepted, collapses, dedupe_ambiguities = dedupe(accepted, groups)
+    # Split the pre-flight-accepted list into per-type groups, each keeping its own
+    # relative artifact order, so dedupe() judges every record against its OWN
+    # type's identity groups (D-58-13) rather than one set for a mixed batch. A
+    # company row and a contact row can never collapse into each other by
+    # construction — they are never in the same dedupe() call.
+    company_accepted = [e for e in accepted if e["record_type"] == "companies"]
+    contact_accepted = [e for e in accepted if e["record_type"] == "contacts"]
+
+    company_deduped, company_collapses, company_ambiguities = dedupe(
+        company_accepted, company_groups
+    )
+    contact_deduped, contact_collapses, contact_ambiguities = dedupe(
+        contact_accepted, contact_groups
+    )
+
+    # Reassemble companies-first. `company_offset` is 0 (companies keep their own
+    # dedupe()-local indices unchanged); `contact_offset` shifts the contacts
+    # group's local indices past however many company rows now precede them.
+    deduped_accepted = company_deduped + contact_deduped
+    contact_offset = len(company_deduped)
+
+    def _remap_collapse(entry, offset):
+        remapped = dict(entry)
+        remapped["record_index"] = entry["record_index"] + offset
+        return remapped
+
+    def _remap_ambiguity(entry, offset):
+        remapped = dict(entry)
+        if isinstance(remapped.get("record_index"), int):
+            remapped["record_index"] += offset
+        if isinstance(remapped.get("other_record_index"), int):
+            remapped["other_record_index"] += offset
+        return remapped
+
+    collapses = [_remap_collapse(c, 0) for c in company_collapses] + [
+        _remap_collapse(c, contact_offset) for c in contact_collapses
+    ]
+    dedupe_ambiguities = [_remap_ambiguity(a, 0) for a in company_ambiguities] + [
+        _remap_ambiguity(a, contact_offset) for a in contact_ambiguities
+    ]
 
     all_ambiguities = list(artifact.get("ambiguities") or []) + dedupe_ambiguities
     all_ambiguities.sort(key=_ambiguity_sort_key)
