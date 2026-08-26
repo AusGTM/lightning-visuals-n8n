@@ -6,7 +6,16 @@
 // Each decision is shaped { field, current_value, chosen_value, source_provider, decision,
 // confidence, reason, validation_status, evidence_url, verified_at } (mergeCompanies.js:213-224).
 //
-// reviewApply(candidateJson, refetchedProperties) -> { canonicalPatch, clearPatch, stale, invalid, reason }
+// reviewApply(candidateJson, refetchedProperties, fieldPolicy = DEFAULT_COMPANY_POLICY)
+//   -> { canonicalPatch, clearPatch, stale, invalid, reason }
+//
+// THIRD PARAMETER (2026-08-27, Phase 54 Plan 03, OP-54-04): an optional field-policy object.
+// Every existing two-argument call site is unchanged in behavior — omitting it (or passing
+// DEFAULT_COMPANY_POLICY explicitly) is byte-identical to before this date. One engine, two
+// policies: `allowedFields` is derived from whichever policy is handed in, so a caller can
+// run the SAME compare-and-set, staleness and enum guards against `DEFAULT_CONTACT_POLICY`'s
+// key set instead of cloning this file. reviewDecision.js is the only caller that ever
+// supplies the contacts policy.
 //
 // STRUCTURAL Approach-C guard: canonicalPatch only ever accepts a field that is a key of
 // mergeCompanies' own DEFAULT_COMPANY_POLICY — the same allowlist mergeCompanies itself
@@ -37,8 +46,9 @@
 const { DEFAULT_COMPANY_POLICY } = require("./mergeCompanies");
 const { normalizeEnumValue } = require("./hubspotEnums");
 
-function reviewApply(candidateJson, refetchedProperties) {
+function reviewApply(candidateJson, refetchedProperties, fieldPolicy) {
   refetchedProperties = refetchedProperties || {};
+  const policy = fieldPolicy || DEFAULT_COMPANY_POLICY;
 
   let decisions;
   try {
@@ -49,7 +59,7 @@ function reviewApply(candidateJson, refetchedProperties) {
              reason: "malformed review candidate JSON" };
   }
 
-  const allowedFields = Object.keys(DEFAULT_COMPANY_POLICY);
+  const allowedFields = Object.keys(policy);
   const canonicalPatch = {};
   const staleFields = [];
   const invalid = [];

@@ -228,6 +228,75 @@ test("approve on a contact writes nothing: no contacts candidate producer exists
   assert.deepEqual(out.properties, {});
 });
 
+// --- contacts apply engine (Phase 54 Plan 03, OP-54-03/OP-54-04, `engine-only`) --------
+//
+// Operator decision, 2026-08-27, robert.li@australiagtm.com: apply engine + the
+// already-applied clear branch only — no contacts candidate producer is built in this
+// plan (recorded as a named residual). These tests prove the engine with a SYNTHETIC
+// candidate; no live contacts record has ever held one, because the only producer
+// (`Decide Company Action`) stages candidates for companies, never contacts.
+
+const P_CONTACT_PROVENANCE = "lv_contact_enrichment_provenance";
+
+test("a contacts approve holding a synthetic candidate promotes through DEFAULT_CONTACT_POLICY and writes the contacts provenance blob", () => {
+  const row = {
+    hs_object_id: "4242", record_found: true, email: "person@example.com",
+    jobtitle: "VP Sales",
+    [P_NEEDS_REVIEW]: "true",
+    [P_CANDIDATE_JSON]: JSON.stringify([
+      { field: "jobtitle", current_value: "VP Sales", chosen_value: "VP of Revenue",
+        decision: "needs_review", confidence: 90 },
+    ]),
+  };
+  const out = approve({ objectType: "contacts", row });
+  assert.equal(out.outcome, "applied");
+  assert.equal(out.properties.jobtitle, "VP of Revenue",
+    "a DEFAULT_CONTACT_POLICY field promotes through the same engine companies use");
+  assert.equal(typeof out.properties[P_CONTACT_PROVENANCE], "string",
+    "a contact write stamps the CONTACTS provenance blob");
+  assert.equal(P_PROVENANCE in out.properties, false,
+    "a contacts approve must never write the companies provenance blob");
+});
+
+test("a contacts approve with no held candidate clears the queue rather than promoting (no producer stages a contacts candidate today)", () => {
+  const row = {
+    hs_object_id: "4242", record_found: true, email: "person@example.com",
+    [P_NEEDS_REVIEW]: "true", [P_CANDIDATE_JSON]: "",
+  };
+  const out = approve({ objectType: "contacts", row });
+  assert.equal(out.properties[P_NEEDS_REVIEW], "false",
+    "a string, not a bare JS boolean — HubSpot EQ filters compare strings");
+  assert.equal(typeof out.properties[P_REVIEWED_AT], "string", "reviewed-at is stamped");
+  assert.equal(out.outcome, "applied", "the same outcome word a companies approve uses");
+});
+
+test("a contacts approve on a write-gate-refused record is refused before any apply is attempted", () => {
+  const row = {
+    hs_object_id: "4242", record_found: true, email: "person@example.com",
+    [P_NEEDS_REVIEW]: "true", [P_CANDIDATE_JSON]: "",
+  };
+  const out = buildReviewDecision({
+    objectType: "contacts", decision: "approve", reason: "x", reviewedBy: "revops@example.com",
+    row, nowIso: NOW, writeAllowed: false,
+  });
+  assert.equal(out.outcome, "not_allowlisted");
+  assert.deepEqual(out.properties, {});
+});
+
+test("a contacts reject still returns exactly one property, the reason", () => {
+  const row = {
+    hs_object_id: "4242", record_found: true, email: "person@example.com",
+    [P_NEEDS_REVIEW]: "true", [P_CANDIDATE_JSON]: "",
+  };
+  const out = buildReviewDecision({
+    objectType: "contacts", decision: "reject", reason: "not a fit",
+    reviewedBy: "revops@example.com", row, nowIso: NOW,
+  });
+  assert.equal(out.outcome, "rejected");
+  assert.equal(Object.keys(out.properties).length, 1);
+  assert.equal(out.properties[P_REVIEW_REASON], "not a fit");
+});
+
 test("an absent reviewed-by label is omitted, never written as an empty string", () => {
   for (const reviewedBy of [undefined, null, "", "   ", 7]) {
     const out = approve({ reviewedBy });

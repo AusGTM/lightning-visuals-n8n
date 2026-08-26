@@ -41,20 +41,31 @@
 // and the real submit return the identical refusal, naming the property and the value.
 //
 
-// CONTACTS: reject works identically to companies (the whole `lv_` review family exists on
-// both objects). APPROVE on a contact always resolves to `no_candidate` and writes nothing,
-// and that is CORRECT, not a stub: `lv_enrichment_review_candidate_json` has exactly one
-// producer in this repo — the COMPANIES enrichment lane's `Decide Company Action`
-// (ENRICH_DECIDE_CO_CLOUD) — and reviewApply's allowlist is the COMPANY policy's key set.
-// Handing a contact candidate to it would drop every contact field as un-allowlisted and
-// then return the clear patch anyway, silently de-queueing the record with nothing written
-// — precisely the REVIEW-05 violation D-10 exists to prevent. A contacts approve path needs
-// a contacts apply engine (DEFAULT_CONTACT_POLICY) writing the contacts blob
-// (`lv_contact_enrichment_provenance`); until one exists, refusing honestly is the only
-// safe answer, so neither is referenced here as unreachable ceremony.
+// CONTACTS (rewritten 2026-08-27, Phase 54 Plan 03, OP-54-03/OP-54-04 — operator decision
+// `engine-only`, recorded in 54-03-SUMMARY.md): approve now resolves to a real HubSpot write
+// for a contact exactly as it does for a company — `approve` never means two different
+// things across object types. reviewApply took a third parameter this same date (a field
+// policy) so ONE engine runs the SAME compare-and-set, staleness and enum guards keyed on
+// either DEFAULT_COMPANY_POLICY or DEFAULT_CONTACT_POLICY, rather than a second engine.
+//
+// The finding that makes the contacts write a clear-only write in practice, not a fork in
+// the code: `lv_enrichment_review_candidate_json` has exactly one producer in this repo —
+// the COMPANIES enrichment lane's `Decide Company Action` (ENRICH_DECIDE_CO_CLOUD). The
+// contacts lane (scripts/build_cloud_workflows.py:1569-1593) flags a contact only when a
+// decision is BOTH a promote AND carries the human-review status, and it writes that value
+// in the SAME PATCH as the flag — deliberately never staging a candidate, precisely so the
+// apply lane will not re-apply an already-live value. So every contact that reaches the
+// review queue today holds NO candidate: this module's held-candidate branch below reuses
+// the SAME engine and policy selection a contacts candidate would need, and is proven by
+// node tests driving a synthetic candidate (no live producer exists to prove it against a
+// real record — see 54-03-SUMMARY.md's stated residual). The no-candidate branch is what
+// every live contact hits: it clears the queue, stamps who decided and when, and says so —
+// an explicit operator decision (D-10 / REVIEW-05: reject still clears nothing), not a
+// silent de-queue.
 
 const { reviewApply } = require("./reviewApply");
 const { DEFAULT_COMPANY_POLICY, stableStringify } = require("./mergeCompanies");
+const { DEFAULT_CONTACT_POLICY } = require("./mergeContacts");
 
 // The `lv_`-prefixed review family (config/hubspot_properties.yaml). The generic
 // unprefixed names in the root CLAUDE.md do not exist in this deployment (30 D-08c).
@@ -71,6 +82,9 @@ const P_REVIEWED_BY = "lv_enrichment_reviewed_by";
 // The companies provenance blob (30 D-08a): ONE JSON object per record keyed by field,
 // NOT a flat `<field>_source` family — that convention does not exist in this deployment.
 const P_PROVENANCE = "lv_enrichment_provenance";
+// The contacts provenance blob (Phase 15) — a DIFFERENT property from the companies one
+// (D-08a); a contact's approve overlay must never write into the companies blob.
+const P_CONTACT_PROVENANCE = "lv_contact_enrichment_provenance";
 
 // HubSpot's own textarea ceiling — the same [:60000] cap merge_policy.py and the
 // enrichment wrapper apply to every JSON blob they stage.
@@ -226,14 +240,40 @@ function buildReviewDecision(input) {
   // ---- approve --------------------------------------------------------------------
   const nothingToApply = (message) => ({ properties: {}, outcome: "no_candidate", message });
 
-  if (inp.objectType === "contacts") {
-    return nothingToApply(
-      "this record holds no review candidate to approve — contact records are flagged for "
-      + "review (dedupe, ICP) but no contact enrichment candidate is ever staged in this "
-      + "deployment, so there is nothing to promote. Reject with a reason, or edit the "
-      + "record in HubSpot.");
-  }
+  const isContact = inp.objectType === "contacts";
+  const policy = isContact ? DEFAULT_CONTACT_POLICY : DEFAULT_COMPANY_POLICY;
+  const provenanceProp = isContact ? P_CONTACT_PROVENANCE : P_PROVENANCE;
+
+  // verifiedAt and reviewedBy are computed ONCE, above every branch that might stamp them,
+  // so one response can never carry two clocks or duplicate the trim/slice logic (54-03).
+  const verifiedAt = (typeof inp.nowIso === "string" && inp.nowIso)
+    ? inp.nowIso : new Date().toISOString();
+  const reviewedByLabel = typeof inp.reviewedBy === "string" ? inp.reviewedBy.trim() : "";
+
   if (held === "") {
+    if (isContact) {
+      // Every contact reaching the queue today hits this branch (see the module header):
+      // its enriched value is already live, written by the permissive contact lane in the
+      // same PATCH as the flag. Approve is still a real HubSpot write — it clears the
+      // queue and stamps who decided and when — it just has nothing to promote, because
+      // nothing was withheld. All seven properties below are confirmed present on the live
+      // contacts object (54-CONTACTS-PROPERTY-CHECK.md, Task 1), so none is narrowed here.
+      const properties = {
+        lv_enrichment_needs_review: "false",
+        lv_enrichment_review_approved: "false",
+        lv_enrichment_review_reason: "",
+        lv_enrichment_review_candidate_json: "",
+        lv_enrichment_reviewed_at: verifiedAt,
+      };
+      if (reviewedByLabel !== "") properties[P_REVIEWED_BY] = reviewedByLabel.slice(0, MAX_SHORT_TEXT);
+      return {
+        properties, outcome: "applied",
+        message: "acknowledged — this contact's value was already written by the permissive "
+          + "contact enrichment lane at the moment it was flagged, so no field was promoted "
+          + "because none was withheld; the review flag is cleared and the decision is "
+          + "recorded",
+      };
+    }
     return nothingToApply(
       "this record is in the review queue but holds no candidate values to approve — "
       + "nothing was written and it stays queued");
@@ -241,7 +281,9 @@ function buildReviewDecision(input) {
 
   // THE non-clobber authority. Its compare-and-set is all-or-nothing: if any held field's
   // frozen baseline disagrees with the live record, it applies nothing and reports stale.
-  const applied = reviewApply(held, row);
+  // `policy` selects DEFAULT_CONTACT_POLICY for a contact and DEFAULT_COMPANY_POLICY for a
+  // company (Phase 54 Plan 03) — one engine, two policies, never a second compare-and-set.
+  const applied = reviewApply(held, row, policy);
   if (applied.stale) {
     return {
       properties: {}, outcome: "stale",
@@ -275,31 +317,29 @@ function buildReviewDecision(input) {
   // D-12: reviewApply's allowlist is the set of policy KEYS, and `domain` is one of them
   // with class manual_protected — so membership alone does not exclude it, and a stale or
   // hand-edited candidate naming it would otherwise reach the patch. Consult the class on
-  // the SAME policy object mergeCompanies gates with: the existing authority, not a second
-  // policy table (D-05/D-07).
+  // the SAME policy object the engine was given (T-54-11) — for a contact that is
+  // DEFAULT_CONTACT_POLICY, never DEFAULT_COMPANY_POLICY — the existing authority, not a
+  // second policy table (D-05/D-07).
   const canonical = {};
   const withheld = [];
   for (const field of Object.keys(applied.canonicalPatch)) {
-    const policy = DEFAULT_COMPANY_POLICY[field];
-    if (policy && PROTECTED_CLASSES.indexOf(policy.class) !== -1) {
+    const fieldPolicy = policy[field];
+    if (fieldPolicy && PROTECTED_CLASSES.indexOf(fieldPolicy.class) !== -1) {
       withheld.push(field);
       continue;
     }
     canonical[field] = applied.canonicalPatch[field];
   }
 
-  const verifiedAt = (typeof inp.nowIso === "string" && inp.nowIso)
-    ? inp.nowIso : new Date().toISOString();
   const provenance = buildHumanProvenance({
-    existingJson: row[P_PROVENANCE], applied: canonical, reason, verifiedAt,
+    existingJson: row[provenanceProp], applied: canonical, reason, verifiedAt,
   });
 
-  const properties = { ...canonical, ...applied.clearPatch, [P_PROVENANCE]: provenance.json };
+  const properties = { ...canonical, ...applied.clearPatch, [provenanceProp]: provenance.json };
 
   // Only ever WRITTEN, never blanked: an empty or wrong-typed label is omitted, because
   // writing "" would erase a reviewer HubSpot already holds.
-  const reviewedBy = typeof inp.reviewedBy === "string" ? inp.reviewedBy.trim() : "";
-  if (reviewedBy !== "") properties[P_REVIEWED_BY] = reviewedBy.slice(0, MAX_SHORT_TEXT);
+  if (reviewedByLabel !== "") properties[P_REVIEWED_BY] = reviewedByLabel.slice(0, MAX_SHORT_TEXT);
 
   const applies = Object.keys(canonical);
   let message = applies.length
