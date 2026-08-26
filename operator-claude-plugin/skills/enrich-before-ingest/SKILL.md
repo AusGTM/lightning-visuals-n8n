@@ -72,6 +72,32 @@ whatever seven columns happened to be in the source file.
    contract exactly as that skill does, then take its accepted rows in place of
    `rows_from_table`'s.
 
+   **When that extraction pass also yields company rows** (`record_type: companies` —
+   one artifact validates both lanes in one pass, companies first), confirm every
+   proposed website in one table before those rows join this batch. When a company
+   arrives with no domain — a bare name, a screenshot, a LinkedIn or directory page —
+   propose one from whatever you can already see; research it only when you cannot
+   confidently propose one, or the operator says to check it. Render one table, one
+   row per company, showing exactly three things: the company, the proposed website,
+   and where that came from with a one-line reason — an evidence link only on a row
+   something actually researched. Before the batch yes, three moves are open on any
+   row: accept as shown, type the right website instead, or say this one is wrong.
+   Say what happens to that last case in the operator's own terms: the company still
+   goes through, looked up by its name instead, and the run's report says so — never
+   dropped.
+
+   State the profile-page rule where the operator meets it: a LinkedIn or directory
+   page is read for who the company is, and that page's own address is never recorded
+   as their website, because a company filed under a social site's address becomes
+   the record every later company from that source is mistaken for.
+
+   **An affirmative answering this shown table, in the same turn, covers the batch,
+   and anything that is not clearly an answer to this table leaves the batch
+   unsent.** Only once every row is decided — a yes, a correction, or a decline —
+   does `company_domain.to_envelope_spec` turn the table into the spec this batch is
+   built from; an undecided row stops the whole batch rather than defaulting either
+   way.
+
    Mint one `row_id` per row, once, for the whole batch — never per chunk, which would
    mint the same id twice:
 

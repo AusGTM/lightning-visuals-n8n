@@ -185,6 +185,50 @@ def test_the_grant_branch_shows_the_window_scoped_to_this_sends_records():
     assert "never the grant's whole record set" in body.lower()
 
 
+# ---------------------------------------------------------------------------------
+# Phase 58 Plan 03 Task 3 (2026-08-26) — the domain confirm table (D-58-04/05/06/07).
+# ADDITIVE ONLY: no pin above this point is touched or reworded by this block.
+# ---------------------------------------------------------------------------------
+
+
+def test_the_skill_documents_the_domain_confirm_table_with_its_three_columns():
+    body = _normalized(_text())
+    assert "the company, the proposed website, and where that came from with a one-line" in body
+
+
+def test_the_skill_says_the_shown_table_answer_covers_the_batch_or_leaves_it_unsent():
+    body = _normalized(_text()).lower()
+    assert (
+        "an affirmative answering this shown table, in the same turn, covers the batch"
+        in body
+    )
+    assert (
+        "anything that is not clearly an answer to this table leaves the batch unsent"
+        in body
+    )
+
+
+def test_the_skill_states_the_three_per_row_moves_and_the_decline_outcome():
+    body = _normalized(_text())
+    assert "accept as shown" in body
+    assert "type the right website instead" in body
+    assert "say this one is wrong" in body
+    assert "looked up by its name instead" in body.lower()
+    assert "never dropped" in body.lower()
+
+
+def test_the_skill_states_the_profile_page_rule_at_the_confirm_step():
+    body = _normalized(_text()).lower()
+    assert "never recorded as their website" in body
+    assert "every later company from that source is mistaken for" in body
+
+
+def test_the_skill_refuses_the_batch_while_any_row_is_undecided():
+    body = _normalized(_text())
+    assert "company_domain.to_envelope_spec" in body
+    assert "an undecided row stops the whole batch" in body.lower()
+
+
 def test_the_skill_does_not_re_ask_for_approval_under_a_grant():
     """D-53-06 (operator, 2026-08-25), found by the walk of Phase 53 itself.
 
