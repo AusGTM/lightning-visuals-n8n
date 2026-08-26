@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Unattended Session Runs
-current_phase: 58
+current_phase: 54
 current_phase_name: single-pass-armed-dispatch
-status: phase-complete
-stopped_at: "Phase 58 COMPLETE 2026-08-26, verified 31/31 must-haves. Six plans: company extraction adapters (bare name/paste/JSON/URL/screenshot, mixed one-pass), propose-mode spike proven live (exec 11972), domain confirm/decline/correct table (operator walk approved), research line priced + declinable (INPUT-02 backend extension deferred by operator ruling, residual in 58-SPIKE-VERDICT.md), native country/city/employees at landing (exec 11980/11983), judge escalation for material conflicts (exec 11987). Code review 1 critical + 2 warnings all fixed. Live incident handled: exec 11983 false Non-ANZ veto on Series Futsal Victoria 283816805830 corrected via operator-authorized one-record window (region AU, veto cleared, disarm verified, grant closed batch_complete). Plugin released 0.19.0. NEXT: Phase 54 (single-pass armed dispatch) — also owns the deferred contact review-flag clearing lane."
-last_updated: "2026-08-26T21:28:34.490Z"
-last_activity: 2026-08-26
-last_activity_desc: Phase 58 complete and verified — company lane takes any operator input; INPUT-01/03/04 closed, INPUT-02 partially open by recorded ruling
+status: executing
+stopped_at: Completed 54-01-PLAN.md
+last_updated: "2026-08-26T21:47:51.867Z"
+last_activity: 2026-08-27
+last_activity_desc: Phase 54 execution started
 progress:
   total_phases: 4
   completed_phases: 3
   total_plans: 18
-  completed_plans: 13
-  percent: 72
+  completed_plans: 14
+  percent: 75
 ---
 
 # Project State
@@ -150,9 +150,9 @@ predating the window. VETO-03 bar still 0.
 
 ## Current Position
 
-Phase: 58 (take-what-the-operator-actually-has) — EXECUTING
-Plan: 6 of 6
-Status: Executing — 58-05 complete (native fields at landing + SFV corrective window); 58-06 (wave 5, judge escalation for material property conflicts) next
+Phase: 54 (single-pass-armed-dispatch) — EXECUTING
+Plan: 2 of 5
+Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
   has executed on a real record. **Nothing is armed** — windows #1 and #2 were each opened
@@ -229,7 +229,7 @@ exactly what B and C now do): .planning/phases/47.5-veto-recompute-path/47.5-CON
 lv_org_type: Editix, Jam TV, Waikato, The Rumble). Not a 47.5 workstream.
 
 Previous status: Executing — Anthropic credit restored, Plan 03 completed
-Last activity: 2026-08-26 — Phase 58 execution started
+Last activity: 2026-08-27 — Phase 54 execution started
   the live property-existence guard (found 19 missing D-09 metadata properties, resolved
   via operator-confirmed D-21 narrowing), one live research pass over all 17 pinned
   companies (47-RESEARCH-RESULTS.json), two live-discovered data-quality fixes
@@ -239,12 +239,12 @@ Last activity: 2026-08-26 — Phase 58 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
+Progress: [████████░░] 78% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-26T11:33:23.221Z
-**Stopped at:** Completed 58-06-PLAN.md (Task 4 checkpoint resolved)
+**Last session:** 2026-08-26T21:47:51.858Z
+**Stopped at:** Completed 54-01-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -323,6 +323,7 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 | Phase 58 P04 | 25min | 3 tasks | 5 files |
 | Phase 58 P05 | ~75min | 4 tasks | 14 files |
 | Phase 58 P06 | ~110min | 4 tasks | 16 files |
+| Phase 54 P01 | ~35min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -365,6 +366,8 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: 58-04: research-line pricing is default-on and declinable; a struck line converges on the existing DECLINE_DOMAIN sentinel (no new bucket). INPUT-02 residual (backend research node not extended to seek a domain) remains deferred per operator decision, 2026-08-26.
 - [Phase ?]: Phase 58-05: Task 4 superseded by events -- operator's own walk dispatch (exec 11983) armed a full enrich before Task 4 resumed, landing the plan's native fields but also flipping a false Non-ANZ veto via an unwatched ZoomInfo region conflict (root cause scoped to gap-closure plan 58-06); Task 4 executed instead as a corrective window (scripts/fix_sfv_region.py, commit 11b17c0), clearing the veto without re-running the same wrong provider match
 - [Phase ?]: Phase 58-06: Task 4 checkpoint resolved 2026-08-26 -- size disagreements stay flag-only permanently (RO-2 untouched, no follow-up); forensic's 70-vs-75 confidence rejection accepted as correct behavior, region min_confidence stays 75, no follow-up opened. Plan complete; INPUT-01/03/04 ticked in v1.1-REQUIREMENTS.md, INPUT-02 stays open per its recorded defer-residual.
+- [Phase ?]: 54-01: envelope() single-record execution count DIFFERS from live measurement (measured 1, projected chunk_count+record_count=2) -- reported, not reconciled; multi-chunk case (WINDOWS id 26) still open
+- [Phase ?]: 54-01: anthropic_usd basis relabelled PROJECTED (was falsely MEASURED) per OP-54-05; SJ-3 double pass recorded WINDOWS id 27 per OP-54-02, deliberately left unfixed
 
 ### Roadmap Evolution
 
