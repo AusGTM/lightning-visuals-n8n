@@ -125,7 +125,7 @@ passes → 1, ~$0.07 → ~$0.035 Anthropic, 2 executions → 1). Full detail:
 **Also carries** (deferred here 2026-08-26): the contact review-flag lane — contacts get
 flagged `lv_enrichment_needs_review` but no lane clears a contact flag.
 
-**Plans**: 6/7 plans executed
+**Plans**: 7/7 plans executed
 
 - [x] 54-01-PLAN.md
 - [x] 54-02-PLAN.md
@@ -136,7 +136,7 @@ flagged `lv_enrichment_needs_review` but no lane clears a contact flag.
       fetch to the whole contacts policy, correct three stale comments, scope the enum-guard claim),
       rebuild, deploy disarmed
 
-- [ ] 54-07-PLAN.md — gap closure WR-04: one bound, not two, in the Anthropic-spend sentence, and a
+- [x] 54-07-PLAN.md — gap closure WR-04: one bound, not two, in the Anthropic-spend sentence, and a
       test that checks the meaning
 
 **Gap closure** (operator decision 2026-08-27, `54-VERIFICATION.md`): the phase goal stays 6/6
