@@ -123,13 +123,23 @@ passes → 1, ~$0.07 → ~$0.035 Anthropic, 2 executions → 1). Full detail:
 **Also carries** (deferred here 2026-08-26): the contact review-flag lane — contacts get
 flagged `lv_enrichment_needs_review` but no lane clears a contact flag.
 
-**Plans**: 5/5 plans executed
+**Plans**: 7 plans (5 executed, 2 gap-closure pending)
 
 - [x] 54-01-PLAN.md
 - [x] 54-02-PLAN.md
 - [x] 54-03-PLAN.md
 - [x] 54-04-PLAN.md
 - [x] 54-05-PLAN.md
+- [ ] 54-06-PLAN.md — gap closure WR-01/02/03: contacts review lane truth-up (widen the decision
+      fetch to the whole contacts policy, correct three stale comments, scope the enum-guard claim),
+      rebuild, deploy disarmed
+- [ ] 54-07-PLAN.md — gap closure WR-04: one bound, not two, in the Anthropic-spend sentence, and a
+      test that checks the meaning
+
+**Gap closure** (operator decision 2026-08-27, `54-VERIFICATION.md`): the phase goal stays 6/6
+verified. All four findings are dormant — no live contacts candidate producer exists — and are
+being closed by operator choice, not because anything is broken. Run
+`/gsd-execute-phase 54 --gaps-only`.
 
 ### Phase 58: Take what the operator actually has
 
