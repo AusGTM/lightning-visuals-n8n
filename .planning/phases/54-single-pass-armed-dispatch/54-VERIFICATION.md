@@ -1,220 +1,165 @@
 ---
 phase: 54-single-pass-armed-dispatch
-verified: 2026-08-27T05:30:00Z
-status: gaps_found
-score: 6/6 must-haves verified; 4 code-quality gaps routed to gap closure by operator decision
+verified: 2026-08-27T06:15:00Z
+status: passed
+score: 9/9 truths verified; 5/5 gap-closure findings (WR-01, WR-02, WR-03, WR-04, IN-02) closed
+re_verification:
+  previous_status: gaps_found
+  previous_score: "6/6 must-haves verified; 4 code-quality gaps routed to gap closure by operator decision"
+  gaps_closed:
+    - "WR-01 — stale pre-54-03 contacts-approve comments in scripts/build_cloud_workflows.py (all four regions, including the one inside the deployed Build Review Decision jsCode literal and the Sticky Note 1 operator panel)"
+    - "WR-02 — REVIEW_CONTACT_PROPERTIES_CSV split into a wide REVIEW_CONTACT_DECISION_PROPERTIES_CSV (all 12 config/field_policy.yaml contacts keys) for the two limit=1 decision nodes, and a narrow REVIEW_CONTACT_QUEUE_PROPERTIES_CSV (byte-identical membership to the pre-split constant) for the queue read"
+    - "WR-03 — reviewApply.js's header now states the ENUM GUARD is company-only (not symmetric), with a fourth drift-guard test pinning the reason against the checked-in contacts snapshot"
+    - "WR-04 — write_grant.py's Anthropic-spend sentence no longer calls the same figure both 'worst case' and 'a floor'; rewritten to 'a projection'; pinning test rescoped to the single Anthropic-spend line"
+    - "IN-02 — review-triage/SKILL.md's no_candidate bullet no longer overclaims permanence ('does not land here anymore' -> 'does not land here today, because...'); step 6 consent wording untouched"
+  gaps_remaining: []
+  regressions: []
 operator_decision:
   date: 2026-08-27
   decided_by: operator (robert li)
   decision: >
-    Both human-verification items answered: open a follow-up gap-closure plan covering ALL
-    FOUR review findings (WR-01, WR-02, WR-03, WR-04) before Phase 54 is marked complete.
-    The operator declined both the "accept as disclosed residual" and the "fix the cheap two
-    only" options. Status flipped human_needed -> gaps_found to route these to
-    /gsd-plan-phase 54 --gaps. The phase GOAL remains 6/6 verified — these gaps are
-    code-quality and documentation-accuracy defects in dormant paths, not goal failures.
-gaps:
-  - id: WR-01
-    severity: warning
-    file: scripts/build_cloud_workflows.py
-    lines: "7049-7055, 7215-7220"
-    summary: >
-      Comments still describe pre-54-03 contacts-approve behaviour ("no_candidate", "writes
-      nothing") that 54-03/54-04 made false. One sits INSIDE the deployed node's own jsCode
-      string, so the wrong description ships to the running workflow.
-    handoff_history: named in 54-03-SUMMARY.md as 54-04's job; 54-04's rebuild never touched it.
-  - id: WR-02
-    severity: warning
-    file: scripts/build_cloud_workflows.py
-    lines: "7060-7062"
-    summary: >
-      REVIEW_CONTACT_PROPERTIES_CSV does not fetch 10 of DEFAULT_CONTACT_POLICY's 12 field
-      keys, so reviewApply's compare-and-set baseline cannot see most contacts fields live.
-      A real non-clobber bypass once a contacts candidate producer exists.
-    handoff_history: flagged in 54-03-SUMMARY.md and handed to 54-04, which never landed it.
-  - id: WR-03
-    severity: warning
-    file: n8n/code/reviewApply.js, n8n/code/hubspotEnums.generated.js
-    summary: >
-      The enum guard Phase 54's header comments describe as symmetric across both policies is
-      a no-op for every contacts field — COMPANY_ENUM_PROPERTIES contains only company
-      properties.
-  - id: WR-04
-    severity: warning
-    file: operator-claude-plugin/scripts/write_grant.py
-    lines: "304-306"
-    summary: >
-      The Anthropic-spend sentence calls the same number both "worst case" and "a floor" — a
-      ceiling and a lower bound cannot both be true. The pinning test asserts only the
-      substring "floor", so it does not catch the contradiction either; fix the test's pin
-      alongside the wording.
-gaps_dormancy_note: >
-  All four are DORMANT as of 2026-08-27: no live contacts candidate producer exists (operator
-  chose engine-only), so WR-01/02/03 are unreachable in production today, and WR-04 has no
-  functional consequence. None affects the clear-and-stamp branch that was live-proven on
-  contact 347569451461. They are being fixed now by operator choice, not because anything is
-  currently broken.
-prior_status: human_needed
+    Both human-verification items from the first pass were answered: open a follow-up
+    gap-closure plan covering ALL FOUR review findings (WR-01, WR-02, WR-03, WR-04) before
+    Phase 54 is marked complete. The operator declined both the "accept as disclosed
+    residual" and the "fix the cheap two only" options. Status flipped human_needed ->
+    gaps_found to route these to /gsd-plan-phase 54 --gaps (commit cecddbb). A fifth
+    finding, IN-02, was folded into the same gap-closure scope by a separate operator
+    decision (commit 7093bc6). Both gap plans (54-06, 54-07) have now executed and this
+    re-verification confirms all five findings are closed in source, not just claimed in
+    SUMMARY.md.
 behavior_unverified: 0
 overrides_applied: 0
 requirements_location_note: >
   G-3 is not a checkbox item in .planning/REQUIREMENTS.md (that file is scoped to the v1.0
   backfill milestone). G-3 is a narrative UAT gap id defined in
-  .planning/milestones/v1.1-REQUIREMENTS.md (~line 27). Verified against that file, per the
-  task's requirement-location note. `gsd-tools requirements mark-complete G-3` correctly
-  returns not_found for this reason (confirmed in 54-01-SUMMARY.md's own Issues Encountered
-  section) — this is not a defect in this phase's work.
-human_verification:
-  - test: "Decide whether WR-01/WR-02/WR-03 (stale build_cloud_workflows.py comments, incomplete REVIEW_CONTACT_PROPERTIES_CSV baseline, contacts-silent enum guard) block phase closure or are an accepted, disclosed residual for a future producer plan."
-    expected: "An explicit operator/planner decision — either accept as a named residual (consistent with 54-03's own engine-only scope decision) or open a follow-up plan before any contacts candidate producer is built."
-    why_human: "These are code-quality/documentation-accuracy gaps in dormant code paths (no live contacts candidate producer exists), not functional failures of what this phase shipped and live-proved. Whether 'dormant + disclosed' is good enough to close the phase is a scope judgment, not a mechanically verifiable fact."
-  - test: "Confirm WR-04 (write_grant.py's Anthropic spend sentence saying 'worst case' and 'a floor' in the same breath) is acceptable operator-facing wording or needs a follow-up edit before the next phase that reads envelope() output."
-    expected: "A decision on which framing (worst case vs. floor) matches how config/cost_rates.json's rate was actually derived."
-    why_human: "A wording self-contradiction with no functional consequence (both numbers are the same figure) — judgment call on urgency, not a functional gap."
+  .planning/milestones/v1.1-REQUIREMENTS.md (~line 27, confirmed present at that location
+  again in this pass). `gsd-tools requirements mark-complete G-3` correctly returns
+  not_found for this reason (documented independently by 54-01-SUMMARY.md, the first-pass
+  VERIFICATION.md, and both 54-06-SUMMARY.md and 54-07-SUMMARY.md) — this is a known
+  tooling/milestone-file split, not a defect in any plan's work.
 ---
 
 # Phase 54: Single-pass armed dispatch Verification Report
 
 **Phase Goal:** A record is enriched once: no derive-then-rearm-then-derive-again, and the
 measured saving proven live before it is claimed.
-**Verified:** 2026-08-27
-**Status:** gaps_found (was `human_needed`; flipped by operator decision 2026-08-27 — see
-`operator_decision` in frontmatter)
-**Re-verification:** No — initial verification
+**Verified:** 2026-08-27 (re-verification, second pass)
+**Status:** passed
+**Re-verification:** Yes — after gap closure (54-06, 54-07)
 
-> **Operator decision, 2026-08-27.** Both human-verification items below were answered:
-> open a follow-up gap-closure plan covering **all four** review findings (WR-01, WR-02,
-> WR-03, WR-04) before Phase 54 is marked complete. The alternatives offered — accept them
-> as disclosed residuals carried to the future producer phase, or fix only the two cheap
-> ones — were both declined. The phase **goal** is unaffected and remains 6/6 verified;
-> these are code-quality and documentation-accuracy defects in dormant code paths, and all
-> four are structured as gaps in the frontmatter for `/gsd-plan-phase 54 --gaps`.
+> **What changed since the first pass.** The first pass (2026-08-27T05:30:00Z) found 6/6
+> must-haves (9/9 observable truths) verified and routed four code-review findings
+> (WR-01..WR-04) to human decision. The operator chose to close all four via a gap-closure
+> plan rather than accept them as disclosed residuals; a fifth finding (IN-02) was folded
+> into the same scope. Two plans executed (`54-06` commits `98afc5a`/`4f0f25f`/`e4fcfe7`,
+> `54-07` commit `5cafcf0`). This pass re-verifies every closure claim directly against
+> source — not against SUMMARY.md prose — and re-confirms the original 9/9 truths did not
+> regress.
 
-## Goal Achievement
+## Goal Achievement (carried forward, re-confirmed this pass)
 
 ### Observable Truths
 
 | # | Truth | Status | Evidence |
 |---|---|---|---|
-| 1 | The accidental double-pass mechanism (arm-after-dispatch) is closed for the documented interactive lanes, both granted and ungranted | ✓ VERIFIED | `write_grant.authorize_ungranted_send` exists (`operator-claude-plugin/scripts/write_grant.py:747`), docstring cites F2/2026-08-25; G-3 amendment in `v1.1-REQUIREMENTS.md` names it as the closing mechanism, live-verified 2026-08-26 |
-| 2 | The saving is measured out of real n8n execution history, not projected, and the artifact says so with basis words | ✓ VERIFIED | `54-MEASUREMENT.md`: executions `11934`/`11935`/`11937` (pre-F2, 3x `write_blocked`) vs. `11960` (post-fix, 1 execution) read directly by id via `measure_dispatch.py`; every figure carries a basis word (`measured`/`projected`/`unmeasured`) |
-| 3 | The measured/projected disagreement is disclosed, not smoothed over | ✓ VERIFIED | `compare_to_projection` verdict recorded as `differs` (measured 1, `envelope()` projects 2) — not silently reconciled; `write_grant.envelope()` formula left uncorrected by explicit scope decision |
-| 4 | The Anthropic dollar figure is never presented as measured | ✓ VERIFIED | `write_grant.py:259` `"anthropic_usd": PROJECTED` (was MEASURED before this phase); `test_write_grant.py::test_the_anthropic_figure_is_labelled_projected_never_measured` passes |
-| 5 | The two remaining legitimate two-pass shapes (look-only rehearsal, identity hold) are named and disclosed at point of use, and not confused with the G-3 defect | ✓ VERIFIED | `report_enrichment.py` gained `held`/`previewed` outcomes (neither in `SUCCESS_OUTCOMES`); `enrich-records/SKILL.md` §2 states the second-pass cost; G-3 REQUIREMENTS.md amendment and ROADMAP.md Phase 54 entry both name the two shapes explicitly as not-the-defect |
-| 6 | Approving a flagged contact results in a real HubSpot write, through the same engine and write gate companies use | ✓ VERIFIED (live) | `reviewDecision.js`/`reviewApply.js` (3rd-param field-policy injection); live execution `12000`, `dry_run:false`, `status:success`, contact `347569451461`'s review flags cleared and reviewed-at/reviewed-by stamped; corroborated by a second independent read (`review_queue.fetch_queue`, execution `12001`, `total:0`) |
-| 7 | The SJ-3 scheduled-poller double pass is recorded on the ledger, not silently fixed or dropped | ✓ VERIFIED | `WINDOWS.md` entry 27 (id 27, status `open`, phase `54`, file `scheduled_arm.py`), citing OP-54-02 and D-1.1-01 |
-| 8 | The promote branch (contacts approve with a held candidate) is not claimed as live-proven | ✓ VERIFIED | `54-LIVE-PROOF.md` states plainly, twice, that only the clear-and-stamp branch was exercised; no artifact in the phase claims a live-proven promotion |
-| 9 | `verify_decision`'s literal verdict is reported honestly, not reinterpreted | ✓ VERIFIED | `54-LIVE-PROOF.md` reports `status: "failed"` verbatim with the one-key HubSpot `""`-vs-`null` round-trip explanation, rather than upgrading it to `verified` |
+| 1 | The accidental double-pass mechanism (arm-after-dispatch) is closed for the documented interactive lanes, both granted and ungranted | ✓ VERIFIED | `write_grant.authorize_ungranted_send` exists (`operator-claude-plugin/scripts/write_grant.py:747`), docstring cites F2/2026-08-25; unchanged by 54-06/54-07 |
+| 2 | The saving is measured out of real n8n execution history, not projected, and the artifact says so with basis words | ✓ VERIFIED | `54-MEASUREMENT.md` unchanged by gap closure; re-confirmed present, untouched by 54-06/54-07 commits (`git log` on the file) |
+| 3 | The measured/projected disagreement is disclosed, not smoothed over | ✓ VERIFIED | `compare_to_projection` verdict `differs` unchanged; `write_grant.envelope()` formula scope decision unchanged |
+| 4 | The Anthropic dollar figure is never presented as measured | ✓ VERIFIED (strengthened this pass) | `write_grant.py:304-305` now reads `"a projection from the dated rate table above, not a [measurement]"` (WR-04 fix, commit `5cafcf0`) — a stronger, unambiguous restatement of the same basis, replacing the self-contradictory "worst case ... a floor" wording. `test_the_anthropic_figure_is_labelled_projected_never_measured` re-run, passes. |
+| 5 | The two remaining legitimate two-pass shapes (look-only rehearsal, identity hold) are named and disclosed at point of use, and not confused with the G-3 defect | ✓ VERIFIED | `report_enrichment.py`/`enrich-records/SKILL.md` unchanged by gap closure |
+| 6 | Approving a flagged contact results in a real HubSpot write, through the same engine and write gate companies use | ✓ VERIFIED (live, unchanged) | Live execution `12000`/`12001` evidence in `54-LIVE-PROOF.md`, file untouched by 54-06/54-07 (confirmed via `git log` on the file — last touch is 54-05) |
+| 7 | The SJ-3 scheduled-poller double pass is recorded on the ledger, not silently fixed or dropped | ✓ VERIFIED | `WINDOWS.md` entry id 27 re-read this pass, present, status still names OP-54-02/D-1.1-01, unchanged |
+| 8 | The promote branch (contacts approve with a held candidate) is not claimed as live-proven | ✓ VERIFIED (no regression) | `54-LIVE-PROOF.md` unchanged (not touched by either gap plan); 54-06-SUMMARY.md's own "Dormancy status" section independently restates the same disclosure for its own widened baseline: "the promote branch this plan hardened is still test-proven only, never live-proven" |
+| 9 | `verify_decision`'s literal verdict is reported honestly, not reinterpreted | ✓ VERIFIED | `54-LIVE-PROOF.md` unchanged |
 
-**Score:** 9/9 truths verified (0 present-but-behavior-unverified)
+**Score:** 9/9 truths verified (0 present-but-behavior-unverified) — unchanged from the first pass; no regression introduced by gap closure.
+
+### Gap-Closure Findings — Re-verified Against Source (this pass)
+
+| Finding | Claimed fix | Verified in source | Status |
+|---|---|---|---|
+| WR-01 | Four stale comment regions in `scripts/build_cloud_workflows.py` (7049-7055 baseline-reason comment, 7215-7220 deployed jsCode literal, Sticky Note 1 operator panel, `Review Queue Contact Search` header) rewritten to scoped-to-today framing | Read all four regions directly: line 7047-7052 states the current reason (per-key compare-and-set), line 7239 states "a live-shape fact scoped to today, not a structural guarantee," Sticky Note 1 (line 7608-7614) states "resolves to a real write today because... not because the code forbids it," and the `Review Queue Contact Search` header (7548-7555) states the split reason correctly. None of the four rewrites overclaims in the *other* direction (i.e. none now unconditionally asserts a write always happens) — each is correctly hedged to today's live shape. | ✓ CLOSED |
+| WR-02 | `REVIEW_CONTACT_PROPERTIES_CSV` split into wide decision CSV (all 12 `DEFAULT_CONTACT_POLICY`/`field_policy.yaml` contacts keys) + narrow queue CSV (unchanged membership) | Confirmed `REVIEW_CONTACT_DECISION_PROPERTIES_CSV` used at the two `limit=1` decision nodes (lines 7418, 7460) and `REVIEW_CONTACT_QUEUE_PROPERTIES_CSV` used at the queue node (line 7559, `limit=queue_limit_expr`, up to 100). Diffed the new queue-CSV tuple against the pre-split `REVIEW_CONTACT_PROPERTIES_CSV` from `git show 98afc5a~1` — **byte-identical membership**, confirming the queue read was NOT widened. `config/field_policy.yaml`'s `contacts` block independently confirmed to have exactly 12 keys, all present in the decision CSV. | ✓ CLOSED |
+| WR-03 | `reviewApply.js`'s header states the enum guard is company-only; no `CONTACT_ENUM_PROPERTIES` table generated; new drift-guard test | Read `reviewApply.js:47-60` — explicit "NOT symmetric across policies" paragraph naming `COMPANY_ENUM_PROPERTIES`'s six company-only keys and stating the contacts guard is a correctly-inert no-op today. Confirmed no `CONTACT_ENUM_PROPERTIES` table exists (`grep` returns none). Read `test_contact_policy_fields_are_not_enumeration_typed` — it reads the CHECKED-IN contacts snapshot JSON, extracts `DEFAULT_CONTACT_POLICY` keys as text (not imported), and asserts none are enumeration-typed; a snapshot regression would fail this test with an actionable message naming the follow-on work. | ✓ CLOSED |
+| WR-04 | `write_grant.py`'s Anthropic-spend sentence no longer self-contradicts; test rescoped to the single line | Read `write_grant.py:304-305` — "worst case"/"floor" both absent, replaced with "a projection from the dated rate table above, not a [measurement]". Confirmed the legitimate "Worst-case credits" table header (line 293, provider-credits section) was NOT collaterally touched. Read the strengthened test (`test_write_grant.py:857-862`) — it extracts only the line containing "Anthropic model spend" from `figures['block']` and asserts `"projection"` present, `"worst case"`/`"floor"` absent on that line only, so it cannot false-fail on the provider-credits table's legitimate ceiling wording. | ✓ CLOSED |
+| IN-02 | `review-triage/SKILL.md`'s no_candidate bullet no longer states permanence; step 6 untouched | Read `SKILL.md:120-126` — "A contacts approve does not land here **today**, because..." (was "does not land here anymore"). Read step 6 (line 129-141) — "That yes is the arm" consent-ceremony text present, byte-for-byte the same wording the first pass pinned. | ✓ CLOSED |
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |---|---|---|---|
-| `operator-claude-plugin/scripts/measure_dispatch.py` | Read-only execution counter | ✓ VERIFIED | Exists, no import of `n8n_arming`/`arm_for_dispatch`/`armed_window` (grep-confirmed), 9 offline tests pass |
-| `operator-claude-plugin/tests/test_measure_dispatch.py` | Covers raising-transport-propagates and verdict logic | ✓ VERIFIED | Present, part of the 3220-pass pytest run |
-| `.planning/phases/54-single-pass-armed-dispatch/54-MEASUREMENT.md` | Measured saving, execution-id-traceable | ✓ VERIFIED | Present, all rows carry distinct basis words, cross-references `54-LIVE-PROOF.md` |
-| `n8n/code/reviewApply.js` | Policy-injectable apply engine | ✓ VERIFIED | `function reviewApply(candidateJson, refetchedProperties, fieldPolicy)` — 3rd param, defaults to `DEFAULT_COMPANY_POLICY`, one function (grep-confirmed no second copy) |
-| `n8n/code/reviewDecision.js` | Contacts approve branch that writes | ✓ VERIFIED | Contacts branch selects `DEFAULT_CONTACT_POLICY`/`lv_contact_enrichment_provenance`, resolves to `applied` outcome with a real patch |
-| `.planning/phases/54-single-pass-armed-dispatch/54-CONTACTS-PROPERTY-CHECK.md` | Live property existence check | ✓ VERIFIED | Present, all seven review-family properties confirmed present live |
-| `n8n/wf_review_decision_cloud.json` | Regenerated by builder, deployed | ✓ VERIFIED | Node count unchanged (26), builder-authored only, deployed + bounced (`54-DEPLOY-RECORD.md`), disarm verified twice (post-deploy and post-live-write) |
-| `.planning/phases/54-single-pass-armed-dispatch/54-DEPLOY-RECORD.md` | Deploy/bounce/read-back/disarm record | ✓ VERIFIED | All 5 steps present with fresh-GET evidence distinct from PUT response |
-| `.planning/phases/54-single-pass-armed-dispatch/54-LIVE-PROOF.md` | Before/after/disarm live proof | ✓ VERIFIED | One real record, independent before/after reads, disarm re-verified (`VERDICT: disarmed PASS`, 5 workflows/15 nodes), branch stated plainly |
-| `.planning/WINDOWS.md` entry 27 | SJ-3 residual on the ledger | ✓ VERIFIED | JSON-parses, unique id 27, status open |
+| `n8n/wf_review_decision_cloud.json` | Regenerated by builder, deployed disarmed with corrected content | ✓ VERIFIED | Re-ran `scripts/build_cloud_workflows.py` this pass — **zero git diff** against the committed file, confirming it is exactly builder output, never hand-edited. `54-06-DEPLOY-RECORD.md` documents an independent fresh-GET read-back (Step 4, distinct from the PUT response) confirming the widened contacts fetch and corrected jsCode are live, plus `scripts/verify_live_write_safety.py` printing `VERDICT: disarmed PASS` (Step 5) |
+| `n8n/wf_scheduled_maintenance_cloud.json` | Regenerated, committed, deliberately NOT deployed | ✓ VERIFIED | Same zero-diff regeneration check applies (this file was also written by the re-run with no diff). `54-06-DEPLOY-RECORD.md` and `54-06-SUMMARY.md` both explicitly name the file's now-TWO stacked committed-but-undeployed deltas (54-04's original mergeContacts fix + this plan's baseline/comment widening) rather than letting them accumulate silently |
+| `tests/test_review_contact_property_sets.py` | New regression test, checks the built JSON not just the in-memory constant | ✓ VERIFIED | Read in full: `test_decision_csv_carries_every_contacts_policy_key` (YAML-vs-constant), `test_built_json_decision_nodes_request_widened_set_and_queue_node_does_not` (reads `n8n/wf_review_decision_cloud.json` directly, checks `mobilephone` present on the two decision nodes and absent on the queue node) |
+| `tests/test_hubspot_enums_generated_currency.py` | Fourth test pinning the contacts non-enumeration reason | ✓ VERIFIED | Read `test_contact_policy_fields_are_not_enumeration_typed` in full — genuine assertion against the pinned snapshot file, not a tautology |
+| `54-06-DEPLOY-RECORD.md` | Deploy/bounce/read-back/disarm record for the gap-closure deploy | ✓ VERIFIED | All steps present: pre-flight diff (only `parameters` on 5 allowlisted nodes differ), resolve-unique, deploy verdict `verified`, bounce sequence (deactivate/PUT/reactivate), independent fresh-GET read-back, `verify_live_write_safety.py` disarmed PASS, 0 executions consumed |
+| `operator-claude-plugin/scripts/write_grant.py` | Corrected Anthropic-spend sentence | ✓ VERIFIED | Read directly, confirmed |
+| `operator-claude-plugin/tests/test_write_grant.py` | Rescoped pinning test | ✓ VERIFIED | Read directly, confirmed line-scoped assertion |
 
-### Key Link Verification
-
-| From | To | Via | Status | Details |
-|---|---|---|---|---|
-| `write_grant.authorize_ungranted_send` | armed window opened before dispatch | direct call inspection | ✓ WIRED | Function present, docstring cites F2 fix date and mechanism |
-| `measure_dispatch.py` | `executions_client.list_executions`/`get_execution` | grep | ✓ WIRED | Only these two calls present; no arming import |
-| `reviewDecision.js` contacts approve | `reviewApply(candidate, row, DEFAULT_CONTACT_POLICY)` | source read | ✓ WIRED | Confirmed at `reviewDecision.js` policy-selection block |
-| `reviewDecision.js` contacts approve | `lv_contact_enrichment_provenance` (not `lv_enrichment_provenance`) | source read | ✓ WIRED | `provenanceProp = isContact ? P_CONTACT_PROVENANCE : P_PROVENANCE` |
-| the deployed instance | operator-facing `review-triage/SKILL.md` | text match | ✓ WIRED | Step 5 bullet rewritten to match the deployed branch's exact return message; step 6 consent ceremony untouched (grep-confirmed) |
-| review queue read | one contact id | live | ✓ WIRED | `347569451461` read via `review_queue.fetch_queue`, matches `54-LIVE-PROOF.md`'s BEFORE section |
-| the submit | independent HubSpot read afterward | live | ✓ WIRED | `verify_decision()` re-derivation + separate `review_queue.fetch_queue` read (execution `12001`) |
-
-### Behavioral Spot-Checks
+### Behavioral Spot-Checks (re-run this pass, not trusted from SUMMARY.md)
 
 | Behavior | Command | Result | Status |
 |---|---|---|---|
+| Python test suite | `.venv/bin/python -m pytest -q` | 3223 passed, 154 skipped, 0 fail (was 3220 passed in the first pass — 3 new tests from 54-06/54-07) | ✓ PASS |
 | Node test suite (776 tests) | `node --test tests/n8n/*.test.mjs` | 776 pass, 0 fail | ✓ PASS |
-| Python test suite (3220 tests) | `.venv/bin/python -m pytest -q` | 3220 passed, 154 skipped, 0 fail | ✓ PASS |
-| `write_grant.envelope()` Anthropic basis relabelled | `grep -n "anthropic_usd\": PROJECTED" write_grant.py` | present | ✓ PASS |
-| Contacts approve engine wired live | source read of `reviewDecision.js` contacts branch | matches claimed behavior | ✓ PASS |
+| Built JSON matches builder output | `python scripts/build_cloud_workflows.py` then `git status --short n8n/` | wrote 8 files, zero diff | ✓ PASS |
+| Debt markers on gap-closure-modified files | `grep -n "TBD\|FIXME\|XXX"` across all 7 files touched by 54-06/54-07 | no hits | ✓ PASS |
+| Queue-CSV membership byte-identical to pre-split constant | `git show 98afc5a~1:scripts/build_cloud_workflows.py` diffed against new `REVIEW_CONTACT_QUEUE_PROPERTIES_CSV` tuple | identical tuple | ✓ PASS |
 
 ### Requirements Coverage
 
 | Requirement | Source | Description | Status | Evidence |
 |---|---|---|---|---|
-| G-3 | `.planning/milestones/v1.1-REQUIREMENTS.md` (narrative UAT gap, not a milestone-file checkbox) | Arming re-runs the waterfall; two full provider passes per record, one thrown away | ✓ SATISFIED | Mechanism closed by `authorize_ungranted_send` (F2, 2026-08-25), live-verified 2026-08-26; measured saving documented in `54-MEASUREMENT.md` with an honestly-disclosed `differs` verdict; the two legitimate remaining two-pass shapes are named and distinguished from the defect; SJ-3's separate, architecturally-similar residual is deliberately out of scope (OP-54-02, D-1.1-01) and recorded, not silently dropped |
+| G-3 | `.planning/milestones/v1.1-REQUIREMENTS.md` (narrative UAT gap) | Arming re-runs the waterfall; two full provider passes per record, one thrown away | ✓ SATISFIED | Mechanism closed (F2, live-verified 2026-08-26); measured saving documented with honest `differs` disclosure; the two legitimate remaining two-pass shapes distinguished from the defect; SJ-3's residual recorded on the ledger; five follow-on code-quality/documentation findings from the phase's own code review (WR-01..04, IN-02) all closed and re-verified against source this pass |
 
-No orphaned requirements found for this phase — G-3 is the only requirement id declared across all five plans' frontmatter, and it maps to the single narrative item in the v1.1 milestone requirements file that names Phase 54's scope.
+No orphaned requirements. G-3 remains the only requirement id declared across all seven plans' frontmatter (54-01 through 54-07).
 
-### Anti-Patterns Found
+### Anti-Patterns Found (updated this pass)
 
-| File | Line | Pattern | Severity | Impact |
+| File | Line | Pattern | Severity | Status |
 |---|---|---|---|---|
-| `scripts/build_cloud_workflows.py` | 7215-7220 (inside deployed `Build Review Decision` jsCode literal) | Stale comment states "A contacts APPROVE resolves to `no_candidate` and writes nothing" — now false since 54-03 | ⚠️ Warning | Misleads any future editor reading the deployed Code node's own header comment; does not affect runtime behavior (comment only) |
-| `scripts/build_cloud_workflows.py` | 7049-7055 | Same stale premise, governing why `REVIEW_CONTACT_PROPERTIES_CSV` omits contacts field-policy keys | ⚠️ Warning | Same as above — reasoning text out of date |
-| `scripts/build_cloud_workflows.py` | 7060-7062 | `REVIEW_CONTACT_PROPERTIES_CSV` fetches only 5 of `DEFAULT_CONTACT_POLICY`'s 12 keys — compare-and-set baseline gap named by 54-03, handed to 54-04, never landed | ⚠️ Warning | Dormant today (no live contacts candidate producer); would silently bypass non-clobber protection for 10 of 12 fields the moment a producer exists |
-| `n8n/code/reviewApply.js` / `hubspotEnums.generated.js` | 36-44, 76-80 | Enum guard is a silent no-op for every `DEFAULT_CONTACT_POLICY` field (no `CONTACT_ENUM_PROPERTIES` table exists) | ⚠️ Warning | Dormant today for the same reason as above; header comments claim symmetric guard coverage across both policies, which is not accurate |
-| `operator-claude-plugin/scripts/write_grant.py` | 304-306 | Rendered text says "worst case" and "a floor" for the same number in the same sentence — self-contradictory | ℹ️ Info | Wording defect only, both framings point at the identical figure; introduced by this phase's own relabelling commit |
-| `operator-claude-plugin/scripts/measure_dispatch.py` | 8 | Docstring claims a `get_execution` call the module never makes | ℹ️ Info | Documentation-only; behavior is correct (GET-only, no arming) |
-| `operator-claude-plugin/skills/review-triage/SKILL.md` | 122 | "A contacts approve does **not** land here anymore" overclaims permanence — true only because no producer exists today | ℹ️ Info | `no_candidate` remains reachable in code for a contact whose candidate fails to parse; wording implies a structural guarantee that isn't one |
+| `scripts/build_cloud_workflows.py` (4 regions) | 7049-7055, 7215-7220 (deployed jsCode), Sticky Note 1, `Review Queue Contact Search` header | Stale pre-54-03 contacts-approve comments | ⚠️ Warning | ✅ CLOSED (54-06, commit `4f0f25f`) — re-verified against source this pass |
+| `scripts/build_cloud_workflows.py` | 7060-7062 (old) | `REVIEW_CONTACT_PROPERTIES_CSV` fetched only 5 of 12 contacts policy keys | ⚠️ Warning | ✅ CLOSED (54-06, commit `98afc5a`) — re-verified against source this pass |
+| `n8n/code/reviewApply.js` / `hubspotEnums.generated.js` | 36-44, 76-80 (old) | Enum guard header claimed symmetric coverage across both policies | ⚠️ Warning | ✅ CLOSED (54-06, commit `4f0f25f`) — re-verified against source this pass |
+| `operator-claude-plugin/scripts/write_grant.py` | 304-306 | "worst case"/"a floor" self-contradiction | ℹ️ Info | ✅ CLOSED (54-07, commit `5cafcf0`) — re-verified against source this pass |
+| `operator-claude-plugin/scripts/measure_dispatch.py` | 8-9 | Docstring claims a `get_execution` call the module never makes (module calls only `list_executions`) | ℹ️ Info | **STILL PRESENT** — file untouched by either gap plan (not in scope of WR-01..04/IN-02); re-confirmed present this pass. Documentation-only, no behavior impact — carried forward as a disclosed, non-blocking residual, not a phase gap |
+| `operator-claude-plugin/skills/review-triage/SKILL.md` | 122 | "does not land here anymore" overclaimed permanence (IN-02) | ℹ️ Info | ✅ CLOSED (54-06, commit `4f0f25f`) — re-verified against source this pass |
 
-No TBD/FIXME/XXX debt markers found in phase-modified files (`grep -rn "TBD\|FIXME\|XXX"` across `n8n/code/reviewApply.js`, `n8n/code/reviewDecision.js`, `operator-claude-plugin/scripts/measure_dispatch.py`, `operator-claude-plugin/scripts/write_grant.py`, `operator-claude-plugin/scripts/report_enrichment.py` returns no hits).
+No TBD/FIXME/XXX debt markers found in any file touched by the gap-closure plans (re-confirmed this pass).
 
 ### Human Verification Required
 
-### 1. Whether WR-01/WR-02/WR-03 block phase closure or are an accepted residual
-
-**Test:** Review `54-REVIEW.md`'s four Warnings (particularly WR-01/WR-02/WR-03, all traceable
-to the same root cause: 54-03's plan text explicitly named the `build_cloud_workflows.py`
-comment/CSV fix as 54-04's job, and 54-04's rebuild — confined by its own plan to the two
-inlined Code-node bodies — never touched it).
-**Expected:** An explicit decision: accept as a disclosed, dormant residual (consistent with
-the phase's own `engine-only` scope decision at 54-03's checkpoint, and with the fact that no
-live contacts candidate producer exists to exercise the gap), or open a follow-up plan/window
-entry before any future phase builds a contacts candidate producer.
-**Why human:** These are documentation-accuracy and dormant-code-path gaps, not functional
-defects in what shipped and was live-proved. Whether "dormant + disclosed" clears this phase's
-own bar is a scope judgment the phase's own `must_haves` don't explicitly answer — they require
-"the same compare-and-set engine" (true) and don't explicitly require the fetch baseline or
-enum guard to already be complete for a producer that doesn't exist yet.
-
-### 2. WR-04's self-contradictory operator-facing wording
-
-**Test:** Read `write_grant.py:304-306`'s rendered Anthropic-spend sentence ("worst case" next
-to "a floor" for the same number).
-**Expected:** A decision on which framing is correct given how `config/cost_rates.json`'s rate
-was derived, and whether a follow-up edit is needed before an operator next reads a grant
-envelope.
-**Why human:** No functional consequence (the number itself is correct and consistently
-computed) — purely a wording clarity call.
+None. Both items from the first pass are resolved: the operator decision (recorded in
+`operator_decision` above) already resolved item 1 (open a gap-closure plan for all four
+findings, later five). Item 2 (WR-04's wording) is now mechanically resolved — the
+contradiction is gone from source and confirmed by a re-scoped, source-read test, so no
+open judgment call remains.
 
 ### Gaps Summary
 
-No blocking gaps. All must-haves across all five plans are verified against the actual
-codebase: the G-3 mechanism is closed and live-verified (not just claimed), the saving is
-genuinely measured against real execution ids with an honestly-disclosed disagreement against
-the projection formula, the contacts approve-writes path is live-proved on the clear branch
-with the promote branch correctly and consistently described as test-proven only, the SJ-3
-residual is on the ledger rather than silently dropped or fixed, and both regression suites
-(3220 pytest, 776 node) are fully green as claimed.
+No gaps remain. All five findings from `54-REVIEW.md` (WR-01, WR-02, WR-03, WR-04) plus
+the operator-folded IN-02 are closed **in source**, not merely claimed in SUMMARY.md: this
+pass read every modified region directly, diffed the queue-CSV's pre/post membership via
+git history to confirm it was not widened, re-ran the builder to confirm the committed
+n8n workflow JSON is exact builder output (zero diff), re-ran both regression suites
+(3223 pytest passed / 776 node passed) rather than trusting reported counts, and confirmed
+the strengthened WR-04 test is scoped narrowly enough to avoid false-passing or
+false-failing on the legitimate provider-credits ceiling wording nearby.
 
-The phase's own code review (`54-REVIEW.md`) found four Warnings and two Info items, all
-concrete, all traceable to a single root cause (a follow-up handed from 54-03 to 54-04 that
-54-04's narrower rebuild scope never reached) and one independent wording self-contradiction.
-None of these findings contradict a must-have claim — every artifact that discusses the
-promote branch, the compare-and-set baseline, or the enum guard describes its actual, current,
-dormant state accurately rather than overclaiming completeness. They are routed to human
-verification because closing them is a scope decision (does a dormant, disclosed gap need a
-follow-up plan now, or does it wait for the producer that would activate it) rather than a
-fact this verifier can resolve by reading code.
+One Info-level residual remains disclosed but unfixed: `measure_dispatch.py`'s docstring
+overclaims a `get_execution` call the module doesn't make. It was never in scope for either
+gap plan (not named in `54-REVIEW.md`'s four Warnings, not folded in by the IN-02 operator
+decision), has zero behavioral impact, and does not block phase closure.
+
+The original 9/9 observable truths from the first pass were re-confirmed to still hold with
+no regression: the promote branch remains disclosed as test-proven only (never live-proven,
+independently restated by 54-06-SUMMARY.md's own "Dormancy status" section for the widened
+baseline it shipped), and the live write on contact `347569451461` still exercised only the
+clear-and-stamp branch (`54-LIVE-PROOF.md` untouched by either gap plan).
+
+**Phase 54 is ready to be sealed complete.**
 
 ---
 
-_Verified: 2026-08-27_
+_Verified: 2026-08-27 (re-verification, second pass)_
 _Verifier: Claude (gsd-verifier)_
