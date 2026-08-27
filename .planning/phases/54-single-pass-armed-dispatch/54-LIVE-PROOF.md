@@ -140,5 +140,91 @@ executions the bug produced before the fix; that is disclosed here rather than
 smoothed over, and Task 3's final accounting will state the total including Task 2's
 real submit.
 
-<!-- Task 2 (operator checkpoint) and Task 3 (AFTER read, disarm verdict, limits section)
-     append below once the operator has authorized and submitted the real write. -->
+## Task 2 — operator authorization received; submit blocked by an environmental gate
+
+**Operator authorization, 2026-08-27**, given at this plan's checkpoint: approve, custom
+reviewer, contact `347569451461` (this one record only, VOCAB-05), the six-key
+clear-and-stamp patch above with exactly one substitution — `lv_enrichment_reviewed_by`
+set to `operator (robert li)` (passed through verbatim, not reformatted) in place of the
+preview's default `operator (unnamed)`.
+
+**Re-confirmed before submitting.** A second `preview_decision` call against the same
+record, in this continuation session, returned the identical outcome as Task 1's: `applied`,
+the same clear branch (`lv_enrichment_review_candidate_json` still empty — still no held
+candidate), the same six property keys. The record had not changed between Task 1 and this
+session. The patch submitted below is the patch the operator saw and approved.
+
+**The submit itself was refused before any request was built.** Called as
+`review_decision.submit_decision(config, "contacts", "347569451461", "approve", <reason>,
+"operator (robert li)", review_armed=True, preview=preview)`. Result:
+
+```json
+{
+  "available": false,
+  "reason": "submit_not_enabled",
+  "outcome": null,
+  "would_write": { /* the same six keys, unchanged */ }
+}
+```
+
+Relayed verbatim, in full, per this module's own `_ENV_REFUSAL` text:
+
+> Review writeback is switched off on this machine: the ALLOW_REVIEW_SUBMIT environment
+> variable is not set to exactly `true`. Nothing was sent and no request was even built.
+> Your administrator sets that variable — this plugin cannot set it and neither can this
+> conversation. Two things still work without it: previewing the exact write, and
+> rejecting a record, which records your reason and leaves the record in the queue.
+
+Independently confirmed before calling `submit_decision`: `python3 review_decision.py`
+(this module's own diagnostic, which sends nothing) reported `submit_enabled: false`, and
+`ALLOW_REVIEW_SUBMIT` is absent from this session's process environment and from every
+shell profile checked (`~/.zshrc`, `~/.bashrc`, `~/.zprofile`, `~/.bash_profile`,
+`~/.profile`). This env var is a plugin-side kill switch that only an administrator can set
+on the machine the plugin runs on (`review_decision.py`'s own docstring, gate 1) — it is
+**not** the same variable as the backend's `ALLOW_HUBSPOT_REVIEW_WRITES` allowlist that
+Task 1's redeploy verified disarmed, and setting one has never done the work of the other.
+Per this plan's own instructions, no attempt was made to set it, work around it, or read
+`.env` to find it.
+
+**Nothing was armed and nothing needs disarming.** `submit_enabled()` is checked before any
+transport is constructed (by design — `review_decision.py` docstring, property (b)), so the
+`available: false` / `submit_not_enabled` response above proves no HTTP request reached
+n8n: the record is still flagged, `lv_enrichment_review_candidate_json` is still empty, and
+none of the backend's write-safety flags or allowlists were touched by anything in this
+session — they stand exactly as Task 1's independent redeploy verification last confirmed
+them (`VERDICT: disarmed PASS`, all 5 workflows). No further live read-back was taken to
+re-prove this: the refusal firing before any transport call is itself the evidence, and
+spending an n8n execution to confirm a no-op would exceed this plan's already-strained
+budget for no new information.
+
+## Execution budget, updated through this session
+
+| Execution | What | Provider credits | Anthropic calls |
+|---|---|---|---|
+| `11992` | broken pre-fix preview attempt (error) | 0 | 0 |
+| `11993` | broken pre-fix preview attempt (error) | 0 | 0 |
+| `11994` | fixed preview (success, Task 1) | 0 | 0 |
+| (unread id) | re-confirm preview, this session, 02:57:39Z | 0 | 0 |
+| (unread id) | preview inside the blocked submit call, 02:59:39Z | 0 | 0 |
+
+Execution ids for the last two rows were not captured — this session has no n8n API
+credentials configured (`N8N_URL`/`N8N_API_KEY` unset), so `verify_live_write_safety.py`
+and any execution-id lookup are unavailable here; they are read-only preview calls (each a
+`dry_run: true` POST to the same workflow), not writes. **Running total: 5 executions
+consumed by this plan, all previews or pre-fix errors — 0 writes, 0 provider credits, 0
+Anthropic calls.** The submit that would have produced the real write consumed 0
+executions because it never reached the transport layer.
+
+## Outcome: blocked, not refused by policy
+
+This is an environmental gate, not a decision by the operator, the backend's write-safety
+allowlist, or this plan's own scope rules. The operator's one-record authorization stands
+and is unexercised. A continuation agent, once an administrator sets
+`ALLOW_REVIEW_SUBMIT=true` in this plugin's runtime environment, should re-confirm the
+preview once more (the record may have changed in the interim) and submit under the same
+authorization before completing Task 3's AFTER read, disarm re-verification, and final
+execution count.
+
+**Task 3 (the AFTER read, disarm verdict, and limits section) has not been executed.**
+There is no real write yet to read back. Writing that section now would describe a write
+that did not happen. This file stops here until the write lands.
