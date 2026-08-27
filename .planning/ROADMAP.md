@@ -86,10 +86,12 @@ variable), and a design that runs the provider waterfall twice per written recor
         by `ALLOW_REVIEW_SUBMIT` (`submit_not_enabled`), then by the backend allowlist — costing two
         human round trips and an arm-deploy for one six-property clear-and-stamp on one contact
         (`54-LIVE-PROOF.md`).
+
       - **Standing grant answers the per-send ask.** Phase 53 already shipped the bounded, expiring,
         revocable session grant; VOCAB-05's per-send consent still fires on top of it. An in-scope,
         unexpired grant answers the ask — asked once per grant, not once per send. Still asks when a
         send exceeds the grant's scope, cap or expiry.
+
       - **Define grant lifetime vs run lifetime — before Phase 55 needs it.** `revoke_grant` today
         refuses only the *next* send: `dispatch_plan` never consults a grant mid-loop, so a running
         dispatch finishes every remaining chunk under the arm it opened with (tested by
@@ -123,16 +125,17 @@ passes → 1, ~$0.07 → ~$0.035 Anthropic, 2 executions → 1). Full detail:
 **Also carries** (deferred here 2026-08-26): the contact review-flag lane — contacts get
 flagged `lv_enrichment_needs_review` but no lane clears a contact flag.
 
-**Plans**: 7 plans (5 executed, 2 gap-closure pending)
+**Plans**: 6/7 plans executed
 
 - [x] 54-01-PLAN.md
 - [x] 54-02-PLAN.md
 - [x] 54-03-PLAN.md
 - [x] 54-04-PLAN.md
 - [x] 54-05-PLAN.md
-- [ ] 54-06-PLAN.md — gap closure WR-01/02/03: contacts review lane truth-up (widen the decision
+- [x] 54-06-PLAN.md — gap closure WR-01/02/03: contacts review lane truth-up (widen the decision
       fetch to the whole contacts policy, correct three stale comments, scope the enum-guard claim),
       rebuild, deploy disarmed
+
 - [ ] 54-07-PLAN.md — gap closure WR-04: one bound, not two, in the Anthropic-spend sentence, and a
       test that checks the meaning
 
