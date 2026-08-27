@@ -6,7 +6,7 @@
 import json
 import os
 from anthropic import Anthropic
-from .classifier_haiku import _parse_json
+from .classifier_haiku import _parse_json, _response_text
 
 SYSTEM_PROMPT = """
 You are a senior CRM data validation and ICP reasoning analyst.
@@ -69,4 +69,4 @@ def validate_conflict_with_sonnet(record, field, current_value, candidates, haik
     )
 
     # SPEC-defect fix (§12.6): SDK returns content as a list of blocks, not `.text`.
-    return _parse_json(msg.content[0].text)
+    return _parse_json(_response_text(msg))

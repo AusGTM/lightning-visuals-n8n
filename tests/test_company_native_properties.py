@@ -11,9 +11,16 @@ import os
 
 import pytest
 import requests
-from dotenv import load_dotenv
+from dotenv import dotenv_values
 
-load_dotenv()
+# `dotenv_values()`, NOT `load_dotenv()`. This module is imported at COLLECTION time, so a
+# module-level `load_dotenv()` pushed every `.env` key -- ANTHROPIC_API_KEY included -- into
+# os.environ for the WHOLE pytest session. Tests that branch on `if not api_key` then took
+# their LIVE branch: tests/test_merge_policy.py, whose own header says "Fully OFFLINE and
+# DETERMINISTIC -- no Anthropic call, no network, no API key", was making real billable
+# Anthropic calls on every full-suite run. `dotenv_values()` returns a dict and mutates
+# nothing; real env still wins over the file for this module's own lookups.
+_ENV = {**dotenv_values(), **os.environ}
 
 BASE_URL = "https://api.hubapi.com"
 
@@ -28,7 +35,7 @@ EXPECTED_TYPES = {
 
 
 def _hs_headers():
-    token = os.getenv("HUBSPOT_PRIVATE_APP_TOKEN")
+    token = _ENV.get("HUBSPOT_PRIVATE_APP_TOKEN")
     if not token:
         pytest.skip("HUBSPOT_PRIVATE_APP_TOKEN not set -- cannot reach the live portal")
     return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}

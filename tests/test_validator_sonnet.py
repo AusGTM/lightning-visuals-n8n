@@ -21,6 +21,10 @@ class _FakeMessages:
         self._captured.update(kwargs)
 
         class _Block:
+            # Every real SDK content block carries a `type`; the module filters on it
+            # so a leading ThinkingBlock cannot be mistaken for the text. A stub without
+            # `type` is unfaithful to the SDK, not a looser contract.
+            type = "text"
             text = json.dumps({
                 "decision": "promote",
                 "chosen_provider": "claude_web",

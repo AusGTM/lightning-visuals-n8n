@@ -9,6 +9,18 @@ import re
 from anthropic import Anthropic
 
 
+def _response_text(msg):
+    # `msg.content` is a LIST OF BLOCKS, and the first one is not necessarily the
+    # text. A model with extended thinking on returns a ThinkingBlock first, which
+    # has no `.text` -- indexing [0] blindly raises AttributeError against every
+    # current model. Join the text blocks and ignore the rest. Same idiom as
+    # `web_research.py` and CLAUDE.md §12.3. Shared here because `validator_sonnet`
+    # already imports from this module and had the identical defect.
+    return "".join(
+        b.text for b in msg.content if getattr(b, "type", None) == "text"
+    )
+
+
 def _parse_json(text):
     # Models occasionally wrap JSON in prose or ```json fences; extract the object.
     try:
@@ -80,4 +92,4 @@ def classify_field_with_haiku(record, field, current_value, candidates, policy):
     )
 
     # SPEC-defect fix (§12.5): SDK returns content as a list of blocks, not `.text`.
-    return _parse_json(msg.content[0].text)
+    return _parse_json(_response_text(msg))
