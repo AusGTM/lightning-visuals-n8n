@@ -1,8 +1,60 @@
 ---
 phase: 54-single-pass-armed-dispatch
 verified: 2026-08-27T05:30:00Z
-status: human_needed
-score: 6/6 must-haves verified (2 items routed to human verification, not failures)
+status: gaps_found
+score: 6/6 must-haves verified; 4 code-quality gaps routed to gap closure by operator decision
+operator_decision:
+  date: 2026-08-27
+  decided_by: operator (robert li)
+  decision: >
+    Both human-verification items answered: open a follow-up gap-closure plan covering ALL
+    FOUR review findings (WR-01, WR-02, WR-03, WR-04) before Phase 54 is marked complete.
+    The operator declined both the "accept as disclosed residual" and the "fix the cheap two
+    only" options. Status flipped human_needed -> gaps_found to route these to
+    /gsd-plan-phase 54 --gaps. The phase GOAL remains 6/6 verified — these gaps are
+    code-quality and documentation-accuracy defects in dormant paths, not goal failures.
+gaps:
+  - id: WR-01
+    severity: warning
+    file: scripts/build_cloud_workflows.py
+    lines: "7049-7055, 7215-7220"
+    summary: >
+      Comments still describe pre-54-03 contacts-approve behaviour ("no_candidate", "writes
+      nothing") that 54-03/54-04 made false. One sits INSIDE the deployed node's own jsCode
+      string, so the wrong description ships to the running workflow.
+    handoff_history: named in 54-03-SUMMARY.md as 54-04's job; 54-04's rebuild never touched it.
+  - id: WR-02
+    severity: warning
+    file: scripts/build_cloud_workflows.py
+    lines: "7060-7062"
+    summary: >
+      REVIEW_CONTACT_PROPERTIES_CSV does not fetch 10 of DEFAULT_CONTACT_POLICY's 12 field
+      keys, so reviewApply's compare-and-set baseline cannot see most contacts fields live.
+      A real non-clobber bypass once a contacts candidate producer exists.
+    handoff_history: flagged in 54-03-SUMMARY.md and handed to 54-04, which never landed it.
+  - id: WR-03
+    severity: warning
+    file: n8n/code/reviewApply.js, n8n/code/hubspotEnums.generated.js
+    summary: >
+      The enum guard Phase 54's header comments describe as symmetric across both policies is
+      a no-op for every contacts field — COMPANY_ENUM_PROPERTIES contains only company
+      properties.
+  - id: WR-04
+    severity: warning
+    file: operator-claude-plugin/scripts/write_grant.py
+    lines: "304-306"
+    summary: >
+      The Anthropic-spend sentence calls the same number both "worst case" and "a floor" — a
+      ceiling and a lower bound cannot both be true. The pinning test asserts only the
+      substring "floor", so it does not catch the contradiction either; fix the test's pin
+      alongside the wording.
+gaps_dormancy_note: >
+  All four are DORMANT as of 2026-08-27: no live contacts candidate producer exists (operator
+  chose engine-only), so WR-01/02/03 are unreachable in production today, and WR-04 has no
+  functional consequence. None affects the clear-and-stamp branch that was live-proven on
+  contact 347569451461. They are being fixed now by operator choice, not because anything is
+  currently broken.
+prior_status: human_needed
 behavior_unverified: 0
 overrides_applied: 0
 requirements_location_note: >
@@ -26,8 +78,17 @@ human_verification:
 **Phase Goal:** A record is enriched once: no derive-then-rearm-then-derive-again, and the
 measured saving proven live before it is claimed.
 **Verified:** 2026-08-27
-**Status:** human_needed
+**Status:** gaps_found (was `human_needed`; flipped by operator decision 2026-08-27 — see
+`operator_decision` in frontmatter)
 **Re-verification:** No — initial verification
+
+> **Operator decision, 2026-08-27.** Both human-verification items below were answered:
+> open a follow-up gap-closure plan covering **all four** review findings (WR-01, WR-02,
+> WR-03, WR-04) before Phase 54 is marked complete. The alternatives offered — accept them
+> as disclosed residuals carried to the future producer phase, or fix only the two cheap
+> ones — were both declined. The phase **goal** is unaffected and remains 6/6 verified;
+> these are code-quality and documentation-accuracy defects in dormant code paths, and all
+> four are structured as gaps in the frontmatter for `/gsd-plan-phase 54 --gaps`.
 
 ## Goal Achievement
 

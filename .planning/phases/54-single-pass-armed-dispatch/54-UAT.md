@@ -1,21 +1,23 @@
 ---
-status: testing
+status: complete
 phase: 54-single-pass-armed-dispatch
 source: [54-VERIFICATION.md]
 started: 2026-08-27
 updated: 2026-08-27
+resolution: >-
+  Both items answered by the operator on 2026-08-27: open a follow-up gap-closure plan
+  covering all four findings (WR-01, WR-02, WR-03, WR-04). 54-VERIFICATION.md flipped
+  human_needed -> gaps_found and the four are structured there as gaps.
 ---
 
 ## Current Test
 
-number: 1
-name: Decide whether the dormant contacts-lane residuals (WR-01/WR-02/WR-03) are accepted or need a follow-up plan
+number: —
+name: none — both items decided
 expected: |
-  An operator decision, not a functional test. All nine observable must-haves already
-  verified against the codebase. These three findings are DORMANT today because the
-  operator chose `engine-only` (2026-08-27) and no live contacts candidate producer
-  exists. Each becomes real the day a producer lands.
-awaiting: user response
+  Closed. The operator answered both decisions on 2026-08-27 by choosing gap closure for
+  all four findings rather than accepting them as residuals or fixing only the cheap two.
+awaiting: nothing
 
 ## Tests
 
@@ -56,9 +58,14 @@ result: [pending]
 
 total: 2
 passed: 0
-issues: 0
-pending: 2
+issues: 2
+pending: 0
 skipped: 0
 blocked: 0
 
 ## Gaps
+
+Both items resolved to gap closure by operator decision, 2026-08-27. The four findings
+(WR-01, WR-02, WR-03, WR-04) are structured as `gaps` in `54-VERIFICATION.md`'s frontmatter
+and routed to `/gsd-plan-phase 54 --gaps`. None is live-reachable today; they are being fixed
+by choice, not because anything is currently broken.
