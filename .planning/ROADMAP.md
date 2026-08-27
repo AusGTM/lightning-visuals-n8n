@@ -10,7 +10,7 @@
 - ✅ **v0.8 Execution Budget Safety** — Phases 44–45 (shipped 2026-08-11)
 - ✅ **v0.9 ICP Rubric Calibration & Veto Remediation** — Phases 46–50, archived (`milestones/v0.9-ROADMAP.md`, `milestones/v0.9-REQUIREMENTS.md`) (shipped 2026-08-19)
 - ⏸️ **v1.0 Direct Backfill & Scoring Coverage** — Phases 51–52 (Phase 51 complete; **Phase 52 deferred by the operator 2026-08-25** in favour of v1.1)
-- 🚧 **v1.1 Unattended Session Runs** — Phases 53–57 (`milestones/v1.1-ROADMAP.md`, `milestones/v1.1-REQUIREMENTS.md`)
+- 🚧 **v1.1 Unattended Session Runs** — Phases 53–59 (`milestones/v1.1-ROADMAP.md`, `milestones/v1.1-REQUIREMENTS.md`)
 
 ## Phases
 
@@ -34,8 +34,10 @@ numbers on its own. Decisions in `.planning/MILESTONE-CONTEXT.md`; requirements 
       companies are untouched. **On resume:** re-derive Phase 51's population and credit sizing
       before planning — the dry-run artifacts were finalized 2026-08-19 and drift with every
       enrichment run — and resolve the deferred FILL-04 third-disposition question.
+      **Gated on Phases 59 and 55** (operator ruling 2026-08-27): the ~646-company run goes
+      through the cheap, low-ceremony write path, not the current one. Do not resume 52 first.
 
-### 🚧 v1.1 Unattended Session Runs (Phases 53–57)
+### 🚧 v1.1 Unattended Session Runs (Phases 53–59)
 
 One operator grant at session start carries a batch through ingest → enrichment → HubSpot write,
 unattended. Driven by a client UAT on 2026-08-25 that found three arming surfaces for one write,
@@ -52,7 +54,12 @@ variable), and a design that runs the provider waterfall twice per written recor
       derive-then-rearm-then-derive-again, and the measured saving proven live before it is claimed
 
 - [ ] **Phase 55: Async run — submit, poll, resume** - A batch stops being bounded by n8n Cloud's
-      ~100s response window; run state survives a restart or fails loudly
+      ~100s response window; run state survives a restart or fails loudly — **pulled ahead of
+      Phase 52** (operator ruling 2026-08-27) so the backfill is not run at `max_records_per_chunk:
+      2`. Owns the response-window ceiling and the chunk cap; Phase 59 deliberately does not touch
+      them. **Sequenced after 59**, which settles what a grant authorizes before async runs start
+      outliving one. Still spike-first: n8n Cloud's execution model, not our code, decides what is
+      possible here — if the spike fails, Phase 52 runs at chunk=2 and that is an accepted outcome.
 
 - [ ] **Phase 56: The unattended pair pipeline** - One grant carries ingest → enrich → create →
       associate, creates included, held rows queued rather than guessed
@@ -64,6 +71,38 @@ variable), and a design that runs the provider waterfall twice per written recor
       (screenshot, paste, URL, bare name) resolves to a company the backend can act on; missing
       domains researched then confirmed before write; refusal is the last resort — promoted
       ahead of 54–57 by operator decision 2026-08-25
+
+- [ ] **Phase 59: Frictionless write path** - One lock on the write door instead of three, and a
+      session grant that answers the per-send ask instead of sitting underneath it. Operator ruling
+      2026-08-27: *frictionless and efficient > strict, writeproof and secure* — gates the operator
+      never asked for come out. **Runs before Phase 55, and both before Phase 52.**
+
+      - **Collapse the review-write kill switches.** Remove `ALLOW_REVIEW_SUBMIT`
+        (`operator-claude-plugin/scripts/review_decision.py`) outright; `ALLOW_HUBSPOT_REVIEW_WRITES`
+        plus the record allowlist survives as the single authority, because it is the one an
+        operator cannot flip by editing a local file. Remove the now-dead `env.ALLOW_REVIEW_SUBMIT`
+        from `.claude/settings.local.json` rather than leaving it behind. **Evidence:** on
+        2026-08-27 a write the operator had already explicitly authorized was stopped twice — first
+        by `ALLOW_REVIEW_SUBMIT` (`submit_not_enabled`), then by the backend allowlist — costing two
+        human round trips and an arm-deploy for one six-property clear-and-stamp on one contact
+        (`54-LIVE-PROOF.md`).
+      - **Standing grant answers the per-send ask.** Phase 53 already shipped the bounded, expiring,
+        revocable session grant; VOCAB-05's per-send consent still fires on top of it. An in-scope,
+        unexpired grant answers the ask — asked once per grant, not once per send. Still asks when a
+        send exceeds the grant's scope, cap or expiry.
+      - **Define grant lifetime vs run lifetime — before Phase 55 needs it.** `revoke_grant` today
+        refuses only the *next* send: `dispatch_plan` never consults a grant mid-loop, so a running
+        dispatch finishes every remaining chunk under the arm it opened with (tested by
+        `test_a_revocation_midway_does_not_stop_a_running_dispatch`). Bounded today; once 55 makes
+        runs outlive their request, a grant can expire mid-run with no defined answer. Decide it
+        here: either the run inherits the grant it started under, or `dispatch_plan` becomes
+        grant-aware.
+
+      **Deliberately untouched** (operator-confirmed load-bearing, 2026-08-27): the n8n
+      write-safety gate nodes (HubSpot has no rollback; a bad merge hits ~700 live records), the
+      material-conflict judge gate (caught a real false veto — execution `11983`, Series Futsal),
+      and the non-clobber merge policy. Out of scope: the response-window ceiling and
+      `max_records_per_chunk`, both owned by Phase 55.
 
 ## Phase Details
 
@@ -266,6 +305,7 @@ silently inherit Phase 51's placeholder behavior without a decision.
 | 52. Staged Canary Execution & Safety Verification | v1.0 | 0/TBD | Deferred (operator, 2026-08-25) | - |
 | 53. Operator-openable Write Grant | v1.1 | 4/4 | Complete (verified) | 2026-08-26 |
 | 58. Take What the Operator Actually Has | v1.1 | 6/6 | Complete (verified) | 2026-08-26 |
+| 59. Frictionless Write Path | v1.1 | 0/TBD | Planned (operator, 2026-08-27) | - |
 
 ## Ledger gaps (known)
 
