@@ -7042,22 +7042,40 @@ REVIEW_DECISION_PROPERTIES_CSV = ",".join(dict.fromkeys(
     ("hs_object_id", "name", "domain") + _REVIEW_FAMILY + ("lv_enrichment_provenance",)
     + _COMPANY_POLICY_FIELDS))
 
-# The contacts lane's set: identity the queue renders, the same review family, and the
-# CONTACTS provenance blob — `lv_contact_enrichment_provenance`, a different property from
-# the companies one (30 D-08a).
-#
-# Deliberately NOT carrying config/field_policy.yaml's `contacts` keys the way the company
-# set carries its own: those exist on the company lane as reviewApply's compare-and-set
-# BASELINE, and no contacts apply engine exists to compare against (see
-# n8n/code/reviewDecision.js's header — a contacts approve resolves to `no_candidate`).
-# Fetching a baseline nothing reads would be ceremony. A future contacts apply engine must
-# widen this set in the same derived-from-YAML form the company set uses, or every such
-# decision silently reads as stale.
+# The contacts policy fields, derived from config/field_policy.yaml the same way
+# _COMPANY_POLICY_FIELDS is (line 7024) — never re-typed by hand. Since 2026-08-27 (Phase
+# 54 Plan 03/06, WR-02) a contacts approve calls the SAME reviewApply engine as companies,
+# keyed on DEFAULT_CONTACT_POLICY, so this is now a real compare-and-set BASELINE: every
+# key here is a field reviewApply can promote, and any key left out comes back
+# `refetchedProperties[field] === undefined` — which reviewApply normalizes to `null` and
+# compares against a stored `current_value` that may also be `null`, silently treating a
+# manually-edited field as unchanged (the exact non-clobber bypass WR-02 named).
+_CONTACT_POLICY_FIELDS = tuple(sorted(
+    yaml.safe_load((ROOT / "config" / "field_policy.yaml").read_text())["contacts"]))
+
+# The DECISION set (30-02/30-03, widened Phase 54 Plan 06): identity the two limit=1 fetch
+# nodes need, the same review family, the CONTACTS provenance blob —
+# `lv_contact_enrichment_provenance`, a different property from the companies one (30
+# D-08a) — and now every contacts policy field, mirroring REVIEW_DECISION_PROPERTIES_CSV's
+# own pattern. Both `Review Contact Fetch By Id` and `Review Contact Verify Fetch` take
+# this wide set for the same reason the companies lane's line 7037-7040 gives: the verify
+# fetch must be able to cover every key `would_write` may carry, or a landed write reports
+# `verified_properties` that cannot see it.
 #
 # No `domain`: contacts do not have one, so the write gate's domain allowlist cannot match
 # a contact and TEST_RECORD_IDS is the ONLY way to allowlist one. Stated in the sticky note
 # because an operator arming with TEST_RECORD_DOMAINS alone gets D-23's silent no-response.
-REVIEW_CONTACT_PROPERTIES_CSV = ",".join(dict.fromkeys(
+REVIEW_CONTACT_DECISION_PROPERTIES_CSV = ",".join(dict.fromkeys(
+    ("hs_object_id", "email", "firstname", "lastname", "jobtitle")
+    + _REVIEW_FAMILY + ("lv_contact_enrichment_provenance",)
+    + _CONTACT_POLICY_FIELDS))
+
+# The QUEUE set — deliberately narrow, mirroring REVIEW_QUEUE_PROPERTIES_CSV's own
+# reasoning at line 7064-7070: the queue compares nothing, the held candidate JSON already
+# carries each decision's own current and proposed value, so fetching the full policy
+# baseline for up to 100 records would be payload nobody reads. Byte-identical in
+# membership to what REVIEW_CONTACT_PROPERTIES_CSV held before this split.
+REVIEW_CONTACT_QUEUE_PROPERTIES_CSV = ",".join(dict.fromkeys(
     ("hs_object_id", "email", "firstname", "lastname", "jobtitle")
     + _REVIEW_FAMILY + ("lv_contact_enrichment_provenance",)))
 
@@ -7394,7 +7412,7 @@ def build_review_decision_cloud():
         "Review Contact Fetch By Id", "contact", x, y - 160,
         filter_groups=[[{"propertyName": "hs_object_id", "operator": "EQ",
                          "value": record_id_expr}]],
-        properties_csv=REVIEW_CONTACT_PROPERTIES_CSV, limit=1))
+        properties_csv=REVIEW_CONTACT_DECISION_PROPERTIES_CSV, limit=1))
 
     x += 220
     nodes.append(code_node("Review Extract Record", REVIEW_EXTRACT_RECORD, x, y))
@@ -7436,7 +7454,7 @@ def build_review_decision_cloud():
         "Review Contact Verify Fetch", "contact", wx + 220, wy + 200,
         filter_groups=[[{"propertyName": "hs_object_id", "operator": "EQ",
                          "value": record_id_expr}]],
-        properties_csv=REVIEW_CONTACT_PROPERTIES_CSV, limit=1))
+        properties_csv=REVIEW_CONTACT_DECISION_PROPERTIES_CSV, limit=1))
 
     rx = wx + 440
     nodes.append(code_node("Build Review Response", REVIEW_BUILD_RESPONSE, rx, y))
@@ -7524,15 +7542,18 @@ def build_review_decision_cloud():
         filter_groups=AWAITING_REVIEW_GROUPS,
         properties_csv=REVIEW_QUEUE_PROPERTIES_CSV, limit=queue_limit_expr))
 
-    # The contacts set is REVIEW_CONTACT_PROPERTIES_CSV verbatim — identity, the same
-    # review family, and `lv_contact_enrichment_provenance`. A contact carries no `domain`
-    # and no candidate JSON (its only producer is the COMPANIES enrichment lane), so the
-    # client renders contacts from a different shape; sharing the constant is what keeps
-    # the queue and the decision endpoint reading the same contact.
+    # The contacts set is REVIEW_CONTACT_QUEUE_PROPERTIES_CSV — its own narrow constant
+    # since Phase 54 Plan 06 (WR-02), NOT the wide REVIEW_CONTACT_DECISION_PROPERTIES_CSV
+    # the two limit=1 decision-lane nodes now take: identity, the same review family, and
+    # `lv_contact_enrichment_provenance`. A contact carries no `domain` and no candidate
+    # JSON (its only producer is the COMPANIES enrichment lane), so the client renders
+    # contacts from a different shape; this queue node compares nothing, so fetching every
+    # contacts policy field for up to 100 records here would be payload nobody reads — the
+    # same split the companies lane already makes between its own decision and queue sets.
     nodes.append(_hs_http_search_node(
         "Review Queue Contact Search", "contact", qx, qy - 160,
         filter_groups=AWAITING_REVIEW_GROUPS,
-        properties_csv=REVIEW_CONTACT_PROPERTIES_CSV, limit=queue_limit_expr))
+        properties_csv=REVIEW_CONTACT_QUEUE_PROPERTIES_CSV, limit=queue_limit_expr))
 
     qx += 220
     nodes.append(code_node("Review Queue Rows", REVIEW_QUEUE_ROWS, qx, qy))

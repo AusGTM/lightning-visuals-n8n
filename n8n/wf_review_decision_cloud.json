@@ -96,7 +96,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"hs_object_id\", operator: \"EQ\", value: $('Parse Review Decision').first().json.record_id } ] } ], properties: [\"hs_object_id\", \"email\", \"firstname\", \"lastname\", \"jobtitle\", \"lv_enrichment_needs_review\", \"lv_icp_needs_review\", \"lv_enrichment_review_reason\", \"lv_enrichment_review_candidate_json\", \"lv_enrichment_review_approved\", \"lv_enrichment_reviewed_by\", \"lv_enrichment_reviewed_at\", \"lv_contact_enrichment_provenance\"], limit: 1 }) }}",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"hs_object_id\", operator: \"EQ\", value: $('Parse Review Decision').first().json.record_id } ] } ], properties: [\"hs_object_id\", \"email\", \"firstname\", \"lastname\", \"jobtitle\", \"lv_enrichment_needs_review\", \"lv_icp_needs_review\", \"lv_enrichment_review_reason\", \"lv_enrichment_review_candidate_json\", \"lv_enrichment_review_approved\", \"lv_enrichment_reviewed_by\", \"lv_enrichment_reviewed_at\", \"lv_contact_enrichment_provenance\", \"city\", \"country\", \"hs_country_region_code\", \"hs_state_code\", \"lv_linkedin_url\", \"lv_persona_group\", \"mobilephone\", \"phone\", \"seniority\", \"state\"], limit: 1 }) }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "hubspotAppToken"
       },
@@ -276,7 +276,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"hs_object_id\", operator: \"EQ\", value: $('Parse Review Decision').first().json.record_id } ] } ], properties: [\"hs_object_id\", \"email\", \"firstname\", \"lastname\", \"jobtitle\", \"lv_enrichment_needs_review\", \"lv_icp_needs_review\", \"lv_enrichment_review_reason\", \"lv_enrichment_review_candidate_json\", \"lv_enrichment_review_approved\", \"lv_enrichment_reviewed_by\", \"lv_enrichment_reviewed_at\", \"lv_contact_enrichment_provenance\"], limit: 1 }) }}",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: \"hs_object_id\", operator: \"EQ\", value: $('Parse Review Decision').first().json.record_id } ] } ], properties: [\"hs_object_id\", \"email\", \"firstname\", \"lastname\", \"jobtitle\", \"lv_enrichment_needs_review\", \"lv_icp_needs_review\", \"lv_enrichment_review_reason\", \"lv_enrichment_review_candidate_json\", \"lv_enrichment_review_approved\", \"lv_enrichment_reviewed_by\", \"lv_enrichment_reviewed_at\", \"lv_contact_enrichment_provenance\", \"city\", \"country\", \"hs_country_region_code\", \"hs_state_code\", \"lv_linkedin_url\", \"lv_persona_group\", \"mobilephone\", \"phone\", \"seniority\", \"state\"], limit: 1 }) }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "hubspotAppToken"
       },
