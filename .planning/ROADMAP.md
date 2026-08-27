@@ -50,8 +50,13 @@ variable), and a design that runs the provider waterfall twice per written recor
       grant that is bounded, expiring and revocable — no terminal, no loss of record scoping
       — **4 plans** (`53-01` .. `53-04`), planned 2026-08-25
 
-- [ ] **Phase 54: Single-pass armed dispatch** - A record is enriched once: no
+- [x] **Phase 54: Single-pass armed dispatch** *(complete 2026-08-27, verified 9/9 truths,
+      5/5 gap findings closed)* - A record is enriched once: no
       derive-then-rearm-then-derive-again, and the measured saving proven live before it is claimed
+      — **7 plans** (`54-01`..`54-05`, plus gap closure `54-06`/`54-07`). Live proof: one real
+      HubSpot write on contact `347569451461`, clear-and-stamp branch only; the promote branch
+      remains test-proven, never live-proven, for want of a contacts candidate producer. Total
+      live cost: 10 n8n executions, 1 write, 0 provider credits, 0 Anthropic calls.
 
 - [ ] **Phase 55: Async run — submit, poll, resume** - A batch stops being bounded by n8n Cloud's
       ~100s response window; run state survives a restart or fails loudly — **pulled ahead of
@@ -317,6 +322,7 @@ silently inherit Phase 51's placeholder behavior without a decision.
 | 51. Backfill Pipeline, Credit Sizing & Dry Run | v1.0 | 3/3 | Complete (verified) | 2026-08-19 |
 | 52. Staged Canary Execution & Safety Verification | v1.0 | 0/TBD | Deferred (operator, 2026-08-25) | - |
 | 53. Operator-openable Write Grant | v1.1 | 4/4 | Complete (verified) | 2026-08-26 |
+| 54. Single-pass Armed Dispatch | v1.1 | 7/7 | Complete (verified) | 2026-08-27 |
 | 58. Take What the Operator Actually Has | v1.1 | 6/6 | Complete (verified) | 2026-08-26 |
 | 59. Frictionless Write Path | v1.1 | 0/TBD | Planned (operator, 2026-08-27) | - |
 
