@@ -302,7 +302,7 @@ def _envelope_block(figures):
         lines += ["", "No provider credits: **0** — this grant runs no provider."]
 
     lines += ["", f"Anthropic model spend: **{_usd(figures.get('anthropic_usd'))}** "
-                  f"worst case — a floor from the dated rate table above, not a "
+                  f"— a projection from the dated rate table above, not a "
                   f"measurement (this repo never reads back real Anthropic usage)."]
 
     executions = figures.get("projected_executions")

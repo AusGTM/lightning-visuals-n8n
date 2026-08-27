@@ -835,7 +835,17 @@ def test_the_anthropic_figure_is_labelled_projected_never_measured(
     this repo reads back Anthropic's real token usage, so this figure has never been a
     measurement (OP-54-05). Before this date it was pinned to `write_grant.MEASURED`,
     which is the exact false audit trail T-54-03 exists to close. The executions and
-    record_count bases are untouched by this change."""
+    record_count bases are untouched by this change.
+
+    Phase 54 Task 07, 2026-08-27 (WR-04): the rendered sentence itself called this same
+    figure both a "worst case" (ceiling) and "a floor" (lower bound) — mutually exclusive
+    claims about one number. `cost_rates.json`'s own citation for
+    `anthropic_usd_per_record` says it is an observed all-in AVERAGE across two canary
+    executions, not a bound in either direction, so real spend can land either side of
+    it. This test scopes to the single Anthropic-spend line of `figures['block']` (not
+    the whole block, which legitimately calls provider credits a ceiling a few lines
+    above) and asserts the sentence commits to the one framing the citation supports —
+    projection — and to neither discarded bound-word."""
     transport = stub_module_transport_factory(_priced_plan_reads())
     figures = _priced_proposal(priced_config, transport, ids=("1", "2"))["envelope"]
 
@@ -843,7 +853,13 @@ def test_the_anthropic_figure_is_labelled_projected_never_measured(
     assert figures["basis"]["anthropic_usd"] != write_grant.MEASURED
     assert figures["basis"]["projected_executions"] == write_grant.PROJECTED
     assert figures["basis"]["record_count"] == write_grant.MEASURED
-    assert "floor" in figures["block"].lower()
+
+    anthropic_line = next(
+        line for line in figures["block"].splitlines()
+        if "Anthropic model spend" in line)
+    assert "projection" in anthropic_line.lower()
+    assert "worst case" not in anthropic_line.lower()
+    assert "floor" not in anthropic_line.lower()
 
 
 def test_an_unreadable_provider_balance_reads_unconfirmed_never_as_headroom(
