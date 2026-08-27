@@ -7189,6 +7189,16 @@ return [{ json: { ...(r.properties || {}), hs_object_id: r.id, record_found: tru
 # DEFAULT_COMPANY_POLICY from mergeCompanies, which reviewDecision also consults for the
 # ownership CLASS check that closes D-12. hubspotEnums.generated/hubspotEnums are inlined
 # because reviewApply (Phase 31) requires them for its own enum guard.
+# mergeContacts is inlined too (Phase 54 Plan 03/05, live defect found 2026-08-27):
+# reviewDecision.js's contacts branch requires DEFAULT_CONTACT_POLICY directly from
+# mergeContacts (line 68), and the original Phase 30 inline list here predates that
+# require — deployed without it, a live approve on a contact threw `ReferenceError:
+# DEFAULT_CONTACT_POLICY is not defined` (executions 11992/11993). mergeCompanies.js and
+# mergeContacts.js share several same-named internal helpers (_isBlank, _gate, etc.) as
+# plain `function` declarations, which redeclare without a SyntaxError in this non-strict
+# eval context; that collision is inert here because this node never calls mergeCompanies()
+# or mergeContacts() themselves — only DEFAULT_*_POLICY, stableStringify (byte-identical in
+# both files) and reviewApply() are ever referenced downstream.
 # WRITE_SAFETY_GATE_JS is inlined too (Phase 31 Plan 02, BUG 30) so this node can compute
 # the SAME _writeSafetyAllows("review", ...) verdict the spliced `Review Decision Update
 # Write Gate` applies further downstream, and answer an explicit `not_allowlisted` refusal
@@ -7196,7 +7206,7 @@ return [{ json: { ...(r.properties || {}), hs_object_id: r.id, record_found: tru
 # this is an earlier, louder answer in front of it, never a replacement for it.
 REVIEW_BUILD_DECISION = inline(
     "taxonomy.generated.js", "hubspotEnums.generated.js", "hubspotEnums.js",
-    "mergeCompanies.js", "reviewApply.js", "reviewDecision.js") + r"""
+    "mergeCompanies.js", "mergeContacts.js", "reviewApply.js", "reviewDecision.js") + r"""
 
 // --- n8n wrapper: Build Review Decision ---
 // ONE decision node for both object types: the row arriving here has already been fetched
