@@ -228,3 +228,55 @@ execution count.
 **Task 3 (the AFTER read, disarm verdict, and limits section) has not been executed.**
 There is no real write yet to read back. Writing that section now would describe a write
 that did not happen. This file stops here until the write lands.
+
+## Continuation, 2026-08-27T03:28:30Z — gate 1 lifted, gate 2 still closed, no submit attempted
+
+A fresh continuation agent picked this plan up after the administrator set
+`ALLOW_REVIEW_SUBMIT=true` in this plugin's runtime environment (confirmed:
+`echo "[$ALLOW_REVIEW_SUBMIT]"` reads `[true]` in this session). That is gate 1 only.
+
+**Read-only checks performed, 0 writes, 0 n8n executions:**
+
+1. `review_queue.fetch_queue(config, "contacts")` — a HubSpot search, not a workflow
+   trigger. `total: 1`, exactly `347569451461`, unchanged from Task 1/2. Still flagged,
+   still the same record.
+2. `scripts/verify_live_write_safety.py` (default disarmed expectation, read-only —
+   builds no request, deploys nothing) against the live `LV Review Decision (Cloud)`
+   workflow. All three declaring nodes (`Build Review Decision`, `Review Decision Update
+   Write Gate`, `Review Contact Decision Update Write Gate`) read:
+   `ALLOW_HUBSPOT_REVIEW_WRITES: "false"`, `TEST_RECORD_IDS: ""`,
+   `TEST_RECORD_DOMAINS: ""`. **Gate 3 — the backend's own write-safety allowlist for the
+   review lane — is still closed.** `ALLOW_REVIEW_SUBMIT` and
+   `ALLOW_HUBSPOT_REVIEW_WRITES` are two different gates in two different processes on two
+   different machines (this module's own docstring, gate 3 note); the administrator
+   lifting one has not moved the other, exactly as documented.
+
+**No submit was attempted.** `scripts/build_cloud_workflows.py` (`_writeSafetyAllows`)
+requires `ALLOW_HUBSPOT_REVIEW_WRITES === "true"` AND the record's id or domain on
+`TEST_RECORD_IDS`/`TEST_RECORD_DOMAINS` before a real (`dry_run: false`) review write is
+allowed; with both empty, a submit right now can only return `outcome: not_allowlisted`
+(BUG 30 semantics) — a genuine refusal, but one this session already knows the answer to
+without spending the execution. Per this plan's own execution budget and the "spending an
+n8n execution to confirm a no-op would exceed this plan's already-strained budget for no
+new information" precedent set earlier in this file, that execution was not spent.
+
+**Gate 3 is opened by a deploy, not by anything reachable from this conversation.** Per
+`.planning/workstreams/plugin-entrypoint/OPERATOR-RUNBOOK.md` ("THREE gates, all three
+must be open"), gate 3 is armed by running `scripts/deploy_n8n_workflows.py` with
+`DRY_RUN=false ALLOW_N8N_DEPLOY=true
+ENABLE_BAKED_FLAGS="ALLOW_HUBSPOT_REVIEW_WRITES,TEST_RECORD_IDS=347569451461"` — a genuine
+production deploy gated by its own admin-only environment variable
+(`ALLOW_N8N_DEPLOY`), separate again from both `ALLOW_REVIEW_SUBMIT` and the session arm.
+This plan's own objective states plainly: "Claude never sets an arming variable and never
+opens a window," and T-54-18 (critical) repeats it: "Claude sets no arming variable in any
+task of this plan." Hand-rolling the equivalent mutation directly (bypassing
+`deploy_n8n_workflows.py`'s own `ALLOW_N8N_DEPLOY` gate) would be exactly the "path around
+the choke point" this plugin's own documentation prohibits — the review lane is
+deliberately not grantable through any conversational surface (`write_grant.py`'s own
+comment: "THE REVIEW LANE IS DELIBERATELY NOT GRANTABLE"). Task 2's own instructions
+already assigned "open a record-scoped write window" to the operator, through the
+review-triage skill's session-arm step; gate 3 is a layer below that skill entirely and was
+never in this skill's reach.
+
+This plan halts here again, at a second, distinct environmental gate — not a repeat of the
+first. It is reported below as a checkpoint, not silently worked around.
