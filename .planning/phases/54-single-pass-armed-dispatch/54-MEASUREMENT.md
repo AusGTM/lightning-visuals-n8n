@@ -119,6 +119,16 @@ description to this exact residual rather than closing it: the single-chunk form
 has one real data point (and it disagrees with the projection); the multi-chunk formula
 still has none.
 
+## Cross-reference: 54-05's live write proof
+
+`54-LIVE-PROOF.md` (this phase's Plan 05) is the companion live measurement to this
+report: one real flagged contact (`347569451461`) taken through an operator-authorized,
+record-scoped armed window on `LV Review Decision (Cloud)` — the clear-and-stamp branch
+only, 10 n8n executions across the whole plan, exactly 1 write (`12000`), 0 provider
+credits, 0 Anthropic calls, disarm independently verified (`VERDICT: disarmed PASS`). Read
+it for the review-decision endpoint's own execution accounting; this file's accounting
+above is the enrichment-workflow envelope only and does not include it.
+
 ## Escalation
 
 Both reads above succeeded — no row in this report is blocked on a pruned or unreadable
