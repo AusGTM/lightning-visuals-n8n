@@ -7230,12 +7230,15 @@ REVIEW_BUILD_DECISION = inline(
 // ONE decision node for both object types: the row arriving here has already been fetched
 // by whichever lane `Review IF Contacts` selected, and the module branches on objectType.
 //
-// A contacts APPROVE resolves to `no_candidate` and writes nothing. That is correct, not a
-// stub: `lv_enrichment_review_candidate_json` has exactly one producer in this repo (the
-// COMPANIES enrichment lane's `Decide Company Action`), and reviewApply's allowlist is the
-// COMPANY policy's key set — handing it a contact candidate would drop every field as
-// un-allowlisted and then clear the review flags anyway, de-queueing a record with nothing
-// written. Contacts REJECT works exactly as companies does.
+// A contacts APPROVE now calls the SAME reviewApply engine as companies (2026-08-27, Phase
+// 54 Plan 03/06), keyed on DEFAULT_CONTACT_POLICY, and resolves to `applied` with a real
+// write — approve never means two different things across object types. It resolves that
+// way in the CURRENT deployment ONLY because `lv_enrichment_review_candidate_json` has
+// exactly one producer in this repo (the COMPANIES enrichment lane's `Decide Company
+// Action`), which never stages a contacts candidate — not because the code forces
+// `no_candidate`. This is a live-shape fact scoped to today, not a structural guarantee: a
+// future contacts candidate producer would exercise the promote branch here for real.
+// Contacts REJECT works exactly as companies does.
 """ + WRITE_SAFETY_GATE_JS + r"""
 const parsed = $('Parse Review Decision').first().json;
 const first = $input.first();
@@ -7602,9 +7605,11 @@ def build_review_decision_cloud():
             "queued — drops any field whose policy class is `manual_protected` or "
             "`review_required`, and stamps a `source: \"human\"` entry per applied field "
             "into `lv_enrichment_provenance` (additive: other fields' entries survive).\n\n"
-            "**Contacts** can be REJECTED here; an approve on a contact returns "
-            "`no_candidate` and writes nothing, because no contact review candidate is "
-            "ever produced in this deployment. Contacts carry no `domain`, so a contact "
+            "**Contacts** can be REJECTED here; an approve on a contact now calls the SAME "
+            "`reviewApply` engine as companies, keyed on `DEFAULT_CONTACT_POLICY`, and "
+            "resolves to a real write today because the one contacts candidate producer in "
+            "this repo (`Decide Company Action`) never stages a contacts candidate — not "
+            "because the code forbids it. Contacts carry no `domain`, so a contact "
             "can only be allowlisted by `TEST_RECORD_IDS` — arming with "
             "`TEST_RECORD_DOMAINS` alone denies it silently (D-23: no response at all).\n\n"
             "**Ships inactive and disarmed.** Both write nodes sit behind their own "

@@ -119,10 +119,11 @@ written, and a second opinion here would be a second authority that drifts from 
      still queued. Re-run enrichment or reject with a reason.
    - `no_candidate` — the record is in the queue but holds nothing to promote. Every
      record flagged as a possible duplicate is in this position: there is a reason to
-     record, but nothing to approve. A contacts approve does **not** land here anymore —
-     approving a contact is a real write: its enriched value was already saved to
-     HubSpot at the moment the record was flagged, so approving promotes nothing new; it
-     takes the record out of the queue and records who decided and when.
+     record, but nothing to approve. A contacts approve does not land here today, because
+     no contact currently in the review queue holds a candidate — approving a contact is
+     a real write: its enriched value was already saved to HubSpot at the moment the
+     record was flagged, so approving promotes nothing new; it takes the record out of
+     the queue and records who decided and when.
    - `not_flagged` — the record is not in the queue. Nothing to decide.
 
 6. **Confirm this record's exact write, then submit it.**

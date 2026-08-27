@@ -5,16 +5,24 @@ Mirrors tests/test_taxonomy_conformance.py::test_taxonomy_generated_js_currency 
 render()-vs-checked-in-text idiom) and operator-claude-plugin/tests/test_control_flag_
 parity.py (the read-the-other-side-as-TEXT idiom for a contract held in two places).
 
-Three tests, each a DRIFT GUARD:
-  1. currency    — the checked-in generated file is byte-identical to what the generator
-                    would emit right now (ROADMAP criterion 1's drift gate).
-  2. policy pin  — gen_hubspot_enums_js.ENUM_PROPERTIES cannot drift from
-                    DEFAULT_COMPANY_POLICY's own enumeration-typed keys, read as TEXT
-                    (never imported), against the pinned snapshot's own `type` field.
-  3. fidelity    — the live 2026-08-03 finding (industry has 148 options, SPORTS is one
-                    of them, the offending provider label matches neither a value nor a
-                    label) is pinned against the SNAPSHOT so a future snapshot refresh
-                    that quietly changes it fails loudly.
+Four tests, each a DRIFT GUARD:
+  1. currency        — the checked-in generated file is byte-identical to what the
+                        generator would emit right now (ROADMAP criterion 1's drift gate).
+  2. policy pin       — gen_hubspot_enums_js.ENUM_PROPERTIES cannot drift from
+                        DEFAULT_COMPANY_POLICY's own enumeration-typed keys, read as TEXT
+                        (never imported), against the pinned snapshot's own `type` field.
+  3. fidelity         — the live 2026-08-03 finding (industry has 148 options, SPORTS is
+                        one of them, the offending provider label matches neither a value
+                        nor a label) is pinned against the SNAPSHOT so a future snapshot
+                        refresh that quietly changes it fails loudly.
+  4. contacts inert   — reviewApply.js's ENUM GUARD is documented as a company-only no-op
+                        for DEFAULT_CONTACT_POLICY (WR-03, Phase 54 Plan 06) because every
+                        contacts policy field is `type: "string"` in the pinned contacts
+                        snapshot. This pins that reason: DEFAULT_CONTACT_POLICY's keys, read
+                        as TEXT from mergeContacts.js, must all resolve to non-enumeration
+                        types in the contacts snapshot. If this ever fails, the field named
+                        by the assertion needs a CONTACT_ENUM_PROPERTIES table generated and
+                        isEnumBound/normalizeEnumValue extended to consult it by object type.
 """
 import json
 import re
@@ -27,7 +35,10 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import gen_hubspot_enums_js  # noqa: E402
 
 MERGE_COMPANIES_JS = ROOT / "n8n" / "code" / "mergeCompanies.js"
+MERGE_CONTACTS_JS = ROOT / "n8n" / "code" / "mergeContacts.js"
 GENERATED_JS = ROOT / "n8n" / "code" / "hubspotEnums.generated.js"
+CONTACTS_SNAPSHOT = (ROOT / "config" / "hubspot_migration" / "baseline"
+                     / "portal-schema-contacts-54-03-contacts-check.json")
 
 
 def _snapshot() -> dict:
@@ -90,3 +101,33 @@ def test_snapshot_industry_fidelity_matches_the_live_2026_08_03_finding():
     values_lower = {v.lower() for v in values}
     assert offending not in labels_lower
     assert offending not in values_lower
+
+
+# --- 4. contacts inert: every DEFAULT_CONTACT_POLICY field is non-enumeration today ----
+
+def test_contact_policy_fields_are_not_enumeration_typed():
+    """reviewApply.js's ENUM GUARD documents itself as a company-only no-op for contacts
+    because every DEFAULT_CONTACT_POLICY field is `type: "string"` in the pinned contacts
+    snapshot. Read mergeContacts.js as TEXT (never imported, same discipline as test 2
+    above) so a policy key added there is covered by this guard too."""
+    src = MERGE_CONTACTS_JS.read_text()
+    block = src.split("const DEFAULT_CONTACT_POLICY = {", 1)[1].split("\n};", 1)[0]
+    policy_keys = set(re.findall(r"^\s*([A-Za-z_][A-Za-z0-9_]*):\s*\{", block, re.MULTILINE))
+    assert policy_keys, "failed to extract any DEFAULT_CONTACT_POLICY keys from mergeContacts.js"
+
+    contacts_snapshot = {
+        p["name"]: p for p in json.loads(CONTACTS_SNAPSHOT.read_text())["results"]
+    }
+    enumeration_typed = {
+        k for k in policy_keys
+        if contacts_snapshot.get(k, {}).get("type") == "enumeration"
+    }
+    assert not enumeration_typed, (
+        f"DEFAULT_CONTACT_POLICY field(s) {sorted(enumeration_typed)} are now "
+        f"enumeration-typed in {CONTACTS_SNAPSHOT.relative_to(ROOT)} -- reviewApply.js's "
+        f"ENUM GUARD is documented as correctly inert for contacts ONLY while this holds. "
+        f"Generate a CONTACT_ENUM_PROPERTIES table (mirroring hubspotEnums.generated.js's "
+        f"company generator, scoped to the contacts object) and extend "
+        f"isEnumBound/normalizeEnumValue to consult the right table by object type, then "
+        f"update reviewApply.js's header to describe the closed gap."
+    )

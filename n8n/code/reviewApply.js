@@ -13,9 +13,10 @@
 // Every existing two-argument call site is unchanged in behavior — omitting it (or passing
 // DEFAULT_COMPANY_POLICY explicitly) is byte-identical to before this date. One engine, two
 // policies: `allowedFields` is derived from whichever policy is handed in, so a caller can
-// run the SAME compare-and-set, staleness and enum guards against `DEFAULT_CONTACT_POLICY`'s
-// key set instead of cloning this file. reviewDecision.js is the only caller that ever
-// supplies the contacts policy.
+// run the SAME compare-and-set and staleness guards against `DEFAULT_CONTACT_POLICY`'s key
+// set instead of cloning this file. reviewDecision.js is the only caller that ever supplies
+// the contacts policy. The ENUM GUARD below is NOT symmetric across the two policies — see
+// its own paragraph.
 //
 // STRUCTURAL Approach-C guard: canonicalPatch only ever accepts a field that is a key of
 // mergeCompanies' own DEFAULT_COMPANY_POLICY — the same allowlist mergeCompanies itself
@@ -42,6 +43,21 @@
 // while refusing a field is the silent de-queueing REVIEW-05 forbids. A candidate that
 // normalizes cleanly (an exact case-insensitive label match, e.g. "Sports" -> "SPORTS")
 // promotes with the NORMALIZED value so an older stored candidate still approves correctly.
+//
+// NOT symmetric across policies (WR-03, Phase 54 Plan 06): `normalizeEnumValue` consults
+// `hubspotEnums.generated.js`'s COMPANY_ENUM_PROPERTIES only — six company-only keys
+// (industry, lv_content_type, lv_country_region_normalized, lv_employee_band, lv_org_type,
+// lv_revenue_band). `isEnumBound` returns false for every DEFAULT_CONTACT_POLICY field, so
+// this guard is a no-op on the contacts policy. Correctly inert TODAY, not a symmetric
+// guard silently mislabelled: every DEFAULT_CONTACT_POLICY field is `type: "string"` in the
+// pinned contacts snapshot (config/hubspot_migration/baseline/
+// portal-schema-contacts-54-03-contacts-check.json), pinned by
+// tests/test_hubspot_enums_generated_currency.py's fourth test — there is nothing for a
+// contacts enum table to hold today, and generating one would emit an empty object. If that
+// pin ever breaks (a contacts field goes enumeration-typed), the follow-on work is: generate
+// a CONTACT_ENUM_PROPERTIES table (mirroring hubspotEnums.generated.js's company generator,
+// scoped to the contacts object) and extend isEnumBound/normalizeEnumValue to consult the
+// right table by object type.
 
 const { DEFAULT_COMPANY_POLICY } = require("./mergeCompanies");
 const { normalizeEnumValue } = require("./hubspotEnums");
