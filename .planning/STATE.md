@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Unattended Session Runs
-current_phase: 54
-current_phase_name: single-pass-armed-dispatch
-status: phase_complete
-stopped_at: Phase 54 sealed complete (verified, gap closure done)
-last_updated: "2026-08-27T06:30:00.000Z"
-last_activity: 2026-08-27
-last_activity_desc: Phase 54 complete -- 7 plans, verification passed 9/9, WR-01..WR-04 + IN-02 closed
+current_phase: 59
+current_phase_name: frictionless-write-path
+status: planning
+stopped_at: Phase 54 sealed; Phase 59 context written and ready to plan
+last_updated: "2026-08-28T00:00:00.000Z"
+last_activity: 2026-08-28
+last_activity_desc: Phase 53 operator walk run (GRANT-01 still not ticked); FINDING 2 fixed and released as plugin 0.20.0; Phase 59 ready to plan
 progress:
-  total_phases: 4
-  completed_phases: 4
-  total_plans: 20
-  completed_plans: 20
-  percent: 100
+  total_phases: 8
+  completed_phases: 2
+  total_plans: 17
+  completed_plans: 17
+  percent: 25
 ---
 
 # Project State
