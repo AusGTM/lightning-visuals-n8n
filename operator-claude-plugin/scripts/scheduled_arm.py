@@ -221,8 +221,16 @@ def run_scheduled_arm_cycle(config, get_transport=requests.get, post_transport=N
                                      config, transport=post_transport) as window:
             # One armed window, one guaranteed disarm on exit — but now as many chunked
             # POSTs as the batch needs. `dispatch_plan` never raises for a single failed
-            # chunk (D-12: recorded, the run continues); it only raises `NotArmedError`,
-            # which cannot fire here since `armed=True` is passed literally.
+            # chunk (D-12: recorded, the run continues). CORRECTED 2026-08-29 (D-59-10):
+            # this comment used to claim `NotArmedError` was the ONLY thing `dispatch_plan`
+            # could raise here — stale since the written-records flush (D-59-07) landed
+            # inside that loop, because `written_records.append_chunk` could raise
+            # `WrittenRecordsError` right through it, unhandled, discarding whatever this
+            # cycle had already accumulated. That gap is closed as of this commit: a
+            # bookkeeping failure is now recorded in `dispatch_outcome.
+            # written_records_failures` below (never re-raised) and the run keeps sending.
+            # `NotArmedError` remains the one exception `dispatch_plan` can still raise from
+            # here, and it cannot fire since `armed=True` is passed literally.
             dispatch_outcome = chunking.dispatch_plan(
                 plan, providers, True, config, transport=post_transport)
     except n8n_arming.ArmingRefused as refusal:
@@ -236,6 +244,19 @@ def run_scheduled_arm_cycle(config, get_transport=requests.get, post_transport=N
         {"index": r.index, "rows": r.rows, "ok": r.ok, "reason": r.reason}
         for r in dispatch_outcome.results
     ]
+    # D-59-10 (operator, 2026-08-29): named here so it is carried into BOTH outcomes
+    # below that report a dispatch, not just the happy one — a written-records
+    # bookkeeping failure never stops the dispatch (chunking.dispatch_plan, Task 1 of
+    # this gap closure), but a run that finishes with a short list must say so loudly
+    # rather than being read as a complete account of what was written.
+    # `dispatch_outcome.run_id` is carried alongside it (also on both outcomes) so an
+    # operator reading a page can find the exact per-run written-records artifact the
+    # incomplete list belongs to (`written_records-<run_id>.json`).
+    written_records_failures = [
+        dict(failure) for failure in dispatch_outcome.written_records_failures
+    ]
+    records_incomplete = bool(written_records_failures)
+
     # A cron log/monitor pages on a batch that landed NOTHING (every chunk failed) the
     # same way it would have paged on the old single-request `dispatch_failed` outcome.
     # A partial failure (some chunks landed) stays under `dispatch_result`/`results` —
@@ -244,13 +265,19 @@ def run_scheduled_arm_cycle(config, get_transport=requests.get, post_transport=N
     if results and all(not r["ok"] for r in results):
         return _outcome("dispatch_failed", record_ids=record_ids,
                         execution_id=batch["execution_id"], results=results,
-                        failed_batch=dispatch_outcome.failed_batch)
+                        failed_batch=dispatch_outcome.failed_batch,
+                        run_id=dispatch_outcome.run_id,
+                        records_incomplete=records_incomplete,
+                        written_records_failures=written_records_failures)
 
     return _outcome("dispatched", record_ids=record_ids, execution_id=batch["execution_id"],
                     arm=window.arm_result, disarm=window.disarm_result,
                     chunk_count=plan.chunk_count, results=results,
                     failed_batch=dispatch_outcome.failed_batch,
-                    dispatch_result=list(dispatch_outcome.responses))
+                    dispatch_result=list(dispatch_outcome.responses),
+                    run_id=dispatch_outcome.run_id,
+                    records_incomplete=records_incomplete,
+                    written_records_failures=written_records_failures)
 
 
 def _load_config_no_migration():
@@ -278,12 +305,27 @@ def _cli_main(load_config=_load_config_no_migration, get_transport=requests.get,
         return _outcome("not_configured", detail=str(refusal))
 
 
+def _exit_code(result):
+    """Whether a cron log/monitor should page on this cycle's outcome.
+
+    Non-zero on anything in `_FAILURE_OUTCOMES` — `arm_refused` is deliberately absent
+    from that set, see its own comment. ALSO non-zero when `records_incomplete` is
+    true (D-59-10, operator, 2026-08-29), even for an otherwise-successful `dispatched`
+    outcome: a dispatch that landed records genuinely did dispatch, so the outcome name
+    itself is never renamed or added to `_FAILURE_OUTCOMES` — that would hide a
+    successful run behind a failure label. This function is where the exit code alone
+    carries the page for a short written-records list instead. Extracted from
+    `__main__` so a test can call it directly rather than shelling out to the script.
+    """
+    return 1 if (
+        result.get("outcome") in _FAILURE_OUTCOMES or result.get("records_incomplete")
+    ) else 0
+
+
 if __name__ == "__main__":
     import json
     import sys
 
     _result = _cli_main()
     print(json.dumps(_result))
-    # Non-zero on anything a cron log/monitor should page on. `arm_refused` is excluded on
-    # purpose — see `_FAILURE_OUTCOMES`'s own comment.
-    sys.exit(1 if _result.get("outcome") in _FAILURE_OUTCOMES else 0)
+    sys.exit(_exit_code(_result))

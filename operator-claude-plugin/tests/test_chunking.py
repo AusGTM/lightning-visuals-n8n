@@ -19,6 +19,7 @@ import requests
 
 import chunking
 import enrichment
+import written_records
 from dispatch import NotArmedError
 
 CONFIG_EXAMPLE = (
@@ -646,6 +647,132 @@ def test_a_refused_gate_02_chunk_still_lands_in_failed_batch(
         plan, PROVIDERS, True, fake_config, transport=transport
     )
     assert outcome.failed_batch == {"people": [{"firstname": "John"}]}
+
+
+
+# ==================================================================================
+# 59-09 gap closure (D-59-10) — a written-records bookkeeping failure never stops the
+# dispatch. Two ways the list can go short (a raised WrittenRecordsError, and a falsey
+# append_chunk return on an OSError) are guarded in ONE place and reported, never
+# silent.
+# ==================================================================================
+
+def _poisoned_body():
+    """A response item whose free-text `reason` contains a forbidden marker — the
+    identical shape `test_written_records.py`'s own
+    `test_a_value_naming_a_secret_refuses_rather_than_persisting` proves makes
+    `written_records.classify_item` raise `WrittenRecordsError`."""
+    return {"action": "write_blocked", "reason": "bad webhook_secret configured"}
+
+
+def test_a_written_records_bookkeeping_failure_does_not_stop_the_dispatch(
+    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
+):
+    """Test 1 — the integration test that would have caught this gap: the MIDDLE
+    chunk's response poisons `written_records.append_chunk` (it raises
+    `WrittenRecordsError`), and the LATER chunk must still be sent — proved by the
+    stub transport's own call count, not by inspection — and `dispatch_plan` must
+    return normally rather than letting the exception escape."""
+    artifact = tmp_path / "written_records.json"
+    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
+
+    transport = stub_module_transport_factory(
+        [{"ok": True}, _poisoned_body(), {"ok": True}]
+    )
+    outcome = chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport,
+    )
+    assert len(transport.calls) == 3
+    assert sent_ids(transport) == [["1", "2"], ["3", "4"], ["5", "6"]]
+    assert [r.ok for r in outcome.results] == [True, True, True], (
+        "a bookkeeping miss is not a dispatch failure — this chunk's HubSpot write "
+        "may already have landed"
+    )
+
+
+def test_the_bookkeeping_failure_is_named_loudly_in_the_dispatch_outcome(
+    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
+):
+    """Test 2 — the new field is non-empty, identifies the failing chunk, and carries
+    a reason a human can act on."""
+    artifact = tmp_path / "written_records.json"
+    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
+
+    transport = stub_module_transport_factory(
+        [{"ok": True}, _poisoned_body(), {"ok": True}]
+    )
+    outcome = chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport,
+    )
+    assert len(outcome.written_records_failures) == 1
+    failure = outcome.written_records_failures[0]
+    assert failure["chunk_index"] == 1
+    assert failure["reason"]
+
+
+def test_an_io_failure_in_append_chunk_is_caught_by_the_same_guard(
+    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
+):
+    """Test 3 — `append_chunk`'s documented falsey return on an `OSError` is the
+    OTHER way the list can go short, and `dispatch_plan` ignored it before this plan.
+    Driven directly (not by inducing a real `OSError`) so this test cannot be confused
+    with the raised-exception path Tests 1/2 cover — one guard must catch both."""
+    artifact = tmp_path / "written_records.json"
+    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
+    real_append_chunk = written_records.append_chunk
+
+    def _flaky_append_chunk(run_id, chunk_index, body, path=None):
+        if chunk_index == 1:
+            return False
+        return real_append_chunk(run_id, chunk_index, body, path=path)
+
+    monkeypatch.setattr(chunking.written_records, "append_chunk", _flaky_append_chunk)
+
+    transport = stub_module_transport_factory()
+    outcome = chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport,
+    )
+    assert len(transport.calls) == 3
+    assert [f["chunk_index"] for f in outcome.written_records_failures] == [1]
+    assert "I/O failure" in outcome.written_records_failures[0]["reason"]
+    # Chunks 0 and 2 flushed normally through the same guard — only chunk 1 went short.
+    assert [e["chunk_index"] for e in written_records.load(path=artifact)] == [0, 2]
+
+
+def test_a_clean_run_reports_an_empty_written_records_failures_tuple(
+    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
+):
+    """Test 4 — the field is an empty tuple, never `None`, so a caller iterates it
+    unconditionally."""
+    artifact = tmp_path / "written_records.json"
+    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
+
+    transport = stub_module_transport_factory()
+    outcome = chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport,
+    )
+    assert outcome.written_records_failures == ()
+    assert outcome.written_records_failures is not None
+
+
+def test_a_bookkeeping_failure_does_not_flip_the_chunks_result_or_join_failed_batch(
+    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
+):
+    """Test 5 — the chunk whose bookkeeping failed keeps the `ChunkResult` it already
+    earned: its HubSpot write may have succeeded, so a bookkeeping miss must not be
+    reported as a dispatch failure, and it must not be added to `failed_batch` for
+    re-send."""
+    artifact = tmp_path / "written_records.json"
+    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
+
+    transport = stub_module_transport_factory(
+        [{"ok": True}, _poisoned_body(), {"ok": True}]
+    )
+    outcome = chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport,
+    )
+    assert outcome.results[1].ok is True
+    assert outcome.failed_batch is None
 
 
 def test_the_dispatcher_iterates_the_plan_and_never_resplits_it(

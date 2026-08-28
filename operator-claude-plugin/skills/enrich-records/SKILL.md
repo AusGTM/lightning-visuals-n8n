@@ -334,6 +334,17 @@ capability; claiming it here would be a guess dressed as a report.
    applies here exactly as it does at every other gate this phase converted: the change
    is refuse-to-propose, never refuse-to-guess.
 
+   **When `outcome.written_records_failures` is non-empty (D-59-10, gap closure
+   2026-08-29), say so plainly and lead with it.** The post-run written-records list
+   for this run is **INCOMPLETE** — name which chunk indices are missing from it — and
+   say that the records those chunks wrote are **not** in the artifact even though the
+   writes may have landed: a bookkeeping miss is not a dispatch failure, so the chunk's
+   own send may well have succeeded. The list must never be read, by the operator or by
+   Claude, as a complete account of what was written when this field is non-empty —
+   that is the exact failure D-59-10 exists to prevent (aborting the dispatch over a
+   bookkeeping failure was considered and rejected, so this loud disclosure is what was
+   chosen instead).
+
    **For every response in `outcome.responses`, read what it actually says before calling
    that chunk sent.** Import `scripts/report_enrichment.py` (a library here, the same way
    `scripts/report.py` already is, not a CLI) and call `build_sync_report(response)` on

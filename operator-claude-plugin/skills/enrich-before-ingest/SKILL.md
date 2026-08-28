@@ -342,6 +342,17 @@ whatever seven columns happened to be in the source file.
    confirms, and no field is filled in to make the row pass. Refuse-to-propose, not
    refuse-to-guess, same as everywhere else this phase touches.
 
+   **When `outcome.written_records_failures` is non-empty (D-59-10, gap closure
+   2026-08-29), say so plainly and lead with it, before the preview in the next
+   step.** The `written_records-<run_id>.json` file this run flushes into (named at
+   step 1 above) is **INCOMPLETE** — name which chunk indices are missing from it —
+   and say the records those chunks wrote are **not** in that file even though the
+   writes may have landed: a bookkeeping miss is not a dispatch failure, so the
+   chunk's own send may well have succeeded. This list must never be read, by the
+   operator or by Claude, as a complete account of what was written when this field
+   is non-empty — the trade-off D-59-10 names explicitly for never stopping the
+   dispatch over a bookkeeping failure.
+
 6. **The enriched preview — the last look before anything reaches HubSpot.** Render
    it:
 

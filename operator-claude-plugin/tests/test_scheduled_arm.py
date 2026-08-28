@@ -14,6 +14,7 @@ import enrichment
 import executions_client
 import n8n_arming
 import scheduled_arm
+import written_records
 from conftest import (ENRICHMENT_WORKFLOW_ID, ENRICHMENT_WORKFLOW_NAME,
                       MAINTENANCE_WORKFLOW_ID, MAINTENANCE_WORKFLOW_NAME)
 
@@ -408,6 +409,110 @@ def test_a_failed_disarm_surfaces_as_its_own_outcome_never_folded_into_dispatche
 
     assert result["outcome"] == "disarm_failed"
     assert "LIVE WRITES MAY STILL BE ENABLED" in result["detail"]
+
+
+# =====================================================================================
+# 59-09 gap closure (D-59-10) — a written-records bookkeeping failure never stops the
+# unattended cycle. It must return a structured outcome (never raise), name the
+# incomplete condition and the run id so an operator can find the artifact, and page
+# via a non-zero exit code even though the dispatch itself succeeded.
+# =====================================================================================
+
+def _poisoned_body():
+    """A response item whose free-text `reason` contains a forbidden marker — the same
+    shape that makes `written_records.classify_item` raise `WrittenRecordsError`
+    (`test_written_records.py::test_a_value_naming_a_secret_refuses_rather_than_persisting`)."""
+    return {"action": "write_blocked", "reason": "bad webhook_secret configured"}
+
+
+def test_a_written_records_bookkeeping_failure_still_completes_the_cycle(
+        armed_env, fake_config, stub_get_transport_factory, stub_module_transport_factory,
+        tmp_path, monkeypatch):
+    """Test 1 — the integration test for the unattended path: run one FULL
+    `run_scheduled_arm_cycle` where the one chunk's bookkeeping fails (its response
+    poisons `written_records.append_chunk`). It must return a structured outcome dict
+    rather than raising, the dispatch must have completed (`outcome == "dispatched"`,
+    the disarm still ran), and the outcome must name the incomplete written-records
+    condition."""
+    artifact = tmp_path / "written_records.json"
+    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
+
+    fake_config = {**fake_config, "max_records_per_chunk": 2}
+    get_transport = stub_get_transport_factory([
+        WORKFLOWS_PAGE, WORKFLOWS_PAGE,
+        {"data": [_execution_list_item("t", "2026-08-06T10:15:00.000Z")]},
+        _execution_with_sj3_rows("t", "111"),
+    ])
+    post_transport = stub_module_transport_factory([
+        _base_enrichment_workflow(),
+        _base_enrichment_workflow(),
+        {}, {}, {},
+        _base_enrichment_workflow(record_writes='"true"', ids='"111"'),  # arm verify
+        _poisoned_body(),                                                # dispatch POST
+        _base_enrichment_workflow(record_writes='"true"', ids='"111"'),  # disarm read
+        _base_enrichment_workflow(record_writes='"true"', ids='"111"'),  # apply_mutation re-read
+        {}, {}, {},
+        _base_enrichment_workflow(),                                    # disarm verify
+    ])
+
+    result = scheduled_arm.run_scheduled_arm_cycle(
+        fake_config, get_transport=get_transport, post_transport=post_transport)
+
+    assert result["outcome"] == "dispatched"
+    assert result["disarm"]["outcome"] == n8n_arming.DISARMED
+    assert result["records_incomplete"] is True
+    assert result["written_records_failures"][0]["chunk_index"] == 0
+    assert result["written_records_failures"][0]["reason"]
+
+
+def test_the_incomplete_outcome_carries_the_dispatchs_run_id(
+        armed_env, fake_config, stub_get_transport_factory, stub_module_transport_factory,
+        tmp_path, monkeypatch):
+    """Test 2 — the outcome names the run id so an operator can find the exact
+    per-run written-records artifact the incomplete list belongs to."""
+    artifact = tmp_path / "written_records.json"
+    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
+
+    fake_config = {**fake_config, "max_records_per_chunk": 2}
+    get_transport = stub_get_transport_factory([
+        WORKFLOWS_PAGE, WORKFLOWS_PAGE,
+        {"data": [_execution_list_item("t", "2026-08-06T10:15:00.000Z")]},
+        _execution_with_sj3_rows("t", "111"),
+    ])
+    post_transport = stub_module_transport_factory([
+        _base_enrichment_workflow(),
+        _base_enrichment_workflow(),
+        {}, {}, {},
+        _base_enrichment_workflow(record_writes='"true"', ids='"111"'),
+        _poisoned_body(),
+        _base_enrichment_workflow(record_writes='"true"', ids='"111"'),
+        _base_enrichment_workflow(record_writes='"true"', ids='"111"'),
+        {}, {}, {},
+        _base_enrichment_workflow(),
+    ])
+
+    result = scheduled_arm.run_scheduled_arm_cycle(
+        fake_config, get_transport=get_transport, post_transport=post_transport)
+
+    assert isinstance(result["run_id"], str) and result["run_id"]
+
+
+def test_an_incomplete_list_exits_non_zero_even_though_the_dispatch_succeeded():
+    """Test 3 — the monitor must fire: the process exit code is non-zero for a run
+    with an incomplete written-records list even though the dispatch outcome itself
+    reports `dispatched` (a success)."""
+    result = {"outcome": "dispatched", "records_incomplete": True}
+    assert scheduled_arm._exit_code(result) == 1
+
+
+def test_a_clean_cycles_exit_code_and_outcome_shape_are_unchanged():
+    """Test 4 — a clean cycle (nothing incomplete) still exits zero, unaffected by
+    this gap closure."""
+    result = {"outcome": "dispatched", "records_incomplete": False}
+    assert scheduled_arm._exit_code(result) == 0
+    assert scheduled_arm._exit_code({"outcome": "dispatched"}) == 0
+    assert scheduled_arm._exit_code({"outcome": "no_recent_sj3_tick"}) == 0
+    assert scheduled_arm._exit_code({"outcome": "dispatch_failed"}) == 1
 
 
 # =====================================================================================

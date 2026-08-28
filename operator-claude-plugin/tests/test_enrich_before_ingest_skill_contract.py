@@ -551,4 +551,23 @@ def test_the_skill_states_the_profile_page_rule_at_the_confirm_step():
 def test_the_skill_refuses_the_batch_while_any_row_is_undecided():
     body = _normalized(_text())
     assert "company_domain.to_envelope_spec" in body
+
+
+# ---------------------------------------------------------------------------------
+# 59-09 gap closure (D-59-10, 2026-08-29) — a written-records bookkeeping failure
+# never stops a dispatch, but a run that finishes with an incomplete list must say
+# so loudly. This block pins the fourth of the plan's four required surfaces (the
+# other three are chunking.DispatchOutcome, scheduled_arm.py's outcome/exit code,
+# and enrich-records/SKILL.md's own equivalent pin).
+# ---------------------------------------------------------------------------------
+
+
+def test_the_skill_reports_an_incomplete_written_records_list_loudly():
+    body = _normalized(_text())
+    assert "outcome.written_records_failures" in body
+    assert "INCOMPLETE" in body, (
+        "the incomplete condition must be stated in words an operator cannot miss, "
+        "not buried in a field name"
+    )
+    assert "D-59-10" in body
     assert "an undecided row stops the whole batch" in body.lower()

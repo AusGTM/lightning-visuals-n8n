@@ -261,3 +261,22 @@ def test_the_skill_states_the_second_pass_cost_of_confirming_a_held_identity_mat
     )
     assert "confirming a held match and sending it again re-runs the whole lookup" in body
     assert "costs the same as this run did" in body
+
+
+# ---------------------------------------------------------------------------------
+# 59-09 gap closure (D-59-10, 2026-08-29) — a written-records bookkeeping failure
+# never stops a dispatch, but a run that finishes with an incomplete list must say
+# so loudly. This block pins the fourth of the plan's four required surfaces (the
+# other three are chunking.DispatchOutcome, scheduled_arm.py's outcome/exit code,
+# and enrich-before-ingest/SKILL.md's own equivalent pin).
+# ---------------------------------------------------------------------------------
+
+
+def test_the_skill_reports_an_incomplete_written_records_list_loudly():
+    body = _normalized(_text())
+    assert "outcome.written_records_failures" in body
+    assert "INCOMPLETE" in body, (
+        "the incomplete condition must be stated in words an operator cannot miss, "
+        "not buried in a field name"
+    )
+    assert "D-59-10" in body

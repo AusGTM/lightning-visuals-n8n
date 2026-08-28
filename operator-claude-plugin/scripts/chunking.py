@@ -28,6 +28,18 @@ fires, against a ~100 s Cloudflare ceiling. A timeout is therefore a CHUNK FAILU
 skip rule (D-11b) — telling "the backend rejected it" from "the backend timed out while
 still working" is Phase 26's job, and conflating them here would either duplicate work or
 throw away the chunks that would have succeeded.
+
+5. A WRITTEN-RECORDS BOOKKEEPING FAILURE NEVER STOPS THE DISPATCH (D-59-10, operator,
+   2026-08-29). `written_records.append_chunk` can go short two ways — it can raise
+   `WrittenRecordsError`, or it can return a falsey result on an `OSError` — and BOTH are
+   caught in `dispatch_plan`'s loop, recorded, and the run keeps sending. This honours
+   D-59-06's shipped, operator-facing promise that once enrichment and writing start, the
+   run continues until done; the rejected alternative was aborting the dispatch on an
+   unrecordable write, which trades a known, reportable gap in the record for an unknown,
+   partial write state in HubSpot. The trade-off D-59-10 names explicitly: a run can now
+   finish with an INCOMPLETE written-records list, and that condition is surfaced loudly —
+   never swallowed — in `DispatchOutcome.written_records_failures`, and from there into
+   `scheduled_arm.py`'s outcome and exit code and both skills' relay to the operator.
 """
 import json
 import uuid
@@ -115,12 +127,29 @@ class DispatchOutcome:
     `run_id` is the id every chunk was flushed under, into D-59-07's durable
     "what got written" artifact. Under D-59-09 each run flushes into its OWN file —
     `written_records.written_records_path(run_id)` — rather than a path shared across
-    runs (see `written_records.py`'s own `append_chunk` for the flush)."""
+    runs (see `written_records.py`'s own `append_chunk` for the flush).
+
+    `written_records_failures` (D-59-10, 59-09 gap closure) names every chunk whose
+    written-records bookkeeping failed — a raised `WrittenRecordsError` OR a falsey
+    `append_chunk` return (its documented degrade on an `OSError`), one guard in the
+    loop below catches both. Default is an empty tuple, NEVER `None`, so a caller
+    iterates it unconditionally exactly like `responses` and `ChunkResult.resolvable`
+    above. It is a SEPARATE field from `results` on purpose: by the time
+    `append_chunk` runs, the chunk's own `ChunkResult` is already built and appended —
+    frozen — and a bookkeeping miss is categorically NOT a dispatch failure (the
+    HubSpot write for that chunk may already have landed), so it must never flip
+    `ChunkResult.ok` or add the chunk to `failed_batch` for re-send. Each entry is
+    `{"chunk_index": int, "reason": str}`. A non-empty tuple here means the run
+    completed with an INCOMPLETE written-records list — D-59-10's named trade-off for
+    never stopping the dispatch on this class of failure — and this field is the first
+    of the four surfaces that must say so loudly (`scheduled_arm.py`'s outcome and
+    exit code, and both skills' relay, are the other three)."""
 
     results: tuple
     failed_batch: dict = None
     responses: tuple = field(default_factory=tuple)
     run_id: str = None
+    written_records_failures: tuple = field(default_factory=tuple)
 
 
 def chunk_ceiling(config, key=CEILING_KEY):
@@ -300,6 +329,9 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
     function stays deliberately GRANT-UNAWARE — no per-chunk revocation hook is added
     here (D-59-06/GRANT-05: revocation bites on the next send, not mid-run; see
     `test_dispatch_plan_has_no_grant_aware_hook_to_revoke_against`).
+
+    A written-records bookkeeping failure (D-59-10) never stops this loop either — see
+    fact 5 in the module docstring and the guard around `append_chunk` below.
     """
     if run_id is None:
         run_id = uuid.uuid4().hex
@@ -307,6 +339,7 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
     results = []
     responses = []
     failed_chunks = []
+    written_records_failures = []
 
     for index, chunk in enumerate(plan.chunks):
         rows = plan.row_counts[index]
@@ -344,9 +377,34 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
         # loop completes, so a crash of the calling process between this chunk and the
         # next would lose everything the loop had accumulated if this call moved out of
         # the loop — that is the exact partial-run guarantee this artifact exists for.
-        # `append_chunk` never raises on an I/O failure (T-59-04): a bookkeeping miss
-        # must never become a mid-run stop.
-        written_records.append_chunk(run_id, index, body)
+        #
+        # D-59-10 (operator, 2026-08-29): a bookkeeping failure here must never stop
+        # the dispatch — this is the ONE guard covering BOTH ways the written-records
+        # list can go short. `append_chunk` is documented to return a falsey result on
+        # an `OSError` rather than raising (T-59-04) — checked below. It can ALSO
+        # raise `WrittenRecordsError` for a shape or forbidden-name problem in the
+        # response body (a defect in the DATA, not the environment, so `append_chunk`
+        # itself does not decide whether to continue) — caught below. Guarding only
+        # the exception would leave the falsey-return path open, which is exactly the
+        # live silent-short-artifact class D-59-10 names; guarding only the exception
+        # would repeat that mistake. Neither path touches this chunk's own
+        # `ChunkResult` (already appended above) or `failed_chunks`: a bookkeeping miss
+        # is not a dispatch failure, and the HubSpot write for this chunk may already
+        # have landed.
+        try:
+            flushed = written_records.append_chunk(run_id, index, body)
+        except written_records.WrittenRecordsError as e:
+            flushed = False
+            bookkeeping_reason = str(e)
+        else:
+            bookkeeping_reason = (
+                None if flushed
+                else "the written-records artifact could not be saved (an I/O failure)"
+            )
+        if not flushed:
+            written_records_failures.append(
+                {"chunk_index": index, "reason": bookkeeping_reason}
+            )
         if reason is not None:
             failed_chunks.append(chunk)
 
@@ -355,6 +413,7 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
         failed_batch=failed_batch(failed_chunks),
         responses=tuple(responses),
         run_id=run_id,
+        written_records_failures=tuple(written_records_failures),
     )
 
 

@@ -16,6 +16,46 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-08-29
+
+### Fixed
+
+- **D-59-10 gap closure: a written-records bookkeeping failure never stops a
+  dispatch.** `written_records.WrittenRecordsError` was not one of the exception
+  types `chunking.dispatch_plan`'s loop caught, so it could propagate and abort an
+  armed, in-progress dispatch — and on the unattended path it crashed
+  `scheduled_arm.py` with an unhandled traceback and no structured outcome, discarding
+  whatever a cycle had already accumulated, while that module's own comment asserted
+  this could not happen. Operator ruling: catch it in the loop the same way
+  `DispatchError` already is, record the failure, and keep sending — this honours
+  D-59-06's shipped, operator-facing promise that once enrichment and writing start,
+  the run continues until done. **Aborting the dispatch on an unrecordable write was
+  considered and rejected**: it is better for auditability in the abstract, but it
+  contradicts D-59-06's promise and can strand a batch mid-run — trading a known,
+  reportable gap in the record for an unknown, partial write state in HubSpot.
+  - `chunking.DispatchOutcome` gains `written_records_failures` (empty-tuple default,
+    never `None`) naming every chunk whose bookkeeping went short. One guard covers
+    BOTH ways the list can go short: a raised `WrittenRecordsError`, and
+    `append_chunk`'s pre-existing falsey return on an `OSError`, which the loop
+    ignored before this release — a live silent-short-artifact path of exactly the
+    class this ruling names. The chunk's own `ChunkResult` and `failed_batch`
+    membership are untouched: a bookkeeping miss is not a dispatch failure, the
+    HubSpot write for that chunk may already have landed.
+  - **The trade-off, paid loudly rather than swallowed:** a run can now finish with an
+    INCOMPLETE written-records list. It is surfaced on all four surfaces this closure
+    requires — the new `DispatchOutcome` field; `scheduled_arm.py`'s returned outcome,
+    which now also carries the dispatch's `run_id` so the artifact can be found; a
+    non-zero process exit code even when the dispatch outcome itself reports
+    `dispatched` (a genuine success — the outcome name is never renamed to hide it);
+    and both `enrich-records`/`enrich-before-ingest` skills, which now lead with the
+    incomplete condition in their reporting instructions before anything else.
+  - `scheduled_arm.py`'s stale comment claiming `dispatch_plan` could only raise
+    `NotArmedError` from inside the armed window is corrected in this same commit.
+  - Lead test drives a multi-chunk `dispatch_plan` with a poisoned response body end
+    to end; the unattended path gets a full `run_scheduled_arm_cycle` — unit-level
+    coverage alone repeats the mistake that let all four gaps in this phase ship past
+    three green suites.
+
 ## [0.27.0] - 2026-08-29
 
 ### Fixed
