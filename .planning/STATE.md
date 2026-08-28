@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Unattended Session Runs
-current_phase: 59
+current_phase: 54
 current_phase_name: frictionless-write-path
-status: planning
+status: executing
 stopped_at: Phase 54 sealed; Phase 59 context written and ready to plan
-last_updated: "2026-08-28T00:00:00.000Z"
+last_updated: "2026-08-28T12:57:51.152Z"
 last_activity: 2026-08-28
 last_activity_desc: Phase 53 operator walk run (GRANT-01 still not ticked); FINDING 2 fixed and released as plugin 0.20.0; Phase 59 ready to plan
 progress:
-  total_phases: 8
+  total_phases: 5
   completed_phases: 2
-  total_plans: 17
+  total_plans: 26
   completed_plans: 17
-  percent: 25
+  percent: 77
 ---
 
 # Project State
@@ -152,7 +152,7 @@ predating the window. VETO-03 bar still 0.
 
 Phase: 54 (single-pass-armed-dispatch) — EXECUTING
 Plan: 5 of 5
-Status: Phase complete — ready for verification
+Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
   has executed on a real record. **Nothing is armed** — windows #1 and #2 were each opened
