@@ -43,41 +43,63 @@ created: 2026-08-28
 ## Per-Task Verification Map
 
 No `phase_req_ids` are mapped to this phase, so the traceability column is by DECISION id rather
-than REQ id. The planner fills task ids in against this surface.
+than REQ id. **Owners filled in by the planner, 2026-08-28** (6 plans, 5 waves — see
+`59-0*-PLAN.md`).
 
-| Decision | Behavior | Test Type | Automated Command | File Exists | Status |
-|----------|----------|-----------|-------------------|-------------|--------|
-| D-59-04 | credentials absent from `os.environ` by default | unit (new) | `.venv/bin/python -m pytest tests/test_conftest_credential_guard.py -x` (name illustrative) | ❌ W0 | ⬜ pending |
-| D-59-04 | credentials **present** when `RUN_LIVE_PARITY=true` — the failure mode reproduced live during research | unit (new) | same file, opt-in case | ❌ W0 | ⬜ pending |
-| D-59-04 | existing live tests still pass with real credentials when opted in | regression (live) | `RUN_LIVE_PARITY=true .venv/bin/python -m pytest tests/test_scoring_parity.py -k live -x` | ✅ `tests/test_scoring_parity.py` | ⬜ pending |
-| D-59-06 | session-start note text is present in the shipped hook payload | contract (assert the file/JSON, not host stdout) | a test asserting `operator-claude-plugin/hooks/hooks.json` exists, declares a `SessionStart` matcher, and its payload contains the run-to-completion sentence | ❌ W0 | ⬜ pending |
-| D-59-06 | note actually fires at session start | **manual** | one operator/Claude session start | — | ⬜ pending |
-| D-59-07 | artifact survives a chunk-7-of-20 interruption | unit (new) | drive `dispatch_plan` with a stub transport, raise after N chunks, assert the durable file already holds N chunks' worth of written ids | ❌ W0 | ⬜ pending |
-| D-59-07 | artifact reflects a revoked-but-completing run | integration (extends existing) | extend the file containing `test_a_revocation_midway_does_not_stop_a_running_dispatch` — **locate and read it before planning the extension** | ❌ W0 (extends existing file) | ⬜ pending |
-| D-59-08 | `extraction.md` wording rewritten; the verbatim-survival sentence still present | contract (existing pattern) | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_no_invention_structural.py -x` | ✅ exists | ⬜ pending |
-| D-59-08 | each converted gate proposes rather than refuses, and a declined proposal still refuses | unit, per converted gate | one test per gate in the inventory | ❌ W0 | ⬜ pending |
-| D-59-08 | a Claude-resolved value carries provenance saying so, never dressed as source-derived | contract | assert the provenance field on a resolved row | ❌ W0 | ⬜ pending |
+| Decision | Behavior | Test Type | Owner | Automated Command | File Exists | Status |
+|----------|----------|-----------|-------|-------------------|-------------|--------|
+| D-59-04 | credentials absent from `os.environ` by default | unit (new) | **59-02 T1** | `.venv/bin/python -m pytest tests/test_conftest_credential_guard.py -x` | ❌ W0 | ⬜ pending |
+| D-59-04 | credentials **present** when `RUN_LIVE_PARITY=true` — the failure mode reproduced live during research | unit (new), **subprocess** | **59-02 T1** | `RUN_LIVE_PARITY=true ANTHROPIC_API_KEY=not-a-real-key .venv/bin/python -m pytest tests/_credential_guard_probe.py -q` — must be a subprocess: the autouse fixture decides before any test body runs | ❌ W0 | ⬜ pending |
+| D-59-04 | existing live tests still pass with real credentials when opted in | regression (live) | **59-02 T2 — DEFERRED, not performed** | `RUN_LIVE_PARITY=true .venv/bin/python -m pytest tests/test_scoring_parity.py -k live -x` (costs real HubSpot/Anthropic calls). 59-02 T2 runs `--collect-only` on both live-gated files instead and records the deferral explicitly | ✅ `tests/test_scoring_parity.py` | ⬜ pending |
+| D-59-06 | session-start note content is present and correct | contract (**subprocess, stronger than a file assertion**) | **59-04 T1** | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_session_start_hook.py -x` — runs `bash hooks/session-start.sh` and asserts stdout carries all three facts, plus `hooks.json` shape and a no-question-mark property | ❌ W0 | ⬜ pending |
+| D-59-06 | note actually fires at session start (DELIVERY by the host) | **manual** | **59-04 T2 records it as unperformed** | one operator/Claude session start — content is automated above, only host delivery is unverified | — | ⬜ pending |
+| D-59-07 | artifact survives a mid-loop interruption (chunk 3 of 5) | unit (new) | **59-01 T1 (TRACER)** | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_written_records.py -x` — stub transport raises a bare `RuntimeError` (deliberately not a type the loop catches) so it escapes as a process interruption would | ❌ W0 | ⬜ pending |
+| D-59-07 | artifact reflects a revoked-but-completing run | integration (extends existing) | **59-01 T2** | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_write_grant.py -x` — a NEW sibling test; `test_a_revocation_midway_does_not_stop_a_running_dispatch` stays byte-identical | ❌ W0 (extends `test_write_grant.py`) | ⬜ pending |
+| D-59-07 | the retired pre-emptive disclosure is gone and cannot return | contract (re-pointed) | **59-03 T1 + T2** | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_write_grant.py operator-claude-plugin/tests/test_enrich_before_ingest_skill_contract.py -x` — each re-point adds a NEGATIVE assertion | ✅ both exist | ⬜ pending |
+| D-59-08 | every operator-facing refuse-and-stop gate is inventoried and decided | document | **59-05 T1**, closed out by **59-06 T3** | `test -f .planning/phases/59-frictionless-write-path/59-GATE-INVENTORY.md` + the difficulty-dismissal grep at 0 | ❌ W0 | ⬜ pending |
+| D-59-08 | the identity gate reports resolvable failures instead of only rejecting | unit (new) | **59-05 T2** | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_extraction_resolvable.py -x` | ❌ W0 | ⬜ pending |
+| D-59-08 | a Claude-resolved value carries provenance from a CLOSED vocabulary; an unrecognised source rejects | contract (extends existing) | **59-05 T2** | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_no_invention_structural.py -x` — the forbidden-name list is EXTENDED, never relaxed | ✅ exists (read in full first) | ⬜ pending |
+| D-59-08 | `extraction.md` rewritten; the gap-filling sentence survives verbatim | contract (grep) | **59-05 T3** | `grep -c "Never fill a gap to make a row satisfy the identity rule" operator-claude-plugin/skills/contact-upload/extraction.md` ≥ 1 | ✅ exists | ⬜ pending |
+| D-59-08 | enrichment-lane refusals name a legitimate resolution source | unit (extends existing) | **59-06 T1** | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_enrichment_envelope.py -x` | ❌ W0 (extends existing file) | ⬜ pending |
+| D-59-08 | the grant lane's empty-record-set dead end is resolvable, and the control did not move | unit + structural | **59-06 T2** | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_write_grant.py -x` — includes a structural test that no HubSpot search call was added to `write_grant.py` | ❌ W0 (extends existing file) | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+
+**Decisions with no implementing task, by design:** D-59-01 (the walk — run, recorded, and
+ruled OUT of this phase), D-59-02 (a scoping statement pointing at Phases 55/56/57), D-59-03
+(deferred to Phase 60), D-59-05 (`ALLOW_REVIEW_SUBMIT` already removed). These are records,
+completed work and deferrals — not unimplemented scope.
 
 ---
 
 ## Wave 0 Requirements
 
-- [ ] `tests/conftest.py` — does not exist at repo root at all; D-59-04's entire deliverable
-- [ ] A test asserting the D-59-04 fixture does **NOT** strip credentials under
-      `RUN_LIVE_PARITY=true`. Research proved live that pytest runs autouse fixtures for a test
-      whose `skipif` evaluates false, so an unconditional strip breaks the two existing live
-      tests. Without this test the regression is silent until someone runs the live suite and
-      gets a confusing auth error.
-- [ ] A harness for D-59-07's crash-survival requirement — no existing test in this repo
-      simulates a mid-loop process interruption. The closest existing pattern
-      (`test_a_revocation_midway_does_not_stop_a_running_dispatch`) tests revocation, not
-      artifact durability.
-- [ ] `operator-claude-plugin/tests/test_no_invention_structural.py` must be read **in full**
-      before D-59-08's `extraction.md` rewrite — it likely already asserts adjacent text the
-      rewrite must keep passing.
-- [ ] `operator-claude-plugin/hooks/` does not exist — D-59-06 is new plugin infrastructure.
+Each gap is OWNED by a named plan/task (planner, 2026-08-28) — the quality gate checks this.
+
+- [ ] **OWNER: 59-02 Task 1.** `tests/conftest.py` — does not exist at repo root at all;
+      D-59-04's entire deliverable.
+- [ ] **OWNER: 59-02 Task 1.** A test asserting the D-59-04 fixture does **NOT** strip
+      credentials under `RUN_LIVE_PARITY=true`. Research proved live that pytest runs autouse
+      fixtures for a test whose `skipif` evaluates false, so an unconditional strip breaks the
+      two existing live tests. Without this test the regression is silent until someone runs
+      the live suite and gets a confusing auth error. Implemented as a **subprocess** run of
+      `tests/_credential_guard_probe.py`, because the autouse fixture has already decided by
+      the time any in-process test body runs.
+- [ ] **OWNER: 59-01 Task 1 (the TRACER).** A harness for D-59-07's crash-survival requirement
+      — no existing test in this repo simulates a mid-loop process interruption. The closest
+      existing pattern (`test_a_revocation_midway_does_not_stop_a_running_dispatch`) tests
+      revocation, not artifact durability, and stays byte-identical; 59-01 Task 2 adds a
+      sibling test for the revoked-run case rather than editing it.
+- [ ] **OWNER: 59-05 Task 2 `read_first`.**
+      `operator-claude-plugin/tests/test_no_invention_structural.py` must be read **in full**
+      before D-59-08's `extraction.md` rewrite. Confirmed during planning: its final test
+      structurally forbids any function in `extraction.py` whose name suggests it resolves or
+      fills a value, which is why D-59-08's conversion is CLASSIFICATION rather than filling.
+      That test is EXTENDED to cover the new resolution surface, never relaxed.
+- [ ] **OWNER: 59-04 Task 1.** `operator-claude-plugin/hooks/` does not exist — D-59-06 is new
+      plugin infrastructure. Location confirmed correct by
+      `test_plugin_manifest.py:40-45`, whose own assertion message states `hooks/` belongs at
+      the plugin root.
 
 ---
 
