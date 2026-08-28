@@ -104,6 +104,31 @@ variable), and a design that runs the provider waterfall twice per written recor
         runs outlive their request, a grant can expire mid-run with no defined answer. Decide it
         here: either the run inherits the grant it started under, or `dispatch_plan` becomes
         grant-aware.
+      - **Make the credential leak structurally impossible, not merely absent.** Folded in by
+        operator decision 2026-08-27 (does not affect Phase 55, so it waits for 59). Add a root
+        `tests/conftest.py` whose autouse fixture strips `ANTHROPIC_API_KEY` /
+        `HUBSPOT_PRIVATE_APP_TOKEN` from `os.environ` unless a test is `@live`-marked, mirroring
+        the reasoning `operator-claude-plugin/tests/conftest.py` already states for its own
+        `no_network` fixture: *by construction rather than by discipline*.
+
+        **Why, from evidence (2026-08-27, phase 54's regression gate).** A single module-level
+        `load_dotenv()` in `tests/test_company_native_properties.py` pushed `.env` into
+        `os.environ` at COLLECTION time, so `tests/test_merge_policy.py` — whose own header reads
+        *"Fully OFFLINE and DETERMINISTIC — no Anthropic call, no network, no API key"* — made
+        real billable Anthropic calls on every full-suite run. Fixed in commit `89c9871`; the
+        full suite went 169s → 10.8s, and that 158-second drop was the live API traffic.
+
+        **A sweep confirmed only that one instance existed** — `operator-claude-plugin/tests/`
+        has zero `load_dotenv` calls, every other hit is inside a docstring wrapper idiom or
+        explicitly deferred out of import (`main.py` / `src/service.py` both carry a "NOT called
+        at module import" note), `scripts/apply_fit_score_formula.py`'s module-level call is
+        imported by nothing, and no `pytest-dotenv`/`pytest-env` plugin or config `env` block
+        exists. So this item is not cleanup; it is the guard that stops the NEXT one.
+        **Two facts make it worth doing:** the root `tests/` suite has no `conftest.py` at all,
+        and the plugin suite's `no_network` guard patches `requests` — while the Anthropic SDK
+        uses `httpx`, so it would not have caught these calls either. Client construction sites
+        to cover: `src/classifier_haiku.py:57`, `src/validator_sonnet.py:36`, and
+        `src/web_research.py:126` (a bare `Anthropic()` reading the ambient key).
 
       **Deliberately untouched** (operator-confirmed load-bearing, 2026-08-27): the n8n
       write-safety gate nodes (HubSpot has no rollback; a bad merge hits ~700 live records), the
