@@ -58,6 +58,27 @@ ambiguity aggregation (D-06/D-07):
     the artifact, and `validate()` runs again over the corrected file. A Python
     resolution path would be a second way for a value to enter a row — exactly the
     surface D-07 exists to keep closed.
+
+D-59-08 (operator ruling, 2026-08-28): a record that fails the identity pre-flight is no
+longer only rejected — it is ALSO classified into `resolvable`, additive to `rejected`
+(never a replacement; every existing reader of `rejected` sees exactly what it saw
+before). Each `resolvable` entry names the record's raw index, its `record_type`, and
+the `missing` field names from whichever identity group came closest to being satisfied
+— so the operator is offered a path forward (a proposal to confirm) instead of only a
+dead end. This is CLASSIFICATION, not filling: `validate()` still never writes a value
+into a row. A value only ever enters a row the way it always has — Claude rewrites the
+artifact, `validate()` runs again — and the closed `RESOLUTION_SOURCES` vocabulary below
+is the anti-laundering control that keeps a Claude-resolved value from being presented as
+source-derived.
+
+A record MAY carry an optional `resolutions` key (a list, sibling to `row` and
+`provenance`, never a `row` key) naming which of its fields were resolved and from what
+source. Validated BEFORE the identity check: an entry naming a source outside
+`RESOLUTION_SOURCES`, or a field the record's row does not actually carry a value for,
+REJECTS the whole record. A record with no `resolutions` key gets an empty list on its
+accepted entry, not a missing key. The D-07 contradiction pass is UNCHANGED by any of
+this — a resolved field named by an ambiguity still rejects the record; being resolved is
+never an exemption from D-07.
 """
 import csv
 import json
@@ -77,6 +98,20 @@ SCRATCH_DIR = Path(__file__).resolve().parent.parent / "scratch"
 # record's own `record_type` selects the company lane.
 COMPANY_MAPPING_PATH = Path(__file__).resolve().parent.parent / "config" / "company_column_mapping.yaml"
 
+# D-59-08 (operator ruling, 2026-08-28): the CLOSED vocabulary of legitimate sources a
+# `resolutions` entry may claim. Illegitimate — and still forbidden no matter what a
+# `resolutions` entry claims — are: Claude's own recall about the person or company from
+# training data; inference from "companies like this usually..."; a plausible corporate
+# email pattern (`first@company.com`); anything the operator would have no way to check.
+# A `resolutions` entry naming a source outside this set REJECTS the record rather than
+# being accepted unlabelled (T-59-20) — see validate()'s per-record resolutions check.
+RESOLUTION_SOURCES = frozenset({
+    "hubspot_lookup",
+    "operator_statement",
+    "provider_result",
+    "same_row_derivation",
+})
+
 
 class ExtractionError(Exception):
     """Raised when the extraction artifact cannot be validated at all: missing file,
@@ -91,11 +126,15 @@ class ExtractionError(Exception):
 
 @dataclass
 class ExtractionResult:
-    accepted: list       # [{"row": {canonical: value}, "provenance": {...} | [...]}, ...]
+    accepted: list       # [{"row": {canonical: value}, "provenance": {...} | [...], "resolutions": [...]}, ...]
     rejected: list       # [{"index": int, "reason": str}, ...]
     dropped_keys: list   # [{"index": int, "key": str}, ...]
     ambiguities: list = field(default_factory=list)   # [{"record_index", "field", "reason"}, ...]
     collapses: list = field(default_factory=list)      # [{"record_index", "merged_from": [...]}, ...]
+    # D-59-08: additive to `rejected`, never a replacement — [{"index", "record_type",
+    # "missing": [...], "reason"}, ...], one entry per record that failed the identity
+    # pre-flight and has a group of missing fields a legitimate source could supply.
+    resolvable: list = field(default_factory=list)
 
 
 def _load_mapping(mapping_path=None) -> dict:
@@ -226,7 +265,11 @@ def _merge_cluster(entries: list) -> tuple:
     `record_type` carries through from the cluster's own entries (all entries in one
     dedupe() call share the same type since Phase 58's per-type grouping runs
     dedupe() separately per type — see `validate()`) — absent on entries that predate
-    the `record_type` field, in which case the merged entry carries none either."""
+    the `record_type` field, in which case the merged entry carries none either.
+
+    `resolutions` (D-59-08) merges the same way `provenance` does: every contributing
+    entry's own `resolutions` list concatenates into the merged row's list, so a merged
+    row never loses the record of which of its fields were resolved and from where."""
     keys = set()
     for e in entries:
         keys.update(e["row"].keys())
@@ -243,7 +286,8 @@ def _merge_cluster(entries: list) -> tuple:
             conflicts.append(key)
 
     provenance = [e["provenance"] for e in entries]
-    merged = {"row": merged_row, "provenance": provenance}
+    resolutions = [item for e in entries for item in (e.get("resolutions") or [])]
+    merged = {"row": merged_row, "provenance": provenance, "resolutions": resolutions}
     record_type = entries[0].get("record_type")
     if record_type is not None:
         merged["record_type"] = record_type
@@ -476,6 +520,10 @@ def validate(artifact: dict, mapping_path=None) -> ExtractionResult:
     accepted: list = []
     rejected: list = []
     dropped_keys: list = []
+    # D-59-08: raw artifact index, same as `rejected` — never remapped through the
+    # per-type split/reassembly below, unlike ambiguities, because it is reported
+    # against the record as originally written, not a post-dedupe position.
+    resolvable: list = []
 
     for i, record in enumerate(artifact.get("records", [])):
         try:
@@ -528,6 +576,64 @@ def validate(artifact: dict, mapping_path=None) -> ExtractionResult:
                 else:
                     dropped_keys.append({"index": i, "key": key})
 
+            # D-59-08: validate an optional `resolutions` key BEFORE the identity
+            # check — the anti-laundering control (T-59-20). A record's `resolutions`
+            # is a RECORD key, sibling to `row`/`provenance`, never a `row` key, so
+            # the canonical-prop strip above never touches it. Every entry must name
+            # a field the cleaned row actually carries a value for, and a source from
+            # the CLOSED `RESOLUTION_SOURCES` vocabulary — anything else rejects the
+            # whole record rather than being accepted unlabelled.
+            resolutions_raw = record.get("resolutions")
+            if resolutions_raw is None:
+                resolutions_raw = []
+            if not isinstance(resolutions_raw, list):
+                rejected.append(
+                    {
+                        "index": i,
+                        "reason": f"record's 'resolutions' is not a list: {resolutions_raw!r}",
+                    }
+                )
+                continue
+            validated_resolutions: list = []
+            resolutions_invalid = False
+            for entry in resolutions_raw:
+                if not isinstance(entry, dict):
+                    rejected.append(
+                        {"index": i, "reason": f"resolutions entry is not an object: {entry!r}"}
+                    )
+                    resolutions_invalid = True
+                    break
+                res_field = entry.get("field")
+                if not res_field or not _present(clean_row.get(res_field)):
+                    rejected.append(
+                        {
+                            "index": i,
+                            "reason": (
+                                f"resolutions entry names field {res_field!r}, which "
+                                "this record's row does not actually carry a value for"
+                            ),
+                        }
+                    )
+                    resolutions_invalid = True
+                    break
+                res_source = entry.get("source")
+                if res_source not in RESOLUTION_SOURCES:
+                    rejected.append(
+                        {
+                            "index": i,
+                            "reason": (
+                                f"resolutions entry for {res_field!r} names source "
+                                f"{res_source!r}, which is outside the closed set of "
+                                f"legitimate resolution sources: {sorted(RESOLUTION_SOURCES)}"
+                            ),
+                        }
+                    )
+                    resolutions_invalid = True
+                    break
+                validated_resolutions.append(dict(entry))
+            if resolutions_invalid:
+                continue
+
             if not has_identity(clean_row, record_groups):
                 if record_type == "companies":
                     reason = "no identity present: give the company's name — that alone is enough"
@@ -537,6 +643,39 @@ def validate(artifact: dict, mapping_path=None) -> ExtractionResult:
                         "three of 'firstname'/'lastname'/'company' non-blank"
                     )
                 rejected.append({"index": i, "reason": reason})
+                # D-59-08: the rejection above is retained EXACTLY as it was — never
+                # removed, never moved — so every existing reader of `rejected`
+                # (preview.py, the CLI) sees exactly what it saw before this change.
+                # Additively, classify which identity group came closest, so the
+                # operator is offered a path forward instead of only a dead end.
+                # Tie-break: fewest absent fields wins (the shortest path to a valid
+                # row); a tie on missing-count is broken toward the group with MORE
+                # fields already present — the group the operator has given the most
+                # information toward, rather than an unrelated single-field group that
+                # happens to tie on missing-count alone.
+                missing_by_group = [
+                    ([f for f in group if not _present(clean_row.get(f))], len(group))
+                    for group in record_groups
+                ]
+                if missing_by_group:
+                    missing, _group_size = min(
+                        missing_by_group,
+                        key=lambda pair: (len(pair[0]), -(pair[1] - len(pair[0]))),
+                    )
+                    resolvable.append(
+                        {
+                            "index": i,
+                            "record_type": record_type,
+                            "missing": missing,
+                            "reason": (
+                                f"missing {', '.join(missing)} — could be resolved via a "
+                                "read-only HubSpot lookup, an earlier operator statement, "
+                                "an enrichment provider result, or a stated derivation "
+                                "from another field on this row, then proposed for "
+                                "confirmation"
+                            ),
+                        }
+                    )
                 continue
 
             accepted.append(
@@ -544,6 +683,7 @@ def validate(artifact: dict, mapping_path=None) -> ExtractionResult:
                     "row": clean_row,
                     "provenance": provenance,
                     "record_type": record_type,
+                    "resolutions": validated_resolutions,
                     # Internal bookkeeping only, stripped before this entry can ever
                     # reach ExtractionResult.accepted — see the raw_to_final lookup
                     # below, which is the only reader.
@@ -660,6 +800,7 @@ def validate(artifact: dict, mapping_path=None) -> ExtractionResult:
         dropped_keys=dropped_keys,
         ambiguities=all_ambiguities,
         collapses=collapses,
+        resolvable=resolvable,
     )
 
 
@@ -778,6 +919,7 @@ if __name__ == "__main__":
                 "dropped_keys": _result.dropped_keys,
                 "ambiguities": _result.ambiguities,
                 "collapses": _result.collapses,
+                "resolvable": _result.resolvable,
             }
         )
     )

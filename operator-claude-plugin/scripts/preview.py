@@ -191,8 +191,9 @@ def build_extracted_preview(result) -> dict:
     disagree about the same batch.
 
     `result` is duck-typed (an extraction.ExtractionResult or anything with the same
-    `.accepted`/`.rejected`/`.dropped_keys`/`.ambiguities` attributes) — this module does
-    not import extraction.py, so there is no import cycle with extraction.py importing
+    `.accepted`/`.rejected`/`.dropped_keys`/`.ambiguities` attributes, plus the optional
+    `.resolvable` attribute added by D-59-08) — this module does not import
+    extraction.py, so there is no import cycle with extraction.py importing
     resolve_mapping_path() above.
     """
     accepted = result.accepted
@@ -206,6 +207,10 @@ def build_extracted_preview(result) -> dict:
         "rejected": result.rejected,
         "dropped_keys": result.dropped_keys,
         "ambiguities": result.ambiguities,
+        # D-59-08: getattr with a default is required, not stylistic — this function's
+        # duck-typing contract must keep working for a shim carrying only the four
+        # original attributes; a bare `.resolvable` access would break every such caller.
+        "resolvable": getattr(result, "resolvable", []),
         "cost_block": tabular_cost_block(len(accepted)),
     }
 
