@@ -54,8 +54,10 @@ whatever seven columns happened to be in the source file.
    **The one exception, and say it here rather than at step 5:** if a write grant covering
    both of this flow's lanes is open, the operator is asked once instead of twice — that is
    D-53-05, their own decision of 2026-08-25. Name which lanes the open grant covers and say
-   what the single ask costs them: the HubSpot write is authorized before the enriched
-   preview exists. With no grant open, this flow asks twice, exactly as described above.
+   what the single ask covers: the grant enables enrichment and writes to HubSpot; after the
+   run, the records it actually wrote are listed in `written_records.json` (see step 5's
+   recorded edit, D-59-07, 2026-08-28, for what this line used to say and why it changed).
+   With no grant open, this flow asks twice, exactly as described above.
 
 2. **Resolve rows, then match them against HubSpot — unarmed.** For a spreadsheet
    (CSV/XLSX), read it with:
@@ -246,12 +248,20 @@ whatever seven columns happened to be in the source file.
    and step 7 asks again on its own.
 
    **Say what the operator accepted when they opened a grant covering both lanes, and say it
-   at the yes rather than after it:** the HubSpot write is **authorized before the enriched
-   preview exists**. Every row held for review, and every merge conflict where the source
-   file's own value was kept over a differing provider value, is authorized before they have
-   seen it — the enriched preview at step 6 is the only place those become visible ahead of a
-   write. It is still rendered and still worth reading; under a two-lane grant it is a report
-   rather than a gate. They can still stop the run by revoking the grant, and revoking
+   at the yes rather than after it:** the grant **enables enrichment and writes to
+   HubSpot** across both lanes. After the run, the records it actually wrote are listed in
+   `written_records.json`, in the plugin's durable state directory, so the operator can open
+   them in HubSpot and amend them.
+
+   > **RECORDED EDIT — D-59-07, operator, 2026-08-28.** This paragraph used to carry a
+   > longer pre-emptive warning, at the yes, describing the ordering of the write relative
+   > to the enriched preview and what that ordering left unseen ahead of a write. That
+   > warning is retired as operator-facing text — it was compensation nobody could act on
+   > until after the fact anyway. The D-53-05 trade itself (one grant spans both lanes, the
+   > allowlist stays record-scoped) is UNCHANGED; only what the operator receives in
+   > exchange for it changed, from a prediction to the actionable post-run list above.
+
+   They can still stop the run by revoking the grant, and revoking
    **refuses the next send** — it **does not stop a dispatch already running**, so a revoke
    arriving mid-dispatch still lets every remaining chunk of that send go out.
 

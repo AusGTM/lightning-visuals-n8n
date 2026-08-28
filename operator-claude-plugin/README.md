@@ -356,10 +356,14 @@ Four things worth knowing before you use one:
   the two-record chunk ceiling a forty-record send is twenty chunks, and all twenty go out
   after you revoke.
 - **On `enrich-before-ingest`, one grant can cover both lanes** — the enrichment lane and
-  the contacts lane — so you are asked once instead of twice. What that costs you, plainly:
-  the HubSpot write is authorized before the enriched preview exists, so rows held for
-  review and merge conflicts are authorized before you have seen them. The preview is still
-  rendered; under a two-lane grant it is a report rather than a gate.
+  the contacts lane — so you are asked once instead of twice. The grant enables enrichment
+  and writes to HubSpot across both lanes; after the run, the records it actually wrote are
+  listed in `written_records.json`, in the plugin's durable state directory, so you can open
+  them in HubSpot and amend them. *(RECORDED EDIT — D-59-07, operator, 2026-08-28: this
+  bullet used to carry a longer pre-emptive warning describing the ordering of the write
+  relative to the enriched preview; that warning is retired as operator-facing text and
+  replaced by the post-run list above — the D-53-05 trade itself, one grant spanning both
+  lanes, is unchanged.)*
 - **A grant lives in the conversation and is never written to disk.** It ends on
   completion, revocation, session end, an error, a ceiling breach, or two consecutive
   failures to turn writes back off.

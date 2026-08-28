@@ -17,10 +17,22 @@ grant may authorize both lanes of this flow, which means the HubSpot write can b
 authorized before the enriched preview exists. The pins below therefore no longer stop
 that collapse; they bind the UNGRANTED path (unchanged by D-53-04) and they carry the
 record that the ordering protection was removed on purpose and by whom. The protections
-that remain are asserted here too: the allowlist stays record-scoped to the named batch,
-and the disclosure the operator was given in exchange -- that the write is authorized
-before the enriched preview exists -- is pinned so a later edit cannot quietly drop it
-after the protection was already traded for it.
+that remain are asserted here too: the allowlist stays record-scoped to the named batch.
+
+RECORDED EDIT -- D-59-07, operator, 2026-08-28. The paragraph above used to end by
+saying that the disclosure the operator was given in exchange -- that the write is
+authorized before the enriched preview exists -- was pinned so a later edit could not
+quietly drop it. That sentence is now RETIRED as operator-facing text (53-04 called it
+"the whole of what you got for the protection you traded", a warning nobody could act
+on until after the fact anyway); this module no longer pins its presence. What is
+pinned instead, in
+`test_the_ingest_arm_heading_is_strictly_after_the_enriched_preview_heading`, is that
+the retired sentence is GONE from SKILL.md, and that a plain, non-blocking statement
+plus a pointer to the post-run written-records list took its place. The D-53-05 trade
+itself -- one grant, both lanes, the record-scoped allowlist and the ordering all
+unchanged -- is untouched by this edit; only what the operator reads about it changed.
+Leaving the paragraph above unedited would be stale prose asserting a pin that no
+longer exists, which is worse for a later reader than no note at all.
 """
 import re
 from pathlib import Path
@@ -202,7 +214,19 @@ def test_the_ingest_arm_heading_is_strictly_after_the_enriched_preview_heading()
     UNGRANTED path: with no grant open this flow asks twice and the preview still lands
     between the asks. It is no longer evidence that the write cannot be authorized early.
     What replaced the protection is the DISCLOSURE, asserted below in the same function so
-    a later edit cannot drop the sentence the operator was given in exchange."""
+    a later edit cannot drop the sentence the operator was given in exchange.
+
+    RECORDED EDIT -- D-59-07, operator, 2026-08-28. The DISCLOSURE named in the paragraph
+    above -- "the write is authorized before the enriched preview exists" -- is itself now
+    retired as operator-facing text: it was compensation nobody could act on until after
+    the fact anyway (53-04's own words). It is replaced by a plain, non-blocking statement
+    that the grant enables enrichment and writes to HubSpot, plus a pointer to the post-run
+    written-records list (`written_records.json`) the operator can open in HubSpot and
+    amend. The offset comparison above is UNCHANGED -- it still guards the ungranted path.
+    What changed below is the final assertion: it now asserts the new statement is present
+    AND that the retired sentence is gone, so the retired wording cannot come back
+    unnoticed. The D-53-05 trade the paragraph above describes (one grant, both lanes) is
+    itself untouched by this edit."""
     text = _text()
     preview_offset = text.find(ENRICHED_PREVIEW_HEADING)
     ingest_offset = text.find(INGEST_ARM_HEADING)
@@ -223,11 +247,25 @@ def test_the_ingest_arm_heading_is_strictly_after_the_enriched_preview_heading()
         f"{preview_offset}) -- on the ungranted path the enriched preview must still "
         "land in the operator's turn before the ingest arm can be spoken"
     )
-    assert "authorized before the enriched preview exists" in _normalized(text).lower(), (
-        "D-53-05 traded the ordering protection for one thing only: the operator being "
-        "told, at the yes, that a grant covering both lanes authorizes the HubSpot write "
-        "before the enriched preview exists. Without that sentence the trade is worse "
-        "than the one the operator agreed to"
+    normalized = _normalized(text).lower()
+    assert "enables enrichment and writes to hubspot" in normalized, (
+        "D-59-07 replaced the retired warning with a plain, non-blocking statement of "
+        "fact, said at the yes: a grant covering both lanes enables enrichment and "
+        "writes to HubSpot. Without that sentence the operator is told nothing at the "
+        "moment that matters"
+    )
+    assert "written_records.json" in normalized, (
+        "D-59-07's replacement for the retired warning points at the post-run "
+        "written-records list -- without it the plain statement above is not actionable, "
+        "which is exactly what made the retired warning worthless"
+    )
+    # NEGATIVE -- D-59-07, 2026-08-28: the retired D-53-05 warning must never come back,
+    # softened or not. This is what makes the pin above a re-point rather than a
+    # weakening.
+    assert "authorized before the enriched preview exists" not in normalized, (
+        "the retired D-53-05 warning reappeared -- D-59-07 retired it as operator-facing "
+        "text, replaced by the plain statement and the written-records pointer asserted "
+        "above"
     )
 
 
