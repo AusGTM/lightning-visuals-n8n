@@ -16,6 +16,33 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.23.0] - 2026-08-28
+
+### Added
+
+- **D-59-06: a `SessionStart` hook, the plugin's first `hooks/` directory.**
+  `hooks/hooks.json` declares a `SessionStart` entry (matcher `startup|resume`)
+  invoking `hooks/session-start.sh`, which prints a non-blocking note once per
+  session, before any send: once enrichment and writing to HubSpot start for a
+  batch, the run continues until it is done; revoking a write grant refuses the
+  NEXT send; and a dispatch already running finishes its remaining chunks, so a
+  revoke arriving mid-run does not stop it.
+  - **This note ships INSTEAD OF making the dispatch loop grant-aware.**
+    Revocation semantics are UNCHANGED by this release — a revoke still only
+    refuses the next send and still does not stop a running dispatch;
+    `dispatch_plan` remains grant-unaware and
+    `test_a_revocation_midway_does_not_stop_a_running_dispatch` is byte-identical.
+    This release makes that existing behaviour visible to the operator; it does
+    not tighten it.
+  - The hook script has zero dependencies (no config, no credential, no network,
+    no filesystem write) and exits 0 unconditionally, so the note appears even on
+    a fresh, unconfigured install.
+  - Proven by `tests/test_session_start_hook.py`, which runs the script by
+    subprocess and asserts on its stdout — this covers the note's CONTENT only.
+    Its DELIVERY (whether the Claude Code host actually fires the hook and
+    relays the note to the operator) requires a live session and is recorded as
+    an unperformed manual check in `59-VALIDATION.md`.
+
 ## [0.22.0] - 2026-08-28
 
 ### Changed
