@@ -16,10 +16,10 @@ the plan that converts it, or `n/a` when the decision is `NOT-APPLICABLE`/`ALREA
 | Gate | Site | Lane | What it refuses today | Decision | Legitimate resolution source | Owner |
 | --- | --- | --- | --- | --- | --- | --- |
 | GATE-01 | `extraction.py:531-540` (identity pre-flight) | ingest | A contact row with no non-blank `email` and no complete `firstname`/`lastname`/`company`; a company row with no non-blank `name`. This is the ruling's own origin — the LinkedIn-sourced row that dead-ended in `53-WALK-RECORD.md`. | **CONVERT** | HubSpot lookup, operator statement, provider result, same-row derivation | **Task 2 of this plan (59-05)** |
-| GATE-02 | `enrichment.py:314` (`build_envelope`, people form) | enrichment | A named person with no email, no `linkedin_url`, and no `lastname`+`company` pair — the backend's own match gate would burn three provider calls on a row that can only return nothing, so the client refuses first. | **CONVERT** | HubSpot lookup (name search), operator statement, provider result | **CONVERTED — 59-06 Task 1** (`RecordSpecError.resolvable`, commit `c8a43a3`) |
-| GATE-03 | `enrichment.py:368` (`build_envelope`, companies form — a profile-page URL with no name) | enrichment | A company row whose only given value is a social/profile-page URL (`_clean_domain` returns `None`) and carries no `name`, so neither a domain nor a name is usable. | **CONVERT** | HubSpot lookup (search on whatever name text accompanied the page), operator statement | **CONVERTED — 59-06 Task 1** (adds `same_row_derivation` for the page's own slug; the message itself stays verbatim) |
-| GATE-04 | `enrichment.py:377` (`build_envelope`, companies form — blank `name`, no domain) | enrichment | A company row's `name` key is present but blank, and there is no website/domain either. | **CONVERT** | Operator statement (ask for the company's actual name) | **CONVERTED — 59-06 Task 1** |
-| GATE-05 | `enrichment.py:385` (`build_envelope`, companies form — no `name` key at all, no domain) | enrichment | A company row never carried a `name` key at all (e.g. a search-results-screenshot row whose name never rendered), and has no domain either. | **CONVERT** | Operator statement | **CONVERTED — 59-06 Task 1** |
+| GATE-02 | `enrichment.py:314` (`build_envelope`, people form) | enrichment | A named person with no email, no `linkedin_url`, and no `lastname`+`company` pair — the backend's own match gate would burn three provider calls on a row that can only return nothing, so the client refuses first. | **CONVERT** | HubSpot lookup (name search), operator statement, provider result | **CONVERTED — 59-06 Task 1 built the payload (`RecordSpecError.resolvable`, commit `c8a43a3`); 59-07 carried it through `chunking.dispatch_plan` to `outcome.results` and into both skills' relay steps (gap closure 2026-08-29).** A gate is CONVERTED only once the payload reaches the operator — until 59-07 the one shipped call site discarded it. |
+| GATE-03 | `enrichment.py:368` (`build_envelope`, companies form — a profile-page URL with no name) | enrichment | A company row whose only given value is a social/profile-page URL (`_clean_domain` returns `None`) and carries no `name`, so neither a domain nor a name is usable. | **CONVERT** | HubSpot lookup (search on whatever name text accompanied the page), operator statement | **CONVERTED — 59-06 Task 1 built the payload (adds `same_row_derivation` for the page's own slug; the message itself stays verbatim); 59-07 carried it through `chunking.dispatch_plan` to `outcome.results` and into both skills' relay steps (gap closure 2026-08-29).** A gate is CONVERTED only once the payload reaches the operator — until 59-07 the one shipped call site discarded it. |
+| GATE-04 | `enrichment.py:377` (`build_envelope`, companies form — blank `name`, no domain) | enrichment | A company row's `name` key is present but blank, and there is no website/domain either. | **CONVERT** | Operator statement (ask for the company's actual name) | **CONVERTED — 59-06 Task 1 built the payload; 59-07 carried it through `chunking.dispatch_plan` to `outcome.results` and into both skills' relay steps (gap closure 2026-08-29).** A gate is CONVERTED only once the payload reaches the operator — until 59-07 the one shipped call site discarded it. |
+| GATE-05 | `enrichment.py:385` (`build_envelope`, companies form — no `name` key at all, no domain) | enrichment | A company row never carried a `name` key at all (e.g. a search-results-screenshot row whose name never rendered), and has no domain either. | **CONVERT** | Operator statement | **CONVERTED — 59-06 Task 1 built the payload; 59-07 carried it through `chunking.dispatch_plan` to `outcome.results` and into both skills' relay steps (gap closure 2026-08-29).** A gate is CONVERTED only once the payload reaches the operator — until 59-07 the one shipped call site discarded it. |
 | GATE-06 | `write_grant.py:440-444` (`plan_grant`, empty record set) | grant | A grant cannot be planned when neither `record_ids` nor `record_domains` are given. This is **FINDING 1** of the Phase 53 walk (`53-WALK-RECORD.md`) — a create with no HubSpot id and no email domain is unreachable on every armed path. | **CONVERT** | HubSpot lookup for the company's own domain — exactly how the walk resolved it (Series Futsal Victoria, `283816805830`, `seriesfutsal.com`, found read-only) | **CONVERTED — 59-06 Task 2** (`write_grant.py`'s refusal detail + `enrich-records/SKILL.md`'s new resolve-then-propose step, commit `73d6484`; `plan_grant` itself unchanged, pinned by a new structural test) |
 | GATE-07 | `company_domain.py` (whole module) | ingest (company lane) | A company row Claude or the backend's research resolved a candidate domain for, used to have no confirm/correct/decline path. | **ALREADY-CONVERTED** | — the precedent every other row in this table follows: propose, never silently write | Phase 58 (shipped) |
 | GATE-08 | `preingest.py` `classify_matches`'s `unmatched` bucket (tier `none`) | preingest | A row with no matching HubSpot record. | **ALREADY-CONVERTED** | — already proceeds to create/propose rather than refusing; it was never a refuse-and-stop gate in the first place | shipped |
@@ -54,13 +54,22 @@ extends this ONE vocabulary rather than inventing a second.
 
 ## Unplanned items
 
-None, and the inventory is now CLOSED. Every gate decided `CONVERT` above is converted:
-GATE-01 by 59-05 Task 2 (`extraction.ExtractionResult.resolvable`); GATE-02 through GATE-05
-by 59-06 Task 1 (`enrichment.RecordSpecError.resolvable`); GATE-06 by 59-06 Task 2
-(`write_grant.py`'s refusal detail plus `enrich-records/SKILL.md`'s resolve-then-propose
-step). No `CONVERT` gate was reclassified to `NOT-APPLICABLE` to close this table — every
-`NOT-APPLICABLE` row above was decided that way during the original 59-05 Task 1 pass, on
-the stated "no legitimate resolution source" reasoning, never on difficulty. The
-authorization control GATE-06 sits behind (`write_grant.plan_grant`'s empty-record-set
-refusal, `_writeSafetyAllows()`) is unchanged by either plan — see 59-06's `write_grant.py`
-structural test asserting no HubSpot search call was added to that module.
+None, and the inventory is now CLOSED — but the CLOSED status of GATE-02 through GATE-05
+only holds as of the gap closure named below; between 59-06 and 59-07 the payload existed
+without reaching the operator, which is not the same thing as CONVERTED.
+
+Every gate decided `CONVERT` above is converted: GATE-01 by 59-05 Task 2
+(`extraction.ExtractionResult.resolvable`); GATE-02 through GATE-05 had their payload
+BUILT by 59-06 Task 1 (`enrichment.RecordSpecError.resolvable`) but that payload was
+discarded by the one shipped call site (`chunking.dispatch_plan`'s bare
+`except enrichment.RecordSpecError:`) until **59-07 (gap closure, 2026-08-29)** carried it
+through to `outcome.results` and into both skills' relay steps — GATE-02 through GATE-05's
+delivery, as distinct from their payload's construction, was completed in gap closure
+rather than in 59-06 alone; GATE-06 by 59-06 Task 2 (`write_grant.py`'s refusal detail plus
+`enrich-records/SKILL.md`'s resolve-then-propose step). No `CONVERT` gate was reclassified
+to `NOT-APPLICABLE` to close this table — every `NOT-APPLICABLE` row above was decided that
+way during the original 59-05 Task 1 pass, on the stated "no legitimate resolution source"
+reasoning, never on difficulty. The authorization control GATE-06 sits behind
+(`write_grant.plan_grant`'s empty-record-set refusal, `_writeSafetyAllows()`) is unchanged
+by any of 59-06/59-07 — see 59-06's `write_grant.py` structural test asserting no HubSpot
+search call was added to that module.
