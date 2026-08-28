@@ -25,9 +25,47 @@ row still fails after following it, the failure is the correct outcome:
 2. **A value the source renders unclearly goes in the ambiguity list, and the field is left out
    of the row it belongs to.** Do not put your best reading in the row and hope it is right.
 3. **Never fill a gap to make a row satisfy the identity rule** (a non-blank `email`, or all
-   three of `firstname`/`lastname`/`company`). A row that gets rejected with a stated reason is
-   the correct outcome. A row you completed just to get it past that check is not — it is
-   invention with extra steps.
+   three of `firstname`/`lastname`/`company`). A row you completed just to get it past that
+   check on your own authority is not honest — it is invention with extra steps.
+
+   > **RECORDED EDIT — D-59-08, operator, 2026-08-28.** This numbered rule used to continue: *"A
+   > row that gets rejected with a stated reason is the correct outcome."* That sentence no
+   > longer describes the intended behaviour and is retired here, not quietly dropped: the
+   > operator ruled, during the Phase 53 walk after a LinkedIn-sourced row dead-ended for want of
+   > a company name, that refusal should be the LAST resort, reached only after a resolution
+   > attempt found nothing or was declined — never the first response. The gap-filling
+   > prohibition above this note is UNCHANGED and still governs everything below.
+
+   **What changes: refuse becomes resolve-and-propose, never resolve-and-guess.** Where a row
+   fails the identity rule, first try to RESOLVE the missing value from one of these — the same
+   four identifiers `scripts/extraction.py`'s `RESOLUTION_SOURCES` enforces in code:
+
+   - `hubspot_lookup` — a read-only HubSpot search (the walk resolved `seriesfutsal.com` this way)
+   - `operator_statement` — something the operator already told you earlier in this conversation
+   - `provider_result` — a value the enrichment waterfall already returned for this row
+   - `same_row_derivation` — a stated derivation from another field on the same row (a domain
+     from an email, a slug from a URL)
+
+   **What is still forbidden, exactly as strictly as before:** your own recall about the person
+   or company from training data; inference from "companies like this usually…"; a plausible
+   corporate email pattern (`first@company.com`); anything the operator would have no way to
+   check. None of these are resolution — they are the invention this rule has always forbidden,
+   and a `resolutions` entry claiming one of them is rejected the same way an unrecognized
+   source is rejected by `validate()`.
+
+   **A resolved value is PROPOSED, never written on your own authority.** Show it to the
+   operator and wait for a yes before it becomes part of the row — it is never written into the
+   artifact and dispatched without confirmation. Once confirmed, record it in the record's
+   `resolutions` key with its `field`, `source` (one of the four identifiers above), and a short
+   `detail`, so an operator reading the row back can tell which fields came from their own input
+   and which from a resolution they approved — a source outside the closed set is rejected by
+   `validate()` rather than accepted unlabelled.
+
+   **The resolution loop is the same one ambiguities already use.** There is no Python function
+   that fills a value: you rewrite the artifact with the confirmed value and the `resolutions`
+   entry, and run the validator again. Only after a resolution attempt found nothing, or the
+   operator declined it, does the row stay rejected — and a row genuinely rejected that way is
+   still the correct outcome.
 
 `scripts/extraction.py` can only check the structural half of this rule (every accepted row
 carries provenance; a field flagged as an ambiguity cannot also carry a value). It cannot check
@@ -364,8 +402,18 @@ company's name.
 The rule at the top of this file governs company rows exactly as it governs contact rows: a
 field the source does not show is left out of the row entirely, a value the source renders
 unclearly goes in the ambiguity list rather than the row, and a company name is never invented
-to make a nameless row pass the identity check. A company row rejected with a stated reason is
-the correct outcome here too — never fill a gap just to get it past the check.
+to make a nameless row pass the identity check.
+
+> **RECORDED EDIT — D-59-08, operator, 2026-08-28.** This section used to end: *"A company row
+> rejected with a stated reason is the correct outcome here too — never fill a gap just to get
+> it past the check."* The second half — never fill a gap just to get it past the check — is
+> UNCHANGED and still governs company rows exactly as it governs contact rows. The first half no
+> longer describes the intended behaviour: rejection is now the LAST resort, reached after a
+> resolution was attempted (the same `hubspot_lookup` / `operator_statement` / `provider_result`
+> / `same_row_derivation` sources described above, and the same forbidden list) and either found
+> nothing or was declined — not the first response to a nameless row. Propose a name, never
+> guess or write one on your own authority; a confirmed resolution is recorded in the record's
+> `resolutions` key the same way a contact row's is.
 
 ### A profile page is a source, never a domain (D-58-03)
 

@@ -16,6 +16,48 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.24.0] - 2026-08-28
+
+### Added
+
+- **D-59-08: the identity gate resolves and proposes instead of dead-ending.**
+  `59-GATE-INVENTORY.md` inventories every operator-facing refuse-and-stop gate
+  across the ingest, enrichment, grant and preingest lanes — GATE-01
+  (`extraction.py`'s identity gate) is converted by this release; GATE-02
+  through GATE-06 (enrichment.py's identity gaps, `write_grant.py`'s
+  FINDING-1 empty-record-set refusal) are named as candidates for **59-06**,
+  which this release does NOT cover — see the inventory's `Unplanned items`
+  note and the gate rows themselves.
+  - `extraction.ExtractionResult` gains a `resolvable` group, ADDITIVE to
+    `rejected` — every existing reader (`preview.py`, the CLI) sees exactly
+    what it saw before. A record that fails the identity pre-flight is still
+    rejected exactly as before, AND now also classified with the specific
+    fields a legitimate source could supply.
+  - A record may carry an optional `resolutions` key naming which fields were
+    resolved and from where. `extraction.RESOLUTION_SOURCES` is a CLOSED
+    vocabulary of exactly four identifiers (`hubspot_lookup`,
+    `operator_statement`, `provider_result`, `same_row_derivation`) — a
+    `resolutions` entry naming any other source, or a field the row does not
+    actually carry, REJECTS the whole record rather than being accepted
+    unlabelled. This is the anti-laundering control (T-59-20).
+  - `preview.build_extracted_preview` returns the new `resolvable` key via
+    `getattr` with a default, preserving the duck-typing contract for a shim
+    caller.
+  - **The no-invention rule was NOT relaxed.** *"Never fill a gap to make a
+    row satisfy the identity rule"* survives verbatim in both passages of
+    `contact-upload/extraction.md`. Only the clause asserting that a bare
+    rejection is the correct outcome was rewritten, in both passages, with a
+    dated `D-59-08` recorded-edit note stating what it used to say and why —
+    nothing was silently deleted. `test_no_invention_structural.py`'s
+    structural guarantee (no Python function anywhere in `extraction.py`
+    resolves or fills a value into a row) is EXTENDED with four new
+    forbidden substrings covering the resolution surface, never relaxed —
+    the original four substrings are unchanged. A resolution still requires
+    the operator's explicit confirmation before it becomes part of a row;
+    the resolution loop is the same one ambiguities already use (Claude
+    rewrites the artifact, `validate()` runs again) — no Python function
+    ever writes a value in place.
+
 ## [0.23.0] - 2026-08-28
 
 ### Added

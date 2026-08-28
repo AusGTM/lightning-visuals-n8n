@@ -202,6 +202,19 @@ be sent, and — only when explicitly armed — send it.
    ambiguity block — one list of every uncertain cell in the batch, presented once,
    never one interruption per row.
 
+   **The `resolvable` group (D-59-08).** A row rejected for failing the identity rule
+   also appears here naming the field(s) that would satisfy it (`missing`) — do not
+   leave it as a dead end. For each entry, try a resolution from `extraction.md`'s four
+   legitimate sources (HubSpot lookup, an earlier operator statement, a provider result,
+   or a stated derivation from another field on the row), propose the resolved value to
+   the operator, and wait for a yes. On confirmation, rewrite the artifact with the
+   value plus a `resolutions` entry naming the source, and re-run the validator — never
+   write a resolved value on your own authority. Keep the same "presented once, never
+   one interruption per row" discipline the rest of this preview follows; a resolvable
+   group that interrupted per row would be exactly the friction this ruling exists to
+   remove. Only after a resolution finds nothing, or the operator declines it, does the
+   row stay rejected.
+
    **If `row_count` is 0, STOP at the preview — do not continue to step 4.** A file that
    parsed but carried no data rows and a file that is fine but has nothing to send look
    identical in the numbers, and the cost block will cheerfully report a "real, explainable
