@@ -30,11 +30,13 @@ still working" is Phase 26's job, and conflating them here would either duplicat
 throw away the chunks that would have succeeded.
 """
 import json
+import uuid
 from dataclasses import dataclass, field
 
 import requests
 
 import enrichment
+import written_records
 from dispatch import DispatchError, NotArmedError
 
 CEILING_KEY = "max_records_per_chunk"
@@ -95,11 +97,16 @@ class DispatchOutcome:
     else [body])]`. `preingest.rerequest_unanswered` does exactly this before calling
     `preingest.merge_enriched`. Passing `responses` straight through unflattened is
     the exact defect FINDING 2 (53-WALK-RECORD.md) recorded: it silently files every
-    row as unanswered with no error."""
+    row as unanswered with no error.
+
+    `run_id` is the id every chunk was flushed under, into D-59-07's durable
+    "what got written" artifact — `written_records.written_records_path()`, keyed by
+    this same id (see `written_records.py`'s own `append_chunk` for the flush)."""
 
     results: tuple
     failed_batch: dict = None
     responses: tuple = field(default_factory=tuple)
+    run_id: str = None
 
 
 def chunk_ceiling(config, key=CEILING_KEY):
@@ -262,7 +269,7 @@ def _failure_reason(watcher):
     return None
 
 
-def dispatch_plan(plan, providers, armed, config, transport=requests):
+def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=None):
     """Send every chunk of an approved plan, in plan order, one at a time.
 
     `armed` has NO default and is passed to each `dispatch_enrichment` call rather than
@@ -271,7 +278,18 @@ def dispatch_plan(plan, providers, armed, config, transport=requests):
     A failing chunk is recorded and the run continues (D-12). Failure is defined in ONE
     place: an unsuccessful status, a transport exception including a timeout (D-11b), or
     an unreadable body where a readable one was expected.
+
+    `run_id` names the D-59-07 written-records artifact this run flushes into, per
+    chunk (see `written_records.py`). Keyword-only so an existing positional caller is
+    unaffected; when omitted, one is generated (`uuid.uuid4().hex`) so every dispatch
+    still gets the artifact without every call site naming a run of its own. This
+    function stays deliberately GRANT-UNAWARE — no per-chunk revocation hook is added
+    here (D-59-06/GRANT-05: revocation bites on the next send, not mid-run; see
+    `test_dispatch_plan_has_no_grant_aware_hook_to_revoke_against`).
     """
+    if run_id is None:
+        run_id = uuid.uuid4().hex
+
     results = []
     responses = []
     failed_chunks = []
@@ -303,6 +321,14 @@ def dispatch_plan(plan, providers, armed, config, transport=requests):
             ChunkResult(index=index, rows=rows, ok=reason is None, reason=reason)
         )
         responses.append(body)
+        # D-59-07: flushed INLINE, immediately after the line above, never assembled
+        # after the loop. `DispatchOutcome` is built in one statement once the
+        # loop completes, so a crash of the calling process between this chunk and the
+        # next would lose everything the loop had accumulated if this call moved out of
+        # the loop — that is the exact partial-run guarantee this artifact exists for.
+        # `append_chunk` never raises on an I/O failure (T-59-04): a bookkeeping miss
+        # must never become a mid-run stop.
+        written_records.append_chunk(run_id, index, body)
         if reason is not None:
             failed_chunks.append(chunk)
 
@@ -310,6 +336,7 @@ def dispatch_plan(plan, providers, armed, config, transport=requests):
         results=tuple(results),
         failed_batch=failed_batch(failed_chunks),
         responses=tuple(responses),
+        run_id=run_id,
     )
 
 
