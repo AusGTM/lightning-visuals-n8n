@@ -28,6 +28,10 @@ import requests
 
 import config_gate
 from dispatch import DispatchError, NotArmedError  # one arming error for the whole plugin
+from resolution_sources import RESOLUTION_SOURCES  # the closed vocabulary, shared with
+# extraction.py (imported from this shared module by both, never duplicated as a
+# literal — see resolution_sources.py's own docstring for why it lives here and not in
+# extraction.py directly: `enrichment -> extraction` is a real circular import).
 
 ENRICHMENT_PATH = "webhook/hubspot/enrichment/event"
 DEFAULT_TIMEOUT = 120  # above the ~100s Cloudflare response ceiling, so a chunk that
@@ -88,7 +92,35 @@ class ProviderSelectionError(Exception):
 
 class RecordSpecError(Exception):
     """Raised when a record specification cannot become a batch — empty, unrecognized,
-    or naming an object type the backend would resolve to "unknown"."""
+    or naming an object type the backend would resolve to "unknown".
+
+    D-59-08 (operator ruling, 2026-08-28): carries an optional, keyword-only
+    `resolvable` payload alongside the operator-readable message, mirroring
+    `extraction.ExtractionError`'s existing `code`-alongside-`message` shape. Shape: a
+    tuple of dicts, each `{"field": str, "sources": (str, ...), "detail": str}` —
+    `field` names what is missing, `sources` are members of the closed
+    `resolution_sources.RESOLUTION_SOURCES` vocabulary, and `detail` says in operator
+    words what the lookup would be. Every `sources` entry is validated against that
+    closed set AT CONSTRUCTION — an unrecognised source raises rather than being
+    carried, the same anti-laundering rule `extraction.py` enforces on its own
+    resolution surface. `resolvable` defaults to an empty tuple, never `None`, so a
+    caller can iterate it unconditionally.
+
+    Positional construction from a bare message (`RecordSpecError("...")`) keeps
+    working exactly as before — every pre-existing raise site in this module passes
+    one string, and none of them changed to accommodate this."""
+
+    def __init__(self, message, *, resolvable=()):
+        for entry in resolvable:
+            unknown = [s for s in entry.get("sources", ()) if s not in RESOLUTION_SOURCES]
+            if unknown:
+                raise ValueError(
+                    f"resolvable entry for field {entry.get('field')!r} names "
+                    f"source(s) {unknown!r} outside the closed resolution "
+                    f"vocabulary: {sorted(RESOLUTION_SOURCES)}"
+                )
+        self.resolvable = tuple(resolvable)
+        super().__init__(message)
 
 
 class ViewNotSupportedError(RecordSpecError):
@@ -314,7 +346,25 @@ def build_envelope(spec, providers):
                 raise RecordSpecError(
                     f"There is not enough to find {named} in HubSpot or at any provider. "
                     f"Add their company, or an email address, or a LinkedIn profile URL — "
-                    f"any one of the three is enough."
+                    f"any one of the three is enough.",
+                    # D-59-08 (GATE-02, 59-06): the same three options the message
+                    # above already names, machine-readable and each with a source.
+                    resolvable=(
+                        {"field": "company",
+                         "sources": ("hubspot_lookup", "operator_statement"),
+                         "detail": ("a read-only HubSpot search on the person's name, "
+                                    "or an earlier statement from the operator naming "
+                                    "their employer")},
+                        {"field": "email",
+                         "sources": ("provider_result", "hubspot_lookup"),
+                         "detail": ("an enrichment provider result, or a read-only "
+                                    "HubSpot lookup, once the person is otherwise "
+                                    "identified")},
+                        {"field": "linkedin_url",
+                         "sources": ("same_row_derivation",),
+                         "detail": ("a LinkedIn URL already present under another key "
+                                    "on this same row")},
+                    ),
                 )
             events.append(event)
         envelope["events"] = events
@@ -365,27 +415,54 @@ def build_envelope(spec, providers):
                 given = str(company.get("domain") or company.get("website") or "").strip()
                 if given:
                     # UNCHANGED verbatim (2026-08-25) — pinned by not being reworded here.
+                    # D-59-08 (GATE-03, 59-06): `resolvable` is ADDED to this raise, the
+                    # message text above is untouched. A profile page's own slug is a
+                    # proposable company name (same_row_derivation), alongside a
+                    # HubSpot search and an operator statement.
                     raise RecordSpecError(
                         f"{given!r} is a profile page rather than a company's own "
                         f"website, and no company name came with it, so there is "
                         f"nothing to look up. Give the company's name — the backend "
-                        f"can match that on its own."
+                        f"can match that on its own.",
+                        resolvable=(
+                            {"field": "name",
+                             "sources": ("hubspot_lookup", "operator_statement",
+                                         "same_row_derivation"),
+                             "detail": ("a read-only HubSpot search on whatever name "
+                                        "text accompanied the page, an earlier "
+                                        "operator statement, or a proposed name "
+                                        "derived from the page's own slug — never "
+                                        "auto-filled, only proposed")},
+                        ),
                     )
                 if "name" in company:
                     # New 2026-08-26 (Phase 58): a bare-name-list row, or a mixed-lane
                     # row, that carried an empty/blank name and no website at all.
+                    # D-59-08 (GATE-04, 59-06): no website came with this row, so
+                    # there is nothing to derive a name from — only the operator can
+                    # supply it.
                     raise RecordSpecError(
                         "A company's name came through blank, and no website came "
                         "with it either, so there is nothing to look up. Give the "
                         "company's actual name — a blank line in a name list can't "
-                        "be matched on its own."
+                        "be matched on its own.",
+                        resolvable=(
+                            {"field": "name", "sources": ("operator_statement",),
+                             "detail": "the company's actual name, from the operator"},
+                        ),
                     )
                 # New 2026-08-26 (Phase 58): the row never carried a `name` key at all
                 # — e.g. a search-results-screenshot row whose name never rendered.
+                # D-59-08 (GATE-05, 59-06): same reasoning as GATE-04 above — no
+                # website, nothing to derive from.
                 raise RecordSpecError(
                     "This company's name never came through, and it has no website "
                     "either, so there is nothing to look up. Give the company's "
-                    "name, or its own website."
+                    "name, or its own website.",
+                    resolvable=(
+                        {"field": "name", "sources": ("operator_statement",),
+                         "detail": "the company's name, or its own website, from the operator"},
+                    ),
                 )
             event = {"objectType": "companies"}
             if domain:

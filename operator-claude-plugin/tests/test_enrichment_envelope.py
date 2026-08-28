@@ -344,3 +344,104 @@ def test_a_company_whose_only_address_is_a_profile_page_keeps_its_existing_messa
     message = str(exc.value)
     assert "profile page" in message
     assert "linkedin.com" in message
+
+
+# =====================================================================================
+# D-59-08 (59-06 Task 1) — the enrichment lane's identity refusals name what would
+# resolve them, without weakening or rewording any existing refusal.
+# =====================================================================================
+
+def test_record_spec_error_constructs_positionally_with_an_empty_resolvable_default():
+    """The compatibility guarantee every pre-existing raise site in this module depends
+    on: a bare positional message keeps working, and `resolvable` is an empty tuple,
+    never None, so a caller can iterate it unconditionally."""
+    err = enrichment.RecordSpecError("just a message")
+    assert str(err) == "just a message"
+    assert err.resolvable == ()
+
+
+def test_record_spec_error_rejects_a_source_outside_the_closed_vocabulary():
+    with pytest.raises(ValueError) as exc:
+        enrichment.RecordSpecError(
+            "a message",
+            resolvable=({"field": "name", "sources": ("claude_recall",),
+                        "detail": "not a real source"},),
+        )
+    assert "claude_recall" in str(exc.value)
+
+
+def test_the_people_identity_refusal_names_all_three_resolvable_options():
+    with pytest.raises(enrichment.RecordSpecError) as exc:
+        enrichment.build_envelope({"people": [{"firstname": "Josh"}]}, [])
+    resolvable = exc.value.resolvable
+    fields = {entry["field"] for entry in resolvable}
+    assert fields == {"company", "email", "linkedin_url"}
+    for entry in resolvable:
+        for source in entry["sources"]:
+            assert source in enrichment.RESOLUTION_SOURCES
+
+
+def test_the_companies_profile_page_refusal_names_a_same_row_derivation():
+    """GATE-03: a profile page's own slug is a proposable name — never auto-filled,
+    only offered as a source the operator can confirm — alongside the message's
+    untouched wording (pinned by the test above this one)."""
+    with pytest.raises(enrichment.RecordSpecError) as exc:
+        enrichment.build_envelope(
+            {"companies": [{"domain": "https://www.linkedin.com/company/futsal-australia"}]},
+            [],
+        )
+    resolvable = exc.value.resolvable
+    assert len(resolvable) == 1
+    assert resolvable[0]["field"] == "name"
+    assert "same_row_derivation" in resolvable[0]["sources"]
+
+
+def test_the_companies_blank_name_refusal_names_operator_statement_only():
+    """GATE-04: no website came with the row, so there is nothing to derive a name
+    from — only the operator can supply it."""
+    with pytest.raises(enrichment.RecordSpecError) as exc:
+        enrichment.build_envelope({"companies": [{"name": "  "}]}, [])
+    resolvable = exc.value.resolvable
+    assert resolvable == (
+        {"field": "name", "sources": ("operator_statement",),
+         "detail": "the company's actual name, from the operator"},
+    )
+
+
+def test_the_companies_no_name_key_refusal_names_operator_statement_only():
+    """GATE-05: same reasoning as GATE-04 — no website, nothing to derive from."""
+    with pytest.raises(enrichment.RecordSpecError) as exc:
+        enrichment.build_envelope({"companies": [{}]}, [])
+    resolvable = exc.value.resolvable
+    assert len(resolvable) == 1
+    assert resolvable[0]["field"] == "name"
+    assert resolvable[0]["sources"] == ("operator_statement",)
+
+
+def test_no_existing_refusal_message_changed_by_adding_resolvable():
+    """Every message string this module raises is unchanged — resolvable is additive.
+    Re-asserts the exact wording of every RecordSpecError site this task touched."""
+    with pytest.raises(enrichment.RecordSpecError) as exc:
+        enrichment.build_envelope({"people": [{"firstname": "Josh"}]}, [])
+    assert str(exc.value) == (
+        "There is not enough to find Josh in HubSpot or at any provider. "
+        "Add their company, or an email address, or a LinkedIn profile URL — "
+        "any one of the three is enough."
+    )
+
+    with pytest.raises(enrichment.RecordSpecError) as exc:
+        enrichment.build_envelope({"companies": [{"name": "  "}]}, [])
+    assert str(exc.value) == (
+        "A company's name came through blank, and no website came "
+        "with it either, so there is nothing to look up. Give the "
+        "company's actual name — a blank line in a name list can't "
+        "be matched on its own."
+    )
+
+    with pytest.raises(enrichment.RecordSpecError) as exc:
+        enrichment.build_envelope({"companies": [{}]}, [])
+    assert str(exc.value) == (
+        "This company's name never came through, and it has no website "
+        "either, so there is nothing to look up. Give the company's "
+        "name, or its own website."
+    )

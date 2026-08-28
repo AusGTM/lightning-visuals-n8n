@@ -105,12 +105,13 @@ COMPANY_MAPPING_PATH = Path(__file__).resolve().parent.parent / "config" / "comp
 # email pattern (`first@company.com`); anything the operator would have no way to check.
 # A `resolutions` entry naming a source outside this set REJECTS the record rather than
 # being accepted unlabelled (T-59-20) — see validate()'s per-record resolutions check.
-RESOLUTION_SOURCES = frozenset({
-    "hubspot_lookup",
-    "operator_statement",
-    "provider_result",
-    "same_row_derivation",
-})
+#
+# Moved into its own module 2026-08-28 (59-06 Task 1) — `enrichment.py` needs this same
+# closed set and importing it directly from here creates a real circular import
+# (enrichment -> extraction -> preview -> preview_enrichment -> chunking -> enrichment,
+# verified live). `RESOLUTION_SOURCES` here is the SAME frozenset object `enrichment.py`
+# imports; this is a re-export, not a second definition.
+from resolution_sources import RESOLUTION_SOURCES  # noqa: E402 (re-export, see above)
 
 
 class ExtractionError(Exception):
