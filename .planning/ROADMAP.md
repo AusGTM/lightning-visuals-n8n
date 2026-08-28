@@ -138,7 +138,7 @@ variable), and a design that runs the provider waterfall twice per written recor
             globbing reader, and every grant — not only a multi-lane one — discloses it
             (D-59-09, D-59-07)
 
-      - [ ] 59-09-PLAN.md — GAP 3: a written-records failure never stops a dispatch, and the
+      - [x] 59-09-PLAN.md — GAP 3: a written-records failure never stops a dispatch, and the
             resulting incomplete list is loud in the outcome, the unattended exit code and both
             skills; `scheduled_arm.py`'s stale comment corrected in the same commit (D-59-10)
 
@@ -455,7 +455,7 @@ silently inherit Phase 51's placeholder behavior without a decision.
 | 53. Operator-openable Write Grant | v1.1 | 4/4 | Complete — walk RUN 2026-08-28, **GRANT-01 not ticked** (composition defect found) | 2026-08-26 |
 | 54. Single-pass Armed Dispatch | v1.1 | 7/7 | Complete (verified) | 2026-08-27 |
 | 58. Take What the Operator Actually Has | v1.1 | 6/6 | Complete (verified) | 2026-08-26 |
-| 59. Frictionless Write Path | v1.1 | 8/9 | In Progress|  |
+| 59. Frictionless Write Path | v1.1 | 9/9 | In Progress|  |
 | 60. Review-lane Authority | v1.1 | 0/TBD | Split from 59 (operator, 2026-08-28) | - |
 
 ## Ledger gaps (known)

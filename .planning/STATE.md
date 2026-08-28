@@ -5,16 +5,16 @@ milestone_name: Unattended Session Runs
 current_phase: 59
 current_phase_name: frictionless-write-path
 status: verifying
-stopped_at: "Completed 59-08-PLAN.md (gap closure: written-records concurrency D-59-09 + universal grant disclosure D-59-07)"
-last_updated: "2026-08-28T21:23:15.058Z"
+stopped_at: "Completed 59-09-PLAN.md (gap closure: written-records bookkeeping failures never stop a dispatch, D-59-10) -- Phase 59 all 6 plans complete, ready for verification"
+last_updated: "2026-08-28T21:37:49.563Z"
 last_activity: 2026-08-28
 last_activity_desc: Phase 59 execution started
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 29
-  completed_plans: 28
-  percent: 80
+  completed_plans: 29
+  percent: 100
 ---
 
 # Project State
@@ -239,12 +239,12 @@ Last activity: 2026-08-28 — Phase 59 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [██████████] 97% (v0.9 phase 47.5 of 46-49)
+Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-28T21:23:15.049Z
-**Stopped at:** Completed 59-08-PLAN.md (gap closure: written-records concurrency D-59-09 + universal grant disclosure D-59-07)
+**Last session:** 2026-08-28T21:37:49.553Z
+**Stopped at:** Completed 59-09-PLAN.md (gap closure: written-records bookkeeping failures never stop a dispatch, D-59-10) -- Phase 59 all 6 plans complete, ready for verification
 **Resume file:** None
 
 ## Performance Metrics
@@ -338,6 +338,7 @@ Progress: [██████████] 97% (v0.9 phase 47.5 of 46-49)
 | Phase 59 P06 | ~40min | 3 tasks | 10 files |
 | Phase 59 P07 | 25min | 3 tasks | 7 files |
 | Phase 59 P08 | ~35min | 3 tasks | 10 files |
+| Phase 59 P09 | ~35min | 3 tasks | 10 files |
 
 ## Decisions
 
@@ -401,6 +402,7 @@ Progress: [██████████] 97% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: [Phase 59-07 gap closure]: chunking.dispatch_plan's RecordSpecError handler now binds the exception and carries str(e)+resolvable onto ChunkResult, closing the severed integration link that kept GATE-02..GATE-05's D-59-08 payload from reaching the operator; 59-GATE-INVENTORY.md corrected to credit delivery to 59-07, not 59-06 alone
 - [Phase ?]: [Phase 59-08]: D-59-09 implemented — written_records.written_records_path now keyed by run_id (written_records-<run_id>.json), append_chunk's run-id-mismatch replace branch deleted, load() globs written_records*.json and unions per-run entries stamped with run_id; no lock, no merged index (both operator-rejected).
 - [Phase ?]: [Phase 59-08]: D-59-07 gap 4 closed — write_grant._consequence's written-records disclosure moved out of the len(lane_names) > 1 branch so it fires for every grant (one lane or two); plan_grant's authorization control untouched (git diff confined to _consequence + import).
+- [Phase ?]: D-59-10 (operator, 2026-08-29): a written-records bookkeeping failure never stops a dispatch -- caught in dispatch_plan's loop like DispatchError already is, recorded in DispatchOutcome.written_records_failures (one guard for a raised WrittenRecordsError AND append_chunk's falsey OSError return), and the run keeps sending; incomplete-list surfaced on 4 surfaces (DispatchOutcome, scheduled_arm's outcome+run_id, non-zero exit code without renaming the outcome, both skills' relay).
 
 ### Roadmap Evolution
 
