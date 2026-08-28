@@ -83,7 +83,19 @@ class ChunkResult:
 class DispatchOutcome:
     """`failed_batch` is None when nothing failed, so the caller branches on presence
     rather than on an empty container. When present it is a record specification the
-    envelope builder accepts unmodified — that is the whole of D-13."""
+    envelope builder accepts unmodified — that is the whole of D-13.
+
+    `responses` is ONE RAW BODY PER CHUNK SENT, in chunk order — never one item per
+    row. Each element is exactly what `enrichment.dispatch_enrichment` returned for
+    that chunk: normally a JSON array (n8n's own `respondWith: allIncomingItems`
+    behaviour, one item per row in that chunk) or, for a caller that still hands one
+    row un-wrapped, a bare dict. A caller that needs a flat list of per-row response
+    items — to index by `row_id`, for instance — must flatten this first:
+    `[item for body in outcome.responses for item in (body if isinstance(body, list)
+    else [body])]`. `preingest.rerequest_unanswered` does exactly this before calling
+    `preingest.merge_enriched`. Passing `responses` straight through unflattened is
+    the exact defect FINDING 2 (53-WALK-RECORD.md) recorded: it silently files every
+    row as unanswered with no error."""
 
     results: tuple
     failed_batch: dict = None

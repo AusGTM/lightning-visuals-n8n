@@ -293,7 +293,16 @@ whatever seven columns happened to be in the source file.
                                 <this send's ids>, <this send's domains>,
                                 <allow_create>, cfg, grant=decision["grant"]):
        outcome = chunking.dispatch_plan(plan, providers, True, cfg)
-   merge_report = preingest.merge_enriched(unmatched_rows, outcome.responses)
+   # outcome.responses is ONE RAW BODY PER CHUNK, never one item per row — each body is
+   # array-wrapped by n8n's normal firstIncomingItem behaviour (a list, usually one item
+   # per row in that chunk) or, rarely, a bare single-row dict. Flatten before merging,
+   # exactly like preingest.rerequest_unanswered's own re-request pass already does for
+   # this same endpoint. Passing outcome.responses to merge_enriched UN-flattened files
+   # every row as unanswered with no error (FINDING 2, 53-WALK-RECORD.md).
+   responses = []
+   for body in outcome.responses:
+       responses.extend(body if isinstance(body, list) else [body])
+   merge_report = preingest.merge_enriched(unmatched_rows, responses)
    ```
 
    The allowlist handed to `armed_window` is **this send's records, never the grant's whole

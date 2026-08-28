@@ -16,6 +16,63 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-08-28
+
+### Fixed
+
+- **`enrich-before-ingest` silently discarded every provider answer it paid for.** Step 5
+  documented `merge_enriched(unmatched_rows, outcome.responses)`, but
+  `chunking.dispatch_plan(...).responses` is ONE RAW BODY PER CHUNK — each body itself
+  array-wrapped by n8n's normal `firstIncomingItem` behaviour — never one item per row.
+  `merge_enriched` indexes responses by `row_id` and skipped any item that was not a dict,
+  so every chunk-list yielded `row_id = None`, the index came out empty, and **every row was
+  filed as `unanswered` with no error, no warning and a zero exit.**
+
+  Worse than a crash: `unanswered` is documented as *"a row nothing is known about at all"*
+  and exists precisely to distinguish "we could not look" from "we found nothing" (T-38-01).
+  A complete, correct, already-billed provider answer was filed under the label meaning its
+  opposite, so the operator read "nothing known" and never learned an email had been returned.
+
+  **This was present in every version ever shipped — 0.11.1 through 0.19.0 inclusive.** It
+  went unnoticed because Phase 53's operator walk (2026-08-28) was the first end-to-end run of
+  this flow anyone had performed; it was that walk's FINDING 2. Measured on one real record,
+  same input both ways: as documented, `unanswered: 1` and no email; flattened,
+  `unanswered: 0` and the email present.
+
+  Fixed by flattening in step 5, using the idiom `preingest.rerequest_unanswered` already
+  applies to this same endpoint. Every other caller of `dispatch_plan` was enumerated and was
+  already correct — `rerequest_unanswered` and `fetch_matches`/`match_batch` both flatten, and
+  `scheduled_arm` never indexes by `row_id`. This was one wrong call site, not a contract
+  mismatch between the two functions.
+
+- **`merge_enriched` now RAISES on a response shape it cannot index, instead of silently
+  filing it as `unanswered`.** This is the separable second defect — the shape bug is what lost
+  the data, but this silence is what made the loss invisible. A non-dict response item now
+  raises `MergeError` naming both the cause and the fix. Precedent: it already raised
+  `MergeError` for a duplicated `row_id`. Nothing is merged when it raises.
+
+### Changed
+
+- `chunking.DispatchOutcome.responses` now documents its per-chunk-raw-body contract in its own
+  docstring. It was previously inferable only by reading three other modules.
+
+## [0.19.0] - date unrecorded
+
+> **This entry was written retroactively on 2026-08-28 and is INCOMPLETE.** `plugin.json` was
+> bumped to `0.19.0` without a matching CHANGELOG entry, which is exactly what this file's own
+> release rule forbids ("bumping `.claude-plugin/plugin.json`'s `version` in the SAME commit as
+> the CHANGELOG entry"). The gap was found while releasing 0.20.0. The contents below are
+> INFERRED from a diff of the installed 0.18.0 and 0.19.0 plugin-cache copies, not recovered
+> from a release note — treat them as a pointer, not an authority, and consult the git history
+> for what actually shipped.
+
+### Added (inferred from the 0.18.0 → 0.19.0 cache diff)
+
+- `scripts/company_domain.py` — new module, present in 0.19.0 and absent from 0.18.0.
+- Changes to `scripts/enrichment.py` and `scripts/extraction.py`, and to the `contact-upload`,
+  `enrich-before-ingest` and `enrich-records` skill files. Consistent with Phase 58 ("take what
+  the operator actually has" — screenshot, paste, URL, bare name resolving to a company).
+
 ## [0.18.0] - 2026-08-25
 
 ### Added

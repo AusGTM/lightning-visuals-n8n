@@ -286,6 +286,45 @@ def test_no_last_modified_field_is_implied_on_the_match_candidate_endpoint():
 
 
 # ---------------------------------------------------------------------------------
+# FINDING 2 (53-WALK-RECORD.md, .planning/debug/merge-enriched-drops-responses.md):
+# step 5 used to hand chunking.dispatch_plan's per-chunk-list responses straight to
+# merge_enriched, which silently filed every row as unanswered. The fix is a flatten
+# step, mirroring preingest.rerequest_unanswered's own normalization for this same
+# endpoint (preingest.py). These pins hold both the negative (the broken call must
+# not reappear) and the positive (the flatten happens, and happens BEFORE the merge).
+# ---------------------------------------------------------------------------------
+
+UNFLATTENED_MERGE_CALL = "preingest.merge_enriched(unmatched_rows, outcome.responses)"
+FLATTEN_IDIOM = "body if isinstance(body, list) else [body]"
+FLATTENED_MERGE_CALL = "preingest.merge_enriched(unmatched_rows, responses)"
+
+
+def test_step_5_does_not_hand_dispatch_plans_raw_responses_straight_to_merge_enriched():
+    body = _text()
+    assert UNFLATTENED_MERGE_CALL not in body, (
+        "outcome.responses is one raw body PER CHUNK, not one item per row -- passing "
+        "it straight to merge_enriched reproduces FINDING 2 (every row silently filed "
+        "as unanswered, no error)"
+    )
+
+
+def test_step_5_flattens_dispatch_plans_responses_before_merging():
+    body = _text()
+    assert FLATTEN_IDIOM in body, (
+        "expected the same per-chunk flatten idiom preingest.rerequest_unanswered "
+        "already uses for this endpoint"
+    )
+    assert FLATTENED_MERGE_CALL in body
+
+    flatten_offset = body.find(FLATTEN_IDIOM)
+    merge_offset = body.find(FLATTENED_MERGE_CALL)
+    assert flatten_offset != -1 and merge_offset != -1
+    assert flatten_offset < merge_offset, (
+        "the flatten step must appear BEFORE the merge_enriched call it feeds"
+    )
+
+
+# ---------------------------------------------------------------------------------
 # 37-CONTEXT.md sec 13's confirmation-format amendment (2026-08-05, at this skill's
 # own read-through): one-proposal-per-turn is superseded by a batched numbered table.
 # These pins are ADDITIVE -- every pin above this point stays exactly as it was.

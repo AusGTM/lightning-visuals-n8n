@@ -429,10 +429,16 @@ def apply_match_decisions(classified, resolved):
 
 
 class MergeError(Exception):
-    """Raised when a response set cannot be merged safely — today, only a duplicated
-    `row_id`. Two items claiming one row means the join is not a function, and there
-    is no safe choice between them; picking either would be a guess about which run
-    actually produced which. Nothing is merged when this raises."""
+    """Raised when a response set cannot be merged safely: a duplicated `row_id` (two
+    items claiming one row means the join is not a function, and there is no safe
+    choice between them — picking either would be a guess about which run actually
+    produced which), or a response item that is not an object at all (this is the
+    shape `chunking.dispatch_plan(...).responses` has when a caller forgets to
+    flatten it first — each element is a whole chunk's raw body, not one row's
+    response item — and silently treating that shape as 'no row_id' would file every
+    row as `unanswered` with no error, which is exactly what happened before this
+    raise existed; see FINDING 2, 53-WALK-RECORD.md). Nothing is merged when this
+    raises."""
 
 
 # The operator-facing sentence for a row no response item ever named — a frozen
@@ -486,6 +492,15 @@ def merge_enriched(rows, responses):
     walked — is what makes that structurally unreachable rather than merely
     untested.
 
+    `responses` must already be a FLAT list of per-row response dicts — never
+    `chunking.dispatch_plan(...).responses` passed straight through, which is one raw
+    body PER CHUNK (each possibly itself a list — n8n's array-wrap). A response item
+    that is not a dict raises `MergeError` rather than being silently treated as "no
+    `row_id`" and skipped: a caller that forgot to flatten a nested per-chunk shape
+    used to have every row file as `unanswered` with no error at all (FINDING 2,
+    53-WALK-RECORD.md). Flatten first, exactly as `rerequest_unanswered` does for
+    this same endpoint.
+
     Walks the ROWS, not the responses, so a row with no matching response is
     detectable (`unanswered`) rather than silently absent from the output —
     distinguishable from a row whose response carried an empty `properties` map,
@@ -511,7 +526,16 @@ def merge_enriched(rows, responses):
     """
     index = {}
     for item in responses:
-        row_id = item.get("row_id") if isinstance(item, dict) else None
+        if not isinstance(item, dict):
+            raise MergeError(
+                f"A response item was not an object ({item!r}) — merge_enriched needs "
+                "a flat list of per-row response dicts, never a nested per-chunk shape. "
+                "This is what `chunking.dispatch_plan(...).responses` looks like when "
+                "it is passed straight through unflattened: each chunk's own body must "
+                "be flattened first (see `preingest.rerequest_unanswered`, which "
+                "already does this for the same endpoint). Nothing was merged."
+            )
+        row_id = item.get("row_id")
         if row_id is None:
             continue
         if row_id in index:

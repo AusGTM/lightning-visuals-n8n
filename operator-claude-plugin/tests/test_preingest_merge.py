@@ -94,6 +94,25 @@ def test_two_response_items_sharing_a_row_id_raises_and_merges_nothing():
         preingest.merge_enriched(rows, responses)
 
 
+def test_an_unflattened_dispatch_plan_response_raises_instead_of_dropping_every_row():
+    # FINDING 2 (53-WALK-RECORD.md): chunking.dispatch_plan(...).responses is one raw
+    # BODY PER CHUNK. Passing it straight through unflattened means merge_enriched
+    # sees the chunk's own list as a single "item" -- exactly this shape. It must
+    # raise, not silently file every row as unanswered.
+    rows = _rows(1)
+    unflattened = [[_response(rows[0]["row_id"], {"email": "a@x.com"})]]  # one chunk
+
+    with pytest.raises(preingest.MergeError):
+        preingest.merge_enriched(rows, unflattened)
+
+
+@pytest.mark.parametrize("bad_item", [None, "row-1", 42, ["nested"]])
+def test_any_non_dict_response_item_raises_merge_error(bad_item):
+    rows = _rows(1)
+    with pytest.raises(preingest.MergeError):
+        preingest.merge_enriched(rows, [bad_item])
+
+
 def test_a_response_item_matching_no_row_is_reported_and_merged_nowhere():
     rows = _rows(1)
     responses = [
