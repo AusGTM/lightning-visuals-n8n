@@ -5,16 +5,16 @@ milestone_name: Unattended Session Runs
 current_phase: 59
 current_phase_name: frictionless-write-path
 status: verifying
-stopped_at: Completed 59-06-PLAN.md
-last_updated: "2026-08-28T14:01:29.661Z"
+stopped_at: "Completed 59-07-PLAN.md (gap closure: GATE-02..GATE-05 resolvable payload wired through dispatch_plan)"
+last_updated: "2026-08-28T21:09:18.918Z"
 last_activity: 2026-08-28
 last_activity_desc: Phase 59 execution started
 progress:
   total_phases: 5
-  completed_phases: 5
-  total_plans: 26
-  completed_plans: 26
-  percent: 100
+  completed_phases: 4
+  total_plans: 29
+  completed_plans: 27
+  percent: 80
 ---
 
 # Project State
@@ -243,8 +243,8 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-28T14:01:23.902Z
-**Stopped at:** Completed 59-06-PLAN.md
+**Last session:** 2026-08-28T21:09:18.909Z
+**Stopped at:** Completed 59-07-PLAN.md (gap closure: GATE-02..GATE-05 resolvable payload wired through dispatch_plan)
 **Resume file:** None
 
 ## Performance Metrics
@@ -336,6 +336,7 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 | Phase 59 P04 | 20min | 2 tasks | 5 files |
 | Phase 59 P05 | 50min | 3 tasks | 9 files |
 | Phase 59 P06 | ~40min | 3 tasks | 10 files |
+| Phase 59 P07 | 25min | 3 tasks | 7 files |
 
 ## Decisions
 
@@ -396,6 +397,7 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: [Phase 59-05]: D-59-08 gate inventory decided 16 gates -- GATE-01 (extraction.py identity gate) converted this plan, GATE-02..06 named candidates for 59-06, 8 NOT-APPLICABLE with stated no-legitimate-resolution-source reasons, 2 ALREADY-CONVERTED (company_domain.py, preingest unmatched bucket)
 - [Phase ?]: [Phase 59-05]: extraction.py identity gate converted refuse-and-stop to refuse-and-classify-resolvable, additive to rejected; RESOLUTION_SOURCES closed vocabulary (hubspot_lookup/operator_statement/provider_result/same_row_derivation) rejects any resolutions entry naming an outside source or a field the row lacks; test_no_invention_structural.py extended (4 new forbidden substrings) never relaxed
 - [Phase ?]: [Phase 59-06]: RESOLUTION_SOURCES moved to a new dependency-free resolution_sources.py module -- a live test proved enrichment.py importing it directly from extraction.py is a real circular import (enrichment -> extraction -> preview -> preview_enrichment -> chunking -> enrichment); extraction.RESOLUTION_SOURCES is the same re-exported object
+- [Phase ?]: [Phase 59-07 gap closure]: chunking.dispatch_plan's RecordSpecError handler now binds the exception and carries str(e)+resolvable onto ChunkResult, closing the severed integration link that kept GATE-02..GATE-05's D-59-08 payload from reaching the operator; 59-GATE-INVENTORY.md corrected to credit delivery to 59-07, not 59-06 alone
 
 ### Roadmap Evolution
 
