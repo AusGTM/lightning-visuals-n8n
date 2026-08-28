@@ -73,12 +73,25 @@ class ChunkPlan:
 @dataclass(frozen=True)
 class ChunkResult:
     """One chunk's outcome. Deliberately small and carries nothing from the config —
-    a relayed transport exception's text can echo request headers (T-25-17)."""
+    a relayed transport exception's text can echo request headers (T-25-17).
+
+    `resolvable` (D-59-08, 59-07 gap closure) is the one exception to "carries
+    nothing beyond a bare reason": it mirrors `enrichment.RecordSpecError.resolvable`
+    verbatim, defaulting to an empty tuple so a caller iterates it unconditionally on
+    every result including successes. This is NOT a widening of T-25-17's rule —
+    `RecordSpecError` is raised by `enrichment.build_envelope` BEFORE any request is
+    built, and every GATE-02..GATE-05 message and resolvable entry is composed from
+    the operator's own record spec, never from a transport response, an HTTP status,
+    or a config value. Transport-sourced text (`DispatchError`'s fixed reason string,
+    below) stays excluded exactly as T-25-17 requires; spec-sourced refusal text is
+    admitted because it cannot carry a header, a webhook secret, or a config value —
+    there is nothing of that shape to leak this early in the call."""
 
     index: int
     rows: object
     ok: bool
     reason: str = None
+    resolvable: tuple = ()
 
 
 @dataclass(frozen=True)
@@ -308,10 +321,14 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
             results.append(ChunkResult(index=index, rows=rows, ok=False, reason=reason))
             failed_chunks.append(chunk)
             continue
-        except enrichment.RecordSpecError:
+        except enrichment.RecordSpecError as e:
+            # D-59-08 / 59-07 gap closure: the gate's own message and its resolvable
+            # tuple, never a generic placeholder. A RecordSpecError always carries a
+            # message the gate wrote, which is strictly better than one this module
+            # would invent — so there is no fallback branch for an empty resolvable.
             results.append(ChunkResult(
                 index=index, rows=rows, ok=False,
-                reason="this chunk could not be turned into a request",
+                reason=str(e), resolvable=getattr(e, "resolvable", ()),
             ))
             failed_chunks.append(chunk)
             continue

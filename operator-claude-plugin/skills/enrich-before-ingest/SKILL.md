@@ -324,6 +324,15 @@ whatever seven columns happened to be in the source file.
    continue. The consent itself has no default — if the operator has not said yes this
    turn and no grant is open, do not call `dispatch_plan` at all.
 
+   **A failed chunk's `outcome.results[i].resolvable` (D-59-08, gap closure
+   2026-08-29) is a proposal to offer, not a dead end to report.** When it is
+   non-empty, walk its entries and tell the operator what each `detail` says would
+   resolve the row, naming the `resolution_sources` value the entry claims
+   (`hubspot_lookup`, `operator_statement`, `provider_result`, `same_row_derivation`).
+   Nothing here acts on the operator's behalf — Claude proposes, the operator
+   confirms, and no field is filled in to make the row pass. Refuse-to-propose, not
+   refuse-to-guess, same as everywhere else this phase touches.
+
 6. **The enriched preview — the last look before anything reaches HubSpot.** Render
    it:
 

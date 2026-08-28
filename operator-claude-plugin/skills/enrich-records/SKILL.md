@@ -321,6 +321,19 @@ capability; claiming it here would be a guess dressed as a report.
    failure here even though the backend may still be working; say so rather than implying
    the records were rejected.
 
+   **When a failed chunk's `resolvable` tuple is non-empty (D-59-08, gap closure
+   2026-08-29), offer the resolution instead of reporting a dead end.** This is the
+   same identity gate GATE-01 already relays through the ingest preview — GATE-02
+   through GATE-05 refuse a `people`/`companies` chunk the same way, and their
+   `resolvable` payload now survives the trip through `dispatch_plan` rather than being
+   replaced by a placeholder. For each entry, relay its `detail` as a proposal of what
+   would resolve that row, and name which of the four `resolution_sources` values
+   (`hubspot_lookup`, `operator_statement`, `provider_result`, `same_row_derivation`)
+   it claims. **Claude proposes and the operator confirms — a resolvable entry is never
+   silently acted on, and no value is invented to satisfy the gate.** D-59-08's own line
+   applies here exactly as it does at every other gate this phase converted: the change
+   is refuse-to-propose, never refuse-to-guess.
+
    **For every response in `outcome.responses`, read what it actually says before calling
    that chunk sent.** Import `scripts/report_enrichment.py` (a library here, the same way
    `scripts/report.py` already is, not a CLI) and call `build_sync_report(response)` on

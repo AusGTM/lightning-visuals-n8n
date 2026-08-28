@@ -16,6 +16,50 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.26.0] - 2026-08-29
+
+### Fixed
+
+- **D-59-08 gap closure: GATE-02 through GATE-05's resolve-and-propose payload now
+  actually reaches the operator.** 0.25.0's CHANGELOG entry above claimed these four
+  gates were "CONVERTED" — that was true only at the level of
+  `enrichment.RecordSpecError` construction. `chunking.dispatch_plan` is the ONE call
+  site `enrichment.build_envelope` is invoked from in shipped code, and its
+  `except enrichment.RecordSpecError:` clause had no `as e`, discarding both the
+  gate's specific message and its `resolvable` tuple and substituting a generic
+  placeholder ("this chunk could not be turned into a request") that neither shipped
+  skill's dispatch instructions could turn into a proposal. An operator hitting
+  exactly GATE-02's own example — a named person with no email, no LinkedIn URL, no
+  surname+company — saw that placeholder and nothing to act on, the identical dead
+  end D-59-08 was an operator ruling against.
+  - `chunking.ChunkResult` gains a `resolvable` field, defaulting to an empty tuple
+    never `None`, mirroring `enrichment.RecordSpecError.resolvable` exactly — a
+    caller iterates it unconditionally on every result, including successes.
+  - `dispatch_plan`'s `RecordSpecError` handler now binds the exception and carries
+    `str(e)` and `getattr(e, "resolvable", ())` onto the `ChunkResult`, in place of
+    the generic placeholder, which is deleted rather than kept as a fallback — a
+    `RecordSpecError` always carries a message the gate wrote, which is strictly
+    better than one this module would invent.
+  - `ChunkResult`'s docstring is amended, not silently overridden: it still carries
+    nothing transport-sourced (T-25-17's rule against echoing a request header
+    through a relayed exception), but a `RecordSpecError` message is raised BEFORE
+    any request is built and is composed entirely from the operator's own record
+    spec — admitting it is not a widening of the original constraint.
+  - Both `enrich-records/SKILL.md` (step 9) and `enrich-before-ingest/SKILL.md`
+    (the dispatch section) now instruct relaying a non-empty `resolvable` entry as a
+    proposal — naming its `detail` and which `resolution_sources` value it claims —
+    rather than reporting the chunk as simply refused. Claude proposes, the
+    operator confirms; nothing is silently acted on and no value is invented.
+  - `59-GATE-INVENTORY.md`'s Owner cells for GATE-02 through GATE-05, and its
+    closing paragraph, are corrected: a gate is CONVERTED only once its payload
+    reaches the operator, and until this release it did not.
+  - Lead test drives the real integration path — `chunking.plan_chunks` into
+    `chunking.dispatch_plan` — rather than calling `enrichment.build_envelope`
+    directly, which is the exact blind spot that let this ship past three green
+    test suites in 0.24.0/0.25.0.
+  - GATE-01 and GATE-06 are untouched — both already reached the operator on
+    independent code paths unaffected by this defect.
+
 ## [0.25.0] - 2026-08-28
 
 ### Added

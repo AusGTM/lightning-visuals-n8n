@@ -593,6 +593,61 @@ def test_result_records_carry_nothing_from_the_config(
     assert fake_config["n8n_url"] not in rendered
 
 
+def test_a_gate_02_person_spec_carries_the_gates_own_message_through_dispatch(
+    fake_config, stub_module_transport_factory
+):
+    """The integration test that would have caught CR-01: GATE-02's own example (a
+    named person with no email, no linkedin_url, no lastname+company) driven through
+    plan_chunks -> dispatch_plan, not through enrichment.build_envelope directly. A
+    unit-only test repeats the exact blind spot that let this ship."""
+    plan = chunking.plan_chunks({"people": [{"firstname": "John"}]}, 2)
+    transport = stub_module_transport_factory()
+    outcome = chunking.dispatch_plan(
+        plan, PROVIDERS, True, fake_config, transport=transport
+    )
+    assert "LinkedIn profile URL" in outcome.results[0].reason
+    assert outcome.results[0].resolvable
+    for entry in outcome.results[0].resolvable:
+        assert set(entry) >= {"field", "sources", "detail"}
+
+
+def test_a_gate_02_refusal_never_reaches_the_transport(
+    fake_config, stub_module_transport_factory
+):
+    """The refusal happens before any send. This must not accidentally start proving
+    a network round trip."""
+    plan = chunking.plan_chunks({"people": [{"firstname": "John"}]}, 2)
+    transport = stub_module_transport_factory()
+    chunking.dispatch_plan(plan, PROVIDERS, True, fake_config, transport=transport)
+    assert transport.calls == []
+
+
+def test_a_transport_failure_still_carries_an_empty_resolvable_tuple(
+    fake_config, stub_module_transport_factory
+):
+    """A caller must be able to iterate `.resolvable` unconditionally on every
+    result — a transport-reason failure carries `()`, never `None`."""
+    transport = stub_module_transport_factory([(500, {"message": "boom"})])
+    outcome = chunking.dispatch_plan(
+        chunking.plan_chunks(spec(2), 2), PROVIDERS, True, fake_config,
+        transport=transport,
+    )
+    assert outcome.results[0].resolvable == ()
+
+
+def test_a_refused_gate_02_chunk_still_lands_in_failed_batch(
+    fake_config, stub_module_transport_factory
+):
+    """D-13's re-send contract is unchanged by this plan: a spec-refused chunk still
+    carries into `outcome.failed_batch`."""
+    plan = chunking.plan_chunks({"people": [{"firstname": "John"}]}, 2)
+    transport = stub_module_transport_factory()
+    outcome = chunking.dispatch_plan(
+        plan, PROVIDERS, True, fake_config, transport=transport
+    )
+    assert outcome.failed_batch == {"people": [{"firstname": "John"}]}
+
+
 def test_the_dispatcher_iterates_the_plan_and_never_resplits_it(
     fake_config, stub_module_transport_factory
 ):
