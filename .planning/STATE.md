@@ -4,17 +4,17 @@ milestone: v1.1
 milestone_name: Unattended Session Runs
 current_phase: 59
 current_phase_name: frictionless-write-path
-status: executing
-stopped_at: Completed 59-05-PLAN.md
-last_updated: "2026-08-28T13:50:04.633Z"
+status: verifying
+stopped_at: Completed 59-06-PLAN.md
+last_updated: "2026-08-28T14:01:29.661Z"
 last_activity: 2026-08-28
 last_activity_desc: Phase 59 execution started
 progress:
   total_phases: 5
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 26
-  completed_plans: 25
-  percent: 80
+  completed_plans: 26
+  percent: 100
 ---
 
 # Project State
@@ -152,7 +152,7 @@ predating the window. VETO-03 bar still 0.
 
 Phase: 59 (frictionless-write-path) — EXECUTING
 Plan: 6 of 6
-Status: Ready to execute
+Status: Phase complete — ready for verification
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
   has executed on a real record. **Nothing is armed** — windows #1 and #2 were each opened
@@ -239,12 +239,12 @@ Last activity: 2026-08-28 — Phase 59 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [██████████] 96% (v0.9 phase 47.5 of 46-49)
+Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-28T13:50:04.625Z
-**Stopped at:** Completed 59-05-PLAN.md
+**Last session:** 2026-08-28T14:01:23.902Z
+**Stopped at:** Completed 59-06-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -335,6 +335,7 @@ Progress: [██████████] 96% (v0.9 phase 47.5 of 46-49)
 | Phase 59 P03 | 45min | 3 tasks | 7 files |
 | Phase 59 P04 | 20min | 2 tasks | 5 files |
 | Phase 59 P05 | 50min | 3 tasks | 9 files |
+| Phase 59 P06 | ~40min | 3 tasks | 10 files |
 
 ## Decisions
 
@@ -394,6 +395,7 @@ Progress: [██████████] 96% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: [Phase 59-04]: D-59-06 SessionStart hook shipped -- non-blocking session-start note discloses run-to-completion behaviour; dispatch_plan stays grant-unaware, revocation test untouched; content proven by subprocess contract test, host delivery recorded as unperformed manual check
 - [Phase ?]: [Phase 59-05]: D-59-08 gate inventory decided 16 gates -- GATE-01 (extraction.py identity gate) converted this plan, GATE-02..06 named candidates for 59-06, 8 NOT-APPLICABLE with stated no-legitimate-resolution-source reasons, 2 ALREADY-CONVERTED (company_domain.py, preingest unmatched bucket)
 - [Phase ?]: [Phase 59-05]: extraction.py identity gate converted refuse-and-stop to refuse-and-classify-resolvable, additive to rejected; RESOLUTION_SOURCES closed vocabulary (hubspot_lookup/operator_statement/provider_result/same_row_derivation) rejects any resolutions entry naming an outside source or a field the row lacks; test_no_invention_structural.py extended (4 new forbidden substrings) never relaxed
+- [Phase ?]: [Phase 59-06]: RESOLUTION_SOURCES moved to a new dependency-free resolution_sources.py module -- a live test proved enrichment.py importing it directly from extraction.py is a real circular import (enrichment -> extraction -> preview -> preview_enrichment -> chunking -> enrichment); extraction.RESOLUTION_SOURCES is the same re-exported object
 
 ### Roadmap Evolution
 
