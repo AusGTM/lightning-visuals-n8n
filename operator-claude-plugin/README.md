@@ -357,13 +357,20 @@ Four things worth knowing before you use one:
   after you revoke.
 - **On `enrich-before-ingest`, one grant can cover both lanes** — the enrichment lane and
   the contacts lane — so you are asked once instead of twice. The grant enables enrichment
-  and writes to HubSpot across both lanes; after the run, the records it actually wrote are
-  listed in `written_records.json`, in the plugin's durable state directory, so you can open
-  them in HubSpot and amend them. *(RECORDED EDIT — D-59-07, operator, 2026-08-28: this
-  bullet used to carry a longer pre-emptive warning describing the ordering of the write
-  relative to the enriched preview; that warning is retired as operator-facing text and
-  replaced by the post-run list above — the D-53-05 trade itself, one grant spanning both
-  lanes, is unchanged.)*
+  and writes to HubSpot across both lanes. *(RECORDED EDIT — D-59-07, operator, 2026-08-28:
+  this bullet used to carry a longer pre-emptive warning describing the ordering of the
+  write relative to the enriched preview; that warning is retired as operator-facing text
+  and replaced by the post-run list below — the D-53-05 trade itself, one grant spanning
+  both lanes, is unchanged.)*
+- **After the run, the records it actually wrote are listed on disk, for every grant, one
+  lane or two.** Each run writes its own `written_records-<run_id>.json` file (matching the
+  pattern `written_records*.json`) in the plugin's durable state directory, so you can open
+  the records it wrote in HubSpot and amend them. *(RECORDED EDIT — D-59-09, operator,
+  2026-08-29: this used to be one sentence, scoped only to a two-lane grant's bullet above,
+  in error — the artifact is written after every dispatch regardless of lane count. It is
+  now its own bullet so it discloses for a single-lane grant too, and the artifact itself
+  moved from one file shared across every run to one file per run — a reader must glob
+  rather than open one fixed path.)*
 - **A grant lives in the conversation and is never written to disk.** It ends on
   completion, revocation, session end, an error, a ceiling breach, or two consecutive
   failures to turn writes back off.

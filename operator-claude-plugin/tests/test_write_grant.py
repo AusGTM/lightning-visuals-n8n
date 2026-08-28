@@ -1051,7 +1051,8 @@ def test_no_status_post_is_made_when_the_batch_prices_no_provider(
 
 def test_a_two_lane_grant_names_both_lanes_and_points_at_the_written_records_list(
         granting_config, stub_module_transport_factory):
-    """RECORDED EDIT -- D-59-07, operator, 2026-08-28.
+    """RECORDED EDIT -- D-59-07, operator, 2026-08-28; filename wording RECORDED EDIT
+    again -- D-59-09, operator, 2026-08-29.
 
     This pin used to assert D-53-05's pre-emptive warning: that a two-lane grant's
     `consequence` said the HubSpot write is authorized BEFORE the enriched preview
@@ -1061,8 +1062,12 @@ def test_a_two_lane_grant_names_both_lanes_and_points_at_the_written_records_lis
 
     What the pin holds now: the `consequence` states plainly and non-blockingly that
     the grant enables enrichment and writes to HubSpot, and points at the post-run
-    written-records list (`written_records.json`) the operator can open in HubSpot and
-    amend. The D-53-05 trade itself (one grant spans both lanes, the allowlist stays
+    written-records list the operator can open in HubSpot and amend. D-59-09 moved that
+    artifact from one file shared across runs to one file per run, so the filename
+    assertion below changed from a single fixed name (`written_records.json`) to the
+    per-run pattern `written_records*.json` -- the disclosure sentence itself also moved
+    (see the single-lane twin below), but this test's job is still only the two-lane
+    phrasing. The D-53-05 trade itself (one grant spans both lanes, the allowlist stays
     record-scoped) is UNCHANGED -- only what the operator reads in exchange for it
     changed. The negative assertion below is what makes this a re-point rather than a
     weakening: the retired sentence cannot come back unnoticed.
@@ -1078,7 +1083,7 @@ def test_a_two_lane_grant_names_both_lanes_and_points_at_the_written_records_lis
     assert write_grant.LANES["contacts"] in consequence
     # The plain, non-blocking statement of fact that replaced the retired warning.
     assert "enables enrichment and writes to HubSpot" in consequence
-    assert "written_records.json" in consequence
+    assert "written_records*.json" in consequence
     # NEGATIVE — the retired pre-emptive warning must never come back, softened or not.
     assert "BEFORE the enriched preview exists" not in consequence
 
@@ -1091,6 +1096,21 @@ def test_a_single_lane_grant_claims_no_preview_trade_that_is_not_happening(
     assert "enrichment lane" in consequence
     assert "contacts" not in consequence
     assert "enriched preview" not in consequence
+
+
+def test_a_single_lane_grant_also_discloses_the_written_records_artifact(
+        granting_config, stub_module_transport_factory):
+    """The gap-4 twin (D-59-07/59-VERIFICATION.md): the artifact is written after EVERY
+    dispatch regardless of lane count, so a one-lane grant must disclose it exactly like
+    a two-lane one does -- before this fix the sentence lived only inside the
+    `len(lane_names) > 1` branch (D-59-09 gap-closure, operator, 2026-08-29)."""
+    transport = stub_module_transport_factory(_plan_reads())
+    consequence = _proposal(granting_config, transport)["consequence"]
+
+    assert "written_records*.json" in consequence
+    assert "After the run, the records it actually wrote are listed" in consequence
+    # The genuinely multi-lane phrasing must NOT leak into a single-lane grant's text.
+    assert "covers both lanes at once" not in consequence
 
 
 def test_the_consequence_carries_the_arm_dispatch_register_in_full(
@@ -1274,7 +1294,7 @@ def test_a_revoked_run_still_records_every_record_it_wrote(
     import chunking
 
     artifact = tmp_path / "written_records.json"
-    monkeypatch.setattr(written_records, "written_records_path", lambda: artifact)
+    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
 
     ids = [str(n) for n in range(1, 7)]
     grant_transport = stub_module_transport_factory(_plan_reads())

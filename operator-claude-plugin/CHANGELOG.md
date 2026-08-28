@@ -16,6 +16,48 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.27.0] - 2026-08-29
+
+### Fixed
+
+- **D-59-09 gap closure: `written_records.json` is now one artifact per `run_id`, not
+  one file shared by every dispatch.** Code review and goal verification (gap 2 of
+  `59-VERIFICATION.md`) found no protection against two real, concurrent writers — an
+  operator's live session and `scheduled_arm.py`'s unattended cron poller — and
+  `append_chunk`'s old replace-not-merge rule silently dropped the loser's already-
+  flushed chunk history on a race between them. Operator ruling: each run writes its
+  own artifact, keyed by `run_id`; a reader globs and unions them.
+  - `written_records_path` now takes `run_id` and returns
+    `written_records-<run_id>.json` in the plugin's durable state directory, resolved
+    fresh on every call as before.
+  - `append_chunk`'s run-id-mismatch replace branch is deleted — under per-run files a
+    document already on disk at a given path is always this run's own earlier chunks,
+    so it is appended to unconditionally. There is nothing foreign left to replace.
+  - `load()` with no `path` now globs `written_records*.json` — deliberately NOT
+    hyphen-anchored, so an artifact an operator already has under the pre-change shared
+    filename is still found — reads every match in sorted order, unions their entries,
+    and stamps each with its own document's `run_id`. One unreadable or malformed file
+    among several does not suppress the readable ones. `load(path=...)` is unchanged.
+  - **An OS-level advisory file lock was considered and rejected**, as was a merged
+    index across every run's file: no contention and no stale-lock failure mode on a
+    path that must never block a dispatch, and the index is a later addition only if
+    operators ask for one combined view. Neither is in this release.
+  - Lead test drives TWO interleaved runs through `chunking.dispatch_plan` against one
+    shared durable directory — a unit test of `append_chunk` alone would have repeated
+    the mistake that let this gap ship.
+  - The cost, paid here: every reader of the artifact globs rather than opens one fixed
+    path — `write_grant.py`'s grant-consequence text, `README.md`, and
+    `enrich-before-ingest/SKILL.md` all reworded to name the per-run shape.
+
+- **D-59-07 gap closure: a single-lane write grant now discloses the written-records
+  artifact too, not only a grant spanning both lanes.** The disclosure sentence used to
+  live only inside `write_grant._consequence`'s `len(lane_names) > 1` branch — scoped
+  there in error, since the artifact is written after every dispatch regardless of lane
+  count. It now fires for every grant. `plan_grant`'s authorization control — refusal
+  ordering, the empty-record-set refusal, every authority check — is untouched; this is
+  a text-only change, and the structural test asserting `write_grant.py` contains no
+  HubSpot search call still passes unmodified.
+
 ## [0.26.0] - 2026-08-29
 
 ### Fixed

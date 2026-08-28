@@ -15,9 +15,13 @@ home — the same discipline every existing test in this suite already follows f
 through a monkeypatch instead of a `path=` kwarg because `chunking.dispatch_plan` itself
 takes no such parameter (see 59-01-PLAN.md's wiring section — only `run_id` was added).
 """
+import json
+import stat
+
 import pytest
 
 import chunking
+import durable_paths
 import enrichment as enrichment_module
 import written_records
 
@@ -144,7 +148,11 @@ def test_append_chunk_flattens_a_list_body_into_one_entry_per_row(tmp_path):
     assert entries[1]["outcome"] == written_records.CREATED_ID_UNKNOWN
 
 
-def test_a_document_carrying_a_different_run_id_is_replaced_not_mixed(tmp_path):
+def test_two_different_run_ids_written_to_the_same_explicit_path_are_appended_not_replaced(tmp_path):
+    """D-59-09 removed the run-id-mismatch replace branch: under per-run files this
+    never fires in production (two runs never share a path — see `written_records_path`),
+    so what is left at the explicit-`path=` escape hatch is simpler — a document already
+    on disk is always appended to, whichever `run_id` wrote it last."""
     artifact = tmp_path / "written_records.json"
     written_records.append_chunk(
         "run-old", 0, {"action": "update", "hs_object_id": "1"}, path=artifact
@@ -153,7 +161,7 @@ def test_a_document_carrying_a_different_run_id_is_replaced_not_mixed(tmp_path):
         "run-new", 0, {"action": "update", "hs_object_id": "2"}, path=artifact
     )
     entries = written_records.load(path=artifact)
-    assert [e["hs_object_id"] for e in entries] == ["2"]
+    assert [e["hs_object_id"] for e in entries] == ["1", "2"]
 
 
 def test_append_chunk_to_an_unwritable_path_does_not_raise(tmp_path):
@@ -226,7 +234,7 @@ def test_a_dispatch_that_crashes_mid_loop_leaves_a_durable_file_holding_earlier_
     fake_config, stub_module_transport_factory, tmp_path, monkeypatch
 ):
     artifact = tmp_path / "written_records.json"
-    monkeypatch.setattr(written_records, "written_records_path", lambda: artifact)
+    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
 
     plan = chunking.plan_chunks(
         {"record_ids": [str(n) for n in range(1, 6)], "object_type": "companies"}, 1
@@ -264,7 +272,7 @@ def test_a_clean_five_chunk_run_leaves_all_five_chunks_on_disk(
     that flushed nothing would still pass the crash assertion vacuously (0 == 0 is not
     what `[0, 1]` asserts against, but this pins the happy path explicitly anyway)."""
     artifact = tmp_path / "written_records.json"
-    monkeypatch.setattr(written_records, "written_records_path", lambda: artifact)
+    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
 
     plan = chunking.plan_chunks(
         {"record_ids": [str(n) for n in range(1, 6)], "object_type": "companies"}, 1
@@ -276,3 +284,134 @@ def test_a_clean_five_chunk_run_leaves_all_five_chunks_on_disk(
 
     entries = written_records.load(path=artifact)
     assert [e["chunk_index"] for e in entries] == [0, 1, 2, 3, 4]
+
+
+# ------------------------------------------------------------------------------------
+# D-59-09 (operator, 2026-08-29) — one artifact per run_id, and a reader that globs and
+# unions. `durable_paths.resolve_state_path` is monkeypatched directly (not
+# `written_records.written_records_path`) so that BOTH `append_chunk`'s per-run write
+# and `load()`'s no-argument glob resolve into the SAME tmp_path directory, exactly as
+# they would against one real durable home.
+# ------------------------------------------------------------------------------------
+
+def _patch_durable_dir(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        durable_paths, "resolve_state_path",
+        lambda *a, **k: tmp_path / "dashboard_artifact.json",
+    )
+
+
+def test_two_interleaved_dispatch_runs_against_one_durable_directory_do_not_clobber_each_other(
+    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
+):
+    """THE test the gap needed — driven through `dispatch_plan`, not `append_chunk`
+    alone (a unit test of `append_chunk` in isolation is exactly the kind of test that
+    let this gap ship). Two REAL runs, interleaved by hand: run A flushes a chunk, run B
+    (a DIFFERENT run_id) flushes into the same durable directory, then run A flushes
+    again. Under the pre-D-59-09 shared path, run B's flush would replace run A's
+    earlier chunk on disk (the old run-id-mismatch branch); under per-run paths nothing
+    is lost and no lock is involved."""
+    _patch_durable_dir(monkeypatch, tmp_path)
+
+    plan_a_first = chunking.ChunkPlan(
+        chunks=({"record_ids": ["1"], "object_type": "companies"},),
+        row_counts=(1,), record_count=1,
+    )
+    plan_b = chunking.ChunkPlan(
+        chunks=({"record_ids": ["9"], "object_type": "companies"},),
+        row_counts=(1,), record_count=1,
+    )
+    plan_a_second = chunking.ChunkPlan(
+        chunks=({"record_ids": ["2"], "object_type": "companies"},),
+        row_counts=(1,), record_count=1,
+    )
+
+    chunking.dispatch_plan(plan_a_first, ["lusha"], True, fake_config,
+                            transport=stub_module_transport_factory(), run_id="run-a")
+    chunking.dispatch_plan(plan_b, ["lusha"], True, fake_config,
+                            transport=stub_module_transport_factory(), run_id="run-b")
+    chunking.dispatch_plan(plan_a_second, ["lusha"], True, fake_config,
+                            transport=stub_module_transport_factory(), run_id="run-a")
+
+    entries_a = written_records.load(path=written_records.written_records_path("run-a"))
+    entries_b = written_records.load(path=written_records.written_records_path("run-b"))
+    assert len(entries_a) == 2, "run A's earlier chunk must survive run B's later flush"
+    assert len(entries_b) == 1
+
+
+def test_load_with_no_path_unions_every_runs_file_and_names_the_run_on_each_entry(
+    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
+):
+    _patch_durable_dir(monkeypatch, tmp_path)
+
+    plan_a = chunking.plan_chunks({"record_ids": ["1"], "object_type": "companies"}, 1)
+    plan_b = chunking.plan_chunks({"record_ids": ["9"], "object_type": "companies"}, 1)
+    chunking.dispatch_plan(plan_a, ["lusha"], True, fake_config,
+                            transport=stub_module_transport_factory(), run_id="run-a")
+    chunking.dispatch_plan(plan_b, ["lusha"], True, fake_config,
+                            transport=stub_module_transport_factory(), run_id="run-b")
+
+    entries = written_records.load()
+    assert len(entries) == 2, "one entry per run, one record each"
+    assert {e[written_records.RUN_ID_FIELD] for e in entries} == {"run-a", "run-b"}
+
+
+def test_load_globs_and_finds_a_legacy_pre_change_filename_too(tmp_path, monkeypatch):
+    """The glob is `written_records*.json`, NOT hyphen-anchored — an artifact an
+    operator already has under the pre-D-59-09 shared filename must not vanish."""
+    _patch_durable_dir(monkeypatch, tmp_path)
+    directory = tmp_path
+    legacy = directory / "written_records.json"
+    legacy.write_text(json.dumps({
+        "run_id": "legacy-run",
+        "saved_at": "2026-01-01T00:00:00+00:00",
+        "entries": [{
+            "chunk_index": 0, "action": "update", "hs_object_id": "1",
+            "object_type": "contacts", "outcome": "written", "reason": None,
+        }],
+    }), encoding="utf-8")
+
+    written_records.append_chunk("run-new", 0, {"action": "update", "hs_object_id": "2"})
+
+    entries = written_records.load()
+    assert {e["hs_object_id"] for e in entries} == {"1", "2"}
+
+
+def test_load_with_no_path_on_a_missing_durable_directory_returns_empty(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        durable_paths, "resolve_state_path",
+        lambda *a, **k: tmp_path / "does-not-exist" / "dashboard_artifact.json",
+    )
+    assert written_records.load() == []
+
+
+def test_load_with_no_path_skips_one_unreadable_file_without_suppressing_the_others(
+    tmp_path, monkeypatch
+):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    (tmp_path / "written_records-bad.json").write_text("not json at all", encoding="utf-8")
+    written_records.append_chunk("run-good", 0, {"action": "update", "hs_object_id": "1"})
+
+    entries = written_records.load()
+    assert [e["hs_object_id"] for e in entries] == ["1"]
+
+
+def test_load_with_no_path_skips_a_schema_mismatched_file_without_suppressing_the_others(
+    tmp_path, monkeypatch
+):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    (tmp_path / "written_records-mismatch.json").write_text("[1, 2, 3]", encoding="utf-8")
+    written_records.append_chunk("run-good", 0, {"action": "update", "hs_object_id": "1"})
+
+    entries = written_records.load()
+    assert [e["hs_object_id"] for e in entries] == ["1"]
+
+
+def test_the_per_run_file_is_written_0600_and_is_not_a_dotfile(tmp_path, monkeypatch):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    written_records.append_chunk("run-perm", 0, {"action": "update", "hs_object_id": "1"})
+
+    target = written_records.written_records_path("run-perm")
+    assert target.exists()
+    assert not target.name.startswith("."), "Phase 23 D-04: must not be a dotfile"
+    assert stat.S_IMODE(target.stat().st_mode) == 0o600

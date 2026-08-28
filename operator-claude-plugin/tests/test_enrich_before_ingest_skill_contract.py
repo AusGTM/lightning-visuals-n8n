@@ -226,7 +226,12 @@ def test_the_ingest_arm_heading_is_strictly_after_the_enriched_preview_heading()
     What changed below is the final assertion: it now asserts the new statement is present
     AND that the retired sentence is gone, so the retired wording cannot come back
     unnoticed. The D-53-05 trade the paragraph above describes (one grant, both lanes) is
-    itself untouched by this edit."""
+    itself untouched by this edit.
+
+    RECORDED EDIT -- D-59-09, operator, 2026-08-29. `written_records.json` above named the
+    single file every run used to share; each run now writes its own
+    `written_records-<run_id>.json` file, and the final assertion below checks the glob
+    pattern (`written_records*.json`) rather than that one retired name."""
     text = _text()
     preview_offset = text.find(ENRICHED_PREVIEW_HEADING)
     ingest_offset = text.find(INGEST_ARM_HEADING)
@@ -254,10 +259,14 @@ def test_the_ingest_arm_heading_is_strictly_after_the_enriched_preview_heading()
         "writes to HubSpot. Without that sentence the operator is told nothing at the "
         "moment that matters"
     )
-    assert "written_records.json" in normalized, (
+    assert "written_records-<run_id>.json" in normalized, (
         "D-59-07's replacement for the retired warning points at the post-run "
         "written-records list -- without it the plain statement above is not actionable, "
-        "which is exactly what made the retired warning worthless"
+        "which is exactly what made the retired warning worthless. D-59-09 (2026-08-29) "
+        "moved the artifact from one shared file to one per run, so this pin now checks "
+        "the per-run filename shape rather than the retired single fixed filename -- "
+        "not the `written_records*.json` glob text, which `_normalized()` strips the "
+        "asterisk from and would make an unreadable pin."
     )
     # NEGATIVE -- D-59-07, 2026-08-28: the retired D-53-05 warning must never come back,
     # softened or not. This is what makes the pin above a re-point rather than a

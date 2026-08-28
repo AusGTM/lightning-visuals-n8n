@@ -11,8 +11,24 @@ This is a SEPARATE file with its OWN schema and its OWN refusal, mirroring
 general-purpose store one commit later, and the first thing parked in one would be the
 arming grant Phase 23 D-11 deliberately keeps off disk.
 
+**D-59-09 (operator, 2026-08-29): ONE ARTIFACT PER `run_id`, not one shared file.**
+Code review and goal verification both found the original one-shared-file design had no
+protection against two real, shipped, concurrent writers — an operator's live session
+and `scheduled_arm.py`'s unattended cron poller — and the old replace-not-merge rule
+(now removed, see `append_chunk`) silently dropped the loser's already-flushed chunk
+history on a race. Two runs never share a path any more, so there is nothing to race
+over and nothing to merge. An OS-level advisory file lock was considered here and
+rejected: it would add contention and a stale-lock failure mode to a path that must
+never block a dispatch — the same reasoning `append_chunk`'s own docstring gives for why
+a bookkeeping failure must degrade rather than raise. A merged index across every run's
+file was also considered and rejected as a later addition, only if operators ask for one
+combined view. The cost of this decision is paid on the READER side: every consumer of
+this artifact globs `written_records*.json` and unions the matches (`load()`, below)
+rather than opening one fixed path.
+
 Schema: `run_id`, `saved_at` (UTC isoformat), `entries` — a list, in chunk order, of
-`{chunk_index, object_type, action, hs_object_id, outcome, reason}`.
+`{chunk_index, object_type, action, hs_object_id, outcome, reason}`. The filename is
+`written_records-<run_id>.json`, resolved fresh on every call by `written_records_path`.
 
 `email` and every other contact PII field is DELIBERATELY EXCLUDED from an entry. An
 operator opens the record by id; this artifact does not need to become a second place
@@ -56,7 +72,12 @@ from pathlib import Path
 
 import durable_paths
 
-WRITTEN_RECORDS_FILENAME = "written_records.json"
+# NOT hyphen-anchored on purpose (D-59-09): an artifact written under the pre-change
+# shared filename (`written_records.json`, no run-id suffix) must still be found by
+# `load()` — a narrower, hyphen-anchored glob would silently drop an operator's
+# existing file, which is the same understate-what-was-written failure this artifact
+# exists to prevent.
+WRITTEN_RECORDS_GLOB = "written_records*.json"
 
 # The whole document schema. Anything else is a rejection, not a widening.
 RUN_ID_FIELD = "run_id"
@@ -93,15 +114,17 @@ def _looks_forbidden(value) -> bool:
     return any(marker in lowered for marker in _FORBIDDEN_NAME_MARKERS)
 
 
-def written_records_path() -> Path:
-    """Where the artifact lives — resolved fresh on every call, never a module-level
-    constant (33-02's migration can create the durable file mid-run; the same reason
-    `run_manifest.manifest_path()` and `artifact_store.state_path()` both resolve fresh).
+def written_records_path(run_id) -> Path:
+    """Where ONE run's artifact lives — resolved fresh on every call, never a
+    module-level constant (33-02's migration can create the durable file mid-run; the
+    same reason `run_manifest.manifest_path()` and `artifact_store.state_path()` both
+    resolve fresh).
 
-    The same durable directory those two files resolve into — never a second resolution
-    rule and never a second env var.
+    D-59-09: keyed by `run_id`, so two runs never resolve to the same path. The same
+    durable directory `run_manifest.py` and `artifact_store.py` both resolve into —
+    never a second resolution rule and never a second env var.
     """
-    return durable_paths.resolve_state_path().parent / WRITTEN_RECORDS_FILENAME
+    return durable_paths.resolve_state_path().parent / f"written_records-{run_id}.json"
 
 
 def classify_item(item) -> dict:
@@ -170,9 +193,9 @@ def classify_item(item) -> dict:
 
 def _load_document(target: Path):
     """The document dict, or `None` on any read/parse failure — used internally by
-    `append_chunk` to decide whether to extend the existing entries or start fresh.
-    Never raises; a failure to read the existing artifact must not stop a live dispatch
-    (T-59-04)."""
+    `append_chunk` to decide whether to extend the existing entries or start fresh, and
+    by `load()` to classify one file. Never raises; a failure to read the existing
+    artifact must not stop a live dispatch (T-59-04)."""
     try:
         document = json.loads(target.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -180,17 +203,35 @@ def _load_document(target: Path):
     return document if isinstance(document, dict) else None
 
 
+def _entries_from_document(document):
+    """`entries`, or `None` when `document` fails the usability check — shared by both
+    branches of `load()` so a single-file read and a globbed union degrade identically
+    (missing, unreadable, malformed, half-written, schema-mismatched all -> `None`, never
+    a partially-trusted list; `run_manifest.load()`'s reasoning verbatim)."""
+    if document is None:
+        return None
+    entries = document.get(ENTRIES_FIELD)
+    if not isinstance(entries, list):
+        return None
+    if any(not isinstance(entry, dict) for entry in entries):
+        return None
+    return entries
+
+
 def append_chunk(run_id, chunk_index, body, path=None):
     """Classify every item in one chunk's raw response `body` and flush the WHOLE
-    written-records document — this chunk's entries appended to whatever the file
-    already held for `run_id` — through `durable_paths._atomic_write_0600`.
+    written-records document — this chunk's entries appended to whatever `run_id`'s file
+    already held — through `durable_paths._atomic_write_0600`.
 
     Called from INSIDE `chunking.dispatch_plan`'s per-chunk loop, immediately after
     `responses.append(body)` — see the call site there for why moving this call out of
     the loop breaks D-59-07's partial-run guarantee.
 
-    A document on disk carrying a DIFFERENT `run_id` is replaced, not merged into — a
-    written-records file is scoped to the one run that is currently writing it.
+    D-59-09 (operator, 2026-08-29): a document already on disk at this path is now
+    ALWAYS this run's own earlier chunks — `written_records_path(run_id)` gives every
+    run its own file, so two runs never share one — and is appended to unconditionally.
+    The old run-id-mismatch check-and-replace branch is gone: there is no foreign
+    document left to replace it against.
 
     MUST NOT raise on an I/O failure (`OSError`): returns a falsey result instead. This
     is load-bearing — a bookkeeping failure that halted a live HubSpot run would convert
@@ -204,18 +245,11 @@ def append_chunk(run_id, chunk_index, body, path=None):
         {"chunk_index": chunk_index, **classify_item(item)} for item in items
     ]
 
-    target = Path(path) if path is not None else written_records_path()
+    target = Path(path) if path is not None else written_records_path(run_id)
 
     try:
-        existing = _load_document(target)
-        if (
-            isinstance(existing, dict)
-            and existing.get(RUN_ID_FIELD) == run_id
-            and isinstance(existing.get(ENTRIES_FIELD), list)
-        ):
-            entries = existing[ENTRIES_FIELD] + new_entries
-        else:
-            entries = new_entries
+        existing_entries = _entries_from_document(_load_document(target))
+        entries = (existing_entries or []) + new_entries
 
         document = {
             RUN_ID_FIELD: run_id,
@@ -229,19 +263,35 @@ def append_chunk(run_id, chunk_index, body, path=None):
 
 
 def load(path=None) -> list:
-    """The document's `entries`, or `[]` when there is nothing usable — missing,
-    unreadable, malformed, half-written, and schema-mismatched all degrade to the SAME
-    empty result, never a partially-trusted one (`run_manifest.load()`'s reasoning
-    verbatim: a truncated list read as complete would understate what was actually
-    written, the exact failure this artifact exists to prevent)."""
-    target = Path(path) if path is not None else written_records_path()
-    document = _load_document(target)
-    if document is None:
+    """The written-records `entries`.
+
+    With an explicit `path=`, this is a single-file read — the document's `entries`, or
+    `[]` on any usability failure — unchanged from before D-59-09.
+
+    With no `path`, globs every `written_records*.json` file in the durable directory
+    (D-59-09: each run writes its own artifact, so reading "the" list means reading all
+    of them) and unions their entries. Matches are read in sorted filename order for
+    determinism. One unreadable or malformed file among several does not suppress the
+    readable ones — same whole-document degradation `_entries_from_document` gives the
+    single-file path, applied per file. Each returned entry is stamped with its own
+    document's `run_id` so a unioned `chunk_index` from two different runs stays
+    distinguishable.
+    """
+    if path is not None:
+        entries = _entries_from_document(_load_document(Path(path)))
+        return entries if entries is not None else []
+
+    directory = durable_paths.resolve_state_path().parent
+    try:
+        matches = sorted(directory.glob(WRITTEN_RECORDS_GLOB))
+    except OSError:
         return []
 
-    entries = document.get(ENTRIES_FIELD)
-    if not isinstance(entries, list):
-        return []
-    if any(not isinstance(entry, dict) for entry in entries):
-        return []
-    return entries
+    unioned = []
+    for match in matches:
+        document = _load_document(match)
+        entries = _entries_from_document(document)
+        if entries is None:
+            continue
+        unioned.extend({**entry, RUN_ID_FIELD: document.get(RUN_ID_FIELD)} for entry in entries)
+    return unioned

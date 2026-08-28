@@ -55,9 +55,10 @@ whatever seven columns happened to be in the source file.
    both of this flow's lanes is open, the operator is asked once instead of twice — that is
    D-53-05, their own decision of 2026-08-25. Name which lanes the open grant covers and say
    what the single ask covers: the grant enables enrichment and writes to HubSpot; after the
-   run, the records it actually wrote are listed in `written_records.json` (see step 5's
-   recorded edit, D-59-07, 2026-08-28, for what this line used to say and why it changed).
-   With no grant open, this flow asks twice, exactly as described above.
+   run, the records it actually wrote are listed in a `written_records-<run_id>.json` file
+   (one per run, matching `written_records*.json`) — see step 5's recorded edits, D-59-07
+   (2026-08-28) and D-59-09 (2026-08-29), for what this line used to say and why it changed
+   twice. With no grant open, this flow asks twice, exactly as described above.
 
 2. **Resolve rows, then match them against HubSpot — unarmed.** For a spreadsheet
    (CSV/XLSX), read it with:
@@ -249,9 +250,11 @@ whatever seven columns happened to be in the source file.
 
    **Say what the operator accepted when they opened a grant covering both lanes, and say it
    at the yes rather than after it:** the grant **enables enrichment and writes to
-   HubSpot** across both lanes. After the run, the records it actually wrote are listed in
-   `written_records.json`, in the plugin's durable state directory, so the operator can open
-   them in HubSpot and amend them.
+   HubSpot** across both lanes. After the run, the records it actually wrote are listed in a
+   `written_records-<run_id>.json` file (one per run, matching `written_records*.json`), in
+   the plugin's durable state directory, so the operator can open them in HubSpot and amend
+   them. This same disclosure applies to a single-lane grant too — say it there as well, not
+   only when a grant spans both lanes.
 
    > **RECORDED EDIT — D-59-07, operator, 2026-08-28.** This paragraph used to carry a
    > longer pre-emptive warning, at the yes, describing the ordering of the write relative
@@ -260,6 +263,12 @@ whatever seven columns happened to be in the source file.
    > until after the fact anyway. The D-53-05 trade itself (one grant spans both lanes, the
    > allowlist stays record-scoped) is UNCHANGED; only what the operator receives in
    > exchange for it changed, from a prediction to the actionable post-run list above.
+   >
+   > **RECORDED EDIT — D-59-09, operator, 2026-08-29.** The artifact named above used to be
+   > one file shared across every run (`written_records.json`); it is now one file per run,
+   > and the disclosure sentence itself used to fire only for a grant spanning both lanes —
+   > scoped there in error, since the artifact is written after every dispatch regardless of
+   > lane count. Both corrections land here in the same edit.
 
    They can still stop the run by revoking the grant, and revoking
    **refuses the next send** — it **does not stop a dispatch already running**, so a revoke

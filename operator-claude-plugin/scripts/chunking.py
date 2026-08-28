@@ -113,8 +113,9 @@ class DispatchOutcome:
     row as unanswered with no error.
 
     `run_id` is the id every chunk was flushed under, into D-59-07's durable
-    "what got written" artifact — `written_records.written_records_path()`, keyed by
-    this same id (see `written_records.py`'s own `append_chunk` for the flush)."""
+    "what got written" artifact. Under D-59-09 each run flushes into its OWN file —
+    `written_records.written_records_path(run_id)` — rather than a path shared across
+    runs (see `written_records.py`'s own `append_chunk` for the flush)."""
 
     results: tuple
     failed_batch: dict = None

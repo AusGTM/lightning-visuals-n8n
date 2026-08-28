@@ -51,6 +51,7 @@ import executions_client
 import n8n_arming
 import n8n_read
 import scheduled_arm
+import written_records
 
 KIND = "write_grant"
 PROPOSAL_KIND = "write_grant_proposal"
@@ -377,16 +378,33 @@ def _consequence(lane_names, ids, domains, allow_create):
         # RETIRED as operator-facing text. 53-04 described it as "the whole of what you
         # got for the protection you traded": a warning nobody could act on until after
         # the fact anyway. What replaces it is actionable -- a durable, post-run list of
-        # the records this run actually wrote (see `written_records.py`,
-        # `written_records_path()`), which the operator can open in HubSpot and amend.
-        # This is a deliberate operator decision, not a simplification: the D-53-05
-        # trade itself (one grant, both lanes, the allowlist unchanged) is UNTOUCHED --
-        # only what the operator is told about it changed.
+        # the records this run actually wrote (see `written_records.py`), which the
+        # operator can open in HubSpot and amend. This is a deliberate operator
+        # decision, not a simplification: the D-53-05 trade itself (one grant, both
+        # lanes, the allowlist unchanged) is UNTOUCHED -- only what the operator is told
+        # about it changed.
+        #
+        # D-59-09 gap-closure, operator, 2026-08-29: the sentence disclosing the
+        # written-records artifact used to live ONLY in this multi-lane branch --
+        # scoped there in error, since the artifact is written after EVERY dispatch
+        # regardless of how many lanes a grant spans. That sentence has MOVED below,
+        # outside this branch, so it fires for a single-lane grant too. What is left
+        # here, genuinely multi-lane, is the statement that this one grant covers both
+        # lanes at once.
         sentence += (
             " This grant covers both lanes at once: it enables enrichment and writes "
-            "to HubSpot. After the run, the records it actually wrote are listed in "
-            "written_records.json, in the plugin's durable state directory, so you can "
-            "open them in HubSpot and amend them.")
+            "to HubSpot.")
+
+    # D-59-09 (operator, 2026-08-29): fires for every grant, one lane or two -- see the
+    # note above for why this moved out of the multi-lane branch. The artifact itself
+    # moved from one file shared across runs to one file per run under the same
+    # decision (`written_records.written_records_path(run_id)`); the wording below
+    # names that per-run shape rather than a single fixed filename.
+    sentence += (
+        f" After the run, the records it actually wrote are listed in a "
+        f"written_records-<run_id>.json file (one per run, matching the pattern "
+        f"{written_records.WRITTEN_RECORDS_GLOB!r}), in the plugin's durable state "
+        f"directory, so you can open them in HubSpot and amend them.")
     return sentence
 
 
