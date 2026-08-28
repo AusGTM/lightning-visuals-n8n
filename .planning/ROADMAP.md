@@ -94,9 +94,35 @@ variable), and a design that runs the provider waterfall twice per written recor
       domains researched then confirmed before write; refusal is the last resort — promoted
       ahead of 54–57 by operator decision 2026-08-25
 
-- [ ] **Phase 59: Frictionless write path** — **READY TO PLAN** (the blocking walk ran
+- [ ] **Phase 59: Frictionless write path** — **PLANNED 2026-08-28** (the blocking walk ran
       2026-08-28; see `59-CONTEXT.md` and `53-WALK-RECORD.md`). Still runs before Phase 55, and
       both before Phase 52.
+
+      **Goal:** an operator who has granted once can see afterwards exactly which HubSpot
+      records the run wrote — even when the run died partway or was revoked mid-flight — is
+      told once at session start that a started run finishes, cannot have a routine test run
+      spend money on their behalf, and is offered a resolvable proposal instead of a dead end
+      wherever a gate used to simply refuse.
+
+      **Plans:** 6 plans, 5 waves. Code only — the Phase 53 operator walk stays a Phase 53
+      checkpoint (operator ruling 2026-08-28), so every plan is autonomous.
+
+      Plans:
+      - [ ] 59-01-PLAN.md — TRACER: durable written-records artifact, flushed per chunk inside
+            `dispatch_plan`, proven to survive a mid-loop interruption and a revoked run (D-59-07b)
+      - [ ] 59-02-PLAN.md — root `tests/conftest.py` ambient-credential guard, gated on
+            `RUN_LIVE_PARITY` rather than a marker that does not exist in this repo (D-59-04)
+      - [ ] 59-03-PLAN.md — retire D-53-05's pre-emptive two-lane disclosure across four
+            surfaces, replaced by a plain statement plus a pointer to the written list (D-59-07a)
+      - [ ] 59-04-PLAN.md — the plugin's first `hooks/`: a `SessionStart` note that a started
+            run continues to completion, instead of a grant-aware dispatch loop (D-59-06)
+      - [ ] 59-05-PLAN.md — the gate inventory, and the extraction identity gate converted to
+            resolve-then-propose with an unlaunderable closed provenance vocabulary (D-59-08)
+      - [ ] 59-06-PLAN.md — the remaining CONVERT gates: enrichment-lane refusals and the
+            walk's FINDING 1 grant dead end, with the authorization control untouched (D-59-08)
+
+      Planning artifacts: `COVERAGE.md` (reasoned no-external-API declaration — this phase
+      integrates nothing new), `59-VALIDATION.md`, and `59-GATE-INVENTORY.md` produced by 59-05.
 
       **The walk gave this phase real scope.** Its headline finding is a live silent-data-loss
       defect on the operator's own headline flow — `merge_enriched` filing complete provider
