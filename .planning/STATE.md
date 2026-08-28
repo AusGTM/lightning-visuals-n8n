@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Unattended Session Runs
-current_phase: 54
+current_phase: 59
 current_phase_name: frictionless-write-path
 status: executing
-stopped_at: Phase 54 sealed; Phase 59 context written and ready to plan
-last_updated: "2026-08-28T12:57:51.152Z"
+stopped_at: Completed 59-01-PLAN.md
+last_updated: "2026-08-28T13:12:53.746Z"
 last_activity: 2026-08-28
-last_activity_desc: Phase 53 operator walk run (GRANT-01 still not ticked); FINDING 2 fixed and released as plugin 0.20.0; Phase 59 ready to plan
+last_activity_desc: Phase 59 execution started
 progress:
   total_phases: 5
-  completed_phases: 2
+  completed_phases: 4
   total_plans: 26
-  completed_plans: 17
-  percent: 77
+  completed_plans: 21
+  percent: 80
 ---
 
 # Project State
@@ -150,8 +150,8 @@ predating the window. VETO-03 bar still 0.
 
 ## Current Position
 
-Phase: 54 (single-pass-armed-dispatch) — EXECUTING
-Plan: 5 of 5
+Phase: 59 (frictionless-write-path) — EXECUTING
+Plan: 2 of 6
 Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
@@ -229,7 +229,7 @@ exactly what B and C now do): .planning/phases/47.5-veto-recompute-path/47.5-CON
 lv_org_type: Editix, Jam TV, Waikato, The Rumble). Not a 47.5 workstream.
 
 Previous status: Executing — Anthropic credit restored, Plan 03 completed
-Last activity: 2026-08-27 — Phase 54 execution started
+Last activity: 2026-08-28 — Phase 59 execution started
   the live property-existence guard (found 19 missing D-09 metadata properties, resolved
   via operator-confirmed D-21 narrowing), one live research pass over all 17 pinned
   companies (47-RESEARCH-RESULTS.json), two live-discovered data-quality fixes
@@ -239,12 +239,12 @@ Last activity: 2026-08-27 — Phase 54 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
+Progress: [████████░░] 81% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-27T05:22:44.245Z
-**Stopped at:** Completed 54-07-PLAN.md
+**Last session:** 2026-08-28T13:12:53.735Z
+**Stopped at:** Completed 59-01-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -330,6 +330,7 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 | Phase 54 P05 | 25min | 3 tasks | 3 files |
 | Phase 54 P06 | 25min | 3 tasks | 8 files |
 | Phase 54 P07 | 8min | 1 tasks | 2 files |
+| Phase 59 P01 | 35min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -382,6 +383,8 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: 54-05: reported verify_decision's literal failed verdict rather than reinterpreting -- one mismatched key is a HubSpot text-property empty-string-vs-null round-trip, not a real write defect
 - [Phase ?]: 54-06: Widened contacts review-decision baseline to all twelve field_policy.yaml keys with queue read kept narrow (WR-02); fixed four stale pre-54-03 comments including the deployed jsCode and operator-facing sticky note (WR-01); scoped reviewApply.js's enum guard to company-only with a pinned drift-guard reason (WR-03); fixed the same false-permanence defect in review-triage/SKILL.md (IN-02); deployed disarmed and proven by independent re-GET
 - [Phase ?]: WR-04: Anthropic-spend sentence dropped both bound-words ('worst case' and 'a floor') for a single 'projection' framing matching cost_rates.json's own citation; pinning test rescoped to the single sentence line.
+- [Phase ?]: 59-01: crash-survival test injects the process-kill RuntimeError via enrichment.dispatch_enrichment (not the transport's .post()), since dispatch_enrichment converts every transport exception into a caught-and-continued DispatchError
+- [Phase ?]: 59-01: dispatch_plan gained only a keyword-only run_id, no path= plumbing; tests redirect written_records.written_records_path via monkeypatch to isolate the artifact
 
 ### Roadmap Evolution
 

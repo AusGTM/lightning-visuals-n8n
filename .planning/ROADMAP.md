@@ -108,16 +108,22 @@ variable), and a design that runs the provider waterfall twice per written recor
       checkpoint (operator ruling 2026-08-28), so every plan is autonomous.
 
       Plans:
-      - [ ] 59-01-PLAN.md — TRACER: durable written-records artifact, flushed per chunk inside
+
+      - [x] 59-01-PLAN.md — TRACER: durable written-records artifact, flushed per chunk inside
             `dispatch_plan`, proven to survive a mid-loop interruption and a revoked run (D-59-07b)
+
       - [ ] 59-02-PLAN.md — root `tests/conftest.py` ambient-credential guard, gated on
             `RUN_LIVE_PARITY` rather than a marker that does not exist in this repo (D-59-04)
+
       - [ ] 59-03-PLAN.md — retire D-53-05's pre-emptive two-lane disclosure across four
             surfaces, replaced by a plain statement plus a pointer to the written list (D-59-07a)
+
       - [ ] 59-04-PLAN.md — the plugin's first `hooks/`: a `SessionStart` note that a started
             run continues to completion, instead of a grant-aware dispatch loop (D-59-06)
+
       - [ ] 59-05-PLAN.md — the gate inventory, and the extraction identity gate converted to
             resolve-then-propose with an unlaunderable closed provenance vocabulary (D-59-08)
+
       - [ ] 59-06-PLAN.md — the remaining CONVERT gates: enrichment-lane refusals and the
             walk's FINDING 1 grant dead end, with the authorization control untouched (D-59-08)
 
@@ -168,6 +174,7 @@ variable), and a design that runs the provider waterfall twice per written recor
         runs outlive their request, a grant can expire mid-run with no defined answer. Decide it
         here: either the run inherits the grant it started under, or `dispatch_plan` becomes
         grant-aware.
+
       - **Make the credential leak structurally impossible, not merely absent.** Folded in by
         operator decision 2026-08-27 (does not affect Phase 55, so it waits for 59). Add a root
         `tests/conftest.py` whose autouse fixture strips `ANTHROPIC_API_KEY` /
@@ -433,7 +440,7 @@ silently inherit Phase 51's placeholder behavior without a decision.
 | 53. Operator-openable Write Grant | v1.1 | 4/4 | Complete — walk RUN 2026-08-28, **GRANT-01 not ticked** (composition defect found) | 2026-08-26 |
 | 54. Single-pass Armed Dispatch | v1.1 | 7/7 | Complete (verified) | 2026-08-27 |
 | 58. Take What the Operator Actually Has | v1.1 | 6/6 | Complete (verified) | 2026-08-26 |
-| 59. Frictionless Write Path | v1.1 | 0/TBD | Ready to plan — walk run 2026-08-28 | - |
+| 59. Frictionless Write Path | v1.1 | 1/6 | In Progress|  |
 | 60. Review-lane Authority | v1.1 | 0/TBD | Split from 59 (operator, 2026-08-28) | - |
 
 ## Ledger gaps (known)
