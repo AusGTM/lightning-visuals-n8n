@@ -49,7 +49,26 @@ variable), and a design that runs the provider waterfall twice per written recor
       `ALLOW_N8N_ARM` dependency with an admin-enabled capability plus an operator-opened session
       grant that is bounded, expiring and revocable — no terminal, no loss of record scoping
       — **4 plans** (`53-01` .. `53-04`), planned 2026-08-25.
-      **⚠ OPERATOR WALK RUN 2026-08-28 — GRANT-01 STILL NOT TICKED** (record: `53-WALK-RECORD.md`).
+      **⚠ WALK RUN AGAIN 2026-08-29 — GRANT-01 STILL NOT TICKED** (record:
+      `53-WALK-RECORD-2.md`). Re-run after Phase 59 shipped, same record, at plugin 0.28.0.
+      **FINDING 2 is genuinely fixed and proven live** — same input, one day apart:
+      `unanswered` went 1 → 0 and the email went `None` → `josh@seriesfutsal.com`, with no
+      hand-patch. D-59-08 proved out twice (bare-URL extraction now proposes a resolution path;
+      GATE-06's empty-record-set refusal now names the domain lookup that unblocks it),
+      D-59-07/D-59-09's rewritten disclosure and per-run artifact both landed, and D-59-10's
+      field was present and clean. Grant machinery sound end to end.
+      **But the composition is still broken, one step further along — FINDING B.** The documented
+      `enrich-before-ingest` step 7 sequence cannot execute: `merge_enriched`'s rows always carry
+      the `row_id` that `build_rows_spec` mints, and `write_dispatch_csv` refuses non-canonical
+      keys. Both behaviours are correct and individually unit-tested; **no test chains
+      `merge_enriched` → `hold_emailless` → `write_dispatch_csv`**, which is the fourth defect
+      this week to survive three green suites because tests drive unit boundaries, not the
+      documented path. No strip helper exists anywhere. Halted rather than hand-stripping.
+      Zero HubSpot writes; backend verified `disarmed PASS`; grant closed `session_end`.
+      **Also found (FINDING A):** the plugin test suite writes `written_records-*.json` into the
+      operator's REAL durable directory — 413 files from one session's suite runs — so
+      `written_records.load()`'s union returns mostly test debris. Per-`run_id` reads are fine.
+      **⚠ EARLIER WALK 2026-08-28 — GRANT-01 NOT TICKED** (record: `53-WALK-RECORD.md`).
       The walk found the grant machinery sound but the flow it serves broken: `enrich-before-ingest`
       step 5's documented `merge_enriched(rows, outcome.responses)` loses ALL enrichment silently
       (`dispatch_plan` returns per-chunk lists; every row lands in `unanswered`). Measured live:
