@@ -113,9 +113,54 @@ should not be carried into a live exercise unexamined.
 - **Cost of reversing, if a review approve is needed before Phase 60:** re-add the line, plus
   the backend arm-deploy that would be required regardless. About a minute.
 
+### D-59-06 — Revocation stays at next-send; disclose the run-to-completion behaviour once, at session start (operator, 2026-08-28)
+
+Answers the open question 53-04 left for the walk (*"is revocation at the next SEND enough?"*).
+
+- **Yes, it is enough.** `dispatch_plan` stays grant-unaware; no per-chunk hook is added. A
+  revoke refuses the NEXT send and a dispatch already running completes its remaining chunks
+  (`test_a_revocation_midway_does_not_stop_a_running_dispatch` keeps pinning this, unchanged).
+- **What is added instead:** a **non-blocking note at session start** telling the operator that
+  once enrichment and writing start, the run continues until done. One statement, up front,
+  where it informs the decision to begin — not a prompt, not a gate, not repeated per send.
+- Rationale: the protection a grant-aware dispatch loop would buy is small (it stops chunks
+  mid-run), and its cost is large (it changes the shared dispatch loop every lane in this
+  plugin uses — `write_grant.py` already names that as why it was not done). Telling the
+  operator the true behaviour once is the honest, cheap version.
+- **This closes, rather than defers, the question 53-04 posed.** The walk no longer needs to
+  answer it; it only needs to confirm the note appears.
+
+### D-59-07 — Replace D-53-05's pre-emptive disclosure with a post-run record of what was written (operator, 2026-08-28)
+
+Supersedes the approach D-53-05 settled on. The trade it made stands; what is received in
+exchange changes.
+
+- **The pre-emptive sentence is compressed to a plain statement of fact** — this grant enables
+  enrichment and writes to HubSpot — and is **non-blocking**. The long "the HubSpot write is
+  authorized BEFORE the enriched preview exists, so held rows and merge conflicts are
+  authorized unseen" warning is retired as operator-facing text.
+- **In its place: at the end of a run, list the HubSpot records actually written**, so the
+  operator can review and amend them. Protection moves from *predicting* what might land to
+  *showing* what did.
+- **Why this is not a weakening.** 53-04 described the retired sentence as *"the whole of what
+  you got for the protection you traded"* — i.e. the compensation was a warning nobody could
+  act on until after the fact anyway. A concrete list of written records is actionable in a way
+  the warning never was: HubSpot values can be amended after the write.
+- **Load-bearing implementation constraint, recorded so it is designed rather than discovered:**
+  the list must survive a **partial** run. A batch that dies at chunk 7 of 20 has already
+  written records, and those must still appear. Under D-59-06 a revoked run also keeps writing
+  to completion, so the list must reflect what a *revoked* run wrote too. This makes the list a
+  **durable artifact written as records land**, not a summary printed at the end of a happy
+  path. A design that only emits on clean completion fails exactly the cases the operator most
+  needs it for.
+- Open for the planner: where the list lives (run artifact, HubSpot note, or plugin-side
+  record), and whether "amend" means anything more than "here are the ids, go look".
+
 ### Claude's Discretion
 
-- Nothing yet. This phase has no implementation scope until the walk lands.
+- Nothing yet. This phase has no implementation scope until the walk lands. D-59-06's note
+  wording and D-59-07's artifact location are the planner's to choose within the constraints
+  stated above.
 
 </decisions>
 
@@ -140,14 +185,44 @@ Desktop, not a terminal:
 7. With the key unset, opening a grant should name the key, the file and who sets it — and
    must NOT tell you to set a shell environment variable.
 
-**The open question the walk must also answer** (from 53-04): is revocation at the next SEND
-enough? `dispatch_plan` loops chunks with no grant-aware hook, so at chunk ceiling 2 a
-40-record send is 20 chunks and all 20 run after a revoke
-(`test_a_revocation_midway_does_not_stop_a_running_dispatch` pins this). Making `dispatch_plan`
-grant-aware is buildable but changes the shared dispatch loop every lane uses.
+**53-04's open question is now CLOSED, not carried into the walk.** It asked whether revocation
+at the next SEND is enough; D-59-06 answers yes, with a session-start note instead of a
+grant-aware dispatch loop. The walk no longer has to decide it — step 5 just confirms the
+behaviour matches what the note promises.
 
-**Cost:** live HubSpot writes on the 1-2 records the operator names, plus a handful of n8n
+**Step 4's check changes under D-59-07.** Do NOT look for the long "authorized before the
+enriched preview existed" sentence — that text is retired. What the walk confirms instead is
+(a) the grant states plainly that it enables enrichment and writes to HubSpot, non-blocking,
+and (b) whether anything today lists the records actually written at the end of a run. Expect
+(b) to be ABSENT — that is the gap D-59-07 asks a plan to fill, and the walk's job is to
+confirm it rather than assume it.
+
+**A prediction the walk should test, found while scouting on 2026-08-28.** The chosen record is
+a CREATE (a new contact from a LinkedIn URL), not an update to an existing record. The shared
+write-safety gate is:
+
+```js
+if (!allowedDomains.length && !allowedIds.length) return false;  // empty allowlist denies everything
+if (hsObjectId && allowedIds.indexOf(String(hsObjectId)) !== -1) return true;
+if (domain && allowedDomains.indexOf(String(domain).toLowerCase()) !== -1) return true;
+return false;
+```
+
+A record that does not exist yet **has no `hsObjectId`**, so it can only be allowlisted by
+DOMAIN. For a contact sourced from a LinkedIn profile URL with no email, there may be no domain
+to scope on either — in which case the gate denies the create and the grant cannot express it.
+If that is what happens, it is exactly the composition break the walk exists to find: every
+component correct, the composition unable to authorize the thing the operator asked for.
+`ALLOW_HUBSPOT_CREATE` is a separate flag from `ALLOW_HUBSPOT_RECORD_WRITES` and must be
+included in the grant (`allow_create`).
+
+**Cost:** live HubSpot writes on the record(s) the operator names, plus a handful of n8n
 executions against the 2,500/month budget.
+
+**The record chosen for the walk (operator, 2026-08-28):**
+`https://www.linkedin.com/in/joshua-fusco-481309247/` — create, enrich, and land in HubSpot.
+This exercises both lanes of the D-53-05 grant in one pass, which is the composition nobody has
+walked.
 
 </specifics>
 
