@@ -437,11 +437,22 @@ def plan_grant(config, *, lanes, object_type, record_ids, record_domains, allow_
     ids = _normalise(record_ids)
     domains = _normalise(record_domains)
     if not ids and not domains:
+        # D-59-08, operator, 2026-08-28 (GATE-06, FINDING 1 of 53-WALK-RECORD.md): the
+        # refusal ITSELF is deliberately unchanged — a grant over nothing is still
+        # correctly refused, for the same reason stated below. What changed is that it
+        # now NAMES what would resolve it. The resolution happens in the skill, BEFORE
+        # this call — never here. `plan_grant` gains no lookup, no transport call and
+        # no resolution logic; see the structural test in test_write_grant.py pinning
+        # that.
         return _refusal(
             "refusing to plan a grant over an empty record set. The deployed "
             "_writeSafetyAllows() returns false when both allowlists are empty, so a "
             "grant over nothing would report as a grant while granting nothing at all — "
-            "worse than refusing, because it reads as success.")
+            "worse than refusing, because it reads as success. This is resolvable: a "
+            "read-only HubSpot lookup for the record's own object id, or — for a "
+            "record that does not exist yet and therefore has no id — for its "
+            "company's domain, which is the handle this allowlist can express a "
+            "create with. Resolve it and plan the grant again with the result.")
 
     import requests as _requests
     transport = transport if transport is not None else _requests

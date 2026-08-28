@@ -374,6 +374,12 @@ def test_authorize_ungranted_send_refuses_an_empty_record_set(
 
     assert decision["armed"] is False
     assert "empty" in decision["detail"]
+    # D-59-08 (59-06 Task 2, FINDING 1): the ungranted path relays plan_grant's own
+    # refusal verbatim, so it names the same resolution — consistent with
+    # test_plan_grant_refuses_an_empty_record_set_at_plan_time below, never a second
+    # wording for the same refusal.
+    assert "read-only" in decision["detail"]
+    assert transport.calls == []
 
 
 def test_authorize_ungranted_send_never_widens_beyond_this_sends_own_records(
@@ -449,6 +455,48 @@ def test_plan_grant_refuses_an_empty_record_set_at_plan_time(granting_config,
     assert result["outcome"] == write_grant.REFUSED
     assert "empty record set" in result["detail"]
     assert transport.calls == []
+    # D-59-08 (59-06 Task 2, FINDING 1 of 53-WALK-RECORD.md): the refusal is UNCHANGED
+    # — still a refusal, its original explanation intact — and now also names what
+    # would resolve it: a read-only HubSpot lookup for the record's own id, or its
+    # company's domain.
+    assert "read-only" in result["detail"]
+    assert "domain" in result["detail"]
+
+
+def test_the_empty_record_set_refusal_names_the_original_explanation_intact(
+        granting_config, stub_module_transport_factory):
+    """The WHY (a grant over nothing would report as success) must still be the first
+    thing read, verbatim — the resolution-naming sentence is an ADDITION, not a
+    replacement."""
+    transport = stub_module_transport_factory(_plan_reads())
+
+    result = _proposal(granting_config, transport, ids=(), domains=())
+
+    assert result["detail"].startswith(
+        "refusing to plan a grant over an empty record set. The deployed "
+        "_writeSafetyAllows() returns false when both allowlists are empty, so a "
+        "grant over nothing would report as a grant while granting nothing at all — "
+        "worse than refusing, because it reads as success."
+    )
+
+
+def test_write_grant_module_never_calls_a_hubspot_search_endpoint():
+    """T-59-26 (D-59-08): the empty-record-set refusal now NAMES a resolution path, but
+    the resolution itself must never move inside write_grant.py — plan_grant is an
+    authorization boundary, and giving it a lookup that can change what it grants is
+    exactly the widening this phase's scope pins as untouched. A structural grep over
+    the module SOURCE (never the compiled bytecode), so a later edit cannot move the
+    lookup inside the authorization boundary without failing this test."""
+    import inspect
+    source = inspect.getsource(write_grant)
+    forbidden = ("hubapi.com", "crm/v3/objects", "/search", "hubspot_search",
+                "HubSpot Company Search", "hubspot_lookup(")
+    for needle in forbidden:
+        assert needle not in source, (
+            f"{needle!r} found in write_grant.py's source — a HubSpot search call "
+            f"does not belong inside the authorization boundary; resolution happens "
+            f"in the skill, before the call to plan_grant, never inside it"
+        )
 
 
 def test_plan_grant_refuses_an_unknown_lane_by_name(granting_config,

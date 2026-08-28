@@ -219,12 +219,51 @@ capability; claiming it here would be a guess dressed as a report.
    running**, so a revoke arriving mid-dispatch still lets every remaining chunk of that
    send go out.
 
-   Whichever consent applies — a standing grant, or this send's own yes — step 7's dispatch
+   Whichever consent applies — a standing grant, or this send's own yes — step 8's dispatch
    opens the same kind of record-scoped armed window; see there for the code (F2,
    2026-08-25: the yes now arms a window for this send, where it used to arm the client's
    own POST only, and nothing on the backend).
 
-7. **Dispatch the plan the operator approved — under an open grant, or otherwise only
+7. **Before planning a grant or authorizing a send, resolve a record set that would
+   otherwise be empty (D-59-08, 2026-08-28).** This is FINDING 1 of
+   `53-WALK-RECORD.md`: a `people` form naming someone the operator believes exists in
+   HubSpot, or a `companies` create, can name a record with **neither a HubSpot object
+   id nor a usable domain** — the exact handle `plan_grant`/`write_grant.py` needs to
+   scope a grant to. `plan_grant` still hard-refuses that empty record set; its own
+   refusal now names what would resolve it. **The resolution happens here, in this
+   skill, before `plan_grant` or `authorize_ungranted_send` is ever called** —
+   `write_grant.py` gains no lookup, no HubSpot call, and no resolution logic of its
+   own; giving the authorization boundary a lookup that can change what it grants is
+   exactly the widening this phase leaves untouched.
+
+   - **Recognise the case.** The record the operator named has no id and no domain to
+     scope a grant to — `plan_grant`'s refusal (or the ungranted per-send path's
+     identical one) says so by name.
+   - **Attempt resolution from the legitimate sources ONLY**, named by the same
+     identifiers `extraction.RESOLUTION_SOURCES`/`resolution_sources.RESOLUTION_SOURCES`
+     use: a read-only HubSpot search (`hubspot_lookup`) for the company the record
+     belongs to, the operator's own earlier statements in this conversation
+     (`operator_statement`), a provider result already in hand from this run
+     (`provider_result`), or a stated derivation from another field of the same row
+     (`same_row_derivation`) — e.g. a company name from a profile-page slug already on
+     the row.
+   - **What is still forbidden, said explicitly to the operator when this step
+     applies:** Claude's own recall about the company, an inferred domain from a
+     company name, a plausible corporate email pattern, and anything the operator has
+     no way to check. This step changes refusing into **proposing** — never into
+     guessing.
+   - **PROPOSE the resolved handle and the scope it produces, naming which source it
+     came from, and wait for the operator to confirm.** Reuse the same confirm/
+     correct/decline vocabulary step 2's company-domain table already established —
+     accept as shown, correct it, or decline it — rather than inventing a third set of
+     words for the same interaction. **A declined proposal leaves the original refusal
+     standing** — no grant is planned, nothing is armed.
+   - **Only once confirmed**, call `plan_grant` (or `authorize_ungranted_send`) with the
+     confirmed handle. The resulting grant is **narrower than or equal to** what the
+     operator named — never wider; this is the same per-send narrowing rule step 8
+     (dispatch) already applies, unchanged by this step.
+
+8. **Dispatch the plan the operator approved — under an open grant, or otherwise only
    after they have said yes to this send.** `scripts/chunking.py` is a library here (the same way `scripts/report.py`
    already is, not a CLI): rebuild the plan from the same spec and the same configured
    ceiling — it is deterministic, so it is the same plan that was previewed — and send it.
@@ -275,7 +314,7 @@ capability; claiming it here would be a guess dressed as a report.
    if the operator has not said yes to this send and no grant is open, pass nothing and do
    not call this at all.
 
-8. **Report what was sent, and relay what the backend actually said about it.** From
+9. **Report what was sent, and relay what the backend actually said about it.** From
    `outcome.results`, say how many chunks the backend accepted and how many rows were in
    them. For any chunk that failed, give its short reason as recorded — a non-2xx, an
    unreachable webhook, or a response that could not be read. A timeout counts as a
