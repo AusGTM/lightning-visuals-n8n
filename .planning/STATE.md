@@ -5,15 +5,15 @@ milestone_name: Unattended Session Runs
 current_phase: 59
 current_phase_name: frictionless-write-path
 status: verifying
-stopped_at: "Completed 59-07-PLAN.md (gap closure: GATE-02..GATE-05 resolvable payload wired through dispatch_plan)"
-last_updated: "2026-08-28T21:09:18.918Z"
+stopped_at: "Completed 59-08-PLAN.md (gap closure: written-records concurrency D-59-09 + universal grant disclosure D-59-07)"
+last_updated: "2026-08-28T21:23:15.058Z"
 last_activity: 2026-08-28
 last_activity_desc: Phase 59 execution started
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 29
-  completed_plans: 27
+  completed_plans: 28
   percent: 80
 ---
 
@@ -239,12 +239,12 @@ Last activity: 2026-08-28 — Phase 59 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
+Progress: [██████████] 97% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-28T21:09:18.909Z
-**Stopped at:** Completed 59-07-PLAN.md (gap closure: GATE-02..GATE-05 resolvable payload wired through dispatch_plan)
+**Last session:** 2026-08-28T21:23:15.049Z
+**Stopped at:** Completed 59-08-PLAN.md (gap closure: written-records concurrency D-59-09 + universal grant disclosure D-59-07)
 **Resume file:** None
 
 ## Performance Metrics
@@ -337,6 +337,7 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 | Phase 59 P05 | 50min | 3 tasks | 9 files |
 | Phase 59 P06 | ~40min | 3 tasks | 10 files |
 | Phase 59 P07 | 25min | 3 tasks | 7 files |
+| Phase 59 P08 | ~35min | 3 tasks | 10 files |
 
 ## Decisions
 
@@ -398,6 +399,8 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: [Phase 59-05]: extraction.py identity gate converted refuse-and-stop to refuse-and-classify-resolvable, additive to rejected; RESOLUTION_SOURCES closed vocabulary (hubspot_lookup/operator_statement/provider_result/same_row_derivation) rejects any resolutions entry naming an outside source or a field the row lacks; test_no_invention_structural.py extended (4 new forbidden substrings) never relaxed
 - [Phase ?]: [Phase 59-06]: RESOLUTION_SOURCES moved to a new dependency-free resolution_sources.py module -- a live test proved enrichment.py importing it directly from extraction.py is a real circular import (enrichment -> extraction -> preview -> preview_enrichment -> chunking -> enrichment); extraction.RESOLUTION_SOURCES is the same re-exported object
 - [Phase ?]: [Phase 59-07 gap closure]: chunking.dispatch_plan's RecordSpecError handler now binds the exception and carries str(e)+resolvable onto ChunkResult, closing the severed integration link that kept GATE-02..GATE-05's D-59-08 payload from reaching the operator; 59-GATE-INVENTORY.md corrected to credit delivery to 59-07, not 59-06 alone
+- [Phase ?]: [Phase 59-08]: D-59-09 implemented — written_records.written_records_path now keyed by run_id (written_records-<run_id>.json), append_chunk's run-id-mismatch replace branch deleted, load() globs written_records*.json and unions per-run entries stamped with run_id; no lock, no merged index (both operator-rejected).
+- [Phase ?]: [Phase 59-08]: D-59-07 gap 4 closed — write_grant._consequence's written-records disclosure moved out of the len(lane_names) > 1 branch so it fires for every grant (one lane or two); plan_grant's authorization control untouched (git diff confined to _consequence + import).
 
 ### Roadmap Evolution
 
