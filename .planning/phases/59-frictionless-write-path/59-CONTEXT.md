@@ -255,11 +255,49 @@ provider answer into `unanswered`, a resolve-and-propose flow will propose from 
 report "nothing known" about a row the backend answered fully. **Fix the merge defect before
 widening propose behaviour**, or the assistive path inherits a silent data-loss bug.
 
+### D-59-09 — Written-records concurrency: one artifact per `run_id` (operator, 2026-08-29)
+
+Taken after the first execution pass shipped, when code review and goal verification both found
+`written_records.append_chunk` had no protection against concurrent writers (gap 2 of 4,
+`59-VERIFICATION.md`). Two shipped, independent processes can race the one shared path — an
+operator's live session and `scheduled_arm.py`'s unattended cron poller — and `append_chunk`'s
+replace-not-merge rule silently drops the loser's already-flushed chunk history. That understates
+what actually landed in HubSpot, which is the exact failure category D-59-07 exists to prevent.
+
+- **Decision: each run writes its own artifact keyed by `run_id`.** A reader globs and unions them.
+- **Why this over a lock:** no contention and no stale-lock failure mode on a path that must never
+  block a dispatch, and the replace-not-merge rule stops being a hazard by construction rather than
+  by discipline — two runs never share a path, so there is nothing to merge and nothing to lose.
+- **Rejected:** `flock` on the shared path (smaller reader-side change, but adds a blocking failure
+  mode to the dispatch loop); per-run files plus a merged index (most robust, largest change — the
+  index is a later addition if operators ask for one combined view).
+- **Cost:** a reader-side change. Every consumer of the artifact must glob rather than open one path.
+
+### D-59-10 — A records-write failure must never stop a dispatch (operator, 2026-08-29)
+
+Taken at the same point, for gap 3. `WrittenRecordsError` is not one of the exception types
+`dispatch_plan`'s loop catches, so it propagates and can abort an armed, in-progress dispatch;
+`scheduled_arm.py` handles only `ArmingRefused` / `DisarmFailed`, so the unattended path would
+crash with an unhandled traceback and no structured outcome. `scheduled_arm.py`'s own comment
+claiming this cannot happen is stale and must be corrected in the same commit.
+
+- **Decision: catch it in the loop as `DispatchError` already is, record the failure in the
+  outcome, and keep writing chunks.** This honours D-59-06's promise, which is now shipped
+  operator-facing text: once enrichment and writing start, the run continues until done.
+- **The trade-off, stated so it is designed rather than discovered:** a run can now complete with
+  an INCOMPLETE written-records list. That failure must be surfaced loudly in the outcome and to
+  the operator — never swallowed. An artifact that is silently short is worse than one that is
+  absent, because it reads as a complete account of what was written.
+- **Rejected:** aborting the dispatch on an unrecordable write. Better for auditability in the
+  abstract, but it contradicts D-59-06's promise and can strand a batch mid-run — trading a
+  known, reportable gap in the record for an unknown, partial state in HubSpot.
+
 ### Claude's Discretion
 
-- Nothing yet. This phase has no implementation scope until the walk lands. D-59-06's note
-  wording and D-59-07's artifact location are the planner's to choose within the constraints
-  stated above.
+- D-59-06's note wording and D-59-07's artifact location were the planner's to choose within the
+  constraints stated above; both are now shipped.
+- How the incomplete-list condition of D-59-10 is surfaced (outcome field, operator-facing line,
+  or both) is the gap planner's to choose, provided it cannot be silent.
 
 </decisions>
 
