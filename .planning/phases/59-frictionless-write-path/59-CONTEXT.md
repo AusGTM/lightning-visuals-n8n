@@ -88,6 +88,31 @@ Add a root `tests/conftest.py` autouse fixture stripping `ANTHROPIC_API_KEY` /
 `HUBSPOT_PRIVATE_APP_TOKEN` from `os.environ` unless a test is `@live`-marked. Full rationale
 and evidence in the ROADMAP Phase 59 entry. Carry it into whatever 59 becomes.
 
+### D-59-05 — `ALLOW_REVIEW_SUBMIT` removed from settings (operator, 2026-08-28)
+
+Decided before the walk, at the operator's request, because a persistent write-enabling switch
+should not be carried into a live exercise unexamined.
+
+- **State when decided, verified live rather than assumed** (`verify_live_write_safety.py
+  --expectation disarmed`, read-only, 2026-08-28): backend `ALLOW_HUBSPOT_REVIEW_WRITES='false'`
+  with both allowlists empty across every declaring node in all 5 workflows —
+  `VERDICT: disarmed PASS`. The switch was therefore **inert**: it opened lock 1 of 2 while
+  lock 2 was shut, and any review submit would have returned `not_allowlisted`.
+- **Decision: removed.** The `env` block is gone from `.claude/settings.local.json`. Zero
+  functional loss today; it restores the two-lock design on the one lane whose separation
+  D-59-03 just confirmed is deliberate, and removes a setting that would have silently halved
+  that protection the next time anyone armed review.
+- **It never affected the walk** — the walk exercises the `enrichment` and `contacts` lanes;
+  review is a separate authority.
+- **Reject/undo decisions are unaffected**: `review_decision.is_undoing()` bypasses this gate by
+  design, so walking a record back never needed it. Only approving did.
+- **Known residual, stated so nobody misreads the file as proof:** Claude Code loads settings
+  `env` at SESSION START, so the session in which this removal was made still carried
+  `ALLOW_REVIEW_SUBMIT=true` in its own process environment for its remaining lifetime. The
+  removal binds new sessions. It was inert throughout either way.
+- **Cost of reversing, if a review approve is needed before Phase 60:** re-add the line, plus
+  the backend arm-deploy that would be required regardless. About a minute.
+
 ### Claude's Discretion
 
 - Nothing yet. This phase has no implementation scope until the walk lands.
@@ -138,11 +163,10 @@ executions against the 2,500/month budget.
 
 </deferred>
 
+
 <open_question>
 ## Still outstanding after this discussion
 
-`ALLOW_REVIEW_SUBMIT=true` remains live in `.claude/settings.local.json`, set on 2026-08-27 to
-unblock one review write. It is a persistent switch, and under D-59-03 it is no longer slated
-for near-term removal. Either remove the line now (the backend allowlist is the binding
-constraint regardless) or record deliberately that it stays.
+Nothing. The one open item at the end of the discussion (`ALLOW_REVIEW_SUBMIT`) was decided —
+see D-59-05. The phase's own scope remains deliberately deferred pending the walk (D-59-01).
 </open_question>
