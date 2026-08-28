@@ -16,6 +16,36 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.22.0] - 2026-08-28
+
+### Changed
+
+- **D-59-07 half (a): the pre-emptive two-lane grant disclosure is retired as
+  operator-facing text.** A grant covering both `enrich-before-ingest` lanes used to
+  show the operator a long warning at the yes — that the HubSpot write is authorized
+  before the enriched preview exists, so held rows and merge conflicts are authorized
+  unseen. That warning is retired everywhere an operator reads it: `write_grant.py`'s
+  `_consequence` (the one rendering the operator reads at the yes),
+  `skills/enrich-before-ingest/SKILL.md` (both the step 1 preamble and the step 5
+  disclosure paragraph), and `README.md`'s two-lane grant bullet.
+  - **What replaced it:** a plain, non-blocking statement that the grant enables
+    enrichment and writes to HubSpot, plus a pointer to the post-run
+    `written_records.json` list (0.21.0) the operator can open in HubSpot and amend.
+  - **The D-53-05 trade itself is UNCHANGED.** One grant still spans both lanes, the
+    record-scoped allowlist is unchanged, and the write is still authorized before the
+    enriched preview exists in mechanical terms — only what the operator is told about
+    it, in exchange for that trade, moved from a prediction nobody could act on to
+    something actionable.
+  - Every rewritten passage carries a dated `D-59-07` / 2026-08-28 recorded-edit note.
+    The historical `LANES` module comment in `write_grant.py` is left unedited, with a
+    dated amendment appended rather than the paragraph being rewritten.
+  - Every pinning test is RE-POINTED with a negative assertion (the retired sentence
+    is asserted absent), never relaxed:
+    `test_a_two_lane_grant_names_both_lanes_and_points_at_the_written_records_list`
+    (renamed from `..._and_states_the_preview_trade`) and
+    `test_the_ingest_arm_heading_is_strictly_after_the_enriched_preview_heading`. The
+    single-lane test and the arm-dispatch-register test are byte-identical.
+
 ## [0.21.0] - 2026-08-28
 
 ### Added
