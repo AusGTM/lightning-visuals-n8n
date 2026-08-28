@@ -83,6 +83,17 @@ LANES = {
     "contacts": executions_client.CONTACT_INGEST_WORKFLOW_NAME,
 }
 
+# D-59-07 AMENDMENT (operator, 2026-08-28): the operator-facing HALF of the paragraph
+# above -- the sentence `_consequence()` used to render at the yes, saying the HubSpot
+# write is authorized before the enriched preview exists -- was retired as
+# operator-facing text. The trade recorded above is UNCHANGED: one grant still spans
+# both lanes, and the allowlist is still record-scoped to the batch. What changed is
+# only what the operator is told in exchange for it: see `_consequence()`'s two-lane
+# branch and `written_records.written_records_path()` (59-01 built the artifact,
+# 59-03 pointed the disclosure at it). The historical paragraph above is left
+# unedited -- it is the code's own record of why the trade was made, and it stays
+# readable as that.
+
 
 def _now_iso():
     return datetime.now(timezone.utc).isoformat()
@@ -360,17 +371,22 @@ def _consequence(lane_names, ids, domains, allow_create):
         f"the grant, and an admin must check n8n.")
 
     if len(lane_names) > 1:
-        # D-53-05's traded protection, stated at the yes — the last place it can be
-        # stated. 37-CONTEXT §6.3 held the enriched preview as strictly preceding the
-        # ingest arm precisely so held rows and merge conflicts were visible before the
-        # write was approved. This grant approves both lanes at once, so it is approved
-        # BEFORE that preview exists, and the operator reads that here or nowhere.
+        # D-59-07, operator, 2026-08-28: the pre-emptive warning this branch used to
+        # render at the yes -- "the HubSpot write is authorized BEFORE the enriched
+        # preview exists, so held rows and merge conflicts are authorized unseen" -- is
+        # RETIRED as operator-facing text. 53-04 described it as "the whole of what you
+        # got for the protection you traded": a warning nobody could act on until after
+        # the fact anyway. What replaces it is actionable -- a durable, post-run list of
+        # the records this run actually wrote (see `written_records.py`,
+        # `written_records_path()`), which the operator can open in HubSpot and amend.
+        # This is a deliberate operator decision, not a simplification: the D-53-05
+        # trade itself (one grant, both lanes, the allowlist unchanged) is UNTOUCHED --
+        # only what the operator is told about it changed.
         sentence += (
-            " This grant covers both lanes at once, which means the HubSpot write is "
-            "authorized BEFORE the enriched preview exists — held rows and merge "
-            "conflicts that the enriched preview is the only place to see ahead of a "
-            "write are authorized unseen. The preview is still rendered, and the record "
-            "set is unchanged; what moved is WHEN you approved it, not WHAT it covers.")
+            " This grant covers both lanes at once: it enables enrichment and writes "
+            "to HubSpot. After the run, the records it actually wrote are listed in "
+            "written_records.json, in the plugin's durable state directory, so you can "
+            "open them in HubSpot and amend them.")
     return sentence
 
 

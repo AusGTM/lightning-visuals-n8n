@@ -1001,11 +1001,24 @@ def test_no_status_post_is_made_when_the_batch_prices_no_provider(
 
 # --- the at-the-yes disclosure (D-53-05) --------------------------------------------------
 
-def test_a_two_lane_grant_names_both_lanes_and_states_the_preview_trade(
+def test_a_two_lane_grant_names_both_lanes_and_points_at_the_written_records_list(
         granting_config, stub_module_transport_factory):
-    """D-53-05's traded protection, pinned by a test rather than by prose. This is the ONE
-    rendering the operator reads AT THE YES — the skill contract pins SKILL.md and the
-    53-04 checkpoint pins the human walk, but neither pins this sentence."""
+    """RECORDED EDIT -- D-59-07, operator, 2026-08-28.
+
+    This pin used to assert D-53-05's pre-emptive warning: that a two-lane grant's
+    `consequence` said the HubSpot write is authorized BEFORE the enriched preview
+    exists. That sentence is retired as operator-facing text, at the operator's
+    decision -- 53-04 called it "the whole of what you got for the protection you
+    traded", a warning nobody could act on until after the fact anyway.
+
+    What the pin holds now: the `consequence` states plainly and non-blockingly that
+    the grant enables enrichment and writes to HubSpot, and points at the post-run
+    written-records list (`written_records.json`) the operator can open in HubSpot and
+    amend. The D-53-05 trade itself (one grant spans both lanes, the allowlist stays
+    record-scoped) is UNCHANGED -- only what the operator reads in exchange for it
+    changed. The negative assertion below is what makes this a re-point rather than a
+    weakening: the retired sentence cannot come back unnoticed.
+    """
     transport = stub_module_transport_factory(_plan_reads(lanes=2))
     proposal = _proposal(granting_config, transport, lanes=("enrichment", "contacts"))
 
@@ -1015,8 +1028,11 @@ def test_a_two_lane_grant_names_both_lanes_and_states_the_preview_trade(
     assert "contacts lane" in consequence
     assert write_grant.LANES["enrichment"] in consequence
     assert write_grant.LANES["contacts"] in consequence
-    # And the sentence the ordering protection was traded FOR.
-    assert "BEFORE the enriched preview exists" in consequence
+    # The plain, non-blocking statement of fact that replaced the retired warning.
+    assert "enables enrichment and writes to HubSpot" in consequence
+    assert "written_records.json" in consequence
+    # NEGATIVE — the retired pre-emptive warning must never come back, softened or not.
+    assert "BEFORE the enriched preview exists" not in consequence
 
 
 def test_a_single_lane_grant_claims_no_preview_trade_that_is_not_happening(
