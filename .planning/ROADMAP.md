@@ -10,7 +10,7 @@
 - ✅ **v0.8 Execution Budget Safety** — Phases 44–45 (shipped 2026-08-11)
 - ✅ **v0.9 ICP Rubric Calibration & Veto Remediation** — Phases 46–50, archived (`milestones/v0.9-ROADMAP.md`, `milestones/v0.9-REQUIREMENTS.md`) (shipped 2026-08-19)
 - ⏸️ **v1.0 Direct Backfill & Scoring Coverage** — Phases 51–52 (Phase 51 complete; **Phase 52 deferred by the operator 2026-08-25** in favour of v1.1)
-- 🚧 **v1.1 Unattended Session Runs** — Phases 53–59 (`milestones/v1.1-ROADMAP.md`, `milestones/v1.1-REQUIREMENTS.md`)
+- 🚧 **v1.1 Unattended Session Runs** — Phases 53–60 (`milestones/v1.1-ROADMAP.md`, `milestones/v1.1-REQUIREMENTS.md`)
 
 ## Phases
 
@@ -37,7 +37,7 @@ numbers on its own. Decisions in `.planning/MILESTONE-CONTEXT.md`; requirements 
       **Gated on Phases 59 and 55** (operator ruling 2026-08-27): the ~646-company run goes
       through the cheap, low-ceremony write path, not the current one. Do not resume 52 first.
 
-### 🚧 v1.1 Unattended Session Runs (Phases 53–59)
+### 🚧 v1.1 Unattended Session Runs (Phases 53–60)
 
 One operator grant at session start carries a batch through ingest → enrichment → HubSpot write,
 unattended. Driven by a client UAT on 2026-08-25 that found three arming surfaces for one write,
@@ -48,7 +48,18 @@ variable), and a design that runs the provider waterfall twice per written recor
 - [ ] **Phase 53: Operator-openable write grant** - Replace the interactive path's
       `ALLOW_N8N_ARM` dependency with an admin-enabled capability plus an operator-opened session
       grant that is bounded, expiring and revocable — no terminal, no loss of record scoping
-      — **4 plans** (`53-01` .. `53-04`), planned 2026-08-25
+      — **4 plans** (`53-01` .. `53-04`), planned 2026-08-25.
+      **⚠ OPERATOR WALK OUTSTANDING (surfaced 2026-08-28).** All four plans executed and the
+      ledger read `Complete (verified)`, but `53-04-SUMMARY.md` records Task 3 as a blocking
+      checkpoint that was never performed: *"the phase's own success criterion for GRANT-01 is
+      the operator walk… Ticking it on the strength of tests would be exactly the claim G-2
+      disproved — every component correct, the composition broken."* **Nobody has ever opened a
+      grant and run a batch under it.** The 2026-08-27 phase-54 session is the argument for
+      doing so: every component passed its tests and the composition broke twice on
+      authorization locks nobody had walked. Step 1 (admin sets `allow_write_grants`) is
+      already satisfied — verified `true` on 2026-08-28; steps 2–7 run from the operator's
+      chair. Script: `53-04-PLAN.md` Task 3, restated in `59-CONTEXT.md` § specifics.
+      **Phase 59 is blocked on this walk by operator decision 2026-08-28.**
 
 - [x] **Phase 54: Single-pass armed dispatch** *(complete 2026-08-27, verified 9/9 truths,
       5/5 gap findings closed)* - A record is enriched once: no
@@ -77,10 +88,23 @@ variable), and a design that runs the provider waterfall twice per written recor
       domains researched then confirmed before write; refusal is the last resort — promoted
       ahead of 54–57 by operator decision 2026-08-25
 
-- [ ] **Phase 59: Frictionless write path** - One lock on the write door instead of three, and a
-      session grant that answers the per-send ask instead of sitting underneath it. Operator ruling
-      2026-08-27: *frictionless and efficient > strict, writeproof and secure* — gates the operator
-      never asked for come out. **Runs before Phase 55, and both before Phase 52.**
+- [ ] **Phase 59: Frictionless write path** — ⏸️ **SCOPE DEFERRED pending Phase 53's operator
+      walk** (operator decision 2026-08-28; see `59-CONTEXT.md`). Still runs before Phase 55, and
+      both before Phase 52.
+
+      **Why deferred.** Discussing this phase on 2026-08-28 found two of the three items below
+      mis-scoped, both from reading code review rather than the codebase:
+      *(a)* the "session grant answers the per-send ask" item is **already built** — D-53-06
+      shipped, `enrich-records/SKILL.md:182-222`; and
+      *(b)* the "collapse the kill switches" item is **wrong as written** — the review lane is
+      excluded from grants deliberately (`write_grant.py:66-69`, 30-01 D-02/D-08e), so deleting
+      `ALLOW_REVIEW_SUBMIT` with nothing behind it leaves that lane authorized only by a deploy an
+      operator cannot run, making it harder rather than easier. That went to its own phase
+      (D-59-03).
+      What survives untouched is the ambient-credential guard (D-59-04) and the grant-vs-run
+      lifetime question. The rest is scoped after the walk says what is actually broken.
+
+      **The bullets below are retained as history, not as scope.** Read `59-CONTEXT.md` first.
 
       - **Collapse the review-write kill switches.** Remove `ALLOW_REVIEW_SUBMIT`
         (`operator-claude-plugin/scripts/review_decision.py`) outright; `ALLOW_HUBSPOT_REVIEW_WRITES`
@@ -135,6 +159,26 @@ variable), and a design that runs the provider waterfall twice per written recor
       material-conflict judge gate (caught a real false veto — execution `11983`, Series Futsal),
       and the non-clobber merge policy. Out of scope: the response-window ceiling and
       `max_records_per_chunk`, both owned by Phase 55.
+
+- [ ] **Phase 60: Review-lane authority** - Split out of Phase 59 by operator decision
+      2026-08-28 (`59-CONTEXT.md` D-59-03), to run **after** Phase 53's operator walk.
+      Approving a flagged record is human triage, not unattended running — it is not on the
+      ingest → enrich → write path and does not belong in a phase about that path.
+
+      **The problem.** The review lane is the one lane grants deliberately do not reach
+      (`write_grant.py:66-69` / 30-01 D-02/D-08e: *"arming a dispatch grants nothing on the
+      review path, and `ALLOW_REVIEW_SUBMIT` is its own gate"*). So on 2026-08-27, approving a
+      single flagged contact fell back to a plugin-side kill switch **plus** an admin-run
+      arm-deploy — G-2's exact shape, still live on this one lane. Two human round trips for a
+      six-property clear-and-stamp on one record (`54-LIVE-PROOF.md`).
+
+      **Options, for that phase to choose between — not pre-decided:**
+      (a) an admin-set settings key mirroring D-53-01's `allow_write_grants` — keeps 30-01's
+      separation, removes the shell dependency; (b) make the review lane grantable — most
+      friction removed, but deliberately reverses that separation and needs D-53-05's
+      recorded-edit discipline; (c) accept the admin deploy as correct for occasional triage.
+      **Not an option:** deleting `ALLOW_REVIEW_SUBMIT` with no replacement — that leaves the
+      lane's only authority behind a deploy an operator cannot run.
 
 ## Phase Details
 
@@ -346,10 +390,11 @@ silently inherit Phase 51's placeholder behavior without a decision.
 | 50. Derived Tier Property | v0.9 | 6/6 | Complete (verified) | 2026-08-14 |
 | 51. Backfill Pipeline, Credit Sizing & Dry Run | v1.0 | 3/3 | Complete (verified) | 2026-08-19 |
 | 52. Staged Canary Execution & Safety Verification | v1.0 | 0/TBD | Deferred (operator, 2026-08-25) | - |
-| 53. Operator-openable Write Grant | v1.1 | 4/4 | Complete (verified) | 2026-08-26 |
+| 53. Operator-openable Write Grant | v1.1 | 4/4 | Complete — **operator walk OUTSTANDING** (corrected 2026-08-28) | 2026-08-26 |
 | 54. Single-pass Armed Dispatch | v1.1 | 7/7 | Complete (verified) | 2026-08-27 |
 | 58. Take What the Operator Actually Has | v1.1 | 6/6 | Complete (verified) | 2026-08-26 |
-| 59. Frictionless Write Path | v1.1 | 0/TBD | Planned (operator, 2026-08-27) | - |
+| 59. Frictionless Write Path | v1.1 | 0/TBD | Scope deferred pending 53 walk (2026-08-28) | - |
+| 60. Review-lane Authority | v1.1 | 0/TBD | Split from 59 (operator, 2026-08-28) | - |
 
 ## Ledger gaps (known)
 
