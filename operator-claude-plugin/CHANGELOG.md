@@ -16,6 +16,41 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.21.0] - 2026-08-28
+
+### Added
+
+- **D-59-07: a durable list of the HubSpot records a dispatch run actually wrote.** New
+  `scripts/written_records.py` module, plus `chunking.dispatch_plan` now flushes each
+  chunk's response into it INLINE, immediately after that chunk is sent — inside the
+  same per-chunk loop, never assembled after it. The artifact lives at
+  `written_records.written_records_path()` (the same durable home `run_manifest.json`
+  and the dashboard-artifact pointer already resolve into), keyed by a `run_id`.
+  - **Survives a partial run.** A batch that dies at chunk 7 of 20 still leaves chunks
+    1-6 on disk — proven by a test that raises a bare exception out of
+    `dispatch_plan`'s loop and asserts the file already holds the earlier chunks.
+  - **Survives a revoked run.** Under D-59-06 a dispatch that is revoked mid-run keeps
+    writing to HubSpot until its chunks are exhausted; the artifact reflects every
+    chunk that run sent, including the ones sent after the revoke — it does not know or
+    care about grant state at all.
+  - **Never claims a write that did not happen.** A row the backend refused
+    (`write_blocked` / `proposed` / `skip` / `needs_match_review` / `held`) is recorded
+    as `not_written`, with the backend's own reason. A companies-lane create — whose
+    response carries no `hs_object_id` by construction — is recorded as
+    `created_id_unknown`, never a fabricated id. The companies-lane create-confirmation
+    that WOULD resolve that unknown id is explicitly SCOPED OUT of this release: it
+    would mean editing `scripts/build_cloud_workflows.py` and generated n8n workflow
+    JSON, both deliberately untouched by this phase.
+  - **`email` and every other contact PII field is deliberately excluded from an
+    entry.** An operator opens the record by id; this artifact does not need to become
+    a second place personal data accumulates.
+  - **This release adds the LIST. It does not yet change the grant-time disclosure
+    text** — the D-53-05 sentence a grant shows before the yes is untouched here; that
+    replacement is a later plugin release (59-03).
+  - An artifact write failure (`OSError`) never halts a live dispatch — `append_chunk`
+    returns falsey instead of raising, so a bookkeeping miss can never become a mid-run
+    stop.
+
 ## [0.20.0] - 2026-08-28
 
 ### Fixed
