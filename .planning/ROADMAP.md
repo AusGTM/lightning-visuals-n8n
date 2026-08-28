@@ -118,7 +118,7 @@ variable), and a design that runs the provider waterfall twice per written recor
       - [x] 59-03-PLAN.md — retire D-53-05's pre-emptive two-lane disclosure across four
             surfaces, replaced by a plain statement plus a pointer to the written list (D-59-07a)
 
-      - [ ] 59-04-PLAN.md — the plugin's first `hooks/`: a `SessionStart` note that a started
+      - [x] 59-04-PLAN.md — the plugin's first `hooks/`: a `SessionStart` note that a started
             run continues to completion, instead of a grant-aware dispatch loop (D-59-06)
 
       - [ ] 59-05-PLAN.md — the gate inventory, and the extraction identity gate converted to
@@ -440,7 +440,7 @@ silently inherit Phase 51's placeholder behavior without a decision.
 | 53. Operator-openable Write Grant | v1.1 | 4/4 | Complete — walk RUN 2026-08-28, **GRANT-01 not ticked** (composition defect found) | 2026-08-26 |
 | 54. Single-pass Armed Dispatch | v1.1 | 7/7 | Complete (verified) | 2026-08-27 |
 | 58. Take What the Operator Actually Has | v1.1 | 6/6 | Complete (verified) | 2026-08-26 |
-| 59. Frictionless Write Path | v1.1 | 3/6 | In Progress|  |
+| 59. Frictionless Write Path | v1.1 | 4/6 | In Progress|  |
 | 60. Review-lane Authority | v1.1 | 0/TBD | Split from 59 (operator, 2026-08-28) | - |
 
 ## Ledger gaps (known)
