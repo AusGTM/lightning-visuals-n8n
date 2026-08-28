@@ -94,9 +94,29 @@ variable), and a design that runs the provider waterfall twice per written recor
       domains researched then confirmed before write; refusal is the last resort — promoted
       ahead of 54–57 by operator decision 2026-08-25
 
-- [ ] **Phase 59: Frictionless write path** — **PLANNED 2026-08-28** (the blocking walk ran
-      2026-08-28; see `59-CONTEXT.md` and `53-WALK-RECORD.md`). Still runs before Phase 55, and
-      both before Phase 52.
+- [x] **Phase 59: Frictionless write path** *(complete 2026-08-29, verified 18/18 after gap
+      closure)* — the blocking walk ran 2026-08-28; see `59-CONTEXT.md` and `53-WALK-RECORD.md`.
+      Still runs before Phase 55, and both before Phase 52. Plugin released 0.21.0 → 0.28.0.
+
+      **The lesson worth keeping.** All four gaps that first-pass verification found (14/18) had
+      shipped past three green suites — root 3285, plugin 1678, node 776 — because every test drove
+      a unit boundary rather than the integration path. Code review and goal verification caught
+      them; the test counts did not. Gap closure's defining constraint was that each fix carry a
+      test driving the real caller path: `plan_chunks` → `dispatch_plan`, two interleaved runs
+      against one directory, a full `run_scheduled_arm_cycle`. Final: root 3308, plugin 1701,
+      node 776.
+
+      **Two rulings taken mid-phase**, recorded in `59-CONTEXT.md`: **D-59-09** — one written-records
+      artifact per `run_id`, reader globs and unions (chosen over `flock`, which would put
+      contention and a stale-lock failure mode on a path that must never block a dispatch);
+      **D-59-10** — a records-write failure never stops a dispatch, and the resulting incomplete
+      list is surfaced loudly across four surfaces, never swallowed, because an artifact that is
+      silently short reads as a complete account of what was written.
+
+      **Not done here, by operator ruling:** the Phase 53 operator walk. This phase was code only,
+      so **GRANT-01 remains unticked** and the walk stays a Phase 53 checkpoint — it now needs the
+      installed plugin updated to ≥0.28.0 first. D-59-06's live-host delivery check is likewise
+      recorded as unperformed rather than claimed.
 
       **Goal:** an operator who has granted once can see afterwards exactly which HubSpot
       records the run wrote — even when the run died partway or was revoked mid-flight — is
@@ -455,7 +475,7 @@ silently inherit Phase 51's placeholder behavior without a decision.
 | 53. Operator-openable Write Grant | v1.1 | 4/4 | Complete — walk RUN 2026-08-28, **GRANT-01 not ticked** (composition defect found) | 2026-08-26 |
 | 54. Single-pass Armed Dispatch | v1.1 | 7/7 | Complete (verified) | 2026-08-27 |
 | 58. Take What the Operator Actually Has | v1.1 | 6/6 | Complete (verified) | 2026-08-26 |
-| 59. Frictionless Write Path | v1.1 | 9/9 | In Progress|  |
+| 59. Frictionless Write Path | v1.1 | 9/9 | Complete (verified 18/18, after gap closure) | 2026-08-29 |
 | 60. Review-lane Authority | v1.1 | 0/TBD | Split from 59 (operator, 2026-08-28) | - |
 
 ## Ledger gaps (known)

@@ -4,11 +4,11 @@ milestone: v1.1
 milestone_name: Unattended Session Runs
 current_phase: 59
 current_phase_name: frictionless-write-path
-status: verifying
-stopped_at: "Completed 59-09-PLAN.md (gap closure: written-records bookkeeping failures never stop a dispatch, D-59-10) -- Phase 59 all 6 plans complete, ready for verification"
-last_updated: "2026-08-28T21:37:49.563Z"
-last_activity: 2026-08-28
-last_activity_desc: Phase 59 execution started
+status: phase_complete
+stopped_at: "Phase 59 complete -- 9/9 plans, re-verified 18/18 after gap closure (59-07..59-09 closed the 4 gaps the 14/18 first pass found). Plugin 0.28.0. Next: Phase 55 (async run), or Phase 53's outstanding GRANT-01 operator walk, which now needs the installed plugin at >=0.28.0."
+last_updated: "2026-08-29T00:00:00.000Z"
+last_activity: 2026-08-29
+last_activity_desc: Phase 59 complete -- verified 18/18 after gap closure
 progress:
   total_phases: 5
   completed_phases: 5
