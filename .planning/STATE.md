@@ -5,15 +5,15 @@ milestone_name: Unattended Session Runs
 current_phase: 59
 current_phase_name: frictionless-write-path
 status: executing
-stopped_at: Completed 59-02-PLAN.md
-last_updated: "2026-08-28T13:18:05.339Z"
+stopped_at: Completed 59-03-PLAN.md
+last_updated: "2026-08-28T13:28:59.446Z"
 last_activity: 2026-08-28
 last_activity_desc: Phase 59 execution started
 progress:
   total_phases: 5
   completed_phases: 4
   total_plans: 26
-  completed_plans: 22
+  completed_plans: 23
   percent: 80
 ---
 
@@ -151,7 +151,7 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Phase: 59 (frictionless-write-path) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
@@ -239,12 +239,12 @@ Last activity: 2026-08-28 — Phase 59 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████████░] 85% (v0.9 phase 47.5 of 46-49)
+Progress: [█████████░] 88% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-28T13:18:05.330Z
-**Stopped at:** Completed 59-02-PLAN.md
+**Last session:** 2026-08-28T13:28:52.844Z
+**Stopped at:** Completed 59-03-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -332,6 +332,7 @@ Progress: [█████████░] 85% (v0.9 phase 47.5 of 46-49)
 | Phase 54 P07 | 8min | 1 tasks | 2 files |
 | Phase 59 P01 | 35min | 3 tasks | 6 files |
 | Phase 59 P02 | 12min | 2 tasks | 3 files |
+| Phase 59 P03 | 45min | 3 tasks | 7 files |
 
 ## Decisions
 
@@ -387,6 +388,7 @@ Progress: [█████████░] 85% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: 59-01: crash-survival test injects the process-kill RuntimeError via enrichment.dispatch_enrichment (not the transport's .post()), since dispatch_enrichment converts every transport exception into a caught-and-continued DispatchError
 - [Phase ?]: 59-01: dispatch_plan gained only a keyword-only run_id, no path= plumbing; tests redirect written_records.written_records_path via monkeypatch to isolate the artifact
 - [Phase ?]: D-59-04: root tests/conftest.py autouse fixture gates the credential strip on RUN_LIVE_PARITY (repo's existing env-var live-test convention) rather than a nonexistent pytest 'live' marker -- deviation recorded in the conftest docstring itself
+- [Phase ?]: [Phase 59-03]: SKILL.md carried a third, unnamed mention of D-53-05's retired warning (step 1 preamble) beyond the plan's read_first scope; fixed in the same Task 2 commit after the re-pointed test caught it. Recorded-edit notes must paraphrase retired wording, never quote it verbatim, or the note trips its own negative pin (enrich-records F3 precedent followed).
 
 ### Roadmap Evolution
 

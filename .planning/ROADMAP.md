@@ -115,7 +115,7 @@ variable), and a design that runs the provider waterfall twice per written recor
       - [x] 59-02-PLAN.md — root `tests/conftest.py` ambient-credential guard, gated on
             `RUN_LIVE_PARITY` rather than a marker that does not exist in this repo (D-59-04)
 
-      - [ ] 59-03-PLAN.md — retire D-53-05's pre-emptive two-lane disclosure across four
+      - [x] 59-03-PLAN.md — retire D-53-05's pre-emptive two-lane disclosure across four
             surfaces, replaced by a plain statement plus a pointer to the written list (D-59-07a)
 
       - [ ] 59-04-PLAN.md — the plugin's first `hooks/`: a `SessionStart` note that a started
@@ -440,7 +440,7 @@ silently inherit Phase 51's placeholder behavior without a decision.
 | 53. Operator-openable Write Grant | v1.1 | 4/4 | Complete — walk RUN 2026-08-28, **GRANT-01 not ticked** (composition defect found) | 2026-08-26 |
 | 54. Single-pass Armed Dispatch | v1.1 | 7/7 | Complete (verified) | 2026-08-27 |
 | 58. Take What the Operator Actually Has | v1.1 | 6/6 | Complete (verified) | 2026-08-26 |
-| 59. Frictionless Write Path | v1.1 | 2/6 | In Progress|  |
+| 59. Frictionless Write Path | v1.1 | 3/6 | In Progress|  |
 | 60. Review-lane Authority | v1.1 | 0/TBD | Split from 59 (operator, 2026-08-28) | - |
 
 ## Ledger gaps (known)
