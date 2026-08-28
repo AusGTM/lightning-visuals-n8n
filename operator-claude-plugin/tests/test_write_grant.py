@@ -18,6 +18,7 @@ import control_actions
 import executions_client
 import n8n_arming
 import write_grant
+import written_records
 
 WORKFLOW_ID = "wf-enrichment-1"
 CONTACTS_WORKFLOW_ID = "wf-contacts-1"
@@ -1189,6 +1190,49 @@ def test_a_revocation_midway_does_not_stop_a_running_dispatch(
         record_ids=["1"], record_domains=[])
     assert refusal["outcome"] == write_grant.REFUSED
     assert write_grant.CLOSED_REVOKED in refusal["detail"]
+
+
+def test_a_revoked_run_still_records_every_record_it_wrote(
+        granting_config, stub_module_transport_factory, tmp_path, monkeypatch):
+    """D-59-07, sibling to the pin directly above (that test's body is left byte-
+    identical — see its own docstring). Under D-59-06 a revoked run keeps writing to
+    HubSpot until its chunks are exhausted, so the written-records artifact must show
+    EVERY chunk the run sent, including the two dispatched AFTER the revoke — a list
+    that stopped at the revoke would understate what actually landed, which is exactly
+    the case this artifact exists for (the artifact does not know or care about grant
+    state at all).
+
+    `written_records.written_records_path` is redirected to a `tmp_path` file rather
+    than an explicit `path=` kwarg on `dispatch_plan` — that function only grew a
+    keyword-only `run_id`, not a path (59-01-PLAN.md's wiring section), so this is the
+    seam `test_written_records.py`'s own crash test uses too.
+    """
+    import chunking
+
+    artifact = tmp_path / "written_records.json"
+    monkeypatch.setattr(written_records, "written_records_path", lambda: artifact)
+
+    ids = [str(n) for n in range(1, 7)]
+    grant_transport = stub_module_transport_factory(_plan_reads())
+    grant = _open(granting_config, grant_transport, ids=tuple(ids))
+    held = {"grant": grant}
+
+    plan = chunking.plan_chunks({"record_ids": ids, "object_type": "companies"}, 2)
+    assert plan.chunk_count == 3
+
+    transport = _RevokingTransport(stub_module_transport_factory(), held,
+                                   revoke_after_chunk=1)
+    chunking.dispatch_plan(plan, ["lusha"], True, granting_config,
+                           transport=transport, run_id="revoked-run")
+
+    # The revoke fired, exactly like the pin above proves — and every chunk still ran.
+    assert held["grant"]["state"] == write_grant.CLOSED
+    entries = written_records.load(path=artifact)
+    assert [e["chunk_index"] for e in entries] == [0, 1, 2], (
+        "the two chunks dispatched AFTER the revoke must still be on the artifact — a "
+        "revoked run keeps writing to HubSpot (D-59-06), so a list that stopped early "
+        "would understate what actually landed"
+    )
 
 
 def test_dispatch_plan_has_no_grant_aware_hook_to_revoke_against():
