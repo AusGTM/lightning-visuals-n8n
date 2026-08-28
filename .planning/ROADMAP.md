@@ -104,8 +104,9 @@ variable), and a design that runs the provider waterfall twice per written recor
       spend money on their behalf, and is offered a resolvable proposal instead of a dead end
       wherever a gate used to simply refuse.
 
-      **Plans:** 6 plans, 5 waves. Code only — the Phase 53 operator walk stays a Phase 53
-      checkpoint (operator ruling 2026-08-28), so every plan is autonomous.
+      **Plans:** 9 plans, 8 waves (6 executed, plus gap closure `59-07`..`59-09` planned
+      2026-08-29 against `59-VERIFICATION.md`'s 4 gaps). Code only — the Phase 53 operator walk
+      stays a Phase 53 checkpoint (operator ruling 2026-08-28), so every plan is autonomous.
 
       Plans:
 
@@ -126,6 +127,20 @@ variable), and a design that runs the provider waterfall twice per written recor
 
       - [x] 59-06-PLAN.md — the remaining CONVERT gates: enrichment-lane refusals and the
             walk's FINDING 1 grant dead end, with the authorization control untouched (D-59-08)
+
+      Gap closure (planned 2026-08-29, `gap_closure: true`, sequential waves 1-3):
+
+      - [ ] 59-07-PLAN.md — GAP 1: GATE-02..GATE-05's resolve-and-propose payload survives
+            `dispatch_plan` and reaches the operator through both skills; gate inventory
+            corrected to match delivery (D-59-08)
+
+      - [ ] 59-08-PLAN.md — GAP 2 + GAP 4: one written-records artifact per `run_id` with a
+            globbing reader, and every grant — not only a multi-lane one — discloses it
+            (D-59-09, D-59-07)
+
+      - [ ] 59-09-PLAN.md — GAP 3: a written-records failure never stops a dispatch, and the
+            resulting incomplete list is loud in the outcome, the unattended exit code and both
+            skills; `scheduled_arm.py`'s stale comment corrected in the same commit (D-59-10)
 
       Planning artifacts: `COVERAGE.md` (reasoned no-external-API declaration — this phase
       integrates nothing new), `59-VALIDATION.md`, and `59-GATE-INVENTORY.md` produced by 59-05.
