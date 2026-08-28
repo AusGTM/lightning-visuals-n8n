@@ -16,6 +16,49 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.25.0] - 2026-08-28
+
+### Added
+
+- **D-59-08, second half: the enrichment lane's identity refusals and the grant lane's
+  empty-record-set dead end now resolve and propose instead of dead-ending.** Closes out
+  `59-GATE-INVENTORY.md` — GATE-02 through GATE-06 are all now **CONVERTED**, alongside
+  0.24.0's GATE-01. The inventory has zero `Unplanned items`, and no `CONVERT` row was
+  ever reclassified to close the table — every `NOT-APPLICABLE` row was decided that way
+  on "no legitimate resolution source", never on difficulty.
+  - `enrichment.RecordSpecError` gains the same `resolvable` shape 0.24.0 gave
+    `extraction.ExtractionResult`: a tuple of `{"field", "sources", "detail"}` entries,
+    validated at construction against the closed resolution vocabulary. Populated at the
+    people-branch identity gate and all three companies-branch no-name refusals. Every
+    existing refusal MESSAGE is unchanged — including the verbatim-pinned profile-page
+    sentence — the payload is additive.
+  - **One shared vocabulary, not two.** `RESOLUTION_SOURCES` moved out of
+    `extraction.py` into a new `resolution_sources.py` module that both `extraction.py`
+    and `enrichment.py` import — `enrichment.py` importing it directly from
+    `extraction.py` hits a real circular import
+    (`enrichment -> extraction -> preview -> preview_enrichment -> chunking ->
+    enrichment`), confirmed live before this release shipped. `extraction.RESOLUTION_SOURCES`
+    is unchanged from every existing reader's perspective — it is the same frozenset
+    object, re-exported.
+  - **FINDING 1 of `53-WALK-RECORD.md` — a create with no HubSpot id and no domain
+    could not be granted on any armed path — is now resolvable.** Stated plainly,
+    because this is the sentence a security reviewer will look for: **`plan_grant`
+    still hard-refuses an empty record set, `_writeSafetyAllows()` is untouched, and no
+    resolution ever widens what a grant covers.** `write_grant.py` gained no lookup, no
+    transport call and no resolution logic of any kind — pinned by a new structural
+    test asserting the module's source carries no HubSpot search call. The refusal's
+    detail now names what would resolve it: a read-only HubSpot lookup for the record's
+    own id, or for its company's domain. `authorize_ungranted_send` relays the same
+    refusal verbatim, so both grant paths agree.
+  - `enrich-records/SKILL.md` gains a new step, placed before the grant is ever planned:
+    attempt resolution from the closed source vocabulary only (a read-only HubSpot
+    search, an earlier operator statement, a provider result already in hand, or a
+    same-row derivation), PROPOSE the resolved handle naming its source, and require
+    explicit operator confirmation before the confirmed handle reaches `plan_grant`. A
+    declined proposal leaves the original refusal standing — nothing is armed. Reuses
+    the confirm/correct/decline vocabulary the companies-domain table already
+    established, rather than inventing a third.
+
 ## [0.24.0] - 2026-08-28
 
 ### Added
