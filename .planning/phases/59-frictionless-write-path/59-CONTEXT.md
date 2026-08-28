@@ -1,14 +1,18 @@
 # Phase 59: Frictionless write path - Context
 
 **Gathered:** 2026-08-28
-**Status:** SCOPE DELIBERATELY DEFERRED — do not plan this phase yet
+**Status:** READY TO PLAN — the blocking walk has now been run (see D-59-01 addendum)
+**Updated:** 2026-08-28, after the Phase 53 operator walk
 
 <domain>
 ## Phase Boundary
 
-**This phase is not ready to plan, by operator decision (2026-08-28).** Its scope is deferred
-until Phase 53's outstanding operator walk has been performed, because the walk determines
-what is actually broken. Planning it now would plan against guesses.
+**The walk has now been run — this phase IS ready to plan.** (The paragraph below records why
+it was blocked; the block is discharged.) Scope was deferred until Phase 53's outstanding
+operator walk had been performed, because the walk determines what is actually broken.
+Planning before it would have planned against guesses — and the walk vindicated that: it found
+a defect nobody had predicted (`53-WALK-RECORD.md` FINDING 2) and confirmed one that had been
+(FINDING 1).
 
 The roadmap entry for Phase 59 (three scoped items plus a credential guard) was written on
 2026-08-27 from a code-review reading, before the scouting below. That scouting found two of
@@ -46,6 +50,34 @@ turned out to be: **that is already built, and has never been run once.**
   step 2's negative check probes for) in
   `~/.claude/plugins/data/operator-claude-plugin-lightning-visuals-operator/operator.local.json`.
   No admin/terminal step remains; the walk runs from the operator's chair.
+
+**ADDENDUM — the walk was run on 2026-08-28. Full record: `53-WALK-RECORD.md`.**
+
+Run autonomously at the operator's instruction. Caveat recorded there: it ran from Claude Code
+with terminal access, so it tests the COMPOSITION but not the operator's own constraint set.
+
+- **GRANT-01 is still NOT ticked**, and the ROADMAP entry for Phase 53 stays corrected.
+- **The grant machinery itself works**: authority check, envelope (Apollo honestly `known:
+  false` with a citation rather than a number), the D-53-05 disclosure verbatim and clear,
+  per-send narrowing (*"narrower than the grant, never wider"*), a live arm -> dispatch ->
+  disarm cycle ending in `VERDICT: disarmed PASS`, and `close_grant` refusing a free-text
+  reason and naming the seven it can report on.
+- **FINDING 1 (predicted, and correct behaviour):** a create with neither a HubSpot id nor an
+  email domain cannot be granted on ANY armed path — `plan_grant` and `authorize_ungranted_send`
+  both refuse an empty record set, loudly and with a good reason. Resolved by scoping to the
+  company's domain, found read-only in HubSpot.
+- **FINDING 2 (unpredicted, and the reason this phase now has real scope):** the documented
+  `merge_enriched(rows, outcome.responses)` call in `enrich-before-ingest` step 5 loses ALL
+  enrichment silently. `dispatch_plan` returns per-chunk LISTS; `merge_enriched` skips non-dict
+  items; every row lands in `unanswered` — the group documented as *"a row nothing is known
+  about at all"*. Measured on one real record: as documented `unanswered: 1` / email `None`;
+  flattened `unanswered: 0` / email `josh@seriesfutsal.com`. Paid-for provider data is
+  discarded and reported as absent.
+- **The walk was halted before the HubSpot write** rather than flattening around the defect —
+  a hand-patched success would have misrepresented the shipped flow. **Zero HubSpot writes.**
+  Cost: 1 n8n execution, ~1 Lusha + ~1.08 ZoomInfo credit, ~$0.07 Anthropic.
+- **Consequence for scoping:** FINDING 2 is a live silent-data-loss defect on the operator's
+  own headline flow. It has a strong claim on this phase, or on a fix that precedes it.
 
 ### D-59-02 — "Unattended" is not an authorization problem (scouted 2026-08-28)
 
@@ -155,6 +187,73 @@ exchange changes.
   needs it for.
 - Open for the planner: where the list lives (run artifact, HubSpot note, or plugin-side
   record), and whether "amend" means anything more than "here are the ids, go look".
+
+### D-59-08 — Resolve and propose, do not refuse outright (operator, 2026-08-28) — CROSS-CUTTING
+
+Operator ruling, given during the Phase 53 walk after `extraction.py` dead-ended a row:
+*"The identity rules surfaced are too strict, instead of immediate refusal, Claude operator
+side should try to resolve and propose. The goal of this system is to guide and be assistive,
+not just deterministic. Otherwise, why use AI?"*
+
+**Applies to this and other flows** — it is not scoped to Phase 59's own work. Recorded here
+because this is where it was taken; a planner should expect it to touch several lanes.
+
+**What changes.** Where a row fails a gate today and the flow stops, Claude should first attempt
+to RESOLVE the missing value, then PROPOSE it for the operator to confirm. Refusal becomes the
+last resort, not the first response.
+
+**What does NOT change — and this is the line that keeps it safe.** The no-invention rule's core
+survives intact: **never silently fill a gap to get a row past a gate.** The change is
+`refuse` -> `propose`, never `refuse` -> `guess`. A proposal the operator sees and confirms
+preserves exactly the property the rule protects, because the failure mode it exists to prevent
+is a fabricated value that lands *undetectably*. A value on screen awaiting a yes is not that.
+
+**The distinction a planner must implement precisely — where a resolved value may come from:**
+
+| Legitimate resolution sources | Illegitimate |
+| --- | --- |
+| HubSpot itself, read-only (the walk resolved `seriesfutsal.com` this way) | Claude's own recall about the person or company from training data |
+| The operator's own statements earlier in the conversation | Inference from "companies like this usually…" |
+| The enrichment waterfall's provider results | A plausible corporate email pattern (`first@company.com`) |
+| Another field of the same row, by stated derivation (a slug, a domain from an email) | Anything the operator would have no way to check |
+
+The right-hand column is still invention and stays forbidden. The left-hand column is lookup,
+and lookup was never what the rule was aimed at.
+
+**Provenance must not be laundered.** A Claude-resolved value carries provenance saying so —
+never dressed as source-derived. An operator reading the row back must be able to tell which
+fields came from their input and which from a resolution they approved. This is what keeps the
+audit trail honest once refusals stop being the default.
+
+**Evidence from the walk this ruling came out of (2026-08-28):**
+- The refusal path was a genuine dead end: a LinkedIn URL yielded name + `linkedin_url` but no
+  company, `extraction.py` rejected it for identity, and the flow simply stopped.
+- The resolve path worked and cost nothing: a read-only HubSpot search found Series Futsal
+  Victoria (`283816805830`, domain `seriesfutsal.com`), which was the exact handle the
+  write-safety allowlist needed for a create. It was disclosed to the operator, not slipped in.
+- Both halves of the ruling are therefore demonstrated, not hypothetical.
+
+**Known text that must be amended, with the same recorded-edit discipline D-53-05 used**
+(never deleted, never quietly weakened, the reason and date written into the file itself):
+- `skills/contact-upload/extraction.md`'s no-invention rule currently states *"A row that gets
+  rejected with a stated reason is the correct outcome"* and *"Never fill a gap to make a row
+  satisfy the identity rule."* The second sentence survives verbatim. The first no longer
+  describes the intended behaviour and must be rewritten to make rejection the last resort
+  after a resolution attempt was made and either failed or was declined.
+- Any contract test pinning that wording is re-pointed in the same commit, with the reason in
+  the test body.
+
+**Precedent already in the codebase, worth reusing rather than reinventing:** Phase 58's
+propose mode (opt-in operator confirmation for ambiguous matches), `preingest`'s existing
+`proposed` group and its `approve` / `deny` / `pick` / `email:` vocabulary, and the enrichment
+backend's own `action: "proposed"` / `mode: "propose"` response shape. The mechanism for
+"here is a candidate, confirm it" exists; this ruling widens where it is used.
+
+**Interaction with FINDING 2 of the walk (`53-WALK-RECORD.md`).** Note for whoever plans this:
+a propose flow makes silent enrichment loss worse, not better. If `merge_enriched` drops a
+provider answer into `unanswered`, a resolve-and-propose flow will propose from nothing and
+report "nothing known" about a row the backend answered fully. **Fix the merge defect before
+widening propose behaviour**, or the assistive path inherits a silent data-loss bug.
 
 ### Claude's Discretion
 

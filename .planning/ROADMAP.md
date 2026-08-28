@@ -49,7 +49,13 @@ variable), and a design that runs the provider waterfall twice per written recor
       `ALLOW_N8N_ARM` dependency with an admin-enabled capability plus an operator-opened session
       grant that is bounded, expiring and revocable — no terminal, no loss of record scoping
       — **4 plans** (`53-01` .. `53-04`), planned 2026-08-25.
-      **⚠ OPERATOR WALK OUTSTANDING (surfaced 2026-08-28).** All four plans executed and the
+      **⚠ OPERATOR WALK RUN 2026-08-28 — GRANT-01 STILL NOT TICKED** (record: `53-WALK-RECORD.md`).
+      The walk found the grant machinery sound but the flow it serves broken: `enrich-before-ingest`
+      step 5's documented `merge_enriched(rows, outcome.responses)` loses ALL enrichment silently
+      (`dispatch_plan` returns per-chunk lists; every row lands in `unanswered`). Measured live:
+      as documented `unanswered: 1` / email `None`; flattened, the email is there. Halted before
+      any HubSpot write. Zero writes. Original note follows.
+      **(surfaced 2026-08-28).** All four plans executed and the
       ledger read `Complete (verified)`, but `53-04-SUMMARY.md` records Task 3 as a blocking
       checkpoint that was never performed: *"the phase's own success criterion for GRANT-01 is
       the operator walk… Ticking it on the strength of tests would be exactly the claim G-2
@@ -88,9 +94,17 @@ variable), and a design that runs the provider waterfall twice per written recor
       domains researched then confirmed before write; refusal is the last resort — promoted
       ahead of 54–57 by operator decision 2026-08-25
 
-- [ ] **Phase 59: Frictionless write path** — ⏸️ **SCOPE DEFERRED pending Phase 53's operator
-      walk** (operator decision 2026-08-28; see `59-CONTEXT.md`). Still runs before Phase 55, and
+- [ ] **Phase 59: Frictionless write path** — **READY TO PLAN** (the blocking walk ran
+      2026-08-28; see `59-CONTEXT.md` and `53-WALK-RECORD.md`). Still runs before Phase 55, and
       both before Phase 52.
+
+      **The walk gave this phase real scope.** Its headline finding is a live silent-data-loss
+      defect on the operator's own headline flow — `merge_enriched` filing complete provider
+      answers under `unanswered`, the group meaning "nothing is known about this row". That has a
+      strong claim on this phase or on a fix preceding it. D-59-08 (resolve-and-propose,
+      cross-cutting) explicitly must NOT ship before it: a propose flow built on a merge that
+      drops answers will propose from nothing and report "nothing known" about a fully-answered
+      row.
 
       **Why deferred.** Discussing this phase on 2026-08-28 found two of the three items below
       mis-scoped, both from reading code review rather than the codebase:
@@ -390,10 +404,10 @@ silently inherit Phase 51's placeholder behavior without a decision.
 | 50. Derived Tier Property | v0.9 | 6/6 | Complete (verified) | 2026-08-14 |
 | 51. Backfill Pipeline, Credit Sizing & Dry Run | v1.0 | 3/3 | Complete (verified) | 2026-08-19 |
 | 52. Staged Canary Execution & Safety Verification | v1.0 | 0/TBD | Deferred (operator, 2026-08-25) | - |
-| 53. Operator-openable Write Grant | v1.1 | 4/4 | Complete — **operator walk OUTSTANDING** (corrected 2026-08-28) | 2026-08-26 |
+| 53. Operator-openable Write Grant | v1.1 | 4/4 | Complete — walk RUN 2026-08-28, **GRANT-01 not ticked** (composition defect found) | 2026-08-26 |
 | 54. Single-pass Armed Dispatch | v1.1 | 7/7 | Complete (verified) | 2026-08-27 |
 | 58. Take What the Operator Actually Has | v1.1 | 6/6 | Complete (verified) | 2026-08-26 |
-| 59. Frictionless Write Path | v1.1 | 0/TBD | Scope deferred pending 53 walk (2026-08-28) | - |
+| 59. Frictionless Write Path | v1.1 | 0/TBD | Ready to plan — walk run 2026-08-28 | - |
 | 60. Review-lane Authority | v1.1 | 0/TBD | Split from 59 (operator, 2026-08-28) | - |
 
 ## Ledger gaps (known)
