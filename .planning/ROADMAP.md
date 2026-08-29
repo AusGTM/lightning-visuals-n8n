@@ -289,9 +289,29 @@ variable), and a design that runs the provider waterfall twice per written recor
 
 - [ ] **Phase 61: Autonomous batch runs** — **IMMEDIATE NEXT PHASE**
       (operator, 2026-08-30). Inserted ahead of everything after walk run 4 failed.
+      **Plans:** 6 plans (planned 2026-08-30; absorbs Phases 55 and 56 per D-61-08).
 
-      **Goal:** an input carrying a strong identity key resolves through match-then-enrich
-      without the operator being asked for fields the backend does not need. Closes INPUT-05.
+      **Goal:** an operator hands over a batch and gets it back done — research, enrichment and
+      ingestion run autonomously, consent is once per batch rather than once per row, rows the
+      system is not confident about are held and collected into one review queue, and the run is
+      not bounded by the synchronous response window. The bar is 300 contacts as one run plus one
+      review pass, not 300 conversations. Identity resolution (the LinkedIn-URL-only row) is the
+      TRACER, not the scope. Closes INPUT-05, RUN-01, RUN-02, RUN-03, RUN-04, AFTER-02.
+
+      Plans:
+      - [ ] 61-01-PLAN.md — spike n8n Cloud's execution model; verdict doc with a basis word per
+            claim, execution arithmetic against the 2,500/month budget, and an operator decision
+            on where run state lives
+      - [ ] 61-02-PLAN.md — the tracer's backend half: a `linkedin` match lane that reaches a
+            HubSpot search on `lv_linkedin_url`, surviving stored-value variance
+      - [ ] 61-03-PLAN.md — the tracer's front-end half: the third identity group in all five
+            D-61-06 sites, with a YAML-to-JS parity test left behind
+      - [ ] 61-04-PLAN.md — the confidence signal and hold-and-collect: confident rows proceed,
+            unconfident rows are held with a reason, the batch always finishes
+      - [ ] 61-05-PLAN.md — async submit, progress-while-running, and resume-or-fail-loudly on the
+            substrate 61-01 selected
+      - [ ] 61-06-PLAN.md — the unattended pair pipeline under one grant, association enforced,
+            index lag absorbed by the run; first live run gated on Phase 57
 
       **The evidence.** Walk run 4 (`53-WALK-RECORD-3.md`) — the first walk ever run from the
       operator's own chair against the installed plugin (0.28.6) — **halted before the grant was
