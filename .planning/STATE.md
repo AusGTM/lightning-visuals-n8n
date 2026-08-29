@@ -8,7 +8,7 @@ status: phase_complete
 stopped_at: "Session end 2026-08-29. Phase 59 complete (18/18). GRANT-01 TICKED -- walk run 3 landed the first HubSpot write (contact 348695309760). Five composition defects fixed; sequence-inventory guard shipped; plugin 0.28.3. >>> REMAINING BACKLOG AND NEXT MOVE: .planning/HANDOVER-2026-08-29-backlog.md <<< FIRST ACTION: git push (10 unpushed), then the operator-chair walk."
 last_updated: "2026-08-29T00:00:00.000Z"
 last_activity: 2026-08-29
-last_activity_desc: Backlog handover written; see HANDOVER-2026-08-29-backlog.md
+last_activity_desc: "Quick task 260829-lg3 complete (Verified) - P2 closed, all five grandfathered SKILL.md composition sequences now covered; MAX_GRANDFATHERED 5 -> 0; plugin 0.28.6"
 progress:
   total_phases: 5
   completed_phases: 5
@@ -243,9 +243,9 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-28T21:37:49.553Z
-**Stopped at:** Completed 59-09-PLAN.md (gap closure: written-records bookkeeping failures never stop a dispatch, D-59-10) -- Phase 59 all 6 plans complete, ready for verification
-**Resume file:** None
+**Last session:** 2026-08-29 (resumed)
+**Stopped at:** Session resumed from .planning/HANDOVER-2026-08-29-backlog.md. Verified live: P1.1's push half is ALREADY DONE -- `origin/master == master == 001edcf`, 0 unpushed (the handover's "10 unpushed" is stale). Marketplace clone also already at 001edcf / plugin 0.28.3. REMAINING half of P1.1: the operator's INSTALLED plugin cache tops out at 0.19.0 (`~/.claude/plugins/cache/lightning-visuals-operator/operator-claude-plugin/`) -- needs an operator-run plugin update to reach 0.28.3 before the P1.2 operator-chair walk can run the installed plugin.
+**Resume file:** .planning/HANDOVER-2026-08-29-backlog.md
 
 ## Performance Metrics
 
@@ -560,6 +560,7 @@ open (VETO-01/VETO-02 remain open requirements, not blockers — Phase 40 met it
 | 260823-ono | Metro peak-body named-account floor: `lv_named_account_score_floor` (number) read by `lv_icp_fit_score` FORMULA-F; ATC/MRC/SSR/BRC/Perth at 60/B live; enum rejected (D-20 reconfirmed) | 2026-08-23 | f1105dd | Verified | [260823-ono-metro-peak-body-override-rule-tier-atc-m](./quick/260823-ono-metro-peak-body-override-rule-tier-atc-m/) |
 | 260826-20w | Permissive contact enrichment: email reclassified `fill_blank_only`@80 (was `manual_protected`@95), promotes into a blank + flags `lv_enrichment_needs_review`; five HubSpot-native location properties (city/state/country/hs_state_code/hs_country_region_code) added to the waterfall; live proof execution 11958 | 2026-08-26 | a583c29 | Verified | [260826-20w-permissive-contact-enrichment-location-f](./quick/260826-20w-permissive-contact-enrichment-location-f/) |
 | 260829-hjm | Sequence-inventory meta-test (`test_skill_sequence_coverage.py`): extracts every documented `module.function(...)` SKILL.md call sequence, fails when unclaimed by `COVERED`/`NOT_A_PIPELINE`/`GRANDFATHERED_UNCOVERED`; census 8 identities (2 covered, 1 not-a-pipeline, 5 grandfathered with named reasons); guard bite demonstrated live (fake block appended/reverted) and permanently (synthetic unit test); zero production-code changes; plugin 0.28.2 -> 0.28.3 | 2026-08-29 | 03bf28c | Verified | [260829-hjm-skill-sequence-composition-guard](./quick/260829-hjm-skill-sequence-composition-guard/) |
+| 260829-lg3 | **P2 closed — all five grandfathered sequences now covered.** 4 new composition tests drive the joins the registry said nothing drove: `authorize_send`/`authorize_ungranted_send` -> `armed_window` -> `dispatch.dispatch` INSIDE the window (one shared test closing both the `contact-upload` and `enrich-before-ingest` identities); the `resolve_providers` -> `plan_chunks`/`chunk_ceiling` -> authorize -> `armed_window` -> `dispatch_plan` waterfall (+`merge_enriched` for enrich-before-ingest); and `chunk_ceiling(key='max_rows_per_match_request')`'s real return through `plan_chunks` -> `match_batch` -> `classify_matches`. `GRANDFATHERED_UNCOVERED = {}`, `MAX_GRANDFATHERED = 0` (shrink-only contract honoured). Every falsifiability check independently re-run by reviewer AND verifier, not merely re-read. Zero production-code changes, zero `SKILL.md` edits, zero live calls. Plugin 0.28.3 -> 0.28.6 | 2026-08-29 | d1a2881 | Verified | [260829-lg3-close-the-five-grandfathered-skill-md-co](./quick/260829-lg3-close-the-five-grandfathered-skill-md-co/) |
 
 ## Deferred Items
 
