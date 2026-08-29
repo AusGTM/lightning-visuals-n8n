@@ -381,6 +381,36 @@ verified. All four findings are dormant — no live contacts candidate producer 
 being closed by operator choice, not because anything is broken. Run
 `/gsd-execute-phase 54 --gaps-only`.
 
+### Phase 61: Resolve the identity, don't ask for it
+
+**Goal**: An input carrying a strong identity key resolves through match-then-enrich without the
+operator being asked for fields the backend does not need. A contact given only a LinkedIn URL
+(or only an email) proceeds: match HubSpot on that key, and where unmatched, enrich through the
+licensed provider waterfall on that same key, proposing the result with its provenance for
+operator confirmation. A refusal for missing identity is correct only when NO strong key is
+present. Closes INPUT-05.
+
+**Why now**: walk run 4 (2026-08-30) — the first walk ever run from the operator's own chair
+against the installed plugin — FAILED, halting before the grant was opened because the plugin
+demanded a company for a LinkedIn-URL-only contact. Inserted ahead of everything by operator
+decision; a re-walk is blocked on this phase or it halts in the same place.
+Full detail: `milestones/v1.1-ROADMAP.md` § Phase 61; evidence:
+`phases/53-operator-openable-write-grant/53-WALK-RECORD-3.md` FINDING D; decisions D-61-01..05:
+`phases/61-resolve-the-identity-dont-ask-for-it/61-CONTEXT.md`.
+
+**Not a backend build**: `n8n/code/resolveIdentity.js:76-78` already treats `linkedin_url` as a
+STRONG match key (same tier as email), and `n8n/code/lushaRequest.js:79-91` already accepts a
+Lusha v3 enrich body carrying `linkedinUrl` alone. This is a front-end contract fix.
+
+**No-invention is NOT loosened** (D-61-02): the operator supplies the key, a licensed provider
+returns a sourced value, the operator confirms. `extraction.md`'s verbatim no-invention sentence
+stays as-is and stays on the do-not-simplify list. Scope fence (D-61-03): strong keys only —
+name-only rows keep routing to the existing `name_company` weak-key → `needs_review` path.
+
+**Requirements**: INPUT-05
+
+**Plans**: not yet planned
+
 ### Phase 58: Take what the operator actually has
 
 **Goal**: Every input an operator holds resolves to something the backend can act on, and a
