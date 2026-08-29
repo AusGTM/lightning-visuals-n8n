@@ -413,7 +413,34 @@ returns a sourced value, the operator confirms. `extraction.md`'s verbatim no-in
 stays as-is and stays on the do-not-simplify list. Scope fence (D-61-03): strong keys only —
 name-only rows keep routing to the existing `name_company` weak-key → `needs_review` path.
 
-**Requirements**: INPUT-05
+**RE-SCOPED 2026-08-30 — absorbs Phases 55 and 56.** After the walk concluded, the operator's
+diagnosis (FINDING F) reframed this phase: there is no confidence self-assessment, therefore no
+autonomy, therefore an operator must walk every row. The three backend services ALREADY do the
+research, enrichment and ingestion — the plugin exists because they clobber each other. Keep the
+non-clobbering and remove the autonomy and the result is WORSE than the raw services.
+
+**What it is now**: an operator hands over a batch and gets it back done. Research, enrichment
+and ingestion run autonomously; consent is once per batch, not per row; unconfident rows are HELD
+and collected into one review queue (D-61-07) rather than guessed or asked about mid-run; the run
+is not bounded by the synchronous response window. The linkedin_url identity fix becomes the
+TRACER, not the scope.
+
+**Closes**: INPUT-05, RUN-01, RUN-02, RUN-03, RUN-04, AFTER-02.
+
+**NOT relaxed** (operator kept these explicitly): the non-clobber merge policy, the write-safety
+gates, the post-run account of what was written. With no HubSpot rollback and ~700 live records
+reachable, those three are what make autonomy survivable rather than reckless.
+
+**Phase 57 stays separate AND stays gating**: Phase 56's original gate survives the fold — the
+first live unattended run is gated on 57's ceiling work. D-53-02 is explicit that a grant's
+computed ceiling is disclosure, not constraint.
+
+**Biggest unknown, inherited from 55**: n8n Cloud's execution model — not our code — decides what
+submit/poll/resume can do. SPIKE IT BEFORE PLANNING TASKS AROUND IT. Run-state location (n8n
+static data, a HubSpot object, an external store) has a different failure mode per option when
+n8n restarts mid-run.
+
+**Requirements**: INPUT-05, RUN-01, RUN-02, RUN-03, RUN-04, AFTER-02
 
 **Plans**: not yet planned
 

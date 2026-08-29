@@ -5,16 +5,65 @@
 **Trigger:** walk run 4 failed (`53-WALK-RECORD-3.md` FINDING D)
 
 <domain>
-## Phase Boundary
+## Phase Boundary — RE-SCOPED 2026-08-30 after the walk concluded
+
+**The original boundary (one identity key) is superseded. It is kept at the bottom of this
+section because it is now the phase's TRACER, not its scope.**
+
+### What this phase is now
+
+**An operator hands over a batch and gets it back done.** Research, enrichment and ingestion run
+**autonomously**; the operator gives consent once for the batch, not once per row; rows the
+system is not confident about are **held and collected**, never guessed and never blocking; and
+the run is not bounded by a synchronous response window.
+
+**Closes:** INPUT-05, RUN-01, RUN-02, RUN-03, RUN-04, AFTER-02.
+
+### Why it grew — FINDING F
+
+Walk run 4 concluded 2026-08-30 with every individual refusal **correct** and the composition
+unusable. Operator's diagnosis, verbatim:
+
+> *"there is no self assessment of confidence, and therefore no autonomy in workflow, it requires
+> an operator to walk through each step every single time, if an operator has hundreds of
+> contacts to ingest, this means they will need to go through hundreds of research steps, and
+> approval gates. That gets away from the point of doing this altogether."*
+
+And the load-bearing argument:
+
+> *"the 3 separate backend services, which DO DO the research enrichment and ingestion ALREADY,
+> but they clobber each other - if we keep the non-clobbering aspect while removing the
+> autonomous research, enrichment and ingestion parts then this makes a worse system"*
+
+**The plugin's whole reason to exist is non-clobbering.** The three backend services already
+perform the work. Keep the non-clobbering and remove the autonomy, and the result is worse than
+using the services raw. That is the bar this phase is measured against — not "does a record
+land", but "did the operator get a batch back without walking it".
+
+### What was folded in (D-61-08)
+
+This phase absorbs **Phase 55 (async run: submit, poll, resume)** and **Phase 56 (the unattended
+pair pipeline)**. Operator decision 2026-08-30: the halting problem and the throughput ceiling
+are one piece of work, because both stand between the operator and an unattended run of
+hundreds. Neither is useful alone — autonomy that still holds a connection open for 100s per
+2-record chunk is not autonomy, and async runs that still ask a question per row are not
+unattended.
+
+**Phase 57 (ceilings, refusal-before-start, post-run proof) is NOT folded in** and remains
+separate. D-53-02 is explicit that a grant's computed ceiling is *disclosure, not constraint* —
+and with autonomy landing here, 57's protective work matters more, not less. **Phase 56's
+original gate stands: 56's first live run is gated on 57's ceiling work.** That gate now applies
+to this phase.
+
+### The original boundary — now the tracer
 
 An input carrying a **strong identity key** resolves through **match, then enrich**, without the
-operator being asked for fields the backend does not need.
+operator being asked for fields the backend does not need: a contact given only a LinkedIn URL
+(or only an email) proceeds — HubSpot match on that key, and where unmatched, licensed-waterfall
+enrichment on that same key — with the result **proposed with provenance**.
 
-Concretely: a contact given only a LinkedIn URL (or only an email) proceeds — HubSpot match on
-that key, and where unmatched, licensed-waterfall enrichment on that same key — with the result
-**proposed with provenance** for operator confirmation.
-
-**Closes:** INPUT-05.
+This is the right tracer because it is the exact row that failed the walk, and it exercises
+identity resolution, the waterfall, the proposal surface and the write path in one pass.
 
 </domain>
 
@@ -100,6 +149,35 @@ sites — two YAML configs, `extraction.py`'s Python gate plus its hardcoded rea
 `columnMap.js`'s hand-written JS reimplementation, and `extraction.md`'s prose — with **no test
 pinning parity between the YAML and the JS**. Any change edits all five in one commit, and the
 phase should leave a parity test behind so the next divergence fails loudly rather than silently.
+
+### D-61-07 — Low confidence HOLDS the row; it never blocks the batch and never guesses
+**Operator ruling, 2026-08-30.** The autonomy policy, and the single decision that bounds how bad
+a bad run can get:
+
+- **Confident rows proceed autonomously.** No question, no gate, no per-row approval.
+- **Unconfident rows are HELD** — not guessed, not written, not asked about mid-run.
+- **The batch always finishes.** A held row never stops the rows behind it.
+- **Held rows collect into ONE review queue**, cleared in a single pass at the end.
+
+300 contacts becomes one run plus one review, not 300 conversations. This is the shape that
+delivers autonomy **while preserving non-clobbering** — the operator explicitly kept the
+non-clobbering ("in a non-clobbering way"), so the merge policy is NOT what is being relaxed.
+
+**What IS being relaxed is approval friction and per-row research halts. What is NOT being
+relaxed:** the non-clobber merge policy, the write-safety gates, or the post-run account of what
+was written. With no HubSpot rollback and ~700 live records, those three are what make autonomy
+survivable rather than reckless — they are the reason this can be granted at all.
+
+The phase needs a real **confidence signal** to hang this on. Today there is none — that absence
+IS FINDING F. Deciding what confidence means (match-key strength, provider agreement, judge
+verdict, or a composite) is core phase work, not a detail.
+
+### D-61-08 — Scope absorbs Phases 55 and 56; 57 stays separate and stays gating
+See the Phase Boundary above. Phase 55's spike-first warning carries over verbatim and is the
+phase's biggest unknown: **n8n Cloud's execution model, not our code, decides what is possible**
+for submit/poll/resume. Spike it before planning tasks around it. Run-state location (n8n static
+data, a HubSpot object, or an external store) is an open design question with a different
+failure mode per option when n8n restarts mid-run.
 
 ### Claude's Discretion
 - Where the contract change lands (`extraction.md`'s identity rule, the ingest lane's gate, or
