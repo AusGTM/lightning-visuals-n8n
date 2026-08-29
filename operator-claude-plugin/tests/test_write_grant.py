@@ -15,6 +15,7 @@ import pytest
 
 import config_gate
 import control_actions
+import dispatch
 import executions_client
 import n8n_arming
 import write_grant
@@ -326,6 +327,79 @@ def test_authorize_ungranted_send_arms_with_the_same_guardrails_a_standing_grant
     assert window.arm_result["outcome"] == n8n_arming.ARMED
     assert window.disarm_result["outcome"] == n8n_arming.DISARMED
     assert os.environ.get(n8n_arming.ARM_ENV_VAR) is None
+
+
+# 260829-lg3: closes two GRANDFATHERED_UNCOVERED entries in
+# test_skill_sequence_coverage.py -- (contact-upload, ...) and (enrich-before-ingest, ...)
+# -- both registered under the identical call tuple `config_gate.load_config ->
+# write_grant.authorize_send -> write_grant.authorize_ungranted_send ->
+# n8n_arming.armed_window -> dispatch.dispatch`. Neither existing test drove
+# dispatch.dispatch INSIDE an armed_window body: the grant-present authorize_send branch
+# was never chained into armed_window at all, and
+# test_authorize_ungranted_send_arms_with_the_same_guardrails_a_standing_grant_gets's
+# `with armed_window(...): pass` stopped one call short of it. This test drives BOTH
+# branches to a real dispatch.dispatch call and asserts on the returned result -- neither
+# `with` body is `pass` any more.
+def test_authorize_send_and_authorize_ungranted_send_each_drive_dispatch_inside_their_own_armed_window(
+        granting_config, stub_module_transport_factory, stub_transport, sample_csv):
+    # Branch 1: a standing, grant-present authorize_send.
+    grant_transport = stub_module_transport_factory([
+        _workflow_list(),                                       # plan_grant's lane resolve
+        _base_workflow(),                                       # guardrail A's live read
+        _base_workflow(), _base_workflow(), {}, {}, {},         # the arm
+        _base_workflow(record_writes='"true"', ids=f'"{RECORD_ID}"'),   # arm verification
+        _armed_workflow(), _armed_workflow(), {}, {}, {}, _base_workflow(),   # the disarm
+    ])
+    grant = _open(granting_config, grant_transport)
+    decision = write_grant.authorize_send(
+        grant, lane="enrichment", record_ids=[RECORD_ID], record_domains=[])
+    assert decision["armed"] is True
+
+    with n8n_arming.armed_window(decision["workflow_id"], [RECORD_ID], [], False,
+                                 granting_config, transport=grant_transport,
+                                 grant=decision["grant"]) as window:
+        result = dispatch.dispatch(str(sample_csv), True, granting_config,
+                                   transport=stub_transport)
+
+    assert window.arm_result["outcome"] == n8n_arming.ARMED
+    assert window.disarm_result["outcome"] == n8n_arming.DISARMED
+    assert result["run_id"]
+    assert len(stub_transport.calls) == 1
+
+    # Branch 2: authorize_ungranted_send, no standing grant -- a FRESH transport instance,
+    # since a stub_module_transport_factory's scripted queue is drained on use and cannot
+    # be reused across the two branches. `_workflow_id_cache` is process-lifetime and was
+    # already populated by branch 1's resolve of the SAME "enrichment" lane name, so it
+    # must be cleared here or branch 2's plan_grant would skip its own workflow-list read
+    # and consume the queue one entry out of step.
+    executions_client._workflow_id_cache.clear()
+    ungranted_transport = stub_module_transport_factory([
+        _workflow_list(),
+        _base_workflow(),
+        _base_workflow(), _base_workflow(), {}, {}, {},
+        _base_workflow(record_writes='"true"', ids=f'"{RECORD_ID}"'),
+        _armed_workflow(), _armed_workflow(), {}, {}, {}, _base_workflow(),
+    ])
+    decision2 = write_grant.authorize_ungranted_send(
+        granting_config, lane="enrichment", object_type="companies",
+        record_ids=[RECORD_ID], record_domains=[], allow_create=False,
+        label="this send", transport=ungranted_transport)
+    assert decision2["armed"] is True
+
+    with n8n_arming.armed_window(decision2["workflow_id"], [RECORD_ID], [], False,
+                                 granting_config, transport=ungranted_transport,
+                                 grant=decision2["grant"]) as window2:
+        # The SAME stub_transport instance is safe to reuse here, unlike the
+        # module-shaped one above -- it has no scripted responses list, so it is not a
+        # draining queue; it just always answers the default accepted body and appends
+        # to .calls.
+        result2 = dispatch.dispatch(str(sample_csv), True, granting_config,
+                                    transport=stub_transport)
+
+    assert window2.arm_result["outcome"] == n8n_arming.ARMED
+    assert window2.disarm_result["outcome"] == n8n_arming.DISARMED
+    assert result2["run_id"]
+    assert len(stub_transport.calls) == 2
 
 
 def test_authorize_ungranted_send_refuses_when_the_admin_has_not_enabled_write_grants(

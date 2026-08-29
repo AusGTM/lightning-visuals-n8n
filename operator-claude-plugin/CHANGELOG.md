@@ -16,6 +16,25 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.28.4] - 2026-08-29
+
+### Added
+
+- **P2 of the 2026-08-29 backlog handover, Task 1 of 3: closes 2 of the 5
+  `GRANDFATHERED_UNCOVERED` entries in `test_skill_sequence_coverage.py`.** The
+  `contact-upload` and `enrich-before-ingest` entries sharing the identical call tuple
+  `config_gate.load_config -> write_grant.authorize_send ->
+  write_grant.authorize_ungranted_send -> n8n_arming.armed_window -> dispatch.dispatch`
+  are now `COVERED`. Neither existing test drove `dispatch.dispatch` INSIDE an
+  `armed_window` body: the grant-present `authorize_send` branch was never chained into
+  `armed_window` at all, and the ungranted branch's `with armed_window(...): pass`
+  stopped one call short of it.
+  - New `test_write_grant.py::test_authorize_send_and_authorize_ungranted_send_each_drive_dispatch_inside_their_own_armed_window`
+    drives BOTH branches to a real `dispatch.dispatch` call inside their own
+    `armed_window`, asserting on the returned result — confirmed to fail (a `NameError`
+    on the unset `result` reference) when one branch's body is reverted to `pass`.
+  - Zero production-code changes. `MAX_GRANDFATHERED` decrements from 5 to 3.
+
 ## [0.28.3] - 2026-08-29
 
 ### Added

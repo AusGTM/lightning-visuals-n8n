@@ -193,6 +193,22 @@ COVERED = {
         "enrich-before-ingest",
         ("run_manifest.load", "run_manifest.rows_to_resume"),
     ): "test_run_manifest.py::test_a_resume_re_requests_only_rows_that_still_needed_work",
+    (
+        "contact-upload",
+        (
+            "config_gate.load_config", "write_grant.authorize_send",
+            "write_grant.authorize_ungranted_send", "n8n_arming.armed_window",
+            "dispatch.dispatch",
+        ),
+    ): "test_write_grant.py::test_authorize_send_and_authorize_ungranted_send_each_drive_dispatch_inside_their_own_armed_window",
+    (
+        "enrich-before-ingest",
+        (
+            "config_gate.load_config", "write_grant.authorize_send",
+            "write_grant.authorize_ungranted_send", "n8n_arming.armed_window",
+            "dispatch.dispatch",
+        ),
+    ): "test_write_grant.py::test_authorize_send_and_authorize_ungranted_send_each_drive_dispatch_inside_their_own_armed_window",
 }
 
 NOT_A_PIPELINE = {
@@ -207,24 +223,6 @@ NOT_A_PIPELINE = {
 # found" -- honesty rule (PLAN.md Design section). Writing the covering test for any
 # one of these is its own follow-on task, and doing so shrinks MAX_GRANDFATHERED by 1.
 GRANDFATHERED_UNCOVERED = {
-    (
-        "contact-upload",
-        (
-            "config_gate.load_config", "write_grant.authorize_send",
-            "write_grant.authorize_ungranted_send", "n8n_arming.armed_window",
-            "dispatch.dispatch",
-        ),
-    ): (
-        "the authorize_ungranted_send -> armed_window join IS driven "
-        "(test_write_grant.py::test_authorize_ungranted_send_arms_with_the_same_"
-        "guardrails_a_standing_grant_gets), but that test's `with armed_window(...): "
-        "pass` never drives dispatch.dispatch inside the window, and no test chains "
-        "the grant-present authorize_send branch into armed_window+dispatch either "
-        "(test_authorize_ungranted_send_returns_the_same_shape_authorize_send_does "
-        "calls both authorize functions but chains neither into armed_window). The "
-        "full chain is defect F2's shape (walk-write-path-defects KB entry), which "
-        "records a live operator walk as its one still-open, untested dimension."
-    ),
     (
         "enrich-before-ingest",
         (
@@ -260,19 +258,6 @@ GRANDFATHERED_UNCOVERED = {
         "assertion is not coverage (honesty rule)."
     ),
     (
-        "enrich-before-ingest",
-        (
-            "config_gate.load_config", "write_grant.authorize_send",
-            "write_grant.authorize_ungranted_send", "n8n_arming.armed_window",
-            "dispatch.dispatch",
-        ),
-    ): (
-        "same tuple as contact-upload's block, different skill -> distinct identity, "
-        "same gap: no test drives authorize_send|authorize_ungranted_send -> "
-        "armed_window -> dispatch.dispatch end to end (see the contact-upload entry "
-        "above for the specific tests that stop short)."
-    ),
-    (
         "enrich-records",
         (
             "config_gate.load_config", "enrichment.resolve_providers", "chunking.plan_chunks",
@@ -291,7 +276,7 @@ GRANDFATHERED_UNCOVERED = {
     ),
 }
 
-MAX_GRANDFATHERED = 5
+MAX_GRANDFATHERED = 3
 
 
 # =====================================================================================
