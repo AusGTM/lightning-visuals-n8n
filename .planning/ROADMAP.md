@@ -398,9 +398,15 @@ Full detail: `milestones/v1.1-ROADMAP.md` § Phase 61; evidence:
 `phases/53-operator-openable-write-grant/53-WALK-RECORD-3.md` FINDING D; decisions D-61-01..05:
 `phases/61-resolve-the-identity-dont-ask-for-it/61-CONTEXT.md`.
 
-**Not a backend build**: `n8n/code/resolveIdentity.js:76-78` already treats `linkedin_url` as a
-STRONG match key (same tier as email), and `n8n/code/lushaRequest.js:79-91` already accepts a
-Lusha v3 enrich body carrying `linkedinUrl` alone. This is a front-end contract fix.
+**Front-end AND backend, together** (corrected 2026-08-30 by `61-RESEARCH.md`; an earlier
+"front-end contract fix only" claim here was WRONG). Lusha enrich by `linkedinUrl` alone is real
+and live (`lushaRequest.js:79-98`). But **HubSpot matching by `linkedin_url` is dead on the live
+path** — `resolveIdentity.js:76-90`'s linkedin branch is unreachable, the ingest lane's
+`ADAPT_SEARCH_RESULTS` builds `searchResultsByKey.email` only, the match lane's
+`matchProposal.js::laneOf()` never reads the key, and the plugin's own
+`enrichment.py:71` `MATCH_LOOKUP_KEYS` filters it out before sending. **Fixing only the front-end
+gate reproduces the failure in a new shape**: the row passes extraction then dead-ends in the
+"could not look" bucket — failing later and more quietly than today's honest refusal.
 
 **No-invention is NOT loosened** (D-61-02): the operator supplies the key, a licensed provider
 returns a sourced value, the operator confirms. `extraction.md`'s verbatim no-invention sentence
