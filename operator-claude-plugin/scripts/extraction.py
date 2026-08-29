@@ -848,6 +848,25 @@ def hold_emailless(rows: list) -> tuple:
     return sendable, held
 
 
+def strip_row_id(rows: list) -> list:
+    """Drop the `row_id` join key `preingest.build_rows_spec` mints into every row,
+    before those rows reach `write_dispatch_csv`'s STRUCT-01 guard below. `row_id` is a
+    plugin-internal join key, not a HubSpot property — deliberately absent from
+    `config/column_mapping.yaml` — so the guard is correct to refuse a row that still
+    carries it; `merge_enriched`, `apply_match_decisions`, and `hold_emailless` all
+    preserve it on purpose, since every stage upstream of dispatch still joins by it.
+    The strip belongs at this boundary, not upstream (2026-08-29 operator ruling —
+    exempting `row_id` from the canonical check was rejected as blurring what STRUCT-01
+    means; carrying `row_id` beside rows instead of inside them is the better end state
+    but too wide a change for this fix — see `enrich-before-ingest/SKILL.md` step 7,
+    which calls this between `hold_emailless` and `write_dispatch_csv`).
+
+    Returns fresh dicts; never mutates an input row. A row with no `row_id` passes
+    through unchanged, so this is harmless to call on rows from any source.
+    """
+    return [{k: v for k, v in row.items() if k != "row_id"} for row in rows]
+
+
 def write_dispatch_csv(rows, out_path, mapping_path=None) -> None:
     """Write dispatch-ready CSV bytes to `out_path` for Phase 23's dispatch.py to POST.
     `rows` is a list of flat dicts (canonical prop -> value); the header is every

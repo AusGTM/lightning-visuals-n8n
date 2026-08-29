@@ -327,9 +327,11 @@ capability; claiming it here would be a guess dressed as a report.
    through GATE-05 refuse a `people`/`companies` chunk the same way, and their
    `resolvable` payload now survives the trip through `dispatch_plan` rather than being
    replaced by a placeholder. For each entry, relay its `detail` as a proposal of what
-   would resolve that row, and name which of the four `resolution_sources` values
-   (`hubspot_lookup`, `operator_statement`, `provider_result`, `same_row_derivation`)
-   it claims. **Claude proposes and the operator confirms — a resolvable entry is never
+   would resolve that row, and name every `resolution_sources` value its `sources`
+   tuple carries — an entry can claim more than one of the four
+   (`hubspot_lookup`, `operator_statement`, `provider_result`, `same_row_derivation`),
+   and every value it claims belongs in the relay, not just the first. **Claude
+   proposes and the operator confirms — a resolvable entry is never
    silently acted on, and no value is invented to satisfy the gate.** D-59-08's own line
    applies here exactly as it does at every other gate this phase converted: the change
    is refuse-to-propose, never refuse-to-guess.

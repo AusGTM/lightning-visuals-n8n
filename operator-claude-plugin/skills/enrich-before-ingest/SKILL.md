@@ -336,7 +336,8 @@ whatever seven columns happened to be in the source file.
    **A failed chunk's `outcome.results[i].resolvable` (D-59-08, gap closure
    2026-08-29) is a proposal to offer, not a dead end to report.** When it is
    non-empty, walk its entries and tell the operator what each `detail` says would
-   resolve the row, naming the `resolution_sources` value the entry claims
+   resolve the row, naming every `resolution_sources` value the entry's `sources`
+   tuple carries — an entry can claim more than one of the four
    (`hubspot_lookup`, `operator_statement`, `provider_result`, `same_row_derivation`).
    Nothing here acts on the operator's behalf — Claude proposes, the operator
    confirms, and no field is filled in to make the row pass. Refuse-to-propose, not
@@ -432,8 +433,15 @@ whatever seven columns happened to be in the source file.
    import extraction
 
    sendable_rows, held = extraction.hold_emailless(merge_report.rows)
+   sendable_rows = extraction.strip_row_id(sendable_rows)
    extraction.write_dispatch_csv(sendable_rows, out_path)
    ```
+
+   `strip_row_id` drops the `row_id` join key `build_rows_spec` minted in step 2 — every
+   stage since has carried it forward on purpose, but it is not a HubSpot property, and
+   `write_dispatch_csv` refuses any row that still carries it (STRUCT-01). This is the
+   only place in this flow that call belongs — every earlier stage still needs `row_id`
+   to join by.
 
    `write_dispatch_csv` raises, and writes nothing, if a held row ever slipped through
    this far — treat that raise as a bug to stop and report, not something to retry

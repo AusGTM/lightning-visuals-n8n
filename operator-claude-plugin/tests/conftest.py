@@ -9,6 +9,15 @@ The autouse `no_network` fixture is the point of this file: every plugin test ru
 `requests` stubbed so no test can ever perform a real POST (or GET — the guard patches
 `Session.request`, which `requests.get` routes through too), by construction rather than
 by discipline (23-VALIDATION.md's Wave 0 critical constraint).
+
+The autouse `no_durable_writes` fixture mirrors that idiom for `written_records.py`
+(bug_001, 2026-08-29 ultrareview): `chunking.dispatch_plan`'s inline flush calls
+`written_records.append_chunk`, which resolves its own path via
+`written_records_path(run_id)` when no test patches it — with `LV_OPERATOR_CONFIG` /
+`CLAUDE_PLUGIN_DATA` unset (the normal test environment), that lands in the operator's
+REAL durable state directory. Redirecting `written_records_path` here, once, for every
+test, closes the gap the five 59-08/59-09 tests each closed for themselves individually
+but the ~25 pre-existing `dispatch_plan` callers never got.
 """
 import copy
 import csv
@@ -26,6 +35,9 @@ SCRIPTS_DIR = PLUGIN_ROOT / "scripts"
 FIXTURES_DIR = PLUGIN_ROOT / "tests" / "fixtures"
 if str(SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPTS_DIR))
+
+import durable_paths  # noqa: E402 — needs SCRIPTS_DIR on sys.path first
+import written_records  # noqa: E402
 
 # Messy headers exercising config/column_mapping.yaml's alias table: "Email Address",
 # "First Name" and "Mobile" all resolve to a canonical prop; "Notes" is not in the alias
@@ -590,3 +602,37 @@ def no_network(monkeypatch, request):
     monkeypatch.setattr(requests, "post", _blocked)
     monkeypatch.setattr(requests, "request", _blocked)
     monkeypatch.setattr(requests.Session, "request", _blocked)
+
+
+@pytest.fixture(autouse=True)
+def no_durable_writes(monkeypatch, tmp_path):
+    """No test may write into the operator's REAL durable state directory (bug_001,
+    2026-08-29 ultrareview). Mirrors `no_network`'s idiom: applies to every test by
+    construction, not by discipline, so a later test cannot leak into it by forgetting
+    to patch `written_records_path` itself — exactly what happened to the ~25
+    pre-existing `dispatch_plan` callers in test_chunking.py, which deposited 413 stray
+    `written_records-*.json` files into the operator's live directory when this suite
+    ran (53-WALK-RECORD-2.md FINDING A).
+
+    A SAFE DEFAULT, not an unconditional override — `written_records.load()`'s no-path
+    branch resolves through `durable_paths.resolve_state_path()` DIRECTLY, not through
+    `written_records_path`, so a test that isolates itself by patching
+    `resolve_state_path` (`test_written_records.py`'s pre-existing `_patch_durable_dir`
+    idiom, used to keep `append_chunk`'s write and `load()`'s glob pointed at the same
+    directory) must still win: this wrapper checks whether `resolve_state_path` is
+    STILL the real, unpatched function at call time, and only substitutes the safe
+    `tmp_path` default when nothing else already isolated it. A test that patches
+    `written_records.written_records_path` itself (test_chunking.py's 59-08/59-09
+    tests) simply overrides this wrapper entirely — both redirect away from the real
+    directory, so there is nothing to conflict over either way.
+    """
+    fake_dir = tmp_path / "durable-state"
+    unpatched_resolve_state_path = durable_paths.resolve_state_path
+    real_written_records_path = written_records.written_records_path
+
+    def _safe_written_records_path(run_id):
+        if durable_paths.resolve_state_path is unpatched_resolve_state_path:
+            return fake_dir / f"written_records-{run_id}.json"
+        return real_written_records_path(run_id)
+
+    monkeypatch.setattr(written_records, "written_records_path", _safe_written_records_path)

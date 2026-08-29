@@ -16,6 +16,73 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.28.1] - 2026-08-29
+
+### Fixed
+
+- **bug_002 (normal): the documented enrich-before-ingest step 7 sequence could not
+  reach a HubSpot write.** `preingest.build_rows_spec` mints a `row_id` join key into
+  every row; `merge_enriched` and `hold_emailless` both preserve it on purpose, since
+  every stage upstream of dispatch still joins by it. `write_dispatch_csv`'s STRUCT-01
+  guard correctly refuses any row carrying a key outside the canonical set — `row_id`
+  is not a HubSpot property — so the documented sequence raised
+  `Row 0 carries key(s) outside the canonical set: ['row_id']` before writing a byte,
+  reproduced live during the 2026-08-29 operator walk. Each of the four functions was
+  individually correct and individually tested; no test drove all four in sequence.
+  **Exempting `row_id` from the canonical check was considered and rejected** — it
+  blurs what STRUCT-01 means and every future internal key would inherit the
+  exemption by precedent. **Carrying `row_id` beside rows rather than inside them is
+  the better end state and is recorded as a follow-up**, but touches
+  `build_rows_spec`, `merge_enriched`, `classify_matches`, `chunking`, and every
+  row_id-joining lane — too wide a blast radius for this release.
+  - `extraction.strip_row_id` — drops the `row_id` key from a list of rows,
+    non-mutating. Called between `hold_emailless` and `write_dispatch_csv`, the only
+    boundary where every upstream stage's need for the key and the dispatch CSV's need
+    for its absence can both be honoured.
+  - `enrich-before-ingest/SKILL.md` step 7 now calls it in that sequence.
+  - New composition test (`test_preingest_merge.py`) drives
+    `build_rows_spec` → `merge_enriched` → `hold_emailless` → `strip_row_id` →
+    `write_dispatch_csv` end to end — the sequence-level gap no unit test covered.
+- **bug_001 (nit): the plugin test suite wrote hundreds of files into the operator's
+  real durable state directory.** `chunking.dispatch_plan`'s inline
+  `written_records.append_chunk` flush resolves its path via
+  `written_records_path(run_id)` when nothing overrides it — with `LV_OPERATOR_CONFIG`
+  / `CLAUDE_PLUGIN_DATA` unset (the normal test environment), that lands in the
+  operator's real
+  `~/.claude/plugins/data/operator-claude-plugin-lightning-visuals-operator/`
+  directory. Five tests added for D-59-08/59-09 monkeypatched this correctly for
+  themselves; the ~25 pre-existing `dispatch_plan` callers never were — measured at
+  413 stray `written_records-*.json` files from one session's test runs.
+  `written_records.load()` has zero shipped callers, so this was latent pollution of
+  the operator's directory, never an operator-visible data-quality failure.
+  - New autouse `no_durable_writes` fixture (`tests/conftest.py`) redirects
+    `written_records.written_records_path` to a per-test `tmp_path` by default,
+    mirroring the existing `no_network` idiom — applies to every test by
+    construction. Yields to a test's own more specific isolation
+    (`durable_paths.resolve_state_path` patched directly, the pre-existing
+    `_patch_durable_dir` idiom `test_written_records.py` uses to keep
+    `append_chunk`'s write and `load()`'s glob pointed at the same directory) rather
+    than overriding it.
+  - Defense in depth: `written_records.append_chunk` now refuses (degrades, does not
+    raise) a write that still resolves into the operator's real durable directory
+    while `PYTEST_CURRENT_TEST` is set, independent of whether the fixture above took
+    effect.
+  - New regression test (`test_chunking.py`) exercises `dispatch_plan` with no
+    written-records patching of its own and asserts the operator's real directory is
+    unchanged.
+  - The 413 pre-existing stray files are **not** deleted by this release — cleaning
+    an operator's live state directory is proposed separately, not done silently.
+- **bug_003 (nit): the two enrichment skills disagreed on whether a `resolvable`
+  entry's `resolution_sources` is one value or several.** `RecordSpecError`'s
+  `resolvable` payload types `sources` as a tuple, and GATE-03's `name` entry
+  (`enrichment.py:427-436`) carries three of the four values at once — but
+  `enrich-before-ingest/SKILL.md` instructed "naming **the** `resolution_sources`
+  value the entry claims", unambiguously singular, disagreeing with
+  `enrich-records/SKILL.md`'s own (ambiguous) phrasing. Both now instruct naming
+  **every** value the entry's `sources` tuple carries. New parity test
+  (`test_resolution_sources_relay_parity.py`) asserts both skills say the same thing
+  and that neither implies a single value.
+
 ## [0.28.0] - 2026-08-29
 
 ### Fixed

@@ -5,6 +5,7 @@ Task 2: `merge_enriched` (join by `row_id`, refuse a duplicate, ignore an unknow
 Task 3: `rows_from_table` (one mapping authority — `preview.label_headers`'s exact
 alias lookup — read-only).
 """
+import csv
 from pathlib import Path
 
 import pytest
@@ -240,6 +241,41 @@ def test_every_merged_row_key_is_in_canonical_props_or_row_id():
     allowed = set(extraction.canonical_props()) | {"row_id"}
     for row in result.rows:
         assert set(row) <= allowed
+
+
+# bug_002 (2026-08-29 ultrareview): each of build_rows_spec, merge_enriched,
+# hold_emailless and write_dispatch_csv was individually correct and individually
+# tested, but chained exactly as `enrich-before-ingest/SKILL.md` step 7 documents,
+# `row_id` (minted by build_rows_spec, preserved by merge_enriched and hold_emailless)
+# reached write_dispatch_csv's STRUCT-01 guard and raised before a byte was written —
+# no test drove all four stages in one sequence. This one does, calling
+# `strip_row_id` exactly where the skill's step 7 now calls it: between
+# `hold_emailless` and `write_dispatch_csv`.
+def test_the_documented_step_7_sequence_reaches_a_written_dispatch_csv(tmp_path):
+    rows = _rows(2)
+    responses = [
+        _response(rows[0]["row_id"], {"email": "amy@example.com"}),
+        _response(rows[1]["row_id"], {}),  # no email supplied — this row is held
+    ]
+
+    merge_report = preingest.merge_enriched(rows, responses)
+    sendable, held = extraction.hold_emailless(merge_report.rows)
+    assert len(sendable) == 1
+    assert len(held) == 1
+
+    sendable = extraction.strip_row_id(sendable)
+
+    out_path = tmp_path / "dispatch.csv"
+    extraction.write_dispatch_csv(sendable, out_path)  # must not raise
+
+    with out_path.open(newline="", encoding="utf-8") as f:
+        reader = csv.reader(f)
+        header = next(reader)
+        written_rows = list(reader)
+
+    assert "row_id" not in header
+    assert len(written_rows) == 1
+    assert written_rows[0][header.index("email")] == "amy@example.com"
 
 
 # =====================================================================================

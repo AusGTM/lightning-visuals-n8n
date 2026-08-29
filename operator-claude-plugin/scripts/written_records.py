@@ -67,6 +67,7 @@ The filename is deliberately NOT a dotfile — Phase 23 D-04, dotfiles are unrea
 this environment's tooling.
 """
 import json
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -218,6 +219,25 @@ def _entries_from_document(document):
     return entries
 
 
+def _refuses_real_durable_write_under_pytest(target: Path) -> bool:
+    """Defense in depth for bug_001 (2026-08-29 ultrareview), behind
+    `conftest.py`'s `no_durable_writes` autouse fixture: if that fixture is ever
+    bypassed or forgotten by a future test, a write from inside pytest that still
+    resolves to the operator's REAL durable directory (`durable_dir()`, computed
+    independently of whatever `written_records_path` was mocked to) must not land —
+    degrade instead of decorating the operator's live state with test artifacts.
+
+    `PYTEST_CURRENT_TEST` is set by pytest itself for the duration of every test; a
+    real dispatch run never has it set, so this can never refuse a live write.
+    """
+    if not os.environ.get("PYTEST_CURRENT_TEST"):
+        return False
+    try:
+        return target.resolve().parent == durable_paths.durable_dir().resolve()
+    except OSError:
+        return False
+
+
 def append_chunk(run_id, chunk_index, body, path=None):
     """Classify every item in one chunk's raw response `body` and flush the WHOLE
     written-records document — this chunk's entries appended to whatever `run_id`'s file
@@ -246,6 +266,9 @@ def append_chunk(run_id, chunk_index, body, path=None):
     ]
 
     target = Path(path) if path is not None else written_records_path(run_id)
+
+    if _refuses_real_durable_write_under_pytest(target):
+        return False
 
     try:
         existing_entries = _entries_from_document(_load_document(target))

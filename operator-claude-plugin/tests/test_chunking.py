@@ -18,6 +18,7 @@ import pytest
 import requests
 
 import chunking
+import durable_paths
 import enrichment
 import written_records
 from dispatch import NotArmedError
@@ -648,6 +649,33 @@ def test_a_refused_gate_02_chunk_still_lands_in_failed_batch(
     )
     assert outcome.failed_batch == {"people": [{"firstname": "John"}]}
 
+
+
+def test_dispatch_plan_never_writes_into_the_operators_real_durable_directory(
+    fake_config, stub_module_transport_factory,
+):
+    """Regression test for bug_001 (2026-08-29 ultrareview). Deliberately does NOT
+    monkeypatch `written_records.written_records_path` itself — every other test in
+    this file either predates that concern or patches it individually; this one
+    exercises exactly the gap those individual patches left open: a `dispatch_plan`
+    caller with no patch of its own, which measurably deposited 413 stray
+    `written_records-*.json` files into the operator's real state directory when this
+    suite ran (53-WALK-RECORD-2.md FINDING A). Relies solely on conftest.py's
+    `no_durable_writes` autouse fixture.
+    """
+    real_dir = durable_paths.durable_dir()
+    before = set(real_dir.glob("written_records-*.json")) if real_dir.exists() else set()
+
+    transport = stub_module_transport_factory()
+    chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport
+    )
+
+    after = set(real_dir.glob("written_records-*.json")) if real_dir.exists() else set()
+    assert after == before, (
+        "dispatch_plan wrote into the operator's real durable directory — "
+        "no_durable_writes (conftest.py) did not take effect"
+    )
 
 
 # ==================================================================================
