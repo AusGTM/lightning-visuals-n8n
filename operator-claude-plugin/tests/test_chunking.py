@@ -18,8 +18,13 @@ import pytest
 import requests
 
 import chunking
+import config_gate
 import durable_paths
 import enrichment
+import executions_client
+import n8n_arming
+import preingest
+import write_grant
 import written_records
 from dispatch import NotArmedError, dispatch
 
@@ -866,3 +871,180 @@ def test_enrichment_and_contacts_writes_from_the_same_run_share_one_file(
         "silently starts a second file instead"
     )
     assert {e.get("hs_object_id") for e in entries} == {None, "348695309760"}
+
+
+# ==================================================================================
+# 260829-lg3 Task 2: closes GRANDFATHERED_UNCOVERED entries #3 (enrich-before-ingest,
+# with merge_enriched) and #7 (enrich-records, no merge_enriched) --  the documented
+# waterfall: resolve_providers -> plan_chunks/chunk_ceiling -> authorize_send |
+# authorize_ungranted_send -> armed_window -> dispatch_plan [-> merge_enriched].
+#
+# Arming scaffolding below is duplicated VERBATIM from test_write_grant.py -- sibling
+# test modules importing each other is fragile under pytest's default import mode.
+# ==================================================================================
+
+WORKFLOW_ID = "wf-enrichment-1"
+RECORD_ID = "12345"
+
+
+def _base_workflow(record_writes='"false"', create='"false"', ids='""', domains='""'):
+    """Same miniature two-gate shape test_write_grant.py's own helper uses."""
+    gate = (f"const ALLOW_HUBSPOT_RECORD_WRITES = {record_writes};\n"
+            f"const ALLOW_HUBSPOT_CREATE = {create};\n"
+            f"const TEST_RECORD_IDS = {ids};\n"
+            f"const TEST_RECORD_DOMAINS = {domains};\n"
+            "function _writeSafetyAllows() { return false; }\n")
+    return {
+        "id": WORKFLOW_ID,
+        "name": write_grant.LANES["enrichment"],
+        "active": True,
+        "settings": {},
+        "connections": {},
+        "nodes": [
+            {"name": "Update Write Gate", "parameters": {"jsCode": gate}},
+            {"name": "Create Write Gate", "parameters": {"jsCode": gate}},
+            {"name": "Webhook", "parameters": {}},
+        ],
+    }
+
+
+def _armed_workflow(ids=f'"{RECORD_ID}"'):
+    return _base_workflow(record_writes='"true"', create='"true"', ids=ids)
+
+
+def _workflow_list():
+    """What `resolve_workflow_id` reads: the /api/v1/workflows collection."""
+    return {"data": [{"id": WORKFLOW_ID, "name": write_grant.LANES["enrichment"]}]}
+
+
+def _arming_sequence():
+    """The proven 14-entry open+arm+disarm sequence
+    (test_write_grant.py::test_a_send_arms_under_an_opened_grant_with_no_environment_variable_set),
+    duplicated verbatim: lane resolve, guardrail A's live read, the arm, arm
+    verification, then the disarm."""
+    return [
+        _workflow_list(),
+        _base_workflow(),
+        _base_workflow(), _base_workflow(), {}, {}, {},
+        _base_workflow(record_writes='"true"', ids=f'"{RECORD_ID}"'),
+        _armed_workflow(), _armed_workflow(), {}, {}, {}, _base_workflow(),
+    ]
+
+
+@pytest.fixture(autouse=True)
+def _clear_workflow_id_cache_between_chunking_tests():
+    """`executions_client._workflow_id_cache` is process-lifetime — without this, a
+    lane name resolved by one of the two tests below leaks into the other (both use
+    the identical "enrichment" lane name), and the second test's `plan_grant` silently
+    skips its own workflow-list read, consuming the scripted transport queue one entry
+    out of step."""
+    executions_client._workflow_id_cache.clear()
+    yield
+    executions_client._workflow_id_cache.clear()
+
+
+@pytest.fixture
+def granting_config(fake_config):
+    """A config whose admin set the write-grant settings key to the JSON boolean true."""
+    return {**fake_config, config_gate.WRITE_GRANT_SETTINGS_KEY: True}
+
+
+def test_the_enrich_before_ingest_waterfall_chains_resolve_providers_through_merge_enriched(
+        granting_config, stub_module_transport_factory):
+    """Closes (enrich-before-ingest, (config_gate.load_config,
+    enrichment.resolve_providers, chunking.plan_chunks, chunking.chunk_ceiling,
+    write_grant.authorize_send, write_grant.authorize_ungranted_send,
+    n8n_arming.armed_window, chunking.dispatch_plan, preingest.merge_enriched)).
+    Uses the grant-present authorize_send branch (Task 1 already covers
+    authorize_ungranted_send for this same file's Test 2 below -- deliberate
+    diversity, not required by either registry reason individually)."""
+    row_spec = preingest.build_rows_spec([
+        {"firstname": "First0", "lastname": "Doe0", "company": "Acme0"},
+        {"firstname": "First1", "lastname": "Doe1", "company": "Acme1"},
+    ])
+    cfg = {**granting_config, "max_records_per_chunk": 2}
+    providers = enrichment.resolve_providers(None, cfg)
+    ceiling = chunking.chunk_ceiling(cfg)
+    plan = chunking.plan_chunks(row_spec, ceiling)
+    assert plan.chunk_count == 1
+
+    grant_transport = stub_module_transport_factory(_arming_sequence())
+    proposal = write_grant.plan_grant(
+        granting_config, lanes=["enrichment"], object_type="companies",
+        record_ids=[RECORD_ID], record_domains=[], allow_create=False, label="test",
+        transport=grant_transport)
+    grant = write_grant.open_grant(proposal, "yes", granting_config)
+    decision = write_grant.authorize_send(
+        grant, lane="enrichment", record_ids=[RECORD_ID], record_domains=[])
+    assert decision["armed"] is True
+
+    row_ids = [row["row_id"] for row in row_spec["rows"]]
+    scripted_body = [
+        {"row_id": row_id, "properties": {"email": f"{row_id}@example.com"}}
+        for row_id in row_ids
+    ]
+
+    with n8n_arming.armed_window(decision["workflow_id"], [RECORD_ID], [], False,
+                                 granting_config, transport=grant_transport,
+                                 grant=decision["grant"]) as window:
+        dispatch_transport = stub_module_transport_factory([scripted_body])
+        outcome = chunking.dispatch_plan(plan, providers, True, cfg,
+                                         transport=dispatch_transport)
+
+    assert window.arm_result["outcome"] == n8n_arming.ARMED
+    assert window.disarm_result["outcome"] == n8n_arming.DISARMED
+    assert len(dispatch_transport.calls) == 1
+
+    flattened = [item for body in outcome.responses
+                 for item in (body if isinstance(body, list) else [body])]
+    merge_report = preingest.merge_enriched(row_spec["rows"], flattened)
+
+    merged_by_row_id = {row["row_id"]: row for row in merge_report.rows}
+    for row_id in row_ids:
+        assert merged_by_row_id[row_id]["email"] == f"{row_id}@example.com", (
+            "the scripted dispatch_plan response value must flow, unchanged, through "
+            "the flatten idiom and into merge_enriched's merged row"
+        )
+
+
+def test_the_enrich_records_waterfall_chains_resolve_providers_through_dispatch_plan(
+        granting_config, stub_module_transport_factory):
+    """Closes (enrich-records, (config_gate.load_config, enrichment.resolve_providers,
+    chunking.plan_chunks, chunking.chunk_ceiling, write_grant.authorize_send,
+    write_grant.authorize_ungranted_send, n8n_arming.armed_window,
+    chunking.dispatch_plan)) -- no merge_enriched in this tuple, since enrich-records
+    targets records already in HubSpot, not a pre-ingest CSV. Uses the
+    authorize_ungranted_send branch (deliberate diversity from the test above)."""
+    record_spec = {"record_ids": ["100", "200"], "object_type": "companies"}
+    cfg = {**granting_config, "max_records_per_chunk": 2}
+    providers = enrichment.resolve_providers(None, cfg)
+    ceiling = chunking.chunk_ceiling(cfg)
+    plan = chunking.plan_chunks(record_spec, ceiling)
+    assert plan.chunk_count == 1
+
+    ungranted_transport = stub_module_transport_factory(_arming_sequence())
+    decision = write_grant.authorize_ungranted_send(
+        granting_config, lane="enrichment", object_type="companies",
+        record_ids=[RECORD_ID], record_domains=[], allow_create=False,
+        label="this send", transport=ungranted_transport)
+    assert decision["armed"] is True
+
+    with n8n_arming.armed_window(decision["workflow_id"], [RECORD_ID], [], False,
+                                 granting_config, transport=ungranted_transport,
+                                 grant=decision["grant"]) as window:
+        dispatch_transport = stub_module_transport_factory()
+        chunking.dispatch_plan(plan, providers, True, cfg, transport=dispatch_transport)
+
+    assert window.arm_result["outcome"] == n8n_arming.ARMED
+    assert window.disarm_result["outcome"] == n8n_arming.DISARMED
+
+    call = dispatch_transport.calls[0]
+    assert call["json"]["events"] == [
+        {"objectId": "100", "objectType": "companies"},
+        {"objectId": "200", "objectType": "companies"},
+    ], "plan_chunks's real chunked record_ids must reach the wire"
+    assert call["json"]["providers"] == enrichment.FULL_WATERFALL, (
+        "resolve_providers's real return -- checked against an expectation independent "
+        "of the `providers` variable itself, so a hardcoded literal reaching the wire "
+        "would fail this assertion, not merely echo itself back -- must reach the wire"
+    )

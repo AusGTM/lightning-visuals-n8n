@@ -209,6 +209,24 @@ COVERED = {
             "dispatch.dispatch",
         ),
     ): "test_write_grant.py::test_authorize_send_and_authorize_ungranted_send_each_drive_dispatch_inside_their_own_armed_window",
+    (
+        "enrich-before-ingest",
+        (
+            "config_gate.load_config", "enrichment.resolve_providers", "chunking.plan_chunks",
+            "chunking.chunk_ceiling", "write_grant.authorize_send",
+            "write_grant.authorize_ungranted_send", "n8n_arming.armed_window",
+            "chunking.dispatch_plan", "preingest.merge_enriched",
+        ),
+    ): "test_chunking.py::test_the_enrich_before_ingest_waterfall_chains_resolve_providers_through_merge_enriched",
+    (
+        "enrich-records",
+        (
+            "config_gate.load_config", "enrichment.resolve_providers", "chunking.plan_chunks",
+            "chunking.chunk_ceiling", "write_grant.authorize_send",
+            "write_grant.authorize_ungranted_send", "n8n_arming.armed_window",
+            "chunking.dispatch_plan",
+        ),
+    ): "test_chunking.py::test_the_enrich_records_waterfall_chains_resolve_providers_through_dispatch_plan",
 }
 
 NOT_A_PIPELINE = {
@@ -239,44 +257,9 @@ GRANDFATHERED_UNCOVERED = {
         "(test_run_manifest.py::test_a_resume_re_requests_only_rows_that_still_"
         "needed_work and neighbours) always uses a literal ceiling instead."
     ),
-    (
-        "enrich-before-ingest",
-        (
-            "config_gate.load_config", "enrichment.resolve_providers", "chunking.plan_chunks",
-            "chunking.chunk_ceiling", "write_grant.authorize_send",
-            "write_grant.authorize_ungranted_send", "n8n_arming.armed_window",
-            "chunking.dispatch_plan", "preingest.merge_enriched",
-        ),
-    ): (
-        "no test chains resolve_providers -> plan_chunks/chunk_ceiling -> "
-        "authorize_send|authorize_ungranted_send -> armed_window -> dispatch_plan -> "
-        "merge_enriched end to end. test_preingest_merge.py's merge_enriched tests "
-        "hand-build rows/responses directly, bypassing the whole waterfall-dispatch "
-        "and authorization portion; test_enrich_before_ingest_skill_contract.py's "
-        "test_step_5_flattens_dispatch_plans_responses_before_merging asserts the "
-        "SKILL.md wording/ordering as TEXT, not the sequence's execution -- a prose "
-        "assertion is not coverage (honesty rule)."
-    ),
-    (
-        "enrich-records",
-        (
-            "config_gate.load_config", "enrichment.resolve_providers", "chunking.plan_chunks",
-            "chunking.chunk_ceiling", "write_grant.authorize_send",
-            "write_grant.authorize_ungranted_send", "n8n_arming.armed_window",
-            "chunking.dispatch_plan",
-        ),
-    ): (
-        "no test chains resolve_providers, chunk_ceiling, authorize_send|"
-        "authorize_ungranted_send, and armed_window with dispatch_plan. "
-        "test_chunking.py::"
-        "test_enrichment_and_contacts_writes_from_the_same_run_share_one_file drives "
-        "plan_chunks -> dispatch_plan with a literal PROVIDERS list and a stub "
-        "transport injected directly, bypassing resolve_providers, chunk_ceiling, "
-        "and the entire authorize/armed_window authorization layer."
-    ),
 }
 
-MAX_GRANDFATHERED = 3
+MAX_GRANDFATHERED = 1
 
 
 # =====================================================================================

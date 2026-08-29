@@ -16,6 +16,31 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.28.5] - 2026-08-29
+
+### Added
+
+- **P2 of the 2026-08-29 backlog handover, Task 2 of 3: closes 2 more of the 5
+  `GRANDFATHERED_UNCOVERED` entries in `test_skill_sequence_coverage.py`.** The
+  `enrich-before-ingest` (with `preingest.merge_enriched`) and `enrich-records` (no
+  `merge_enriched`) entries for the documented enrichment waterfall — `resolve_providers
+  -> plan_chunks/chunk_ceiling -> authorize_send|authorize_ungranted_send ->
+  armed_window -> dispatch_plan[-> merge_enriched]` — are now `COVERED`. The nearest
+  existing test drove `plan_chunks -> dispatch_plan` with a literal provider list and no
+  authorization layer at all; no test chained the real `resolve_providers` return, or
+  either authorize branch, into `dispatch_plan`.
+  - New `test_chunking.py::test_the_enrich_before_ingest_waterfall_chains_resolve_providers_through_merge_enriched`
+    (grant-present `authorize_send` branch) drives the real waterfall into a scripted
+    `dispatch_plan` response and flows it through `merge_enriched` — confirmed to fail
+    when the scripted response value is changed without updating the assertion.
+  - New `test_chunking.py::test_the_enrich_records_waterfall_chains_resolve_providers_through_dispatch_plan`
+    (`authorize_ungranted_send` branch, deliberate diversity) asserts the real chunked
+    `record_ids` and the real `resolve_providers` return both reach the wire, checked
+    against an independent expectation (`enrichment.FULL_WATERFALL`) rather than the
+    test's own `providers` variable — confirmed to fail when `resolve_providers`'s call
+    is replaced with a literal list.
+  - Zero production-code changes. `MAX_GRANDFATHERED` decrements from 3 to 1.
+
 ## [0.28.4] - 2026-08-29
 
 ### Added
