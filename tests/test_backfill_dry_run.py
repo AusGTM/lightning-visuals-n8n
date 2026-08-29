@@ -187,6 +187,41 @@ def test_payload_key_set():
         assert forbidden not in row["payload"]
 
 
+def test_build_dry_run_row_scope_guard_survives_pythonoptimize():
+    # 2026-08-29 bare-assert sweep: build_dry_run_row's PERMITTED_PAYLOAD_KEYS bound
+    # used to be a bare `assert` -- now src.guards.assert_keys_subset. Prove it still
+    # fires under PYTHONOPTIMIZE=1.
+    import os
+    import subprocess
+    import sys as _sys
+    import textwrap
+    from pathlib import Path as _Path
+
+    root = _Path(__file__).resolve().parent.parent
+    script = textwrap.dedent(f"""
+        import sys
+        sys.path.insert(0, {str(root)!r})
+        import scripts.backfill_dry_run as b
+
+        b.PERMITTED_PAYLOAD_KEYS = frozenset({{"lv_org_type"}})
+        try:
+            b.build_dry_run_row("999", {{"lv_org_type": "governing_body_league"}})
+        except ValueError as exc:
+            assert "not a subset of PERMITTED_PAYLOAD_KEYS" in str(exc), exc
+            print("GUARD FIRED")
+        else:
+            print("GUARD DID NOT FIRE")
+    """)
+
+    proc = subprocess.run(
+        [_sys.executable, "-c", script],
+        env={**os.environ, "PYTHONOPTIMIZE": "1"},
+        capture_output=True, text=True, timeout=30,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "GUARD FIRED" in proc.stdout, proc.stdout
+
+
 def test_no_domain_skipped_before_provider_call(monkeypatch):
     calls = []
 

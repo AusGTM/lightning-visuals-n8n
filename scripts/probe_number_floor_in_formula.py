@@ -82,6 +82,7 @@ from scripts.check_tier_null_propagation import (  # noqa: E402
     _create_numeric_property,
     _get_property_live,
 )
+from src.guards import assert_keys_equal, assert_no_secrets  # noqa: E402
 
 DEFAULT_OUT = (
     ROOT / ".planning" / "quick" / "260823-ono-metro-peak-body-override-rule-tier-atc-m"
@@ -157,12 +158,12 @@ def _writes_allowed() -> bool:
 
 
 def _assert_no_secrets(text: str) -> None:
-    # Copied verbatim from scripts/check_tier_null_propagation.py / probe_enum_in_formula.py.
-    token = os.getenv("HUBSPOT_PRIVATE_APP_TOKEN") or ""
-    assert "Authorization" not in text, "serializer leaked the Authorization header"
-    if token:
-        assert token not in text, "serializer leaked the bearer token value"
-    assert "HUBSPOT_PRIVATE_APP_TOKEN" not in text, "serializer leaked the token env var name"
+    # Thin wrapper -- delegates to src.guards.assert_no_secrets, the single
+    # implementation this check was previously copy-pasted verbatim across six files
+    # (WR-02 discipline: a bare `assert` is stripped entirely under `python -O` /
+    # PYTHONOPTIMIZE=1). Kept as a named wrapper so this module's own call sites are
+    # unchanged.
+    assert_no_secrets(text)
 
 
 def _now_iso() -> str:
@@ -257,8 +258,11 @@ def _patch_disposable_floor(company_id: str, number_prop: str, value) -> None:
     in teardown). No production property is ever in a PATCH body in this script."""
     from src.hubspot_client import patch_record
     payload = {number_prop: value}
-    assert set(payload) == {number_prop}, (
-        f"payload-scope assertion failed for {company_id}: {set(payload)} != {{{number_prop!r}}}"
+    # A real, unstrippable check, not `assert` (WR-02 discipline, ac64353) -- this
+    # guards a live PATCH to a HubSpot portal with no rollback.
+    assert_keys_equal(
+        payload, {number_prop},
+        f"payload-scope assertion failed for {company_id}: {set(payload)} != {{{number_prop!r}}}",
     )
     patch_record("companies", company_id, payload, dry_run=False)
 

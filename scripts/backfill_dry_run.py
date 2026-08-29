@@ -39,6 +39,7 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))  # repo root on sys.path so `src.*`/`scripts.*` imports resolve
 
+from src.guards import assert_keys_subset  # noqa: E402
 from src.hubspot_client import patch_record, search_records  # noqa: E402
 from src.icp_scoring import anti_icp_flag_properties, compute_icp_score  # noqa: E402
 from src.schemas import CandidateValue, HubSpotRecord, ProviderEvidence, ProviderResult  # noqa: E402
@@ -766,9 +767,14 @@ def build_dry_run_row(company_id: str, candidate_patch: dict) -> dict:
     payload.update(compute_components(candidate_patch))
     payload["lv_anti_icp_flag_num"] = anti_icp_flag_properties(result.anti_icp_flag)["lv_anti_icp_flag_num"]
 
-    assert set(payload.keys()) <= PERMITTED_PAYLOAD_KEYS, (
+    # A real, unstrippable check, not `assert` -- `assert` is removed entirely under
+    # `python -O` / PYTHONOPTIMIZE=1 (WR-02 discipline, ac64353). This driver is
+    # zero-write (SAFE-01) today, but the payload this builds is the exact shape a
+    # future armed leg would send -- the scope bound must survive regardless.
+    assert_keys_subset(
+        payload.keys(), PERMITTED_PAYLOAD_KEYS,
         f"payload key set {sorted(payload.keys())} is not a subset of "
-        f"PERMITTED_PAYLOAD_KEYS {sorted(PERMITTED_PAYLOAD_KEYS)}"
+        f"PERMITTED_PAYLOAD_KEYS {sorted(PERMITTED_PAYLOAD_KEYS)}",
     )
 
     return {

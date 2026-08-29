@@ -68,6 +68,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))  # repo root on sys.path so `src.*` imports resolve
 
+from src.guards import assert_keys_equal  # noqa: E402
+
 EXPECTED_PORTAL_ID = os.getenv("HUBSPOT_EXPECTED_PORTAL_ID", "22617666")
 PREDICTIONS_PATH = (
     ROOT / ".planning" / "quick" / "260823-ono-metro-peak-body-override-rule-tier-atc-m"
@@ -115,8 +117,12 @@ def build_payloads() -> dict:
     every call site below, never trusted from this function's return alone."""
     payloads = {cid: {FLOOR_PROP: FLOOR_VALUE} for cid in NAMED_ACCOUNTS}
     for cid, payload in payloads.items():
-        assert set(payload) == {FLOOR_PROP}, (
-            f"payload-scope assertion failed for {cid}: {set(payload)} != {{{FLOOR_PROP!r}}}"
+        # A real, unstrippable check, not `assert` -- `assert` is removed entirely
+        # under `python -O` / PYTHONOPTIMIZE=1 (WR-02 discipline, ac64353), and this
+        # guards a live PATCH to a HubSpot portal with no rollback.
+        assert_keys_equal(
+            payload, {FLOOR_PROP},
+            f"payload-scope assertion failed for {cid}: {set(payload)} != {{{FLOOR_PROP!r}}}",
         )
     return payloads
 
