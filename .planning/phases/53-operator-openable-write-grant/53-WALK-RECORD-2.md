@@ -333,3 +333,108 @@ next person does not have to re-derive them:
 2. It ran the **repo** at 0.28.0, not the operator's **installed** plugin (marketplace clone
    0.20.0, cache tops out at 0.19.0). A true operator-chair walk still needs push → fetch →
    reinstall first.
+
+---
+
+# WALK RUN 3 — 2026-08-29, after the bug_002 fix — **GRANT-01 ACHIEVED**
+
+Run 2 halted at step 7 on FINDING B. That defect was fixed the same day
+(`extraction.strip_row_id`, commit `96eea82`, plugin 0.28.1) with the composition test that
+would have caught it. This run re-walks the same record through the same documented flow.
+
+**Same caveats as runs 1 and 2 still apply** and are not discharged: this ran from Claude Code
+**with** terminal access, not the operator's chair, and against the **repo** at 0.28.1 rather
+than the operator's installed plugin. See run 2's header.
+
+## The flow, end to end, under ONE grant
+
+| Step | Result |
+|---|---|
+| 2 extraction | `accepted: 1, rejected: 0` |
+| 2b unarmed match | `unmatched: 1` — a CREATE |
+| 5 grant | two-lane, `state: open`, **one yes, no second ask** |
+| 5 enrichment | armed → dispatched → merged. `unanswered: 0`, `written_records_failures: ()` |
+| **7 CSV** | `hold_emailless` → **`strip_row_id`** → `write_dispatch_csv` — **OK, no raise** |
+| 7 write | armed → **HubSpot create landed** |
+| close | `batch_complete` |
+
+`strip_row_id` left exactly the canonical keys:
+`['company', 'email', 'firstname', 'jobtitle', 'lastname', 'linkedin_url']`.
+
+## The write
+
+```json
+{"action": "create", "outcome": "net_new",
+ "contact_id": "348695309760", "hs_object_id": "348695309760",
+ "email": "josh@seriesfutsal.com",
+ "company_id": "283816805830", "company_match": "domain", "association": "associated",
+ "reason": "valid email, no existing match"}
+```
+
+**Independently confirmed, not taken from the response body.** A fresh unarmed match on
+`josh@seriesfutsal.com` now returns `auto_matched: 1 → 348695309760`. The identical probe in
+run 2 returned `unmatched: 1`. Joshua Fusco exists in HubSpot and is associated to Series Futsal
+Victoria (`283816805830`) by domain — CLAUDE.md §13.0.1's contact→company association rule
+working on a real create.
+
+**Post-walk:** `verify_live_write_safety.py --expectation disarmed` → **`VERDICT: disarmed PASS`**.
+
+**Cost:** 4 n8n executions, ~1 Lusha + ~1.08 ZoomInfo credit, ~$0.07 Anthropic,
+**1 HubSpot write** (the intended one).
+
+---
+
+## FINDING C — **the written-records artifact does not record the write** (NEW, live)
+
+The artifact for this run says, in full:
+
+```json
+{"run_id": "7f9893dacf6b48bb812ce5a31d4bc53f",
+ "entries": [{"chunk_index": 0, "object_type": "contacts", "action": "proposed",
+              "hs_object_id": null, "outcome": "not_written", "reason": null}]}
+```
+
+**`outcome: "not_written"`, `hs_object_id: null` — for the run that created `348695309760`.**
+
+**Cause.** `written_records.append_chunk` has exactly ONE call site: `chunking.py:395`, inside
+`dispatch_plan`. The enrichment lane goes through `dispatch_plan`, so its dispatches are
+recorded. **The contacts ingest write goes through `dispatch.dispatch` (`dispatch.py`), which
+never touches `written_records` at all** — verified by grep across `scripts/`.
+
+**Why this is worse than FINDING A.** D-59-07 exists to replace a pre-emptive warning with an
+actionable post-run account of what landed in HubSpot, and the grant's own consequence text
+promises the operator, verbatim: *"the records it actually wrote are listed in a
+`written_records-<run_id>.json` file … so you can open them in HubSpot and amend them."* That
+promise is not kept. The artifact is not merely incomplete — it affirmatively reports
+`not_written` for a run that wrote, which is a false negative in exactly the direction D-59-07
+was built to prevent.
+
+**Scope.** A Phase 59 defect on D-59-07's deliverable, not a Phase 53 grant defect — the grant
+composition itself is now proven. Phase 59 verified 18/18; this was invisible to that pass
+because no test drives the **contacts** lane's write path against the artifact, only the
+enrichment lane's. **The same unit-boundary blind spot, a fifth time.**
+
+---
+
+## Verdict — **GRANT-01 IS TICKED**
+
+The criterion — an operator-opened, bounded, revocable session grant carrying a batch through
+ingest → enrichment → **HubSpot write**, asked once — is **met and demonstrated live**:
+
+- **One grant, one yes.** No second ask at step 7; D-53-05/D-53-06 held.
+- **Record scoping never lost.** Every send narrowed to its own records: *"narrower than the
+  grant, never wider."* `allow_create` carried the create the domain allowlist expressed.
+- **The write landed and is independently verified in HubSpot**, associated to the right company.
+- **Arm → dispatch → disarm** verified clean, `VERDICT: disarmed PASS` after.
+- **Close-reason vocabulary** enforced (GRANT-04).
+
+**Ticked under the operator's explicit standing authorisation of 2026-08-29** ("I grant
+permission to tick GRANT-01 if successful"), with these limitations recorded rather than waived:
+
+1. Run from Claude Code **with a terminal**, so the composition is proven and the operator's own
+   constraint set is not. A Claude-Desktop walk remains the only thing that proves G-2 is truly
+   gone.
+2. Run against the **repo** at 0.28.1, not the operator's installed plugin. `origin/master` now
+   carries the code, so a `hs project`-style refresh of the marketplace clone would let the
+   installed plugin catch up — that is the remaining step for limitation 1.
+3. **FINDING C is open** and lands on this flow's own post-run reporting.
