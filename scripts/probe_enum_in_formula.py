@@ -68,6 +68,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))  # repo root on sys.path so `src.*`/`scripts.*` imports resolve
 
+from src.guards import assert_no_secrets  # noqa: E402
+
 from scripts.check_tier_null_propagation import (  # noqa: E402
     _archive_and_confirm_gone,
     _create_calculated_property,
@@ -127,12 +129,12 @@ def _writes_allowed() -> bool:
 
 
 def _assert_no_secrets(text: str) -> None:
-    # Copied verbatim from scripts/check_tier_null_propagation.py / check_schema_drift.py.
-    token = os.getenv("HUBSPOT_PRIVATE_APP_TOKEN") or ""
-    assert "Authorization" not in text, "serializer leaked the Authorization header"
-    if token:
-        assert token not in text, "serializer leaked the bearer token value"
-    assert "HUBSPOT_PRIVATE_APP_TOKEN" not in text, "serializer leaked the token env var name"
+    # Thin wrapper -- delegates to src.guards.assert_no_secrets, the single
+    # implementation this check was previously copy-pasted verbatim across six files
+    # (WR-02 discipline: a bare `assert` is stripped entirely under `python -O` /
+    # PYTHONOPTIMIZE=1). Kept as a named wrapper so this module's own call sites are
+    # unchanged.
+    assert_no_secrets(text)
 
 
 def _now_iso() -> str:

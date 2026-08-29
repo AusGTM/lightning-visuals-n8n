@@ -30,6 +30,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))  # repo root on sys.path so `src.*` imports resolve
 
+from src.guards import assert_no_secrets  # noqa: E402
+
 BASELINE_DIR = ROOT / "config" / "hubspot_migration" / "baseline"
 
 # Portal 22617666 is the only portal this migration is designed against — asserted BEFORE
@@ -76,11 +78,12 @@ def _get_properties_raw(object_type: str) -> str:
 
 
 def _assert_no_secrets(text: str) -> None:
-    token = os.getenv("HUBSPOT_PRIVATE_APP_TOKEN") or ""
-    assert "Authorization" not in text, "serializer leaked the Authorization header"
-    if token:
-        assert token not in text, "serializer leaked the bearer token value"
-    assert "HUBSPOT_PRIVATE_APP_TOKEN" not in text, "serializer leaked the token env var name"
+    # Thin wrapper -- delegates to src.guards.assert_no_secrets, the single
+    # implementation this check was previously copy-pasted verbatim across six files
+    # (WR-02 discipline: a bare `assert` is stripped entirely under `python -O` /
+    # PYTHONOPTIMIZE=1). Kept as a named wrapper so this module's own call sites are
+    # unchanged.
+    assert_no_secrets(text)
 
 
 def _write_snapshot(object_type: str, raw_text: str, label: str | None,

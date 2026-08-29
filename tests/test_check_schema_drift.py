@@ -307,3 +307,47 @@ def test_retired_flow_live_and_enabled_is_not_ok():
 
 def test_retired_flow_ids_contains_wf1():
     assert "4625147345" in RETIRED_FLOW_IDS
+
+
+# --- 2026-08-29 bare-assert sweep: _assert_no_secrets now delegates to
+# src.guards.assert_no_secrets (was a bare `assert`, copy-pasted across six files) -----
+
+def test_assert_no_secrets_wrapper_passes_clean_text():
+    from check_schema_drift import _assert_no_secrets
+    _assert_no_secrets('{"name": "Example Co"}')
+
+
+def test_assert_no_secrets_wrapper_raises_on_leaked_token_env_var_name():
+    from check_schema_drift import _assert_no_secrets
+    try:
+        _assert_no_secrets("set HUBSPOT_PRIVATE_APP_TOKEN before running")
+    except ValueError as exc:
+        assert "token env var name" in str(exc)
+    else:
+        raise AssertionError("expected ValueError for a leaked token env var name")
+
+
+def test_assert_no_secrets_wrapper_survives_pythonoptimize():
+    import os
+    import subprocess
+    import textwrap
+
+    script = textwrap.dedent(f"""
+        import sys
+        sys.path.insert(0, {str(ROOT / "scripts")!r})
+        from check_schema_drift import _assert_no_secrets
+        try:
+            _assert_no_secrets("leaked HUBSPOT_PRIVATE_APP_TOKEN reference")
+        except ValueError:
+            print("GUARD FIRED")
+        else:
+            print("GUARD DID NOT FIRE")
+    """)
+
+    proc = subprocess.run(
+        [sys.executable, "-c", script],
+        env={**os.environ, "PYTHONOPTIMIZE": "1"},
+        capture_output=True, text=True, timeout=30,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "GUARD FIRED" in proc.stdout, proc.stdout
