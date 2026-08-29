@@ -548,7 +548,7 @@ never succeed — if the plan chooses to sequence them across two waves for revi
 ## Sources
 
 ### Primary (HIGH confidence — all read directly this session)
-- `.planning/phases/61-resolve-the-identity-dont-ask-for-it/61-CONTEXT.md`
+- `.planning/phases/61-autonomous-batch-runs/61-CONTEXT.md`
 - `.planning/phases/53-operator-openable-write-grant/53-WALK-RECORD-3.md`
 - `n8n/code/resolveIdentity.js`, `n8n/code/columnMap.js`, `n8n/code/matchProposal.js`,
   `n8n/code/lushaRequest.js`

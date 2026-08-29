@@ -287,7 +287,7 @@ variable), and a design that runs the provider waterfall twice per written recor
       and the non-clobber merge policy. Out of scope: the response-window ceiling and
       `max_records_per_chunk`, both owned by Phase 55.
 
-- [ ] **Phase 61: Resolve the identity, don't ask for it** — **IMMEDIATE NEXT PHASE**
+- [ ] **Phase 61: Autonomous batch runs** — **IMMEDIATE NEXT PHASE**
       (operator, 2026-08-30). Inserted ahead of everything after walk run 4 failed.
 
       **Goal:** an input carrying a strong identity key resolves through match-then-enrich
@@ -381,14 +381,20 @@ verified. All four findings are dormant — no live contacts candidate producer 
 being closed by operator choice, not because anything is broken. Run
 `/gsd-execute-phase 54 --gaps-only`.
 
-### Phase 61: Resolve the identity, don't ask for it
+### Phase 61: Autonomous batch runs
 
-**Goal**: An input carrying a strong identity key resolves through match-then-enrich without the
-operator being asked for fields the backend does not need. A contact given only a LinkedIn URL
-(or only an email) proceeds: match HubSpot on that key, and where unmatched, enrich through the
-licensed provider waterfall on that same key, proposing the result with its provenance for
-operator confirmation. A refusal for missing identity is correct only when NO strong key is
-present. Closes INPUT-05.
+**Goal**: An operator hands over a batch and gets it back done. Research, enrichment and
+ingestion run **autonomously**; consent is once per batch, not once per row; rows the system is
+not confident about are **held and collected into one review queue** rather than guessed or
+asked about mid-run; and the run is not bounded by the synchronous response window. The bar is
+not "does a record land" — it is **300 contacts as one run plus one review pass, not 300
+conversations**.
+
+**The tracer, not the scope**: a contact given only a LinkedIn URL (or only an email) proceeds —
+match HubSpot on that key, and where unmatched, enrich through the licensed provider waterfall on
+that same key, proposing the result with its provenance. This is the exact row that failed the
+walk, and it exercises identity resolution, the waterfall, the proposal surface and the write
+path in one pass. A refusal for missing identity is correct only when NO strong key is present.
 
 **Why now**: walk run 4 (2026-08-30) — the first walk ever run from the operator's own chair
 against the installed plugin — FAILED, halting before the grant was opened because the plugin
@@ -396,7 +402,7 @@ demanded a company for a LinkedIn-URL-only contact. Inserted ahead of everything
 decision; a re-walk is blocked on this phase or it halts in the same place.
 Full detail: `milestones/v1.1-ROADMAP.md` § Phase 61; evidence:
 `phases/53-operator-openable-write-grant/53-WALK-RECORD-3.md` FINDING D; decisions D-61-01..05:
-`phases/61-resolve-the-identity-dont-ask-for-it/61-CONTEXT.md`.
+`phases/61-autonomous-batch-runs/61-CONTEXT.md`.
 
 **Front-end AND backend, together** (corrected 2026-08-30 by `61-RESEARCH.md`; an earlier
 "front-end contract fix only" claim here was WRONG). Lusha enrich by `linkedinUrl` alone is real

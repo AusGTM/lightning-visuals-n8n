@@ -1,4 +1,8 @@
-# Phase 61 — Resolve the identity, don't ask for it — Context
+# Phase 61 — Autonomous batch runs — Context
+
+**Renamed 2026-08-30.** Was "Resolve the identity, don't ask for it" — that name described the
+TRACER, not the phase. The phase is autonomy (absorbing Phases 55 and 56); identity resolution
+is the slice that proves it end to end.
 
 **Gathered:** 2026-08-30
 **Status:** Ready for planning

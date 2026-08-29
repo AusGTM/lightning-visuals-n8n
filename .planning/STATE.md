@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Unattended Session Runs
 current_phase: 61
-current_phase_name: resolve-the-identity-dont-ask-for-it
+current_phase_name: autonomous-batch-runs
 status: planning
 stopped_at: "2026-08-30. WALK RUN 4 FAILED (53-WALK-RECORD-3.md) -- first walk ever from the operator's chair against the installed plugin (0.28.6), halted BEFORE the grant was opened. Steps 3-7 never exercised; the grant surface is still untested from that chair, so GRANT-01's limitation 1 stays open (limitation 2 is now closed). FINDING D: given only a LinkedIn URL the plugin demanded a company, a field its own backend does not need -- resolveIdentity.js:76-78 treats linkedin_url as a STRONG match key and lushaRequest.js:79-91 accepts a Lusha v3 body with linkedinUrl alone. NOT a no-invention problem and NOT a regression: no best-effort ruling was ever recorded and the escalation ladder has only ever been same-host URL fetching. >>> PHASE 61 inserted as the IMMEDIATE NEXT PHASE (operator, 2026-08-30) and is being planned. A re-walk is BLOCKED on 61 -- it would halt in the same place. <<< P1/P2/P5 of the backlog handover are all closed."
 last_updated: "2026-08-29T00:00:00.000Z"
