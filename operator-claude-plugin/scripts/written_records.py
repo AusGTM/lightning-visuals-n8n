@@ -243,9 +243,12 @@ def append_chunk(run_id, chunk_index, body, path=None):
     written-records document — this chunk's entries appended to whatever `run_id`'s file
     already held — through `durable_paths._atomic_write_0600`.
 
-    Called from INSIDE `chunking.dispatch_plan`'s per-chunk loop, immediately after
-    `responses.append(body)` — see the call site there for why moving this call out of
-    the loop breaks D-59-07's partial-run guarantee.
+    Two call sites, both at the write itself, never in a caller (written-records-misses-write,
+    debug session 2026-08-29 — the gap this docstring used to name only one of them left open):
+    `chunking.dispatch_plan`'s per-chunk loop, INSIDE it immediately after
+    `responses.append(body)` (`chunk_index` is the loop index; see the call site there for why
+    moving this call out of the loop breaks D-59-07's partial-run guarantee), and
+    `dispatch.dispatch` (`chunk_index` is always `0` — that function sends exactly one request).
 
     D-59-09 (operator, 2026-08-29): a document already on disk at this path is now
     ALWAYS this run's own earlier chunks — `written_records_path(run_id)` gives every

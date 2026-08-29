@@ -1,7 +1,7 @@
 {
   "name": "operator-claude-plugin",
   "description": "Conversational front end for the n8n contact enrichment backend: load a contact spreadsheet, preview it, and dispatch it to HubSpot.",
-  "version": "0.28.1",
+  "version": "0.28.2",
   "author": {
     "name": "Lightning Visuals"
   }

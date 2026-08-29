@@ -419,12 +419,27 @@ whatever seven columns happened to be in the source file.
    with n8n_arming.armed_window(decision["workflow_id"],
                                 <this send's ids>, <this send's domains>,
                                 <allow_create>, cfg, grant=decision["grant"]):
-       result = dispatch.dispatch(out_path, True, cfg)
+       result = dispatch.dispatch(out_path, True, cfg, run_id=outcome.run_id)
    ```
+
+   `run_id=outcome.run_id` is what makes D-59-09's "one file per run" promise (step 1, step
+   5) true across BOTH of this flow's dispatches: `outcome` is step 5's own
+   `chunking.dispatch_plan` result, and passing its `run_id` through here is what keeps
+   this write's entry in the SAME `written_records-<run_id>.json` file as the enrichment
+   lane's chunks rather than starting a second file — omitting it would still work
+   (`dispatch.dispatch` generates its own `run_id` when none is given), just into the wrong
+   file. `result` is `{"body": <the raw JSON body>, "run_id": <str>,
+   "written_records_failures": [...]}`, not a bare body — `body = result["body"]` below,
+   same as `contact-upload/SKILL.md`'s own step 7.
 
    Same rule as step 5: the allowlist is **this send's records, never the grant's whole
    record set**. And the same honesty about stopping it — revoking the grant **refuses the
    next send** and **does not stop a dispatch already running**.
+
+   **When `result["written_records_failures"]` is non-empty, say so plainly before the
+   report** — the same D-59-10 relay step 5 already gives the enrichment lane's own
+   bookkeeping misses: this write's outcome could not be recorded in the artifact even
+   though the write itself may have landed; a bookkeeping miss is never a dispatch failure.
 
    Build and send a CSV of exactly the rows the preview marked SEND — never the
    operator's original file, which is what makes holding a row back possible at all:

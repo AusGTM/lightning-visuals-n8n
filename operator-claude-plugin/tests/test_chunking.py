@@ -21,7 +21,7 @@ import chunking
 import durable_paths
 import enrichment
 import written_records
-from dispatch import NotArmedError
+from dispatch import NotArmedError, dispatch
 
 CONFIG_EXAMPLE = (
     Path(__file__).resolve().parent.parent / "config" / "operator.local.example.json"
@@ -818,3 +818,51 @@ def test_the_dispatcher_iterates_the_plan_and_never_resplits_it(
     chunking.dispatch_plan(plan, PROVIDERS, True, fake_config, transport=transport)
     assert len(transport.calls) == 1
     assert sent_ids(transport) == [["7", "8", "9"]]
+
+
+# ==================================================================================
+# written-records-misses-write (debug session, 2026-08-29): D-59-09 promises ONE
+# written-records file per run, but a run is not one transport — enrich-before-ingest
+# dispatches through BOTH `chunking.dispatch_plan` (the enrichment lane) and
+# `dispatch.dispatch` (the contacts write, scripts/dispatch.py) in the same run. That
+# promise only holds if both transports flush under the SAME run_id — this pins the
+# contract directly rather than leaving it living only in enrich-before-ingest/SKILL.md's
+# prose (D-59-09's own "keep one run's enrichment entries and its write entries in the
+# SAME file" requirement).
+# ==================================================================================
+
+def _ingest_response_body(hs_object_id="348695309760"):
+    """One row in Build Ingest Response's own shape (scripts/build_cloud_workflows.py:
+    471-520, repo root) — the contacts webhook's real synchronous body is a JSON array of
+    exactly these keys."""
+    return [{
+        "action": "create", "outcome": "created", "contact_id": hs_object_id,
+        "hs_object_id": hs_object_id, "email": "josh@seriesfutsal.com",
+        "company_id": "283816805830", "company_match": "domain",
+        "association": "associated", "reason": None, "email_status": None,
+    }]
+
+
+def test_enrichment_and_contacts_writes_from_the_same_run_share_one_file(
+    fake_config, stub_module_transport_factory, stub_post_transport_factory, tmp_path,
+    monkeypatch, sample_csv,
+):
+    artifact = tmp_path / "written_records.json"
+    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
+
+    plan = chunking.plan_chunks(spec(2), 10)
+    enrich_transport = stub_module_transport_factory()
+    outcome = chunking.dispatch_plan(plan, PROVIDERS, True, fake_config, transport=enrich_transport)
+
+    write_transport = stub_post_transport_factory([_ingest_response_body()])
+    dispatch(
+        str(sample_csv), True, fake_config, transport=write_transport, run_id=outcome.run_id,
+    )
+
+    entries = written_records.load(path=artifact)
+    assert len(entries) == 2, (
+        "the enrichment lane's chunk and the contacts write must both land in the ONE "
+        "file this run's run_id names — a caller that omits run_id= on the second call "
+        "silently starts a second file instead"
+    )
+    assert {e.get("hs_object_id") for e in entries} == {None, "348695309760"}

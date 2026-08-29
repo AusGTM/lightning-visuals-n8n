@@ -4,13 +4,40 @@ The only network call this plugin makes: a multipart POST to the deployed
 `hubspot/contact-upload` webhook. `armed` has NO default — a caller that forgets it gets
 a TypeError, never a silent send (D-11, D-13, T-23-01). Nothing about the grant is
 persisted anywhere; it exists only as this call's argument.
+
+written-records-misses-write (debug session, 2026-08-29): this is the contacts-ingest
+WRITE path, and before this fix it never touched `written_records` at all —
+`written_records.append_chunk`'s only call site was `chunking.dispatch_plan`'s loop, so a
+run whose only write went through here (every `contact-upload` send, and
+`enrich-before-ingest`'s own final ingest step) produced a `written_records-<run_id>.json`
+artifact that omitted the write entirely, or — worse — reported `not_written` for it (walk
+run 3, FINDING C, HubSpot contact 348695309760). Fixed by flushing HERE, at the write
+site, mirroring `chunking.dispatch_plan`'s own D-59-07 inline-flush precedent
+(`chunk_index=0` — this function sends exactly one request) and its D-59-10
+catch/record/continue guard verbatim (chunking.py:394-407): a bookkeeping failure must
+never stop this dispatch, and must never be silently swallowed either.
+
+`run_id` is keyword-only, defaulting to a freshly generated one (`uuid.uuid4().hex`) —
+the same default `chunking.dispatch_plan` gives itself. A caller that wants this write's
+entry to land in the SAME file as an earlier `dispatch_plan` run in the same conversation
+(`enrich-before-ingest`'s two-lane flow) passes that run's `outcome.run_id` through
+explicitly; a standalone `contact-upload` send gets its own fresh file, same as any other
+run.
+
+Return shape is `{"body": <the raw response, exactly what this function returned before
+this change>, "run_id": <str>, "written_records_failures": [...]}` rather than the bare
+body — a bookkeeping failure has nowhere to be smuggled into a body that is sometimes a
+bare list of row items, and D-59-10 requires it be surfaced, not swallowed. Every existing
+consumer reads `result["body"]` in place of the old bare `result`.
 """
 import json
+import uuid
 
 import requests
 
 import config_gate
 import tabular
+import written_records
 
 
 class NotArmedError(Exception):
@@ -22,7 +49,13 @@ class DispatchError(Exception):
     exception's text, which can carry request headers (T-23-09)."""
 
 
-def dispatch(file_path, armed, config, transport=requests.post):
+# Mirrors chunking.append_chunk's own I/O-failure wording (chunking.py:402) verbatim, so
+# a reason string that names an I/O failure is greppable in one place across both
+# transports.
+_IO_FAILURE_REASON = "the written-records artifact could not be saved (an I/O failure)"
+
+
+def dispatch(file_path, armed, config, transport=requests.post, *, run_id=None):
     # load_config() only enforces n8n_url (the universal minimum) — this is the guard
     # that stops a webhook_secret-less config from reaching the transmit path below
     # (mirrors review_queue.fetch_queue()'s require_capability call).
@@ -34,6 +67,9 @@ def dispatch(file_path, armed, config, transport=requests.post):
             "when the operator says yes to the send just described, and that yes "
             "covers that one send."
         )
+
+    if run_id is None:
+        run_id = uuid.uuid4().hex
 
     csv_bytes = tabular.to_csv_bytes(file_path)
     url = config_gate.describe_target(config)
@@ -49,12 +85,37 @@ def dispatch(file_path, armed, config, transport=requests.post):
         ) from None
 
     try:
-        return response.json()
+        body = response.json()
     except Exception:
-        return {
+        body = {
             "status_code": getattr(response, "status_code", None),
             "text": getattr(response, "text", None),
         }
+
+    # D-59-10, mirrored from chunking.py:394-407 verbatim: a written-records bookkeeping
+    # failure never stops this dispatch — the real webhook response is returned either
+    # way — and never goes unreported either. `append_chunk` is documented to return a
+    # falsey result on an OSError rather than raising (T-59-04) — checked below. It can
+    # ALSO raise `WrittenRecordsError` for a shape or forbidden-name problem in the
+    # response body (a defect in the DATA, not the environment) — caught below. Guarding
+    # only one of the two paths would repeat the exact live silent-short-artifact class
+    # D-59-10 names.
+    written_records_failures = []
+    try:
+        flushed = written_records.append_chunk(run_id, 0, body)
+    except written_records.WrittenRecordsError as e:
+        flushed = False
+        bookkeeping_reason = str(e)
+    else:
+        bookkeeping_reason = None if flushed else _IO_FAILURE_REASON
+    if not flushed:
+        written_records_failures.append({"chunk_index": 0, "reason": bookkeeping_reason})
+
+    return {
+        "body": body,
+        "run_id": run_id,
+        "written_records_failures": written_records_failures,
+    }
 
 
 if __name__ == "__main__":
@@ -79,4 +140,11 @@ if __name__ == "__main__":
         print(json.dumps({"ok": False, "error": str(_e)}))
         raise SystemExit(1)
 
-    print(json.dumps({"ok": True, "response": _result}))
+    # "response" stays the raw body — the documented CLI contract is unchanged — with
+    # the new bookkeeping fields as siblings, not a replacement.
+    print(json.dumps({
+        "ok": True,
+        "response": _result["body"],
+        "run_id": _result["run_id"],
+        "written_records_failures": _result["written_records_failures"],
+    }))

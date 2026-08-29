@@ -13,6 +13,7 @@ import pytest
 
 import config_gate
 import tabular
+import written_records
 from dispatch import DispatchError, NotArmedError, dispatch
 
 
@@ -85,7 +86,13 @@ def test_armed_dispatch_calls_the_stub_exactly_once_with_the_deployed_contract(
 
     assert call["timeout"]
     assert call["timeout"] > 0
-    assert result == {"status": "accepted"}
+    # `dispatch()` no longer returns the raw body directly (written-records-misses-write,
+    # 2026-08-29) — the bookkeeping outcome must be surfaced, never smuggled into a body
+    # that is sometimes a bare list of row items. `result["body"]` is exactly what this
+    # assertion checked before that change.
+    assert result["body"] == {"status": "accepted"}
+    assert result["written_records_failures"] == []
+    assert result["run_id"]
 
 
 def test_armed_dispatch_with_xlsx_source_sends_converted_csv_bytes(
@@ -138,3 +145,105 @@ def test_missing_webhook_secret_refuses_before_the_transport_is_touched_even_whe
         dispatch(str(sample_csv), True, cfg, transport=stub_transport)
     assert "webhook_secret" in str(exc.value)
     assert stub_transport.calls == []
+
+
+# =====================================================================================
+# written-records-misses-write (debug session, 2026-08-29): `dispatch()` is the ONLY
+# network call this plugin makes for the contacts write path — before this fix it never
+# touched `written_records` at all, so a run whose only write went through here produced
+# an artifact reporting `not_written`/`hs_object_id: null` for a write that actually
+# landed in HubSpot (walk run 3, FINDING C, HubSpot contact 348695309760). Recorded at
+# the write site, mirroring `chunking.dispatch_plan`'s own D-59-07 inline-flush precedent
+# and its D-59-10 catch/record/continue guard (chunking.py:394-407) verbatim.
+# =====================================================================================
+
+def _ingest_response_body(hs_object_id="348695309760"):
+    """One row in Build Ingest Response's own shape (scripts/build_cloud_workflows.py:
+    471-520, repo root) — the contacts webhook's real synchronous body is a JSON array of
+    exactly these keys."""
+    return [{
+        "action": "create", "outcome": "created", "contact_id": hs_object_id,
+        "hs_object_id": hs_object_id, "email": "josh@seriesfutsal.com",
+        "company_id": "283816805830", "company_match": "domain",
+        "association": "associated", "reason": None, "email_status": None,
+    }]
+
+
+def _poisoned_ingest_body():
+    """A response item whose free-text `reason` contains a forbidden marker — the same
+    shape `test_chunking.py`'s own `_poisoned_body()` uses to make
+    `written_records.classify_item` raise `WrittenRecordsError`."""
+    return [{"action": "write_blocked", "reason": "bad webhook_secret configured"}]
+
+
+def test_a_contacts_write_is_named_in_the_written_records_artifact(
+    sample_csv, fake_config, stub_post_transport_factory, tmp_path, monkeypatch
+):
+    """The mandated regression test (debug file 'Hard constraints' #1): drives the real
+    contacts write path's own entry point, `dispatch.dispatch`, the way an operator's real
+    send reaches it — not a unit boundary a documented sequence never actually calls."""
+    artifact = tmp_path / "written_records.json"
+    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
+
+    transport = stub_post_transport_factory([_ingest_response_body()])
+    result = dispatch(str(sample_csv), True, fake_config, transport=transport, run_id="r1")
+
+    assert result["written_records_failures"] == []
+    entries = written_records.load(path=artifact)
+    assert len(entries) == 1
+    assert entries[0]["hs_object_id"] == "348695309760"
+    assert entries[0]["outcome"] == "written"
+    assert entries[0]["action"] == "create"
+
+
+def test_a_written_records_bookkeeping_failure_does_not_stop_the_contacts_dispatch(
+    sample_csv, fake_config, stub_post_transport_factory, tmp_path, monkeypatch
+):
+    """D-59-10, mirrored: a bookkeeping failure (here, a `WrittenRecordsError` raised by a
+    forbidden-looking response value) must never stop this dispatch — the caller still
+    gets the real webhook response back, and the failure is named, not swallowed."""
+    artifact = tmp_path / "written_records.json"
+    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
+
+    transport = stub_post_transport_factory([_poisoned_ingest_body()])
+    result = dispatch(str(sample_csv), True, fake_config, transport=transport, run_id="r1")
+
+    assert result["body"] == _poisoned_ingest_body()
+    assert len(result["written_records_failures"]) == 1
+    assert result["written_records_failures"][0]["chunk_index"] == 0
+    assert result["written_records_failures"][0]["reason"]
+
+
+def test_an_io_failure_in_append_chunk_is_caught_by_the_same_guard(
+    sample_csv, fake_config, stub_post_transport_factory, tmp_path, monkeypatch
+):
+    """The OTHER way the list can go short (`test_chunking.py`'s own Test 3 idiom):
+    `append_chunk`'s documented falsey return on an `OSError`, driven directly rather than
+    by inducing a real `OSError`, so this test cannot be confused with the
+    raised-exception path above — one guard must catch both."""
+    artifact = tmp_path / "written_records.json"
+    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
+    import dispatch as dispatch_module
+    monkeypatch.setattr(dispatch_module.written_records, "append_chunk", lambda *a, **k: False)
+
+    transport = stub_post_transport_factory([_ingest_response_body()])
+    result = dispatch(str(sample_csv), True, fake_config, transport=transport, run_id="r1")
+
+    assert result["body"] == _ingest_response_body()
+    assert len(result["written_records_failures"]) == 1
+    assert "I/O failure" in result["written_records_failures"][0]["reason"]
+
+
+def test_run_id_defaults_to_a_fresh_generated_value_when_omitted(
+    sample_csv, fake_config, stub_post_transport_factory, tmp_path, monkeypatch
+):
+    """Mirrors `chunking.dispatch_plan`'s own default: a caller that does not care which
+    file this write lands in (a standalone contact-upload send) still gets one."""
+    artifact = tmp_path / "written_records.json"
+    monkeypatch.setattr(written_records, "written_records_path", lambda run_id: artifact)
+
+    transport = stub_post_transport_factory([_ingest_response_body()])
+    result = dispatch(str(sample_csv), True, fake_config, transport=transport)
+
+    assert result["run_id"]
+    assert written_records.load(path=artifact)[0]["hs_object_id"] == "348695309760"

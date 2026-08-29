@@ -314,15 +314,24 @@ be sent, and — only when explicitly armed — send it.
    it runs under; passing the grant's full list would widen every window to the whole batch
    and every test would still pass.
 
-   The webhook response you get back here is the raw JSON body `dispatch.py` printed
-   under `"response"` — hand it to the next step exactly as returned, unparsed.
+   `dispatch.dispatch` returns `{"body": <the raw JSON body>, "run_id": <str>,
+   "written_records_failures": [...]}`, not a bare body. The webhook response step 7 works
+   from is `result["body"]` — hand it to the next step exactly as returned, unparsed. This
+   send is now recorded, at the write site, into a `written_records-<run_id>.json` artifact
+   in the plugin's durable state directory (`scripts/written_records.py`) — the same
+   artifact a write grant's own consequence sentence already promises at arming time,
+   regardless of which lane the grant covers. There is nothing to say about this to the
+   operator here unless `result["written_records_failures"]` is non-empty: when it is, say
+   so plainly before step 7's report, the same way `enrich-before-ingest`'s D-59-10 relay
+   does — this send's own outcome could not be recorded even though the write itself may
+   already have landed; a bookkeeping miss is never a dispatch failure.
 
 7. **Report the outcome — per record, not a bare acceptance.**
 
    First, check whether the synchronous body from step 6 is even usable: import
    `scripts/report.py` (its functions are a library, the same way
    `scripts/config_gate.py`/`scripts/tabular.py` already are, not a CLI) and call
-   `sync_response_is_sufficient(body)` on it.
+   `sync_response_is_sufficient(body)` on it, where `body = result["body"]`.
 
    n8n Cloud's webhook response is cut off by a Cloudflare-enforced ceiling of
    roughly one hundred seconds (a 524 on breach) — treat crossing it, or any

@@ -16,6 +16,46 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.28.2] - 2026-08-29
+
+### Fixed
+
+- **bug_004 (normal): the `written_records-<run_id>.json` artifact silently omitted every
+  contacts-lane write, and could report `not_written` for a run that had actually
+  written.** `written_records.append_chunk`'s only call site was
+  `chunking.dispatch_plan`'s per-chunk loop, so recording covered one TRANSPORT (the
+  enrichment lane) rather than covering writes — `dispatch.dispatch`, the sole network
+  call for `hubspot/contact-upload` and the write step of both `contact-upload` and
+  `enrich-before-ingest`, never touched `written_records` at all. Live during the
+  2026-08-29 operator walk (FINDING C, `53-WALK-RECORD-2.md`): HubSpot contact
+  `348695309760` was created, and the run's own artifact reported the enrichment lane's
+  `proposed`/`not_written` entry and said nothing about the write that actually landed —
+  a false negative in exactly the direction D-59-07 exists to prevent.
+  - `dispatch.dispatch` now flushes its own response into `written_records` at the write
+    site, mirroring `chunking.dispatch_plan`'s D-59-07 inline-flush precedent and its
+    D-59-10 catch/record/continue guard verbatim — a bookkeeping failure here never stops
+    the dispatch and is never swallowed.
+  - `dispatch.dispatch` gained a keyword-only `run_id=None` parameter (defaulting to a
+    freshly generated one, mirroring `chunking.dispatch_plan`'s own default) and now
+    returns `{"body": <the raw response>, "run_id": <str>, "written_records_failures":
+    [...]}` instead of the bare body — there is nowhere to smuggle a bookkeeping-failure
+    signal into a body that is sometimes a bare list of row items, and D-59-10 requires it
+    be surfaced rather than swallowed. Every consumer now reads `result["body"]`.
+  - This is a deliberate widening: `contact-upload` sends now also produce a
+    `written_records-<run_id>.json` artifact, where before this fix they produced none.
+    `write_grant.py`'s own consequence sentence already promises this artifact for every
+    write grant regardless of lane count, so the promise was already false for a granted
+    contact-upload-only send — this fix makes it true.
+  - `enrich-before-ingest/SKILL.md` step 7 now threads `run_id=outcome.run_id` from its
+    own earlier `chunking.dispatch_plan` call into `dispatch.dispatch`, so one run's
+    enrichment-lane entries and its write entry land in the SAME file, per D-59-09.
+  - New regression tests: `test_dispatch_multipart.py` drives `dispatch.dispatch` itself
+    with a `Build Ingest Response`-shaped create and asserts the artifact names the
+    written record (red before this fix, green after), plus D-59-10 guard-parity tests
+    mirroring `test_chunking.py`'s own; `test_chunking.py` adds a cross-transport test
+    proving `chunking.dispatch_plan` and `dispatch.dispatch` share one file when the same
+    `run_id` is threaded through both.
+
 ## [0.28.1] - 2026-08-29
 
 ### Fixed
