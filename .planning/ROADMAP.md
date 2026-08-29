@@ -48,7 +48,10 @@ variable), and a design that runs the provider waterfall twice per written recor
 - [x] **Phase 53: Operator-openable write grant** *(GRANT-01 ticked 2026-08-29, walk run 3)* -
       Replace the interactive path's
       `ALLOW_N8N_ARM` dependency with an admin-enabled capability plus an operator-opened session
-      grant that is bounded, expiring and revocable — no terminal, no loss of record scoping
+      grant that is bounded, expiring and revocable — no terminal, no loss of record scoping.
+      ("Expiring" = event-triggered close per GRANT-04, NOT a wall-clock timestamp; a real
+      `expires_at` was proposed and declined by the operator 2026-08-25, D-53-03. See
+      `.planning/milestones/v1.1-ROADMAP.md` § Phase 53.)
       — **4 plans** (`53-01` .. `53-04`), planned 2026-08-25.
       **✅ WALK RUN 3, 2026-08-29 — GRANT-01 ACHIEVED AND TICKED** (record:
       `53-WALK-RECORD-2.md` § run 3). After run 2's FINDING B was fixed the same day

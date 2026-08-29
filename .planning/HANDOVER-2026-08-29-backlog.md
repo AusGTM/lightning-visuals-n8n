@@ -124,20 +124,66 @@ A typed pipeline object making seam mismatches construction-time errors was reje
 
 ---
 
-## P5 — Small, verified, unfixed
+## P5 — ALL CLOSED 2026-08-29
+
+All three items are resolved, and **none of the three was a code defect**. Two were wrong
+observations recorded as bugs; the third was debris kept for a reason that turned out to be
+false. The value of working P5 was disproving it, not fixing it — worth remembering about how
+this section was compiled.
+
+Closed alongside it, from the same run: the two Phase 48 code-review WARNINGs (WR-01, WR-02),
+which WERE real — plus the whole bare-`assert` defect class they belonged to. See
+"Phase 48 warnings and the bare-assert class" below.
 
 | Item | Detail |
 |---|---|
-| Grant `expires_at: None` | The design language is "bounded, **expiring** and revocable". Bounded and revocable are demonstrated; expiring is not. Observed walk run 2. |
-| `close_grant` returns `close_reason: None` | State correctly becomes `closed` and the reason vocabulary is enforced, but the returned field reads `None`. Cosmetic; possibly a differently-named field. Not chased. |
-| Legacy `written_records.json` | Mtime 07:09 on 2026-08-29 suggests it may itself be test debris rather than a genuine pre-change operator file. Kept deliberately — it is the only artifact demonstrating why `load()`'s glob is not hyphen-anchored. Decide and either document or delete. |
+| ~~Grant `expires_at: None`~~ | **CLOSED 2026-08-29 — not a defect** (debug session `grant-fields-return-none`). There is no wall-clock expiry field by design: GRANT-03 scopes a grant to a named batch, "not a duration", and a timestamp `expires_at` was **proposed and declined by the operator on 2026-08-25** (D-53-03, `operator-claude-plugin/scripts/write_grant.py:682-688`). "Expiring" in the design language means GRANT-04's five event-triggered closes, which ARE implemented and tested. `expires_at: None` was the result of reading a field that was never defined. Operator ruling 2026-08-29: accept as designed; the roadmap phrasing was clarified so it no longer reads as promising a timestamp. |
+| ~~`close_grant` returns `close_reason: None`~~ | **CLOSED 2026-08-29 — not a defect, the observation named the wrong field** (debug session `grant-fields-return-none`). The real field is `closed_reason` (with the "d"): initialized at `write_grant.py:571`, set at `:592` after validating against the enforced vocabulary, and pinned green by a test parametrized over all five GRANT-04 reasons — including the exact `session_end` value the walk used. `close_reason` without the "d" appears **only** in planning prose and in no `.py` file anywhere in this repo's history. The walk record is left as written: it records what was observed at the time, wrong field name included. |
+| ~~Legacy `written_records.json`~~ | **CLOSED 2026-08-29 — investigated and deleted as debris** (record: `.planning/debug/resolved/legacy-written-records-file.md`). The "only artifact demonstrating the glob" claim was **wrong**: `test_written_records.py:359` (`test_load_globs_and_finds_a_legacy_pre_change_filename_too`) pins the non-hyphen-anchored glob hermetically in `tmp_path`. Provenance: its `run_id` `2acd52f7…` appears in no walk record or planning doc (both sibling hyphenated files' run_ids DO appear in `53-WALK-RECORD-2.md`), all three entries were `outcome: "not_written"`, and it was saved mid-Phase-59 dev session — development debris, not operator data. It also carried an active cost: `load()` with no path unioned its three phantom entries into every operator-facing read. Content preserved verbatim in the resolution record, so the deletion is reversible. **The glob stays un-anchored** — a real operator may still hold a genuine pre-D-59-09 file. |
+
+---
+
+## Phase 48 warnings and the bare-`assert` class — CLOSED 2026-08-29
+
+Both Phase 48 code-review WARNINGs were real, and fixing one of them exposed a defect class
+much larger than either.
+
+**WR-02** — `build_coverage_patch`'s D-07 "never write derived scoring fields" guard was a bare
+`assert`. CPython strips `assert` ENTIRELY under `python -O` / `PYTHONOPTIMIZE=1`: the guard did
+not weaken, it ceased to exist — and what it guards is a live PATCH to a portal with no
+rollback. **WR-01** — `run_coverage_window`'s armed per-record loop special-cased only a client
+`Timeout`, so any other exception discarded the whole run's partial audit trail, which is
+precisely the record you need when an armed loop dies. Fixed in `ac64353`, one regression test
+each, both proven red on the pre-fix code.
+
+**The class.** A sweep of `scripts/` found ~35 bare asserts across 14 files. The largest group
+was ~18 **credential-leak** guards (`assert "Authorization" not in text`,
+`assert token not in text`, `assert "HUBSPOT_PRIVATE_APP_TOKEN" not in text`) copy-pasted
+verbatim across 6 files — under `-O` a serialized artifact could carry the live bearer token,
+arguably higher stakes than WR-02 itself. Operator ruling 2026-08-29: fix all safety-critical
+classes via one shared helper.
+
+`src/guards.py` now holds four unconditional `ValueError`-raising helpers
+(`assert_disjoint`, `assert_keys_equal`, `assert_keys_subset`, `assert_no_secrets`). 14 sites
+fixed across 10 scripts in `196b989` / `2f897fc` / `c205503`, each pinned by a
+`PYTHONOPTIMIZE=1` subprocess test — the fix is pinned, not merely asserted. Deliberately left
+as `assert`, with reasons recorded: `build_cloud_workflows.py` (dev-time config-name checks),
+`sync_hubspot_properties.py:209,211` (post-write confirmation, not prevention),
+`check_schema_drift.py:363`, `probe_org_type_migration.py:406`.
+
+Full record incl. falsifiability evidence: `.planning/debug/resolved/bare-assert-guard-sweep.md`
+and `.planning/debug/resolved/phase48-coverage-warnings.md`.
+
+**Standing rule this establishes:** a safety guard — anything preventing a live write or a
+secret leak — must never be a bare `assert`. Use `src/guards.py`.
 
 ---
 
 ## Standing rules — do not rediscover these
 
-- **Test commands.** `.venv/bin/python -m pytest -q` (root, **3328** passed / 154 skipped),
-  `.venv/bin/python -m pytest operator-claude-plugin/tests -q` (**1721** / 5),
+- **Test commands.** `.venv/bin/python -m pytest -q` (root, **3365** passed / 154 skipped —
+  was 3328 before the 2026-08-29 session's +37 tests),
+  `.venv/bin/python -m pytest operator-claude-plugin/tests -q` (**1725** / 5),
   `node --test tests/n8n/*.test.mjs` (**776** / 0, **glob form only** — the directory form is
   broken on node 24). Never bare `python -m pytest`; system python lacks the deps. Root collection
   includes the plugin tests, so its count moves when plugin tests are added.
