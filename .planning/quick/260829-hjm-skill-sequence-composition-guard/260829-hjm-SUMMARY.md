@@ -102,10 +102,15 @@ assert not {('review-triage', ('preingest.build_rows_spec', 'extraction.write_di
 - Operator's durable directory
   (`~/.claude/plugins/data/operator-claude-plugin-lightning-visuals-operator/`):
   md5sum of every `.json` file identical before and after a full
-  `operator-claude-plugin/tests` run. **Correction to the plan's stated baseline:**
-  the directory holds 5 files as of this task, not the "exactly 3" the plan's
-  constraint 7 stated — all 5 predate this session (timestamps 07:09–11:05 vs. task
-  start ~13:06 local), i.e. left over from other same-day work, not something this
+  `operator-claude-plugin/tests` run. **This "correction" was itself wrong and is
+  retracted (verified 2026-08-29 after the task closed):** the constraint said 3
+  `written_records*.json` files and there are exactly 3 —
+  `written_records-7f9893…json` (walk run 3), `written_records-c24bfb6e…json` (walk
+  run 2), and the legacy `written_records.json`. The count of 5 came from counting
+  every file in the directory (which also holds `operator.local.json` and other
+  non-artifact state), not the `written_records*.json` set the constraint named. The
+  substantive claim is unaffected and still holds: nothing in the directory was
+  touched by this task. Left over from other same-day work, not something this
   task added or should have zeroed out. What matters for the constraint — that this
   task's own test run adds/changes nothing in that directory — is confirmed by the
   identical before/after md5sums.
@@ -135,7 +140,7 @@ assert not {('review-triage', ('preingest.build_rows_spec', 'extraction.write_di
 ## Deviations from Plan
 
 None — plan executed exactly as written. The one factual correction (durable-directory
-file count, 5 not 3) is documented above under Verification, not a deviation from
+file count — a miscount, retracted above) is documented under Verification, not a deviation from
 required behavior — the actual required invariant (no files added/changed by this
 task's test runs) holds.
 
