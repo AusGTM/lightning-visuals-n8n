@@ -455,9 +455,13 @@ def build_coverage_patch(company_id, decision, now_iso):
                 "entry -- D-03 requires a non-empty reason"
             )
         props["lv_enrichment_review_reason"] = reason
-    assert FORBIDDEN_PROPS.isdisjoint(props), (
-        f"{company_id!r}: build_coverage_patch produced a forbidden derived-field key"
-    )
+    # D-07: this must be a real, unstrippable check, not `assert` -- `assert` is removed
+    # entirely under `python -O` / PYTHONOPTIMIZE=1 (WR-02), and the thing it guards is a
+    # live write to a HubSpot portal with no rollback.
+    if not FORBIDDEN_PROPS.isdisjoint(props):
+        raise ValueError(
+            f"{company_id!r}: build_coverage_patch produced a forbidden derived-field key"
+        )
     return {"id": company_id, "properties": props}
 
 
@@ -504,8 +508,8 @@ def _has_credentials() -> bool:
 # excludes these read-only property-name literals the same way it already excludes
 # POPULATION_PROPERTIES' own "lv_icp_fit_score/lv_icp_tier/lv_anti_icp_flag" lines. This
 # module reads these fields to prove what the n8n node settled, never PATCHes them
-# (FORBIDDEN_PROPS stays asserted disjoint from every payload build_coverage_patch
-# produces).
+# (FORBIDDEN_PROPS is checked disjoint from every payload build_coverage_patch produces
+# via a real `raise`, not `assert` -- see WR-02 -- so the guard survives python -O).
 BEFORE_PROPS = (
     "lv_org_type",
     "lv_enrichment_review_reason",
@@ -533,6 +537,27 @@ class WindowError(Exception):
     """Raised by run_coverage_window before its first write, when
     coverage_writes_allowed() is False -- this driver's own two-key gate (DRY_RUN=false
     AND ALLOW_ENRICH_COVERAGE=true, per-shell) is not open. Nothing is sent."""
+
+
+class CoverageWindowFailed(Exception):
+    """Raised by run_coverage_window's per-record loop in place of letting an
+    unanticipated exception unwind bare (WR-01). Wraps whatever the loop actually raised
+    (chained via `__cause__`/`raise ... from exc`, never swallowed) and carries
+    `partial_results` -- every record this call had already fully processed, plus a
+    best-effort, `error`-tagged entry for the record being processed when it failed.
+    This is deliberately NOT a narrower set of caught exception types: any exception this
+    loop doesn't already handle inline (a later id's PendingResearch, a HubSpot 4xx/5xx,
+    a transport error) must still surface the partial audit trail -- that trail is exactly
+    the record of what an ARMED loop actually wrote before it died."""
+
+    def __init__(self, original, partial_results):
+        ids = [r.get("id") for r in partial_results]
+        super().__init__(
+            f"run_coverage_window failed after {len(partial_results)} record(s) "
+            f"recorded ({ids!r}): {original!r}"
+        )
+        self.original = original
+        self.partial_results = partial_results
 
 
 def _read_snapshot(company_id, reader=get_record):
@@ -719,6 +744,12 @@ def run_coverage_window(
     runs even when the write leg fails or raises"). Never trims `ids` -- refuses whole
     (COVER-02) via WindowError/AllowlistNotExact before the first write.
 
+    Any exception the per-record loop doesn't already handle inline surfaces wrapped as
+    CoverageWindowFailed (WR-01) -- `.partial_results` carries every record this call
+    fully processed plus a best-effort, `error`-tagged entry for the record in flight,
+    `.original`/`__cause__` carries the real exception. Disarm still runs unconditionally
+    either way.
+
     `armed=False` (the default) never touches the network beyond the two pre-write
     gates: every PATCH is built and recorded but sent with dry_run=True, and no webhook
     POST is made (mirrors post_webhook_event's own NotArmedError contract) -- this is
@@ -753,48 +784,58 @@ def run_coverage_window(
     results = []
     try:
         for company_id in resolved_ids:
-            decision = decide_org_type(company_id, _load_captured_research(company_id))
-            patch = build_coverage_patch(company_id, decision, now_iso)
-            patcher([patch], dry_run=not armed)
+            record = {"id": company_id}
+            try:
+                decision = decide_org_type(company_id, _load_captured_research(company_id))
+                patch = build_coverage_patch(company_id, decision, now_iso)
+                patcher([patch], dry_run=not armed)
 
-            record = {
-                "id": company_id,
-                "decision": decision,
-                "patch_properties": patch["properties"],
-                "timed_out": False,
-                "execution": None,
-                "after_properties": None,
-            }
+                record.update({
+                    "decision": decision,
+                    "patch_properties": patch["properties"],
+                    "timed_out": False,
+                    "execution": None,
+                    "after_properties": None,
+                })
 
-            if armed:
-                dispatched_at = datetime.now(timezone.utc)
-                try:
-                    poster(company_id, True, cfg, recompute=True)
-                except requests.exceptions.Timeout:
-                    # Trap 2: n8n completes server-side; a client timeout is never
-                    # retried. Fall straight through to reading the execution back.
-                    record["timed_out"] = True
+                if armed:
+                    dispatched_at = datetime.now(timezone.utc)
+                    try:
+                        poster(company_id, True, cfg, recompute=True)
+                    except requests.exceptions.Timeout:
+                        # Trap 2: n8n completes server-side; a client timeout is never
+                        # retried. Fall straight through to reading the execution back.
+                        record["timed_out"] = True
 
-                candidates = lister(cfg, workflow_id, limit=5)
-                handle = finder(candidates, dispatched_at)
-                execution = getter(cfg, handle["execution_id"]) if handle else None
-                record["execution_handle"] = handle
-                record["execution"] = summarize_execution(execution)
+                    candidates = lister(cfg, workflow_id, limit=5)
+                    handle = finder(candidates, dispatched_at)
+                    execution = getter(cfg, handle["execution_id"]) if handle else None
+                    record["execution_handle"] = handle
+                    record["execution"] = summarize_execution(execution)
 
-                try:
-                    settle_and_assert(
-                        company_id,
-                        "lv_icp_tier",
-                        lambda _v: True,
-                        settle_timeout,
-                        settle_interval,
-                        reader=reader,
-                        sleeper=sleeper,
-                    )
-                except SettleFailed:
-                    pass  # recorded via the after-read below, not fatal to the window
+                    try:
+                        settle_and_assert(
+                            company_id,
+                            "lv_icp_tier",
+                            lambda _v: True,
+                            settle_timeout,
+                            settle_interval,
+                            reader=reader,
+                            sleeper=sleeper,
+                        )
+                    except SettleFailed:
+                        pass  # recorded via the after-read below, not fatal to the window
 
-                record["after_properties"] = _read_snapshot(company_id, reader=reader)
+                    record["after_properties"] = _read_snapshot(company_id, reader=reader)
+            except Exception as exc:
+                # WR-01: whatever this iteration had already learned about company_id
+                # (however incomplete -- its write may already have gone out with
+                # armed=True) rides along in `results` rather than dying with the
+                # exception. Every already-completed record ahead of it in this same
+                # call is already in `results` and survives untouched.
+                record["error"] = repr(exc)
+                results.append(record)
+                raise CoverageWindowFailed(exc, list(results)) from exc
 
             results.append(record)
     finally:

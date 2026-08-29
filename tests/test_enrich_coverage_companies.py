@@ -130,6 +130,47 @@ def test_tracer_build_coverage_patch_rejects_out_of_vocabulary_org_type():
         )
 
 
+def test_wr02_forbidden_props_guard_survives_pythonoptimize(tmp_path):
+    # WR-02 regression: the D-07 guard in build_coverage_patch used to be a bare
+    # `assert`, which python -O / PYTHONOPTIMIZE=1 strips entirely -- the check would
+    # stop existing with no warning. Run in a real subprocess with PYTHONOPTIMIZE=1
+    # (the interpreter reads it at startup; setting it mid-process doesn't apply) and
+    # force the forbidden-prop branch by monkeypatching FORBIDDEN_PROPS to collide with
+    # a key build_coverage_patch actually emits. If this guard regresses back to a bare
+    # `assert`, this subprocess prints "GUARD DID NOT FIRE" and the test fails.
+    import os
+    import subprocess
+    import sys
+    import textwrap
+
+    script = textwrap.dedent(f"""
+        import sys
+        sys.path.insert(0, {str(m.ROOT)!r})
+        import scripts.enrich_coverage_companies as m
+
+        m.FORBIDDEN_PROPS = frozenset({{"lv_org_type"}})
+        try:
+            m.build_coverage_patch(
+                "test-id", {{"org_type": "broadcaster"}}, "2026-08-13T00:00:00+00:00",
+            )
+        except ValueError as exc:
+            assert "forbidden derived-field key" in str(exc), exc
+            print("GUARD FIRED")
+        else:
+            print("GUARD DID NOT FIRE")
+    """)
+
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        env={**os.environ, "PYTHONOPTIMIZE": "1"},
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "GUARD FIRED" in result.stdout, result.stdout
+
+
 def test_tracer_refuse_if_over_budget_raises_and_never_returns_a_shorter_list():
     over_budget_estimate = m.estimate_phase48_cost(
         research_ids=[], written_ids=[JAM_TV_ID, WAIKATO_ID], proof_executions=0,
@@ -491,6 +532,57 @@ def test_run_coverage_window_never_trims_the_id_set_on_mismatch(monkeypatch):
             patcher=_refuse_network,
             disarmer=lambda: {"outcome": "disarmed"},
         )
+
+
+def test_wr01_unanticipated_exception_preserves_partial_audit_trail(monkeypatch):
+    # WR-01 regression: an exception type this loop doesn't special-case (here a bare
+    # RuntimeError from the second record's patcher call -- not requests.exceptions.Timeout,
+    # the only type ever caught inline) used to propagate bare and discard the whole run's
+    # `results`, including the first record's already-completed audit entry. It must now
+    # surface as CoverageWindowFailed carrying every record processed so far.
+    monkeypatch.setattr("requests.post", _refuse_network)
+    monkeypatch.setattr("requests.patch", _refuse_network)
+
+    ids = list(ALL_FIVE_IDS[:2])  # Racing NSW, Editix -- both resolve cleanly
+    seen_patches = []
+
+    def _flaky_patcher(updates, dry_run=True):
+        seen_patches.extend(updates)
+        if len(seen_patches) > 1:
+            raise RuntimeError("simulated HubSpot 5xx -- not caught anywhere in the loop")
+
+    disarm_calls = []
+
+    def _fake_disarmer():
+        disarm_calls.append(True)
+        return {"outcome": "disarmed"}
+
+    with pytest.raises(m.CoverageWindowFailed) as excinfo:
+        m.run_coverage_window(
+            ids=ids,
+            armed=False,
+            now_iso="2026-08-13T00:00:00+00:00",
+            config={},
+            writes_allowed_fn=lambda: True,
+            allowlist_asserter=lambda *_a, **_kw: frozenset(ids),
+            patcher=_flaky_patcher,
+            disarmer=_fake_disarmer,
+            workflow_id="wf-fake",
+        )
+
+    exc = excinfo.value
+    assert isinstance(exc.original, RuntimeError)
+    assert isinstance(exc.__cause__, RuntimeError)  # chained, never swallowed
+
+    partial = exc.partial_results
+    assert len(partial) == 2
+    assert partial[0]["id"] == ids[0]
+    assert "decision" in partial[0]  # first record: fully processed, trail intact
+    assert partial[1]["id"] == ids[1]
+    assert "error" in partial[1]     # second record: failed, tagged rather than lost
+
+    # D-48-01 is unchanged by this fix: disarm still runs unconditionally.
+    assert disarm_calls == [True]
 
 
 def test_summarize_execution_reads_decide_company_action_output_and_node_counts():
