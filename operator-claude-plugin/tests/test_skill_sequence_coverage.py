@@ -227,6 +227,13 @@ COVERED = {
             "chunking.dispatch_plan",
         ),
     ): "test_chunking.py::test_the_enrich_records_waterfall_chains_resolve_providers_through_dispatch_plan",
+    (
+        "enrich-before-ingest",
+        (
+            "config_gate.load_config", "chunking.plan_chunks", "chunking.chunk_ceiling",
+            "preingest.match_batch", "preingest.classify_matches",
+        ),
+    ): "test_chunking.py::test_chunk_ceilings_real_match_key_return_flows_into_match_batch_and_classify_matches",
 }
 
 NOT_A_PIPELINE = {
@@ -240,26 +247,13 @@ NOT_A_PIPELINE = {
 # Shrink-only. Each entry names the specific undriven join, not merely "no test
 # found" -- honesty rule (PLAN.md Design section). Writing the covering test for any
 # one of these is its own follow-on task, and doing so shrinks MAX_GRANDFATHERED by 1.
-GRANDFATHERED_UNCOVERED = {
-    (
-        "enrich-before-ingest",
-        (
-            "config_gate.load_config", "chunking.plan_chunks", "chunking.chunk_ceiling",
-            "preingest.match_batch", "preingest.classify_matches",
-        ),
-    ): (
-        "chunking.chunk_ceiling(cfg, key='max_rows_per_match_request')'s result never "
-        "flows into chunking.plan_chunks in any test that also drives match_batch/"
-        "classify_matches -- the match-request ceiling key is tested only in "
-        "isolation (test_chunking.py::"
-        "test_chunk_ceiling_reads_the_match_key_and_it_is_larger_than_the_write_"
-        "ceiling); the plan_chunks->match_batch->classify_matches chain "
-        "(test_run_manifest.py::test_a_resume_re_requests_only_rows_that_still_"
-        "needed_work and neighbours) always uses a literal ceiling instead."
-    ),
-}
+#
+# All five originally-grandfathered entries are closed as of 260829-lg3 -- this dict is
+# now the empty literal, the correct end state per the ratchet's own "shrinks by one
+# each time" rule (not a headroom-preserving non-zero count).
+GRANDFATHERED_UNCOVERED = {}
 
-MAX_GRANDFATHERED = 1
+MAX_GRANDFATHERED = 0
 
 
 # =====================================================================================

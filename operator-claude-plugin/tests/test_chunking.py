@@ -115,6 +115,62 @@ def test_chunk_ceiling_reads_the_match_key_and_it_is_larger_than_the_write_ceili
     assert match_ceiling > write_ceiling
 
 
+def _match_item(row_id, tier, hs_object_id=None):
+    """Duplicated verbatim from test_run_manifest.py:415-422."""
+    match = {"tier": tier}
+    if tier == "medium":
+        match["candidates"] = []
+    item = {"row_id": row_id, "mode": "propose", "action": "proposed", "match": match}
+    if hs_object_id is not None:
+        item["hs_object_id"] = hs_object_id
+    return item
+
+
+def test_chunk_ceilings_real_match_key_return_flows_into_match_batch_and_classify_matches(
+        fake_config, stub_post_transport_factory):
+    """Closes the last GRANDFATHERED_UNCOVERED entry (enrich-before-ingest,
+    (config_gate.load_config, chunking.plan_chunks, chunking.chunk_ceiling,
+    preingest.match_batch, preingest.classify_matches)).
+
+    ADDITIVE, placed immediately after the isolated-ceiling unit test above (left
+    byte-identical) -- the registry's own reason names that test as insufficient BY
+    ITSELF, since nothing there feeds `plan_chunks`/`match_batch`/`classify_matches`.
+    `test_run_manifest.py::test_a_resume_re_requests_only_rows_that_still_needed_work`
+    is the near-miss the registry also names: it passes `plan_chunks(spec, ceiling=5)`
+    a LITERAL `5`, never `chunk_ceiling`'s real return -- also left untouched.
+    """
+    real_match_ceiling = json.loads(CONFIG_EXAMPLE.read_text())["max_rows_per_match_request"]
+    cfg = {**fake_config, "max_rows_per_match_request": real_match_ceiling}
+
+    row_spec = preingest.build_rows_spec([
+        {"firstname": "First0", "lastname": "Doe0", "company": "Acme0"},
+        {"firstname": "First1", "lastname": "Doe1", "company": "Acme1"},
+        {"firstname": "First2", "lastname": "Doe2", "company": "Acme2"},
+    ])
+
+    ceiling = chunking.chunk_ceiling(cfg, key="max_rows_per_match_request")
+    assert ceiling == real_match_ceiling, (
+        "the ceiling fed to plan_chunks below must come from the real config path, "
+        "never a hardcoded literal"
+    )
+    plan = chunking.plan_chunks(row_spec, ceiling)
+    assert plan.chunk_count == 1
+
+    row_ids = [row["row_id"] for row in row_spec["rows"]]
+    match_transport = stub_post_transport_factory(responses=[[
+        _match_item(row_ids[0], "high", hs_object_id="111"),
+        _match_item(row_ids[1], "none"),
+        _match_item(row_ids[2], "medium"),
+    ]])
+    outcome = preingest.match_batch(plan, cfg, transport=match_transport)
+    classified = preingest.classify_matches(
+        row_spec["rows"], outcome.responses, unchecked_row_ids=outcome.unchecked_row_ids)
+
+    assert {entry["row_id"] for entry in classified["auto_matched"]} == {row_ids[0]}
+    assert {entry["row_id"] for entry in classified["unmatched"]} == {row_ids[1]}
+    assert {entry["row_id"] for entry in classified["proposed"]} == {row_ids[2]}
+
+
 def test_chunk_ceiling_with_the_match_key_absent_raises_naming_that_key():
     with pytest.raises(chunking.ChunkPlanError) as excinfo:
         chunking.chunk_ceiling({}, key="max_rows_per_match_request")

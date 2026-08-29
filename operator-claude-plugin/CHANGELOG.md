@@ -16,6 +16,35 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.28.6] - 2026-08-29
+
+### Added
+
+- **P2 of the 2026-08-29 backlog handover, Task 3 of 3 (final): all 5
+  `GRANDFATHERED_UNCOVERED` entries in `test_skill_sequence_coverage.py` are now
+  closed.** The last entry — `chunking.chunk_ceiling(cfg,
+  key='max_rows_per_match_request')`'s real return never flowed into `plan_chunks` in
+  any test that also drove `preingest.match_batch -> preingest.classify_matches` — is
+  now `COVERED`.
+  - New `test_chunking.py::test_chunk_ceilings_real_match_key_return_flows_into_match_batch_and_classify_matches`,
+    added immediately after the pre-existing isolated-ceiling unit test (left
+    byte-identical), reads the ceiling from `config/operator.local.example.json` at
+    runtime (never a hardcoded literal — confirmed by `grep -nE
+    "plan_chunks\(row_spec, *[0-9]+\)"` matching nothing), plans a 3-row batch at that
+    real ceiling, and asserts a three-way tier split (auto-matched / unmatched /
+    proposed) that only holds if both `match_batch`'s real response and
+    `plan_chunks`'s real ceiling-derived chunking reached `classify_matches` correctly.
+  - `test_run_manifest.py` is untouched (`git diff` shows zero changes) — the near-miss
+    test the registry named (`test_a_resume_re_requests_only_rows_that_still_needed_work`,
+    which passes `plan_chunks` a literal ceiling) stays exactly as it was.
+  - `GRANDFATHERED_UNCOVERED` is now the empty dict and `MAX_GRANDFATHERED` is `0` — the
+    ratchet's own "shrinks by one each time" rule, taken to its correct end state
+    rather than left at a headroom-preserving non-zero count.
+  - Full plugin suite: 1725 passed / 5 skipped (baseline 1721 + 4 new tests across all
+    three releases in this P2 series).
+  - Zero production-code changes across all three releases (0.28.4-0.28.6) — every
+    change was test-file additions plus this release metadata.
+
 ## [0.28.5] - 2026-08-29
 
 ### Added
