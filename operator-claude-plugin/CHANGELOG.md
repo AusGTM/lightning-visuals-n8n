@@ -16,6 +16,29 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.28.3] - 2026-08-29
+
+### Added
+
+- **Sequence-inventory meta-test: the ratchet against the composition-boundary blind
+  spot.** Five defects in one week (`.planning/debug/knowledge-base.md`,
+  `composition-boundary-blind-spot`) all shipped past three fully green suites
+  because every unit was correct and individually tested, while the documented
+  `SKILL.md` call SEQUENCES joining those units were tested nowhere. New
+  `tests/test_skill_sequence_coverage.py` extracts every `module.function(...)`
+  sequence of two-or-more scripts-module calls from every `skills/*/SKILL.md` python
+  block and fails when a sequence is neither claimed by a named composition test
+  (`COVERED`) nor deliberately excluded with a reason (`NOT_A_PIPELINE` /
+  `GRANDFATHERED_UNCOVERED`). A block that will not parse (even after prose-
+  placeholder substitution) fails loudly, naming the skill and line, rather than
+  being silently skipped.
+  - Honest census on today's corpus: 8 documented sequences, 2 genuinely covered,
+    1 not a pipeline (two independent read-only lookups), 5 grandfathered with a
+    specific undriven join named for each -- writing those composition tests is
+    follow-on work, tracked by `MAX_GRANDFATHERED` (shrink-only).
+  - Zero production-code changes -- this test reads `SKILL.md` and test-file text
+    only; it never imports, executes, or modifies anything under `scripts/`.
+
 ## [0.28.2] - 2026-08-29
 
 ### Fixed
