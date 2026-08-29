@@ -241,3 +241,36 @@ def test_requires_exactly_one_of_plan_or_execute():
         fix.main([])
     with pytest.raises(SystemExit):
         fix.main(["--plan", "--execute"])
+
+
+# --- 2026-08-29 bare-assert sweep: build_region_patch's FORBIDDEN_PROPS guard is now
+# src.guards.assert_disjoint, not a bare `assert` -- prove it still fires under
+# PYTHONOPTIMIZE=1.
+
+def test_build_region_patch_guard_survives_pythonoptimize():
+    import os
+    import subprocess
+    import textwrap
+
+    script = textwrap.dedent(f"""
+        import sys
+        sys.path.insert(0, {str(ROOT)!r})
+        import scripts.fix_sfv_region as fix
+
+        fix.FORBIDDEN_PROPS = frozenset({{"lv_country_region_normalized"}})
+        try:
+            fix.build_region_patch()
+        except ValueError as exc:
+            assert "forbidden derived-field key" in str(exc), exc
+            print("GUARD FIRED")
+        else:
+            print("GUARD DID NOT FIRE")
+    """)
+
+    proc = subprocess.run(
+        [sys.executable, "-c", script],
+        env={**os.environ, "PYTHONOPTIMIZE": "1"},
+        capture_output=True, text=True, timeout=30,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "GUARD FIRED" in proc.stdout, proc.stdout

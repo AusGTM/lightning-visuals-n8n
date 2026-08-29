@@ -61,6 +61,7 @@ sys.path.insert(0, str(ROOT))  # repo root on sys.path so `scripts.*`/`src.*` im
 PLUGIN_SCRIPTS = ROOT / "operator-claude-plugin" / "scripts"
 sys.path.insert(0, str(PLUGIN_SCRIPTS))  # flat plugin imports, same idiom scripts/june_run_arm.py uses
 
+from src.guards import assert_disjoint  # noqa: E402
 from src.hubspot_client import get_record, patch_record  # noqa: E402
 
 from scripts.remediate_veto_companies import (  # noqa: E402
@@ -114,7 +115,10 @@ def build_region_patch() -> dict:
         STATUS_PROPERTY: CORRECT_STATUS,
         NEEDS_REVIEW_PROPERTY: CORRECT_NEEDS_REVIEW,
     }
-    assert FORBIDDEN_PROPS.isdisjoint(props), "build_region_patch produced a forbidden derived-field key"
+    # D-07 (WR-02 discipline, ac64353): a real, unstrippable check, not `assert` --
+    # `assert` is removed entirely under `python -O` / PYTHONOPTIMIZE=1, and what it
+    # guards is a live PATCH to a HubSpot portal with no rollback.
+    assert_disjoint(props, FORBIDDEN_PROPS, "build_region_patch produced a forbidden derived-field key")
     return props
 
 

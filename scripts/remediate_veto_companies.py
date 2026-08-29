@@ -59,6 +59,7 @@ from src.web_research import claude_web_research  # noqa: E402
 from scripts.backfill_seed_company_scores import compute_components  # noqa: E402
 
 import config_gate  # noqa: E402
+from src.guards import assert_disjoint  # noqa: E402
 
 # WR-01-style discipline (matches backfill_seed_company_scores.py): hard-coded, no env
 # override.
@@ -99,8 +100,13 @@ _EXCLUDED_NAMES = {
     "15860277364": "Gravity Media",
     "17317184159": "Ironman",
 }
-assert PINNED_COMPANY_IDS.isdisjoint(EXCLUDED_COMPANY_IDS), (
-    "a pinned id and an excluded id collided -- this must never happen"
+# D-07-style discipline: a real, unstrippable check, not `assert` -- `assert` is
+# removed entirely under `python -O` / PYTHONOPTIMIZE=1 (WR-02), and what this guards is
+# an excluded id (a verified-correct non-ANZ record this script must never touch)
+# silently becoming write-eligible because it also reads as pinned.
+assert_disjoint(
+    PINNED_COMPANY_IDS, EXCLUDED_COMPANY_IDS,
+    "a pinned id and an excluded id collided -- this must never happen",
 )
 
 # Derived fields owned by the calculated properties and the n8n Decide node (D-07).
@@ -365,7 +371,10 @@ def build_input_patch(company_id: str, result):
     if region:
         props["lv_country_region_normalized"] = region
 
-    assert FORBIDDEN_PROPS.isdisjoint(props), "build_input_patch produced a forbidden derived-field key"
+    # D-07: a real, unstrippable check, not `assert` -- `assert` is removed entirely
+    # under `python -O` / PYTHONOPTIMIZE=1 (WR-02), and what it guards is a live write
+    # to a HubSpot portal with no rollback.
+    assert_disjoint(props, FORBIDDEN_PROPS, "build_input_patch produced a forbidden derived-field key")
     return {"id": company_id, "properties": props}
 
 
@@ -430,7 +439,8 @@ def build_metadata_patch(company_id: str, result, written_fields) -> dict:
         for field in written_fields
         if field in LIVE_METADATA_FIELDS
     }
-    assert FORBIDDEN_PROPS.isdisjoint(props), "build_metadata_patch produced a forbidden derived-field key"
+    # D-07 (WR-02 discipline): unstrippable under python -O -- see build_input_patch.
+    assert_disjoint(props, FORBIDDEN_PROPS, "build_metadata_patch produced a forbidden derived-field key")
     return {"id": company_id, "properties": props}
 
 
@@ -454,7 +464,8 @@ def build_metadata_record(company_id: str, result, written_fields) -> dict:
         props[f"{field}_verified_by_model"] = verified_by_model
         props[f"{field}_validation_status"] = "web_researched"
 
-    assert FORBIDDEN_PROPS.isdisjoint(props), "build_metadata_record produced a forbidden derived-field key"
+    # D-07 (WR-02 discipline): unstrippable under python -O -- see build_input_patch.
+    assert_disjoint(props, FORBIDDEN_PROPS, "build_metadata_record produced a forbidden derived-field key")
     return {"id": company_id, "properties": props}
 
 
@@ -465,7 +476,8 @@ def build_component_patch(company_id: str, props: dict) -> dict:
     re-implements the point table. `props` must already carry the NEWLY-researched input
     values merged over the record's existing properties (D-04)."""
     components = compute_components(props)
-    assert FORBIDDEN_PROPS.isdisjoint(components), "build_component_patch produced a forbidden derived-field key"
+    # D-07 (WR-02 discipline): unstrippable under python -O -- see build_input_patch.
+    assert_disjoint(components, FORBIDDEN_PROPS, "build_component_patch produced a forbidden derived-field key")
     return {"id": company_id, "properties": components}
 
 

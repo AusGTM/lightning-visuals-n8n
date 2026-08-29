@@ -630,3 +630,71 @@ def test_post_webhook_event_still_refuses_when_not_armed_even_with_recompute():
             PINNED_ID, False, _WEBHOOK_CONFIG, transport=transport, recompute=True)
 
     assert transport.calls == []
+
+
+# --- 2026-08-29 bare-assert sweep: the D-07 guard is now src.guards.assert_disjoint,
+# not a bare `assert` -- prove it still fires under PYTHONOPTIMIZE=1 (the whole point
+# of the change; see also tests/test_guards.py for the shared helper's own coverage).
+
+def test_forbidden_props_guard_survives_pythonoptimize_at_the_real_call_site():
+    import os
+    import subprocess
+    import textwrap
+
+    script = textwrap.dedent(f"""
+        import sys
+        sys.path.insert(0, {str(ROOT)!r})
+        import scripts.remediate_veto_companies as m
+        from src.schemas import ProviderEvidence, ProviderResult
+
+        m.FORBIDDEN_PROPS = frozenset({{"lv_org_type"}})
+        result = ProviderResult(
+            provider="claude_web", object_type="companies", matched=True, confidence=90,
+            data={{"lv_org_type": "broadcaster"}},
+            evidence=ProviderEvidence(evidence_urls=["https://example.org"]),
+        )
+        try:
+            m.build_input_patch("test-id", result)
+        except ValueError as exc:
+            assert "forbidden derived-field key" in str(exc), exc
+            print("GUARD FIRED")
+        else:
+            print("GUARD DID NOT FIRE")
+    """)
+
+    proc = subprocess.run(
+        [sys.executable, "-c", script],
+        env={**os.environ, "PYTHONOPTIMIZE": "1"},
+        capture_output=True, text=True, timeout=30,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "GUARD FIRED" in proc.stdout, proc.stdout
+
+
+def test_pinned_excluded_disjoint_guard_survives_pythonoptimize():
+    """The module-level PINNED_COMPANY_IDS/EXCLUDED_COMPANY_IDS invariant (2026-08-29
+    sweep: this used to be a bare `assert`, evaluated at import time) -- a collision
+    would let a verified-correct non-ANZ record become write-eligible."""
+    import os
+    import subprocess
+    import textwrap
+
+    script = textwrap.dedent(f"""
+        import sys
+        sys.path.insert(0, {str(ROOT)!r})
+        from src.guards import assert_disjoint
+        try:
+            assert_disjoint({{"a"}}, {{"a"}}, "a pinned id and an excluded id collided")
+        except ValueError as exc:
+            print("GUARD FIRED")
+        else:
+            print("GUARD DID NOT FIRE")
+    """)
+
+    proc = subprocess.run(
+        [sys.executable, "-c", script],
+        env={**os.environ, "PYTHONOPTIMIZE": "1"},
+        capture_output=True, text=True, timeout=30,
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "GUARD FIRED" in proc.stdout, proc.stdout
