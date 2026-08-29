@@ -45,11 +45,34 @@ a write path unreachable from the operator's own surface (`ALLOW_N8N_ARM` is a s
 variable), and a design that runs the provider waterfall twice per written record. Full detail:
 `milestones/v1.1-ROADMAP.md`; evidence: `quick/260825-contact-company-association/UAT.md`.
 
-- [ ] **Phase 53: Operator-openable write grant** - Replace the interactive path's
+- [x] **Phase 53: Operator-openable write grant** *(GRANT-01 ticked 2026-08-29, walk run 3)* -
+      Replace the interactive path's
       `ALLOW_N8N_ARM` dependency with an admin-enabled capability plus an operator-opened session
       grant that is bounded, expiring and revocable — no terminal, no loss of record scoping
       — **4 plans** (`53-01` .. `53-04`), planned 2026-08-25.
-      **⚠ WALK RUN AGAIN 2026-08-29 — GRANT-01 STILL NOT TICKED** (record:
+      **✅ WALK RUN 3, 2026-08-29 — GRANT-01 ACHIEVED AND TICKED** (record:
+      `53-WALK-RECORD-2.md` § run 3). After run 2's FINDING B was fixed the same day
+      (`extraction.strip_row_id`, commit `96eea82`, plugin 0.28.1, shipped with the composition
+      test that would have caught it), the same record walked the whole flow under **one grant,
+      one yes**: extraction → unarmed match → grant → arm → enrich → merge → strip → CSV → arm →
+      **HubSpot create**. Contact `348695309760` (`josh@seriesfutsal.com`) created and
+      auto-associated to Series Futsal Victoria `283816805830` by domain. **Independently
+      confirmed** — the same probe that returned `unmatched: 1` in run 2 now returns
+      `auto_matched: 1`. Backend `VERDICT: disarmed PASS` after; grant closed `batch_complete`.
+      Cost: 4 n8n executions, ~2 provider credits, ~$0.07, 1 write.
+      **Ticked under the operator's explicit authorisation of 2026-08-29, with two limitations
+      recorded not waived:** it ran from Claude Code **with a terminal** (so the composition is
+      proven, the operator's own constraint set is not), and against the **repo** at 0.28.1 rather
+      than the installed plugin (marketplace clone still behind). A Claude-Desktop walk on the
+      installed plugin is the only thing that proves G-2 is truly gone.
+      **⚠ NEW OPEN DEFECT — FINDING C.** The written-records artifact **does not record the
+      write**: it reports `outcome: "not_written"`, `hs_object_id: null` for the run that created
+      `348695309760`. `written_records.append_chunk` has one call site (`chunking.py:395`, inside
+      `dispatch_plan`); the contacts write goes through `dispatch.dispatch`, which never touches
+      it. D-59-07's own promise to the operator is therefore unkept, and the artifact is a false
+      negative in the exact direction it exists to prevent. A **Phase 59** defect, not a grant
+      defect — and the fifth to survive a green suite on the same unit-boundary blind spot.
+      **⚠ EARLIER: WALK RUN 2 2026-08-29 — halted at step 7** (record:
       `53-WALK-RECORD-2.md`). Re-run after Phase 59 shipped, same record, at plugin 0.28.0.
       **FINDING 2 is genuinely fixed and proven live** — same input, one day apart:
       `unanswered` went 1 → 0 and the email went `None` → `josh@seriesfutsal.com`, with no
@@ -491,7 +514,7 @@ silently inherit Phase 51's placeholder behavior without a decision.
 | 50. Derived Tier Property | v0.9 | 6/6 | Complete (verified) | 2026-08-14 |
 | 51. Backfill Pipeline, Credit Sizing & Dry Run | v1.0 | 3/3 | Complete (verified) | 2026-08-19 |
 | 52. Staged Canary Execution & Safety Verification | v1.0 | 0/TBD | Deferred (operator, 2026-08-25) | - |
-| 53. Operator-openable Write Grant | v1.1 | 4/4 | Complete — walk RUN 2026-08-28, **GRANT-01 not ticked** (composition defect found) | 2026-08-26 |
+| 53. Operator-openable Write Grant | v1.1 | 4/4 | Complete (verified) — GRANT-01 TICKED, walk run 3 | 2026-08-29 |
 | 54. Single-pass Armed Dispatch | v1.1 | 7/7 | Complete (verified) | 2026-08-27 |
 | 58. Take What the Operator Actually Has | v1.1 | 6/6 | Complete (verified) | 2026-08-26 |
 | 59. Frictionless Write Path | v1.1 | 9/9 | Complete (verified 18/18, after gap closure) | 2026-08-29 |
