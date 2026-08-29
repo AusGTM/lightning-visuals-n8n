@@ -39,7 +39,22 @@ git push origin master
 Note: `origin/master` was moved once during this session by a push that did **not** originate
 from the session doing the work. If that recurs, find out who.
 
-### 2. The operator-chair walk — GRANT-01's remaining half
+### 2. The operator-chair walk — **ATTEMPTED 2026-08-30, FAILED, now BLOCKED on Phase 61**
+
+**Walk run 4 halted before the grant was ever opened** (`53-WALK-RECORD-3.md`). Both prereqs
+below were met — pushed, and the installed plugin updated to 0.28.6 — so **limitation 2 is
+closed**. But given only a LinkedIn URL, the plugin demanded a company and the operator ended the
+run. Steps 3–7 were never exercised, so **limitation 1 stands: the grant surface has still never
+been driven from the operator's chair, and G-2 is still undisproven.**
+
+The cause (FINDING D) is a front-end contract demanding a field the backend does not need —
+`resolveIdentity.js:76-78` makes `linkedin_url` a strong match key and `lushaRequest.js:79-91`
+accepts a Lusha v3 body with `linkedinUrl` alone. **Phase 61 owns the fix and is the immediate
+next phase. Do not re-walk before it lands — the walk will halt in the same place.**
+
+Original text follows.
+
+### 2 (original). The operator-chair walk — GRANT-01's remaining half
 
 GRANT-01 is ticked and the tick is honest, but **two limitations were recorded, not waived**:
 

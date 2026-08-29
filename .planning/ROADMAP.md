@@ -287,6 +287,42 @@ variable), and a design that runs the provider waterfall twice per written recor
       and the non-clobber merge policy. Out of scope: the response-window ceiling and
       `max_records_per_chunk`, both owned by Phase 55.
 
+- [ ] **Phase 61: Resolve the identity, don't ask for it** — **IMMEDIATE NEXT PHASE**
+      (operator, 2026-08-30). Inserted ahead of everything after walk run 4 failed.
+
+      **Goal:** an input carrying a strong identity key resolves through match-then-enrich
+      without the operator being asked for fields the backend does not need. Closes INPUT-05.
+
+      **The evidence.** Walk run 4 (`53-WALK-RECORD-3.md`) — the first walk ever run from the
+      operator's own chair against the installed plugin (0.28.6) — **halted before the grant was
+      opened**. Given only a LinkedIn URL, the plugin demanded a company. Steps 3–7 were never
+      exercised; the grant surface remains untested from the operator's chair.
+
+      **Why it is a defect, not strictness.** The plugin demanded a field its own backend does
+      not need. `n8n/code/resolveIdentity.js:76-78` treats `linkedin_url` as a **strong** HubSpot
+      match key (same tier as email); `n8n/code/lushaRequest.js:79-91` accepts a Lusha v3 enrich
+      body carrying `linkedinUrl` alone (`lushaContactBody` takes any subset — only a wholly
+      empty set skips). Both operations it refused were keyed on what the operator had supplied.
+
+      **No-invention is NOT loosened.** Operator supplies the key, a licensed provider returns
+      sourced fields, the operator confirms. A searched-and-sourced value is not an invented one;
+      the two have been collapsed and the fix is separating them. `extraction.md`'s verbatim
+      no-invention sentence stays as-is — it remains on the do-not-simplify list.
+
+      **Not a regression.** No best-effort ruling was ever recorded in `.planning/`, and the
+      extraction escalation ladder has only ever been same-host URL fetching (`url_fallback.py`,
+      host-bound in code). The capability was never built. The root cause is process: a verbal
+      operator ruling that was never written down, so nothing implemented it and nothing guarded
+      it — the third documented-vs-actual gap to cost something in two days.
+
+      **Design note:** for a **person**, web search is the weaker instrument — `claude_web` is
+      company-oriented (`object_type: companies` throughout `src/web_research.py`). Use the
+      licensed waterfall on `linkedin_url`.
+
+      **Scope fence:** strong keys only (LinkedIn URL, email). Name-only rows keep routing to the
+      existing `name_company` weak-key → `needs_review` path — a wrongly matched person is worse
+      than an unmatched one.
+
 - [ ] **Phase 60: Review-lane authority** - Split out of Phase 59 by operator decision
       2026-08-28 (`59-CONTEXT.md` D-59-03), to run **after** Phase 53's operator walk.
       Approving a flagged record is human triage, not unattended running — it is not on the
