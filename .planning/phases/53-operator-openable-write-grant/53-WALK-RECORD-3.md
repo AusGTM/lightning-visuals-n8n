@@ -120,3 +120,94 @@ waterfall keyed on `linkedin_url`, which is already built and already paid for.
 
 Effectively nil: one refused fetch, zero provider credits, zero n8n executions, zero HubSpot
 writes, zero Anthropic research calls. Nothing was armed and no grant was opened.
+
+---
+
+# WALK CONCLUDED — 2026-08-30, operator verdict: **all steps passed as per walk requirement**
+
+The operator resumed and completed the walk after the halt above. Revised outcome: **steps 1–6
+reached their gates and step 7 PASSED outright.** The run is no longer "failed at step 2" — it is
+a completed walk whose value is a diagnosis rather than a write.
+
+## Step 7 — **PASS**, on all four criteria
+
+With `allow_write_grants` unset in `operator.local.json`, the refusal read:
+
+> Grant authority is OFF. `allow_write_grants` is not true in `operator.local.json`.
+> `plan_grant`/`open_grant` hard-refuse at the authority gate — no grant opens from this
+> conversation until your n8n admin sets that key.
+
+| Criterion | Result |
+| --- | --- |
+| Names the key | **PASS** — `allow_write_grants` |
+| Names the file | **PASS** — `operator.local.json` |
+| Names who sets it | **PASS** — "your n8n admin" |
+| Does NOT tell the operator to set a shell environment variable | **PASS** — no env var mentioned |
+
+This is the **direct G-2 probe, and G-2's original shape is genuinely gone on this lane.** The
+refusal points at a settings key an admin edits in a file, not at a shell export an operator in
+Claude Desktop cannot perform. Cited live from the operator's chair: `write_grant.py:436`,
+`config_gate.py:107`.
+
+## Steps 3–6 — reached, and each refusal was correct in isolation
+
+- **The empty-record-set refusal fired and explained itself well**: *"refusing to plan a grant
+  over an empty record set… This is resolvable: a read-only HubSpot lookup for the record's own
+  object id, or — for a record that does not exist yet and therefore has no id — for its
+  company's domain."* That is `plan_grant`'s operator-confirmed load-bearing refusal working as
+  designed, and naming its own resolution.
+- **The grant-handle boundary held**: a LinkedIn URL is not a grant handle; a grant scopes by
+  HubSpot record id or company domain, never a profile URL.
+- **The no-invention rule held again**: it declined to guess Football Queensland's domain from
+  memory, and offered the two legitimate routes (operator statement, or a read-only lookup).
+
+## FINDING E — the Desktop session has no HubSpot read path
+
+New, and it matters more than it looks. From step 7 verbatim:
+
+> This session has no HubSpot read path: n8n-mcp returned 401, HubSpot MCP connector is
+> unauthorized. So I can't resolve the URL from here, and I won't invent an id.
+
+Every "this is resolvable — just do a read-only lookup" escape hatch the refusals offer
+**depends on a read path that does not exist in the operator's chair.** The refusals are
+therefore well-worded but unactionable from where the operator actually sits: they name a
+remedy the session cannot perform. A read-only HubSpot lookup costs nothing, writes nothing, and
+is the single unblocking capability for most of steps 3–6.
+
+## FINDING F — no confidence self-assessment, therefore no autonomy (operator's diagnosis)
+
+**Operator, 2026-08-30, verbatim:**
+
+> *"Again Steps 1-6 show how incredibly halting this process is, that there is no self assessment
+> of confidence, and therefore no autonomy in workflow, it requires an operator to walk through
+> each step every single time, if an operator has hundreds of contacts to ingest, this means they
+> will need to go through hundreds of research steps, and approval gates. That gets away from the
+> point of doing this altogether. The point is that this plugin is supposed to take all the
+> research, enrichment, and ingestion off the operator's hands in a non-clobbering way (as using
+> the 3 separate backend services, which DO DO the research enrichment and ingestion ALREADY, but
+> they clobber each other - if we keep the non-clobbering aspect while removing the autonomous
+> research, enrichment and ingestion parts then this makes a worse system - again, guidance is
+> speed, efficiency autonomy is MORE IMPORTANT than gating, permissions, security - this is a GTM
+> function, not a core product or security function)"*
+
+**This is the sharpest statement of the problem in the project's history, and it reframes the
+milestone.** The load-bearing argument: the three backend services **already perform** research,
+enrichment and ingestion. The plugin's entire reason to exist is that they clobber each other.
+**Keep the non-clobbering and remove the autonomy, and the result is worse than the raw
+services** — which is what the walk just demonstrated at n=1.
+
+Note what is NOT being asked for, because a careless reading would destroy the value:
+**non-clobbering is explicitly kept** ("in a non-clobbering way"). The target is *approval
+friction and per-row research halts*, not the merge policy.
+
+Every individual refusal in steps 3–6 was correct. **The composition of correct refusals is the
+defect** — the same shape as the five composition defects of 2026-08-29, one level up.
+
+## Verdict
+
+**GRANT-01 stays ticked. Limitation 1 is now CLOSED for the authority surface** — step 7 proved
+the grant refusal is operator-actionable from Claude Desktop with no terminal. What remains
+unproven is a grant actually *opening and carrying a batch* from that chair, which steps 3–6
+could not reach.
+
+**Cost:** zero. No credits, no executions, no writes, nothing armed.
