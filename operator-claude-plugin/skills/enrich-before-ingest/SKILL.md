@@ -23,7 +23,9 @@ whatever seven columns happened to be in the source file.
 
 ## Steps
 
-1. **State the target, and that this flow arms twice.** Run:
+1. **State the target, and how many times this flow will ask.** One write grant covers
+   this whole batch and this flow asks once; with no grant open it asks twice. Say which
+   of the two applies before any other work. Run:
 
    ```
    python3 scripts/config_gate.py
@@ -36,22 +38,24 @@ whatever seven columns happened to be in the source file.
    If it reports `"ok": true`, tell the operator this flow touches the n8n instance
    named in `"target"` three ways: an unarmed search that just looks up whether a row
    already exists in HubSpot, a provider waterfall call that spends money once armed,
-   and the ingest write itself — the same endpoint `"target"` names — once armed a
-   second time. Then read `"can_send"` exactly as `contact-upload/SKILL.md` step 1
+   and the ingest write itself — the same endpoint `"target"` names — once armed too
+   (under a batch grant that is the same authorization; with no grant open it is a
+   second, separate ask). Then read `"can_send"` exactly as `contact-upload/SKILL.md` step 1
    does: when it is `false`, say so with the relayed `"send_blocked_reason"`, and carry
    on building previews (they cost nothing), but do not ask for either send for the
    rest of this conversation.
 
-   Say up front, before any other work, that this flow will ask for permission
-   **twice, at two different moments** — once before any provider credit is spent, and
-   again before anything is written to HubSpot — with a full preview of the enriched
+   **With no write grant open**, say up front, before any other work, that this flow
+   will ask for permission **twice, at two different moments** — once before any
+   provider credit is spent, and again before anything is written to HubSpot — with a
+   full preview of the enriched
    result landing in between. The second ask is not a formality and it is not a repeat
    of the first: it is the operator's answer to that preview, which does not exist yet
    when the first grant is given. Say this plainly here so it is not a surprise five
    turns later — an operator surprised by the second ask learns to pre-grant both,
    which is exactly the shortcut this design exists to prevent.
 
-   **The one exception, and say it here rather than at step 5:** if a write grant covering
+   **The batch path, and say it here rather than at step 5:** if a write grant covering
    both of this flow's lanes is open, the operator is asked once instead of twice — that is
    D-53-05, their own decision of 2026-08-25. Name which lanes the open grant covers and say
    what the single ask covers: the grant enables enrichment and writes to HubSpot; after the

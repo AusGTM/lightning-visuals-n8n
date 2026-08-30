@@ -1,3 +1,16 @@
+> **PARTLY SUPERSEDED 2026-08-30 by Phase 61.** §8's item 3 (throughput) and the Phase 55/56
+> work it points at are built: Phase 61 absorbed both (D-61-08) and shipped an async submit +
+> progress read + resume, so a run is no longer bounded by the ~100 s synchronous response
+> window (the `max_records_per_chunk: 2` config value itself is unchanged). §6's FINDING B is
+> fixed (`extraction.strip_row_id`), and §5's composition gap now has a standing guard at
+> `MAX_GRANDFATHERED = 0`. §4's suite counts are stale — 3539 pytest / 1875 plugin / 844 node
+> as of 2026-08-30. §3's operator constraint and §7's load-bearing list still stand. §10 is
+> half stale: walk run 3 (2026-08-29) did carry a batch through under one grant and did write
+> to HubSpot (contact `348695309760`), so "zero HubSpot writes" no longer holds — but it ran
+> from Claude Code with a terminal, and the **operator-chair** run §10 actually asks for, and
+> the first live unattended credit-spending batch, still have not happened. That batch is
+> gated on Phase 57.
+
 # Handoff for deep review — lv-n8n-poc
 
 **Written:** 2026-08-29

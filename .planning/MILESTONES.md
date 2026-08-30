@@ -1,8 +1,22 @@
 # Milestones
 
-## v1.1 Unattended Session Runs (Defined 2026-08-25 — NOT STARTED)
+## v1.1 Unattended Session Runs (Defined 2026-08-25 — IN FLIGHT, not shipped)
 
-**Requirements:** `.planning/milestones/v1.1-REQUIREMENTS.md`. **Roadmap:** `.planning/milestones/v1.1-ROADMAP.md` — 5 phases, 53–57 (52 stays v1.0's). **UAT evidence:** `.planning/quick/260825-contact-company-association/UAT.md` (G-1..G-4).
+**Requirements:** `.planning/milestones/v1.1-REQUIREMENTS.md`. **Roadmap:** `.planning/milestones/v1.1-ROADMAP.md` — ~~5 phases, 53–57~~ **phases 53–61** (52 stays v1.0's). **UAT evidence:** `.planning/quick/260825-contact-company-association/UAT.md` (G-1..G-4).
+
+**Progress (2026-08-30):** complete — 53 (GRANT-01 ticked on walk run 3, 2026-08-29), 54, 58, 59,
+**61**. Absorbed into 61 by operator decision D-61-08 — 55 (async run) and 56 (unattended pair
+pipeline). Open — **57 (next)** and 60. Requirements closed to date: INPUT-01, INPUT-03, INPUT-04,
+INPUT-05, GRANT-01, GRANT-03, GRANT-05, RUN-01, RUN-02, RUN-03, RUN-04, AFTER-02, VOCAB-05.
+
+**Phase 61 (2026-08-30)** landed `linkedin_url` as a third identity group across both lanes, a
+confidence decision table plus a durable held-rows queue with per-hold-code resume fingerprints,
+a run manifest and run state, async submit/progress off the ~100s synchronous window, one grant
+across ingest/enrich/create/associate, and substrate-3 scale-up fan-out behind an off-by-default
+flag. All five cloud workflows were deployed, bounced and exercised by **disarmed** runs only
+(executions `12040`, `12044`–`12047`). Suites at close: root python 3539 passed / 154 skipped;
+node 844 pass / 0 fail. **The first live unattended, credit-spending batch has NOT run — it is
+gated on Phase 57 (D-61-08).**
 
 **Decisions taken 2026-08-25:** the grant is operator-openable in Claude (the `ALLOW_N8N_ARM` env var stops being the interactive authority); grant first, then a single async pass; first slice is the full pair pipeline with creates included.
 

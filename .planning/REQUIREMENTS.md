@@ -2,6 +2,16 @@
 
 **Defined:** 2026-08-19. Source: `.planning/MILESTONE-CONTEXT.md` (operator decisions D-01..D-06).
 
+> **Scope note, 2026-08-30 — this file is v1.0's, and only v1.0's.** The active milestone is
+> **v1.1 Unattended Session Runs**, whose requirements live in
+> `.planning/milestones/v1.1-REQUIREMENTS.md`. Nothing from v1.1 (GRANT-*, RUN-*, AFTER-*,
+> INPUT-*, VOCAB-*, SUGGEST-*) is tracked here, and closures from v1.1 phases must never be
+> recorded in this file.
+>
+> **v1.0's own status:** Phase 51 complete; **Phase 52 deferred by the operator 2026-08-25** in
+> favour of v1.1, so FILL-02 and SAFE-02/03/04 are deferred rather than merely "not started". The
+> `.planning/ROADMAP.md` § Phase 52 entry carries the resume conditions and the gate.
+
 Scope: backfill the ~646 never-scored HubSpot companies with ZoomInfo firmographics plus targeted
 research, writing the inputs and the six numeric properties HubSpot's calculation engine needs, so
 those records acquire a real `lv_icp_fit_score` and `lv_icp_tier_derived`. Executed in-session —
@@ -55,13 +65,13 @@ those records acquire a real `lv_icp_fit_score` and `lv_icp_tier_derived`. Execu
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | FILL-01 | Phase 51 | Complete |
-| FILL-02 | Phase 52 | Not started |
+| FILL-02 | Phase 52 | Deferred (operator, 2026-08-25) |
 | FILL-03 | Phase 51 | Complete |
 | FILL-04 | Phase 51 | Complete |
 | SAFE-01 | Phase 51 | Complete |
-| SAFE-02 | Phase 52 | Not started |
-| SAFE-03 | Phase 52 | Not started |
-| SAFE-04 | Phase 52 | Not started |
+| SAFE-02 | Phase 52 | Deferred (operator, 2026-08-25) |
+| SAFE-03 | Phase 52 | Deferred (operator, 2026-08-25) |
+| SAFE-04 | Phase 52 | Deferred (operator, 2026-08-25) |
 
 ## Out of Scope
 

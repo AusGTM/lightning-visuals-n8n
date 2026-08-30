@@ -1,3 +1,15 @@
+> **SUPERSEDED IN PART 2026-08-30 by Phase 61.** Phase 61 ("Autonomous batch runs", verified
+> 2026-08-30, 12/12 must-haves) **absorbed Phases 55 and 56** (operator decision D-61-08) — do
+> not plan them from P4 below. It also fixed FINDING D, the blocker that halted walk run 4: a
+> contact row carrying only a **LinkedIn URL** is now accepted, matched on that key and
+> enriched, so P1.2's operator-chair walk is no longer blocked on it. **P2 is closed** —
+> `MAX_GRANDFATHERED = 0` in `operator-claude-plugin/tests/test_skill_sequence_coverage.py`,
+> so none of the five sequences is grandfathered any more. The test counts in § Standing rules
+> are stale: 3539 pytest / 1875 plugin / 844 node as of 2026-08-30. Still open and still
+> correct as written: **Phase 57 gates the first live unattended, credit-spending batch, which
+> has not run**, plus Phases 60 and 52. Current truth:
+> `.planning/phases/61-autonomous-batch-runs/61-VERIFICATION.md`.
+
 # Handover — remaining backlog
 
 **Written:** 2026-08-29, at the end of a long session

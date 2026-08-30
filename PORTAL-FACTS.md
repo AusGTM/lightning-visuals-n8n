@@ -6,6 +6,9 @@ from the historical, phase-scoped, explicitly read-only
 that file's "never edit" prohibition was stated inside Phase 47's own CONTEXT.md and does
 not bind this file. Append-only, dated blocks, oldest first.
 
+Blocks record HubSpot-portal facts unless the heading says otherwise — the 2026-08-30 block
+records **n8n Cloud** platform facts.
+
 ---
 
 ## 2026-08-13 (Phase 49 Plan 05, Task 3) — stamped-component overwrite behaves identically to a never-set write
@@ -70,3 +73,25 @@ components settled, later self-corrected in score but not in tier). Closing this
 gap needs either a WF1-side manual re-enrollment (portal UI, out of API scope) or a
 deliberate score-value perturbation, neither of which is in this driver's declared W1
 scope.
+
+---
+
+## 2026-08-30 (Phase 61) — **n8n Cloud** platform facts (not HubSpot)
+
+Recorded here so the next session does not re-probe them. Each row carries its basis, because
+the difference matters: *documented* means n8n published it, *observed/measured* means this
+instance did it. Sources: `.planning/phases/61-autonomous-batch-runs/61-PREMISE-DOCS-FINDINGS.md`,
+`61-PREMISE-PROBE-VERDICT.json`, `61-SCALE-UP-VERDICT.json`, `61-VERIFICATION.md`.
+
+| Fact | Basis |
+| --- | --- |
+| This account is on **n8n Cloud Starter: 5 concurrent executions, 2.5K executions/month.** Executions beyond the concurrency cap **queue FIFO** — a throughput bound, **not an error**: a fan-out of 50 drains 5 at a time rather than failing. | documented (n8n docs), not observed here |
+| **Sub-workflow executions are DOCUMENTED as neither billed nor concurrency-capped** — "only the parent (top-level) execution counts", and concurrency control "doesn't apply to … sub-workflow executions". **This is documented, NOT verified against billing.** The executions API list and the billing quota are different systems, and no API key on this account can observe billing, so a child appearing in `GET /api/v1/executions` neither proves nor disproves that it was charged. Do not restate this as a measured cost saving. | documented; billing unverifiable from here |
+| **A Wait shorter than 65 seconds stays in-process and is NOT restart-safe**; a Wait of ≥ 65 s is offloaded to the database and survives a restart, as does a webhook/form wait. A design that parks work must not use a sub-65-second timed wait and call it durable. | documented |
+| **A parent workflow cannot activate while a referenced child is unpublished** — activation 400s with `Cannot publish workflow: Node "…" references workflow <id> which is not published`. Publish children first. | observed (P-13 first attempt) |
+| A **self-referencing `Execute Workflow` node** activates, **runs and terminates**: two detached children ran and correlated, and the in-workflow depth guard stopped recursion with no depth supplied. | observed live, disarmed (executions `12044`–`12047`) |
+| **An execution keeps running after its webhook response has been sent.** Client round-trip 0.47 s against a 5 s wait; execution span 5.06 s; the post-Respond node still recorded success. | observed (P-07, execution `12035`) |
+| A detached child's execution id **is recoverable from the parent's own dispatch runData**, with `waitForSubWorkflow` off (`12036`→`12037`) and on (`12038`→`12039`) alike. Children also appear in the executions list. | observed (P-13) |
+| The `chunk_count + record_count` execution-cost formula **OVER-states** cost: a real historical 2-record chunk (execution `11950`) projected 3 executions; the executions list showed 1. Nothing found suggests it under-projects — the direction that would matter for a budget guard. | measured |
+
+

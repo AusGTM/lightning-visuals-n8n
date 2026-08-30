@@ -19,7 +19,25 @@ progress:
 
 # Project State
 
-## 📋 NEXT MILESTONE DEFINED — v1.1 Unattended Session Runs (2026-08-25, not started)
+## 🚧 CURRENT MILESTONE — v1.1 Unattended Session Runs (IN FLIGHT; Phase 61 complete 2026-08-30)
+
+**Phases:** 53–61. Complete: 53, 54, 58, 59, **61**. Absorbed into 61 by operator decision
+D-61-08: **55** (async run) and **56** (unattended pair pipeline) — neither is open work, do not
+re-plan them. Open: **57 — the next phase** (ceilings, refusal-before-start, post-run proof) and
+60 (review-lane authority, split out of 59). Phase 52 stays v1.0's and stays deferred.
+
+**Phase 61 outcome (2026-08-30):** 6/6 plans, verification 12/12. All five cloud workflows
+deployed and bounced (enrichment 114 → 118 nodes) and exercised by DISARMED runs only —
+executions `12040`, and `12044`–`12047` for the substrate-3 fan-out. **Nothing was armed.
+The first live UNATTENDED, credit-spending batch has NOT run and is gated on Phase 57
+(D-61-08).** Requirements closed: INPUT-05, RUN-01, RUN-02, RUN-03, RUN-04, AFTER-02 — all in
+`.planning/milestones/v1.1-REQUIREMENTS.md`, NOT the root `.planning/REQUIREMENTS.md` (which is
+v1.0's). Suites at close: root python 3539 passed / 154 skipped; `node --test tests/n8n/*.test.mjs`
+844 pass / 0 fail.
+
+**Next action: plan Phase 57.**
+
+### Original milestone-definition note (2026-08-25) — retained as history
 
 Client UAT verdict: the flow is "incredibly halting" — one grant per send does not scale. One
 session grant, then an unattended run through to HubSpot write. Requirements:
@@ -150,9 +168,18 @@ predating the window. VETO-03 bar still 0.
 
 ## Current Position
 
-Phase: 61 (autonomous-batch-runs) — EXECUTING
-Plan: 6 of 6
-Status: Phase complete — ready for verification
+Phase: 61 (autonomous-batch-runs) — **COMPLETE 2026-08-30**, 6/6 plans, verification 12/12
+Next: **Phase 57** — ceilings, refusal-before-start, post-run proof. It gates the first live
+  unattended, credit-spending batch (D-61-08), which has NOT run. Also open: Phase 60.
+Armed state: nothing armed. Phase 61's live exercise was DISARMED throughout
+  (executions `12040`, `12044`–`12047`).
+Suites at Phase 61 close: root python 3539 passed / 154 skipped; node 844 pass / 0 fail.
+
+### Retained history — Phase 47.5 (v0.9, 2026-08-12)
+
+*The remainder of this section is the v0.9 Phase 47.5 record, left in place unedited. It is
+history, not current position.*
+
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
   has executed on a real record. **Nothing is armed** — windows #1 and #2 were each opened
@@ -228,8 +255,12 @@ exactly what B and C now do): .planning/phases/47.5-veto-recompute-path/47.5-CON
 **Standing order:** COVER-01/COVER-02 stay open for Phase 48 (four records ended with no
 lv_org_type: Editix, Jam TV, Waikato, The Rumble). Not a 47.5 workstream.
 
-Previous status: Executing — Anthropic credit restored, Plan 03 completed
-Last activity: 2026-08-30 — Phase 61 execution started
+Last activity: 2026-08-30 — **Phase 61 complete and verified (12/12)**; backend deployed and
+  disarmed-proven. Next: Phase 57.
+
+*Retained history — Phase 47 (v0.9). Previous status: Executing — Anthropic credit restored,
+Plan 03 completed.*
+
   the live property-existence guard (found 19 missing D-09 metadata properties, resolved
   via operator-confirmed D-21 narrowing), one live research pass over all 17 pinned
   companies (47-RESEARCH-RESULTS.json), two live-discovered data-quality fixes
@@ -239,7 +270,9 @@ Last activity: 2026-08-30 — Phase 61 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [██████████] 97% (v0.9 phase 47.5 of 46-49)
+Progress: v1.1 — 53/54/58/59/61 complete; **57 next**; 60 open; 55 and 56 absorbed into 61;
+52 deferred (v1.0). (The old `97% (v0.9 phase 47.5 of 46-49)` bar was a v0.9 figure and is
+superseded.)
 
 ## Session
 
@@ -600,8 +633,12 @@ across the next plugin update — it fails silently, which is the dangerous dire
 
 ## Operator Next Steps
 
-- Run /gsd-plan-phase 50 to plan Derived Tier Property (context gathered 2026-08-13,
-  `.planning/phases/50-derived-tier-property/50-CONTEXT.md`)
+- Run `/gsd-plan-phase 57` — Ceilings, refusal-before-start and post-run proof. It is the last
+  gate on the first live unattended, credit-spending batch (D-61-08) and is the missing producer
+  for GRANT-04's `ceiling_breach` and requirements RUN-05 / AFTER-01 / AFTER-03.
+- ~~Run /gsd-plan-phase 50 to plan Derived Tier Property (context gathered 2026-08-13,
+  `.planning/phases/50-derived-tier-property/50-CONTEXT.md`)~~ — superseded; Phase 50 completed
+  2026-08-14.
 
 ## Deferred Items
 

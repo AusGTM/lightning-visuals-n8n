@@ -20,8 +20,10 @@ n8n. This skill's whole job is: work out **which** records, **which** providers,
 it will cost** and **how it will be split** — show all four — and then, only when
 explicitly armed, send exactly that plan.
 
-Nothing below is a per-record claim. Reading a run's outcome per record is a separate
-capability; claiming it here would be a guess dressed as a report.
+Per-record outcomes are relayed only from what the backend's own response body carries —
+never inferred, never invented (step 9, and the F3 recorded edit there). A chunk the
+transport accepted can still hold a blocked row inside it, and where the body genuinely
+says nothing per record, this lane reports at chunk granularity and says so.
 
 ## Steps
 

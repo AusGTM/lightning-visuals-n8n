@@ -10,7 +10,10 @@
 - ✅ **v0.8 Execution Budget Safety** — Phases 44–45 (shipped 2026-08-11)
 - ✅ **v0.9 ICP Rubric Calibration & Veto Remediation** — Phases 46–50, archived (`milestones/v0.9-ROADMAP.md`, `milestones/v0.9-REQUIREMENTS.md`) (shipped 2026-08-19)
 - ⏸️ **v1.0 Direct Backfill & Scoring Coverage** — Phases 51–52 (Phase 51 complete; **Phase 52 deferred by the operator 2026-08-25** in favour of v1.1)
-- 🚧 **v1.1 Unattended Session Runs** — Phases 53–60 (`milestones/v1.1-ROADMAP.md`, `milestones/v1.1-REQUIREMENTS.md`)
+- 🚧 **v1.1 Unattended Session Runs** — Phases 53–61 (`milestones/v1.1-ROADMAP.md`, `milestones/v1.1-REQUIREMENTS.md`).
+  Complete: 53, 54, 58, 59, 61. Open: **57 (next)**, 60. Absorbed into 61: 55, 56 (D-61-08).
+  ~~Phases 53–60~~ — corrected 2026-08-30, Phase 61 was inserted ahead of everything.
+  **The first live unattended, credit-spending batch has NOT run** — it is gated on Phase 57.
 
 ## Phases
 
@@ -36,8 +39,13 @@ numbers on its own. Decisions in `.planning/MILESTONE-CONTEXT.md`; requirements 
       enrichment run — and resolve the deferred FILL-04 third-disposition question.
       **Gated on Phases 59 and 55** (operator ruling 2026-08-27): the ~646-company run goes
       through the cheap, low-ceremony write path, not the current one. Do not resume 52 first.
+      **Status of that gate, 2026-08-30:** Phase 59 is complete (2026-08-29) and Phase 55's async
+      work landed inside Phase 61 (complete 2026-08-30), so both named gates have been built —
+      but the first live unattended, credit-spending batch is itself still gated on Phase 57
+      (D-61-08). Whether 52 may now resume is an operator call that has not been recorded; this
+      entry does not decide it.
 
-### 🚧 v1.1 Unattended Session Runs (Phases 53–60)
+### 🚧 v1.1 Unattended Session Runs (Phases 53–61)
 
 One operator grant at session start carries a batch through ingest → enrichment → HubSpot write,
 unattended. Driven by a client UAT on 2026-08-25 that found three arming surfaces for one write,
@@ -120,19 +128,35 @@ variable), and a design that runs the provider waterfall twice per written recor
       remains test-proven, never live-proven, for want of a contacts candidate producer. Total
       live cost: 10 n8n executions, 1 write, 0 provider credits, 0 Anthropic calls.
 
-- [ ] **Phase 55: Async run — submit, poll, resume** - A batch stops being bounded by n8n Cloud's
+- [x] **Phase 55: Async run — submit, poll, resume** — **ABSORBED INTO PHASE 61, 2026-08-30**
+      (operator decision D-61-08). Not open work; do NOT re-plan it. Delivered inside Phase 61
+      (plans `61-01` spike + `61-05` async submit/progress/resume): RUN-01, RUN-03 and RUN-04 are
+      ticked in `milestones/v1.1-REQUIREMENTS.md`. The requirements it carried are retained below
+      for traceability. ~~A batch stops being bounded by n8n Cloud's
       ~100s response window; run state survives a restart or fails loudly — **pulled ahead of
       Phase 52** (operator ruling 2026-08-27) so the backfill is not run at `max_records_per_chunk:
       2`. Owns the response-window ceiling and the chunk cap; Phase 59 deliberately does not touch
       them. **Sequenced after 59**, which settles what a grant authorizes before async runs start
       outliving one. Still spike-first: n8n Cloud's execution model, not our code, decides what is
-      possible here — if the spike fails, Phase 52 runs at chunk=2 and that is an accepted outcome.
+      possible here — if the spike fails, Phase 52 runs at chunk=2 and that is an accepted
+      outcome.~~ The spike was run and did not fail: `61-SPIKE-VERDICT.md` selected substrate 1
+      (async ack), with substrate 3 (self-referencing fan-out) integrated behind an off-by-default
+      flag and proven at runtime (disarmed executions `12044`–`12047`).
 
-- [ ] **Phase 56: The unattended pair pipeline** - One grant carries ingest → enrich → create →
-      associate, creates included, held rows queued rather than guessed
+- [x] **Phase 56: The unattended pair pipeline** — **ABSORBED INTO PHASE 61, 2026-08-30**
+      (operator decision D-61-08). Not open work; do NOT re-plan it. Delivered inside Phase 61
+      (plans `61-04` confidence table + durable held-rows queue, `61-06` pair pipeline under one
+      grant): RUN-02 and AFTER-02 are ticked in `milestones/v1.1-REQUIREMENTS.md`. Original text,
+      retained for traceability: ~~One grant carries ingest → enrich → create →
+      associate, creates included, held rows queued rather than guessed~~ — **its gate survived
+      the fold**: the first live unattended run is still gated on Phase 57.
 
-- [ ] **Phase 57: Ceilings, refusal-before-start, and post-run proof** - A run cannot spend what
-      it does not have, and proves afterwards it wrote only what it was granted
+- [ ] **Phase 57: Ceilings, refusal-before-start, and post-run proof** — **NEXT PHASE.** A run
+      cannot spend what it does not have, and proves afterwards it wrote only what it was granted.
+      **This phase gates the first live unattended, credit-spending batch** (D-61-08) — Phase 61's
+      backend is deployed and disarmed-proven, but no such run has happened. Closes RUN-05,
+      AFTER-01, AFTER-03, G-4, and is the producer GRANT-02/GRANT-04's `ceiling_breach` still
+      lacks.
 
 - [x] **Phase 58: Take what the operator actually has** *(complete 2026-08-26, verified 31/31)* - Every input an operator holds
       (screenshot, paste, URL, bare name) resolves to a company the backend can act on; missing
@@ -141,7 +165,9 @@ variable), and a design that runs the provider waterfall twice per written recor
 
 - [x] **Phase 59: Frictionless write path** *(complete 2026-08-29, verified 18/18 after gap
       closure)* — the blocking walk ran 2026-08-28; see `59-CONTEXT.md` and `53-WALK-RECORD.md`.
-      Still runs before Phase 55, and both before Phase 52. Plugin released 0.21.0 → 0.28.0.
+      ~~Still runs before Phase 55, and both before Phase 52.~~ (Superseded 2026-08-30: Phase 55
+      was absorbed into Phase 61, which is complete; Phase 52 stays deferred.) Plugin released
+      0.21.0 → 0.28.0.
 
       **The lesson worth keeping.** All four gaps that first-pass verification found (14/18) had
       shipped past three green suites — root 3285, plugin 1678, node 776 — because every test drove
@@ -285,7 +311,8 @@ variable), and a design that runs the provider waterfall twice per written recor
       write-safety gate nodes (HubSpot has no rollback; a bad merge hits ~700 live records), the
       material-conflict judge gate (caught a real false veto — execution `11983`, Series Futsal),
       and the non-clobber merge policy. Out of scope: the response-window ceiling and
-      `max_records_per_chunk`, both owned by Phase 55.
+      `max_records_per_chunk`, both owned by Phase 55 — **which was absorbed into Phase 61
+      (D-61-08); Phase 61 shipped the async shape that lifts the response-window bound.**
 
 - [x] **Phase 61: Autonomous batch runs** — **COMPLETE 2026-08-30**
       (operator, 2026-08-30). Inserted ahead of everything after walk run 4 failed.
@@ -429,6 +456,11 @@ being closed by operator choice, not because anything is broken. Run
 
 ### Phase 61: Autonomous batch runs
 
+**Status: COMPLETE 2026-08-30** — 6/6 plans, verification 12/12 (`61-VERIFICATION.md`). Backend
+deployed and bounced (all five cloud workflows; enrichment 114 → 118 nodes) and exercised by
+DISARMED runs only (`12040`; `12044`–`12047` for the fan-out). **Nothing was armed, and the first
+live unattended, credit-spending batch has NOT run — it is gated on Phase 57 (D-61-08).**
+
 **Goal**: An operator hands over a batch and gets it back done. Research, enrichment and
 ingestion run **autonomously**; consent is once per batch, not once per row; rows the system is
 not confident about are **held and collected into one review queue** rather than guessed or
@@ -487,10 +519,15 @@ reachable, those three are what make autonomy survivable rather than reckless.
 first live unattended run is gated on 57's ceiling work. D-53-02 is explicit that a grant's
 computed ceiling is disclosure, not constraint.
 
-**Biggest unknown, inherited from 55**: n8n Cloud's execution model — not our code — decides what
-submit/poll/resume can do. SPIKE IT BEFORE PLANNING TASKS AROUND IT. Run-state location (n8n
-static data, a HubSpot object, an external store) has a different failure mode per option when
-n8n restarts mid-run.
+**Biggest unknown, inherited from 55 — RESOLVED by plan `61-01`**: ~~n8n Cloud's execution model —
+not our code — decides what submit/poll/resume can do. SPIKE IT BEFORE PLANNING TASKS AROUND
+IT.~~ The spike ran first, as directed: `61-SPIKE-VERDICT.md` plus `61-PREMISE-DOCS-FINDINGS.md`,
+`61-PREMISE-PROBE-VERDICT.json` and `61-SCALE-UP-VERDICT.json`. Substrate 1 (async ack) was
+selected; substrate 3 (self-referencing fan-out) shipped behind an off-by-default flag and was
+proven at runtime. Run-state location was an operator decision: a HubSpot object for the run
+handle and progress, plus `run_manifest.py` for per-row verdicts. Two findings worth carrying:
+sub-workflow executions are documented as neither billed nor concurrency-capped, and a Wait under
+65s stays in-process and is NOT restart-safe.
 
 **Requirements**: INPUT-05, RUN-01, RUN-02, RUN-03, RUN-04, AFTER-02
 
@@ -670,9 +707,13 @@ silently inherit Phase 51's placeholder behavior without a decision.
 | 52. Staged Canary Execution & Safety Verification | v1.0 | 0/TBD | Deferred (operator, 2026-08-25) | - |
 | 53. Operator-openable Write Grant | v1.1 | 4/4 | Complete (verified) — GRANT-01 TICKED, walk run 3 | 2026-08-29 |
 | 54. Single-pass Armed Dispatch | v1.1 | 7/7 | Complete (verified) | 2026-08-27 |
+| 55. Async Run — Submit, Poll, Resume | v1.1 | — | Absorbed into Phase 61 (D-61-08) | 2026-08-30 |
+| 56. The Unattended Pair Pipeline | v1.1 | — | Absorbed into Phase 61 (D-61-08) | 2026-08-30 |
+| 57. Ceilings, Refusal-before-start, Post-run Proof | v1.1 | 0/TBD | **NEXT** — gates the first live unattended batch | - |
 | 58. Take What the Operator Actually Has | v1.1 | 6/6 | Complete (verified) | 2026-08-26 |
 | 59. Frictionless Write Path | v1.1 | 9/9 | Complete (verified 18/18, after gap closure) | 2026-08-29 |
 | 60. Review-lane Authority | v1.1 | 0/TBD | Split from 59 (operator, 2026-08-28) | - |
+| 61. Autonomous Batch Runs (absorbs 55 + 56) | v1.1 | 6/6 | Complete (verified 12/12) | 2026-08-30 |
 
 ## Ledger gaps (known)
 

@@ -136,6 +136,38 @@ Inherited from the backend and non-negotiable:
 - **Unattended monitoring is read-only.** The sweep that watches for problems burns no provider
   credits, enables no writes, and dispatches nothing.
 
+## Autonomy: what a batch does without asking
+
+A batch of three hundred contacts must not become three hundred conversations. Since the
+2026-08-30 ruling that shape is explicit, and it is four things at once:
+
+- **A row the system is confident about proceeds** — no question, no gate, no per-row approval.
+- **A row it is not confident about is held** — never guessed, never written, and never asked
+  about in the middle of the run.
+- **The batch always finishes.** A held row never stops the rows behind it.
+- **Held rows collect into one review queue**, cleared in a single pass at the end, in the same
+  approve / deny / pick vocabulary the rest of the flow already uses.
+
+Confidence here is a deterministic decision table over signals the pipeline already produces —
+how strong the HubSpot match was, whether the providers agreed, and whether a material conflict
+went to the judge. It is not a score and not a model call, and agreement never rescues a row an
+ambiguous match already held.
+
+**What autonomy did not relax, and this is the reason it could be granted at all:** the
+non-clobber merge policy, the write-safety gates, the per-send armed window narrowed to that
+send's own records, and the post-run account of exactly which records were written. HubSpot has
+no rollback and this portal holds roughly seven hundred live records — those four are what make
+a run that asks less still safe to run.
+
+**A broken batch resumes rather than restarting.** What each row reached is recorded as the run
+goes, so a dropped connection or a stopped run does not re-spend provider credit on rows that
+already settled. A run that cannot trust its own previous state re-runs everything and says so
+in those words, rather than presenting a partial trust as a fresh start.
+
+**Still gated:** the first live *unattended*, credit-spending batch run is held behind Phase 57's
+per-run ceilings, refusal-before-start, and post-run allowlist proof. The backend is deployed and
+has been exercised by disarmed runs. Nothing here has yet run unattended against real credit.
+
 ## Cost posture
 
 Provider credits are real money and the operator cannot see a bill. Every batch is previewed
@@ -250,6 +282,12 @@ them the same conversational way:
 
 A few things are true across all four:
 
+- **A row needs one strong identity, and there are three.** An email address; or a LinkedIn
+  profile URL; or first name, last name and company, all three. A row carrying nothing but a
+  LinkedIn URL is accepted — matched against HubSpot on that key and enriched through the
+  licensed provider waterfall on it — so you are never asked to supply a company just to get
+  such a row moving. A name with no company and no email is the one case still held for review
+  rather than matched: a wrongly matched person is worse than an unmatched one.
 - **A row is never completed by guessing.** If something can't be read clearly, or a field just
   isn't there, it's left blank rather than filled in with a plausible guess.
 - **Anything uncertain comes back as one list to confirm**, alongside the preview — not one
@@ -340,7 +378,11 @@ which have no operator to confirm anything. The settings key is the authority fo
 interactive path only. An admin who finds both documented is looking at two paths, not two
 switches for one.
 
-**For you, per batch:** ask to open a write grant. You name the records and the lanes;
+**For you, per batch:** ask to open a write grant. **One grant carries the whole batch** —
+through matching, enrichment, creation and association — rather than one grant per send, and
+that includes a company or contact the batch itself creates partway through (covered by the
+website domain you confirmed for it before the grant was opened, never by an id that did not
+exist yet). You name the records and the lanes;
 the plugin shows the record count, the worst-case provider credits per provider, the
 worst-case Anthropic dollars, the projected n8n executions and the configured monthly
 allowance; you say yes once. Every send in that batch then turns live writes on and off
@@ -373,7 +415,8 @@ Four things worth knowing before you use one:
   rather than open one fixed path.)*
 - **A grant lives in the conversation and is never written to disk.** It ends on
   completion, revocation, session end, an error, a ceiling breach, or two consecutive
-  failures to turn writes back off.
+  failures to turn writes back off. **A resumed batch therefore gets a fresh grant, always** —
+  resuming brings back which rows still need work, never the authority to write them.
 
 ## Asking what the backend is doing
 
@@ -580,7 +623,7 @@ operator-claude-plugin/
   skills/
     initialize/            # setup + setup-check: template placement, named missing values, idempotent re-run
     contact-upload/        # the ingestion contract: state target, resolve input, preview, approve, arm, dispatch
-    enrich-before-ingest/  # default for rows with no email: match against HubSpot, confirm, enrich, enriched preview, two arms, then upload
+    enrich-before-ingest/  # default for rows with no email: match against HubSpot, confirm, enrich, enriched preview, then upload — one grant for the batch, or two asks without one
     enrich-records/        # the enrichment lane: records or list, providers, cost, chunk plan, approve, arm, dispatch
     backend-status/        # plain-language read of what the backend is doing, text or dashboard artifact
     backend-control/       # run-now / on-off / cadence over the allowlisted mutations, confirmed and read-back verified
@@ -606,6 +649,10 @@ operator-claude-plugin/
     watch.py sweep_entry.py sweep_read.py sweep_conditions.py sweep_notify.py
     # review triage
     review_queue.py review_decision.py
+    # write authorization + the post-run account of what was written
+    write_grant.py written_records.py
+    # autonomous batch runs: confidence verdicts, held rows, run scope and resume
+    confidence.py held_queue.py run_manifest.py run_state.py
   config/
     operator.local.example.json  # tracked template — copy to operator.local.json (gitignored) per setup above
     cost_rates.json        # dated cost-rate table the previews price from

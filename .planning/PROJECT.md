@@ -9,7 +9,21 @@ mock Claude web research, a Haiku→Sonnet LLM cascade, and a non-clobber merge 
 emitting dry-run HubSpot PATCH payloads. It is internal RevOps tooling for LV's sales
 team, not a customer-facing product.
 
-## Current State (as of 2026-08-19)
+## Current State (as of 2026-08-30)
+
+**In flight: v1.1 — Unattended Session Runs (phases 53–61).** Complete: 53, 54, 58, 59, 61.
+Absorbed into 61 by operator decision D-61-08: 55 (async run) and 56 (unattended pair pipeline).
+Open: **Phase 57 — the next phase** (ceilings, refusal-before-start, post-run proof) and Phase 60
+(review-lane authority). Phase 61 closed 2026-08-30 with 6/6 plans and 12/12 verification; all
+five cloud workflows are deployed and bounced but were exercised by **disarmed** runs only.
+**The first live unattended, credit-spending batch has NOT run — it is gated on Phase 57.**
+Detail: `.planning/ROADMAP.md`, `.planning/milestones/v1.1-ROADMAP.md`.
+
+**v1.0 Direct Backfill & Scoring Coverage is paused:** Phase 51 complete, **Phase 52 deferred by
+the operator 2026-08-25** in favour of v1.1. The v1.0 requirements are the root
+`.planning/REQUIREMENTS.md`; v1.1's live in `.planning/milestones/v1.1-REQUIREMENTS.md`.
+
+### Prior state (as of 2026-08-19), retained
 
 **Shipped: v0.9 — ICP Rubric Calibration & Veto Remediation.** 6 phases, 35 plans, 18
 requirements, all verified `passed`. Archived at `.planning/milestones/v0.9-ROADMAP.md`.
@@ -33,7 +47,10 @@ operator has no credits for it, and none are needed: HubSpot already derives sco
 those six numbers on its own. Decisions in `.planning/MILESTONE-CONTEXT.md`.
 
 
-## Current Milestone: v0.9 ICP Rubric Calibration & Veto Remediation
+## Shipped Milestone: v0.9 ICP Rubric Calibration & Veto Remediation (2026-08-19)
+
+*(Was headed "Current Milestone" — corrected 2026-08-30; v0.9 shipped, the current milestone is
+v1.1. The goal/feature text below is the v0.9 record as written at the time.)*
 
 **Goal:** The ICP rubric reflects who Lightning Visuals actually wins, and every scored company
 carries a score derived from that rubric rather than from a stale or false one.
@@ -215,6 +232,11 @@ Full detail and traceability live in `.planning/REQUIREMENTS.md`.
 
 ### Active (v0.9 — not yet scoped)
 
+> **Stale block, flagged 2026-08-30 rather than rewritten** (same treatment as the 2026-08-11
+> hygiene note above). This lists v0.9 candidate scope; v0.9 shipped 2026-08-19 and the current
+> milestone is v1.1, whose requirements live in `.planning/milestones/v1.1-REQUIREMENTS.md`.
+> Re-deriving these checkboxes against the v0.9 archive was out of scope for this pass.
+
 Requirements are defined by `/gsd-new-milestone`. The candidate scope carried out of v0.8 and the
 2026-08-11 debug work:
 
@@ -353,4 +375,6 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-11 after v0.8 milestone close (verified_closeout, 2 phases / 6 plans / 15 requirements)*
+*Last updated: 2026-08-30 — current-state refresh after Phase 61 closed (v1.1 in flight, Phase 57
+next). Previously updated 2026-08-11 after the v0.8 milestone close (verified_closeout, 2 phases /
+6 plans / 15 requirements).*

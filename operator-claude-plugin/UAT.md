@@ -81,9 +81,12 @@ Each is a fresh message. Use your own data or anything realistic.
 | 2.5 | Paste one or more screenshots of a page | Rows extracted from the image, same provenance rules | **PASS** — operator walk 2026-08-05 on `0.9.0`, against a LinkedIn people-search screenshot the operator captured and supplied. 6 cards read, **2 accepted / 4 rejected / 1 ambiguity**, each rejection naming its own reason. The rejections are the evidence: the "Melbourne Racing Club" chip is a SEARCH FILTER, and four cards that stated no employer were rejected rather than having the filter's company written into them — the invention this criterion exists to catch. No email, phone or `linkedin_url` was lifted off the image; those are provider-waterfall fields and a screenshot is not a route around that. `Hayden James Lowe` surfaced as an ambiguity, not a guess (middle name vs two-word surname — 0.9.0's splitter behaving the same way in the screenshot adapter as in a spreadsheet), and his card states a café, not MRC. The walk also stated up front that both accepted rows carry no email and would therefore land in `needs_review` on arrival — seeding the queue, not a finished import. Nothing sent; dispatch stayed disarmed. |
 | 2.6 | Give it something unreadable — an empty file, a PDF of a photo | A **clear, actionable** error. Never a silent drop, never zero rows with no explanation | **PASS** — operator walk 2026-08-04 on 0.7.3: named the causes, stopped before approval, offered no arming phrase (the 0.7.1 branch working live) |
 | 2.7 | Look at any row where a field was absent in your source | It is **empty** — not guessed, not filled from the company name | **PASS** — operator walk 2026-08-04: Tomas's absent title/phone/linkedin rendered `—`; nothing invented from company or email |
+| 2.8 | Give it a row carrying **only** a LinkedIn profile URL — no email, no company | It is **accepted**, not refused, and you are **not** asked to supply a company for it | **UNTESTED** — the identity rule gained `linkedin_url` as a third group on 2026-08-30 (`config/column_mapping.yaml`, `n8n/code/columnMap.js`, pinned equal by a parity test); no operator has walked it in conversation. **Scope, so a pass is not misread:** this row tests the identity gate only. Plain contact-upload still searches HubSpot by **email alone**, so a linkedin-only row taken through *that* lane lands in `needs_review` — expected, not a failure. Matching and enriching *on* the LinkedIn URL is the **enrich-before-ingest** flow ("enrich these contacts before uploading them"); walk 2.8 there to see that half |
+| 2.9 | Give it a row with a **name only** — no company, no email, no LinkedIn URL | It goes to **review**, not to a match. Being unmatched is the intended answer here | **UNTESTED** — deliberately unchanged by the 2026-08-30 identity work: a wrongly matched person is worse than an unmatched one |
 
 **Fail if:** any value appears that was not in your input. Invention is the most serious defect
-in this list (STRUCT-04).
+in this list (STRUCT-04). Also fail 2.9 if a name-only row is matched to somebody — turning a
+weak key into a confident write is the one thing that change deliberately did not do.
 
 *Covers INGEST-01/02/03/05/06/07, STRUCT-03/04.*
 
@@ -134,9 +137,13 @@ a session, and it is why the state file exists.
 | 5.3 | If any row failed | The **failing rows are identified**, and you are told what to do about them | **FUNCTIONAL PASS** (self-assessed) — `test_build_enrichment_report_failing_rows_include_blocked_skipped_and_needs_review` itemises each failing row; `test_report_sufficiency.py` pins that a create/update row is NOT reported confirmed when HubSpot produced zero items (the failure-as-success guard) |
 | 5.4 | If the run is still going | It says so and shows partial results — it does not hang or pretend to be done | **FUNCTIONAL PASS** (self-assessed) — `test_unsettled_at_the_bound_returns_still_running_with_handle_and_recheck` plus `test_settles_before_the_bound_returns_a_settled_report`: two terminal shapes, never a third |
 | 5.5 | Check the records in HubSpot | They match what the report said | **PASS** — RB-3 (created contact confirmed in HubSpot) |
+| 5.6 | Take a batch where at least one row is uncertain (a weak match, or providers that disagree) | The run **does not stop to ask you about it mid-batch**. It finishes every row, then hands you the uncertain ones as **one review list** — each named by the person, with the reason it was held | **UNTESTED** — the hold-don't-block shape was ruled 2026-08-30; the machinery is pinned by tests, but no operator has walked a mixed batch in conversation |
+| 5.7 | Interrupt a batch partway (stop it, or let a chunk fail), then run it again against the same file | It says in words which of four things happened — nothing ran before / resuming K of N / previous state unreadable, rerunning all / previous state belongs to a different run — and does not re-spend credit on rows that already settled. It asks for a **fresh** grant | **UNTESTED** — resume-or-disclose is pinned by tests; the four disclosure sentences have not been read by an operator in a live conversation |
 
 **Fail if:** the report is a summary count with no per-row detail, or a failure is reported as
-a success.
+a success. On 5.6, also fail if a held row is silently dropped instead of returned by name, or
+if the run stops to ask about it mid-batch. On 5.7, fail if a resume presents itself as a fresh
+first run, or if unreadable previous state is trusted in part rather than rerun in full.
 
 *Covers DISPATCH-01/03/04, REPORT-01/03.*
 

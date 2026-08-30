@@ -16,9 +16,9 @@ Two things this walk exists to prove, both new on 2026-08-25:
 
 ## 0. Prerequisites (admin, once)
 
-The backend is already deployed and bounced (Contact Ingest 29 nodes, Enrichment 113
-nodes, both active, **all write flags false and both allowlists empty**). What remains is
-the client:
+The backend is already deployed and bounced (Contact Ingest 29 nodes, Enrichment **123**
+nodes as of the 2026-08-30 Phase 61 deploy — was 113 when this walk was written; both
+active, **all write flags false and both allowlists empty**). What remains is the client:
 
 ```bash
 git push origin master
@@ -26,7 +26,9 @@ git -C ~/.claude/plugins/marketplaces/lightning-visuals-operator fetch --depth=1
 git -C ~/.claude/plugins/marketplaces/lightning-visuals-operator reset --hard FETCH_HEAD
 ```
 
-Then in Claude Desktop: **Update** the plugin to **0.14.0**. Settings are safe — since
+Then in Claude Desktop: **Update** the plugin to at least the version in
+`operator-claude-plugin/.claude-plugin/plugin.json` (**0.14.0** when this walk was written;
+**0.33.0** as of 2026-08-30). Settings are safe — since
 0.7.0 they live outside the versioned install directory. Confirm by asking the plugin to
 initialize; it should report setup complete and change nothing.
 
@@ -168,10 +170,14 @@ writes off**.
 
 ## What this walk does not cover
 
-- **The enrichment lane's own contact create does not associate.** The 2026-08-25 rule is
-  implemented in the ingest lane only. That path needs `ALLOW_HUBSPOT_CREATE` plus an
-  allowlist match, so it cannot fire unattended, but a contact created through it lands
-  unassociated. Tracked in the root `CHANGELOG.md` under Known debt.
+- **The enrichment lane never creates a contact at all — it holds one.** The 2026-08-25
+  association rule is still implemented in the ingest lane only, and rather than land an
+  unassociated contact, Phase 61 (2026-08-30) downgrades an armed `create` on the
+  enrichment workflow's contacts branch to `review`, with a reason telling you to route
+  that contact through the contact-upload ingest lane instead. So this walk's ingest lane
+  remains the only path that creates a contact, and no lane lands one unassociated. (The
+  root `CHANGELOG.md` still lists the old "lands unassociated" wording under Known debt —
+  that entry is stale.)
 - **Freemail contacts.** A contact whose only address is gmail/bigpond/optusnet resolves
   no company from its domain, so it depends on the exact company-name match or on you
   naming the company id. That is deliberate: associating every consumer address to one

@@ -70,6 +70,17 @@ inference from the sibling usage endpoint alone.
 (`{"contacts": [...]}`) is still required (a flat top-level body is also rejected), but
 each item is a plain identity object with no synthetic index key.
 
+> **NOT PROBED — `email` and `linkedinUrl` (noted 2026-08-30).** The table above is the whole
+> of what the 2026-07-30 probe session tested. It never sent an `email` or a `linkedinUrl`
+> identity key, so this contract of record says **nothing** about either. That matters now:
+> `n8n/code/lushaRequest.js`'s `lushaContactBody` sends both (`contact.email`,
+> `contact.linkedinUrl`), the cloud emission site passes **only** `{email, linkedin_url}`, and
+> since Phase 61 (2026-08-30) a contact row carrying **only** a LinkedIn URL is accepted and
+> routed down that path — so a LinkedIn-only row's provider leg rests on a request key this
+> document has never confirmed live. `lushaRequest.js`'s own comment cites "§3" for those keys;
+> §3 does not support the citation. Confirm both with a live 200 before treating them as
+> contract, and record the result here.
+
 ## 4. Contacts: response
 
 **Envelope** (verbatim structure; the person's revealed email is a synthetic placeholder,

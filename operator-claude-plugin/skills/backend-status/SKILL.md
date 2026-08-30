@@ -16,7 +16,8 @@ description: Report what the HubSpot enrichment backend is doing — which workf
 **This skill reads. It changes nothing.** It does not turn a workflow on or off, does not
 start, stop or cancel a run, does not retry anything, and writes to no HubSpot record.
 If the operator asks you to act on what you find here, say plainly that this surface can
-only look — turning things on and off is a separate capability that does not exist yet.
+only look — turning things on and off is the `backend-control` skill's job, and it has
+its own confirmation before anything changes. Point them at it rather than acting here.
 An operator who believes this skill can act on their behalf is a worse outcome than one
 who has to ask twice.
 

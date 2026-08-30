@@ -70,13 +70,14 @@ flowchart LR
 | Execution-budget safety (SJ-3 gate + drain + cap) | ✅ **v0.8 Phase 44, live-proven 2026-08-10** — a gate-closed tick costs 1 execution (was 1+N), drains its own queue, and dispatch is capped from `config/execution_budget.yaml` (2,500/month plan) |
 | Burn-rate alarm + runtime cadence budget floor | ✅ **v0.8 Phase 45, sealed 2026-08-10** — the sweep samples a bounded recent execution rate and fires when it projects past the allowance, never claiming a monthly total n8n makes unknowable; a cadence change is refused when the whole schedule's floor would bust its configured share. **Ships inert** — installing the sweep schedule is an admin action, so this is unit-proven against synthetic history, not an observed scheduled fire |
 | Operator usage guide | ✅ [`operator-claude-plugin/USAGE.md`](operator-claude-plugin/USAGE.md) — task-oriented guide for the non-technical operator |
+| Autonomous batch runs (one grant per batch · confident rows proceed · unconfident rows HELD into one end-of-run review queue · async submit + progress read + resume, so a run is no longer bounded by n8n's ~100 s synchronous response window) | ✅ **v1.1 Phase 61, verified 2026-08-30** (12/12 must-haves; absorbed Phases 55 and 56 per D-61-08). A contact row carrying only a **LinkedIn URL** is now accepted, matched on that key and enriched; name-only rows still route to weak-key `needs_review`. Deployed and bounced 2026-08-30, **disarmed** — live evidence is disarmed executions `12040` and `12044`–`12047`. **The first live unattended, credit-spending batch has NOT run** — it is gated on Phase 57 (per-run ceilings, refusal-before-start, post-run proof), which is still unbuilt |
 
 **"Operator" means two different people in this repo.** Everything above is administered from this
 repository by a technical operator/admin (scripts, deploys, armed windows, runbooks in `docs/`). The
 v0.6 client targets a *non-technical* operator who works only in Claude and never opens n8n or a
 terminal; `docs/` runbooks and `scripts/` are admin surfaces, not theirs.
 
-Full test suite: `.venv/bin/python -m pytest -q` (Python oracle) + `node --test tests/n8n/*.test.mjs` (Code-node modules). Current: **2487 pytest / 656 node**, plus **1332** in `operator-claude-plugin/tests/`.
+Full test suite: `.venv/bin/python -m pytest -q` (Python oracle) + `node --test tests/n8n/*.test.mjs` (Code-node modules). Current (2026-08-30): **3539 pytest / 844 node**, plus **1875** in `operator-claude-plugin/tests/` (root pytest collection includes those).
 
 ## Repository layout
 

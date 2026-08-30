@@ -49,15 +49,32 @@ Not limited to spreadsheets — pasted text, a JSON export from another tool, a 
 screenshot of a table all work. Claude extracts a contact table, shows the same preview, and
 proceeds the same way.
 
+**What a row needs to be usable:** an email address, *or* a LinkedIn profile URL, *or* first
+name + last name + company. A row with only a LinkedIn URL is fine on its own — you are not
+asked to supply a company for it. A name with neither a company nor an email is the case that
+still goes to review rather than being matched, on purpose: matching the wrong person is worse
+than matching nobody.
+
 ### Enrich first, then load
 
 > "Enrich these contacts before uploading them" · "Fill in the gaps before they go in"
 
 Same as an upload, but each new contact is matched against HubSpot and enriched from the
 data providers *before* it is created — so nothing lands in HubSpot incomplete. Costs
-provider credits; the preview includes a cost estimate before you approve. This flow asks
-for permission **twice**, at two different moments — once before any provider credit is
-spent, and again (after a full enriched preview) before anything is written to HubSpot.
+provider credits; the preview includes a cost estimate before you approve.
+
+**How many times you are asked depends on one thing.** Open a **write grant** for the batch
+and you say yes once, and that one yes carries the whole batch — matching, enrichment,
+creation and association. With no grant open the flow asks **twice**, at two different
+moments: once before any provider credit is spent, and again (after a full enriched preview)
+before anything is written to HubSpot.
+
+Either way, the run itself does not stop to ask you about individual rows. Rows the system
+is confident about go through; rows it is not confident about are **held** — never guessed,
+never written — and the batch finishes regardless. The held rows come back at the end as
+**one review list**, named person by person with the reason each is held, which you clear in
+a single pass. If a run breaks partway, resuming picks up the rows that never settled rather
+than re-spending credit on the ones that did; a resumed batch always asks for a fresh grant.
 
 ## Enriching records already in HubSpot
 
@@ -174,6 +191,10 @@ that was never installed, or that has stopped firing, produces nothing at all �
   says "verified", it re-fetched the record and looked.
 - **Refusals are explicit.** A record that wasn't processed says so and says why — nothing
   is silently dropped, capped, or skipped.
+- **A batch that asks less is not a batch that checks less.** Running without per-row
+  approval changed who gets asked, not what gets enforced: the non-clobber merge policy,
+  the write gates, the per-send armed window and the post-run list of exactly which records
+  were written are all unchanged. A held row is held, not dropped — it comes back by name.
 
 ## When to call the admin
 

@@ -2297,7 +2297,8 @@ rest of the lane):
 deliberately **not** a `mode` value — `isReturnOnly()` treats any non-`"write"` mode as
 return-only, so a mode-borne intent would report success and write nothing. Helper:
 `scripts/remediate_veto_companies.py::post_webhook_event(..., recompute=True)` (300s default
-read timeout).
+read timeout). **Amended 2026-08-30:** `recompute` is no longer the only request-level flag —
+Phase 61 added `async_ack` and `scale_up` on the same idiom. See §13.0.2.
 
 **What it costs: nothing.** The lane reaches `Decide` with no provider, research, judge, merge
 or normalize node on it — 0 provider credits, 0 Anthropic calls, 1 n8n execution per POST
@@ -2357,8 +2358,116 @@ Company creation stays where dedupe already lives: the companies branch of
 `wf_enrichment_cloud`, now reachable from the plugin via the `{"companies": [{"name",
 "domain"}]}` spec form (`enrichment.build_envelope`, domain mandatory, no `mode`).
 
-**Known gap:** `wf_enrichment_cloud`'s own contact create does not associate. The rule is
-implemented in the ingest lane only.
+~~**Known gap:** `wf_enrichment_cloud`'s own contact create does not associate. The rule is
+implemented in the ingest lane only.~~
+
+**Gap closed 2026-08-30 (Phase 61, plan 61-06 Task 1) — by REFUSAL, not duplication.**
+`wf_enrichment_cloud`'s contacts branch still has no company-resolution or association
+mechanism, and deliberately never gained one: `ENRICH_DECIDE_CLOUD` in
+`scripts/build_cloud_workflows.py` (see its "Phase 61 Plan 06 Task 1" comment block) now
+downgrades **every** `create` on that lane to `action: "review"` — even an armed one — and
+stamps `lv_enrichment_needs_review=true`, `lv_enrichment_status=needs_review` and an
+`lv_enrichment_review_reason` naming the contact-upload ingest lane as the route to take
+instead. Rather than land an unassociated contact, the lane holds it.
+
+The load-bearing property is unchanged and is the reason the gap was closed this way: the
+association rule still has **exactly ONE operational implementation**, in
+`wf_contact_ingest_cloud`. Copying the resolve+associate subgraph into the enrichment lane
+would have created a second, driftable copy of the same rule. Coverage:
+`tests/n8n/pairPipelineAssociationFlow.test.mjs` (resolved / held / update in one batch call,
+with the held case asserted NOT landed).
+
+### 13.0.2 As-built delta — two more request-level flags, `async_ack` and `scale_up` (Phase 61, 2026-08-30)
+
+§13.0 documents `recompute` as **the** request-level boolean. Phase 61 added two more following
+the identical idiom, so §13.0's "a request-level boolean, deliberately not a `mode` value"
+reasoning now covers three flags, not one. Read this before treating §13.3's input schema or
+§18.2's parser sample as the complete request contract — both predate all three.
+
+| Flag | Added by | Default | Does |
+| --- | --- | --- | --- |
+| `recompute` | 47.5 | off | §13.0's veto recompute lane |
+| `async_ack` | 61-05 | off | responds immediately, taking the run off the ~100s synchronous response window |
+| `scale_up` | 61-06 Task 5 | **off** | substrate-3 sub-workflow fan-out via a self-referencing `Execute Workflow` node |
+
+All three are normalized in `Parse HubSpot Event` **after** the event spread, from the envelope
+with a per-event fallback (`ENVELOPE_ASYNC_ACK || event.async_ack`), and all three normalize
+**strictly** to `true` — a truthy non-boolean never opts in. They describe the REQUEST, not a
+row.
+
+**`async_ack`.** `Build Async Ack` is a third parallel fan target off `Parse HubSpot Event`;
+its only edge is to `Respond to Webhook`. When the flag is absent it `return []`s and the
+request takes the byte-identical path it took before. When set, it responds
+`{run_id, accepted: true, row_id}` — the `run_id` is the **caller's own client-minted handle,
+echoed back, never generated in-workflow**. Progress is then read by the client, not by n8n
+(D-61-01 Task 4 selected a HubSpot object + a client-side manifest over an executions-API
+store). Coverage: `tests/n8n/asyncAck.test.mjs`.
+
+**`scale_up`.** OFF by default, and the off path is test-asserted rather than assumed:
+`dispatch_plan()` with `scale_up` omitted emits an envelope carrying no `scale_up` key at all,
+dict-equal to the envelope every existing caller already sends
+(`operator-claude-plugin/tests/test_scale_up_runtime.py`). Termination has two independent
+stops: `IF Scale Up Route` and `Build Scale Up Fan-Out` test the identical predicate
+(`scale_up === true && fan_depth < 1`), and each dispatched child is re-written with
+`scale_up: false` and `fan_depth: depth + 1`, so a child can never fan again even if one guard
+were wrong. `Dispatch Self` runs `mode: "each"`, `waitForSubWorkflow: false` (detached);
+`Build Scale Up Ack` reports what was *dispatched*, never a business outcome.
+
+**Nodes added to `wf_enrichment_cloud` (verified by counting the committed
+`n8n/wf_enrichment_cloud.json`: 123 nodes as of 2026-08-30):** `Build Async Ack`,
+`IF Linkedin Searchable`, `HubSpot Linkedin Search`, `Adapt Linkedin Search`,
+`Adapt Company Create`, `IF Scale Up Route`, `Build Scale Up Fan-Out`, `Dispatch Self`,
+`Build Scale Up Ack`. One pre-existing edge was re-pointed: `Parse HubSpot Event`'s first fan
+target is now `IF Scale Up Route`, whose FALSE lane reaches the old target
+`IF Object Type Supported` unchanged — one extra pass-through hop, identical routing for any
+request that never opts in. As always, never hand-edit the JSON; regenerate with
+`scripts/build_cloud_workflows.py`.
+
+**No scheduled path carries any of the three flags.** SJ-3 and every other schedule trigger
+POST no `recompute`, no `async_ack` and no `scale_up`, so §19.1's statement stands unchanged
+and generalizes: all three are on-demand only.
+
+**Identity: `linkedin_url` is now a third identity group.** `required_identity.any_of` in
+`config/column_mapping.yaml` is `[email]`, `[firstname, lastname, company]`, `[linkedin_url]`,
+mirrored in `n8n/code/columnMap.js::requiredIdentity` and in the plugin's shipped copy
+(`operator-claude-plugin/config/column_mapping.yaml`), pinned by a
+YAML/JS parity test (`tests/n8n/columnMapIdentityParity.test.mjs`) and derived — not
+re-hardcoded — in `operator-claude-plugin/scripts/extraction.py`. A LinkedIn-URL-only row
+therefore resolves through match then enrich without being asked for a company, via a dedicated
+`linkedin` lane in `n8n/code/matchProposal.js::laneOf` ranked between `email` and weak `name`.
+**Unchanged:** a name-only row still routes to the weak-key `needs_review` path and is never
+promoted to a confident write (`summarizeMatch`'s `name` arm returns `auto: false` always).
+
+**Deployment state as of 2026-08-30 — read this before assuming autonomy is live.** All five
+cloud workflows were deployed and bounced on 2026-08-30, and **disarmed** runs were performed
+(execution `12040` for the async ack; `12044`–`12047` for the scale-up proof). **Nothing is
+armed. The first live UNATTENDED, credit-spending batch has NOT run** — it remains gated on
+Phase 57 per D-61-08, which also defers RUN-05 (per-run ceilings), AFTER-01 (refusal before
+start) and AFTER-03 (full end-of-run report).
+
+### 13.0.3 As-built delta — n8n Cloud platform facts (established 2026-08-30)
+
+Established during Phase 61's premise spike. **Tags are load-bearing: `[documented]` means
+n8n's own published documentation and nothing more; `[observed live]` means this repo watched
+it happen. Documentation is not evidence of as-built behaviour — do not upgrade a
+`[documented]` line to "verified" without an observation of your own.**
+
+| Fact | Basis |
+| --- | --- |
+| This account is on **Starter: 5 concurrent executions, 2.5K executions/month**. Over-concurrency **queues FIFO** — a throughput bound, not an error. A fan-out of 50 does not fail; it drains 5 at a time. | `[documented]` (P-09) |
+| **Sub-workflow executions are documented as neither billed nor concurrency-capped** — "only the parent (top-level) execution counts". | `[documented]` (P-05/P-09 source page) — **not** verified against billing |
+| The executions API on this instance **does list child executions**, and a parent `Execute Workflow` node's `runData` carries `metadata.subExecution.executionId` naming the child even with wait-for-completion off — detachment costs no correlation. | `[observed live]` (P-13, probes `12036`→`12037`, `12038`→`12039`) |
+| **The executions API list is not the billing quota.** No API key available to this repo can observe billing. Every execution figure in this document counts what the API *listed*. | standing residual (P-10) |
+| `write_grant.py`'s `chunk_count + record_count` cost formula **OVER-states**: a real 2-record chunk (execution `11950`) projected 3 and the list showed 1. Nothing found suggests it ever under-projects — the direction that would matter for a budget guard. | `[measured]` (P-10, against the list) |
+| A **Wait under 65 seconds stays in-process and is NOT restart-safe**; only `>= 65s` is offloaded to the database and reloaded on the resume condition. Never park work on a sub-65s wait and call it durable. | `[documented]` (P-08) — a design constraint, **not** a description of shipped behaviour: there is no Wait node in any of the eight `n8n/wf_*.json` workflows |
+| A parent workflow **cannot activate while a referenced child is unpublished** (400: "Please publish all referenced sub-workflows first"). Publish children before parents. | `[observed live]` (P-13 probe) |
+| A **self-referencing `Execute Workflow` node publishes, runs, and terminates** — the in-workflow depth guard stopped recursion, zero grandchildren. | `[observed live, disarmed]` (`12045` → children `12046`/`12047`, `61-SCALE-UP-VERDICT.json`, `depth_guard_stopped_recursion: true`) |
+
+**Do not read the fan-out as cheaper.** The same 2-synthetic-row batch listed **1** execution
+inline (substrate 1, `12044`) and **3** with `scale_up: true` (`12045` + two children). The
+verdict refuses the cheapness claim at this scale: a fan-out only pays off once either the
+billed-vs-listed question is resolved in its favour, or the row count is large enough that
+substrate 1's per-chunk ceiling would need multiple top-level executions anyway.
 
 ## 13.1 Workflow A: HubSpot private-app webhook receiver
 
