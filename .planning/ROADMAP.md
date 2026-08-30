@@ -313,7 +313,7 @@ variable), and a design that runs the provider waterfall twice per written recor
       - [x] 61-04-PLAN.md — the confidence signal and hold-and-collect: confident rows proceed,
             unconfident rows are held with a reason, the batch always finishes
 
-      - [ ] 61-05-PLAN.md — async submit, progress-while-running, and resume-or-fail-loudly on the
+      - [x] 61-05-PLAN.md — async submit, progress-while-running, and resume-or-fail-loudly on the
             substrate 61-01 selected
 
       - [ ] 61-06-PLAN.md — the unattended pair pipeline under one grant, association enforced,
@@ -474,7 +474,7 @@ n8n restarts mid-run.
 
 **Requirements**: INPUT-05, RUN-01, RUN-02, RUN-03, RUN-04, AFTER-02
 
-**Plans**: 4/6 plans executed
+**Plans**: 5/6 plans executed
 
 ### Phase 58: Take what the operator actually has
 

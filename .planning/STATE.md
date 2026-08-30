@@ -5,15 +5,15 @@ milestone_name: Unattended Session Runs
 current_phase: 61
 current_phase_name: autonomous-batch-runs
 status: executing
-stopped_at: Completed 61-01-PLAN.md (async run substrate spike verdict, Task 4 operator decision)
-last_updated: "2026-08-30T06:02:09.009Z"
+stopped_at: Completed 61-05-PLAN.md (async run handle, mid-flight progress, resume-or-disclose; deployed+bounced+live-run observed)
+last_updated: "2026-08-30T07:12:30.325Z"
 last_activity: 2026-08-30
 last_activity_desc: Phase 61 execution started
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 36
-  completed_plans: 33
+  completed_plans: 34
   percent: 83
 ---
 
@@ -151,7 +151,7 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Phase: 61 (autonomous-batch-runs) — EXECUTING
-Plan: 5 of 6
+Plan: 6 of 6
 Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
@@ -239,12 +239,12 @@ Last activity: 2026-08-30 — Phase 61 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████████░] 92% (v0.9 phase 47.5 of 46-49)
+Progress: [█████████░] 94% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-30T06:02:08.998Z
-**Stopped at:** Completed 61-01-PLAN.md (async run substrate spike verdict, Task 4 operator decision)
+**Last session:** 2026-08-30T07:12:30.316Z
+**Stopped at:** Completed 61-05-PLAN.md (async run handle, mid-flight progress, resume-or-disclose; deployed+bounced+live-run observed)
 **Resume file:** None
 
 ## Performance Metrics
@@ -343,6 +343,7 @@ Progress: [█████████░] 92% (v0.9 phase 47.5 of 46-49)
 | Phase 61 P03 | ~55min | 3 tasks | 16 files |
 | Phase 61 P04 | ~2h | 4 tasks | 16 files |
 | Phase 61 P01 | 45min | 1 tasks | 2 files |
+| Phase 61 P05 | ~35min (T1-3) + recording pass | 4 tasks | 12 files |
 
 ## Decisions
 
@@ -415,6 +416,11 @@ Progress: [█████████░] 92% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: 61-04: run_manifest.load() kept byte-unchanged; load_scoped() added instead of widening it, since 61-05 (the stated consumer) doesn't yet exist to require the wider shape
 - [Phase ?]: 61-04: held_queue.py is ONE global file (not per-run like written_records.py) -- D-61-07's 'one review queue, cleared in a single pass' is a durable backlog across runs
 - [Phase ?]: Operator decided run-state store for async batch runs: HubSpot object (run handle + progress) plus run_manifest.py (per-row verdicts); all six previously-unresolved 61-01 premises (P-05,P-07,P-08,P-09,P-10,P-13) closed by n8n docs + a live disarmed probe, none deferred
+- [Phase ?]: Substrate 1 (async_ack opt-in on Respond node) selected over substrate 3 (self-referencing Execute Workflow) at this plan's scale; substrate 3 stays the disclosed 61-06 scale-up path, narrowed by P-14 to publish-viable-but-runtime-unproven
+- [Phase ?]: run_id minted client-side before submit and passed into dispatch_plan's existing run_id keyword (REVIEW-C14) — no new handle, no signature change
+- [Phase ?]: Resume path keeps run_manifest.load()'s degrade-whole rule unchanged; report path independently classifies the manifest file (absent/parseable/anomalous/wrong-run) and discloses which in words (REVIEW-C15/08)
+- [Phase ?]: Per-chunk manifest persistence is load-accumulated-document, merge, save-whole-document — bounding crash replay exposure to one chunk (REVIEW-C13)
+- [Phase ?]: Task 4 deploy scope widened to all five cloud workflows with operator's informed consent, because the live instance was four plans behind 61-05 alone
 
 ### Roadmap Evolution
 
