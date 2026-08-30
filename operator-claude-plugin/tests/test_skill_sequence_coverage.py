@@ -242,6 +242,14 @@ COVERED = {
             "preingest.classify_matches", "extraction.validate",
         ),
     ): "test_linkedin_row_composition.py::test_a_lusha_hit_for_the_unmatched_row_is_proposed_through_resolutions_and_revalidated",
+    (
+        "enrich-before-ingest",
+        (
+            "held_queue.load", "run_manifest.load", "preingest.parse_outcome",
+            "confidence.assess", "held_queue.build_entry", "held_queue.save",
+            "run_manifest.save",
+        ),
+    ): "test_batch_finishes_composition.py::test_a_batch_with_a_failed_chunk_and_a_held_row_still_reaches_and_dispatches_its_last_row",
 }
 
 NOT_A_PIPELINE = {

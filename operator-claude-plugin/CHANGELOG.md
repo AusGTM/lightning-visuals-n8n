@@ -16,6 +16,30 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-08-30
+
+### Added
+
+- **A real confidence self-assessment, and hold-don't-block (Phase 61 Plan 04,
+  D-61-07).** The absence of any confidence signal was Finding F — with none, every
+  row became a per-row conversation. `preingest.parse_outcome` turns a response item
+  into a typed outcome carrying five named signals the backend already computes (match
+  tier, verified candidate count, provider agreement, material conflicts, judge
+  adjudication), version-stamped by `Build Response` and pinned by a real flow test
+  driving the committed lane — a missing signal or an unrecognised version parses as
+  unparseable, never as a good value. `confidence.py`'s `assess()` is a total,
+  deterministic decision table over those signals: only a strong-key auto-match with
+  no unadjudicated conflict is confident; everything else is held, with a
+  closed-vocabulary `hold_code` and a reason. `held_queue.py` is a fourth durable
+  artifact collecting held rows for one end-of-run review, with a per-hold_code resume
+  fingerprint (hashing only what a zero-credit free match pass can itself re-derive)
+  so a resume never re-spends provider credit re-reaching an identical hold.
+  `run_manifest.py` gained a sixth verdict word, `confidence_held`, distinct from the
+  existing no-email `held` since a confidence-held row usually has an email and would
+  otherwise be re-sent on every resume. `enrich-before-ingest/SKILL.md` documents the
+  sequence and reuses step 3's own approve/deny/pick/email vocabulary for the
+  end-of-run review — no second decision vocabulary.
+
 ## [0.30.0] - 2026-08-30
 
 ### Added

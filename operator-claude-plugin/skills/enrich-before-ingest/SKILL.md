@@ -414,6 +414,64 @@ whatever seven columns happened to be in the source file.
    is non-empty — the trade-off D-59-10 names explicitly for never stopping the
    dispatch over a bookkeeping failure.
 
+   **Assess confidence, and hold — don't block (D-61-07).** Once the waterfall's own
+   responses land, three properties hold for the rest of this run, stated in the
+   operator's own terms because they are the promise this phase is measured against:
+   nothing here is guessed, nothing is written that was held, and nothing waits for a
+   held row mid-run. For each row's own response item (or its absence, for a row whose
+   chunk failed outright — see above), turn it into a typed outcome and a verdict:
+
+   ```python
+   import confidence, held_queue, preingest, run_manifest
+
+   # `responses` here is the ALREADY-FLATTENED list built just above (never
+   # `outcome.responses` directly, which is one raw body per CHUNK — see the same
+   # flattening note a few lines up).
+   responses_by_id = {item["row_id"]: item for item in responses}
+   held_entries = held_queue.load()
+   verdicts = run_manifest.load()
+
+   for row in unmatched_rows:
+       row_id = row["row_id"]
+       item = responses_by_id.get(row_id)
+       parsed = preingest.parse_outcome(item) if item is not None else preingest.UNPARSEABLE_OUTCOME
+       verdict = confidence.assess(parsed)
+
+       if verdict.verdict == confidence.CONFIDENT:
+           continue  # no per-row gate — proceeds to ingest like any other sendable row
+
+       entry = held_queue.build_entry(row, verdict.hold_code, verdict.reason, parsed)
+       held_entries[row_id] = entry
+       held_queue.save(outcome.run_id, held_entries)
+       verdicts[row_id] = run_manifest.CONFIDENCE_HELD
+       run_manifest.save(outcome.run_id, verdicts)
+   ```
+
+   **The queue entry is written before the manifest verdict, in that order, every
+   time** — a crash between the two leaves an unmentioned row that simply gets
+   re-checked on the next resume (a duplicate provider call, never a dropped contact),
+   never a row marked held with nothing recorded to review.
+
+   A row this table cannot confirm is HELD, not guessed and not asked about here — the
+   run moves straight to the next row regardless of what this one did, and reaches its
+   last row whatever any single row's chunk or verdict was. Held rows do not join the
+   `sendable`/`send` set below; they are collected, and shown ONCE, in the end-of-run
+   review pass described after step 7's report.
+
+   **The end-of-run review reuses step 3's own numbered-table vocabulary — `approve` /
+   `deny` / `pick <sub-label>` / `email: <address>` — never a second decision
+   vocabulary.** Its two safety rules carry over unchanged: a bare blanket approval
+   with no named scope is refused, and one malformed line refuses the whole table
+   before anything is applied. `approve` on a held row means proceed with it despite
+   the hold; `pick` selects among a `HOLD_AMBIGUOUS_CANDIDATES` row's own real
+   candidates, the same as an ordinary ambiguous, multi-candidate proposal.
+
+   **What stays exactly as it is, said here so it is not mistaken for relaxed:** the
+   non-clobber merge policy, the write-safety gate nodes, `plan_grant`'s empty-record-
+   set refusal, the material-conflict judge gate, the per-send armed window, and the
+   post-run written-records account. This step only decides who gets asked before a
+   write — the write itself is exactly as gated as it always was.
+
 6. **The enriched preview — the last look before anything reaches HubSpot.** Render
    it:
 
