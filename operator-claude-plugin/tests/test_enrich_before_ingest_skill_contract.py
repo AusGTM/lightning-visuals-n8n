@@ -335,15 +335,17 @@ def test_no_last_modified_field_is_implied_on_the_match_candidate_endpoint():
 # ---------------------------------------------------------------------------------
 # FINDING 2 (53-WALK-RECORD.md, .planning/debug/merge-enriched-drops-responses.md):
 # step 5 used to hand chunking.dispatch_plan's per-chunk-list responses straight to
-# merge_enriched, which silently filed every row as unanswered. The fix is a flatten
-# step, mirroring preingest.rerequest_unanswered's own normalization for this same
-# endpoint (preingest.py). These pins hold both the negative (the broken call must
-# not reappear) and the positive (the flatten happens, and happens BEFORE the merge).
+# merge_enriched, which silently filed every row as unanswered. The original fix was a
+# manual flatten step, mirroring preingest.rerequest_unanswered's own normalization for
+# this same endpoint. Gap-closure (2026-08-31) replaced step 5's dispatch+merge with an
+# async submit + recovery (`watch.recover_async_dispatch`), whose own `responses` are
+# already flat by construction — so the manual flatten is gone from THIS step (it still
+# lives, unchanged, in `preingest.rerequest_unanswered`), and what these two tests pin
+# is the negative (the broken raw-per-chunk call must never reappear) and the positive
+# (the recovered, already-flat payload is what actually reaches merge_enriched).
 # ---------------------------------------------------------------------------------
 
 UNFLATTENED_MERGE_CALL = "preingest.merge_enriched(unmatched_rows, outcome.responses)"
-FLATTEN_IDIOM = "body if isinstance(body, list) else [body]"
-FLATTENED_MERGE_CALL = "preingest.merge_enriched(unmatched_rows, responses)"
 
 
 def test_step_5_does_not_hand_dispatch_plans_raw_responses_straight_to_merge_enriched():
@@ -355,20 +357,26 @@ def test_step_5_does_not_hand_dispatch_plans_raw_responses_straight_to_merge_enr
     )
 
 
-def test_step_5_flattens_dispatch_plans_responses_before_merging():
-    body = _text()
-    assert FLATTEN_IDIOM in body, (
-        "expected the same per-chunk flatten idiom preingest.rerequest_unanswered "
-        "already uses for this endpoint"
-    )
-    assert FLATTENED_MERGE_CALL in body
+RECOVERED_MERGE_CALL = 'preingest.merge_enriched(unmatched_rows, recovery["responses"])'
 
-    flatten_offset = body.find(FLATTEN_IDIOM)
-    merge_offset = body.find(FLATTENED_MERGE_CALL)
-    assert flatten_offset != -1 and merge_offset != -1
-    assert flatten_offset < merge_offset, (
-        "the flatten step must appear BEFORE the merge_enriched call it feeds"
+
+def test_step_5_merges_the_recovered_async_payload_not_dispatch_plans_raw_per_chunk_body():
+    """Gap-closure (2026-08-31, operator decision "Option B"): step 5 now dispatches
+    with `async_ack=True` and recovers the proposed values from the settled execution
+    (`watch.recover_async_dispatch`) rather than reading `outcome.responses` off the
+    wire — `recovery["responses"]` is already flat by construction (one settled
+    execution's own `Build Response` output IS one chunk's rows, never one raw body per
+    chunk), so the OLD manual per-chunk flatten loop this test used to pin no longer
+    belongs in this step; it survives, unchanged, in `preingest.rerequest_unanswered`'s
+    own re-request pass. What this test still pins: the call that reaches
+    `merge_enriched` is the recovered payload, never `outcome.responses` unflattened
+    (see the sibling test above, still pinned unchanged)."""
+    body = _text()
+    assert "watch.recover_async_dispatch" in body, (
+        "step 5 must recover the proposed values from the settled execution, not "
+        "assume they arrived on the wire"
     )
+    assert RECOVERED_MERGE_CALL in body
 
 
 # ---------------------------------------------------------------------------------

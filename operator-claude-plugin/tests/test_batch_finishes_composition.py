@@ -14,6 +14,7 @@ import confidence
 import held_queue
 import preingest
 import run_manifest
+import run_state
 
 
 def _match_item(row_id, tier, candidates=None):
@@ -50,6 +51,15 @@ def test_a_batch_with_a_failed_chunk_and_a_held_row_still_reaches_and_dispatches
     outcome = preingest.match_batch(plan, fake_config, transport=transport)
     assert outcome.unchecked_row_ids == {"row-1"}, "row-1's chunk failed outright"
 
+    # Gap-closure (2026-08-31) scaffolding: the SKILL's own dispatch step (a separate,
+    # earlier python block — not part of the sequence this test pins) registers the
+    # run's scope and marks it dispatched before this confidence-assessment block ever
+    # runs. Reproduced here as setup, not as an assertion target, so `run_state.
+    # read_progress` below reads real buckets instead of NOT_STARTED.
+    row_ids = [row["row_id"] for row in rows]
+    run_state.start_run("run-1", row_ids)
+    run_state.mark_dispatched("run-1", row_ids)
+
     responses_by_id = {item["row_id"]: item for item in outcome.responses}
     held_entries = held_queue.load()
     verdicts = run_manifest.load()
@@ -71,8 +81,27 @@ def test_a_batch_with_a_failed_chunk_and_a_held_row_still_reaches_and_dispatches
         held_entries[row_id] = entry
         held_queue.save("run-1", held_entries)
         verdicts[row_id] = run_manifest.CONFIDENCE_HELD
+        # Shared path (unchanged) — step 8's cross-turn resume reads this file.
         run_manifest.save("run-1", verdicts)
+        # Run-scoped path (gap-closure, 2026-08-31) — what run_state.read_progress
+        # reads within this run; a second write, never a substitute for the first.
+        run_manifest.save("run-1", verdicts, path=run_manifest.run_manifest_path("run-1"))
         processed_row_ids.append(row_id)
+
+    # Gap-closure (2026-08-31): read_progress now sees both held rows (row-1's chunk
+    # failure parsed to UNPARSEABLE, which confidence.assess also holds, and row-2's
+    # ambiguous candidates) and reads row-3 as still "running" — a confident row gets no
+    # manifest entry at all (unchanged by this gap-closure), so `done` under-counts for
+    # this flow by design; `held` is the bucket this call exists to make visible.
+    progress = run_state.read_progress("run-1")
+    assert progress.state == run_state.OK
+    assert progress.total == 3
+    assert progress.held == 2
+    assert progress.running == 1
+    assert progress.pending == 0
+    assert progress.done == 0
+    assert (progress.pending + progress.running + progress.done + progress.held
+            + progress.failed) == progress.total
 
     # THE LOAD-BEARING ASSERTION: the batch reached and processed its LAST row
     # (row-3, confident) despite row-1's chunk failing outright and row-2 being held —

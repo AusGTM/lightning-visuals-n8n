@@ -24,6 +24,8 @@ import enrichment
 import executions_client
 import n8n_arming
 import preingest
+import run_state
+import watch
 import write_grant
 import written_records
 from dispatch import NotArmedError, dispatch
@@ -1061,6 +1063,114 @@ def test_the_enrich_before_ingest_waterfall_chains_resolve_providers_through_mer
             "the scripted dispatch_plan response value must flow, unchanged, through "
             "the flatten idiom and into merge_enriched's merged row"
         )
+
+
+def test_the_enrich_before_ingest_waterfall_submits_async_and_recovers_through_merge_enriched(
+        granting_config, stub_module_transport_factory, stub_get_transport_factory):
+    """Closes (enrich-before-ingest, (run_state.new_run_id, run_state.start_run,
+    config_gate.load_config, enrichment.resolve_providers, chunking.plan_chunks,
+    chunking.chunk_ceiling, write_grant.authorize_send, write_grant.authorize_ungranted_send,
+    n8n_arming.armed_window, chunking.dispatch_plan, run_state.mark_dispatched,
+    watch.recover_async_dispatch, preingest.merge_enriched)) — gap-closure, 2026-08-31,
+    operator decision "Option B".
+
+    Drives the REAL documented async sequence end to end with an injected transport at
+    every boundary (dispatch's own POST, and the executions-API GETs
+    `recover_async_dispatch` reads) — never a mock of `run_state`/`chunking`/`watch`/
+    `preingest` themselves. Pins REVIEW-C14: the run's scope is registered
+    (`run_state.start_run`, which writes the run's own state file) BEFORE
+    `chunking.dispatch_plan` makes its first HTTP call.
+
+    Live differential proof that recovery actually reproduces the synchronous body
+    (rather than merely asserting it does, as an injected transport necessarily must):
+    `.planning/phases/61-autonomous-batch-runs/61-ASYNC-RECOVERY-VERDICT.json`.
+    """
+    row_spec = preingest.build_rows_spec([
+        {"firstname": "First0", "lastname": "Doe0", "company": "Acme0"},
+    ])
+    cfg = {**granting_config, "max_records_per_chunk": 2}
+    providers = enrichment.resolve_providers(None, cfg)
+    ceiling = chunking.chunk_ceiling(cfg)
+    plan = chunking.plan_chunks(row_spec, ceiling)
+    assert plan.chunk_count == 1
+    row_id = row_spec["rows"][0]["row_id"]
+
+    run_id = run_state.new_run_id()
+    run_state.start_run(run_id, [row_id])
+    assert run_state.run_state_path(run_id).exists(), (
+        "REVIEW-C14: the run's own scope must be registered before any HTTP call is made"
+    )
+
+    grant_transport = stub_module_transport_factory(_arming_sequence())
+    proposal = write_grant.plan_grant(
+        granting_config, lanes=["enrichment"], object_type="companies",
+        record_ids=[RECORD_ID], record_domains=[], allow_create=False, label="test",
+        transport=grant_transport)
+    grant = write_grant.open_grant(proposal, "yes", granting_config)
+    decision = write_grant.authorize_send(
+        grant, lane="enrichment", record_ids=[RECORD_ID], record_domains=[])
+    assert decision["armed"] is True
+
+    with n8n_arming.armed_window(decision["workflow_id"], [RECORD_ID], [], False,
+                                 granting_config, transport=grant_transport,
+                                 grant=decision["grant"]):
+        dispatch_transport = stub_module_transport_factory()  # default accepted body
+        outcome = chunking.dispatch_plan(plan, providers, True, cfg,
+                                         transport=dispatch_transport,
+                                         run_id=run_id, async_ack=True)
+
+    assert outcome.run_id == run_id, "dispatch_plan must echo the SAME id, never mint a second one"
+    assert dispatch_transport.calls[0]["json"]["async_ack"] is True
+    assert dispatch_transport.calls[0]["json"]["run_id"] == run_id
+
+    run_state.mark_dispatched(run_id, [row_id])
+    progress = run_state.read_progress(run_id)
+    assert progress.state == run_state.OK
+    assert progress.total == 1
+    assert progress.pending == 0
+    assert progress.running == 1, (
+        "no row has a run_manifest verdict yet — the async ack returns before the real "
+        "work finishes, so the dispatched row reads as running, not done"
+    )
+
+    # The settled execution `recover_async_dispatch` must find BY run_id — never by
+    # timing. `Build Response`'s own output is byte-identical to what the synchronous
+    # webhook body would have carried (proven live, see the verdict file cited above).
+    execution = {
+        "id": "exec-1", "status": "success",
+        "data": {"resultData": {"runData": {
+            "Parse HubSpot Event": [{"data": {"main": [[{"json": {"run_id": run_id}}]]}}],
+            "Build Response": [{"data": {"main": [[{"json": {
+                "row_id": row_id, "action": "proposed", "object_type": "contacts",
+                "outcome_contract_version": 1,
+                "match": {"tier": "none", "auto": False, "reason": "searched, no hit",
+                          "candidates": []},
+                "candidate_count": 0, "provider_agreement": {}, "material_conflicts": None,
+                "judge_adjudicated_fields": None,
+                "properties": {"email": f"{row_id}@example.com"},
+            }}]]}}],
+        }}},
+    }
+    get_transport = stub_get_transport_factory([
+        {"data": [{"id": "exec-1"}]},  # list_executions
+        execution,  # get_execution
+    ])
+    recovery = watch.recover_async_dispatch(
+        cfg, run_id, plan.chunk_count, workflow_id="wf-enrichment-cloud",
+        transport=get_transport, now=lambda: 0.0, sleep=lambda seconds: None,
+    )
+    assert recovery["recovered"] is True
+    assert recovery["matched_executions"] == 1
+    assert len(get_transport.calls) == 2, (
+        "workflow_id was supplied explicitly — resolve_workflow_id must not be called"
+    )
+
+    merge_report = preingest.merge_enriched(row_spec["rows"], recovery["responses"])
+    merged_by_row_id = {row["row_id"]: row for row in merge_report.rows}
+    assert merged_by_row_id[row_id]["email"] == f"{row_id}@example.com", (
+        "the value recovered from the settled execution must flow, unchanged, into "
+        "merge_enriched's merged row — exactly like the synchronous path does"
+    )
 
 
 def test_the_enrich_records_waterfall_chains_resolve_providers_through_dispatch_plan(

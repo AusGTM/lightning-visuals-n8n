@@ -208,12 +208,13 @@ COVERED = {
     (
         "enrich-before-ingest",
         (
-            "config_gate.load_config", "enrichment.resolve_providers", "chunking.plan_chunks",
-            "chunking.chunk_ceiling", "write_grant.authorize_send",
-            "write_grant.authorize_ungranted_send", "n8n_arming.armed_window",
-            "chunking.dispatch_plan", "preingest.merge_enriched",
+            "run_state.new_run_id", "run_state.start_run", "config_gate.load_config",
+            "enrichment.resolve_providers", "chunking.plan_chunks", "chunking.chunk_ceiling",
+            "write_grant.authorize_send", "write_grant.authorize_ungranted_send",
+            "n8n_arming.armed_window", "chunking.dispatch_plan", "run_state.mark_dispatched",
+            "run_state.read_progress", "watch.recover_async_dispatch", "preingest.merge_enriched",
         ),
-    ): "test_chunking.py::test_the_enrich_before_ingest_waterfall_chains_resolve_providers_through_merge_enriched",
+    ): "test_chunking.py::test_the_enrich_before_ingest_waterfall_submits_async_and_recovers_through_merge_enriched",
     (
         "enrich-records",
         (
@@ -243,7 +244,8 @@ COVERED = {
         (
             "held_queue.load", "run_manifest.load", "preingest.parse_outcome",
             "confidence.assess", "held_queue.build_entry", "held_queue.save",
-            "run_manifest.save",
+            "run_manifest.save", "run_manifest.save", "run_manifest.run_manifest_path",
+            "run_state.read_progress",
         ),
     ): "test_batch_finishes_composition.py::test_a_batch_with_a_failed_chunk_and_a_held_row_still_reaches_and_dispatches_its_last_row",
 }
