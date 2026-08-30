@@ -4408,33 +4408,53 @@ _SCALE_UP_IS_FANNING_EXPR = (
 # names. Reshapes the current (already-normalized) event back into the BARE event shape
 # `ENRICH_SJ3_BUILD_DISPATCH_EVENT` already establishes as this workflow's OWN proven
 # cross-workflow dispatch contract (fix(40)/WINDOWS.md #3 — the "Execute Workflow
-# Trigger" entry point this reuses, unchanged, rather than inventing a second one) — one
-# item in, one item out, `scale_up` forced `false` and `fan_depth` incremented, so the
-# dispatched child can never re-fan even if every other guard were absent.
+# Trigger" entry point this reuses, unchanged, rather than inventing a second one) —
+# `scale_up` forced `false` and `fan_depth` incremented per item, so a dispatched child
+# can never re-fan even if every other guard were absent.
+#
+# `$input.all()`, NOT a bare `$json` (deviation, Rule 1 — found live at this task's own
+# runtime proof, execution 12042: a 2-record disarmed batch fanned out only ONE child,
+# silently dropping the second. `Build Async Ack`'s own bare-`$json` shape — this node's
+# original model — only ever reads the FIRST of however many items n8n hands a
+# "runOnceForAllItems" Code node; it was never exercised past 1 item live before this.
+# `ENRICH_SKIP_NOOP_JS`/`ENRICH_SJ3_BUILD_DISPATCH_EVENT` are this file's own precedent
+# for the CORRECT multi-item shape in this exact node mode — `$input.all().filter().map()`
+# — reused here rather than repeating Build Async Ack's latent gap. A dropped fan-out
+# item is silent data loss, not a safety issue on its own (T-61-25's depth/forced-false
+# stops are per-item and untouched by this fix), but it is a real bug: the whole point of
+# scale-up is a BATCH, and this task's own runtime proof exists to catch exactly this
+# class of miss rather than merely assert the mechanism on paper.
 ENRICH_BUILD_SCALE_UP_FAN_OUT = r"""// Build Scale Up Fan-Out — Phase 61 Plan 06 Task 5.
 // Independently re-checks the SAME predicate "IF Scale Up Route" already gated on —
 // T-61-25's two-independent-stops mitigation, not redundancy for its own sake.
 const SCALE_UP_MAX_FAN_DEPTH = __SCALE_UP_MAX_FAN_DEPTH__;
-const depth = Number($json.fan_depth) || 0;
-if ($json.scale_up !== true || depth >= SCALE_UP_MAX_FAN_DEPTH) return [];
-// Bare-event shape (CLAUDE.md §18.2 / ENRICH_SJ3_BUILD_DISPATCH_EVENT's own precedent):
-// arrives at the self-dispatched child's "Execute Workflow Trigger" (passthrough) and is
-// read by Parse HubSpot Event as `$json.body ?? $json` — no `.body` wrapper needed.
-return [{ json: {
-  objectId: $json.object_id,
-  objectType: $json.object_type,
-  subscriptionType: $json.event_type || null,
-  propertyName: $json.property_name || null,
-  occurredAt: new Date().toISOString(),
-  providers: $json.providers_requested,
-  mode: $json.mode,
-  run_id: $json.run_id ?? null,
-  row_id: $json.row_id ?? null,
-  // The two independent stops (T-61-25): forced false regardless of what the ORIGINAL
-  // caller asked for, plus the incremented, workflow-owned depth counter above.
-  scale_up: false,
-  fan_depth: depth + 1,
-} }];
+return $input.all()
+  .filter((it) => {
+    const depth = Number(it.json.fan_depth) || 0;
+    return it.json.scale_up === true && depth < SCALE_UP_MAX_FAN_DEPTH;
+  })
+  .map((it) => {
+    const depth = Number(it.json.fan_depth) || 0;
+    // Bare-event shape (CLAUDE.md §18.2 / ENRICH_SJ3_BUILD_DISPATCH_EVENT's own
+    // precedent): arrives at the self-dispatched child's "Execute Workflow Trigger"
+    // (passthrough) and is read by Parse HubSpot Event as `$json.body ?? $json` — no
+    // `.body` wrapper needed.
+    return { json: {
+      objectId: it.json.object_id,
+      objectType: it.json.object_type,
+      subscriptionType: it.json.event_type || null,
+      propertyName: it.json.property_name || null,
+      occurredAt: new Date().toISOString(),
+      providers: it.json.providers_requested,
+      mode: it.json.mode,
+      run_id: it.json.run_id ?? null,
+      row_id: it.json.row_id ?? null,
+      // The two independent stops (T-61-25): forced false regardless of what the
+      // ORIGINAL caller asked for, plus the incremented, workflow-owned depth counter.
+      scale_up: false,
+      fan_depth: depth + 1,
+    } };
+  });
 """.replace("__SCALE_UP_MAX_FAN_DEPTH__", str(SCALE_UP_MAX_FAN_DEPTH))
 
 # Phase 61 Plan 06 Task 5. `Dispatch Self` (Execute Workflow, mode="each",
@@ -4443,10 +4463,15 @@ return [{ json: {
 # P-13's own `correlate_child_id`), not a business outcome. This shapes a minimal ack from
 # it rather than echoing that internal metadata verbatim to the caller — mirrors
 # `ENRICH_BUILD_ASYNC_ACK`'s own minimal-ack precedent for the same reason.
+# `$input.all()` (same Rule 1 fix as Build Scale Up Fan-Out above, same commit): "each"
+# mode dispatch produces one output item PER dispatched child, and every one must be
+# acknowledged, not just the first.
 ENRICH_BUILD_SCALE_UP_ACK = r"""// Build Scale Up Ack — Phase 61 Plan 06 Task 5.
-// Reports what was DISPATCHED (fire-and-forget), never a business outcome — the child
-// execution this item represents may still be running when this responds.
-return [{ json: { scale_up_dispatched: true, run_id: $json.run_id ?? null } }];
+// Reports what was DISPATCHED (fire-and-forget), never a business outcome — each child
+// execution this represents may still be running when this responds.
+return $input.all().map((it) => ({
+  json: { scale_up_dispatched: true, run_id: it.json.run_id ?? null },
+}));
 """
 
 

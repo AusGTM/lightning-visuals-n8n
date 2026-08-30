@@ -30,14 +30,22 @@ function runParseEvent(body) {
   return fn({ body }).map((it) => (it && it.json !== undefined ? it.json : it));
 }
 
-function runBuildScaleUpFanOut(item) {
-  const fn = new Function("$json", `"use strict";\n${node("Build Scale Up Fan-Out").parameters.jsCode}`);
-  return fn(item).map((it) => (it && it.json !== undefined ? it.json : it));
+// Both "Build Scale Up Fan-Out" and "Build Scale Up Ack" are `runOnceForAllItems` Code
+// nodes that iterate `$input.all()` (Rule 1 fix, found live at this task's own runtime
+// proof — see the builder's own comment on ENRICH_BUILD_SCALE_UP_FAN_OUT for why a bare
+// `$json` silently drops every item after the first). So these run with a MULTI-item
+// harness, one or more seed items in, mirroring companyAssociationFlow.test.mjs's own
+// `$input.all()` shim exactly — never a single-`$json` harness for these two.
+function runBuildScaleUpFanOut(items) {
+  const $input = { all: () => items.map((j) => ({ json: j })) };
+  const fn = new Function("$input", `"use strict";\n${node("Build Scale Up Fan-Out").parameters.jsCode}`);
+  return fn($input).map((it) => (it && it.json !== undefined ? it.json : it));
 }
 
-function runBuildScaleUpAck(item) {
-  const fn = new Function("$json", `"use strict";\n${node("Build Scale Up Ack").parameters.jsCode}`);
-  return fn(item).map((it) => (it && it.json !== undefined ? it.json : it));
+function runBuildScaleUpAck(items) {
+  const $input = { all: () => items.map((j) => ({ json: j })) };
+  const fn = new Function("$input", `"use strict";\n${node("Build Scale Up Ack").parameters.jsCode}`);
+  return fn($input).map((it) => (it && it.json !== undefined ? it.json : it));
 }
 
 function targetsOf(nodeName, branchIndex = 0) {
@@ -114,15 +122,15 @@ test("Parse HubSpot Event: a caller-supplied fan_depth normalizes via Number()||
 // --- Build Scale Up Fan-Out: the depth bound, asserted directly -------------------------
 
 test("Build Scale Up Fan-Out: scale_up absent/false returns nothing — the byte-identical no-op path", () => {
-  assert.deepEqual(runBuildScaleUpFanOut({ scale_up: false, fan_depth: 0 }), []);
-  assert.deepEqual(runBuildScaleUpFanOut({ fan_depth: 0 }), []);
+  assert.deepEqual(runBuildScaleUpFanOut([{ scale_up: false, fan_depth: 0 }]), []);
+  assert.deepEqual(runBuildScaleUpFanOut([{ fan_depth: 0 }]), []);
 });
 
 test("Build Scale Up Fan-Out: scale_up=true and fan_depth=0 (no depth supplied) fans out exactly once, forcing scale_up=false and fan_depth=1 on the child", () => {
-  const [child] = runBuildScaleUpFanOut({
+  const [child] = runBuildScaleUpFanOut([{
     scale_up: true, fan_depth: 0, object_id: "789", object_type: "companies",
     providers_requested: [], mode: "propose", run_id: "run-1", row_id: "row-1",
-  });
+  }]);
   assert.equal(child.scale_up, false, "the child can never re-fan even if every other guard were absent");
   assert.equal(child.fan_depth, 1);
   assert.equal(child.objectId, "789");
@@ -132,6 +140,16 @@ test("Build Scale Up Fan-Out: scale_up=true and fan_depth=0 (no depth supplied) 
   assert.equal(child.run_id, "run-1");
 });
 
+test("MULTI-ITEM (Rule 1 fix, found live at execution 12042): every qualifying item in the batch fans out, not just the first", () => {
+  const children = runBuildScaleUpFanOut([
+    { scale_up: true, fan_depth: 0, object_id: "1", object_type: "companies" },
+    { scale_up: true, fan_depth: 0, object_id: "2", object_type: "companies" },
+    { scale_up: false, fan_depth: 0, object_id: "3", object_type: "companies" }, // not fanning
+  ]);
+  assert.deepEqual(children.map((c) => c.objectId), ["1", "2"],
+    "the second qualifying item must not be silently dropped, and the non-fanning third must not appear");
+});
+
 test("TERMINATION (T-61-25): a fan-out invoked with NO depth supplied still stops after one hop — feeding the emitted child back in produces []", () => {
   // Simulates a caller who never passed fan_depth at all — the field is `undefined` on
   // the very first request, exactly as a real caller who has never heard of this
@@ -139,7 +157,7 @@ test("TERMINATION (T-61-25): a fan-out invoked with NO depth supplied still stop
   // supplied" case, not a stand-in for one.
   const first = { scale_up: true, object_id: "789", object_type: "companies" };
   assert.equal(first.fan_depth, undefined, "sanity: this test genuinely supplies no depth");
-  const [child] = runBuildScaleUpFanOut(first);
+  const [child] = runBuildScaleUpFanOut([first]);
   assert.equal(child.fan_depth, 1);
   assert.equal(child.scale_up, false);
   // Feed the emitted child event back through Parse HubSpot Event (the bare-event shape
@@ -148,27 +166,33 @@ test("TERMINATION (T-61-25): a fan-out invoked with NO depth supplied still stop
   // dispatched child's own body as a fresh request, it would not fan a second time.
   const [reparsed] = runParseEvent(child);
   assert.equal(reparsed.scale_up, false, "the forced-false stop already prevents a second hop on its own");
-  assert.deepEqual(runBuildScaleUpFanOut(reparsed), [], "no second fan-out, even resubmitted");
+  assert.deepEqual(runBuildScaleUpFanOut([reparsed]), [], "no second fan-out, even resubmitted");
 
   // The independent, depth-only stop: even if a caller forged scale_up back to true on
   // the resubmission (bypassing the forced-false stop), fan_depth alone still blocks it.
   const forged = { ...reparsed, scale_up: true };
-  assert.deepEqual(runBuildScaleUpFanOut(forged), [], "the depth bound alone terminates it, independent of the forced-false flag");
+  assert.deepEqual(runBuildScaleUpFanOut([forged]), [], "the depth bound alone terminates it, independent of the forced-false flag");
 });
 
 test("Build Scale Up Fan-Out: fan_depth already at the ceiling never fans, regardless of scale_up", () => {
-  assert.deepEqual(runBuildScaleUpFanOut({ scale_up: true, fan_depth: 1 }), []);
-  assert.deepEqual(runBuildScaleUpFanOut({ scale_up: true, fan_depth: 99 }), []);
+  assert.deepEqual(runBuildScaleUpFanOut([{ scale_up: true, fan_depth: 1 }]), []);
+  assert.deepEqual(runBuildScaleUpFanOut([{ scale_up: true, fan_depth: 99 }]), []);
 });
 
 // --- Build Scale Up Ack -----------------------------------------------------------------
 
 test("Build Scale Up Ack: reports dispatch, never a business outcome", () => {
-  const [ack] = runBuildScaleUpAck({ run_id: "run-1" });
+  const [ack] = runBuildScaleUpAck([{ run_id: "run-1" }]);
   assert.deepEqual(ack, { scale_up_dispatched: true, run_id: "run-1" });
 });
 
 test("Build Scale Up Ack: a missing run_id reads as null, never a missing key or a thrown error", () => {
-  const [ack] = runBuildScaleUpAck({});
+  const [ack] = runBuildScaleUpAck([{}]);
   assert.deepEqual(ack, { scale_up_dispatched: true, run_id: null });
+});
+
+test("Build Scale Up Ack: acks every dispatched child, not just the first (same Rule 1 fix)", () => {
+  const acks = runBuildScaleUpAck([{ run_id: "run-1" }, { run_id: "run-1" }]);
+  assert.equal(acks.length, 2);
+  assert.ok(acks.every((a) => a.scale_up_dispatched === true));
 });
