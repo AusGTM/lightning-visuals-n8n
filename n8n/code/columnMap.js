@@ -3,7 +3,8 @@
 // Mirrors src/column_mapper.py + config/column_mapping.yaml: arbitrary source
 // headers -> canonical HubSpot contact props via case-insensitive / whitespace-
 // collapsed aliases; unmapped columns are dropped. requiredIdentity mirrors the
-// column_mapping required_identity reject rule (email OR firstname+lastname+company).
+// column_mapping required_identity reject rule (email OR firstname+lastname+company OR
+// linkedin_url).
 
 // Embedded alias table (source of truth: config/column_mapping.yaml). Keys are
 // already lowercased/whitespace-collapsed, matching _normHeader.
@@ -75,11 +76,13 @@ function _present(v) {
   return v !== null && v !== undefined && String(v).trim() !== "";
 }
 
-// requiredIdentity(row) — email OR (firstname AND lastname AND company).
+// requiredIdentity(row) — email OR (firstname AND lastname AND company) OR linkedin_url.
+// Mirrors config/column_mapping.yaml's required_identity.any_of (3 groups).
 function requiredIdentity(row) {
   if (!row) return false;
   if (_present(row.email)) return true;
-  return _present(row.firstname) && _present(row.lastname) && _present(row.company);
+  if (_present(row.firstname) && _present(row.lastname) && _present(row.company)) return true;
+  return _present(row.linkedin_url);
 }
 
 module.exports = { mapRow, requiredIdentity, ALIASES };
