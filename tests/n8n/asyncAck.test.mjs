@@ -42,9 +42,15 @@ function targetsOf(nodeName, branchIndex = 0) {
 
 test("wiring: Parse HubSpot Event fans to Build Async Ack alongside its two existing targets", () => {
   const targets = targetsOf("Parse HubSpot Event");
+  // Phase 61 Plan 06 Task 5: the first target is now "IF Scale Up Route", not
+  // "IF Object Type Supported" directly — the ONE disclosed re-point (see
+  // scaleUpFanOutFlow.test.mjs for why an unconditional 4th fan target would have
+  // double-processed a fanned row). "IF Scale Up Route"'s own false lane still reaches
+  // "IF Object Type Supported" — functionally unchanged for every request that never
+  // opts into scale_up.
   assert.deepEqual(
     new Set(targets),
-    new Set(["IF Object Type Supported", "Credit Request", "Build Async Ack"]),
+    new Set(["IF Scale Up Route", "Credit Request", "Build Async Ack"]),
     "the existing two targets must survive unmodified — this is an ADDITIVE fan-out target",
   );
 });

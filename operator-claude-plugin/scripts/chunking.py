@@ -315,7 +315,7 @@ def _failure_reason(watcher):
 
 
 def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=None,
-                   async_ack=False):
+                   async_ack=False, scale_up=False):
     """Send every chunk of an approved plan, in plan order, one at a time.
 
     `armed` has NO default and is passed to each `dispatch_enrichment` call rather than
@@ -347,6 +347,18 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
     arrives once `async_ack` is honoured server-side, which is not observable from an
     injected test transport and is proven live at this plan's own checkpoint, not here.
 
+    `scale_up` (Phase 61 Plan 06 Task 5, T-61-25, substrate-3 of 61-SPIKE-VERDICT.md — see
+    `scripts/build_cloud_workflows.py`'s `SCALE_UP_MAX_FAN_DEPTH`/`ENRICH_BUILD_SCALE_UP_
+    FAN_OUT` for the n8n-side mechanism): keyword-only, defaults to `False`, so every
+    existing caller sends the byte-identical envelope it sends today. When `True`, rides
+    the envelope as `scale_up: true` — the SAME opt-in-flag idiom `async_ack` already
+    established one Task ago, "a pattern, not an invention." THERE IS NO `fan_depth`
+    PARAMETER HERE, DELIBERATELY: the depth bound this feature's safety rests on
+    (T-61-25) is a workflow-internal counter this workflow's OWN "Build Scale Up Fan-Out"
+    node owns and increments — the client has no knob to request a depth, and cannot ask
+    for one, structurally (see
+    `test_scale_up_runtime.py::test_dispatch_plan_has_no_depth_parameter_to_forge`).
+
     A written-records bookkeeping failure (D-59-10) never stops this loop either — see
     fact 5 in the module docstring and the guard around `append_chunk` below.
     """
@@ -366,6 +378,8 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
             if async_ack:
                 envelope["run_id"] = run_id
                 envelope["async_ack"] = True
+            if scale_up:
+                envelope["scale_up"] = True
             body = enrichment.dispatch_enrichment(envelope, armed, config, transport=watcher)
         except NotArmedError:
             # Not a chunk failure — nothing was sent and nothing should be. Let it out.

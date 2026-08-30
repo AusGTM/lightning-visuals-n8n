@@ -4240,6 +4240,14 @@ const parsed = parseWebhookBody(body);
 const envelopeIsObject = body && typeof body === "object" && !Array.isArray(body);
 const ENVELOPE_RUN_ID = envelopeIsObject ? (body.run_id ?? null) : null;
 const ENVELOPE_ASYNC_ACK = envelopeIsObject ? body.async_ack === true : false;
+// Phase 61 Plan 06 Task 5 (T-61-25, substrate-3 scale-up): a THIRD request-level opt-in
+// boolean, the SAME envelope+event-fallback idiom as async_ack above — a pattern, not an
+// invention (61-06-PLAN.md's own framing, citing `recompute` and `async_ack` as the two
+// precedents). `fan_depth` is deliberately NOT read from the envelope: the only value
+// this workflow ever trusts is one ITS OWN "Build Scale Up Fan-Out" node wrote onto a
+// self-dispatched child event, below. A caller-supplied one still normalizes safely via
+// `Number(...) || 0` exactly like a genuine one — it just cannot manufacture trust.
+const ENVELOPE_SCALE_UP = envelopeIsObject ? body.scale_up === true : false;
 // Phase 36-03 Task 3 (36-CONTEXT.md sec7 step 6, D-15/D-22): refuse an oversize or empty
 // events array WHOLE, never truncate, never hang. In-node here rather than a separate
 // node (unlike Expand List To Events, whose separate-node placement guards against a
@@ -4327,6 +4335,10 @@ return parsed.events.map((event) => {
     // request into the immediate ack `Build Async Ack` fans out below.
     run_id: ENVELOPE_RUN_ID ?? event.run_id ?? null,
     async_ack: (ENVELOPE_ASYNC_ACK || event.async_ack) === true,
+    // Phase 61 Plan 06 Task 5: same placement rationale as recompute/async_ack — AFTER
+    // the `...event` spread so a caller-supplied raw row property cannot shadow this.
+    scale_up: (ENVELOPE_SCALE_UP || event.scale_up) === true,
+    fan_depth: Number(event.fan_depth) || 0,
   }};
 });
 """
@@ -4367,6 +4379,74 @@ ENRICH_BUILD_ASYNC_ACK = r"""// Build Async Ack — Phase 61 Plan 05 Task 2 (sub
 // an early ack takes the byte-identical path it takes today.
 if ($json.async_ack !== true) return [];
 return [{ json: { run_id: $json.run_id ?? null, accepted: true, row_id: $json.row_id ?? null } }];
+"""
+
+# Phase 61 Plan 06 Task 5 (T-61-25, RUN-02/AFTER-02's substrate-3 scale-up path,
+# 61-PREMISE-DOCS-FINDINGS.md's "sub-workflows are doubly exempt" finding, P-14). This
+# bound is the load-bearing safety property, not a detail: it lives HERE, inside the
+# workflow, so a caller who never passes `fan_depth` still cannot start more than one
+# level of self-dispatch. 1 means exactly one fan-out hop is ever permitted — a row this
+# workflow itself re-dispatches to itself always arrives with `fan_depth >= 1` (see the
+# `depth + 1` below) and is refused a second hop by BOTH `IF Scale Up Route` (which never
+# routes it back to this branch) AND this node's own independent check, so termination
+# does not depend on either guard alone being correct (defense in depth, the same shape
+# `p14`'s own Depth Guard IF carried but never exercised at runtime).
+SCALE_UP_MAX_FAN_DEPTH = 1
+
+# The gate `IF Scale Up Route` (an n8n-native IF condition, built alongside this string)
+# tests the IDENTICAL predicate — same threshold, same fields — so a request is routed to
+# the fan-out lane if and only if this node would also fan it out. Declared once here so
+# the two expressions cannot silently drift apart.
+_SCALE_UP_IS_FANNING_EXPR = (
+    "$json.scale_up === true && (Number($json.fan_depth) || 0) < "
+    f"{SCALE_UP_MAX_FAN_DEPTH}"
+)
+
+# Phase 61 Plan 06 Task 5. Fed ONLY by `IF Scale Up Route`'s TRUE lane (already gated),
+# but self-gated a SECOND time regardless — same discipline `ENRICH_BUILD_ASYNC_ACK`
+# already uses for its own opt-in, and the two independent stops T-61-25's mitigation
+# names. Reshapes the current (already-normalized) event back into the BARE event shape
+# `ENRICH_SJ3_BUILD_DISPATCH_EVENT` already establishes as this workflow's OWN proven
+# cross-workflow dispatch contract (fix(40)/WINDOWS.md #3 — the "Execute Workflow
+# Trigger" entry point this reuses, unchanged, rather than inventing a second one) — one
+# item in, one item out, `scale_up` forced `false` and `fan_depth` incremented, so the
+# dispatched child can never re-fan even if every other guard were absent.
+ENRICH_BUILD_SCALE_UP_FAN_OUT = r"""// Build Scale Up Fan-Out — Phase 61 Plan 06 Task 5.
+// Independently re-checks the SAME predicate "IF Scale Up Route" already gated on —
+// T-61-25's two-independent-stops mitigation, not redundancy for its own sake.
+const SCALE_UP_MAX_FAN_DEPTH = __SCALE_UP_MAX_FAN_DEPTH__;
+const depth = Number($json.fan_depth) || 0;
+if ($json.scale_up !== true || depth >= SCALE_UP_MAX_FAN_DEPTH) return [];
+// Bare-event shape (CLAUDE.md §18.2 / ENRICH_SJ3_BUILD_DISPATCH_EVENT's own precedent):
+// arrives at the self-dispatched child's "Execute Workflow Trigger" (passthrough) and is
+// read by Parse HubSpot Event as `$json.body ?? $json` — no `.body` wrapper needed.
+return [{ json: {
+  objectId: $json.object_id,
+  objectType: $json.object_type,
+  subscriptionType: $json.event_type || null,
+  propertyName: $json.property_name || null,
+  occurredAt: new Date().toISOString(),
+  providers: $json.providers_requested,
+  mode: $json.mode,
+  run_id: $json.run_id ?? null,
+  row_id: $json.row_id ?? null,
+  // The two independent stops (T-61-25): forced false regardless of what the ORIGINAL
+  // caller asked for, plus the incremented, workflow-owned depth counter above.
+  scale_up: false,
+  fan_depth: depth + 1,
+} }];
+""".replace("__SCALE_UP_MAX_FAN_DEPTH__", str(SCALE_UP_MAX_FAN_DEPTH))
+
+# Phase 61 Plan 06 Task 5. `Dispatch Self` (Execute Workflow, mode="each",
+# waitForSubWorkflow=false — P-13's proven detached shape) never waits, so its own output
+# item IS the dispatch record (each carrying `metadata.subExecution.executionId` per
+# P-13's own `correlate_child_id`), not a business outcome. This shapes a minimal ack from
+# it rather than echoing that internal metadata verbatim to the caller — mirrors
+# `ENRICH_BUILD_ASYNC_ACK`'s own minimal-ack precedent for the same reason.
+ENRICH_BUILD_SCALE_UP_ACK = r"""// Build Scale Up Ack — Phase 61 Plan 06 Task 5.
+// Reports what was DISPATCHED (fire-and-forget), never a business outcome — the child
+// execution this item represents may still be running when this responds.
+return [{ json: { scale_up_dispatched: true, run_id: $json.run_id ?? null } }];
 """
 
 
@@ -4971,6 +5051,36 @@ def build_enrichment_cloud():
     # this is a third, unconditional fan target (not a re-point) and a no-op for every
     # request that does not opt in.
     nodes.append(code_node("Build Async Ack", ENRICH_BUILD_ASYNC_ACK, x, y + 260))
+
+    # Phase 61 Plan 06 Task 5 (T-61-25, substrate-3 scale-up, off by default). Spliced
+    # BETWEEN "Parse HubSpot Event" and "IF Object Type Supported" — the ONE edge this
+    # task re-points (disclosed exactly like Task 2's `Adapt Company Create` splice) —
+    # rather than added as a further unconditional fan target: a fanned row must NOT
+    # ALSO run the main business chain in the parent, or an armed request would write
+    # twice. TRUE (is fanning: `_SCALE_UP_IS_FANNING_EXPR`) routes to the fan-out lane
+    # below; FALSE (every request that never opts in, the overwhelming default) routes to
+    # "IF Object Type Supported" exactly as before — functionally byte-identical, one
+    # additional pass-through hop.
+    nodes.append(_if_bool_expr_node(
+        "IF Scale Up Route", _SCALE_UP_IS_FANNING_EXPR, x, y - 260))
+    x += 220
+    nodes.append(code_node(
+        "Build Scale Up Fan-Out", ENRICH_BUILD_SCALE_UP_FAN_OUT, x, y - 260))
+    x += 220
+    # Self-reference: "LVenrichmentCloud01"/"LV Enrichment (Cloud template)" is THIS
+    # workflow's own local id/name (see this function's own final `return` below).
+    # `rebind_subworkflow_refs` (scripts/deploy_n8n_workflows.py) resolves any
+    # executeWorkflow node's `cachedResultName` against a fresh live name->id map at
+    # deploy time — this workflow already exists live (61-05's substrate-1 deploy), so
+    # its own name already resolves to its own live id with NO special-casing, the exact
+    # mechanism SJ-3's cross-workflow dispatch already proves. `wait_for_sub=False` bakes
+    # the detached shape 61-PREMISE-PROBE-VERDICT.json's P-13 measured live.
+    nodes.append(_execute_workflow_node(
+        "Dispatch Self", x, y - 260,
+        "LVenrichmentCloud01", "LV Enrichment (Cloud template)", wait_for_sub=False))
+    x += 220
+    nodes.append(code_node("Build Scale Up Ack", ENRICH_BUILD_SCALE_UP_ACK, x, y - 260))
+    x -= 660  # restore x: the fan-out lane is a side branch, not the main chain's spine
 
     # Phase 16.1 (reviews A2): an explicit unsupported-object-type check BEFORE the
     # existing companies/contacts router — a malformed/unknown object_type terminates in
@@ -5786,12 +5896,27 @@ return $input.all().map((it, i) => {
     # Phase 61 Plan 05 Task 2: a THIRD parallel fan target, "Build Async Ack" — see that
     # node's own comment (ENRICH_BUILD_ASYNC_ACK) for why this is additive and a no-op
     # absent the request-level `async_ack` opt-in.
+    # Phase 61 Plan 06 Task 5: the FIRST target is now "IF Scale Up Route", not
+    # "IF Object Type Supported" directly — the ONE re-pointed edge this task discloses
+    # (see "IF Scale Up Route"'s own comment above for why an unconditional 4th fan
+    # target, mirroring Build Async Ack, would double-process a fanned row).
     conns["Parse HubSpot Event"] = {"main": [[
-        {"node": "IF Object Type Supported", "type": "main", "index": 0},
+        {"node": "IF Scale Up Route", "type": "main", "index": 0},
         {"node": "Credit Request", "type": "main", "index": 0},
         {"node": "Build Async Ack", "type": "main", "index": 0},
     ]]}
     conns["Build Async Ack"] = {"main": [[
+        {"node": "Respond to Webhook", "type": "main", "index": 0},
+    ]]}
+    # Phase 61 Plan 06 Task 5: true (is fanning, `_SCALE_UP_IS_FANNING_EXPR`) -> the
+    # fan-out lane; false (every request that never opts in) -> "IF Object Type
+    # Supported", the exact node Parse HubSpot Event fed directly before this task.
+    conns["IF Scale Up Route"] = {"main": [
+        [{"node": "Build Scale Up Fan-Out", "type": "main", "index": 0}],  # true: fanning
+        [{"node": "IF Object Type Supported", "type": "main", "index": 0}],  # false: today's path
+    ]}
+    conns.update(chain(["Build Scale Up Fan-Out", "Dispatch Self", "Build Scale Up Ack"]))
+    conns["Build Scale Up Ack"] = {"main": [[
         {"node": "Respond to Webhook", "type": "main", "index": 0},
     ]]}
     # Phase 16.1 (reviews A2): unsupported/unknown object_type terminates HERE, before
@@ -6917,12 +7042,19 @@ def _hs_update_set_property(name, resource, x, y, property_name, value_literal="
     }
 
 
-def _execute_workflow_node(name, x, y, workflow_id, workflow_name):
+def _execute_workflow_node(name, x, y, workflow_id, workflow_name, wait_for_sub=None):
+    """`wait_for_sub` (Phase 61 Plan 06 Task 5, additive kwarg): omitted (None) preserves
+    every existing call site's byte-identical `"options": {}` (SJ-3's own dispatch —
+    n8n's own default applies, unchanged). Passing `False` bakes the detached
+    `waitForSubWorkflow` shape 61-PREMISE-PROBE-VERDICT.json's P-13 measured live
+    (`_p13_parent_workflow`'s own `{"waitForSubWorkflow": wait_for_sub}` shape) — a
+    self-referencing dispatch must not wait on itself."""
+    options = {} if wait_for_sub is None else {"waitForSubWorkflow": wait_for_sub}
     return {
         "parameters": {"source": "database",
                        "workflowId": {"__rl": True, "value": workflow_id, "mode": "list",
                                       "cachedResultName": workflow_name},
-                       "mode": "each", "options": {}},
+                       "mode": "each", "options": options},
         "id": nid("ew"), "name": name,
         "type": "n8n-nodes-base.executeWorkflow", "typeVersion": 1.2, "position": [x, y],
     }
