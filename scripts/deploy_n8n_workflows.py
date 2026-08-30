@@ -57,6 +57,11 @@ NODE_CREDENTIAL_MAP = {
     # F1 (2026-08-25): the weaker fallback search — same lesson, sixth time. Registered
     # in the SAME commit as the node's creation in scripts/build_cloud_workflows.py.
     "HubSpot Name Search Fallback": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
+    # Phase 61 Plan 02 Task 1 (deviation, Rule 3 — build_cloud_workflows.py's own
+    # regenerated-workflow deploy-binding guard is a blocking test failure without this):
+    # the STRONG linkedin match-lane search node — same lesson, seventh time. Registered
+    # in the SAME commit as the node's creation in scripts/build_cloud_workflows.py.
+    "HubSpot Linkedin Search": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot Create": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     "HubSpot Update": {"cred_type": "hubspotAppToken", "cred_name": "LV HubSpot"},
     # Phase 25 Plan 03 (same gpt #9 lesson, third time): the two Lists API GETs of the

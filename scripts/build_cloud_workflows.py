@@ -4456,7 +4456,18 @@ ENRICH_CONTACT_SEARCH_PROPERTIES_CSV = (
 # identity_keys.companyName/.linkedin_url on the backfill. The existing search lane never
 # needed them; deliberately NOT the broader CLAUDE.md §18.4 list (several of those
 # properties do not exist in portal 22617666 and HubSpot silently drops unknown names).
-ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV = ENRICH_CONTACT_SEARCH_PROPERTIES_CSV + ",company,lv_linkedin_url"
+#
+# Phase 61 Plan 02 Task 1 (REVIEW-02): `hs_linkedin_url` added — HubSpot's own native
+# LinkedIn property, confirmed present (hubspotDefined: true) in the committed live
+# snapshot config/hubspot_migration/baseline/portal-schema-contacts-54-03-contacts-check.json.
+# The linkedin search filters on BOTH properties; a hit returned on a property this list
+# does not request is a hit the adapter's re-verification cannot read back — searching a
+# property without requesting it reproduces the exact silent-zero-result shape this whole
+# plan exists to remove. Additive to the fetch-by-id lane this CSV already feeds (HubSpot
+# returns one more property; nothing there reads it).
+ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV = (
+    ENRICH_CONTACT_SEARCH_PROPERTIES_CSV + ",company,lv_linkedin_url,hs_linkedin_url"
+)
 
 ENRICH_ADAPT_FETCH_BY_ID_CONTACT = inline("adaptFetchById.js", "matchProposal.js") + r"""
 
@@ -4545,6 +4556,52 @@ return rows.map((it, i) => {
 
   const match = summarizeMatch({ lane: "name", existingRecord: {}, lookupFailed: false, candidates });
   return { json: { ...row, existingRecord: {}, lookup_failed: false, match } };
+});
+"""
+
+# ---- Phase 61 Plan 02, Task 1: the STRONG linkedin match lane (D-61-05 CORRECTED) -----
+#
+# D-61-05's research finding: `resolveIdentity.js:76-90`'s linkedin branch is real code
+# nothing reaches on the live path — this lane is what makes it reachable. Mirrors
+# ENRICH_ADAPT_SEARCH's row-recovery idiom (filter-then-index-align BEFORE reading the
+# HTTP node, never $json directly) and REVIEW-02's re-verification requirement: a hit
+# counts only when `linkedinAgreement` (matchProposal.js) — canonicalizing BOTH
+# `lv_linkedin_url` and native `hs_linkedin_url` and requiring them to agree when both are
+# present — equals the row's own canonicalized key. A self-disagreeing record (the two
+# properties point at different profiles) is never a verified hit (T-61-05). Deduplicated
+# by contact id inside verifiedLinkedinHits, so a contact matching under both properties
+# is ONE hit. `inline("resolveIdentity.js", ...)` gives this wrapper `canonicalizeLinkedin`
+# (matchProposal.js's own `require` of it is stripped by inline() — the definition must be
+# concatenated into the same script for real).
+ENRICH_ADAPT_LINKEDIN_SEARCH = inline("resolveIdentity.js", "matchProposal.js") + r"""
+
+// --- n8n wrapper: adapt "HubSpot Linkedin Search" -> match proposal ---
+// Phase 36 (Finding A) discipline: filtered to the "linkedin" lane BEFORE index-aligning
+// against its own search node — a mixed-lane batch would otherwise duplicate/misalign.
+const rows = $('Build Identity').all().filter((it) => it.json.lane === "linkedin");
+const search = $('HubSpot Linkedin Search').all();
+return rows.map((it, i) => {
+  const row = it.json;
+  const item = search[i];
+  const failed = !item || item.error || (item.json && item.json.error);
+  if (failed) {
+    const match = summarizeMatch({ lane: "linkedin", lookupFailed: true });
+    return { json: { ...row, existingRecord: {}, lookup_failed: true, match } };
+  }
+  const res = item.json || {};
+  const results = Array.isArray(res.results) ? res.results : [];
+  const rawLinkedinUrl = (row.identity_keys && row.identity_keys.linkedin_url) || null;
+  const verified = verifiedLinkedinHits(results, rawLinkedinUrl);
+  // existingRecord is built from the verified hit ONLY on a single verified match — never
+  // on 0 or >1, mirroring every other lane's "auto only means exactly one confirmed
+  // record" contract (36-CONTEXT.md §6).
+  let existingRecord = {};
+  if (verified.length === 1) {
+    existingRecord = { ...(verified[0].properties || {}), hs_object_id: verified[0].id };
+  }
+  const candidates = verified.map(toCandidateShape);
+  const match = summarizeMatch({ lane: "linkedin", candidates, lookupFailed: false });
+  return { json: { ...row, existingRecord, lookup_failed: false, match } };
 });
 """
 
@@ -4880,6 +4937,42 @@ def build_enrichment_cloud():
     )
     nodes.append(hs_name_search_fallback)
     nodes.append(code_node("Adapt Name Search", ENRICH_ADAPT_NAME_SEARCH, adapt_search_x, mby))
+
+    # Phase 61 Plan 02 Task 1 (D-61-05 CORRECTED): the STRONG linkedin match lane, spliced
+    # between "IF Has Email" and "IF Name Searchable" — additive FOURTH row below the name
+    # lane above, so none of the existing nodes move `position`. Only "IF Has Email"'s
+    # FALSE edge re-points (was "IF Name Searchable" directly; now "IF Linkedin Searchable"
+    # first) — its TRUE edge is untouched, and "IF Linkedin Searchable"'s own false edge
+    # re-points to "IF Name Searchable", which keeps that node's own true/false targets
+    # byte-identical to what they are today.
+    lby = mby + 200
+    if_linkedin_searchable = _if_bool_expr_node(
+        "IF Linkedin Searchable",
+        '$(\'Build Identity\').item.json.lane === "linkedin"',
+        build_identity_x, lby,
+    )
+    nodes.append(if_linkedin_searchable)
+    # REVIEW-02: filter groups for BOTH `lv_linkedin_url` and native `hs_linkedin_url`
+    # (HubSpot ORs across groups) — a contact whose LinkedIn lives only under the native
+    # property must be found, never missed into a duplicate create. "Adapt Linkedin
+    # Search" re-verifies whichever property carried the hit; searching a property this
+    # node does not request would make that re-verification impossible (properties_csv is
+    # the fetch-by-id list, which Task 1 already extended with `hs_linkedin_url`).
+    # Task 2 (61-02) widens this filter's operator/value shape from plain EQ to an IN over
+    # a written-down, bounded variant set, to survive stored-value variance (trailing
+    # slash / www. / scheme) — see that task's comment on this same node.
+    hs_linkedin_search = _hs_http_search_node(
+        "HubSpot Linkedin Search", "contact", hs_search_x, lby,
+        filter_groups=[
+            [{"propertyName": "lv_linkedin_url", "operator": "EQ",
+              "value": "={{ $json.identity_keys.linkedin_url }}"}],
+            [{"propertyName": "hs_linkedin_url", "operator": "EQ",
+              "value": "={{ $json.identity_keys.linkedin_url }}"}],
+        ],
+        properties_csv=ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV,
+    )
+    nodes.append(hs_linkedin_search)
+    nodes.append(code_node("Adapt Linkedin Search", ENRICH_ADAPT_LINKEDIN_SEARCH, adapt_search_x, lby))
 
     # Phase 16.1 (reviews A1): a SINGLE `action != "skip"` dispatch lane feeds the
     # provider gate chain — replaces the old Route Action switch, whose create+enrich
@@ -5507,16 +5600,26 @@ return $input.all().map((it, i) => {
     ]}
     conns.update(chain(["HubSpot Fetch By Id", "Adapt Fetch By Id", "Enrichment Gate"]))
     # Phase 36 Plan 02: the match-lane cascade. "IF Has Email" routes the email lane back
-    # onto the existing, unmodified "HubSpot Search" chain; its false lane tries the name
-    # lane next. "IF Name Searchable"'s false lane (no searchable identity at all) goes
-    # straight to "Enrichment Gate" — this is that node's FOURTH inbound branch (the same
-    # documented, not-hard-determinism property "Build Response" already carries,
-    # 36-CONTEXT.md §12 Risk 1); the row arriving there carries no `existingRecord` by
-    # design, and Task 3's gate rule turns it into a skip before any provider call.
+    # onto the existing, unmodified "HubSpot Search" chain; its false lane now tries the
+    # linkedin lane next (Phase 61 Plan 02 — was "IF Name Searchable" directly). "IF Name
+    # Searchable"'s false lane (no searchable identity at all) goes straight to
+    # "Enrichment Gate" — this is that node's FIFTH inbound branch (the same documented,
+    # not-hard-determinism property "Build Response" already carries, 36-CONTEXT.md §12
+    # Risk 1); the row arriving there carries no `existingRecord` by design, and Task 3's
+    # gate rule turns it into a skip before any provider call.
     conns["IF Has Email"] = {"main": [
-        [{"node": "HubSpot Search", "type": "main", "index": 0}],       # true: email lane
-        [{"node": "IF Name Searchable", "type": "main", "index": 0}],   # false
+        [{"node": "HubSpot Search", "type": "main", "index": 0}],             # true: email lane
+        [{"node": "IF Linkedin Searchable", "type": "main", "index": 0}],     # false
     ]}
+    # Phase 61 Plan 02 (D-61-05 CORRECTED): the linkedin lane sits between "IF Has Email"
+    # and "IF Name Searchable" — a strong key is tried before the weak name+company pair
+    # (D-61-03). Its own false lane re-points to "IF Name Searchable", exactly where "IF
+    # Has Email"'s false lane used to point before this plan.
+    conns["IF Linkedin Searchable"] = {"main": [
+        [{"node": "HubSpot Linkedin Search", "type": "main", "index": 0}],  # true: linkedin lane
+        [{"node": "IF Name Searchable", "type": "main", "index": 0}],       # false
+    ]}
+    conns.update(chain(["HubSpot Linkedin Search", "Adapt Linkedin Search", "Enrichment Gate"]))
     conns["IF Name Searchable"] = {"main": [
         [{"node": "HubSpot Name Search", "type": "main", "index": 0}],  # true: name lane
         [{"node": "Enrichment Gate", "type": "main", "index": 0}],      # false: unmatchable

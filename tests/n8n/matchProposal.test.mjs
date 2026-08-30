@@ -11,7 +11,10 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-const { laneOf, mediumCandidates, summarizeMatch, isReturnOnly } = require(path.join(ROOT, "n8n/code/matchProposal.js"));
+const {
+  laneOf, mediumCandidates, summarizeMatch, isReturnOnly,
+  linkedinAgreement, verifiedLinkedinHits,
+} = require(path.join(ROOT, "n8n/code/matchProposal.js"));
 
 // --- fetch_by_id: object_id present, no email — mirrors IF Bare Event's true branch ------
 
@@ -38,6 +41,35 @@ test("an empty-string email is falsy and must not select email", () => {
 
 test("an empty-string email with object_id falls through to fetch_by_id", () => {
   assert.equal(laneOf({ object_id: "123", identity_keys: { email: "" } }), "fetch_by_id");
+});
+
+// --- linkedin lane (Phase 61 Plan 02, D-61-05 CORRECTED) ------------------------------------
+
+test("a linkedin_url with no email selects linkedin", () => {
+  assert.equal(
+    laneOf({ identity_keys: { linkedin_url: "https://www.linkedin.com/in/x/" } }),
+    "linkedin"
+  );
+});
+
+test("email and linkedin_url both present selects email — email wins", () => {
+  assert.equal(
+    laneOf({ identity_keys: { email: "jane@example.com", linkedin_url: "https://linkedin.com/in/x" } }),
+    "email"
+  );
+});
+
+test("linkedin_url and lastName+companyName both present selects linkedin — a strong key outranks the weak pair (D-61-03)", () => {
+  assert.equal(
+    laneOf({ identity_keys: {
+      linkedin_url: "https://linkedin.com/in/x", lastName: "Doe", companyName: "Gold Coast Turf Club",
+    } }),
+    "linkedin"
+  );
+});
+
+test("a whitespace-only linkedin_url is not a present key and yields none", () => {
+  assert.equal(laneOf({ identity_keys: { linkedin_url: "   " } }), "none");
 });
 
 // --- name lane -----------------------------------------------------------------------------
@@ -224,6 +256,105 @@ test("order is input order — no sort, no tie-break", () => {
 });
 
 // ============================================================================================
+// verifiedLinkedinHits / linkedinAgreement — the strong-key re-verification (T-61-05,
+// REVIEW-02). A hit surviving the server-side filter is a narrowing, never a verdict.
+// ============================================================================================
+
+test("a stored value differing only in trailing slash matches", () => {
+  const hits = [{ id: "1", properties: { lv_linkedin_url: "https://www.linkedin.com/in/robert-cavallucci-14698741/" } }];
+  const out = verifiedLinkedinHits(hits, "https://www.linkedin.com/in/robert-cavallucci-14698741");
+  assert.deepEqual(out.map((h) => h.id), ["1"]);
+});
+
+test("a stored value differing only in scheme/host case matches", () => {
+  const hits = [{ id: "1", properties: { lv_linkedin_url: "HTTPS://LinkedIn.com/in/x" } }];
+  const out = verifiedLinkedinHits(hits, "https://linkedin.com/in/x");
+  assert.deepEqual(out.map((h) => h.id), ["1"]);
+});
+
+test("a stored value with a query string matches an input without one", () => {
+  const hits = [{ id: "1", properties: { lv_linkedin_url: "https://linkedin.com/in/x?trk=public_profile" } }];
+  const out = verifiedLinkedinHits(hits, "https://linkedin.com/in/x");
+  assert.deepEqual(out.map((h) => h.id), ["1"]);
+});
+
+test("a different profile under the same host does not match", () => {
+  const hits = [{ id: "1", properties: { lv_linkedin_url: "https://linkedin.com/in/someone-else" } }];
+  assert.deepEqual(verifiedLinkedinHits(hits, "https://linkedin.com/in/x"), []);
+});
+
+test("a contact stored ONLY under native hs_linkedin_url is found (REVIEW-02)", () => {
+  const hits = [{ id: "1", properties: { hs_linkedin_url: "https://linkedin.com/in/x" } }];
+  const out = verifiedLinkedinHits(hits, "https://linkedin.com/in/x");
+  assert.deepEqual(out.map((h) => h.id), ["1"]);
+});
+
+test("a contact matching under BOTH properties is one hit, not two", () => {
+  const hits = [{ id: "1", properties: {
+    lv_linkedin_url: "https://linkedin.com/in/x", hs_linkedin_url: "https://linkedin.com/in/x",
+  } }];
+  const out = verifiedLinkedinHits(hits, "https://linkedin.com/in/x");
+  assert.equal(out.length, 1);
+});
+
+test("a self-disagreeing record (lv_linkedin_url and hs_linkedin_url point at different profiles) is never a verified hit", () => {
+  const hits = [{ id: "1", properties: {
+    lv_linkedin_url: "https://linkedin.com/in/x", hs_linkedin_url: "https://linkedin.com/in/someone-else",
+  } }];
+  assert.deepEqual(verifiedLinkedinHits(hits, "https://linkedin.com/in/x"), []);
+  assert.equal(linkedinAgreement(hits[0].properties), null);
+});
+
+test("two verified hits both survive — dedup and cardinality are separate steps", () => {
+  const hits = [
+    { id: "1", properties: { lv_linkedin_url: "https://linkedin.com/in/x" } },
+    { id: "2", properties: { hs_linkedin_url: "https://linkedin.com/in/x/" } },
+  ];
+  const out = verifiedLinkedinHits(hits, "https://linkedin.com/in/x");
+  assert.deepEqual(out.map((h) => h.id).sort(), ["1", "2"]);
+});
+
+test("verifiedLinkedinHits never throws on malformed input", () => {
+  assert.deepEqual(verifiedLinkedinHits(null, "https://linkedin.com/in/x"), []);
+  assert.deepEqual(verifiedLinkedinHits([{ id: "1" }], "https://linkedin.com/in/x"), []);
+  assert.deepEqual(verifiedLinkedinHits([{ id: "1", properties: {} }], ""), []);
+});
+
+// ============================================================================================
+// summarizeMatch({lane:"linkedin", ...}) — 0/1/>1 verified hits (REVIEW-03/HIGH-3): a
+// closed cardinality rule, never a two-outcome shortcut (REVIEW-C4).
+// ============================================================================================
+
+test("linkedin lane, zero verified candidates, is none", () => {
+  const out = summarizeMatch({ lane: "linkedin", candidates: [] });
+  assert.equal(out.tier, "none");
+  assert.equal(out.auto, false);
+});
+
+test("linkedin lane, exactly one verified candidate, is high and auto", () => {
+  const out = summarizeMatch({ lane: "linkedin", candidates: [{ hs_object_id: "1" }] });
+  assert.equal(out.tier, "high");
+  assert.equal(out.auto, true);
+  assert.deepEqual(out.candidates, []);
+});
+
+test("linkedin lane, more than one verified candidate, is medium carrying both — never a pick", () => {
+  const out = summarizeMatch({
+    lane: "linkedin",
+    candidates: [{ hs_object_id: "1" }, { hs_object_id: "2" }],
+  });
+  assert.equal(out.tier, "medium");
+  assert.equal(out.auto, false);
+  assert.equal(out.candidates.length, 2);
+});
+
+test("linkedin lane, a failed lookup, is unknown — never none (a linkedin-only row is never `unknown` on a SUCCESSFUL search)", () => {
+  const out = summarizeMatch({ lane: "linkedin", lookupFailed: true });
+  assert.equal(out.tier, "unknown");
+  assert.equal(out.auto, false);
+});
+
+// ============================================================================================
 // Task 2: summarizeMatch — unknown vs none, auto only for high
 // ============================================================================================
 
@@ -346,9 +477,12 @@ test("auto is true for exactly one tier: high", () => {
     summarizeMatch({ lane: "email", existingRecord: {} }),
     summarizeMatch({ lane: "name", candidates: [{ hs_object_id: "1" }] }),
     summarizeMatch({ lane: "name", candidates: [] }),
+    summarizeMatch({ lane: "linkedin", candidates: [{ hs_object_id: "1" }] }),
+    summarizeMatch({ lane: "linkedin", candidates: [{ hs_object_id: "1" }, { hs_object_id: "2" }] }),
+    summarizeMatch({ lane: "linkedin", candidates: [] }),
     summarizeMatch({ lane: "none" }),
     summarizeMatch({ lane: "email", lookupFailed: true }),
   ];
   const autos = cases.map((c) => c.auto);
-  assert.deepEqual(autos, [true, false, false, false, false, false]);
+  assert.deepEqual(autos, [true, false, false, false, true, false, false, false, false]);
 });
