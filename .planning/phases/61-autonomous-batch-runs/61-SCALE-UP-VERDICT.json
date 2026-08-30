@@ -1,0 +1,141 @@
+{
+  "premise": "T-61-25-runtime",
+  "question": "does the self-referencing substrate-3 fan-out RUN, TERMINATE, and remain correlatable, on the real deployed 'LV Enrichment (Cloud template)' workflow (not a throwaway probe workflow)?",
+  "answer": true,
+  "basis": "observed",
+  "scope_boundary": "DISARMED: mode='propose' + providers=[] over 2 synthetic rows -- zero HubSpot writes, zero provider calls, zero Anthropic calls, nothing armed. This is NOT D-61-08's gated live unattended run. This counts what the executions API LISTED; what was BILLED is a separate, unobservable-from-an-API-key question (P-10's standing residual) and is not claimed here.",
+  "substrate_1_comparison": {
+    "parent_execution_id": "12044",
+    "http_status": 200,
+    "nodes_that_ran": [
+      "Adapt Company Fetch By Id",
+      "Build Async Ack",
+      "Build Company Identity",
+      "Build Response",
+      "Company Gate",
+      "Credit Request",
+      "HubSpot Company Fetch By Id",
+      "IF Apollo Credit Requested",
+      "IF Company Bare Event",
+      "IF Company Recompute",
+      "IF Company Skip",
+      "IF List Input",
+      "IF Lusha Credit Requested",
+      "IF Object Type Supported",
+      "IF Scale Up Route",
+      "IF ZoomInfo Credit Requested",
+      "Parse HubSpot Event",
+      "Respond to Webhook",
+      "Route By Object Type",
+      "Webhook Trigger"
+    ]
+  },
+  "scale_up_run": {
+    "parent_execution_id": "12045",
+    "http_status": 200,
+    "parent_nodes_that_ran": [
+      "Build Async Ack",
+      "Build Scale Up Ack",
+      "Build Scale Up Fan-Out",
+      "Credit Request",
+      "Dispatch Self",
+      "IF Apollo Credit Requested",
+      "IF List Input",
+      "IF Lusha Credit Requested",
+      "IF Scale Up Route",
+      "IF ZoomInfo Credit Requested",
+      "Parse HubSpot Event",
+      "Respond to Webhook",
+      "Webhook Trigger"
+    ],
+    "write_or_provider_nodes_observed": [],
+    "child_execution_ids": [
+      "12046",
+      "12047"
+    ],
+    "children": [
+      {
+        "execution_id": "12046",
+        "nodes_that_ran": [
+          "Adapt Company Fetch By Id",
+          "Build Async Ack",
+          "Build Company Identity",
+          "Build Response",
+          "Company Gate",
+          "Credit Request",
+          "Execute Workflow Trigger",
+          "HubSpot Company Fetch By Id",
+          "IF Apollo Credit Requested",
+          "IF Company Bare Event",
+          "IF Company Recompute",
+          "IF Company Skip",
+          "IF Lusha Credit Requested",
+          "IF Object Type Supported",
+          "IF Scale Up Route",
+          "IF ZoomInfo Credit Requested",
+          "Parse HubSpot Event",
+          "Respond to Webhook",
+          "Route By Object Type"
+        ],
+        "status": "success",
+        "reached_dispatch_self_again": false
+      },
+      {
+        "execution_id": "12047",
+        "nodes_that_ran": [
+          "Adapt Company Fetch By Id",
+          "Build Async Ack",
+          "Build Company Identity",
+          "Build Response",
+          "Company Gate",
+          "Credit Request",
+          "Execute Workflow Trigger",
+          "HubSpot Company Fetch By Id",
+          "IF Apollo Credit Requested",
+          "IF Company Bare Event",
+          "IF Company Recompute",
+          "IF Company Skip",
+          "IF Lusha Credit Requested",
+          "IF Object Type Supported",
+          "IF Scale Up Route",
+          "IF ZoomInfo Credit Requested",
+          "Parse HubSpot Event",
+          "Respond to Webhook",
+          "Route By Object Type"
+        ],
+        "status": "success",
+        "reached_dispatch_self_again": false
+      }
+    ],
+    "child_write_or_provider_nodes_observed": {},
+    "grandchildren_found": [],
+    "depth_guard_stopped_recursion": true,
+    "parent_output_correlates_to_child_ids": [
+      "12046",
+      "12047"
+    ]
+  },
+  "executions_spent_this_run": {
+    "note": "reconciled from the live run already performed (executions 12044-12047); this reconciliation itself performed zero NEW n8n executions, only GET reads (management-plane reads cost 0 executions, P-04/P-05)",
+    "live_executions_created_by_this_proof": [
+      "12044 (substrate-1 comparison parent)",
+      "12045 (scale_up parent)",
+      "12046 (child)",
+      "12047 (child)"
+    ],
+    "total_new_top_level_and_sub_executions": 4
+  },
+  "leftover_zz_workflows": [],
+  "flag_off_byte_identity": {
+    "claim": "functionally byte-identical, not literally byte-identical, and both halves are measured, not assumed",
+    "envelope": "asserted by dict-equality test (operator-claude-plugin/tests/test_scale_up_runtime.py::test_omitting_scale_up_sends_the_byte_identical_envelope_every_existing_caller_sends_today) -- dispatch_plan()'s output with scale_up omitted is byte-identical to today's, and the envelope carries no `scale_up` key at all when not opted in",
+    "graph_added_nodes": ["Build Scale Up Ack", "Build Scale Up Fan-Out", "Dispatch Self", "IF Scale Up Route"],
+    "graph_removed_nodes": [],
+    "graph_connections_delta": "exactly one re-pointed edge (disclosed): Parse HubSpot Event's first fan target changed from 'IF Object Type Supported' to 'IF Scale Up Route', whose own FALSE lane reaches 'IF Object Type Supported' unchanged -- functionally identical routing for every request that never opts in, one extra pass-through hop",
+    "existing_node_diffs_beyond_the_above": "87 pre-existing nodes differ ONLY in their own internal nid()-generated id string (and, for IF/Switch nodes, their nested condition ids) -- a cosmetic consequence of this build's sequential id counter being offset by the 4 new nodes' own nid() calls inserted earlier in build order. Verified directly: for every one of the 87, node['parameters'], node['type'], node['position'] are byte-identical to the pre-Task-5 commit (e144bf1) once the 'id' field is excluded from the comparison. Matches this repo's own documented 'n8n-deploy-diff-noise' precedent (ids/credentials/placeholders always differ, never signal) -- these ids are opaque, never referenced by name, and rebinding at deploy time is by NAME (cachedResultName), not by this internal id.",
+    "genuinely_different_node_beyond_id": "Parse HubSpot Event only -- its jsCode gained the scale_up/fan_depth normalization lines (ENVELOPE_SCALE_UP, the scale_up/fan_depth fields on every event), the SAME envelope+event-fallback idiom as recompute/async_ack; behaviourally a no-op for any request that never opts in (asserted by tests/n8n/scaleUpFanOutFlow.test.mjs's 'absent scale_up/fan_depth normalize to false/0, byte-identical to today's shape' test)",
+    "other_seven_workflow_jsons": "byte-identical -- only n8n/wf_enrichment_cloud.json changed (git status --short n8n/ confirmed on every commit this plan made)"
+  },
+  "note_first_run_had_a_bug_now_fixed": "the FIRST live attempt (executions 12040-12043) misidentified the parent execution (picked a child by mode=integrated instead of the real webhook-mode parent) and, separately, discovered a real Rule-1 bug in Build Scale Up Fan-Out/Build Scale Up Ack (a bare $json read only ever sees the FIRST of however many input items a runOnceForAllItems Code node receives, so the second synthetic row silently never fanned out). Both were fixed (the $input.all() fix in scripts/build_cloud_workflows.py, committed and redeployed; and this script's own _latest_webhook_execution/_child_ids_from_dispatch corrections, not redeployed since they are local-only diagnostics) before this second, successful run (executions 12044-12047), which is the run this verdict otherwise describes.",
+  "written_at": "2026-08-30T08:30:00.407053+00:00"
+}
