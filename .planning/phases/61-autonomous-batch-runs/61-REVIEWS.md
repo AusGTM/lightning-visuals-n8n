@@ -653,6 +653,14 @@ stores before 61-01's checkpoint decides the run-state substrate.
   constraint, not an unresolved defect**: it is the phase's own T-61-19 threat-register row with
   the exact mitigations kimi lists ("the mitigation is as good as the repo allows pre-Phase-57").
   Recorded here, not counted as an unresolved HIGH.
+- **gpt's HIGH on 61-04's forbidden-name refusal ("key-name scanning insufficient while
+  persisting full rows") is adjudicated down to actionable-MEDIUM.** The forbidden-name markers
+  (`run_manifest.py:86-100`) target grants/secrets/tokens, and persisting operator-supplied row
+  content 0600 through `durable_paths._atomic_write_0600` is the SAME accepted pattern
+  `run_manifest.py` and `artifact_store.py` already ship; the residual (a secret hidden under an
+  innocuous key inside row data) is not new exposure introduced by this plan. The actionable
+  remainder — persist allowlisted row fields rather than whole rows, and state in the docstring
+  why row content is needed for re-send — is carried as a non-HIGH concern.
 - **gemini's claim that CRM v3 does not support `CONTAINS_TOKEN` on arbitrary string fields**
   conflicts with the repo's committed name-lane usage (company CONTAINS_TOKEN, live since Phase
   36) — the operator exists in the closed vocabulary; what is genuinely unproven is its
