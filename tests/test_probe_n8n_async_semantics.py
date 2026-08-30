@@ -174,6 +174,12 @@ def test_instance_guard_never_fails_open(monkeypatch):
 
 
 def test_probe_gate_demands_exactly_true(monkeypatch):
+    # `_require_gates` runs the instance guard too, and that guard demands an EXACT match
+    # when N8N_EXPECTED_URL is set. Without this delenv the test passes on a bare shell and
+    # fails on any shell that sourced .env -- a false failure on a safety-gate test, which
+    # is the worst kind to leave flaky. `test_instance_guard_never_fails_open` above
+    # already clears it for the same reason.
+    monkeypatch.delenv("N8N_EXPECTED_URL", raising=False)
     monkeypatch.setenv("N8N_URL", "https://lv.app.n8n.cloud")
     monkeypatch.setenv("N8N_API_KEY", "k")
     for bad in ("1", "yes", "TRUE", "True"):
