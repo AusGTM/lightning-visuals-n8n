@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Unattended Session Runs
-current_phase: 61
+current_phase: 59
 current_phase_name: autonomous-batch-runs
-status: planning
+status: executing
 stopped_at: "2026-08-30. WALK RUN 4 FAILED (53-WALK-RECORD-3.md) -- first walk ever from the operator's chair against the installed plugin (0.28.6), halted BEFORE the grant was opened. Steps 3-7 never exercised; the grant surface is still untested from that chair, so GRANT-01's limitation 1 stays open (limitation 2 is now closed). FINDING D: given only a LinkedIn URL the plugin demanded a company, a field its own backend does not need -- resolveIdentity.js:76-78 treats linkedin_url as a STRONG match key and lushaRequest.js:79-91 accepts a Lusha v3 body with linkedinUrl alone. NOT a no-invention problem and NOT a regression: no best-effort ruling was ever recorded and the escalation ladder has only ever been same-host URL fetching. >>> PHASE 61 inserted as the IMMEDIATE NEXT PHASE (operator, 2026-08-30) and is being planned. A re-walk is BLOCKED on 61 -- it would halt in the same place. <<< P1/P2/P5 of the backlog handover are all closed."
-last_updated: "2026-08-29T00:00:00.000Z"
+last_updated: "2026-08-30T02:27:16.196Z"
 last_activity: 2026-08-30
 last_activity_desc: "Walk run 4 FAILED before the grant opened (FINDING D); Phase 61 inserted as immediate next phase and being planned. Earlier: P2 closed (quick 260829-lg3, Verified): all five grandfathered SKILL.md composition sequences covered, MAX_GRANDFATHERED 5 -> 0, plugin 0.28.6. P5 closed: all three items were NON-defects (two wrong observations, one debris file deleted). Phase 48 WR-01/WR-02 fixed, and the whole bare-assert safety-guard class swept into src/guards.py (14 sites, 10 scripts). Root suite 3328 -> 3365."
 progress:
-  total_phases: 5
+  total_phases: 6
   completed_phases: 5
-  total_plans: 29
+  total_plans: 36
   completed_plans: 29
-  percent: 100
+  percent: 81
 ---
 
 # Project State
@@ -152,7 +152,7 @@ predating the window. VETO-03 bar still 0.
 
 Phase: 59 (frictionless-write-path) — EXECUTING
 Plan: 6 of 6
-Status: Phase complete — ready for verification
+Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
   has executed on a real record. **Nothing is armed** — windows #1 and #2 were each opened
