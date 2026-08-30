@@ -603,6 +603,22 @@ def covers(grant, *, lane=None, workflow_id, record_ids, record_domains):
 
     Refusals NAME the offending values: a refusal that said only "outside the grant" would
     leave the operator diffing two lists by eye.
+
+    Phase 61 Plan 06 Task 3 (REVIEW-11), VERIFIED, NO CODE CHANGE: a record created
+    DURING a batch has an id absent from `grant['record_ids']` (unknowable at grant-
+    open time), which reviewers read as an unclosed scope gap for "one grant covers the
+    whole batch, including what it creates." The check below is symmetric across
+    `record_ids` AND `record_domains` — every value in BOTH lists must be inside the
+    grant, an AND, not an OR — so a send that also passes the create's own brand-new id
+    still refuses even when its domain is covered. What closes the gap is upstream, not
+    here: `enrich-before-ingest/SKILL.md`'s own batch-composition step confirms every
+    company's domain BEFORE the grant opens, and this skill's calling convention never
+    passes a record's own id for a row that has none yet (SKILL.md: "record_ids=<this
+    send's ids>" is empty for such a row) — it expresses the send by domain alone. A
+    same-run create is therefore covered via `record_domains`, with no widening of
+    `covers()` itself; see `test_write_grant.py`'s
+    `test_covers_admits_a_same_run_create_via_the_domain_named_at_grant_time` for the
+    verification this comment describes.
     """
     if not isinstance(grant, dict) or grant.get("kind") != KIND:
         return _refusal("that is not a write grant, so it authorizes nothing.")

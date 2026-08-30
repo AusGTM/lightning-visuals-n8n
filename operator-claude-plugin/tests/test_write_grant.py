@@ -674,6 +674,65 @@ def test_the_grant_carries_what_it_covers(granting_config, stub_module_transport
     assert grant["consecutive_disarm_failures"] == 0
 
 
+# --- Phase 61 Plan 06 Task 3 (REVIEW-11) -------------------------------------------------
+#
+# "one grant is documentation-only" was PARTLY a real find and PARTLY a wrong premise.
+# The wrong-premise half: `covers()` refuses any record id ABSENT from the grant's
+# `record_ids` at grant time, and a company or contact CREATED during the batch has
+# exactly such an id — reviewers read this as an unclosed gap. Verified against the
+# real code below: `covers()` ALSO checks `record_domains`, symmetrically with
+# `record_ids` (same refusal shape, same "outside the grant" wording). This skill's own
+# batch-composition step (SKILL.md step 2) confirms every company's domain BEFORE the
+# grant is opened — a domainless company is never let into the batch without one — so a
+# same-run create's brand-new id is never the ONLY handle a later send has for it; its
+# domain, already named at grant-open time, is. No change to write_grant.py's
+# `covers()` was needed for this — these two tests ARE the verification the plan asked
+# for, and the finding is recorded here rather than invented as a fix for a defect that
+# does not exist.
+
+def test_covers_admits_a_same_run_create_via_the_domain_named_at_grant_time(
+        granting_config, stub_module_transport_factory):
+    """`covers()` requires EVERY passed id/domain to be inside the grant (an AND, not
+    an OR, across the two lists) — so a same-run create is covered only when the SEND
+    itself is expressed by the domain the grant already named, not by the record's own
+    brand-new id (which the grant could not have known at open time). A send that
+    passes BOTH the unknown-at-grant-time id AND the known domain still refuses —
+    passing the id at all, for a record whose id did not exist when the grant was
+    planned, is not this skill's own calling convention (SKILL.md's own
+    `record_ids=<this send's ids>` is empty for a record with no id yet); expressing
+    the send by domain alone is."""
+    transport = stub_module_transport_factory(_plan_reads())
+    grant = _open(granting_config, transport, ids=(), domains=("newco.example",))
+
+    # An id genuinely outside the grant, with no domain given, still refuses.
+    id_only = write_grant.covers(
+        grant, lane="enrichment", workflow_id=WORKFLOW_ID,
+        record_ids=["999999"], record_domains=[])
+    assert id_only is not None, "an id alone, absent from the grant, must still refuse"
+
+    # The send for a same-run create, expressed the way this skill actually composes
+    # it — by the domain the grant already named, with no id (none existed at grant
+    # time) — is covered with no widening and no code change.
+    covered = write_grant.covers(
+        grant, lane="enrichment", workflow_id=WORKFLOW_ID,
+        record_ids=[], record_domains=["newco.example"])
+    assert covered is None, "a same-run create is covered via the domain named at grant time"
+
+
+def test_covers_still_refuses_a_domain_never_named_at_grant_time(
+        granting_config, stub_module_transport_factory):
+    """GRANT-03 is unweakened by the finding above: a domain genuinely outside the
+    grant still refuses, by name, exactly as it always has."""
+    transport = stub_module_transport_factory(_plan_reads())
+    grant = _open(granting_config, transport, ids=(), domains=("newco.example",))
+
+    refusal = write_grant.covers(
+        grant, lane="enrichment", workflow_id=WORKFLOW_ID,
+        record_ids=[], record_domains=["unrelated.example"])
+    assert refusal is not None
+    assert refusal["outside_record_domains"] == ["unrelated.example"]
+
+
 def test_close_grant_returns_a_copy_and_makes_no_network_call(
         granting_config, stub_module_transport_factory):
     transport = stub_module_transport_factory(_plan_reads())

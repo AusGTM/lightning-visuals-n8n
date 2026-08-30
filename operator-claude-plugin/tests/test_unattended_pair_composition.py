@@ -1,16 +1,22 @@
-"""Phase 61 Plan 06 Task 2 — same-run company-id propagation (HIGH-12/REVIEW-12,
-REVIEW-C17) and the REVIEW-10 client-side consumer for an ingest-lane no-company
-hold.
+"""Phase 61 Plan 06 — the pair pipeline's own composition tests.
 
-Drives the REAL functions (`preingest.index_company_dependencies`,
-`preingest.assign_same_run_company_ids`, `preingest.classify_company_resolution_hold`,
-`preingest.ingest_response_needs_hold`, `preingest.hold_ingest_no_company`,
-`held_queue.save`/`held_queue.load`) with only the n8n response SHAPE synthesized —
-this composition never calls n8n or HubSpot.
+Task 2: same-run company-id propagation (HIGH-12/REVIEW-12, REVIEW-C17) and the
+REVIEW-10 client-side consumer for an ingest-lane no-company hold. Drives the REAL
+functions (`preingest.index_company_dependencies`, `preingest.assign_same_run_company_ids`,
+`preingest.classify_company_resolution_hold`, `preingest.ingest_response_needs_hold`,
+`preingest.hold_ingest_no_company`, `held_queue.save`/`held_queue.load`) with only the
+n8n response SHAPE synthesized — this composition never calls n8n or HubSpot.
+
+Task 3: one grant across the lane (REVIEW-11/C16) — drives the REAL grant functions
+(`write_grant.plan_grant`/`open_grant`/`covers`) with only the transport injected, and
+the REAL `written_records` per-run scoping (REVIEW-C16).
 """
+import config_gate
 import held_queue
 import preingest
 import run_manifest
+import write_grant
+import written_records
 
 
 # =====================================================================================
@@ -175,3 +181,113 @@ def test_this_modules_bounded_lag_mechanism_has_no_sleep_or_loop():
     assert not any(isinstance(n, ast.While) for n in ast.walk(tree))
     assert "sleep" not in source
     assert "import time" not in source
+
+
+# =====================================================================================
+# Task 3 — one grant across the lane (REVIEW-11), a resumed run gets a fresh grant, and
+# the end-of-run account is scoped to THIS run (REVIEW-C16).
+# =====================================================================================
+
+
+import json  # noqa: E402 — grouped with this section's own tests, not the module header
+
+
+WORKFLOW_ID = "wf-enrichment-composition-1"
+
+
+def _base_workflow(record_writes='"false"', create='"false"', ids='""', domains='""'):
+    gate = (f"const ALLOW_HUBSPOT_RECORD_WRITES = {record_writes};\n"
+            f"const ALLOW_HUBSPOT_CREATE = {create};\n"
+            f"const TEST_RECORD_IDS = {ids};\n"
+            f"const TEST_RECORD_DOMAINS = {domains};\n"
+            "function _writeSafetyAllows() { return false; }\n")
+    return {
+        "id": WORKFLOW_ID, "name": write_grant.LANES["enrichment"], "active": True,
+        "settings": {}, "connections": {},
+        "nodes": [
+            {"name": "Update Write Gate", "parameters": {"jsCode": gate}},
+            {"name": "Create Write Gate", "parameters": {"jsCode": gate}},
+            {"name": "Webhook", "parameters": {}},
+        ],
+    }
+
+
+def _workflow_list():
+    return {"data": [{"id": WORKFLOW_ID, "name": write_grant.LANES["enrichment"]}]}
+
+
+def _open_grant(config, transport, **kwargs):
+    proposal = write_grant.plan_grant(
+        config, lanes=["enrichment"], object_type="companies",
+        record_ids=kwargs.pop("ids", ()), record_domains=kwargs.pop("domains", ()),
+        allow_create=False, label="the composition test batch", transport=transport,
+    )
+    assert proposal.get("kind") == write_grant.PROPOSAL_KIND, proposal
+    return write_grant.open_grant(proposal, "yes", config)
+
+
+def test_one_grant_authorizes_a_same_run_create_via_the_domain_it_already_named(
+        fake_config, stub_module_transport_factory):
+    """Drives the REAL grant functions end to end (REVIEW-11's own demand: 'proven by
+    a test over the real grant functions, not by prose'). A batch grant opened over one
+    company's domain authorizes a same-run create expressed by that domain, with no
+    widening — the mechanism `test_write_grant.py`'s own Task 3 tests pin in isolation,
+    exercised here as part of this plan's own composition."""
+    config = {**fake_config, config_gate.WRITE_GRANT_SETTINGS_KEY: True}
+    transport = stub_module_transport_factory([
+        _workflow_list(), _base_workflow(),
+    ])
+    grant = _open_grant(config, transport, domains=("newco.example",))
+
+    decision = write_grant.covers(
+        grant, lane="enrichment", workflow_id=WORKFLOW_ID,
+        record_ids=[], record_domains=["newco.example"])
+    assert decision is None, "the same-run create is inside the grant"
+
+
+def test_a_resumed_run_has_no_persisted_grant_to_read_back(monkeypatch, tmp_path):
+    """GRANT-06: a grant is never written to disk. `run_manifest.py` and
+    `held_queue.py` are the two durable documents a resume actually reads, and
+    neither can ever carry a grant-shaped object — so 'a resumed run needs a fresh
+    grant' is not a runtime check this test could race; it is a structural fact about
+    what these two documents' own schemas hold, verified directly rather than assumed.
+    """
+    fake_durable = tmp_path / "durable"
+    fake_durable.mkdir()
+    (fake_durable / "dashboard_artifact.json").write_text("{}")
+    monkeypatch.setenv("CLAUDE_PLUGIN_DATA", str(fake_durable))
+
+    run_manifest.save("run-resume-1", {"row-1": run_manifest.HELD})
+    held_queue.save("run-resume-1", {})
+
+    manifest_doc = json.loads(run_manifest.manifest_path().read_text())
+    queue_doc = json.loads(held_queue.queue_path().read_text())
+    for doc in (manifest_doc, queue_doc):
+        assert doc.get("kind") != write_grant.KIND
+        assert "workflow_ids" not in doc
+        assert "record_ids" not in doc
+
+
+def test_the_end_of_run_account_after_two_runs_shows_only_the_second_runs_records():
+    """REVIEW-C16: load `written_records.written_records_path(run_id)`, never the
+    path-less `written_records.load()` — the latter AGGREGATES every historical run's
+    artifact (`written_records.py:291-323`), which would inflate the one number an
+    operator checks a batch grant against. This is the one behaviour, driven against
+    the real module: a report generated after two runs shows only the second run's
+    own records. (No manual durable-dir isolation here — conftest.py's autouse
+    `no_durable_writes` fixture already redirects `written_records_path` for every
+    test in this suite; this test drives the SAME per-run scoping every other
+    `written_records` test in this repo relies on.)"""
+    written_records.append_chunk("run-1", 0, [
+        {"action": "create", "hs_object_id": "100", "object_type": "contacts"},
+    ])
+    written_records.append_chunk("run-2", 0, [
+        {"action": "create", "hs_object_id": "200", "object_type": "contacts"},
+    ])
+
+    run_1_only = written_records.load(path=written_records.written_records_path("run-1"))
+    run_2_only = written_records.load(path=written_records.written_records_path("run-2"))
+
+    assert {e["hs_object_id"] for e in run_1_only} == {"100"}
+    assert {e["hs_object_id"] for e in run_2_only} == {"200"}
+    assert run_1_only != run_2_only, "the two runs' accounts must never merge into one"

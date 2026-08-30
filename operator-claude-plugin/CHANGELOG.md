@@ -16,6 +16,28 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-08-30
+
+### Added
+
+- **One grant across ingest, enrich, create and associate — including what the batch
+  creates (Phase 61 Plan 06 Tasks 1-3, RUN-02, AFTER-02).** The 2026-08-25 association
+  contract now holds unconditionally: `wf_enrichment_cloud`'s own contacts-create path,
+  which had no company-resolution mechanism at all, downgrades any armed create to
+  `review` rather than land an unassociated contact — one implementation of the rule
+  (the contact-upload ingest lane), not two. `Adapt Company Create` (new node, companies
+  branch) captures a company create's own returned id and joins it to its planned
+  dependency by value; `preingest.py` gained the client-side coalescing
+  (`assign_same_run_company_ids`), a bounded index-lag classifier
+  (`classify_company_resolution_hold`, 3 attempts), and the REVIEW-10 consumer that
+  writes an n8n-returned no-company hold into `held_queue.py` (n8n cannot write a local
+  file). REVIEW-11's "one grant is prose-only" verified against the real `covers()`: a
+  same-run create is already covered via the domain this skill's own step 2 confirms
+  before the grant opens — no widening of `write_grant.py` was needed. A resumed run
+  gets a fresh grant, always (GRANT-06 unchanged). The end-of-run account now reads
+  `written_records.written_records_path(run_id)`, never the aggregating path-less
+  `load()` (REVIEW-C16).
+
 ## [0.32.0] - 2026-08-30
 
 ### Added

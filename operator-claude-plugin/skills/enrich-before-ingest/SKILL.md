@@ -60,6 +60,36 @@ whatever seven columns happened to be in the source file.
    (2026-08-28) and D-59-09 (2026-08-29), for what this line used to say and why it changed
    twice. With no grant open, this flow asks twice, exactly as described above.
 
+   **One grant, the whole batch — including what it creates (Phase 61 Plan 06 Task 3,
+   REVIEW-11).** The machinery is real code, not prose: `write_grant.plan_grant(config,
+   lanes=[...], ...)` opens a grant spanning both of this flow's lanes in one call,
+   `open_grant`'s `_consequence()` branch states the two-lane consequence at the yes, and
+   `authorize_send`/`authorize_ungranted_send` route every send through the SAME grant —
+   including a company or contact THIS BATCH creates partway through. `write_grant.covers()`
+   only ever admits a value present in the grant's own `record_ids`/`record_domains` at the
+   moment it was opened, so a same-run create's brand-new HubSpot id (unknowable before the
+   write that mints it) is never, by itself, inside the grant — what covers it instead is the
+   DOMAIN this step's own confirmation table names before the grant is ever opened (step 2,
+   below: every company gets a proposed website confirmed in the batch table first). Express
+   a same-run create's send by that domain, never by its own new id, and it is covered with
+   no widening (verified against the real functions in `test_write_grant.py` and
+   `test_unattended_pair_composition.py` — no change to `covers()` was needed, because the
+   scope question was already answered by the domain the operator confirmed at step 2).
+
+   **A resumed run gets a FRESH grant, always.** A grant exists only as a value in this
+   conversation (GRANT-06) — it is never persisted and never rehydrated from
+   `run_manifest.py` or `held_queue.py`. Resuming a broken batch (step 8, below) brings back
+   which rows still need work; it never brings back the authority to write them. If no grant
+   is open when a resumed batch reaches a send, that send asks again (or refuses, per steps 5
+   and 7), exactly as if it were the first attempt.
+
+   **The end-of-run account is scoped to THIS run (REVIEW-C16).** Read it from
+   `written_records.load(path=written_records.written_records_path(run_id))` — never the
+   path-less `written_records.load()`, which aggregates every historical run's artifact and
+   would inflate the one number an operator checks a batch grant against with a previous
+   batch's writes. The fuller end-of-run report, per-run ceilings, and the post-run allowlist
+   proof are Phase 57's work (RUN-05, AFTER-01, AFTER-03) and are deliberately not built here.
+
 2. **Resolve rows, then match them against HubSpot — unarmed.** For a spreadsheet
    (CSV/XLSX), read it with:
 
