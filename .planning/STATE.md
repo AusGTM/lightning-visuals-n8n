@@ -4,17 +4,17 @@ milestone: v1.1
 milestone_name: Unattended Session Runs
 current_phase: 61
 current_phase_name: autonomous-batch-runs
-status: verifying
-stopped_at: Completed 61-06-PLAN.md (offline pair pipeline + substrate-3 scale-up runtime proof; Phase 61 all 6 plans complete)
+status: complete
+stopped_at: Phase 61 COMPLETE — 6/6 plans, verification passed 12/12. Next: Phase 57 (ceilings, refusal-before-start, post-run proof) gates the first live unattended batch.
 last_updated: "2026-08-30T08:36:43.888Z"
 last_activity: 2026-08-30
-last_activity_desc: Phase 61 execution started
+last_activity_desc: Phase 61 complete and verified (12/12); backend deployed and disarmed-proven
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 36
-  completed_plans: 35
-  percent: 83
+  completed_plans: 36
+  percent: 100
 ---
 
 # Project State

@@ -287,9 +287,29 @@ variable), and a design that runs the provider waterfall twice per written recor
       and the non-clobber merge policy. Out of scope: the response-window ceiling and
       `max_records_per_chunk`, both owned by Phase 55.
 
-- [ ] **Phase 61: Autonomous batch runs** — **IMMEDIATE NEXT PHASE**
+- [x] **Phase 61: Autonomous batch runs** — **COMPLETE 2026-08-30**
       (operator, 2026-08-30). Inserted ahead of everything after walk run 4 failed.
-      **Plans:** 6 plans (planned 2026-08-30; absorbs Phases 55 and 56 per D-61-08).
+      **Plans:** 6/6 complete (planned and executed 2026-08-30; absorbs Phases 55 and 56 per
+      D-61-08). Verified 12/12 must-haves — `61-VERIFICATION.md`.
+
+      **Landed:** `linkedin_url` as a third identity group across both lanes with a YAML/JS
+      parity test; a real confidence decision table plus a durable held-rows queue with
+      per-hold-code resume fingerprints (the absence that WAS FINDING F); async submit/progress
+      off the synchronous window; one grant across ingest/enrich/create/associate; the
+      enrichment lane's unassociated-create gap closed by refusal, keeping ONE implementation
+      of the association rule; and the substrate-3 scale-up fan-out integrated behind an
+      off-by-default flag and proven at runtime.
+
+      **Backend deployed 2026-08-30** (all five cloud workflows; enrichment 114 → 118 nodes),
+      bounced, and exercised by disarmed runs — `12040`, and `12044`-`12047` for the fan-out.
+      **STILL GATED ON PHASE 57 (D-61-08):** the first live *unattended, credit-spending*
+      batch. Nothing armed; no such run has happened.
+
+      **Premises closed:** P-05/P-08/P-09 from n8n's own docs; P-07/P-10/P-13/P-14 by live
+      disarmed probes (`61-PREMISE-DOCS-FINDINGS.md`, `61-PREMISE-PROBE-VERDICT.json`,
+      `61-SCALE-UP-VERDICT.json`). Two findings worth carrying: sub-workflow executions are
+      documented as neither billed nor concurrency-capped (Starter = 5 concurrent, 2.5K/month),
+      and a Wait under 65s stays in-process and is NOT restart-safe.
 
       **Goal:** an operator hands over a batch and gets it back done — research, enrichment and
       ingestion run autonomously, consent is once per batch rather than once per row, rows the
