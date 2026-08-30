@@ -312,7 +312,8 @@ def _failure_reason(watcher):
     return None
 
 
-def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=None):
+def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=None,
+                   async_ack=False):
     """Send every chunk of an approved plan, in plan order, one at a time.
 
     `armed` has NO default and is passed to each `dispatch_enrichment` call rather than
@@ -330,6 +331,20 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
     here (D-59-06/GRANT-05: revocation bites on the next send, not mid-run; see
     `test_dispatch_plan_has_no_grant_aware_hook_to_revoke_against`).
 
+    `async_ack` (Phase 61 Plan 05 Task 2, REVIEW-C14, substrate 1 of
+    61-SPIKE-VERDICT.md — see `run_state.py`'s module docstring for why substrate 1 was
+    chosen over substrate 3 for this plan): keyword-only, defaults to `False`, so every
+    existing caller sends the byte-identical envelope it sends today. When `True`, this
+    run's already-minted `run_id` (the SAME one the caller is about to pass, or has
+    passed, to `run_state.start_run` — never a second id) rides the envelope as
+    `run_id`/`async_ack: true`, which `Parse HubSpot Event` (the n8n side,
+    `scripts/build_cloud_workflows.py`) reads to fan an immediate ack to `Respond to
+    Webhook` alongside the unchanged full chain. This does not change what `dispatch_plan`
+    itself waits for — the caller's own transport still returns synchronously from this
+    call exactly as it does today; what changes is how FAST the real backend's response
+    arrives once `async_ack` is honoured server-side, which is not observable from an
+    injected test transport and is proven live at this plan's own checkpoint, not here.
+
     A written-records bookkeeping failure (D-59-10) never stops this loop either — see
     fact 5 in the module docstring and the guard around `append_chunk` below.
     """
@@ -346,6 +361,9 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
         watcher = _StatusCapturingTransport(transport)
         try:
             envelope = enrichment.build_envelope(chunk, providers)
+            if async_ack:
+                envelope["run_id"] = run_id
+                envelope["async_ack"] = True
             body = enrichment.dispatch_enrichment(envelope, armed, config, transport=watcher)
         except NotArmedError:
             # Not a chunk failure — nothing was sent and nothing should be. Let it out.

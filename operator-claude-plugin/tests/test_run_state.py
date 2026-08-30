@@ -28,10 +28,16 @@ retracts a premise's resolved status FAILS THIS SUITE, rather than leaving `run_
 (Task 2) standing on a fact the doc no longer asserts.
 """
 import glob
+import json
 import re
 from pathlib import Path
 
 import pytest
+
+import chunking
+import durable_paths
+import run_manifest
+import run_state
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
@@ -234,3 +240,244 @@ def test_premises_all_six_previously_open_premises_stay_resolved():
         assert token in ("measured", "derived", "documented"), (
             f"{pid} must carry a resolved basis token: {by_id[pid]!r}"
         )
+
+
+# =====================================================================================
+# Task 2: run_state.py — one run submitted, one progress read, end to end.
+#
+# Isolation mirrors test_run_manifest.py/test_held_queue.py: CLAUDE_PLUGIN_DATA pointed
+# at a tmp_path fake durable home, never real ~/.claude — this lets run_state's own file
+# AND run_manifest's (both resolved via the SAME durable_paths.resolve_state_path()) land
+# in the same fake directory with no explicit path threading through read_progress().
+# =====================================================================================
+
+
+def _point_at_a_fake_durable_home(monkeypatch, tmp_path):
+    fake_durable = tmp_path / "durable"
+    fake_durable.mkdir()
+    (fake_durable / "dashboard_artifact.json").write_text("{}")
+    monkeypatch.setenv("CLAUDE_PLUGIN_DATA", str(fake_durable))
+
+
+def _rows(count, start=1):
+    return [{"row_id": f"r{n}"} for n in range(start, start + count)]
+
+
+# --- run_state_path() / new_run_id() ----------------------------------------------------
+
+def test_run_state_path_shares_a_parent_with_the_manifest_but_not_its_name(monkeypatch, tmp_path):
+    _point_at_a_fake_durable_home(monkeypatch, tmp_path)
+    state_path = run_state.run_state_path("run-1")
+    manifest_path = run_manifest.manifest_path()
+    assert state_path != manifest_path
+    assert state_path.parent == manifest_path.parent
+    assert not state_path.name.startswith(".")
+
+
+def test_new_run_id_mints_a_fresh_string_every_call():
+    a, b = run_state.new_run_id(), run_state.new_run_id()
+    assert a != b
+    assert isinstance(a, str) and a
+
+
+# --- start_run() / mark_dispatched() ----------------------------------------------------
+
+def test_start_run_refuses_a_forbidden_shaped_row_id(monkeypatch, tmp_path):
+    _point_at_a_fake_durable_home(monkeypatch, tmp_path)
+    with pytest.raises(run_state.RunStateError):
+        run_state.start_run("run-1", ["armed_row_1"])
+    assert not run_state.run_state_path("run-1").exists(), "a refusal must write nothing"
+
+
+def test_mark_dispatched_without_start_run_raises(monkeypatch, tmp_path):
+    _point_at_a_fake_durable_home(monkeypatch, tmp_path)
+    with pytest.raises(run_state.RunStateError):
+        run_state.mark_dispatched("run-never-started", ["r1"])
+
+
+def test_mark_dispatched_accumulates_across_calls_read_merge_write_never_overwrites(monkeypatch, tmp_path):
+    _point_at_a_fake_durable_home(monkeypatch, tmp_path)
+    run_state.start_run("run-1", ["r1", "r2", "r3"])
+    run_state.mark_dispatched("run-1", ["r1"])
+    run_state.mark_dispatched("run-1", ["r2"])
+    document = json.loads(run_state.run_state_path("run-1").read_text())
+    assert sorted(document[run_state.DISPATCHED_FIELD]) == ["r1", "r2"], (
+        "the second mark_dispatched call must not erase the first's ids"
+    )
+
+
+# --- classify_read() / read_progress() three-way state -----------------------------------
+
+def test_classify_read_absent_parseable_anomalous(monkeypatch, tmp_path):
+    _point_at_a_fake_durable_home(monkeypatch, tmp_path)
+    assert run_state.classify_read("run-never-started") == run_state.ABSENT
+
+    run_state.start_run("run-1", ["r1"])
+    assert run_state.classify_read("run-1") == run_state.PARSEABLE
+
+    run_state.run_state_path("run-2").write_text("not json at all {{{")
+    assert run_state.classify_read("run-2") == run_state.ANOMALOUS
+
+
+def test_read_progress_on_a_never_started_run_reports_not_started_with_real_zero_counts(monkeypatch, tmp_path):
+    _point_at_a_fake_durable_home(monkeypatch, tmp_path)
+    progress = run_state.read_progress("run-never-started")
+    assert progress.state == run_state.NOT_STARTED
+    assert (progress.total, progress.pending, progress.running,
+            progress.done, progress.held, progress.failed) == (0, 0, 0, 0, 0, 0)
+
+
+def test_read_progress_on_an_anomalous_file_reports_unreadable_never_zero(monkeypatch, tmp_path):
+    _point_at_a_fake_durable_home(monkeypatch, tmp_path)
+    run_state.run_state_path("run-1").write_text("not json at all {{{")
+    progress = run_state.read_progress("run-1")
+    assert progress.state == run_state.UNREADABLE
+    for field in (progress.total, progress.pending, progress.running,
+                  progress.done, progress.held, progress.failed):
+        assert field is None, (
+            "an unreadable state must never present a count as 0 — that is the exact "
+            "could-not-look-versus-did-not-find confusion this module refuses to make"
+        )
+
+
+# --- read_progress(): the five-bucket invariant, combining this run's own scope with
+# run_manifest's run-scoped verdicts (61-04's stated consumer). -------------------------
+
+def test_read_progress_before_any_verdict_is_all_pending(monkeypatch, tmp_path):
+    _point_at_a_fake_durable_home(monkeypatch, tmp_path)
+    run_state.start_run("run-1", ["r1", "r2", "r3"])
+    progress = run_state.read_progress("run-1")
+    assert progress.state == run_state.OK
+    assert progress.total == 3
+    assert progress.pending == 3
+    assert (progress.running, progress.done, progress.held, progress.failed) == (0, 0, 0, 0)
+
+
+def test_read_progress_moves_dispatched_rows_from_pending_to_running(monkeypatch, tmp_path):
+    _point_at_a_fake_durable_home(monkeypatch, tmp_path)
+    run_state.start_run("run-1", ["r1", "r2", "r3"])
+    run_state.mark_dispatched("run-1", ["r1", "r2"])
+    progress = run_state.read_progress("run-1")
+    assert progress.total == 3
+    assert progress.pending == 1
+    assert progress.running == 2
+    assert progress.pending + progress.running + progress.done + progress.held + progress.failed == progress.total
+
+
+def test_read_progress_reflects_run_manifest_verdicts_done_held_failed_and_the_total_invariant(monkeypatch, tmp_path):
+    _point_at_a_fake_durable_home(monkeypatch, tmp_path)
+    run_id = "run-1"
+    row_ids = ["r1", "r2", "r3", "r4", "r5", "r6"]
+    run_state.start_run(run_id, row_ids)
+    run_state.mark_dispatched(run_id, row_ids)
+    # read_progress() reads the PER-RUN manifest (run_manifest_path(run_id)), which is
+    # opt-in (61-04's own docstring) — a real caller saves there deliberately, exactly
+    # like this test does, rather than to manifest_path()'s single shared file.
+    run_manifest.save(run_id, {
+        "r1": run_manifest.MATCHED,
+        "r2": run_manifest.ENRICHED,
+        "r3": run_manifest.HELD,
+        "r4": run_manifest.CONFIDENCE_HELD,
+        "r5": run_manifest.UNCHECKED,
+        # r6 carries no verdict yet — still "running".
+    }, path=run_manifest.run_manifest_path(run_id))
+
+    progress = run_state.read_progress(run_id)
+    assert progress.state == run_state.OK
+    assert progress.total == 6
+    assert progress.done == 2
+    assert progress.held == 2
+    assert progress.failed == 1
+    assert progress.running == 1
+    assert progress.pending == 0
+    assert (progress.pending + progress.running + progress.done + progress.held
+            + progress.failed) == progress.total, (
+        "REVIEW-A6: the five buckets must always sum to total"
+    )
+
+
+def test_read_progress_ignores_a_run_manifest_verdict_stamped_under_a_different_run_id(monkeypatch, tmp_path):
+    """`load_scoped(expected_run_id=...)` degrades whole on a mismatch — a concurrent
+    second run's manifest must never be read as this run's own progress."""
+    _point_at_a_fake_durable_home(monkeypatch, tmp_path)
+    run_state.start_run("run-1", ["r1"])
+    run_state.mark_dispatched("run-1", ["r1"])
+    run_manifest.save("some-other-run", {"r1": run_manifest.MATCHED},
+                      path=run_manifest.run_manifest_path("run-1"))
+
+    progress = run_state.read_progress("run-1")
+    assert progress.done == 0, "a different run's own verdict must not count as this run's done"
+    assert progress.running == 1
+
+
+# --- spend_against_ceiling() -------------------------------------------------------------
+
+def test_spend_against_ceiling_projects_chunk_plus_record_count_against_the_configured_allowance():
+    result = run_state.spend_against_ceiling({"n8n_monthly_execution_allowance": 2500}, 20, 40)
+    assert result["projected_executions"] == 60
+    assert result["allowance"] == 2500
+    assert "projected" in result["basis"]
+
+
+def test_spend_against_ceiling_with_no_allowance_configured_reports_none_not_zero():
+    result = run_state.spend_against_ceiling({}, 5, 10)
+    assert result["allowance"] is None
+
+
+# --- end to end: mint before submit (REVIEW-C14), pass into dispatch_plan, one run -------
+
+def test_run_id_minted_before_submit_and_passed_into_dispatch_plan_rides_the_envelope(
+    monkeypatch, tmp_path, fake_config, stub_module_transport_factory,
+):
+    """REVIEW-C14: the run_id must exist BEFORE the submit call — never read off
+    `DispatchOutcome.run_id` after the loop, which only returns once the work is done.
+    Demonstrated here by minting first, registering the run's scope with the SAME id
+    BEFORE dispatch_plan is ever called, then asserting dispatch_plan's own outcome
+    carries that identical id back, and that the wire body (captured by the injected
+    transport) carries it too — the mechanism `Build Async Ack` reads server-side.
+    """
+    _point_at_a_fake_durable_home(monkeypatch, tmp_path)
+
+    run_id = run_state.new_run_id()  # minted BEFORE any HTTP call
+    plan = chunking.plan_chunks({"rows": _rows(3), "object_type": "contacts"}, 2)
+    run_state.start_run(run_id, [row["row_id"] for row in _rows(3)])  # registered BEFORE dispatch
+
+    transport = stub_module_transport_factory()
+    outcome = chunking.dispatch_plan(
+        plan, ["zoominfo"], True, fake_config, transport=transport,
+        run_id=run_id, async_ack=True,
+    )
+
+    assert outcome.run_id == run_id, "dispatch_plan must echo the SAME id, never mint a second one"
+    assert [call["json"]["run_id"] for call in transport.calls] == [run_id, run_id]
+    assert [call["json"]["async_ack"] for call in transport.calls] == [True, True]
+
+    for index, chunk in enumerate(plan.chunks):
+        run_state.mark_dispatched(run_id, [row["row_id"] for row in chunk["rows"]])
+
+    progress = run_state.read_progress(run_id)
+    assert progress.state == run_state.OK
+    assert progress.total == 3
+    assert progress.pending == 0
+    assert progress.running == 3, (
+        "no row has a run_manifest verdict yet — the async ack returns before the "
+        "real work finishes, so every dispatched row reads as running, not done"
+    )
+    assert (progress.pending + progress.running + progress.done + progress.held
+            + progress.failed) == progress.total
+
+
+def test_async_ack_false_by_default_leaves_the_envelope_byte_identical_to_today(
+    monkeypatch, tmp_path, fake_config, stub_module_transport_factory,
+):
+    """Every EXISTING caller of dispatch_plan omits async_ack — this must send neither
+    `run_id` nor `async_ack` on the wire, so no live behaviour changes for them."""
+    _point_at_a_fake_durable_home(monkeypatch, tmp_path)
+    plan = chunking.plan_chunks({"rows": _rows(2), "object_type": "contacts"}, 2)
+    transport = stub_module_transport_factory()
+
+    chunking.dispatch_plan(plan, ["zoominfo"], True, fake_config, transport=transport)
+
+    for call in transport.calls:
+        assert "run_id" not in call["json"]
+        assert "async_ack" not in call["json"]

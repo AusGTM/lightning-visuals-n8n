@@ -4174,6 +4174,15 @@ function normalizeObjectType(input) {
 const PROVIDER_NAMES = __PROVIDER_NAMES__;
 const body = $json.body ?? $json;
 const parsed = parseWebhookBody(body);
+// Phase 61 Plan 05 Task 2 (REVIEW-C14, substrate 1): the caller's own client-minted
+// run_id and its per-REQUEST async_ack opt-in. Both describe the REQUEST, not a row, so
+// they are read straight off `body` at the envelope level — the identical idiom
+// `parsed.mode`/`parsed.providers` already use, but `parseWebhookBody` itself is not
+// widened to carry them (its own contract is `{events, providers, mode}` and nothing
+// else, and this plan's own file scope does not touch n8n/code/providerSelection.js).
+const envelopeIsObject = body && typeof body === "object" && !Array.isArray(body);
+const ENVELOPE_RUN_ID = envelopeIsObject ? (body.run_id ?? null) : null;
+const ENVELOPE_ASYNC_ACK = envelopeIsObject ? body.async_ack === true : false;
 // Phase 36-03 Task 3 (36-CONTEXT.md sec7 step 6, D-15/D-22): refuse an oversize or empty
 // events array WHOLE, never truncate, never hang. In-node here rather than a separate
 // node (unlike Expand List To Events, whose separate-node placement guards against a
@@ -4254,10 +4263,54 @@ return parsed.events.map((event) => {
     // action:"proposed", write nothing, and report success — the exact silent-success
     // class this phase exists to remove.
     recompute: event.recompute === true,
+    // Phase 61 Plan 05 Task 2 (REVIEW-C14, substrate 1): placed AFTER the `...event`
+    // spread for the SAME reason `recompute` above is — a caller-supplied raw row
+    // property must not shadow the envelope-level normalization. `run_id` is the
+    // caller's own client-minted handle (never generated here); `async_ack` opts this
+    // request into the immediate ack `Build Async Ack` fans out below.
+    run_id: ENVELOPE_RUN_ID ?? event.run_id ?? null,
+    async_ack: (ENVELOPE_ASYNC_ACK || event.async_ack) === true,
   }};
 });
 """
 ).replace("__PROVIDER_NAMES__", json.dumps(provider_registry.PROVIDER_NAMES))
+
+
+# Phase 61 Plan 05 Task 2 (RUN-01/RUN-03, REVIEW-C14, substrate 1 of
+# 61-SPIKE-VERDICT.md — "Respond node moved to the front of the chain", P-07 confirmed
+# live execution 12035, 2026-08-30). Fanned UNCONDITIONALLY from "Parse HubSpot Event"
+# alongside its existing two targets ("IF Object Type Supported", "Credit Request") —
+# the SAME fan-out shape that pair already uses (Phase 16.1 reviews C1) — so this is one
+# more parallel target, not a re-point of any existing edge.
+#
+# Opt-in, per request: `async_ack` is normalized onto every event above; absent or not
+# exactly `true` (every existing test payload, and every caller that has not opted in)
+# returns nothing here, so "Respond to Webhook" is reached, as always, only via "Build
+# Response" below — BYTE-IDENTICAL to today's behaviour for every request that does not
+# ask for this.
+#
+# When `async_ack` IS true, this item reaches "Respond to Webhook" first (it is a single
+# Code node vs. the full provider+Haiku+Sonnet chain, so it wins the race), and the
+# UNCHANGED chain below keeps running afterward (P-07's own finding: an execution keeps
+# running once its own triggering webhook's response has already been sent) until it
+# reaches "Build Response" -> "Respond to Webhook" a second time for the SAME execution.
+# This is the identical "multiple inbound branches, first arrival wins" property
+# ENRICH_BUILD_RESPONSE's own comment already documents for that node's several terminal
+# branches (reviews C3) — n8n's webhook responder answers once and treats a later arrival
+# as already-answered; nothing downstream of that second arrival exists to be affected by
+# it (this workflow's actual HubSpot writes all happen BEFORE Build Response, never
+# after). Pinned as a static graph/topology fact in tests/n8n/asyncAck.test.mjs, not
+# claimed as a live-proven behaviour — this exact mechanism (an execution continuing past
+# its own already-sent response) is what P-07 measured live; a SECOND arrival at the SAME
+# responder node specifically is not itself separately live-tested by this plan and is
+# left for this plan's own checkpoint to observe.
+ENRICH_BUILD_ASYNC_ACK = r"""// Build Async Ack — Phase 61 Plan 05 Task 2 (substrate 1).
+// Opt-in per request via `async_ack`, normalized by Parse HubSpot Event onto every
+// event. Absent or not exactly `true` returns nothing — a request that never asked for
+// an early ack takes the byte-identical path it takes today.
+if ($json.async_ack !== true) return [];
+return [{ json: { run_id: $json.run_id ?? null, accepted: true, row_id: $json.row_id ?? null } }];
+"""
 
 
 # ---- Phase 25 Plan 03: HubSpot list -> record events (INGEST-04, D-01/D-02/D-15) -------
@@ -4857,6 +4910,10 @@ def build_enrichment_cloud():
 
     x += 220
     nodes.append(code_node("Parse HubSpot Event", ENRICH_PARSE_EVENT_CLOUD, x, y))
+    # Phase 61 Plan 05 Task 2 — see ENRICH_BUILD_ASYNC_ACK's own comment above for why
+    # this is a third, unconditional fan target (not a re-point) and a no-op for every
+    # request that does not opt in.
+    nodes.append(code_node("Build Async Ack", ENRICH_BUILD_ASYNC_ACK, x, y + 260))
 
     # Phase 16.1 (reviews A2): an explicit unsupported-object-type check BEFORE the
     # existing companies/contacts router — a malformed/unknown object_type terminates in
@@ -5666,9 +5723,16 @@ return $input.all().map((it, i) => {
     # Phase 16.1 Plan 02 (reviews C1): Parse HubSpot Event ALSO forks to the single-item
     # credit branch (Credit Request) — a parallel fan-out from the SAME output, not a
     # re-point of the existing IF Object Type Supported edge.
+    # Phase 61 Plan 05 Task 2: a THIRD parallel fan target, "Build Async Ack" — see that
+    # node's own comment (ENRICH_BUILD_ASYNC_ACK) for why this is additive and a no-op
+    # absent the request-level `async_ack` opt-in.
     conns["Parse HubSpot Event"] = {"main": [[
         {"node": "IF Object Type Supported", "type": "main", "index": 0},
         {"node": "Credit Request", "type": "main", "index": 0},
+        {"node": "Build Async Ack", "type": "main", "index": 0},
+    ]]}
+    conns["Build Async Ack"] = {"main": [[
+        {"node": "Respond to Webhook", "type": "main", "index": 0},
     ]]}
     # Phase 16.1 (reviews A2): unsupported/unknown object_type terminates HERE, before
     # Route By Object Type ever runs — no path to any provider gate.
