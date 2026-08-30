@@ -1,0 +1,72 @@
+{
+  "premise": "async-recovery-differential",
+  "question": "does watch.recover_async_dispatch recover, from the execution, the SAME proposed-values payload a synchronous mode=propose dispatch would have returned on the wire?",
+  "answer": true,
+  "basis": "observed",
+  "scope_boundary": "DISARMED: mode='propose' + providers=[] over 1 synthetic contact row, sent twice (once sync, once async_ack=true) -- zero HubSpot writes, zero provider calls, zero Anthropic calls, nothing armed. Correlation used the EXACT client-minted run_id read off Parse HubSpot Event's own output, never executions_client.find_execution_for_dispatch's time-proximity guess. This is NOT D-61-08's gated live unattended run.",
+  "observed": {
+    "run_id": "6a114c679e57406b83e6a3c0abe5deb4",
+    "matched_executions": 1,
+    "sync_responses_without_row_id": [
+      {
+        "action": "proposed",
+        "object_type": "contacts",
+        "hs_object_id": null,
+        "gap_flag": true,
+        "needs_review": false,
+        "mode": "propose",
+        "match": {
+          "tier": "none",
+          "auto": false,
+          "reason": "searched, no hit",
+          "candidates": []
+        },
+        "scored": {
+          "best": {},
+          "winners": {}
+        },
+        "material_conflicts": null,
+        "judge_confidence_by_field": null,
+        "properties": {
+          "lv_enrichment_status": "complete"
+        },
+        "remaining_credits": [],
+        "outcome_contract_version": 1,
+        "candidate_count": 0,
+        "provider_agreement": {},
+        "judge_adjudicated_fields": null
+      }
+    ],
+    "recovered_responses_without_row_id": [
+      {
+        "action": "proposed",
+        "object_type": "contacts",
+        "hs_object_id": null,
+        "gap_flag": true,
+        "needs_review": false,
+        "mode": "propose",
+        "match": {
+          "tier": "none",
+          "auto": false,
+          "reason": "searched, no hit",
+          "candidates": []
+        },
+        "scored": {
+          "best": {},
+          "winners": {}
+        },
+        "material_conflicts": null,
+        "judge_confidence_by_field": null,
+        "properties": {
+          "lv_enrichment_status": "complete"
+        },
+        "remaining_credits": [],
+        "outcome_contract_version": 1,
+        "candidate_count": 0,
+        "provider_agreement": {},
+        "judge_adjudicated_fields": null
+      }
+    ],
+    "shapes_equal": true
+  }
+}
