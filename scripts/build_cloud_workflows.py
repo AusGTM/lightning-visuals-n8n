@@ -3444,6 +3444,42 @@ return $input.all().map((it) => {
 });
 """
 
+# Phase 61 Plan 06 Task 2 (REVIEW-C17): the created company's id capture point.
+# "HubSpot Company Create"'s HTTP response carries the minted id, but the builder
+# wires that node STRAIGHT into the generic "Build Response" — nothing between them
+# preserves which run dependency the created id answers, so the id is lane-internal
+# only, never client-visible (written_records.py:38-48's `created_id_unknown`, the
+# post-write companies confirmation node having been scoped OUT in 59-01). This is the
+# ONE named adapter that closes that: it joins the create RESPONSE back to its planned
+# dependency BY VALUE — the same discipline "Build Association Request" (ingest lane)
+# already uses, for the same reason: index alignment is gone downstream of the write
+# IFs. `company_dependency_id` is the domain "Decide Company Action" seeded onto the
+# create's own properties (BUG 19); HubSpot's create response echoes the properties it
+# was given back, so the response's OWN `properties.domain` is the same value the
+# planning row named — no second search, no correlation id invented. Wired straight
+# into "Build Response", whose `...row` projection (Phase 61 Plan 04 Task 1) carries
+# both fields to the client for free.
+ADAPT_COMPANY_CREATE = r"""// Adapt Company Create — Phase 61 Plan 06 Task 2 (REVIEW-C17).
+function nodeAll(name) { try { return $(name).all(); } catch (e) { return []; } }
+const decided = nodeAll('Decide Company Action').map((it) => it.json);
+return $input.all().map((it) => {
+  const res = it.json || {};
+  const companyId = res.id != null ? String(res.id) : null;
+  const domain = (res.properties && res.properties.domain) || null;
+  const row = domain
+    ? decided.find((r) => r.properties && r.properties.domain === domain)
+    : null;
+  const companyDependencyId = domain ||
+    (row && row.properties && row.properties.name) || null;
+  return { json: {
+    ...res,
+    company_dependency_id: companyDependencyId,
+    company_id: companyId,
+  }};
+});
+"""
+
+
 def _live_http(name, x, y, method, url, headers, json_body=None, timeout=20000):
     """HTTP Request node whose auth/secrets come from $env expressions in headers
     (no credential store), for headless `n8n execute` with docker exec -e.
@@ -5636,6 +5672,9 @@ return $input.all().map((it, i) => {
     # endpoint takes it inside `properties` like any other field, and the merge supplies it
     # there when it has one.
     nodes.append(_hs_http_create_node("HubSpot Company Create", "companies", csx + 220, cy - 200))
+    # Phase 61 Plan 06 Task 2 (REVIEW-C17): the id capture point, spliced between the
+    # create write and the shared convergence — see ADAPT_COMPANY_CREATE's own comment.
+    nodes.append(code_node("Adapt Company Create", ADAPT_COMPANY_CREATE, csx + 440, cy - 200))
     if_co_enrich = _if_node("IF Company Enrich", "enrich", csx + 220, cy - 20)
     nodes.append(if_co_enrich)
     # BUG 11 / Phase 16.7-01: credential-bound httpRequest PATCH — companies mirror of
@@ -5959,7 +5998,11 @@ return $input.all().map((it, i) => {
             [{"node": "Build Response", "type": "main", "index": 0}],          # false -> respond (Plan 02)
         ]},
     })
-    conns["HubSpot Company Create"] = {"main": [[{"node": "Build Response", "type": "main", "index": 0}]]}
+    # Phase 61 Plan 06 Task 2 (REVIEW-C17): "HubSpot Company Create" now feeds "Adapt
+    # Company Create" (the id capture point) before the shared convergence, rather than
+    # straight into "Build Response".
+    conns["HubSpot Company Create"] = {"main": [[{"node": "Adapt Company Create", "type": "main", "index": 0}]]}
+    conns["Adapt Company Create"] = {"main": [[{"node": "Build Response", "type": "main", "index": 0}]]}
     conns["HubSpot Company Update"] = {"main": [[{"node": "Build Response", "type": "main", "index": 0}]]}
     conns["Unsupported Object Type"] = {"main": [[{"node": "Build Response", "type": "main", "index": 0}]]}
     conns.update(credit_conns)

@@ -12,13 +12,16 @@ shift every later row onto the wrong person's verdict, and nothing downstream co
 detect it (37-CONTEXT §12, §7).
 """
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 
 import requests
 
 import chunking
 import config_gate
+import confidence
 import enrichment
 import extraction
+import held_queue
 import preview
 from dispatch import DispatchError
 from tabular import read_table
@@ -937,3 +940,126 @@ def render_enriched_preview(rows, merge_report=None):
         "unanswered_statement": _unanswered_statement(total, unanswered_count),
         "nothing_reached_hubspot": _NOTHING_REACHED_HUBSPOT,
     }
+
+
+# =====================================================================================
+# Phase 61 Plan 06 Task 2 — same-run company dependencies, and the REVIEW-10 consumer
+# for an ingest-lane no-company hold.
+#
+# HIGH-12/REVIEW-12 (the "subtraction"): HubSpot's create response already returns the
+# authoritative company id. Waiting for the search index to catch up is slower AND
+# ambiguous — a zero-hit search cannot tell "not yet indexed" from "never created",
+# "the create failed", or "the wrong lookup key" (CLAUDE.md §13.0.1's Harness Racing
+# NSW case, execution 11922, is exactly the last one and is NOT lag). So a company
+# created earlier in the SAME RUN is carried forward by value: the id from
+# `Adapt Company Create`'s own response (the `Decide Company Action` capture point,
+# scripts/build_cloud_workflows.py, REVIEW-C17) is assigned directly onto every
+# contact row naming that dependency — no second search, no wait.
+# =====================================================================================
+
+# REVIEW-C17's own residual: a search that returns nothing for a company THIS RUN has
+# durable create evidence for is the ONLY case allowed to be called lag. It gets a
+# small, fixed number of bounded attempts (a caller-tracked count — no sleep, no while
+# loop; `watch.py` remains the sole poll site) before it too is held, with a reason
+# naming the lag rather than absence.
+LAG_RETRY_LIMIT = 3
+
+
+def index_company_dependencies(company_create_responses):
+    """`company_dependency_id -> company_id` for every company create THIS RUN made.
+
+    `company_create_responses` is the flattened list of `Build Response` items from a
+    companies-object_type dispatch (each item carries `company_dependency_id`/
+    `company_id` once `Adapt Company Create` has run). An item with no `company_id`
+    (the create failed, was blocked, or the response predates this plan's builder
+    change) is ignored — it is simply not durable create evidence.
+    """
+    index = {}
+    for item in company_create_responses or []:
+        if not isinstance(item, dict):
+            continue
+        dependency = item.get("company_dependency_id")
+        company_id = item.get("company_id")
+        if dependency and company_id:
+            index[dependency] = str(company_id)
+    return index
+
+
+def assign_same_run_company_ids(rows, dependency_index):
+    """Coalesces every contact row naming a dependency this run created onto that
+    create's own returned id — no second search (HIGH-12). Mutates and returns `rows`;
+    several rows naming the identical dependency all resolve to the same id (n:1,
+    dependency -> rows). A row with no matching dependency, or one that already
+    carries a `company_id`, is left untouched — it falls through to the ingest lane's
+    own domain/name search, which is the only place a genuine absence (or the bounded
+    residual lag case, see `classify_company_resolution_hold`) is decided.
+
+    Returns `(rows, assigned_count)`.
+    """
+    assigned = 0
+    for row in rows:
+        if row.get("company_id"):
+            continue
+        dependency = row.get("company_domain") or row.get("company")
+        company_id = dependency_index.get(dependency) if dependency else None
+        if company_id:
+            row["company_id"] = company_id
+            assigned += 1
+    return rows, assigned
+
+
+def classify_company_resolution_hold(reason, has_create_evidence, attempt):
+    """One ingest-lane no-company hold's disposition: `("held", reason)` or
+    `("retry", None)`. `has_create_evidence` is whether the row's dependency appears
+    in `index_company_dependencies`'s own index — a company genuinely absent from
+    this run's evidence holds IMMEDIATELY, regardless of `attempt` (behavior: "a
+    contact whose company genuinely does not exist is held"). Only a row this run has
+    durable create evidence for may ever be read as lag, and even then only for
+    `LAG_RETRY_LIMIT` attempts before it, too, is held — with a reason naming the lag,
+    not absence.
+    """
+    if not has_create_evidence:
+        return "held", reason
+    if attempt < LAG_RETRY_LIMIT:
+        return "retry", None
+    return "held", (
+        f"could not confirm the company this run created within {LAG_RETRY_LIMIT} "
+        "attempts — this reads as index lag against a company this run's own create "
+        f"evidence names, not absence: {reason}"
+    )
+
+
+def ingest_response_needs_hold(item):
+    """True when an ingest-lane response item (`Build Ingest Response`'s own shape,
+    scripts/build_cloud_workflows.py) is a create the lane held for want of a
+    resolved company — the ONE case REVIEW-10 routes into 61-04's held queue. An
+    UPDATE's `association == "none"` is never this — it simply had nothing to
+    associate, and `companyLink.js`'s own contract never holds it."""
+    return (
+        isinstance(item, dict)
+        and item.get("action") == "review"
+        and item.get("company_id") is None
+        and item.get("association") == "none"
+        and bool(item.get("reason"))
+    )
+
+
+def hold_ingest_no_company(row, item):
+    """Builds the `held_queue` entry for an ingest-lane no-company hold. REVIEW-10:
+    n8n cannot write `held_queue.py`'s file (it runs on someone else's machine), so
+    the lane RETURNS the hold on its response and the client parses it and writes the
+    queue entry here. Reuses `confidence.HOLD_NO_MATCH` — "no record found to act on"
+    fits a company search returning nothing exactly as well as it fits a contact
+    search, and this plan does not touch `confidence.py`'s vocabulary. `match_tier`/
+    `candidate_count` do not apply to a company-resolution hold (no match tier was
+    ever computed), so both are `None` on the synthetic outcome passed to
+    `held_queue.fingerprint`.
+    """
+    outcome = SimpleNamespace(match_tier=None, candidate_count=None)
+    return held_queue.build_entry(
+        row, confidence.HOLD_NO_MATCH, item.get("reason"), outcome,
+        observed_signals={
+            "company_match": item.get("company_match"),
+            "email": item.get("email"),
+        },
+    )

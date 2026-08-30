@@ -158,7 +158,10 @@ def test_zero_env_or_vars_expressions_in_the_credit_branch():
 
 BUILD_RESPONSE_SOURCES = {
     ("HubSpot Create", 0), ("HubSpot Update", 0), ("Skip (NoOp)", 0),
-    ("HubSpot Company Create", 0), ("HubSpot Company Update", 0),
+    # Phase 61 Plan 06 Task 2 (REVIEW-C17): "HubSpot Company Create" no longer feeds
+    # Build Response directly — "Adapt Company Create" is spliced between them to
+    # capture the created company's id and join it to its planned dependency by value.
+    ("Adapt Company Create", 0), ("HubSpot Company Update", 0),
     ("IF Enrich", 1), ("IF Company Enrich", 1),
     ("Unsupported Object Type", 0),
     # Phase 47.5 Plan 01 (RECOMP-02): the companies branch's skip terminal. Until now a
