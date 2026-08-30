@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Unattended Session Runs
-current_phase: 59
+current_phase: 61
 current_phase_name: autonomous-batch-runs
 status: executing
-stopped_at: "2026-08-30. WALK RUN 4 FAILED (53-WALK-RECORD-3.md) -- first walk ever from the operator's chair against the installed plugin (0.28.6), halted BEFORE the grant was opened. Steps 3-7 never exercised; the grant surface is still untested from that chair, so GRANT-01's limitation 1 stays open (limitation 2 is now closed). FINDING D: given only a LinkedIn URL the plugin demanded a company, a field its own backend does not need -- resolveIdentity.js:76-78 treats linkedin_url as a STRONG match key and lushaRequest.js:79-91 accepts a Lusha v3 body with linkedinUrl alone. NOT a no-invention problem and NOT a regression: no best-effort ruling was ever recorded and the escalation ladder has only ever been same-host URL fetching. >>> PHASE 61 inserted as the IMMEDIATE NEXT PHASE (operator, 2026-08-30) and is being planned. A re-walk is BLOCKED on 61 -- it would halt in the same place. <<< P1/P2/P5 of the backlog handover are all closed."
-last_updated: "2026-08-30T02:27:16.196Z"
+stopped_at: Completed 61-02-PLAN.md (linkedin match lane, end to end)
+last_updated: "2026-08-30T03:02:56.624Z"
 last_activity: 2026-08-30
 last_activity_desc: "Walk run 4 FAILED before the grant opened (FINDING D); Phase 61 inserted as immediate next phase and being planned. Earlier: P2 closed (quick 260829-lg3, Verified): all five grandfathered SKILL.md composition sequences covered, MAX_GRANDFATHERED 5 -> 0, plugin 0.28.6. P5 closed: all three items were NON-defects (two wrong observations, one debris file deleted). Phase 48 WR-01/WR-02 fixed, and the whole bare-assert safety-guard class swept into src/guards.py (14 sites, 10 scripts). Root suite 3328 -> 3365."
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 36
-  completed_plans: 29
-  percent: 81
+  completed_plans: 30
+  percent: 83
 ---
 
 # Project State
@@ -150,8 +150,8 @@ predating the window. VETO-03 bar still 0.
 
 ## Current Position
 
-Phase: 59 (frictionless-write-path) — EXECUTING
-Plan: 6 of 6
+Phase: 61 (autonomous-batch-runs) — EXECUTING
+Plan: 2 of 6
 Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
@@ -229,7 +229,7 @@ exactly what B and C now do): .planning/phases/47.5-veto-recompute-path/47.5-CON
 lv_org_type: Editix, Jam TV, Waikato, The Rumble). Not a 47.5 workstream.
 
 Previous status: Executing — Anthropic credit restored, Plan 03 completed
-Last activity: 2026-08-28 — Phase 59 execution started
+Last activity: 2026-08-30 — Phase 61 execution started
   the live property-existence guard (found 19 missing D-09 metadata properties, resolved
   via operator-confirmed D-21 narrowing), one live research pass over all 17 pinned
   companies (47-RESEARCH-RESULTS.json), two live-discovered data-quality fixes
@@ -239,13 +239,13 @@ Last activity: 2026-08-28 — Phase 59 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
+Progress: [████████░░] 83% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-29 (resumed)
-**Stopped at:** Session resumed from .planning/HANDOVER-2026-08-29-backlog.md. Verified live: P1.1's push half is ALREADY DONE -- `origin/master == master == 001edcf`, 0 unpushed (the handover's "10 unpushed" is stale). Marketplace clone also already at 001edcf / plugin 0.28.3. REMAINING half of P1.1: the operator's INSTALLED plugin cache tops out at 0.19.0 (`~/.claude/plugins/cache/lightning-visuals-operator/operator-claude-plugin/`) -- needs an operator-run plugin update to reach 0.28.3 before the P1.2 operator-chair walk can run the installed plugin.
-**Resume file:** .planning/HANDOVER-2026-08-29-backlog.md
+**Last session:** 2026-08-30T03:02:47.006Z
+**Stopped at:** Completed 61-02-PLAN.md (linkedin match lane, end to end)
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -339,6 +339,7 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 | Phase 59 P07 | 25min | 3 tasks | 7 files |
 | Phase 59 P08 | ~35min | 3 tasks | 10 files |
 | Phase 59 P09 | ~35min | 3 tasks | 10 files |
+| Phase 61 P02 | ~90min | 3 tasks | 17 files |
 
 ## Decisions
 
@@ -403,6 +404,10 @@ Progress: [██████████] 100% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: [Phase 59-08]: D-59-09 implemented — written_records.written_records_path now keyed by run_id (written_records-<run_id>.json), append_chunk's run-id-mismatch replace branch deleted, load() globs written_records*.json and unions per-run entries stamped with run_id; no lock, no merged index (both operator-rejected).
 - [Phase ?]: [Phase 59-08]: D-59-07 gap 4 closed — write_grant._consequence's written-records disclosure moved out of the len(lane_names) > 1 branch so it fires for every grant (one lane or two); plan_grant's authorization control untouched (git diff confined to _consequence + import).
 - [Phase ?]: D-59-10 (operator, 2026-08-29): a written-records bookkeeping failure never stops a dispatch -- caught in dispatch_plan's loop like DispatchError already is, recorded in DispatchOutcome.written_records_failures (one guard for a raised WrittenRecordsError AND append_chunk's falsey OSError return), and the run keeps sending; incomplete-list surfaced on 4 surfaces (DispatchOutcome, scheduled_arm's outcome+run_id, non-zero exit code without renaming the outcome, both skills' relay).
+- [Phase ?]: [61-02] linkedin match lane: dedicated 3-outcome summarizeMatch arm (0/1/>1 verified hits), never joined to the two-outcome fetch_by_id/email arm (REVIEW-C4)
+- [Phase ?]: [61-02] search-variant set stored as a sibling row field (linkedin_url_variants), not inside identity_keys, to avoid perturbing an out-of-scope exact-shape test
+- [Phase ?]: [61-02] Python oracle ORs lv_linkedin_url/hs_linkedin_url by two sequential hs_search calls, unioned by contact id; src/hubspot_client.py deliberately untouched (REVIEW-C6)
+- [Phase ?]: [61-02] MATCH_LOOKUP_KEYS widened from 4 to 5 (added linkedin_url); operator-claude-plugin bumped 0.28.6 -> 0.29.0
 
 ### Roadmap Evolution
 

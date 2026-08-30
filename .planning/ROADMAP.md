@@ -299,17 +299,23 @@ variable), and a design that runs the provider waterfall twice per written recor
       TRACER, not the scope. Closes INPUT-05, RUN-01, RUN-02, RUN-03, RUN-04, AFTER-02.
 
       Plans:
+
       - [ ] 61-01-PLAN.md — spike n8n Cloud's execution model; verdict doc with a basis word per
             claim, execution arithmetic against the 2,500/month budget, and an operator decision
             on where run state lives
-      - [ ] 61-02-PLAN.md — the tracer's backend half: a `linkedin` match lane that reaches a
+
+      - [x] 61-02-PLAN.md — the tracer's backend half: a `linkedin` match lane that reaches a
             HubSpot search on `lv_linkedin_url`, surviving stored-value variance
+
       - [ ] 61-03-PLAN.md — the tracer's front-end half: the third identity group in all five
             D-61-06 sites, with a YAML-to-JS parity test left behind
+
       - [ ] 61-04-PLAN.md — the confidence signal and hold-and-collect: confident rows proceed,
             unconfident rows are held with a reason, the batch always finishes
+
       - [ ] 61-05-PLAN.md — async submit, progress-while-running, and resume-or-fail-loudly on the
             substrate 61-01 selected
+
       - [ ] 61-06-PLAN.md — the unattended pair pipeline under one grant, association enforced,
             index lag absorbed by the run; first live run gated on Phase 57
 
@@ -468,7 +474,7 @@ n8n restarts mid-run.
 
 **Requirements**: INPUT-05, RUN-01, RUN-02, RUN-03, RUN-04, AFTER-02
 
-**Plans**: not yet planned
+**Plans**: 1/6 plans executed
 
 ### Phase 58: Take what the operator actually has
 
