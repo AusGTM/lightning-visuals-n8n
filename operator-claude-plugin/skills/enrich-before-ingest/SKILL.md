@@ -628,28 +628,66 @@ whatever seven columns happened to be in the source file.
    lane's workflow and only that send's records**. Saying a phrase early still does not
    carry it forward to a moment that has not happened yet.
 
-8. **Resuming a broken batch.** If a chunk failure, a dropped connection, or an
-   operator stopping mid-batch leaves rows unfinished, this flow does not have to
-   re-spend provider credit on rows it already settled. Persist what each row's run
-   actually reached — `matched`, `enriched`, `held`, or `unchecked` — as this batch
-   proceeds:
+8. **Resuming a broken batch (Phase 61 Plan 05 Task 3, REVIEW-C13/08/C15).** If a chunk
+   failure, a dropped connection, or an operator stopping mid-batch leaves rows
+   unfinished, this flow does not have to re-spend provider credit on rows it already
+   settled. Persist what each row's run actually reached — `matched`, `enriched`,
+   `held`, or `unchecked` — **per chunk, as this batch proceeds, through
+   `chunking.merge_chunk_verdicts`, never a bare `run_manifest.save`:**
 
    ```python
-   import run_manifest
-   run_manifest.save(run_id, verdicts)
+   import chunking
+
+   chunking.merge_chunk_verdicts(run_id, chunk_verdicts)
    ```
 
-   The next time this skill runs against the same source, load it back and ask only
-   about what still needs an answer:
+   **Never call `run_manifest.save(run_id, verdicts)` directly from this step.**
+   `save()` writes the map it is given as the COMPLETE document — a call that saved
+   only the current chunk's own rows would ERASE every earlier chunk's verdicts, which
+   is exactly backwards from what "persist per chunk" is for. `merge_chunk_verdicts`
+   loads whatever this run has already accumulated, folds this chunk's verdicts on top,
+   and saves the whole thing — the crash window this bounds is exactly one chunk wide.
+
+   The next time this skill runs against the same source, do not read `run_manifest.load()`
+   and `rows_to_resume` directly — classify the file first, through `watch.resume_or_disclose`,
+   and say its disclosure sentence out loud, VERBATIM, before anything else in this step:
 
    ```python
-   manifest = run_manifest.load()
-   resume = run_manifest.rows_to_resume(rows, manifest)
+   import watch
+
+   resume_report = watch.resume_or_disclose(rows)
+   # Say resume_report.disclosure out loud, verbatim, before proceeding.
+   rows = resume_report.rows
    ```
 
-   Tell the operator what was **skipped** because it already finished, by name or
-   count, rather than silently starting a smaller batch — a resume that looks like a
-   fresh, smaller run is indistinguishable from one that lost rows. Rows still `held`
-   are re-included the moment they gain an email and reported as still held
-   otherwise; rows `unchecked` are always re-requested, because "we could not look" is
-   a reason to look again, not an answer about the row.
+   This is the report-path half of a deliberate split: the RESUME rule underneath
+   (`run_manifest.rows_to_resume`) is unchanged and still degrades a missing or corrupt
+   manifest to "resume everything" — that trade is correct and stays. What
+   `resume_or_disclose` adds is telling the operator WHICH of four things actually
+   happened, rather than letting a corrupted or foreign-run manifest read as a fresh
+   first run:
+
+   - **`"no previous state — running all N rows"`** — nothing has run here before.
+   - **`"resuming — K of N already done, M to go"`** — an ordinary resume; K/M come
+     straight from `resume_report.skipped`/`resume_report.rows`.
+   - **`"previous state unreadable — rerunning all N rows, nothing was skipped"`** — the
+     manifest file exists but could not be trusted (missing, malformed, or carrying a
+     verdict word that is not one of the six allowed).
+   - **`"previous state belongs to a different run — rerunning all N rows, nothing was
+     skipped"`** — the file is perfectly readable, but its own recorded run id does not
+     match this run's (pass `expected_run_id=` to get this fourth classification).
+
+   The last two are both a **full rerun, disclosed loudly** — never a partial trust and
+   never presented as a fresh first run (REVIEW-C15). Rows still `held` are re-included
+   the moment they gain an email and reported as still held otherwise; rows `unchecked`
+   are always re-requested, because "we could not look" is a reason to look again, not
+   an answer about the row — both of those are `rows_to_resume`'s own unchanged rules,
+   inherited through `resume_or_disclose`.
+
+   Once this pass's own rows settle, distinguish what THIS pass finished from what was
+   already done before it started — never one merged count, which reads exactly like a
+   fresh run that got lucky:
+
+   ```python
+   completion = watch.build_resume_completion_report(resume_report, this_pass_verdicts)
+   ```

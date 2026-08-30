@@ -44,10 +44,12 @@ throw away the chunks that would have succeeded.
 import json
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import requests
 
 import enrichment
+import run_manifest
 import written_records
 from dispatch import DispatchError, NotArmedError
 
@@ -433,6 +435,46 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
         run_id=run_id,
         written_records_failures=tuple(written_records_failures),
     )
+
+
+def merge_chunk_verdicts(run_id, chunk_verdicts, path=None) -> None:
+    """Persist one chunk's own verdicts WITHOUT erasing any prior chunk's (Phase 61
+    Plan 05 Task 3, REVIEW-C13). `run_manifest.save` writes the supplied map as the
+    COMPLETE document (`run_manifest.py:117-153`) — it does not merge. A caller that
+    saved only `{this chunk's own rows}` per chunk would ERASE every earlier chunk's
+    verdicts, turning "write per chunk" (meant to bound replay to one chunk) into a
+    mechanism that guarantees a full replay of everything already done.
+
+    So: load whatever this run has already accumulated (`run_manifest.load`, which
+    already degrades a missing/corrupt file to `{}` — there is nothing new to trust
+    here, only to not lose), merge this chunk's verdicts on top (this chunk's own value
+    wins on any overlapping row id), and save the WHOLE resulting map.
+    `run_manifest.save`'s whole-document semantics stay unchanged; the merge is this
+    caller's job, not a second write mode on `save()`.
+
+    Not wired into `dispatch_plan` itself: a verdict (`matched`/`enriched`/`held`/
+    `unchecked`/`unanswered`/`confidence_held`) is derived downstream of a chunk's raw
+    response — by Haiku, Sonnet, and `confidence.assess` — so `dispatch_plan` cannot
+    compute one. A caller (the SKILL.md runbook) composes this the same way
+    `run_state.mark_dispatched`'s own docstring already names for a different pair: "a
+    caller composes the two."
+
+    The crash window this bounds is exactly one chunk wide: a crash between this
+    function's own load and its own save loses at most the CURRENT chunk's verdicts —
+    the previous chunk's call to this function already completed its own save before
+    this one started, so its verdicts are already on disk.
+
+    `path` defaults to `run_manifest.manifest_path()` — the SAME single shared file
+    `SKILL.md`'s existing resume step already reads across separate runs of this skill,
+    never a per-run file (this is not `run_state.py`'s per-run scoping; the two stores
+    make opposite defaults for opposite reasons, each already documented in its own
+    module).
+    """
+    target = Path(path) if path is not None else run_manifest.manifest_path()
+    accumulated = run_manifest.load(path=target)
+    merged = dict(accumulated)
+    merged.update(chunk_verdicts)
+    run_manifest.save(run_id, merged, path=target)
 
 
 def failed_batch(chunks):

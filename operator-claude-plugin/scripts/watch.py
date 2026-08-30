@@ -35,13 +35,17 @@ deployed workflow returns an execution id, so the run handle is a time-proximity
 (``executions_client.find_execution_for_dispatch``). The still-running report says so
 plainly rather than asserting the watched run with false confidence.
 """
+import json
 import time
+from dataclasses import dataclass
+from pathlib import Path
 
 import requests
 
 import executions_client
 import report
 import report_enrichment
+import run_manifest
 
 try:
     import cost_guard
@@ -352,3 +356,146 @@ def watch(config, run_handle, *, lane="enrichment", record_count=None,
         lane=lane, pre_dispatch_balances=pre_dispatch_balances, config=config,
         bonus_delivery_available=bonus_delivery_available(config),
     )
+
+
+# =====================================================================================
+# Resume or fail loudly (Phase 61 Plan 05 Task 3, RUN-03, REVIEW-08/C15) — the
+# REPORT-path half of "two consumers, two rules over one load". `run_manifest.py`
+# itself is untouched: `load()`, `save()`, and `rows_to_resume` all stay exactly as they
+# are, and the RESUME path (whatever calls `rows_to_resume` directly) keeps trusting
+# `load()`'s existing degrade-to-`{}` behaviour unmodified — a raise there would strand
+# a whole batch on one corrupt byte, which `run_manifest.load()`'s own module docstring
+# already explains is the wrong trade (degrading to a full run costs money; degrading to
+# a partial skip costs a contact).
+#
+# What is new here is the REPORT path: before trusting `rows_to_resume`'s result at
+# all, classify the manifest FILE ITSELF — never `load()`'s return value, which
+# collapses "never registered", "corrupted", and "a real, honest empty map" to the same
+# `{}` by design. A classification this module could not confirm safe (ANOMALOUS or
+# WRONG_RUN) takes the identical full-rerun path ABSENT would, but says a different,
+# specific sentence — never presenting a corrupted or foreign-run state as a fresh first
+# run (REVIEW-C15's resolved wording: full rerun, loudly disclosed, never a partial
+# trust and never silently indistinguishable from "nothing has ever run here before").
+# =====================================================================================
+
+ABSENT = "absent"
+PARSEABLE = "parseable"
+ANOMALOUS = "anomalous"
+WRONG_RUN = "wrong_run"
+
+
+def classify_manifest_read(path=None, expected_run_id=None) -> str:
+    """What a `run_manifest.py`-shaped file at `path` looks like, from a fresh probe —
+    never raises. Mirrors `run_state.classify_read`'s own three-way reasoning
+    (re-implemented here, not imported — this plugin's own precedent, see
+    `run_state.py`'s forbidden-name-list comment, for why a shared predicate is
+    duplicated rather than imported: a future change to one file's parsing must not
+    silently change what this one enforces), plus a fourth answer 61-04's
+    `load_scoped(expected_run_id=...)` already makes possible: `WRONG_RUN`, when the
+    document is perfectly readable but stamped with someone else's run id.
+
+    `PARSEABLE` is checked with the SAME schema `run_manifest.load()` itself enforces
+    (dict document, a `verdicts` dict, every entry a string key mapped to one of
+    `run_manifest.ALLOWED_VERDICTS`) — walked directly here rather than inferred from
+    `load()`'s return, because `load()` returns `{}` for BOTH a corrupted file and a
+    real, legitimately empty verdict map (a run registered but with no chunk dispatched
+    yet), and those two must never classify the same way.
+    """
+    target = Path(path) if path is not None else run_manifest.manifest_path()
+    if not target.exists():
+        return ABSENT
+
+    if expected_run_id is not None:
+        scoped = run_manifest.load_scoped(path=target, expected_run_id=expected_run_id)
+        if scoped.mismatch:
+            return WRONG_RUN
+
+    try:
+        raw = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ANOMALOUS
+    if not isinstance(raw, dict):
+        return ANOMALOUS
+    verdicts = raw.get(run_manifest.VERDICTS_FIELD)
+    if not isinstance(verdicts, dict):
+        return ANOMALOUS
+    for row_id, verdict in verdicts.items():
+        if not isinstance(row_id, str) or verdict not in run_manifest.ALLOWED_VERDICTS:
+            return ANOMALOUS
+    return PARSEABLE
+
+
+@dataclass(frozen=True)
+class ResumeReport:
+    """One resume decision, from the report side of REVIEW-08's split. `rows` is
+    exactly what `run_manifest.rows_to_resume` returns for the one classification
+    (`PARSEABLE`, and matching `expected_run_id` when one was given) that is safe to
+    trust; for every other classification it is every row handed in, unmodified —
+    `ABSENT`/`ANOMALOUS`/`WRONG_RUN` are all a full rerun, because none of them is
+    trustworthy enough to skip a single row from. `disclosure` is ONE of exactly four
+    fixed sentences, chosen by `classification` alone."""
+
+    classification: str
+    rows: tuple
+    skipped: tuple
+    still_held: tuple
+    disclosure: str
+
+
+def resume_or_disclose(rows, *, path=None, expected_run_id=None,
+                        held_entries=None, current_outcomes=None) -> ResumeReport:
+    """Classify the manifest first, THEN decide whether `run_manifest.rows_to_resume`'s
+    result is safe to act on. `held_entries`/`current_outcomes` pass straight through to
+    `rows_to_resume` for the `confidence_held` fingerprint comparison — see that
+    function's own docstring; both default to `None` exactly as it does.
+    """
+    total = len(rows)
+    classification = classify_manifest_read(path=path, expected_run_id=expected_run_id)
+
+    if classification == PARSEABLE:
+        manifest = run_manifest.load(path=path)
+        result = run_manifest.rows_to_resume(
+            rows, manifest, held_entries=held_entries, current_outcomes=current_outcomes,
+        )
+        disclosure = (
+            f"resuming — {len(result.skipped)} of {total} already done, "
+            f"{len(result.rows)} to go"
+        )
+        return ResumeReport(classification=classification, rows=result.rows,
+                             skipped=result.skipped, still_held=result.still_held,
+                             disclosure=disclosure)
+
+    if classification == ABSENT:
+        disclosure = f"no previous state — running all {total} rows"
+    elif classification == WRONG_RUN:
+        disclosure = (
+            f"previous state belongs to a different run — rerunning all {total} rows, "
+            "nothing was skipped"
+        )
+    else:  # ANOMALOUS
+        disclosure = (
+            f"previous state unreadable — rerunning all {total} rows, nothing was skipped"
+        )
+
+    return ResumeReport(classification=classification, rows=tuple(rows),
+                         skipped=(), still_held=(), disclosure=disclosure)
+
+
+def build_resume_completion_report(resume_report, this_pass_verdicts) -> dict:
+    """The FINAL report once a resumed run's own dispatched rows have settled:
+    distinguishes rows completed in THIS pass (`this_pass_verdicts`, this run's own
+    fresh verdicts) from rows already complete when the run started
+    (`resume_report.skipped`) — the plan's own `<behavior>` line. Merging the two into
+    one count would make a resume indistinguishable from a run that started fresh and
+    got lucky.
+    """
+    completed_this_pass = sum(
+        1 for v in this_pass_verdicts.values()
+        if v in (run_manifest.MATCHED, run_manifest.ENRICHED)
+    )
+    return {
+        "disclosure": resume_report.disclosure,
+        "already_done_before_this_pass": len(resume_report.skipped),
+        "completed_this_pass": completed_this_pass,
+        "still_held": len(resume_report.still_held),
+    }

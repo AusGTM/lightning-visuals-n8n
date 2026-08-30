@@ -190,10 +190,6 @@ COVERED = {
         ("extraction.hold_emailless", "extraction.strip_row_id", "extraction.write_dispatch_csv"),
     ): "test_preingest_merge.py::test_the_documented_step_7_sequence_reaches_a_written_dispatch_csv",
     (
-        "enrich-before-ingest",
-        ("run_manifest.load", "run_manifest.rows_to_resume"),
-    ): "test_run_manifest.py::test_a_resume_re_requests_only_rows_that_still_needed_work",
-    (
         "contact-upload",
         (
             "config_gate.load_config", "write_grant.authorize_send",

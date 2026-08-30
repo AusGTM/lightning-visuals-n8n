@@ -16,6 +16,27 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.32.0] - 2026-08-30
+
+### Added
+
+- **Resume-or-fail-loudly, and a per-chunk manifest merge that cannot erase a prior
+  chunk (Phase 61 Plan 05 Task 3, RUN-03, REVIEW-08/C13/C15).** `run_manifest.py`
+  itself is unchanged — its `load()`/`save()`/`rows_to_resume` all keep their existing,
+  correct degrade-whole behaviour. Two new caller-side pieces close the gap around it:
+  `chunking.merge_chunk_verdicts` reads the accumulated manifest, folds one chunk's
+  verdicts on top, and saves the whole document, so a per-chunk write (meant to bound a
+  crash's replay window to one chunk) cannot instead erase every earlier chunk's
+  verdicts the way a bare `run_manifest.save` would. `watch.classify_manifest_read` /
+  `watch.resume_or_disclose` classify the manifest FILE ITSELF — absent, parseable,
+  anomalous, or stamped with a different run's id — before trusting a resume, so a
+  corrupted or foreign-run manifest reruns everything with a named, spoken disclosure
+  sentence rather than presenting as a first run or a partial resume.
+  `watch.build_resume_completion_report` distinguishes rows completed in this pass from
+  rows already done when it started. `enrich-before-ingest/SKILL.md` step 8 now calls
+  both instead of `run_manifest.save`/`load`/`rows_to_resume` directly. No poll loop was
+  added anywhere; `_POLL_LOOP_ALLOWED` stays `{"watch.py"}` unchanged.
+
 ## [0.31.0] - 2026-08-30
 
 ### Added
