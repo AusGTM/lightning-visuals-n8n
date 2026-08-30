@@ -37,6 +37,71 @@ _TIER_NONE = "none"
 # third state" asymmetry n8n/code/matchProposal.js's own isReturnOnly() uses.
 
 
+# Phase 61 Plan 04 Task 1 (REVIEW-05): the only version this parser knows. A response
+# item stamped with any other value (or none) parses as UNPARSEABLE_OUTCOME — an
+# unrecognised contract is never assumed compatible.
+OUTCOME_CONTRACT_VERSION = 1
+_KNOWN_OUTCOME_CONTRACT_VERSIONS = frozenset({OUTCOME_CONTRACT_VERSION})
+
+
+@dataclass(frozen=True)
+class Outcome:
+    """One row's typed outcome — Task 2's confidence table's ONLY input, never raw
+    response JSON. `parseable=False` (the terminal, catch-all state) carries no signal
+    at all; every field on that branch stays `None` so a caller cannot mistake "could
+    not parse" for "parsed to an empty/negative answer"."""
+
+    parseable: bool
+    match_tier: str = None
+    candidate_count: int = None
+    provider_agreement: dict = None
+    material_conflicts: list = None
+    judge_adjudicated_fields: dict = None
+
+
+UNPARSEABLE_OUTCOME = Outcome(parseable=False)
+
+
+def parse_outcome(item):
+    """One response item -> a typed `Outcome`. Pure: no I/O, no config read.
+
+    Fails toward the hold, per Task 1's own contract: a missing
+    `outcome_contract_version`, an unrecognised one, a missing/tierless `match`, or a
+    missing `candidate_count` all parse as `UNPARSEABLE_OUTCOME` — a signal this parser
+    cannot verify must never be read as a good one. `provider_agreement`,
+    `material_conflicts`, and `judge_adjudicated_fields` are read as given, including
+    `None` — a row that went through no enrichment carries them as an EXPLICIT null on
+    the wire (Build Response, `scripts/build_cloud_workflows.py`), which is a fact
+    ("no providers ran"), not a parse failure.
+    """
+    if not isinstance(item, dict):
+        return UNPARSEABLE_OUTCOME
+
+    version = item.get("outcome_contract_version")
+    if version not in _KNOWN_OUTCOME_CONTRACT_VERSIONS:
+        return UNPARSEABLE_OUTCOME
+
+    match = item.get("match")
+    if not isinstance(match, dict):
+        return UNPARSEABLE_OUTCOME
+    tier = match.get("tier")
+    if not isinstance(tier, str) or not tier:
+        return UNPARSEABLE_OUTCOME
+
+    candidate_count = item.get("candidate_count")
+    if not isinstance(candidate_count, int) or isinstance(candidate_count, bool):
+        return UNPARSEABLE_OUTCOME
+
+    return Outcome(
+        parseable=True,
+        match_tier=tier,
+        candidate_count=candidate_count,
+        provider_agreement=item.get("provider_agreement"),
+        material_conflicts=item.get("material_conflicts"),
+        judge_adjudicated_fields=item.get("judge_adjudicated_fields"),
+    )
+
+
 class RowSpecError(Exception):
     """Raised when a rows list cannot become a matchable spec — empty, or a row that
     already carries a `row_id` of its own."""

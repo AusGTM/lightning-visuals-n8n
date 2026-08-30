@@ -1683,6 +1683,15 @@ return $input.all().map((it) => {
     row_id: row.row_id ?? null,
     mode: row.mode ?? null,
     match: row.match ?? summarizeMatch({ lane: row.lane }),
+    // Phase 61 Plan 04 Task 1 (REVIEW-05): carried BY NAME, mirroring the existing
+    // paired-index carry idiom (e.g. research_candidate/judge_verdict/existingRecord)
+    // — this node's own return object is an explicit field list, so a signal not named
+    // here dies at this exact boundary before Build Response ever sees it. `scored` and
+    // `judge_confidence_by_field` are raw upstream fields; Build Response is the single
+    // place that turns them into the named outcome-contract signals.
+    scored: row.scored ?? null,
+    material_conflicts: row.material_conflicts ?? null,
+    judge_confidence_by_field: row.judge_confidence_by_field ?? null,
     properties
   }};
 });
@@ -4443,7 +4452,41 @@ const remaining_credits = providers_requested.map((provider) => {
   const raw = rows[0] && rows[0].json;
   return { provider, credits: extractCredits(provider, raw) };
 });
-return $input.all().map((item) => ({ json: { ...item.json, remaining_credits } }));
+
+// Phase 61 Plan 04 Task 1 (REVIEW-05): the per-row OUTCOME CONTRACT. Build Response
+// already spreads the whole row (`...row` below) to every terminal (skip, proposed,
+// write_blocked, create, enrich, research_failed, unsupported...) — the transport
+// already exists. What was missing is a NAMED, VERSIONED projection of the five
+// signals the client's confidence table reads, computed HERE because this is the one
+// convergence point every terminal reaches, rather than duplicated per-terminal.
+// Absence is stamped explicitly (null), never a missing key, so a match-only call
+// ("no providers ran") and a lane that dropped a field cannot look alike to a parser.
+function _agreementByField(scored) {
+  const best = (scored && scored.best) || {};
+  const out = {};
+  for (const field of Object.keys(best)) {
+    out[field] = (best[field] && best[field].agreedBy) || [];
+  }
+  return out;
+}
+const OUTCOME_CONTRACT_VERSION = 1;
+return $input.all().map((item) => {
+  const row = item.json || {};
+  const match = row.match || null;
+  // Meaningful for tier "medium" only (REVIEW-C9) — "high"/"none"/"unknown" already
+  // encode their own cardinality in the tier itself, and summarizeMatch deliberately
+  // empties `candidates` for a high-tier auto-match.
+  const candidate_count = (match && Array.isArray(match.candidates)) ? match.candidates.length : 0;
+  return { json: {
+    ...row,
+    remaining_credits,
+    outcome_contract_version: OUTCOME_CONTRACT_VERSION,
+    candidate_count,
+    provider_agreement: row.scored ? _agreementByField(row.scored) : null,
+    material_conflicts: row.material_conflicts || null,
+    judge_adjudicated_fields: row.judge_confidence_by_field || null,
+  }};
+});
 """
 
 
