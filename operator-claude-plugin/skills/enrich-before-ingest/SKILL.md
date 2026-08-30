@@ -334,10 +334,26 @@ whatever seven columns happened to be in the source file.
    this send's records — using the SAME `allow_write_grants` authority and the SAME
    Guardrail A dirty-backend refusal a standing grant gets — and discards it once this
    dispatch finishes; it is never remembered as a standing grant, never written to disk.
-   Once said this turn, dispatch and merge:
+   Once said this turn, mint the run handle, dispatch **asynchronously**, and recover the
+   proposed values from the execution rather than the wire.
+
+   **This dispatch submits async and reads progress via `run_state` (gap-closure,
+   2026-08-31, operator decision "Option B" — see `scripts/watch.py`'s "Async recovery"
+   section for the full mechanism).** A `mode: "propose"` row's proposed field values
+   never travel by any channel `run_state.py` reads (CLAUDE.md §13.0.2: progress is
+   read by the client, never by n8n) — `async_ack=True` makes the synchronous response
+   an ack only (`Build Async Ack` wins the race against the full chain, deterministically,
+   every time). The values are not lost, though: `Build Response` still runs to
+   completion and its own output — read off the settled execution by the SAME `run_id`
+   this run minted, an exact match, never a timing guess — is byte-identical to what the
+   synchronous body would have carried. `watch.recover_async_dispatch` is the one place
+   that reads it; nothing here re-implements that walk.
 
    ```python
-   import chunking, config_gate, enrichment, n8n_arming, preingest, write_grant
+   import chunking, config_gate, enrichment, n8n_arming, preingest, run_state, watch, write_grant
+
+   run_id = run_state.new_run_id()  # minted before any HTTP call (REVIEW-C14)
+   run_state.start_run(run_id, [row["row_id"] for row in unmatched_rows])
 
    cfg = config_gate.load_config()
    providers = enrichment.resolve_providers(<override or None>, cfg)
@@ -359,18 +375,26 @@ whatever seven columns happened to be in the source file.
    with n8n_arming.armed_window(decision["workflow_id"],
                                 <this send's ids>, <this send's domains>,
                                 <allow_create>, cfg, grant=decision["grant"]):
-       outcome = chunking.dispatch_plan(plan, providers, True, cfg)
-   # outcome.responses is ONE RAW BODY PER CHUNK, never one item per row — each body is
-   # array-wrapped by n8n's normal firstIncomingItem behaviour (a list, usually one item
-   # per row in that chunk) or, rarely, a bare single-row dict. Flatten before merging,
-   # exactly like preingest.rerequest_unanswered's own re-request pass already does for
-   # this same endpoint. Passing outcome.responses to merge_enriched UN-flattened files
-   # every row as unanswered with no error (FINDING 2, 53-WALK-RECORD.md).
-   responses = []
-   for body in outcome.responses:
-       responses.extend(body if isinstance(body, list) else [body])
-   merge_report = preingest.merge_enriched(unmatched_rows, responses)
+       outcome = chunking.dispatch_plan(plan, providers, True, cfg, run_id=run_id, async_ack=True)
+   run_state.mark_dispatched(run_id, [row["row_id"] for row in unmatched_rows])
+   progress = run_state.read_progress(run_id)  # tell the operator N submitted, still running
+
+   recovery = watch.recover_async_dispatch(cfg, run_id, plan.chunk_count)
+   if not recovery["recovered"]:
+       # The bound elapsed before every chunk settled. Tell the operator this run is
+       # still going and offer to check again — by calling watch.recover_async_dispatch
+       # with this SAME run_id, never by re-dispatching (that sends the same rows twice).
+       ...
+   else:
+       merge_report = preingest.merge_enriched(unmatched_rows, recovery["responses"])
    ```
+
+   **`recovery["responses"]` is already flat** — one `Build Response` item per row,
+   because that is what one settled execution's own output already is (unlike a
+   synchronous `outcome.responses`, which is one raw body PER CHUNK and needs flattening
+   before `merge_enriched` — see `preingest.rerequest_unanswered`'s own re-request pass
+   for that same flatten, and FINDING 2, 53-WALK-RECORD.md, for what skipping it does).
+   Passing `recovery["responses"]` straight to `merge_enriched` is correct as written.
 
    The allowlist handed to `armed_window` is **this send's records, never the grant's whole
    record set** — that narrowing is what keeps every window strictly smaller than the grant
@@ -456,11 +480,11 @@ whatever seven columns happened to be in the source file.
    chunk failed outright — see above), turn it into a typed outcome and a verdict:
 
    ```python
-   import confidence, held_queue, preingest, run_manifest
+   import confidence, held_queue, preingest, run_manifest, run_state
 
-   # `responses` here is the ALREADY-FLATTENED list built just above (never
-   # `outcome.responses` directly, which is one raw body per CHUNK — see the same
-   # flattening note a few lines up).
+   # `responses` here is `recovery["responses"]` from the dispatch step above — already
+   # flat (one item per row; see that step's own note on why no second flatten belongs
+   # here).
    responses_by_id = {item["row_id"]: item for item in responses}
    held_entries = held_queue.load()
    verdicts = run_manifest.load()
@@ -476,15 +500,27 @@ whatever seven columns happened to be in the source file.
 
        entry = held_queue.build_entry(row, verdict.hold_code, verdict.reason, parsed)
        held_entries[row_id] = entry
-       held_queue.save(outcome.run_id, held_entries)
+       held_queue.save(run_id, held_entries)
        verdicts[row_id] = run_manifest.CONFIDENCE_HELD
-       run_manifest.save(outcome.run_id, verdicts)
+       # Shared path (unchanged) — step 8's resume reads this SAME file across turns.
+       run_manifest.save(run_id, verdicts)
+       # Run-scoped path (new) — the ONLY thing that makes run_state.read_progress able
+       # to see this run's held rows; step 8's resume never reads this second copy.
+       run_manifest.save(run_id, verdicts, path=run_manifest.run_manifest_path(run_id))
+
+   progress = run_state.read_progress(run_id)  # done/held/failed, now that verdicts exist
    ```
 
    **The queue entry is written before the manifest verdict, in that order, every
    time** — a crash between the two leaves an unmentioned row that simply gets
    re-checked on the next resume (a duplicate provider call, never a dropped contact),
-   never a row marked held with nothing recorded to review.
+   never a row marked held with nothing recorded to review. The two `run_manifest.save`
+   calls are a deliberate dual-write, not a redundancy: the shared path is what step 8's
+   resume already reads across separate invocations of this skill (unchanged by this
+   gap-closure), and the run-scoped path is what `run_state.read_progress` reads within
+   THIS run. A confident row (the `continue` above) still gets no manifest entry at all
+   — unchanged from before this gap-closure — so `read_progress`'s `done` bucket
+   under-counts for this flow; `held`/`failed` are the buckets this call is for.
 
    A row this table cannot confirm is HELD, not guessed and not asked about here — the
    run moves straight to the next row regardless of what this one did, and reaches its

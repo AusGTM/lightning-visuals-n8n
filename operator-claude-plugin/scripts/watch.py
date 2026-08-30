@@ -46,6 +46,7 @@ import executions_client
 import report
 import report_enrichment
 import run_manifest
+import scheduled_arm
 
 try:
     import cost_guard
@@ -356,6 +357,123 @@ def watch(config, run_handle, *, lane="enrichment", record_count=None,
         lane=lane, pre_dispatch_balances=pre_dispatch_balances, config=config,
         bonus_delivery_available=bonus_delivery_available(config),
     )
+
+
+# =====================================================================================
+# Async recovery (Phase 61 gap-closure, 2026-08-31, operator decision "Option B").
+#
+# A `mode: "propose"` dispatch (rows describing contacts not yet in HubSpot) needs the
+# proposed field VALUES back, not merely a completion signal — that is the one thing
+# `run_state.py` was deliberately built NOT to carry (CLAUDE.md §13.0.2: "Progress is
+# read by the client... never by n8n"). `async_ack=True` makes the synchronous HTTP
+# response an ack only (`{run_id, accepted, row_id}` — `Build Async Ack`,
+# `scripts/build_cloud_workflows.py`), which `Build Async Ack` deterministically wins
+# ("a single Code node vs. the full chain"), so the proposed values are NOT lost — they
+# are simply not on the wire this way. `Build Response` still runs (the "unchanged
+# chain" keeps executing after the early ack) and its own output is exactly the
+# synchronous body's shape (`ENRICH_BUILD_RESPONSE` returns `{...row, remaining_credits,
+# outcome_contract_version, ...}` per item — the same fields `preingest.parse_outcome`/
+# `merge_enriched` already read). Reading `Build Response`'s output off the SETTLED
+# EXECUTION recovers the identical payload a synchronous call would have returned on
+# the wire — proven byte-for-byte by the differential live check in
+# `.planning/phases/61-autonomous-batch-runs/61-ASYNC-RECOVERY-VERDICT.json`.
+#
+# Correlation is EXACT, never a timing guess: `Parse HubSpot Event` normalizes the
+# caller's own client-minted `run_id` onto every event (the same idiom `recompute`
+# established, CLAUDE.md §13.0/§13.0.2), so an execution is claimed by this run if and
+# only if one of its own `Parse HubSpot Event` output items carries this run's `run_id`
+# — never `executions_client.find_execution_for_dispatch`'s D-12 time-proximity
+# fallback, which this module does not call here.
+# =====================================================================================
+
+def _execution_carries_run_id(execution, run_id) -> bool:
+    run_data = report._run_data(execution)
+    if run_data is None:
+        return False
+    for item in report_enrichment._first_node_items(run_data, report_enrichment.PARSE_EVENT_NODE):
+        body = item.get("json") if isinstance(item, dict) else None
+        if isinstance(body, dict) and body.get("run_id") == run_id:
+            return True
+    return False
+
+
+def _build_response_rows(execution) -> list:
+    """The SAME raw items `Build Response` emits as the synchronous webhook body,
+    read from the settled execution instead of the HTTP response — byte-identical
+    shape, never a second value channel."""
+    run_data = report._run_data(execution)
+    if run_data is None:
+        return []
+    items = report_enrichment._first_node_items(run_data, report_enrichment.BUILD_RESPONSE_NODE)
+    return [item["json"] for item in items if isinstance(item, dict) and isinstance(item.get("json"), dict)]
+
+
+def find_executions_by_run_id(config, run_id, *, workflow_id=None, transport=requests.get,
+                               limit=20) -> list:
+    """One scan of the enrichment workflow's recent executions — no sleep, no retry of
+    its own (the bounded wait lives in `recover_async_dispatch` below). Returns every
+    execution whose own `Parse HubSpot Event` output names `run_id` exactly, settled or
+    not — the caller decides what to do with an unsettled match.
+    """
+    if workflow_id is None:
+        workflow_id = executions_client.resolve_workflow_id(
+            config, transport=transport, workflow_name=scheduled_arm.ENRICHMENT_WORKFLOW_NAME,
+        )
+    if workflow_id is None:
+        return []
+    matches = []
+    for candidate in executions_client.list_executions(config, workflow_id, transport=transport, limit=limit):
+        execution_id = candidate.get("id") if isinstance(candidate, dict) else None
+        if execution_id is None:
+            continue
+        execution = executions_client.get_execution(config, execution_id, transport=transport)
+        if _execution_carries_run_id(execution, run_id):
+            matches.append(execution)
+    return matches
+
+
+def recover_async_dispatch(config, run_id, expected_chunk_count, *, workflow_id=None,
+                            transport=requests.get, now=None, sleep=None,
+                            bound_seconds=None, backoff_schedule=BACKOFF_SCHEDULE_SECONDS) -> dict:
+    """Waits — bounded, THIS module's own sanctioned poll site — for `expected_chunk_count`
+    executions carrying `run_id` to settle, then returns their flattened `Build Response`
+    rows: exactly the shape `preingest.merge_enriched` already consumes (one flat list of
+    per-row dicts — see `chunking.DispatchOutcome.responses`'s own docstring for why a
+    synchronous caller flattens before merging; this recovery path returns pre-flattened,
+    since one settled execution's `Build Response` output already IS one chunk's rows).
+
+    Never falls back to `executions_client.find_execution_for_dispatch`'s time-proximity
+    correlation — a miss here is reported as `recovered: False`, not guessed.
+
+    `{"recovered": True, "responses": [...], "matched_executions": N}` on success;
+    `{"recovered": False, "responses": [], "matched_executions": N, "elapsed_seconds",
+    "bound_seconds"}` when the bound elapses first — the caller (the skill) is expected
+    to tell the operator this run is still going and offer to call this again with the
+    SAME `run_id`, never to re-dispatch (that would send the same rows twice).
+    """
+    _now = now or time.monotonic
+    _sleep = sleep or time.sleep
+    bound = bound_seconds if bound_seconds is not None else DEFAULT_BOUND_SECONDS
+    start = _now()
+    attempt = 0
+    while True:
+        executions = find_executions_by_run_id(config, run_id, workflow_id=workflow_id, transport=transport)
+        settled = [e for e in executions if _is_settled(e)]
+        if len(settled) >= expected_chunk_count:
+            responses = []
+            for execution in settled:
+                responses.extend(_build_response_rows(execution))
+            return {"recovered": True, "responses": responses, "matched_executions": len(settled)}
+
+        elapsed = _now() - start
+        if elapsed >= bound:
+            return {
+                "recovered": False, "responses": [], "matched_executions": len(settled),
+                "elapsed_seconds": elapsed, "bound_seconds": bound,
+            }
+        wait = backoff_schedule[min(attempt, len(backoff_schedule) - 1)]
+        _sleep(wait)
+        attempt += 1
 
 
 # =====================================================================================

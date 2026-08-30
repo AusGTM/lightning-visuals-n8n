@@ -16,6 +16,44 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-08-31
+
+### Added
+
+- **`async_ack`/`run_state` wired into the documented `enrich-before-ingest` flow
+  (gap-closure, operator decision "Option B").** Phase 61 shipped `async_ack` and
+  `run_state.py` fully built, deployed and live-proven, but no `SKILL.md` passed
+  `async_ack` and none referenced `run_state` — a documentation sweep found the
+  operator-reachable flow was still fully synchronous. Step 5's waterfall dispatch now
+  mints a `run_id` before any HTTP call (REVIEW-C14), submits with `async_ack=True`,
+  and recovers the proposed field values from the settled execution's own `Build
+  Response` output (`scripts/watch.py::recover_async_dispatch`, a new function, exact
+  `run_id` correlation via `Parse HubSpot Event`'s own output — never a timing guess)
+  rather than from the synchronous response body, which an early ack makes an ack-only
+  shell. `run_state.read_progress` reports pending/running/held counts mid-run.
+  Live-proven by a differential check (same synthetic disarmed row sent once sync, once
+  async): the recovered payload is byte-identical to the synchronous body — see
+  `.planning/phases/61-autonomous-batch-runs/61-ASYNC-RECOVERY-VERDICT.json`.
+- **A checkpoint caught and rejected a silent data-loss regression before it shipped.**
+  The literal ask — pass `async_ack=True` on step 5's dispatch unmodified — would have
+  discarded every batch's proposed enrichment values (the ack response carries no field
+  data, and `mode: "propose"` rows have no other channel for them), invisibly to every
+  offline test. Recorded for anyone touching this lane again: `async_ack` is safe on a
+  dispatch whose result lands via a server-side HubSpot write regardless of the HTTP
+  response; it is not safe on a dispatch whose only channel for its result IS that
+  response.
+
+### Investigated, not changed
+
+- **`enrich-records`'s step 8 dispatch does not get the same wiring.** Checked per the
+  task's own "wire it only if it genuinely applies" instruction. It does not: 3 of its 4
+  record-spec forms (`list`, `people`, `companies`) carry no row-id-shaped set before
+  dispatch for `run_state.start_run` to register; nothing in that lane writes
+  `run_manifest` verdicts today, so `run_state.read_progress` would report `running`
+  forever with `done`/`held`/`failed` never populating; and step 9's per-record report
+  (the F3 operator contract: "relay what the body actually says") would be gutted by an
+  ack-only body. No code changed in `enrich-records/SKILL.md`.
+
 ## [0.33.0] - 2026-08-30
 
 ### Added
