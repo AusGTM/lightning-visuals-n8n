@@ -16,6 +16,23 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-08-30
+
+### Added
+
+- **A LinkedIn-URL-only row is no longer refused by the front end (Phase 61 Plan 03,
+  D-61-06/D-61-05 CORRECTED, second half).** `config/column_mapping.yaml`'s
+  `required_identity.any_of` gained a third group, `[linkedin_url]`, mirrored in
+  `n8n/code/columnMap.js`'s hand-written `requiredIdentity()` and pinned equal by a new
+  parity test — the exact walk-failure row (`53-WALK-RECORD-3.md` FINDING D) now passes
+  every gate that used to reject it. `extraction.py`'s rejection reason is now COMPOSED
+  from the configured groups rather than a hard-coded sentence, so a future group can
+  never again leave the message stale. `enrich-before-ingest/SKILL.md` documents that
+  such a row proceeds without a company (D-61-01), and that a value the waterfall finds
+  for it is proposed through the existing `resolutions`/`provider_result` loop
+  (D-59-08) — never a second proposal surface. A new capability, not a patch — this
+  ships as a minor version bump.
+
 ## [0.29.0] - 2026-08-30
 
 ### Added

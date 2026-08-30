@@ -234,6 +234,14 @@ COVERED = {
             "preingest.match_batch", "preingest.classify_matches",
         ),
     ): "test_chunking.py::test_chunk_ceilings_real_match_key_return_flows_into_match_batch_and_classify_matches",
+    (
+        "enrich-before-ingest",
+        (
+            "config_gate.load_config", "preingest.build_rows_spec", "preingest.rows_from_table",
+            "chunking.plan_chunks", "chunking.chunk_ceiling", "preingest.match_batch",
+            "preingest.classify_matches", "extraction.validate",
+        ),
+    ): "test_linkedin_row_composition.py::test_a_lusha_hit_for_the_unmatched_row_is_proposed_through_resolutions_and_revalidated",
 }
 
 NOT_A_PIPELINE = {

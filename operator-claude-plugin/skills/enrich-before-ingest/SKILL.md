@@ -75,6 +75,15 @@ whatever seven columns happened to be in the source file.
    contract exactly as that skill does, then take its accepted rows in place of
    `rows_from_table`'s.
 
+   **A row carrying just one strong identity key — a non-blank `email`, or a non-blank
+   `linkedin_url` — proceeds to the match search below exactly like any row that also
+   carries a company.** The backend needs no company name to look a row up or later
+   enrich it (D-61-01, the operator's own words: "relying on the plugin to propose
+   best effort completion using the services n8n gives it"), so this flow never asks
+   the operator to supply one just to get such a row moving — that is the unnecessary
+   exception D-61-01 rejects. The weaker `firstname`+`lastname`+`company` group is
+   unaffected and still needs all three fields present.
+
    **When that extraction pass also yields company rows** (`record_type: companies` —
    one artifact validates both lanes in one pass, companies first), confirm every
    proposed website in one table before those rows join this batch. When a company
@@ -124,7 +133,12 @@ whatever seven columns happened to be in the source file.
 
    **This search needs no arming.** It writes nothing to HubSpot and spends no
    provider credit — it is a read wearing a search's clothes, not a step this flow's
-   two grants protect.
+   two grants protect. Widening what this search can look up — including the
+   `linkedin_url` key above — does not change that: `fetch_matches` takes no `armed`
+   parameter and sends an explicit empty provider list. The consent gate that guards
+   spending is step 5's, below, unchanged — and every new call this widening enables
+   still goes through the existing `preingest.match_batch` and `chunking.dispatch_plan`
+   functions, never a new transport.
 
    Report exactly four groups, by name:
 
@@ -342,6 +356,52 @@ whatever seven columns happened to be in the source file.
    Nothing here acts on the operator's behalf — Claude proposes, the operator
    confirms, and no field is filled in to make the row pass. Refuse-to-propose, not
    refuse-to-guess, same as everywhere else this phase touches.
+
+   **A linkedin-only row's waterfall miss is a HOLD, never a fallback to research
+   (D-61-04).** Per D-61-04, only Lusha reads a bare `linkedin_url` at all — Apollo's
+   match body and ZoomInfo's `hasZoomKey` never read the key, so neither can ever
+   return anything for a row that carries nothing else. When Lusha itself finds no
+   match for such a row, hold it with that reason recorded rather than escalating to
+   `claude_web` research: that adapter is company-oriented (`object_type: companies`
+   throughout `src/web_research.py`) and would be answering a different question
+   about a different kind of subject entirely.
+
+   **A HIT is proposed through the same `resolutions` / `provider_result` loop
+   `extraction.md`'s own adapters already use — never a second proposal surface.**
+   A value Lusha returns for a field this row did not already have is provenance, not
+   invention (D-61-02's distinction): show it to the operator, and once confirmed,
+   record it as a `resolutions` entry and validate the corrected record again, the
+   same rewrite-and-revalidate loop the extraction lane already runs:
+
+   ```python
+   import chunking, config_gate, extraction, preingest
+
+   cfg = config_gate.load_config()
+   spec = preingest.build_rows_spec(preingest.rows_from_table(path)["rows"])
+   plan = chunking.plan_chunks(spec, chunking.chunk_ceiling(cfg, key="max_rows_per_match_request"))
+   outcome = preingest.match_batch(plan, cfg)
+   classified = preingest.classify_matches(
+       spec["rows"], outcome.responses, unchecked_row_ids=outcome.unchecked_row_ids,
+   )
+   # A linkedin-only row that lands in `unmatched` goes through the waterfall like any
+   # other unmatched row (steps 4-5 above). Once Lusha returns a value this row did not
+   # already carry, propose it; a confirmed value becomes a `resolutions` entry and the
+   # corrected record is validated again — never written on Claude's own authority.
+   unmatched_row = classified["unmatched"][0]
+   record = {
+       "row": unmatched_row["row"],
+       "provenance": {"input": "lusha_waterfall", "locator": unmatched_row["row_id"]},
+       "resolutions": [
+           {"field": "company", "source": "provider_result", "detail": "Lusha contact enrich"}
+       ],
+   }
+   result = extraction.validate({"records": [record]})
+   ```
+
+   `RESOLUTION_SOURCES`'s closed vocabulary is the same anti-laundering control here as
+   everywhere else it applies (T-59-20): a `resolutions` entry naming a source outside
+   the four legitimate identifiers rejects the whole record rather than being accepted
+   unlabelled — there is no linkedin-specific exception to that rule.
 
    **When `outcome.written_records_failures` is non-empty (D-59-10, gap closure
    2026-08-29), say so plainly and lead with it, before the preview in the next
