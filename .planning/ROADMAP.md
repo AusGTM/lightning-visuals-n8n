@@ -300,7 +300,7 @@ variable), and a design that runs the provider waterfall twice per written recor
 
       Plans:
 
-      - [ ] 61-01-PLAN.md — spike n8n Cloud's execution model; verdict doc with a basis word per
+      - [x] 61-01-PLAN.md — spike n8n Cloud's execution model; verdict doc with a basis word per
             claim, execution arithmetic against the 2,500/month budget, and an operator decision
             on where run state lives
 
@@ -474,7 +474,7 @@ n8n restarts mid-run.
 
 **Requirements**: INPUT-05, RUN-01, RUN-02, RUN-03, RUN-04, AFTER-02
 
-**Plans**: 3/6 plans executed
+**Plans**: 4/6 plans executed
 
 ### Phase 58: Take what the operator actually has
 
