@@ -20,6 +20,7 @@ import pytest
 
 import artifact_store
 import chunking
+import confidence
 import durable_paths
 import preingest
 import run_manifest
@@ -89,7 +90,6 @@ def test_save_refuses_a_verdict_outside_the_five_allowed_words(tmp_path):
 
 
 def test_allowed_verdicts_holds_five_words_including_unanswered():
-    assert len(run_manifest.ALLOWED_VERDICTS) == 5
     assert run_manifest.UNANSWERED in run_manifest.ALLOWED_VERDICTS
     assert run_manifest.UNANSWERED == "unanswered"
 
@@ -251,7 +251,10 @@ def test_the_module_exposes_no_fourth_verb():
     public = {name for name in vars(run_manifest)
               if not name.startswith("_") and inspect.isfunction(getattr(run_manifest, name))
               and getattr(run_manifest, name).__module__ == "run_manifest"}
-    assert public == {"manifest_path", "save", "load", "rows_to_resume"}
+    # Phase 61 Plan 04 Task 3: run_manifest_path (per-run scoping) and load_scoped (the
+    # run-aware load) are the two deliberate additions this widening earns.
+    assert public == {"manifest_path", "run_manifest_path", "save", "load",
+                       "load_scoped", "rows_to_resume"}
 
 
 # =====================================================================================
@@ -514,3 +517,190 @@ def test_run_manifest_is_absent_from_the_sweeps_import_closure():
 
     closure = sweep_guard.transitive_closure(sweep_guard.SWEEP_ENTRYPOINT, sweep_guard.SCRIPTS)
     assert "run_manifest" not in closure
+
+
+# =====================================================================================
+# Phase 61 Plan 04 Task 3: the sixth verdict word, confidence_held
+# =====================================================================================
+
+
+def test_allowed_verdicts_now_holds_six_words_including_confidence_held():
+    assert len(run_manifest.ALLOWED_VERDICTS) == 6
+    assert run_manifest.CONFIDENCE_HELD in run_manifest.ALLOWED_VERDICTS
+    assert run_manifest.CONFIDENCE_HELD == "confidence_held"
+
+
+def test_looks_forbidden_is_false_for_confidence_held():
+    assert run_manifest._looks_forbidden(run_manifest.CONFIDENCE_HELD) is False
+
+
+def test_save_then_load_round_trips_a_confidence_held_verdict(tmp_path):
+    target = tmp_path / "run_manifest.json"
+    run_manifest.save("run-1", {"row-1": run_manifest.CONFIDENCE_HELD}, path=target)
+    assert run_manifest.load(path=target) == {"row-1": run_manifest.CONFIDENCE_HELD}
+
+
+def _held_entry(row_id, hold_code, outcome):
+    import held_queue as hq
+    return {
+        "hold_code": hold_code,
+        "reason": "test reason",
+        "observed_signals": {},
+        "resume_fingerprint": hq.fingerprint(hold_code, outcome),
+        "row": {"row_id": row_id},
+    }
+
+
+def test_confidence_held_row_is_excluded_when_its_fingerprint_is_unchanged():
+    import held_queue as hq
+    rows = [{"row_id": "row-1", "email": "a@example.com"}]
+    manifest = {"row-1": run_manifest.CONFIDENCE_HELD}
+    recorded_outcome = preingest.Outcome(parseable=True, match_tier="none", candidate_count=0)
+    held_entries = {"row-1": _held_entry("row-1", "no_match", recorded_outcome)}
+    current_outcomes = {"row-1": preingest.Outcome(parseable=True, match_tier="none", candidate_count=0)}
+
+    result = run_manifest.rows_to_resume(
+        rows, manifest, held_entries=held_entries, current_outcomes=current_outcomes)
+
+    assert result.rows == ()
+    assert {e["row_id"] for e in result.still_held} == {"row-1"}
+
+
+def test_confidence_held_row_is_reincluded_when_its_fingerprint_changes():
+    rows = [{"row_id": "row-1", "email": "a@example.com"}]
+    manifest = {"row-1": run_manifest.CONFIDENCE_HELD}
+    recorded_outcome = preingest.Outcome(parseable=True, match_tier="none", candidate_count=0)
+    held_entries = {"row-1": _held_entry("row-1", "no_match", recorded_outcome)}
+    # The row's match situation genuinely moved: it now matches (tier high).
+    current_outcomes = {"row-1": preingest.Outcome(parseable=True, match_tier="high", candidate_count=0)}
+
+    result = run_manifest.rows_to_resume(
+        rows, manifest, held_entries=held_entries, current_outcomes=current_outcomes)
+
+    assert result.rows == (rows[0],)
+    assert result.still_held == ()
+
+
+def test_confidence_held_row_with_no_held_entries_supplied_is_reincluded_not_stranded():
+    """No fingerprint recorded (or the caller didn't pass held_entries at all) is
+    treated as changed -- a schema gap re-runs a row rather than stranding it."""
+    rows = [{"row_id": "row-1", "email": "a@example.com"}]
+    manifest = {"row-1": run_manifest.CONFIDENCE_HELD}
+
+    result = run_manifest.rows_to_resume(rows, manifest)
+
+    assert result.rows == (rows[0],)
+
+
+def test_an_unadjudicated_conflict_held_row_resumed_against_an_unchanged_free_match_pass_is_excluded_with_zero_provider_calls():
+    """cycle-3 C10's named regression: THE enrichment-stage hold code, resumed with an
+    UNCHANGED match tier/candidate_count (the only two signals the free match pass can
+    observe), must stay excluded -- the invariant this whole fingerprint design exists
+    to prove. No provider call is even modelled here because none is possible: the
+    outcome objects below carry no provider_agreement/material_conflicts at all, exactly
+    as a free match pass (zero providers requested) would produce."""
+    rows = [{"row_id": "row-1", "email": "a@example.com"}]
+    manifest = {"row-1": run_manifest.CONFIDENCE_HELD}
+    recorded_outcome = preingest.Outcome(parseable=True, match_tier="high", candidate_count=0)
+    held_entries = {"row-1": _held_entry("row-1", confidence.HOLD_UNADJUDICATED_CONFLICT, recorded_outcome)}
+    current_outcomes = {"row-1": preingest.Outcome(parseable=True, match_tier="high", candidate_count=0)}
+
+    result = run_manifest.rows_to_resume(
+        rows, manifest, held_entries=held_entries, current_outcomes=current_outcomes)
+
+    assert result.rows == ()
+    assert {e["row_id"] for e in result.still_held} == {"row-1"}
+
+
+@pytest.mark.parametrize("hold_code,tier,count", [
+    (confidence.HOLD_UNKNOWN_TIER, "unknown", 0),
+    (confidence.HOLD_NO_MATCH, "none", 0),
+    (confidence.HOLD_AMBIGUOUS_CANDIDATES, "medium", 3),
+    (confidence.HOLD_NO_TABLE_ROW_MATCHED, "medium", 1),
+    (confidence.HOLD_UNPARSEABLE, None, None),
+])
+def test_every_match_stage_hold_code_stays_excluded_on_an_unchanged_resume(hold_code, tier, count):
+    rows = [{"row_id": "row-1", "email": "a@example.com"}]
+    manifest = {"row-1": run_manifest.CONFIDENCE_HELD}
+    outcome = preingest.Outcome(parseable=(hold_code != confidence.HOLD_UNPARSEABLE),
+                                 match_tier=tier, candidate_count=count)
+    held_entries = {"row-1": _held_entry("row-1", hold_code, outcome)}
+    current_outcomes = {"row-1": outcome}
+
+    result = run_manifest.rows_to_resume(
+        rows, manifest, held_entries=held_entries, current_outcomes=current_outcomes)
+
+    assert result.rows == (), f"{hold_code} did not stay excluded on an unchanged resume"
+    assert {e["row_id"] for e in result.still_held} == {"row-1"}
+
+
+def test_the_five_pre_existing_verdict_words_resume_behaviour_is_byte_for_byte_unchanged():
+    rows = [
+        {"row_id": "row-1"}, {"row_id": "row-2"}, {"row_id": "row-3", "email": "a@example.com"},
+        {"row_id": "row-4"}, {"row_id": "row-5"},
+    ]
+    manifest = {
+        "row-1": "matched", "row-2": "enriched", "row-3": "held",
+        "row-4": "unchecked", "row-5": "unanswered",
+    }
+    result = run_manifest.rows_to_resume(rows, manifest)
+    assert {r["row_id"] for r in result.rows} == {"row-3", "row-4", "row-5"}
+    assert {e["row_id"] for e in result.skipped} == {"row-1", "row-2"}
+
+
+def test_existing_positional_only_calls_are_unaffected_by_the_new_keyword_parameters():
+    rows = [{"row_id": "row-1"}]
+    result = run_manifest.rows_to_resume(rows, {"row-1": "matched"})
+    assert result.rows == ()
+
+
+# =====================================================================================
+# Phase 61 Plan 04 Task 3: run_manifest_path / load_scoped (REVIEW-07)
+# =====================================================================================
+
+
+def test_run_manifest_path_is_keyed_by_run_id_and_shares_written_records_naming_shape():
+    a = run_manifest.run_manifest_path("run-a")
+    b = run_manifest.run_manifest_path("run-b")
+    assert a != b
+    assert a.name == "run_manifest-run-a.json"
+    assert a.parent == run_manifest.manifest_path().parent
+
+
+def test_load_scoped_with_no_expected_run_id_behaves_like_load_plus_the_stored_run_id(tmp_path):
+    target = tmp_path / "run_manifest.json"
+    run_manifest.save("run-1", {"row-1": "matched"}, path=target)
+
+    result = run_manifest.load_scoped(path=target)
+
+    assert result.verdicts == {"row-1": "matched"}
+    assert result.run_id == "run-1"
+    assert result.mismatch is False
+
+
+def test_load_scoped_degrades_whole_on_a_run_id_mismatch(tmp_path):
+    target = tmp_path / "run_manifest.json"
+    run_manifest.save("run-1", {"row-1": "matched"}, path=target)
+
+    result = run_manifest.load_scoped(path=target, expected_run_id="run-2")
+
+    assert result.verdicts == {}
+    assert result.mismatch is True
+    assert result.run_id == "run-1"
+
+
+def test_load_scoped_matches_the_expected_run_id_and_returns_the_verdicts(tmp_path):
+    target = tmp_path / "run_manifest.json"
+    run_manifest.save("run-1", {"row-1": "matched"}, path=target)
+
+    result = run_manifest.load_scoped(path=target, expected_run_id="run-1")
+
+    assert result.verdicts == {"row-1": "matched"}
+    assert result.mismatch is False
+
+
+def test_load_stays_byte_unchanged_a_bare_dict_regardless_of_the_new_load_scoped(tmp_path):
+    target = tmp_path / "run_manifest.json"
+    run_manifest.save("run-1", {"row-1": "matched"}, path=target)
+    assert run_manifest.load(path=target) == {"row-1": "matched"}
+    assert isinstance(run_manifest.load(path=target), dict)
