@@ -9,9 +9,9 @@
 - ✅ **v0.7 HubSpot Scoring Engine Remediation** — Phases 39–43 (shipped 2026-08-08)
 - ✅ **v0.8 Execution Budget Safety** — Phases 44–45 (shipped 2026-08-11)
 - ✅ **v0.9 ICP Rubric Calibration & Veto Remediation** — Phases 46–50, archived (`milestones/v0.9-ROADMAP.md`, `milestones/v0.9-REQUIREMENTS.md`) (shipped 2026-08-19)
-- ⏸️ **v1.0 Direct Backfill & Scoring Coverage** — Phases 51–52 (Phase 51 complete; **Phase 52 deferred by the operator 2026-08-25** in favour of v1.1)
-- 🚧 **v1.1 Unattended Session Runs** — Phases 53–61 (`milestones/v1.1-ROADMAP.md`, `milestones/v1.1-REQUIREMENTS.md`).
-  Complete: 53, 54, 58, 59, 61. Open: **57 (next)**, 60. Absorbed into 61: 55, 56 (D-61-08).
+- ⏸️ **v1.0 Direct Backfill & Scoring Coverage** — Phases 51–52 (Phase 51 complete; **Phase 52 deferred INDEFINITELY** — 2026-08-25 in favour of v1.1, reaffirmed 2026-08-30 after its gates were satisfied)
+- 🚧 **v1.1 Unattended Session Runs** — Phases 53–62 (`milestones/v1.1-ROADMAP.md`, `milestones/v1.1-REQUIREMENTS.md`).
+  Complete: 53, 54, 58, 59, 61. Open: **57 (next)**, 60, 62. Absorbed into 61: 55, 56 (D-61-08).
   ~~Phases 53–60~~ — corrected 2026-08-30, Phase 61 was inserted ahead of everything.
   **The first live unattended, credit-spending batch has NOT run** — it is gated on Phase 57.
 
@@ -30,7 +30,7 @@ numbers on its own. Decisions in `.planning/MILESTONE-CONTEXT.md`; requirements 
       ZoomInfo credit cap live, pin the thousands-to-dollars revenue conversion, and dry-run a
       sample's exact PATCH payloads and pre-registered tier predictions — zero writes
 
-- [ ] **Phase 52: Staged Canary Execution & Safety Verification** — ⏸️ **DEFERRED 2026-08-25**
+- [ ] **Phase 52: Staged Canary Execution & Safety Verification** — ⏸️ **DEFERRED INDEFINITELY**
       (operator, in favour of v1.1 Phase 53 — the client is blocked on the write path). Write the
       credit-capped population in gated stages (1 → 5 → 25 → chunked remainder), polling every
       result against its committed prediction, and close by proving the 66 already-scored
@@ -39,11 +39,13 @@ numbers on its own. Decisions in `.planning/MILESTONE-CONTEXT.md`; requirements 
       enrichment run — and resolve the deferred FILL-04 third-disposition question.
       **Gated on Phases 59 and 55** (operator ruling 2026-08-27): the ~646-company run goes
       through the cheap, low-ceremony write path, not the current one. Do not resume 52 first.
-      **Status of that gate, 2026-08-30:** Phase 59 is complete (2026-08-29) and Phase 55's async
-      work landed inside Phase 61 (complete 2026-08-30), so both named gates have been built —
-      but the first live unattended, credit-spending batch is itself still gated on Phase 57
-      (D-61-08). Whether 52 may now resume is an operator call that has not been recorded; this
-      entry does not decide it.
+      **RESOLVED 2026-08-30 (operator): DEFERRED INDEFINITELY.** Both named gates are now built —
+      Phase 59 completed 2026-08-29, and Phase 55's async work landed inside Phase 61 — so the
+      2026-08-27 gating ruling is discharged. The operator has nonetheless deferred 52 with no
+      scheduled resume: the backfill is not a current priority. **Do not treat the satisfied gate
+      as permission to resume.** If it is ever revived, Phase 51's population and credit sizing
+      must be re-derived first (the dry-run artifacts were finalized 2026-08-19 and drift with
+      every enrichment run), and the run would still be subject to Phase 57's ceilings.
 
 ### 🚧 v1.1 Unattended Session Runs (Phases 53–61)
 
@@ -415,6 +417,24 @@ variable), and a design that runs the provider waterfall twice per written recor
       recorded-edit discipline; (c) accept the admin deploy as correct for occasional triage.
       **Not an option:** deleting `ALLOW_REVIEW_SUBMIT` with no replacement — that leaves the
       lane's only authority behind a deploy an operator cannot run.
+
+
+- [ ] **Phase 62: Suggest the contacts nobody named** — **NUMBERED 2026-08-30** (operator).
+      An enriched company with nobody at it is not a lead. After a company batch, the operator is
+      offered contacts worth enriching, chosen by role and priced once. Closes SUGGEST-01..05.
+      **Full scope:** `milestones/v1.1-ROADMAP.md` § Phase 62.
+
+      **Why it needed numbering.** It was written as "Phase 59" in the milestone roadmap, but 59
+      was reassigned to the as-built *Frictionless write path* (complete 2026-08-29) and Phase 60
+      was split out of that. The suggestion scope was left with no number and no schedule — real
+      work that no index pointed at. It is now a numbered phase so it cannot be silently dropped
+      or re-planned from scratch.
+
+      **Sequenced after Phase 57**, because a suggestion round spends provider credit and 57 owns
+      the per-run ceilings, refusal-before-start and post-run proof that bound that spend.
+      **Depends on** the 2026-08-25 association contract (a suggested contact must resolve a
+      company or be held) and Phase 61's held-row queue (`held_queue.py`) for anything held —
+      Phase 56 was absorbed into 61, so its queue is 61's.
 
 ## Phase Details
 

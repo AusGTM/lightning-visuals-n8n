@@ -276,6 +276,57 @@ def probe_contacts_lane(key, ledger):
     return winner, winner_id
 
 
+def probe_identity_keys(key, ledger):
+    """P9 (added 2026-08-30) — are `linkedinUrl` and `email` VALID v3 contact properties?
+
+    Why this exists. `n8n/code/lushaRequest.js::lushaContactBody` sends
+    `contact.linkedinUrl` and `contact.email`, and Phase 61 made a LinkedIn-only row's
+    whole enrichment leg depend on the first of those. But the 2026-07-30 session that
+    produced `docs/LUSHA-V3-CONTRACT.md` -- the contract of record, whose every claim was
+    live-confirmed -- never sent either key. Its §3 table confirms
+    firstName/lastName/companyName/companyDomain and nothing else, and its P7 row shows v3
+    rejects an unknown property outright: `property notARealProperty should not exist`.
+    So "Lusha accepts linkedinUrl" was, until this probe, an inference from OUR source
+    rather than an observation of THEIRS -- the same error D-61-05 records.
+
+    Cheap by construction. This asks whether the PROPERTY is valid, not whether a
+    particular person matches, so it deliberately uses a well-formed but non-matching
+    value. A 400 `should not exist` is the answer and costs ZERO credits; only a 200 match
+    can charge, and a fabricated identity should not produce one. Each shape carries a
+    single key so a rejection names that key unambiguously rather than the first of a set.
+    """
+    shapes = [
+        ("linkedinUrl", {"contacts": [{"linkedinUrl":
+                                       "https://www.linkedin.com/in/probe-61-not-a-real-person/"}],
+                         "reveal": ["emails"]}),
+        ("email", {"contacts": [{"email": "probe-61-not-a-real-person@nonexistent-holdings-zz.example"}],
+                   "reveal": ["emails"]}),
+    ]
+    verdicts = {}
+    for prop, body in shapes:
+        if _cap_breached(ledger):
+            verdicts[prop] = {"verdict": "not_probed", "reason": "credit cap reached"}
+            continue
+        step = _record_billable_step(ledger, f"P9_identity_key_{prop}", "POST",
+                                     CONTACTS_URL, body, key)
+        resp = step.get("response_body") or {}
+        text = json.dumps(resp, default=str)
+        rejected_by_name = (step["status"] == 400 and f"property {prop} should not exist" in text)
+        verdicts[prop] = {
+            "status": step["status"],
+            # The discriminator is the SHAPE of the rejection, not merely its code: a 400
+            # naming this property means v3 does not know it; any other outcome (200, a
+            # no-match 200, or a 400 about something else) means the property parsed.
+            "verdict": ("INVALID_PROPERTY" if rejected_by_name else
+                        "VALID_PROPERTY" if step["status"] in (200, 404) else "INCONCLUSIVE"),
+            "rejected_by_name": rejected_by_name,
+            "credits_charged": step.get("credits_charged"),
+            "response_excerpt": text[:400],
+        }
+    ledger["P9_identity_keys"] = verdicts
+    return verdicts
+
+
 def probe_companies_lane(key, ledger):
     """P2 — companies lane. Live-confirmed 2026-07-30: a `companyId` key (mirroring v2's
     `contactId` convention) is rejected the same way as the contacts lane's `contactId`;
@@ -513,6 +564,12 @@ def main(argv=None):
     if "--task2b" in argv:
         result = probe_task2b_reuse_envelope(key, ledger)
         ledger["task2b_result"] = result
+    elif "--identity-keys" in argv:
+        # P9 only — the two-shape property-validity question (2026-08-30). Deliberately
+        # NOT part of run_full_ladder: the full ladder spends real credits on match
+        # shapes this question does not need, and the whole point of P9 is that it is
+        # nearly free (a 400 charges nothing).
+        probe_identity_keys(key, ledger)
     else:
         run_full_ladder(key, ledger)
 

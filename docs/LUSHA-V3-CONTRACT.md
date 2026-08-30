@@ -70,16 +70,38 @@ inference from the sibling usage endpoint alone.
 (`{"contacts": [...]}`) is still required (a flat top-level body is also rejected), but
 each item is a plain identity object with no synthetic index key.
 
-> **NOT PROBED — `email` and `linkedinUrl` (noted 2026-08-30).** The table above is the whole
-> of what the 2026-07-30 probe session tested. It never sent an `email` or a `linkedinUrl`
-> identity key, so this contract of record says **nothing** about either. That matters now:
-> `n8n/code/lushaRequest.js`'s `lushaContactBody` sends both (`contact.email`,
-> `contact.linkedinUrl`), the cloud emission site passes **only** `{email, linkedin_url}`, and
-> since Phase 61 (2026-08-30) a contact row carrying **only** a LinkedIn URL is accepted and
-> routed down that path — so a LinkedIn-only row's provider leg rests on a request key this
-> document has never confirmed live. `lushaRequest.js`'s own comment cites "§3" for those keys;
-> §3 does not support the citation. Confirm both with a live 200 before treating them as
-> contract, and record the result here.
+### 3.1 `email` and `linkedinUrl` — PROBED AND CONFIRMED VALID (live, 2026-08-30)
+
+**Both are valid v3 contact identity properties.** Probed because they were the one gap in this
+document that Phase 61 had come to depend on: `lushaRequest.js`'s `lushaContactBody` sends
+`contact.email` and `contact.linkedinUrl`, the cloud emission site passes **only**
+`{email, linkedin_url}`, and since Phase 61 a row carrying **only** a LinkedIn URL is accepted
+and routed down that path — yet the 2026-07-30 session that produced this contract never sent
+either key. Until this probe, "Lusha accepts `linkedinUrl`" was an inference from *our* source,
+not an observation of *theirs* — the error pattern D-61-05 exists to prevent.
+
+| Property | Body sent | Result | Verdict |
+| --- | --- | --- | --- |
+| `linkedinUrl` | `{"contacts":[{"linkedinUrl":"https://www.linkedin.com/in/probe-61-not-a-real-person/"}],"reveal":["emails"]}` | **200**, `results[0].error.code = NOT_FOUND`, `billing.creditsCharged: 0` | **VALID PROPERTY** |
+| `email` | `{"contacts":[{"email":"probe-61-not-a-real-person@nonexistent-holdings-zz.example"}],"reveal":["emails"]}` | **200**, `results[0].error.code = NOT_FOUND`, `billing.creditsCharged: 0` | **VALID PROPERTY** |
+
+**The discriminator is the shape of the rejection, not the match.** §3's P7 row establishes that
+v3 rejects an unknown property outright with `property <name> should not exist`. Neither probe
+drew that, so both keys parsed. A deliberately fabricated value was used so the question asked is
+"is this property known?", not "does this person exist" — which is why the whole probe cost
+**zero credits** (balance 3894 before and after; a 400 or a NOT_FOUND charges nothing).
+
+**What this does NOT establish:** that a *real* LinkedIn URL returns a match, or the match rate
+on that key. It establishes only that the request is well-formed and will not be rejected.
+
+**A miss is a 200, not a 4xx** — `{"results":[{"error":{"code":"NOT_FOUND",...}}]}`. That shape is
+already handled: `n8n/code/normalizeProviders.js::_lushaRecord` returns `{}` on
+`entry.error`, so a miss yields no candidate values rather than failing the run, and
+`tests/fixtures/enrichment/lusha_v3_no_match.json` pins exactly this body. No guard was added —
+one already existed and is tested, and a second would be duplication.
+
+Reproduce: `ALLOW_LUSHA_PROBE=true .venv/bin/python scripts/probe_lusha_v3.py --identity-keys`
+(P9 lane; two calls, zero credits when both miss).
 
 ## 4. Contacts: response
 
