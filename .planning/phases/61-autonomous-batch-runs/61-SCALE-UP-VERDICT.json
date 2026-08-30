@@ -116,14 +116,20 @@
     ]
   },
   "executions_spent_this_run": {
-    "note": "reconciled from the live run already performed (executions 12044-12047); this reconciliation itself performed zero NEW n8n executions, only GET reads (management-plane reads cost 0 executions, P-04/P-05)",
+    "note": "reconciled from the SECOND (successful) live run only (executions 12044-12047); this reconciliation itself performed zero NEW n8n executions, only GET reads (management-plane reads cost 0 executions, P-04/P-05). The FIRST attempt (12041-12043, corrected below -- 12040 belongs to 61-05, not this task) is accounted separately.",
     "live_executions_created_by_this_proof": [
-      "12044 (substrate-1 comparison parent)",
-      "12045 (scale_up parent)",
-      "12046 (child)",
-      "12047 (child)"
+      "12044 (substrate-1 comparison parent, mode=webhook)",
+      "12045 (scale_up parent, mode=webhook)",
+      "12046 (child, mode=integrated)",
+      "12047 (child, mode=integrated)"
     ],
-    "total_new_top_level_and_sub_executions": 4
+    "total_new_top_level_and_sub_executions": 4,
+    "substrate_1_vs_scale_up_comparison": "same 2-synthetic-row batch: substrate 1 (scale_up omitted) listed 1 execution (12044, the single top-level webhook execution -- no fan-out, the entire batch ran inline); scale_up:true listed 3 (12045 the top-level webhook parent + 12046/12047 the two detached children) -- MORE listed executions for the same 2 rows at this small scale, because a fan-out that dispatches one child per row is not cheaper than one inline execution until either the child count crosses whatever is and is not billed (P-10's residual, unresolved) or the row count is large enough that substrate 1's per-chunk ceiling (2 records/request) would otherwise require multiple top-level executions substrate 3 does not.",
+    "first_attempt_executions_for_completeness": {
+      "ids": ["12041 (substrate-1 comparison parent)", "12042 (scale_up parent)", "12043 (the ONE child the Rule-1 bug allowed to fan)"],
+      "note": "these three executions found the Rule 1 bug (see note_first_run_had_a_bug_now_fixed) and are real, billed-relevant executions this proof spent -- included in the total below, corrected from an earlier draft of this file that misattributed them as '12040-12043' (12040 is 61-05's own proof execution, not this task's)."
+    },
+    "total_executions_listed_across_both_attempts": 7
   },
   "leftover_zz_workflows": [],
   "flag_off_byte_identity": {
@@ -136,6 +142,6 @@
     "genuinely_different_node_beyond_id": "Parse HubSpot Event only -- its jsCode gained the scale_up/fan_depth normalization lines (ENVELOPE_SCALE_UP, the scale_up/fan_depth fields on every event), the SAME envelope+event-fallback idiom as recompute/async_ack; behaviourally a no-op for any request that never opts in (asserted by tests/n8n/scaleUpFanOutFlow.test.mjs's 'absent scale_up/fan_depth normalize to false/0, byte-identical to today's shape' test)",
     "other_seven_workflow_jsons": "byte-identical -- only n8n/wf_enrichment_cloud.json changed (git status --short n8n/ confirmed on every commit this plan made)"
   },
-  "note_first_run_had_a_bug_now_fixed": "the FIRST live attempt (executions 12040-12043) misidentified the parent execution (picked a child by mode=integrated instead of the real webhook-mode parent) and, separately, discovered a real Rule-1 bug in Build Scale Up Fan-Out/Build Scale Up Ack (a bare $json read only ever sees the FIRST of however many input items a runOnceForAllItems Code node receives, so the second synthetic row silently never fanned out). Both were fixed (the $input.all() fix in scripts/build_cloud_workflows.py, committed and redeployed; and this script's own _latest_webhook_execution/_child_ids_from_dispatch corrections, not redeployed since they are local-only diagnostics) before this second, successful run (executions 12044-12047), which is the run this verdict otherwise describes.",
+  "note_first_run_had_a_bug_now_fixed": "the FIRST live attempt (executions 12041-12043 -- CORRECTED; an earlier draft of this file misattributed these as '12040-12043', but 12040 is 61-05's own prior proof execution at 07:07 UTC, a different task entirely, not part of this attempt which ran at 08:22 UTC) misidentified the parent execution (picked a child by mode=integrated instead of the real webhook-mode parent) and, separately, discovered a real Rule-1 bug in Build Scale Up Fan-Out/Build Scale Up Ack (a bare $json read only ever sees the FIRST of however many input items a runOnceForAllItems Code node receives, so the second synthetic row silently never fanned out). Both were fixed (the $input.all() fix in scripts/build_cloud_workflows.py, committed and redeployed; and this script's own _latest_webhook_execution/_child_ids_from_dispatch corrections, not redeployed since they are local-only diagnostics) before this second, successful run (executions 12044-12047), which is the run this verdict otherwise describes.",
   "written_at": "2026-08-30T08:30:00.407053+00:00"
 }

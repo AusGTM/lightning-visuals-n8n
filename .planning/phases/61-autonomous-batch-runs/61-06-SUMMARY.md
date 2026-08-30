@@ -296,7 +296,8 @@ a stand-in) still stops after exactly one hop, even if the resubmitted child's o
 is fed back in and `scale_up` is forged back to `true`.
 
 **Rule 1 bug found and fixed by the proof itself.** The FIRST live disarmed attempt
-(executions 12040-12043) sent a 2-synthetic-row batch with `scale_up:true` and observed
+(executions 12041-12043 — 12040 belongs to 61-05's own prior proof, a different task, not
+this one) sent a 2-synthetic-row batch with `scale_up:true` and observed
 only ONE child dispatched instead of two — both `Build Scale Up Fan-Out` and `Build Scale
 Up Ack` were written as `runOnceForAllItems` Code nodes reading a bare `$json`, which only
 ever sees the FIRST of however many input items such a node receives (the exact shape
@@ -505,13 +506,21 @@ the task's own scope per Rule 1.
 - Regenerated workflow JSONs: only `n8n/wf_enrichment_cloud.json` changed across all
   five tasks. The other seven are byte-identical to before this plan started.
 - **Task 5 only (the disarmed runtime proof, after Task 4's checkpoint resolved):**
-  live n8n executions were expected and observed — executions `12040`-`12043` (first
-  attempt, both bugs found), `12044`-`12047` (second, successful attempt: substrate-1
-  comparison parent, scale_up parent, 2 detached children). Zero HubSpot writes, zero
-  provider calls, zero Anthropic calls, nothing armed, in either attempt. Every proof
-  ran against the real production workflow (no throwaway `ZZ-*` workflow to sweep);
-  the instance was confirmed clean afterward (5 workflows total, 0 `ZZ-` leftovers).
-  Flag-off byte-identity measured precisely (see Task 5's own section above and
+  live n8n executions were expected and observed — executions `12041`-`12043` (first
+  attempt, both bugs found; `12040` is 61-05's own prior proof execution, a different
+  task, and is not part of this count), `12044`-`12047` (second, successful attempt:
+  substrate-1 comparison parent, scale_up parent, 2 detached children). **Total listed
+  across both attempts: 7.** Substrate-1-vs-scale_up comparison, same 2-row batch:
+  substrate 1 listed **1** execution (`12044`, inline, no fan-out); `scale_up:true`
+  listed **3** (`12045` parent + `12046`/`12047` children) — more listed executions for
+  the same 2 rows at this small scale, since a fan-out only pays off once billing/
+  concurrency exemptions or the per-chunk ceiling actually bind, neither of which this
+  proof's 2-row batch reaches (see `61-SCALE-UP-VERDICT.json`'s
+  `substrate_1_vs_scale_up_comparison` field). Zero HubSpot writes, zero provider calls,
+  zero Anthropic calls, nothing armed, in either attempt. Every proof ran against the
+  real production workflow (no throwaway `ZZ-*` workflow to sweep); the instance was
+  confirmed clean afterward (5 workflows total, 0 `ZZ-` leftovers). Flag-off
+  byte-identity measured precisely (see Task 5's own section above and
   `61-SCALE-UP-VERDICT.json`'s `flag_off_byte_identity` field) rather than assumed. The
   listed-vs-billed limit is stated explicitly in the verdict's own `scope_boundary`.
 - Zero live n8n, HubSpot, Anthropic or provider calls anywhere in Tasks 1-3 (unchanged
