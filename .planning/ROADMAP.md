@@ -316,7 +316,7 @@ variable), and a design that runs the provider waterfall twice per written recor
       - [x] 61-05-PLAN.md — async submit, progress-while-running, and resume-or-fail-loudly on the
             substrate 61-01 selected
 
-      - [ ] 61-06-PLAN.md — the unattended pair pipeline under one grant, association enforced,
+      - [x] 61-06-PLAN.md — the unattended pair pipeline under one grant, association enforced,
             index lag absorbed by the run; first live run gated on Phase 57
 
       **The evidence.** Walk run 4 (`53-WALK-RECORD-3.md`) — the first walk ever run from the
@@ -474,7 +474,7 @@ n8n restarts mid-run.
 
 **Requirements**: INPUT-05, RUN-01, RUN-02, RUN-03, RUN-04, AFTER-02
 
-**Plans**: 5/6 plans executed
+**Plans**: 6/6 plans executed
 
 ### Phase 58: Take what the operator actually has
 

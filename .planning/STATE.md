@@ -4,16 +4,16 @@ milestone: v1.1
 milestone_name: Unattended Session Runs
 current_phase: 61
 current_phase_name: autonomous-batch-runs
-status: executing
-stopped_at: Completed 61-05-PLAN.md (async run handle, mid-flight progress, resume-or-disclose; deployed+bounced+live-run observed)
-last_updated: "2026-08-30T07:12:30.325Z"
+status: verifying
+stopped_at: Completed 61-06-PLAN.md (offline pair pipeline + substrate-3 scale-up runtime proof; Phase 61 all 6 plans complete)
+last_updated: "2026-08-30T08:36:43.888Z"
 last_activity: 2026-08-30
 last_activity_desc: Phase 61 execution started
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 36
-  completed_plans: 34
+  completed_plans: 35
   percent: 83
 ---
 
@@ -152,7 +152,7 @@ predating the window. VETO-03 bar still 0.
 
 Phase: 61 (autonomous-batch-runs) — EXECUTING
 Plan: 6 of 6
-Status: Ready to execute
+Status: Phase complete — ready for verification
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
   has executed on a real record. **Nothing is armed** — windows #1 and #2 were each opened
@@ -239,12 +239,12 @@ Last activity: 2026-08-30 — Phase 61 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████████░] 94% (v0.9 phase 47.5 of 46-49)
+Progress: [██████████] 97% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-30T07:12:30.316Z
-**Stopped at:** Completed 61-05-PLAN.md (async run handle, mid-flight progress, resume-or-disclose; deployed+bounced+live-run observed)
+**Last session:** 2026-08-30T08:36:43.871Z
+**Stopped at:** Completed 61-06-PLAN.md (offline pair pipeline + substrate-3 scale-up runtime proof; Phase 61 all 6 plans complete)
 **Resume file:** None
 
 ## Performance Metrics
@@ -344,6 +344,7 @@ Progress: [█████████░] 94% (v0.9 phase 47.5 of 46-49)
 | Phase 61 P04 | ~2h | 4 tasks | 16 files |
 | Phase 61 P01 | 45min | 1 tasks | 2 files |
 | Phase 61 P05 | ~35min (T1-3) + recording pass | 4 tasks | 12 files |
+| Phase 61 P06 | this session | 5 tasks | 18 files |
 
 ## Decisions
 
@@ -421,6 +422,8 @@ Progress: [█████████░] 94% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: Resume path keeps run_manifest.load()'s degrade-whole rule unchanged; report path independently classifies the manifest file (absent/parseable/anomalous/wrong-run) and discloses which in words (REVIEW-C15/08)
 - [Phase ?]: Per-chunk manifest persistence is load-accumulated-document, merge, save-whole-document — bounding crash replay exposure to one chunk (REVIEW-C13)
 - [Phase ?]: Task 4 deploy scope widened to all five cloud workflows with operator's informed consent, because the live instance was four plans behind 61-05 alone
+- [Phase ?]: Task 4 checkpoint resolved: operator approved offline pipeline and authorized Task 5's disarmed deploy + runtime proof; Phase 57's gate on the first live unattended run is unchanged
+- [Phase ?]: Task 5: substrate-3 self-referencing fan-out proven live (executions 12044-12047, disarmed) -- runs, terminates with no depth supplied, stays correlatable; a Rule 1 multi-item bug was found and fixed by the proof's own first attempt
 
 ### Roadmap Evolution
 
