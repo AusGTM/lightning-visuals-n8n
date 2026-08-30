@@ -310,7 +310,7 @@ variable), and a design that runs the provider waterfall twice per written recor
       - [x] 61-03-PLAN.md — the tracer's front-end half: the third identity group in all five
             D-61-06 sites, with a YAML-to-JS parity test left behind
 
-      - [ ] 61-04-PLAN.md — the confidence signal and hold-and-collect: confident rows proceed,
+      - [x] 61-04-PLAN.md — the confidence signal and hold-and-collect: confident rows proceed,
             unconfident rows are held with a reason, the batch always finishes
 
       - [ ] 61-05-PLAN.md — async submit, progress-while-running, and resume-or-fail-loudly on the
@@ -474,7 +474,7 @@ n8n restarts mid-run.
 
 **Requirements**: INPUT-05, RUN-01, RUN-02, RUN-03, RUN-04, AFTER-02
 
-**Plans**: 2/6 plans executed
+**Plans**: 3/6 plans executed
 
 ### Phase 58: Take what the operator actually has
 

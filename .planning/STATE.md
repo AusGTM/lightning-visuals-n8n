@@ -5,15 +5,15 @@ milestone_name: Unattended Session Runs
 current_phase: 61
 current_phase_name: autonomous-batch-runs
 status: executing
-stopped_at: Completed 61-03-PLAN.md (linkedin-only row acceptance, end to end)
-last_updated: "2026-08-30T03:40:16.665Z"
+stopped_at: Completed 61-04-PLAN.md (confidence, hold-don't-block, sixth verdict word)
+last_updated: "2026-08-30T04:18:57.390Z"
 last_activity: 2026-08-30
 last_activity_desc: "Walk run 4 FAILED before the grant opened (FINDING D); Phase 61 inserted as immediate next phase and being planned. Earlier: P2 closed (quick 260829-lg3, Verified): all five grandfathered SKILL.md composition sequences covered, MAX_GRANDFATHERED 5 -> 0, plugin 0.28.6. P5 closed: all three items were NON-defects (two wrong observations, one debris file deleted). Phase 48 WR-01/WR-02 fixed, and the whole bare-assert safety-guard class swept into src/guards.py (14 sites, 10 scripts). Root suite 3328 -> 3365."
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 36
-  completed_plans: 31
+  completed_plans: 32
   percent: 83
 ---
 
@@ -151,7 +151,7 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Phase: 61 (autonomous-batch-runs) — EXECUTING
-Plan: 3 of 6
+Plan: 4 of 6
 Status: Ready to execute
   deployed and live, the acceptance test red since Phase 40-07 is GREEN with all four
   assertions byte-identical, the D-V6 flips are written, and the hardware veto's retroactivity
@@ -239,12 +239,12 @@ Last activity: 2026-08-30 — Phase 61 execution started
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████████░] 86% (v0.9 phase 47.5 of 46-49)
+Progress: [█████████░] 89% (v0.9 phase 47.5 of 46-49)
 
 ## Session
 
-**Last session:** 2026-08-30T03:40:16.650Z
-**Stopped at:** Completed 61-03-PLAN.md (linkedin-only row acceptance, end to end)
+**Last session:** 2026-08-30T04:18:57.375Z
+**Stopped at:** Completed 61-04-PLAN.md (confidence, hold-don't-block, sixth verdict word)
 **Resume file:** None
 
 ## Performance Metrics
@@ -341,6 +341,7 @@ Progress: [█████████░] 86% (v0.9 phase 47.5 of 46-49)
 | Phase 59 P09 | ~35min | 3 tasks | 10 files |
 | Phase 61 P02 | ~90min | 3 tasks | 17 files |
 | Phase 61 P03 | ~55min | 3 tasks | 16 files |
+| Phase 61 P04 | ~2h | 4 tasks | 16 files |
 
 ## Decisions
 
@@ -410,6 +411,8 @@ Progress: [█████████░] 86% (v0.9 phase 47.5 of 46-49)
 - [Phase ?]: [61-02] Python oracle ORs lv_linkedin_url/hs_linkedin_url by two sequential hs_search calls, unioned by contact id; src/hubspot_client.py deliberately untouched (REVIEW-C6)
 - [Phase ?]: [61-02] MATCH_LOOKUP_KEYS widened from 4 to 5 (added linkedin_url); operator-claude-plugin bumped 0.28.6 -> 0.29.0
 - [Phase ?]: Phase 61 Plan 03: linkedin_url added as third required_identity group in both YAML copies + columnMap.js, pinned by a YAML-driven parity test; extraction.py's rejection message now composed from identity_groups() rather than hard-coded; enrich-before-ingest/SKILL.md documents a strong-key-only row proceeding without a company and a waterfall find routed through the existing D-59-08 resolutions/provider_result loop
+- [Phase ?]: 61-04: run_manifest.load() kept byte-unchanged; load_scoped() added instead of widening it, since 61-05 (the stated consumer) doesn't yet exist to require the wider shape
+- [Phase ?]: 61-04: held_queue.py is ONE global file (not per-run like written_records.py) -- D-61-07's 'one review queue, cleared in a single pass' is a durable backlog across runs
 
 ### Roadmap Evolution
 
