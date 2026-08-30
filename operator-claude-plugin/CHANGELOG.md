@@ -16,6 +16,19 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-08-30
+
+### Added
+
+- **`linkedin_url` widened into `MATCH_LOOKUP_KEYS` (Phase 61 Plan 02 Task 3, D-61-05
+  CORRECTED).** A contact given only a LinkedIn URL — the exact row that failed walk run 4
+  (`53-WALK-RECORD-3.md` FINDING D) — can now have that key sent to the backend's match
+  search. It is a strong match key `Build Identity` reads into `identity_keys` and the
+  backend's new "HubSpot Linkedin Search" node (61-02 Tasks 1-2) filters on; withholding it
+  client-side meant the operator's own supplied key could never be used to find their own
+  contact. `phone` and `jobtitle` still never cross this boundary. A new capability, not a
+  patch — this ships as a minor version bump.
+
 ## [0.28.6] - 2026-08-29
 
 ### Added

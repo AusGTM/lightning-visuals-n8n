@@ -115,7 +115,9 @@ def test_every_recorded_event_key_set_is_a_subset_of_the_structural_pair_plus_ma
     for event in body["events"]:
         assert "phone" not in event
         assert "jobtitle" not in event
-        assert "linkedin_url" not in event
+    # Phase 61 Plan 02 Task 3: linkedin_url now DOES cross — it is a MATCH_LOOKUP_KEYS
+    # member, not a richer prop excluded from it.
+    assert body["events"][0]["linkedin_url"] == "https://x.com/jane"
 
 
 def test_fetch_matches_takes_no_armed_argument():

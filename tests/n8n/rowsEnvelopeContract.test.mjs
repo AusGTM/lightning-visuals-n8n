@@ -30,6 +30,11 @@ const { laneOf } = require(path.join(here, "..", "..", "n8n", "code", "matchProp
 // EXACTLY what operator-claude-plugin/scripts/enrichment.py::build_envelope emits for
 // {"rows": [{"row_id": "r1", "firstname": "Jane", "lastname": "Doe", "company": "GCTC"}],
 // "object_type": "contacts"} with providers []. Keep byte-identical with the Python twin.
+// Phase 61 Plan 02 Task 3 (deviation — D-19 discipline: this literal must stay
+// byte-identical with the Python twin's CLIENT_ENVELOPE or the two suites silently drift
+// apart, the exact class of bug this pin exists to catch): `linkedin_url` widened into
+// MATCH_LOOKUP_KEYS on the Python side, so every event now carries it (null when the row
+// didn't supply one).
 const CLIENT_ENVELOPE = {
   providers: [],
   mode: "propose",
@@ -41,6 +46,7 @@ const CLIENT_ENVELOPE = {
       firstname: "Jane",
       lastname: "Doe",
       company: "GCTC",
+      linkedin_url: null,
     },
   ],
 };
@@ -52,6 +58,7 @@ const CLIENT_ENVELOPE = {
 function deriveIdentityKeys(row) {
   return {
     email: row.email || null,
+    linkedin_url: row.linkedin_url || null,
     firstName: row.firstname || row.first_name || null,
     lastName: row.lastname || row.last_name || null,
     companyName: row.company || row.companyName || null,

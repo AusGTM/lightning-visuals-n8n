@@ -440,10 +440,17 @@ def test_the_allowlisted_match_post_carries_no_multipart_or_form_payload():
     )
 
 
-def test_match_lookup_keys_stays_the_frozen_four():
+def test_match_lookup_keys_stays_the_reviewed_five():
     """Keeper two. `enrichment.MATCH_LOOKUP_KEYS` is the allowlist every match
     request's body is projected through — parsed by AST, not imported, so this test
-    fails even if some other code path shadowed or reassigned the name at runtime."""
+    fails even if some other code path shadowed or reassigned the name at runtime.
+
+    Phase 61 Plan 02 Task 3 (D-61-05 CORRECTED): widened from four to five —
+    `linkedin_url` added deliberately, a strong match key the backend's `Build Identity`
+    reads into `identity_keys` and the "HubSpot Linkedin Search" node filters on. This is
+    a disclosure boundary that widens on evidence, not a permanently frozen set; the guard
+    below still fails loudly on any UNREVIEWED widening or narrowing (`phone`/`jobtitle`
+    stay excluded)."""
     tree = _parse(SCRIPTS_DIR / "enrichment.py")
     assign = next(
         node for node in tree.body
@@ -458,11 +465,11 @@ def test_match_lookup_keys_stays_the_frozen_four():
     assert len(values) == len(assign.value.elts), (
         "MATCH_LOOKUP_KEYS must contain only string literal constants."
     )
-    assert tuple(values) == ("email", "firstname", "lastname", "company"), (
+    assert tuple(values) == ("email", "firstname", "lastname", "company", "linkedin_url"), (
         f"MATCH_LOOKUP_KEYS changed to {tuple(values)} — a match request would widen "
         "or narrow what crosses the boundary per row."
     )
-    for richer_prop in ("phone", "jobtitle", "linkedin_url"):
+    for richer_prop in ("phone", "jobtitle"):
         assert richer_prop not in values, (
             f"{richer_prop!r} must never appear in MATCH_LOOKUP_KEYS — it is a richer "
             "contact prop the match lookup does not need and must not send."

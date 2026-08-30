@@ -29,6 +29,11 @@ CLIENT_ENVELOPE = {
             "firstname": "Jane",
             "lastname": "Doe",
             "company": "GCTC",
+            # Phase 61 Plan 02 Task 3: linkedin_url widened into MATCH_LOOKUP_KEYS — every
+            # event now carries it (None when the row didn't supply one). The JS twin's
+            # own CLIENT_ENVELOPE literal must carry this same key or the two silently
+            # drift apart, exactly the class of bug this pin exists to catch.
+            "linkedin_url": None,
         }
     ],
 }
@@ -66,10 +71,14 @@ def test_the_event_projection_is_match_lookup_keys_not_the_rows_own_keys():
         [],
     )
     event = envelope["events"][0]
-    for excluded in ("phone", "jobtitle", "linkedin_url"):
+    for excluded in ("phone", "jobtitle"):
         assert excluded not in event, (
             f"{excluded} crossed the boundary — only MATCH_LOOKUP_KEYS may cross it"
         )
+    # Phase 61 Plan 02 Task 3 (D-61-05 CORRECTED): linkedin_url now DOES cross — proving
+    # this widened by exactly one key rather than opening the tuple is what the phone/
+    # jobtitle exclusion above and this inclusion together demonstrate.
+    assert event["linkedin_url"] == "https://linkedin.example/jane"
 
 
 def test_mode_is_propose_and_is_not_readable_from_the_spec():

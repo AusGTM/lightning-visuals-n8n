@@ -63,12 +63,20 @@ _OBJECT_TYPES = {
     "company": "companies", "companies": "companies", "0-2": "companies",
 }
 
-# The frozen lookup allowlist for a rows envelope's per-event projection. These are the
-# ONLY row fields that cross the boundary on a rows/match envelope, because they are the
-# only ones the backend's `Build Identity` reads into `identity_keys` and the only ones
-# the match search filters on (37-CONTEXT §7). Widening this tuple widens what leaves the
-# operator's machine — a row's `phone`, `jobtitle` and `linkedin_url` never cross it.
-MATCH_LOOKUP_KEYS = ("email", "firstname", "lastname", "company")
+# The lookup allowlist for a rows envelope's per-event projection. These are the ONLY row
+# fields that cross the boundary on a rows/match envelope — it is a disclosure boundary,
+# not a frozen list: a key is added only when the backend actually reads it into
+# `identity_keys` and filters a match search on it (37-CONTEXT §7). `phone` and
+# `jobtitle` still never cross it — the backend has no search node that filters on either.
+#
+# Phase 61 Plan 02 Task 3 (D-61-05 CORRECTED): `linkedin_url` WIDENED IN. It is a strong
+# match key the backend's `Build Identity` reads into `identity_keys` and the new
+# "HubSpot Linkedin Search" node (61-02 Tasks 1-2) filters on — withholding it meant the
+# operator's own supplied key could never be used to find their own contact, the exact
+# walk-failure row (53-WALK-RECORD-3.md FINDING D): a LinkedIn URL and nothing else. The
+# backend lane this tuple gates is unreachable until this widens; the two halves only
+# deliver together.
+MATCH_LOOKUP_KEYS = ("email", "firstname", "lastname", "company", "linkedin_url")
 
 
 def _lookup_value(row, key):
@@ -247,9 +255,10 @@ def build_envelope(spec, providers):
     never accepted as a parameter — so the backend's write mode is structurally
     unreachable from a rows form rather than being a caller's responsibility to withhold.
     Only `MATCH_LOOKUP_KEYS` cross the boundary per row; every other row key (`phone`,
-    `jobtitle`, `linkedin_url`) is dropped, because those are the only fields the
-    backend's `Build Identity` reads into `identity_keys` and the match search filters
-    on.
+    `jobtitle`) is dropped. `linkedin_url` DOES cross (Phase 61 Plan 02 Task 3) — it is a
+    strong match key the backend's `Build Identity` reads into `identity_keys` and the
+    "HubSpot Linkedin Search" node filters on, so withholding it would mean the operator's
+    own supplied key could never be used to find their own contact.
 
     THE LIST ENVELOPE IS NESTED, and it has to be (D-19). `n8n/code/listExpansion.js`
     reads `isPlainObject(body.list)` and then `body.list.name` / `body.list.objectType`.
