@@ -1,0 +1,104 @@
+{
+  "P-07": {
+    "premise": "P-07",
+    "question": "does an n8n Cloud execution keep running after its own triggering webhook's response has already been sent?",
+    "answer": true,
+    "basis": "observed",
+    "observed": {
+      "client_round_trip_seconds": 0.4688782496377826,
+      "wait_seconds": 5,
+      "respond_node_status": "success",
+      "post_response_set_node_status": "success",
+      "execution_span_seconds": 5.057,
+      "execution_id": "12035",
+      "execution_status": "success",
+      "http_status": 200
+    },
+    "scope_boundary": "the wait was 5s, BELOW the 65s boundary at which n8n offloads a time-based wait to the database, so this exercised the IN-PROCESS path only. It is evidence about respond-then-continue semantics and NO evidence at all about whether a parked execution survives a platform restart (P-08).",
+    "executions_spent": 1
+  },
+  "executions_spent_p07": 1,
+  "written_at": "2026-08-30T05:48:35.752816+00:00",
+  "P-10": {
+    "premise": "P-10",
+    "question": "does `chunk_count + record_count` hold at the configured ceiling of 2 records per chunk?",
+    "answer": false,
+    "basis": "measured",
+    "observed": {
+      "source_execution": {
+        "execution_id": "11950",
+        "started_at": "2026-08-25T11:23:06.265Z",
+        "record_count": 2,
+        "counted_from": "Parse HubSpot Event"
+      },
+      "window_execution_ids": [
+        "11950"
+      ],
+      "measured_executions_listed": 1,
+      "projected_executions": 3,
+      "delta": -2
+    },
+    "list_vs_billing": "this counts rows returned by GET /api/v1/executions. The 2,500/month allowance is a BILLING quota. The two are not equated anywhere in this verdict.",
+    "explanation_discrimination": "sub-workflow executions ARE listed by the executions API on this instance, so a shortfall here is NOT explained by children being invisible to the list \u2014 explanation (a), the formula over-counting, is the one the list supports. Whether those listed children are BILLED is a separate question this measurement does not observe.",
+    "sub_workflow_executions_listed": true,
+    "scanned": {
+      "workflow_id": "950HPb7a1GgSAIyZ",
+      "executions_read": 40,
+      "scan_limit": 40
+    }
+  },
+  "executions_spent_p10": 0,
+  "P-13": {
+    "premise": "P-13",
+    "question": "can the parent Execute Workflow node's own output be correlated to a detached child's execution id when wait-for-completion is off?",
+    "answer": true,
+    "basis": "observed",
+    "wait_for_completion_off": {
+      "wait_for_completion": false,
+      "http_status": 200,
+      "client_round_trip_seconds": 0.6268015000969172,
+      "parent_execution_id": "12036",
+      "child_execution_ids": [
+        "12037"
+      ],
+      "child_rows_carry_parent_link": [],
+      "child_detail_parent_like_fields": [
+        "retryOf",
+        "retrySuccessId"
+      ],
+      "child_detail_carries_parent_execution_id": "12036",
+      "matched_child_execution_id": "12037",
+      "parent_dispatch_node_output": "{\"startTime\": 1788068800758, \"executionIndex\": 1, \"source\": [{\"previousNode\": \"Parent Webhook\", \"previousNodeOutput\": 0, \"previousNodeRun\": 0}], \"hints\": [], \"executionTime\": 64, \"metadata\": {\"subExecutionsCount\": 1}, \"executionStatus\": \"success\", \"data\": {\"main\": [[{\"json\": {\"headers\": {\"host\": \"alexherman.app.n8n.cloud\", \"user-agent\": \"python-requests/2.34.2\", \"content-length\": \"16\", \"accept\": \"*/*\", \"accept-encoding\": \"gzip, br\", \"cdn-loop\": \"cloudflare; loops=1; subreqs=1\", \"cf-connecting-ip\": \"115.186.228.21\", \"cf-ew-via\": \"15\", \"cf-ipcountry\": \"AU\", \"cf-ray\": \"a3317f134ac4487c-BNE\", \"cf-visitor\": \"{\\\"scheme\\\":\\\"https\\\"}\", \"cf-worker\": \"n8n.cloud\", \"content-type\": \"application/json\", \"x-forwarded-for\": \"115.186.228.21, 162.158.164.219\", \"x-forwarded-host\": \"alexherman.app.n8n.cloud\", \"x-forwarded-port\": \"443\", \"x-forwarded-proto\": \"https\", \"x-forwarded-server\": \"traefik-prod-users-swc-40-6d977c9c6c-2cs6n\", \"x-is-trusted\": \"yes\", \"x-real-ip\": \"115.186.228.21\"}, \"params\": {}, \"query\": {}, \"body\": {\"probe\": \"p13\"}, \"webhookUrl\": \"https://alexherman.app.n8n.cloud/webhook/probe61-p13-c4243e293fe0\", \"executionMode\": \"production\"}, \"index\": 0, \"pairedItem\": {\"item\": 0}, \"metadata\": {\"subExecution\": {\"workflowId\": \"ev4MED3sGcFdiWrx\", \"executionId\": \"12037\"}}}]]}}"
+    },
+    "wait_for_completion_on_control": {
+      "wait_for_completion": true,
+      "http_status": 200,
+      "client_round_trip_seconds": 0.6754049584269524,
+      "parent_execution_id": "12038",
+      "child_execution_ids": [
+        "12039"
+      ],
+      "child_rows_carry_parent_link": [],
+      "child_detail_parent_like_fields": [
+        "retryOf",
+        "retrySuccessId"
+      ],
+      "child_detail_carries_parent_execution_id": "12038",
+      "matched_child_execution_id": "12039",
+      "parent_dispatch_node_output": "{\"startTime\": 1788068812769, \"executionIndex\": 1, \"source\": [{\"previousNode\": \"Parent Webhook\", \"previousNodeOutput\": 0, \"previousNodeRun\": 0}], \"hints\": [], \"executionTime\": 120, \"metadata\": {\"subExecutionsCount\": 1}, \"executionStatus\": \"success\", \"data\": {\"main\": [[{\"json\": {\"child_ran\": \"observed\"}, \"pairedItem\": {\"item\": 0}, \"metadata\": {\"subExecution\": {\"executionId\": \"12039\", \"workflowId\": \"ev4MED3sGcFdiWrx\"}}}]]}}"
+    },
+    "child_appears_in_executions_list": true,
+    "delta_off_vs_on": {
+      "child_listed": [
+        true,
+        true
+      ],
+      "parent_output_carries_child_id": [
+        true,
+        true
+      ]
+    },
+    "note": "n8n's docs state a sub-workflow execution counts neither against the billable quota nor against the Starter plan's 5-concurrent cap. That is DOCUMENTED, not observed here \u2014 this probe observes only what the executions API lists and what the parent's runData contains."
+  },
+  "executions_spent_p13": 4
+}

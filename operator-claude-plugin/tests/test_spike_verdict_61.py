@@ -296,28 +296,78 @@ def test_premises_claim_lines_carry_exactly_one_basis_token():
 
 
 def test_premises_unknowns_appear_in_unresolved_with_a_command():
+    """As of the 2026-08-30 operator decision, all six premises this spike once recorded as
+    `[unknown]` (P-05, P-07, P-08, P-09, P-10, P-13) are answered -- three from n8n's own
+    published documentation, three from a live disarmed probe. `_unknown_premise_ids` is
+    therefore expected to be EMPTY today. This is the honest state, not a weaker one: the
+    contract below still enforces both directions --
+
+    - if a future edit reintroduces an `[unknown]` premise, it MUST appear in ## Unresolved
+      with a command (the original per-unknown contract, unchanged); and
+    - ## Unresolved itself must say, in words, that everything it once listed is resolved --
+      an empty-of-unknowns section that goes silent about *why* it's empty reads as "nobody
+      checked," which is exactly the failure REVIEW-04 named. Silence is not the same claim
+      as "resolved."
+    """
     text = _read_doc()
     unknown_ids = _unknown_premise_ids(text)
-    assert unknown_ids, "expected at least one [unknown] premise for this spike to be honest"
 
     unresolved_body = _section_body(text, "## Unresolved")
     assert unresolved_body is not None, "## Unresolved section not found"
-    unresolved_lines = _claim_lines(unresolved_body)
-    assert unresolved_lines, "## Unresolved must carry at least one entry"
 
-    for premise_id in unknown_ids:
-        assert premise_id in unresolved_body, (
-            f"{premise_id} carries basis [unknown] but does not appear in ## Unresolved"
+    if unknown_ids:
+        unresolved_lines = _claim_lines(unresolved_body)
+        assert unresolved_lines, "## Unresolved must carry at least one entry"
+
+        for premise_id in unknown_ids:
+            assert premise_id in unresolved_body, (
+                f"{premise_id} carries basis [unknown] but does not appear in ## Unresolved"
+            )
+
+        all_ids = _all_premise_ids(text)
+        for line in unresolved_lines:
+            ids_here = {f"P-{i}" for i in _PREMISE_ID_RE.findall(line)}
+            assert ids_here, f"## Unresolved entry names no premise id: {line!r}"
+            for pid in ids_here:
+                assert pid in all_ids, (
+                    f"## Unresolved names {pid!r}, which is not a real premise id in ## Premises"
+                )
+            assert "command" in line.lower(), (
+                f"## Unresolved entry for {sorted(ids_here)} carries no read-only command: {line!r}"
+            )
+    else:
+        assert re.search(r"\bresolved\b", unresolved_body, re.IGNORECASE), (
+            "## Premises carries zero [unknown] entries, but ## Unresolved does not say so -- "
+            "an empty-of-unknowns section must state explicitly that everything it once listed "
+            "was resolved, not just go quiet"
         )
 
-    all_ids = _all_premise_ids(text)
-    for line in unresolved_lines:
-        ids_here = {f"P-{i}" for i in _PREMISE_ID_RE.findall(line)}
-        assert ids_here, f"## Unresolved entry names no premise id: {line!r}"
-        for pid in ids_here:
-            assert pid in all_ids, (
-                f"## Unresolved names {pid!r}, which is not a real premise id in ## Premises"
-            )
-        assert "command" in line.lower(), (
-            f"## Unresolved entry for {sorted(ids_here)} carries no read-only command: {line!r}"
+
+def test_previously_unknown_premises_now_carry_a_non_unknown_basis():
+    """Names the six premise ids this spike's first pass recorded as `[unknown]`
+    (P-05, P-07, P-08, P-09, P-10, P-13) and asserts each now carries a real basis token
+    (measured/derived/documented), never the literal string `[unknown]` on its own line --
+    the positive half of the contract above: not just "no unknowns exist" in aggregate, but
+    specifically that the six the operator was asked to close ARE closed, by id."""
+    text = _read_doc()
+    body = _section_body(text, "## Premises")
+    assert body is not None, "## Premises section not found"
+    lines = _claim_lines(body)
+
+    formerly_unknown = ("P-05", "P-07", "P-08", "P-09", "P-10", "P-13")
+    lines_by_id = {}
+    for line in lines:
+        for pid in {f"P-{i}" for i in _PREMISE_ID_RE.findall(line)}:
+            lines_by_id.setdefault(pid, line)
+
+    for pid in formerly_unknown:
+        assert pid in lines_by_id, f"{pid} not found in ## Premises at all"
+        line = lines_by_id[pid]
+        assert "[unknown]" not in line, (
+            f"{pid} was one of the six premises the operator was asked to close and must not "
+            f"still carry [unknown]: {line!r}"
+        )
+        matches = BASIS_RE.findall(line)
+        assert matches and matches[0] in ("measured", "derived", "documented"), (
+            f"{pid} must carry a resolved basis token (measured/derived/documented): {line!r}"
         )
