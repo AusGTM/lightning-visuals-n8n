@@ -68,6 +68,14 @@ HOLD_NO_TABLE_ROW_MATCHED = "no_table_row_matched"
 # which stage it belongs to, rather than guessing).
 ENRICHMENT_STAGE_HOLD_CODES = frozenset({HOLD_UNADJUDICATED_CONFLICT})
 
+# The whole closed vocabulary (Phase 61 Plan 04 Task 3) — `held_queue.py` validates
+# every persisted `hold_code` against this set rather than against a second, separately
+# maintained list.
+ALL_HOLD_CODES = frozenset({
+    HOLD_UNPARSEABLE, HOLD_UNADJUDICATED_CONFLICT, HOLD_UNKNOWN_TIER,
+    HOLD_NO_MATCH, HOLD_AMBIGUOUS_CANDIDATES, HOLD_NO_TABLE_ROW_MATCHED,
+})
+
 
 @dataclass(frozen=True)
 class ConfidenceVerdict:
