@@ -307,7 +307,7 @@ variable), and a design that runs the provider waterfall twice per written recor
       - [x] 61-02-PLAN.md — the tracer's backend half: a `linkedin` match lane that reaches a
             HubSpot search on `lv_linkedin_url`, surviving stored-value variance
 
-      - [ ] 61-03-PLAN.md — the tracer's front-end half: the third identity group in all five
+      - [x] 61-03-PLAN.md — the tracer's front-end half: the third identity group in all five
             D-61-06 sites, with a YAML-to-JS parity test left behind
 
       - [ ] 61-04-PLAN.md — the confidence signal and hold-and-collect: confident rows proceed,
@@ -474,7 +474,7 @@ n8n restarts mid-run.
 
 **Requirements**: INPUT-05, RUN-01, RUN-02, RUN-03, RUN-04, AFTER-02
 
-**Plans**: 1/6 plans executed
+**Plans**: 2/6 plans executed
 
 ### Phase 58: Take what the operator actually has
 
