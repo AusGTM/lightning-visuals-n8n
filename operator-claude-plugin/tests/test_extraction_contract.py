@@ -75,7 +75,7 @@ def test_first_fenced_example_artifact_is_accepted_by_the_real_validator_with_no
     artifact = blocks[0]
     result = extraction.validate(artifact)
 
-    assert len(result.accepted) == 2
+    assert len(result.accepted) == 3
     assert result.rejected == []
     assert result.dropped_keys == []
     for record in result.accepted:
@@ -234,11 +234,34 @@ def test_a_record_with_no_record_type_key_still_routes_to_the_contact_rules():
         {
             "index": 0,
             "reason": (
-                "no identity present: needs a non-blank 'email', or all "
-                "three of 'firstname'/'lastname'/'company' non-blank"
+                "no identity present: needs a non-blank 'email', or all three of "
+                "'firstname'/'lastname'/'company' non-blank, or a non-blank "
+                "'linkedin_url'"
             ),
         }
     ]
+
+
+# D-61-02 (do-not-simplify), REVIEW-A10: the no-invention sentence (rules 1-2 of "The
+# no-invention rule" section) is a different, independently-editable sentence from the
+# identity-group list this plan's Task 1/2 changed (rule 3's parenthetical). Pinned here
+# VERBATIM so a future edit to this file fails THIS suite rather than only a one-time
+# summary byte-check that runs on the day of this plan and never again.
+NO_INVENTION_SENTENCE = (
+    "1. **A field the source does not supply is left out of the row entirely.** Never fill it from\n"
+    "   what you already know about the person or the company — a blank cell is honest; a plausible\n"
+    "   guess is not.\n"
+    "2. **A value the source renders unclearly goes in the ambiguity list, and the field is left out\n"
+    "   of the row it belongs to.** Do not put your best reading in the row and hope it is right."
+)
+
+
+def test_no_invention_sentence_is_byte_identical_to_its_pre_plan_61_03_text():
+    """REVIEW-A10 / D-61-02: rules 1-2 govern every adapter and must never be loosened
+    just because the identity-group list (rule 3's parenthetical, a few lines below)
+    gained a third group in this same plan. An edit to this sentence must fail this
+    test, not slip through unnoticed."""
+    assert NO_INVENTION_SENTENCE in _extraction_md_text()
 
 
 def test_client_rendered_verdict_is_nowhere_in_extraction_md():

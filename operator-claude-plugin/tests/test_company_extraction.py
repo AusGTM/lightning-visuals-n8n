@@ -346,8 +346,9 @@ def test_extraction_contract_backwards_compat_pin_absent_record_type_routes_to_c
         {
             "index": 0,
             "reason": (
-                "no identity present: needs a non-blank 'email', or all "
-                "three of 'firstname'/'lastname'/'company' non-blank"
+                "no identity present: needs a non-blank 'email', or all three of "
+                "'firstname'/'lastname'/'company' non-blank, or a non-blank "
+                "'linkedin_url'"
             ),
         }
     ]

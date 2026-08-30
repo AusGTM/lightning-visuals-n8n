@@ -175,6 +175,37 @@ def identity_groups(mapping_path=None) -> list:
     return required.get("any_of") or []
 
 
+_SMALL_NUMBER_WORDS = {2: "two", 3: "three", 4: "four", 5: "five", 6: "six"}
+
+
+def _describe_identity_group(group: list) -> str:
+    """One identity group, in the operator's own vocabulary — never a raw Python repr.
+    A single-field group reads as "a non-blank 'x'"; a multi-field group reads as "all
+    N of 'a'/'b'/'c' non-blank", with N spelled out for small counts (matching this
+    module's pre-existing wording, "all three of ...") and falling back to a digit for
+    a count this table does not name."""
+    quoted = [f"'{f}'" for f in group]
+    if len(quoted) == 1:
+        return f"a non-blank {quoted[0]}"
+    count_word = _SMALL_NUMBER_WORDS.get(len(quoted), str(len(quoted)))
+    return f"all {count_word} of {'/'.join(quoted)} non-blank"
+
+
+def _identity_rejection_reason(groups: list) -> str:
+    """D-61-06 (Phase 61 Plan 03): the rejection reason a record's own configured
+    identity groups produce — COMPOSED from `groups`, never restated in prose. This is
+    the fix for the drift class D-61-06 names: a hard-coded sentence naming two groups
+    would silently go stale the moment a third group (e.g. `linkedin_url`) was added to
+    the YAML. Deriving it here removes this call site from that list of drift-prone
+    sites entirely — the sentence can never again lag what is actually configured."""
+    descriptions = [_describe_identity_group(group) for group in groups]
+    if not descriptions:
+        return "no identity present: no identity groups are configured"
+    if len(descriptions) == 1:
+        return f"no identity present: needs {descriptions[0]}"
+    return "no identity present: needs " + ", or ".join(descriptions)
+
+
 def _present(value) -> bool:
     """Coerce to string, strip, test non-empty — mirrors the deployed `Map Columns`
     node's requiredIdentity()/_present(), which trims before checking presence.
@@ -636,13 +667,7 @@ def validate(artifact: dict, mapping_path=None) -> ExtractionResult:
                 continue
 
             if not has_identity(clean_row, record_groups):
-                if record_type == "companies":
-                    reason = "no identity present: give the company's name — that alone is enough"
-                else:
-                    reason = (
-                        "no identity present: needs a non-blank 'email', or all "
-                        "three of 'firstname'/'lastname'/'company' non-blank"
-                    )
+                reason = _identity_rejection_reason(record_groups)
                 rejected.append({"index": i, "reason": reason})
                 # D-59-08: the rejection above is retained EXACTLY as it was — never
                 # removed, never moved — so every existing reader of `rejected`

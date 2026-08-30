@@ -47,6 +47,33 @@ def test_whitespace_only_identity_field_is_rejected_diverging_deliberately_from_
     assert len(result.rejected) == 1
 
 
+def test_linkedin_url_alone_satisfies_the_identity_rule_and_the_row_is_accepted():
+    """D-61-06 (Phase 61 Plan 03): the third identity group. A row carrying nothing but
+    a LinkedIn URL is the exact walk-failure row (53-WALK-RECORD-3.md FINDING D) and
+    must now pass `validate()` where it used to be refused before the backend's own
+    new linkedin lane (61-02) ever got a chance to act on it."""
+    artifact = {
+        "records": [_record({"linkedin_url": "https://www.linkedin.com/in/dana-osei"})]
+    }
+    result = extraction.validate(artifact)
+
+    assert result.rejected == []
+    assert len(result.accepted) == 1
+    assert result.accepted[0]["row"] == {"linkedin_url": "https://www.linkedin.com/in/dana-osei"}
+
+
+def test_a_bare_name_with_no_email_and_no_linkedin_is_still_rejected():
+    """D-61-03's fence, asserted rather than assumed: the new linkedin_url group is
+    additive only. A name with no company, no email, and no linkedin_url still
+    satisfies none of the three configured groups and must still be refused."""
+    artifact = {"records": [_record({"firstname": "Dana"})]}
+    result = extraction.validate(artifact)
+
+    assert result.accepted == []
+    assert len(result.rejected) == 1
+    assert "identity" in result.rejected[0]["reason"]
+
+
 def test_non_canonical_key_is_stripped_and_reported_and_row_still_accepted():
     artifact = {
         "records": [_record({"email": "a@b.c", "twitter_url": "https://twitter.com/a"})]

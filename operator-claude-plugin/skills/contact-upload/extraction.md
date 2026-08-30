@@ -24,9 +24,10 @@ row still fails after following it, the failure is the correct outcome:
    guess is not.
 2. **A value the source renders unclearly goes in the ambiguity list, and the field is left out
    of the row it belongs to.** Do not put your best reading in the row and hope it is right.
-3. **Never fill a gap to make a row satisfy the identity rule** (a non-blank `email`, or all
-   three of `firstname`/`lastname`/`company`). A row you completed just to get it past that
-   check on your own authority is not honest — it is invention with extra steps.
+3. **Never fill a gap to make a row satisfy the identity rule** (a non-blank `email`, all
+   three of `firstname`/`lastname`/`company`, or a non-blank `linkedin_url`). A row you
+   completed just to get it past that check on your own authority is not honest — it is
+   invention with extra steps.
 
    > **RECORDED EDIT — D-59-08, operator, 2026-08-28.** This numbered rule used to continue: *"A
    > row that gets rejected with a stated reason is the correct outcome."* That sentence no
@@ -106,8 +107,8 @@ The file you write is one JSON object with these top-level keys:
 - `ambiguities` — a list of entries, each naming the record index, the field, what you saw, and
   why it is uncertain. Empty list if there are none — never omit the key.
 
-This is a complete, valid example — two records (one via the `email` identity group, one via
-`firstname`+`lastname`+`company`) and one ambiguity:
+This is a complete, valid example — three records (one via the `email` identity group, one via
+`firstname`+`lastname`+`company`, one via a bare `linkedin_url`) and one ambiguity:
 
 ```json
 {
@@ -136,6 +137,15 @@ This is a complete, valid example — two records (one via the `email` identity 
       "provenance": {
         "input": "pasted_text",
         "locator": "line 9: 'Ben Ito, Example Racing League'"
+      }
+    },
+    {
+      "row": {
+        "linkedin_url": "https://www.linkedin.com/in/dana-osei"
+      },
+      "provenance": {
+        "input": "pasted_text",
+        "locator": "line 11: 'linkedin.com/in/dana-osei'"
       }
     }
   ],
