@@ -158,6 +158,10 @@ def _create_workflow(body: dict) -> str:
     return _api("POST", "/workflows", json=body)["id"]
 
 
+def _update_workflow(wf_id: str, body: dict) -> dict:
+    return _api("PUT", f"/workflows/{wf_id}", json=body)
+
+
 def _activate(wf_id: str) -> None:
     _api("POST", f"/workflows/{wf_id}/activate")
 
@@ -278,6 +282,89 @@ def _p13_parent_workflow(path: str, child_id: str, wait_for_sub: bool) -> dict:
             "Dispatch Child": {"main": [[{"node": "Parent Tail", "type": "main", "index": 0}]]},
         },
         "settings": {"executionOrder": "v1"},
+    }
+
+
+def _p14_self_ref_workflow(path: str, self_id: str) -> dict:
+    """A workflow whose own Execute Workflow node references ITSELF.
+
+    P-14 asks only whether n8n will PUBLISH this shape. `61-SPIKE-VERDICT.md`'s P-13 note
+    records that a parent cannot activate while a referenced child is unpublished; a
+    self-reference is the degenerate case of that rule -- at activation time the workflow
+    is its own unpublished dependency, so it is genuinely unclear whether n8n resolves it,
+    refuses it, or deadlocks on it.
+
+    The dispatch is guarded by an IF on a `depth` field so that IF this workflow is ever
+    triggered, it can recurse at most once. The guard is defence in depth only: the p14
+    probe NEVER fires the webhook. Activation alone answers the publish-order question at
+    a cost of zero executions, and an unbounded self-dispatch on a live 2,500/month
+    instance is not a risk worth taking to learn something activation already tells us.
+    """
+    return {
+        "name": f"{PROBE_PREFIX}p14-selfref-{path}",
+        "nodes": [
+            {"parameters": {"httpMethod": "POST", "path": path,
+                            "responseMode": "lastNode", "options": {}},
+             "id": "p14-webhook", "name": "Self Webhook",
+             "type": "n8n-nodes-base.webhook", "typeVersion": 2, "position": [0, 0],
+             "webhookId": path},
+            {"parameters": {"conditions": {"options": {"caseSensitive": True,
+                                                       "version": 2},
+                                           "conditions": [{
+                                               "id": "p14-depth-guard",
+                                               "operator": {"type": "string",
+                                                            "operation": "empty",
+                                                            "singleValue": True},
+                                               "leftValue": "={{ $json.body.depth }}",
+                                               "rightValue": ""}],
+                                           "combinator": "and"},
+                            "options": {}},
+             "id": "p14-if", "name": "Depth Guard",
+             "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [220, 0]},
+            {"parameters": {
+                "source": "database",
+                "workflowId": {"__rl": True, "value": self_id, "mode": "list",
+                               "cachedResultName": f"{PROBE_PREFIX}p14-selfref"},
+                "mode": "each",
+                "options": {"waitForSubWorkflow": False}},
+             "id": "p14-exec", "name": "Dispatch Self",
+             "type": "n8n-nodes-base.executeWorkflow", "typeVersion": 1.2,
+             "position": [440, 0]},
+            _set_node("Self Tail", "p14-self-set", [660, 0], field="self_ran"),
+        ],
+        "connections": {
+            "Self Webhook": {"main": [[{"node": "Depth Guard", "type": "main", "index": 0}]]},
+            "Depth Guard": {"main": [
+                [{"node": "Dispatch Self", "type": "main", "index": 0}],
+                [{"node": "Self Tail", "type": "main", "index": 0}],
+            ]},
+            "Dispatch Self": {"main": [[{"node": "Self Tail", "type": "main", "index": 0}]]},
+        },
+        "settings": {"executionOrder": "v1"},
+    }
+
+
+def verdict_p14(activated: bool, error: str | None, wf_id: str | None):
+    return {
+        "premise": "P-14",
+        "question": ("can a workflow whose Execute Workflow node references ITSELF be "
+                     "published/activated on this n8n Cloud instance?"),
+        "answer": activated,
+        "basis": "observed",
+        "observed": {"workflow_id": wf_id, "activated": activated,
+                     "activation_error": error},
+        "scope_boundary": (
+            "ACTIVATION ONLY. The webhook was never fired, so this says nothing about "
+            "whether a self-dispatch RUNS correctly, terminates, or how n8n meters it. A "
+            "depth guard exists in the workflow but was never exercised. Runtime "
+            "behaviour of a self-referencing dispatch remains UNPROBED."),
+        "why_it_matters": (
+            "It is the cheaper of the two routes to substrate 3 (sub-workflow dispatch, "
+            "unmetered and uncapped). The alternative -- a new parent workflow with its "
+            "own webhook path -- moves the plugin's dispatch target. If self-reference "
+            "cannot publish, that alternative is the only route and 61-06 should plan for "
+            "it rather than discover it late."),
+        "executions_spent": 0,
     }
 
 
@@ -634,6 +721,23 @@ def _run_p13():
         _delete_workflow(child_id)
 
 
+def _run_p14():
+    """Create, self-reference, try to publish, delete. Fires nothing: 0 executions."""
+    path = f"probe61-p14-{uuid.uuid4().hex[:12]}"
+    wf_id = _create_workflow(_p14_self_ref_workflow(path, "PLACEHOLDER"))
+    try:
+        # The self-reference can only be written once the id exists, so this is
+        # necessarily a two-step: create, then point the node at the id just minted.
+        _update_workflow(wf_id, _p14_self_ref_workflow(path, wf_id))
+        try:
+            _activate(wf_id)
+            return verdict_p14(True, None, wf_id), 0
+        except Exception as exc:
+            return verdict_p14(False, str(exc)[:800], wf_id), 0
+    finally:
+        _delete_workflow(wf_id)
+
+
 def _resolve_enrichment_workflow_id():
     for wf in _list_workflows():
         if wf.get("name") == ENRICHMENT_WORKFLOW_NAME:
@@ -703,6 +807,8 @@ def main(argv=None):
     p07.add_argument("--wait-seconds", type=int, default=DEFAULT_WAIT_SECONDS)
     sub.add_parser("p10", help="2-record chunk execution cost (read-only, 0 executions)")
     sub.add_parser("p13", help="detached child execution-id correlation")
+    sub.add_parser("p14", help="can a self-referencing Execute Workflow publish? "
+                               "(activation only, 0 executions, never fires)")
     sub.add_parser("cleanup", help=f"delete every live {PROBE_PREFIX}* workflow")
     all_p = sub.add_parser("all", help="p07, p13, then p10, then cleanup")
     all_p.add_argument("--wait-seconds", type=int, default=DEFAULT_WAIT_SECONDS)
@@ -723,6 +829,10 @@ def main(argv=None):
         verdict, n = _run_p13()
         spent += n
         _write_verdict({"P-13": verdict, "executions_spent_p13": n})
+    elif args.cmd == "p14":
+        verdict, n = _run_p14()
+        print(json.dumps(verdict, indent=2, default=str))
+        _write_verdict({"P-14": verdict, "executions_spent_p14": n})
     elif args.cmd == "p10":
         # Fire-and-read-separately is this tool's design, so a standalone p10 must be able
         # to pick up a P-13 observation recorded by an EARLIER invocation. Without this,

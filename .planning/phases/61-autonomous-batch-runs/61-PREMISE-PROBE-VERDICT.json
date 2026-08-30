@@ -18,7 +18,7 @@
     "executions_spent": 1
   },
   "executions_spent_p07": 1,
-  "written_at": "2026-08-30T05:48:35.752816+00:00",
+  "written_at": "2026-08-30T06:40:24.352020+00:00",
   "P-10": {
     "premise": "P-10",
     "question": "does `chunk_count + record_count` hold at the configured ceiling of 2 records per chunk?",
@@ -100,5 +100,20 @@
     },
     "note": "n8n's docs state a sub-workflow execution counts neither against the billable quota nor against the Starter plan's 5-concurrent cap. That is DOCUMENTED, not observed here \u2014 this probe observes only what the executions API lists and what the parent's runData contains."
   },
-  "executions_spent_p13": 4
+  "executions_spent_p13": 4,
+  "P-14": {
+    "premise": "P-14",
+    "question": "can a workflow whose Execute Workflow node references ITSELF be published/activated on this n8n Cloud instance?",
+    "answer": true,
+    "basis": "observed",
+    "observed": {
+      "workflow_id": "h2Sn4WGTNfmr4vLj",
+      "activated": true,
+      "activation_error": null
+    },
+    "scope_boundary": "ACTIVATION ONLY. The webhook was never fired, so this says nothing about whether a self-dispatch RUNS correctly, terminates, or how n8n meters it. A depth guard exists in the workflow but was never exercised. Runtime behaviour of a self-referencing dispatch remains UNPROBED.",
+    "why_it_matters": "It is the cheaper of the two routes to substrate 3 (sub-workflow dispatch, unmetered and uncapped). The alternative -- a new parent workflow with its own webhook path -- moves the plugin's dispatch target. If self-reference cannot publish, that alternative is the only route and 61-06 should plan for it rather than discover it late.",
+    "executions_spent": 0
+  },
+  "executions_spent_p14": 0
 }

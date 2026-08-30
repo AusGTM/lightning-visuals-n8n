@@ -165,6 +165,27 @@ probe's own source:
 **Any sub-workflow architecture must publish its children before the parent can be activated.**
 That is a real deployment-ordering constraint on substrate 3, not probe scaffolding.
 
+### P-14 — added 2026-08-30, operator-requested: can a workflow reference ITSELF?
+
+**Answer: yes — activation succeeded.** Basis: observed. Cost: **0 executions.**
+
+Asked because 61-05 chose substrate 1 and deferred substrate 3, and the operator wanted the
+scale-up path de-risked while it was cheap. Substrate 3 has two possible routes: a
+self-referencing `Execute Workflow` node, or a brand-new parent workflow with its own webhook
+path (which would move the plugin's dispatch target). The self-reference is much the cheaper,
+and P-13's publish-order constraint made it genuinely uncertain — at activation a
+self-referencing workflow is its own unpublished dependency.
+
+n8n resolved it without complaint (workflow `h2Sn4WGTNfmr4vLj`, activated, no error).
+
+**Scope boundary, which matters:** activation only. **The webhook was never fired.** This says
+nothing about whether a self-dispatch runs correctly, terminates, or how it is metered. The probe
+workflow carries a depth guard, but that guard was never exercised — it exists so that an
+accidental trigger cannot recurse without bound, not because recursion was tested. **Runtime
+behaviour of a self-referencing dispatch remains UNPROBED**, deliberately: an unbounded
+self-dispatch on a live 2,500/month instance is not a risk worth taking to learn something
+activation already answered.
+
 ### What P-10 does and does not settle
 
 Because P-13 established that sub-workflow executions ARE listed, the -2 shortfall is **not**
