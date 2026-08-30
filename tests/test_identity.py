@@ -49,9 +49,16 @@ def test_email_zero_hits_is_net_new():  # P7-SC3
 
 
 # --- STRONG key: linkedin (only reached with NO valid email) ------------------
+#
+# Phase 61 Plan 02 Task 2: the oracle's linkedin branch now searches (and requests) BOTH
+# `lv_linkedin_url` and native `hs_linkedin_url` -- `linkedin_url` never existed on the
+# live portal, so the pre-fix canned key here would have pinned a search that has never
+# once been reachable live. `make_search`'s stub keys off filters[0]["propertyName"];
+# a canned dict entry only for `lv_linkedin_url` leaves `hs_linkedin_url` at the stub's own
+# zero-hit default, which is exactly what the union-by-contact-id needs to be a no-op.
 
 def test_no_email_linkedin_single_hit_is_match():  # P7-SC1
-    s = make_search({"linkedin_url": {"results": [{"id": "777"}], "total": 1}})
+    s = make_search({"lv_linkedin_url": {"results": [{"id": "777"}], "total": 1}})
     r = resolve_identity({"linkedin_url": "https://LinkedIn.com/in/alice/"}, hs_search=s)
     assert r.outcome == "match"
     assert r.match_key == "linkedin_url"
@@ -59,11 +66,66 @@ def test_no_email_linkedin_single_hit_is_match():  # P7-SC1
 
 
 def test_no_email_linkedin_multi_hit_is_ambiguous():  # P7-SC3
-    s = make_search({"linkedin_url": {"results": [{"id": "777"}, {"id": "778"}], "total": 2}})
+    s = make_search({"lv_linkedin_url": {"results": [{"id": "777"}, {"id": "778"}], "total": 2}})
     r = resolve_identity({"linkedin_url": "https://linkedin.com/in/alice"}, hs_search=s)
     assert r.outcome == "ambiguous"
     assert r.match_key == "linkedin_url"
     assert r.candidate_ids == ["777", "778"]
+
+
+def test_no_email_linkedin_searches_and_requests_both_properties():  # REVIEW-C6
+    s = make_search({"lv_linkedin_url": {"results": [{"id": "777"}], "total": 1}})
+    r = resolve_identity({"linkedin_url": "https://linkedin.com/in/alice"}, hs_search=s)
+    assert r.outcome == "match"
+    props_by_call = [c["properties"] for c in s.calls]
+    assert all("lv_linkedin_url" in p and "hs_linkedin_url" in p for p in props_by_call)
+    # Two sequential calls, one per property (the seam ORs by calling twice, not by an
+    # OR-across-groups shape it cannot express -- src/hubspot_client.py:119-125).
+    searched_props = [c["filters"][0]["propertyName"] for c in s.calls]
+    assert searched_props == ["lv_linkedin_url", "hs_linkedin_url"]
+
+
+def test_no_email_linkedin_found_only_under_native_property_still_matches():  # REVIEW-C6
+    s = make_search({"hs_linkedin_url": {"results": [{"id": "555"}], "total": 1}})
+    r = resolve_identity({"linkedin_url": "https://linkedin.com/in/alice"}, hs_search=s)
+    assert r.outcome == "match"
+    assert r.contact_id == "555"
+
+
+def test_no_email_linkedin_same_contact_under_both_properties_is_one_id_not_ambiguous():
+    s = make_search({
+        "lv_linkedin_url": {"results": [{"id": "777"}], "total": 1},
+        "hs_linkedin_url": {"results": [{"id": "777"}], "total": 1},
+    })
+    r = resolve_identity({"linkedin_url": "https://linkedin.com/in/alice"}, hs_search=s)
+    assert r.outcome == "match"
+    assert r.candidate_ids == ["777"]
+
+
+def test_no_email_linkedin_different_contacts_under_the_two_properties_is_ambiguous():
+    s = make_search({
+        "lv_linkedin_url": {"results": [{"id": "777"}], "total": 1},
+        "hs_linkedin_url": {"results": [{"id": "888"}], "total": 1},
+    })
+    r = resolve_identity({"linkedin_url": "https://linkedin.com/in/alice"}, hs_search=s)
+    assert r.outcome == "ambiguous"
+    assert r.candidate_ids == ["777", "888"]
+
+
+def test_no_email_linkedin_search_uses_the_written_down_variant_set():
+    calls = []
+
+    def hs_search(object_type, filters, properties, limit=100):
+        calls.append(filters[0])
+        return {"results": [], "total": 0}
+
+    resolve_identity({"linkedin_url": "https://www.linkedin.com/in/robert-cavallucci-14698741/"}, hs_search=hs_search)
+    assert calls[0]["operator"] == "IN"
+    assert "https://www.linkedin.com/in/robert-cavallucci-14698741/" in calls[0]["values"]
+    assert "https://linkedin.com/in/robert-cavallucci-14698741" in calls[0]["values"]
+    assert len(calls[0]["values"]) <= 9
+    # Both property calls carry the SAME variant set.
+    assert calls[0]["values"] == calls[1]["values"]
 
 
 # --- WEAK keys: a hit is NEVER confident -> only ambiguous --------------------

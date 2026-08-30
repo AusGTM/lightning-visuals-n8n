@@ -103,8 +103,14 @@ print(json.dumps({"outcome": r.outcome, "contact_id": r.contact_id,
 }
 
 // Map a JS searchResultsByKey (match_key names) -> Python propertyName-keyed canned.
+// Phase 61 Plan 02 Task 2: the Python oracle's linkedin filter moved from the dead
+// `linkedin_url` property name to `lv_linkedin_url` (REVIEW-A2) — this map translates the
+// JS side's semantic match-key name to whatever HubSpot property the Python oracle
+// actually filters on, so it must move with it. The JS-side resolveIdentity.js mock still
+// uses the semantic key `linkedin_url` (its own searchResultsByKey vocabulary, unrelated
+// to HubSpot property names) — untouched.
 function toCanned(searchMap) {
-  const propOf = { email: "email", linkedin_url: "linkedin_url",
+  const propOf = { email: "email", linkedin_url: "lv_linkedin_url",
                    phone_lastname: "phone", name_company: "firstname" };
   const canned = {};
   for (const [k, ids] of Object.entries(searchMap)) {

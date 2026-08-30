@@ -1193,7 +1193,35 @@ function _writeSafetyAllows(action, hsObjectId, domain) {
 # ---- shared inlined Code-node bodies (Cloud + local both use these) ----------
 
 # Build identity search keys from the trigger payload (email/domain/linkedin).
-ENRICH_BUILD_IDENTITY = inline("normalizeEmail.js", "matchProposal.js") + r"""
+ENRICH_BUILD_IDENTITY = inline("normalizeEmail.js", "resolveIdentity.js", "matchProposal.js") + r"""
+
+// Phase 61 Plan 02 Task 2 (REVIEW-01/REVIEW-C5): the WRITTEN-DOWN, BOUNDED search-variant
+// set for "HubSpot Linkedin Search" — NOT an unbounded normalization promise. Covers the
+// canonicalized host+path crossed with {https,http} x {no-www.,www.} x {no-slash,
+// trailing-slash} (8 combinations) plus the raw operator-supplied value as given
+// (deduplicated against the 8) = up to 9 variants. A stored form outside this set is a
+// KNOWN search miss (tier `none`), never guessed — the re-verification in "Adapt Linkedin
+// Search" (canonicalizeLinkedin on both sides) is what actually tolerates trailing-slash/
+// case/query-string variance; THIS set only has to get the record BACK from HubSpot so
+// that re-verification has something to look at.
+function linkedinUrlVariants(raw) {
+  const canonical = canonicalizeLinkedin(raw);
+  if (!canonical) return [];
+  const schemeSep = canonical.indexOf("://");
+  let hostPath = schemeSep >= 0 ? canonical.slice(schemeSep + 3) : canonical;
+  if (hostPath.indexOf("www.") === 0) hostPath = hostPath.slice(4);
+  const out = new Set();
+  for (const scheme of ["https", "http"]) {
+    for (const www of ["", "www."]) {
+      for (const slash of ["", "/"]) {
+        out.add(scheme + "://" + www + hostPath + slash);
+      }
+    }
+  }
+  const rawTrimmed = typeof raw === "string" ? raw.trim() : raw;
+  if (rawTrimmed) out.add(String(rawTrimmed));
+  return Array.from(out);
+}
 
 // --- n8n wrapper: normalise the incoming identity into HubSpot search keys ---
 return $input.all().map((it) => {
@@ -1217,6 +1245,10 @@ return $input.all().map((it) => {
     // truth plan 36-02's match-lane routing IFs read too, so routing and filtering
     // provably cannot disagree.
     lane: laneOf({ object_id: row.object_id, identity_keys }),
+    // Phase 61 Plan 02 Task 2: kept OFF identity_keys deliberately — a sibling field, not
+    // a new identity_keys member, so this addition cannot perturb any test that pins
+    // identity_keys' own exact shape (e.g. bareEventChainFlow.test.mjs).
+    linkedin_url_variants: linkedinUrlVariants(row.linkedin_url),
   }};
 });
 """
@@ -1285,7 +1317,7 @@ return $input.all().map((it) => {
 """
 
 # Hand scored winners to the non-clobber merge (email never promotes to canonical).
-ENRICH_MERGE = inline("mergeContacts.js") + r"""
+ENRICH_MERGE = inline("resolveIdentity.js", "mergeContacts.js") + r"""
 
 // --- n8n wrapper: mergeContacts(existingRecord, winners) non-clobber ---
 // PN-1: linkedin_url is NOT HubSpot-native -> the merge candidate/canonical key is
@@ -1302,8 +1334,14 @@ return $input.all().map((it) => {
                     "city", "state", "country", "hs_state_code", "hs_country_region_code"]) {
     if (winners[f] != null && String(winners[f]).trim() !== "") candidate[f] = winners[f];
   }
-  if (winners.linkedin_url != null && String(winners.linkedin_url).trim() !== "") {
-    candidate.lv_linkedin_url = winners.linkedin_url;
+  // Phase 61 Plan 02 Task 2: canonicalize BEFORE writing, so stored values converge from
+  // here forward and the search's variant-set widening (ENRICH_BUILD_IDENTITY) can
+  // eventually be narrowed. Existing stored values written before this change remain
+  // UNCONVERTED — this is exactly why the search still carries the wider filter rather
+  // than dropping to a plain EQ on the canonical form.
+  const canonicalWinnerLinkedin = canonicalizeLinkedin(winners.linkedin_url);
+  if (canonicalWinnerLinkedin) {
+    candidate.lv_linkedin_url = canonicalWinnerLinkedin;
   }
   // COPY-02: persona_group is NOT HubSpot-native (PN-1) -> the merge candidate/canonical
   // key is lv_persona_group. Dot-property access only, never a bare quoted array entry
@@ -4958,16 +4996,33 @@ def build_enrichment_cloud():
     # Search" re-verifies whichever property carried the hit; searching a property this
     # node does not request would make that re-verification impossible (properties_csv is
     # the fetch-by-id list, which Task 1 already extended with `hs_linkedin_url`).
-    # Task 2 (61-02) widens this filter's operator/value shape from plain EQ to an IN over
-    # a written-down, bounded variant set, to survive stored-value variance (trailing
-    # slash / www. / scheme) — see that task's comment on this same node.
+    #
+    # Task 2 (61-02, REVIEW-01/REVIEW-C5): EQ-on-a-single-value survives nothing —
+    # `canonicalizeLinkedin` output need not equal a raw stored value at all. The filter is
+    # `IN` over `identity_keys.linkedin_url_variants` — the WRITTEN-DOWN, bounded variant
+    # set "Build Identity" computes (see `linkedinUrlVariants`'s own comment there): the
+    # canonicalized host+path crossed with {https,http} x {no-www.,www.} x
+    # {no-slash,trailing-slash}, plus the raw operator-supplied value as given — up to 9
+    # variants. `IN` is in HubSpot CRM v3's closed string-operator vocabulary (same
+    # vocabulary the `name` lane's own comment records at the "HubSpot Name Search" node
+    # above) and is provable offline, unlike `CONTAINS_TOKEN`'s tokenization behavior on a
+    # URL-valued property (recorded [unknown] below). This is ONE `IN` group per property —
+    # TWO filter groups total, a CONSTANT regardless of how the variant set grows, never a
+    # variant x property cross-product (REVIEW-C5's bound). A stored form outside this
+    # variant set is a KNOWN search miss reporting tier `none` ("we searched and did not
+    # find") — never guessed, and never written to.
+    #
+    # [unknown], recorded rather than adopted: whether `CONTAINS_TOKEN` would additionally
+    # catch a stored value with more query-string noise than this set covers. Settle with a
+    # read-only admin search POST against a known contact's `lv_linkedin_url` before
+    # adopting it — not on this plan's evidence.
     hs_linkedin_search = _hs_http_search_node(
         "HubSpot Linkedin Search", "contact", hs_search_x, lby,
         filter_groups=[
-            [{"propertyName": "lv_linkedin_url", "operator": "EQ",
-              "value": "={{ $json.identity_keys.linkedin_url }}"}],
-            [{"propertyName": "hs_linkedin_url", "operator": "EQ",
-              "value": "={{ $json.identity_keys.linkedin_url }}"}],
+            [{"propertyName": "lv_linkedin_url", "operator": "IN",
+              "values": "={{ $json.linkedin_url_variants }}"}],
+            [{"propertyName": "hs_linkedin_url", "operator": "IN",
+              "values": "={{ $json.linkedin_url_variants }}"}],
         ],
         properties_csv=ENRICH_CONTACT_FETCH_BY_ID_PROPERTIES_CSV,
     )
@@ -6512,7 +6567,13 @@ def _hs_search_json_body_expr(filter_groups, properties, limit):
     `limit` goes through the SAME unwrapping, so a caller-driven page size (30-04's queue
     read) can read a clamped value from a parse node by name. An int renders identically to
     the old `str(limit)` form (`json.dumps(100) == "100"`), so every existing call site is
-    byte-unchanged — proven by rebuild-diff, not by this sentence."""
+    byte-unchanged — proven by rebuild-diff, not by this sentence.
+
+    Phase 61 Plan 02 Task 2 (REVIEW-C5): a filter may carry `values` (plural) instead of
+    `value` — HubSpot CRM v3's `IN`/`NOT_IN` operators take an array under `values`, never
+    a single scalar under `value`. Every pre-existing call site uses `value` only, so this
+    is additive: a filter dict with `value` renders exactly as before, and `values` is the
+    new, separate key this task's IN filter uses."""
     def render_value(v):
         if isinstance(v, str) and v.startswith("={{") and v.endswith("}}"):
             return v[3:-2].strip()
@@ -6523,6 +6584,8 @@ def _hs_search_json_body_expr(filter_groups, properties, limit):
                  f'operator: {json.dumps(f["operator"])}']
         if "value" in f:
             parts.append("value: " + render_value(f["value"]))
+        if "values" in f:
+            parts.append("values: " + render_value(f["values"]))
         return "{ " + ", ".join(parts) + " }"
 
     groups_js = ", ".join(

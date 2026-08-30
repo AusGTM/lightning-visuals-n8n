@@ -13,7 +13,19 @@ from .normalizer import normalize_email, normalize_phone
 from .hubspot_client import search_records
 
 # Properties requested on every contact search -- enough for downstream review.
-_SEARCH_PROPS = ["email", "linkedin_url", "phone", "firstname", "lastname", "company"]
+#
+# Phase 61 Plan 02 Task 2 (REVIEW-A2/REVIEW-C6): `linkedin_url` was a bare property name
+# that does not exist on this portal -- the committed live snapshot
+# config/hubspot_migration/baseline/portal-schema-contacts-54-03-contacts-check.json
+# contains no bare `linkedin_url` contact property, so this module's linkedin search has
+# ALWAYS returned zero hits against the real portal; its linkedin branch has never once
+# been reachable live. HubSpot silently ignores an unknown property name in a `properties`
+# request rather than erroring (CLAUDE.md §18.4), so this was a silent zero, not a loud
+# one. Corrected to BOTH `lv_linkedin_url` (the live property) and native `hs_linkedin_url`
+# (REVIEW-C6 -- same pair the n8n lane searches, so a caller can re-verify against
+# whichever one carried the hit and a native-only contact resolves here exactly as it does
+# in the lane, Phase 46 parity discipline).
+_SEARCH_PROPS = ["email", "lv_linkedin_url", "hs_linkedin_url", "phone", "firstname", "lastname", "company"]
 
 
 def canonicalize_linkedin(url) -> Optional[str]:
@@ -29,6 +41,32 @@ def canonicalize_linkedin(url) -> Optional[str]:
     parts = urlsplit(s)
     path = parts.path[:-1] if parts.path.endswith("/") else parts.path
     return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), path, "", ""))
+
+
+def _linkedin_variant_set(raw_value) -> list:
+    # Phase 61 Plan 02 Task 2 (REVIEW-01/REVIEW-C5): the WRITTEN-DOWN, BOUNDED search-
+    # variant set -- mirrors the n8n lane's linkedinUrlVariants EXACTLY
+    # (scripts/build_cloud_workflows.py, ENRICH_BUILD_IDENTITY): the canonicalized
+    # host+path crossed with {https,http} x {no-www.,www.} x {no-slash,trailing-slash} (8
+    # combinations), plus the raw operator-supplied value as given. A stored form outside
+    # this set is a KNOWN search miss -- never guessed, and never a promise of unbounded
+    # normalization tolerance.
+    canonical = canonicalize_linkedin(raw_value)
+    if not canonical:
+        return []
+    scheme_sep = canonical.find("://")
+    host_path = canonical[scheme_sep + 3:] if scheme_sep >= 0 else canonical
+    if host_path.startswith("www."):
+        host_path = host_path[4:]
+    variants = set()
+    for scheme in ("https", "http"):
+        for www in ("", "www."):
+            for slash in ("", "/"):
+                variants.add(f"{scheme}://{www}{host_path}{slash}")
+    raw_trimmed = str(raw_value).strip() if raw_value else ""
+    if raw_trimmed:
+        variants.add(raw_trimmed)
+    return sorted(variants)
 
 
 def _search_ids(hs_search, filters) -> list:
@@ -61,8 +99,29 @@ def resolve_identity(row: dict, hs_search=search_records) -> IdentityResult:
                               reason="valid email, no existing match")
 
     # 2. Reaching here means NO valid email. LinkedIn (STRONG).
+    #
+    # Phase 61 Plan 02 Task 2 (REVIEW-C6). THE MECHANISM: the shared search seam
+    # (_search_ids -> search_records) wraps its filters list in exactly ONE filterGroup
+    # whose members AND (src/hubspot_client.py:119-125) -- it cannot express the n8n
+    # node's OR-across-properties in a single call. So this ORs by CALLING TWICE, one per
+    # property, each carrying a single `IN` filter over the SAME written-down variant set
+    # the node emits (_linkedin_variant_set) -- one filter, one group, through the existing
+    # seam unmodified -- and UNIONS the returned ids by contact id BEFORE deciding
+    # cardinality: 1 -> match, >1 -> ambiguous, 0 -> fall through to weak keys, exactly the
+    # branch's existing vocabulary. A contact hit by both calls is ONE id.
+    # `src/hubspot_client.py` is deliberately NOT modified: widening the shared client
+    # every other caller uses to serve one branch of this parity lane is the larger
+    # change, not the smaller one -- two sequential searches is already this module's
+    # idiom (email, linkedin, weak keys are all sequential searches today).
     if linkedin:
-        ids = _search_ids(hs_search, [{"propertyName": "linkedin_url", "operator": "EQ", "value": linkedin}])
+        variants = _linkedin_variant_set(row.get("linkedin_url"))
+        ids = []
+        seen = set()
+        for prop in ("lv_linkedin_url", "hs_linkedin_url"):
+            for cid in _search_ids(hs_search, [{"propertyName": prop, "operator": "IN", "values": variants}]):
+                if cid not in seen:
+                    seen.add(cid)
+                    ids.append(cid)
         if len(ids) == 1:
             return IdentityResult(outcome="match", contact_id=ids[0], match_key="linkedin_url",
                                   candidate_ids=ids, reason="single linkedin match")
