@@ -1664,6 +1664,28 @@ return $input.all().map((it) => {
       !_writeSafetyAllows(action, hs_object_id, domain)) {
     action = "write_blocked";
   }
+  // Phase 61 Plan 06 Task 1 (CLAUDE.md §13.0.1's closing gap): this contacts branch has
+  // no company-resolution or association mechanism at all — the ONLY lane that
+  // associates a created contact to a company is the ingest lane (contact-upload
+  // webhook, wf_contact_ingest_cloud.json, whose `Build Company Link`/`Adapt Company
+  // Link`/`Build Association Request` nodes already implement the 2026-08-25 rule).
+  // Duplicating that resolution+association subgraph here would be a second,
+  // driftable copy of the same rule — exactly the outcome CLAUDE.md's closing sentence
+  // warns is still open. Rather than land an unassociated contact, an armed create on
+  // THIS lane is held for review instead, the same "hold, don't land unassociated"
+  // contract the ingest lane enforces on its own create path — enforced here by never
+  // completing the create at all, one operational implementation of the rule.
+  let contactCreateHeldForAssociation = false;
+  if (action === "create") {
+    action = "review";
+    contactCreateHeldForAssociation = true;
+    properties.lv_enrichment_needs_review = "true";
+    properties.lv_enrichment_status = "needs_review";
+    properties.lv_enrichment_review_reason =
+      "contact creates are not associated on this lane — route this contact through " +
+      "the contact-upload ingest lane instead, which resolves and associates a " +
+      "company before creating";
+  }
   // BUG 27 (live 400 on execution 328): HubSpot v3 PATCH rejects JSON arrays —
   // multi-checkbox values must be semicolon-joined strings. Single choke point.
   // D-07 (43-01, PIPE-01, row 5, defensive parity with the companies branch): a second
@@ -1679,7 +1701,7 @@ return $input.all().map((it) => {
     object_type: row.object_type || "contacts",
     hs_object_id,
     gap_flag: row.gap_flag === true,
-    needs_review: permissivelyFlagged.length > 0,
+    needs_review: permissivelyFlagged.length > 0 || contactCreateHeldForAssociation,
     row_id: row.row_id ?? null,
     mode: row.mode ?? null,
     match: row.match ?? summarizeMatch({ lane: row.lane }),
@@ -3421,7 +3443,6 @@ return $input.all().map((it) => {
   }};
 });
 """
-
 
 def _live_http(name, x, y, method, url, headers, json_body=None, timeout=20000):
     """HTTP Request node whose auth/secrets come from $env expressions in headers
