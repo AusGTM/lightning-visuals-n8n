@@ -6,6 +6,15 @@
 
 Human-reference record only. Downstream agents read `57-CONTEXT.md`, not this file.
 
+## D-57-00 — supersedes D-53-02 (recorded at Task 3, plan 57-01, since it is the ruling
+## the rest of this phase's decisions sit on)
+
+> **D-57-00 supersedes D-53-02 for every run this milestone covers.** D-53-02 recorded that a
+> grant's computed ceiling is disclosure, not constraint — correct while a human watched every
+> send. Phase 57 makes the execution allowance a conservative binding preflight refusal and a
+> pre-send mid-run stop. The prior behaviour remains historical context, not current behaviour.
+> Sampling limits and the retention caveat are disclosed rather than pretended away.
+
 ## Areas offered, and what the operator chose to discuss
 
 All four offered areas were selected: ceiling authority, unknowable budgets, report vocabulary,

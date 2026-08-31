@@ -111,16 +111,12 @@ def _normalise(values):
 
 # ------------------------------------------------------------- GRANT-02: the envelope
 #
-# THE ENVELOPE DISCLOSES; IT DOES NOT CONSTRAIN (D-53-02, operator, 2026-08-25).
-#
-# The figures below are computed FROM the batch, so they cannot refuse the batch: a
-# ceiling derived from what was named can never block anything that naming already
-# implies. Recorded here, and stated in the operator-facing block itself, because a
-# number labelled "ceiling" reads as a guard, and an operator who believes a guard is
-# watching stops watching. The refuse-before-starting check — the projection compared
-# against what is LEFT of the monthly execution allowance, not against the plan's
-# configured allowance — is Phase 57's, and it is the only thing that will actually
-# stand between a large batch and the execution budget.
+# D-57-00 SUPERSEDES D-53-02 (Phase 57, RUN-05; recorded in .planning/STATE.md,
+# 57-DISCUSSION-LOG.md and 61-CONTEXT.md). This block used to say the envelope discloses
+# and cannot constrain — true only while the remainder was sampled rather than read, and
+# the sampling was unbuilt. It is built now: `allowance_headroom` walks the executions
+# list and `plan_grant` refuses a CEILING_OVER batch before anything is armed. The
+# figures below still describe what this batch can cost; they also now say what stops it.
 #
 # No second cost model is built here. `cost_guard` is dated, measured, deliberately
 # over-stating (Lusha at its first-time rate, never its measured-zero re-enrich rate) and
@@ -141,18 +137,23 @@ EXECUTIONS_BASIS = (
     "1 webhook execution per chunk + 1 sub-execution per record (the enrichment "
     "workflow has no batching node, so it fans out per record)")
 
-_ALLOWANCE_GAP = (
-    "This projection is against the plan's CONFIGURED monthly execution allowance, not "
-    "against what is left of it this month. n8n exposes no usage endpoint to an API key, "
-    "so the remainder is sampled rather than read, and sampling it is not built yet — "
-    "the schedulers have already spent an unknown share of this month's allowance and "
-    "none of it is subtracted below.")
+_ALLOWANCE_SAMPLED = (
+    "This projection is now compared against the SAMPLED remaining monthly execution "
+    "allowance, not only the plan's configured total (Phase 57, D-57-01). The executions "
+    "API list is not the billing quota (CLAUDE.md section 13.0.3 — [documented], not "
+    "verified against billing), and the sample is capped at a page budget sized to the "
+    "configured allowance — up to 1,000 executions across ALL workflows on the instance "
+    "by default — so a month whose true traffic exceeds that budget can still come back "
+    "unsampled and read as unknown rather than as a number.")
 
-_DISCLOSURE_NOT_CONSTRAINT = (
-    "These figures are this grant's ceiling, and they describe what this batch can cost "
-    "— they do not prevent it. The ceiling is computed FROM the batch you named, so it "
-    "cannot block anything that batch already implies. If you want a smaller ceiling, "
-    "name a smaller batch.")
+_CEILING_CONSTRAINT = (
+    "These figures are this grant's ceiling, and the projected execution count above is "
+    "compared against the sampled remaining monthly allowance BEFORE anything is armed "
+    "or sent — a batch that would exceed it is refused, not merely disclosed. The "
+    "comparison uses a formula measured to OVER-STATE a real chunk's cost (roughly 3x), "
+    "deliberately, so it refuses early rather than letting an over-budget batch through "
+    "late. When the remainder cannot be sampled, the run proceeds with the gap named "
+    "rather than being blocked (D-57-02).")
 
 
 # ------------------------------------------------------ RUN-05 / D-57-01: the ceiling
@@ -356,6 +357,28 @@ def _headroom(verdict):
     return "unconfirmed"
 
 
+def _ceiling_line(ceiling):
+    """Phase 57 / D-57-01 / RUN-05: the sampled monthly ceiling verdict, in the
+    operator's own reading order — `ok`, `over` with the shortfall, or `unconfirmed`.
+    `unconfirmed` is its own answer here too, in the same register `_headroom` already
+    established for an unreadable provider balance, and it must never read as headroom."""
+    verdict = (ceiling or {}).get("verdict")
+    if verdict == CEILING_OK:
+        return (
+            f"Execution ceiling: **ok** — sampled {ceiling.get('spent_sampled')} spent, "
+            f"{ceiling.get('remaining_sampled')} remaining this month of the configured "
+            f"{ceiling.get('allowance')}.")
+    if verdict == CEILING_OVER:
+        return (
+            f"Execution ceiling: **OVER** — sampled {ceiling.get('spent_sampled')} "
+            f"spent, only {ceiling.get('remaining_sampled')} remaining this month of the "
+            f"configured {ceiling.get('allowance')}; this batch is "
+            f"{ceiling.get('shortfall')} execution(s) over.")
+    return (
+        f"Execution ceiling: **unconfirmed** — "
+        f"{(ceiling or {}).get('reason') or 'the monthly remainder could not be sampled.'}")
+
+
 def _post_transport(transport):
     if transport is None:
         return None
@@ -363,7 +386,7 @@ def _post_transport(transport):
 
 
 def envelope(config, *, object_type, record_ids, record_domains, providers,
-             transport=None, today=None):
+             transport=None, today=None, headroom=None):
     """The arithmetic an operator reads BEFORE the yes (GRANT-02).
 
     Returns `{figures..., "block": <markdown>}`. Every figure carries its basis in
@@ -377,6 +400,12 @@ def envelope(config, *, object_type, record_ids, record_domains, providers,
     projection. Neither takes the whole grant down with it: an operator refused a grant
     because a projection line could not be computed learns nothing and can act on
     nothing.
+
+    `headroom=None` (default) means this call samples the month-to-date executions list
+    itself, via `allowance_headroom`. A caller that already has a sample — `plan_grant`
+    does, computed once per grant before this call — passes it in here so the executions
+    list is walked ONCE per grant, never twice (REVIEW-57-H9's frozen call order names
+    this as a single read).
     """
     ids = _normalise(record_ids)
     domains = _normalise(record_domains)
@@ -423,6 +452,13 @@ def envelope(config, *, object_type, record_ids, record_domains, providers,
     if not allowance_configured:
         allowance = None
 
+    # Phase 57 / D-57-01 / RUN-05: the sampled monthly ceiling, computed here so every
+    # caller of `envelope()` — not only `plan_grant` — gets the verdict for free.
+    if headroom is None:
+        get_transport = transport.get if hasattr(transport, "get") else transport
+        headroom = allowance_headroom(config, transport=get_transport)
+    ceiling = ceiling_verdict({"projected_executions": executions}, headroom)
+
     figures = {
         "record_count": record_count,
         "object_type": object_type,
@@ -440,7 +476,15 @@ def envelope(config, *, object_type, record_ids, record_domains, providers,
         "executions_projection_basis": EXECUTIONS_BASIS,
         "monthly_execution_allowance": allowance,
         "allowance_configured": allowance_configured,
-        "remaining_allowance_sampled": False,
+        # Phase 57 / D-57-01 / RUN-05: the ceiling is now sampled, not asserted absent.
+        "remaining_allowance_sampled": bool(headroom.get("sampled")),
+        "spent_sampled": headroom.get("spent_sampled"),
+        "remaining_sampled": headroom.get("remaining_sampled"),
+        "sample_covers_full_window": headroom.get("covers_full_window"),
+        "sample_listing_exhausted": headroom.get("listing_exhausted"),
+        "sample_truncated_by_page_cap": headroom.get("truncated_by_page_cap"),
+        "retention_caveat": headroom.get("retention_caveat"),
+        "ceiling": ceiling,
         "basis": {
             "record_count": MEASURED,
             "provider_credits": MEASURED,
@@ -454,6 +498,7 @@ def envelope(config, *, object_type, record_ids, record_domains, providers,
             "projected_executions": executions_basis,
             "monthly_execution_allowance": (
                 MEASURED if allowance_configured else UNCONFIGURED),
+            "remaining_allowance": MEASURED if headroom.get("sampled") else UNCONFIGURED,
         },
     }
     figures["block"] = _envelope_block(figures)
@@ -523,7 +568,13 @@ def _envelope_block(figures):
             f"compare the projection against. That is one missing line, not a reason to "
             f"refuse the grant.")
 
-    lines += ["", _ALLOWANCE_GAP, "", _DISCLOSURE_NOT_CONSTRAINT]
+    # Phase 57 / D-57-01 / RUN-05: the sampled ceiling verdict, in the operator's own
+    # reading order, right after the allowance line it compares against.
+    lines.append(_ceiling_line(figures.get("ceiling") or {}))
+    if figures.get("sample_listing_exhausted") and not figures.get("sample_covers_full_window"):
+        lines.append(figures.get("retention_caveat") or RETENTION_CAVEAT)
+
+    lines += ["", _ALLOWANCE_SAMPLED, "", _CEILING_CONSTRAINT]
     return "\n".join(lines)
 
 
@@ -633,12 +684,15 @@ def plan_grant(config, *, lanes, object_type, record_ids, record_domains, allow_
 
     CALL ORDER, frozen because every scripted test depends on it: the cheap refusals
     (authority, lanes, record set) cost nothing; then one workflow-collection GET per
-    lane to resolve ids; then ONE status POST for provider balances, and only when the
-    batch actually prices a provider; then ONE executions-list read sequence for the
-    Phase 57 headroom sample (never per lane — the sample is per grant); then one
-    workflow GET per lane for guardrail A. The envelope AND the ceiling are computed
-    BEFORE guardrail A so that a refused open still tells the operator what the batch
-    would have cost and how it stood against the month's allowance.
+    lane to resolve ids; then ONE executions-list read sequence for the Phase 57
+    headroom sample (never per lane — the sample is per grant, and it is sampled here
+    rather than inside `envelope()` so a grant that already has one hands it in and
+    `envelope()` never re-walks the list — REVIEW-57-H9); then ONE status POST for
+    provider balances, and only when the batch actually prices a provider, computed
+    INSIDE `envelope()`; then one workflow GET per lane for guardrail A. The envelope
+    AND the ceiling are computed BEFORE guardrail A so that a refused open still tells
+    the operator what the batch would have cost and how it stood against the month's
+    allowance.
     """
     if override and not (isinstance(override_reason, str) and override_reason.strip()):
         raise ValueError(
@@ -706,15 +760,23 @@ def plan_grant(config, *, lanes, object_type, record_ids, record_domains, allow_
             f"{', '.join(repr(LANES[l]) for l in sorted(unresolved))}. Nothing was armed. "
             f"Ask your n8n admin whether that workflow is deployed.")
 
+    # Phase 57 / D-57-01 / RUN-05: sample the month-to-date remainder ONCE per grant,
+    # right after lane resolution and before `envelope()`'s own balances POST, and hand
+    # it to `envelope()` so the figures an operator reads already carry the verdict.
+    # `envelope()` would otherwise sample it a SECOND time for a caller that has none —
+    # REVIEW-57-H9's frozen call order is one executions-list read per grant, not two.
+    headroom = allowance_headroom(config, transport=get_transport)
+
     figures = envelope(
         config, object_type=object_type, record_ids=ids, record_domains=domains,
         providers=providers if providers is not None
         else (config or {}).get("enrichment_providers"),
-        transport=transport, today=today)
+        transport=transport, today=today, headroom=headroom)
 
-    # Phase 57 / D-57-01 / RUN-05: the refuse-before-starting check, sampled AFTER the
-    # envelope (a refusal still carries the batch's own figures) and BEFORE guardrail A
-    # (an over-ceiling batch never reaches a live write-safety read at all).
+    # Phase 57 / D-57-01 / RUN-05: the refuse-before-starting check, computed from the
+    # SAME headroom sample the envelope was just built from (a refusal still carries the
+    # batch's own figures) and BEFORE guardrail A (an over-ceiling batch never reaches a
+    # live write-safety read at all).
     #
     # DELIBERATE DIVERGENCE FROM `n8n_cadence.check_budget_floor`'s own analog, recorded
     # here rather than left for a reader to notice and "fix": that function refuses
@@ -725,8 +787,7 @@ def plan_grant(config, *, lanes, object_type, record_ids, record_domains, allow_
     # the feature being switched off. Only `CEILING_OVER` refuses. `envelope()`'s own
     # established contract for a missing allowance key ("one missing line, not a reason
     # to refuse") is preserved by this choice, not contradicted.
-    headroom = allowance_headroom(config, transport=get_transport)
-    ceiling = ceiling_verdict(figures, headroom)
+    ceiling = figures["ceiling"]
     if ceiling["verdict"] == CEILING_OVER and not override:
         return _refusal(
             f"refusing to open this grant: it projects {ceiling['projected_executions']} "

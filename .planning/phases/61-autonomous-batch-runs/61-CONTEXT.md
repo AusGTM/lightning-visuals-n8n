@@ -55,9 +55,11 @@ unattended.
 
 **Phase 57 (ceilings, refusal-before-start, post-run proof) is NOT folded in** and remains
 separate. D-53-02 is explicit that a grant's computed ceiling is *disclosure, not constraint* —
-and with autonomy landing here, 57's protective work matters more, not less. **Phase 56's
-original gate stands: 56's first live run is gated on 57's ceiling work.** That gate now applies
-to this phase.
+and with autonomy landing here, 57's protective work matters more, not less. **[As-built,
+2026-08-31: D-53-02 was SUPERSEDED by D-57-00 in Phase 57 plan 57-01 — the ceiling now refuses
+before start and stops mid-run, not merely discloses. This paragraph is left as the historical
+record of what was known when this phase's boundary was drawn.]** **Phase 56's original gate
+stands: 56's first live run is gated on 57's ceiling work.** That gate now applies to this phase.
 
 ### The original boundary — now the tracer
 

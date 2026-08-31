@@ -6,7 +6,7 @@ current_phase: 61
 current_phase_name: autonomous-batch-runs
 status: complete
 stopped_at: Phase 57 context gathered — 4 decisions locked, ready for planning
-last_updated: "2026-08-31T01:54:38.961Z"
+last_updated: "2026-08-31T05:21:47.593Z"
 last_activity: 2026-08-30
 last_activity_desc: Phase 61 complete and verified (12/12); backend deployed and disarmed-proven
 progress:
@@ -407,7 +407,8 @@ superseded.)
 - [Phase ?]: [Phase 53-01]: D-53-01 landed: the interactive arm's authority is config_gate.WRITE_GRANT_SETTINGS_KEY ('allow_write_grants') in operator.local.json, compared by identity against the JSON boolean true. ALLOW_N8N_ARM is unchanged and remains the sole authority for headless/cron (scheduled_arm.py, unedited).
 - [Phase ?]: [Phase 53-01]: GRANT-03 is enforced inside n8n_arming.arm_for_dispatch's grant branch, before any transport is constructed, via the single write_grant.covers implementation -- not only at a helper a caller could bypass.
 - [Phase ?]: [Phase 53-01]: The grant is a plain JSON-shaped dict held in the conversation only: no file, no env var, no default (GRANT-06/D-53-03). Per-send armed windows are retained, so the guaranteed disarm is untouched.
-- [Phase ?]: [Phase 53-02]: D-53-02 landed as DISCLOSURE, and the block says so where the operator reads it: write_grant.envelope() computes the four GRANT-02 figures out of cost_guard + chunking (no second cost model), labels each measured/projected/unconfigured, and states plainly that the projection is against the CONFIGURED monthly allowance rather than what is left of it this month. Phase 57 still carries all the actual spend protection.
+- [Phase ?]: [Phase 53-02]: D-53-02 landed as DISCLOSURE, and the block says so where the operator reads it: write_grant.envelope() computes the four GRANT-02 figures out of cost_guard + chunking (no second cost model), labels each measured/projected/unconfigured, and states plainly that the projection is against the CONFIGURED monthly allowance rather than what is left of it this month. Phase 57 still carries all the actual spend protection. SUPERSEDED by D-57-00, Phase 57 -- see [Phase 57-01] below: the ceiling now refuses before start, not just discloses.
+- [Phase ?]: [Phase 57-01]: D-57-00 supersedes D-53-02 for every run this milestone covers. D-53-02 recorded that a grant's computed ceiling is disclosure, not constraint -- correct while a human watched every send. Phase 57 makes the execution allowance a conservative binding preflight refusal and a pre-send mid-run stop. The prior behaviour remains historical context, not current behaviour. Sampling limits and the retention caveat are disclosed rather than pretended away.
 - [Phase ?]: [Phase 53-02]: GRANT_04_REASONS is exactly GRANT-04's five and is pinned BY NAME; guardrail B's two closes are their own constants in GUARDRAIL_B_REASONS. Folding "two consecutive disarm failures" into one of the five would misreport the close the operator most needs to read correctly. close_grant RAISES on free text.
 - [Phase ?]: [Phase 53-02]: GRANT-05 bites at the next SEND, proven by driving a real 3-chunk dispatch_plan with a mid-run revoke and asserting every chunk STILL ran. The drafted two-hand-calls test was refused: it would have passed while GRANT-05 was entirely unimplemented.
 - [Phase ?]: [Phase 53-02]: Both proposed guardrails are working code and neither is switchable (T-53-12). A is plan_grant's MANDATORY preflight and is offer-only (its transport log is pinned to reads only); B's two closes ATTEMPT a disarm through the ungated n8n_arming.disarm, carry the verdict, and CLOSE EVEN WHEN THAT DISARM FAILS.

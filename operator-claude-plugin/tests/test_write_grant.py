@@ -72,18 +72,21 @@ def _plan_reads(lanes=1, balances=None, guardrail=None):
     """Everything ONE `plan_grant` consumes, in `plan_grant`'s frozen call order:
 
         one /api/v1/workflows read per lane   (id resolution)
-        one status POST                       (balances — only when a provider is priced)
         one executions-list read              (Phase 57's headroom sample — ONE per
-                                               grant, not per lane; REVIEW-57-H9)
+                                               grant, not per lane, sampled by `plan_grant`
+                                               itself and handed to `envelope()` so it is
+                                               never walked twice; REVIEW-57-H9)
+        one status POST                       (balances — only when a provider is priced,
+                                               computed inside `envelope()`)
         one workflow read per lane            (GUARDRAIL A's live write-safety read)
 
     The guardrail reads default to DISARMED bodies, because a scripted transport that runs
     out answers `{}` — which guardrail A correctly treats as unreadable and refuses on.
     """
     reads = [_workflow_list()] * lanes
+    reads.append(_executions_page())
     if balances is not None:
         reads.append(balances)
-    reads.append(_executions_page())
     return reads + [guardrail if guardrail is not None else _base_workflow()] * lanes
 
 
@@ -1111,9 +1114,11 @@ def test_a_config_with_no_allowance_key_degrades_one_line_not_the_whole_open(
     # No allowance key means `allowance_headroom` makes NO executions-list read at all
     # (Phase 57) — there is nothing to sample a remainder against — so this transport
     # script omits the `_executions_page()` step `_priced_plan_reads()` would otherwise
-    # insert.
+    # insert. It is now the SECOND entry (index 1), right after the workflow-list read
+    # and before the balances POST — `plan_grant` samples headroom before calling
+    # `envelope()`.
     transport = stub_module_transport_factory(_priced_plan_reads())
-    transport._responses.pop(2)
+    transport._responses.pop(1)
 
     proposal = _priced_proposal(config, transport, ids=("1", "2"))
     figures = proposal["envelope"]
@@ -1144,26 +1149,80 @@ def test_a_missing_chunk_ceiling_degrades_the_projection_not_the_grant(
     assert "not projected" in figures["block"]
 
 
-def test_the_block_says_the_ceiling_discloses_rather_than_constrains(
+def test_the_block_says_the_ceiling_now_constrains(
         priced_config, stub_module_transport_factory):
-    """D-53-02, in the operator's own register and not only in a docstring. A number
-    labelled ceiling that cannot refuse anything must say so where it is read."""
+    """D-57-00 supersedes D-53-02: a number labelled ceiling now says it refuses, not
+    only that it describes cost, and the old disclosure-only sentence is gone."""
     transport = stub_module_transport_factory(_priced_plan_reads())
     block = _priced_proposal(priced_config, transport)["envelope"]["block"]
 
-    assert "they do not prevent it" in block
-    assert "name a smaller batch" in block.lower()
+    assert "they do not prevent it" not in block
+    assert "refused" in block.lower()
+    assert write_grant._CEILING_CONSTRAINT in block
+    assert write_grant._ALLOWANCE_SAMPLED in block
 
 
-def test_the_block_states_the_remaining_allowance_gap(
+def test_the_block_states_the_sampled_remaining_allowance(
         priced_config, stub_module_transport_factory):
-    """An operator reading a share-of-allowance figure will otherwise assume it accounts
-    for what the schedulers have already spent this month. It does not."""
+    """An operator reading a share-of-allowance figure now sees what the sample actually
+    found, not a hardcoded assertion that nothing was sampled."""
     transport = stub_module_transport_factory(_priced_plan_reads())
     figures = _priced_proposal(priced_config, transport)["envelope"]
 
-    assert figures["remaining_allowance_sampled"] is False
-    assert "not against what is left of it this month" in figures["block"]
+    assert figures["remaining_allowance_sampled"] is True
+    assert figures["spent_sampled"] == 0
+    assert figures["remaining_sampled"] == 2500
+    assert "Execution ceiling: **ok**" in figures["block"]
+
+
+def test_the_block_names_the_verdict_in_all_three_states(
+        priced_config, stub_module_transport_factory):
+    """RUN-05's arithmetic must be legible in the operator's own reading order, not only
+    inspectable on the returned dict."""
+    ok_transport = stub_module_transport_factory(_priced_plan_reads())
+    ok_block = _priced_proposal(priced_config, ok_transport)["envelope"]["block"]
+    assert "Execution ceiling: **ok**" in ok_block
+
+    over_config = {**priced_config, "n8n_monthly_execution_allowance": 1,
+                   "max_records_per_chunk": 2}
+    over_transport = stub_module_transport_factory(_priced_plan_reads())
+    over_result = _priced_proposal(over_config, over_transport, ids=("1", "2", "3"))
+    over_block = over_result["envelope"]["block"]
+    assert "Execution ceiling: **OVER**" in over_block
+    assert "execution(s) over" in over_block
+
+    unknown_config = {k: v for k, v in priced_config.items()
+                       if k != "n8n_monthly_execution_allowance"}
+    unknown_transport = stub_module_transport_factory(_priced_plan_reads())
+    unknown_transport._responses.pop(1)
+    unknown_block = _priced_proposal(unknown_config, unknown_transport)["envelope"]["block"]
+    assert "Execution ceiling: **unconfirmed**" in unknown_block
+
+
+def test_the_block_carries_the_retention_caveat_when_sampled_from_an_exhausted_listing(
+        priced_config, stub_module_transport_factory):
+    """`_executions_page()` is a single no-cursor page — exhausted, not back-paged — so
+    the sample rests on `listing_exhausted`, and the retention caveat must say so."""
+    transport = stub_module_transport_factory(_priced_plan_reads())
+    figures = _priced_proposal(priced_config, transport)["envelope"]
+
+    assert figures["sample_listing_exhausted"] is True
+    assert figures["sample_covers_full_window"] is not True
+    assert write_grant.RETENTION_CAVEAT in figures["block"]
+
+
+def test_plan_grant_walks_the_executions_list_exactly_once(
+        priced_config, stub_module_transport_factory):
+    """REVIEW-57-H9: `envelope()` must not re-sample what `plan_grant` already sampled.
+    The frozen call order for a priced, one-lane grant is exactly FOUR transport calls:
+    one workflow-list GET, one executions-list GET (the headroom sample), one balances
+    POST, one guardrail-A workflow GET. A second executions-list read would make it
+    five."""
+    transport = stub_module_transport_factory(_priced_plan_reads())
+    proposal = _priced_proposal(priced_config, transport)
+
+    assert proposal["kind"] == write_grant.PROPOSAL_KIND
+    assert len(transport.calls) == 4
 
 
 def test_the_envelope_is_attached_to_the_grant_unchanged(
