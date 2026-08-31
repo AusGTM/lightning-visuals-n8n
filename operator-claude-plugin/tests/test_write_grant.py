@@ -60,11 +60,21 @@ def _workflow_list():
     ]}
 
 
+def _executions_page():
+    """One exhausted executions-list page — `write_grant.allowance_headroom`'s sample
+    (Phase 57). No items, no cursor: `listing_exhausted: True`, `sampled: True`,
+    `count_in_window: 0`, so the default `fake_config` allowance (2500) reads back as
+    fully remaining unless a test overrides it."""
+    return {"data": []}
+
+
 def _plan_reads(lanes=1, balances=None, guardrail=None):
     """Everything ONE `plan_grant` consumes, in `plan_grant`'s frozen call order:
 
         one /api/v1/workflows read per lane   (id resolution)
         one status POST                       (balances — only when a provider is priced)
+        one executions-list read              (Phase 57's headroom sample — ONE per
+                                               grant, not per lane; REVIEW-57-H9)
         one workflow read per lane            (GUARDRAIL A's live write-safety read)
 
     The guardrail reads default to DISARMED bodies, because a scripted transport that runs
@@ -73,6 +83,7 @@ def _plan_reads(lanes=1, balances=None, guardrail=None):
     reads = [_workflow_list()] * lanes
     if balances is not None:
         reads.append(balances)
+    reads.append(_executions_page())
     return reads + [guardrail if guardrail is not None else _base_workflow()] * lanes
 
 
@@ -120,6 +131,7 @@ def test_a_send_arms_under_an_opened_grant_with_no_environment_variable_set(
     dispatch -> verified disarm, with no shell anywhere in it."""
     transport = stub_module_transport_factory([
         _workflow_list(),                                       # plan_grant's lane resolve
+        _executions_page(),                                     # Phase 57 headroom sample
         _base_workflow(),                                       # guardrail A's live read
         _base_workflow(), _base_workflow(), {}, {}, {},         # the arm
         _base_workflow(record_writes='"true"', ids=f'"{RECORD_ID}"'),   # arm verification
@@ -300,6 +312,7 @@ def test_authorize_ungranted_send_arms_with_the_same_guardrails_a_standing_grant
     synthesized single-use grant, one armed window, one verified disarm."""
     transport = stub_module_transport_factory([
         _workflow_list(),                                       # plan_grant's lane resolve
+        _executions_page(),                                     # Phase 57 headroom sample
         _base_workflow(),                                       # guardrail A's live read
         _base_workflow(), _base_workflow(), {}, {}, {},         # the arm
         _base_workflow(record_writes='"true"', ids=f'"{RECORD_ID}"'),   # arm verification
@@ -345,6 +358,7 @@ def test_authorize_send_and_authorize_ungranted_send_each_drive_dispatch_inside_
     # Branch 1: a standing, grant-present authorize_send.
     grant_transport = stub_module_transport_factory([
         _workflow_list(),                                       # plan_grant's lane resolve
+        _executions_page(),                                     # Phase 57 headroom sample
         _base_workflow(),                                       # guardrail A's live read
         _base_workflow(), _base_workflow(), {}, {}, {},         # the arm
         _base_workflow(record_writes='"true"', ids=f'"{RECORD_ID}"'),   # arm verification
@@ -375,6 +389,7 @@ def test_authorize_send_and_authorize_ungranted_send_each_drive_dispatch_inside_
     executions_client._workflow_id_cache.clear()
     ungranted_transport = stub_module_transport_factory([
         _workflow_list(),
+        _executions_page(),
         _base_workflow(),
         _base_workflow(), _base_workflow(), {}, {}, {},
         _base_workflow(record_writes='"true"', ids=f'"{RECORD_ID}"'),
@@ -424,6 +439,7 @@ def test_authorize_ungranted_send_refuses_over_a_dirty_backend_guardrail_a(
     turn on the ungranted path the way a standing grant has one."""
     transport = stub_module_transport_factory([
         _workflow_list(),
+        _executions_page(),
         _armed_workflow(),   # guardrail A's live read: writes already enabled
     ])
 
@@ -514,8 +530,9 @@ def test_plan_grant_makes_no_mutating_call_of_any_kind(granting_config,
 
     assert proposal["kind"] == write_grant.PROPOSAL_KIND
     assert transport.mutating_calls == []
-    # Id resolution, then GUARDRAIL A's live write-safety read. Reads only.
-    assert transport.verbs == ["get", "get"]
+    # Id resolution, then the Phase 57 headroom sample, then GUARDRAIL A's live
+    # write-safety read. Reads only.
+    assert transport.verbs == ["get", "get", "get"]
 
 
 def test_plan_grant_refuses_an_empty_record_set_at_plan_time(granting_config,
@@ -1091,7 +1108,12 @@ def test_a_config_with_no_allowance_key_degrades_one_line_not_the_whole_open(
         priced_config, stub_module_transport_factory):
     config = {k: v for k, v in priced_config.items()
               if k != "n8n_monthly_execution_allowance"}
+    # No allowance key means `allowance_headroom` makes NO executions-list read at all
+    # (Phase 57) — there is nothing to sample a remainder against — so this transport
+    # script omits the `_executions_page()` step `_priced_plan_reads()` would otherwise
+    # insert.
     transport = stub_module_transport_factory(_priced_plan_reads())
+    transport._responses.pop(2)
 
     proposal = _priced_proposal(config, transport, ids=("1", "2"))
     figures = proposal["envelope"]
@@ -1174,10 +1196,266 @@ def test_no_status_post_is_made_when_the_batch_prices_no_provider(
     transport = stub_module_transport_factory(_plan_reads())
     figures = _proposal(granting_config, transport)["envelope"]
 
-    # One id-resolution read and one guardrail-A read. No POST: no provider, no balance.
-    assert transport.verbs == ["get", "get"]
+    # One id-resolution read, one headroom-sample read (Phase 57), one guardrail-A read.
+    # No POST: no provider, no balance.
+    assert transport.verbs == ["get", "get", "get"]
     assert figures["provider_credits"] == {}
     assert "No provider credits: **0**" in figures["block"]
+
+
+# =========================================================================================
+# Phase 57 Task 1 — RUN-05: the refuse-before-starting ceiling (D-57-01)
+# =========================================================================================
+
+
+def test_allowance_headroom_reports_remaining_when_the_window_is_fully_covered(
+        fake_config, stub_get_transport_factory):
+    transport = stub_get_transport_factory([
+        {"data": [{"id": "e-1", "status": "success",
+                   "startedAt": "2026-01-01T00:00:00.000Z",
+                   "stoppedAt": "2026-01-01T00:00:01.000Z", "finished": True}],
+         "nextCursor": None},
+    ])
+    headroom = write_grant.allowance_headroom(fake_config, transport=transport)
+
+    assert headroom["sampled"] is True
+    assert headroom["allowance"] == fake_config["n8n_monthly_execution_allowance"]
+    assert headroom["remaining_sampled"] == (
+        fake_config["n8n_monthly_execution_allowance"] - headroom["spent_sampled"])
+
+
+def test_allowance_headroom_treats_an_exhausted_listing_as_sampled(
+        fake_config, stub_get_transport_factory):
+    """REVIEW-57-H1, the quiet-instance half: no cursor, nothing older than the cutoff
+    — the listing is exhausted, and that alone is a complete sample."""
+    transport = stub_get_transport_factory([{"data": []}])
+    headroom = write_grant.allowance_headroom(fake_config, transport=transport)
+
+    assert headroom["sampled"] is True
+    assert headroom["listing_exhausted"] is True
+    assert headroom["covers_full_window"] is False
+    assert "retention" in headroom["reason"].lower()
+    assert headroom["remaining_sampled"] == fake_config["n8n_monthly_execution_allowance"]
+
+
+def test_allowance_headroom_never_derives_a_remainder_from_a_truncated_sample(
+        fake_config, monkeypatch):
+    """Pitfall 4: a truncated (neither exhausted nor back-paged) sample must report
+    `sampled: False` and `remaining_sampled: None` — never a number computed from a
+    partial count."""
+    import n8n_read
+
+    def _fake_window(*a, **k):
+        return {"count_in_window": 999, "observed_span_hours": 1.0,
+                "covers_full_window": False, "listing_exhausted": False,
+                "truncated_by_page_cap": True}
+
+    monkeypatch.setattr(n8n_read, "executions_in_window", _fake_window)
+    headroom = write_grant.allowance_headroom(fake_config)
+
+    assert headroom["sampled"] is False
+    assert headroom["remaining_sampled"] is None
+    assert "truncat" in headroom["reason"].lower()
+
+
+def test_allowance_headroom_names_the_missing_allowance_key(fake_config):
+    config = {k: v for k, v in fake_config.items()
+              if k != "n8n_monthly_execution_allowance"}
+    headroom = write_grant.allowance_headroom(config)
+
+    assert headroom["sampled"] is False
+    assert headroom["allowance"] is None
+    assert "n8n_monthly_execution_allowance" in headroom["reason"]
+
+
+def test_allowance_headroom_sizes_the_page_budget_to_the_configured_allowance(
+        fake_config, monkeypatch):
+    """`ceil(2500 / 250) + 2 == 12` — the busy-instance half of REVIEW-57-H1."""
+    import n8n_read
+
+    seen = {}
+
+    def _fake_window(*a, **k):
+        seen["max_pages"] = k.get("max_pages")
+        return {"count_in_window": 0, "observed_span_hours": 1.0,
+                "covers_full_window": False, "listing_exhausted": True,
+                "truncated_by_page_cap": False}
+
+    monkeypatch.setattr(n8n_read, "executions_in_window", _fake_window)
+    write_grant.allowance_headroom(fake_config)
+
+    assert seen["max_pages"] >= 12
+
+
+def test_ceiling_verdict_is_over_when_the_projection_exceeds_the_remainder():
+    verdict = write_grant.ceiling_verdict(
+        {"projected_executions": 10},
+        {"sampled": True, "remaining_sampled": 5, "allowance": 100, "spent_sampled": 95})
+
+    assert verdict["verdict"] == write_grant.CEILING_OVER
+    assert verdict["shortfall"] == 5
+
+
+def test_ceiling_verdict_is_ok_when_the_projection_fits():
+    verdict = write_grant.ceiling_verdict(
+        {"projected_executions": 5},
+        {"sampled": True, "remaining_sampled": 5, "allowance": 100, "spent_sampled": 95})
+
+    assert verdict["verdict"] == write_grant.CEILING_OK
+    assert verdict["shortfall"] is None
+
+
+def test_ceiling_verdict_is_unknown_whenever_the_headroom_is_unsampled():
+    verdict = write_grant.ceiling_verdict(
+        {"projected_executions": 10}, {"sampled": False, "remaining_sampled": None})
+    assert verdict["verdict"] == write_grant.CEILING_UNKNOWN
+
+
+def test_ceiling_verdict_is_unknown_when_there_is_no_projection_at_all():
+    verdict = write_grant.ceiling_verdict(
+        {"projected_executions": None},
+        {"sampled": True, "remaining_sampled": 500, "allowance": 500, "spent_sampled": 0})
+    assert verdict["verdict"] == write_grant.CEILING_UNKNOWN
+
+
+def _over_ceiling_config(granting_config):
+    """A config whose sampled remainder cannot possibly cover the batch below —
+    `n8n_monthly_execution_allowance: 1` against a 3-record batch (4 projected
+    executions at the default 2-per-chunk ceiling)."""
+    return {**granting_config, "n8n_monthly_execution_allowance": 1,
+            "max_records_per_chunk": 2}
+
+
+def test_plan_grant_refuses_an_over_ceiling_batch_before_anything_is_armed(
+        granting_config, stub_module_transport_factory):
+    config = _over_ceiling_config(granting_config)
+    transport = stub_module_transport_factory(_plan_reads())
+
+    result = _proposal(config, transport, ids=("1", "2", "3"))
+
+    assert result["outcome"] == write_grant.REFUSED
+    assert result["ceiling"]["verdict"] == write_grant.CEILING_OVER
+    assert result["ceiling"]["projected_executions"] is not None
+    assert result["ceiling"]["remaining_sampled"] is not None
+    assert result["ceiling"]["shortfall"] is not None
+    assert result["envelope"]["record_count"] == 3
+    assert transport.mutating_calls == []
+
+
+def test_plan_grant_with_override_true_and_a_reason_proceeds_and_records_it(
+        granting_config, stub_module_transport_factory):
+    config = _over_ceiling_config(granting_config)
+    transport = stub_module_transport_factory(_plan_reads())
+
+    result = _proposal(config, transport, ids=("1", "2", "3"))
+    assert result["outcome"] == write_grant.REFUSED, "fixture must actually be over-ceiling"
+
+    # The workflow-id cache is process-lifetime — the refusal above already resolved and
+    # cached "enrichment", so the override call below must clear it or it would skip its
+    # OWN workflow-list read and consume the script one entry out of step.
+    executions_client._workflow_id_cache.clear()
+    transport = stub_module_transport_factory(_plan_reads())
+    proposal = write_grant.plan_grant(
+        config, lanes=["enrichment"], object_type="companies",
+        record_ids=["1", "2", "3"], record_domains=[], allow_create=False,
+        label="over-ceiling, overridden", transport=transport,
+        override=True, override_reason="operator accepted the overage on the call")
+
+    assert proposal["kind"] == write_grant.PROPOSAL_KIND
+    assert proposal["ceiling"]["overridden"] is True
+    assert proposal["ceiling"]["override_reason"] == \
+        "operator accepted the overage on the call"
+    assert proposal["ceiling"]["override_authority"] == "operator"
+
+
+def test_plan_grant_override_true_with_no_reason_raises_rather_than_proceeding(
+        granting_config, stub_module_transport_factory):
+    config = _over_ceiling_config(granting_config)
+    transport = stub_module_transport_factory(_plan_reads())
+
+    with pytest.raises(ValueError):
+        write_grant.plan_grant(
+            config, lanes=["enrichment"], object_type="companies",
+            record_ids=["1", "2", "3"], record_domains=[], allow_create=False,
+            label="over-ceiling, no reason", transport=transport, override=True)
+
+
+def test_plan_grant_with_an_unconfigured_allowance_proceeds_as_unknown_not_refused(
+        granting_config, stub_module_transport_factory):
+    config = {**granting_config, "max_records_per_chunk": 2}
+    del config["n8n_monthly_execution_allowance"]
+    transport = stub_module_transport_factory(_plan_reads())
+    # No allowance key means `allowance_headroom` makes no executions-list read at all
+    # (see test_a_config_with_no_allowance_key_degrades_one_line_not_the_whole_open's
+    # own note) — this script omits the inserted `_executions_page()` step.
+    transport._responses.pop(1)
+
+    proposal = _proposal(config, transport)
+
+    assert proposal["kind"] == write_grant.PROPOSAL_KIND, proposal
+    assert proposal["envelope"]["projected_executions"] is not None, (
+        "the ceiling must read unknown because the ALLOWANCE is unconfigured, not "
+        "because the chunk ceiling is also missing")
+    assert proposal["ceiling"]["verdict"] == write_grant.CEILING_UNKNOWN
+
+
+def test_record_dispatch_outcome_closes_the_grant_from_a_real_dispatch_ceiling_stop(
+        granting_config, stub_module_transport_factory):
+    """The producer test (D-57-01, Pitfall 1): `record_send_outcome`'s `ceiling_breach`
+    branch REACHED as a consequence of a real `chunking.dispatch_plan()` call, never by
+    handing it a hand-built dict."""
+    import chunking
+
+    transport = stub_module_transport_factory(_plan_reads())
+    grant = _open(granting_config, transport, ids=("1", "2", "3", "4", "5", "6"))
+
+    plan = chunking.plan_chunks(
+        {"record_ids": ["1", "2", "3", "4", "5", "6"], "object_type": "companies"}, 2)
+    assert plan.chunk_count == 3
+
+    send_transport = stub_module_transport_factory()  # default-accepted for every send
+    outcome = chunking.dispatch_plan(
+        plan, ["lusha"], True, granting_config, transport=send_transport,
+        execution_ceiling=5)   # chunk 0 (1+2=3) + chunk 1 (2+2=4) fit; chunk 2 would be 7
+
+    assert outcome.ceiling_stop is not None
+    updated = write_grant.record_dispatch_outcome(grant, outcome, granting_config)
+
+    assert updated["state"] == write_grant.CLOSED
+    assert updated["closed_reason"] == write_grant.CLOSED_CEILING_BREACH
+
+
+def test_single_dispatch_outcome_composed_with_record_dispatch_outcome_closes_normally(
+        granting_config, stub_module_transport_factory):
+    """A single-shot leg's `ceiling_stop` is unconditionally None — no chunk boundary to
+    stop at — so composing it through `record_dispatch_outcome` derives no breach."""
+    import chunking
+
+    transport = stub_module_transport_factory(_plan_reads())
+    grant = _open(granting_config, transport)
+
+    outcome = chunking.single_dispatch_outcome(
+        {"body": {}, "run_id": "ingest-run"}, record_count=3)
+    updated = write_grant.record_dispatch_outcome(grant, outcome, granting_config)
+
+    assert updated["state"] == write_grant.OPEN
+
+
+def test_record_dispatch_outcome_leaves_the_grant_open_with_no_ceiling_stop(
+        granting_config, stub_module_transport_factory):
+    import chunking
+
+    transport = stub_module_transport_factory(_plan_reads())
+    grant = _open(granting_config, transport)
+
+    plan = chunking.plan_chunks({"record_ids": ["1"], "object_type": "companies"}, 2)
+    send_transport = stub_module_transport_factory()
+    outcome = chunking.dispatch_plan(plan, ["lusha"], True, granting_config,
+                                     transport=send_transport)
+
+    assert outcome.ceiling_stop is None
+    updated = write_grant.record_dispatch_outcome(grant, outcome, granting_config)
+    assert updated["state"] == write_grant.OPEN
 
 
 # --- the at-the-yes disclosure (D-53-05) --------------------------------------------------

@@ -109,6 +109,31 @@ class ChunkResult:
 
 
 @dataclass(frozen=True)
+class CeilingStop:
+    """A deliberate budget stop inside `dispatch_plan` (Phase 57, D-57-01). Categorically
+    NOT a recovered-from failure — mirroring `DispatchOutcome.written_records_failures`'
+    own D-59-10 precedent for a separate field on purpose: a budget stop must never flip
+    a `ChunkResult.ok`, never add a chunk to `failed_chunks`, and never appear in
+    `failed_batch` (Pitfall 5).
+
+    `chunk_index` is the index of the chunk that was NOT sent — the first one that would
+    have taken the running projected spend strictly above `execution_ceiling` — never the
+    index of the last chunk that WAS sent. `unsent_chunks` is every remaining chunk from
+    that index onward, in plan order. `remainder` is those chunks as ONE record
+    specification (`chunking.failed_batch`'s own shape), ready to re-send under a fresh
+    grant without being parsed out of a report. `reason` is a short, config-value-free
+    sentence naming the ceiling and the projection that would have breached it.
+    """
+
+    chunk_index: int
+    projected_executions: int
+    execution_ceiling: int
+    unsent_chunks: tuple
+    remainder: object
+    reason: str
+
+
+@dataclass(frozen=True)
 class DispatchOutcome:
     """`failed_batch` is None when nothing failed, so the caller branches on presence
     rather than on an empty container. When present it is a record specification the
@@ -145,13 +170,22 @@ class DispatchOutcome:
     completed with an INCOMPLETE written-records list — D-59-10's named trade-off for
     never stopping the dispatch on this class of failure — and this field is the first
     of the four surfaces that must say so loudly (`scheduled_arm.py`'s outcome and
-    exit code, and both skills' relay, are the other three)."""
+    exit code, and both skills' relay, are the other three).
+
+    `ceiling_stop` (Phase 57, D-57-01): a `CeilingStop` when `dispatch_plan`'s running
+    tally stopped BEFORE sending a chunk that would breach `execution_ceiling`, else
+    `None`. Defaulting to `None` means every existing caller branches on presence exactly
+    as it already does for `failed_batch`, and a call with no `execution_ceiling` (the
+    byte-identical default) can never produce one. See `CeilingStop`'s own docstring for
+    why this is a separate field from `failed_batch`/`ChunkResult.ok` rather than folded
+    into either."""
 
     results: tuple
     failed_batch: dict = None
     responses: tuple = field(default_factory=tuple)
     run_id: str = None
     written_records_failures: tuple = field(default_factory=tuple)
+    ceiling_stop: CeilingStop = None
 
 
 def chunk_ceiling(config, key=CEILING_KEY):
@@ -315,7 +349,7 @@ def _failure_reason(watcher):
 
 
 def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=None,
-                   async_ack=False, scale_up=False):
+                   async_ack=False, scale_up=False, execution_ceiling=None):
     """Send every chunk of an approved plan, in plan order, one at a time.
 
     `armed` has NO default and is passed to each `dispatch_enrichment` call rather than
@@ -331,7 +365,28 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
     still gets the artifact without every call site naming a run of its own. This
     function stays deliberately GRANT-UNAWARE — no per-chunk revocation hook is added
     here (D-59-06/GRANT-05: revocation bites on the next send, not mid-run; see
-    `test_dispatch_plan_has_no_grant_aware_hook_to_revoke_against`).
+    `test_dispatch_plan_has_no_grant_aware_hook_to_revoke_against`). A BUDGET stop is a
+    different kind of early exit from a revocation, and the two must not be confused:
+    it consults a plain number (`execution_ceiling`) it is handed, never a grant object,
+    and the grant-close it enables happens in the CALLER, through
+    `write_grant.record_dispatch_outcome` — never here.
+
+    `execution_ceiling` (Phase 57, D-57-01), keyword-only, defaults to `None`: today's
+    behaviour, byte-identical envelope, byte-identical `DispatchOutcome` with
+    `ceiling_stop` always `None`. When an int, a running tally — computed at the TOP of
+    each loop iteration, BEFORE `enrichment.build_envelope` or any transport call for
+    that chunk — projects what this run's total spend would become if this chunk were
+    sent (the same `chunk_count + record_count` formula `write_grant.EXECUTIONS_BASIS`
+    and `run_state.spend_against_ceiling` already use, never re-derived). When that
+    projection would take the running total STRICTLY ABOVE the ceiling, the loop stops
+    BEFORE that chunk is built or sent — the breaching chunk is never dispatched — and a
+    `CeilingStop` is attached to the returned `DispatchOutcome`. Consuming the EXACT
+    remaining allowance is legitimate; the stop fires only on strictly-over, never on
+    equal. The one shape this cannot bound: a backend-resolved list spec
+    (`plan.row_counts[index] is chunking.UNKNOWN`) is always a single chunk by
+    construction, so there is nothing mid-run to stop — the tally is skipped for it and
+    `ceiling_stop` stays `None`; that one shape is genuinely unbounded by this mechanism,
+    not silently guessed at.
 
     `async_ack` (Phase 61 Plan 05 Task 2, REVIEW-C14, substrate 1 of
     61-SPIKE-VERDICT.md — see `run_state.py`'s module docstring for why substrate 1 was
@@ -369,9 +424,36 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
     responses = []
     failed_chunks = []
     written_records_failures = []
+    ceiling_stop = None
 
     for index, chunk in enumerate(plan.chunks):
         rows = plan.row_counts[index]
+
+        # THE TALLY, PRE-SEND (Phase 57, D-57-01, REVIEW-57-H2 — this placement is the
+        # whole point). First statement of the loop body: before `_StatusCapturingTransport`,
+        # before `enrichment.build_envelope`, before anything can be sent for THIS chunk.
+        # `plan.row_counts[:index]` are the chunks ALREADY sent (never this one); `rows`
+        # is this chunk's own count. Skipped entirely for a backend-resolved list spec
+        # (`rows is UNKNOWN`) — that plan is always one chunk, so there is nothing mid-run
+        # to stop.
+        if execution_ceiling is not None and isinstance(rows, int):
+            sent_rows = sum(r for r in plan.row_counts[:index] if isinstance(r, int))
+            would_be = (index + 1) + sent_rows + rows
+            if would_be > execution_ceiling:
+                unsent = tuple(plan.chunks[index:])
+                ceiling_stop = CeilingStop(
+                    chunk_index=index,
+                    projected_executions=would_be,
+                    execution_ceiling=execution_ceiling,
+                    unsent_chunks=unsent,
+                    remainder=failed_batch(list(unsent)),
+                    reason=(
+                        f"sending chunk {index} would take this run's projected spend to "
+                        f"{would_be} execution(s), over the {execution_ceiling}-execution "
+                        f"ceiling — stopped before that chunk was built or sent."),
+                )
+                break
+
         watcher = _StatusCapturingTransport(transport)
         try:
             envelope = enrichment.build_envelope(chunk, providers)
@@ -448,6 +530,65 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
         responses=tuple(responses),
         run_id=run_id,
         written_records_failures=tuple(written_records_failures),
+        ceiling_stop=ceiling_stop,
+    )
+
+
+def projected_spend(outcome) -> int:
+    """The chunks ATTEMPTED (not the whole plan — a caller that stopped on a
+    `ceiling_stop` attempted fewer) plus the rows in them, read straight off a
+    `DispatchOutcome` (Phase 57). The SAME `chunk_count + record_count` formula
+    `write_grant.EXECUTIONS_BASIS`/`run_state.spend_against_ceiling` already use, never
+    re-derived, so a caller running several `dispatch_plan` calls under one grant (the
+    pair pipeline's match/enrich/re-request/ingest passes) can decrement its remaining
+    allowance across them without a second formula to keep in sync.
+
+    Reads `result.rows` off each `ChunkResult` in `outcome.results` — never
+    `outcome.failed_batch` or `ceiling_stop.unsent_chunks`, which by definition were NOT
+    sent and must not be charged. A chunk whose `rows` reads `chunking.UNKNOWN` (the
+    backend-resolved list shape) contributes 0 rows to the sum — its own chunk still
+    counts as 1 execution — because there is no client-side count to add; the caller is
+    left to its own honest "unknown" rather than a guessed number.
+    """
+    attempted = tuple(outcome.results) if outcome is not None else ()
+    row_total = sum(r.rows for r in attempted if isinstance(r.rows, int))
+    return len(attempted) + row_total
+
+
+def single_dispatch_outcome(result, *, record_count, run_id=None) -> DispatchOutcome:
+    """Wrap a single-shot `dispatch.dispatch(...)` result into a real `DispatchOutcome`
+    (Phase 57, REVIEW-57-H7) — the adapter the pair pipeline's FINAL ingest leg needs.
+
+    That leg never reaches `dispatch_plan` at all: `enrich-before-ingest/SKILL.md:610`
+    and `contact-upload/SKILL.md` both call `dispatch.dispatch(out_path, armed, cfg,
+    run_id=...)`, a single-shot CSV send returning `{"body", "run_id",
+    "written_records_failures"}` (`dispatch.py:58`, `:114`). Nothing charged its spend
+    before this: `projected_spend` could not see it, and 57-05's `outcomes=` could not
+    receive it. This wraps that dict into ONE `ChunkResult` carrying `record_count` rows,
+    so `projected_spend` evaluates it to `1 + record_count` through the SAME formula
+    every other leg uses — never a second spend vocabulary.
+
+    `record_count` is keyword-only, deliberately: a positional call could silently swap
+    it with `run_id` (both plausible-looking values at a call site), and the row count
+    feeding straight into the execution-ceiling arithmetic is exactly the field a swap
+    must not corrupt silently.
+
+    `ceiling_stop` is unconditionally `None`: a single-shot send has no chunk boundary to
+    stop AT mid-call — the ceiling check for this leg is PRE-CALL and lives in the
+    runbook (Task 4), exactly as the `plan.row_counts == UNKNOWN` shape is documented on
+    `dispatch_plan` above. This is a documented boundary of the mechanism, not an
+    omission.
+    """
+    result = result if isinstance(result, dict) else {}
+    written_records_failures = result.get("written_records_failures") or ()
+    chunk_result = ChunkResult(index=0, rows=record_count, ok=True)
+    return DispatchOutcome(
+        results=(chunk_result,),
+        failed_batch=None,
+        responses=(result.get("body"),),
+        run_id=run_id if run_id is not None else result.get("run_id"),
+        written_records_failures=tuple(written_records_failures),
+        ceiling_stop=None,
     )
 
 

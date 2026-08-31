@@ -216,6 +216,12 @@ def _workflow_list():
     return {"data": [{"id": WORKFLOW_ID, "name": write_grant.LANES["enrichment"]}]}
 
 
+def _executions_page():
+    """One exhausted executions-list page — `allowance_headroom`'s new read, inserted
+    between the workflow-list resolve and guardrail A's own read (REVIEW-57-H9)."""
+    return {"data": []}
+
+
 def _open_grant(config, transport, **kwargs):
     proposal = write_grant.plan_grant(
         config, lanes=["enrichment"], object_type="companies",
@@ -235,7 +241,7 @@ def test_one_grant_authorizes_a_same_run_create_via_the_domain_it_already_named(
     exercised here as part of this plan's own composition."""
     config = {**fake_config, config_gate.WRITE_GRANT_SETTINGS_KEY: True}
     transport = stub_module_transport_factory([
-        _workflow_list(), _base_workflow(),
+        _workflow_list(), _executions_page(), _base_workflow(),
     ])
     grant = _open_grant(config, transport, domains=("newco.example",))
 

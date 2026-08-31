@@ -231,6 +231,59 @@ def test_no_read_returns_or_embeds_the_workflow_body(fake_config, stub_get_trans
 # --- contract: the extractor matches the artifact that actually ships ----------------
 
 
+# --- Phase 57 Task 1 (REVIEW-57-H1): listing_exhausted and max_pages -----------------
+
+
+def test_an_exhausted_listing_with_nothing_older_than_the_cutoff_is_still_sampled(
+        fake_config, stub_get_transport_factory):
+    """The quiet-instance half. `covers_full_window` alone would read this account as
+    unsampled forever — the listing is exhausted (no `nextCursor`), but nothing in it was
+    old enough to prove the retained history reaches back the whole window."""
+    transport = stub_get_transport_factory([{"data": []}])
+    window = n8n_read.executions_in_window(fake_config, transport=transport)
+
+    assert window["listing_exhausted"] is True
+    assert window["covers_full_window"] is False
+    assert window["truncated_by_page_cap"] is False
+
+
+def test_max_pages_overrides_the_module_default_and_walks_further(
+        fake_config, stub_get_transport_factory):
+    """The busy-instance half. 8 pages, each newer than the cutoff so the walk never
+    finds the window boundary on its own — with `max_pages` omitted the default 4-page
+    cap truncates it; with `max_pages=12` the whole 8-page listing is read and its
+    exhaustion is correctly reported."""
+    def _page(n, cursor):
+        item = {"id": f"e-{n}", "status": "success",
+                "startedAt": "2026-08-31T00:00:00.000Z",
+                "stoppedAt": "2026-08-31T00:00:01.000Z", "finished": True}
+        body = {"data": [item]}
+        if cursor is not None:
+            body["nextCursor"] = cursor
+        return body
+
+    pages = [_page(i, f"cursor-{i + 1}" if i < 7 else None) for i in range(8)]
+
+    truncated = n8n_read.executions_in_window(
+        fake_config, transport=stub_get_transport_factory(list(pages)))
+    assert truncated["truncated_by_page_cap"] is True
+    assert truncated["listing_exhausted"] is False
+
+    walked_in_full = n8n_read.executions_in_window(
+        fake_config, transport=stub_get_transport_factory(list(pages)), max_pages=12)
+    assert walked_in_full["truncated_by_page_cap"] is False
+    assert walked_in_full["listing_exhausted"] is True
+    assert walked_in_full["count_in_window"] == 8
+
+
+def test_max_pages_default_none_preserves_every_existing_callers_behaviour():
+    import inspect
+    params = inspect.signature(n8n_read.executions_in_window).parameters
+    assert "max_pages" in params
+    assert params["max_pages"].default is None
+    assert params["max_pages"].kind is inspect.Parameter.KEYWORD_ONLY
+
+
 @pytest.mark.parametrize("flag", ["ALLOW_HUBSPOT_RECORD_WRITES", "ALLOW_HUBSPOT_CREATE"])
 def test_committed_cloud_workflows_read_as_a_single_consistent_value(flag):
     """An offline unit fixture proves the parsing; this proves the parsing matches the

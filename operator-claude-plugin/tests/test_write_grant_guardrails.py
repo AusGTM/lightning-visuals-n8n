@@ -73,6 +73,15 @@ def _workflow_list():
     ]}
 
 
+def _executions_page():
+    """One exhausted executions-list page: no items, no cursor — `allowance_headroom`'s
+    sample reads this as `listing_exhausted: True`, `sampled: True`, `count_in_window: 0`
+    (REVIEW-57-H1). Inserted into every `plan_grant` transport script between the
+    workflow-list read(s) and guardrail A's per-lane read(s) — the new step the headroom
+    sample adds to the frozen call order (REVIEW-57-H9)."""
+    return {"data": []}
+
+
 @pytest.fixture(autouse=True)
 def _clean_arm_env(monkeypatch):
     monkeypatch.delenv(n8n_arming.ARM_ENV_VAR, raising=False)
@@ -109,7 +118,7 @@ def _open_grant(config, transport):
 
 def test_an_open_over_a_live_armed_backend_refuses_and_names_what_it_found(
         granting_config, stub_module_transport_factory):
-    transport = stub_module_transport_factory([_workflow_list(), _armed_workflow()])
+    transport = stub_module_transport_factory([_workflow_list(), _executions_page(), _armed_workflow()])
 
     result = _plan(granting_config, transport)
 
@@ -133,7 +142,7 @@ def test_an_open_over_a_live_armed_backend_refuses_and_names_what_it_found(
 def test_the_refusal_offers_a_disarm_and_does_not_perform_one(
         granting_config, stub_module_transport_factory):
     """D-53-03 mandates offer-only. The operator decides."""
-    transport = stub_module_transport_factory([_workflow_list(), _armed_workflow()])
+    transport = stub_module_transport_factory([_workflow_list(), _executions_page(), _armed_workflow()])
 
     result = _plan(granting_config, transport)
 
@@ -146,17 +155,19 @@ def test_guardrail_as_transport_log_holds_reads_only(
         granting_config, stub_module_transport_factory):
     """The pin that stops a later edit quietly making guardrail A act. A disarm would show
     up here as a PUT — `n8n_control.apply_mutation` cannot disarm without one."""
-    transport = stub_module_transport_factory([_workflow_list(), _armed_workflow()])
+    transport = stub_module_transport_factory([_workflow_list(), _executions_page(), _armed_workflow()])
 
     _plan(granting_config, transport)
 
-    assert transport.verbs == ["get", "get"]
+    assert transport.verbs == ["get", "get", "get"], (
+        "workflow-list resolve, the new headroom sample, then guardrail A's own read "
+        "(REVIEW-57-H9's re-sequenced frozen call order)")
     assert transport.mutating_calls == []
 
 
 def test_an_open_over_a_disarmed_backend_proceeds(
         granting_config, stub_module_transport_factory):
-    transport = stub_module_transport_factory([_workflow_list(), _workflow()])
+    transport = stub_module_transport_factory([_workflow_list(), _executions_page(), _workflow()])
 
     proposal = _plan(granting_config, transport)
 
@@ -167,7 +178,7 @@ def test_a_workflow_that_cannot_be_read_refuses_the_open(
         granting_config, stub_module_transport_factory):
     """THE ONE A HURRIED IMPLEMENTATION GETS WRONG. An unreadable write-safety state is not
     a disarmed one, and this guardrail fires exactly when something is already wrong."""
-    transport = stub_module_transport_factory([_workflow_list(), (500, {"message": "no"})])
+    transport = stub_module_transport_factory([_workflow_list(), _executions_page(), (500, {"message": "no"})])
 
     result = _plan(granting_config, transport)
 
@@ -179,7 +190,7 @@ def test_a_workflow_with_no_declarations_at_all_refuses_the_open(
         granting_config, stub_module_transport_factory):
     """A 200 carrying a body with nothing to read is the same answer as an unreachable
     one: nobody can say whether writes are on."""
-    transport = stub_module_transport_factory([_workflow_list(), {"id": WORKFLOW_ID,
+    transport = stub_module_transport_factory([_workflow_list(), _executions_page(), {"id": WORKFLOW_ID,
                                                                  "nodes": []}])
 
     result = _plan(granting_config, transport)
@@ -191,7 +202,7 @@ def test_a_workflow_with_no_declarations_at_all_refuses_the_open(
 def test_declaring_nodes_that_disagree_refuse_the_open_and_say_so(
         granting_config, stub_module_transport_factory):
     disagreeing = _workflow(second_gate=_gate(record_writes='"true"'))
-    transport = stub_module_transport_factory([_workflow_list(), disagreeing])
+    transport = stub_module_transport_factory([_workflow_list(), _executions_page(), disagreeing])
 
     result = _plan(granting_config, transport)
 
@@ -201,7 +212,7 @@ def test_declaring_nodes_that_disagree_refuse_the_open_and_say_so(
 
 def test_a_refused_open_still_carries_the_envelope(
         granting_config, stub_module_transport_factory):
-    transport = stub_module_transport_factory([_workflow_list(), _armed_workflow()])
+    transport = stub_module_transport_factory([_workflow_list(), _executions_page(), _armed_workflow()])
 
     result = _plan(granting_config, transport)
 
@@ -215,7 +226,7 @@ def test_guardrail_a_reads_every_lane_the_grant_covers(
     contacts = _workflow(record_writes='"true"',
                          name=write_grant.LANES["contacts"])
     transport = stub_module_transport_factory(
-        [_workflow_list(), _workflow_list(), _workflow(), contacts])
+        [_workflow_list(), _workflow_list(), _executions_page(), _workflow(), contacts])
 
     result = _plan(granting_config, transport, lanes=("enrichment", "contacts"))
 
@@ -244,7 +255,7 @@ def test_one_failure_then_a_verified_disarm_leaves_the_grant_open_and_disarms_no
         granting_config, stub_module_transport_factory):
     """D-53-04's chosen behaviour, kept intact: the bound is on the SECOND, not the first,
     so a transient blip does not abort a long run."""
-    transport = stub_module_transport_factory([_workflow_list(), _workflow()])
+    transport = stub_module_transport_factory([_workflow_list(), _executions_page(), _workflow()])
     grant = _open_grant(granting_config, transport)
     before = len(transport.calls)
 
@@ -263,7 +274,7 @@ def test_one_failure_then_a_verified_disarm_leaves_the_grant_open_and_disarms_no
 
 def test_two_consecutive_disarm_failures_close_the_grant_and_attempt_a_disarm(
         granting_config, stub_module_transport_factory):
-    transport = stub_module_transport_factory([_workflow_list(), _workflow()])
+    transport = stub_module_transport_factory([_workflow_list(), _executions_page(), _workflow()])
     grant = _open_grant(granting_config, transport)
 
     # The closing disarm's own read -> mutate -> verify sequence, ending disarmed.
@@ -284,7 +295,7 @@ def test_two_consecutive_disarm_failures_close_the_grant_and_attempt_a_disarm(
 
 def test_the_next_send_after_a_two_failure_close_is_refused(
         granting_config, stub_module_transport_factory):
-    transport = stub_module_transport_factory([_workflow_list(), _workflow()])
+    transport = stub_module_transport_factory([_workflow_list(), _executions_page(), _workflow()])
     grant = _open_grant(granting_config, transport)
     transport._responses.extend(
         [_armed_workflow(), _armed_workflow(), {}, {}, {}, _workflow()])
@@ -306,7 +317,7 @@ def test_the_grant_closes_even_when_the_closing_disarm_itself_fails(
         granting_config, stub_module_transport_factory):
     """A failed closing disarm must NEVER be a reason to leave the grant open — that would
     let the run continue over exactly the state that triggered the guardrail."""
-    transport = stub_module_transport_factory([_workflow_list(), _workflow()])
+    transport = stub_module_transport_factory([_workflow_list(), _executions_page(), _workflow()])
     grant = _open_grant(granting_config, transport)
 
     # The disarm's verifying re-read still shows writes enabled: DISARM_FAILED.
@@ -328,7 +339,7 @@ def test_a_preflight_finding_writes_still_live_closes_the_grant_and_refuses_that
         granting_config, stub_module_transport_factory):
     """Whatever the counter reads. A live write at the start of the next send means the
     previous window's disarm did not take, and the counter cannot know that."""
-    transport = stub_module_transport_factory([_workflow_list(), _workflow()])
+    transport = stub_module_transport_factory([_workflow_list(), _executions_page(), _workflow()])
     grant = _open_grant(granting_config, transport)
     assert grant["consecutive_disarm_failures"] == 0
 
@@ -349,7 +360,7 @@ def test_a_preflight_finding_writes_still_live_closes_the_grant_and_refuses_that
 
 def test_a_preflight_over_a_disarmed_lane_lets_the_send_through(
         granting_config, stub_module_transport_factory):
-    transport = stub_module_transport_factory([_workflow_list(), _workflow()])
+    transport = stub_module_transport_factory([_workflow_list(), _executions_page(), _workflow()])
     grant = _open_grant(granting_config, transport)
     transport._responses.append(_workflow())
 
@@ -366,7 +377,7 @@ def test_a_preflight_that_cannot_read_does_not_close_the_grant(
     """Mid-run, an unreadable read is more likely an API blip than a live write, and
     D-53-04's whole point is that a blip must not abort a long run. Guardrail A refuses on
     unreadable at the OPEN, where refusing costs nothing."""
-    transport = stub_module_transport_factory([_workflow_list(), _workflow()])
+    transport = stub_module_transport_factory([_workflow_list(), _executions_page(), _workflow()])
     grant = _open_grant(granting_config, transport)
     transport._responses.append((500, {"message": "no"}))
 
@@ -420,7 +431,7 @@ def test_guardrail_a_runs_by_default_with_no_preflight_argument_at_all(
         granting_config, stub_module_transport_factory):
     """The default IS the guardrail. A `preflight=None` that meant "no check" would be a
     toggle by omission, which is the same defect wearing quieter clothes."""
-    transport = stub_module_transport_factory([_workflow_list(), _armed_workflow()])
+    transport = stub_module_transport_factory([_workflow_list(), _executions_page(), _armed_workflow()])
 
     result = _plan(granting_config, transport)
 

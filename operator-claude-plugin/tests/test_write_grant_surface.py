@@ -66,10 +66,19 @@ def _workflow_list():
     ]}
 
 
+def _executions_page():
+    """One exhausted executions-list page — `write_grant.allowance_headroom`'s new
+    sample, inserted between the id resolves and guardrail A's own read (REVIEW-57-H9's
+    re-sequenced frozen call order)."""
+    return {"data": []}
+
+
 def _plan_reads(lanes=1):
     """`plan_grant`'s frozen call order: one workflow-list read per lane for id
-    resolution, then one workflow read per lane for guardrail A's live write-safety read."""
-    return [_workflow_list()] * lanes + [_base_workflow()] * lanes
+    resolution, then ONE executions-list read for the headroom sample (Phase 57,
+    REVIEW-57-H9 — not per lane, the sample is per grant), then one workflow read per
+    lane for guardrail A's live write-safety read."""
+    return [_workflow_list()] * lanes + [_executions_page()] + [_base_workflow()] * lanes
 
 
 @pytest.fixture(autouse=True)

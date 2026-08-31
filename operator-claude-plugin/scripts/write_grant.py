@@ -42,6 +42,7 @@ Three things a reader needs and cannot infer from the code:
    (`test_write_grant.py`, 53-01 Task 2), never a source-text pin.
 """
 import copy
+import math
 from datetime import date, datetime, timezone
 
 import chunking
@@ -152,6 +153,187 @@ _DISCLOSURE_NOT_CONSTRAINT = (
     "— they do not prevent it. The ceiling is computed FROM the batch you named, so it "
     "cannot block anything that batch already implies. If you want a smaller ceiling, "
     "name a smaller batch.")
+
+
+# ------------------------------------------------------ RUN-05 / D-57-01: the ceiling
+#
+# D-57-00 supersedes D-53-02 for every run this milestone covers. D-53-02 recorded that a
+# grant's computed ceiling is disclosure, not constraint — correct while a human watched
+# every send. Phase 57 makes the execution allowance a conservative binding preflight
+# refusal and a pre-send mid-run stop. The prior behaviour remains historical context,
+# not current behaviour. Sampling limits and the retention caveat are disclosed rather
+# than pretended away.
+
+CEILING_OK = "ok"
+CEILING_OVER = "over"
+CEILING_UNKNOWN = "unknown"
+
+RETENTION_CAVEAT = (
+    "An exhausted listing is complete only with respect to what the n8n API RETAINS. "
+    "n8n prunes execution history, and a pruned execution was still billed — so the "
+    "sampled spend is a LOWER bound on this month's true cost and the sampled remainder "
+    "is an UPPER bound on headroom. That is the one axis on which this guard is "
+    "permissive, never the one on which it refuses too late. [documented] (n8n's "
+    "retention behaviour, CLAUDE.md section 13.0.3), not [observed live]."
+)
+
+
+def allowance_headroom(config, *, transport=None, now=None) -> dict:
+    """Sample THIS calendar month to date against the executions list, and report what is
+    left of the configured monthly execution allowance (Phase 57, D-57-01, RUN-05).
+
+    Returns `allowance`, `spent_sampled`, `remaining_sampled`, `covers_full_window`,
+    `listing_exhausted`, `truncated_by_page_cap`, `observed_span_hours`, `sampled`,
+    `retention_caveat` and `reason`.
+
+    `sampled` is True only when: the allowance key is a positive int, AND
+    `n8n_read.executions_in_window` returned a dict (not None — the read itself did not
+    fail), AND `truncated_by_page_cap` is False, AND (`covers_full_window` OR
+    `listing_exhausted`). In every other case `sampled` is False and `remaining_sampled`
+    is None — NEVER a number derived from a partial count (Pitfall 4). `ceiling_verdict`
+    reads `sampled` alone to decide reachability; it never re-derives this predicate.
+
+    THE PAGE BUDGET IS RAISED TO FIT THE ALLOWANCE (REVIEW-57-H1). The module default —
+    `n8n_read.MAX_EXECUTION_PAGES` (4) x `n8n_read.EXECUTIONS_WINDOW_PAGE_LIMIT` (250) —
+    is 1,000 executions across ALL workflows on the instance, sized for a 24h sweep, not
+    a month. This caller asks for `ceil(allowance / EXECUTIONS_WINDOW_PAGE_LIMIT) + 2`
+    pages instead, so a month whose executions fit inside the CONFIGURED allowance cannot
+    be truncated by a page budget sized for a different question. At the documented
+    Starter 2,500/month that is 12 pages — up to 12 GETs per grant, once, not per lane.
+
+    THE RETENTION CAVEAT, CARRIED ON `retention_caveat` AND NEVER SOFTENED: an exhausted
+    listing (`listing_exhausted`) is complete only with respect to what the API retains.
+    n8n prunes; a pruned execution was still billed. `spent_sampled` is therefore a LOWER
+    bound and `remaining_sampled` an UPPER bound on headroom — the one axis on which this
+    guard is permissive rather than conservative, tagged `[documented]` rather than
+    `[observed live]` per CLAUDE.md section 13.0.3.
+    """
+    now = now or datetime.now(timezone.utc)
+    month_start = datetime(now.year, now.month, 1, tzinfo=timezone.utc)
+    window_hours = max(
+        (now - month_start).total_seconds() / 3600.0, n8n_read.MIN_OBSERVED_SPAN_HOURS)
+
+    raw_allowance = (config or {}).get(n8n_read.EXECUTION_ALLOWANCE_KEY)
+    allowance_valid = (isinstance(raw_allowance, int) and not isinstance(raw_allowance, bool)
+                       and raw_allowance > 0)
+
+    unsampled = {
+        "spent_sampled": None, "remaining_sampled": None, "covers_full_window": None,
+        "listing_exhausted": None, "truncated_by_page_cap": None,
+        "observed_span_hours": None, "sampled": False, "retention_caveat": RETENTION_CAVEAT,
+    }
+
+    if not allowance_valid:
+        return {
+            "allowance": None,
+            "reason": (
+                f"{n8n_read.EXECUTION_ALLOWANCE_KEY!r} is not configured (or is not a "
+                f"positive whole number), so there is no monthly allowance to sample a "
+                f"remainder against."),
+            **unsampled,
+        }
+
+    max_pages = math.ceil(raw_allowance / n8n_read.EXECUTIONS_WINDOW_PAGE_LIMIT) + 2
+    get_transport = transport.get if hasattr(transport, "get") else transport
+    read_kwargs = {} if get_transport is None else {"transport": get_transport}
+
+    window = n8n_read.executions_in_window(
+        config, now=now, window_hours=window_hours, max_pages=max_pages, **read_kwargs)
+
+    if window is None:
+        return {
+            "allowance": raw_allowance,
+            "reason": (
+                "the executions list could not be read at all this month, so there is "
+                "nothing to sample a remainder against."),
+            **unsampled,
+        }
+
+    covers_full_window = window.get("covers_full_window")
+    listing_exhausted = window.get("listing_exhausted")
+    truncated = bool(window.get("truncated_by_page_cap"))
+    spent = window.get("count_in_window")
+
+    sampled = (not truncated) and bool(covers_full_window or listing_exhausted)
+    remaining = (raw_allowance - spent) if sampled and isinstance(spent, int) else None
+
+    if sampled:
+        if listing_exhausted and not covers_full_window:
+            reason = (
+                "sampled from an exhausted executions listing — there is nothing "
+                "further for the API to return this month. Subject to the retention "
+                "caveat: a pruned execution would not appear here even though it was "
+                "billed.")
+        else:
+            reason = "sampled: retained history reaches back past the start of this month."
+    elif truncated:
+        reason = (
+            f"the executions list truncated at the {max_pages}-page budget before "
+            f"reaching either the start of the month or an exhausted listing — the "
+            f"partial count is NEVER read as a full one.")
+    else:
+        reason = "the executions list could not be confirmed complete or exhausted."
+
+    return {
+        "allowance": raw_allowance,
+        "spent_sampled": spent if sampled else None,
+        "remaining_sampled": remaining,
+        "covers_full_window": covers_full_window,
+        "listing_exhausted": listing_exhausted,
+        "truncated_by_page_cap": truncated,
+        "observed_span_hours": window.get("observed_span_hours"),
+        "sampled": sampled,
+        "retention_caveat": RETENTION_CAVEAT,
+        "reason": reason,
+    }
+
+
+def ceiling_verdict(figures, headroom) -> dict:
+    """Pure, no I/O: compare a batch's projected execution count against a sampled
+    monthly remainder (Phase 57, D-57-01).
+
+    `CEILING_UNKNOWN` whenever `headroom["sampled"]` is False OR
+    `figures["projected_executions"]` is None — two of three provider balances already
+    read `unknown` on this account, and D-57-02 is explicit that an unknown verdict must
+    proceed rather than refuse (a guard that always fires is indistinguishable from a
+    feature that is off). `CEILING_OVER` only when both are real numbers and the
+    projection STRICTLY exceeds the remainder — consuming the exact remaining allowance
+    is legitimate and must not refuse.
+    """
+    headroom = headroom or {}
+    projected = (figures or {}).get("projected_executions")
+    sampled = bool(headroom.get("sampled"))
+    remaining = headroom.get("remaining_sampled")
+    allowance = headroom.get("allowance")
+    spent = headroom.get("spent_sampled")
+
+    if not sampled or projected is None:
+        verdict = CEILING_UNKNOWN
+        shortfall = None
+        if not sampled:
+            reason = headroom.get("reason") or "the monthly remainder could not be sampled."
+        else:
+            reason = "this batch has no execution projection to compare against a remainder."
+    else:
+        over = projected > remaining
+        verdict = CEILING_OVER if over else CEILING_OK
+        shortfall = (projected - remaining) if over else None
+        reason = (
+            f"the projected {projected} execution(s) exceed the sampled {remaining} "
+            f"remaining this month by {shortfall}." if over else
+            f"the projected {projected} execution(s) fit inside the sampled {remaining} "
+            f"remaining this month.")
+
+    return {
+        "verdict": verdict,
+        "projected_executions": projected,
+        "allowance": allowance,
+        "spent_sampled": spent,
+        "remaining_sampled": remaining,
+        "shortfall": shortfall,
+        "basis": EXECUTIONS_BASIS,
+        "reason": reason,
+    }
 
 
 def _usd(value):
@@ -409,15 +591,29 @@ def _consequence(lane_names, ids, domains, allow_create):
 
 
 def plan_grant(config, *, lanes, object_type, record_ids, record_domains, allow_create,
-               label, providers=None, transport=None, preflight=None, today=None):
+               label, providers=None, transport=None, preflight=None, today=None,
+               override=False, override_reason=None):
     """Compose a PROPOSAL for a write grant. Reads only — never mutates anything.
 
     Refuses, in this order and before returning anything: an unauthorized config, an
-    unknown lane, an empty record set, a lane whose workflow cannot be resolved by name.
+    unknown lane, an empty record set, a lane whose workflow cannot be resolved by name,
+    a batch whose projected executions exceed the sampled remaining monthly allowance
+    (Phase 57, D-57-01, RUN-05 — see `ceiling` below).
 
     `providers` is the resolved provider selection the envelope is priced against;
     `None` means the configured selection in `enrichment_providers`, the same default
     every other lane in this plugin resolves to.
+
+    `override`/`override_reason` (Phase 57, REVIEW-57-M6) let an operator proceed past a
+    `CEILING_OVER` refusal. `override=True` with no non-blank `override_reason` string
+    RAISES `ValueError` rather than proceeding — an override with no recorded
+    justification is not an override, it is the guard's absence with extra steps. THE
+    OVERRIDE NEVER TRAVELS: it is accepted here only from the caller's own immediate
+    argument, never read from a config key, a stored grant, or a remainder resume — no
+    runbook step may set it from anything but the operator's answer in that conversation
+    (Task 4 pins this with a structural grep). When accepted, the returned proposal's
+    `ceiling` dict carries `overridden: True`, `override_reason` and
+    `override_authority: "operator"`, rendered in full wherever the run is reported.
 
     `preflight` IS GUARDRAIL A, and it is not optional. `None` means the real one; a
     caller may substitute another callable (a test does), but a non-callable value is a
@@ -426,13 +622,31 @@ def plan_grant(config, *, lanes, object_type, record_ids, record_domains, allow_
     with extra steps (T-53-12). It is invoked with `(config, workflow_ids, transport)` and
     its refusal is returned with the envelope attached.
 
+    `ceiling` (Phase 57): the `ceiling_verdict` computed against `allowance_headroom`'s
+    live sample, attached to every returned proposal AND every refusal so an operator is
+    never shown a batch's cost without also being shown how much of the month it would
+    spend. `CEILING_UNKNOWN` — an unconfigured or unsampleable allowance — does NOT
+    refuse (D-57-02: a guard that always fires is indistinguishable from a feature that
+    is off; two of three provider balances already read `unknown` on this account, and
+    refusing on unknown would block essentially every run). Only `CEILING_OVER` refuses,
+    and only when `override` is falsey.
+
     CALL ORDER, frozen because every scripted test depends on it: the cheap refusals
     (authority, lanes, record set) cost nothing; then one workflow-collection GET per
     lane to resolve ids; then ONE status POST for provider balances, and only when the
-    batch actually prices a provider; then one workflow GET per lane for guardrail A.
-    The envelope is computed BEFORE guardrail A so that a refused open still tells the
-    operator what the batch would have cost.
+    batch actually prices a provider; then ONE executions-list read sequence for the
+    Phase 57 headroom sample (never per lane — the sample is per grant); then one
+    workflow GET per lane for guardrail A. The envelope AND the ceiling are computed
+    BEFORE guardrail A so that a refused open still tells the operator what the batch
+    would have cost and how it stood against the month's allowance.
     """
+    if override and not (isinstance(override_reason, str) and override_reason.strip()):
+        raise ValueError(
+            "an override with no recorded reason is not an override. Pass "
+            "`override_reason` as the operator's own words, given in this conversation, "
+            "for why this batch must exceed the sampled remaining monthly allowance."
+        )
+
     if not config_gate.write_grants_enabled(config):
         return _refusal(
             f"opening a write grant needs {config_gate.WRITE_GRANT_SETTINGS_KEY!r} set to "
@@ -498,6 +712,41 @@ def plan_grant(config, *, lanes, object_type, record_ids, record_domains, allow_
         else (config or {}).get("enrichment_providers"),
         transport=transport, today=today)
 
+    # Phase 57 / D-57-01 / RUN-05: the refuse-before-starting check, sampled AFTER the
+    # envelope (a refusal still carries the batch's own figures) and BEFORE guardrail A
+    # (an over-ceiling batch never reaches a live write-safety read at all).
+    #
+    # DELIBERATE DIVERGENCE FROM `n8n_cadence.check_budget_floor`'s own analog, recorded
+    # here rather than left for a reader to notice and "fix": that function refuses
+    # FIRST and unconditionally on a missing config key. This one does not. A
+    # `CEILING_UNKNOWN` verdict proceeds with the blind spot disclosed, per D-57-02 — two
+    # of three provider balances already read `unknown`, and refusing on unknown would
+    # block essentially every run today, which makes the guard indistinguishable from
+    # the feature being switched off. Only `CEILING_OVER` refuses. `envelope()`'s own
+    # established contract for a missing allowance key ("one missing line, not a reason
+    # to refuse") is preserved by this choice, not contradicted.
+    headroom = allowance_headroom(config, transport=get_transport)
+    ceiling = ceiling_verdict(figures, headroom)
+    if ceiling["verdict"] == CEILING_OVER and not override:
+        return _refusal(
+            f"refusing to open this grant: it projects {ceiling['projected_executions']} "
+            f"execution(s) this month against a sampled {ceiling['remaining_sampled']} "
+            f"remaining of the configured {ceiling['allowance']} allowance "
+            f"({ceiling['spent_sampled']} already sampled spent this month) — "
+            f"{ceiling['shortfall']} execution(s) over. This projection is "
+            f"{EXECUTIONS_BASIS}, and it is measured to OVER-STATE a real chunk's cost "
+            f"(roughly 3x) — deliberately, so it refuses early rather than letting an "
+            f"over-budget batch through late. {RETENTION_CAVEAT} Name a smaller batch, "
+            f"or tell me to override this refusal and why.",
+            envelope=figures, ceiling=ceiling)
+
+    if override:
+        # Recorded, not just honoured (REVIEW-57-M6): every reader downstream —
+        # 57-05's end-of-run report included — must be able to tell an overridden run
+        # from an under-ceiling one at a glance.
+        ceiling = {**ceiling, "overridden": True, "override_reason": override_reason,
+                   "override_authority": "operator"}
+
     preflight = guardrail_a if preflight is None else preflight
     if not callable(preflight):
         raise TypeError(
@@ -509,7 +758,7 @@ def plan_grant(config, *, lanes, object_type, record_ids, record_domains, allow_
         # The envelope rides along on the refusal: an operator who is refused still
         # learns what the batch would have cost, and can act on the refusal without
         # re-planning to find out.
-        return {**blocked, "envelope": figures}
+        return {**blocked, "envelope": figures, "ceiling": ceiling}
 
     return {
         "kind": PROPOSAL_KIND,
@@ -523,6 +772,10 @@ def plan_grant(config, *, lanes, object_type, record_ids, record_domains, allow_
         # The arithmetic shown BEFORE the yes (GRANT-02/D-53-02). `open_grant` deep-copies
         # the proposal, so what was shown and what the grant is bound to are one object.
         "envelope": figures,
+        # Phase 57 / RUN-05: this grant's ceiling verdict against the sampled monthly
+        # remainder — see `ceiling_verdict`. `open_grant` deep-copies the proposal, so
+        # this rides along onto the opened grant unchanged.
+        "ceiling": ceiling,
         "consequence": _consequence(lane_names, ids, domains, allow_create),
     }
 
@@ -947,6 +1200,39 @@ def record_send_outcome(grant, outcome, config=None, *, transport=None):
             [failed_on] if failed_on else _covered_workflow_ids(updated), transport)
 
     return updated
+
+
+def record_dispatch_outcome(grant, outcome, config=None, *, disarm=None, transport=None,
+                            reason=None):
+    """The adapter that turns a real `chunking.DispatchOutcome` into the
+    `record_send_outcome` call D-57-01 requires (Pitfall 1, REVIEW-57-H8/M5/M7).
+
+    Builds `{"ceiling_breach": outcome.ceiling_stop is not None, "disarm": disarm}` and
+    delegates to the EXISTING `record_send_outcome` — no second close path, no second
+    outcome vocabulary. It exists so the producer is reachable from a pytest-driven
+    dispatch rather than only from SKILL.md prose; the `ceiling_breach` computation
+    belongs here, never duplicated into a skill.
+
+    `reason`, keyword-only (Task 4, REVIEW-57-M7): when supplied, it OVERRIDES the
+    derived `ceiling_breach` reading and closes the grant with exactly that reason. An
+    explicit `reason=write_grant.CLOSED_UNHANDLED_ERROR` from a runbook's `except` arm
+    must never be relabelled a budget stop just because the `outcome` it caught also
+    happens to carry a `ceiling_stop` — the override wins.
+
+    `outcome=None` is accepted for exactly the circumstance this exists to cover
+    (REVIEW-57-M5): an exception raised INSIDE `dispatch_plan` before it returns —
+    `enrichment.build_envelope`, or the transport itself — leaves no outcome object to
+    inspect at all. A caller in that state still needs to close the grant with its own
+    explicit `reason`; requiring a real outcome here would make the crash-recovery path
+    itself raise `UnboundLocalError`-shaped failures, in the one circumstance closing the
+    grant matters most.
+    """
+    if reason is not None:
+        return close_grant(grant, reason)
+
+    ceiling_stop = getattr(outcome, "ceiling_stop", None) if outcome is not None else None
+    payload = {"ceiling_breach": ceiling_stop is not None, "disarm": disarm}
+    return record_send_outcome(grant, payload, config, transport=transport)
 
 
 # =========================================================================================

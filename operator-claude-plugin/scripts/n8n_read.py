@@ -256,14 +256,35 @@ def recent_executions(config: dict, transport=requests.get, limit: int = EXECUTI
 
 
 def executions_in_window(config: dict, transport=requests.get, now=None,
-                         window_hours: float = DEFAULT_EXECUTION_WINDOW_HOURS) -> dict:
+                         window_hours: float = DEFAULT_EXECUTION_WINDOW_HOURS, *,
+                         max_pages: int = None) -> dict:
     """Executions across every workflow, newest first, walked back to `window_hours` ago
     (D-08 — the fixed 100-row page this augments; D-01's shrunken-window rule).
 
     `None` is returned when and only when the FIRST page read fails — same unreadable
     contract as `recent_executions`. Otherwise a dict with keys `items`, `window_hours`,
     `count_in_window`, `observed_span_hours`, `oldest_started_at`, `covers_full_window`,
-    `truncated_by_page_cap`.
+    `listing_exhausted`, `truncated_by_page_cap`.
+
+    `max_pages` (Phase 57, REVIEW-57-H1) overrides `MAX_EXECUTION_PAGES` for this call
+    only. Keyword-only, defaulting to `None`, which means "use the module constant" — so
+    every existing caller (the 24h stuck/failed-run sweep) is byte-identical. A caller
+    sampling against a large configured allowance (`write_grant.allowance_headroom`)
+    raises it so a month that fits inside that allowance is not truncated by the default
+    1,000-execution page budget.
+
+    TWO DIFFERENT ANSWERS TO TWO DIFFERENT QUESTIONS, both load-bearing
+    (REVIEW-57-H1 — conflating them is the exact defect that left Phase 57's refusal
+    unreachable on a quiet account). `covers_full_window` means "retained history reaches
+    back past the window" — true only once the walk has SEEN an item strictly older than
+    the cutoff. `listing_exhausted` means "there is nothing further the API will
+    return" — true when the walk ended because a page carried no `nextCursor` and no
+    later page read failed. A quiet instance produces the second without the first: the
+    walk exhausts a short listing well inside the window, so it never sees anything older
+    than the cutoff, yet every execution the API holds has genuinely been read. Reading
+    `covers_full_window` alone as "is this sample complete" mistakes "we paged back far
+    enough" for "there was nothing more to page through" and reports a complete sample as
+    unsampled. `truncated_by_page_cap`'s meaning is unchanged by this addition.
 
     Retention (load-bearing — a naive `startedAt >= cutoff` filter would blind the stuck
     check to its own headline case): every IN-FLIGHT item (status in `IN_FLIGHT_STATUSES`)
@@ -293,24 +314,26 @@ def executions_in_window(config: dict, transport=requests.get, now=None,
     """
     now = now or datetime.now(timezone.utc)
     window_minutes = window_hours * 60.0
+    page_budget = max_pages if isinstance(max_pages, int) and max_pages > 0 else MAX_EXECUTION_PAGES
 
     items = []
     count_in_window = 0
     saw_older_than_cutoff = False
     truncated_by_page_cap = False
+    listing_exhausted = False
     oldest_age_minutes = None
     oldest_started_at = None
 
     cursor = None
 
-    # A bounded `for` over MAX_EXECUTION_PAGES, never a `while` — T-45-02's page-count
+    # A bounded `for` over the page budget, never a `while` — T-45-02's page-count
     # bound doubles as the reason this can be a `for`: test_report_sufficiency.py's D-07
     # guard forbids any poll/watch `while` loop outside watch.py, and a page walk with a
     # hard-known iteration ceiling is exactly what `for ... else` expresses without one.
     # The `else` clause fires only when every allotted page was consumed without an early
     # `break` — i.e. the walk stopped because it hit the cap, not because it ran out of
     # data or found the cutoff.
-    for page_index in range(1, MAX_EXECUTION_PAGES + 1):
+    for page_index in range(1, page_budget + 1):
         params = {"limit": EXECUTIONS_WINDOW_PAGE_LIMIT}
         if cursor:
             params["cursor"] = cursor
@@ -356,6 +379,13 @@ def executions_in_window(config: dict, transport=requests.get, now=None,
             saw_older_than_cutoff = True
 
         next_cursor = body.get("nextCursor")
+        if not next_cursor:
+            # REVIEW-57-H1, the quiet-instance half: the listing itself is exhausted —
+            # there is nothing further the API will return — independent of whether an
+            # item older than the cutoff was ever seen. Set even when
+            # `saw_older_than_cutoff` is ALSO true on this same page; both can hold at
+            # once and neither cancels the other.
+            listing_exhausted = True
         if saw_older_than_cutoff or not next_cursor:
             break
         cursor = next_cursor
@@ -377,6 +407,7 @@ def executions_in_window(config: dict, transport=requests.get, now=None,
         "observed_span_hours": observed_span_hours,
         "oldest_started_at": oldest_started_at,
         "covers_full_window": saw_older_than_cutoff,
+        "listing_exhausted": listing_exhausted,
         "truncated_by_page_cap": truncated_by_page_cap,
     }
 

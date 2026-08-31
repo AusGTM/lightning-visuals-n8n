@@ -466,6 +466,95 @@ def test_a_failing_middle_chunk_does_not_stop_the_final_chunk_being_sent(
     assert "500" in outcome.results[1].reason
 
 
+# --- Phase 57 Task 1 (D-57-01, REVIEW-57-H2): the pre-send mid-run ceiling stop --------
+
+
+def test_dispatch_plan_with_no_ceiling_behaves_byte_identically_to_today(
+    fake_config, stub_module_transport_factory
+):
+    """The characterization pin: unchanged baseline, `ceiling_stop` always None."""
+    transport = stub_module_transport_factory()
+    outcome = chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport
+    )
+    assert transport.verbs == ["post", "post", "post"]
+    assert outcome.ceiling_stop is None
+
+
+def test_a_pre_send_ceiling_stops_before_the_breaching_chunk_is_sent(
+    fake_config, stub_module_transport_factory
+):
+    """REVIEW-57-H2: the tally runs BEFORE the send. `three_chunk_plan()` is 3 chunks of
+    2 rows each (projection 1+2 per chunk = 9 total); `execution_ceiling=6` is the exact
+    projected cost of chunks 0 and 1 (2 chunks + 4 rows), so chunk 2 — which would take
+    the running total to 9 — is never built or sent."""
+    transport = stub_module_transport_factory()
+    outcome = chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport,
+        execution_ceiling=6,
+    )
+    assert transport.verbs == ["post", "post"]
+    assert sent_ids(transport) == [["1", "2"], ["3", "4"]]
+    assert outcome.ceiling_stop is not None
+    assert outcome.ceiling_stop.chunk_index == 2, (
+        "the index of the chunk that was NOT sent, not the last one that was")
+    assert outcome.ceiling_stop.unsent_chunks == (three_chunk_plan().chunks[2],)
+    assert outcome.ceiling_stop.remainder == {
+        "record_ids": ["5", "6"], "object_type": "companies"}
+    assert outcome.failed_batch is None, "a budget stop is never a chunk failure"
+    assert [r.ok for r in outcome.results] == [True, True]
+    assert len(outcome.results) == 2, "no result for a chunk that was never attempted"
+
+
+def test_a_ceiling_exactly_equal_to_the_full_projection_sends_every_chunk(
+    fake_config, stub_module_transport_factory
+):
+    """Strictly greater, not greater-or-equal: consuming the exact remaining allowance
+    is permitted. `three_chunk_plan()`'s full projection is 3 chunks + 6 rows = 9."""
+    transport = stub_module_transport_factory()
+    outcome = chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport,
+        execution_ceiling=9,
+    )
+    assert transport.verbs == ["post", "post", "post"]
+    assert outcome.ceiling_stop is None
+
+
+def test_zero_overshoot_across_every_possible_ceiling(
+    fake_config, stub_module_transport_factory
+):
+    """REVIEW-57-H2's own pin: for every ceiling from 1 to the full projection, the
+    realized projected spend of what was actually ATTEMPTED never exceeds the ceiling —
+    the test that fails if the tally is ever moved back below the send."""
+    full_projection = 9
+    for ceiling in range(1, full_projection + 1):
+        transport = stub_module_transport_factory()
+        outcome = chunking.dispatch_plan(
+            three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport,
+            execution_ceiling=ceiling,
+        )
+        assert chunking.projected_spend(outcome) <= ceiling, (
+            f"ceiling {ceiling}: realized spend {chunking.projected_spend(outcome)} "
+            f"exceeded it")
+
+
+def test_a_backend_resolved_list_plan_has_no_chunk_boundary_to_stop_at(
+    fake_config, stub_module_transport_factory
+):
+    """`plan.row_counts == (chunking.UNKNOWN,)` is always a single chunk by
+    construction — the tally is skipped and `ceiling_stop` stays None, documented as
+    genuinely unbounded by this mechanism rather than guessed at."""
+    plan = chunking.plan_chunks({"list": "some-hubspot-list", "object_type": "companies"}, 2)
+    assert plan.row_counts == (chunking.UNKNOWN,)
+
+    transport = stub_module_transport_factory()
+    outcome = chunking.dispatch_plan(
+        plan, PROVIDERS, True, fake_config, transport=transport, execution_ceiling=1)
+
+    assert outcome.ceiling_stop is None
+    assert transport.verbs == ["post"]
+
+
 def test_a_non_2xx_carrying_a_readable_json_body_is_still_a_failure(
     fake_config, stub_module_transport_factory
 ):
@@ -975,13 +1064,21 @@ def _workflow_list():
     return {"data": [{"id": WORKFLOW_ID, "name": write_grant.LANES["enrichment"]}]}
 
 
+def _executions_page():
+    """One exhausted executions-list page — `write_grant.allowance_headroom`'s new
+    sample (Phase 57), inserted between the lane resolve and guardrail A's own read
+    (REVIEW-57-H9's re-sequenced frozen call order)."""
+    return {"data": []}
+
+
 def _arming_sequence():
-    """The proven 14-entry open+arm+disarm sequence
+    """The proven open+arm+disarm sequence
     (test_write_grant.py::test_a_send_arms_under_an_opened_grant_with_no_environment_variable_set),
-    duplicated verbatim: lane resolve, guardrail A's live read, the arm, arm
-    verification, then the disarm."""
+    duplicated verbatim: lane resolve, the Phase 57 headroom sample, guardrail A's live
+    read, the arm, arm verification, then the disarm."""
     return [
         _workflow_list(),
+        _executions_page(),
         _base_workflow(),
         _base_workflow(), _base_workflow(), {}, {}, {},
         _base_workflow(record_writes='"true"', ids=f'"{RECORD_ID}"'),
