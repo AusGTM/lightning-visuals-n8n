@@ -515,6 +515,12 @@ return decided.map((row) => {
     association,
     reason: row.reason || null,
     email_status: row.email_status || null,
+    // 57-02 Task 4 (AFTER-01's join key): `Decide Action` already emits `row_id`
+    // pre-write. Closes the join for every lane whose rows carry `row_id` into the
+    // backend. Does NOT close it for the pair pipeline's FINAL ingest dispatch —
+    // `extraction.strip_row_id` removes the key before `write_dispatch_csv`
+    // (enrich-before-ingest/SKILL.md:639), so those rows echo `null` here regardless.
+    row_id: row.row_id ?? null,
   }};
 });
 """
