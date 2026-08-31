@@ -262,11 +262,20 @@ def _n8n_headers() -> dict:
     return {"X-N8N-API-KEY": os.getenv("N8N_API_KEY", ""), "Content-Type": "application/json"}
 
 
-def _load_local_workflows() -> list:
+def _load_local_workflows(only: str | None = None) -> list:
     # Deploy ONLY the Cloud-targeted workflows (wf_*_cloud.json). The other top-level
     # wf_*.json files are docker-replica fixtures that legitimately keep $env/$vars
     # (AR-4) and would import as broken/unbound nodes on n8n Cloud.
-    return [json.loads(p.read_text()) for p in sorted(N8N_DIR.glob("wf_*_cloud.json"))]
+    #
+    # `only` (Phase 57 Task 4, REVIEW-57-H2): a single filename (e.g.
+    # "wf_contact_ingest_cloud.json") narrows the glob to exactly that file. Absent
+    # (the default), behaviour is exactly today's — every existing caller and test is
+    # unchanged. Without this, a deploy that regenerated only ONE workflow would still
+    # push all five, because `main()` has never had a way to name just one.
+    paths = sorted(N8N_DIR.glob("wf_*_cloud.json"))
+    if only is not None:
+        paths = [p for p in paths if p.name == only]
+    return [json.loads(p.read_text()) for p in paths]
 
 
 def _get_live_workflows() -> list:
@@ -563,6 +572,22 @@ def _update_workflow_live(workflow_id: str, body: dict):
 
 
 def main(argv=None) -> int:
+    # `--only <filename>` (Phase 57 Task 4, REVIEW-57-H2): deploy exactly one
+    # `wf_*_cloud.json`, never the whole set — this is what makes it safe to push
+    # a single regenerated workflow (57-02's `wf_contact_ingest_cloud.json`) without
+    # touching the other four. `argv=None` (every existing call site, including every
+    # test) means no args were given, byte-identical to today's behaviour — this
+    # parsing only ever fires when a caller explicitly passes argv.
+    argv = list(argv) if argv else []
+    only = None
+    if argv:
+        if len(argv) == 2 and argv[0] == "--only":
+            only = argv[1]
+        else:
+            print(f"REFUSED: unrecognized arguments {argv!r} — the only supported form "
+                  f"is `--only <filename>`. No API call made.")
+            return 1
+
     if not _has_n8n():
         print("skipped (no n8n creds): N8N_URL and N8N_API_KEY must both be set to run this deploy.")
         return 0
@@ -572,7 +597,11 @@ def main(argv=None) -> int:
               "it, or use a genuine *.n8n.cloud host. No API call made.")
         return 1
 
-    local_workflows = _load_local_workflows()
+    local_workflows = _load_local_workflows(only=only) if only is not None else _load_local_workflows()
+    if only is not None and not local_workflows:
+        print(f"REFUSED: --only {only!r} matched no file under {N8N_DIR} — nothing to deploy. "
+              f"No API call made.")
+        return 1
     live_workflows = _get_live_workflows()
     diff = compute_workflow_diff(local_workflows, live_workflows)
 
@@ -674,4 +703,4 @@ def main(argv=None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

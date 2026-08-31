@@ -339,6 +339,74 @@ def test_deploy_set_is_cloud_only_no_env_leak():
         )
 
 
+# --- Phase 57 Task 4 (REVIEW-57-H2) — `--only <filename>`, offline, no instance --------
+#
+# `_load_local_workflows()` globs EVERY `wf_*_cloud.json` and `main()` had no selector
+# of any kind, so invoking a deploy for one regenerated workflow would silently push
+# all five. This filter is additive: absent, behaviour is exactly today's.
+
+def test_only_narrows_the_loaded_workflow_list_to_exactly_one():
+    everything = deploy._load_local_workflows()
+    assert len(everything) > 1, "expected more than one Cloud workflow on disk to filter"
+
+    target_name = "wf_contact_ingest_cloud.json"
+    assert (deploy.N8N_DIR / target_name).exists(), f"{target_name} must exist to filter to"
+
+    narrowed = deploy._load_local_workflows(only=target_name)
+    assert len(narrowed) == 1
+    assert narrowed[0]["name"], "the one loaded workflow must still have a real name"
+
+
+def test_only_absent_matches_todays_full_length():
+    """Byte-identical to today's behaviour when `only` is omitted — no existing
+    invocation, script, or runbook step is affected by this addition."""
+    assert len(deploy._load_local_workflows(only=None)) == len(deploy._load_local_workflows())
+
+
+def test_only_that_matches_nothing_is_an_empty_list_not_the_full_set():
+    assert deploy._load_local_workflows(only="wf_does_not_exist_cloud.json") == []
+
+
+def test_main_with_no_argv_behaves_exactly_as_before(monkeypatch):
+    """`main()` (every existing call site) must still parse zero args — the `--only`
+    parsing must never fire unless a caller explicitly passes argv."""
+    monkeypatch.delenv("N8N_URL", raising=False)
+    monkeypatch.delenv("N8N_API_KEY", raising=False)
+    rc = deploy.main()
+    assert rc == 0  # "skipped (no n8n creds)" branch, unaffected by this change
+
+
+def test_main_only_flag_is_parsed_and_passed_through(monkeypatch):
+    """No REAL instance is contacted by this test — `_get_live_workflows` (the one
+    function that would actually make an HTTP GET) is stubbed to a bare list, so the
+    `--only` filter is proven purely by which workflows `_load_local_workflows` was
+    asked to load, with the write gate (`DRY_RUN`) left at its default (closed)."""
+    monkeypatch.setattr(deploy, "_has_n8n", lambda: True)
+    monkeypatch.setattr(deploy, "_instance_ok", lambda: True)
+    monkeypatch.setattr(deploy, "_get_live_workflows", lambda: [])
+    seen = {}
+
+    def _spy_load(only=None):
+        seen["only"] = only
+        return []
+
+    monkeypatch.setattr(deploy, "_load_local_workflows", _spy_load)
+    # The spy returns [] regardless of what it is asked to load, so main()'s own
+    # "matched no file" refusal fires here — that refusal is itself proof no live GET
+    # was reachable past this point. What this test actually proves is `seen["only"]`.
+    rc = deploy.main(["--only", "wf_contact_ingest_cloud.json"])
+    assert rc == 1
+    assert seen["only"] == "wf_contact_ingest_cloud.json"
+
+
+def test_main_refuses_unrecognized_arguments_with_no_api_call(monkeypatch):
+    called = []
+    monkeypatch.setattr(deploy, "_has_n8n", lambda: called.append("contacted") or True)
+    rc = deploy.main(["--bogus", "flag"])
+    assert rc == 1
+    assert not called, "an unrecognized argument must refuse before any instance check"
+
+
 # --- Phase 16.1 Plan 02 Task 3 (reviews C2) — credit-node deploy binding -----------------
 
 CREDIT_NODE_EXPECTED_CREDENTIAL = {
