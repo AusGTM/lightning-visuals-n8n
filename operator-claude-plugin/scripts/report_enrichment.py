@@ -1,20 +1,41 @@
 """operator-claude-plugin/scripts/report_enrichment.py
 
 The enrichment lane's half of the outcome report (REPORT-02, as amended by
-26-CONTEXT.md D-10a/D-10b). Per record: the operator-facing outcome (created /
-enriched / blocked / skipped), the review-state (needs_review / clear / unknown —
-NEVER inferred false when the backend is silent), and the provider-credit ledger
-from the response body. Nothing about ICP anywhere — HubSpot owns those derived
-outputs (Phase 15 "Approach C"; see src/merge_policy.py, n8n/code/mergeCompanies.js,
-config/field_policy.yaml) and a placeholder here would re-couple exactly what that
-decision decoupled.
+26-CONTEXT.md D-10a/D-10b, and by 57-02 which collapses this module's outcome
+vocabulary onto `written_records`'s — see below). Per record: the operator-facing
+outcome, the review-state (needs_review / clear / unknown — NEVER inferred false when
+the backend is silent), and the provider-credit ledger from the response body. Nothing
+about ICP anywhere — HubSpot owns those derived outputs (Phase 15 "Approach C"; see
+src/merge_policy.py, n8n/code/mergeCompanies.js, config/field_policy.yaml) and a
+placeholder here would re-couple exactly what that decision decoupled.
 
 Reuses report.py's `_run_data`/`_node_output_items` traversal (26-01) rather than a
 second implementation of the same `data.resultData.runData` walk — same defensive
 contract: a missing key, a non-list run entry, or a non-mapping payload yields an
 empty/insufficient result plus a stated reason, never an exception.
+
+**57-02: one action-to-outcome vocabulary, not two (D-57-03, REVIEW-57).** This module
+used to keep its own private action-to-outcome table, covering only 6 of the backend's
+10 real `action` values (`update`, `review`, `research_failed` and `recompute_refused`
+all rendered `"unknown"`, uncovered by any test) and using different words for the same
+concepts `written_records.py` names (`"blocked"` where D-57-03 says `gated`). Leaving
+two tables to drift is not an option here — CLAUDE.md section 13.0.1 records what a
+second copy of one rule costs. `_outcome_for_row` now delegates to
+`written_records.outcome_for_action`, the single pure vocabulary both client-side
+readers resolve through.
+
+It delegates to that pure function, **never to `written_records`'s validating entry
+builder** — cross-AI review caught why: the entry builder raises `WrittenRecordsError`
+for a malformed item and for a forbidden-named value (`written_records.py:100-115`,
+`:150-190`), while `build_enrichment_report` promises never to raise (see its own
+docstring below). Delegating to the validating builder would import persistence
+validation into a never-raise report surface and turn a malformed row into a report
+that fails instead of a report that says the row was malformed.
+`written_records.outcome_for_action` is pure and total by construction, so this module
+reuses it with no such risk.
 """
 
+import written_records
 from report import SETTLED_STATUSES, SMALL_BATCH_THRESHOLD, _node_output_items, _run_data
 
 # The enrichment workflow runs one or both lanes in a single execution (a batch can
@@ -28,53 +49,64 @@ DECIDE_CONTACT_ACTION_NODE = "Decide Action"
 BUILD_RESPONSE_NODE = "Build Response"
 PARSE_EVENT_NODE = "Parse HubSpot Event"
 
-# The six values the deployed decision nodes emit (write_blocked comes from the
-# write-safety gate refusing a create/enrich, computed downstream of the original
-# create/enrich/skip intent — see Enrichment Gate / Company Gate; needs_match_review
-# and proposed are two more non-writing exits, added Phase 54-02 — see the two entries
-# below). Anything else is an anomaly this module has never seen and renders "unknown"
-# — conservative, same "never guess a success" discipline Phase 25 D-10 applies to
-# credit balances.
-_ACTION_TO_OUTCOME = {
-    "create": "created",
-    "enrich": "enriched",
-    "write_blocked": "blocked",
-    "skip": "skipped",
-    # Phase 54-02: a MEDIUM identity match (same surname, same company, no exact hit)
-    # — Decide Action holds it rather than writing over a possible different person.
-    "needs_match_review": "held",
-    # Phase 54-02: the look-only/rehearsal mode (`isReturnOnly`) — either lane, forced
-    # BEFORE the write-safety gate ever runs. Nothing was saved on this pass.
-    "proposed": "previewed",
+# 57-02: this module's own action-to-outcome table is gone (D-57-03) — see the module
+# docstring. `SUCCESS_OUTCOMES` is the "landed, or nothing left to do" set: a write the
+# backend was allowed to make is not a failing row, even though it is not yet CONFIRMED
+# landed (that is what the word itself, not the bucket, is for). `created_id_unknown`
+# and `written_id_unknown` are deliberately NOT in this set — an id that never came back
+# is a row worth a second look, not a clean success.
+SUCCESS_OUTCOMES = {
+    written_records.WRITTEN, written_records.WRITE_ATTEMPTED, written_records.NO_ACTION,
 }
-SUCCESS_OUTCOMES = {"created", "enriched"}
 
 # Neither decision node's return statement carries a per-row "why" for write_blocked
 # or skip (they strip everything upstream except action/object_type/hs_object_id/
 # gap_flag/(needs_review)/properties) — these are the accurate, static explanations
-# of what each outcome means, read from the node's own jsCode.
+# of what each outcome means, read from the node's own jsCode. Keyed by OUTCOME (the
+# same convention this table always used), not by the backend `action` — `held` covers
+# both `review` and `needs_match_review` for the same reason it always covered
+# `needs_match_review` alone, and `no_action` covers both `skip` and `proposed`.
 _OUTCOME_REASON = {
-    "blocked": "the write-safety gate did not allow this write "
-               "(ALLOW_HUBSPOT_RECORD_WRITES / ALLOW_HUBSPOT_CREATE / the test-record allowlist)",
-    "skipped": "no enrichment needed: required fields were present, fresh and valid",
-    # Phase 54-02 (T-54-05/T-54-06): the two shapes that still cost a second full pass —
-    # named where the operator reads the result, not just in the skill that requests it.
-    "held": "this row matched somebody with the same surname at the same company and "
-            "was held rather than written over; confirming it and sending it again "
-            "re-runs the whole lookup for that person, so it costs the same as this "
-            "run did",
-    "previewed": "this was a look; nothing was saved. Saving it means running the same "
-                 "look again, and that costs the same as this run did",
+    written_records.GATED:
+        "this row would have been written — open a grant and re-send it to write it "
+        "(ALLOW_HUBSPOT_RECORD_WRITES / ALLOW_HUBSPOT_CREATE / the test-record allowlist "
+        "did not allow this write)",
+    # Phase 54-02 (T-54-05/T-54-06): the two-pass shapes that still cost a second full
+    # pass — named where the operator reads the result, not just in the skill that
+    # requests it. Generalised in 57-02 to cover `review` as well as `needs_match_review`
+    # — a same-surname/company match is one reason a row lands here, not the only one.
+    written_records.HELD:
+        "this row was held for review before writing — a same-surname/company match, "
+        "an unresolved company association, or another gap the decision node flagged. "
+        "Confirming it and sending it again re-runs the whole lookup for that row, so "
+        "it costs the same as this run did",
+    written_records.NO_ACTION:
+        "no action was needed on this row: either it was a look-only preview and "
+        "nothing was saved (saving it means running the same look again, at the same "
+        "cost as this run), or the record already had complete, fresh, valid data and "
+        "needed no enrichment",
+    written_records.FAILED:
+        "this action failed, was refused, or is an outcome this module has never seen "
+        "before — retry it, or fix the input",
+    written_records.WRITE_ATTEMPTED:
+        "the write was permitted and attempted, but the id was already known before "
+        "the write and proves nothing about whether it landed — spot-check this "
+        "record if it matters",
+    written_records.CREATED_ID_UNKNOWN:
+        "the record was likely created, but the response carried no id to confirm it; "
+        "the id is unrecoverable and is never fabricated",
+    written_records.WRITTEN_ID_UNKNOWN:
+        "the write was permitted and attempted, and the response carried no id either "
+        "— open this row's record and confirm",
 }
 
 _ACTION_LANE_ORDER = (("companies", DECIDE_COMPANY_ACTION_NODE), ("contacts", DECIDE_CONTACT_ACTION_NODE))
 
 
 def _empty_counts():
-    return {
-        "created": 0, "enriched": 0, "blocked": 0, "skipped": 0,
-        "held": 0, "previewed": 0, "unknown": 0,
-    }
+    """Keyed on `written_records.ALL_OUTCOMES` — derived, never restated, so this
+    follows Task 1's checkpoint selection automatically (57-02)."""
+    return {outcome: 0 for outcome in written_records.ALL_OUTCOMES}
 
 
 def _empty_review_counts():
@@ -119,7 +151,12 @@ def enrichment_row_ledger(execution):
 
 
 def _outcome_for_row(row):
-    return _ACTION_TO_OUTCOME.get(row.get("action"), "unknown")
+    """Delegates to `written_records.outcome_for_action` — the one pure, total,
+    never-raising vocabulary both client-side readers resolve through (57-02, D-57-03).
+    NEVER `written_records`'s validating entry builder: that raises for a malformed item
+    and for a forbidden-named value, and this module's `build_enrichment_report`
+    promises never to raise (see its own docstring)."""
+    return written_records.outcome_for_action(row.get("action"), row.get("hs_object_id"))
 
 
 def _review_state_for_row(row):
@@ -171,6 +208,10 @@ def _build_row_report(row, row_number):
         "row_number": row_number,
         "_identity": _row_identity(row, row_number),
         "lane": row.get("_lane"),
+        # 57-02: the raw backend action, alongside the outcome word — counts are by
+        # outcome, but a renderer still needs to say how many written rows were
+        # creates versus enriches.
+        "action": row.get("action"),
         "outcome": outcome,
         "review_state": _review_state_for_row(row),
         "reason": _OUTCOME_REASON.get(outcome),

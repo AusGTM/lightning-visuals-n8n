@@ -9,7 +9,10 @@ import copy
 import json
 from pathlib import Path
 
+import pytest
+
 import report_enrichment
+import written_records
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 SKILLS_DIR = Path(__file__).resolve().parent.parent / "skills"
@@ -52,36 +55,75 @@ def test_ledger_never_raises_on_malformed_payload():
 
 
 # =====================================================================================
-# Outcome mapping — create/enrich/write_blocked/skip -> created/enriched/blocked/skipped.
+# Outcome mapping — 57-02: one vocabulary, delegated to written_records.outcome_for_action.
 # =====================================================================================
 
-def test_write_blocked_row_renders_as_blocked_with_a_reason_never_enriched():
+def test_write_blocked_row_renders_as_gated_with_a_recoverable_reason_never_written():
     ledger, _ = report_enrichment.enrichment_row_ledger(_enrichment_execution())
     blocked = next(row for row in ledger if row["action"] == "write_blocked")
 
     rendered = report_enrichment._build_row_report(blocked, 1)
 
-    assert rendered["outcome"] == "blocked"
-    assert rendered["outcome"] != "enriched"
-    assert rendered["reason"]
+    assert rendered["outcome"] == "gated"
+    assert rendered["outcome"] not in report_enrichment.SUCCESS_OUTCOMES
+    assert "grant" in rendered["reason"] and "re-send" in rendered["reason"]
 
 
-def test_skip_row_renders_as_skipped_never_enriched():
+def test_skip_row_renders_as_no_action_a_success_never_gated():
     ledger, _ = report_enrichment.enrichment_row_ledger(_enrichment_execution())
     skipped = next(row for row in ledger if row["action"] == "skip")
 
     rendered = report_enrichment._build_row_report(skipped, 1)
 
-    assert rendered["outcome"] == "skipped"
-    assert rendered["outcome"] != "enriched"
+    assert rendered["outcome"] == "no_action"
+    assert rendered["outcome"] in report_enrichment.SUCCESS_OUTCOMES
+    assert rendered["outcome"] != "gated"
 
 
-def test_unrecognised_action_renders_as_unknown_never_a_success():
+def test_unrecognised_action_renders_as_failed_never_a_success():
     row = {"_lane": "companies", "action": "some-future-action-this-code-has-never-seen"}
 
     rendered = report_enrichment._build_row_report(row, 1)
 
-    assert rendered["outcome"] == "unknown"
+    assert rendered["outcome"] == "failed"
+    assert rendered["outcome"] not in report_enrichment.SUCCESS_OUTCOMES
+
+
+# =====================================================================================
+# The four actions that used to render "unknown", uncovered by any test (REVIEW-57:
+# the two-table divergence this plan closes) — update/review/research_failed/
+# recompute_refused.
+# =====================================================================================
+
+def test_update_with_an_id_renders_write_attempted_not_written():
+    """The id was known before the PATCH — proves attempted, never landed."""
+    row = {"_lane": "contacts", "action": "update", "hs_object_id": "123"}
+
+    rendered = report_enrichment._build_row_report(row, 1)
+
+    assert rendered["outcome"] == "write_attempted"
+    assert rendered["outcome"] != "unknown"
+    assert rendered["outcome"] in report_enrichment.SUCCESS_OUTCOMES
+
+
+def test_review_renders_as_held_never_unknown():
+    row = {"_lane": "contacts", "action": "review"}
+
+    rendered = report_enrichment._build_row_report(row, 1)
+
+    assert rendered["outcome"] == "held"
+    assert rendered["outcome"] != "unknown"
+    assert rendered["outcome"] not in report_enrichment.SUCCESS_OUTCOMES
+
+
+@pytest.mark.parametrize("action", ["research_failed", "recompute_refused"])
+def test_research_failed_and_recompute_refused_render_as_failed_never_unknown(action):
+    row = {"_lane": "companies", "action": action}
+
+    rendered = report_enrichment._build_row_report(row, 1)
+
+    assert rendered["outcome"] == "failed"
+    assert rendered["outcome"] != "unknown"
     assert rendered["outcome"] not in report_enrichment.SUCCESS_OUTCOMES
 
 
@@ -102,15 +144,15 @@ def test_needs_match_review_row_renders_as_held_never_unknown_or_a_success():
     assert "costs" in rendered["reason"] and "again" in rendered["reason"]
 
 
-def test_proposed_row_renders_as_previewed_never_unknown_or_a_success():
+def test_proposed_row_renders_as_no_action_never_unknown_and_is_a_success():
     row = {"_lane": "companies", "action": "proposed"}
 
     rendered = report_enrichment._build_row_report(row, 1)
 
-    assert rendered["outcome"] == "previewed"
+    assert rendered["outcome"] == "no_action"
     assert rendered["outcome"] != "unknown"
-    assert rendered["outcome"] not in report_enrichment.SUCCESS_OUTCOMES
-    assert "costs" in rendered["reason"] and "again" in rendered["reason"]
+    assert rendered["outcome"] in report_enrichment.SUCCESS_OUTCOMES
+    assert "preview" in rendered["reason"]
 
 
 # =====================================================================================
@@ -163,15 +205,15 @@ def _walk_11948_body():
     }]
 
 
-def test_build_sync_report_relays_write_blocked_and_the_no_hit_match_reason():
+def test_build_sync_report_relays_write_blocked_as_gated_with_the_no_hit_match_reason():
     rows, reason = report_enrichment.build_sync_report(_walk_11948_body())
 
     assert reason is None
     assert len(rows) == 1
     row = rows[0]
-    assert row["outcome"] == "blocked"
-    assert row["outcome"] != "created" and row["outcome"] not in report_enrichment.SUCCESS_OUTCOMES
-    assert "write-safety gate" in row["reason"]
+    assert row["outcome"] == "gated"
+    assert row["outcome"] != "written" and row["outcome"] not in report_enrichment.SUCCESS_OUTCOMES
+    assert "grant" in row["reason"]
     assert row["match_level"] == "none"
     assert row["match_reason"] == "searched, no hit"
     assert row["lane"] == "contacts"
@@ -181,16 +223,16 @@ def test_build_sync_report_accepts_a_bare_object_never_only_an_array():
     rows, reason = report_enrichment.build_sync_report(_walk_11948_body()[0])
 
     assert reason is None
-    assert rows[0]["outcome"] == "blocked"
+    assert rows[0]["outcome"] == "gated"
 
 
-def test_build_sync_report_unrecognised_action_renders_unknown_never_a_success():
+def test_build_sync_report_unrecognised_action_renders_failed_never_a_success():
     body = [{**_walk_11948_body()[0], "action": "some-future-action-never-seen"}]
 
     rows, reason = report_enrichment.build_sync_report(body)
 
     assert reason is None
-    assert rows[0]["outcome"] == "unknown"
+    assert rows[0]["outcome"] == "failed"
     assert rows[0]["outcome"] not in report_enrichment.SUCCESS_OUTCOMES
 
 
@@ -334,23 +376,27 @@ def test_build_enrichment_report_counts_and_total_sum_correctly():
 
     assert r["total"] == 6
     assert sum(r["counts"].values()) == 6
-    # 2026-08-27, Phase 54-02: this exact-dict-equality pin now carries two more keys
-    # (`held`, `previewed`) that `_empty_counts()` grew when `needs_match_review` and
-    # `proposed` joined `_ACTION_TO_OUTCOME` (T-54-05). The fixture's six rows carry
-    # neither action, so both new keys read 0 here — a deliberate, predicted move
-    # (54-RESEARCH.md §5), not a sweep.
+    # 2026-08-31, 57-02 Task 3: the fixture's six rows, re-classified under the eight-
+    # word vocabulary (D-57-03, Task 1 option-b) — two companies creates with no id
+    # (created_id_unknown), one companies enrich with an id (write_attempted), one
+    # companies write_blocked (gated), one companies skip (no_action), one contacts
+    # enrich with an id (write_attempted). Re-keyed on `written_records.ALL_OUTCOMES`
+    # so this dict always has exactly the current vocabulary's keys, whatever Task 1
+    # selected.
     assert r["counts"] == {
-        "created": 2, "enriched": 2, "blocked": 1, "skipped": 1,
-        "held": 0, "previewed": 0, "unknown": 0,
+        "written": 0, "write_attempted": 2, "created_id_unknown": 2,
+        "written_id_unknown": 0, "gated": 1, "held": 0, "failed": 0, "no_action": 1,
     }
+    assert set(r["counts"]) == set(written_records.ALL_OUTCOMES)
 
 
-def test_build_enrichment_report_failing_rows_include_blocked_skipped_and_needs_review():
+def test_build_enrichment_report_failing_rows_include_gated_created_id_unknown_and_needs_review():
     r = report_enrichment.build_enrichment_report(_enrichment_execution(), handle=None)
 
     failing_outcomes = {row["outcome"] for row in r["failing_rows"]}
-    assert "blocked" in failing_outcomes
-    assert "skipped" in failing_outcomes
+    assert "gated" in failing_outcomes
+    assert "created_id_unknown" in failing_outcomes
+    assert "no_action" not in failing_outcomes, "skip/proposed are successes (D-57-03)"
     assert any(row["review_state"] == "needs_review" for row in r["failing_rows"])
 
 
@@ -375,6 +421,74 @@ def test_build_enrichment_report_never_raises_on_a_non_dict_execution():
         r = report_enrichment.build_enrichment_report(bad, handle=None)
         assert r["state"] == "unknown"
         assert r["handle"] is None
+
+
+def test_skip_row_never_appears_in_failing_rows():
+    """D-57-03's exact point: a clean run must not read as though half of it did not
+    land. `skip` is a success outcome, not a failure."""
+    r = report_enrichment.build_enrichment_report(_enrichment_execution(), handle=None)
+
+    assert not any(row["action"] == "skip" for row in r["failing_rows"])
+
+
+# =====================================================================================
+# 57-02 Task 3 — the never-raise report path must reach the vocabulary through the pure
+# function only, never through written_records's validating entry builder. A malformed
+# row or a forbidden-named value must still produce a report, not an exception, because
+# that entry builder is exactly the thing that would raise on either shape.
+# =====================================================================================
+
+def test_build_enrichment_report_never_raises_over_a_malformed_row_or_a_forbidden_named_value():
+    execution = {
+        "data": {
+            "resultData": {
+                "runData": {
+                    "Decide Action": [{
+                        "executionStatus": "success",
+                        "data": {
+                            "main": [[
+                                # A malformed item — no "json" key at all.
+                                {"not_json": "oops"},
+                                # A row whose reason carries a value that would trip
+                                # written_records' forbidden-name scan if this module
+                                # ever routed through the validating entry builder.
+                                {"json": {
+                                    "action": "write_blocked",
+                                    "reason": "webhook_secret misconfigured",
+                                }},
+                                # An ordinary well-formed row.
+                                {"json": {"action": "update", "hs_object_id": "1"}},
+                            ]]
+                        },
+                    }],
+                }
+            }
+        }
+    }
+
+    r = report_enrichment.build_enrichment_report(execution, handle=None)
+
+    assert r["state"] in ("finished", "in_flight")
+    outcomes = {row["outcome"] for row in r["rows"]}
+    assert "gated" in outcomes
+    assert "write_attempted" in outcomes
+
+
+# =====================================================================================
+# The two client-side readers must agree — for every one of the ten real action values,
+# report_enrichment._outcome_for_row and written_records.classify_item resolve to the
+# same word, both through outcome_for_action (57-02 Task 3).
+# =====================================================================================
+
+@pytest.mark.parametrize("action", [
+    "create", "update", "enrich", "write_blocked", "review", "needs_match_review",
+    "research_failed", "recompute_refused", "skip", "proposed",
+])
+def test_the_two_client_readers_agree_on_every_action(action):
+    row = {"action": action}
+    entry = written_records.classify_item(row)
+
+    assert report_enrichment._outcome_for_row(row) == entry["outcome"]
 
 
 # =====================================================================================
