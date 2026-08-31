@@ -56,6 +56,23 @@ created: 2026-08-31
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
+### Populated by the planner, 2026-08-31 — per task
+
+| Plan · Task | Automated command | Caller path the test MUST drive | Status |
+|---|---|---|---|
+| 57-01 · T1 (tracer) | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_write_grant.py operator-claude-plugin/tests/test_chunking.py -q` | `write_grant.plan_grant()` for the refusal; a REAL 3-chunk `chunking.dispatch_plan()` with `stub_module_transport_factory` for the stop; the resulting `DispatchOutcome` passed to `write_grant.record_dispatch_outcome` for the close — never a hand-built outcome | ⬜ |
+| 57-01 · T2 | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_write_grant.py -q` | `envelope()` itself, with a stubbed executions transport; the block asserted from the real render, not a helper | ⬜ |
+| 57-01 · T3 | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_write_grant.py -q` | a structural test reading both `SKILL.md` files on disk | ⬜ |
+| 57-02 · T1 | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_written_records.py -q` | `classify_item` direct (pure function), parametrised over all ten real action values | ⬜ |
+| 57-02 · T2 | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_report_enrichment.py -q` | `build_enrichment_report`/`build_sync_report`, plus a cross-module agreement test over all ten actions | ⬜ |
+| 57-02 · T3 | `node --test tests/n8n/ingestResponseRowId.test.mjs` | the GENERATED `n8n/wf_contact_ingest_cloud.json`, plus a live read-back of the deployed workflow | ⬜ |
+| 57-03 · T2 | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_remainder_queue.py -q` | `build_entry`/`save`/`load` against `tmp_path` via the `_patch_durable_dir` idiom | ⬜ |
+| 57-03 · T3 | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_write_grant.py operator-claude-plugin/tests/test_chunking.py -q` | `plan_grant()` for the offer; a REAL `dispatch_plan()` ceiling stop for the remainder write, read back off disk | ⬜ |
+| 57-04 · T1 | `.venv/bin/python -c "import ast; ast.parse(open('scripts/prove_zoominfo_balance.py').read())"` + the gated live run | the deployed `Status Credit Request` → `ZoomInfo Usage` chain, read-only | ⬜ |
+| 57-04 · T2 | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_cost_guard.py -q` | `cost_guard.compare` and `write_grant._headroom` over the new fixture | ⬜ |
+| 57-05 · T1 | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_run_report.py -q` | `build_run_report` against fixture artifacts on disk; the join asserted by finding an `hs_object_id: None` row under its `row_id` in both the dict and the rendered block | ⬜ |
+| 57-05 · T2 | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_run_report.py -q` | the extended structural test reading both `SKILL.md` files on disk | ⬜ |
+
 ---
 
 ## Wave 0 Requirements
