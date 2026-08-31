@@ -107,8 +107,17 @@ def test_classify_audit_read_is_absent_for_no_file(tmp_path, monkeypatch):
 
 def test_classify_audit_read_is_parseable_for_a_good_record_including_an_empty_one(tmp_path, monkeypatch):
     monkeypatch.setattr(run_report, "run_audit_path", lambda run_id: tmp_path / f"run_audit-{run_id}.json")
-    run_report.record_audit("run-1")
+    run_report.record_audit("run-1", ceiling={"verdict": "ok"})
     assert run_report.classify_audit_read("run-1") == run_report.PARSEABLE
+
+
+def test_classify_audit_read_is_parseable_for_a_well_formed_but_empty_record(tmp_path, monkeypatch):
+    target = tmp_path / "run_audit-empty.json"
+    target.write_text(json.dumps({
+        "run_id": "empty", "saved_at": "2026-01-01T00:00:00+00:00", "facts": {},
+    }), encoding="utf-8")
+    monkeypatch.setattr(run_report, "run_audit_path", lambda run_id: target)
+    assert run_report.classify_audit_read("empty") == run_report.PARSEABLE
 
 
 def test_classify_audit_read_is_anomalous_for_unparseable_json(tmp_path, monkeypatch):

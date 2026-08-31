@@ -122,6 +122,15 @@ _FORBIDDEN_NAME_MARKERS = (
     "grant", "permission", "webhook",
 )
 
+# classify_read()'s four answers (57-05 Task 1, REVIEW-57-M9), mirroring
+# `held_queue.classify_read` — the fourth word, `ANOTHER_RUN`, comes from
+# `held_queue.py`'s own template, not from this module's pre-existing (three-word)
+# constants, which `load()`/`load_scoped()` never needed to distinguish before.
+ABSENT = "absent"
+PARSEABLE = "parseable"
+ANOMALOUS = "anomalous"
+ANOTHER_RUN = "another_run"
+
 
 class ManifestError(Exception):
     """Raised when a verdict map cannot be persisted safely — a verdict outside the
@@ -155,6 +164,39 @@ def run_manifest_path(run_id) -> Path:
     file stays every existing caller's default; this is for a caller that deliberately
     wants per-run scoping (REVIEW-07)."""
     return durable_paths.resolve_state_path().parent / f"run_manifest-{run_id}.json"
+
+
+def classify_read(run_id, path=None) -> str:
+    """What THIS run's own run-scoped manifest (`run_manifest_path(run_id)` by default)
+    looks like, from a fresh probe over the raw file — never raises (57-05 Task 1,
+    REVIEW-57-M9). Same four words `written_records.classify_read`/
+    `held_queue.classify_read` carry: `ABSENT` (no file), `PARSEABLE` (a real, readable
+    document, including one whose `verdicts` map is empty), `ANOMALOUS` (present but
+    unparseable, malformed, or carrying a verdict outside `ALLOWED_VERDICTS`), or
+    `ANOTHER_RUN` (a readable document whose own stored `run_id` does not match). Does
+    not change `load()`/`load_scoped()`'s own degrade-whole behaviour.
+    """
+    try:
+        target = Path(path) if path is not None else run_manifest_path(run_id)
+        if not target.exists():
+            return ABSENT
+        try:
+            document = json.loads(target.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return ANOMALOUS
+        if not isinstance(document, dict):
+            return ANOMALOUS
+        verdicts = document.get(VERDICTS_FIELD)
+        if not isinstance(verdicts, dict):
+            return ANOMALOUS
+        for row_id, verdict in verdicts.items():
+            if not isinstance(row_id, str) or verdict not in ALLOWED_VERDICTS:
+                return ANOMALOUS
+        if document.get(RUN_ID_FIELD) != run_id:
+            return ANOTHER_RUN
+        return PARSEABLE
+    except (TypeError, ValueError, OSError):
+        return ABSENT
 
 
 def save(run_id, verdicts, path=None) -> None:

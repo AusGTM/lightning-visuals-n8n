@@ -252,9 +252,11 @@ def test_the_module_exposes_no_fourth_verb():
               if not name.startswith("_") and inspect.isfunction(getattr(run_manifest, name))
               and getattr(run_manifest, name).__module__ == "run_manifest"}
     # Phase 61 Plan 04 Task 3: run_manifest_path (per-run scoping) and load_scoped (the
-    # run-aware load) are the two deliberate additions this widening earns.
+    # run-aware load) are the two deliberate additions this widening earns. 57-05 Task 1
+    # (REVIEW-57-M9) adds one more: classify_read, the second probe a report needs to
+    # tell an absent manifest from a malformed one.
     assert public == {"manifest_path", "run_manifest_path", "save", "load",
-                       "load_scoped", "rows_to_resume"}
+                       "load_scoped", "rows_to_resume", "classify_read"}
 
 
 # =====================================================================================

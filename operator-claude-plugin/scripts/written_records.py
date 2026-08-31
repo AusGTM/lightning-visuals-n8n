@@ -182,6 +182,14 @@ _FORBIDDEN_NAME_MARKERS = (
     "grant", "permission", "webhook",
 )
 
+# classify_read()'s four answers (57-05 Task 1, REVIEW-57-M9), mirroring
+# `held_queue.classify_read` — `load()`'s own return ([] on absent, [] on malformed)
+# cannot say WHICH of the two happened; this is the second probe that can.
+ABSENT = "absent"
+PARSEABLE = "parseable"
+ANOMALOUS = "anomalous"
+ANOTHER_RUN = "another_run"
+
 
 class WrittenRecordsError(Exception):
     """Raised when an entry cannot be persisted safely — a non-dict response item (the
@@ -390,6 +398,34 @@ def append_chunk(run_id, chunk_index, body, path=None):
         return True
     except OSError:
         return False
+
+
+def classify_read(run_id, path=None) -> str:
+    """What THIS run's own written-records file looks like, from a fresh probe over the
+    raw file — never raises (57-05 Task 1, REVIEW-57-M9). `ABSENT` (no file — a
+    legitimate zero, not a failure to read), `PARSEABLE` (a real, readable document,
+    including one whose `entries` is an empty list — an empty store is not an absent
+    one), `ANOMALOUS` (present but unparseable, malformed, or schema-mismatched — must
+    never present as zero), or `ANOTHER_RUN` (a readable document whose own stored
+    `run_id` does not match). Mirrors `held_queue.classify_read`'s contract exactly;
+    does not change `load()`'s own degrade-whole behaviour — a caller still calls
+    `load()` for the entries and `classify_read()` for the sentence to say about them.
+    """
+    try:
+        target = Path(path) if path is not None else written_records_path(run_id)
+        if not target.exists():
+            return ABSENT
+        document = _load_document(target)
+        if document is None:
+            return ANOMALOUS
+        entries = _entries_from_document(document)
+        if entries is None:
+            return ANOMALOUS
+        if document.get(RUN_ID_FIELD) != run_id:
+            return ANOTHER_RUN
+        return PARSEABLE
+    except (TypeError, ValueError, OSError):
+        return ABSENT
 
 
 def load(path=None) -> list:
