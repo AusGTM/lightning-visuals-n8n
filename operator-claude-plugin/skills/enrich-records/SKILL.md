@@ -280,30 +280,71 @@ says nothing per record, this lane reports at chunk granularity and says so.
    functions return the identical `{armed, workflow_id, grant, refusal, detail}` shape, so
    the dispatch is the same call either way:
 
+   `send_ids`/`send_domains`/`allow_create`/`object_type`/`providers_override` below are
+   whatever step 2/3 already resolved for this send — bound to real names here, not left
+   as angle-bracket placeholders, because this block is executable Python and an AST test
+   (`test_write_grant.py`) `compile()`s it (REVIEW-57-M4):
+
    ```python
    import chunking, config_gate, enrichment, n8n_arming, write_grant
 
    cfg = config_gate.load_config()
-   providers = enrichment.resolve_providers(<override or None>, cfg)
-   plan = chunking.plan_chunks(<spec>, chunking.chunk_ceiling(cfg))
+   providers = enrichment.resolve_providers(providers_override, cfg)
+   plan = chunking.plan_chunks(spec, chunking.chunk_ceiling(cfg))
    decision = (
        write_grant.authorize_send(
            grant, lane="enrichment",
-           record_ids=<this send's ids>, record_domains=<this send's domains>)
+           record_ids=send_ids, record_domains=send_domains)
        if grant is not None else
        write_grant.authorize_ungranted_send(
-           cfg, lane="enrichment", object_type=<object_type>,
-           record_ids=<this send's ids>, record_domains=<this send's domains>,
-           allow_create=<allow_create>, label="this send")
+           cfg, lane="enrichment", object_type=object_type,
+           record_ids=send_ids, record_domains=send_domains,
+           allow_create=allow_create, label="this send")
    )
    if not decision["armed"]:
        # revoked, closed, outside the grant, the admin has not enabled write grants, or
        # the backend is not in a known-disarmed state — STOP and report decision["detail"]
        ...
-   with n8n_arming.armed_window(decision["workflow_id"],
-                                <this send's ids>, <this send's domains>,
-                                <allow_create>, cfg, grant=decision["grant"]):
-       outcome = chunking.dispatch_plan(plan, providers, True, cfg)
+
+   # Phase 57 / D-57-01 / RUN-05: bound this dispatch to the grant's own sampled ceiling,
+   # never left unbounded. `ok` — the sampled monthly remainder; `unknown` — the monthly
+   # allowance could not be sampled, so this run is self-bound to its OWN quote of N
+   # executions instead of running unchecked (REVIEW-57-H6); `over` is reached here only
+   # when the operator OVERRIDDEN the preflight refusal (an override never travels — it
+   # comes only from the operator's own answer in this conversation, never from stored
+   # state or a config value), and is bounded by that same self-quote so the override
+   # cannot silently become "spend without limit".
+   ceiling = decision["grant"]["ceiling"]
+   if ceiling["verdict"] == write_grant.CEILING_OK:
+       execution_ceiling = ceiling["remaining_sampled"]
+   elif ceiling["verdict"] == write_grant.CEILING_UNKNOWN:
+       execution_ceiling = ceiling["projected_executions"]
+   else:
+       execution_ceiling = ceiling["projected_executions"]
+
+   # Grant closure on every exit (REVIEW-57-H8/M5): `outcome`/`disarm` start None so an
+   # exception raised BEFORE `dispatch_plan()` returns — inside `enrichment.build_envelope`
+   # or the transport itself — cannot leave either name unbound when the closure below
+   # runs. A crash closes with the pre-existing `unhandled_error` reason and re-raises; a
+   # normal return (including a ceiling stop, which is not an exception) closes through the
+   # same adapter with no override, deriving `ceiling_breach` only when `outcome.
+   # ceiling_stop` is actually present.
+   outcome = None
+   disarm = None
+   crashed = False
+   try:
+       with n8n_arming.armed_window(decision["workflow_id"], send_ids, send_domains,
+                                    allow_create, cfg, grant=decision["grant"]) as window:
+           outcome = chunking.dispatch_plan(plan, providers, True, cfg,
+                                            execution_ceiling=execution_ceiling)
+       disarm = window.disarm_result
+   except Exception:
+       crashed = True
+       raise
+   finally:
+       close_reason = write_grant.CLOSED_UNHANDLED_ERROR if crashed else None
+       grant = write_grant.record_dispatch_outcome(
+           decision["grant"], outcome, cfg, disarm=disarm, reason=close_reason)
    ```
 
    The allowlist handed to `armed_window` is **this send's records, never the grant's whole
@@ -315,6 +356,14 @@ says nothing per record, this lane reports at chunk granularity and says so.
    continue — one bad chunk does not abandon the batch. The consent itself has no default:
    if the operator has not said yes to this send and no grant is open, pass nothing and do
    not call this at all.
+
+   **When `outcome.ceiling_stop` is present, this is a budget stop, not a chunk
+   failure** (D-57-01) — it never appears in `outcome.failed_batch` and every attempted
+   chunk's `ok` is still True. Tell the operator four things: spending stopped BEFORE the
+   named chunk was sent, the run completed rather than aborting, the unsent rows
+   (`outcome.ceiling_stop.remainder`) are named individually and are not lost, and the
+   grant is now closed for `ceiling_breach` — `grant["state"]` is `write_grant.CLOSED`
+   after the `finally` above runs — so a further send needs a fresh grant.
 
 9. **Report what was sent, and relay what the backend actually said about it.** From
    `outcome.results`, say how many chunks the backend accepted and how many rows were in

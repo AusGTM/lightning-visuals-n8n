@@ -376,6 +376,87 @@ def test_rerequest_unanswered_request_bodies_carry_the_original_row_ids(
     )
 
 
+def test_rerequest_unanswered_carries_the_dispatch_outcome_and_ceiling(
+        fake_config, stub_module_transport_factory):
+    """Phase 57 / D-57-01 / REVIEW-57-H3: the re-request pass is a real production
+    `dispatch_plan` caller that runs a SECOND pass under the same grant, and its own
+    spend was invisible to any tally before `execution_ceiling` and `dispatch_outcome`
+    existed."""
+    rows = _rows(1)
+    merge_report = preingest.merge_enriched(rows, [])
+    transport = stub_module_transport_factory(responses=[
+        [_response(rows[0]["row_id"], {"email": "answered@x.com"})],
+    ])
+
+    result = preingest.rerequest_unanswered(
+        rows, merge_report, ["zoominfo"], True, _rerequest_config(fake_config),
+        transport=transport, execution_ceiling=5,
+    )
+
+    assert len(transport.calls) == 1
+    assert result.dispatch_outcome is not None
+    assert result.dispatch_outcome.ceiling_stop is None, "comfortably under the ceiling"
+
+
+def test_rerequest_unanswered_with_no_execution_ceiling_is_unchanged(
+        fake_config, stub_module_transport_factory):
+    """`execution_ceiling=None` is today's behaviour — the same plan, the same single
+    call, the same `MergeResult` fields every existing caller relies on."""
+    rows = _rows(2)
+    merge_report = preingest.merge_enriched(rows, [])
+    transport = stub_module_transport_factory(responses=[
+        [_response(rows[0]["row_id"], {"email": "answered@x.com"})],
+    ])
+
+    result = preingest.rerequest_unanswered(
+        rows, merge_report, ["zoominfo"], True, _rerequest_config(fake_config),
+        transport=transport,
+    )
+
+    assert len(transport.calls) == 1, "one re-request pass, and no more"
+    assert len(result.unanswered) == 1
+    assert result.unanswered[0]["row_id"] == rows[1]["row_id"]
+    assert result.dispatch_outcome is not None
+    assert result.dispatch_outcome.ceiling_stop is None
+
+
+def test_rerequest_unanswered_with_nothing_unanswered_carries_no_dispatch_outcome(
+        fake_config, stub_module_transport_factory):
+    """No unanswered rows means no dispatch happened at all — `dispatch_outcome` must
+    default None rather than pretend a call was made."""
+    rows = _rows(1)
+    merge_report = preingest.merge_enriched(rows, [_response(rows[0]["row_id"], {})])
+    transport = stub_module_transport_factory()
+
+    result = preingest.rerequest_unanswered(
+        rows, merge_report, ["zoominfo"], True, _rerequest_config(fake_config),
+        transport=transport,
+    )
+
+    assert result is merge_report
+    assert result.dispatch_outcome is None
+
+
+def test_rerequest_unanswered_with_an_already_exhausted_ceiling_sends_nothing(
+        fake_config, stub_module_transport_factory):
+    """A ceiling that cannot even cover the first chunk sends zero POSTs and reports the
+    stop on the returned outcome rather than silently sending anyway."""
+    rows = _rows(1)
+    merge_report = preingest.merge_enriched(rows, [])
+    transport = stub_module_transport_factory()
+
+    result = preingest.rerequest_unanswered(
+        rows, merge_report, ["zoominfo"], True, _rerequest_config(fake_config),
+        transport=transport, execution_ceiling=0,
+    )
+
+    assert transport.calls == []
+    assert result.dispatch_outcome is not None
+    assert result.dispatch_outcome.ceiling_stop is not None
+    assert len(result.unanswered) == 1
+    assert result.unanswered[0]["row_id"] == rows[0]["row_id"]
+
+
 def test_a_failed_rerequest_chunk_leaves_its_rows_unanswered_with_reason_intact(
         fake_config, stub_module_transport_factory):
     rows = _rows(1)

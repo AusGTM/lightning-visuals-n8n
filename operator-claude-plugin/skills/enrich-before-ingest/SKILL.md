@@ -349,6 +349,11 @@ whatever seven columns happened to be in the source file.
    synchronous body would have carried. `watch.recover_async_dispatch` is the one place
    that reads it; nothing here re-implements that walk.
 
+   `send_ids`/`send_domains`/`allow_create`/`object_type`/`providers_override` are whatever
+   the earlier steps resolved for this send — bound to real names here, never left as
+   angle-bracket placeholders, because this block is executable Python and an AST test
+   (`test_write_grant.py`) `compile()`s it (REVIEW-57-M4):
+
    ```python
    import chunking, config_gate, enrichment, n8n_arming, preingest, run_state, watch, write_grant
 
@@ -356,26 +361,68 @@ whatever seven columns happened to be in the source file.
    run_state.start_run(run_id, [row["row_id"] for row in unmatched_rows])
 
    cfg = config_gate.load_config()
-   providers = enrichment.resolve_providers(<override or None>, cfg)
+   providers = enrichment.resolve_providers(providers_override, cfg)
    plan = chunking.plan_chunks(spec, chunking.chunk_ceiling(cfg))
    decision = (
        write_grant.authorize_send(
            grant, lane="enrichment",
-           record_ids=<this send's ids>, record_domains=<this send's domains>)
+           record_ids=send_ids, record_domains=send_domains)
        if grant is not None else
        write_grant.authorize_ungranted_send(
-           cfg, lane="enrichment", object_type=<object_type>,
-           record_ids=<this send's ids>, record_domains=<this send's domains>,
-           allow_create=<allow_create>, label="this run")
+           cfg, lane="enrichment", object_type=object_type,
+           record_ids=send_ids, record_domains=send_domains,
+           allow_create=allow_create, label="this run")
    )
    if not decision["armed"]:
        # revoked, closed, outside the grant, the admin has not enabled write grants, or
        # the backend is not in a known-disarmed state — STOP and report decision["detail"]
        ...
-   with n8n_arming.armed_window(decision["workflow_id"],
-                                <this send's ids>, <this send's domains>,
-                                <allow_create>, cfg, grant=decision["grant"]):
-       outcome = chunking.dispatch_plan(plan, providers, True, cfg, run_id=run_id, async_ack=True)
+
+   # Phase 57 / D-57-01 / RUN-05: bound this dispatch to the grant's own sampled ceiling
+   # — see `enrich-records/SKILL.md` step 8 for the same three-state read. This is the
+   # FIRST of this grant's several dispatch legs under D-53-05's one-grant-two-lanes
+   # shape (this enrich pass, then the final ingest send below), so the remaining budget
+   # is carried forward as `remaining_execution_ceiling` and decremented after every leg
+   # with `chunking.projected_spend` (REVIEW-57-H3/H6) rather than re-sampled per leg —
+   # the executions list is walked once, at grant open.
+   ceiling = decision["grant"]["ceiling"]
+   if ceiling["verdict"] == write_grant.CEILING_OK:
+       remaining_execution_ceiling = ceiling["remaining_sampled"]
+   elif ceiling["verdict"] == write_grant.CEILING_UNKNOWN:
+       remaining_execution_ceiling = ceiling["projected_executions"]
+   else:
+       remaining_execution_ceiling = ceiling["projected_executions"]
+
+   # Grant closure on every exit (REVIEW-57-H8/M5): `outcome`/`disarm` start None so an
+   # exception raised BEFORE `dispatch_plan()` returns cannot leave either name unbound
+   # when the closure below runs. A crash closes with the pre-existing `unhandled_error`
+   # reason and re-raises; a normal return (including a ceiling stop, which is not an
+   # exception) closes through the same adapter with no override, deriving
+   # `ceiling_breach` only when `outcome.ceiling_stop` is actually present. If this
+   # dispatch closes the grant, every later step that reads `decision["grant"]` again
+   # (the re-request pass, the final ingest send) refuses through `covers()`'s own
+   # closed-grant check — no separate handling is added here for that.
+   outcome = None
+   disarm = None
+   crashed = False
+   try:
+       with n8n_arming.armed_window(decision["workflow_id"], send_ids, send_domains,
+                                    allow_create, cfg, grant=decision["grant"]) as window:
+           outcome = chunking.dispatch_plan(
+               plan, providers, True, cfg, run_id=run_id, async_ack=True,
+               execution_ceiling=remaining_execution_ceiling)
+       disarm = window.disarm_result
+   except Exception:
+       crashed = True
+       raise
+   finally:
+       close_reason = write_grant.CLOSED_UNHANDLED_ERROR if crashed else None
+       grant = write_grant.record_dispatch_outcome(
+           decision["grant"], outcome, cfg, disarm=disarm, reason=close_reason)
+
+   if remaining_execution_ceiling is not None:
+       remaining_execution_ceiling -= chunking.projected_spend(outcome)
+
    run_state.mark_dispatched(run_id, [row["row_id"] for row in unmatched_rows])
    progress = run_state.read_progress(run_id)  # tell the operator N submitted, still running
 
@@ -388,6 +435,20 @@ whatever seven columns happened to be in the source file.
    else:
        merge_report = preingest.merge_enriched(unmatched_rows, recovery["responses"])
    ```
+
+   **When `outcome.ceiling_stop` is present, this is a budget stop, not a chunk
+   failure** (D-57-01) — it never appears in `outcome.failed_batch` and every attempted
+   chunk's `ok` is still True. Tell the operator four things: spending stopped BEFORE the
+   named chunk was sent, the run completed rather than aborting, the unsent rows
+   (`outcome.ceiling_stop.remainder`) are named individually and are not lost, and the
+   grant is now closed for `ceiling_breach` so the re-request pass and the final ingest
+   send below both need a fresh grant.
+
+   **If `preingest.rerequest_unanswered` is invoked for this run's unanswered rows**, pass
+   it the SAME decremented `remaining_execution_ceiling` this dispatch just computed —
+   never a fresh sample — and decrement it again from the returned `MergeResult.
+   dispatch_outcome` with `chunking.projected_spend` before the final ingest leg below,
+   exactly as this dispatch decremented it from the enrich pass's own outcome.
 
    **`recovery["responses"]` is already flat** — one `Build Response` item per row,
    because that is what one settled execution's own output already is (unlike a
@@ -584,30 +645,85 @@ whatever seven columns happened to be in the source file.
    this send's records — using the SAME `allow_write_grants` authority and the SAME
    Guardrail A dirty-backend refusal a standing grant gets — and discards it once this
    dispatch finishes; it is never remembered as a standing grant, never written to disk.
-   Run the dispatch below inside this send's own window either way:
+   Build the CSV of exactly the rows the preview marked SEND FIRST — never the operator's
+   original file, which is what makes holding a row back possible at all — because the
+   pre-send ceiling check below needs its row count in scope before the send, not after:
 
    ```python
-   import config_gate, dispatch, n8n_arming, write_grant
+   import extraction
+
+   sendable_rows, held = extraction.hold_emailless(merge_report.rows)
+   sendable_rows = extraction.strip_row_id(sendable_rows)
+   extraction.write_dispatch_csv(sendable_rows, out_path)
+   ```
+
+   Then authorize and run the dispatch below inside this send's own window. `send_ids`/
+   `send_domains`/`allow_create` are whatever the earlier steps in this flow resolved for
+   this send — bound to real names here, never left as angle-bracket placeholders, because
+   this block is executable Python and an AST test (`test_write_grant.py`) `compile()`s it
+   (REVIEW-57-M4):
+
+   ```python
+   import chunking, config_gate, dispatch, n8n_arming, write_grant
 
    cfg = config_gate.load_config()
    decision = (
        write_grant.authorize_send(
            grant, lane="contacts",
-           record_ids=<this send's ids>, record_domains=<this send's domains>)
+           record_ids=send_ids, record_domains=send_domains)
        if grant is not None else
        write_grant.authorize_ungranted_send(
            cfg, lane="contacts", object_type="contacts",
-           record_ids=<this send's ids>, record_domains=<this send's domains>,
-           allow_create=<allow_create>, label="this write")
+           record_ids=send_ids, record_domains=send_domains,
+           allow_create=allow_create, label="this write")
    )
    if not decision["armed"]:
        # revoked, closed, outside the grant, the admin has not enabled write grants, or
        # the backend is not in a known-disarmed state — STOP and report decision["detail"]
        ...
-   with n8n_arming.armed_window(decision["workflow_id"],
-                                <this send's ids>, <this send's domains>,
-                                <allow_create>, cfg, grant=decision["grant"]):
-       result = dispatch.dispatch(out_path, True, cfg, run_id=outcome.run_id)
+
+   # Phase 57 / D-57-01 / REVIEW-57-H7: THE FOURTH DISPATCH PATH. This single-shot send
+   # has no chunk boundary to stop mid-run at, so the ceiling check is PRE-CALL — charged
+   # before sending, not after. `remaining_execution_ceiling` is the enrich pass's own
+   # decremented budget (`enrich-before-ingest/SKILL.md`'s enrich step), carried forward
+   # rather than re-sampled; a plan whose envelope produced no projection at all leaves it
+   # `None`, which is genuinely unbounded and is said to the operator plainly as such.
+   would_be = 1 + len(sendable_rows)
+   if remaining_execution_ceiling is not None and would_be > remaining_execution_ceiling:
+       # DO NOT SEND. The rows go to the remainder queue with
+       # `remainder_queue.REASON_CEILING_BREACH` (57-03's store — this disposition is
+       # prose here until 57-03 Task 3 lands and wires it; the guard above is real code
+       # now). Tell the operator spending stopped BEFORE this ingest send, name
+       # `sendable_rows` individually as recoverable — nothing here is lost, only
+       # unsent — and close the grant for the breach.
+       grant = write_grant.record_dispatch_outcome(
+           decision["grant"], None, cfg, reason=write_grant.CLOSED_CEILING_BREACH)
+   else:
+       # Grant closure on every exit (REVIEW-57-H8/M5): `outcome_ingest`/`disarm` start
+       # None so an exception raised before `dispatch.dispatch()` returns cannot leave
+       # either name unbound when the closure below runs.
+       outcome_ingest = None
+       disarm = None
+       crashed = False
+       try:
+           with n8n_arming.armed_window(decision["workflow_id"], send_ids, send_domains,
+                                        allow_create, cfg, grant=decision["grant"]) as window:
+               result = dispatch.dispatch(out_path, True, cfg, run_id=outcome.run_id)
+               # One spend vocabulary (REVIEW-57-H7): wrap this single-shot send's
+               # result into the SAME `DispatchOutcome` shape every chunked leg
+               # produces, so `chunking.projected_spend` and 57-05's
+               # `build_run_report(..., outcomes=...)` see it exactly as they see a
+               # chunked leg — never a second "extra spend" argument anywhere.
+               outcome_ingest = chunking.single_dispatch_outcome(
+                   result, record_count=len(sendable_rows), run_id=result["run_id"])
+           disarm = window.disarm_result
+       except Exception:
+           crashed = True
+           raise
+       finally:
+           close_reason = write_grant.CLOSED_UNHANDLED_ERROR if crashed else None
+           grant = write_grant.record_dispatch_outcome(
+               decision["grant"], outcome_ingest, cfg, disarm=disarm, reason=close_reason)
    ```
 
    `run_id=outcome.run_id` is what makes D-59-09's "one file per run" promise (step 1, step
@@ -628,17 +744,6 @@ whatever seven columns happened to be in the source file.
    report** — the same D-59-10 relay step 5 already gives the enrichment lane's own
    bookkeeping misses: this write's outcome could not be recorded in the artifact even
    though the write itself may have landed; a bookkeeping miss is never a dispatch failure.
-
-   Build and send a CSV of exactly the rows the preview marked SEND — never the
-   operator's original file, which is what makes holding a row back possible at all:
-
-   ```python
-   import extraction
-
-   sendable_rows, held = extraction.hold_emailless(merge_report.rows)
-   sendable_rows = extraction.strip_row_id(sendable_rows)
-   extraction.write_dispatch_csv(sendable_rows, out_path)
-   ```
 
    `strip_row_id` drops the `row_id` join key `build_rows_spec` minted in step 2 — every
    stage since has carried it forward on purpose, but it is not a HubSpot property, and

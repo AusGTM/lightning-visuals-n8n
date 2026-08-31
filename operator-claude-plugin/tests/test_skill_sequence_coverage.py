@@ -189,29 +189,39 @@ COVERED = {
         "enrich-before-ingest",
         ("extraction.hold_emailless", "extraction.strip_row_id", "extraction.write_dispatch_csv"),
     ): "test_preingest_merge.py::test_the_documented_step_7_sequence_reaches_a_written_dispatch_csv",
+    # Phase 57 Task 4 (RUN-05, REVIEW-57-H7/H8): these four entries' tuples grew a
+    # `write_grant.record_dispatch_outcome` close (and, for the single-shot legs, a
+    # `chunking.single_dispatch_outcome` wrap first) once the ceiling wiring landed. The
+    # sink changed too on the two single-shot legs, so their covering nodeid moved to a
+    # test that actually drives `single_dispatch_outcome` -> `record_dispatch_outcome`
+    # for real, rather than one written before either function existed.
     (
         "contact-upload",
         (
             "config_gate.load_config", "write_grant.authorize_send",
-            "write_grant.authorize_ungranted_send", "n8n_arming.armed_window",
-            "dispatch.dispatch",
+            "write_grant.authorize_ungranted_send", "write_grant.record_dispatch_outcome",
+            "n8n_arming.armed_window", "dispatch.dispatch",
+            "chunking.single_dispatch_outcome", "write_grant.record_dispatch_outcome",
         ),
-    ): "test_write_grant.py::test_authorize_send_and_authorize_ungranted_send_each_drive_dispatch_inside_their_own_armed_window",
+    ): "test_write_grant.py::test_single_dispatch_outcome_composed_with_record_dispatch_outcome_closes_normally",
     (
         "enrich-before-ingest",
         (
             "config_gate.load_config", "write_grant.authorize_send",
-            "write_grant.authorize_ungranted_send", "n8n_arming.armed_window",
-            "dispatch.dispatch",
+            "write_grant.authorize_ungranted_send", "write_grant.record_dispatch_outcome",
+            "n8n_arming.armed_window", "dispatch.dispatch",
+            "chunking.single_dispatch_outcome", "write_grant.record_dispatch_outcome",
         ),
-    ): "test_write_grant.py::test_authorize_send_and_authorize_ungranted_send_each_drive_dispatch_inside_their_own_armed_window",
+    ): "test_write_grant.py::test_single_dispatch_outcome_composed_with_record_dispatch_outcome_closes_normally",
     (
         "enrich-before-ingest",
         (
             "run_state.new_run_id", "run_state.start_run", "config_gate.load_config",
             "enrichment.resolve_providers", "chunking.plan_chunks", "chunking.chunk_ceiling",
             "write_grant.authorize_send", "write_grant.authorize_ungranted_send",
-            "n8n_arming.armed_window", "chunking.dispatch_plan", "run_state.mark_dispatched",
+            "n8n_arming.armed_window", "chunking.dispatch_plan",
+            "write_grant.record_dispatch_outcome", "chunking.projected_spend",
+            "run_state.mark_dispatched",
             "run_state.read_progress", "watch.recover_async_dispatch", "preingest.merge_enriched",
         ),
     ): "test_chunking.py::test_the_enrich_before_ingest_waterfall_submits_async_and_recovers_through_merge_enriched",
@@ -221,9 +231,9 @@ COVERED = {
             "config_gate.load_config", "enrichment.resolve_providers", "chunking.plan_chunks",
             "chunking.chunk_ceiling", "write_grant.authorize_send",
             "write_grant.authorize_ungranted_send", "n8n_arming.armed_window",
-            "chunking.dispatch_plan",
+            "chunking.dispatch_plan", "write_grant.record_dispatch_outcome",
         ),
-    ): "test_chunking.py::test_the_enrich_records_waterfall_chains_resolve_providers_through_dispatch_plan",
+    ): "test_write_grant.py::test_record_dispatch_outcome_closes_the_grant_from_a_real_dispatch_ceiling_stop",
     (
         "enrich-before-ingest",
         (

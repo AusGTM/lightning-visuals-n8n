@@ -285,28 +285,79 @@ be sent, and — only when explicitly armed — send it.
    functions return the identical `{armed, workflow_id, grant, refusal, detail}` shape, so
    the dispatch is the same call either way:
 
+   `send_ids`/`send_domains`/`allow_create`/`send_path`/`send_row_count` are whatever the
+   earlier steps resolved for this send (`send_row_count` is `row_count` from step 3's
+   preview) — bound to real names here, never left as angle-bracket placeholders, because
+   this block is executable Python and an AST test (`test_write_grant.py`) `compile()`s it
+   (REVIEW-57-M4):
+
    ```python
-   import config_gate, dispatch, n8n_arming, write_grant
+   import chunking, config_gate, dispatch, n8n_arming, write_grant
 
    cfg = config_gate.load_config()
    decision = (
        write_grant.authorize_send(
            grant, lane="contacts",
-           record_ids=<this send's ids>, record_domains=<this send's domains>)
+           record_ids=send_ids, record_domains=send_domains)
        if grant is not None else
        write_grant.authorize_ungranted_send(
            cfg, lane="contacts", object_type="contacts",
-           record_ids=<this send's ids>, record_domains=<this send's domains>,
-           allow_create=<allow_create>, label="this send")
+           record_ids=send_ids, record_domains=send_domains,
+           allow_create=allow_create, label="this send")
    )
    if not decision["armed"]:
        # revoked, closed, outside the grant, the admin has not enabled write grants, or
        # the backend is not in a known-disarmed state — STOP and report decision["detail"]
        ...
-   with n8n_arming.armed_window(decision["workflow_id"],
-                                <this send's ids>, <this send's domains>,
-                                <allow_create>, cfg, grant=decision["grant"]):
-       result = dispatch.dispatch(<path>, True, cfg)
+
+   # Phase 57 / D-57-01 / REVIEW-57-H7: THE FOURTH DISPATCH PATH. This is a single-shot
+   # send — the whole file in one POST — with no chunk boundary to stop mid-run at, so
+   # the ceiling check is PRE-CALL. `ok` — bounded by the sampled monthly remainder;
+   # `unknown` — self-bound to this batch's own quote (REVIEW-57-H6), never left
+   # unbounded; `over` is reached only when the operator overrode the preflight refusal.
+   ceiling = decision["grant"]["ceiling"]
+   if ceiling["verdict"] == write_grant.CEILING_OK:
+       execution_ceiling = ceiling["remaining_sampled"]
+   elif ceiling["verdict"] == write_grant.CEILING_UNKNOWN:
+       execution_ceiling = ceiling["projected_executions"]
+   else:
+       execution_ceiling = ceiling["projected_executions"]
+
+   would_be = 1 + send_row_count
+   if execution_ceiling is not None and would_be > execution_ceiling:
+       # DO NOT SEND. The rows go to the remainder queue with
+       # `remainder_queue.REASON_CEILING_BREACH` (57-03's store — this disposition is
+       # prose here until 57-03 Task 3 lands and wires it; the guard above is real code
+       # now). Tell the operator spending stopped BEFORE this send, name the file's rows
+       # as recoverable — nothing here is lost, only unsent — and close the grant for
+       # the breach.
+       grant = write_grant.record_dispatch_outcome(
+           decision["grant"], None, cfg, reason=write_grant.CLOSED_CEILING_BREACH)
+   else:
+       # Grant closure on every exit (REVIEW-57-H8/M5): `outcome`/`disarm` start None so
+       # an exception raised before `dispatch.dispatch()` returns cannot leave either
+       # name unbound when the closure below runs.
+       outcome = None
+       disarm = None
+       crashed = False
+       try:
+           with n8n_arming.armed_window(decision["workflow_id"], send_ids, send_domains,
+                                        allow_create, cfg, grant=decision["grant"]) as window:
+               result = dispatch.dispatch(send_path, True, cfg)
+               # One spend vocabulary (REVIEW-57-H7): wrap this single-shot send's
+               # result into the SAME `DispatchOutcome` shape every chunked leg
+               # produces, so `chunking.projected_spend` sees it exactly as it sees a
+               # chunked leg — never a second "extra spend" argument anywhere.
+               outcome = chunking.single_dispatch_outcome(
+                   result, record_count=send_row_count, run_id=result["run_id"])
+           disarm = window.disarm_result
+       except Exception:
+           crashed = True
+           raise
+       finally:
+           close_reason = write_grant.CLOSED_UNHANDLED_ERROR if crashed else None
+           grant = write_grant.record_dispatch_outcome(
+               decision["grant"], outcome, cfg, disarm=disarm, reason=close_reason)
    ```
 
    The allowlist handed to `armed_window` is **this send's records, never the grant's whole

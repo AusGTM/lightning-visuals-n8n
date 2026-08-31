@@ -8,7 +8,10 @@ The tracer test walks the whole path in one function on purpose — an admin-set
 planned grant, an explicit yes, an armed window, a verified disarm — because that is the
 path G-2 said was unreachable from the operator's chair.
 """
+import ast
 import os
+import re
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -1517,6 +1520,48 @@ def test_record_dispatch_outcome_leaves_the_grant_open_with_no_ceiling_stop(
     assert updated["state"] == write_grant.OPEN
 
 
+def test_an_explicit_reason_overrides_a_derived_ceiling_breach(
+        granting_config, stub_module_transport_factory):
+    """REVIEW-57-M7: a crash during a ceiling-stopped dispatch must never be mislabelled
+    a budget stop. This is the behaviour that can actually fail today — asserting the
+    `CLOSED_UNHANDLED_ERROR` constant merely exists cannot."""
+    import chunking
+
+    transport = stub_module_transport_factory(_plan_reads())
+    grant = _open(granting_config, transport, ids=("1", "2", "3", "4", "5", "6"))
+
+    plan = chunking.plan_chunks(
+        {"record_ids": ["1", "2", "3", "4", "5", "6"], "object_type": "companies"}, 2)
+    send_transport = stub_module_transport_factory()
+    outcome = chunking.dispatch_plan(
+        plan, ["lusha"], True, granting_config, transport=send_transport,
+        execution_ceiling=5)
+    assert outcome.ceiling_stop is not None, "fixture must actually carry a ceiling stop"
+
+    updated = write_grant.record_dispatch_outcome(
+        grant, outcome, granting_config, reason=write_grant.CLOSED_UNHANDLED_ERROR)
+
+    assert updated["state"] == write_grant.CLOSED
+    assert updated["closed_reason"] == write_grant.CLOSED_UNHANDLED_ERROR, (
+        "the explicit reason must win over the outcome's own ceiling_stop")
+
+
+def test_record_dispatch_outcome_accepts_outcome_none_with_an_explicit_reason(
+        granting_config, stub_module_transport_factory):
+    """REVIEW-57-M5: an exception raised BEFORE `dispatch_plan()` returns leaves no
+    outcome object to inspect. The closure handler must still be able to close the
+    grant with its own explicit reason, with no outcome at all, and no
+    `AttributeError`/`UnboundLocalError` escaping."""
+    transport = stub_module_transport_factory(_plan_reads())
+    grant = _open(granting_config, transport)
+
+    updated = write_grant.record_dispatch_outcome(
+        grant, None, granting_config, reason=write_grant.CLOSED_UNHANDLED_ERROR)
+
+    assert updated["state"] == write_grant.CLOSED
+    assert updated["closed_reason"] == write_grant.CLOSED_UNHANDLED_ERROR
+
+
 # --- the at-the-yes disclosure (D-53-05) --------------------------------------------------
 
 def test_a_two_lane_grant_names_both_lanes_and_points_at_the_written_records_list(
@@ -1867,3 +1912,175 @@ def test_closing_a_grant_makes_no_network_call_on_the_three_vacuous_paths(
         write_grant.close_grant(grant, reason)
 
     assert len(transport.calls) == before
+
+
+# =========================================================================================
+# Phase 57 Task 4 — the runbook dispatch fences are executable Python, wired for the
+# ceiling (REVIEW-57-M4/H6/H7/H8/H9). Verified by AST over the runbooks' REAL code, never
+# by grep over prose (REVIEW-57-M-markdown / 57-VALIDATION.md's "caller path the test
+# MUST drive" column) — a block that does not parse, or that mentions a name only in a
+# comment, must fail these tests rather than satisfy them.
+# =========================================================================================
+
+SKILLS_DIR = Path(__file__).resolve().parent.parent / "skills"
+
+_RUNBOOK_PATHS = {
+    "enrich-records": SKILLS_DIR / "enrich-records" / "SKILL.md",
+    "enrich-before-ingest": SKILLS_DIR / "enrich-before-ingest" / "SKILL.md",
+    "contact-upload": SKILLS_DIR / "contact-upload" / "SKILL.md",
+}
+
+_PYTHON_FENCE_RE = re.compile(r"```python\n(.*?)```", re.DOTALL)
+
+
+def _python_blocks(path):
+    """Every fenced ```python block in a SKILL.md, dedented and ready to `compile()`."""
+    return [textwrap.dedent(b) for b in _PYTHON_FENCE_RE.findall(path.read_text())]
+
+
+def _called_names(tree):
+    """Every function/method name a parsed block CALLS — `foo()` and `mod.foo()` both
+    contribute `"foo"` — so a comment mentioning a name can never satisfy a lookup that
+    requires it to be called."""
+    found = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call):
+            func = node.func
+            if isinstance(func, ast.Attribute):
+                found.add(func.attr)
+            elif isinstance(func, ast.Name):
+                found.add(func.id)
+    return found
+
+
+def _blocks_calling(path, *call_names):
+    """Every fenced python block in `path` whose parsed AST calls EVERY name in
+    `call_names` — never a block that merely mentions it in prose or an unrelated
+    example (grok-4-6's cycle-2 LOW)."""
+    matches = []
+    for src in _python_blocks(path):
+        tree = ast.parse(src)
+        if set(call_names) <= _called_names(tree):
+            matches.append((src, tree))
+    return matches
+
+
+@pytest.mark.parametrize("runbook", sorted(_RUNBOOK_PATHS))
+def test_every_dispatch_fence_in_the_runbooks_is_valid_python(runbook):
+    """REVIEW-57-M4: the angle-bracket placeholders (`<this send's ids>`, `<allow_
+    create>`, etc.) were a hard SyntaxError. Every fenced python block must compile —
+    an unparseable block would make every AST assertion below unreachable."""
+    path = _RUNBOOK_PATHS[runbook]
+    blocks = _python_blocks(path)
+    assert blocks, f"expected at least one fenced python block in {path}"
+    for i, src in enumerate(blocks):
+        try:
+            compile(src, f"{path.name}:block{i}", "exec")
+        except SyntaxError as e:
+            pytest.fail(f"{path} block {i} does not parse: {e}")
+
+
+@pytest.mark.parametrize("runbook", ["enrich-records", "enrich-before-ingest"])
+def test_the_dispatch_plan_lane_carries_execution_ceiling(runbook):
+    """REVIEW-57-M4/H2: the two `chunking.dispatch_plan` lanes must pass their sampled
+    (or self-bound) ceiling straight through, not leave the mid-run tally switched off."""
+    matches = _blocks_calling(_RUNBOOK_PATHS[runbook], "dispatch_plan")
+    assert matches, f"no block in {runbook}/SKILL.md calls dispatch_plan"
+    for src, tree in matches:
+        calls = [n for n in ast.walk(tree) if isinstance(n, ast.Call)
+                 and getattr(n.func, "attr", None) == "dispatch_plan"]
+        assert calls
+        for call in calls:
+            assert any(kw.arg == "execution_ceiling" for kw in call.keywords), (
+                f"{runbook}/SKILL.md's dispatch_plan( call carries no execution_ceiling "
+                f"keyword"
+            )
+
+
+@pytest.mark.parametrize("runbook", sorted(_RUNBOOK_PATHS))
+def test_the_dispatch_close_runs_inside_a_try_finally(runbook):
+    """REVIEW-57-H8/M5: grant closure on every exit — normal, ceiling-stopped, or
+    crashed — never only on the happy path."""
+    path = _RUNBOOK_PATHS[runbook]
+    matches = _blocks_calling(path, "record_dispatch_outcome")
+    assert matches, f"no block in {path} calls record_dispatch_outcome"
+    for src, tree in matches:
+        assert any(isinstance(n, ast.Try) and n.finalbody for n in ast.walk(tree)), (
+            f"{path} closes a grant outside a try/finally"
+        )
+
+
+@pytest.mark.parametrize("runbook", ["enrich-before-ingest", "contact-upload"])
+def test_the_single_shot_dispatch_is_guarded_and_expressed_in_one_vocabulary(runbook):
+    """REVIEW-57-H7: the FOURTH dispatch path — `dispatch.dispatch` — has no chunk
+    boundary to stop mid-run at, so it must be checked PRE-CALL, inside an `If`, and its
+    spend expressed through `single_dispatch_outcome` — never a second spend
+    vocabulary."""
+    path = _RUNBOOK_PATHS[runbook]
+    matches = _blocks_calling(path, "dispatch", "single_dispatch_outcome")
+    assert matches, f"no block in {path} calls both dispatch.dispatch and single_dispatch_outcome"
+
+    def _dispatch_dispatch_calls(node):
+        return [n for n in ast.walk(node) if isinstance(n, ast.Call)
+                and isinstance(n.func, ast.Attribute) and n.func.attr == "dispatch"
+                and isinstance(n.func.value, ast.Name) and n.func.value.id == "dispatch"]
+
+    for src, tree in matches:
+        guarded = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.If):
+                dispatch_calls = _dispatch_dispatch_calls(node)
+                single_calls = [
+                    n for n in ast.walk(node) if isinstance(n, ast.Call)
+                    and getattr(n.func, "attr", None) == "single_dispatch_outcome"]
+                if dispatch_calls and single_calls:
+                    guarded = True
+        assert guarded, (
+            f"{path}'s dispatch.dispatch( call must be enclosed by an If guarding it "
+            f"against a remaining ceiling, and followed by single_dispatch_outcome "
+            f"inside the same branch"
+        )
+
+
+@pytest.mark.parametrize("runbook", sorted(_RUNBOOK_PATHS))
+def test_override_never_appears_literally_in_a_runbook(runbook):
+    """REVIEW-57-M6: an override comes only from the operator's own answer in this
+    conversation — never from a runbook's own source, a stored grant, or a config
+    value. `# planner-discipline-allow: override=True` in 57-01-PLAN.md's own
+    acceptance criteria names this literal deliberately; it must appear in NEITHER
+    runbook."""
+    path = _RUNBOOK_PATHS[runbook]
+    assert "override=True" not in path.read_text()
+
+
+@pytest.mark.parametrize("runbook", sorted(_RUNBOOK_PATHS))
+def test_the_unknown_ceiling_branch_self_bounds_rather_than_going_unbounded(runbook):
+    """REVIEW-57-H6: an unconfigured/unsampleable allowance must not switch off the
+    mid-run tally too — the double-off hole. The CEILING_UNKNOWN branch's value
+    expression must never be the `None` literal."""
+    path = _RUNBOOK_PATHS[runbook]
+    found = False
+    for src in _python_blocks(path):
+        tree = ast.parse(src)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.If):
+                test = node.test
+                if (isinstance(test, ast.Compare) and len(test.comparators) == 1
+                        and isinstance(test.comparators[0], ast.Attribute)
+                        and test.comparators[0].attr == "CEILING_UNKNOWN"):
+                    found = True
+                    assign = node.body[0]
+                    assert isinstance(assign, ast.Assign), (
+                        f"{path}'s CEILING_UNKNOWN branch's first statement is not a "
+                        f"plain assignment"
+                    )
+                    is_none_literal = (
+                        isinstance(assign.value, ast.Constant)
+                        and assign.value.value is None
+                    )
+                    assert not is_none_literal, (
+                        f"{path}'s CEILING_UNKNOWN branch assigns None — the "
+                        f"self-bound ceiling must be the envelope's own "
+                        f"projected_executions, never left unbounded"
+                    )
+    assert found, f"{path} has no branch comparing to write_grant.CEILING_UNKNOWN"

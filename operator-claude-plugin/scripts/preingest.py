@@ -540,6 +540,11 @@ class MergeResult:
     dropped_property_keys: tuple = field(default_factory=tuple)
     conflicts: tuple = field(default_factory=tuple)
     unanswered: tuple = field(default_factory=tuple)
+    # Phase 57 / D-57-01 / REVIEW-57-H3: the `chunking.DispatchOutcome` this pass's own
+    # `dispatch_plan` call produced, so a caller running several dispatches under one
+    # grant can decrement its remaining allowance with `chunking.projected_spend`. None
+    # when there was nothing unanswered and no dispatch happened at all.
+    dispatch_outcome: object = None
 
 
 def _present(value) -> bool:
@@ -659,12 +664,23 @@ def merge_enriched(rows, responses):
     )
 
 
-def rerequest_unanswered(rows, merge_report, providers, armed, config, transport=requests):
+def rerequest_unanswered(rows, merge_report, providers, armed, config, transport=requests, *,
+                          execution_ceiling=None):
     """One re-request pass over `merge_report.unanswered`, dispatched through the SAME
     `chunking.dispatch_plan` -> `enrichment.dispatch_enrichment` path the first pass
     used. No new send path exists here — see the comment on the `dispatch_plan` call
     below, and `test_retry_reuses_dispatch.py`'s `_EXPECTED_SEND_SHAPED`, which this
     function must leave unchanged (T-38-03).
+
+    `execution_ceiling` (Phase 57 / D-57-01 / REVIEW-57-H3): passed straight through to
+    `chunking.dispatch_plan`, budget-aware exactly as every other dispatch path now is.
+    This pass runs under the SAME grant as the first pass — the pair pipeline's
+    match/enrich/re-request/ingest passes all share one grant — so its own spend was
+    invisible to any tally before this parameter existed. `None` is today's unbounded
+    behaviour, unchanged for every existing caller. The returned `MergeResult.
+    dispatch_outcome` carries this pass's `DispatchOutcome` so the caller can decrement
+    the grant's remaining allowance with `chunking.projected_spend` before its own next
+    dispatch.
 
     Returns `merge_report` unchanged, with no plan built and no call made, when there
     is nothing unanswered — the whole point of this function is a re-request, and a
@@ -710,7 +726,8 @@ def rerequest_unanswered(rows, merge_report, providers, armed, config, transport
     # guard flags a function only when it BOTH defaults `transport` to the bare
     # `requests` module AND calls `transport.post`/`.put` directly in its own body: this
     # function does the first and not the second.
-    outcome = chunking.dispatch_plan(plan, providers, armed, config, transport=transport)
+    outcome = chunking.dispatch_plan(plan, providers, armed, config, transport=transport,
+                                     execution_ceiling=execution_ceiling)
 
     new_items = []
     for body in outcome.responses:
@@ -719,6 +736,10 @@ def rerequest_unanswered(rows, merge_report, providers, armed, config, transport
         # normalizes for this same endpoint. Accept both.
         new_items.extend(body if isinstance(body, list) else [body])
 
+    # `outcome.ceiling_stop` names the unsent rows; `merge_enriched` never sees them as
+    # answered (no response item for a row this pass never sent), so they fall through
+    # the ordinary "item is None" branch and stay `unanswered` with their true reason —
+    # no fabricated ceiling-specific unanswered reason is needed.
     retry_result = merge_enriched(retry_rows, new_items)
 
     retry_by_id = {row["row_id"]: row for row in retry_result.rows}
@@ -738,6 +759,7 @@ def rerequest_unanswered(rows, merge_report, providers, armed, config, transport
         ),
         conflicts=tuple(merge_report.conflicts) + retry_result.conflicts,
         unanswered=retry_result.unanswered,
+        dispatch_outcome=outcome,
     )
 
 
