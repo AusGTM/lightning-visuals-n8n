@@ -160,6 +160,20 @@ variable), and a design that runs the provider waterfall twice per written recor
       AFTER-01, AFTER-03, G-4, and is the producer GRANT-02/GRANT-04's `ceiling_breach` still
       lacks.
 
+      **Goal:** an operator can start a batch knowing it will be refused before it starts if it
+      cannot afford itself, will stop spending rather than overrun if reality diverges mid-run,
+      and can read afterwards exactly what happened to every row — with a record that would have
+      been written never reading as one that was.
+
+      **Plans:** 5 plans (waves 1/2/3)
+
+      Plans:
+      - [ ] 57-01-PLAN.md — TRACER: the ceiling refuses before start and a mid-run breach closes the grant (RUN-05)
+      - [ ] 57-02-PLAN.md — one outcome vocabulary across both client surfaces, plus the `row_id` join key on both lanes (AFTER-03)
+      - [ ] 57-03-PLAN.md — auto-split and the remainder queue: work queued, authority never (RUN-05, D-57-05 checkpoint)
+      - [ ] 57-04-PLAN.md — provider-balance blind spots: a disarmed ZoomInfo re-probe, Apollo disclosed as structural (G-4)
+      - [ ] 57-05-PLAN.md — the one end-of-run report joining all four durable stores (AFTER-01, AFTER-03, G-4)
+
 - [x] **Phase 58: Take what the operator actually has** *(complete 2026-08-26, verified 31/31)* - Every input an operator holds
       (screenshot, paste, URL, bare name) resolves to a company the backend can act on; missing
       domains researched then confirmed before write; refusal is the last resort — promoted
