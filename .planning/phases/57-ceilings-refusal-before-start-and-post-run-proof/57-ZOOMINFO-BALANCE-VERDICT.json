@@ -1,0 +1,15 @@
+{
+  "premise": "zoominfo-balance-probe",
+  "verdict": "readable",
+  "zoominfo_raw_credits": 9381,
+  "zoominfo_http_status_present": false,
+  "zoominfo_http_status": null,
+  "zoominfo_error": null,
+  "checked_at": "2026-08-31T07:15:27.490088+00:00",
+  "instance_host": "alexherman.app.n8n.cloud",
+  "lusha_before": 3894,
+  "lusha_after": 3894,
+  "lusha_delta": 0,
+  "lusha_after_cost_unmeasured": true,
+  "lusha_after_cost_unmeasured_reason": "Request #2 exists only to supply lusha_after; its own credit cost is not measured, because measuring it would need a third read, whose cost would need a fourth, and so on. lusha_delta measures request #1's (the probe's) cost only, not the full two-request run."
+}
