@@ -493,6 +493,43 @@ verified. All four findings are dormant — no live contacts candidate producer 
 being closed by operator choice, not because anything is broken. Run
 `/gsd-execute-phase 54 --gaps-only`.
 
+### Phase 57: Ceilings, refusal-before-start, and post-run proof
+
+**Status: PLANNED — NEXT PHASE.** 5 plans, converged through cross-AI review
+(`57-REVIEWS.md`). **This phase gates the first live unattended, credit-spending batch**
+(D-61-08): Phase 61's backend is deployed and disarmed-proven, but no such run has happened.
+
+**Goal**: An operator can start a batch knowing it will be refused before it starts if it cannot
+afford itself, will stop spending rather than overrun if reality diverges mid-run, and can read
+afterwards exactly what happened to every row — with a record that would have been written never
+reading as one that was.
+
+**Closes**: RUN-05 (refuse before starting, with the arithmetic, offering a smaller batch),
+AFTER-01 (one end-of-run report — PARTIAL, see below), AFTER-03 (written vs would-have-been
+written), G-4 (name which provider balances were readable). It is also the producer
+GRANT-02/GRANT-04's `ceiling_breach` close reason still lacks. Requirements live in
+`milestones/v1.1-REQUIREMENTS.md`, NOT the root `REQUIREMENTS.md`, which is v1.0's.
+
+**AFTER-01 ships PARTIAL, deliberately**: the pair pipeline's final ingest leg strips `row_id`
+(`extraction.strip_row_id`), so that leg's rows return unjoinable. They are kept, rendered as
+UNJOINABLE and named in the report's `gaps` rather than dropped or presented as a completed join.
+
+**Plans**: 5 — wave 1: 57-01 (the ceiling: refusal, pre-send stop, four dispatch paths),
+57-04 (the ZoomInfo balance probe) · wave 2: 57-02 (the outcome vocabulary and `row_id`),
+57-03 (the remainder queue and the split offer) · wave 3: 57-05 (the end-of-run report and the
+phase gate).
+
+**Four blocking operator checkpoints**, all of which must be answered by a human: what RUN-05
+means if the sampling predicate makes the preflight refusal unreachable on this account; whether
+`written` may be claimed without terminal write evidence; auto-split's work-not-authority
+confirmation; and a phase gate that separates LANDING this phase from AUTHORISING the first live
+credit-spending batch. Landing the phase authorises nothing.
+
+**The residual this phase discloses rather than closes**: when the executions list will not yield
+a sample, the ceiling verdict is `unknown` and no code in this repo can guard the MONTHLY
+allowance. A run is then bound only by its own approved quote. 57-05's phase gate makes the
+unattended option unselectable in that state.
+
 ### Phase 61: Autonomous batch runs
 
 **Status: COMPLETE 2026-08-30** — 6/6 plans, verification 12/12 (`61-VERIFICATION.md`). Backend
