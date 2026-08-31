@@ -329,10 +329,18 @@ def _empty_progress(run_id, state) -> Progress:
     return Progress(run_id=run_id, state=state)
 
 
-def read_progress(run_id, path=None) -> Progress:
+def read_progress(run_id, path=None, *, manifest_snapshot=None) -> Progress:
     """This run's progress, combining its OWN registered scope (this file) with
     `run_manifest`'s run-scoped verdicts. See module docstring's "five-bucket invariant"
     section for exactly how each bucket is derived.
+
+    `manifest_snapshot` (57-05 Task 2, REVIEW-57-M1), keyword-only: an already-loaded
+    `run_manifest.ScopedLoadResult` to derive verdicts from, instead of loading the
+    manifest again here. Default (`None`) is byte-for-byte today's own internal load —
+    every existing caller and test is unaffected. `run_report.build_run_report` is the
+    one caller that passes a snapshot: it needs the SAME view of the manifest for both
+    this run's progress bucket AND its per-row verdicts, and two independent loads of
+    one file could in principle see two different states of it.
     """
     classification = classify_read(run_id, path)
     if classification != PARSEABLE:
@@ -342,7 +350,7 @@ def read_progress(run_id, path=None) -> Progress:
     total_ids = set(document[TOTAL_FIELD])
     dispatched_ids = set(document[DISPATCHED_FIELD]) & total_ids
 
-    scoped = run_manifest.load_scoped(
+    scoped = manifest_snapshot if manifest_snapshot is not None else run_manifest.load_scoped(
         run_manifest.run_manifest_path(run_id), expected_run_id=run_id
     )
     verdicts = {row_id: v for row_id, v in scoped.verdicts.items() if row_id in total_ids}

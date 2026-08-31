@@ -62,7 +62,14 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
+import chunking
 import durable_paths
+import held_queue
+import remainder_queue
+import run_manifest
+import run_state
+import write_grant
+import written_records
 
 # The whole document schema. Anything else is a rejection, not a widening.
 RUN_ID_FIELD = "run_id"
@@ -250,3 +257,540 @@ def classify_audit_read(run_id, path=None) -> str:
         return PARSEABLE
     except (TypeError, ValueError, OSError):
         return ABSENT
+
+
+# =========================================================================================
+# Task 2 — build_run_report: one report from five stores plus the audit record
+# (AFTER-01, AFTER-03's operator-facing half, G-4's disclosure half).
+# =========================================================================================
+
+# The words this report renders come from `written_records` — imported, never restated
+# (must_haves: "Use the SAME outcome words written_records defines").
+_WRITE_OUTCOMES = frozenset({
+    written_records.WRITTEN, written_records.WRITE_ATTEMPTED,
+    written_records.CREATED_ID_UNKNOWN, written_records.WRITTEN_ID_UNKNOWN,
+})
+
+_OUTCOME_TEXT = {
+    written_records.WRITTEN:
+        "written — a create whose response echoed back a real HubSpot id. Operator does nothing.",
+    written_records.WRITE_ATTEMPTED:
+        "write attempted — the id was already known before the write; this proves the write "
+        "was permitted and attempted, never that it landed. Spot-check the record if it matters.",
+    written_records.CREATED_ID_UNKNOWN:
+        "created, id unknown — the record was likely created but the response carried no id; "
+        "never fabricated.",
+    written_records.WRITTEN_ID_UNKNOWN:
+        "write attempted, id unknown — open this row's record and confirm.",
+    written_records.GATED:
+        "gated — this row would have been written; open a grant and re-send it to write it. "
+        "This is recoverable, never a failure.",
+    written_records.HELD:
+        "held for review — a human or a second automated pass needs to decide before it can "
+        "be written.",
+    written_records.FAILED:
+        "failed — this action failed, was refused, or is an outcome never seen before; retry, "
+        "or fix the input.",
+    written_records.NO_ACTION:
+        "no action needed — a success, not a failure: either a look-only preview, or the "
+        "record already had complete, fresh, valid data.",
+}
+
+_ASSOCIATION_TEXT = {
+    "associated": "associated",
+    "not_confirmed": "association not confirmed",
+    "not_attempted": "association not attempted",
+    "none": "no association",
+}
+
+_SAMPLING_CAVEAT = (
+    "If the month-to-date sample rested on an exhausted listing rather than on back-paging, "
+    "the sampled spend is a LOWER bound (n8n prunes history and a pruned execution was still "
+    "billed) — so the headroom the ceiling worked from was an UPPER bound."
+)
+_CONCURRENCY_CAVEAT = (
+    "The ceiling is a conservative point-in-time LOCAL control; other sessions, schedulers, "
+    "and grants consume the same instance-wide allowance, so zero local overshoot is not zero "
+    "instance-wide overrun."
+)
+_REMAINDER_STANDING_CAVEAT = (
+    "Note: the remainder queue records only DELIBERATE ceiling stops and accepted allowance "
+    "splits — it says nothing about a run that crashed mid-dispatch; a crash's own account "
+    "lives in written_records, not here."
+)
+
+
+def _association_text(value):
+    if value in _ASSOCIATION_TEXT:
+        return _ASSOCIATION_TEXT[value]
+    return "association unknown"
+
+
+def _balance_readable(info):
+    if not isinstance(info, dict):
+        return False
+    if info.get("verdict") == "unknown":
+        return False
+    if info.get("unreadable") is True:
+        return False
+    value = info.get("remaining_credits", info.get("credits"))
+    return value is not None
+
+
+def _lane_for_entry(entry):
+    object_type = entry.get("object_type") or "unknown"
+    action = entry.get("action") or "unknown"
+    return f"{object_type}:{action}"
+
+
+def _identity_for_entry(entry, counter):
+    row_id = entry.get("row_id")
+    if row_id:
+        return row_id, "row_id"
+    hs_object_id = entry.get("hs_object_id")
+    if hs_object_id:
+        return hs_object_id, "hs_object_id"
+    counter[0] += 1
+    return f"unjoinable-{counter[0]}", "unjoinable"
+
+
+def _build_records(entries):
+    """`{(identity, lane): {"identity", "lane", "join", "events": [entry, ...]}}` — never
+    keyed by `row_id` alone (REVIEW-57-H: one row can carry an enrichment event and an
+    ingest event under one run) and never dropping an entry with no join key at all
+    (REVIEW-57-H7: kept, marked unjoinable)."""
+    records = {}
+    counter = [0]
+    unjoinable_seen = False
+    for entry in entries:
+        identity, join_kind = _identity_for_entry(entry, counter)
+        lane = _lane_for_entry(entry)
+        key = (identity, lane)
+        bucket = records.setdefault(
+            key, {"identity": identity, "lane": lane, "join": join_kind, "events": []})
+        bucket["events"].append(entry)
+        if join_kind == "unjoinable":
+            unjoinable_seen = True
+    return records, unjoinable_seen
+
+
+def _identities_in_spec(spec):
+    ids = set()
+    if not isinstance(spec, dict):
+        return ids
+    rows = spec.get("rows")
+    if isinstance(rows, list):
+        for row in rows:
+            if isinstance(row, dict) and row.get("row_id"):
+                ids.add(row["row_id"])
+    record_ids = spec.get("record_ids")
+    if isinstance(record_ids, list):
+        ids.update(str(v) for v in record_ids)
+    return ids
+
+
+def _classify_remainder_read(run_id):
+    """A local, fresh four-word probe over remainder_queue's per-run file — never added
+    to `remainder_queue.py` itself (not this plan's file to widen); mirrors the shape
+    every sibling classifier in this family already carries."""
+    target = remainder_queue.remainder_path(run_id)
+    if not target.exists():
+        return ABSENT
+    try:
+        document = json.loads(target.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return ANOMALOUS
+    if not isinstance(document, dict):
+        return ANOMALOUS
+    entries = document.get(remainder_queue.ENTRIES_FIELD)
+    if not isinstance(entries, list) or any(not isinstance(e, dict) for e in entries):
+        return ANOMALOUS
+    if document.get(remainder_queue.RUN_ID_FIELD) != run_id:
+        return ANOTHER_RUN
+    return PARSEABLE
+
+
+def _add_gap(gaps, store_name, classification):
+    """ABSENT is a legitimate zero for every store except `written_records` (every real
+    dispatch appends to it — its absence means nothing durable exists for this run_id
+    at all). ANOMALOUS/ANOTHER_RUN are always a gap, for every store, because they mean
+    the evidence exists but cannot be trusted (T-57-28)."""
+    if classification == PARSEABLE:
+        return
+    if classification == ABSENT:
+        if store_name == "written_records":
+            gaps.append(f"{store_name}: absent — no durable file exists for this run.")
+        return
+    if classification == ANOMALOUS:
+        gaps.append(f"{store_name}: malformed (anomalous) — present but unreadable or "
+                    "schema-mismatched.")
+    elif classification == ANOTHER_RUN:
+        gaps.append(f"{store_name}: another run's file — this run's own data could not "
+                    "be read from it.")
+
+
+def _find_contradictions(run_id, records, scoped_verdicts, remainder_entries,
+                         held_map, progress, entries):
+    """The contradiction matrix (REVIEW-57-H) — five independently written stores can
+    disagree after a crash. Every detected disagreement becomes a named entry; NONE is
+    silently resolved in favour of one store."""
+    contradictions = []
+
+    # Row 1: written ledger reports a write outcome; the manifest says held/confidence_held
+    # for the SAME row.
+    for (identity, lane), bucket in records.items():
+        if bucket["join"] != "row_id":
+            continue
+        verdict = scoped_verdicts.get(identity)
+        if verdict not in (run_manifest.HELD, run_manifest.CONFIDENCE_HELD):
+            continue
+        for event in bucket["events"]:
+            if event.get("outcome") in _WRITE_OUTCOMES:
+                contradictions.append({
+                    "kind": "written_vs_held",
+                    "row_id": identity,
+                    "written_outcome": event.get("outcome"),
+                    "manifest_verdict": verdict,
+                    "description": (
+                        f"row {identity}: written-records reports "
+                        f"{event.get('outcome')!r} but the manifest recorded "
+                        f"{verdict!r} for the same row — both shown, neither resolved; "
+                        "this row needs a human look."
+                    ),
+                })
+
+    # Row 2: a row is in the remainder queue AND in the written records for this run.
+    written_identities = {k[0] for k in records}
+    for entry in remainder_entries:
+        overlap = _identities_in_spec(entry.get("spec")) & written_identities
+        if overlap:
+            contradictions.append({
+                "kind": "remainder_and_written",
+                "row_ids": sorted(overlap),
+                "description": (
+                    f"row(s) {sorted(overlap)} appear both in the remainder queue and "
+                    "in this run's written records — it may have been sent and "
+                    "re-queued, or the ceiling stop raced the send."
+                ),
+            })
+
+    # Row 3: association says associated but the write outcome is unknown or absent.
+    for (identity, lane), bucket in records.items():
+        for event in bucket["events"]:
+            if event.get("association") == "associated" and event.get("outcome") not in _WRITE_OUTCOMES:
+                contradictions.append({
+                    "kind": "associated_without_confirmed_write",
+                    "row_id": identity,
+                    "outcome": event.get("outcome"),
+                    "description": (
+                        f"row {identity}: association reports 'associated' but the "
+                        f"write outcome is {event.get('outcome')!r} — an association "
+                        "without a confirmed write is not evidence of one."
+                    ),
+                })
+
+    # Row 4: run_state still reads "running" while durable per-row results exist.
+    if progress.state == run_state.OK and (progress.running or 0) > 0 and entries:
+        contradictions.append({
+            "kind": "interrupted_run",
+            "running_count": progress.running,
+            "description": (
+                f"run_state still reports {progress.running} row(s) as 'running' "
+                f"while this run's written-records list already holds {len(entries)} "
+                "entrie(s) — the run may have crashed between dispatch and "
+                "verdict-recording. The results are shown; the running tally is not "
+                "trusted."
+            ),
+        })
+
+    # Row 5: a held_queue row this run actually touched carries no matching manifest
+    # verdict for it — attribution unknown (held_queue itself carries no run_id at
+    # all: REVIEW-57-H2, see module docstring's own note on why this is keyed by
+    # row_id, restricted to rows THIS run's own written-records evidence names).
+    for (identity, lane), bucket in records.items():
+        if bucket["join"] != "row_id":
+            continue
+        if identity not in held_map:
+            continue
+        if scoped_verdicts.get(identity) in (run_manifest.HELD, run_manifest.CONFIDENCE_HELD):
+            continue
+        contradictions.append({
+            "kind": "held_queue_attribution_unknown",
+            "row_id": identity,
+            "description": (
+                f"row {identity} appears in the global held-queue backlog, but this "
+                "run's own manifest does not record it as held — backlog attribution "
+                "unknown; never counted into this run."
+            ),
+        })
+
+    return contradictions
+
+
+def _render_block(run_id, records, held_section, remainder_entries, spend, disarm,
+                  balances, contradictions, gaps):
+    lines = []
+    if gaps or contradictions:
+        lines.append(
+            f"**REPORT INCOMPLETE** — {len(gaps)} gap(s), {len(contradictions)} "
+            "contradiction(s) named below. This report joins FIVE primary durable "
+            "stores plus one run-audit record; not all of them could be read cleanly."
+        )
+        lines.append("")
+
+    lines.append(f"## End-of-run report — {run_id}")
+    lines.append("")
+
+    lines.append("### Per-record outcomes")
+    if records:
+        for (identity, lane), bucket in sorted(records.items()):
+            display_identity = identity
+            if bucket["join"] == "unjoinable":
+                display_identity = f"{identity} (UNJOINABLE — no row_id and no HubSpot id)"
+            for event in bucket["events"]:
+                outcome = event.get("outcome")
+                text = _OUTCOME_TEXT.get(outcome, str(outcome))
+                assoc = _association_text(event.get("association"))
+                lines.append(
+                    f"- {display_identity} [{lane}]: {event.get('action')} -> {text} "
+                    f"(association: {assoc})"
+                )
+    else:
+        lines.append("- (no records)")
+    lines.append("")
+
+    lines.append("### Held rows")
+    this_run_held = held_section.get("this_run") or []
+    if this_run_held:
+        for h in this_run_held:
+            lines.append(f"- HELD: row {h['row_id']} — verdict {h['verdict']}")
+    else:
+        lines.append("- (no rows held by this run)")
+    backlog = held_section.get("backlog") or {}
+    if backlog:
+        lines.append(
+            f"- Backlog (global held_queue, NOT attributed to this run): "
+            f"{len(backlog)} row(s) held across all runs."
+        )
+    lines.append("")
+
+    lines.append("### Remainder queue")
+    lines.append(f"- {_REMAINDER_STANDING_CAVEAT}")
+    if remainder_entries:
+        for entry in remainder_entries:
+            lines.append(
+                f"- {entry.get('reason')}: {entry.get('record_count')} record(s), "
+                f"{entry.get('note') or ''}"
+            )
+    else:
+        lines.append("- (nothing queued)")
+    lines.append("")
+
+    lines.append("### Spend against ceiling")
+    lines.append(f"- Projected executions this run (from what was attempted): "
+                 f"{spend.get('projected_executions')}")
+    ceiling = spend.get("ceiling")
+    if isinstance(ceiling, dict):
+        verdict = ceiling.get("verdict")
+        lines.append(
+            f"- Ceiling verdict: **{verdict}** — projected "
+            f"{ceiling.get('projected_executions')}, sampled "
+            f"{ceiling.get('spent_sampled')} spent, {ceiling.get('remaining_sampled')} "
+            f"remaining of the configured {ceiling.get('allowance')} allowance."
+        )
+        if ceiling.get("overridden"):
+            lines.append(
+                f"- **OVERRIDDEN** by the operator: {ceiling.get('override_reason')} "
+                f"(authority: {ceiling.get('override_authority')}). This run must "
+                "never read as under-ceiling."
+            )
+    else:
+        lines.append("- Ceiling verdict: not observed for this run.")
+    lines.append(f"- Basis: {spend.get('basis')}")
+    lines.append(f"- {spend.get('executions_basis')}")
+    lines.append(f"- {_SAMPLING_CAVEAT}")
+    lines.append(f"- {_CONCURRENCY_CAVEAT}")
+    for stop in spend.get("ceiling_stops") or []:
+        lines.append(
+            f"- Ceiling stop at chunk {stop['chunk_index']}: a deliberate budget stop "
+            f"— spending halted before this chunk was sent. {stop['unsent_count']} "
+            "unsent row-group(s) are queued in the remainder queue, to be sent only by "
+            "a future run the operator separately authorises."
+        )
+    lines.append("")
+
+    lines.append("### Provider balances")
+    if balances:
+        for provider, info in sorted(balances.items()):
+            readable = _balance_readable(info)
+            state = "readable" if readable else "unreadable"
+            reason = info.get("reason") if isinstance(info, dict) else None
+            lines.append(f"- {provider}: {state}" + (f" ({reason})" if reason else ""))
+        unreadable = sorted(p for p, info in balances.items() if not _balance_readable(info))
+        readable_list = sorted(p for p, info in balances.items() if _balance_readable(info))
+        lines.append(
+            f"- Spend was bounded only for the balance(s) that could be read: "
+            f"{readable_list or 'none'}. {unreadable or 'none'} could not be confirmed "
+            "readable, so the ceiling did not guard that part of spend (D-57-02)."
+        )
+    else:
+        lines.append("- (no balances observed)")
+    lines.append("")
+
+    lines.append("### Disarm")
+    if disarm is None:
+        lines.append("- Not observed for this run.")
+    else:
+        outcome = disarm.get("outcome") if isinstance(disarm, dict) else disarm
+        lines.append(f"- {outcome}.")
+    lines.append("")
+
+    if contradictions:
+        lines.append("### Contradictions (never silently resolved)")
+        for c in contradictions:
+            lines.append(f"- [{c['kind']}] {c['description']}")
+        lines.append("")
+
+    if gaps:
+        lines.append("### Known gaps")
+        for g in gaps:
+            lines.append(f"- {g}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def build_run_report(run_id, config, *, outcomes=(), disarm=None, balances=None,
+                     ceiling=None):
+    """One end-of-run report over FIVE primary durable stores
+    (`written_records`, `run_state`, `run_manifest`, `held_queue`, `remainder_queue`)
+    plus one run-audit record (`record_audit`/`load_audit`) — AFTER-01, AFTER-03's
+    operator-facing half, G-4's disclosure half.
+
+    `outcomes` is a SEQUENCE of this run's `chunking.DispatchOutcome`s (plural — the
+    pair pipeline runs match/enrich/re-request/ingest passes under one grant and one
+    `run_id`). `disarm`/`balances`/`ceiling` are the caller's own live observations;
+    each falls back to this run's persisted audit record when omitted, and only then to
+    a stated gap. Never raises: a missing or malformed input degrades to a named entry
+    in `gaps`, never an exception.
+    """
+    try:
+        return _build_run_report(run_id, config, tuple(outcomes or ()), disarm, balances, ceiling)
+    except Exception as exc:  # noqa: BLE001 — this is the report's own never-raise contract.
+        gaps = [f"internal report error: {exc!r} — this report is incomplete."]
+        block = (
+            "**REPORT INCOMPLETE** — an internal error prevented building this report.\n"
+            f"- {gaps[0]}"
+        )
+        return {
+            "run_id": run_id, "records": {}, "held": {"this_run": [], "backlog": {}},
+            "remainder": [], "spend": {}, "disarm": None, "balances": {},
+            "contradictions": [], "gaps": gaps, "block": block,
+        }
+
+
+def _build_run_report(run_id, config, outcomes, disarm, balances, ceiling):
+    gaps = []
+
+    # --- written_records --------------------------------------------------------------
+    wr_classification = written_records.classify_read(run_id)
+    _add_gap(gaps, "written_records", wr_classification)
+    all_entries = written_records.load()
+    entries = [e for e in all_entries if e.get(written_records.RUN_ID_FIELD) == run_id]
+    records, unjoinable_seen = _build_records(entries)
+    if unjoinable_seen:
+        gaps.append(
+            "the pair pipeline's final ingest leg strips row_id before the CSV is "
+            "written (extraction.strip_row_id) — rows from that leg with no HubSpot id "
+            "either cannot be joined at all and are kept, rendered UNJOINABLE, rather "
+            "than dropped or silently counted as a complete join."
+        )
+
+    # --- run_manifest (run-scoped) + run_state, one manifest snapshot for both -------
+    rm_classification = run_manifest.classify_read(run_id)
+    _add_gap(gaps, "run_manifest", rm_classification)
+    scoped = run_manifest.load_scoped(
+        run_manifest.run_manifest_path(run_id), expected_run_id=run_id)
+
+    rs_classification = run_state.classify_read(run_id)
+    _add_gap(gaps, "run_state", rs_classification)
+    progress = run_state.read_progress(run_id, manifest_snapshot=scoped)
+
+    # --- held_queue (global backlog, never attributed to this run) -------------------
+    hq_classification = held_queue.classify_read()
+    _add_gap(gaps, "held_queue", hq_classification)
+    held_map = held_queue.load()
+    if held_map:
+        gaps.append(
+            f"held_queue: {len(held_map)} backlog row(s) exist globally; held_queue "
+            "carries no run attribution at all, so this report cannot confirm any of "
+            "them belong to this run — shown as backlog only, never counted into this "
+            "run's own held total."
+        )
+    this_run_held = [
+        {"row_id": row_id, "verdict": verdict}
+        for row_id, verdict in scoped.verdicts.items()
+        if verdict in (run_manifest.HELD, run_manifest.CONFIDENCE_HELD)
+    ]
+    held_section = {"this_run": this_run_held, "backlog": held_map}
+
+    # --- remainder_queue (this run's rows only) ---------------------------------------
+    remainder_classification = _classify_remainder_read(run_id)
+    _add_gap(gaps, "remainder_queue", remainder_classification)
+    remainder_entries = [
+        e for e in remainder_queue.load() if e.get(remainder_queue.RUN_ID_FIELD) == run_id
+    ]
+
+    # --- the audit record (crash-reconstruction fallback) -----------------------------
+    audit_classification = classify_audit_read(run_id)
+    _add_gap(gaps, "run_audit", audit_classification)
+    audit_facts = load_audit(run_id)
+    resolved_ceiling = ceiling if ceiling is not None else audit_facts.get("ceiling")
+    resolved_disarm = disarm if disarm is not None else audit_facts.get("disarm")
+    resolved_balances = balances if balances is not None else audit_facts.get("balances")
+
+    # --- spend -------------------------------------------------------------------------
+    projected_from_outcomes = (
+        sum(chunking.projected_spend(o) for o in outcomes) if outcomes else None
+    )
+    ceiling_stops = []
+    for outcome in outcomes:
+        stop = getattr(outcome, "ceiling_stop", None)
+        if stop is not None:
+            ceiling_stops.append({
+                "chunk_index": stop.chunk_index,
+                "unsent_count": len(stop.unsent_chunks),
+                "reason": stop.reason,
+            })
+    audit_ceiling_stop = audit_facts.get("ceiling_stop")
+    if audit_ceiling_stop and not ceiling_stops:
+        ceiling_stops.append(audit_ceiling_stop)
+
+    spend = {
+        "projected_executions": projected_from_outcomes,
+        "ceiling": resolved_ceiling,
+        "basis": run_state.SPEND_BASIS,
+        "executions_basis": write_grant.EXECUTIONS_BASIS,
+        "ceiling_stops": ceiling_stops,
+    }
+
+    # --- contradictions ------------------------------------------------------------
+    contradictions = _find_contradictions(
+        run_id, records, scoped.verdicts, remainder_entries, held_map, progress, entries)
+
+    block = _render_block(
+        run_id, records, held_section, remainder_entries, spend, resolved_disarm,
+        resolved_balances, contradictions, gaps)
+
+    return {
+        "run_id": run_id,
+        "records": records,
+        "held": held_section,
+        "remainder": remainder_entries,
+        "spend": spend,
+        "disarm": resolved_disarm,
+        "balances": resolved_balances,
+        "contradictions": contradictions,
+        "gaps": gaps,
+        "block": block,
+    }
