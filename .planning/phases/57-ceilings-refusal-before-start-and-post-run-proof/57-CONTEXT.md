@@ -126,8 +126,8 @@ unattended batch of hundreds. **Phase 57's core job is to make a ceiling refuse.
   — **Reversibility:** costly — the queued-remainder store is a new persisted artifact other
   surfaces will read; removing it later means re-deciding what happens to a partially-run batch.
 
-- **D-57-05 (DERIVED — not asked, follows from an existing operator ruling; planner must honour
-  it):** **Auto-split queues WORK, never AUTHORITY.** GRANT-06 is that a grant is never persisted
+- **D-57-05:** **Auto-split queues WORK, never AUTHORITY.** (DERIVED — not asked; it follows from
+  an existing operator ruling, and the planner must honour it.) GRANT-06 is that a grant is never persisted
   and never rehydrated, and 61-06 restated it: *"A resumed run gets a FRESH grant."* So the
   remainder queue holds rows still to do; it does **not** carry permission to write them. Each
   subsequent run opens its own grant.
