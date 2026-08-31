@@ -1,7 +1,12 @@
 """59-01 Task 1 — D-59-07's durable "what got written" artifact.
 
-Two properties carry the weight, and neither is exercised by the `classify_item`
-behaviour tests alone:
+Widened by 57-02 Task 2 (D-57-03, AFTER-03, option-b per `57-DISCUSSION-LOG.md`'s Task 1
+ruling): `classify_item` no longer collapses every non-write action into `not_written`.
+Eight outcome words now exist — see `written_records.py`'s module docstring — and every
+one of the backend's ten real `action` values resolves to exactly one of them.
+
+Two properties carry the weight beyond the outcome-mapping tests, and neither is
+exercised by the `classify_item` behaviour tests alone:
 
 * the flush is INLINE in `chunking.dispatch_plan`'s loop, not assembled after it — a run
   that dies mid-loop must still leave the durable file holding every chunk that landed
@@ -16,7 +21,9 @@ through a monkeypatch instead of a `path=` kwarg because `chunking.dispatch_plan
 takes no such parameter (see 59-01-PLAN.md's wiring section — only `run_id` was added).
 """
 import json
+import re
 import stat
+from pathlib import Path
 
 import pytest
 
@@ -25,58 +32,129 @@ import durable_paths
 import enrichment as enrichment_module
 import written_records
 
+# operator-claude-plugin/tests -> operator-claude-plugin -> repo root. A plain TEXT scan
+# of the builder source (never an `import build_cloud_workflows`, which would also work
+# per test_no_backend_imports.py's FORBIDDEN_MODULE_NAMES list not naming it, but running
+# a multi-thousand-line n8n workflow builder module at import time for one regex is not
+# the lazy path) — REVIEW-57-M: the ten-value set must come FROM the builder, not be
+# hard-coded here, or an eleventh action added there would go unnoticed here.
+REPO_ROOT = Path(__file__).resolve().parents[2]
+BUILD_CLOUD_WORKFLOWS = REPO_ROOT / "scripts" / "build_cloud_workflows.py"
+_ACTION_LITERAL_RE = re.compile(r'action\s*[:=]\s*"([a-zA-Z_]+)"')
+
+
+def _action_literals_from_builder():
+    return set(_ACTION_LITERAL_RE.findall(BUILD_CLOUD_WORKFLOWS.read_text(encoding="utf-8")))
+
+
 # ------------------------------------------------------------------------------------
-# classify_item — pure, no I/O. One test per <behavior> bullet, driving the exact key
-# sets read from BUILD_INGEST_RESPONSE (contacts) and the companies branch's own
-# "Decide Company Action" (scripts/build_cloud_workflows.py), not invented shapes.
+# classify_item / outcome_for_action — pure, no I/O. One test per <behavior> bullet,
+# driving the exact key sets read from BUILD_INGEST_RESPONSE (contacts) and the
+# companies branch's own "Decide Company Action" (scripts/build_cloud_workflows.py),
+# not invented shapes.
 # ------------------------------------------------------------------------------------
 
-def test_an_update_with_an_id_is_written():
+def test_write_blocked_is_gated_distinct_from_written():
     entry = written_records.classify_item(
-        {"action": "update", "hs_object_id": "123", "email": "a@b.c"}
+        {"action": "write_blocked", "reason": "not_allowlisted"}
     )
-    assert entry["outcome"] == written_records.WRITTEN
-    assert entry["hs_object_id"] == "123"
-    assert entry["action"] == "update"
+    assert entry["outcome"] == written_records.GATED
+    assert entry["outcome"] != written_records.WRITTEN
+    assert entry["reason"] == "not_allowlisted"
 
 
-def test_an_enrich_with_an_id_is_written():
-    entry = written_records.classify_item(
-        {"action": "enrich", "hs_object_id": "9604614548"}
-    )
-    assert entry["outcome"] == written_records.WRITTEN
-    assert entry["hs_object_id"] == "9604614548"
+@pytest.mark.parametrize("action", ["review", "needs_match_review"])
+def test_review_and_needs_match_review_are_held(action):
+    entry = written_records.classify_item({"action": action})
+    assert entry["outcome"] == written_records.HELD
 
 
-def test_a_create_with_a_resolved_id_is_written():
-    """The contacts lane resolves a real post-write id on create."""
+@pytest.mark.parametrize("action", ["research_failed", "recompute_refused"])
+def test_research_failed_and_recompute_refused_are_failed(action):
+    entry = written_records.classify_item({"action": action})
+    assert entry["outcome"] == written_records.FAILED
+
+
+@pytest.mark.parametrize("action", ["skip", "proposed"])
+def test_skip_and_proposed_are_no_action(action):
+    entry = written_records.classify_item({"action": action})
+    assert entry["outcome"] == written_records.NO_ACTION
+
+
+def test_a_create_with_an_id_is_written():
+    """The id was echoed back by the create call itself — terminal evidence a record
+    now exists (Task 1 option-b)."""
     entry = written_records.classify_item({"action": "create", "hs_object_id": "556"})
     assert entry["outcome"] == written_records.WRITTEN
     assert entry["hs_object_id"] == "556"
 
 
+@pytest.mark.parametrize("action", ["update", "enrich"])
+def test_update_and_enrich_with_an_id_are_write_attempted_not_written(action):
+    """The id was known BEFORE the PATCH (`Decide Action`/`Decide Company Action` emit
+    it pre-write) — it proves the write was permitted and attempted, never that it
+    landed. `written` must never be inferred (Task 1 option-b)."""
+    entry = written_records.classify_item({"action": action, "hs_object_id": "9604614548"})
+    assert entry["outcome"] == written_records.WRITE_ATTEMPTED
+    assert entry["outcome"] != written_records.WRITTEN
+    assert entry["hs_object_id"] == "9604614548"
+
+
 def test_a_create_with_no_id_is_created_id_unknown_never_a_fabricated_id():
     """The companies lane: `Build Response` reads `hs_object_id` off
-    `row.existingRecord`, which is null for a create by construction."""
+    `row.existingRecord`, which is null for a create by construction. D-57-03: stays
+    as-is, unchanged by Task 1's selection."""
     entry = written_records.classify_item({"action": "create", "hs_object_id": None})
     assert entry["outcome"] == written_records.CREATED_ID_UNKNOWN
     assert entry["hs_object_id"] is None
 
 
-def test_a_write_blocked_row_is_not_written_and_carries_the_reason_verbatim():
-    entry = written_records.classify_item(
-        {"action": "write_blocked", "reason": "not_allowlisted"}
-    )
-    assert entry["outcome"] == written_records.NOT_WRITTEN
-    assert entry["reason"] == "not_allowlisted"
+@pytest.mark.parametrize("action", ["update", "enrich"])
+def test_update_and_enrich_with_no_id_are_written_id_unknown(action):
+    """The same missing-id fact `created_id_unknown` names, for the two write actions
+    D-57-03's original table did not cover — never fabricated, unchanged by Task 1's
+    selection."""
+    entry = written_records.classify_item({"action": action, "hs_object_id": None})
+    assert entry["outcome"] == written_records.WRITTEN_ID_UNKNOWN
+    assert entry["hs_object_id"] is None
 
 
-@pytest.mark.parametrize(
-    "action", ["proposed", "skip", "needs_match_review", "review", "held", "bogus"]
-)
-def test_every_non_write_action_is_not_written(action):
+def test_an_unrecognised_action_is_failed_and_reason_is_preserved():
+    entry = written_records.classify_item({"action": "quokka", "reason": "never seen this"})
+    assert entry["outcome"] == written_records.FAILED
+    assert entry["reason"] == "never seen this"
+
+
+def test_the_ten_real_action_values_are_extracted_from_the_builder_not_hardcoded():
+    """REVIEW-57-M: circularity guard. The set is read FROM
+    `scripts/build_cloud_workflows.py`, not typed out here — an eleventh action added
+    there fails this test in the client, which is the point."""
+    extracted = _action_literals_from_builder()
+    assert extracted == set(written_records.ACTION_TO_OUTCOME) | written_records.WRITE_ACTIONS
+
+
+@pytest.mark.parametrize("action", [
+    "create", "update", "enrich", "write_blocked", "review", "needs_match_review",
+    "research_failed", "recompute_refused", "skip", "proposed",
+])
+def test_every_one_of_the_ten_real_actions_is_exercised(action):
+    """Non-circular per-value exercise — the ten literals above are typed here only to
+    drive the call, not to assert what the mapping table says; the actual mapping
+    assertions live in the more specific tests above and the builder-extraction test."""
     entry = written_records.classify_item({"action": action, "hs_object_id": "999"})
-    assert entry["outcome"] == written_records.NOT_WRITTEN
+    assert entry["outcome"] in written_records.ALL_OUTCOMES
+
+
+def test_outcome_for_action_matches_classify_item_for_write_blocked():
+    assert (
+        written_records.outcome_for_action("write_blocked")
+        == written_records.classify_item({"action": "write_blocked"})["outcome"]
+    )
+
+
+@pytest.mark.parametrize("value", [None, 7, "", "quokka"])
+def test_outcome_for_action_never_raises(value):
+    written_records.outcome_for_action(value)
 
 
 def test_a_non_dict_item_raises_rather_than_being_skipped():
@@ -101,13 +179,34 @@ def test_object_type_is_carried_through_when_present():
     assert entry["object_type"] == "companies"
 
 
+def test_row_id_and_association_are_carried_when_present():
+    entry = written_records.classify_item(
+        {"action": "review", "row_id": "r7", "association": "not_attempted"}
+    )
+    assert entry["row_id"] == "r7"
+    assert entry["association"] == "not_attempted"
+    assert entry["hs_object_id"] is None
+
+
+def test_row_id_and_association_default_to_none_never_absent():
+    entry = written_records.classify_item({"action": "skip"})
+    assert "row_id" in entry and entry["row_id"] is None
+    assert "association" in entry and entry["association"] is None
+
+
 def test_no_pii_key_survives_classification():
     keys = sorted(
         written_records.classify_item(
             {"action": "update", "hs_object_id": "1", "email": "a@b.c", "reason": None}
         ).keys()
     )
-    assert keys == ["action", "hs_object_id", "object_type", "outcome", "reason"]
+    assert keys == [
+        "action", "association", "hs_object_id", "object_type", "outcome", "reason",
+        "row_id",
+    ]
+    assert "email" not in written_records.classify_item(
+        {"action": "update", "hs_object_id": "1", "email": "a@b.c"}
+    )
 
 
 def test_a_value_naming_a_secret_refuses_rather_than_persisting():
@@ -116,6 +215,13 @@ def test_a_value_naming_a_secret_refuses_rather_than_persisting():
     with pytest.raises(written_records.WrittenRecordsError):
         written_records.classify_item(
             {"action": "write_blocked", "reason": "bad webhook_secret configured"}
+        )
+
+
+def test_a_forbidden_named_row_id_still_refuses_the_new_keys_are_scanned_too():
+    with pytest.raises(written_records.WrittenRecordsError):
+        written_records.classify_item(
+            {"action": "review", "row_id": "arm_this_now"}
         )
 
 
@@ -144,7 +250,7 @@ def test_append_chunk_flattens_a_list_body_into_one_entry_per_row(tmp_path):
     )
     entries = written_records.load(path=artifact)
     assert len(entries) == 2
-    assert entries[0]["outcome"] == written_records.WRITTEN
+    assert entries[0]["outcome"] == written_records.WRITE_ATTEMPTED
     assert entries[1]["outcome"] == written_records.CREATED_ID_UNKNOWN
 
 

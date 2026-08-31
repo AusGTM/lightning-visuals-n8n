@@ -27,29 +27,78 @@ this artifact globs `written_records*.json` and unions the matches (`load()`, be
 rather than opening one fixed path.
 
 Schema: `run_id`, `saved_at` (UTC isoformat), `entries` — a list, in chunk order, of
-`{chunk_index, object_type, action, hs_object_id, outcome, reason}`. The filename is
-`written_records-<run_id>.json`, resolved fresh on every call by `written_records_path`.
+`{chunk_index, object_type, action, hs_object_id, outcome, reason, row_id, association}`.
+`row_id` and `association` (57-02 Task 2, AFTER-01's join key) default to `None` when the
+response item does not supply them — an entry written before this widening reads back
+byte-unchanged and `.get("row_id")` on it is `None`, never an error and never a
+partial-trust guess (REVIEW-57-M10). The filename is `written_records-<run_id>.json`,
+resolved fresh on every call by `written_records_path`.
 
 `email` and every other contact PII field is DELIBERATELY EXCLUDED from an entry. An
 operator opens the record by id; this artifact does not need to become a second place
 personal data accumulates. A later widening to include more fields is a decision, not a
 drift — this comment is what makes that visible.
 
-`outcome` is one of three words:
-  - `written`           — a write action (`update`/`enrich`/`create`) carried a real
-                           HubSpot object id.
+`outcome` is one of EIGHT words (D-57-03, widened by 57-02 Task 1's checkpoint —
+option-b, `57-DISCUSSION-LOG.md`). The three-word `not_written` collapse this replaces
+made a `write_blocked` row indistinguishable from a failure (AFTER-03's exact case) and
+made a clean `skip`/`proposed` run read as though half of it did not land.
+
+  - `written`            — a `create` whose response echoed back a real HubSpot object
+                            id. The echoed id is terminal evidence a record now exists.
+                            Operator does nothing.
+  - `write_attempted`    — an `update`/`enrich` whose response carried an
+                            `hs_object_id` that was already known BEFORE the write
+                            (`Decide Action`/`Decide Company Action` emit it pre-write,
+                            and `Build Ingest Response` even falls back to
+                            `row.hs_object_id` when no write response could be joined).
+                            Proves the write was PERMITTED and ATTEMPTED, never that it
+                            landed — "written" must never be inferred. Operator:
+                            spot-check the record if it matters.
   - `created_id_unknown` — a `create` whose response carried no id. NEVER a fabricated
-                           id: the companies branch's `Build Response`
-                           (`scripts/build_cloud_workflows.py`) reads `hs_object_id` off
-                           `row.existingRecord`, which is null for a create by
-                           construction, and there is no post-write companies
-                           confirmation node in this codebase (59-01-PLAN.md's
-                           planner_assumptions #5 — that node is explicitly SCOPED OUT,
-                           not silently omitted).
-  - `not_written`        — the backend's own `action` says the row was refused, held, or
-                           never reached a write gate (`write_blocked`, `proposed`,
-                           `needs_match_review`, `skip`, `review`, `held`, or anything
-                           this module does not recognise).
+                            id: the companies branch's `Build Response`
+                            (`scripts/build_cloud_workflows.py`) reads `hs_object_id` off
+                            `row.existingRecord`, which is null for a create by
+                            construction, and there is no post-write companies
+                            confirmation node in this codebase (59-01-PLAN.md's
+                            planner_assumptions #5 — that node is explicitly SCOPED OUT,
+                            not silently omitted). Left exactly as-is by 57-02 — it is
+                            already on disk under this name.
+  - `written_id_unknown` — an `update`/`enrich` whose response ALSO carried no id — the
+                            same missing-id fact `created_id_unknown` names, for the two
+                            write actions D-57-03's original table did not cover. This
+                            extends the table by one word rather than folding into
+                            `created_id_unknown`, which is named for creates specifically
+                            and D-57-03 says stays as-is. Operator: open this row's
+                            record and confirm — distinct from every other word's action.
+  - `gated`              — `write_blocked`: the backend decided to write and the
+                            write-safety gate refused. Deliberately distinct from
+                            `written`/`write_attempted` (AFTER-03): a gated row is
+                            RECOVERABLE, not failed. Operator: open a grant and re-send —
+                            this row would have been written.
+  - `held`               — `review` or `needs_match_review`: the row needs a human (or a
+                            second automated pass) to decide before it can be written.
+                            Operator: review the row and decide.
+  - `failed`             — `research_failed`, `recompute_refused`, or an `action` this
+                            module has never seen — a value it has never seen is
+                            something to look at, never a silent success. Operator:
+                            retry, or fix the input.
+  - `no_action`          — `skip` or `proposed`: nothing needed doing (the record was
+                            already complete/fresh, or this was a preview that saved
+                            nothing on purpose). These are SUCCESSES, not failures.
+
+`NOT_WRITTEN` stays defined and exported as a DEPRECATED alias — no longer produced by
+`classify_item`, but an entry already on disk under that name (written before this
+widening) is still a recognisable word to a reader instead of a mystery string. A
+missing `row_id`/`association` on such an entry reads as `None` via `.get()`, the same
+absent-field discipline every sibling artifact already applies; no schema-version field
+is introduced, because `_entries_from_document` already degrades a whole document rather
+than half-trusting one.
+
+`outcome_for_action(action, hs_object_id=None)` is the one PURE, TOTAL, never-raising
+function this vocabulary lives in. `classify_item` calls it for the durable entry it also
+validates; `report_enrichment._outcome_for_row` calls it for the never-raise report path
+(REVIEW-57-H) — neither re-derives the mapping.
 
 Reuses `run_manifest.py`'s `_FORBIDDEN_NAME_MARKERS` discipline (defined fresh in THIS
 module, not imported from `run_manifest`'s private name, so a later change to one cannot
@@ -85,15 +134,46 @@ RUN_ID_FIELD = "run_id"
 STAMP_FIELD = "saved_at"
 ENTRIES_FIELD = "entries"
 
-# The three outcomes a classified entry may carry. See module docstring.
+# The eight outcomes a classified entry may carry (D-57-03, widened option-b). See
+# module docstring for what each means and what the operator does about it.
 WRITTEN = "written"
+WRITE_ATTEMPTED = "write_attempted"
 CREATED_ID_UNKNOWN = "created_id_unknown"
+WRITTEN_ID_UNKNOWN = "written_id_unknown"
+GATED = "gated"
+HELD = "held"
+FAILED = "failed"
+NO_ACTION = "no_action"
+
+# DEPRECATED (57-02): no longer produced by `classify_item`. Kept defined and exported
+# so an entry written before this widening still reads as a recognisable word, not a
+# mystery string.
 NOT_WRITTEN = "not_written"
+
+ALL_OUTCOMES = frozenset({
+    WRITTEN, WRITE_ATTEMPTED, CREATED_ID_UNKNOWN, WRITTEN_ID_UNKNOWN,
+    GATED, HELD, FAILED, NO_ACTION,
+})
 
 # An `action` in this set means the backend passed the row through its write gate.
 # Anything else — `write_blocked`, `proposed`, `needs_match_review`, `skip`, `review`,
-# `held`, or an unrecognised value — means no write happened.
+# `research_failed`, `recompute_refused`, or an unrecognised value — means no write
+# happened, and is resolved via `ACTION_TO_OUTCOME` below instead.
 WRITE_ACTIONS = frozenset({"update", "enrich", "create"})
+
+# The six non-write actions the backend actually emits (scripts/build_cloud_workflows.py),
+# mapped to their outcome word. An action in neither this table nor `WRITE_ACTIONS`
+# resolves to `FAILED` — a value this module has never seen is a thing to look at, and
+# calling it a no-action would be a silent success.
+ACTION_TO_OUTCOME = {
+    "write_blocked": GATED,
+    "review": HELD,
+    "needs_match_review": HELD,
+    "research_failed": FAILED,
+    "recompute_refused": FAILED,
+    "skip": NO_ACTION,
+    "proposed": NO_ACTION,
+}
 
 # Phase 23 D-11, reimplemented (not imported) per `run_manifest.py`'s own precedent —
 # see module docstring.
@@ -128,9 +208,40 @@ def written_records_path(run_id) -> Path:
     return durable_paths.resolve_state_path().parent / f"written_records-{run_id}.json"
 
 
+def outcome_for_action(action, hs_object_id=None) -> str:
+    """The one, pure, total, never-raising action-to-outcome vocabulary (D-57-03,
+    REVIEW-57-H). No I/O, no validation, no raise — for ANY input, including `None`, a
+    non-string, or a value this module has never seen. `classify_item` calls this for
+    the durable entry it also validates; `report_enrichment._outcome_for_row` calls it
+    for the never-raise report path, so a report over a malformed row still returns a
+    report rather than inheriting `classify_item`'s persistence checks.
+
+    A `WRITE_ACTIONS` action with a truthy `hs_object_id` resolves per Task 1's
+    selection (option-b): a `create`'s echoed id is terminal evidence (`WRITTEN`); an
+    `update`/`enrich`'s id was known before the write and proves only that the write was
+    attempted (`WRITE_ATTEMPTED`). Without an id it is `CREATED_ID_UNKNOWN` for `create`
+    and `WRITTEN_ID_UNKNOWN` otherwise — the same missing-id fact, never a fabricated
+    id. Everything else resolves through `ACTION_TO_OUTCOME`, `FAILED` as the fallback
+    for anything unrecognised.
+    """
+    try:
+        if action in WRITE_ACTIONS:
+            if hs_object_id:
+                return WRITTEN if action == "create" else WRITE_ATTEMPTED
+            return CREATED_ID_UNKNOWN if action == "create" else WRITTEN_ID_UNKNOWN
+        return ACTION_TO_OUTCOME.get(action, FAILED)
+    except TypeError:
+        # An unhashable `action` (e.g. a list) can't be tested against a frozenset or
+        # used as a dict key. Total means total: this still resolves to a word, not a
+        # traceback.
+        return FAILED
+
+
 def classify_item(item) -> dict:
     """One per-row n8n response item -> `{object_type, action, hs_object_id, outcome,
-    reason}`. Pure, no I/O.
+    reason, row_id, association}`. `row_id`/`association` default to `None` when the
+    item carries neither — the join key AFTER-01 needs for exactly the held/gated rows
+    that never got an `hs_object_id` (57-02 Task 2). Pure, no I/O.
 
     Raises `WrittenRecordsError` on a non-dict item — the flattening idiom documented at
     `chunking.py:93-96` must run first; a caller that indexes a raw, unflattened body is
@@ -162,16 +273,7 @@ def classify_item(item) -> dict:
     hs_object_id = item.get("hs_object_id") or None
     object_type = item.get("object_type") or "contacts"
     reason = item.get("reason")
-
-    if action in WRITE_ACTIONS:
-        if hs_object_id:
-            outcome = WRITTEN
-        elif action == "create":
-            outcome = CREATED_ID_UNKNOWN
-        else:
-            outcome = NOT_WRITTEN
-    else:
-        outcome = NOT_WRITTEN
+    outcome = outcome_for_action(action, hs_object_id)
 
     entry = {
         "object_type": object_type,
@@ -179,6 +281,8 @@ def classify_item(item) -> dict:
         "hs_object_id": hs_object_id,
         "outcome": outcome,
         "reason": reason,
+        "row_id": item.get("row_id"),
+        "association": item.get("association"),
     }
 
     for key, value in entry.items():
