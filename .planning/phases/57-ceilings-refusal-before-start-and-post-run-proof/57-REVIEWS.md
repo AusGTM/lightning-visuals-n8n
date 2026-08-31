@@ -943,3 +943,828 @@ mean these were checked.
 MISSING (needs-acknowledgement), ~9 signature/reachability classes UNCHECKABLE (INFO), plus the
 declared new-symbol exclusion set. Zero hard blocks — hard blocks require `lsp`/`scip` authority,
 which this project does not have.
+
+---
+
+# Cross-AI Plan Review — Phase 57 — CYCLE 2 (review of the REVISION)
+
+```yaml
+cycle: 2
+phase: 57
+reviewers_invoked: [gpt-5-6-sol, kimi-k3, grok-4-6]
+reviewers_producing_a_review: [gpt-5-6-sol, grok-4-6]
+lanes_completed: 2 of 3
+reviewed_at: 2026-08-31T13:33:06+10:00
+revision_under_review: 7959fd6
+plans_reviewed:
+  - 57-01-PLAN.md
+  - 57-02-PLAN.md
+  - 57-03-PLAN.md
+  - 57-04-PLAN.md
+  - 57-05-PLAN.md
+source_grounding: run (authority `grep`)
+requirements_substituted: .planning/milestones/v1.1-REQUIREMENTS.md
+```
+
+> **Assurance level: 2 of 3 lanes.** `kimi-k3` dropped again. Its cycle-1 failure was
+> `[spawn error: ETIMEDOUT]` at the lane's fixed 900s floor on both attempts; this cycle it
+> failed differently and faster — `opencode review failed or returned empty output … agent
+> ended its turn with no final message, stop reason=unknown, output tokens=0`, after 103s
+> (13:29:57 → 13:31:40). Per the cycle-2 brief it was given **one** attempt and not retried.
+> A 2-of-3 review is a materially lower assurance level than 3-of-3; nothing below carries
+> three-way corroboration.
+
+> **The reviewer panel CHANGED between cycles, which weakens cross-cycle comparison.**
+> Cycle 1 ran `gpt-5-6-sol`, `kimi-k3`, `gemini-3-6-flash`. `review.default_reviewers` now
+> resolves to `["gpt-5-6-sol", "kimi-k3", "grok-4-6"]` and no `gemini-3-6-flash` instance is
+> defined in `review.reviewer_instances` any more. Selection was resolved through config with
+> no reviewer flags passed, as instructed. Consequence: any cycle-1 finding raised **only** by
+> `gemini-3-6-flash` had no originating voice this cycle, so its absence here is not evidence
+> of closure.
+
+> Note: gpt-5-6-sol, kimi-k3 and grok-4-6 all share the `opencode` adapter; their consensus is
+> cross-model, not cross-tool.
+
+> **Requirements context (unchanged from cycle 1, and deliberately re-applied).** The stock
+> `gather_context` step copies the root `.planning/REQUIREMENTS.md`, which contains **zero**
+> occurrences of RUN-05, AFTER-01, AFTER-03 or G-4 (`grep -c` returns 0). The reviewers were
+> given `.planning/milestones/v1.1-REQUIREMENTS.md` instead (6 matches), and the substitution
+> is stated in the prompt they received.
+
+## Cycle-2 Consensus Summary
+
+Both producing lanes agree the revision is a **real safety rewrite rather than a changelog
+overlay**: cycle 1's load-bearing defects — the post-send tally, the quiet-instance sampling
+predicate, `failed_batch`'s silent `people`/`companies` drop, markdown-grep wiring proofs, and
+the deploy-before-gate ordering — are written into task actions and executable acceptance
+criteria, not merely asserted. GRANT-06 is intact across both new persistence surfaces. Neither
+reviewer found a binding constraint broken by the revision.
+
+They diverge sharply on residual risk: **gpt-5-6-sol rates the phase HIGH** (blocking plan
+defects at the phase boundaries), **grok-4-6 rates it MEDIUM** (conditional on 57-01 option A
+landing and 57-05 option B not being chosen while the sample is unknown). The divergence is
+substantive, not stylistic — see *Divergent Views*.
+
+### Agreed Strengths (both lanes)
+
+- The pre-send tally is placed correctly (first statement of the loop body, before
+  `build_envelope`), the comparison is strictly-greater so an exactly-sized batch still sends,
+  and the zero-overshoot sweep pins it. Both traced it against the real hook point in
+  `chunking.py:373-383`.
+- Quiet-instance exhaustion and busy-instance page truncation are modelled as separate facts;
+  the diagnosis against `n8n_read.py:358-379` is correct.
+- A deliberate budget stop has its own `DispatchOutcome` field and never masquerades as a chunk
+  failure.
+- `failed_batch` gains a per-shape round-trip property test over every shape `plan_chunks`
+  accepts.
+- Split persistence happens only after acceptance and a fresh grant; a refusal writes nothing.
+- GRANT-06 is enforced by recursive forbidden-name tests on both new stores.
+- The outcome vocabulary is centralised in a pure, total function, preserving
+  `build_enrichment_report`'s never-raise contract.
+- The first live unattended run is no longer an automatic consequence of a green test suite.
+
+### Agreed Concerns (both lanes — highest priority)
+
+**The 57-01 Task 1 checkpoint measures the UNFIXED sampler.** Both reviewers reached this
+independently and both rate it HIGH/NEW. Task 1 is ordered before Task 2 and its `<context>`
+(`57-01-PLAN.md:210-218`) prescribes running the measurement against today's
+`n8n_read.executions_in_window`, which has neither `listing_exhausted` nor `max_pages`. On this
+quiet account that call returns `covers_full_window: False` and `truncated_by_page_cap: False`,
+i.e. exactly the unusable state Task 2 exists to fix. grok-4-6 states the load-bearing
+conclusion plainly: **`listing_exhausted` in Task 2 is what makes RUN-05 reachable here — the
+checkpoint is the escape hatch, not the mechanism.** The cycle-2 brief asked which is doing the
+real work; both lanes answer Task 2, and both warn the operator could select option C ("leave
+RUN-05 PARTIAL") on evidence the revision already knows how to fix.
+
+### Divergent Views
+
+| Question | gpt-5-6-sol | grok-4-6 |
+|---|---|---|
+| Overall risk | **HIGH** — "blocking plan defects … the plans should undergo one more focused revision before execution" | **MEDIUM** — "cycle 1's spend-after-breach and silent `people` drop are actually specified away"; HIGH only if Task 1 is decided on pre-fix data or 57-05 option B is chosen while the sample is unknown |
+| `try/finally` + `CLOSED_UNHANDLED_ERROR` | PARTIALLY RESOLVED — the must-have "never left open by a crash path" overclaims; `finally` covers ordinary exceptions, not process death | RESOLVED |
+| Phase-boundary defects (deploy scope, ZoomInfo before/after, live-spend prohibition) | Four separate HIGHs | Not raised |
+| `CEILING_UNKNOWN` disabling both guards | Noted only inside the option-A cons summary | **Its own HIGH** — the hole that makes 57-05 option B dangerous |
+| Checkpoint proliferation | Structural improvement | MEDIUM/NEW — wave 2 now blocked on two independent option selections |
+
+Neither reviewer caught the two factual defects the grounding pass found (SG-1, SG-2 below);
+neither caught the frozen-call-order test-file gap (SG-3). Conversely the grounding pass cannot
+reach any of the reachability or ordering findings above. The two methods are complementary and
+neither is sufficient alone.
+
+## OpenCode Review (gpt-5-6-sol)
+
+I’m validating the revised plans against the committed Cycle 1 findings and the current implementation surfaces, with particular attention to caller wiring, checkpoint dependencies, and artifact contracts.
+# Phase 57 Cycle 2 Plan Review
+
+## Summary
+
+The revision materially improves the Phase 57 plans. Most Cycle 1 defects now have concrete mechanisms, caller-path tests, or explicit checkpoints rather than changelog-only claims. In particular, the pre-send ceiling placement, exhausted-listing handling, lossless remainder reconstruction, split acceptance transition, pure outcome classifier, contradiction reporting, and deployment deferral are genuinely present.
+
+The plans are still not ready to execute unchanged. The most important remaining problems are newly introduced by the revision: the RUN-05 checkpoint measures the old sampler before its fixes exist; the proposed deployment command targets every cloud workflow rather than only the ingest workflow; the ZoomInfo probe requires before/after balances while permitting one request; final pair-pipeline dispatch accounting remains underspecified; and the plans still map AFTER-01 to closed despite admitting an unjoinable population. The four-checkpoint structure improves operator control, but two checkpoints are positioned or specified in ways that cannot validate the mechanisms they govern.
+
+## Claimed Resolutions
+
+### 1. Mid-run tally moved pre-send
+
+**Verdict: RESOLVED**
+
+The mechanism is present, not merely mentioned in revision prose.
+
+- `57-01-PLAN.md:455-476` places the calculation as the first operation in the loop, before `build_envelope` and `dispatch_enrichment`.
+- The comparison is strictly `would_be > execution_ceiling`, so equality remains sendable.
+- `57-01-PLAN.md:312-329` requires transport calls for only the admitted chunks and no result for an unsent chunk.
+- `57-01-PLAN.md:505-507` requires the zero-overshoot sweep.
+- The placement correctly precedes the existing send at `operator-claude-plugin/scripts/chunking.py:373-383`.
+
+The local guarantee is correctly narrowed: this prevents local dispatch overshoot, not concurrent instance-wide consumption.
+
+### 2. Sampling predicate fixed at both ends
+
+**Verdict: PARTIALLY RESOLVED**
+
+The proposed code mechanism addresses both source defects:
+
+- `listing_exhausted` distinguishes quiet-instance exhaustion from incomplete pagination.
+- `max_pages` lets `allowance_headroom` request enough pages for the configured allowance.
+- `57-01-PLAN.md:339-374` defines `sampled` as true when the listing is complete by either back-paging or exhaustion and not truncated.
+- The existing defect is real: `covers_full_window` currently depends only on seeing an older execution, while the walker is capped at four pages at `operator-claude-plugin/scripts/n8n_read.py:258-281` and `:355-380`.
+
+This should make RUN-05 reachable on this quiet account after implementation. Task 1 is not what makes it reachable; the Task 2 code changes do.
+
+The checkpoint is incorrectly ordered, however:
+
+- `57-01-PLAN.md:200-231` takes the live measurement before Task 2 adds `listing_exhausted` and the allowance-sized page budget.
+- It therefore measures the known-broken sampler and cannot establish whether the revised sampler works on this account.
+- Option A reasons prospectively that the fixes “should” make it usable rather than measuring the fixed behavior.
+
+Move this checkpoint after the sampler implementation and repeat the measurement using the new `max_pages` behavior. Until then, the mechanism is credible but its account-specific proof is not.
+
+### 3. `preingest.rerequest_unanswered` no longer bypasses the ceiling
+
+**Verdict: PARTIALLY RESOLVED**
+
+The direct bypass identified in Cycle 1 is addressed:
+
+- `57-01-PLAN.md:624-650` adds `execution_ceiling` to `rerequest_unanswered`.
+- It passes the value to the existing internal `dispatch_plan`.
+- It adds `MergeResult.dispatch_outcome`, allowing its spend to be returned to the caller.
+- This reaches the current hidden dispatch at `operator-claude-plugin/scripts/preingest.py:699-741`.
+
+The broader claim that every pair-pipeline dispatch leg shares one decrementing ceiling is not yet concrete. The revised runbook describes subtracting `chunking.projected_spend()` over match, enrich, re-request, and final ingest, but the final ingest path does not clearly produce the same `chunking.DispatchOutcome` shape. The plan needs to name the final ingest adapter and show how its spend is charged before claiming the whole pair pipeline is covered.
+
+### 4. `chunking.failed_batch` generalized to all five shapes
+
+**Verdict: RESOLVED**
+
+The revision directly addresses the source defect.
+
+- Current planning accepts `rows`, `people`, `companies`, and `record_ids` at `operator-claude-plugin/scripts/chunking.py:206-277`, plus the list passthrough.
+- Current reconstruction only combines `rows` and `record_ids`, falling back to the first chunk for other shapes at `operator-claude-plugin/scripts/chunking.py:494-517`.
+- `57-03-PLAN.md:319-327` requires tests for all five forms.
+- `57-03-PLAN.md:367-381` defines concatenation across the matching list-bearing key.
+- `57-03-PLAN.md:445-446` includes executable checks for the previously lossy `people` and `companies` cases.
+
+### 5. `REASON_ALLOWANCE_SPLIT` has a producer and refusal writes no file
+
+**Verdict: PARTIALLY RESOLVED**
+
+The transition is now explicit and correctly ordered:
+
+1. `plan_grant` returns a pure refusal and offer.
+2. The operator accepts a subset.
+3. A fresh grant opens.
+4. The remainder is persisted with `REASON_ALLOWANCE_SPLIT`.
+5. Declining writes nothing.
+
+This appears at `57-03-PLAN.md:402-421`, with a no-file test at `57-03-PLAN.md:342-351`.
+
+A remaining design problem exists in `split_for_allowance`:
+
+- It is specified around `record_ids` and `record_domains` at `57-03-PLAN.md:383-400`.
+- `plan_chunks` does not accept a generic `record_domains` work shape at `operator-claude-plugin/scripts/chunking.py:183-277`.
+- A domain is valid grant scope, but it is not automatically a complete resendable work specification.
+
+The plan must distinguish authorization scope from dispatch work. For `people`, `companies`, and row-based requests, the split must preserve the original full work objects, not reduce them to grant IDs/domains.
+
+### 6. `try/finally` grant closure with `CLOSED_UNHANDLED_ERROR`
+
+**Verdict: PARTIALLY RESOLVED**
+
+The ordinary exception path is now specified:
+
+- `57-01-PLAN.md:674-682` requires an explicit unhandled-error close and re-raise.
+- `record_dispatch_outcome` gains a reason override rather than mislabelling the exception as a ceiling breach.
+- The AST test is an improvement over Markdown grep.
+
+Two qualifications remain:
+
+- The AST criterion verifies calls occur somewhere within a `try`/`finally`, but does not prove all exception-producing operations are protected or that the exception path supplies `CLOSED_UNHANDLED_ERROR`.
+- The must-have statement that a grant is “never left open by a crash path” at `57-01-PLAN.md:36` is too broad. `finally` covers ordinary Python exceptions, not process termination, interpreter failure, or machine loss.
+
+Rename the guarantee to “ordinary exceptions escaping the runbook close the in-memory grant.” Actual process crashes should remain explicitly outside it.
+
+### 7. Override authority defined
+
+**Verdict: RESOLVED**
+
+The revision supplies real enforcement:
+
+- `57-01-PLAN.md:395-416` requires a non-empty operator-provided reason.
+- Missing or non-string reasons raise.
+- `overridden`, `override_reason`, and `override_authority` are recorded.
+- The report must render them.
+- Runbooks are prohibited from manufacturing the override from config or stored state.
+- Tests verify that the runbooks do not contain the override invocation.
+
+This is a defensible narrow override over sampled information, not an unqualified bypass.
+
+### 8. D-53-02 supersession recorded as D-57-00
+
+**Verdict: RESOLVED**
+
+The revision writes the supersession into all three named canonical locations:
+
+- `.planning/STATE.md`
+- `57-DISCUSSION-LOG.md`
+- `61-CONTEXT.md`
+
+The exact required text and placement are specified at `57-01-PLAN.md:558-588`, with preservation of the historical D-53-02 record. This is a real decision-record edit, not just a source comment.
+
+### 9. Markdown-grep criteria replaced with AST tests and new prohibitions
+
+**Verdict: RESOLVED**
+
+The production runbook checks now require extraction and compilation of fenced Python:
+
+- `57-01-PLAN.md:690-708`
+- `57-05-PLAN.md:488-503`
+- `57-VALIDATION.md` explicitly prohibits identifier grep as the sole proof and prohibits proving a gate from its own text.
+
+Some secondary grep checks remain, but they are no longer the only reachability evidence. That is appropriate.
+
+The AST tests should additionally assert the unhandled-error reason argument and full protected-region ordering, not only call presence.
+
+### 10. Apollo error corrected to `http_403`
+
+**Verdict: RESOLVED**
+
+The revised plan correctly uses `http_403` and explicitly identifies the research artifact as stale:
+
+- `57-04-PLAN.md:56-75`
+- Existing fixture evidence is `error="http_403", status=403` at `operator-claude-plugin/tests/conftest.py:541-543`.
+
+The plan also correctly distinguishes refused credentials, transport failure, and successful-but-unparseable responses.
+
+### 11. `report_enrichment` delegates to pure total `outcome_for_action`
+
+**Verdict: RESOLVED**
+
+The revision explicitly rejects direct delegation to raising persistence logic:
+
+- `57-02-PLAN.md:299-307` defines `outcome_for_action` as pure and total.
+- `57-02-PLAN.md:359-410` removes the second mapping and routes the report through the pure function.
+- This preserves `build_enrichment_report`’s never-raise contract while keeping validation in `classify_item`.
+
+This directly addresses the mismatch between current `written_records.classify_item` and `report_enrichment._ACTION_TO_OUTCOME`.
+
+### 12. Expanded 57-05 evidence/report work and phase gate
+
+**Verdict: PARTIALLY RESOLVED**
+
+Substantial Cycle 1 concerns are genuinely addressed:
+
+- `classify_read` distinguishes absent, malformed, parseable, and another-run artifacts.
+- `record_audit` persists the four previously ephemeral observations.
+- The report now describes five state stores and a five-row contradiction matrix.
+- `REPORT INCOMPLETE` appears at the top when evidence is incomplete.
+- Multiple dispatch outcomes are accepted.
+- Deployment and first-live authorization are separated into a blocking checkpoint.
+- `57-05` now depends on `57-02`, `57-03`, and `57-04`.
+
+Remaining gaps:
+
+- `run_audit` is itself another durable input, so the report consumes six durable artifacts, not five. The audit store needs classified-read and gap handling too.
+- The promised single manifest snapshot is not implementable through current `run_state.read_progress`, which loads the manifest internally at `operator-claude-plugin/scripts/run_state.py:332-365`. The plan modifies neither `run_state.py` nor its API.
+- Pair-pipeline final-ingest rows can still be unjoinable.
+- Task 4’s live-spend options conflict with the plan-wide statement that no task spends provider credit.
+- The deploy command is not actually scoped to the ingest workflow.
+
+### 13. 57-02 live redeploy removed and folded into 57-05
+
+**Verdict: PARTIALLY RESOLVED**
+
+The ordering intent is improved:
+
+- `57-02-PLAN.md:448-459` regenerates and tests without deploying.
+- `57-05-PLAN.md:536-602` places deployment behind the phase gate.
+
+But the proposed deployment is not mechanically narrow. `scripts/deploy_n8n_workflows.py:265-269` loads every `wf_*_cloud.json`. A checkpoint described as deploying only `wf_contact_ingest_cloud.json` could update unrelated workflows.
+
+The phase gate needs either a single-workflow selector or a pre-deploy diff that refuses unless the ingest workflow is the only changed deployment target.
+
+## Deferral Verdicts
+
+### 1. Crash-mid-run remainder durability
+
+**Verdict: HONEST**
+
+`57-03-PLAN.md:116-124` clearly states that only deliberate ceiling stops create remainder entries, while a process crash between chunks does not. It gives a real trade-off:
+
+- Per-chunk remainder checkpointing adds a durable write on the hot path.
+- Existing written-record evidence makes reconstruction possible, though not automatic.
+- `57-05` must report the missing remainder as a gap.
+
+This is a genuine scope and cost decision, not a dismissal. The phrase “reconstructable” should not be allowed to become “reconstructed”; no such recovery mechanism is planned.
+
+### 2. Restoring `row_id` through the final pair-pipeline ingest
+
+**Verdict: HONEST as a deferral, but incompatible with claimed AFTER-01 closure**
+
+The rationale is explicit at `57-02-PLAN.md:124-140` and `:437-446`:
+
+- `extraction.strip_row_id` intentionally enforces canonical CSV structure.
+- Carrying the key beside the rows would require broader transport changes.
+- Joining by email would persist PII in a ledger that deliberately excludes it.
+
+Source confirms the strip at `operator-claude-plugin/scripts/extraction.py:876-892` and its use at `operator-claude-plugin/skills/enrich-before-ingest/SKILL.md:632-647`.
+
+The deferral is honest. The requirement accounting is not: AFTER-01 requires per-record outcomes, yet `57-01-PLAN.md:800` still maps it to closure while 57-05 admits some records remain unjoinable. Mark AFTER-01 partial or restore correlation.
+
+### 3. Instance-wide concurrent consumption
+
+**Verdict: HONEST**
+
+`57-01-PLAN.md:117-123` and threat `T-57-05c` at `57-01-PLAN.md:739` state:
+
+- The control is point-in-time and local.
+- Other sessions and schedulers can consume the allowance.
+- No reservation or billing-quota API exists.
+- The limitation is accepted and disclosed.
+
+This is a genuine platform limitation and correctly avoids upgrading a local tally into an instance-wide guarantee.
+
+### 4. Retention pruning under-counting spend
+
+**Verdict: HONEST**
+
+`57-01-PLAN.md:369-374` states the permissive direction explicitly:
+
+- Sampled spend is a lower bound.
+- Remaining headroom is an upper bound.
+- Pruned executions may still have been billed.
+- The fact is tagged `[documented]`, not `[observed live]`.
+
+The caveat is also required in the final report at `57-05-PLAN.md:430-435`. This follows the project’s evidence-tag discipline.
+
+### 5. Per-provider spend ceilings
+
+**Verdict: NOT ACTUALLY WRITTEN in the revised execution plans**
+
+The deferral exists in `57-CONTEXT.md`, but the revised plans do not provide an in-plan engineering rationale comparable to the crash and row-correlation deferrals. Plan 57-04 discusses unreadable provider balances, which is related but not the same as deciding why aggregate rather than provider-specific enforcement is sufficient for the first live unattended run.
+
+Add a short explicit deferral paragraph stating:
+
+- Aggregate provider-credit projection remains the only enforced provider ceiling.
+- Per-provider ceilings need reliable per-provider balance/usage inputs.
+- Apollo is structurally unreadable and ZoomInfo is probe-dependent.
+- Therefore provider-specific enforcement cannot honestly be implemented in this phase.
+
+### 6. Post-write confirmation
+
+**Verdict: HONEST**
+
+`57-02-PLAN.md:168-188` explicitly explains that an update/enrich ID may predate the PATCH and cannot prove write success. It correctly sends the unresolved vocabulary decision to a checkpoint instead of claiming terminal evidence exists.
+
+The deferral becomes unsafe only if Task 1 selects option A and the phase still closes AFTER-03 as fully satisfied.
+
+### 7. Throughput optimization
+
+**Verdict: NOT ACTUALLY WRITTEN in the revised execution plans**
+
+The context explains why the 82% sequential Anthropic cost is optimization rather than guardrail work, but the revised plan text does not carry that rationale as a named deferral. Because the revision expanded scope substantially, this should be stated in 57-01 or 57-05 to prevent an executor from folding optimization into already large tasks.
+
+## Strengths
+
+- The pre-send guard now has the correct ordering and comparison direction.
+- Quiet-instance exhaustion and busy-instance page truncation are modeled separately.
+- The revision no longer hides `rerequest_unanswered` outside the ceiling.
+- Deliberate budget stops have their own outcome field rather than masquerading as failures.
+- `failed_batch` is tested as a round-trip property over every accepted work shape.
+- Split persistence occurs only after acceptance and a fresh grant.
+- GRANT-06 is repeatedly enforced with recursive forbidden-value tests.
+- Outcome vocabulary is centralized in a pure, total function.
+- The post-write evidence conflict is escalated to an operator decision rather than silently decided.
+- Missing, malformed, and contradictory audit evidence becomes visible at the top of the report.
+- 57-05 now consumes the outputs of 57-02, 57-03, and 57-04 in the correct wave.
+- The first live unattended run is no longer an automatic consequence of green tests.
+
+## Concerns
+
+### HIGH, NEW: RUN-05 checkpoint measures the old sampler
+
+`57-01-PLAN.md:200-231` takes the account-specific measurement before Task 2 implements `listing_exhausted` and the allowance-sized page budget. The checkpoint cannot determine whether the revised sampler is usable.
+
+### HIGH, NEW: Deployment is broader than the checkpoint says
+
+Task 4 describes an ingest-only deployment at `57-05-PLAN.md:553-559`, but `scripts/deploy_n8n_workflows.py:265-269` loads all cloud workflows. Unrelated local/live drift could be deployed.
+
+### HIGH, NEW: ZoomInfo before/after proof is impossible with one request
+
+`57-04-PLAN.md:181-182` allows exactly one status request, while `:214-220` requires Lusha balances before and after the probe. One response cannot bracket itself. A second status request would also trigger the provider status chain again.
+
+### HIGH, NEW: Live-spend checkpoint conflicts with global prohibitions
+
+`57-05-PLAN.md:66-70` and `:637-641` say no task spends provider credit. Option A explicitly says provider credits are spent at `:581-589`, and option B authorizes an unattended credit-spending batch. It is unclear whether Task 4 merely records authorization or executes the run.
+
+### HIGH, CARRIED: AFTER-01 remains incomplete on final ingest
+
+The plan now honestly discloses the `strip_row_id` boundary but still maps AFTER-01 to closure. Keeping an unjoinable row in the report is safer than dropping it, but it does not supply the required per-record joined outcome.
+
+### HIGH, NEW: Final pair-pipeline spend accounting is underspecified
+
+The plans explain decrementing the ceiling across dispatch outcomes but do not concretely adapt the final ingest dispatch to the same `DispatchOutcome` and `projected_spend` mechanism.
+
+### HIGH, NEW: Split scope is not necessarily resendable work
+
+`record_domains` preserves authorization semantics, but a domain-only object is not necessarily enough to reconstruct `people`, `companies`, or row-based dispatch input.
+
+### MEDIUM, NEW: Single manifest snapshot is not supported by the current API
+
+The plan promises one snapshot, while `run_state.read_progress` loads internally and returns only progress. No API change is assigned.
+
+### MEDIUM, NEW: 57-03 checkpoint ownership is undeclared
+
+57-02 and 57-03 run in Wave 2. 57-02 owns `57-DISCUSSION-LOG.md`; 57-03 has a one-way operator checkpoint but does not declare a decision-record file. Either the checkpoint is not durably recorded or two parallel plans can edit the same undeclared artifact.
+
+### MEDIUM, NEW: 57-04 is marked autonomous despite a live gated probe
+
+`57-04-PLAN.md` is `autonomous: true`, yet the plan requires an explicit live gate, credentials, a backend POST, and possible ZoomInfo token-cache mutation. It should be non-autonomous or split into autonomous fixture work plus a checkpointed probe.
+
+### MEDIUM, NEW: GRANT-06 lacks requirement-level closure ownership
+
+The phase introduces two new persistence surfaces adjacent to authority, but the requirement map omits GRANT-06 and none of the plans updates the milestone requirement file. The code-level tests are strong; traceability is missing.
+
+### MEDIUM, NEW: Audit-store terminology and handling are incomplete
+
+57-05 says it joins five stores, then consumes `run_audit-<run_id>.json` as a sixth durable input. The audit artifact needs the same absent/malformed/another-run reporting discipline or an explicit reason it differs.
+
+### LOW, NEW: Deployment artifact ownership is inaccurate
+
+57-02 creates the generated JSON. 57-05 optionally deploys it. A deployed state is not an unconditional repository artifact, especially when Task 4 option D permits no deployment.
+
+## Suggestions
+
+1. Move 57-01 Task 1 after Task 2, then measure using the revised sampler and allowance-sized page budget.
+2. Add a concrete adapter for charging the final ingest dispatch against the same grant ceiling and include it in the AST/caller-path test.
+3. Change `split_for_allowance` to split the original canonical work specification, preserving complete `rows`, `people`, or `companies` objects as appropriate.
+4. Mark AFTER-01 partial unless final-ingest correlation is restored through sidecar metadata.
+5. Make 57-05 Task 4 explicitly authorization-only, or add a separate live-run task and remove the contradictory no-spend claims.
+6. Add a single-workflow deployment selector or require a pre-deploy diff that refuses if any workflow other than contact ingest would change.
+7. Replace the ZoomInfo before/after credit claim with either a two-request protocol or a narrower claim that the probe does not invoke enrichment endpoints.
+8. Add `run_state.read_progress(..., manifest_snapshot=...)` or return the loaded snapshot so the one-snapshot report claim is implementable.
+9. Make 57-04 non-autonomous for the live portion.
+10. Assign each checkpoint a durable decision-record owner and serialize plans that modify the same log.
+11. Include GRANT-06 in the phase requirement map and assign its closure update to 57-05.
+12. Add explicit in-plan deferral rationales for per-provider ceilings and throughput optimization.
+
+## Risk Assessment
+
+**Overall risk: HIGH**
+
+The revision is significantly safer than Cycle 1 and resolves most original implementation defects. The remaining risk is concentrated at the phase boundaries rather than in the core pre-send algorithm:
+
+- RUN-05’s account-specific checkpoint currently cannot validate the revised sampler.
+- AFTER-01 is still claimed as closed despite acknowledged unjoinable rows.
+- The complete pair pipeline is not yet demonstrably charged against one ceiling.
+- The deployment mechanism can touch more workflows than the checkpoint describes.
+- The live-spend checkpoint contradicts the phase’s own prohibition.
+- The provider-balance proof contains an impossible one-request before/after requirement.
+
+Because Phase 57 gates the first unattended credit-spending batch, these are blocking plan defects. The core approach is sound, but the plans should undergo one more focused revision before execution.
+
+---
+
+## OpenCode Review (kimi-k3)
+
+LANE DROPPED — no review produced. Raw lane output:
+
+```
+opencode review failed or returned empty output. stderr:
+
+Raw response body:
+OpenCode review returned no assistant text (#1936: agent ended its turn with no final message).
+Diagnostic: stop reason=unknown, output tokens=0
+```
+
+Given one attempt per the cycle-2 brief and not retried. See the assurance-level note in
+the cycle-2 frontmatter above.
+
+---
+
+## OpenCode Review (grok-4-6)
+
+I'll verify claimed cycle-2 fixes against source, not changelog lines.
+# Phase 57 Cycle 2 — Plan Revision Review
+
+Verified against current source: `n8n_read.py:258-381`, `chunking.py:317-517`, `conftest.py:541-544`, `STATE.md:410`, `61-CONTEXT.md:57`. Plans are still unimplemented; this judges **plan text**, not landed code.
+
+## 1. Summary
+
+The revision is a real safety rewrite, not a changelog overlay. Cycle 1’s load-bearing defects (post-send tally, quiet-instance sampling, `failed_batch` drop, markdown-grep wiring, deploy-before-gate) are **written into task actions and tests**. GRANT-06 is intact. Residual risk is concentrated in **checkpoint ordering** (T1 measures *before* the sampling fix), the **`CEILING_UNKNOWN` double-off hole** that option A itself names, and **new coupling** (four blocking gates, remainder write inside `dispatch_plan`, audit merge). As a gate on first live spend: **MEDIUM** if option A + T2 land as specified; **HIGH** if T1 is decided on pre-fix measurements or option B unattended is chosen while sample is `unknown`.
+
+## 2. Claimed resolutions
+
+| Claim | Verdict | Evidence |
+|---|---|---|
+| Mid-run tally **pre-send** | **RESOLVED** | 57-01 T2: first statement of loop, before `build_envelope`; `would_be > execution_ceiling`; equality sends all; zero-overshoot sweep. Matches `chunking.py:373-377` hook point. Comparison direction cannot off-by-one if implemented as specified. |
+| Sampling predicate both ends | **PARTIALLY RESOLVED** | Plan specifies `listing_exhausted` + `max_pages` + `sampled = truncated_by_page_cap False AND (covers_full_window OR listing_exhausted)` (`n8n_read.py:378-379` is still `covers_full_window = saw_older_than_cutoff` today). **On this quiet account, `listing_exhausted` is what makes RUN-05 reachable**, not the checkpoint. T1 still runs the **unfixed** walker first — the checkpoint can *override* closure, but it is not the mechanism that makes refusal fire here. Retention caveat is honest (`[documented]`, lower-bound spend). |
+| `rerequest_unanswered` under ceiling | **RESOLVED** | 57-01 T4: `execution_ceiling` + `MergeResult.dispatch_outcome`; withdrawn grep-0 pin. |
+| `failed_batch` all five shapes | **RESOLVED** | 57-03 T3: ordered key concat; per-shape round-trip. Current `chunking.py:506-516` still returns `chunks[0]` for `people`/`companies`. |
+| `REASON_ALLOWANCE_SPLIT` producer | **RESOLVED** | Five-step transition; `plan_grant` writes nothing; runbook after fresh grant; disk-empty test. |
+| `try/finally` + `CLOSED_UNHANDLED_ERROR` | **RESOLVED** | 57-01 T4; crash ≠ `ceiling_breach`. |
+| Override authority | **RESOLVED** | raise without reason; recorded; `override=True` grep 0 in SKILLs. |
+| D-53-02 → D-57-00 | **RESOLVED in plan** | Edit `STATE.md:410`, discussion log, `61-CONTEXT.md:57`. Not in repo yet. |
+| Markdown-grep → AST | **RESOLVED** | 57-VALIDATION prohibitions + compile fenced python. |
+| Apollo `http_403` | **RESOLVED** | `conftest.py:541-544`; 57-04 supersedes stale RESEARCH. |
+| `outcome_for_action` not `classify_item` | **RESOLVED** | 57-02 T2/T3; never-raise pin. |
+| 57-05 classify_read / audit / matrix / phase gate | **RESOLVED as specified** | Five-store join, GRANT-06 authority test, deploy folded from 57-02. |
+| 57-02 live redeploy removed | **RESOLVED** | Explicit prohibition; deploy = 57-05 T4. |
+
+## 3. Deferrals
+
+1. **Crash-mid-run remainder** — **HONEST**. 57-03 objective: remainder only on deliberate stop; reconstruct from `written_records` + plan; 57-05 names the gap. Trade-off (hot-path write vs reconstructability) is written, not waved.
+2. **`row_id` through pair ingest** — **HONEST**. 57-02 must_haves + T4 + 57-05 unjoinable-leg; `extraction.strip_row_id` at `extraction.py:876` / SKILL ~639. AFTER-01 join incomplete on that lane — plan says so.
+3. **Instance-wide concurrent spend** — **HONEST**. T-57-05c **accept**; P-12; disclosed as local control. Real trade-off (no reservation API).
+4. **Retention pruning** — **HONEST**. `retention_caveat`, `[documented]`, permissive direction named.
+5. **Per-provider ceilings / post-write confirm / throughput** — **HONEST**. Unchanged `<deferred>`.
+
+## 4. Strengths
+
+- Pre-send tally + `CeilingStop` field matches Pitfall 5 and current loop structure (`chunking.py:373-451`).
+- Quiet-instance sampling is correctly diagnosed against `n8n_read.py:358-379`.
+- GRANT-06 never broken: remainder/audit observations only; authority tests.
+- Phase gate (57-05 T4) separates landing from first live spend (D-61-08).
+- G-4 closure table: `inconclusive` does not close.
+- Wave 1 parallel (57-01 ∥ 57-04) is sound; 57-04 consumes nothing from 57-01.
+
+## 5. Concerns
+
+**HIGH / NEW — T1 measures the unfixed sampler.** Checkpoint is *before* T2. Quiet instance today: `covers_full_window=False`, `truncated_by_page_cap=False` (`n8n_read.py:358-364,379`). Operator may pick option C (leave RUN-05 PARTIAL) on evidence the revision already knows how to fix. **Which does the real work here:** T2’s `listing_exhausted`, **not** the checkpoint. Reorder: land T2 (or run the measurement script *as if* patched), then decide.
+
+**HIGH / NEW (named in-plan, still open) — `CEILING_UNKNOWN` turns off both guards.** 57-01 option A cons: unknown → `execution_ceiling=None` → no preflight *and* no mid-run stop. D-57-02 forbids refusing on unknown. For unattended first spend this is the hole that makes option B of 57-05 dangerous. Not a missed fix — a residual the phase gate must treat as blocking if sample is still unusable after T2.
+
+**MEDIUM / NEW — Remainder persist inside `dispatch_plan`.** 57-03 T3 writes `remainder_queue` on stop. Couples chunking to a sixth store; D-59-10 wrap specified. Grant-unaware preserved (`import write_grant` grep 0). Acceptable if degrade-on-fail is as specified.
+
+**MEDIUM / NEW — Four checkpoints vs one.** Wave 2 blocked on 57-02 T1 (`written` vs `write_attempted`) *and* 57-03 T1 (auto-split). 57-05 T2 must wait for both option selections. Scope grew (57-01 3→4, 57-05 2→4) but coupling is explicit.
+
+**MEDIUM / CARRIED — `plan.row_counts == UNKNOWN` skips tally.** 57-01 T2: list spec, single chunk, `ceiling_stop` None. Honest; still a mid-run hole for that shape.
+
+**LOW / NEW — `record_audit` merge.** Two calls (grant-time + finally); crash between is the point. Spec is merge-not-replace; executor must not last-write-wins.
+
+**LOW / NEW — AST vs fenced blocks.** Skills have multiple fences; test must extract the *dispatch* block or it goes green on a comment fence.
+
+Binding constraints: **not broken** (GRANT-06, no arm in 01–04, distinct `DispatchOutcome` field, tags, no fabricated ids). 57-05 T4 deploy is the only live action and is gated.
+
+## 6. Suggestions
+
+1. Move 57-01 T1 **after** T2, or measure with a one-off that applies `listing_exhausted` logic to the live listing so the decision uses post-fix reachability.
+2. In 57-05 T4 facts list: if post-T2 sample is still `CEILING_UNKNOWN`, **forbid option B** (unattended) in the option text, not only in cons.
+3. Pin `would_be` against `write_grant.EXECUTIONS_BASIS` / `run_state.spend_against_ceiling` in one shared helper so the loop formula cannot drift.
+4. AST extractor: name the fence heading or require `dispatch_plan(` in the compiled unit.
+
+## 7. Risk Assessment
+
+**MEDIUM** for executing the revised plans as a safety proposition.
+
+Justification: cycle 1’s spend-after-breach and silent `people` drop are actually specified away; GRANT-06 holds; first live run is no longer an automatic consequence of green tests. Remaining HIGH items are **decision-order** and the **unknown-ceiling dual-off path**, both visible in the plans. They do not make the revision dishonest; they do mean RUN-05 on *this* quiet account is closed by **`listing_exhausted` in T2**, with T1 as an escape hatch if that still fails — not the other way around.
+
+If T1 is taken on pre-fix data and the operator chooses option C, the phase under-closes a fix it already designed. If 57-05 option B is chosen while `execution_ceiling` is None, the phase fails its own goal.
+
+---
+
+## Source-Grounding Pass — Cycle 2 (authority: `grep`)
+
+Run after the reviews, per the cycle-2 brief. Method: enumerate every symbol the five revised
+plans cite, subtract each plan's own "Artifacts this phase produces" section, resolve the
+remainder with ripgrep/Read. Severity under `grep`: MISSING → `needs-acknowledgement` (NOT a
+hard block — hard blocks require `lsp`/`scip`); AMBIGUOUS → MEDIUM; UNCHECKABLE → INFO.
+
+### Step 2 — Exclusion set (declared "Artifacts this phase produces", all five plans read)
+
+All five plans now carry a populated section (cycle 1 had only 57-01 populated). Excluded from
+resolution because absence is expected:
+
+- **57-01:** `write_grant.allowance_headroom`, `ceiling_verdict`, `CEILING_OK`/`CEILING_OVER`/
+  `CEILING_UNKNOWN`, `record_dispatch_outcome`, `_CEILING_CONSTRAINT`, `_ALLOWANCE_SAMPLED`,
+  `plan_grant`'s `override`/`override_reason`, `envelope`'s `headroom` param and new figures,
+  `n8n_read.executions_in_window`'s `max_pages`/`listing_exhausted`, `chunking.CeilingStop`,
+  `DispatchOutcome.ceiling_stop`, `dispatch_plan`'s `execution_ceiling`,
+  `chunking.projected_spend`, `preingest.rerequest_unanswered`'s `execution_ceiling`,
+  `preingest.MergeResult.dispatch_outcome`, the `D-57-00` records.
+  — **and `write_grant.CLOSED_UNHANDLED_ERROR`, which is listed here but ALREADY EXISTS. See
+  Step 3, finding SG-1.**
+- **57-02:** `written_records.GATED`/`HELD`/`FAILED`/`NO_ACTION`/`WRITTEN_ID_UNKNOWN`/
+  (`WRITE_ATTEMPTED`), `ALL_OUTCOMES`, `ACTION_TO_OUTCOME`, `outcome_for_action`, the
+  `row_id`/`association` entry fields, `row_id` on `BUILD_INGEST_RESPONSE`,
+  `tests/n8n/ingestResponseRowId.test.mjs`.
+- **57-03:** `remainder_queue.py` and its whole surface (`RemainderQueueError`,
+  `remainder_path`, `build_entry`, `save`, `load`, `REMAINDER_QUEUE_GLOB`,
+  `REASON_CEILING_BREACH`, `REASON_ALLOWANCE_SPLIT`, `ALL_REASONS`),
+  `write_grant.split_for_allowance`, the `split_offer` key.
+- **57-04:** `scripts/prove_zoominfo_balance.py`, `ALLOW_ZOOMINFO_BALANCE_PROBE`,
+  `test_prove_zoominfo_balance.py`, `57-ZOOMINFO-BALANCE-VERDICT.json`,
+  `backend_status_zoominfo_provider_error` fixture.
+- **57-05:** `run_report.py`, `build_run_report`, `record_audit`, `load_audit`,
+  `run_audit-<run_id>.json`, `written_records.classify_read`, `run_manifest.classify_read`,
+  `test_run_report.py`.
+
+### Step 3 — Resolution of the remaining cited symbols
+
+#### VERIFIED (existing code the plans cite)
+
+| Plan citation | Verdict | Evidence |
+|---|---|---|
+| `n8n_read.executions_in_window` at 258-382, `covers_full_window = saw_older_than_cutoff` at `:378` | VERIFIED | def at `n8n_read.py:258`; `"covers_full_window": saw_older_than_cutoff` at `:379` (one line off the cited 378) |
+| `MAX_EXECUTION_PAGES` / `EXECUTIONS_WINDOW_PAGE_LIMIT` at `n8n_read.py:69,73`; 1,000-execution cap | VERIFIED | `:69` = 250, `:73` = 4; the cap is stated in the source comment at `:71-72` |
+| quiet-instance exit "no next cursor" at `n8n_read.py:358-360` | VERIFIED | `next_cursor = body.get("nextCursor")` `:358`; `if saw_older_than_cutoff or not next_cursor: break` `:359` |
+| `truncated_by_page_cap` only set in the `for/else` when not broken | VERIFIED | `:363-364` `if not saw_older_than_cutoff: truncated_by_page_cap = True` |
+| `EXECUTION_ALLOWANCE_KEY` at `n8n_read.py:62` | VERIFIED | `:62` |
+| `config_gate.load_config` at `config_gate.py:131` | VERIFIED | `:131` |
+| its callers `cost_guard.py:323`, `chunking.py:531`, `dispatch.py:131` | VERIFIED | all three exact |
+| `write_grant` D-53-02 text `_DISCLOSURE_NOT_CONSTRAINT`, `_ALLOWANCE_GAP` at 111-155 | VERIFIED | `_ALLOWANCE_GAP` `:143`, `_DISCLOSURE_NOT_CONSTRAINT` `:150`, `EXECUTIONS_BASIS` `:139` |
+| hardcoded `remaining_allowance_sampled` false literal at `write_grant.py:261` | VERIFIED | `:261` `"remaining_allowance_sampled": False,` |
+| `_headroom()` tri-state renderer at 167-174 | VERIFIED | def at `:167` |
+| `envelope()` at 183-278 / `_envelope_block()` | VERIFIED | `envelope` `:183`, `_envelope_block` `:281` |
+| `plan_grant` at 411-520 | VERIFIED | def at `:411` |
+| `record_send_outcome` at 899-949 | VERIFIED | def at `:899` |
+| the close reasons at 660-705 | VERIFIED | `CLOSED_BATCH_COMPLETE` `:666` … `CLOSED_UNHANDLED_ERROR` `:670`; `GRANT_04_REASONS` `:672-675` |
+| `_refusal` / `_normalise` / `PROPOSAL_KIND` / `REFUSED` | VERIFIED | `:103`, `:107`, `:57`, `:61` |
+| grant scope id-vs-domain handling at `write_grant.py:607-620`, `:645-656` | VERIFIED | both ranges are inside the `covers`/scope block ending `:658` |
+| `chunking.ChunkResult` / `DispatchOutcome` at 87-155 | VERIFIED | `:88`, `:112` |
+| `chunking.dispatch_plan` at 317-451 | VERIFIED | def at `:317` |
+| `chunking.failed_batch` at 494-517, returns `chunks[0]` for `people`/`companies` | VERIFIED | def `:494`; `list` passthrough `:502`; `rows` branch `:505`; `record_ids` fallthrough `:513-518` — a `people`/`companies` spec finds no `record_ids` and returns `dict(chunks[0])` at `:517` |
+| `chunk_ceiling` at 157-180, `plan_chunks` at 183-277 with four shapes | VERIFIED | `:157`, `:183`; rows `:215`, people `:232`, companies `:252`, record_ids `:270` |
+| `chunking.UNKNOWN` | VERIFIED | `:60` |
+| `n8n_cadence.check_budget_floor` at 452-491 | VERIFIED | def at `:452` |
+| `run_state.SPEND_BASIS`, `spend_against_ceiling`, `classify_read`, `read_progress` | VERIFIED | `:175`, `:368`, `:265`, `:332` |
+| `run_state.read_progress` loads the manifest internally (`run_state.py:332-365`) | VERIFIED | def at `:332`, body inside the cited range |
+| `run_state` `ABSENT`/`PARSEABLE`/`ANOMALOUS` at 152-158 | VERIFIED | `:152`, `:153`, `:154` — note `ANOTHER_RUN` is **not** defined in `run_state.py` |
+| `held_queue.classify_read` at `held_queue.py:260` | VERIFIED | `:260` |
+| `held_queue` `ABSENT`/`PARSEABLE`/`ANOMALOUS`/`ANOTHER_RUN`, `queue_path`, `load`, `fingerprint`, `ROW_FIELD_ALLOWLIST` | VERIFIED | `:107-110`, `:147`, `:245`, `:154`, `:98` |
+| `run_manifest.load_scoped` at 242-274, `run_manifest_path` at 151-160 | VERIFIED | `:242`, `:151`; no `classify_read` present (correctly, it is this phase's work) |
+| `durable_paths._atomic_write_0600` at 57-77/57-81, `resolve_state_path` | VERIFIED | `:57`, `:234` |
+| `written_records`: `classify_item` 131-192, forbidden markers 100-115, `WRITE_ACTIONS` `:96`, `load` 291-323, `_entries_from_document` 207-219, `append_chunk` 241-288, `written_records_path` 118-128 | VERIFIED | `:131`, `:100`, `:96`, `:291`, `:207`, `:241`, `:118`; `WRITTEN_RECORDS_GLOB` `:81`; `WRITTEN`/`CREATED_ID_UNKNOWN`/`NOT_WRITTEN` `:89-91` |
+| `report_enrichment._ACTION_TO_OUTCOME` (lines 1-80), `SUCCESS_OUTCOMES`, `_OUTCOME_REASON`, `_outcome_for_row` 121-185, `build_sync_report`/`build_enrichment_report` 245-337, never-raise contract 285-304 | VERIFIED | `:38`, `:50`, `:56`, `:122` (`_ACTION_TO_OUTCOME.get(..., "unknown")` — the 4-of-10 gap), all within the cited ranges |
+| `preingest.MergeResult` at 520-545; `rerequest_unanswered` at 662-745 with a single internal `dispatch_plan` | VERIFIED | `:525`, `:662`; the "only ever handed on to `dispatch_plan`" invariant comment at `:708` |
+| `scheduled_arm.py:234` calls `dispatch_plan` | VERIFIED | `:234` |
+| `extraction.strip_row_id` at 876-895 | VERIFIED | def at `:876` |
+| `enrich-before-ingest/SKILL.md:639` strips `row_id` before `write_dispatch_csv` | VERIFIED | `strip_row_id(sendable_rows)` at `:639`, `write_dispatch_csv` at `:640`, STRUCT-01 rationale `:643-645` |
+| `build_cloud_workflows.BUILD_INGEST_RESPONSE` at 465-520 | VERIFIED | `:471` |
+| decision nodes emit `row_id: row.row_id ?? null` at `:1699`/`:1705` and `:3439` | VERIFIED | `:1705` and `:3439` exactly |
+| `ENRICH_STATUS_BUILD_RESPONSE` error labelling at 6340-6370 / 6354-6362 | VERIFIED | node at `:6327`; `error = status ? ("http_" + status) : "provider_error"` `:6357`; `unrecognized_response_shape` `:6360` |
+| `conftest.py` `_balance` helper at `:498` | VERIFIED | `:498` |
+| `conftest.py` `no_network` `:588`, `no_durable_writes` `:608`, `stub_module_transport_factory` `:260` | VERIFIED | all exact |
+| `cost_guard` `_all_unreadable`/`fetch_balances`/`compare`/`_verdict` (221-320) | VERIFIED | `:221`, `:225`, `:274`, `:316` |
+| `confidence.ALL_HOLD_CODES`, `confidence.assess` | VERIFIED | `:74`, `:109` |
+| `enrichment.build_envelope` | VERIFIED | `enrichment.py:237` |
+| `n8n_arming.DISARMED` / `DISARM_FAILED` | VERIFIED | `:188`, `:189` |
+| `backend_status.py:40-54` issues the status POST | VERIFIED | `fetch_backend_status(config, transport=requests.post)` at `:40` |
+| `deploy_n8n_workflows.py::_instance_ok()` | VERIFIED | `:238` |
+| `provider_registry.py:26-33` Apollo non-master-key 403 comment | VERIFIED | the `apollo` credit block, `# 403 w/o master key -> null` |
+| `n8n/code/providerSelection.js:76-106` `extractCredits` + live-verified comment | VERIFIED | `:76` |
+| `tests/test_conftest_credential_guard.py` `RUN_LIVE_PARITY` | VERIFIED | `:6` |
+| `scripts/prove_async_recovery.py`, `scripts/prove_scale_up_runtime.py` (templates) | VERIFIED | both exist |
+| `test_write_grant.py:1455-1463` pins no `grant` parameter on `dispatch_plan` | VERIFIED | `test_dispatch_plan_has_no_grant_aware_hook_to_revoke_against`, ~`:1456-1466` |
+| `test_a_revocation_midway_does_not_stop_a_running_dispatch`'s 3-chunk idiom | VERIFIED | `test_write_grant.py:1371` |
+| `test_retry_reuses_dispatch.py::_EXPECTED_SEND_SHAPED` | VERIFIED | present in that file |
+| `written_records` / `held_queue` / `run_state` each carrying their own `_FORBIDDEN_NAME_MARKERS` (anti-DRY convention) | VERIFIED | `written_records.py:100`; the convention holds |
+
+#### MISSING / factually wrong claims about existing code (`needs-acknowledgement`)
+
+| Claim | Verdict | Evidence |
+|---|---|---|
+| **SG-1.** `57-01-PLAN.md:680-682` — "Add `CLOSED_UNHANDLED_ERROR` to `write_grant`'s close-reason set **beside the existing five**"; and `57-01-PLAN.md:765` lists `write_grant.CLOSED_UNHANDLED_ERROR` under "Artifacts this phase produces … these symbols do not exist yet" (also echoed in 57-03's and 57-05's "created elsewhere" lists) | **MISSING → needs-acknowledgement** | The constant **already exists**: `write_grant.py:670` `CLOSED_UNHANDLED_ERROR = "unhandled_error"`, already a member of `GRANT_04_REASONS` at `:672-675`, already asserted at `test_write_grant.py:1278`. It **IS** one of "the existing five" the same plan cites at 660-705. Consequences: (a) the plan's own acceptance criterion `assert w.CLOSED_UNHANDLED_ERROR` (`57-01-PLAN.md:707`) passes **today, before any work** — a criterion that cannot fail; (b) the source comment at `write_grant.py:679-681` says "GRANT_04_REASONS stays exactly five and is pinned by name", so an executor following the action literally could try to add a sixth against an explicit in-source guard; (c) listing it in the exclusion set tells a drift check to skip a symbol that exists. The *mechanism* cycle 1's H8 asked for (the `try`/`finally` closing the grant with that reason) is genuinely new and correctly specified — only the "add the constant" framing is wrong. |
+| **SG-2.** `57-01-PLAN.md:86-88` — "`record_send_outcome(` has ZERO production callers — **the only invocation outside `write_grant.py` itself is `test_write_grant.py:1507`**" (repeated at `57-VALIDATION.md:97`, "today only the direct-call unit test exists (`test_write_grant.py:1507`)") | **half VERIFIED, half MISSING → needs-acknowledgement** | The load-bearing half holds: `grep -rn "record_send_outcome" --include=*.py` finds **no non-test caller**. The specific half does not: there are **ten** test invocations across **two** files — `test_write_grant.py:1474, 1489, 1502, 1512` and `test_write_grant_guardrails.py:251, 256, 274, 293, 317, 396` — and **none at line 1507** (nearest are `:1502` and `:1512`). This matters because `test_write_grant_guardrails.py` is in no plan's `files_modified`. |
+
+#### AMBIGUOUS (MEDIUM)
+
+| Claim | Verdict | Evidence |
+|---|---|---|
+| **SG-3.** `57-01-PLAN.md:413-419` — the frozen-call-order change "Existing scripted-transport tests that count or sequence calls WILL fail … re-sequence them", with only `test_write_grant.py` in `files_modified` | **AMBIGUOUS → MEDIUM (and the basis of HIGH-4 below)** | `plan_grant` is called from **five** test files: `test_write_grant.py` (52 `_plan_reads()` uses) and `test_chunking.py` — both listed — plus `test_write_grant_surface.py` (**13** `_plan_reads()` uses; its helper docstring at `:67-69` literally reads "`plan_grant`'s frozen call order: one workflow-list read per lane … then one workflow read per lane"), `test_write_grant_guardrails.py` (ordered 2-element scripts, e.g. `:112`), and `test_unattended_pair_composition.py` (`:220` + scripted transport `:237`). The last three are in **no** plan's `files_modified`. |
+| **SG-4.** `57-05-PLAN.md:268` cites "`run_state.py` lines 100-135 and 308-378 — the `Progress` dataclass … and `SPEND_BASIS`" | AMBIGUOUS → MEDIUM (citation drift, harmless) | `Progress` `:309` ✓ and `read_progress` `:332` ✓ and `spend_against_ceiling` `:368` ✓ are all inside 308-378, but `SPEND_BASIS` is at `:175`, inside neither cited range. |
+| **SG-5.** `57-04-PLAN.md:24`, `:61`, `:285` cite `conftest.py:541` (`error="http_403"`) and `:543` (health `reason="http_403"`) | AMBIGUOUS → MEDIUM (off by one, claim itself correct) | The values are real and the cycle-1 correction is right, but they sit at `conftest.py:542` and `:544`, not `:541`/`:543`. |
+| **SG-6.** `57-05-PLAN.md:36` — "`run_state.classify_read` (`run_state.py:265`) already exist[s]" and the four words `ABSENT`/`PARSEABLE`/`ANOMALOUS`/`ANOTHER_RUN` are to be mirrored from it | AMBIGUOUS → MEDIUM | `run_state.classify_read` exists at `:265` ✓, but `run_state.py` defines only **three** of the four constants (`:152-154`); `ANOTHER_RUN` exists in `held_queue.py:110` only. 57-05 Task 1's behaviour spec requires all four words from both new `classify_read`s, so the executor must take the fourth from `held_queue`, and `run_state` is not the template it is named as for that word. The plan's "define them alongside where it does not" clause covers this, but the two named templates are not interchangeable. |
+
+### Step 5 — Verification coverage
+
+Not resolved by `grep`, with the reason. A clean grounding pass does not mean these were checked.
+
+**UNCHECKABLE under `grep` authority (INFO) — every *signature* claim:**
+
+- Keyword-only-ness and arity of every new parameter: `dispatch_plan(..., execution_ceiling=)`,
+  `executions_in_window(..., max_pages=)`, `plan_grant(..., override=, override_reason=)`,
+  `envelope(..., headroom=)`, `rerequest_unanswered(..., execution_ceiling=)`,
+  `record_dispatch_outcome(..., reason=)`, `build_run_report(..., outcomes=)`,
+  `record_audit(...)`, `split_for_allowance(...)`. (The plans propose `inspect.signature`
+  assertions precisely because grep cannot do this.)
+- `chunking.CeilingStop`'s field list and `frozen=True` — the dataclass does not exist yet.
+- `written_records.classify_item`'s returned key set; `outcome_for_action`'s totality
+  (never-raises) — grep sees a `def`, not a return shape or an exception profile.
+- `remainder_queue.build_entry`'s recursive forbidden scan reaching a marker nested inside a
+  list-of-dicts — a behavioural property, not a text one.
+- Every "X calls Y" / "no production caller reaches Z" **reachability** claim beyond the one
+  literal-name grep in SG-2. Call-graph analysis needs an index, not grep.
+- Whether `n8n_read.executions_in_window`'s proposed `listing_exhausted` is *correct* for a
+  failed-later-page walk — a control-flow property of code not yet written.
+- Whether `run_state.read_progress` can be made to hand back its internal manifest snapshot
+  without an API change (gpt-5-6-sol's MEDIUM) — the *current* internal load is VERIFIED at
+  `:332-365`; whether the plan's "pass that same loaded manifest into the row-verdict step" is
+  achievable without editing `run_state.py` (which is in **no** plan's `files_modified`) is a
+  design question grep cannot settle.
+
+**Skipped deliberately (INFO):**
+
+- Everything in the Step 2 exclusion set — created by this phase, so absence is expected.
+- Bare dictionary keys and string literals used as data: `row_id`, `run_id`, `action`,
+  `outcome`, `association`, `reason`, `spec`, `entries`, `records`, and the ten backend action
+  words (`create`, `update`, `enrich`, `write_blocked`, `review`, `needs_match_review`,
+  `research_failed`, `recompute_refused`, `skip`, `proposed`). Grep cannot distinguish a key
+  from a coincidental word. (The ten-action set itself is partly checkable — `:1705`/`:3439`
+  confirm the decision nodes exist — but the completeness of the set is exactly what 57-02
+  Task 2's builder-derived test is for, and that test does not exist yet.)
+- n8n node names as graph positions (`Build Ingest Response`, `Decide Action`,
+  `Build Response`, `Status Credit Request`, `ZoomInfo Usage`) — they resolve as string
+  constants in `build_cloud_workflows.py` (confirmed) but node-graph wiring is not
+  grep-checkable.
+- HubSpot / provider API field names external to this repo (`hs_object_id`, `contact_id`,
+  `company_id`, `credits.remaining`, `nextCursor`).
+- Line-range citations were spot-checked at their anchors (the `def`/constant), not
+  exhaustively range-by-range.
+
+**Totals:** ~55 file paths and code symbols VERIFIED, 2 factual claims about existing code
+MISSING (`needs-acknowledgement`), 4 AMBIGUOUS (MEDIUM), ~10 signature/reachability classes
+UNCHECKABLE (INFO), plus the declared five-plan exclusion set. **Zero hard blocks** — hard
+blocks require `lsp`/`scip` authority, which this project does not have.
+
+---
+
+## Cycle-2 Unresolved Findings Register
+
+Counted against the **current plan text** (commit `7959fd6`), not by grepping cycle 1's audit
+trail. A cycle-1 HIGH the revision genuinely closed is excluded as FULLY RESOLVED; a cycle-1
+finding the plans explicitly deferred with written rationale is treated as incorporated.
+
+**All ten cycle-1 HIGHs were checked and are excluded as FULLY RESOLVED**, each with a
+mechanism now present in plan text and verified against source by at least one lane: pre-send
+tally (H2), sampling predicate (H1 — mechanism resolved; its *checkpoint ordering* is a new
+finding, not the old one), `rerequest_unanswered` ceiling bypass (H3), `failed_batch` shape loss
+(H4), `REASON_ALLOWANCE_SPLIT` producer (H5), `written` provability escalated to a checkpoint
+(H6), `row_id` pair-pipeline gap disclosed (H7 — the *deferral* is honest; the requirement
+accounting is a carried finding), `try/finally` closure (H8), D-53-02 supersession recorded
+(H9), five-store contradiction handling (the 57-05 join HIGH).
+
+### HIGH — unresolved (9)
+
+| # | Status | Source | Finding | Plan change still needed |
+|---|---|---|---|---|
+| H-1 | NEW | both lanes | **57-01 Task 1 measures the pre-fix sampler.** The checkpoint is ordered before Task 2 and its command (`57-01-PLAN.md:210-218`) drives today's `executions_in_window`, which lacks `listing_exhausted`/`max_pages`. On this quiet account that returns the unusable state Task 2 exists to remove, so the checkpoint cannot establish whether the *revised* sampler works here. | Move Task 1 after Task 2, or take the measurement with the `listing_exhausted` logic applied, then decide. |
+| H-2 | NEW | gpt-5-6-sol (grep-confirmed) | **The deploy is broader than the checkpoint says.** 57-05 Task 4 describes deploying the regenerated ingest workflow; `deploy_n8n_workflows.py:264-269` globs **every** `wf_*_cloud.json` and the script has no argparse, `--only` or per-workflow selector anywhere. Unrelated local/live drift on the other four cloud workflows would deploy with it. | Add a single-workflow selector, or a pre-deploy diff that refuses unless `wf_contact_ingest_cloud.json` is the only changed target. |
+| H-3 | NEW | gpt-5-6-sol | **The ZoomInfo before/after proof is impossible as specified.** `57-04-PLAN.md` `<behavior>` requires "exactly ONE status request"; `<action>` requires the Lusha `credits.remaining` figure "BEFORE and AFTER this run". One response cannot bracket itself, and a second status request re-runs the whole provider chain. | Either a two-request protocol (and say so in `<behavior>`), or narrow the claim to "the probe invokes no enrichment endpoint". |
+| H-4 | NEW | gpt-5-6-sol | **57-05's own prohibition contradicts its Task 4 options.** `57-05-PLAN.md:66` and `:637-641` state no task in the plan may spend a provider credit; option A's cons say "Provider credits are spent" and option B authorises an unattended credit-spending batch. It is unresolved whether Task 4 *records* an authorisation or *executes* the run — on the phase whose binding constraint is that nothing in it spends a credit. | Make Task 4 authorisation-only in its own words, or split the live run into a separate task and drop the blanket no-spend claim. |
+| H-5 | CARRIED | gpt-5-6-sol | **AFTER-01 is still mapped to closure while the plans admit an unjoinable population.** 57-01's requirement-coverage table (`:800`) closes AFTER-01 via 57-05; 57-02 and 57-05 both correctly disclose that the pair pipeline's final ingest leg returns `row_id: null`. The deferral rationale is honest and written; the coverage row contradicts it. | Mark AFTER-01 PARTIAL in the coverage table, or restore correlation via sidecar metadata. |
+| H-6 | NEW | grok-4-6 | **`CEILING_UNKNOWN` switches OFF both guards.** An unsampleable allowance yields verdict `unknown` → no preflight refusal (D-57-02) *and* `execution_ceiling=None` → no mid-run tally. 57-01 option A names this in its `<cons>`, which is disclosure, not mitigation. 57-05 option B would authorise an unattended run in exactly that state. | Forbid 57-05 option B in the option text (not only the cons) when the post-Task-2 sample is still `CEILING_UNKNOWN`. |
+| H-7 | NEW | gpt-5-6-sol (sharpened by grounding) | **The pair pipeline's final ingest leg cannot be charged against the grant ceiling.** 57-05 Task 3 says the lane "collects the match pass, the enrich pass, `rerequest_unanswered`'s `result.dispatch_outcome` and **the final ingest dispatch**, and passes all of them". But `enrich-before-ingest/SKILL.md:653` delegates that leg to `contact-upload/SKILL.md`'s steps "by heading, unmodified", and `contact-upload/SKILL.md` is in **no** plan's `files_modified`. That leg produces no `chunking.DispatchOutcome`, so `chunking.projected_spend` cannot charge it and `outcomes=` cannot receive it. | Name the final-ingest adapter and show how its spend is charged, or drop it from the `outcomes` claim and name it as an uncharged leg. |
+| H-8 | NEW | gpt-5-6-sol | **`split_for_allowance` splits grant scope, not resendable work.** It is specified over `record_ids`/`record_domains` (`57-03-PLAN.md:383-400`), but `plan_chunks` accepts `rows`, `people`, `companies`, `record_ids` and `list` (`chunking.py:206-277`) and has no `record_domains` work shape. A domain-only spec cannot reconstruct a `people`/`companies`/row batch. | Split the original canonical work specification, preserving complete `rows`/`people`/`companies` objects. |
+| H-9 | NEW | grounding pass (SG-3) | **Three test files pinning `plan_grant`'s frozen call order are in no plan's `files_modified`.** 57-01 Task 2 inserts a new executions-list GET into that order and acknowledges "scripted-transport tests … WILL fail", but lists only `test_write_grant.py`. Also affected: `test_write_grant_surface.py` (13 `_plan_reads()` uses; its helper docstring at `:67-69` literally encodes the frozen order), `test_write_grant_guardrails.py` (ordered 2-element scripts, e.g. `:112`), `test_unattended_pair_composition.py` (`:220` + scripted transport `:237`). Under GSD, editing a file outside `files_modified` is a deviation. | Add the three files to 57-01's `files_modified` and name the re-sequencing as expected work. |
+
+### Actionable non-HIGH — unresolved (11)
+
+| # | Sev | Source | Finding | Plan change still needed |
+|---|---|---|---|---|
+| M-1 | MEDIUM | gpt-5-6-sol (grep-confirmed) | 57-05's `key_links` promises ONE manifest snapshot shared between `read_progress` and the row-verdict step, but `run_state.read_progress` loads the manifest internally (`run_state.py:332-365`) and returns only a `Progress`. **`run_state.py` is in no plan's `files_modified`** (0 hits in all three blocks), so the promise is unimplementable and degrades to the double-load the plan itself calls a risk. | Add a `manifest_snapshot` return/param to `read_progress` and put `run_state.py` in `files_modified`, or withdraw the one-snapshot claim. |
+| M-2 | MEDIUM | gpt-5-6-sol | 57-03's one-way checkpoint declares no decision-record owner. 57-02 owns `57-DISCUSSION-LOG.md` and both run in wave 2 — so either the ruling is not durably recorded, or two parallel plans edit the same undeclared file. | Assign each checkpoint a durable decision-record owner and serialise plans sharing one log. |
+| M-3 | MEDIUM | gpt-5-6-sol | `57-04-PLAN.md:12` is `autonomous: true`, yet Task 1 requires a live gate, credentials, a backend POST and possible ZoomInfo token-cache mutation on the instance. | Make it non-autonomous, or split autonomous fixture work (Task 2) from a checkpointed live probe (Task 1). |
+| M-4 | MEDIUM | gpt-5-6-sol | 57-05 says it joins FIVE stores, then consumes `run_audit-<run_id>.json` as a sixth durable input with no `classify_read` and no `gaps` handling of its own. | Give the audit store the same absent/malformed/another-run discipline, or state why it differs. |
+| M-5 | MEDIUM | gpt-5-6-sol (grep-confirmed) | GRANT-06 is absent from 57-01's requirement-coverage table (rows are RUN-05/AFTER-01/AFTER-03/G-4 only); the phase adds two persistence surfaces adjacent to authority. Code-level tests are strong; traceability is missing. | Add a GRANT-06 row and assign its closure. |
+| M-6 | MEDIUM | gpt-5-6-sol (grep-confirmed) | The per-provider-spend-ceiling deferral has **no in-plan rationale**: `grep` for `per-provider`/`throughput` across all five plans returns one unrelated hit (`57-04-PLAN.md:312`, "per-provider policy switch"). It lives only in `57-CONTEXT.md`'s `<deferred>`. Same for throughput optimisation. Given the revision grew scope substantially, an executor could fold either into an already-large task. | Add a short named deferral paragraph to 57-01 or 57-05 stating why aggregate-only enforcement is sufficient for the first live run. |
+| M-7 | MEDIUM | grounding (SG-1) | **`write_grant.CLOSED_UNHANDLED_ERROR` already exists** at `write_grant.py:670`, is already in `GRANT_04_REASONS` (`:672-675`) and is already asserted at `test_write_grant.py:1278`. 57-01 Task 4 says to "add" it "beside the existing five" — it *is* one of those five; `57-01-PLAN.md:765` lists it as a symbol that "does not exist yet"; and the acceptance criterion `assert w.CLOSED_UNHANDLED_ERROR` passes today, before any work. The source comment at `:679-681` says "GRANT_04_REASONS stays exactly five and is pinned by name", so a literal reading of the action runs into an in-source guard. The `try`/`finally` *mechanism* is genuinely new and correctly specified. | Reword to "wire the existing `CLOSED_UNHANDLED_ERROR` through `record_dispatch_outcome`'s `reason=` override", remove it from the exclusion set, and replace the vacuous criterion with one that can fail. |
+| M-8 | MEDIUM | grounding (SG-2) | `57-01-PLAN.md:86-88` and `57-VALIDATION.md:97` claim "the only invocation outside `write_grant.py` itself is `test_write_grant.py:1507`". The load-bearing half (zero production callers) holds; the specific half does not — there are **ten** invocations across **two** files (`test_write_grant.py:1474,1489,1502,1512` and `test_write_grant_guardrails.py:251,256,274,293,317,396`) and none at line 1507. | Correct the claim; it compounds H-9 by understating what a `record_send_outcome` contract change touches. |
+| M-9 | MEDIUM | grounding (SG-6) | 57-05 Task 1 names `run_state.classify_read` as a template for all four words, but `run_state.py` defines only three (`:152-154`); `ANOTHER_RUN` exists only in `held_queue.py:110`. The plan's "define them alongside where it does not" clause covers it, but the two named templates are not interchangeable for that word. | Name `held_queue` as the template for `ANOTHER_RUN`. |
+| M-10 | LOW | grounding (SG-4/SG-5) | Citation drift in `read_first` anchors: `conftest.py:541`/`:543` are actually `:542`/`:544` (the `http_403` claim itself is correct); `57-05-PLAN.md:268` cites `SPEND_BASIS` inside ranges 100-135/308-378 but it is at `run_state.py:175`. | Correct the line anchors an executor is told to read. |
+| M-11 | LOW | grok-4-6 | `record_audit`'s two calls (grant-time and `finally`) must merge, not last-write-wins — a crash between them is the entire reason the record exists. Specified as merge in the action; not pinned by an acceptance criterion. | Add an acceptance criterion asserting the second call preserves the first call's keys. |
+
+### Not counted (incorporated or resolved)
+
+- **AST extractor targeting the right fence** (grok LOW) — 57-01 Task 4's criterion already
+  asserts `dispatch_plan(..., execution_ceiling=)` on the parsed tree, so a comment fence fails it.
+- **Remainder persistence inside `dispatch_plan`** (grok MEDIUM) — grok's own "acceptable if
+  degrade-on-fail is as specified" condition is met by 57-03 Task 3's explicit D-59-10 wrap.
+- **`plan.row_counts == UNKNOWN` skips the tally** (grok MEDIUM/CARRIED) — stated in
+  `57-01-PLAN.md:478-481` with the reason (a backend-resolved list spec is a single chunk by
+  construction, so there is nothing to stop mid-run). Disclosed deferral, incorporated.
+- **The "never left open by a crash path" overclaim** (gpt-5) — a wording tightening on
+  `57-01-PLAN.md:36`; folded into H-4/M-7's neighbourhood rather than counted separately.
+- **Deployment artifact ownership** (gpt-5 LOW) — 57-05's artifact list already conditions the
+  deploy on the Task 4 checkpoint, including option D (no deploy).
+
+**CYCLE_SUMMARY: current_high=9 current_actionable=11**
