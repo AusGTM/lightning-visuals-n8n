@@ -5,15 +5,15 @@ milestone_name: Unattended Session Runs
 current_phase: 61
 current_phase_name: autonomous-batch-runs
 status: complete
-stopped_at: Phase 57 context gathered — 4 decisions locked, ready for planning
-last_updated: "2026-08-31T05:21:47.593Z"
-last_activity: 2026-08-30
-last_activity_desc: Phase 61 complete and verified (12/12); backend deployed and disarmed-proven
+stopped_at: Completed 57-01-PLAN.md (Tasks 3-4; Task 1 by prior agent, Task 2 answered by operator)
+last_updated: "2026-08-31T06:48:52.089Z"
+last_activity: 2026-08-31
+last_activity_desc: Phase 57 Plan 01 complete (4/4 tasks) — ceiling refuses before start, stops mid-run, all four dispatch paths wired
 progress:
   total_phases: 7
   completed_phases: 5
   total_plans: 41
-  completed_plans: 35
+  completed_plans: 36
   percent: 71
 ---
 
@@ -270,15 +270,15 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: v1.1 — 53/54/58/59/61 complete; **57 next**; 60 open; 55 and 56 absorbed into 61;
-52 deferred (v1.0). (The old `97% (v0.9 phase 47.5 of 46-49)` bar was a v0.9 figure and is
-superseded.)
+Progress: [█████████░] 88% — v1.1: 53/54/58/59/61 complete; **57 in progress (Plan 01 done,
+RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The old
+`97% (v0.9 phase 47.5 of 46-49)` bar was a v0.9 figure and is superseded.)
 
 ## Session
 
-**Last session:** 2026-08-31T00:56:06.267Z
-**Stopped at:** Phase 57 context gathered — 4 decisions locked, ready for planning
-**Resume file:** .planning/phases/57-ceilings-refusal-before-start-and-post-run-proof/57-CONTEXT.md
+**Last session:** 2026-08-31T06:48:52.073Z
+**Stopped at:** Completed 57-01-PLAN.md (Tasks 3-4; Task 1 by prior agent, Task 2 answered by operator)
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -378,6 +378,7 @@ superseded.)
 | Phase 61 P01 | 45min | 1 tasks | 2 files |
 | Phase 61 P05 | ~35min (T1-3) + recording pass | 4 tasks | 12 files |
 | Phase 61 P06 | this session | 5 tasks | 18 files |
+| Phase 57 P01 | 90min | 4 tasks | 18 files |
 
 ## Decisions
 
@@ -458,6 +459,9 @@ superseded.)
 - [Phase ?]: Task 4 deploy scope widened to all five cloud workflows with operator's informed consent, because the live instance was four plans behind 61-05 alone
 - [Phase ?]: Task 4 checkpoint resolved: operator approved offline pipeline and authorized Task 5's disarmed deploy + runtime proof; Phase 57's gate on the first live unattended run is unchanged
 - [Phase ?]: Task 5: substrate-3 self-referencing fan-out proven live (executions 12044-12047, disarmed) -- runs, terminates with no depth supplied, stays correlatable; a Rule 1 multi-item bug was found and fixed by the proof's own first attempt
+- [Phase ?]: [Phase 57-01]: D-57-00 supersedes D-53-02 -- the grant's ceiling now refuses a CEILING_OVER batch before anything is armed and stops mid-run before the breaching chunk, rather than only disclosing the projection.
+- [Phase ?]: [Phase 57-01]: Task 2 checkpoint (option-a) -- measured sampled:true live via listing_exhausted (allowance 2500, spent 134, remaining 2366) after Task 1's exhausted-listing fix landed; the first pre-fix reading of sampled:false was a config-gap artifact (n8n_monthly_execution_allowance absent from the live plugin config), not an account limitation, and is superseded by this measurement.
+- [Phase ?]: [Phase 57-01]: CEILING_UNKNOWN never refuses (D-57-02 preserved) but is no longer double-off -- runbooks self-bound execution_ceiling to the batch's own projected_executions instead of None when the monthly allowance can't be sampled.
 
 ### Roadmap Evolution
 
