@@ -165,14 +165,19 @@ variable), and a design that runs the provider waterfall twice per written recor
       and can read afterwards exactly what happened to every row — with a record that would have
       been written never reading as one that was.
 
-      **Plans:** 5 plans (waves 1/2/3)
+      **Plans:** 5 plans — wave 1: 57-01, 57-04 · wave 2: 57-02, 57-03 · wave 3: 57-05
+      *(revised 2026-08-31 after cross-AI plan review — `57-REVIEWS.md`. Four blocking operator
+      checkpoints now exist: what RUN-05 means if the sampling predicate makes the preflight
+      refusal unreachable on this account; whether `written` may be claimed without terminal write
+      evidence; auto-split's work-not-authority confirmation; and a phase gate that separates
+      landing this phase from authorising the first live credit-spending batch.)*
 
       Plans:
-      - [ ] 57-01-PLAN.md — TRACER: the ceiling refuses before start and a mid-run breach closes the grant (RUN-05)
-      - [ ] 57-02-PLAN.md — one outcome vocabulary across both client surfaces, plus the `row_id` join key on both lanes (AFTER-03)
-      - [ ] 57-03-PLAN.md — auto-split and the remainder queue: work queued, authority never (RUN-05, D-57-05 checkpoint)
-      - [ ] 57-04-PLAN.md — provider-balance blind spots: a disarmed ZoomInfo re-probe, Apollo disclosed as structural (G-4)
-      - [ ] 57-05-PLAN.md — the one end-of-run report joining all four durable stores (AFTER-01, AFTER-03, G-4)
+      - [ ] 57-01-PLAN.md — TRACER: the ceiling refuses before start, stops PRE-SEND mid-run, and closes the grant on every exit; every dispatch path under the ceiling; D-53-02's supersession recorded (RUN-05)
+      - [ ] 57-02-PLAN.md — one outcome vocabulary across both client surfaces via a pure mapping, plus the `row_id` join key as far as it reaches (AFTER-03)
+      - [ ] 57-03-PLAN.md — a lossless `failed_batch`, auto-split and the remainder queue: work queued, authority never (RUN-05, D-57-05 checkpoint)
+      - [ ] 57-04-PLAN.md — provider-balance blind spots: a disarmed ZoomInfo re-probe with its gate proved by zero network calls, Apollo disclosed as structural `http_403` (G-4)
+      - [ ] 57-05-PLAN.md — the one end-of-run report joining all five durable stores, naming contradictions rather than resolving them (AFTER-01, AFTER-03, G-4)
 
 - [x] **Phase 58: Take what the operator actually has** *(complete 2026-08-26, verified 31/31)* - Every input an operator holds
       (screenshot, paste, URL, bare name) resolves to a company the backend can act on; missing
