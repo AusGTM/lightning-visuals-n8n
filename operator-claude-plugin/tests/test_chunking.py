@@ -24,6 +24,7 @@ import enrichment
 import executions_client
 import n8n_arming
 import preingest
+import remainder_queue
 import run_state
 import watch
 import write_grant
@@ -555,6 +556,111 @@ def test_a_backend_resolved_list_plan_has_no_chunk_boundary_to_stop_at(
     assert transport.verbs == ["post"]
 
 
+# --- Phase 57 Task 3: the ceiling stop's remainder gets a durable home (D-57-01) -------
+
+def _patch_durable_dir(monkeypatch, tmp_path):
+    monkeypatch.setattr(
+        durable_paths, "resolve_state_path",
+        lambda *a, **k: tmp_path / "dashboard_artifact.json",
+    )
+
+
+def test_a_mid_run_ceiling_stop_writes_the_unsent_record_ids_to_the_remainder_queue(
+    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
+):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    transport = stub_module_transport_factory()
+    outcome = chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport,
+        execution_ceiling=6, run_id="run-ceiling-ids",
+    )
+    assert outcome.ceiling_stop is not None
+
+    entries = remainder_queue.load(
+        path=remainder_queue.remainder_path("run-ceiling-ids"))
+    assert len(entries) == 1
+    assert entries[0]["reason"] == remainder_queue.REASON_CEILING_BREACH
+    assert entries[0]["spec"] == {"record_ids": ["5", "6"], "object_type": "companies"}
+
+
+def test_a_mid_run_ceiling_stop_writes_the_unsent_people_to_the_remainder_queue(
+    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
+):
+    """The exact shape the old `failed_batch` lost (REVIEW-57-H4) — a `people` plan
+    proves the remainder queue rests on the now-lossless reconstruction."""
+    _patch_durable_dir(monkeypatch, tmp_path)
+    plan = chunking.plan_chunks({"people": [{"n": i} for i in range(6)]}, 2)
+    transport = stub_module_transport_factory()
+    outcome = chunking.dispatch_plan(
+        plan, PROVIDERS, True, fake_config, transport=transport,
+        execution_ceiling=6, run_id="run-ceiling-people",
+    )
+    assert outcome.ceiling_stop is not None
+
+    entries = remainder_queue.load(
+        path=remainder_queue.remainder_path("run-ceiling-people"))
+    assert len(entries) == 1
+    assert entries[0]["reason"] == remainder_queue.REASON_CEILING_BREACH
+    assert entries[0]["spec"]["people"] == [{"n": 4}, {"n": 5}]
+
+
+def test_a_dispatch_with_no_ceiling_writes_no_remainder_file(
+    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
+):
+    _patch_durable_dir(monkeypatch, tmp_path)
+    chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config,
+        transport=stub_module_transport_factory(), run_id="run-no-ceiling",
+    )
+    assert remainder_queue.load(
+        path=remainder_queue.remainder_path("run-no-ceiling")) == []
+
+
+def test_a_remainder_queue_save_failure_during_a_ceiling_stop_does_not_raise_or_alter_the_outcome(
+    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
+):
+    """D-59-10's degrade-rather-than-halt rule, applied to the remainder queue: a save
+    failure never propagates out of `dispatch_plan` and never changes any other field
+    of the returned `DispatchOutcome`."""
+    _patch_durable_dir(monkeypatch, tmp_path)
+    monkeypatch.setattr(remainder_queue, "save", lambda *a, **k: False)
+
+    transport = stub_module_transport_factory()
+    outcome = chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport,
+        execution_ceiling=6, run_id="run-save-fails",
+    )
+    assert outcome.ceiling_stop is not None
+    assert outcome.ceiling_stop.chunk_index == 2
+    assert outcome.ceiling_stop.remainder == {
+        "record_ids": ["5", "6"], "object_type": "companies"}
+    assert "remainder queue" in outcome.ceiling_stop.reason.lower()
+    assert outcome.failed_batch is None
+    assert [r.ok for r in outcome.results] == [True, True]
+
+
+def test_a_remainder_queue_error_during_a_ceiling_stop_does_not_raise(
+    fake_config, stub_module_transport_factory, tmp_path, monkeypatch
+):
+    """A `RemainderQueueError` (a forbidden-named value — a data defect) must degrade
+    the same way an I/O failure does at this call site: the dispatch itself never
+    raises, only `CeilingStop.reason` names the miss."""
+    _patch_durable_dir(monkeypatch, tmp_path)
+
+    def _boom(*a, **k):
+        raise remainder_queue.RemainderQueueError("looks like a grant")
+
+    monkeypatch.setattr(remainder_queue, "build_entry", _boom)
+
+    transport = stub_module_transport_factory()
+    outcome = chunking.dispatch_plan(
+        three_chunk_plan(), PROVIDERS, True, fake_config, transport=transport,
+        execution_ceiling=6, run_id="run-build-entry-fails",
+    )
+    assert outcome.ceiling_stop is not None
+    assert "looks like a grant" in outcome.ceiling_stop.reason
+
+
 def test_a_non_2xx_carrying_a_readable_json_body_is_still_a_failure(
     fake_config, stub_module_transport_factory
 ):
@@ -711,6 +817,53 @@ def test_a_failed_list_chunk_comes_back_as_the_list_spec_not_as_ids(
     )
     assert outcome.failed_batch == {"list": "New Targets.xlsx", "object_type": "contacts"}
     assert "record_ids" not in outcome.failed_batch
+
+
+# --- Phase 57 Task 3 (REVIEW-57-H4): `failed_batch` reconstructs all five shapes -------
+
+
+def test_failed_batch_reconstructs_every_person_across_multiple_chunks():
+    """Before this fix, a multi-chunk `people` batch fell through to the `record_ids`
+    branch, found nothing, and silently returned `chunks[0]` alone."""
+    plan = chunking.plan_chunks({"people": [{"n": i} for i in range(5)]}, 2)
+    batch = chunking.failed_batch(list(plan.chunks))
+    assert len(batch["people"]) == 5
+    assert batch["people"] == [{"n": i} for i in range(5)]
+    assert "object_type" not in batch
+
+
+def test_failed_batch_reconstructs_every_company_across_multiple_chunks():
+    plan = chunking.plan_chunks(
+        {"companies": [{"domain": f"{i}.example"} for i in range(5)]}, 2)
+    batch = chunking.failed_batch(list(plan.chunks))
+    assert len(batch["companies"]) == 5
+    assert batch["companies"] == [{"domain": f"{i}.example"} for i in range(5)]
+    assert "object_type" not in batch
+
+
+@pytest.mark.parametrize("build_spec,key", [
+    (lambda: {"record_ids": ids(5), "object_type": "companies"}, "record_ids"),
+    (lambda: {"rows": [{"row_id": str(i)} for i in range(5)], "object_type": "contacts"},
+     "rows"),
+    (lambda: {"people": [{"n": i} for i in range(5)]}, "people"),
+    (lambda: {"companies": [{"domain": f"{i}.example"} for i in range(5)]}, "companies"),
+])
+def test_failed_batch_round_trips_every_shape_losslessly(build_spec, key):
+    """The property both the remainder queue and auto-split rest on: for each of the
+    four list-bearing shapes, chunking then re-batching a 5-record spec over a ceiling
+    of 2 yields a spec whose record count is 5 and whose records equal the original in
+    order."""
+    spec_dict = build_spec()
+    plan = chunking.plan_chunks(spec_dict, 2)
+    batch = chunking.failed_batch(list(plan.chunks))
+    assert len(batch[key]) == 5
+    assert batch[key] == spec_dict[key]
+
+
+def test_failed_batch_single_chunk_list_passthrough_is_unchanged():
+    plan = chunking.plan_chunks({"list": "New Targets.xlsx", "object_type": "contacts"}, 2)
+    batch = chunking.failed_batch(list(plan.chunks))
+    assert batch == {"list": "New Targets.xlsx", "object_type": "contacts"}
 
 
 def test_result_records_report_which_chunk_failed_and_its_size(

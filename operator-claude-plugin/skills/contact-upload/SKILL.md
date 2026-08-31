@@ -292,7 +292,8 @@ be sent, and — only when explicitly armed — send it.
    (REVIEW-57-M4):
 
    ```python
-   import chunking, config_gate, dispatch, n8n_arming, write_grant
+   import chunking, config_gate, dispatch, n8n_arming, remainder_queue, tabular, uuid
+   import write_grant
 
    cfg = config_gate.load_config()
    decision = (
@@ -325,12 +326,30 @@ be sent, and — only when explicitly armed — send it.
 
    would_be = 1 + send_row_count
    if execution_ceiling is not None and would_be > execution_ceiling:
-       # DO NOT SEND. The rows go to the remainder queue with
-       # `remainder_queue.REASON_CEILING_BREACH` (57-03's store — this disposition is
-       # prose here until 57-03 Task 3 lands and wires it; the guard above is real code
-       # now). Tell the operator spending stopped BEFORE this send, name the file's rows
-       # as recoverable — nothing here is lost, only unsent — and close the grant for
-       # the breach.
+       # DO NOT SEND (57-03 Task 3 — the handoff 57-01 Task 4 left here by name, now
+       # wired). This lane hands the whole file to `dispatch.dispatch` unmapped — there
+       # is no client-side row list yet — so the file is read back once, here, to name
+       # its rows individually for the remainder queue rather than losing that detail.
+       # A save failure (an I/O miss, or a forbidden-named column) must not stop this
+       # report — the same never-raise guard `chunking.dispatch_plan`'s own
+       # ceiling-stop path follows; `RemainderQueueError` alone is caught because it
+       # is the one raise this call can produce (a data defect, not the environment).
+       headers, raw_rows = tabular.read_table(send_path)
+       held_rows = [dict(zip(headers, row)) for row in raw_rows]
+       remainder_saved = False
+       try:
+           remainder_saved = remainder_queue.save(
+               uuid.uuid4().hex,
+               [remainder_queue.build_entry(
+                   {"rows": held_rows, "object_type": "contacts"},
+                   remainder_queue.REASON_CEILING_BREACH,
+                   note="pre-call ingest ceiling stop")])
+       except remainder_queue.RemainderQueueError:
+           remainder_saved = False
+       # Tell the operator spending stopped BEFORE this send, name the file's rows as
+       # recoverable — nothing here is lost, only unsent — and say plainly if
+       # `remainder_saved` came back False (the original file at `send_path` is still
+       # the fallback recovery path either way). Then close the grant for the breach.
        grant = write_grant.record_dispatch_outcome(
            decision["grant"], None, cfg, reason=write_grant.CLOSED_CEILING_BREACH)
    else:

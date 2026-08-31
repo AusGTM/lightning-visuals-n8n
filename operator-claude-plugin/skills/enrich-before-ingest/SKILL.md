@@ -653,6 +653,11 @@ whatever seven columns happened to be in the source file.
    import extraction
 
    sendable_rows, held = extraction.hold_emailless(merge_report.rows)
+   # Kept row_id-bearing, separately from the CSV-bound copy below, so a pre-call
+   # ceiling breach (see the dispatch block that follows) can still name these rows
+   # individually in the remainder queue — `strip_row_id` below removes the join key
+   # `write_dispatch_csv` refuses to see, and there is no getting it back after.
+   sendable_rows_for_remainder = list(sendable_rows)
    sendable_rows = extraction.strip_row_id(sendable_rows)
    extraction.write_dispatch_csv(sendable_rows, out_path)
    ```
@@ -664,7 +669,7 @@ whatever seven columns happened to be in the source file.
    (REVIEW-57-M4):
 
    ```python
-   import chunking, config_gate, dispatch, n8n_arming, write_grant
+   import chunking, config_gate, dispatch, n8n_arming, remainder_queue, write_grant
 
    cfg = config_gate.load_config()
    decision = (
@@ -690,12 +695,28 @@ whatever seven columns happened to be in the source file.
    # `None`, which is genuinely unbounded and is said to the operator plainly as such.
    would_be = 1 + len(sendable_rows)
    if remaining_execution_ceiling is not None and would_be > remaining_execution_ceiling:
-       # DO NOT SEND. The rows go to the remainder queue with
-       # `remainder_queue.REASON_CEILING_BREACH` (57-03's store — this disposition is
-       # prose here until 57-03 Task 3 lands and wires it; the guard above is real code
-       # now). Tell the operator spending stopped BEFORE this ingest send, name
+       # DO NOT SEND (57-03 Task 3 — the handoff 57-01 Task 4 left here by name, now
+       # wired). `sendable_rows_for_remainder` is the row_id-bearing copy captured
+       # BEFORE `strip_row_id`, above — `chunking.failed_batch()`'s own "rows" shape,
+       # re-sendable without re-deriving it. A save failure (an I/O miss, or a
+       # forbidden-named column) must not stop this report — the same never-raise
+       # guard `chunking.dispatch_plan`'s own ceiling-stop path follows;
+       # `RemainderQueueError` alone is caught because it is the one raise this call
+       # can produce (a data defect, not the environment).
+       remainder_saved = False
+       try:
+           remainder_saved = remainder_queue.save(
+               outcome.run_id,
+               [remainder_queue.build_entry(
+                   {"rows": sendable_rows_for_remainder, "object_type": "contacts"},
+                   remainder_queue.REASON_CEILING_BREACH,
+                   note="pre-call ingest ceiling stop")])
+       except remainder_queue.RemainderQueueError:
+           remainder_saved = False
+       # Tell the operator spending stopped BEFORE this ingest send, name
        # `sendable_rows` individually as recoverable — nothing here is lost, only
-       # unsent — and close the grant for the breach.
+       # unsent — and say plainly if `remainder_saved` came back False. Then close
+       # the grant for the breach.
        grant = write_grant.record_dispatch_outcome(
            decision["grant"], None, cfg, reason=write_grant.CLOSED_CEILING_BREACH)
    else:

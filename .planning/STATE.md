@@ -6,7 +6,7 @@ current_phase: 61
 current_phase_name: autonomous-batch-runs
 status: complete
 stopped_at: Completed 57-02-PLAN.md (Task 1 checkpoint answered by operator, option-b; Tasks 2-4 by continuation agent)
-last_updated: "2026-08-31T08:41:12.957Z"
+last_updated: "2026-08-31T23:04:46.460Z"
 last_activity: 2026-08-30
 last_activity_desc: "**Phase 61 complete and verified (12/12)**; backend deployed and"
 progress:
@@ -466,6 +466,7 @@ RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The 
 - [Phase ?]: [Phase 57-01]: CEILING_UNKNOWN never refuses (D-57-02 preserved) but is no longer double-off -- runbooks self-bound execution_ceiling to the batch's own projected_executions instead of None when the monthly allowance can't be sampled.
 - [Phase ?]: Phase 57 Plan 04 Task 2 checkpoint: operator selected option-run; live ZoomInfo balance probe returned readable (9381 credits), closing G-4's ZoomInfo half by observation with no code fix
 - [Phase ?]: 57-02 Task 1 (operator): option-b — split written vs write_attempted by what the id echoed back actually proves
+- [Phase ?]: [Phase 57-03]: Task 1 checkpoint ruling (operator, this plan): option-a selected -- auto-split queues WORK ONLY, never AUTHORITY (D-57-05, GRANT-06). remainder_queue.py holds re-sendable chunking.failed_batch()-shaped specs; write_grant.split_for_allowance projects the grant scope FROM the split work (never a separately-ordered ids/domains sequence, REVIEW-57-H1). Each split run still opens its OWN grant -- the queue confers no authority and nothing picks it up automatically. 57-03 is the declared owner of this STATE.md record per M-2.
 
 ### Roadmap Evolution
 

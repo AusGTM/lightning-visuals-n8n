@@ -43,12 +43,13 @@ throw away the chunks that would have succeeded.
 """
 import json
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 import requests
 
 import enrichment
+import remainder_queue
 import run_manifest
 import written_records
 from dispatch import DispatchError, NotArmedError
@@ -452,6 +453,34 @@ def dispatch_plan(plan, providers, armed, config, transport=requests, *, run_id=
                         f"{would_be} execution(s), over the {execution_ceiling}-execution "
                         f"ceiling — stopped before that chunk was built or sent."),
                 )
+
+                # D-57-01: the unsent remainder gets a durable, re-sendable home before
+                # this run returns. Mirrors the `written_records.append_chunk` guard
+                # immediately below (D-59-10's degrade-rather-than-halt rule, applied to
+                # a second bookkeeping store): a `RemainderQueueError` or a falsey save
+                # must never raise out of the dispatch and must never alter any other
+                # field of the returned `DispatchOutcome` — only `CeilingStop.reason`
+                # gains a sentence naming the bookkeeping miss, so it is not silent.
+                try:
+                    entry = remainder_queue.build_entry(
+                        ceiling_stop.remainder, remainder_queue.REASON_CEILING_BREACH,
+                        note=f"stopped before chunk {index}",
+                    )
+                    saved = remainder_queue.save(run_id, [entry])
+                except remainder_queue.RemainderQueueError as e:
+                    saved = False
+                    save_failure_reason = str(e)
+                else:
+                    save_failure_reason = (
+                        None if saved
+                        else "the remainder queue could not be saved (an I/O failure)")
+                if not saved:
+                    ceiling_stop = replace(
+                        ceiling_stop,
+                        reason=(
+                            f"{ceiling_stop.reason} The unsent remainder could not be "
+                            f"saved to the remainder queue: {save_failure_reason}"),
+                    )
                 break
 
         watcher = _StatusCapturingTransport(transport)
@@ -632,11 +661,25 @@ def merge_chunk_verdicts(run_id, chunk_verdicts, path=None) -> None:
     run_manifest.save(run_id, merged, path=target)
 
 
+# The four list-bearing shapes `plan_chunks` accepts, ordered — `failed_batch` and
+# `write_grant.split_for_allowance` both walk this SAME tuple (Phase 57, REVIEW-57-H4/H8)
+# so a shape added to one has an obvious place to be added to the other. `rows` and
+# `record_ids` carry `object_type`; `people` and `companies` do not (37-CONTEXT §5 /
+# CLAUDE.md section 13.0.1 — a `people`/`companies` event carries its own `objectType`
+# per record, never one shared across the batch).
+LIST_BEARING_KEYS = ("record_ids", "rows", "people", "companies")
+KEYS_WITH_OBJECT_TYPE = frozenset({"record_ids", "rows"})
+
+
 def failed_batch(chunks):
     """The failed chunks as ONE record specification, or None when nothing failed.
 
-    Ids keep their original order and no id from a successful chunk appears. The result
-    is already a well-formed enrichment request by construction, so Phase 26 re-sends it
+    Reconstructs EVERY shape `plan_chunks` accepts — `list` (single-chunk passthrough,
+    below), `rows`, `people`, `companies` and `record_ids` (REVIEW-57-H4: this used to
+    branch on `rows`/`record_ids` alone and silently return `chunks[0]` for a multi-chunk
+    `people` or `companies` batch, dropping every record after the first chunk). Members
+    keep their original order and no member from a successful chunk appears. The result
+    is already a well-formed enrichment request by construction, so a caller re-sends it
     through the same armed dispatch path rather than parsing it out of log lines (D-13).
     """
     if not chunks:
@@ -644,18 +687,18 @@ def failed_batch(chunks):
     if len(chunks) == 1 and chunks[0].get("list"):
         return dict(chunks[0])
 
-    if "rows" in chunks[0]:
-        rows = [row for chunk in chunks for row in chunk.get("rows", [])]
-        if not rows:
-            return dict(chunks[0])
-        return {"rows": rows, "object_type": chunks[0].get("object_type")}
-
-    record_ids = [
-        record_id for chunk in chunks for record_id in chunk.get("record_ids", [])
-    ]
-    if not record_ids:
+    key = next((k for k in LIST_BEARING_KEYS if k in chunks[0]), None)
+    if key is None:
         return dict(chunks[0])
-    return {"record_ids": record_ids, "object_type": chunks[0].get("object_type")}
+
+    members = [member for chunk in chunks for member in chunk.get(key, [])]
+    if not members:
+        return dict(chunks[0])
+
+    result = {key: members}
+    if key in KEYS_WITH_OBJECT_TYPE:
+        result["object_type"] = chunks[0].get("object_type")
+    return result
 
 
 if __name__ == "__main__":

@@ -265,6 +265,49 @@ says nothing per record, this lane reports at chunk granularity and says so.
      operator named — never wider; this is the same per-send narrowing rule step 8
      (dispatch) already applies, unchanged by this step.
 
+   **When `plan_grant` refuses because the batch would exceed the sampled monthly
+   execution allowance (`ceiling["verdict"] == write_grant.CEILING_OVER`), the refusal
+   carries a `split_offer` (D-57-04, RUN-05's "offers a smaller batch") — present it
+   rather than only the bare shortfall.** `split_offer["affordable_spec"]` being
+   present means a smaller batch fits now; relay `record_ceiling_per_run` (how many
+   records this run could carry) against the total, and that the rest — the same
+   count as `split_offer["remainder_spec"]`'s own records — would be **queued for a
+   future run the operator will separately authorise, never a schedule that runs
+   itself**: each subsequent run opens its OWN grant (GRANT-06), so accepting the
+   smaller batch now is not standing permission to spend later. When
+   `split_offer["affordable_spec"]` is `None`, relay `split_offer["reason"]` instead —
+   no split can be offered (an unsampleable allowance, or a remainder too small for
+   even one record), and the operator's only path is to name a smaller batch by hand
+   or override.
+
+   **The state transition an ACCEPTED offer follows, in order — never out of order**
+   (REVIEW-57-H5: `plan_grant` itself writes nothing durable on a refusal the operator
+   has not acted on):
+
+   1. `plan_grant()`'s refusal carries the pure `split_offer`. Nothing is written yet.
+   2. The operator accepts the affordable subset (or names a different one, or
+      declines outright — a decline leaves no file, exactly like any other refusal).
+   3. Call `plan_grant`/`open_grant` again over `split_offer["affordable"]` (the
+      resolved scope) and `split_offer["affordable_spec"]` (the plan to dispatch) — a
+      FRESH grant, unchanged by D-57-04: this is the same open-a-grant step this skill
+      already runs, just over the smaller batch.
+   4. **Only once that fresh grant is open**, persist the remainder so it survives past
+      this conversation:
+
+      ```python
+      import remainder_queue
+
+      entry = remainder_queue.build_entry(
+          split_offer["remainder_spec"], remainder_queue.REASON_ALLOWANCE_SPLIT)
+      remainder_queue.save(run_id, [entry])
+      ```
+
+      A `RemainderQueueError` or a falsey `save()` here must not stop the run that just
+      got its fresh grant — report the save failure alongside everything else, the
+      same never-raise guard step 8's ceiling-stop path already follows.
+   5. A declined offer never reaches step 3 or 4 — nothing is queued for work the
+      operator never agreed to.
+
 8. **Dispatch the plan the operator approved — under an open grant, or otherwise only
    after they have said yes to this send.** `scripts/chunking.py` is a library here (the same way `scripts/report.py`
    already is, not a CLI): rebuild the plan from the same spec and the same configured

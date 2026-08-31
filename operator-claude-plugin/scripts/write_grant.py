@@ -641,6 +641,208 @@ def _consequence(lane_names, ids, domains, allow_create):
     return sentence
 
 
+# --------------------------------------------------------- D-57-04: the auto-split offer
+#
+# RUN-05's "offers a smaller batch", made concrete. `split_for_allowance` has TWO
+# products, and the second is PROJECTED FROM the first (REVIEW-57-H1, the correction to
+# an earlier draft that split them independently — see the module-level comment above
+# `plan_grant`'s CEILING_OVER branch, the one call site, for why that mattered enough to
+# be the whole correctness argument of this section).
+
+def _looks_like_hs_object_id(value) -> bool:
+    """A HubSpot object id is a bare run of digits; a domain never is. This is the
+    ONLY test used to tell "id-shaped" from "domain-shaped" apart when a `record_ids`
+    spec carries both (`envelope()`'s own `ids + domains` combined projection, above,
+    is exactly such a spec) — never a positional assumption about which half of the
+    list is which (REVIEW-57-H1)."""
+    text = str(value).strip()
+    return bool(text) and text.isdigit()
+
+
+def _classify_scope_member(key, record):
+    """One record from a `spec`'s list-bearing `key`, classified into the grant scope's
+    own vocabulary: `("record_ids", value)`, `("record_domains", value)`, or `None`
+    when the record carries neither identity a grant scope can express.
+
+    `record_ids`-keyed members are matched on their own shape (see
+    `_looks_like_hs_object_id`) because that key's list may hold ids and domains mixed
+    together. `companies`-keyed members are always domain-only creates — `domain` is
+    the only identity a company spec's own shape ever carries (CLAUDE.md section
+    13.0.1; `enrichment.build_envelope`'s companies branch never emits an id). `rows`
+    and `people` members describe someone who may not be matched to a HubSpot record
+    yet; the only identity such a record can carry that maps onto a grant scope is a
+    PRE-RESOLVED `hs_object_id` some upstream match step already attached — a domain
+    has no meaning for a contact, so an unmatched row/person contributes to neither
+    scope key, exactly as it would need a read-only HubSpot lookup (D-59-08's own
+    refusal text) before it could be granted at all.
+    """
+    if key == "record_ids":
+        value = str(record).strip()
+        if not value:
+            return None
+        return (("record_ids", value) if _looks_like_hs_object_id(value)
+                else ("record_domains", value))
+    if key == "companies":
+        domain = str((record or {}).get("domain") or "").strip()
+        return ("record_domains", domain) if domain else None
+    hs_object_id = (record or {}).get("hs_object_id") if isinstance(record, dict) else None
+    if hs_object_id and _looks_like_hs_object_id(hs_object_id):
+        return ("record_ids", str(hs_object_id).strip())
+    return None
+
+
+def _project_scope(key, records):
+    """The grant scope PROJECTED FROM `records`, walked in their own order — never a
+    separately-ordered `(kind, value)` sequence. A side with no members omits its key,
+    matching `envelope()`/`plan_grant()`'s own `record_ids`/`record_domains` shape."""
+    scope_ids, scope_domains = [], []
+    for record in records:
+        identity = _classify_scope_member(key, record)
+        if identity is None:
+            continue
+        bucket, value = identity
+        (scope_ids if bucket == "record_ids" else scope_domains).append(value)
+    scope = {}
+    if scope_ids:
+        scope["record_ids"] = scope_ids
+    if scope_domains:
+        scope["record_domains"] = scope_domains
+    return scope
+
+
+def _spec_for(key, members, object_type):
+    """One half of a split, in `chunking.failed_batch()`'s own shape — directly
+    re-sendable to `chunking.dispatch_plan` with no re-derivation."""
+    spec = {key: list(members)}
+    if key in chunking.KEYS_WITH_OBJECT_TYPE:
+        spec["object_type"] = object_type
+    return spec
+
+
+def _affordable_record_count(total, ceiling, remaining):
+    """The largest N (0 <= N <= `total`) such that `ceil(N / ceiling) + N` — the SAME
+    `chunk_count + record_count` basis `EXECUTIONS_BASIS` and
+    `run_state.spend_against_ceiling` already use, never re-derived — is at or under
+    `remaining`. A linear scan that stops at the first N whose cost overshoots — never
+    a `while` loop (D-07's own AST guard, `test_report_sufficiency.py`, forbids one in
+    every plugin script but `watch.py`) — which is correct only because the cost is
+    monotonically non-decreasing in N (increasing N never decreases either term),
+    pinned by `test_affordable_record_count_cost_is_monotonic_over_a_range_of_n` in
+    `test_write_grant.py` rather than assumed: once one N overshoots, every larger N
+    overshoots too, so stopping there never misses a larger affordable N.
+    """
+    if remaining is None or remaining < 0 or total < 1:
+        return 0
+    best = 0
+    for n in range(1, total + 1):
+        cost = -(-n // ceiling) + n  # ceil(n / ceiling) + n, integer arithmetic
+        if cost > remaining:
+            break
+        best = n
+    return best
+
+
+# Every key `split_for_allowance` can fail to fill in — both work-spec halves and both
+# scope halves — so a refusal always carries the same four `None`s rather than a
+# caller-visible difference between "no spec" and "unsampleable" failure shapes.
+_NO_SPLIT_OFFER = {
+    "affordable_spec": None, "remainder_spec": None,
+    "affordable": None, "remainder": None,
+    "runs": None, "record_ceiling_per_run": None,
+}
+
+
+def split_for_allowance(config, *, object_type, spec=None, record_ids=None,
+                        record_domains=None, headroom, providers=None):
+    """D-57-04: the smaller-batch offer a `CEILING_OVER` refusal carries. Pure — no
+    transport, no durable write; the caller decides whether to accept, and only an
+    ACCEPTED offer's remainder is ever persisted (`remainder_queue.save`, at the
+    runbook step after a fresh grant opens — REVIEW-57-H5, see `plan_grant`'s own
+    CEILING_OVER branch, the one call site, for the state transition in full).
+
+    `record_ids=`/`record_domains=`/`providers=` are accepted for signature parity
+    with `envelope()`/`plan_grant()`'s own scope arguments but play no part in the
+    split itself — see the paragraph below for why. Nothing but `spec` and `headroom`
+    is read.
+
+    **TWO PRODUCTS, and the second is PROJECTED FROM the first (REVIEW-57-H1).** An
+    earlier draft split a work spec's own records and a `record_ids`/`record_domains`
+    scope as two INDEPENDENTLY ordered sequences, cut at the same N, and called them
+    "consistent by construction" on a count check alone. They are not: a work list
+    that interleaves an id-backed record and a domain-only create candidate cuts to a
+    DIFFERENT membership on each side once the two sequences are ordered differently —
+    the exact failure this phase exists to prevent, produced by the mechanism meant to
+    prevent it. So there is ONE ordered sequence — `spec`'s own records, in the
+    caller's order — cut once at N; `affordable`/`remainder` are then PROJECTIONS of
+    that same cut, computed by walking each half and classifying every record by its
+    own shape (`_classify_scope_member`), never by a second, independently-ordered
+    list. `spec=None` means there is nothing to project from, so EVERY key — both
+    spec halves and both scope halves — comes back `None`; that parallel
+    scope-without-a-spec path is exactly what this correction removes.
+
+    Returns `affordable_spec`/`remainder_spec` (WORK, `chunking.failed_batch()` shape,
+    directly re-sendable), `affordable`/`remainder` (the GRANT SCOPE, keyed
+    `record_ids`/`record_domains`, projected from the matching spec half — a side with
+    no members omits its key), `runs` (how many runs of `record_ceiling_per_run`'s
+    size the whole batch would take), `record_ceiling_per_run` (the N found), and
+    `reason` (`None` on success, or why no split could be offered).
+
+    No split is offered — every key `None`, `reason` naming which — when: `spec` is
+    missing or not a dict; `spec` names none of `chunking.LIST_BEARING_KEYS`; `spec`'s
+    list is empty; `headroom["sampled"]` is False (there is no number to split
+    against, per D-57-02); the configured chunk ceiling cannot be read; or the largest
+    affordable N works out below 1 (not even one record fits — never an empty batch
+    dressed as an offer).
+    """
+    if spec is None or not isinstance(spec, dict):
+        return {**_NO_SPLIT_OFFER, "reason": (
+            "no work specification (`spec=`) was supplied to split against — there is "
+            "no scope split without the work it would be projected from.")}
+
+    key = next((k for k in chunking.LIST_BEARING_KEYS if k in spec), None)
+    if key is None:
+        return {**_NO_SPLIT_OFFER, "reason": (
+            "the work specification names none of record_ids, rows, people or "
+            "companies, so there is nothing to split by record.")}
+
+    records = list(spec.get(key) or [])
+    if not records:
+        return {**_NO_SPLIT_OFFER, "reason":
+                "the work specification names no records to split."}
+
+    headroom = headroom or {}
+    if not headroom.get("sampled"):
+        return {**_NO_SPLIT_OFFER, "reason": (
+            headroom.get("reason")
+            or "the monthly remainder could not be sampled, so no split can be offered.")}
+
+    try:
+        ceiling = chunking.chunk_ceiling(config)
+    except chunking.ChunkPlanError as e:
+        return {**_NO_SPLIT_OFFER, "reason": str(e)}
+
+    total = len(records)
+    n = _affordable_record_count(total, ceiling, headroom.get("remaining_sampled"))
+    if n < 1:
+        return {**_NO_SPLIT_OFFER, "reason": (
+            f"not even one record fits inside the sampled "
+            f"{headroom.get('remaining_sampled')} execution(s) remaining this month — "
+            f"no smaller batch can be offered.")}
+
+    affordable_records = records[:n]
+    remainder_records = records[n:]
+
+    return {
+        "affordable_spec": _spec_for(key, affordable_records, object_type),
+        "remainder_spec": _spec_for(key, remainder_records, object_type),
+        "affordable": _project_scope(key, affordable_records),
+        "remainder": _project_scope(key, remainder_records),
+        "runs": math.ceil(total / n),
+        "record_ceiling_per_run": n,
+        "reason": None,
+    }
+
+
 def plan_grant(config, *, lanes, object_type, record_ids, record_domains, allow_create,
                label, providers=None, transport=None, preflight=None, today=None,
                override=False, override_reason=None):
@@ -789,6 +991,25 @@ def plan_grant(config, *, lanes, object_type, record_ids, record_domains, allow_
     # to refuse") is preserved by this choice, not contradicted.
     ceiling = figures["ceiling"]
     if ceiling["verdict"] == CEILING_OVER and not override:
+        # D-57-04, option-a (operator, Task 1's checkpoint): the refusal carries a
+        # concrete offer alongside the arithmetic. `plan_grant` has no chunking-shaped
+        # work spec of its own — only the resolved `ids`/`domains` scope — so the spec
+        # split against is the same combined "record_ids" projection `envelope()` above
+        # already uses for its own chunk count (`ids + domains`, worst case priced as
+        # every domain being a distinct record). `split_for_allowance` classifies each
+        # element by its OWN shape (id-shaped vs domain-shaped) rather than assuming
+        # this combined list is ordered "ids then domains" (REVIEW-57-H1). This call is
+        # PURE — no transport, no durable write — so a refusal the operator never
+        # accepts writes nothing (REVIEW-57-H5; see `split_for_allowance`'s own
+        # docstring for the four-step state transition an ACCEPTED offer follows).
+        split_offer = split_for_allowance(
+            config, object_type=object_type,
+            spec={"record_ids": ids + domains, "object_type": object_type},
+            record_ids=ids, record_domains=domains,
+            headroom=headroom,
+            providers=providers if providers is not None
+            else (config or {}).get("enrichment_providers"),
+        )
         return _refusal(
             f"refusing to open this grant: it projects {ceiling['projected_executions']} "
             f"execution(s) this month against a sampled {ceiling['remaining_sampled']} "
@@ -798,8 +1019,20 @@ def plan_grant(config, *, lanes, object_type, record_ids, record_domains, allow_
             f"{EXECUTIONS_BASIS}, and it is measured to OVER-STATE a real chunk's cost "
             f"(roughly 3x) — deliberately, so it refuses early rather than letting an "
             f"over-budget batch through late. {RETENTION_CAVEAT} Name a smaller batch, "
-            f"or tell me to override this refusal and why.",
-            envelope=figures, ceiling=ceiling)
+            f"or tell me to override this refusal and why."
+            + (
+                f" A smaller batch is available now: "
+                f"{split_offer['record_ceiling_per_run']} of "
+                f"{figures['record_count']} record(s) would fit this run, with the "
+                f"other "
+                f"{figures['record_count'] - split_offer['record_ceiling_per_run']} "
+                f"queued for a future run you will separately authorise — each "
+                f"subsequent run opens its OWN grant, so this is a plan of work, never "
+                f"standing permission to spend and never a schedule that runs itself."
+                if split_offer.get("affordable_spec") is not None else
+                f" {split_offer['reason']}"
+            ),
+            envelope=figures, ceiling=ceiling, split_offer=split_offer)
 
     if override:
         # Recorded, not just honoured (REVIEW-57-M6): every reader downstream —

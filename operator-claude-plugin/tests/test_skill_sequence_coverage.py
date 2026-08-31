@@ -195,11 +195,24 @@ COVERED = {
     # sink changed too on the two single-shot legs, so their covering nodeid moved to a
     # test that actually drives `single_dispatch_outcome` -> `record_dispatch_outcome`
     # for real, rather than one written before either function existed.
+    #
+    # Phase 57 Task 3 (the 57-01 Task 4 handoff, taken): both tuples grew a
+    # `remainder_queue.save` -> `remainder_queue.build_entry` pair inside the pre-call
+    # ceiling-breach branch (outer call recorded before the entry it builds, per
+    # `parse_calls`'s own pre-order rule) -- `contact-upload`'s also grew a leading
+    # `tabular.read_table`, since that lane never parses the file into rows
+    # client-side and must read it back once to name the held rows individually. The
+    # sink is still `record_dispatch_outcome`, so the covering nodeid is unchanged;
+    # the branch's OWN wiring (the remainder_queue calls actually appear, are real
+    # code, and carry REASON_CEILING_BREACH) is pinned separately by
+    # `test_write_grant.py::test_the_single_shot_ceiling_breach_writes_the_remainder_queue`.
     (
         "contact-upload",
         (
             "config_gate.load_config", "write_grant.authorize_send",
-            "write_grant.authorize_ungranted_send", "write_grant.record_dispatch_outcome",
+            "write_grant.authorize_ungranted_send", "tabular.read_table",
+            "remainder_queue.save", "remainder_queue.build_entry",
+            "write_grant.record_dispatch_outcome",
             "n8n_arming.armed_window", "dispatch.dispatch",
             "chunking.single_dispatch_outcome", "write_grant.record_dispatch_outcome",
         ),
@@ -208,7 +221,9 @@ COVERED = {
         "enrich-before-ingest",
         (
             "config_gate.load_config", "write_grant.authorize_send",
-            "write_grant.authorize_ungranted_send", "write_grant.record_dispatch_outcome",
+            "write_grant.authorize_ungranted_send",
+            "remainder_queue.save", "remainder_queue.build_entry",
+            "write_grant.record_dispatch_outcome",
             "n8n_arming.armed_window", "dispatch.dispatch",
             "chunking.single_dispatch_outcome", "write_grant.record_dispatch_outcome",
         ),
@@ -258,6 +273,13 @@ COVERED = {
             "run_state.read_progress",
         ),
     ): "test_batch_finishes_composition.py::test_a_batch_with_a_failed_chunk_and_a_held_row_still_reaches_and_dispatches_its_last_row",
+    # Phase 57 Task 3: the accepted-split persistence step (D-57-04's
+    # `REASON_ALLOWANCE_SPLIT` producer) -- `build_entry`'s validated entry flows
+    # straight into `save`'s list argument.
+    (
+        "enrich-records",
+        ("remainder_queue.build_entry", "remainder_queue.save"),
+    ): "test_remainder_queue.py::test_save_writes_a_0600_file_with_the_right_document_shape",
 }
 
 NOT_A_PIPELINE = {

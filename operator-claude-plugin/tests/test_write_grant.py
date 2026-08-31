@@ -16,11 +16,14 @@ from pathlib import Path
 
 import pytest
 
+import chunking
 import config_gate
 import control_actions
 import dispatch
+import durable_paths
 import executions_client
 import n8n_arming
+import remainder_queue
 import write_grant
 import written_records
 
@@ -1380,6 +1383,268 @@ def test_ceiling_verdict_is_unknown_when_there_is_no_projection_at_all():
     assert verdict["verdict"] == write_grant.CEILING_UNKNOWN
 
 
+# =====================================================================================
+# split_for_allowance() — D-57-04, RUN-05's "offers a smaller batch"
+# =====================================================================================
+
+def test_affordable_record_count_cost_is_monotonic_over_a_range_of_n():
+    """The assumption the binary search rests on, pinned rather than assumed: the
+    `chunk_count + record_count` cost of N records never DECREASES as N grows, for any
+    ceiling in a realistic range."""
+    for ceiling in range(1, 6):
+        costs = [-(-n // ceiling) + n for n in range(0, 50)]
+        assert costs == sorted(costs), f"ceiling {ceiling}: cost is not monotonic in N"
+
+
+def test_split_for_allowance_with_no_spec_returns_every_key_none():
+    result = write_grant.split_for_allowance(
+        {}, object_type="companies", headroom={"sampled": True, "remaining_sampled": 100})
+    assert result["affordable_spec"] is None
+    assert result["remainder_spec"] is None
+    assert result["affordable"] is None
+    assert result["remainder"] is None
+    assert result["runs"] is None
+    assert result["record_ceiling_per_run"] is None
+    assert result["reason"]
+
+
+def test_split_for_allowance_with_ids_and_domains_but_no_spec_still_refuses():
+    """H-1's own removal: passing `record_ids=`/`record_domains=` alone, with no
+    `spec=`, must NOT resurrect the parallel-split path that used to derive a scope
+    independently of any work."""
+    result = write_grant.split_for_allowance(
+        {}, object_type="companies", record_ids=["1", "2"], record_domains=["a.example"],
+        headroom={"sampled": True, "remaining_sampled": 100})
+    assert result["affordable"] is None
+    assert result["remainder"] is None
+
+
+def test_split_for_allowance_with_an_unsampled_headroom_offers_no_split():
+    result = write_grant.split_for_allowance(
+        {"max_records_per_chunk": 2}, object_type="companies",
+        spec={"record_ids": ["1", "2", "3"], "object_type": "companies"},
+        headroom={"sampled": False, "remaining_sampled": None,
+                  "reason": "the executions list could not be read."})
+    assert result["affordable_spec"] is None
+    assert result["remainder_spec"] is None
+    assert result["affordable"] is None
+    assert result["remainder"] is None
+    assert "could not be read" in result["reason"]
+
+
+def test_split_for_allowance_with_no_room_for_even_one_record_offers_none():
+    result = write_grant.split_for_allowance(
+        {"max_records_per_chunk": 2}, object_type="companies",
+        spec={"record_ids": ["1", "2", "3"], "object_type": "companies"},
+        headroom={"sampled": True, "remaining_sampled": 0})
+    assert result["affordable_spec"] is None
+    assert result["record_ceiling_per_run"] is None
+    assert "not even one record fits" in result["reason"]
+
+
+@pytest.mark.parametrize("build_spec,key", [
+    (lambda: {"people": [{"n": i} for i in range(5)]}, "people"),
+    (lambda: {"companies": [{"domain": f"{i}.example"} for i in range(5)]}, "companies"),
+    (lambda: {"rows": [{"row_id": str(i)} for i in range(5)], "object_type": "contacts"},
+     "rows"),
+    (lambda: {"record_ids": [str(i) for i in range(5)], "object_type": "companies"},
+     "record_ids"),
+])
+def test_the_two_product_test_affordable_and_remainder_specs_split_in_order(
+        build_spec, key):
+    """REVIEW-57-H8: the split spec — not the scope — is what a caller re-dispatches.
+    A remainder fitting exactly 3 of 5 records (cost(3) = ceil(3/2) + 3 = 5)."""
+    spec = build_spec()
+    result = write_grant.split_for_allowance(
+        {"max_records_per_chunk": 2}, object_type="companies", spec=spec,
+        headroom={"sampled": True, "remaining_sampled": 5})
+
+    assert result["record_ceiling_per_run"] == 3
+    assert result["affordable_spec"][key] == spec[key][:3]
+    assert result["remainder_spec"][key] == spec[key][3:]
+    # chunking.plan_chunks must accept both halves without raising.
+    chunking.plan_chunks(result["affordable_spec"], 2)
+    chunking.plan_chunks(result["remainder_spec"], 2)
+
+
+def test_a_domain_only_companies_spec_splits_scope_on_domains_alone():
+    spec = {"companies": [{"domain": f"{i}.example"} for i in range(5)]}
+    result = write_grant.split_for_allowance(
+        {"max_records_per_chunk": 2}, object_type="companies", spec=spec,
+        headroom={"sampled": True, "remaining_sampled": 5})
+
+    assert result["affordable"] == {"record_domains": ["0.example", "1.example", "2.example"]}
+    assert "record_ids" not in result["affordable"]
+    assert result["remainder"] == {"record_domains": ["3.example", "4.example"]}
+    assert "record_ids" not in result["remainder"]
+
+
+def test_the_membership_test_an_interleaved_batch_projects_the_correct_scope():
+    """REVIEW-57-H1, not a count test: work `[domain-create A, id-backed record B]`
+    with N=1 must authorise A alone on the affordable side and B alone on the
+    remainder side — the exact counterexample the plan names."""
+    spec = {"record_ids": ["a.example.com", "12345"], "object_type": "companies"}
+    result = write_grant.split_for_allowance(
+        {"max_records_per_chunk": 2}, object_type="companies", spec=spec,
+        headroom={"sampled": True, "remaining_sampled": 2})
+
+    assert result["record_ceiling_per_run"] == 1
+    assert result["affordable_spec"]["record_ids"] == ["a.example.com"]
+    assert result["affordable"] == {"record_domains": ["a.example.com"]}
+    assert result["remainder_spec"]["record_ids"] == ["12345"]
+    assert result["remainder"] == {"record_ids": ["12345"]}
+
+
+def test_the_membership_test_a_grouped_batch_projects_the_correct_scope():
+    """The same interleaved-vs-grouped pair the plan asks for — ids grouped first,
+    domains after, so a broken "cut ids then domains" implementation would coincide
+    with the correct answer here but not in the interleaved case above."""
+    spec = {"record_ids": ["1", "2", "a.example.com", "b.example.com"],
+            "object_type": "companies"}
+    result = write_grant.split_for_allowance(
+        {"max_records_per_chunk": 2}, object_type="companies", spec=spec,
+        headroom={"sampled": True, "remaining_sampled": 3})
+
+    assert result["record_ceiling_per_run"] == 2
+    assert result["affordable_spec"]["record_ids"] == ["1", "2"]
+    assert result["affordable"] == {"record_ids": ["1", "2"]}
+    assert result["remainder_spec"]["record_ids"] == ["a.example.com", "b.example.com"]
+    assert result["remainder"] == {"record_domains": ["a.example.com", "b.example.com"]}
+
+
+def test_the_scope_is_a_projection_every_affordable_record_is_backed_and_nothing_extra():
+    spec = {"record_ids": ["1", "a.example", "2", "b.example", "3"],
+            "object_type": "companies"}
+    result = write_grant.split_for_allowance(
+        {"max_records_per_chunk": 2}, object_type="companies", spec=spec,
+        headroom={"sampled": True, "remaining_sampled": 5})
+
+    affordable_records = result["affordable_spec"]["record_ids"]
+    scope_members = (result["affordable"].get("record_ids", [])
+                      + result["affordable"].get("record_domains", []))
+    assert sorted(scope_members) == sorted(affordable_records)
+
+    remainder_records = result["remainder_spec"]["record_ids"]
+    remainder_scope_members = (result["remainder"].get("record_ids", [])
+                                + result["remainder"].get("record_domains", []))
+    assert sorted(remainder_scope_members) == sorted(remainder_records)
+
+
+def test_runs_is_the_ceiling_of_total_over_the_affordable_size():
+    spec = {"record_ids": [str(i) for i in range(5)], "object_type": "companies"}
+    result = write_grant.split_for_allowance(
+        {"max_records_per_chunk": 2}, object_type="companies", spec=spec,
+        headroom={"sampled": True, "remaining_sampled": 5})
+    assert result["record_ceiling_per_run"] == 3
+    assert result["runs"] == 2  # ceil(5 / 3)
+
+
+def test_split_for_allowance_never_carries_a_forbidden_named_key():
+    """The authority test, pinning D-57-05."""
+    spec = {"record_ids": [str(i) for i in range(5)], "object_type": "companies"}
+    result = write_grant.split_for_allowance(
+        {"max_records_per_chunk": 2}, object_type="companies", spec=spec,
+        headroom={"sampled": True, "remaining_sampled": 5})
+    markers = ("arm", "secret", "api_key", "apikey", "token", "credential",
+               "password", "grant", "permission", "webhook")
+    for key in result:
+        assert not any(m in key.lower() for m in markers), key
+
+
+# =====================================================================================
+# plan_grant()'s CEILING_OVER refusal now carries split_offer
+# =====================================================================================
+
+def test_plan_grant_refusal_carries_a_split_offer(
+        granting_config, stub_module_transport_factory):
+    config = {**granting_config, "n8n_monthly_execution_allowance": 5,
+              "max_records_per_chunk": 2}
+    transport = stub_module_transport_factory(_plan_reads())
+
+    result = _proposal(config, transport, ids=("1", "2", "3", "4", "5"))
+
+    assert result["outcome"] == write_grant.REFUSED
+    assert "split_offer" in result
+    offer = result["split_offer"]
+    assert offer["affordable_spec"] is not None
+    assert offer["record_ceiling_per_run"] >= 1
+    assert offer["record_ceiling_per_run"] < 5
+    assert "queued for a future run" in result["detail"]
+    assert "separately authorise" in result["detail"]
+
+
+def _walk_keys(value):
+    if isinstance(value, dict):
+        for key, sub in value.items():
+            yield key
+            yield from _walk_keys(sub)
+    elif isinstance(value, (list, tuple)):
+        for item in value:
+            yield from _walk_keys(item)
+
+
+def test_the_ceiling_over_refusal_payload_carries_no_forbidden_named_key(
+        granting_config, stub_module_transport_factory):
+    """The TEN forbidden-name markers (REVIEW-57-L4), scanned recursively over the
+    WHOLE refusal payload including the nested `split_offer` — pinning D-57-05 at the
+    one surface an operator actually reads."""
+    config = {**granting_config, "n8n_monthly_execution_allowance": 5,
+              "max_records_per_chunk": 2}
+    transport = stub_module_transport_factory(_plan_reads())
+
+    result = _proposal(config, transport, ids=("1", "2", "3", "4", "5"))
+    assert result["outcome"] == write_grant.REFUSED
+
+    markers = ("arm", "secret", "api_key", "apikey", "token", "credential",
+               "password", "grant", "permission", "webhook")
+    for key in _walk_keys(result):
+        assert not any(m in str(key).lower() for m in markers), key
+
+
+def test_a_ceiling_over_refusal_writes_nothing_to_the_remainder_queue(
+        granting_config, stub_module_transport_factory, tmp_path, monkeypatch):
+    """REVIEW-57-H5, the state-transition test: `plan_grant` is a planning surface and
+    must not mutate durable state on a decision the operator has not taken."""
+    monkeypatch.setattr(
+        durable_paths, "resolve_state_path",
+        lambda *a, **k: tmp_path / "dashboard_artifact.json")
+
+    config = {**granting_config, "n8n_monthly_execution_allowance": 1,
+              "max_records_per_chunk": 2}
+    transport = stub_module_transport_factory(_plan_reads())
+
+    result = _proposal(config, transport, ids=("1", "2", "3"))
+    assert result["outcome"] == write_grant.REFUSED
+
+    assert list(tmp_path.glob("remainder_queue*.json")) == []
+
+
+def test_an_accepted_split_offers_remainder_can_be_saved_with_reason_allowance_split(
+        granting_config, stub_module_transport_factory, tmp_path, monkeypatch):
+    """`REASON_ALLOWANCE_SPLIT`'s producer is the runbook step AFTER a fresh grant
+    opens (see `enrich-records/SKILL.md`) — this proves the shape the offer's
+    `remainder_spec` hands to that step is directly usable."""
+    monkeypatch.setattr(
+        durable_paths, "resolve_state_path",
+        lambda *a, **k: tmp_path / "dashboard_artifact.json")
+
+    config = {**granting_config, "n8n_monthly_execution_allowance": 5,
+              "max_records_per_chunk": 2}
+    transport = stub_module_transport_factory(_plan_reads())
+
+    result = _proposal(config, transport, ids=("1", "2", "3", "4", "5"))
+    offer = result["split_offer"]
+    assert offer["remainder_spec"] is not None
+
+    entry = remainder_queue.build_entry(
+        offer["remainder_spec"], remainder_queue.REASON_ALLOWANCE_SPLIT)
+    assert remainder_queue.save("run-accepted-split", [entry]) is True
+
+    saved = remainder_queue.load(
+        path=remainder_queue.remainder_path("run-accepted-split"))
+    assert saved[0]["reason"] == remainder_queue.REASON_ALLOWANCE_SPLIT
+
+
 def _over_ceiling_config(granting_config):
     """A config whose sampled remainder cannot possibly cover the batch below —
     `n8n_monthly_execution_allowance: 1` against a 3-record batch (4 projected
@@ -2084,3 +2349,68 @@ def test_the_unknown_ceiling_branch_self_bounds_rather_than_going_unbounded(runb
                         f"projected_executions, never left unbounded"
                     )
     assert found, f"{path} has no branch comparing to write_grant.CEILING_UNKNOWN"
+
+
+# =========================================================================================
+# Phase 57 Task 3 — the handoff 57-01 Task 4 left for this plan, taken: the single-shot
+# `dispatch.dispatch` legs' pre-call ceiling-breach branch must call
+# `remainder_queue.save(...)` with a `REASON_CEILING_BREACH` entry, real code on the
+# parsed tree — not the prose 57-01 left there (a `grep` for the module name would pass
+# against prose too; this must not).
+# =========================================================================================
+
+def _is_would_be_ceiling_branch(node):
+    """The `If` node guarding the pre-call ceiling check in both runbooks — the test
+    always compares a `would_be` name against a ceiling, but the ceiling's own name
+    differs between the two files (`remaining_execution_ceiling` vs
+    `execution_ceiling`), so only `would_be` is required to identify it."""
+    if not isinstance(node, ast.If):
+        return False
+    names = {n.id for n in ast.walk(node.test) if isinstance(n, ast.Name)}
+    return "would_be" in names
+
+
+@pytest.mark.parametrize("runbook", ["enrich-before-ingest", "contact-upload"])
+def test_the_single_shot_ceiling_breach_writes_the_remainder_queue(runbook):
+    path = _RUNBOOK_PATHS[runbook]
+    matches = _blocks_calling(path, "dispatch", "single_dispatch_outcome")
+    assert matches, f"no block in {path} calls both dispatch.dispatch and single_dispatch_outcome"
+
+    for src, tree in matches:
+        branch = next((n for n in ast.walk(tree) if _is_would_be_ceiling_branch(n)), None)
+        assert branch is not None, f"{path} has no pre-call ceiling-breach If branch"
+
+        save_calls = [
+            n for n in ast.walk(branch) if isinstance(n, ast.Call)
+            and isinstance(n.func, ast.Attribute) and n.func.attr == "save"
+            and isinstance(n.func.value, ast.Name) and n.func.value.id == "remainder_queue"
+        ]
+        assert save_calls, (
+            f"{path}'s pre-call ceiling-breach branch has no remainder_queue.save(...) "
+            f"call — this is the handoff 57-01 Task 4 left for 57-03 to wire; prose "
+            f"here satisfies nothing"
+        )
+        assert any(
+            isinstance(n, ast.Attribute) and n.attr == "REASON_CEILING_BREACH"
+            for n in ast.walk(branch)
+        ), f"{path}'s ceiling-breach branch never references REASON_CEILING_BREACH"
+
+
+@pytest.mark.parametrize("runbook", ["enrich-before-ingest", "contact-upload"])
+def test_the_single_shot_ceiling_breachs_remainder_save_never_raises_into_the_branch(
+        runbook):
+    """The same degrade-rather-than-halt rule the chunked `dispatch_plan` path follows
+    (D-59-10): a `remainder_queue.RemainderQueueError` must be caught inside the
+    breach branch, never left to propagate out of the runbook step."""
+    path = _RUNBOOK_PATHS[runbook]
+    matches = _blocks_calling(path, "dispatch", "single_dispatch_outcome")
+    for src, tree in matches:
+        branch = next((n for n in ast.walk(tree) if _is_would_be_ceiling_branch(n)), None)
+        assert branch is not None
+        excepts = [
+            h for n in ast.walk(branch) if isinstance(n, ast.Try) for h in n.handlers
+        ]
+        assert any(
+            isinstance(h.type, ast.Attribute) and h.type.attr == "RemainderQueueError"
+            for h in excepts
+        ), f"{path}'s ceiling-breach branch has no except remainder_queue.RemainderQueueError"
