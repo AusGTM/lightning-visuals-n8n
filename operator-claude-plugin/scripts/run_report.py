@@ -218,7 +218,12 @@ def record_audit(run_id, *, ceiling=None, balances=None, disarm=None,
         }
         durable_paths._atomic_write_0600(target, json.dumps(document))
         return True
-    except OSError:
+    except (OSError, TypeError):
+        # OSError: the same environment-condition degrade every sibling store's writer
+        # follows. TypeError: a caller passed a value `json.dumps` cannot serialize (a
+        # dataclass instead of `dataclasses.asdict(...)`, say) — a defect in the DATA
+        # this call was given, but still a bookkeeping miss, never a reason to halt the
+        # live dispatch this is called from (D-59-10's same posture).
         return False
 
 

@@ -1727,11 +1727,20 @@ def test_plan_grant_with_an_unconfigured_allowance_proceeds_as_unknown_not_refus
 
 
 def test_record_dispatch_outcome_closes_the_grant_from_a_real_dispatch_ceiling_stop(
-        granting_config, stub_module_transport_factory):
+        granting_config, stub_module_transport_factory, tmp_path, monkeypatch):
     """The producer test (D-57-01, Pitfall 1): `record_send_outcome`'s `ceiling_breach`
     branch REACHED as a consequence of a real `chunking.dispatch_plan()` call, never by
-    handing it a hand-built dict."""
+    handing it a hand-built dict.
+
+    57-05 Task 1/3: `enrich-records/SKILL.md`'s dispatch block now closes with a
+    `run_report.record_audit` call right after this same `record_dispatch_outcome` —
+    driven here for real too, over a `ceiling_stop` a real `dispatch_plan()` produced,
+    never a hand-built dict (test_skill_sequence_coverage.py's registry)."""
     import chunking
+    import run_report
+
+    monkeypatch.setattr(run_report, "run_audit_path",
+                        lambda run_id: tmp_path / f"run_audit-{run_id}.json")
 
     transport = stub_module_transport_factory(_plan_reads())
     grant = _open(granting_config, transport, ids=("1", "2", "3", "4", "5", "6"))
@@ -1751,12 +1760,33 @@ def test_record_dispatch_outcome_closes_the_grant_from_a_real_dispatch_ceiling_s
     assert updated["state"] == write_grant.CLOSED
     assert updated["closed_reason"] == write_grant.CLOSED_CEILING_BREACH
 
+    import dataclasses
+    run_report.record_audit(
+        "test-run", disarm=None,
+        ceiling_stop=dataclasses.asdict(outcome.ceiling_stop))
+    assert run_report.load_audit("test-run")["ceiling_stop"]["chunk_index"] == \
+        outcome.ceiling_stop.chunk_index, (
+        "the ceiling-stop observed at run-end must be readable back byte-for-byte — "
+        "this is the observation both runbooks persist right after this same "
+        "record_dispatch_outcome call"
+    )
+
 
 def test_single_dispatch_outcome_composed_with_record_dispatch_outcome_closes_normally(
-        granting_config, stub_module_transport_factory):
+        granting_config, stub_module_transport_factory, tmp_path, monkeypatch):
     """A single-shot leg's `ceiling_stop` is unconditionally None — no chunk boundary to
-    stop at — so composing it through `record_dispatch_outcome` derives no breach."""
+    stop at — so composing it through `record_dispatch_outcome` derives no breach.
+
+    57-05 Task 1/3: both `contact-upload/SKILL.md` and `enrich-before-ingest/SKILL.md`'s
+    single-shot ingest legs follow this same `record_dispatch_outcome` with a
+    `run_report.record_audit(disarm=...)` call — driven here for real, over the
+    `disarm` result an `armed_window` actually produced (test_skill_sequence_coverage.py's
+    registry)."""
     import chunking
+    import run_report
+
+    monkeypatch.setattr(run_report, "run_audit_path",
+                        lambda run_id: tmp_path / f"run_audit-{run_id}.json")
 
     transport = stub_module_transport_factory(_plan_reads())
     grant = _open(granting_config, transport)
@@ -1766,6 +1796,10 @@ def test_single_dispatch_outcome_composed_with_record_dispatch_outcome_closes_no
     updated = write_grant.record_dispatch_outcome(grant, outcome, granting_config)
 
     assert updated["state"] == write_grant.OPEN
+
+    disarm_result = {"outcome": "disarmed", "workflow_id": "wf-1"}
+    run_report.record_audit("ingest-run", disarm=disarm_result)
+    assert run_report.load_audit("ingest-run")["disarm"] == disarm_result
 
 
 def test_record_dispatch_outcome_leaves_the_grant_open_with_no_ceiling_stop(
@@ -2414,3 +2448,89 @@ def test_the_single_shot_ceiling_breachs_remainder_save_never_raises_into_the_br
             isinstance(h.type, ast.Attribute) and h.type.attr == "RemainderQueueError"
             for h in excepts
         ), f"{path}'s ceiling-breach branch has no except remainder_queue.RemainderQueueError"
+
+
+# =========================================================================================
+# 57-05 Task 3 — both lane runbooks end by reading `run_report.build_run_report`, and
+# record their audit facts as they observe them (`record_audit`), one call before the
+# dispatch and one inside the `finally` — real code on the parsed tree, per
+# `57-VALIDATION.md`'s "caller path the test MUST drive" column, never a markdown
+# string search.
+# =========================================================================================
+
+def _nodes_inside_any_finally(tree):
+    """Every node reachable from any `Try` node's `finalbody`, across the whole tree —
+    used to tell a call made BEFORE a dispatch's try/finally from one made INSIDE its
+    `finally:` clause, on the real parsed structure rather than by line position."""
+    seen = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Try):
+            for stmt in node.finalbody:
+                for sub in ast.walk(stmt):
+                    seen.add(id(sub))
+    return seen
+
+
+def _calls_named(tree, name):
+    return [n for n in ast.walk(tree) if isinstance(n, ast.Call)
+            and getattr(n.func, "attr", None) == name]
+
+
+@pytest.mark.parametrize("runbook", ["enrich-records", "enrich-before-ingest"])
+def test_build_run_report_is_called_with_an_outcomes_keyword(runbook):
+    path = _RUNBOOK_PATHS[runbook]
+    matches = _blocks_calling(path, "build_run_report")
+    assert matches, f"no block in {path} calls build_run_report"
+    for src, tree in matches:
+        calls = _calls_named(tree, "build_run_report")
+        assert calls
+        for call in calls:
+            assert any(kw.arg == "outcomes" for kw in call.keywords), (
+                f"{path}'s build_run_report( call carries no outcomes keyword"
+            )
+
+
+@pytest.mark.parametrize("runbook", ["enrich-records", "enrich-before-ingest"])
+def test_a_record_audit_call_exists_before_the_dispatch(runbook):
+    path = _RUNBOOK_PATHS[runbook]
+    matches = _blocks_calling(path, "record_audit")
+    assert matches, f"no block in {path} calls record_audit"
+    found = False
+    for src, tree in matches:
+        in_finally = _nodes_inside_any_finally(tree)
+        calls = _calls_named(tree, "record_audit")
+        if any(id(c) not in in_finally for c in calls):
+            found = True
+    assert found, (
+        f"no block in {path} calls record_audit outside a finally clause — the "
+        f"ceiling/balances observation must be recorded before dispatch, not only at "
+        f"the end"
+    )
+
+
+@pytest.mark.parametrize("runbook", ["enrich-records", "enrich-before-ingest"])
+def test_a_record_audit_call_exists_inside_the_finally(runbook):
+    path = _RUNBOOK_PATHS[runbook]
+    matches = _blocks_calling(path, "record_audit")
+    assert matches, f"no block in {path} calls record_audit"
+    found = False
+    for src, tree in matches:
+        in_finally = _nodes_inside_any_finally(tree)
+        calls = _calls_named(tree, "record_audit")
+        if any(id(c) in in_finally for c in calls):
+            found = True
+    assert found, (
+        f"no block in {path} calls record_audit inside a finally clause — the disarm "
+        f"result must be recorded on every exit, not only the happy path"
+    )
+
+
+def test_calls_named_finds_no_call_in_a_block_that_only_mentions_the_name_in_a_comment():
+    """A block that merely MENTIONS a name in a comment (never calling it) must satisfy
+    nothing — `_calls_named`/`_blocks_calling` find parsed CALL nodes only, never a
+    comment or a docstring, which is what makes prose insufficient to pass the tests
+    above (57-VALIDATION.md's "caller path the test MUST drive" column)."""
+    src = "# record_audit and build_run_report happen somewhere, trust me\nx = 1\n"
+    tree = ast.parse(src)
+    assert not _calls_named(tree, "record_audit")
+    assert not _calls_named(tree, "build_run_report")

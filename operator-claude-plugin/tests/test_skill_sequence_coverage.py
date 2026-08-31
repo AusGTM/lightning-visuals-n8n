@@ -217,36 +217,54 @@ COVERED = {
             "chunking.single_dispatch_outcome", "write_grant.record_dispatch_outcome",
         ),
     ): "test_write_grant.py::test_single_dispatch_outcome_composed_with_record_dispatch_outcome_closes_normally",
+    # 57-05 Task 3: both `write_grant.record_dispatch_outcome` closes in the
+    # enrich-before-ingest ingest leg now grow a `run_report.record_audit` call right
+    # after them — the second is the new sink, since it is textually last in the
+    # block. The covering nodeid is extended (not replaced) to mention it.
     (
         "enrich-before-ingest",
         (
             "config_gate.load_config", "write_grant.authorize_send",
             "write_grant.authorize_ungranted_send",
             "remainder_queue.save", "remainder_queue.build_entry",
-            "write_grant.record_dispatch_outcome",
+            "write_grant.record_dispatch_outcome", "run_report.record_audit",
             "n8n_arming.armed_window", "dispatch.dispatch",
             "chunking.single_dispatch_outcome", "write_grant.record_dispatch_outcome",
+            "run_report.record_audit",
         ),
     ): "test_write_grant.py::test_single_dispatch_outcome_composed_with_record_dispatch_outcome_closes_normally",
+    # 57-05 Task 1: the two grant-time/end-of-run `run_report.record_audit`
+    # observations land before `n8n_arming.armed_window` and right after
+    # `write_grant.record_dispatch_outcome` respectively. The sink stays
+    # `preingest.merge_enriched` — unchanged, so the covering nodeid needs no
+    # extension, only the tuple.
     (
         "enrich-before-ingest",
         (
             "run_state.new_run_id", "run_state.start_run", "config_gate.load_config",
             "enrichment.resolve_providers", "chunking.plan_chunks", "chunking.chunk_ceiling",
             "write_grant.authorize_send", "write_grant.authorize_ungranted_send",
+            "run_report.record_audit",
             "n8n_arming.armed_window", "chunking.dispatch_plan",
-            "write_grant.record_dispatch_outcome", "chunking.projected_spend",
+            "write_grant.record_dispatch_outcome", "run_report.record_audit",
+            "chunking.projected_spend",
             "run_state.mark_dispatched",
             "run_state.read_progress", "watch.recover_async_dispatch", "preingest.merge_enriched",
         ),
     ): "test_chunking.py::test_the_enrich_before_ingest_waterfall_submits_async_and_recovers_through_merge_enriched",
+    # 57-05 Task 3: the enrich-records dispatch block's own `run_report.record_audit`
+    # pair — one before the grant's armed window, one in the finally right after
+    # `record_dispatch_outcome`, which becomes the new sink.
     (
         "enrich-records",
         (
-            "config_gate.load_config", "enrichment.resolve_providers", "chunking.plan_chunks",
+            "run_state.new_run_id", "config_gate.load_config",
+            "enrichment.resolve_providers", "chunking.plan_chunks",
             "chunking.chunk_ceiling", "write_grant.authorize_send",
-            "write_grant.authorize_ungranted_send", "n8n_arming.armed_window",
+            "write_grant.authorize_ungranted_send", "run_report.record_audit",
+            "n8n_arming.armed_window",
             "chunking.dispatch_plan", "write_grant.record_dispatch_outcome",
+            "run_report.record_audit",
         ),
     ): "test_write_grant.py::test_record_dispatch_outcome_closes_the_grant_from_a_real_dispatch_ceiling_stop",
     (

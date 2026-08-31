@@ -355,7 +355,7 @@ whatever seven columns happened to be in the source file.
    (`test_write_grant.py`) `compile()`s it (REVIEW-57-M4):
 
    ```python
-   import chunking, config_gate, enrichment, n8n_arming, preingest, run_state, watch, write_grant
+   import chunking, config_gate, enrichment, n8n_arming, preingest, run_report, run_state, watch, write_grant
 
    run_id = run_state.new_run_id()  # minted before any HTTP call (REVIEW-C14)
    run_state.start_run(run_id, [row["row_id"] for row in unmatched_rows])
@@ -393,6 +393,19 @@ whatever seven columns happened to be in the source file.
    else:
        remaining_execution_ceiling = ceiling["projected_executions"]
 
+   # 57-05 Task 1: record the ceiling verdict and this grant's balance readability the
+   # MOMENT they are observed — before the FIRST of this grant's several dispatch legs,
+   # not at the end — so a run that dies mid-batch still leaves this on disk. One grant
+   # covers both lanes (D-53-05), so this is the ONE grant-open observation for the
+   # whole run; the ingest leg below only ever ADDS a disarm observation to the same
+   # per-run record, never a second ceiling. Wrapped because a bookkeeping defect must
+   # never halt a live dispatch (D-59-10's same posture).
+   balances_at_grant = decision["grant"].get("envelope", {}).get("verdicts")
+   try:
+       run_report.record_audit(run_id, ceiling=ceiling, balances=balances_at_grant)
+   except run_report.RunReportError:
+       pass
+
    # Grant closure on every exit (REVIEW-57-H8/M5): `outcome`/`disarm` start None so an
    # exception raised BEFORE `dispatch_plan()` returns cannot leave either name unbound
    # when the closure below runs. A crash closes with the pre-existing `unhandled_error`
@@ -419,6 +432,17 @@ whatever seven columns happened to be in the source file.
        close_reason = write_grant.CLOSED_UNHANDLED_ERROR if crashed else None
        grant = write_grant.record_dispatch_outcome(
            decision["grant"], outcome, cfg, disarm=disarm, reason=close_reason)
+       # 57-05 Task 1: this leg's disarm result and any ceiling-stop metadata, observed
+       # at the end of this leg — merged into the same per-run record (REVIEW-57-M11),
+       # never replacing the ceiling/balances observation above.
+       import dataclasses
+       stop = outcome.ceiling_stop if outcome is not None else None
+       try:
+           run_report.record_audit(
+               run_id, disarm=disarm,
+               ceiling_stop=(dataclasses.asdict(stop) if stop is not None else None))
+       except run_report.RunReportError:
+           pass
 
    if remaining_execution_ceiling is not None:
        remaining_execution_ceiling -= chunking.projected_spend(outcome)
@@ -669,7 +693,7 @@ whatever seven columns happened to be in the source file.
    (REVIEW-57-M4):
 
    ```python
-   import chunking, config_gate, dispatch, n8n_arming, remainder_queue, write_grant
+   import chunking, config_gate, dispatch, n8n_arming, remainder_queue, run_report, write_grant
 
    cfg = config_gate.load_config()
    decision = (
@@ -719,6 +743,16 @@ whatever seven columns happened to be in the source file.
        # the grant for the breach.
        grant = write_grant.record_dispatch_outcome(
            decision["grant"], None, cfg, reason=write_grant.CLOSED_CEILING_BREACH)
+       # 57-05 Task 1: this pre-call stop never produces a chunking.CeilingStop object
+       # (there is no chunk boundary to attach one to), so the observation is a plain,
+       # already-JSON-safe dict — never wrapped in the enrich pass's own dataclass.
+       try:
+           run_report.record_audit(outcome.run_id, ceiling_stop={
+               "chunk_index": None, "unsent_count": len(sendable_rows_for_remainder),
+               "reason": "pre-call ingest ceiling stop",
+           })
+       except run_report.RunReportError:
+           pass
    else:
        # Grant closure on every exit (REVIEW-57-H8/M5): `outcome_ingest`/`disarm` start
        # None so an exception raised before `dispatch.dispatch()` returns cannot leave
@@ -745,6 +779,13 @@ whatever seven columns happened to be in the source file.
            close_reason = write_grant.CLOSED_UNHANDLED_ERROR if crashed else None
            grant = write_grant.record_dispatch_outcome(
                decision["grant"], outcome_ingest, cfg, disarm=disarm, reason=close_reason)
+           # 57-05 Task 1: this leg's disarm result — the SAME per-run record the enrich
+           # pass's ceiling/balances observation and its own disarm already live in
+           # (REVIEW-57-M11's merge, never a replace).
+           try:
+               run_report.record_audit(outcome.run_id, disarm=disarm)
+           except run_report.RunReportError:
+               pass
    ```
 
    `run_id=outcome.run_id` is what makes D-59-09's "one file per run" promise (step 1, step
@@ -887,3 +928,52 @@ whatever seven columns happened to be in the source file.
    ```python
    completion = watch.build_resume_completion_report(resume_report, this_pass_verdicts)
    ```
+
+9. **Read the end-of-run report — this is what the operator reads INSTEAD of watching the
+   run (AFTER-01, 57-05).** One grant, two lanes, several dispatch legs — the match pass,
+   the enrich pass, the re-request pass when it ran, and the final ingest send — all under
+   the SAME `run_id`. One call joins every durable store this run touched into one block:
+   per-record outcome, association outcome, held rows named individually with reasons,
+   spend against the ceiling, and the disarm verdict.
+
+   ```python
+   import run_report
+
+   # `outcomes` is a SEQUENCE (REVIEW-57-H): the pair pipeline runs several dispatch
+   # legs under one run_id, and a single outcome could describe only one of them.
+   # `outcome` is step 5's enrich-pass DispatchOutcome; `outcome_ingest` is the final
+   # ingest leg, already wrapped by `chunking.single_dispatch_outcome` (REVIEW-57-H7) —
+   # never the raw `dispatch.dispatch(...)` dict, which is not a DispatchOutcome and
+   # cannot join this list. When `preingest.rerequest_unanswered` ran for this run's
+   # unanswered rows, its own `MergeResult.dispatch_outcome` joins the same list —
+   # referenced defensively since that pass is conditional and may not have run.
+   outcomes = [o for o in (
+       outcome, globals().get("rerequest_dispatch_outcome"), outcome_ingest
+   ) if o is not None]
+
+   report = run_report.build_run_report(
+       run_id, cfg, outcomes=outcomes, disarm=disarm,
+       balances=balances_at_grant, ceiling=ceiling)
+   ```
+
+   Render `report["block"]` to the operator verbatim. It already carries the
+   `REPORT INCOMPLETE` banner when any store could not be read cleanly, and it already
+   states which provider balances were readable and which were not, and which part of
+   the spend was therefore actually bounded (D-57-02): a ceiling cannot guard what it
+   cannot read.
+
+   **A `gated` row on this surface must never read as a completed one (AFTER-03).** It
+   says the row would have been written and is recoverable by opening a grant and
+   re-sending it — never a failure, and never worded like a `written` row.
+
+   **The pair pipeline's final ingest leg has a known unjoinable population
+   (REVIEW-57-H).** Step 7's own `extraction.strip_row_id` removes the join key before
+   the CSV is written, so those rows come back `row_id: null` and are joined by
+   `hs_object_id` where one exists, or kept and rendered UNJOINABLE otherwise — the
+   report names that leg by name in its own `gaps`, and this is a stated, permanent
+   boundary of the mechanism, never a bug to chase.
+
+   `contact-upload/SKILL.md`'s own step 7 report is a single-shot upload the operator
+   watches in real time; it is deliberately NOT a call site for this report (REVIEW-57-L5)
+   — AFTER-01 exists for the run nobody is watching, and that lane keeps its existing
+   report unchanged.

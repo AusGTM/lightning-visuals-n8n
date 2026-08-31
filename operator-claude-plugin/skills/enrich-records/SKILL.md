@@ -22,7 +22,7 @@ explicitly armed, send exactly that plan.
 
 Per-record outcomes are relayed only from what the backend's own response body carries —
 never inferred, never invented (step 9, and the F3 recorded edit there). A chunk the
-transport accepted can still hold a blocked row inside it, and where the body genuinely
+transport accepted can still hold a gated row inside it, and where the body genuinely
 says nothing per record, this lane reports at chunk granularity and says so.
 
 ## Steps
@@ -329,7 +329,11 @@ says nothing per record, this lane reports at chunk granularity and says so.
    (`test_write_grant.py`) `compile()`s it (REVIEW-57-M4):
 
    ```python
-   import chunking, config_gate, enrichment, n8n_arming, write_grant
+   import chunking, config_gate, enrichment, n8n_arming, run_report, run_state, write_grant
+
+   run_id = run_state.new_run_id()  # minted before any HTTP call (REVIEW-C14) — the SAME
+   # id this run's written-records file, audit record, and end-of-run report (step 10)
+   # are all keyed by.
 
    cfg = config_gate.load_config()
    providers = enrichment.resolve_providers(providers_override, cfg)
@@ -365,6 +369,19 @@ says nothing per record, this lane reports at chunk granularity and says so.
    else:
        execution_ceiling = ceiling["projected_executions"]
 
+   # 57-05 Task 1: record the ceiling verdict and this grant's balance readability the
+   # MOMENT they are observed — before dispatch, not at the end — so a run that dies
+   # mid-dispatch still leaves this on disk for the end-of-run report to reconstruct
+   # from (crash-recovery is the entire reason this record exists). `record_audit`
+   # raises only on a grant-shaped value, which nothing here supplies; it is still
+   # wrapped so a bookkeeping defect can never halt a live dispatch (D-59-10's same
+   # posture).
+   balances_at_grant = decision["grant"].get("envelope", {}).get("verdicts")
+   try:
+       run_report.record_audit(run_id, ceiling=ceiling, balances=balances_at_grant)
+   except run_report.RunReportError:
+       pass
+
    # Grant closure on every exit (REVIEW-57-H8/M5): `outcome`/`disarm` start None so an
    # exception raised BEFORE `dispatch_plan()` returns — inside `enrichment.build_envelope`
    # or the transport itself — cannot leave either name unbound when the closure below
@@ -378,7 +395,7 @@ says nothing per record, this lane reports at chunk granularity and says so.
    try:
        with n8n_arming.armed_window(decision["workflow_id"], send_ids, send_domains,
                                     allow_create, cfg, grant=decision["grant"]) as window:
-           outcome = chunking.dispatch_plan(plan, providers, True, cfg,
+           outcome = chunking.dispatch_plan(plan, providers, True, cfg, run_id=run_id,
                                             execution_ceiling=execution_ceiling)
        disarm = window.disarm_result
    except Exception:
@@ -388,6 +405,17 @@ says nothing per record, this lane reports at chunk granularity and says so.
        close_reason = write_grant.CLOSED_UNHANDLED_ERROR if crashed else None
        grant = write_grant.record_dispatch_outcome(
            decision["grant"], outcome, cfg, disarm=disarm, reason=close_reason)
+       # 57-05 Task 1: the disarm result and any ceiling-stop metadata, observed at the
+       # END of the run — the second of this run's two audit observations, merged into
+       # the same record rather than replacing the first (REVIEW-57-M11).
+       import dataclasses
+       stop = outcome.ceiling_stop if outcome is not None else None
+       try:
+           run_report.record_audit(
+               run_id, disarm=disarm,
+               ceiling_stop=(dataclasses.asdict(stop) if stop is not None else None))
+       except run_report.RunReportError:
+           pass
    ```
 
    The allowlist handed to `armed_window` is **this send's records, never the grant's whole
@@ -445,12 +473,19 @@ says nothing per record, this lane reports at chunk granularity and says so.
    that chunk sent.** Import `scripts/report_enrichment.py` (a library here, the same way
    `scripts/report.py` already is, not a CLI) and call `build_sync_report(response)` on
    each one. It returns `(rows, reason)`: one row per record the body itself decided on,
-   each carrying `outcome` (created / enriched / blocked / skipped / unknown), `reason`
-   (present for `blocked`/`skipped`), and `match_level`/`match_reason` (how the record was
-   found — high / medium / none / unknown, and why). Relay every one of them by name: a
-   chunk the transport accepted can still carry a `blocked` or `unknown` row inside it, and
-   "the backend accepted 1 chunk, 1 row" must never stand in for that when the row itself
-   says otherwise.
+   each carrying `outcome` — one of `written_records`'s eight words (D-57-03/57-02):
+   `written`, `write_attempted`, `created_id_unknown`, `written_id_unknown`, `gated`,
+   `held`, `failed`, `no_action` — `reason` (present for `gated`/`held`/`failed`), and
+   `match_level`/`match_reason` (how the record was found — high / medium / none /
+   unknown, and why). Relay every one of them by name: a chunk the transport accepted
+   can still carry a `gated`, `held`, or `failed` row inside it, and "the backend
+   accepted 1 chunk, 1 row" must never stand in for that when the row itself says
+   otherwise.
+
+   **`gated` is AFTER-03's case (57-05): the row would have been written and is
+   RECOVERABLE, never a failure.** Say plainly that opening a grant and re-sending it
+   writes it — never describe it as a dead end, and never let its wording read like a
+   `written` row's.
 
    RECORDED EDIT (F3, 2026-08-25) — never invent what the body does not carry; always
    relay what it does. This step used to carry a blanket rule against stating any
@@ -469,3 +504,32 @@ says nothing per record, this lane reports at chunk granularity and says so.
    **a batch that can be re-sent** — one well-formed enrichment request, not a list of
    errors — and that re-sending it goes through this same arming gate, because a re-send is
    a send. Name it as the thing to hand to a retry.
+
+10. **Read the end-of-run report — this is what the operator reads INSTEAD of watching the
+   run (AFTER-01, 57-05).** Step 9 relays what happened DURING the run — this step is the
+   after. One call joins every durable store this run touched into one block: per-record
+   outcome, association outcome, held rows named individually with reasons, spend against
+   the ceiling, and the disarm verdict.
+
+   ```python
+   import run_report
+
+   report = run_report.build_run_report(
+       run_id, cfg, outcomes=[outcome], disarm=disarm,
+       balances=balances_at_grant, ceiling=ceiling)
+   ```
+
+   Render `report["block"]` to the operator verbatim — it already carries the
+   `REPORT INCOMPLETE` banner when any store could not be read cleanly, and it already
+   states which provider balances were readable and which were not, and which part of
+   the spend was therefore actually bounded (D-57-02): a ceiling cannot guard what it
+   cannot read.
+
+   **A `gated` row on this surface must never read as a completed one (AFTER-03).** It
+   says the row would have been written and is recoverable by opening a grant and
+   re-sending it — never a failure, and never worded like a `written` row.
+
+   `contact-upload/SKILL.md`'s own step 7 report is a single-shot upload the operator
+   watches in real time; it is deliberately NOT a call site for this report (REVIEW-57-L5)
+   — AFTER-01 exists for the run nobody is watching, and that lane keeps its existing
+   report unchanged.
