@@ -13,7 +13,9 @@ from pathlib import Path
 
 import pytest
 
+import backend_status
 import cost_guard
+import write_grant
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 
@@ -318,3 +320,118 @@ def test_comparison_yields_one_verdict_per_estimated_provider(rates):
     assert verdicts["lusha"]["verdict"] == "ok"
     assert verdicts["apollo"]["verdict"] == "unknown"
     assert verdicts["zoominfo"]["verdict"] == "insufficient"
+
+
+# ------------------------------------------------------- unreadable-balance causes (57-04)
+#
+# G-4 / D-57-02: an unreadable balance is disclosed with the reason that made it unknown,
+# never as headroom. Three causes exist and must stay distinguishable rather than
+# collapsing into one generic "unreadable": Apollo's `http_403` (the request was REFUSED,
+# a permanent structural fact — the account's key is not a master key), ZoomInfo's
+# `provider_error` (the request itself ERRORED in transport — an expired mint, a stale
+# cached token, a transient 5xx), and `unrecognized_response_shape` (the request
+# SUCCEEDED and the body could not be parsed — a contract change). Task 1's live probe is
+# what tells ZoomInfo's actual current cause apart from the other two; this module pins
+# the tri-state and the fixtures regardless of what that probe observes.
+
+
+def _balances_from_fixture(monkeypatch, fixture):
+    """Route a `backend_status` fixture through the real `fetch_balances` so these tests
+    exercise the same code path a live status response would, not a hand-built dict."""
+    monkeypatch.setattr(backend_status, "fetch_backend_status", lambda *a, **k: fixture)
+    return cost_guard.fetch_balances(CONFIG)
+
+
+def test_provider_error_and_http_403_are_distinguishable_error_labels(
+    backend_status_unknown_balance, backend_status_zoominfo_provider_error,
+):
+    """The distinction cannot quietly collapse: a refused request and an errored request
+    are different causes with different fixes, so their labels must differ outright."""
+    apollo_row = next(b for b in backend_status_unknown_balance["data"]["balances"]
+                       if b["provider"] == "apollo")
+    zoominfo_row = next(
+        b for b in backend_status_zoominfo_provider_error["data"]["balances"]
+        if b["provider"] == "zoominfo")
+
+    assert apollo_row["error"] == "http_403"
+    assert zoominfo_row["error"] == "provider_error"
+    assert apollo_row["error"] != zoominfo_row["error"]
+
+
+def test_zoominfo_provider_error_compares_to_unknown_carrying_its_own_reason(
+    monkeypatch, rates, backend_status_zoominfo_provider_error,
+):
+    balances = _balances_from_fixture(monkeypatch, backend_status_zoominfo_provider_error)
+    estimate = cost_guard.estimate_batch(10, "companies", ["zoominfo"], rates)
+    verdict = cost_guard.compare(estimate, balances)["zoominfo"]
+
+    assert verdict["verdict"] == "unknown"
+    assert verdict["verdict"] not in {"ok", "insufficient"}
+    assert "provider_error" in verdict["reason"]
+    assert verdict["remaining_credits"] is None
+
+
+def test_zoominfo_provider_error_renders_as_unconfirmed_never_headroom(
+    monkeypatch, rates, backend_status_zoominfo_provider_error,
+):
+    balances = _balances_from_fixture(monkeypatch, backend_status_zoominfo_provider_error)
+    estimate = cost_guard.estimate_batch(10, "companies", ["zoominfo"], rates)
+    verdict = cost_guard.compare(estimate, balances)["zoominfo"]
+
+    rendered = write_grant._headroom(verdict)
+    assert rendered == "unconfirmed"
+    assert rendered not in {"ok", "NOT ENOUGH"}
+    assert not rendered.lstrip("-").isdigit()
+
+
+def test_apollo_http_403_names_the_structural_cause_and_renders_unconfirmed(
+    monkeypatch, rates, backend_status_unknown_balance,
+):
+    balances = _balances_from_fixture(monkeypatch, backend_status_unknown_balance)
+    estimate = cost_guard.estimate_batch(10, "contacts", ["apollo"], rates)
+    verdict = cost_guard.compare(estimate, balances)["apollo"]
+
+    assert verdict["verdict"] == "unknown"
+    assert "http_403" in verdict["reason"]
+    assert write_grant._headroom(verdict) == "unconfirmed"
+
+
+def test_an_unreadable_balance_is_never_a_zero_a_default_or_a_last_known_value(
+    monkeypatch, rates, backend_status_zoominfo_provider_error,
+):
+    """The only readable balance in this fixture is Lusha — ZoomInfo's
+    `remaining_credits` must come back None, never 0 and never a fabricated prior
+    figure."""
+    balances = _balances_from_fixture(monkeypatch, backend_status_zoominfo_provider_error)
+    estimate = cost_guard.estimate_batch(10, "companies", ["zoominfo"], rates)
+    verdict = cost_guard.compare(estimate, balances)["zoominfo"]
+
+    assert verdict["remaining_credits"] is None
+    assert verdict["remaining_credits"] != 0
+
+
+def test_unrecognized_response_shape_is_also_unknown_and_distinct_from_the_other_two(
+    monkeypatch, rates, backend_status_zoominfo_unrecognized_response_shape,
+    backend_status_zoominfo_provider_error, backend_status_unknown_balance,
+):
+    """The third cause — request succeeded, body didn't parse — gets its own fixture and
+    its own reason string, never collapsing into either sibling label."""
+    balances = _balances_from_fixture(
+        monkeypatch, backend_status_zoominfo_unrecognized_response_shape)
+    estimate = cost_guard.estimate_batch(10, "companies", ["zoominfo"], rates)
+    verdict = cost_guard.compare(estimate, balances)["zoominfo"]
+
+    assert verdict["verdict"] == "unknown"
+    assert "unrecognized_response_shape" in verdict["reason"]
+    assert write_grant._headroom(verdict) == "unconfirmed"
+
+    shape_row = next(
+        b for b in backend_status_zoominfo_unrecognized_response_shape["data"]["balances"]
+        if b["provider"] == "zoominfo")
+    error_row = next(
+        b for b in backend_status_zoominfo_provider_error["data"]["balances"]
+        if b["provider"] == "zoominfo")
+    refused_row = next(
+        b for b in backend_status_unknown_balance["data"]["balances"]
+        if b["provider"] == "apollo")
+    assert len({shape_row["error"], error_row["error"], refused_row["error"]}) == 3

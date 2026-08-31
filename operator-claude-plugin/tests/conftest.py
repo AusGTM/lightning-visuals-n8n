@@ -548,6 +548,51 @@ def backend_status_unknown_balance():
 
 
 @pytest.fixture
+def backend_status_zoominfo_provider_error():
+    """ZoomInfo's `provider_error`: the HTTP request itself ERRORED — an expired mint, a
+    stale cached token, or a transient upstream failure with no HTTP status to label it
+    by (`build_cloud_workflows.py:6354-6361`: `error = status ? ("http_" + status) :
+    "provider_error"` — this label fires exactly when `raw.error` is set and no status
+    came back). Distinct in shape from Apollo's `http_403` (the request was REFUSED,
+    carries a status) and from `unrecognized_response_shape` below (the request
+    SUCCEEDED, the body just didn't parse). `configured: true`, `credits: None`,
+    `unreadable: true`, no HTTP status.
+
+    Credential health mirrors `deriveSourceHealth`'s real branch for `status: None`:
+    `state: unknown, reason: no_response` — not `refused`, because a status-less error is
+    "can't tell", not "refused" (backendStatus.js).
+    """
+    return _backend_status(
+        balances=[_balance("lusha", 412),
+                  _balance("zoominfo", None, error="provider_error", status=None)],
+        credential_health=[_health("lusha", "ok"),
+                           _health("zoominfo", "unknown", status=None,
+                                   reason="no_response")],
+        counts=_counts(),
+    )
+
+
+@pytest.fixture
+def backend_status_zoominfo_unrecognized_response_shape():
+    """The third unreadable-balance cause: the request SUCCEEDED (`status=200`) and the
+    body could not be parsed into a credits figure (`extractCredits` returned null,
+    `build_cloud_workflows.py:6354-6361`) — a contract change, not a credential or
+    transport problem. `configured: true`, `credits: None`, `unreadable: true`, status
+    200 present. Credential health mirrors `deriveSourceHealth`'s 2xx-with-no-value
+    branch: `state: unknown, reason: unrecognized_response_shape`.
+    """
+    return _backend_status(
+        balances=[_balance("lusha", 412),
+                  _balance("zoominfo", None, error="unrecognized_response_shape",
+                           status=200)],
+        credential_health=[_health("lusha", "ok"),
+                           _health("zoominfo", "unknown", status=200,
+                                   reason="unrecognized_response_shape")],
+        counts=_counts(),
+    )
+
+
+@pytest.fixture
 def backend_status_unconfigured_provider():
     """The third provider state: never probed at all. Absent from `balances` entirely
     (that node maps over the REQUESTED providers), present in credential_health as
