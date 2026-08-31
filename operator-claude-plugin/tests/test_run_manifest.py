@@ -704,3 +704,53 @@ def test_load_stays_byte_unchanged_a_bare_dict_regardless_of_the_new_load_scoped
     run_manifest.save("run-1", {"row-1": "matched"}, path=target)
     assert run_manifest.load(path=target) == {"row-1": "matched"}
     assert isinstance(run_manifest.load(path=target), dict)
+
+
+# =====================================================================================
+# 57-05 Task 1 (REVIEW-57-M9): `classify_read` — the same four-word probe
+# `written_records.classify_read`/`held_queue.classify_read` carry, over a run-scoped
+# manifest path — `load()`/`load_scoped()`'s degrade-whole return cannot say WHY.
+# =====================================================================================
+
+def test_manifest_classify_read_is_absent_for_no_file(tmp_path):
+    target = tmp_path / "run_manifest-nope.json"
+    assert run_manifest.classify_read("nope", path=target) == run_manifest.ABSENT
+
+
+def test_manifest_classify_read_is_parseable_for_a_good_file(tmp_path):
+    target = tmp_path / "run_manifest-ok.json"
+    run_manifest.save("ok", {"row-1": "matched"}, path=target)
+    assert run_manifest.classify_read("ok", path=target) == run_manifest.PARSEABLE
+
+
+def test_manifest_classify_read_empty_but_well_formed_is_parseable_not_absent(tmp_path):
+    target = tmp_path / "run_manifest-empty.json"
+    run_manifest.save("empty", {}, path=target)
+    assert run_manifest.classify_read("empty", path=target) == run_manifest.PARSEABLE
+
+
+def test_manifest_classify_read_is_anomalous_for_unparseable_json(tmp_path):
+    target = tmp_path / "run_manifest-bad.json"
+    target.write_text("not json at all", encoding="utf-8")
+    assert run_manifest.classify_read("bad", path=target) == run_manifest.ANOMALOUS
+
+
+def test_manifest_classify_read_is_anomalous_for_a_bad_verdict_word(tmp_path):
+    target = tmp_path / "run_manifest-mismatch.json"
+    target.write_text(json.dumps({
+        "run_id": "mismatch", "saved_at": "2026-01-01T00:00:00+00:00",
+        "verdicts": {"row-1": "not_a_real_verdict"},
+    }), encoding="utf-8")
+    assert run_manifest.classify_read("mismatch", path=target) == run_manifest.ANOMALOUS
+
+
+def test_manifest_classify_read_is_another_run_when_the_stored_run_id_differs(tmp_path):
+    target = tmp_path / "run_manifest-real.json"
+    run_manifest.save("the-other-run", {"row-1": "matched"}, path=target)
+    assert run_manifest.classify_read("this-run", path=target) == run_manifest.ANOTHER_RUN
+
+
+def test_manifest_classify_read_never_raises_on_any_input(tmp_path):
+    target = tmp_path / "not-even-a-real-directory" / "run_manifest-x.json"
+    assert run_manifest.classify_read("x", path=target) == run_manifest.ABSENT
+    assert run_manifest.classify_read(None, path=target) == run_manifest.ABSENT

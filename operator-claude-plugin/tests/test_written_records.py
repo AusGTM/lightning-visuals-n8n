@@ -521,3 +521,66 @@ def test_the_per_run_file_is_written_0600_and_is_not_a_dotfile(tmp_path, monkeyp
     assert target.exists()
     assert not target.name.startswith("."), "Phase 23 D-04: must not be a dotfile"
     assert stat.S_IMODE(target.stat().st_mode) == 0o600
+
+
+# ------------------------------------------------------------------------------------
+# 57-05 Task 1 (REVIEW-57-M9): `classify_read` — a SECOND probe over the raw file,
+# mirroring `held_queue.classify_read`'s four-word contract, because `load()`'s return
+# value ([] on absent, [] on malformed) cannot say WHICH of the two happened.
+# ------------------------------------------------------------------------------------
+
+def test_classify_read_is_absent_for_no_file(tmp_path):
+    target = tmp_path / "written_records-nope.json"
+    assert written_records.classify_read("nope", path=target) == written_records.ABSENT
+
+
+def test_classify_read_is_parseable_for_a_good_file():
+    written_records.classify_item  # sanity import touch
+    target_run = "run-ok"
+    import tempfile
+    from pathlib import Path
+    with tempfile.TemporaryDirectory() as d:
+        target = Path(d) / f"written_records-{target_run}.json"
+        target.write_text(json.dumps({
+            "run_id": target_run, "saved_at": "2026-01-01T00:00:00+00:00", "entries": [],
+        }), encoding="utf-8")
+        assert written_records.classify_read(target_run, path=target) == written_records.PARSEABLE
+
+
+def test_classify_read_empty_but_well_formed_is_parseable_not_absent(tmp_path):
+    """The distinction the report needs and load() cannot make: an empty entries list is
+    a legitimate, readable document, never treated the same as a missing file."""
+    target = tmp_path / "written_records-empty.json"
+    target.write_text(json.dumps({
+        "run_id": "empty", "saved_at": "2026-01-01T00:00:00+00:00", "entries": [],
+    }), encoding="utf-8")
+    assert written_records.classify_read("empty", path=target) == written_records.PARSEABLE
+
+
+def test_classify_read_is_anomalous_for_unparseable_json(tmp_path):
+    target = tmp_path / "written_records-bad.json"
+    target.write_text("not json at all", encoding="utf-8")
+    assert written_records.classify_read("bad", path=target) == written_records.ANOMALOUS
+
+
+def test_classify_read_is_anomalous_when_entries_is_not_a_list(tmp_path):
+    target = tmp_path / "written_records-mismatch.json"
+    target.write_text(json.dumps({
+        "run_id": "mismatch", "saved_at": "2026-01-01T00:00:00+00:00", "entries": "nope",
+    }), encoding="utf-8")
+    assert written_records.classify_read("mismatch", path=target) == written_records.ANOMALOUS
+
+
+def test_classify_read_is_another_run_when_the_stored_run_id_differs(tmp_path):
+    target = tmp_path / "written_records-real.json"
+    target.write_text(json.dumps({
+        "run_id": "the-other-run", "saved_at": "2026-01-01T00:00:00+00:00", "entries": [],
+    }), encoding="utf-8")
+    assert written_records.classify_read("this-run", path=target) == written_records.ANOTHER_RUN
+
+
+def test_classify_read_never_raises_on_any_input(tmp_path):
+    target = tmp_path / "not-even-a-real-directory" / "written_records-x.json"
+    assert written_records.classify_read("x", path=target) == written_records.ABSENT
+    assert written_records.classify_read(None, path=target) == written_records.ABSENT
+    assert written_records.classify_read({"unhashable": True}, path=target) == written_records.ABSENT
