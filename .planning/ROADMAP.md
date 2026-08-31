@@ -175,7 +175,7 @@ variable), and a design that runs the provider waterfall twice per written recor
       Plans:
 
       - [x] 57-01-PLAN.md — TRACER: the ceiling refuses before start, stops PRE-SEND mid-run, and closes the grant on every exit; every dispatch path under the ceiling; D-53-02's supersession recorded (RUN-05)
-      - [ ] 57-02-PLAN.md — one outcome vocabulary across both client surfaces via a pure mapping, plus the `row_id` join key as far as it reaches (AFTER-03)
+      - [x] 57-02-PLAN.md — one outcome vocabulary across both client surfaces via a pure mapping, plus the `row_id` join key as far as it reaches (AFTER-03)
       - [ ] 57-03-PLAN.md — a lossless `failed_batch`, auto-split and the remainder queue: work queued, authority never (RUN-05, D-57-05 checkpoint)
       - [x] 57-04-PLAN.md — provider-balance blind spots: a disarmed ZoomInfo re-probe with its gate proved by zero network calls, Apollo disclosed as structural `http_403` (G-4). Live verdict: `readable` (9381 credits) — G-4's ZoomInfo half closed by observation, no code fix needed; G-4's disclosure half still lands in 57-05.
       - [ ] 57-05-PLAN.md — the one end-of-run report joining all five durable stores, naming contradictions rather than resolving them (AFTER-01, AFTER-03, G-4)
@@ -514,7 +514,7 @@ GRANT-02/GRANT-04's `ceiling_breach` close reason still lacks. Requirements live
 (`extraction.strip_row_id`), so that leg's rows return unjoinable. They are kept, rendered as
 UNJOINABLE and named in the report's `gaps` rather than dropped or presented as a completed join.
 
-**Plans**: 2/5 plans executed
+**Plans**: 3/5 plans executed
 57-04 (the ZoomInfo balance probe) · wave 2: 57-02 (the outcome vocabulary and `row_id`),
 57-03 (the remainder queue and the split offer) · wave 3: 57-05 (the end-of-run report and the
 phase gate).
@@ -785,7 +785,7 @@ silently inherit Phase 51's placeholder behavior without a decision.
 | 54. Single-pass Armed Dispatch | v1.1 | 7/7 | Complete (verified) | 2026-08-27 |
 | 55. Async Run — Submit, Poll, Resume | v1.1 | — | Absorbed into Phase 61 (D-61-08) | 2026-08-30 |
 | 56. The Unattended Pair Pipeline | v1.1 | — | Absorbed into Phase 61 (D-61-08) | 2026-08-30 |
-| 57. Ceilings, Refusal-before-start, Post-run Proof | v1.1 | 2/5 | In Progress|  |
+| 57. Ceilings, Refusal-before-start, Post-run Proof | v1.1 | 3/5 | In Progress|  |
 | 58. Take What the Operator Actually Has | v1.1 | 6/6 | Complete (verified) | 2026-08-26 |
 | 59. Frictionless Write Path | v1.1 | 9/9 | Complete (verified 18/18, after gap closure) | 2026-08-29 |
 | 60. Review-lane Authority | v1.1 | 0/TBD | Split from 59 (operator, 2026-08-28) | - |
