@@ -140,3 +140,59 @@ Verdict `readable`, 9381 raw ZoomInfo credits, `lusha_delta` 0, instance
 `alexherman.app.n8n.cloud`, checked 2026-08-31T07:15:27Z. G-4 closure-table row: CLOSED for the
 ZoomInfo half. The `provider_error` from the 2026-08-25 walk is gone and needed no fix — the
 suspected missing `Accept` header was already fixed in current code.
+
+### 57-05 Task 4 (phase gate) — option-a selected — recorded by this plan, its own wave-3 writer
+
+**(a) The deploy — executed.** Dry run first, under `--only wf_contact_ingest_cloud.json`,
+proved the filter live: `Workflows to create: []`, `Workflows to update: ['LV Contact Ingest
+(Cloud template)']` — exactly one workflow, five without the flag (pinned offline by the same
+plan's Task 4 prep, `0098ff6`). Deploy: `DRY_RUN=false ALLOW_N8N_DEPLOY=true
+.venv/bin/python scripts/deploy_n8n_workflows.py --only wf_contact_ingest_cloud.json` →
+`updated workflow LV Contact Ingest (Cloud template) (200)`. Read-back #1 (stored): workflow id
+`AwbBeShdPgV48eiY`, 29 nodes, `active: true`, `Build Ingest Response` present, `row_id` present
+in the stored node, all three write gates present (`HubSpot Update Write Gate`, `HubSpot Create
+Write Gate`, `HubSpot Associate Company Write Gate`), refuse-by-default. Bounced — POST
+deactivate → `(200, active=False)`, POST activate → `(200, active=True)` — because a bare PUT
+never reloads a running workflow (CLAUDE.md, project memory). Read-back #2 (post-bounce):
+`active=True`, 29 nodes, `row_id` present, 3 write gates. The fix is live, not merely stored.
+Nothing was armed; no HubSpot record was written; no provider credit was spent.
+
+**Methodological correction worth keeping.** The first read-back scanned for stored
+`allow*`/`armed`/`dry_run` booleans and found none — which would have reported "no
+write-safety flags found" had it stood. Wrong check: these workflows gate writes through three
+Code nodes reading a request-scoped allowlist, not through stored booleans. Re-verified against
+the gate nodes directly. A read-back that looks for the wrong shape of evidence reads as
+absence, and absence reads as safe — recorded here so the next probe does not repeat it.
+
+**Operator selected option-a**, not option-b: deploy the regenerated workflow, and authorise a
+SMALL first live batch under an operator-supervised run, rather than the first UNATTENDED
+credit-spending batch. Conditions of the authorisation, recorded as an authorisation for a run
+executed OUTSIDE this phase, at a time of the operator's choosing:
+
+- small record set, operator-supervised, not unattended;
+- the operator reads the end-of-run report on that run first — the same precondition the
+  plan's own constraint list sets before any UNATTENDED run ("not without the operator having
+  read the end-of-run report format at least once"); D-61-08's unattended gate stays SHUT;
+- cost quoted from `write_grant.envelope()` over the actual proposed record set at the time of
+  that run — no record set is named here, so no figure is invented.
+
+**Facts carried into the authorisation, unvarnished:**
+
+- Ceiling: `sampled: true` via `listing_exhausted`, allowance 2500, spent 134, remaining 2366,
+  span ~159.9h, `covers_full_window` FALSE — not `CEILING_UNKNOWN`, which is why option-b was
+  even selectable (it was not selected).
+- Balances: ZoomInfo readable (9381 credits, verdict above). Apollo a permanent structural
+  `http_403` blind spot. Lusha is NOT established readable by this phase's own artifacts —
+  project memory records it live-validated in an earlier phase, predating this phase's G-4 work
+  and not re-verified here; reported as unconfirmed-by-this-phase, not asserted readable.
+- Three residuals disclosed, not closed: the retention caveat (sampled spend is a LOWER bound,
+  headroom an UPPER bound); the ceiling is a local point-in-time control while the allowance is
+  instance-wide and shared with other sessions, schedulers and grants; a crash mid-dispatch
+  writes nothing to the remainder queue, so an empty remainder is not a "nothing was lost"
+  guarantee.
+- AFTER-01 ships PARTIAL: the pair pipeline's final ingest leg strips `row_id`
+  (`extraction.strip_row_id`), so its rows join by `hs_object_id` where one exists and are
+  otherwise kept and rendered UNJOINABLE, named in the report's own `gaps`.
+
+No task in this plan armed a write, dispatched an enrichment, or spent a provider credit. The
+only live action was the disarmed deploy, bounce and read-back above.
