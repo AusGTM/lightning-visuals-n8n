@@ -40,11 +40,20 @@ _TIER_NONE = "none"
 # third state" asymmetry n8n/code/matchProposal.js's own isReturnOnly() uses.
 
 
-# Phase 61 Plan 04 Task 1 (REVIEW-05): the only version this parser knows. A response
-# item stamped with any other value (or none) parses as UNPARSEABLE_OUTCOME — an
-# unrecognised contract is never assumed compatible.
-OUTCOME_CONTRACT_VERSION = 1
-_KNOWN_OUTCOME_CONTRACT_VERSIONS = frozenset({OUTCOME_CONTRACT_VERSION})
+# Phase 61 Plan 04 Task 1 (REVIEW-05): the versions this parser knows. A response item
+# stamped with any other value (or none) parses as UNPARSEABLE_OUTCOME — an unrecognised
+# contract is never assumed compatible.
+#
+# Phase 62 Plan 04 (D-62-16): 2 added — scripts/build_cloud_workflows.py's
+# ENRICH_BUILD_RESPONSE now stamps `num_associated_contacts` (additive) and bumped its
+# own OUTCOME_CONTRACT_VERSION to 2. WIDENED here rather than moved: this regenerated
+# workflow JSON is not deployed by this plan, so the currently-live backend still
+# stamps 1 until an operator deploys it — the parser must accept both regardless of
+# deploy order. `Outcome` itself carries no new field (num_associated_contacts is read
+# directly off raw response rows by suggest_contacts.eligibility(), never through this
+# dataclass), so nothing else here needs to change.
+OUTCOME_CONTRACT_VERSION = 2
+_KNOWN_OUTCOME_CONTRACT_VERSIONS = frozenset({1, OUTCOME_CONTRACT_VERSION})
 
 
 @dataclass(frozen=True)

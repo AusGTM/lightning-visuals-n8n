@@ -2153,7 +2153,11 @@ HS_CO_SEARCH_BODY_EXPR = (
     '"lv_org_type","lv_produces_content","lv_content_type","lv_is_hardware_vendor",'
     '"lv_is_gambling_operator","lv_icp_tier","lv_icp_fit_score","lv_anti_icp_flag",'
     '"lv_enrichment_provenance",'
-    '"lv_org_type_verified_at","lv_produces_content_verified_at","lusha_company_id"], '
+    '"lv_org_type_verified_at","lv_produces_content_verified_at","lusha_company_id",'
+    # Phase 62 Plan 04 (D-62-16): a native, read-only HubSpot rollup — confirmed
+    # present in every committed portal-schema baseline. A read-field addition, not
+    # a write; the suggestion round's zero-associated-contacts check reads this.
+    '"num_associated_contacts"], '
     'limit: 5 }) }}'
 )
 
@@ -2161,6 +2165,19 @@ HS_CO_SEARCH_BODY_EXPR = (
 # lookup_failed tagging + hs_object_id preservation; see that constant's comment.
 ENRICH_ADAPT_CO_SEARCH = r"""// Adapt Company Search -> existingRecord — companies branch.
 // Same contract as the contacts Adapt Search: per-row, same order, 0 results => {} => CREATE.
+// Phase 62 Plan 04 (D-62-16): num_associated_contacts is carried as a TOP-LEVEL row key,
+// never nested only inside existingRecord — this repo has a recorded suspicion that HTTP
+// hops strip existingRecord on this lane, and a top-level key that degrades to null is the
+// honest failure mode the plugin's eligibility tri-state already handles. Coerced to a
+// number; stamped null (never omitted) on a failed lookup or an unparseable/absent value —
+// HubSpot returns property values as strings, and a zero-hit search never reaches the
+// coercion at all (existingRecord stays {}), so it stamps null too, not the number 0.
+function _numAssociatedContacts(existingRecord) {
+  const raw = existingRecord && existingRecord.num_associated_contacts;
+  if (raw === undefined || raw === null || raw === "") return null;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : null;
+}
 const rows = $('Build Company Identity').all();
 const search = $('HubSpot Company Search').all();
 return rows.map((it, i) => {
@@ -2168,7 +2185,7 @@ return rows.map((it, i) => {
   const item = search[i];
   const failed = !item || item.error || (item.json && item.json.error);
   if (failed) {
-    return { json: { ...row, existingRecord: {}, lookup_failed: true } };
+    return { json: { ...row, existingRecord: {}, lookup_failed: true, num_associated_contacts: null } };
   }
   const res = item.json || {};
   let existingRecord = {};
@@ -2180,7 +2197,8 @@ return rows.map((it, i) => {
   } else if (res.properties) {
     existingRecord = { ...res.properties, hs_object_id: res.id };                // single object
   }
-  return { json: { ...row, existingRecord, lookup_failed: false } };
+  return { json: { ...row, existingRecord, lookup_failed: false,
+    num_associated_contacts: _numAssociatedContacts(existingRecord) } };
 });
 """
 
@@ -4715,7 +4733,12 @@ function _agreementByField(scored) {
   }
   return out;
 }
-const OUTCOME_CONTRACT_VERSION = 1;
+// Phase 62 Plan 04 (D-62-16): version bumped 1 -> 2 — num_associated_contacts is a NEW
+// field added to the outcome projection below (additive, no existing field removed or
+// reshaped). The client parser (preingest.py) widens its known-version set in the same
+// commit rather than moving it, since the currently-deployed backend still stamps 1
+// until this regenerated JSON is deployed — either deploy order must keep parsing.
+const OUTCOME_CONTRACT_VERSION = 2;
 return $input.all().map((item) => {
   const row = item.json || {};
   const match = row.match || null;
@@ -4731,6 +4754,10 @@ return $input.all().map((item) => {
     provider_agreement: row.scored ? _agreementByField(row.scored) : null,
     material_conflicts: row.material_conflicts || null,
     judge_adjudicated_fields: row.judge_confidence_by_field || null,
+    // D-62-16: absence stamped explicitly (null), never a missing key, so a company
+    // row that never went through the search (e.g. contacts-only requests) and a
+    // company genuinely unreadable cannot look alike to a parser.
+    num_associated_contacts: row.num_associated_contacts ?? null,
   }};
 });
 """
@@ -4973,6 +5000,11 @@ return rows.map((it, i) => {
 # guard that is supposed to protect a populated field silently permits overwriting it
 # (same class of defect WR-01/VETO-01 already fixed for lv_sponsorship_reliant/
 # lv_country_region_normalized above). `numberofemployees` was already present.
+# Phase 62 Plan 04 (D-62-16): num_associated_contacts appended — a native, read-only
+# HubSpot rollup (confirmed present in every committed portal-schema baseline), never
+# a write. This is the property list build_enrichment_cloud() ACTUALLY feeds its
+# "HubSpot Company Search" and "HubSpot Company Fetch By Id" nodes (HS_CO_SEARCH_BODY_EXPR
+# above is a separate constant, used by build_enrichment_local_live() only).
 ENRICH_COMPANY_SEARCH_PROPERTIES_CSV = (
     "name,domain,industry,annualrevenue,"
     "numberofemployees,hs_object_id,lv_org_type,"
@@ -4980,7 +5012,8 @@ ENRICH_COMPANY_SEARCH_PROPERTIES_CSV = (
     "lv_is_hardware_vendor,lv_is_gambling_operator,"
     "lv_country_region_normalized,country,city,"
     "lv_enrichment_provenance,lv_org_type_verified_at,"
-    "lv_produces_content_verified_at,lusha_company_id"
+    "lv_produces_content_verified_at,lusha_company_id,"
+    "num_associated_contacts"
 )
 
 ENRICH_ADAPT_FETCH_BY_ID_COMPANY = inline("adaptFetchById.js") + r"""
