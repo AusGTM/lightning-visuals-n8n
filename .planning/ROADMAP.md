@@ -458,7 +458,7 @@ variable), and a design that runs the provider waterfall twice per written recor
       **Plans:** 5 plans (planned 2026-09-02)
 
       Plans:
-      - [ ] 62-01-PLAN.md — the suggestion round's engine: eligibility, ladder discovery, role
+      - [x] 62-01-PLAN.md — the suggestion round's engine: eligibility, ladder discovery, role
             filter, row synthesis into `extraction.validate()` (wave 1, tracer-led)
       - [ ] 62-02-PLAN.md — role vocabulary from the portal's own job titles, with the disclosed
             un-evidenced fallback, and the SUGGEST-03 / ROADMAP amendment (wave 2)

@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Unattended Session Runs
-current_phase: 60
-current_phase_name: Review-lane authority
+current_phase: 62
+current_phase_name: Suggest the contacts nobody named
 status: complete
-stopped_at: Completed 60-04-PLAN.md (Phase 60 review-lane-authority all 4 plans complete)
-last_updated: "2026-09-01T07:42:06.393Z"
-last_activity: 2026-09-01
+stopped_at: Completed 62-01-PLAN.md (suggest_contacts engine, tracer-led, 24 tests)
+last_updated: "2026-09-01T22:39:28.836Z"
+last_activity: 2026-09-02
+state_head: 79d1ada614e698df502599ab9fbe7afbd3583198
 progress:
-  total_phases: 8
-  completed_phases: 7
-  total_plans: 45
-  completed_plans: 44
-  percent: 88
-state_head: 7d0d72e4638db6cc32de405811fd2e3a1284385b
+  total_phases: 9
+  completed_phases: 6
+  total_plans: 49
+  completed_plans: 45
+  percent: 67
 last_activity_desc: "**Phase 61 complete and verified (12/12)**; backend deployed and"
 ---
 
@@ -169,23 +169,26 @@ predating the window. VETO-03 bar still 0.
 
 ## Current Position
 
-Phase: 60 (Review-lane authority) — EXECUTING, Plan 01 of 4 complete (Plan 02 next).
-**60-01 outcome (2026-09-01):** "review" is now a third grantable lane end to end — the
-  tracer proved plan/open/arm/decision/disarm through `n8n_arming.arm_for_review` and
-  `write_grant.authorize_send(lane="review")`, with no shell environment variable read
-  anywhere. `ALLOW_REVIEW_SUBMIT`/`submit_enabled()` retired from `review_decision.py`.
-  `n8n_arming.disarm` rebuilt to derive its targets AND node allowlist from what the
-  fetched workflow actually declares (closes cross-AI review MEDIUM-2/LOW-5 in the same
-  commit). No workflow JSON touched; nothing armed, nothing deployed. Full record:
-  `.planning/phases/60-review-lane-authority/60-01-SUMMARY.md`.
-Next: **60-02** (preflight guardrails: widen `WRITE_ENABLING_FLAGS`/`read_live_write_state`,
-  the batch-window lifecycle). Also open: **Phase 57** — ceilings, refusal-before-start,
-  post-run proof. It gates the first live unattended, credit-spending batch (D-61-08),
-  which has NOT run.
-Armed state: nothing armed. Phase 61's live exercise was DISARMED throughout
-  (executions `12040`, `12044`–`12047`); 60-01 touched only local test fixtures and code.
-Suites at 60-01 close: root python 3815 passed / 154 skipped; operator-claude-plugin
-  2145 passed / 5 skipped; node 848 pass / 0 fail.
+Phase: 62 (Suggest the contacts nobody named) — EXECUTING
+**62-01 outcome (2026-09-02):** the suggestion round's engine, tracer-led — `suggest_contacts.py`
+  (`eligibility`, `discovery_plan`, `company_budget`, `next_candidates`, `no_candidates`,
+  `select_people`, `synthesise_rows`, `round_artifact`, `partition_for_dispatch`) and
+  `role_classify.py` (`classify_title`), pure orchestration with no HTTP client, no model
+  call, no filesystem write. One company with zero associated contacts, discovered via the
+  existing sitemap ladder (`url_fallback.py`, called never re-implemented), role-filtered,
+  deduped against known contacts (D-62-18, pre-filter half), and synthesised into a row
+  `extraction.validate()` accepts on identity group 2 — proved end to end in one offline
+  tracer test. 24 new tests, 3 tasks each RED (failing test) then GREEN (implementation).
+  `SUGGEST-01`/`SUGGEST-04` stay blocked (shared with sibling plans 62-04/62-05, not yet
+  summarized). Full record: `.planning/phases/62-suggest-the-contacts-nobody-named/62-01-SUMMARY.md`.
+Next: **62-02** (role vocabulary — Haiku clustering of live `jobtitle` values, cached —
+  supplies the `family_list`/`chosen_families` this plan's functions already accept as
+  parameters). Also open: **Phase 57** — ceilings, refusal-before-start, post-run proof. It
+  gates the first live unattended, credit-spending batch (D-61-08), which has NOT run.
+Armed state: nothing armed. 62-01 touched only local Python source and tests, no network,
+  no HubSpot credentials, no workflow JSON.
+Suites at 62-01 close: operator-claude-plugin 2206 passed / 5 skipped (root python and node
+  suites unaffected — this plan touches operator-claude-plugin/ only).
 
 ### Retained history — Phase 47.5 (v0.9, 2026-08-12)
 
@@ -267,7 +270,7 @@ exactly what B and C now do): .planning/phases/47.5-veto-recompute-path/47.5-CON
 **Standing order:** COVER-01/COVER-02 stay open for Phase 48 (four records ended with no
 lv_org_type: Editix, Jam TV, Waikato, The Rumble). Not a 47.5 workstream.
 
-Last activity: 2026-09-01
+Last activity: 2026-09-02
   disarmed-proven. Next: Phase 57.
 
 *Retained history — Phase 47 (v0.9). Previous status: Executing — Anthropic credit restored,
@@ -282,14 +285,14 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [██████████] 98% — v1.1: 53/54/58/59/61 complete; **57 in progress (Plan 01 done,
+Progress: [███████░░░] 67% — v1.1: 53/54/58/59/61 complete; **57 in progress (Plan 01 done,
 RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The old
 `97% (v0.9 phase 47.5 of 46-49)` bar was a v0.9 figure and is superseded.)
 
 ## Session
 
-**Last session:** 2026-09-01T07:42:06.383Z
-**Stopped at:** Completed 60-04-PLAN.md (Phase 60 review-lane-authority all 4 plans complete)
+**Last session:** 2026-09-01T22:39:28.522Z
+**Stopped at:** Completed 62-01-PLAN.md (suggest_contacts engine, tracer-led, 24 tests)
 **Resume file:** None
 
 ## Performance Metrics
@@ -398,6 +401,7 @@ RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The 
 | Phase 60 P02 | 14min | 2 tasks | 6 files |
 | Phase 60 P03 | ~11min | 2 tasks | 4 files |
 | Phase 60 P04 | ~15min | 3 tasks | 9 files |
+| Phase 62 P01 | 35min | 3 tasks | 3 files |
 
 ## Decisions
 
@@ -490,6 +494,7 @@ RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The 
 - [Phase 60]: preflight_before_send narrowed on the review lane only (MEDIUM-1): liveness excludes the review flag, derived from WRITE_ENABLING_FLAGS, so the batch window's own arm cannot trip its own pre-flight; a live dispatch flag on the review workflow still closes the grant.
 - [Phase 60]: D-60-08: a review decision now lands in the run's written_records-<run_id>.json artifact via a new classify_review_item mapping the review endpoint's seven outcome words onto the existing eight-word vocabulary; the append is gated on result["available"] (not merely run_id is not None) so a raising/unreachable POST leaves no artifact entry, matching dispatch.py's raise-before-append and chunking.dispatch_plan's DispatchError-continue precedent — resolved via advisor consult after the plan's <action> and <behavior> text diverged on this point.
 - [Phase ?]: Phase 60 sealed: the review lane is grantable end-to-end, operator-facing docs corrected, plugin released as v0.35.0 (push and marketplace-clone refresh still the operator's own action).
+- [Phase 62]: select_people's dedupe pre-filter runs before the role filter; the D-62-18 already-associated check never even reaches role classification
 
 ### Roadmap Evolution
 
