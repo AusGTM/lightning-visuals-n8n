@@ -35,11 +35,19 @@ REVIEW_WORKFLOW_ID = "wf-review-1"
 RECORD_ID = "12345"
 
 
-def _base_workflow(record_writes='"false"', create='"false"', ids='""', domains='""'):
+# Phase 60 (D-60-01/D-60-05 widening): a fifth constant, `ALLOW_HUBSPOT_REVIEW_WRITES`,
+# matches the deployed shape every real workflow using the shared write-safety gate
+# declares (60-RESEARCH.md). Omitting it makes every disarmed-backend test that drives
+# `plan_grant`/guardrail A through this fixture read as UNREADABLE rather than disarmed —
+# the failure mode is loud on purpose; fix by adding the constant, never by narrowing the
+# guardrail's widened read.
+def _base_workflow(record_writes='"false"', create='"false"', ids='""', domains='""',
+                   review_writes='"false"'):
     """Same miniature two-gate shape `test_control_arming.py::_base_workflow` uses —
     declarations inside jsCode, plus a node with no code at all."""
     gate = (f"const ALLOW_HUBSPOT_RECORD_WRITES = {record_writes};\n"
             f"const ALLOW_HUBSPOT_CREATE = {create};\n"
+            f"const ALLOW_HUBSPOT_REVIEW_WRITES = {review_writes};\n"
             f"const TEST_RECORD_IDS = {ids};\n"
             f"const TEST_RECORD_DOMAINS = {domains};\n"
             "function _writeSafetyAllows() { return false; }\n")

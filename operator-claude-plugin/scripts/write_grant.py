@@ -1572,11 +1572,21 @@ def record_dispatch_outcome(grant, outcome, config=None, *, disarm=None, transpo
 #   WAY. `n8n_arming.disarm` is ungated by design, so this adds no authority anywhere.
 # =========================================================================================
 
-# The two flags that actually enable a write. TEST_RECORD_IDS / TEST_RECORD_DOMAINS bound a
+# The flags that actually enable a write. TEST_RECORD_IDS / TEST_RECORD_DOMAINS bound a
 # write that is already enabled; they cannot enable one on their own (the deployed
 # `_writeSafetyAllows` denies everything on an empty allowlist), so they are REPORTED by
 # guardrail A rather than treated as an armed state.
-WRITE_ENABLING_FLAGS = ("ALLOW_HUBSPOT_RECORD_WRITES", "ALLOW_HUBSPOT_CREATE")
+#
+# D-60-01 CONSEQUENCE (2026-09-01): review became grantable (LANES above), so a stuck-open
+# review authorization is now exactly the kind of state guardrail A exists to find — and a
+# two-flag tuple was structurally unable to find it. `"ALLOW_HUBSPOT_REVIEW_WRITES"` is
+# APPENDED LAST, never inserted or reordered: `_live_write_faults` builds `live_flags` by
+# iterating this tuple in order, and an existing test
+# (`test_an_open_over_a_live_armed_backend_refuses_and_names_what_it_found`) asserts that
+# list exactly as `["ALLOW_HUBSPOT_RECORD_WRITES", "ALLOW_HUBSPOT_CREATE"]` when the review
+# flag reads disabled. Order here is load-bearing.
+WRITE_ENABLING_FLAGS = ("ALLOW_HUBSPOT_RECORD_WRITES", "ALLOW_HUBSPOT_CREATE",
+                        "ALLOW_HUBSPOT_REVIEW_WRITES")
 
 CLOSED_DISARM_UNCONFIRMED = "two_consecutive_disarm_failures"
 CLOSED_WRITES_STILL_LIVE = "writes_still_live_at_next_send"
@@ -1595,8 +1605,13 @@ def _enabled(value):
 def read_live_write_state(config, workflow_ids, transport=None):
     """What the LIVE workflows say about writes right now, one read per covered lane.
 
-    Reads through `n8n_read.get_workflow` + `n8n_read.read_write_safety` over
-    `n8n_arming.DISPATCH_FLAGS` — the shipped reader, never a second declaration regex.
+    Reads through `n8n_read.get_workflow` + `n8n_read.read_write_safety` over ALL FIVE
+    `n8n_arming.OVERLAYABLE_FLAGS` — the shipped reader, never a second declaration regex.
+    Uniform per lane, not lane-keyed (D-60-01 consequence, 2026-09-01): every deployed cloud
+    workflow built from the shared write-safety gate declares all five constants regardless
+    of which ones it branches on — verified against the committed enrichment, contacts and
+    review workflow JSON — so reading all five on every lane is not overreach onto lanes
+    that predate review, it matches deployed reality on lanes that existed before it too.
 
     This is NOT a call into `status.describe_workflow`, and that is not duplication:
     `describe_workflow` reads only two of the four dispatch flags and returns no
@@ -1619,7 +1634,7 @@ def read_live_write_state(config, workflow_ids, transport=None):
 
         flags = {}
         disagreements = {}
-        for flag in n8n_arming.DISPATCH_FLAGS:
+        for flag in sorted(n8n_arming.OVERLAYABLE_FLAGS):
             reading = n8n_read.read_write_safety(body, flag)
             flags[flag] = reading.get("value")
             if reading.get("disagreement"):
@@ -1683,7 +1698,7 @@ def guardrail_a(config, workflow_ids, transport=None):
             f"[{lane}] {fault.get('workflow_name') or 'unnamed workflow'} "
             f"({fault.get('workflow_id')}): {'; '.join(fault['reasons'])}. "
             f"Flags read: "
-            f"{', '.join(f'{flag}={flags.get(flag)!r}' for flag in n8n_arming.DISPATCH_FLAGS)}."
+            f"{', '.join(f'{flag}={flags.get(flag)!r}' for flag in sorted(n8n_arming.OVERLAYABLE_FLAGS))}."
             f" Records currently allowlisted: "
             f"ids={flags.get('TEST_RECORD_IDS')!r}, "
             f"domains={flags.get('TEST_RECORD_DOMAINS')!r}.")

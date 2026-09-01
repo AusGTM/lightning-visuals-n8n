@@ -1187,10 +1187,16 @@ WORKFLOW_ID = "wf-enrichment-1"
 RECORD_ID = "12345"
 
 
-def _base_workflow(record_writes='"false"', create='"false"', ids='""', domains='""'):
+# Phase 60 (D-60-01/D-60-05 widening): the fifth constant matches the deployed shape —
+# see `test_write_grant.py::_base_workflow`'s identical comment. Omitting it here would
+# make every fixture that drives `plan_grant`/guardrail A through this helper read as
+# UNREADABLE rather than disarmed.
+def _base_workflow(record_writes='"false"', create='"false"', ids='""', domains='""',
+                   review_writes='"false"'):
     """Same miniature two-gate shape test_write_grant.py's own helper uses."""
     gate = (f"const ALLOW_HUBSPOT_RECORD_WRITES = {record_writes};\n"
             f"const ALLOW_HUBSPOT_CREATE = {create};\n"
+            f"const ALLOW_HUBSPOT_REVIEW_WRITES = {review_writes};\n"
             f"const TEST_RECORD_IDS = {ids};\n"
             f"const TEST_RECORD_DOMAINS = {domains};\n"
             "function _writeSafetyAllows() { return false; }\n")

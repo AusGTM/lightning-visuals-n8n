@@ -34,20 +34,30 @@ CONTACTS_WORKFLOW_ID = "wf-contacts-1"
 RECORD_ID = "12345"
 
 
-def _gate(record_writes='"false"', create='"false"', ids='""', domains='""'):
+# Phase 60 (D-60-01/D-60-05 widening): `_gate()`'s fifth constant matches the deployed
+# shape — every deployed cloud workflow using the shared write-safety gate declares all
+# five OVERLAYABLE_FLAGS regardless of which ones it branches on (60-RESEARCH.md, verified
+# against the committed workflow JSON). Omitting it makes every disarmed-backend test read
+# as UNREADABLE ("its write-safety state could not be read at all") rather than disarmed —
+# a loud, obvious failure. If you see that message on a test that is supposed to proceed,
+# the fix is to add the missing constant to the fixture, never to narrow the guardrail's
+# widened read back down to dodge it.
+def _gate(record_writes='"false"', create='"false"', ids='""', domains='""',
+          review_writes='"false"'):
     return (f"const ALLOW_HUBSPOT_RECORD_WRITES = {record_writes};\n"
             f"const ALLOW_HUBSPOT_CREATE = {create};\n"
+            f"const ALLOW_HUBSPOT_REVIEW_WRITES = {review_writes};\n"
             f"const TEST_RECORD_IDS = {ids};\n"
             f"const TEST_RECORD_DOMAINS = {domains};\n"
             "function _writeSafetyAllows() { return false; }\n")
 
 
 def _workflow(record_writes='"false"', create='"false"', ids='""', domains='""',
-              name=None, second_gate=None):
+              name=None, second_gate=None, review_writes='"false"'):
     """Two declaring nodes, as the deployed workflows have. `second_gate` lets a test make
     them DISAGREE, which is a real desync shape (a partial deploy or a hand edit in the
     n8n UI) and must never be reported as a guess."""
-    first = _gate(record_writes, create, ids, domains)
+    first = _gate(record_writes, create, ids, domains, review_writes)
     return {
         "id": WORKFLOW_ID,
         "name": name or write_grant.LANES["enrichment"],
@@ -241,6 +251,88 @@ def test_read_live_write_state_uses_the_shipped_reader_not_a_second_regex():
     source = inspect.getsource(write_grant.read_live_write_state)
     assert "n8n_read.read_write_safety" in source
     assert "re.compile" not in source
+
+
+# =========================================================================================
+# Phase 60, Task 1 — Guardrail A widened to see a stuck-open review authorization
+# (D-60-01 consequence: review is now grantable, so a review flag left live by a crashed
+# prior session is exactly the state D-53-03 built this guardrail to catch).
+# =========================================================================================
+
+def test_a_stuck_open_review_flag_refuses_the_open_and_names_it(
+        granting_config, stub_module_transport_factory):
+    """Behavior 1: a workflow whose gate declares ALLOW_HUBSPOT_REVIEW_WRITES enabled while
+    both dispatch booleans read disabled REFUSES the open, and the refusal names the review
+    flag and the allowlist currently in force."""
+    dirty = _workflow(review_writes='"true"', ids='"9999,8888"', domains='"already.example"')
+    transport = stub_module_transport_factory([_workflow_list(), _executions_page(), dirty])
+
+    result = _plan(granting_config, transport)
+
+    assert result["outcome"] == write_grant.REFUSED
+    assert "ALLOW_HUBSPOT_REVIEW_WRITES reads enabled" in result["detail"]
+    assert result["faults"]["enrichment"]["live_flags"] == ["ALLOW_HUBSPOT_REVIEW_WRITES"]
+    assert "9999,8888" in result["detail"]
+    assert "already.example" in result["detail"]
+
+
+def test_the_armed_backend_refusal_still_names_only_the_two_dispatch_flags(
+        granting_config, stub_module_transport_factory):
+    """Behavior 2: the widening must not reorder or pollute the pre-existing armed-backend
+    refusal. `test_an_open_over_a_live_armed_backend_refuses_and_names_what_it_found` (above
+    this section) already pins this with the un-widened backend
+    (`review_writes` stays at its disarmed default); this test re-asserts it explicitly as
+    the Task 1 behavior it now is, so a reader looking for Behavior 2 finds it named."""
+    transport = stub_module_transport_factory([_workflow_list(), _executions_page(), _armed_workflow()])
+
+    result = _plan(granting_config, transport)
+
+    assert result["outcome"] == write_grant.REFUSED
+    assert result["faults"]["enrichment"]["live_flags"] == [
+        "ALLOW_HUBSPOT_RECORD_WRITES", "ALLOW_HUBSPOT_CREATE"]
+    assert "ALLOW_HUBSPOT_REVIEW_WRITES" not in result["faults"]["enrichment"]["live_flags"]
+
+
+def test_a_workflow_declaring_only_the_four_dispatch_constants_is_unreadable_and_refuses(
+        granting_config, stub_module_transport_factory):
+    """Behavior 3: a workflow declaring only the four dispatch constants (the shape a
+    fixture built for a 2-lane world had) is now `readable: False` and refuses — an
+    unreadable state is never evidence of a disarmed backend, and this is the direction the
+    widening deliberately fails in."""
+    four_const_only = {
+        "id": WORKFLOW_ID, "name": write_grant.LANES["enrichment"],
+        "active": True, "settings": {}, "connections": {},
+        "nodes": [
+            {"name": "Update Write Gate", "parameters": {"jsCode": (
+                'const ALLOW_HUBSPOT_RECORD_WRITES = "false";\n'
+                'const ALLOW_HUBSPOT_CREATE = "false";\n'
+                'const TEST_RECORD_IDS = "";\n'
+                'const TEST_RECORD_DOMAINS = "";\n'
+                'function _writeSafetyAllows() { return false; }\n'
+            )}},
+            {"name": "Webhook", "parameters": {}},
+        ],
+    }
+    transport = stub_module_transport_factory(
+        [_workflow_list(), _executions_page(), four_const_only])
+
+    result = _plan(granting_config, transport)
+
+    assert result["outcome"] == write_grant.REFUSED
+    assert "could not be read at all" in result["detail"]
+
+
+def test_a_fully_disarmed_five_constant_workflow_still_proceeds(
+        granting_config, stub_module_transport_factory):
+    """Behavior 4: a fully disarmed five-constant workflow (the deployed shape) still
+    proceeds — `guardrail_a` returns `None`. `_workflow()` already declares all five
+    constants disarmed by default (Pitfall 2's fixture widening); this pins that the
+    widened read does not turn a genuinely disarmed backend into a false refusal."""
+    transport = stub_module_transport_factory([_workflow_list(), _executions_page(), _workflow()])
+
+    result = _plan(granting_config, transport)
+
+    assert result["kind"] == write_grant.PROPOSAL_KIND
 
 
 # =========================================================================================
