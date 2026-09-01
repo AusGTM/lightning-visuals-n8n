@@ -12,35 +12,86 @@ companies that have nobody at them — roles chosen **once for the whole batch**
 
 Closes SUGGEST-01, -02, -04, -05. **Amends SUGGEST-03** (see D-62-07).
 
-**Not in this phase:** a second discovery provider (D-62-03), any change to how enrichment or the
-write path themselves work, and any new grant lane — one session grant already covers this
-(D-62-11).
+**Not in this phase:** any people-search / prospecting vendor API (see the re-scope below), any
+change to how enrichment or the write path themselves work, and any new grant lane — one session
+grant already covers this (D-62-11).
+
+## RE-SCOPE, 2026-09-02 — read before D-62-01..03
+
+The original D-62-01/02 assumed Lusha `/v3/contacts/search-and-enrich` could find people by
+company + title. **It cannot, and this was verified twice.** Its request body is
+`{"contacts":[{firstName, lastName, companyName, companyDomain, email, linkedinUrl}]}` — a 1:1
+resolution of a person you can *already name*. "Search" there means "find this person's contact
+details", not "find people matching criteria". `jobTitle` appears in `docs/LUSHA-V3-CONTRACT.md`
+**only as a response field** (`results[i].jobTitle.title`), never as a request filter.
+
+Discovery-by-title lives in Lusha's **Prospecting API**, which this project excludes by standing
+decision — `.planning/workstreams/milestone/REQUIREMENTS.md:47`: *"Lusha Prospecting / Lookalikes
+/ Tables / Decision Makers APIs — net-new acquisition surfaces, not enrichment of existing CRM
+records."* That is a **class** exclusion: Apollo `mixed_people/search` and ZoomInfo contact-search
+are the same class. Swapping vendors does not escape it.
+
+**Operator decision, 2026-09-02: re-scope discovery to the existing web-research lane.**
+
+**The two stages compose, and that is the whole design.** Web research is good at *naming* people
+from a company's own public pages and bad at contact details; the provider waterfall is the
+reverse — `search-and-enrich` requires exactly `firstName + lastName + companyName`, which is what
+research produces. So:
+
+```
+company with zero contacts
+  -> web research the company's own pages  (names + job titles, no email)
+  -> filter to the operator's chosen roles
+  -> named person = firstname+lastname+company = identity group 2 (STRONG)
+  -> existing enrich waterfall fills email/phone
+  -> synthesised rows -> extraction.py -> match lane -> proposals
+```
+
+Precedent, not theory: **UAT 2.4 passed on `0.10.0`** against `https://gctc.com.au/board-of-directors/`
+— ordinary fetch returned 0 people, the ladder's rung 1 returned **all 9 directors**, provenance
+named the URL actually fetched, and no email was invented for anyone. That is this phase's
+discovery step, already built and already in scope.
+
+**15 of the 18 decisions survive unchanged.** Only D-62-01, D-62-02 and D-62-03 are rewritten;
+D-62-09, D-62-11, D-62-14 and D-62-17 are amended in place where the cost or provenance unit
+changed. Every other decision stands as taken.
 </domain>
 
 <decisions>
 ## Implementation Decisions
 
-### Discovery provider
+### Discovery mechanism  *(rewritten 2026-09-02 — see RE-SCOPE above)*
 
-- **D-62-01:** Lusha `/v3/contacts/search-and-enrich` is the discovery provider for this phase.
-  It is the **only search endpoint already wired** in the deployed workflow — every other
-  provider call is enrich/match on a person you already know (Apollo `/v1/people/match`,
-  ZoomInfo `/gtm/data/v1/contacts/enrich`). The adapter is shaped so Apollo/ZoomInfo discovery
-  can slot in later without rework. **This deliberately departs from SUGGEST-05's wording**,
-  which names Apollo and ZoomInfo as the people-search providers; that wording predates the
-  Lusha v3 migration. — **Reversibility:** reversible — a second adapter is additive; nothing
-  about the round's shape assumes one provider.
+- **D-62-01 (rev 2):** Discovery is the **existing web-research lane reading the company's own
+  public pages** — not a vendor people-search API. No new provider surface, no reversal of the
+  Prospecting exclusion. Host-bound escalation already exists in
+  `operator-claude-plugin/scripts/url_fallback.py` (`plan_ladder`, `filter_candidates`,
+  `give_up_message`), which is what returned all 9 directors in UAT 2.4 after the ordinary fetch
+  returned none. — **Reversibility:** reversible — if the acquisition/enrichment boundary is
+  ever reopened, a vendor discovery adapter is additive and this lane keeps working.
 
-- **D-62-02:** One combined search+enrich call, priced upfront. Discovery is **not** split into
-  a find-then-confirm-then-enrich flow. SUGGEST-05's "cost shown before it is spent" is satisfied
-  by the upfront estimate (D-62-14), not by a mid-round preview. This matches how Lusha's
-  endpoint actually behaves rather than fighting it.
+  *Superseded:* rev 1 named Lusha `/v3/contacts/search-and-enrich`. It cannot filter by title;
+  see RE-SCOPE.
 
-- **D-62-03:** When the provider returns nobody at a company, **record "no candidates found" and
-  move on**. A fallback to a second provider is **deferred**, not designed-and-unbuilt — no
-  unreachable fallback code ships this phase. (Resolved a conflict in the discussion: a
-  no-hits fallback was chosen alongside Lusha-only, which would have had nothing to fall through
-  to.)
+- **D-62-02 (rev 2):** **Two stages, one price.** Research names people (no email); the existing
+  enrich waterfall then fills contact details for those named people. This is not the
+  "find-then-confirm-then-enrich" flow rejected in discussion — there is still **no operator
+  confirmation between the stages** (D-62-10 stands). It is one automated round with two
+  mechanisms, priced as one decision up front (D-62-14).
+
+  The composition is the point: `search-and-enrich` needs exactly `firstName + lastName +
+  companyName`, which is precisely what research yields. The constraint that made Lusha useless
+  for discovery is what makes it correct for stage 2.
+
+- **D-62-03 (rev 2):** When research finds nobody at a company, **record "no candidates found"
+  and move on**. Unchanged in effect from rev 1, and the fallback question is now moot — there is
+  no second discovery provider to fall through to, by design. The ladder's own give-up path
+  (`give_up_message`) already reports why it stopped; surface that reason rather than a bare
+  count.
+
+  **Do not escalate past a refusal.** If the ladder gives up, or a page is unreachable, that is a
+  result to report — not a prompt to try a search engine. Phase 53's walk run 4 recorded the
+  principle verbatim: *"escalating past a refusal turns a fence into a suggestion."*
 
 - **D-62-04:** The candidate company set is **the batch just processed**. Not "every company in
   the portal with no contacts" (unbounded, and includes companies the operator never asked
@@ -81,12 +132,20 @@ write path themselves work, and any new grant lane — one session grant already
   — **Reversibility:** costly — a later move to a dedicated lane means re-homing the association
   and held-row behaviour this decision deliberately borrows.
 
-- **D-62-09:** A suggested person lands with **whatever identity the provider returns**. If Lusha
-  yields an email or `linkedin_url`, the row resolves on a strong key; if only name+company, it
-  routes to the weak-key `needs_review` path exactly as any other name-only row does (D-61-03).
-  **No special-casing for suggested rows** — they are ordinary rows with an ordinary identity
-  story. Note `linkedin_url` became a third identity group in Phase 61-03, so a person with a
-  LinkedIn URL and no email is no longer automatically weak.
+- **D-62-09 (amended 2026-09-02):** A suggested person lands with **whatever identity the round
+  produces**. **No special-casing for suggested rows** — they are ordinary rows with an ordinary
+  identity story.
+
+  What changed under the re-scope, and it is good news: web research reliably yields
+  `firstname + lastname + company`, which is **identity group 2 — a strong key**. So a
+  research-discovered person resolves through the match lane rather than landing weak, even
+  before the stage-2 enrichment adds an email. A name-ONLY row (no company) still routes to the
+  weak-key `needs_review` path per D-61-03. `linkedin_url` remains a third identity group
+  (Phase 61-03) for anyone whose page links their profile.
+
+  **Planner note:** do not assume "no email ⇒ needs_review". UAT 2.4's 9 directors had no email
+  and the walk correctly predicted `needs_review` — but that was a raw extraction with no
+  stage-2 enrichment behind it. This phase's stage 2 exists precisely to close that gap.
 
 - **D-62-10:** The **whole round lands as proposals** — no per-person and no per-company
   confirmation. SUGGEST-04's "proposed, never auto-created" is satisfied by the ingest lane's own
@@ -104,10 +163,25 @@ write path themselves work, and any new grant lane — one session grant already
   contact matching the chosen roles". Narrowest and cheapest reading, and it matches the
   requirement's own framing: *an enriched company with nobody at it is not a lead*.
 
-- **D-62-17:** Provenance uses the **existing per-field provenance mechanism** (source,
-  confidence, verified_at) with `source=lusha`, rather than a new `lv_` property marking a
-  contact as suggestion-derived. CLAUDE.md §4.0 records a long list of properties documented but
-  never created; this decision deliberately avoids adding to it.
+- **D-62-17 (amended 2026-09-02):** Provenance uses the **existing per-field provenance
+  mechanism**, not a new `lv_` property marking a contact as suggestion-derived. CLAUDE.md §4.0
+  records a long list of properties documented but never created; this deliberately avoids adding
+  to it.
+
+  **Two corrections the research surfaced — the planner must not take CLAUDE.md §6/§8 at face
+  value here:**
+  1. The live mechanism is the **Phase 15 `lv_contact_enrichment_provenance` JSON blob**
+     (`n8n/code/mergeContacts.js`), not the per-field `<field>_source` property family §6/§8
+     describe. Those §6/§8 property names are largely in the never-created list.
+  2. Its `source` is **hardcoded to `"csv"`** at one narrow call site — the `MERGE_CONTACTS`
+     constant in `scripts/build_cloud_workflows.py`. A suggestion round's rows are not CSV rows,
+     so that hardcode must be parameterised rather than worked around downstream.
+
+  Under the re-scope the value is **`claude_web` for stage-1 fields (name, jobtitle) and the
+  provider's own name for stage-2 fields (email, phone)** — a suggested contact legitimately
+  carries mixed provenance, which is what a per-field mechanism is for. Research also flagged
+  `extraction.py`'s `resolutions.source` as a **separate, closed vocabulary** that is easy to
+  conflate with this — check whether it needs a new member before assuming it does.
 
 - **D-62-18:** Dedupe is **both** — filter the company's already-known contacts out of role
   targeting before spending, *and* rely on the ingest lane's existing match as the backstop, so a
@@ -140,11 +214,23 @@ write path themselves work, and any new grant lane — one session grant already
   offer**. `_affordable_record_count` already computes the largest affordable N; nothing new to
   build, and it is behaviour the operator has already seen on write grants.
 
-- **D-62-14:** The estimate is **worst case, stated plainly as a ceiling** that actuals land at or
-  under. Lusha bills per contact returned, which is not knowable until the search runs, so
-  companies × per-company cap is the honest maximum. This matches `write_grant`'s envelope, which
-  already over-states rather than under-states (measured: projected 3 executions for a real
-  2-record chunk) — the safe direction for a budget guard.
+- **D-62-14 (amended 2026-09-02):** The estimate is **worst case, stated plainly as a ceiling**
+  that actuals land at or under. This matches `write_grant`'s envelope, which already over-states
+  rather than under-states (measured: projected 3 executions for a real 2-record chunk) — the
+  safe direction for a budget guard.
+
+  **The re-scope gives the round TWO cost components, and both belong in the one ceiling:**
+
+  | Stage | Unit | Bound |
+  |---|---|---|
+  | 1 — research | Anthropic tokens + `web_search` uses | companies × `WEB_RESEARCH_MAX_SEARCHES` (currently 5), plus the ladder's own fetch cap |
+  | 2 — enrich named people | provider credits (Lusha ~1/contact measured) | companies × per-company cap (D-62-12) |
+
+  Quote them as one number the operator agrees to, with the split visible. **Do not present the
+  provider-credit figure alone** — that was the honest number when discovery was a vendor call
+  and is now only half the round. Stage 2's count is bounded by what stage 1 actually found, so
+  its ceiling is genuinely a ceiling: fewer people discovered means fewer credits spent, never
+  more.
 
 ### Claude's Discretion
 
@@ -193,10 +279,26 @@ None — every question in this discussion was answered explicitly. No "you deci
   implementation (the reason D-62-08 reuses rather than forks).
 - `operator-claude-plugin/scripts/held_queue.py` — Phase 61's held-row queue.
 
-### Provider contract
-- `docs/LUSHA-V3-CONTRACT.md` — the contract of record for Lusha v3.
+### Discovery (stage 1) — the web-research lane
+- `operator-claude-plugin/scripts/url_fallback.py` — the host-bound escalation ladder
+  (`plan_ladder`, `filter_candidates`, `give_up_message`). This is what returned all 9 directors
+  in UAT 2.4. Host-bound **in code**, not by judgement — do not loosen it.
+- `operator-claude-plugin/UAT.md` § 2.4 — the passing walk that is this stage's precedent, and
+  its provenance discipline (day-job employers present in the bios were deliberately NOT used).
+- `src/web_research.py` — the research adapter. **Company-oriented throughout**; read the
+  landmine note before assuming it finds people.
+
+### Enrichment (stage 2) — provider contract
+- `docs/LUSHA-V3-CONTRACT.md` — the contract of record for Lusha v3. **Read §3 first**: the
+  request body is a named-identity resolution, which is why it is stage 2 and not stage 1.
 - `n8n/code/lushaRequest.js` — `lushaContactBody` accepts any subset of identity keys;
   `linkedin_url` maps to `contact.linkedinUrl`.
+- `.planning/workstreams/milestone/REQUIREMENTS.md:47` — the standing exclusion of
+  Prospecting / Lookalikes / Tables / Decision Makers APIs. **Binding on this phase.**
+
+### Provenance
+- `n8n/code/mergeContacts.js` — the live `lv_contact_enrichment_provenance` blob (Phase 15).
+- `scripts/build_cloud_workflows.py` § `MERGE_CONTACTS` — where `source` is hardcoded `"csv"`.
 
 ### The role-vocabulary pattern
 - `scripts/inventory_org_type_values.py` — the named pattern for a read-only, paged live
@@ -236,9 +338,18 @@ None — every question in this discussion was answered explicitly. No "you deci
 - **Per-field provenance stamping** is where `source=lusha` is recorded (D-62-17).
 
 ### Landmines
-- **`contactResearch.js` is NOT reusable here.** It enriches an existing contact's
-  jobtitle/seniority; it does not discover people. Named because its filename invites the
-  mistake.
+- **Lusha `search-and-enrich` is NOT a discovery endpoint.** It resolves a person you can already
+  name. Verified twice against `docs/LUSHA-V3-CONTRACT.md`; `jobTitle` is a response field only.
+  The endpoint's NAME is the trap — it cost this phase a full discussion round.
+- **People-search/prospecting APIs are excluded by standing decision** across all vendors
+  (`.planning/workstreams/milestone/REQUIREMENTS.md:47`). Do not plan a task that calls one.
+- **`contactResearch.js` is NOT reusable for discovery either.** It enriches an existing
+  contact's jobtitle/seniority. Named because its filename invites the mistake.
+- **`src/web_research.py` is company-oriented throughout** (`object_type: companies`). Phase 53's
+  FINDING D analysis concluded web search is the weaker instrument for a *person*. That is why
+  discovery here reads the company's own pages via the host-bound ladder rather than searching
+  the open web for individuals.
+- **Do not escalate past a refusal** — `url_fallback.py` is host-bound in code, not by judgement.
 - **Apollo's key on this portal is not a master key** — `usage_stats` returns 403 and the
   credit check degrades to null. Relevant if Apollo discovery is added later (D-62-01).
 - **A full Lusha sweep already exceeds the credit balance** (measured 2026-07-30). A 300-company
