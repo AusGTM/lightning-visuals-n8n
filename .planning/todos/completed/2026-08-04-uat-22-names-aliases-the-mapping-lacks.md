@@ -1,4 +1,7 @@
 ---
+closed: 2026-09-02
+closed_as: resolved
+closed_by: Phase 34 (alias widening + columnMapAliasParity.test.mjs), plugin 0.9.0 amendment 6a (per-row Full Name splitter)
 created: 2026-08-04T09:40:00.000Z
 title: UAT 2.2 names two header aliases the column mapping does not support
 area: n8n + operator-claude-plugin
@@ -61,3 +64,13 @@ TBD — a decision, not a defect fix, because both directions are defensible:
 `column_mapping.yaml`'s alias map equals `columnMap.js`'s. They agree today by luck, not by
 construction, and a widened YAML with an un-widened JS would make the preview lie about the
 backend in the confident direction.
+
+## Resolution (2026-09-02)
+
+Closed as **resolved**, not abandoned — verified against the tree, not assumed:
+
+- `e-mail address`, `org.` and `linkedin profile` are present in BOTH `config/column_mapping.yaml` and `n8n/code/columnMap.js` (Phase 34, option 3 — widen the unambiguous near-misses).
+- The pin this todo asked for exists: `tests/n8n/columnMapAliasParity.test.mjs`, whose own header states the reason this todo gave — a widened YAML with an un-widened JS would make the preview lie about the backend in the confident direction.
+- `Ph.` was deliberately NOT added as a blind alias (the todo itself called it genuinely ambiguous). It is handled by suggest-and-confirm: proposed as `phone` with its own sample values shown for a per-header yes.
+- `Full Name` is no longer refused — plugin 0.9.0 amendment 6a added a per-row splitter that surfaces ambiguities (`Maria Jane Santos`, `Cher`, `Jan van der Berg`) instead of cutting on whitespace.
+- **UAT 2.2 now reads PASS** (operator re-walk 2026-08-05 on `0.9.0`) and cites this todo by filename. The requirement and the mapping no longer disagree.
