@@ -121,14 +121,18 @@ def test_the_grant_refusal_names_opening_one_and_never_a_shell_command():
     ("closed_grant", _closed_review_grant()),
     ("wrong_lane", _open_review_grant(lanes=("enrichment",))),
     ("not_a_grant_shape", {"lanes": ["review"], "state": "open"}),   # no "kind"
+    ("empty_dict", {}),
+    ("wrong_kind", {**_open_review_grant(), "kind": "something_else"}),
+    ("covers_a_different_record", _open_review_grant(record_ids=("999",))),
 ])
 def test_every_grant_state_near_miss_refuses_with_an_empty_call_log(
         label, grant, stub_module_transport_factory):
     """The grant-state near-miss set that replaces the retired env-value near-miss set
-    (`""`, `"1"`, `"yes"`, `"TRUE"`, `"True"`): no grant, a CLOSED grant, a grant whose
-    `lanes` omits `"review"`, and a dict that is not a grant at all — each refuses with
-    `GRANT_REFUSAL_REASON` and an empty transport call log, exactly as every env near-miss
-    used to."""
+    (`""`, `"1"`, `"yes"`, `"TRUE"`, `"True"`, `"true "`, `" true"`): no grant, a CLOSED
+    grant, a grant whose `lanes` omits `"review"`, a dict that is not a grant at all, an
+    empty dict, a grant carrying the wrong `kind`, and an open grant scoped to a different
+    record — each refuses with `GRANT_REFUSAL_REASON` and an empty transport call log,
+    exactly as every env near-miss used to."""
     transport = stub_module_transport_factory([applied_response()])
 
     result = review_decision.submit_decision(
