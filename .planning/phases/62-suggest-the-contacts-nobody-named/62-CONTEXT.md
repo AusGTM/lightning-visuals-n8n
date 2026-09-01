@@ -55,6 +55,29 @@ discovery step, already built and already in scope.
 **15 of the 18 decisions survive unchanged.** Only D-62-01, D-62-02 and D-62-03 are rewritten;
 D-62-09, D-62-11, D-62-14 and D-62-17 are amended in place where the cost or provenance unit
 changed. Every other decision stands as taken.
+
+### Where the round runs (settled 2026-09-02, third revision)
+
+**In the plugin, as an operator-attended sitting** — not on a schedule, not in the backend.
+`web_fetch` exists only on the conversational side; the backend has `web_search` alone.
+
+**This does NOT weaken any SUGGEST requirement, and the phase accounting is unchanged.** The
+"300-company unattended round" framing was this document's invention, never the requirement's.
+Re-reading the source:
+
+- **SUGGEST-02** asks that the suggestion be *"categorical, not per-record — the operator picks
+  roles once and the system applies them across the batch."* A sitting satisfies this exactly:
+  roles are chosen once, Claude applies them across the whole company list in one pass. The
+  requirement constrains **how the decision is shaped**, not whether a human is present.
+- **SUGGEST-01, -04, -05** say nothing about unattended operation. SUGGEST-05 (*"cost shown
+  before it is spent"*) is arguably better served with an operator present.
+
+So Phase 62 still **closes SUGGEST-01, -02, -04, -05 and amends only SUGGEST-03** (D-62-07) —
+the accounting D-62-07 already stated. No second requirement is amended.
+
+**It also makes the grant coherent rather than strained.** D-62-11 puts the suggestion allowance
+in the session grant; the grant *is* a conversational-session concept. Round and grant now live
+in the same place instead of the round running somewhere the grant cannot reach.
 </domain>
 
 <decisions>
@@ -62,16 +85,36 @@ changed. Every other decision stands as taken.
 
 ### Discovery mechanism  *(rewritten 2026-09-02 — see RE-SCOPE above)*
 
-- **D-62-01 (rev 2):** Discovery is the **existing web-research lane reading the company's own
-  public pages** — not a vendor people-search API. No new provider surface, no reversal of the
-  Prospecting exclusion. Host-bound escalation already exists in
-  `operator-claude-plugin/scripts/url_fallback.py` (`plan_ladder`, `filter_candidates`,
-  `give_up_message`), which is what returned all 9 directors in UAT 2.4 after the ordinary fetch
-  returned none. — **Reversibility:** reversible — if the acquisition/enrichment boundary is
-  ever reopened, a vendor discovery adapter is additive and this lane keeps working.
+- **D-62-01 (rev 3, 2026-09-02):** Discovery runs **in the plugin (the conversational side),
+  sourced from the company's own sitemap**, using the ladder that already exists.
 
-  *Superseded:* rev 1 named Lusha `/v3/contacts/search-and-enrich`. It cannot filter by title;
-  see RE-SCOPE.
+  **Where the fetch runs, and why it is not the backend.** `web_fetch` — the tool that actually
+  retrieves a candidate URL — **does not exist anywhere in the n8n backend**. The backend research
+  node declares `web_search` only (`web_search_tool_result` blocks in `webResearch.js`). The
+  plugin side has `web_fetch`, and it is where UAT 2.4's proven flow already runs.
+
+  **Sitemap-first, and the machinery is already built** — `url_fallback.py` is a pure
+  string-building module with *"no HTTP client, no scraping library, no headless browser, no I/O
+  of any kind"*:
+  - `plan_ladder(url)` already emits `/sitemap.xml` (rung 3) and `/wp-sitemap.xml` (rung 4)
+  - `filter_candidates()` is documented as *"the guard on sitemap-derived candidates
+    SPECIFICALLY"* — sitemap URLs come out of fetched content, which is attacker-influenceable,
+    so nothing is fetched without passing scheme → host → budget checks in that order
+  - `MAX_FOLLOWUP_FETCHES = 5` is sized for exactly this: *"four constructed candidates against
+    this cap leaves exactly one fetch for a sitemap-derived profile page"*
+  - The crawler line is already drawn: *"A sitemap can list thousands of URLs; an uncapped ladder
+    is a crawler, and a crawler is explicitly out of scope"*
+
+  **Do not build a conventional-path guesser** (`/about`, `/team`, `/leadership`). It was
+  considered and rejected: the sitemap is the site's own declaration of its pages, so reading it
+  is evidence where a path list is inference. The ladder already prefers it.
+
+  — **Reversibility:** reversible — the ladder is shared, so a backend `web_fetch` node could
+  host the same discovery later without changing the sitemap logic.
+
+  *Superseded:* rev 1 named Lusha `/v3/contacts/search-and-enrich` (cannot filter by title).
+  rev 2 said "the existing web-research lane" without distinguishing the three mechanisms that
+  phrase covers — see the research amendment; only the plugin-side URL adapter can name people.
 
 - **D-62-02 (rev 2):** **Two stages, one price.** Research names people (no email); the existing
   enrich waterfall then fills contact details for those named people. This is not the
@@ -223,8 +266,17 @@ changed. Every other decision stands as taken.
 
   | Stage | Unit | Bound |
   |---|---|---|
-  | 1 — research | Anthropic tokens + `web_search` uses | companies × `WEB_RESEARCH_MAX_SEARCHES` (currently 5), plus the ladder's own fetch cap |
+  | 1 — discovery | page fetches per company | `url_fallback.MAX_FOLLOWUP_FETCHES` = **5**, whole-ladder, already enforced by `filter_candidates`' budget check |
   | 2 — enrich named people | provider credits (Lusha ~1/contact measured) | companies × per-company cap (D-62-12) |
+
+  **Two fetch/search budgets exist and are easy to conflate** (research flagged this):
+  `url_fallback.MAX_FOLLOWUP_FETCHES` (page fetches, the one that bounds stage 1) and
+  `WEB_RESEARCH_MAX_SEARCHES` (the backend node's `web_search` budget). Both default to 5 and
+  they are **different axes**. Stage 1 runs in the plugin, so it is the former.
+
+  No isolated research-only Anthropic cost has ever been measured in this repo — the one rate key
+  that would carry it (`company_domain_research`) ships `null` by design. Do not invent a
+  per-company dollar figure; bound stage 1 by **fetch count**, which is real and enforced.
 
   Quote them as one number the operator agrees to, with the split visible. **Do not present the
   provider-credit figure alone** — that was the honest number when discovery was a vendor call
