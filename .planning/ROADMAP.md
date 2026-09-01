@@ -465,7 +465,7 @@ variable), and a design that runs the provider waterfall twice per written recor
       - [ ] 62-02-PLAN.md — role vocabulary from the portal's own job titles, with the disclosed
             un-evidenced fallback, and the SUGGEST-03 / ROADMAP amendment (wave 2)
 
-      - [ ] 62-03-PLAN.md — the priced ceiling folded into the session grant's opening envelope
+      - [x] 62-03-PLAN.md — the priced ceiling folded into the session grant's opening envelope
             (wave 1, carries a blocking `checkpoint:decision` for the one-way D-62-11)
 
       - [x] 62-04-PLAN.md — per-field provenance for a suggested contact, and

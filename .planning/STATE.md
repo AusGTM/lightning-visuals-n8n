@@ -5,16 +5,16 @@ milestone_name: Unattended Session Runs
 current_phase: 62
 current_phase_name: Suggest the contacts nobody named
 status: complete
-stopped_at: Completed 62-04-PLAN.md (sourceByField provenance + num_associated_contacts, tracer-free, 2 tasks)
-last_updated: "2026-09-01T23:02:49.334Z"
+stopped_at: Completed 62-03-PLAN.md (suggestion allowance folded into the grant envelope, one-envelope checkpoint answered)
+last_updated: "2026-09-01T23:25:06.198Z"
 last_activity: 2026-09-02
+state_head: e7da6198e06a85cb4ad7bd9f415459ddfcfc5d21
 progress:
   total_phases: 9
-  completed_phases: 7
-  total_plans: 50
-  completed_plans: 46
-  percent: 78
-state_head: 79d1ada614e698df502599ab9fbe7afbd3583198
+  completed_phases: 6
+  total_plans: 49
+  completed_plans: 47
+  percent: 67
 last_activity_desc: "**Phase 61 complete and verified (12/12)**; backend deployed and"
 ---
 
@@ -285,14 +285,14 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████████░] 92% — v1.1: 53/54/58/59/61 complete; **57 in progress (Plan 01 done,
+Progress: [███████░░░] 67% — v1.1: 53/54/58/59/61 complete; **57 in progress (Plan 01 done,
 RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The old
 `97% (v0.9 phase 47.5 of 46-49)` bar was a v0.9 figure and is superseded.)
 
 ## Session
 
-**Last session:** 2026-09-01T23:02:18.002Z
-**Stopped at:** Completed 62-04-PLAN.md (sourceByField provenance + num_associated_contacts, tracer-free, 2 tasks)
+**Last session:** 2026-09-01T23:25:05.849Z
+**Stopped at:** Completed 62-03-PLAN.md (suggestion allowance folded into the grant envelope, one-envelope checkpoint answered)
 **Resume file:** None
 
 ## Performance Metrics
@@ -403,6 +403,7 @@ RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The 
 | Phase 60 P04 | ~15min | 3 tasks | 9 files |
 | Phase 62 P01 | 35min | 3 tasks | 3 files |
 | Phase 62 P04 | 55min | 2 tasks | 15 files |
+| Phase 62 P03 | 25min | 3 tasks | 5 files |
 
 ## Decisions
 
@@ -499,6 +500,7 @@ RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The 
 - [Phase 62]: 62-04: sourceByField resolves into both the provenance entry's source and the decisions row's source_provider, mirroring confidenceByField's dual-write so the two can never disagree.
 - [Phase 62]: 62-04: num_associated_contacts was added to both HS_CO_SEARCH_BODY_EXPR (local_live) and ENRICH_COMPANY_SEARCH_PROPERTIES_CSV (the cloud builder's actual property list) after tracing that the plan's read_first named only the former, which never reaches wf_enrichment_cloud.json.
 - [Phase 62]: 62-04: preingest.py's OUTCOME_CONTRACT_VERSION allowlist was widened to {1, 2}, not moved to {2}, since this plan regenerates but does not deploy the n8n JSON -- the deployed backend still stamps 1 until an operator deploys it separately.
+- [Phase 62]: D-62-11 locked via checkpoint: the suggestion round's cost folds into the SAME opening grant envelope (one-envelope), not a separate spend confirmation. — Human operator answer at a gate=blocking-human checkpoint; one disclosure, one yes for the whole session; over-budget suggestion rounds now refuse pre-start via Phase 57's existing CEILING_OVER split offer.
 
 ### Roadmap Evolution
 
