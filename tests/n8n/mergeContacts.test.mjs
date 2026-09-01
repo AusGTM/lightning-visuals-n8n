@@ -107,6 +107,32 @@ test("mergeContacts: recorded confidence matches deciding confidence for an over
   assert.equal(decisions.find((d) => d.field === "jobtitle").confidence, 90);
 });
 
+// --- Phase 62 Plan 04 (D-62-17): sourceByField mirrors confidenceByField exactly -------
+test("mergeContacts: sourceByField overrides the flat source for named fields only, both in provenance and decisions", () => {
+  const candidate = { firstname: "Jo", lastname: "Rider", jobtitle: "Board Member", email: "jo@example.com" };
+  const { provenance, decisions } = mergeContacts({}, candidate, undefined, {
+    source: "waterfall", confidence: 90,
+    sourceByField: { firstname: "claude_web", lastname: "claude_web", jobtitle: "claude_web" },
+  });
+  for (const field of ["firstname", "lastname", "jobtitle"]) {
+    assert.equal(provenance[field].source, "claude_web", `${field} provenance carries the overridden source`);
+    assert.equal(decisions.find((d) => d.field === field).source_provider, "claude_web",
+      `${field} decision's source_provider matches the overridden source`);
+  }
+  // email is absent from sourceByField -> falls back to the flat opts.source.
+  assert.equal(provenance.email.source, "waterfall");
+  assert.equal(decisions.find((d) => d.field === "email").source_provider, "waterfall");
+});
+
+test("mergeContacts: omitting sourceByField entirely is byte-identical to the pre-port shape (modulo verified_at)", () => {
+  const candidate = { jobtitle: "VP Engineering" };
+  const withoutOption = mergeContacts({}, candidate, undefined, { source: "waterfall", confidence: 90 });
+  const withEmptyMap = mergeContacts({}, candidate, undefined,
+    { source: "waterfall", confidence: 90, sourceByField: {} });
+  const strip = stripVerifiedAt;
+  assert.deepEqual(strip(withoutOption), strip(withEmptyMap));
+});
+
 // --- 260826-20w Task 2 commit 2: email now PROMOTES into a blank field + is flagged ----
 test("mergeContacts: email with a blank existing value promotes at the default policy's threshold, flagged human-review", () => {
   const { canonicalPatch, provenance, decisions } = mergeContacts(
