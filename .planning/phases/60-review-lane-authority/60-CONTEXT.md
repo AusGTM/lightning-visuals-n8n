@@ -99,6 +99,28 @@ does not change what a reviewer sees before approving (the dry-run exact-write p
   batch — the batch arm's allowlist is fixed to the grant's own record list at open time
   (per D-60-02/D-60-03), it does not grow as the operator triages records one by one.
 
+### Answered during planning (raised by 60-RESEARCH.md's open questions, 2026-09-01)
+
+- **D-60-07:** A `reject` decision works with **no grant open**. This preserves, symmetrically,
+  the exact property the retired `ALLOW_REVIEW_SUBMIT` carve-out existed for
+  (`review_decision.py`'s `is_undoing`): a closed authority must never be able to strand a
+  flagged record mid-decision. A reject promotes nothing — it records a reason and leaves the
+  record in the queue — so it carries none of the risk the grant exists to gate. The session arm
+  (`review_armed`) is unaffected and still required, exactly as it is today for both approve and
+  reject. **The `is_undoing` carve-out therefore SURVIVES D-60-04's retirement of the env var —
+  it is re-pointed at the grant check, not deleted.** — **Reversibility:** reversible.
+- **D-60-08:** Review-lane writes **DO** appear in the per-run `written_records-<run_id>.json`
+  artifact (D-59-07/D-59-09), against 60-RESEARCH.md's own recommendation to treat it as out of
+  scope — operator's call, 2026-09-01. Rationale: one artifact should answer "what did this
+  session write to HubSpot" across all three lanes now that all three are grantable.
+  — **Reversibility:** costly — review decisions go through `review_decision.submit_decision`,
+  never `chunking.dispatch_plan`, so this is new plumbing rather than a reused call site;
+  removing it later means unpicking a second writer of that artifact.
+  **Constraints the planner must carry over from the artifact's own decisions:** the run must be
+  keyed by a `run_id` the same way a dispatch run is (D-59-09: one artifact per run, readers glob
+  and union — never a shared append); and per D-59-10 a written-records failure must **never**
+  stop or abort a review write, it is recorded in the outcome and surfaced loudly instead.
+
 ### Claude's Discretion
 
 - The exact mechanism for a `REVIEW_FLAGS`-style constant and where the review-specific
