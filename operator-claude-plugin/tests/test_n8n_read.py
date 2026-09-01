@@ -7,6 +7,7 @@ The module's contract in one line: `None` means "could not tell", `[]` means "re
 fine, nothing there", and the two are never conflated (D-08).
 """
 import json
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
@@ -253,10 +254,18 @@ def test_max_pages_overrides_the_module_default_and_walks_further(
     finds the window boundary on its own — with `max_pages` omitted the default 4-page
     cap truncates it; with `max_pages=12` the whole 8-page listing is read and its
     exhaustion is correctly reported."""
+    # "Newer than the cutoff" is a claim about NOW, so it is computed, never written
+    # down. The first draft hardcoded 2026-08-31 and the docstring's premise silently
+    # became false the day the clock rolled past it — the test then failed every day
+    # thereafter, for a reason that had nothing to do with the code under test.
+    recent = datetime.now(timezone.utc) - timedelta(minutes=1)
+    started = recent.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+    stopped = (recent + timedelta(seconds=1)).strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
     def _page(n, cursor):
         item = {"id": f"e-{n}", "status": "success",
-                "startedAt": "2026-08-31T00:00:00.000Z",
-                "stoppedAt": "2026-08-31T00:00:01.000Z", "finished": True}
+                "startedAt": started,
+                "stoppedAt": stopped, "finished": True}
         body = {"data": [item]}
         if cursor is not None:
             body["nextCursor"] = cursor
