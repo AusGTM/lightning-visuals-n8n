@@ -440,7 +440,9 @@ variable), and a design that runs the provider waterfall twice per written recor
 
 - [ ] **Phase 62: Suggest the contacts nobody named** — **NUMBERED 2026-08-30** (operator).
       An enriched company with nobody at it is not a lead. After a company batch, the operator is
-      offered contacts worth enriching, chosen by role and priced once. Closes SUGGEST-01..05.
+      offered contacts worth enriching, chosen by role and priced once. Closes SUGGEST-01, -02,
+      -04, -05, and AMENDS SUGGEST-03 per D-62-07 (a disclosed un-evidenced fallback is now
+      permitted; see `milestones/v1.1-REQUIREMENTS.md`).
       **Full scope:** `milestones/v1.1-ROADMAP.md` § Phase 62.
 
       **Why it needed numbering.** It was written as "Phase 59" in the milestone roadmap, but 59
