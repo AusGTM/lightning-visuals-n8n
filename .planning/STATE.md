@@ -5,16 +5,16 @@ milestone_name: Unattended Session Runs
 current_phase: 60
 current_phase_name: Review-lane authority
 status: complete
-stopped_at: Completed 60-03-PLAN.md
-last_updated: "2026-09-01T07:23:11.000Z"
+stopped_at: Completed 60-04-PLAN.md (Phase 60 review-lane-authority all 4 plans complete)
+last_updated: "2026-09-01T07:42:06.393Z"
 last_activity: 2026-09-01
-state_head: 7d0d72e4638db6cc32de405811fd2e3a1284385b
 progress:
   total_phases: 8
-  completed_phases: 5
-  total_plans: 44
-  completed_plans: 43
-  percent: 63
+  completed_phases: 7
+  total_plans: 45
+  completed_plans: 44
+  percent: 88
+state_head: 7d0d72e4638db6cc32de405811fd2e3a1284385b
 last_activity_desc: "**Phase 61 complete and verified (12/12)**; backend deployed and"
 ---
 
@@ -282,14 +282,14 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [██████░░░░] 63% — v1.1: 53/54/58/59/61 complete; **57 in progress (Plan 01 done,
+Progress: [██████████] 98% — v1.1: 53/54/58/59/61 complete; **57 in progress (Plan 01 done,
 RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The old
 `97% (v0.9 phase 47.5 of 46-49)` bar was a v0.9 figure and is superseded.)
 
 ## Session
 
-**Last session:** 2026-09-01T07:23:11Z
-**Stopped at:** Completed 60-03-PLAN.md
+**Last session:** 2026-09-01T07:42:06.383Z
+**Stopped at:** Completed 60-04-PLAN.md (Phase 60 review-lane-authority all 4 plans complete)
 **Resume file:** None
 
 ## Performance Metrics
@@ -397,6 +397,7 @@ RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The 
 | Phase 60 P01 | ~40min | 3 tasks | 6 files |
 | Phase 60 P02 | 14min | 2 tasks | 6 files |
 | Phase 60 P03 | ~11min | 2 tasks | 4 files |
+| Phase 60 P04 | ~15min | 3 tasks | 9 files |
 
 ## Decisions
 
@@ -488,6 +489,7 @@ RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The 
 - [Phase 60]: write_grant.authorize_review_batch(grant) returns the grant's own record_ids/record_domains on purpose (D-60-06) -- the deliberate divergence from authorize_send, which refuses to return a record list so a per-send window cannot widen to the whole grant.
 - [Phase 60]: preflight_before_send narrowed on the review lane only (MEDIUM-1): liveness excludes the review flag, derived from WRITE_ENABLING_FLAGS, so the batch window's own arm cannot trip its own pre-flight; a live dispatch flag on the review workflow still closes the grant.
 - [Phase 60]: D-60-08: a review decision now lands in the run's written_records-<run_id>.json artifact via a new classify_review_item mapping the review endpoint's seven outcome words onto the existing eight-word vocabulary; the append is gated on result["available"] (not merely run_id is not None) so a raising/unreachable POST leaves no artifact entry, matching dispatch.py's raise-before-append and chunking.dispatch_plan's DispatchError-continue precedent — resolved via advisor consult after the plan's <action> and <behavior> text diverged on this point.
+- [Phase ?]: Phase 60 sealed: the review lane is grantable end-to-end, operator-facing docs corrected, plugin released as v0.35.0 (push and marketplace-clone refresh still the operator's own action).
 
 ### Roadmap Evolution
 

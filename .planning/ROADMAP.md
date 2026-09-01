@@ -595,7 +595,7 @@ review became grantable (plan 02), and `n8n/code/reviewDecision.js`'s `not_allow
 becomes false once a grant can set the allowlist dynamically (plan 04, changed at its source and
 regenerated — never a hand-edit of the JSON).
 
-**Plans**: 3/4 plans executed
+**Plans**: 4/4 plans executed
 
 - [x] 60-01-PLAN.md — TRACER: `"review"` becomes a grantable lane end-to-end (LANES, `REVIEW_FLAGS`,
       `arm_for_review`, `submit_decision`'s grant gate), with the two reversed-design tests rewritten
@@ -607,7 +607,7 @@ regenerated — never a hand-edit of the JSON).
 - [x] 60-03-PLAN.md — review writes land in the per-run `written_records-<run_id>.json` artifact, in its
       existing vocabulary, with the bookkeeping structurally unable to stop a write. D-60-08. Wave 2.
 
-- [ ] 60-04-PLAN.md — operator surfaces and release: the corrected backend message (regenerated), the
+- [x] 60-04-PLAN.md — operator surfaces and release: the corrected backend message (regenerated), the
       review-triage skill on the grant, three-lane grants in the dispatch skills, truthful gate tables,
       CHANGELOG and version `0.35.0`. Wave 3.
 
@@ -873,7 +873,7 @@ silently inherit Phase 51's placeholder behavior without a decision.
 | 57. Ceilings, Refusal-before-start, Post-run Proof | v1.1 | 4/5 | In Progress|  |
 | 58. Take What the Operator Actually Has | v1.1 | 6/6 | Complete (verified) | 2026-08-26 |
 | 59. Frictionless Write Path | v1.1 | 9/9 | Complete (verified 18/18, after gap closure) | 2026-08-29 |
-| 60. Review-lane Authority | v1.1 | 3/4 | In Progress|  |
+| 60. Review-lane Authority | v1.1 | 4/4 | In Progress|  |
 | 61. Autonomous Batch Runs (absorbs 55 + 56) | v1.1 | 6/6 | Complete (verified 12/12) | 2026-08-30 |
 
 ## Ledger gaps (known)
