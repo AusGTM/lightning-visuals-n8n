@@ -1,0 +1,70 @@
+{
+  "version": "1.0",
+  "timestamp": "2026-09-01T01:48:58.302Z",
+  "phase": "57",
+  "phase_name": "ceilings-refusal-before-start-and-post-run-proof",
+  "phase_dir": ".planning/phases/57-ceilings-refusal-before-start-and-post-run-proof",
+  "plan": null,
+  "task": null,
+  "total_tasks": null,
+  "status": "paused",
+  "context": "default",
+  "note": "Phase 57 is COMPLETE and SEALED (fc1d142, verified 9/9). This handoff does NOT describe unfinished phase work. What is paused is (a) an unfinished investigation into two GSD tooling defects that live OUTSIDE this repo, and (b) one authorised operator action not yet taken.",
+  "completed_tasks": [
+    {"id": 1, "name": "Apply interrupted cycle-2 revision to 57-02..05 + VALIDATION", "status": "done", "commit": "9b89d7f"},
+    {"id": 2, "name": "Close plan-checker blocker (57-01's remainder handoff pointed at a task 57-03 never had) + 3 warnings", "status": "done", "commit": "2828061"},
+    {"id": 3, "name": "Add ### Phase 57 ROADMAP detail section to pass the convergence pre-flight gate", "status": "done", "commit": "0cb40e7"},
+    {"id": 4, "name": "Convergence cycle 3 (2 HIGH / 10 actionable, down from 20)", "status": "done", "commit": "8eef5fb"},
+    {"id": 5, "name": "Close all 12 cycle-3 findings", "status": "done", "commit": "1184a69"},
+    {"id": 6, "name": "Execute 57-01 — the ceiling: refusal, pre-send stop, four dispatch paths", "status": "done", "commit": "3b3fcfb,f02113d,6ebb74f,2dcaec7"},
+    {"id": 7, "name": "Execute 57-04 — disarmed ZoomInfo probe + live verdict + cause discrimination", "status": "done", "commit": "d549b5b,92b3557,7b06b8b,375be51"},
+    {"id": 8, "name": "Execute 57-02 — eight-word outcome vocabulary, row_id through Build Ingest Response", "status": "done", "commit": "6187173,0ba8130,d78c15f,14699ef"},
+    {"id": 9, "name": "Execute 57-03 — remainder queue, split_for_allowance, ceiling-breach handoff", "status": "done", "commit": "6ba462c,ce0896f,4b12d18"},
+    {"id": 10, "name": "Execute 57-05 — evidence layer, end-of-run report, phase gate", "status": "done", "commit": "59e0419,2d58f65,2fe8d50,58c2e9b,c3f987f,0098ff6,92d2c39"},
+    {"id": 11, "name": "Fix date-brittle test 57-01 introduced (hardcoded 2026-08-31)", "status": "done", "commit": "f072e09"},
+    {"id": 12, "name": "Verify phase (9/9 truths) and seal", "status": "done", "commit": "fc1d142"},
+    {"id": 13, "name": "Re-check the two GSD tooling defects after the 1.10.0 -> 1.12.0 update", "status": "in_progress", "progress": "Both confirmed still present. Defect 2's cause narrowed to content-stripping, NOT the regex; the exact stripping function is not yet identified."}
+  ],
+  "remaining_tasks": [
+    {"id": 14, "name": "Finish isolating GSD defect 2: which of extractCurrentMilestone() / stripShippedMilestones() drops the checklist entries", "status": "not_started"},
+    {"id": 15, "name": "Decide how to handle both GSD defects (patch global install / report upstream / leave)", "status": "not_started"},
+    {"id": 16, "name": "Run the authorised SMALL supervised first live batch and read its end-of-run report", "status": "not_started"},
+    {"id": 17, "name": "Phase 60 — review-lane authority (the other open v1.1 phase)", "status": "not_started"}
+  ],
+  "blockers": [
+    {
+      "description": "GSD defect 2 root cause not yet isolated. roadmap get-phase returns a bare {found:false} for every checklist-only phase in this repo's ROADMAP (53, 55, 56, 59, 60, 62) with no error/message/phase_name. Proven NOT to be the checklist regex (it matches raw content) and NOT the fallback logic (it fires correctly, message and all, on a minimal fixture). Cause is that 1.12.0 now searches extractCurrentMilestone(rawContent, cwd) and stripShippedMilestones(rawContent) instead of the raw file, and this repo's checklist entries (ROADMAP.md lines 29-441) do not survive that pass while the '### Phase N:' headings (line 458+) do.",
+      "type": "technical",
+      "workaround": "Give a phase both a checklist entry AND a '### Phase N:' detail section, as was done for 57 in 0cb40e7."
+    },
+    {
+      "description": "Both GSD defects live in ~/.claude/gsd-core (v1.12.0), which is NOT a git repo, is shared by every project on this machine, and is overwritten by /gsd-update. A /gsd-quick run in this repo would commit planning prose here describing changes made outside it.",
+      "type": "external",
+      "workaround": "None chosen yet — the scope question was put to the operator and not answered."
+    }
+  ],
+  "async_jobs": [],
+  "human_actions_pending": [
+    {
+      "action": "Run the SMALL supervised first live batch, quoting cost from write_grant.envelope() over the actual record set first, then read its end-of-run report",
+      "context": "Authorised at 57-05's phase gate (option-a). This is what produces the end-of-run report on real data, which is itself the precondition the phase set before ANY unattended run. D-61-08's unattended gate stays SHUT until then.",
+      "blocking": true
+    },
+    {
+      "action": "Decide the scope question on the two GSD tooling defects",
+      "context": "Options put to the operator: patch the global install + record for re-apply after /gsd-update; patch the requirements one only; write up for upstream; or run /gsd-quick as originally asked. Not answered.",
+      "blocking": false
+    }
+  ],
+  "decisions": [
+    {"decision": "RUN-05 ships via option-a — preflight refusal with sampling limits disclosed", "rationale": "The live measurement read sampled:true (2500 allowance, 134 spent, 2366 remaining) via listing_exhausted while covers_full_window was false. An earlier sampled:false reading was superseded: it was caused by n8n_monthly_execution_allowance being absent from the live plugin config, not by an unsampleable account.", "phase": "57"},
+    {"decision": "AFTER-03 ships via option-b — eight outcome words", "rationale": "'written' only for a create whose id was echoed back (terminal evidence); 'write_attempted' for an update/enrich whose id was known before the PATCH. D-57-03 locked 'written' for all three while CONTEXT's specifics forbade inferring it; splitting by evidence satisfies both.", "phase": "57"},
+    {"decision": "Auto-split queues WORK, never AUTHORITY (one-way ruling)", "rationale": "Each split run opens its OWN grant; the remainder queue records what is left and nothing picks it up automatically. GRANT-06 unchanged.", "phase": "57"},
+    {"decision": "ZoomInfo balance probed live — verdict readable", "rationale": "9381 credits, lusha_delta 0. The provider_error from the 2026-08-25 walk is gone and needed no fix; the suspected missing Accept header was already fixed in current code. This is why the plan forbade writing a fix before observing.", "phase": "57"},
+    {"decision": "Deploy the ingest workflow disarmed; authorise only a SMALL supervised batch", "rationale": "Landing the phase authorises nothing. The unattended option was selectable (ceiling did not read CEILING_UNKNOWN) but was not chosen, because the phase's own precondition wants an end-of-run report read on real data first.", "phase": "57"},
+    {"decision": "AFTER-01 ships PARTIAL, disclosed", "rationale": "The pair pipeline's final ingest leg strips row_id via extraction.strip_row_id, so its rows are kept and rendered UNJOINABLE with that leg named in the report's gaps — never dropped, never shown as a completed join.", "phase": "57"}
+  ],
+  "uncommitted_files": [],
+  "next_action": "Finish isolating GSD defect 2 by instrumenting ~/.claude/gsd-core/bin/lib/roadmap.cjs's extractCurrentMilestone() and stripShippedMilestones() against this repo's ROADMAP.md, to establish which one drops the checklist entries. Then take the operator's scope decision on both defects.",
+  "context_notes": "Phase 57 is done and sealed; nothing in it is owed. The session ended mid-investigation on GSD tooling defects that are NOT part of this repo. Two environment changes were made outside git and matter operationally: n8n_monthly_execution_allowance=2500 was added to the live plugin config at ~/.claude/plugins/data/operator-claude-plugin-lightning-visuals-operator/operator.local.json (backup .bak-57) — it had been absent, which meant the ceiling could not sample AND Phase 45's burn-rate alarm was not watching; and wf_contact_ingest_cloud.json was deployed AND bounced on alexherman.app.n8n.cloud (AwbBeShdPgV48eiY). Nothing was armed, no batch ran, no provider credit was spent in the entire phase."
+}
