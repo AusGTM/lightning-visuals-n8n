@@ -5,16 +5,16 @@ milestone_name: Unattended Session Runs
 current_phase: 60
 current_phase_name: Review-lane authority
 status: complete
-stopped_at: Completed 60-01-PLAN.md
-last_updated: "2026-09-01T06:55:01.566Z"
+stopped_at: Completed 60-02-PLAN.md
+last_updated: "2026-09-01T07:12:06.620Z"
 last_activity: 2026-09-01
+state_head: 5bc5fc49e382c4f01d7eb5bedf1dc18544316423
 progress:
   total_phases: 8
-  completed_phases: 6
-  total_plans: 45
-  completed_plans: 41
-  percent: 75
-state_head: 7002b21d7293f77730053e27574e5800fa7e4253
+  completed_phases: 5
+  total_plans: 44
+  completed_plans: 42
+  percent: 63
 last_activity_desc: "**Phase 61 complete and verified (12/12)**; backend deployed and"
 ---
 
@@ -282,14 +282,14 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████████░] 91% — v1.1: 53/54/58/59/61 complete; **57 in progress (Plan 01 done,
+Progress: [██████░░░░] 63% — v1.1: 53/54/58/59/61 complete; **57 in progress (Plan 01 done,
 RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The old
 `97% (v0.9 phase 47.5 of 46-49)` bar was a v0.9 figure and is superseded.)
 
 ## Session
 
-**Last session:** 2026-09-01T06:54:57.420Z
-**Stopped at:** Completed 60-01-PLAN.md
+**Last session:** 2026-09-01T07:12:06.392Z
+**Stopped at:** Completed 60-02-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -395,6 +395,7 @@ RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The 
 | Phase 57 P02 | 55min | 3 tasks | 9 files |
 | Phase 57 P03 | 90min | 3 tasks | 11 files |
 | Phase 60 P01 | ~40min | 3 tasks | 6 files |
+| Phase 60 P02 | 14min | 2 tasks | 6 files |
 
 ## Decisions
 
@@ -482,6 +483,9 @@ RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The 
 - [Phase ?]: 57-02 Task 1 (operator): option-b — split written vs write_attempted by what the id echoed back actually proves
 - [Phase ?]: [Phase 57-03]: Task 1 checkpoint ruling (operator, this plan): option-a selected -- auto-split queues WORK ONLY, never AUTHORITY (D-57-05, GRANT-06). remainder_queue.py holds re-sendable chunking.failed_batch()-shaped specs; write_grant.split_for_allowance projects the grant scope FROM the split work (never a separately-ordered ids/domains sequence, REVIEW-57-H1). Each split run still opens its OWN grant -- the queue confers no authority and nothing picks it up automatically. 57-03 is the declared owner of this STATE.md record per M-2.
 - [Phase ?]: D-60-01/D-60-02: review is now a third grantable lane; one grant can span enrichment, contacts and review — 60-01 tracer proved the full path arm/decision/disarm with no shell env var
+- [Phase 60]: Guardrail A widened to sorted(OVERLAYABLE_FLAGS) (5 flags, was DISPATCH_FLAGS' 4) so a stuck-open ALLOW_HUBSPOT_REVIEW_WRITES refuses the next grant open by name; WRITE_ENABLING_FLAGS appended the review flag last (order load-bearing).
+- [Phase 60]: write_grant.authorize_review_batch(grant) returns the grant's own record_ids/record_domains on purpose (D-60-06) -- the deliberate divergence from authorize_send, which refuses to return a record list so a per-send window cannot widen to the whole grant.
+- [Phase 60]: preflight_before_send narrowed on the review lane only (MEDIUM-1): liveness excludes the review flag, derived from WRITE_ENABLING_FLAGS, so the batch window's own arm cannot trip its own pre-flight; a live dispatch flag on the review workflow still closes the grant.
 
 ### Roadmap Evolution
 
