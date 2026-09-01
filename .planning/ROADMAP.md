@@ -455,6 +455,21 @@ variable), and a design that runs the provider waterfall twice per written recor
       company or be held) and Phase 61's held-row queue (`held_queue.py`) for anything held —
       Phase 56 was absorbed into 61, so its queue is 61's.
 
+      **Plans:** 5 plans (planned 2026-09-02)
+
+      Plans:
+      - [ ] 62-01-PLAN.md — the suggestion round's engine: eligibility, ladder discovery, role
+            filter, row synthesis into `extraction.validate()` (wave 1, tracer-led)
+      - [ ] 62-02-PLAN.md — role vocabulary from the portal's own job titles, with the disclosed
+            un-evidenced fallback, and the SUGGEST-03 / ROADMAP amendment (wave 2)
+      - [ ] 62-03-PLAN.md — the priced ceiling folded into the session grant's opening envelope
+            (wave 1, carries a blocking `checkpoint:decision` for the one-way D-62-11)
+      - [ ] 62-04-PLAN.md — per-field provenance for a suggested contact, and
+            `num_associated_contacts` on the company search and response (wave 1, regenerate only,
+            no deploy)
+      - [ ] 62-05-PLAN.md — the operator-attended sitting: `skills/suggest-contacts/SKILL.md`, its
+            composition test, the unprompted post-batch offer, and the 0.36.0 release (wave 3)
+
 - [ ] **Phase 63: The unattended lane actually runs unattended** — **NUMBERED 2026-09-02**
       (operator). Two long-standing todos, both re-verified live that day, both attacking the
       v1.1 goal from opposite ends: the sweep that is supposed to run without anyone watching
