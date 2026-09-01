@@ -3,18 +3,18 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Unattended Session Runs
 current_phase: 60
-current_phase_name: review-lane-authority
+current_phase_name: Review-lane authority
 status: complete
-stopped_at: Phase 60 context gathered
-last_updated: "2026-09-01T06:03:23.390Z"
+stopped_at: Completed 60-01-PLAN.md
+last_updated: "2026-09-01T06:55:01.566Z"
 last_activity: 2026-09-01
-state_head: 459ab9e8c923ba19e8c0957f0d72aaf204220c94
 progress:
   total_phases: 8
-  completed_phases: 5
-  total_plans: 44
-  completed_plans: 40
-  percent: 63
+  completed_phases: 6
+  total_plans: 45
+  completed_plans: 41
+  percent: 75
+state_head: 7002b21d7293f77730053e27574e5800fa7e4253
 last_activity_desc: "**Phase 61 complete and verified (12/12)**; backend deployed and"
 ---
 
@@ -169,12 +169,23 @@ predating the window. VETO-03 bar still 0.
 
 ## Current Position
 
-Phase: 60 (review-lane-authority) — READY TO EXECUTE
-Next: **Phase 57** — ceilings, refusal-before-start, post-run proof. It gates the first live
-  unattended, credit-spending batch (D-61-08), which has NOT run. Also open: Phase 60.
+Phase: 60 (Review-lane authority) — EXECUTING, Plan 01 of 4 complete (Plan 02 next).
+**60-01 outcome (2026-09-01):** "review" is now a third grantable lane end to end — the
+  tracer proved plan/open/arm/decision/disarm through `n8n_arming.arm_for_review` and
+  `write_grant.authorize_send(lane="review")`, with no shell environment variable read
+  anywhere. `ALLOW_REVIEW_SUBMIT`/`submit_enabled()` retired from `review_decision.py`.
+  `n8n_arming.disarm` rebuilt to derive its targets AND node allowlist from what the
+  fetched workflow actually declares (closes cross-AI review MEDIUM-2/LOW-5 in the same
+  commit). No workflow JSON touched; nothing armed, nothing deployed. Full record:
+  `.planning/phases/60-review-lane-authority/60-01-SUMMARY.md`.
+Next: **60-02** (preflight guardrails: widen `WRITE_ENABLING_FLAGS`/`read_live_write_state`,
+  the batch-window lifecycle). Also open: **Phase 57** — ceilings, refusal-before-start,
+  post-run proof. It gates the first live unattended, credit-spending batch (D-61-08),
+  which has NOT run.
 Armed state: nothing armed. Phase 61's live exercise was DISARMED throughout
-  (executions `12040`, `12044`–`12047`).
-Suites at Phase 61 close: root python 3539 passed / 154 skipped; node 844 pass / 0 fail.
+  (executions `12040`, `12044`–`12047`); 60-01 touched only local test fixtures and code.
+Suites at 60-01 close: root python 3815 passed / 154 skipped; operator-claude-plugin
+  2145 passed / 5 skipped; node 848 pass / 0 fail.
 
 ### Retained history — Phase 47.5 (v0.9, 2026-08-12)
 
@@ -271,15 +282,15 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [██████████] 95% — v1.1: 53/54/58/59/61 complete; **57 in progress (Plan 01 done,
+Progress: [█████████░] 91% — v1.1: 53/54/58/59/61 complete; **57 in progress (Plan 01 done,
 RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The old
 `97% (v0.9 phase 47.5 of 46-49)` bar was a v0.9 figure and is superseded.)
 
 ## Session
 
-**Last session:** 2026-09-01T04:52:40.393Z
-**Stopped at:** Phase 60 context gathered
-**Resume file:** .planning/phases/60-review-lane-authority/60-CONTEXT.md
+**Last session:** 2026-09-01T06:54:57.420Z
+**Stopped at:** Completed 60-01-PLAN.md
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -383,6 +394,7 @@ RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The 
 | Phase 57 P04 | unknown | 3 tasks | 5 files |
 | Phase 57 P02 | 55min | 3 tasks | 9 files |
 | Phase 57 P03 | 90min | 3 tasks | 11 files |
+| Phase 60 P01 | ~40min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -469,6 +481,7 @@ RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The 
 - [Phase ?]: Phase 57 Plan 04 Task 2 checkpoint: operator selected option-run; live ZoomInfo balance probe returned readable (9381 credits), closing G-4's ZoomInfo half by observation with no code fix
 - [Phase ?]: 57-02 Task 1 (operator): option-b — split written vs write_attempted by what the id echoed back actually proves
 - [Phase ?]: [Phase 57-03]: Task 1 checkpoint ruling (operator, this plan): option-a selected -- auto-split queues WORK ONLY, never AUTHORITY (D-57-05, GRANT-06). remainder_queue.py holds re-sendable chunking.failed_batch()-shaped specs; write_grant.split_for_allowance projects the grant scope FROM the split work (never a separately-ordered ids/domains sequence, REVIEW-57-H1). Each split run still opens its OWN grant -- the queue confers no authority and nothing picks it up automatically. 57-03 is the declared owner of this STATE.md record per M-2.
+- [Phase ?]: D-60-01/D-60-02: review is now a third grantable lane; one grant can span enrichment, contacts and review — 60-01 tracer proved the full path arm/decision/disarm with no shell env var
 
 ### Roadmap Evolution
 
