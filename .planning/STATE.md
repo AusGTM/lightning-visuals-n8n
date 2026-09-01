@@ -5,15 +5,15 @@ milestone_name: Unattended Session Runs
 current_phase: 62
 current_phase_name: Suggest the contacts nobody named
 status: complete
-stopped_at: Completed 62-03-PLAN.md (suggestion allowance folded into the grant envelope, one-envelope checkpoint answered)
-last_updated: "2026-09-01T23:25:06.198Z"
+stopped_at: "Completed 62-02-PLAN.md (role vocabulary: portal jobtitle clustering, disclosed generic fallback, SUGGEST-03 amended not closed)"
+last_updated: "2026-09-01T23:34:02.207Z"
 last_activity: 2026-09-02
-state_head: e7da6198e06a85cb4ad7bd9f415459ddfcfc5d21
+state_head: e9e33a0f9fee727ccefa0fa0588dfa224984bd45
 progress:
   total_phases: 9
   completed_phases: 6
   total_plans: 49
-  completed_plans: 47
+  completed_plans: 48
   percent: 67
 last_activity_desc: "**Phase 61 complete and verified (12/12)**; backend deployed and"
 ---
@@ -170,7 +170,34 @@ predating the window. VETO-03 bar still 0.
 ## Current Position
 
 Phase: 62 (Suggest the contacts nobody named) — EXECUTING
-**62-01 outcome (2026-09-02):** the suggestion round's engine, tracer-led — `suggest_contacts.py`
+**62-02 outcome (2026-09-02):** the role vocabulary — `scripts/role_vocabulary.py` (repo root,
+  credential- and portal-guarded, mirrors `inventory_org_type_values.py`) sweeps live contact
+  `jobtitle` values and clusters them with ONE cached Haiku call (gated behind
+  `SPARSE_THRESHOLD`, never re-clustered per round), ranking the top `TOP_N_FAMILIES` (8) by
+  recurrence. The committed `operator-claude-plugin/config/role_vocabulary.yaml` was seeded by
+  actually executing the generic-fallback branch (`evidenced: false` at document AND every
+  family level), so a sitting works before any operator runs the live inventory.
+  `role_classify.py` gained `load_families()`/`offer_block()`/`chosen_families()`: the loader
+  never separates the family list from its evidence status, `offer_block()`'s disclosure
+  sentence for an un-evidenced vocabulary IS D-62-07's whole mitigation, and
+  `chosen_families()` validates a round-level (never per-record) selection. SUGGEST-03 was
+  AMENDED (not closed) in `v1.1-REQUIREMENTS.md` with an inline D-62-07 note; `ROADMAP.md`'s
+  Phase 62 entry now distinguishes closed (SUGGEST-01/-02/-04/-05) from amended (SUGGEST-03) —
+  the blanket `Closes SUGGEST-01..05` claim is gone. Full record:
+  `.planning/phases/62-suggest-the-contacts-nobody-named/62-02-SUMMARY.md`.
+Next: **62-05** (the operator-attended sitting: `skills/suggest-contacts/SKILL.md`, the
+  unprompted post-batch offer, and the 0.36.0 release — wave 3, the last plan in this phase).
+  Also open: **Phase 57** — ceilings, refusal-before-start, post-run proof. It gates the first
+  live unattended, credit-spending batch (D-61-08), which has NOT run.
+Armed state: nothing armed. 62-02 touched only local Python/YAML source, tests, and two
+  planning docs — no network, no HubSpot credentials, no workflow JSON.
+Suites at 62-02 close: operator-claude-plugin 2237 passed / 5 skipped; root
+  `.venv/bin/python -m pytest -q` 3907 passed / 154 skipped; `node --test tests/n8n/*.test.mjs`
+  862 pass / 0 fail (all >= wave 1 baselines).
+
+### Retained — 62-01 outcome (2026-09-02)
+
+the suggestion round's engine, tracer-led — `suggest_contacts.py`
   (`eligibility`, `discovery_plan`, `company_budget`, `next_candidates`, `no_candidates`,
   `select_people`, `synthesise_rows`, `round_artifact`, `partition_for_dispatch`) and
   `role_classify.py` (`classify_title`), pure orchestration with no HTTP client, no model
@@ -179,16 +206,7 @@ Phase: 62 (Suggest the contacts nobody named) — EXECUTING
   deduped against known contacts (D-62-18, pre-filter half), and synthesised into a row
   `extraction.validate()` accepts on identity group 2 — proved end to end in one offline
   tracer test. 24 new tests, 3 tasks each RED (failing test) then GREEN (implementation).
-  `SUGGEST-01`/`SUGGEST-04` stay blocked (shared with sibling plans 62-04/62-05, not yet
-  summarized). Full record: `.planning/phases/62-suggest-the-contacts-nobody-named/62-01-SUMMARY.md`.
-Next: **62-02** (role vocabulary — Haiku clustering of live `jobtitle` values, cached —
-  supplies the `family_list`/`chosen_families` this plan's functions already accept as
-  parameters). Also open: **Phase 57** — ceilings, refusal-before-start, post-run proof. It
-  gates the first live unattended, credit-spending batch (D-61-08), which has NOT run.
-Armed state: nothing armed. 62-01 touched only local Python source and tests, no network,
-  no HubSpot credentials, no workflow JSON.
-Suites at 62-01 close: operator-claude-plugin 2206 passed / 5 skipped (root python and node
-  suites unaffected — this plan touches operator-claude-plugin/ only).
+  Full record: `.planning/phases/62-suggest-the-contacts-nobody-named/62-01-SUMMARY.md`.
 
 ### Retained history — Phase 47.5 (v0.9, 2026-08-12)
 
@@ -291,8 +309,8 @@ RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The 
 
 ## Session
 
-**Last session:** 2026-09-01T23:25:05.849Z
-**Stopped at:** Completed 62-03-PLAN.md (suggestion allowance folded into the grant envelope, one-envelope checkpoint answered)
+**Last session:** 2026-09-01T23:34:01.864Z
+**Stopped at:** Completed 62-02-PLAN.md (role vocabulary: portal jobtitle clustering, disclosed generic fallback, SUGGEST-03 amended not closed)
 **Resume file:** None
 
 ## Performance Metrics
@@ -404,6 +422,7 @@ RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The 
 | Phase 62 P01 | 35min | 3 tasks | 3 files |
 | Phase 62 P04 | 55min | 2 tasks | 15 files |
 | Phase 62 P03 | 25min | 3 tasks | 5 files |
+| Phase 62 P02 | 22 min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -501,6 +520,7 @@ RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The 
 - [Phase 62]: 62-04: num_associated_contacts was added to both HS_CO_SEARCH_BODY_EXPR (local_live) and ENRICH_COMPANY_SEARCH_PROPERTIES_CSV (the cloud builder's actual property list) after tracing that the plan's read_first named only the former, which never reaches wf_enrichment_cloud.json.
 - [Phase 62]: 62-04: preingest.py's OUTCOME_CONTRACT_VERSION allowlist was widened to {1, 2}, not moved to {2}, since this plan regenerates but does not deploy the n8n JSON -- the deployed backend still stamps 1 until an operator deploys it separately.
 - [Phase 62]: D-62-11 locked via checkpoint: the suggestion round's cost folds into the SAME opening grant envelope (one-envelope), not a separate spend confirmation. — Human operator answer at a gate=blocking-human checkpoint; one disclosure, one yes for the whole session; over-budget suggestion rounds now refuse pre-start via Phase 57's existing CEILING_OVER split offer.
+- [Phase 62]: D-62-07 implemented: role_vocabulary.py's committed seed is the generic-fallback branch's actual output (executed, not hand-typed), and role_classify.offer_block()'s disclosure sentence is what SUGGEST-03's amendment requires operators to see.
 
 ### Roadmap Evolution
 

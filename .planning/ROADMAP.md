@@ -464,7 +464,7 @@ variable), and a design that runs the provider waterfall twice per written recor
       - [x] 62-01-PLAN.md — the suggestion round's engine: eligibility, ladder discovery, role
             filter, row synthesis into `extraction.validate()` (wave 1, tracer-led)
 
-      - [ ] 62-02-PLAN.md — role vocabulary from the portal's own job titles, with the disclosed
+      - [x] 62-02-PLAN.md — role vocabulary from the portal's own job titles, with the disclosed
             un-evidenced fallback, and the SUGGEST-03 / ROADMAP amendment (wave 2)
 
       - [x] 62-03-PLAN.md — the priced ceiling folded into the session grant's opening envelope
