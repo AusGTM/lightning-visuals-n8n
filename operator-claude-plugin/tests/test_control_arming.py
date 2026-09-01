@@ -236,6 +236,69 @@ def test_no_code_path_returns_a_successful_looking_result_for_a_failed_disarm():
     )
 
 
+# --- Phase 60, MEDIUM-2/LOW-5: targets and allowlist derived from what's actually declared -
+
+def _review_only_workflow(review_writes='"false"', ids='""', domains='""'):
+    """A gate node declaring ONLY the review write-safety constant (and its shared
+    allowlist) — no dispatch constant at all. This is the shape MEDIUM-2 exists to prove
+    `disarm` handles: BEFORE the fix, `disarm`'s node allowlist was always
+    `_declaring_nodes(original)` (the DISPATCH_FLAGS default), so a node like this one would
+    fall outside that allowlist and `apply_mutation`'s own allowlist assertion would refuse
+    the very rewrite disarm needed to make."""
+    gate = (f"const ALLOW_HUBSPOT_REVIEW_WRITES = {review_writes};\n"
+            f"const TEST_RECORD_IDS = {ids};\n"
+            f"const TEST_RECORD_DOMAINS = {domains};\n"
+            "function _writeSafetyAllows() { return false; }\n")
+    return {
+        "id": WORKFLOW_ID,
+        "name": "LV Review Decision (Cloud)",
+        "active": True,
+        "settings": {},
+        "connections": {},
+        "nodes": [{"name": "Review Gate", "parameters": {"jsCode": gate}}],
+    }
+
+
+def test_disarm_rewrites_a_node_declaring_only_the_review_constant(
+        fake_config, stub_module_transport_factory):
+    """MEDIUM-2 (cross-AI review, 2026-09-01): a fixture workflow whose gate node declares
+    ONLY the review write-safety constant has that declaration rewritten by `disarm` rather
+    than refused — proving the node allowlist and the mutation targets were derived from
+    the SAME flag list (both from what the fetched workflow actually declares, via
+    `n8n_read.read_write_safety` over `OVERLAYABLE_FLAGS`). With the allowlist reverted to
+    `_declaring_nodes(original)`'s old DISPATCH_FLAGS default, this node would sit outside
+    the allowed-node set and `apply_mutation` would refuse before any PUT — which is the
+    failure this test exists to catch."""
+    transport = stub_module_transport_factory([
+        _review_only_workflow(review_writes='"true"', ids='"12345"'),
+        _review_only_workflow(review_writes='"true"', ids='"12345"'),
+        {}, {}, {},
+        _review_only_workflow(),
+    ])
+
+    result = n8n_arming.disarm(WORKFLOW_ID, fake_config, transport=transport)
+
+    assert result["outcome"] == n8n_arming.DISARMED
+    assert transport.mutating_calls, "the disarm must actually have rewritten the node"
+
+
+def test_disarm_refuses_before_mutating_when_the_pre_read_is_unreadable(
+        fake_config, stub_module_transport_factory):
+    """LOW-5 (cross-AI review, 2026-09-01): when `disarm`'s own pre-read cannot be parsed as
+    a workflow, it returns DISARM_FAILED IMMEDIATELY, before any mutation is attempted —
+    never falling back to a guessed flag list and reporting a clean verdict over state
+    nobody actually read. The detail names the review write constant as UNVERIFIED, and no
+    mutating request reaches the recorded call log."""
+    transport = stub_module_transport_factory([(500, {})])   # non-2xx -> get_workflow: None
+
+    result = n8n_arming.disarm(WORKFLOW_ID, fake_config, transport=transport)
+
+    assert result["outcome"] == n8n_arming.DISARM_FAILED
+    assert "ALLOW_HUBSPOT_REVIEW_WRITES" in result["detail"]
+    assert "UNVERIFIED" in result["detail"]
+    assert transport.mutating_calls == []
+
+
 # --- the armed window --------------------------------------------------------------------
 
 def test_a_raise_inside_the_window_still_attempts_the_disarm(

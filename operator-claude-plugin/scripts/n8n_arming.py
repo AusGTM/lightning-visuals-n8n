@@ -184,6 +184,20 @@ ARM_ENV_VAR = "ALLOW_N8N_ARM"
 DISPATCH_FLAGS = ("ALLOW_HUBSPOT_RECORD_WRITES", "ALLOW_HUBSPOT_CREATE",
                   "TEST_RECORD_IDS", "TEST_RECORD_DOMAINS")
 
+# The REVIEW lifecycle's three constants (Phase 60, D-60-01/D-60-05). A SEPARATE tuple from
+# DISPATCH_FLAGS, deliberately — arming review must never grant dispatch, and arming
+# dispatch must never grant review. DISPATCH_FLAGS must NEVER gain
+# ALLOW_HUBSPOT_REVIEW_WRITES: `test_control_arming.py::test_review_writes_is_not_touched_by_a_dispatch_disarm`
+# and `test_write_grant.py`'s flag-separation assertions pin this and must stay green.
+REVIEW_FLAGS = ("ALLOW_HUBSPOT_REVIEW_WRITES", "TEST_RECORD_IDS", "TEST_RECORD_DOMAINS")
+
+# Which flag set an arm/disarm call targets. A dispatch arm/window defaults to
+# AUTHORITY_DISPATCH; a review arm/window (arm_for_review / armed_review_window) passes
+# AUTHORITY_REVIEW. The two never share a call.
+AUTHORITY_DISPATCH = "dispatch"
+AUTHORITY_REVIEW = "review"
+FLAGS_BY_AUTHORITY = {AUTHORITY_DISPATCH: DISPATCH_FLAGS, AUTHORITY_REVIEW: REVIEW_FLAGS}
+
 ARMED = "armed"
 DISARMED = "disarmed"
 DISARM_FAILED = "disarm_failed"
@@ -297,7 +311,7 @@ def _assert_only_declaration_lines_changed(original, modified, node_names, flags
 
 
 def arm_for_dispatch(workflow_id, record_ids, record_domains, allow_create, config,
-                     transport=None, grant=None):
+                     transport=None, grant=None, *, authority=AUTHORITY_DISPATCH):
     """Grant live writes for ONE dispatch, bounded to exactly the records in it.
 
     The allowlist is derived from the batch about to be dispatched, so the grant is
@@ -309,7 +323,20 @@ def arm_for_dispatch(workflow_id, record_ids, record_domains, allow_create, conf
     `scheduled_arm.py` included — stays on the environment gate with no edit. When a grant
     IS supplied, two decisions are made separately and both must pass: `_arm_gate` decides
     AUTHORITY (the admin's settings key), and the block below decides SCOPE (GRANT-03).
+
+    `authority` (Phase 60, D-60-01/D-60-05) is keyword-only and selects WHICH flag set this
+    arm targets: `AUTHORITY_DISPATCH` (the default, unchanged) sets
+    `ALLOW_HUBSPOT_RECORD_WRITES`/`ALLOW_HUBSPOT_CREATE`; `AUTHORITY_REVIEW` sets
+    `ALLOW_HUBSPOT_REVIEW_WRITES` instead and NEVER either dispatch boolean. This function
+    is the one arm implementation both authorities share — see `arm_for_review`, which
+    delegates here rather than duplicating the body.
     """
+    if authority not in FLAGS_BY_AUTHORITY:
+        return {"outcome": REFUSED,
+                "detail": (f"refusing to arm: unknown authority {authority!r}. Permitted "
+                           f"values are {sorted(FLAGS_BY_AUTHORITY)}.")}
+    flags = FLAGS_BY_AUTHORITY[authority]
+
     import requests as _requests
 
     refusal = _arm_gate(config, grant)
@@ -349,18 +376,28 @@ def arm_for_dispatch(workflow_id, record_ids, record_domains, allow_create, conf
         }
 
 
-    targets = {
-        "ALLOW_HUBSPOT_RECORD_WRITES": True,
-        "TEST_RECORD_IDS": ",".join(ids),
-        "TEST_RECORD_DOMAINS": ",".join(domains),
-    }
-    if allow_create:
-        targets["ALLOW_HUBSPOT_CREATE"] = True
+    if authority == AUTHORITY_REVIEW:
+        # Never carries either dispatch boolean — the load-bearing separation D-60-05
+        # requires: arming review must never incidentally open dispatch-write eligibility.
+        targets = {
+            "ALLOW_HUBSPOT_REVIEW_WRITES": True,
+            "TEST_RECORD_IDS": ",".join(ids),
+            "TEST_RECORD_DOMAINS": ",".join(domains),
+        }
+    else:
+        targets = {
+            "ALLOW_HUBSPOT_RECORD_WRITES": True,
+            "TEST_RECORD_IDS": ",".join(ids),
+            "TEST_RECORD_DOMAINS": ",".join(domains),
+        }
+        if allow_create:
+            targets["ALLOW_HUBSPOT_CREATE"] = True
 
     # Mirror of the deploy script's second fail-safe: the create constant has no effect
     # unless record-writes is enabled in the SAME request. Record-writes is unconditional
     # here, so this can only trip if a future edit makes it conditional — which is exactly
-    # when it needs to fail.
+    # when it needs to fail. Never reached on the review branch: `targets` never carries
+    # ALLOW_HUBSPOT_CREATE there.
     if "ALLOW_HUBSPOT_CREATE" in targets and not targets.get("ALLOW_HUBSPOT_RECORD_WRITES"):
         return {"outcome": REFUSED,
                 "detail": ("refusing to arm: creation was requested without record writes "
@@ -370,10 +407,10 @@ def arm_for_dispatch(workflow_id, record_ids, record_domains, allow_create, conf
 
     def _mutate(workflow):
         prior.update({flag: n8n_read.read_write_safety(workflow, flag).get("value")
-                      for flag in DISPATCH_FLAGS})
-        node_names = _declaring_nodes(workflow)
+                      for flag in flags})
+        node_names = _declaring_nodes(workflow, flags)
         rewritten, _counts = set_write_safety(workflow, targets)
-        _assert_only_declaration_lines_changed(workflow, rewritten, node_names)
+        _assert_only_declaration_lines_changed(workflow, rewritten, node_names, flags)
         workflow["nodes"] = rewritten["nodes"]
 
     def _verify(workflow):
@@ -387,7 +424,7 @@ def arm_for_dispatch(workflow_id, record_ids, record_domains, allow_create, conf
                           "attempted."}
 
     result = n8n_control.apply_mutation(
-        workflow_id, _mutate, _declaring_nodes(original), config,
+        workflow_id, _mutate, _declaring_nodes(original, flags), config,
         verify_fn=_verify, transport=transport,
         action=f"arm live writes on {workflow_id} for {len(ids)} id(s) and "
                f"{len(domains)} domain(s)")
@@ -420,17 +457,86 @@ def arm_for_dispatch(workflow_id, record_ids, record_domains, allow_create, conf
     }
 
 
+def arm_for_review(workflow_id, record_ids, record_domains, config, transport=None,
+                   grant=None):
+    """Grant review-decision writeback for ONE window, bounded to exactly the records in it
+    (Phase 60, D-60-01/D-60-05).
+
+    Delegates to `arm_for_dispatch(..., authority=AUTHORITY_REVIEW)` rather than
+    duplicating its body — one arm implementation, one set of guarantees, applied to a
+    second flag set. The historical name `arm_for_dispatch` is why this delegates instead
+    of standing up a parallel implementation: the mutation, the field-level guard, the
+    fail-closed re-scan and the record-scope check are all authority-agnostic, and only the
+    targets dict (`REVIEW_FLAGS` vs `DISPATCH_FLAGS`) differs between the two callers.
+
+    `allow_create` is fixed to `False` — a review decision never creates a record.
+    """
+    return arm_for_dispatch(workflow_id, record_ids, record_domains, False, config,
+                            transport=transport, grant=grant, authority=AUTHORITY_REVIEW)
+
+
 def disarm(workflow_id, config, transport=None):
     """Take live writes away again and PROVE it by an independent re-read.
 
     Deliberately NOT gated on ALLOW_N8N_ARM. A kill switch that blocked disarming would
     strand an armed backend, which is the exact failure the whole ceremony exists to
     prevent.
+
+    TARGETS AND ALLOWLIST ARE BOTH DERIVED FROM WHAT THE FETCHED WORKFLOW ACTUALLY DECLARES
+    (Phase 60, cross-AI review MEDIUM-2/LOW-5) — not from a fixed flag list. "Disarm" means
+    "put every write-safety constant this workflow declares back to its rest state": a
+    dispatch-only workflow disarms its four dispatch constants, a workflow whose gate also
+    declares `ALLOW_HUBSPOT_REVIEW_WRITES` disarms that too. This is what lets guardrail B's
+    `_close_with_disarm` clear a stuck review authorization it did not itself open, and it
+    also clears a deploy-baked review arm on that workflow — a deliberate fail-safe, not an
+    accident.
+
+    The derived flag list feeds BOTH the mutation targets AND the allowed-node list
+    (`_declaring_nodes(original, derived_flags)`) — never two different lists computed from
+    different flag sets. Every deployed workflow today declares all five OVERLAYABLE_FLAGS
+    on the same nodes, so a divergence between "what gets rewritten" and "what nodes may be
+    touched" is latent rather than live — but a node that ever declares ONLY the review
+    constant (no dispatch constant) would otherwise fall outside a DISPATCH_FLAGS-derived
+    allowlist and `apply_mutation` would refuse the very rewrite disarm needs to make.
+
+    WHEN THE PRE-READ FAILS, THIS RETURNS `DISARM_FAILED` IMMEDIATELY, BEFORE ANY MUTATION
+    IS ATTEMPTED (LOW-5). An unreadable workflow means the constants it declares are
+    unknown — falling back to a guessed flag list would let a verify over that guess pass
+    while the review write constant (or any other) stayed live and unread. This reuses
+    `DISARM_FAILED` rather than inventing a third outcome word: an unreadable state is never
+    evidence of a disarmed backend (the same rule `guardrail_a` applies at the open),
+    `DISARM_FAILED`'s existing wording already says exactly what is true here, and a new
+    word would have to be relearned by `_close_with_disarm`'s all-verified check, by
+    `armed_window.__exit__` and by every test. This also adds no noise to a working path:
+    before this change the unreadable branch computed an EMPTY allowed-node list, so
+    `apply_mutation`'s own allowlist assertion raised a raw exception the moment anything
+    needed changing — this early return replaces that accidental raw raise with a
+    deterministic verdict.
     """
     import requests as _requests
     transport = transport if transport is not None else _requests
 
-    targets = disarmed_targets(*DISPATCH_FLAGS)
+    original = n8n_read.get_workflow(config, workflow_id, transport=transport.get)
+    if not isinstance(original, dict):
+        return {
+            "outcome": DISARM_FAILED,
+            "workflow_id": workflow_id,
+            "workflow_name": None,
+            "observed": {},
+            "expected": {},
+            "detail": (
+                f"DISARM FAILED on {workflow_id!r}: the workflow could not be read, so the "
+                f"write-safety constants it declares are UNKNOWN — in particular "
+                f"ALLOW_HUBSPOT_REVIEW_WRITES is UNVERIFIED. LIVE WRITES MAY STILL BE "
+                f"ENABLED — an admin should open n8n and check this workflow directly. "
+                f"Do not treat this run as finished. No mutating request was attempted."),
+        }
+
+    derived_flags = [flag for flag in sorted(OVERLAYABLE_FLAGS)
+                     if n8n_read.read_write_safety(original, flag).get("nodes")]
+    targets = disarmed_targets(*derived_flags)
+    node_names = _declaring_nodes(original, derived_flags)
+    workflow_name = original.get("name")
 
     def _mutate(workflow):
         rewritten, _counts = set_write_safety(workflow, targets)
@@ -438,11 +544,7 @@ def disarm(workflow_id, config, transport=None):
 
     def _verify(workflow):
         return {flag: n8n_read.read_write_safety(workflow, flag).get("value")
-                for flag in DISPATCH_FLAGS}
-
-    original = n8n_read.get_workflow(config, workflow_id, transport=transport.get)
-    node_names = _declaring_nodes(original) if isinstance(original, dict) else []
-    workflow_name = original.get("name") if isinstance(original, dict) else None
+                for flag in derived_flags}
 
     result = n8n_control.apply_mutation(
         workflow_id, _mutate, node_names, config, verify_fn=_verify,
@@ -483,24 +585,27 @@ class armed_window:
     """
 
     def __init__(self, workflow_id, record_ids, record_domains, allow_create, config,
-                 transport=None, grant=None):
+                 transport=None, grant=None, *, authority=AUTHORITY_DISPATCH):
         self._args = (workflow_id, record_ids, record_domains, allow_create, config)
         self._transport = transport
         # Pass-through only. The window's own behaviour — arm, run, guaranteed disarm on
-        # both paths — is identical whichever authority the arm used (53-01).
+        # both paths — is identical whichever authority the arm used (53-01, 60-01).
         self._grant = grant
+        self._authority = authority
         self.workflow_id = workflow_id
         self.arm_result = None
         self.disarm_result = None
 
     def __enter__(self):
         self.arm_result = arm_for_dispatch(*self._args, transport=self._transport,
-                                           grant=self._grant)
+                                           grant=self._grant, authority=self._authority)
         if self.arm_result.get("outcome") != ARMED:
             raise ArmingRefused(self.arm_result.get("detail", "the arm did not succeed"))
         return self
 
     def __exit__(self, exc_type, exc, tb):
+        # disarm() derives its own targets from what the workflow declares, so it needs no
+        # authority argument — unchanged by this parameter's addition.
         self.disarm_result = disarm(self._args[0], self._args[4], transport=self._transport)
 
         if self.disarm_result.get("outcome") == DISARM_FAILED:
@@ -511,3 +616,15 @@ class armed_window:
             raise DisarmFailed(self.disarm_result) from exc
 
         return False        # never swallow the body's exception
+
+
+def armed_review_window(workflow_id, record_ids, record_domains, config, transport=None,
+                        grant=None):
+    """Factory: an `armed_window` for review-decision writeback (Phase 60, D-60-06).
+
+    Same arm -> run -> guaranteed-disarm lifecycle as a dispatch window; only the flags set
+    at arm/disarm time differ (`REVIEW_FLAGS`, via `authority=AUTHORITY_REVIEW`).
+    `allow_create` is fixed to `False` — a review decision never creates a record.
+    """
+    return armed_window(workflow_id, record_ids, record_domains, False, config,
+                        transport=transport, grant=grant, authority=AUTHORITY_REVIEW)

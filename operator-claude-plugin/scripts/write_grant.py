@@ -80,9 +80,13 @@ REFUSED = "refused"
 # hold: the allowlist stays record-scoped to the batch, so the collapse widens WHEN the
 # approval is given and never WHAT it covers; the enriched preview is still rendered; and
 # revocation still works — the default flips from ask-again to proceed-unless-stopped.
+REVIEW_LANE = "review"
+REVIEW_WORKFLOW_NAME = "LV Review Decision (Cloud)"
+
 LANES = {
     "enrichment": scheduled_arm.ENRICHMENT_WORKFLOW_NAME,
     "contacts": executions_client.CONTACT_INGEST_WORKFLOW_NAME,
+    REVIEW_LANE: REVIEW_WORKFLOW_NAME,
 }
 
 # D-59-07 AMENDMENT (operator, 2026-08-28): the operator-facing HALF of the paragraph
@@ -95,6 +99,23 @@ LANES = {
 # 59-03 pointed the disclosure at it). The historical paragraph above is left
 # unedited -- it is the code's own record of why the trade was made, and it stays
 # readable as that.
+
+# D-60-01/D-60-05 AMENDMENT (operator, 2026-09-01): Phase 60 REVERSES the paragraph
+# above -- the review lane's exclusion it describes is no longer true.
+# `"review"` is now a third grantable lane (`REVIEW_LANE` / `REVIEW_WORKFLOW_NAME`
+# above). The reversal happened because the separation the paragraph describes cost
+# TWO manual round trips to close a single flagged record -- an admin setting
+# `ALLOW_REVIEW_SUBMIT` in their own shell (which an operator in Claude Desktop cannot
+# do) plus a separate admin-run deploy baking `ALLOW_HUBSPOT_REVIEW_WRITES` and the
+# record's id into the workflow -- which made the documented operator path
+# unreachable from the operator's chair (60-CONTEXT.md D-60-01, mirroring G-2's
+# original diagnosis for the dispatch lanes in 53-01). What still holds, unchanged:
+# `ALLOW_HUBSPOT_REVIEW_WRITES` stays OUT of `n8n_arming.DISPATCH_FLAGS` -- arming a
+# dispatch grant still grants nothing on the review path and vice versa
+# (`n8n_arming.REVIEW_FLAGS` is its own separate tuple) -- and a grant's record
+# scoping (`covers()`, GRANT-03) still bounds every review decision exactly as it
+# bounds every dispatch send. Only the WALL between the two authorities' consent
+# ceremonies came down; the wall between what they can each touch did not.
 
 
 def _now_iso():
@@ -622,11 +643,14 @@ def _consequence(lane_names, ids, domains, allow_create):
         # scoped there in error, since the artifact is written after EVERY dispatch
         # regardless of how many lanes a grant spans. That sentence has MOVED below,
         # outside this branch, so it fires for a single-lane grant too. What is left
-        # here, genuinely multi-lane, is the statement that this one grant covers both
-        # lanes at once.
+        # here, genuinely multi-lane, is the statement that this one grant covers every
+        # named lane at once. Phase 60, D-60-02: a grant may now span up to three lanes,
+        # not just two, so the count is derived from `lane_names` rather than the fixed
+        # "both" this sentence used to say — the trailing clause itself is unchanged and
+        # stays pinned by `test_a_two_lane_grant_names_both_lanes_and_points_at_the_written_records_list`.
         sentence += (
-            " This grant covers both lanes at once: it enables enrichment and writes "
-            "to HubSpot.")
+            f" This grant covers all {len(lane_names)} lanes at once: it enables "
+            f"enrichment and writes to HubSpot.")
 
     # D-59-09 (operator, 2026-08-29): fires for every grant, one lane or two -- see the
     # note above for why this moved out of the multi-lane branch. The artifact itself
@@ -915,8 +939,7 @@ def plan_grant(config, *, lanes, object_type, record_ids, record_domains, allow_
     if unknown:
         return _refusal(
             f"there is no grantable lane called {', '.join(repr(l) for l in unknown)}. "
-            f"The grantable lanes are: {', '.join(sorted(LANES))}. The review lane is "
-            f"deliberately not grantable — review writeback is its own authority.")
+            f"The grantable lanes are: {', '.join(sorted(LANES))}.")
     if not lane_names:
         return _refusal(
             f"a write grant must name at least one lane. The grantable lanes are: "

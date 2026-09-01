@@ -52,6 +52,22 @@ from `ALLOW_N8N_ARM` without variation:
 It is defence in depth, not a replacement: the session arm and the per-decision exact-write
 display both stay.
 
+D-60-04 AMENDMENT (operator, 2026-09-01): gate 1 above is RETIRED as an environment
+variable. `ALLOW_REVIEW_SUBMIT`, `SUBMIT_ENV_VALUE`, `submit_enabled()` and the
+`_ENV_REFUSAL` message are deleted from this module (Phase 60) — none of the three
+paragraphs above describe live code anymore, and they are left in place rather than
+rewritten because they are the record of why the gate looked the way it did. Gate 1 is now
+GRANT-AUTHORIZATION: `write_grant.authorize_send(grant, lane=write_grant.REVIEW_LANE,
+record_ids=[str(record_id)], record_domains=[])`, checked BEFORE any transport exists,
+exactly the same authorization call enrichment's dispatch already uses rather than a second
+copy of the check (`write_grant.covers` stays the ONE scope implementation). Property (c)
+above — the un-doing carve-out that lets a `reject` bypass gate 1 — SURVIVES, re-pointed at
+the grant check rather than deleted, per D-60-07: a closed authority must never be able to
+strand a flagged record mid-decision. See `submit_decision`'s own docstring for the honest
+limit of what that carve-out delivers (client-side submission, never a guarantee of
+landing — cross-AI review, MEDIUM-3, 2026-09-01). Gates 2 (`review_armed`) and 3
+(`ALLOW_HUBSPOT_REVIEW_WRITES`) are UNCHANGED by this amendment.
+
 TRANSPORT SHAPE (D-17, Phase 28 D-28/D-33): `transport` defaults to the BARE `requests`
 module and every call goes through `transport.post(...)` — never `transport=requests.post`,
 never a direct `requests.post(...)`. `tests/test_retry_reuses_dispatch.py` scans every
@@ -71,7 +87,6 @@ Auth is `X-Enrichment-Secret`. The secret goes in a header and nowhere else: nev
 rendered, never logged, never echoed in a refusal.
 """
 import json
-import os
 
 import requests
 
@@ -79,10 +94,6 @@ import config_gate
 
 DECISION_PATH = "webhook/hubspot/review/decision"
 DEFAULT_TIMEOUT = 30
-
-# The plugin-side kill switch. NOT ALLOW_HUBSPOT_REVIEW_WRITES — see the module docstring.
-SUBMIT_ENV_VAR = "ALLOW_REVIEW_SUBMIT"
-SUBMIT_ENV_VALUE = "true"
 
 # The audit trail must always name something; the backend writes lv_enrichment_reviewed_by
 # only when the label is non-empty, so an empty string would leave the field unstamped.
@@ -97,16 +108,19 @@ WRITING_OUTCOMES = ("applied", "rejected")
 NON_WRITING_OUTCOMES = ("stale", "no_candidate", "not_flagged", "refused", "not_allowlisted")
 OUTCOMES = WRITING_OUTCOMES + NON_WRITING_OUTCOMES
 
-# The un-doing decisions the env kill switch must never block (D-16 property (c)). A
-# rejection records a reason and leaves the record in the queue — it walks a decision back
-# rather than promoting anything.
+# The un-doing decisions gate 1 must never block (D-16 property (c), re-pointed at the
+# grant check by D-60-07). A rejection records a reason and leaves the record in the
+# queue — it walks a decision back rather than promoting anything.
 UNDOING_DECISIONS = ("reject",)
 
-_ENV_REFUSAL = (
-    "Review writeback is switched off on this machine: the ALLOW_REVIEW_SUBMIT "
-    "environment variable is not set to exactly `true`. Nothing was sent and no request "
-    "was even built. Your administrator sets that variable — this plugin cannot set it "
-    "and neither can this conversation. Two things still work without it: previewing the "
+# D-60-04: gate 1's refusal reason and message. Replaces the retired
+# `submit_not_enabled` / `_ENV_REFUSAL` pair — see the docstring amendment above.
+GRANT_REFUSAL_REASON = "grant_not_authorized"
+
+_GRANT_REFUSAL = (
+    "Review writeback needs an open write grant covering this record: no request was even "
+    "built. Opening one is something the operator can do in this conversation, once an n8n "
+    "admin has enabled write grants. Two things still work without one: previewing the "
     "exact write, and rejecting a record, which records your reason and leaves the record "
     "in the queue."
 )
@@ -125,20 +139,10 @@ def decision_target(config: dict) -> str:
     return f"{str(config.get('n8n_url') or '').rstrip('/')}/{DECISION_PATH}"
 
 
-def submit_enabled() -> bool:
-    """True only when `ALLOW_REVIEW_SUBMIT` reads exactly `true`.
-
-    Every near-miss — unset, `""`, `"1"`, `"yes"`, `"TRUE"`, `"True"` — is False. Same
-    semantics as `ALLOW_N8N_ARM` / `ALLOW_N8N_PROBE` / `ALLOW_N8N_DEPLOY`; a divergence
-    between them is itself the defect (D-16).
-    """
-    return os.environ.get(SUBMIT_ENV_VAR) == SUBMIT_ENV_VALUE
-
-
 def is_undoing(decision) -> bool:
     """True for a decision that walks a record back rather than promoting anything.
 
-    Only these bypass `ALLOW_REVIEW_SUBMIT`. An unrecognised decision word is NOT
+    Only these bypass gate 1 (grant-authorization). An unrecognised decision word is NOT
     un-doing — the gate fails closed on anything it does not recognise.
     """
     word = decision.strip().lower() if isinstance(decision, str) else ""
@@ -213,7 +217,7 @@ def _post_decision(config, body, transport) -> dict:
 def preview_decision(config, object_type, record_id, decision, reason, transport=requests):
     """The dry run: what the backend WOULD write, without writing it (D-03, D-05).
 
-    Deliberately NOT gated on `ALLOW_REVIEW_SUBMIT` and not on the session arm. A dry run
+    Deliberately NOT gated on grant-authorization and not on the session arm. A dry run
     writes nothing, and if the operator cannot see the patch they cannot approve it —
     gating the preview would remove the display the arm exists to protect.
 
@@ -226,23 +230,47 @@ def preview_decision(config, object_type, record_id, decision, reason, transport
 
 
 def submit_decision(config, object_type, record_id, decision, reason, reviewed_by,
-                    review_armed, preview=None, transport=requests):
-    """Send the decision for real — only when the env gate AND the session arm are open.
+                    review_armed, grant=None, preview=None, transport=requests):
+    """Send the decision for real — only when grant-authorization AND the session arm are
+    open (D-60-04, Phase 60).
 
-    `ALLOW_REVIEW_SUBMIT` is checked first and before anything else, so an unset variable
-    leaves the transport's call log EMPTY (D-16). An un-doing decision skips that check by
-    design: a closed kill switch must not be able to strand a record mid-decision.
+    Gate 1 is checked first and before anything else, so a missing/out-of-scope grant
+    leaves the transport's call log EMPTY — the same property `ALLOW_REVIEW_SUBMIT` used to
+    guarantee, now delivered by `write_grant.authorize_send` instead of an environment
+    variable. An un-doing decision (`is_undoing`) skips gate 1 by design (D-60-07): a closed
+    authority must never be able to strand a flagged record mid-decision. What this
+    guarantees is that the request is SUBMITTED, never that it LANDS — the deployed gate
+    checks its own record allowlist before it branches on approve-vs-reject, so an ungranted
+    reject with no armed window still reaches the POST and still comes back
+    `not_allowlisted` (cross-AI review, MEDIUM-3, 2026-09-01). That is not a regression: the
+    retired `ALLOW_REVIEW_SUBMIT` carve-out was equally client-side, no weaker than this one.
 
-    `review_armed` has no default — the arm arrives from the conversation as an explicit
-    argument and is never read from or written to a file, a cache, or module state.
+    `grant` defaults to `None`, matching every other lane's grant-optional call sites: with
+    no grant open, `write_grant.authorize_send` reports `armed=False` and this function
+    refuses with `GRANT_REFUSAL_REASON`, restating whatever `authorize_send`'s own `detail`
+    says (so an out-of-scope record names itself rather than being reworded here).
 
-    `preview` is the envelope `preview_decision` already returned, used only so an unarmed
-    refusal can restate the exact write the operator was looking at. Nothing is fetched to
-    populate it: an unarmed submit performs NO call of any kind.
+    `review_armed` (gate 2) has no default — the arm arrives from the conversation as an
+    explicit argument and is never read from or written to a file, a cache, or module
+    state. Unchanged by this function's grant-authorization gate.
+
+    `preview` is the envelope `preview_decision` already returned, used only so a refused
+    submit can restate the exact write the operator was looking at. Nothing is fetched to
+    populate it: a refused submit performs NO call of any kind.
     """
-    if not is_undoing(decision) and not submit_enabled():
-        return _unavailable("submit_not_enabled", message=_ENV_REFUSAL,
-                            would_write=(preview or {}).get("would_write"))
+    if not is_undoing(decision):
+        # Imported inside the function body — this module's house style for avoiding an
+        # import cycle (see n8n_arming.py's own `import write_grant` inside
+        # `arm_for_dispatch`); write_grant does not import review_decision, but the
+        # convention is kept uniform across the plugin's authorization call sites.
+        import write_grant
+        auth = write_grant.authorize_send(
+            grant, lane=write_grant.REVIEW_LANE, record_ids=[str(record_id)],
+            record_domains=[])
+        if not auth.get("armed"):
+            return _unavailable(GRANT_REFUSAL_REASON,
+                                message=auth.get("detail") or _GRANT_REFUSAL,
+                                would_write=(preview or {}).get("would_write"))
 
     if not review_armed:
         return _unavailable("not_armed", message=_NOT_ARMED_REFUSAL,
@@ -359,12 +387,16 @@ def verify_decision(intended, response) -> dict:
 
 
 if __name__ == "__main__":
-    # Diagnostic only: reports whether the env kill switch is open. It never sends
-    # anything, and it never prints a secret or a config value.
+    # Diagnostic only (D-60-04): reports the grant-gate contract, not a live gate state —
+    # whether a decision goes through depends on a grant handed in from the conversation,
+    # not on anything this process can read on its own. It never sends anything, and it
+    # never prints a secret or a config value.
     print(json.dumps({
         "ok": True,
-        "env_var": SUBMIT_ENV_VAR,
-        "submit_enabled": submit_enabled(),
-        "note": ("Submitting a review decision also needs the session arm and the "
-                 "backend's own ALLOW_HUBSPOT_REVIEW_WRITES allowlist."),
+        "gate_1": "grant-authorization via write_grant.authorize_send(lane='review', ...)",
+        "grant_refusal_reason": GRANT_REFUSAL_REASON,
+        "note": ("Submitting a review decision (other than a reject) needs an open write "
+                 "grant covering this record, the session arm (review_armed), and the "
+                 "backend's own ALLOW_HUBSPOT_REVIEW_WRITES allowlist. A reject bypasses "
+                 "the grant check but still needs the session arm."),
     }))

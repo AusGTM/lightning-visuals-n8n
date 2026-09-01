@@ -9,6 +9,7 @@ planned grant, an explicit yes, an armed window, a verified disarm — because t
 path G-2 said was unreachable from the operator's chair.
 """
 import ast
+import json
 import os
 import re
 import textwrap
@@ -24,11 +25,13 @@ import durable_paths
 import executions_client
 import n8n_arming
 import remainder_queue
+import review_decision
 import write_grant
 import written_records
 
 WORKFLOW_ID = "wf-enrichment-1"
 CONTACTS_WORKFLOW_ID = "wf-contacts-1"
+REVIEW_WORKFLOW_ID = "wf-review-1"
 RECORD_ID = "12345"
 
 
@@ -58,11 +61,42 @@ def _armed_workflow(ids=f'"{RECORD_ID}"'):
     return _base_workflow(record_writes='"true"', create='"true"', ids=ids)
 
 
+def _review_workflow(review_writes='"false"', record_writes='"false"', create='"false"',
+                     ids='""', domains='""'):
+    """Phase 60: the review lane's own gate shape. Declares all 5 OVERLAYABLE_FLAGS,
+    mirroring the real deployed gate node (PATTERNS.md's shared write-safety gate is baked
+    into every gate node regardless of which action a given node checks) — the dispatch
+    pair stays declared-but-disabled throughout every review-lane test here unless a test
+    says otherwise, and only ALLOW_HUBSPOT_REVIEW_WRITES/the allowlist ever move."""
+    gate = (f"const ALLOW_HUBSPOT_RECORD_WRITES = {record_writes};\n"
+            f"const ALLOW_HUBSPOT_CREATE = {create};\n"
+            f"const ALLOW_HUBSPOT_REVIEW_WRITES = {review_writes};\n"
+            f"const TEST_RECORD_IDS = {ids};\n"
+            f"const TEST_RECORD_DOMAINS = {domains};\n"
+            "function _writeSafetyAllows() { return false; }\n")
+    return {
+        "id": REVIEW_WORKFLOW_ID,
+        "name": write_grant.LANES["review"],
+        "active": True,
+        "settings": {},
+        "connections": {},
+        "nodes": [
+            {"name": "Review Decision Gate", "parameters": {"jsCode": gate}},
+            {"name": "Webhook", "parameters": {}},
+        ],
+    }
+
+
+def _armed_review_workflow(ids=f'"{RECORD_ID}"'):
+    return _review_workflow(review_writes='"true"', ids=ids)
+
+
 def _workflow_list():
     """What `resolve_workflow_id` reads: the /api/v1/workflows collection."""
     return {"data": [
         {"id": WORKFLOW_ID, "name": write_grant.LANES["enrichment"]},
         {"id": CONTACTS_WORKFLOW_ID, "name": write_grant.LANES["contacts"]},
+        {"id": REVIEW_WORKFLOW_ID, "name": write_grant.LANES["review"]},
     ]}
 
 
@@ -601,20 +635,202 @@ def test_write_grant_module_never_calls_a_hubspot_search_endpoint():
 
 def test_plan_grant_refuses_an_unknown_lane_by_name(granting_config,
                                                     stub_module_transport_factory):
+    """RECORDED EDIT — Phase 60, D-60-01, 2026-09-01. Before this phase, `"review"` was
+    itself the unknown-lane fixture: review was deliberately not grantable, so naming it
+    refused. Phase 60 makes review a real, grantable lane (see the inverted test below), so
+    a genuinely unknown name is what now exercises "the refusal names the offending lane
+    and lists the grantable set" — the behavior this test has always existed to pin."""
     transport = stub_module_transport_factory(_plan_reads())
 
-    result = _proposal(granting_config, transport, lanes=("review",))
+    result = _proposal(granting_config, transport, lanes=("bogus",))
 
     assert result["outcome"] == write_grant.REFUSED
-    assert "review" in result["detail"]
+    assert "bogus" in result["detail"]
     assert transport.calls == []
 
 
-def test_the_review_lane_is_not_grantable(granting_config, stub_module_transport_factory):
-    """30-01's D-02/D-08e: review writeback is a SEPARATE authority. A dispatch grant must
-    not reach it."""
-    assert "review" not in write_grant.LANES
+def test_the_review_lane_is_grantable_with_flag_separation_intact(
+        granting_config, stub_module_transport_factory):
+    """RECORDED EDIT — Phase 60, D-60-01, 2026-09-01. This test used to be
+    `test_the_review_lane_is_not_grantable` and asserted `"review" not in write_grant.LANES`
+    — the exact opposite of what is now true. 30-01's D-02/D-08e separation between
+    dispatch grants and review writeback is REVERSED by this phase (see the
+    D-60-01/D-60-05 AMENDMENT beside `write_grant.LANES`): review is now a third grantable
+    lane, closing the two manual round trips (a shell env var an operator in Claude
+    Desktop cannot set, plus an admin-run deploy) that made the documented operator path
+    unreachable.
+
+    What survives unchanged, and is still pinned here verbatim: `ALLOW_HUBSPOT_REVIEW_WRITES`
+    stays OUT of `n8n_arming.DISPATCH_FLAGS` — arming a dispatch grant still grants nothing
+    on the review path. That flag-set separation is the load-bearing half of the old design
+    and this phase does not touch it."""
+    assert "review" in write_grant.LANES
+    assert write_grant.LANES["review"] == write_grant.REVIEW_WORKFLOW_NAME
     assert "ALLOW_HUBSPOT_REVIEW_WRITES" not in n8n_arming.DISPATCH_FLAGS
+
+
+# --- Phase 60: "a grant approves one flagged record", end to end -------------------------
+
+def test_a_review_decision_arms_and_authorizes_under_an_opened_review_grant(
+        granting_config, stub_module_transport_factory):
+    """D-60-01/D-60-02/D-60-03/D-60-05, the tracer, one function on purpose: an admin-set
+    settings key -> a planned review-lane grant -> an explicit yes -> an armed review
+    window -> one authorized decision -> a verified disarm, with no shell environment
+    variable anywhere on the path. This is the path G-2's diagnosis said was unreachable
+    from the operator's chair for review specifically."""
+    plan_transport = stub_module_transport_factory(
+        _plan_reads(guardrail=_review_workflow()))
+    proposal = write_grant.plan_grant(
+        granting_config, lanes=["review"], object_type="companies",
+        record_ids=["9605284724"], record_domains=[], allow_create=False,
+        label="review triage", transport=plan_transport)
+    assert proposal.get("kind") == write_grant.PROPOSAL_KIND, proposal
+
+    grant = write_grant.open_grant(proposal, "yes", granting_config)
+    assert grant["kind"] == write_grant.KIND
+    assert grant["state"] == write_grant.OPEN
+    assert grant["workflow_ids"]["review"] == REVIEW_WORKFLOW_ID
+
+    arm_transport = stub_module_transport_factory([
+        _review_workflow(),                                             # arm's own pre-read
+        _review_workflow(),                                             # apply_mutation's fresh read
+        {}, {}, {},                                                     # deactivate, put, activate
+        _review_workflow(review_writes='"true"', ids='"9605284724"'),   # arm verification
+        _armed_review_workflow(),                                       # disarm's own pre-read
+        _armed_review_workflow(),                                       # apply_mutation's fresh read
+        {}, {}, {},                                                     # deactivate, put, activate
+        _review_workflow(),                                             # disarm verification
+    ])
+    with n8n_arming.armed_review_window(
+            REVIEW_WORKFLOW_ID, ["9605284724"], [], granting_config,
+            transport=arm_transport, grant=grant) as window:
+        assert window.arm_result["outcome"] == n8n_arming.ARMED
+
+        decision_transport = stub_module_transport_factory([{
+            "outcome": "applied", "message": "ok", "would_write": {"a": "1"},
+            "verified_properties": {"a": "1"}, "verified": True,
+        }])
+        result = review_decision.submit_decision(
+            granting_config, "companies", "9605284724", "approve", "looks right",
+            "operator", review_armed=True, grant=grant, transport=decision_transport)
+
+    assert set(result) == {"available", "reason", "outcome", "message", "would_write",
+                           "verified_properties", "verified"}
+    assert result["available"] is True
+    assert result["outcome"] == "applied"
+    assert decision_transport.mutating_calls, "the decision POST must actually have gone out"
+
+    assert window.disarm_result["outcome"] == n8n_arming.DISARMED
+    assert os.environ.get(n8n_arming.ARM_ENV_VAR) is None, (
+        "the whole point: no shell variable was involved at any step")
+
+
+def test_the_review_arm_never_sets_dispatch_write_flags_in_the_recorded_put_body(
+        granting_config, stub_module_transport_factory):
+    """D-60-05, behavior 2: across the whole arm, no recorded PUT body ever sets
+    ALLOW_HUBSPOT_RECORD_WRITES or ALLOW_HUBSPOT_CREATE to "true" — asserted against the
+    RECORDED PUT body, not against the returned dict (a returned dict could be shaped to
+    look right while the actual mutation reached further than it should)."""
+    resolve_transport = stub_module_transport_factory(
+        _plan_reads(guardrail=_review_workflow()))
+    grant = write_grant.open_grant(
+        write_grant.plan_grant(
+            granting_config, lanes=["review"], object_type="companies",
+            record_ids=["9605284724"], record_domains=[], allow_create=False,
+            label="review triage", transport=resolve_transport),
+        "yes", granting_config)
+
+    arm_transport = stub_module_transport_factory([
+        _review_workflow(), _review_workflow(), {}, {}, {},
+        _review_workflow(review_writes='"true"', ids='"9605284724"'),
+    ])
+    result = n8n_arming.arm_for_review(
+        REVIEW_WORKFLOW_ID, ["9605284724"], [], granting_config,
+        transport=arm_transport, grant=grant)
+
+    assert result["outcome"] == n8n_arming.ARMED
+    put_calls = [call for call in arm_transport.calls if call["verb"] == "put"]
+    assert put_calls, "the arm must have PUT the workflow"
+    for call in put_calls:
+        body = json.dumps(call.get("json"))
+        assert 'ALLOW_HUBSPOT_RECORD_WRITES = "true"' not in body
+        assert 'ALLOW_HUBSPOT_CREATE = "true"' not in body
+
+
+def test_submit_decision_with_no_grant_refuses_and_makes_no_call(
+        fake_config, stub_module_transport_factory):
+    """Behavior 3: an approve with no grant open leaves the transport call log EMPTY — the
+    same property the retired env kill switch guaranteed, now delivered by grant
+    authorization instead (D-60-04)."""
+    transport = stub_module_transport_factory([])
+
+    result = review_decision.submit_decision(
+        fake_config, "companies", "9605284724", "approve", "reason", "operator",
+        review_armed=True, grant=None, transport=transport)
+
+    assert result["available"] is False
+    assert result["reason"] == review_decision.GRANT_REFUSAL_REASON
+    assert transport.calls == []
+
+
+def test_a_reject_proceeds_with_no_grant_but_still_needs_the_session_arm(
+        fake_config, stub_module_transport_factory):
+    """Behavior 4 (D-60-07): a reject is still SUBMITTED with no grant open — the
+    is_undoing carve-out survives, re-pointed at the grant check rather than deleted.
+
+    RECORDED, cross-AI review MEDIUM-3, 2026-09-01: this proves only that the request
+    reaches the POST, never that the backend's own allowlist gate lets it land — the
+    deployed gate checks its record allowlist BEFORE it branches on the decision word, so
+    an ungranted reject with no armed review window still comes back `not_allowlisted`,
+    honestly rather than silently. That is not a regression: the retired
+    `ALLOW_REVIEW_SUBMIT` carve-out was equally client-side, no weaker than this one — the
+    honest outcome word is the point, so the operator learns the record is not on the
+    backend's allowlist rather than watching a decision vanish."""
+    transport = stub_module_transport_factory([{
+        "outcome": "not_allowlisted", "message": "not on the allowlist", "would_write": {},
+        "verified_properties": None, "verified": None,
+    }])
+
+    result = review_decision.submit_decision(
+        fake_config, "companies", "9605284724", "reject", "not a fit", "operator",
+        review_armed=True, grant=None, transport=transport)
+
+    assert result["available"] is True
+    assert transport.mutating_calls, "a reject with no grant still reaches the POST"
+
+    still_transport = stub_module_transport_factory([])
+    unarmed = review_decision.submit_decision(
+        fake_config, "companies", "9605284724", "reject", "not a fit", "operator",
+        review_armed=False, grant=None, transport=still_transport)
+
+    assert unarmed["available"] is False
+    assert unarmed["reason"] == "not_armed"
+    assert still_transport.calls == []
+
+
+def test_a_review_grant_over_record_a_refuses_a_decision_on_record_b(
+        granting_config, stub_module_transport_factory):
+    """Behavior 5 (D-60-03): the grant's record-scoping bounds review decisions exactly the
+    way it bounds dispatch sends — a grant opened over one record cannot approve another,
+    and the refusal names the offending record."""
+    resolve_transport = stub_module_transport_factory(
+        _plan_reads(guardrail=_review_workflow()))
+    grant = write_grant.open_grant(
+        write_grant.plan_grant(
+            granting_config, lanes=["review"], object_type="companies",
+            record_ids=["9605284724"], record_domains=[], allow_create=False,
+            label="review triage", transport=resolve_transport),
+        "yes", granting_config)
+
+    transport = stub_module_transport_factory([])
+    result = review_decision.submit_decision(
+        granting_config, "companies", "18756544344", "approve", "reason", "operator",
+        review_armed=True, grant=grant, transport=transport)
+
+    assert result["available"] is False
+    assert result["reason"] == review_decision.GRANT_REFUSAL_REASON
+    assert "18756544344" in result["message"]
+    assert transport.calls == []
 
 
 def test_plan_grant_refuses_when_a_lane_does_not_resolve(granting_config,
