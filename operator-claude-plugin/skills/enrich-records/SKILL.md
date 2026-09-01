@@ -338,6 +338,11 @@ says nothing per record, this lane reports at chunk granularity and says so.
    cfg = config_gate.load_config()
    providers = enrichment.resolve_providers(providers_override, cfg)
    plan = chunking.plan_chunks(spec, chunking.chunk_ceiling(cfg))
+   # D-60-02 (Phase 60, 2026-09-01): the grant behind this call, if opened via
+   # write_grant.plan_grant(config, lanes=["enrichment", "contacts", "review"], ...),
+   # covers all three lanes together — so a record enriched under this grant can also be
+   # triaged in review-triage's SKILL.md in the same sitting, with no second deliberate
+   # yes, bounded as always to the grant's own records.
    decision = (
        write_grant.authorize_send(
            grant, lane="enrichment",

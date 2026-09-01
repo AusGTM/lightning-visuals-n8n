@@ -56,7 +56,7 @@ whatever seven columns happened to be in the source file.
    which is exactly the shortcut this design exists to prevent.
 
    **The batch path, and say it here rather than at step 5:** if a write grant covering
-   both of this flow's lanes is open, the operator is asked once instead of twice — that is
+   this flow's lanes is open, the operator is asked once instead of twice — that is
    D-53-05, their own decision of 2026-08-25. Name which lanes the open grant covers and say
    what the single ask covers: the grant enables enrichment and writes to HubSpot; after the
    run, the records it actually wrote are listed in a `written_records-<run_id>.json` file
@@ -64,10 +64,17 @@ whatever seven columns happened to be in the source file.
    (2026-08-28) and D-59-09 (2026-08-29), for what this line used to say and why it changed
    twice. With no grant open, this flow asks twice, exactly as described above.
 
+   **D-60-02 (Phase 60, 2026-09-01): the grant this flow opens now covers a THIRD lane too —
+   `"review"`, alongside `"enrichment"` and `"contacts"`.** A record this flow enriches or
+   ingests under this grant can also be triaged in the review-triage skill in the same
+   sitting, with no second deliberate yes — bounded, as always, to the grant's own records.
+   Say "all three lanes", not "both", when naming what the open grant covers.
+
    **One grant, the whole batch — including what it creates (Phase 61 Plan 06 Task 3,
    REVIEW-11).** The machinery is real code, not prose: `write_grant.plan_grant(config,
-   lanes=[...], ...)` opens a grant spanning both of this flow's lanes in one call,
-   `open_grant`'s `_consequence()` branch states the two-lane consequence at the yes, and
+   lanes=["enrichment", "contacts", "review"], ...)` opens a grant spanning all three of
+   this flow's lanes in one call, `open_grant`'s `_consequence()` branch states the
+   multi-lane consequence at the yes, and
    `authorize_send`/`authorize_ungranted_send` route every send through the SAME grant —
    including a company or contact THIS BATCH creates partway through. `write_grant.covers()`
    only ever admits a value present in the grant's own `record_ids`/`record_domains` at the
