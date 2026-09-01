@@ -47,7 +47,7 @@ numbers on its own. Decisions in `.planning/MILESTONE-CONTEXT.md`; requirements 
       must be re-derived first (the dry-run artifacts were finalized 2026-08-19 and drift with
       every enrichment run), and the run would still be subject to Phase 57's ceilings.
 
-### 🚧 v1.1 Unattended Session Runs (Phases 53–61)
+### 🚧 v1.1 Unattended Session Runs (Phases 53–63)
 
 One operator grant at session start carries a batch through ingest → enrichment → HubSpot write,
 unattended. Driven by a client UAT on 2026-08-25 that found three arming surfaces for one write,
@@ -454,6 +454,58 @@ variable), and a design that runs the provider waterfall twice per written recor
       **Depends on** the 2026-08-25 association contract (a suggested contact must resolve a
       company or be held) and Phase 61's held-row queue (`held_queue.py`) for anything held —
       Phase 56 was absorbed into 61, so its queue is 61's.
+
+- [ ] **Phase 63: The unattended lane actually runs unattended** — **NUMBERED 2026-09-02**
+      (operator). Two long-standing todos, both re-verified live that day, both attacking the
+      v1.1 goal from opposite ends: the sweep that is supposed to run without anyone watching
+      can silently stop or silently run old code, and a bulk run costs ~16s per record on a
+      judge gate that does not discriminate. Closes the two todos carrying
+      `resolves_phase: 63` in `.planning/todos/pending/`.
+
+      **Why one phase and not two.** Both are the gap between "the unattended path exists"
+      (Phase 61 shipped it) and "the unattended path can be left alone with real volume." One
+      is reliability, one is cost-per-record; neither is worth a phase alone, and shipping
+      either without the other still leaves bulk unattended running unwise.
+
+      **63-A — the sweep's crontab pins a versioned plugin path.** `SWEEP-CRON-TEMPLATE.md:56`
+      hands the admin a line built from `[plugin-root]`, so every plugin update orphans it.
+      **Twelve** versioned directories now exist on the operator machine, and the newest
+      (`0.33.0`) is already behind the shipped `0.35.0`. Either the sweep fires stale code
+      indefinitely with no signal, or it fires nothing and produces a shell error into cron's
+      mail rather than Phase 32's banner — reopening the "never fired vs healthy" ambiguity
+      NOTICE-03 exists to eliminate. Phase 33's `durable_paths.py` does NOT cover this: its
+      boundary is operator *state*, this is operator *code*. **Preferred fix:** a stable shim
+      under the durable home that resolves the newest install at run time, reusing
+      `durable_paths.py`'s newest-sibling ordering rather than writing a second one. Needs a
+      **real-scheduler proof** — memory `sweep-trigger-llm-free` records an interactive probe
+      that passed and still failed under cron.
+
+      **63-B — the judge gate is decorative, and it is 47% of the run.** Confirmed by code read
+      2026-09-02, no run needed: `ESCALATION_CONFIDENCE_BAND = [75, 85]` compared
+      `conf >= lo && conf <= hi` (`judge.js:147`) — inclusive at both ends, while `claude_web`
+      lands on 85 routinely. That is why 8 of 8 measured full runs fired the judge, at 16.1s
+      mean against a 34.2s wall. **This is an authorization trade, not a perf tweak**, and the
+      phase must treat it as one: gap-closure 58-06 deliberately *widened* escalation after an
+      unadjudicated conflict false-vetoed a real AU company (execution `11983`). Narrowing the
+      gate decides what may go unadjudicated. The low-risk lever is model routing — Haiku 4.5
+      when `confidence_band` is the ONLY reason, Sonnet retained for conflicts and veto-shaped
+      reasons — which changes what adjudicates, not what gets adjudicated. Any change must keep
+      RO-2 (`test_judge_spec.py::test_ro2_judge_gate_cannot_see_size_conflicts`) green.
+
+      **Cheap first step, before any decision:** log `reasons[]` from the gate over a handful of
+      records. The code read predicts `confidence_band` dominates; a live sample turns that into
+      a distribution and may show the model-routing lever alone captures most of the win.
+
+      **Explicitly NOT in scope:** the provider waterfall (measured at under 12% of wall — the
+      judge alone costs four times it), and re-litigating Phase 61's fan-out. Phase 61 already
+      shipped the concurrency lever (`async_ack`, `scale_up`); its own caveat stands (CLAUDE.md
+      §13.0.3) that fan-out is a throughput win, not a cost win. **The Anthropic and Lusha
+      per-record costs are untouched by fan-out** — one bulk run still consumes half the Lusha
+      balance and cannot be repeated twice in a month. That is what makes 63-B still worth doing
+      after 61.
+
+      **Sequenced after Phase 57** (per-run ceilings bound what a faster lane may spend) and
+      **after Phase 60's UAT**, so no live-write walk is competing for the operator's attention.
 
 ## Phase Details
 
