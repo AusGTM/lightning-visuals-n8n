@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Unattended Session Runs
-current_phase: 57
+current_phase: 60
+current_phase_name: review-lane-authority
 status: complete
 stopped_at: Phase 60 context gathered
-last_updated: "2026-09-01T04:52:40.671Z"
+last_updated: "2026-09-01T06:03:23.390Z"
 last_activity: 2026-09-01
-state_head: 837a5e762e0b8db0d660b92b8ab8390840212d43
+state_head: 459ab9e8c923ba19e8c0957f0d72aaf204220c94
 progress:
   total_phases: 8
   completed_phases: 5
-  total_plans: 40
+  total_plans: 44
   completed_plans: 40
   percent: 63
-current_phase_name: autonomous-batch-runs
 last_activity_desc: "**Phase 61 complete and verified (12/12)**; backend deployed and"
 ---
 
@@ -169,7 +169,7 @@ predating the window. VETO-03 bar still 0.
 
 ## Current Position
 
-Phase: 57 — COMPLETE
+Phase: 60 (review-lane-authority) — READY TO EXECUTE
 Next: **Phase 57** — ceilings, refusal-before-start, post-run proof. It gates the first live
   unattended, credit-spending batch (D-61-08), which has NOT run. Also open: Phase 60.
 Armed state: nothing armed. Phase 61's live exercise was DISARMED throughout
