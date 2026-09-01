@@ -391,9 +391,12 @@ without asking again.
 
 Four things worth knowing before you use one:
 
-- **The cost figure discloses; it does not prevent.** It is computed from the batch you
-  named, so it cannot refuse anything that batch already implies, and the remaining
-  monthly execution allowance is not yet checked before a run starts.
+- **The cost figure mostly discloses, but the projected n8n-execution count is checked.**
+  It is computed from the batch you named, so it cannot refuse anything that batch already
+  implies — but the projected execution count IS checked against the sampled remaining
+  monthly allowance before a grant opens: a batch that would exceed it is refused unless
+  you explicitly override with a reason. Every other figure (provider credits, Anthropic
+  spend) discloses only; it does not gate the open.
 - **Revoking refuses the *next send*.** It does not stop a dispatch already running: at
   the two-record chunk ceiling a forty-record send is twenty chunks, and all twenty go out
   after you revoke.
