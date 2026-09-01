@@ -5,15 +5,15 @@ milestone_name: Unattended Session Runs
 current_phase: 60
 current_phase_name: Review-lane authority
 status: complete
-stopped_at: Completed 60-02-PLAN.md
-last_updated: "2026-09-01T07:12:06.620Z"
+stopped_at: Completed 60-03-PLAN.md
+last_updated: "2026-09-01T07:23:11.000Z"
 last_activity: 2026-09-01
-state_head: 5bc5fc49e382c4f01d7eb5bedf1dc18544316423
+state_head: 7d0d72e4638db6cc32de405811fd2e3a1284385b
 progress:
   total_phases: 8
   completed_phases: 5
   total_plans: 44
-  completed_plans: 42
+  completed_plans: 43
   percent: 63
 last_activity_desc: "**Phase 61 complete and verified (12/12)**; backend deployed and"
 ---
@@ -288,8 +288,8 @@ RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The 
 
 ## Session
 
-**Last session:** 2026-09-01T07:12:06.392Z
-**Stopped at:** Completed 60-02-PLAN.md
+**Last session:** 2026-09-01T07:23:11Z
+**Stopped at:** Completed 60-03-PLAN.md
 **Resume file:** None
 
 ## Performance Metrics
@@ -396,6 +396,7 @@ RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The 
 | Phase 57 P03 | 90min | 3 tasks | 11 files |
 | Phase 60 P01 | ~40min | 3 tasks | 6 files |
 | Phase 60 P02 | 14min | 2 tasks | 6 files |
+| Phase 60 P03 | ~11min | 2 tasks | 4 files |
 
 ## Decisions
 
@@ -486,6 +487,7 @@ RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The 
 - [Phase 60]: Guardrail A widened to sorted(OVERLAYABLE_FLAGS) (5 flags, was DISPATCH_FLAGS' 4) so a stuck-open ALLOW_HUBSPOT_REVIEW_WRITES refuses the next grant open by name; WRITE_ENABLING_FLAGS appended the review flag last (order load-bearing).
 - [Phase 60]: write_grant.authorize_review_batch(grant) returns the grant's own record_ids/record_domains on purpose (D-60-06) -- the deliberate divergence from authorize_send, which refuses to return a record list so a per-send window cannot widen to the whole grant.
 - [Phase 60]: preflight_before_send narrowed on the review lane only (MEDIUM-1): liveness excludes the review flag, derived from WRITE_ENABLING_FLAGS, so the batch window's own arm cannot trip its own pre-flight; a live dispatch flag on the review workflow still closes the grant.
+- [Phase 60]: D-60-08: a review decision now lands in the run's written_records-<run_id>.json artifact via a new classify_review_item mapping the review endpoint's seven outcome words onto the existing eight-word vocabulary; the append is gated on result["available"] (not merely run_id is not None) so a raising/unreachable POST leaves no artifact entry, matching dispatch.py's raise-before-append and chunking.dispatch_plan's DispatchError-continue precedent — resolved via advisor consult after the plan's <action> and <behavior> text diverged on this point.
 
 ### Roadmap Evolution
 
