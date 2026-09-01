@@ -41,23 +41,28 @@ created: "2026-09-01"
 
 ## Per-Task Verification Map
 
-Task IDs are assigned when plans are written; the behaviors below are the contract each task
-must map onto. Every row derives from a locked decision in `60-CONTEXT.md` — no REQ-IDs are
-mapped to this phase (`milestones/v1.1-REQUIREMENTS.md` carries no review-lane id).
+Task IDs filled in 2026-09-01 when the four plans were written. Every row derives from a locked
+decision in `60-CONTEXT.md` — no REQ-IDs are mapped to this phase
+(`milestones/v1.1-REQUIREMENTS.md` carries no review-lane id), so the D-60-NN ids are the
+coverage contract and each plan's `must_haves.truths` cites the ones it carries.
 
-| Behavior (from decision) | Decision | Test Type | Automated Command | File Exists |
-|---|---|---|---|---|
-| `"review"` is a valid, grantable lane | D-60-01, D-60-02 | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_write_grant.py -k lane -x` | ❌ needs rewrite — `test_the_review_lane_is_not_grantable` currently asserts the opposite |
-| A review decision cannot exceed the grant's record scope | D-60-03 | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_write_grant.py -k covers -x` | ✅ generic scope check exists; add a review-specific case |
-| `submit_decision` no longer reads `ALLOW_REVIEW_SUBMIT`; grant-authorization gates it | D-60-04 | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_review_decision.py -x` | ✅ exists; ~15 tests pin the env gate and need rewriting |
-| A `reject` still works with no grant open (the `is_undoing` carve-out survives, re-pointed) | D-60-07 | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_review_decision.py -k undoing -x` | ✅ exists; must be re-pointed at the grant check, not deleted |
-| Arming review sets `ALLOW_HUBSPOT_REVIEW_WRITES` only — never `ALLOW_HUBSPOT_RECORD_WRITES` / `ALLOW_HUBSPOT_CREATE` | D-60-05 | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_control_flag_parity.py -x` | ✅ parity test unaffected; add a Python test proving the review arm's flag set |
-| The JSON-side flag separation invariant stays intact | D-60-05 | n8n JS | `node --test tests/n8n/reviewWriteFlagSeparation.test.mjs` | ✅ exists — must stay green **unmodified** (it pins what this phase must not violate) |
-| Guardrail A detects a dirty `ALLOW_HUBSPOT_REVIEW_WRITES` before opening a grant | D-60-01 consequence (research finding) | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_write_grant_guardrails.py -x` | ❌ new case needed; `_gate()` fixture needs its 4-constant list widened in the same commit |
-| One arm window covers a whole batch of review decisions | D-60-06 | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_write_grant.py operator-claude-plugin/tests/test_write_grant_guardrails.py -x` | ❌ new coverage needed |
-| Review writes land in the per-run `written_records-<run_id>.json` artifact | D-60-08 | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_written_records.py -x` | ❌ new coverage needed — review writes go through `submit_decision`, not `dispatch_plan` |
-| A written-records failure never stops a review write | D-60-08 (carried from D-59-10) | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_written_records.py -k failure -x` | ❌ new coverage needed |
-| `reviewDecision.js`'s stale `not_allowlisted` message is corrected via the builder | research Pitfall 5 | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_review_outcome_parity.py -x` | ✅ exists (pins outcome literals, not message text) |
+**Spec-less probe fallback: SKIP, recorded.** No `SPEC.md` and no requirement ids for this
+phase, so no probe predicates were generated this run.
+
+| Behavior (from decision) | Decision | Plan · Task | Test Type | Automated Command | File Exists |
+|---|---|---|---|---|---|
+| `"review"` is a valid, grantable lane | D-60-01, D-60-02 | 60-01 · T1 | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_write_grant.py -k lane -x` | ❌ needs rewrite — `test_the_review_lane_is_not_grantable` currently asserts the opposite |
+| A review decision cannot exceed the grant's record scope | D-60-03 | 60-01 · T1 (behavior 5), 60-01 · T2 | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_write_grant.py -k covers -x` | ✅ generic scope check exists; add a review-specific case |
+| `submit_decision` no longer reads a shell kill switch; grant-authorization gates it | D-60-04 | 60-01 · T1 (source), 60-01 · T2 (suite) | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_review_decision.py -x` | ✅ exists; ~15 tests pin the env gate and need rewriting |
+| A `reject` still works with no grant open (the `is_undoing` carve-out survives, re-pointed) | D-60-07 | 60-01 · T1 (behavior 4), 60-01 · T2 | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_review_decision.py -k undoing -x` | ✅ exists; must be re-pointed at the grant check, not deleted |
+| Arming review sets `ALLOW_HUBSPOT_REVIEW_WRITES` only — never `ALLOW_HUBSPOT_RECORD_WRITES` / `ALLOW_HUBSPOT_CREATE` | D-60-05 | 60-01 · T1 (behavior 2) | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_control_flag_parity.py -x` | ✅ parity test unaffected; add a Python test proving the review arm's flag set |
+| The JSON-side flag separation invariant stays intact | D-60-05 | 60-01 · T1 and T3 (assert no diff) | n8n JS | `node --test tests/n8n/reviewWriteFlagSeparation.test.mjs` | ✅ exists — must stay green **unmodified** (it pins what this phase must not violate) |
+| Guardrail A detects a dirty `ALLOW_HUBSPOT_REVIEW_WRITES` before opening a grant | D-60-01 consequence (research finding) | 60-02 · T1 | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_write_grant_guardrails.py -x` | ❌ new case needed; `_gate()` fixture needs its 4-constant list widened in the same commit |
+| One arm window covers a whole batch of review decisions (normal, out-of-scope, crashed, revoked exits) | D-60-06 | 60-02 · T2 | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_write_grant_guardrails.py -x` | ❌ new coverage needed |
+| Review writes land in the per-run `written_records-<run_id>.json` artifact | D-60-08 | 60-03 · T1 (mapping), 60-03 · T2 (wiring) | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_written_records.py -x` | ❌ new coverage needed — review writes go through `submit_decision`, not `dispatch_plan` |
+| A written-records failure never stops a review write (both raise shapes) | D-60-08 (carried from D-59-10) | 60-03 · T2 (behaviors 4 and 5) | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_review_decision.py -k written -x` | ❌ new coverage needed |
+| `reviewDecision.js`'s stale `not_allowlisted` message is corrected via the builder | research Pitfall 5 | 60-04 · T1 | unit | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_review_outcome_parity.py -x` | ✅ exists (pins outcome literals, not message text) |
+| The operator surfaces and the shipped version describe the authority that now exists | D-60-01/02/04/05/06/08 | 60-04 · T2 and T3 | unit + source | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_skill_sequence_coverage.py operator-claude-plugin/tests/test_enrich_skill_contract.py operator-claude-plugin/tests/test_enrich_before_ingest_skill_contract.py -x` | ✅ exist; skill edits must keep both pinned symbols and the compilable Python block |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
