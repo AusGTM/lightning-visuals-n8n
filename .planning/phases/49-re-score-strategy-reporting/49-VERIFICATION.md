@@ -72,7 +72,8 @@ gaps:
          proved PASS post-archive (population=66 match=61 expected_mismatch=5 defect=0),
          and already carries the KNOWN_STUCK allowance run_scoring_parity.py lacks"
 deferred: []
-human_verification: []gap_closure_2026_08_19:
+human_verification: []
+gap_closure_2026_08_19:
   - gap: "docs/OPERATOR-RESCORE.md's ## Acceptance section still named scripts/run_scoring_parity.py's sweep as the proof a re-score landed, but that sweep's pass condition ANDs in tier_match (line 313, used at 315), which reads the lv_icp_tier property Phase 50 archived on 2026-08-14."
     severity: "Real. An archived HubSpot property returns its frozen last value rather than erroring or nulling, so the sweep runs, prints a verdict, and silently compares dead data. After any FUTURE rubric change every newly-tier-changed company reads red permanently and indistinguishably from 'the re-score has not finished' -- the exact misdiagnosis the 2026-08-13 amendment was written to prevent, relocated into another clause of the same document."
     closed_by: "A second AS-BUILT AMENDMENT block dated 2026-08-19 (Phase 50 follow-up), appended at the top per the document's own convention with the original prose left intact. It repoints the acceptance gate at scripts/check_tier_derived_parity.py / lv_icp_tier_derived, cites Phase 50's live proof (population=66 match=61 expected_mismatch=5 defect=0), and carries two cautions: poll rather than single-read (calculated properties backfill ~70-130s, a mistake this project already made once and had to reverse), and a red result still means what it always meant -- only the property being read has changed. The AMENDMENT-block convention section was updated from 'One amendment' to 'Two amendments'."
