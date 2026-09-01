@@ -60,7 +60,7 @@ test("Decide Action + Build Response stamp outcome_contract_version and all five
   const [decided] = runDecideAction([row]);
   const [built] = runBuildResponse([decided]);
 
-  assert.equal(built.outcome_contract_version, 1);
+  assert.equal(built.outcome_contract_version, 2);
   assert.equal(built.match.tier, "medium");
   assert.equal(built.candidate_count, 2, "the true medium-tier candidate cardinality, not re-derived client-side (REVIEW-C9)");
   assert.deepEqual(built.provider_agreement, { jobtitle: ["apollo"] });
@@ -77,7 +77,7 @@ test("a row with no enrichment signals carries them as explicit null, never a mi
   const [decided] = runDecideAction([row]);
   const [built] = runBuildResponse([decided]);
 
-  assert.equal(built.outcome_contract_version, 1);
+  assert.equal(built.outcome_contract_version, 2);
   assert.equal(built.candidate_count, 0);
   assert.ok("provider_agreement" in built, "the key itself must be present, even when its value is null");
   assert.equal(built.provider_agreement, null);
@@ -95,7 +95,7 @@ test("Build Response stamps the contract even on the Skip terminal, which bypass
 
   const [built] = runBuildResponse([row]);
 
-  assert.equal(built.outcome_contract_version, 1);
+  assert.equal(built.outcome_contract_version, 2);
   assert.equal(built.match.tier, "high");
   assert.equal(built.candidate_count, 0, "high tier's own candidates array is deliberately emptied — count is meaningful for medium tier only");
 });

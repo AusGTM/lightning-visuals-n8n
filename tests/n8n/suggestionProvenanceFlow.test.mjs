@@ -99,5 +99,77 @@ test("with no 'Set Config' node at all (the local template's own shape) the read
   }
 });
 
-// Task 2 (num_associated_contacts) cases land in Task 2's own RED/GREEN commit, below
-// this line — appended once ENRICH_ADAPT_CO_SEARCH/ENRICH_BUILD_RESPONSE are wired.
+// --- Task 2: num_associated_contacts on the company search and on the response -----------
+
+const enrichWf = loadWorkflow("n8n/wf_enrichment_cloud.json");
+
+test("the 'HubSpot Company Search' node's body requests num_associated_contacts alongside the properties the lane already asks for", () => {
+  const searchNode = nodeOf(enrichWf, "HubSpot Company Search");
+  const body = searchNode.parameters.jsonBody || searchNode.parameters.body;
+  assert.match(body, /num_associated_contacts/);
+});
+
+test("Adapt Company Search: a search hit reporting 0 carries the row-level num_associated_contacts as the number 0, distinguishable from null", () => {
+  const js = nodeOf(enrichWf, "Adapt Company Search").parameters.jsCode;
+  const [out] = runCode(js, [{ identity_keys: { domain: "acme.example" } }], {
+    "Build Company Identity": [{ identity_keys: { domain: "acme.example" } }],
+    "HubSpot Company Search": [{ results: [{ id: "1", properties: { num_associated_contacts: "0" } }] }],
+  });
+  assert.equal(out.num_associated_contacts, 0);
+  assert.notEqual(out.num_associated_contacts, null);
+});
+
+test("Adapt Company Search: a real nonzero count coerces the HubSpot string property to a number", () => {
+  const js = nodeOf(enrichWf, "Adapt Company Search").parameters.jsCode;
+  const [out] = runCode(js, [{ identity_keys: { domain: "acme.example" } }], {
+    "Build Company Identity": [{ identity_keys: { domain: "acme.example" } }],
+    "HubSpot Company Search": [{ results: [{ id: "1", properties: { num_associated_contacts: "3" } }] }],
+  });
+  assert.equal(out.num_associated_contacts, 3);
+});
+
+test("Adapt Company Search: a lookup_failed row carries num_associated_contacts as explicit null, never a missing key", () => {
+  const js = nodeOf(enrichWf, "Adapt Company Search").parameters.jsCode;
+  const [out] = runCode(js, [{ identity_keys: { domain: "acme.example" } }], {
+    "Build Company Identity": [{ identity_keys: { domain: "acme.example" } }],
+    "HubSpot Company Search": [{ error: "timeout" }],
+  });
+  assert.equal(out.lookup_failed, true);
+  assert.ok("num_associated_contacts" in out, "the key is present even on a failed lookup");
+  assert.equal(out.num_associated_contacts, null);
+});
+
+test("Adapt Company Search: a zero-hit search (no error, empty results) also stamps null — no promotion to a false zero", () => {
+  const js = nodeOf(enrichWf, "Adapt Company Search").parameters.jsCode;
+  const [out] = runCode(js, [{ identity_keys: { domain: "acme.example" } }], {
+    "Build Company Identity": [{ identity_keys: { domain: "acme.example" } }],
+    "HubSpot Company Search": [{ results: [] }],
+  });
+  assert.equal(out.lookup_failed, false);
+  assert.equal(out.num_associated_contacts, null);
+});
+
+function runBuildResponse(items, extraOutputs) {
+  const outputs = {
+    "Parse HubSpot Event": [{ providers_requested: [] }],
+    ...(extraOutputs || {}),
+  };
+  return runCode(nodeOf(enrichWf, "Build Response").parameters.jsCode, items, outputs);
+}
+
+test("Build Response stamps num_associated_contacts on the response, present as explicit null when the row does not carry one", () => {
+  const [built] = runBuildResponse([{ row_id: "row-1", action: "skip" }]);
+  assert.ok("num_associated_contacts" in built);
+  assert.equal(built.num_associated_contacts, null);
+});
+
+test("Build Response stamps a real zero count as the number 0, distinguishable from null", () => {
+  const [built] = runBuildResponse([{ row_id: "row-1", action: "skip", num_associated_contacts: 0 }]);
+  assert.equal(built.num_associated_contacts, 0);
+  assert.notEqual(built.num_associated_contacts, null);
+});
+
+test("Build Response bumped outcome_contract_version to 2 for this additive field", () => {
+  const [built] = runBuildResponse([{ row_id: "row-1", action: "skip" }]);
+  assert.equal(built.outcome_contract_version, 2);
+});

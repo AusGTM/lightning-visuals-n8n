@@ -60,8 +60,20 @@ def test_a_missing_outcome_contract_version_is_unparseable():
 
 
 def test_an_unknown_outcome_contract_version_is_unparseable():
-    outcome = preingest.parse_outcome(_item(outcome_contract_version=2))
+    outcome = preingest.parse_outcome(_item(outcome_contract_version=999))
     assert outcome.parseable is False
+
+
+def test_version_2_also_parses_num_associated_contacts_read_separately_not_through_outcome(
+):
+    """Phase 62 Plan 04 (D-62-16): version 2 is now known (widened, not moved — the
+    currently-deployed backend still stamps 1). num_associated_contacts is read by
+    suggest_contacts.eligibility() off the raw row, never through this Outcome dataclass,
+    so a version-2 item with no such field on it (and no such field on Outcome) still
+    parses exactly like a version-1 one."""
+    outcome = preingest.parse_outcome(_item(outcome_contract_version=2))
+    assert outcome.parseable is True
+    assert not hasattr(outcome, "num_associated_contacts")
 
 
 def test_a_missing_candidate_count_is_unparseable():
