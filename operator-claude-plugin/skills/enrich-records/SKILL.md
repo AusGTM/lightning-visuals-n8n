@@ -194,6 +194,20 @@ says nothing per record, this lane reports at chunk granularity and says so.
    straight on. The preview above is still rendered and still shown; under a grant it
    informs rather than gates, because the gate moved earlier.
 
+   **When this batch's `object_type` is `companies` (Phase 62, D-62-11): the
+   `write_grant.plan_grant(config, lanes=[...], object_type="companies", ...)` call this
+   step opens the grant with also carries `suggestion_companies=<this batch's own company
+   count>`, leaving `suggestion_cap` unset so the envelope prices the suggestion round's
+   worst-case allowance at `PRICED_CAP` (3, the top of D-62-12's band) — the sitting has
+   not chosen a cap yet at grant-open.** This is the wiring `suggest-contacts/SKILL.md`
+   depends on: without it, the opened grant's envelope carries no suggestion allowance at
+   all, and the offer at step 10 below would have nothing priced to point at. Threading
+   these two keyword arguments into this already-documented call widens its contract —
+   `envelope()`/`plan_grant()` both default them to `None` — without changing the
+   `module.function` chain the sequence-coverage extractor keys on, so this edit adds no
+   new sequence for that ratchet to demand a test for; do not "fix" it into a separate
+   code block later.
+
 6. **Ask for this send, in the operator's own words.** Disarmed is the default and the
    state of every new conversation. Say plainly that sending is off, then ask for this send
    by naming what it will do — how many records, and that it writes them to HubSpot. **An
@@ -538,3 +552,14 @@ says nothing per record, this lane reports at chunk granularity and says so.
    watches in real time; it is deliberately NOT a call site for this report (REVIEW-57-L5)
    — AFTER-01 exists for the run nobody is watching, and that lane keeps its existing
    report unchanged.
+
+   **When this batch's `object_type` is `companies` and every row in the manifest has
+   reached a terminal verdict (D-62-15), offer the suggestion round yourself — do not
+   wait to be asked.** Run `suggest_contacts.eligibility(...)` over this batch's own
+   response rows and name, in one sentence and in the operator's own register, how many
+   of this run's companies came back with nobody named at them. Offer to find and propose
+   people at those companies right now — `suggest-contacts/SKILL.md` — and say that it
+   is already covered by the grant this batch just spent under (D-62-11), so accepting
+   costs nothing beyond what was already priced. This offer is unconditional every time a
+   companies batch finishes; there is no suppression setting for it this phase (D-62-15's
+   own deferral) — an operator who wants it left out of a run simply declines it that run.

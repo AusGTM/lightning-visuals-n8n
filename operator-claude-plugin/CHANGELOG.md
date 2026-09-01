@@ -16,6 +16,53 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.36.0] - 2026-09-02
+
+### Added
+
+- **`suggest-contacts`, a new skill: after a company batch finishes, the assistant offers
+  to find and propose the people nobody named at it (Phase 62, SUGGEST-01, SUGGEST-02,
+  SUGGEST-04, SUGGEST-05).** Auto-offered right after `enrich-records` reports a
+  companies batch's completion — not only invocable on request — and, unlike every other
+  skill in this plugin, raised BY the assistant as well as slash-invocable. The round
+  reads a company's own pages through the sitemap ladder `contact-upload`'s URL adapter
+  already builds (`url_fallback.py`, called as a library, never re-implemented), filters
+  what it finds to roles the operator picks ONCE for the whole batch, enriches the named
+  people through the same waterfall every other lane uses, and lands them as proposals
+  through the same match, held-row and association gates a spreadsheet upload goes
+  through — no per-person and no per-company confirmation.
+- **Roles are derived from the portal's own contact job titles, with a disclosed
+  fallback when the portal is too sparse to evidence one.** A read-only, credential- and
+  portal-guarded sweep of live `jobtitle` values, clustered once with a single cached
+  Haiku call and ranked by recurrence. When the portal cannot support that, the round
+  offers a generic role list instead — but says so plainly, in the operator's own words,
+  so a derived role is never mistaken for an invented one.
+- **The suggestion round's cost is folded into the SAME opening grant envelope a company
+  batch already opens** — one disclosure, one yes, never a second ask. `write_grant.
+  plan_grant()`/`envelope()` gained keyword-only `suggestion_companies`/`suggestion_cap`
+  arguments, and `enrich-records`'s own grant-opening step now threads the batch's company
+  count through them. A round whose cost alone would push the batch over the sampled
+  monthly execution ceiling is refused before it starts, carrying the same split-batch
+  offer any other oversized grant already gets.
+- **A suggested contact's provenance is per field, not per record.** The existing Phase
+  15 provenance mechanism now records `claude_web` for the name and job-title fields the
+  round's own page read named, and the provider's own name for the email and phone
+  fields the enrichment waterfall filled in — one contact, two legitimate sources, both
+  visible.
+
+### Changed
+
+- **SUGGEST-03 is AMENDED, not closed, by this release** — a disclosed generic role
+  fallback is now permitted for a portal too sparse to derive its own vocabulary; see
+  `.planning/milestones/v1.1-REQUIREMENTS.md`'s inline note for the full text and the
+  operator decision behind it (D-62-07).
+- **The regenerated backend workflow JSON this release's provenance wiring produced
+  (`n8n/wf_contact_ingest_cloud.json`, `n8n/wf_contact_ingest_local.json`,
+  `n8n/wf_enrichment_cloud.json`, `n8n/wf_enrichment_local.json`,
+  `n8n/wf_enrichment_local_live.json`, `n8n/wf_review_decision_cloud.json`) is committed
+  but NOT deployed.** No production workflow changed behavior as part of this release;
+  deploying is a separate, explicit operator action.
+
 ## [0.35.0] - 2026-09-01
 
 ### Added
