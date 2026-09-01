@@ -2150,6 +2150,34 @@ def test_a_two_lane_grant_names_both_lanes_and_points_at_the_written_records_lis
     assert "BEFORE the enriched preview exists" not in consequence
 
 
+def test_a_review_and_contacts_grant_does_not_falsely_claim_enrichment(
+        granting_config, stub_module_transport_factory):
+    """WR-01 (Phase 60 review): `_consequence`'s multi-lane summary sentence used to
+    hardcode "it enables enrichment and writes to HubSpot" no matter which lanes were
+    actually named. `LANES` now has three entries (Phase 60, D-60-02) and a grant can
+    legally span `("review", "contacts")` — no enrichment lane at all — so that
+    hardcoded claim would be false. This drives `_consequence` directly (no lane
+    resolution/transport plumbing needed) and asserts the word "enrichment" is absent
+    while "review decisions" is present."""
+    consequence = write_grant._consequence(
+        lane_names=("review", "contacts"), ids=(RECORD_ID,), domains=(), allow_create=False)
+
+    assert "enrichment" not in consequence
+    assert "review decisions" in consequence
+    assert "covers all 2 lanes at once" in consequence
+
+
+def test_a_review_and_enrichment_grant_names_both_verbs(
+        granting_config, stub_module_transport_factory):
+    """The other side of WR-01's fix: a grant that DOES include enrichment alongside
+    review must still name both, not just one."""
+    consequence = write_grant._consequence(
+        lane_names=("review", "enrichment"), ids=(RECORD_ID,), domains=(), allow_create=False)
+
+    assert "enrichment" in consequence
+    assert "review decisions" in consequence
+
+
 def test_a_single_lane_grant_claims_no_preview_trade_that_is_not_happening(
         granting_config, stub_module_transport_factory):
     transport = stub_module_transport_factory(_plan_reads())

@@ -654,9 +654,25 @@ def _consequence(lane_names, ids, domains, allow_create):
         # not just two, so the count is derived from `lane_names` rather than the fixed
         # "both" this sentence used to say — the trailing clause itself is unchanged and
         # stays pinned by `test_a_two_lane_grant_names_both_lanes_and_points_at_the_written_records_list`.
+        #
+        # WR-01 fix (Phase 60 review): this used to hardcode "it enables enrichment and
+        # writes to HubSpot" regardless of which lanes were actually named, which is
+        # false for any grant combination that excludes "enrichment" (e.g.
+        # ("review", "contacts")) and misleading for a review-inclusive grant (a review
+        # decision adjudicates a held candidate; it does not "enrich"). Derived from
+        # `lane_names` instead. "contacts" gets no verb of its own here — a
+        # contacts-only write is already named by the trailing "writes to HubSpot"
+        # clause below, and always was even before this fix (the pre-Phase-60
+        # enrichment+contacts combo relied on exactly that to keep this clause's old,
+        # still-pinned wording unchanged).
+        verbs = []
+        if "enrichment" in lane_names:
+            verbs.append("enrichment")
+        if REVIEW_LANE in lane_names:
+            verbs.append("review decisions")
         sentence += (
             f" This grant covers all {len(lane_names)} lanes at once: it enables "
-            f"enrichment and writes to HubSpot.")
+            f"{' and '.join(verbs)} and writes to HubSpot.")
 
     # D-59-09 (operator, 2026-08-29): fires for every grant, one lane or two -- see the
     # note above for why this moved out of the multi-lane branch. The artifact itself
