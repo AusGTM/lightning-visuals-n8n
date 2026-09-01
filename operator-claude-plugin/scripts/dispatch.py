@@ -55,7 +55,8 @@ class DispatchError(Exception):
 _IO_FAILURE_REASON = "the written-records artifact could not be saved (an I/O failure)"
 
 
-def dispatch(file_path, armed, config, transport=requests.post, *, run_id=None):
+def dispatch(file_path, armed, config, transport=requests.post, *, run_id=None,
+             source_by_field=None):
     # load_config() only enforces n8n_url (the universal minimum) — this is the guard
     # that stops a webhook_secret-less config from reaching the transmit path below
     # (mirrors review_queue.fetch_queue()'s require_capability call).
@@ -75,6 +76,16 @@ def dispatch(file_path, armed, config, transport=requests.post, *, run_id=None):
     url = config_gate.describe_target(config)
     headers = {"X-Enrichment-Secret": config["webhook_secret"]}
     files = {"data": ("contacts.csv", csv_bytes, "text/csv")}
+    # Phase 62 Plan 04 (D-62-17, CLAUDE.md 13.0.2 idiom): describes the REQUEST, not a
+    # row — write_dispatch_csv raises on any non-canonical row key, so a per-row
+    # `origin` column cannot travel this channel. `filename=None` is load-bearing: it
+    # makes `requests` emit a plain multipart form FIELD (no Content-Disposition
+    # filename), which n8n's webhook parses into `$json.body.source_by_field` rather
+    # than `$binary` — a filename would land it in binary instead, invisible to the
+    # `Merge Contacts` node's envelope read. Absent/empty leaves `files` byte-identical
+    # to every existing caller (no `data=` kwarg added, no second send-shaped function).
+    if source_by_field:
+        files["source_by_field"] = (None, json.dumps(source_by_field), "application/json")
 
     try:
         response = transport(url, headers=headers, files=files, timeout=30)

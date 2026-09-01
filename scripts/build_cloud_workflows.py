@@ -279,6 +279,30 @@ MERGE_CONTACTS = inline("mergeContacts.js") + r"""
 // MERGE CANDIDATE / canonical field key is lv_linkedin_url. `row.linkedin_url` (the raw
 // mapped-column name from columnMap.js) stays unprefixed on the READ side — only the
 // write-side candidate key renames.
+// Phase 62 Plan 04 (D-62-17): a round-level per-field source map, read from the request
+// ENVELOPE by NODE NAME — never off the row. D-16b: a row-seeded value does not survive
+// Extract From File's fresh-item parse, so this reads 'Set Config' (the node
+// immediately before Extract From File that still spreads the webhook's own body)
+// rather than $json. Wrapped in try/catch, matching ENRICH_BUILD_RESPONSE's own
+// nodeAll() idiom: 'Set Config' does not exist in build_local()'s workflow at all, and
+// no envelope carries source_by_field on every existing caller (a plain CSV upload),
+// so both cases fall through to {} -> the flat "csv" source, byte-identical to today.
+// A multipart form field with no filename (dispatch.py's source_by_field part) arrives
+// as a JSON STRING on $json.body, hence the JSON.parse fallback below.
+function _sourceByFieldFromEnvelope() {
+  try {
+    const cfg = $('Set Config').first();
+    const body = (cfg && cfg.json && (cfg.json.body ?? cfg.json)) || {};
+    let map = (body && typeof body === 'object') ? body.source_by_field : null;
+    if (typeof map === 'string') {
+      try { map = JSON.parse(map); } catch (e) { map = null; }
+    }
+    return (map && typeof map === 'object' && !Array.isArray(map)) ? map : {};
+  } catch (e) {
+    return {};
+  }
+}
+const sourceByField = _sourceByFieldFromEnvelope();
 return $input.all().map((it) => {
   const row = it.json;
   const candidate = {};
@@ -290,7 +314,8 @@ return $input.all().map((it) => {
   }
   if (row.phone_normalized) candidate.phone = row.phone_normalized;
   // LOCAL/template: no existing HubSpot props fetched here => {} (blanks promote per policy).
-  const merged = mergeContacts({}, candidate, undefined, { source: "csv", confidence: 80 });
+  const merged = mergeContacts({}, candidate, undefined,
+    { source: "csv", confidence: 80, sourceByField });
   return { json: { ...row, merge: merged } };
 });
 """

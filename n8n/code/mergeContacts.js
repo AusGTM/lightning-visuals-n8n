@@ -159,7 +159,7 @@ function _statusFor(decision) {
 //   candidateRow:  canonical-keyed upload row (post column-map + normalization)
 //   fieldPolicy:   contacts policy block; defaults to DEFAULT_CONTACT_POLICY
 //   opts:          { source="csv", confidence=80, evidence={field: url},
-//                    confidenceByField={field: number} }
+//                    confidenceByField={field: number}, sourceByField={field: string} }
 //                  Phase 16.2 Task 2 (additive port of mergeCompanies.js's opts,
 //                  mergeCompanies.js:150-169): `evidence` is a per-field evidence-URL
 //                  map (absent = no evidence); `confidenceByField` overrides the flat
@@ -167,6 +167,12 @@ function _statusFor(decision) {
 //                  provider `mergeContacts(existing, candidate, undefined, {source,
 //                  confidence})`) omits both keys and is therefore byte-identical —
 //                  proven by tests/n8n/mergeContacts.test.mjs.
+//                  Phase 62 Plan 04 (D-62-17): `sourceByField` mirrors
+//                  `confidenceByField` exactly — it overrides the flat `source` for one
+//                  field only, resolved into BOTH the provenance entry's `source` and
+//                  the decisions-array row's `source_provider`, so the two can never
+//                  disagree. Absent (every caller before this plan) keeps the function
+//                  byte-identical to today's flat-source behaviour.
 function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
   existingProps = existingProps || {};
   candidateRow = candidateRow || {};
@@ -174,6 +180,7 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
   const source = (opts && opts.source) || "csv";
   const flatConfidence = (opts && opts.confidence != null) ? opts.confidence : 80;
   const confidenceByField = (opts && opts.confidenceByField) || {};
+  const sourceByField = (opts && opts.sourceByField) || {};
   const evidence = (opts && opts.evidence) || {};
   const verifiedAt = _nowIso();
 
@@ -193,6 +200,9 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
     // threshold, the provenance entry, and the decision record — so the recorded
     // confidence and the confidence that made the decision can never disagree.
     const confidence = confidenceByField[field] != null ? confidenceByField[field] : flatConfidence;
+    // Same resolution, mirrored for source (Phase 62 Plan 04, D-62-17): the recorded
+    // source and the source that was chosen can never disagree.
+    const resolvedSource = sourceByField[field] != null ? sourceByField[field] : source;
 
     const gate = _gate(field, currentValue, confidence, fieldPol, evidenceUrl, value);
     const decision = gate.decision;
@@ -207,7 +217,7 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
     if (isEmailField && promoted) validationStatus = "human_review_required";
 
     // ONE provenance entry per field — replaces the old flat metadataPatch/stagingPatch.
-    const entry = { source, confidence, verified_at: verifiedAt,
+    const entry = { source: resolvedSource, confidence, verified_at: verifiedAt,
                     validation_status: validationStatus, value };
     if (!_isBlank(evidenceUrl)) entry.evidence_url = evidenceUrl;
     provenance[field] = entry;
@@ -228,7 +238,7 @@ function mergeContacts(existingProps, candidateRow, fieldPolicy, opts) {
       field,
       current_value: currentValue === undefined ? null : currentValue,
       chosen_value: value,
-      source_provider: source,
+      source_provider: resolvedSource,
       decision,
       confidence,
       reason: gate.reason,

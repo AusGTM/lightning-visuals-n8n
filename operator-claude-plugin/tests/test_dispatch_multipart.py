@@ -8,6 +8,7 @@ they're actually used. Every dispatch test uses `stub_transport`; the autouse
 import csv
 import inspect
 import io
+import json
 
 import pytest
 
@@ -131,6 +132,37 @@ def test_transport_exception_becomes_a_plain_language_dispatch_error_not_the_raw
     with pytest.raises(DispatchError) as exc:
         dispatch(str(sample_csv), True, fake_config, transport=_raising_transport)
     assert "real-secret-value" not in str(exc.value)
+
+
+def test_dispatch_with_source_by_field_none_produces_a_byte_identical_files_dict(
+    sample_csv, fake_config, stub_transport
+):
+    """Phase 62 Plan 04 (D-62-17): the default (omitted/None) must leave every existing
+    caller's `files` dict unchanged — no `source_by_field` key at all."""
+    dispatch(str(sample_csv), True, fake_config, transport=stub_transport)
+    call = stub_transport.calls[0]
+    assert set(call["files"].keys()) == {"data"}
+
+
+def test_dispatch_with_source_by_field_adds_exactly_one_extra_multipart_part_no_data_kwarg(
+    sample_csv, fake_config, stub_transport
+):
+    """A non-empty map adds ONE more entry to the EXISTING `files` dict — never a `data=`
+    kwarg on the transport call (that would be a second, form-encoded body)."""
+    source_map = {"firstname": "claude_web", "email": "lusha"}
+    dispatch(str(sample_csv), True, fake_config, transport=stub_transport,
+              source_by_field=source_map)
+    call = stub_transport.calls[0]
+    assert set(call["files"].keys()) == {"data", "source_by_field"}
+    assert "data" not in call, "no data= kwarg was added to the transport call"
+
+    filename, body, content_type = call["files"]["source_by_field"]
+    # filename=None is load-bearing: it is what makes requests emit a plain multipart
+    # FORM FIELD rather than a file part, so n8n's webhook parses it into
+    # $json.body.source_by_field instead of $binary.
+    assert filename is None
+    assert json.loads(body) == source_map
+    assert content_type == "application/json"
 
 
 def test_missing_webhook_secret_refuses_before_the_transport_is_touched_even_when_armed(
