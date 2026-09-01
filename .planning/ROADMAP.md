@@ -547,6 +547,43 @@ a sample, the ceiling verdict is `unknown` and no code in this repo can guard th
 allowance. A run is then bound only by its own approved quote. 57-05's phase gate makes the
 unattended option unselectable in that state.
 
+### Phase 60: Review-lane authority
+
+**Status: CONTEXT GATHERED 2026-09-01** (`60-CONTEXT.md`, `60-DISCUSSION-LOG.md`). Split out of
+Phase 59 by operator decision 2026-08-28 (`59-CONTEXT.md` D-59-03).
+
+**Goal**: Approving or rejecting one flagged HubSpot record costs the operator zero manual admin
+round trips. Today it costs two: an admin setting `ALLOW_REVIEW_SUBMIT=true` as a shell env var,
+and a separate admin-run deploy that bakes `ALLOW_HUBSPOT_REVIEW_WRITES` plus the record's id
+into the deployed `LV Review Decision (Cloud)` workflow — G-2's shape, still live on this one
+lane (`54-LIVE-PROOF.md`).
+
+**The decisions this phase implements** (locked in `60-CONTEXT.md`, do not re-litigate):
+D-60-01 review becomes grantable, deliberately reversing 30-01's D-02/D-08e separation (option
+(b) of the three the roadmap offered) · D-60-02 one grant covers all three lanes (enrichment,
+contacts, review) together · D-60-03 the grant's own record-scoping bounds which flagged records
+review may approve — the same "narrower than the grant, never wider" rule dispatch follows, and
+what keeps D-60-02 from being a blank check · D-60-04 `ALLOW_REVIEW_SUBMIT` is retired, with
+grant-authorization taking its place as the gate · D-60-05 `ALLOW_HUBSPOT_REVIEW_WRITES` is wired
+into `n8n_arming`'s existing overlay mechanism (already one of its five overlayable flags, never
+wired for review), removing the deploy round trip · D-60-06 one arm window covers a batch of
+review decisions per session rather than one per decision.
+
+**Not an option** (carried from the checklist entry): deleting `ALLOW_REVIEW_SUBMIT` with no
+replacement — that leaves the lane's only authority behind a deploy an operator cannot run.
+D-60-04 retires it only because D-60-01 puts grant-authorization behind it first.
+
+**Recorded-edit discipline required**: `write_grant.py:64-82`'s comment block documents why the
+review lane is currently excluded from `LANES`. This phase reverses that decision — the comment
+is AMENDED with a dated addendum (mirroring the D-59-07 amendment below it in the same file),
+never silently deleted.
+
+**Depends on**: Phase 53 (the grant machinery this folds review into), Phase 30 (the review lane
+and the separation being reversed)
+
+**Requirements**: none mapped — `milestones/v1.1-REQUIREMENTS.md` carries no review-lane id; this
+phase is driven by D-59-03 and `60-CONTEXT.md`'s D-60-01..06.
+
 ### Phase 61: Autonomous batch runs
 
 **Status: COMPLETE 2026-08-30** — 6/6 plans, verification 12/12 (`61-VERIFICATION.md`). Backend
