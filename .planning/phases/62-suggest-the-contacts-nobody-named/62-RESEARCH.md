@@ -1,41 +1,88 @@
 # Phase 62: Suggest the contacts nobody named - Research
 
 **Researched:** 2026-09-02
-**Domain:** Provider-driven contact discovery, layered onto the existing HubSpot enrichment/ingest pipeline (n8n Cloud + operator-claude-plugin)
-**Confidence:** MEDIUM — the ingest-lane and grant-lane mechanics are HIGH confidence (live-probed contracts, read source); the phase's core premise (D-62-01/D-62-02) rests on a provider-capability finding that is itself HIGH confidence but forces the phase's shape to change before a PLAN.md can be written faithfully.
+**Amended:** 2026-09-02 — re-scope amendment (discovery mechanism rewritten; see
+`§ RE-SCOPE AMENDMENT` below, inserted after the original Summary). The original research pass's
+finding that vendor people-search is out of scope stands and is load-bearing; only the
+DISCOVERY-MECHANISM sections that assumed Lusha as the discovery provider are superseded, marked
+inline where they occur rather than deleted.
+**Domain:** Web-research-driven contact discovery (operator-claude-plugin's URL-fetch escalation
+ladder, `web_search`-backed research nodes), layered onto the existing HubSpot enrichment/ingest
+pipeline (n8n Cloud + operator-claude-plugin)
+**Confidence:** MEDIUM — the ingest-lane and grant-lane mechanics are HIGH confidence (live-probed
+contracts, read source) and are UNCHANGED by the re-scope. The re-scoped discovery premise
+(D-62-01/02/03 rev 2) is itself a NEW finding of this amendment pass: HIGH confidence that the
+named mechanism (`url_fallback.py` + the INGEST-05 URL adapter) is real and does what UAT 2.4
+showed, but also HIGH confidence that it has no programmatic or batch entry point — which again
+forces a premise question back to the operator before PLAN.md can be written faithfully to
+D-62-04/11/12/14/15 as currently worded.
 
 <user_constraints>
 ## User Constraints (from CONTEXT.md)
 
+**RE-SCOPE, 2026-09-02 (read first):** the original D-62-01/02 assumed Lusha
+`/v3/contacts/search-and-enrich` could find people by company + title. It cannot (verified twice,
+see the now-superseded `§ Research Priority 1` below). Discovery-by-title lives only in Lusha's
+Prospecting API, excluded by standing decision
+(`.planning/workstreams/milestone/REQUIREMENTS.md:47`) as a **class** exclusion covering every
+vendor's people-search/prospecting surface. Operator decision, 2026-09-02: re-scope discovery to
+the **existing web-research lane** reading a company's own public pages, composed with the
+existing enrich waterfall as stage 2. Precedent: UAT 2.4 (`0.10.0`, `gctc.com.au/board-of-directors/`)
+returned all 9 directors via the escalation ladder. **15 of 18 decisions survive unchanged; only
+D-62-01/02/03 are rewritten, and D-62-09/11/14/17 are amended in place.**
+
 ### Locked Decisions
 
-**Discovery provider:** D-62-01 (Lusha `/v3/contacts/search-and-enrich` is the discovery provider,
-departing from SUGGEST-05's Apollo/ZoomInfo wording) · D-62-02 (one combined search+enrich call,
-priced upfront, no find-then-confirm-then-enrich flow) · D-62-03 (no-hits records "no candidates
-found," a second-provider fallback is deferred not built) · D-62-04 (candidate company set is the
-batch just processed, not the whole portal and not an operator-supplied list).
+**Discovery mechanism (rewritten rev 2):** D-62-01 rev 2 (discovery is the existing web-research
+lane reading the company's own public pages via `operator-claude-plugin/scripts/url_fallback.py`'s
+host-bound escalation ladder — not a vendor people-search API; superseded rev 1 named Lusha
+`search-and-enrich`) · D-62-02 rev 2 (two stages, one price: research names people with no email;
+the existing enrich waterfall fills contact details for those named people; still no operator
+confirmation between the two stages, D-62-10 stands) · D-62-03 rev 2 (no candidates found is
+recorded and the round moves on; the ladder's own give-up message supplies the reason; do not
+escalate past a refusal — Phase 53 walk run 4: "escalating past a refusal turns a fence into a
+suggestion") · D-62-04 (candidate company set is the batch just processed, not the whole portal and
+not an operator-supplied list — unchanged).
 
 **Role vocabulary:** D-62-05 (cluster live `jobtitle` values with Haiku, cached, not re-clustered
 per run) · D-62-06 (offer the top N roles by recurrence, N fixed) · D-62-07 (sparse-portal fallback
 to a disclosed, un-evidenced generic role list — **amends SUGGEST-03**, does not close it as
-written).
+written) — unchanged by the re-scope.
 
 **How suggestions land:** D-62-08 (proposed people enter as synthesised rows through
-`extraction.py`/the contact-upload ingest lane — no new lane) · D-62-09 (a suggested person lands
-with whatever identity the provider returns; no special-casing) · D-62-10 (the whole round lands as
-proposals, no per-person/per-company confirmation).
+`extraction.py`/the contact-upload ingest lane — no new lane, unchanged) · D-62-09 (amended
+2026-09-02: a suggested person lands with whatever identity the ROUND produces, no special-casing —
+under the re-scope, web research reliably yields firstname+lastname+company, identity group 2, a
+STRONG key, so a research-discovered person resolves through match rather than landing weak even
+before stage-2 enrichment adds an email; a name-only row with no company still routes to weak-key
+`needs_review` per D-61-03) · D-62-10 (the whole round lands as proposals, no per-person/per-company
+confirmation — unchanged).
 
 **Trigger and scope:** D-62-15 (a round is auto-offered after a batch completes, unprompted, no
 suppression setting this phase) · D-62-16 ("no contacts named" means zero associated contacts, not
-"no contact matching the chosen roles") · D-62-17 (provenance uses the existing per-field mechanism
-with `source=lusha`, not a new `lv_` property) · D-62-18 (dedupe is both a pre-filter and reliance
-on the ingest lane's existing match as backstop).
+"no contact matching the chosen roles") · D-62-17 (amended 2026-09-02: provenance uses the existing
+`lv_contact_enrichment_provenance` JSON blob — CLAUDE.md §6/§8's flat per-field properties are
+largely never-created; `mergeContacts.js`'s `opts.source` hook is hardcoded `"csv"` at ONE call site,
+`MERGE_CONTACTS` in `scripts/build_cloud_workflows.py`, which must be parameterised; under the
+re-scope the value is `claude_web` for stage-1 fields (name, jobtitle) and the provider's own name
+for stage-2 fields (email, phone) — a suggested contact legitimately carries MIXED provenance;
+`extraction.py`'s `resolutions.source` is flagged as a separate, closed vocabulary easy to conflate
+with this) · D-62-18 (dedupe is both a pre-filter and reliance on the ingest lane's existing match as
+backstop — unchanged).
 
-**Pricing and the cap:** D-62-11 (one session grant covers the suggestion round — the allowance
-enters `plan_grant`'s opening envelope, not a separate spend confirmation) · D-62-12 (per-company
-cap, operator-set, default low 2-3, chosen once for the batch) · D-62-13 (over ceiling reuses Phase
-57's `CEILING_OVER` refusal and split offer) · D-62-14 (the estimate is worst case, stated plainly
-as a ceiling actuals land at or under).
+**Pricing and the cap:** D-62-11 (amended 2026-09-02: one session grant covers the ENTIRE session
+including suggestions — operator's own words, "a single grant covers the entire session (this would
+include suggestions)" — supersedes an earlier framing that proposed a separate spend confirmation on
+the grounds that grants authorise writes while discovery only spends credit; the suggestion cost
+enters `plan_grant`'s opening envelope as an allowance, one number, one yes) · D-62-12 (per-company
+cap, operator-set, default low 2-3, chosen once for the batch — unchanged) · D-62-13 (over ceiling
+reuses Phase 57's `CEILING_OVER` refusal and split offer — unchanged) · D-62-14 (amended 2026-09-02:
+the estimate is worst case, stated plainly as a ceiling; the re-scope gives the round TWO cost
+components in ONE ceiling — stage 1 research: Anthropic tokens + `web_search` uses, bound by
+companies × `WEB_RESEARCH_MAX_SEARCHES` (5) plus the ladder's own fetch cap; stage 2 enrich: provider
+credits, bound by companies × the D-62-12 per-company cap, itself bounded by what stage 1 actually
+found — do not present the provider-credit figure alone, that was honest when discovery was a vendor
+call and is now only half the round).
 
 Full text and reversibility notes: `.planning/phases/62-suggest-the-contacts-nobody-named/62-CONTEXT.md`.
 
@@ -45,26 +92,28 @@ None — every question in the discussion was answered explicitly. No "you decid
 
 ### Deferred Ideas (OUT OF SCOPE)
 
-- Apollo and ZoomInfo discovery adapters — the requirement names them; this phase ships Lusha only,
-  adapter shaped for later addition (D-62-01).
+- Apollo and ZoomInfo discovery adapters — the requirement names them; this phase ships Lusha only
+  for stage 2 enrichment, adapter shaped for later addition (D-62-01).
 - No-hits fallback to a second provider — unreachable until a second discovery adapter exists
   (D-62-03).
-- Two-step discovery (find, confirm, then enrich) — rejected in favour of Lusha's combined call
-  (D-62-02).
+- Two-step discovery with an operator confirmation between stages — rejected; the two stages compose
+  in one automated round, still no per-stage confirmation (D-62-02 rev 2).
 - "No contact matching the chosen roles" as the candidate rule — deferred as materially more
   expensive per round (D-62-16).
 - A suppression setting for the auto-offer — deferred as unneeded surface until an operator finds
   the prompt noisy (D-62-15).
 - A dedicated suggestion-provenance property — deferred in favour of existing provenance fields
   (D-62-17).
-- A second discovery provider generally, and any change to how enrichment or the write path
-  themselves work, and any new grant lane — per the Phase Boundary in CONTEXT.md.
+- A second discovery provider generally, any vendor people-search/prospecting API from any vendor,
+  any change to how enrichment or the write path themselves work, and any new grant lane — per the
+  Phase Boundary in CONTEXT.md.
 
-**Note on this research pass:** § Summary below reports that D-62-01/D-62-02, as literally written,
-rest on a provider-capability premise this research found to be false (see Priority 1). This is
-surfaced as a finding for the operator to re-decide, per this agent's mandate ("research HOW to
-implement [locked decisions] and surface anything that makes one unimplementable") — it is not this
-document overriding the lock.
+**Note on this amendment pass:** `§ RE-SCOPE AMENDMENT` below (inserted after the original Summary)
+reports that D-62-01/02/03 rev 2, as literally written, name a real, working mechanism
+(`url_fallback.py` + INGEST-05, proven by UAT 2.4) that nonetheless has no programmatic or batch
+entry point — a different premise gap from the original pass's, one layer down. This is surfaced as
+a finding for the operator to re-decide, per this agent's mandate — it is not this document
+overriding the lock.
 </user_constraints>
 
 <phase_requirements>
@@ -77,6 +126,13 @@ document overriding the lock.
 | SUGGEST-03 | **AMENDED, not closed** — see D-62-07 in CONTEXT.md. The role vocabulary is derived from the portal's own `jobtitle` values, with a disclosed generic fallback permitted when the portal is too sparse. Do not tick as originally written ("not invented and not a generic B2B list" — no exception). | `scripts/inventory_org_type_values.py`'s read-only paged-inventory idiom, confirmed reusable for `jobtitle` on contacts; the Haiku-clustering step (D-62-05) is new work with no in-repo precedent. Researched below. |
 | SUGGEST-04 | Suggested contacts are proposed, never auto-created — they land through the existing pre-ingest path (match, held rows, association contract). | Priority 3 (this document) confirms `extraction.py`'s real entry point (`validate()` on an in-memory dict) accepts synthesised rows with the identity contract unchanged — no special-casing needed for D-62-08/09/10. |
 | SUGGEST-05 | The cost of a suggestion round is shown before it is spent — priced as one decision, not discovered mid-run. | D-62-11/13/14 reuse `write_grant.envelope()`/`plan_grant()`/`_affordable_record_count()` verbatim — confirmed live-in-repo under "the rest of the priorities." **Caveat:** the per-company cap arithmetic these decisions price assumes a search-shaped provider call; Priority 1's finding means this pricing must be re-derived once Open Question 1 is resolved. |
+
+**Amendment note (2026-09-02):** SUGGEST-01/SUGGEST-05's support above was written for the original
+Lusha-discovery premise. Under the re-scope, SUGGEST-01's "the batch just processed" and SUGGEST-05's
+"priced as one decision" both depend on Open Question 1's amended sub-question (operator-attended vs.
+backend-automated) — see `§ RE-SCOPE AMENDMENT` above. SUGGEST-02/03/04's support is unaffected: role
+vocabulary, the ingest-lane landing contract, and the proposed-not-created guarantee do not depend on
+which discovery mechanism supplies the rows.
 
 </phase_requirements>
 
@@ -107,12 +163,279 @@ written by `mergeContacts.js`, which already accepts a `source` override — it 
 `"csv"` at the one call site (`scripts/build_cloud_workflows.py`'s `MERGE_CONTACTS` constant,
 consumed by both `build_local()` and `build_cloud()`), a small, well-scoped change.
 
-**Primary recommendation:** Before writing PLAN.md, take the D-62-01/D-62-02 finding back to the
-operator (a `checkpoint:human-verify` or a return to `/gsd-discuss-phase`) with the two forward
-options below (§ Open Questions). Everything else in this document — the ingest-lane reuse
-contract, the grant/ceiling reuse, the provenance mechanism, the role-vocabulary sampling idiom —
-is ready for planning regardless of which option the operator picks, because none of it depends on
-which discovery mechanism eventually supplies the candidate people.
+**Primary recommendation (original pass, now historical):** Before writing PLAN.md, take the
+D-62-01/D-62-02 finding back to the operator with the two forward options below (§ Open Questions).
+**The operator did exactly this and re-scoped discovery** — see `§ RE-SCOPE AMENDMENT` immediately
+below for what changed and what this amendment pass found about the NEW mechanism. Everything else
+in this document — the ingest-lane reuse contract, the grant/ceiling reuse, the provenance
+mechanism, the role-vocabulary sampling idiom — was ready for planning regardless of which
+discovery option was picked, and remains ready now; only the discovery-mechanism sections
+(originally Priority 1, and Priority 2's framing) are superseded.
+
+---
+
+## RE-SCOPE AMENDMENT (2026-09-02)
+
+**Read this section before planning. It supersedes `§ Research Priority 1` below (kept, marked
+superseded, not deleted — its finding that vendor discovery is closed remains load-bearing) and
+answers CONTEXT.md's re-scoped D-62-01/02/03 (rev 2).**
+
+### Headline
+
+**The mechanism D-62-01 rev 2 names is real, and UAT 2.4's result is real — but it is a
+per-conversation, operator-in-the-loop tool, not a batch/backend capability, and nothing in this
+repo currently drives it across a company list unattended.** This is a different premise problem
+from the original pass's (which was "the named provider cannot do this at all"); here, the named
+mechanism CAN name people from a page, but only when a human supplies the starting page URL and
+approves every escalation step, one company at a time, inside a live conversation. D-62-04's
+"candidate company set is the batch just processed" and D-62-12's "a 300-company round" (CONTEXT.md's
+own words) describe a scale this mechanism was never built to run at without an operator personally
+handling each company's starting URL.
+
+Three genuinely different "web research" mechanisms exist in this repo, easy to conflate under one
+phrase ("the existing web-research lane") because CONTEXT.md's canonical refs and this section both
+use that phrase loosely. Naming them precisely is the first job of this amendment:
+
+| Mechanism | Where | Invocation | Input | Output | Can it name people? |
+|---|---|---|---|---|---|
+| (a) URL-fetch escalation ladder | `operator-claude-plugin/scripts/url_fallback.py` + `extraction.md`'s INGEST-05 adapter | Conversational only — Claude's own `web_fetch` tool, driven by prose instructions in a live plugin skill session | An operator-pasted starting URL; every escalation candidate operator-approved | Canonical `extraction.py` rows (firstname/lastname/jobtitle/company), written by Claude's own reading | **Yes — this is what UAT 2.4 proved** |
+| (b) Company web research | `src/web_research.py`, `n8n/code/webResearch.js`, the "Claude Web Research HTTP Request" node (companies branch, `wf_enrichment_cloud.json`) | Programmatic — one Anthropic Messages API call per company, `web_search` server tool, deployed in n8n Cloud | Company name + domain | Company ICP fields only (`lv_org_type`, `lv_produces_content`, ...) | **No — no slot for a person's name anywhere in its schema** |
+| (c) Contact web research | `n8n/code/contactResearch.js`, the "Contact Web Research HTTP node" (contacts branch, same workflow) | Programmatic — same shape as (b) | An ALREADY-NAMED contact (firstName/lastName/company) | `jobtitle` + `seniority` for that one named person | **No — consumes a name, never produces one** |
+
+Only (a) can do what D-62-01 rev 2 asks. Only (b)/(c) are backend-batchable. No mechanism is both.
+
+### Amendment Research Priority 1 — Invocation and batchability of the web-research lane
+
+`[VERIFIED: operator-claude-plugin/scripts/url_fallback.py, read in full this session]` The module
+is a pure string-builder — `plan_ladder`, `same_host`, `filter_candidates`, `give_up_message` — with
+a module docstring stating plainly: *"`web_fetch` is a model-invoked SERVER tool — this module does
+not and cannot call it. Everything here builds strings and nothing else: no HTTP client, no
+scraping library, no headless browser, no I/O of any kind."* Confirmed by grep across the whole repo
+(`grep -rn "url_fallback"`): its **only** caller anywhere is
+`operator-claude-plugin/skills/contact-upload/extraction.md`'s prose instructions for the INGEST-05
+URL adapter. There is no Python function that imports `url_fallback` and loops it over a list of
+companies — the `__main__` CLI exists to be invoked by Claude, mid-conversation, one URL at a time.
+
+`[VERIFIED: operator-claude-plugin/skills/contact-upload/extraction.md:215-287, read in full this
+session]` The INGEST-05 adapter's own words make the consent boundary explicit, not incidental:
+
+> "The operator pastes the URL. That is also what makes the fetch possible at all — the tool only
+> fetches a URL that has already appeared in the conversation; you cannot construct one yourself."
+
+> "Fetch only the candidates the operator approves, in the order shown, stopping at the first one
+> that yields people."
+
+Every escalation rung — not just the starting URL — requires an operator decision before Claude may
+fetch it. `MAX_FOLLOWUP_FETCHES = 5` bounds the WHOLE ladder (not per rung, not per company); UAT
+2.4 spent 1 of 5. `filter_candidates()` takes `already_fetched` as a caller-tracked integer — nothing
+in the module persists a budget across companies or across turns; Claude in-conversation is the only
+thing keeping count.
+
+`[VERIFIED: operator-claude-plugin/skills/backend-sweep/SKILL.md, read in full this session]` The
+plugin's ONLY cron-invocable skill is `backend-sweep`, and it is read-only by explicit contract:
+*"This skill reads. It changes nothing, ever... nothing this skill reaches has a code path to a
+mutation."* There is no unattended path in this plugin that could paste a URL, approve a candidate,
+or drive `web_fetch` across a company list without a human present turn-by-turn. (Project memory,
+not independently re-verified this session, corroborates from the other direction: headless
+`claude -p` invocations do not authenticate under cron and fail silently — the sweep design already
+had to work around exactly this gap for a read-only skill.)
+
+`[VERIFIED: n8n/code/webResearch.js, read in full this session]` Mechanism (b)'s entire validation
+contract (`validateResearchOutput`, `toProviderResult`) operates on `data.lv_org_type`,
+`data.lv_produces_content`, `data.lv_content_type`, `data.lv_country_region_normalized` — company
+ICP fields exclusively. No field for a person's name exists anywhere in the schema, the system
+prompt (`RESEARCH_SYSTEM` in `src/web_research.py`, and its n8n-inlined twin,
+`scripts/build_cloud_workflows.py`'s companies "Build Research Request" node), or the request body.
+
+`[VERIFIED: n8n/code/contactResearch.js, read in full this session]` Mechanism (c)'s output is
+hard-limited: `const CONTACT_RESEARCH_FIELDS = ["jobtitle", "seniority"];` — and its own request
+body (`scripts/build_cloud_workflows.py`'s contacts "Build Research Request" node) requires
+`id.contactName || row.contactName || [id.firstName, id.lastName].filter(Boolean).join(" ")` — a
+name must already be present to call it. Its system prompt tells the model to *"prefer the
+company's own team/about/leadership page,"* confirming the underlying `web_search` capability CAN
+locate such a page — but this deployed node never surfaces anyone beyond the one person it was told
+to research. `[VERIFIED, quoted verbatim, corroborating this exact landmine]`
+`operator-claude-plugin/skills/enrich-before-ingest/SKILL.md` (read in full this session) states it
+explicitly for a related case: *"that adapter is company-oriented (`object_type: companies`
+throughout `src/web_research.py`) and would be answering a different question about a different
+kind of subject entirely."*
+
+### Amendment Research Priority 2 — Company → page URL (the highest-risk unknown, as flagged)
+
+`[VERIFIED — negative result]` No helper anywhere in `operator-claude-plugin/scripts/` or `src/`
+turns a bare company `website`/`domain` into a candidate team/board/leadership page URL. Grepped for
+`leadership`, `/team`, `board-of-directors`, `/about-us`, `guess.*url`, `candidate.*page` — zero
+source-code hits. `plan_ladder()` itself needs an already-specific page URL to build from (it derives
+WordPress-REST and sitemap rungs from the PASTED URL's own path slug and host) — it has no rung that
+starts from a homepage and proposes a subpage.
+
+UAT 2.4's precedent gave Claude the exact page — `https://gctc.com.au/board-of-directors/` — supplied
+directly by the human operator, not derived from anything HubSpot stores. A company's `website`
+property (CLAUDE.md §18.4 lists it among the standard company fetch fields, `[CITED]`) is at best a
+homepage domain; resolving from there to whichever specific subpage lists the leadership team
+(`/board-of-directors/`, `/about/team`, `/leadership`, `/who-we-are`, or nothing published at all) is
+a distinct, unaddressed problem.
+
+The closest built precedent for the ADJACENT, EASIER problem — finding a company's own domain from
+its name, not finding a subpage of a known domain — is explicitly, deliberately UNBUILT.
+`[VERIFIED: operator-claude-plugin/scripts/company_domain.py:154-175, read this session]`
+`needs_research()`'s own docstring: *"Pure -- no I/O, no network, no research call. This only names
+the rows; pricing them is `cost_guard.research_line`'s job, and actually researching them is neither
+function's job."* Its priced rate key, `company_domain_research`
+(`operator-claude-plugin/config/cost_rates.json`), is `null`: *"No measured rate exists for backend
+domain research (Phase 58, D-58-08/09)... must be measured on its own before it is disclosed as
+anything but unmeasured -- do not scale another rate to fill this in."* If the strictly easier
+sibling problem (domain-for-a-name) has no wired research call after being explicitly scoped for it
+in Phase 58, the harder problem (subpage-for-a-known-domain, then people-on-that-subpage) has none
+either — confirmed absent by the negative grep above, not merely by analogy.
+
+**Conclusion:** there is no reliable, already-built path from a HubSpot company record to a
+candidate team/board/leadership page URL. Absent that, D-62-04's "the batch just processed" cannot
+become a set of stage-1 starting points without a human supplying one per company.
+
+### Amendment Research Priority 3 — the stage-1 → stage-2 handoff
+
+Confirmed unchanged and clean: under mechanism (a), Claude reads page content directly and writes
+`firstname`/`lastname`/`jobtitle`/`company` straight into the canonical `extraction.py` row shape
+the ORIGINAL Priority 3 below already fully documents (record shape, `canonical_props()`, the three
+identity groups) — that finding stands entirely, independent of which discovery mechanism supplies
+the rows.
+
+`[VERIFIED — negative result]` The "per-row splitter added in plugin 0.9.0, amendment 6a"
+(`name_split.py`, `propose_split`/`apply_name_split`) is scoped to the CSV/XLSX "Full Name" COLUMN
+adapter (INGEST-02) only — grepped for `name_split`/`splitter`/`amendment 6a` across
+`extraction.md`: zero hits outside the CSV-header context (UAT 2.2's "Maria Jane Santos"
+middle-name-vs-surname case). The URL adapter (INGEST-05) never invokes it and has no comparable
+gap: Claude supplies firstname/lastname by its own reading judgment while extracting the row, the
+same way it does for the pasted-freeform-text adapter (INGEST-01) — UAT 2.4's 9 directors are the
+live proof this already works without a splitter.
+
+`[VERIFIED — negative result]` No existing composition of "research → enrich" for PEOPLE exists to
+copy. `enrich-before-ingest/SKILL.md` (read in full this session) is the closest analogous
+composition (match → enrichment waterfall → preview → ingest) and its own text explicitly REFUSES to
+substitute web research for a missing waterfall match on a person — the exact quote above
+("a different kind of subject entirely"). Phase 62's stage-1 → stage-2 composition is genuinely new
+wiring. What IS directly reusable from `enrich-before-ingest` for STAGE 2 specifically, once stage
+1's rows exist: `enrichment.resolve_providers`, `chunking.dispatch_plan`/`chunking.plan_chunks`,
+`preingest.merge_enriched`, `confidence.assess`, `held_queue` — the entire waterfall-dispatch-and-hold
+machinery, unmodified.
+
+### Amendment Research Priority 4 — cost
+
+`[VERIFIED: src/web_research.py:128; scripts/build_cloud_workflows.py generated node bodies (both
+companies and contacts "Build Research Request" nodes), read this session]` `WEB_RESEARCH_MAX_SEARCHES`
+is read via `os.getenv("WEB_RESEARCH_MAX_SEARCHES", "5")` in the local Python oracle, and is a
+hardcoded literal `5` (`const WEB_RESEARCH_MAX_SEARCHES = 5;`) inside both generated n8n Code node
+bodies deployed in `wf_enrichment_cloud.json`. It bounds `web_search` tool `max_uses` per Messages API
+call — **a different budget axis from `url_fallback.py`'s `MAX_FOLLOWUP_FETCHES`** (`web_fetch`
+escalation rungs). Both happen to default to 5; do not conflate them when deriving D-62-14's ceiling
+— a plan that writes "5 fetches" when it means "5 searches," or vice versa, prices the wrong axis.
+
+`[VERIFIED: operator-claude-plugin/config/cost_rates.json, read in full this session]` No isolated
+"cost of one research-only call" has been measured anywhere in this repo. `anthropic_usd_per_record`
+= `0.068624` USD/record is explicitly the ALL-IN chain — *"full provider + Haiku research + Sonnet
+judge chain"* — measured on Phase 22 canary executions 332/337, not isolated to a `web_search` call.
+The one rate key that would isolate a research-only call, `company_domain_research`, ships `null`
+with the file's own instruction not to substitute another rate for it. That instruction applies with
+equal force here: **do not scale `anthropic_usd_per_record` to price a Phase 62 discovery call** —
+price it as a new, separately-measured rate key, shipped `null` until a live probe measures it,
+following this file's own established convention.
+
+Tangential but material: the same file's judge-model rate entries are tagged *"measured, time-bound
+— intro pricing expires 2026-08-31, re-check after that date"* — today is 2026-09-02. Not this
+phase's defect to fix, but any Phase 62 ceiling should not silently inherit that now-expired figure
+without flagging it.
+
+Lusha stage-2 credit rate is unchanged from the original pass and stands:
+`lusha_contacts_first_time_enrich` = 1 credit/contact `[VERIFIED: cost_rates.json;
+docs/LUSHA-V3-CONTRACT.md §7-8]`.
+
+**A directly reusable two-component pricing SHAPE already exists, from a sibling feature.**
+`[VERIFIED: operator-claude-plugin/scripts/cost_guard.py:115-215, read in full this session]`
+`estimate_batch()` prices the provider-credit component; `research_line()` prices a SEPARATE,
+honestly-tri-state (`no_rows`/`unmeasured`/`measured`) domain-research-cost line for the exact
+"never render an unmeasured rate as $0" discipline D-62-14 asks for — built for D-58-08/09, a
+different call on a different subject. Recommend the planner parallel `research_line()`'s shape for
+the Phase 62 stage-1 cost line rather than inventing a new one, with a NEW rate key (not
+`company_domain_research`, which prices a different research call) shipped `null` until measured.
+
+### Amendment Research Priority 5 — the role filter / matcher
+
+`[VERIFIED — negative result]` No clustering or classification module exists for `jobtitle` values
+anywhere in `scripts/`, `operator-claude-plugin/scripts/`, or `n8n/code/` — grepped `cluster` across
+all three, no relevant hit. The only comparable pattern in the codebase, `ORG_TYPE_SYNONYMS`
+(`n8n/code/taxonomy.generated.js`), is a keyword-literal map, not clustering, and is exactly the
+pattern D-62-05's own rationale rejects ("keyword rules under-cluster").
+
+This is genuinely TWO matching problems, and CONTEXT.md's D-62-05/06 address only the first:
+
+1. **Offline (D-62-05/06's scope):** cluster the WHOLE portal's existing `jobtitle` values into
+   families, cached, to build the operator-facing "top N roles" menu.
+2. **Online, per suggestion round (unaddressed by any D-62 decision):** classify a NEWLY DISCOVERED,
+   freshly-extracted page title — a string that may never have appeared in the CRM before — against
+   the family list the operator already chose from (1).
+
+Nothing in CONTEXT.md speaks to (2) at all. **Recommendation for the planner:** design (2) as a
+single classification call — "given this jobtitle string and this fixed family list, which family
+(or none)" — reusing (1)'s cached family definitions as the classification target, rather than a
+second independent clustering pipeline; mirror the one-vocabulary-two-access-modes pattern
+`taxonomy.py`/`taxonomy.generated.js` already use for `lv_org_type` (one definitions block, consumed
+by both a build-time and a runtime path). Flag it in the plan as a distinct module from (1)'s
+clustering script — clustering and classification are different operations even sharing a
+vocabulary, and conflating them risks exactly the "second implementation of the same rule" this
+priority was asked to watch for.
+
+### Amendment Research Priority 6 — does the re-scoped design work as written?
+
+**No, not as an automated "round" at the scale CONTEXT.md's own prose describes ("a 300-company
+round," "auto-offered... unprompted," priced "as one number the operator agrees to").** The chain
+the re-scope specifies —
+
+```
+company with zero contacts -> web research the company's own pages (names + job titles, no email)
+  -> filter to chosen roles -> named person = strong identity -> enrich waterfall fills email/phone
+  -> extraction.py -> match lane -> proposals
+```
+
+— names mechanism (a) for its first arrow, and (a):
+
+1. needs a human to supply the STARTING page URL per company (Priority 2: no derivation path
+   exists), and
+2. needs a human to APPROVE every escalation candidate (Priority 1, quoted verbatim), and
+3. has no programmatic entry point and no unattended/cron path (Priority 1).
+
+None of this is a defect — it is Phase 35's deliberate consent-boundary design, and matches the same
+"escalating past a refusal turns a fence into a suggestion" principle CONTEXT.md itself cites for
+D-62-03. But "the existing web-research lane," as CONTEXT.md's canonical refs and precedent both use
+the phrase, names a proven-but-manual, per-company, human-attended tool — not the automated,
+backend-batchable capability D-62-04/11/12/14/15's language implies. The mechanisms that ARE
+backend-batchable, (b) and (c), cannot name a person at all.
+
+**This is not this phase's authority to resolve** — the same posture the original research pass
+took, which the operator then used to produce this very re-scope. Two honest ways forward for the
+next `/gsd-discuss-phase` pass:
+
+**(a) Scope the round to operator attention, not company count.** Accept that a "round" is bounded
+by how many companies a human is willing to hand a starting URL to, in one sitting — plausibly
+single-to-low-double-digits, not 300 — and that D-62-02/14's "one price, quoted once" covers stage
+2's provider-credit cost only, since stage 1 spends no provider/Anthropic budget but spends operator
+TIME proportional to N, which nothing in D-62-11..15 currently discloses or bounds.
+
+**(b) Build a genuinely programmatic stage-1 discovery step.** Extend the `web_search`-backed
+pattern (c) already gestures at ("prefer the company's own team/about/leadership page") into a NEW
+research schema that returns a LIST of `{name, jobtitle, evidence_url}` per company, query-driven
+from company name/domain rather than an operator-pasted URL — real, scoped, new work (a new n8n Code
+node + HTTP request + validator, mirroring `webResearch.js`/`contactResearch.js`'s existing shape),
+not "already built" as CONTEXT.md's RE-SCOPE section frames UAT 2.4. It needs its own consent-boundary
+decision (it removes the operator-paste/approve gate Phase 35 deliberately built) and its own
+currently-unmeasured cost line, following `company_domain_research`'s "ship null until probed"
+convention.
+
+**Recommendation:** return this finding to the operator (checkpoint or `/gsd-discuss-phase`
+re-entry) before planning proceeds — the same move the original pass made for the vendor-discovery
+premise, one layer down.
+
+---
 
 ## Architectural Responsibility Map
 
@@ -134,6 +457,14 @@ Not applicable — this phase installs no new external packages. Every dependenc
 ---
 
 ## Research Priority 1 — Does Lusha `/v3/contacts/search-and-enrich` support a title/role filter?
+
+> **SUPERSEDED as a discovery-mechanism recommendation — see `§ RE-SCOPE AMENDMENT` above.** The
+> operator has already re-scoped discovery away from Lusha entirely (D-62-01 rev 2). **Kept in
+> full, not deleted: the underlying finding — Lusha's Enrichment API cannot discover an unnamed
+> person by title, and vendor people-search/prospecting is out of scope by standing decision — is
+> exactly why the re-scope happened, and remains load-bearing** for stage 2 (this endpoint is still
+> the correct, in-scope tool for RESOLVING a person research has already named) and for ruling out
+> any future temptation to route discovery back through a vendor API.
 
 **Verdict: NO. `[VERIFIED: docs/LUSHA-V3-CONTRACT.md §3, live-probed 2026-07-30 and 2026-08-30]`**
 
@@ -200,6 +531,14 @@ authority to reverse on its own (see § Open Questions for the two ways forward)
 ---
 
 ## Research Priority 2 — Credit behaviour when a search returns fewer people than the cap
+
+> **Framing superseded — see `§ RE-SCOPE AMENDMENT` above and its Priority 4.** This section's
+> "for the endpoint actually wired" premise (Lusha `search-and-enrich` as discovery) no longer
+> applies; discovery is now the web-research lane, not a Lusha call, so there is no "search returns
+> fewer than the cap" case on this endpoint to worry about at all. **The billing facts below still
+> stand and are exactly what prices D-62-14's stage-2 component** (Lusha resolving a
+> research-named person is still a real, in-scope call) — kept for that reason, not as a discovery
+> analysis.
 
 **Verdict: for the endpoint actually wired, this question is largely moot — but the underlying
 billing facts are answered and still needed for D-62-14's estimate wording, and the real open
@@ -313,6 +652,12 @@ resolved before the row reached extraction") from D-62-17's question ("what stam
 per-field provenance after the row is written"). If Phase 62 needs to record `resolutions` at all
 (it does not have to — the field is optional), the correct value is `"provider_result"`, never
 `"lusha"`.
+
+> **Standing under the re-scope, unchanged.** This whole Priority 3 finding is about
+> `extraction.py`'s row contract, not about which mechanism supplies the row's values — it applies
+> identically whether a row comes from Lusha (original pass) or from web research (re-scope). See
+> `§ RE-SCOPE AMENDMENT`'s own Priority 3 above for the re-scope-specific addition (no name-split
+> gap; no existing research→enrich composition to copy).
 
 ---
 
@@ -483,28 +828,36 @@ D-62-14's arithmetic verbatim.
 | A2 | Lusha's Prospecting API billing model (search credits vs. reveal credits, per-result cost) is unknown to this repo. | Priority 2 | Medium — if the operator reopens the Prospecting decision (§ Open Questions option a), D-62-14's cost-ceiling formula cannot be trusted until this is live-probed; a plan that reuses D-62-14's arithmetic for the Prospecting API without re-probing could under-price the round. |
 | A3 | `GET /crm/v4/objects/companies/{id}/associations/contacts` is the correct read-only mirror of the write path CLAUDE.md §13.0.1 confirms live; not independently probed this session. | D-62-16 / "the rest of the priorities" | Low-Medium — a wrong endpoint name would surface immediately as a 404 in a disarmed dry run, before any write risk; still worth a `checkpoint:human-verify` before locking it into a task. |
 | A4 | A company-only Lusha identity body (`companyName`+`companyDomain`, no person name) either 400s or returns exactly one arbitrarily-matched result — inferred from the 1:1 response-array-alignment description, never directly probed. | Priority 1 | Low — feeds the same falsification probe named in Priority 1; matters only if someone considers "company-only search" as a workaround, which this document already argues against on response-shape grounds alone. |
+| A5 | Project memory's claim that headless `claude -p` invocations fail to authenticate under cron was not independently re-verified this session (the source file could not be located on disk this session); treated as corroborating context only. | RE-SCOPE AMENDMENT, Priority 1 | Low — even without this corroboration, the `backend-sweep` read-only contract (independently read and verified this session) is sufficient on its own to establish "no unattended write/fetch path exists in this plugin." |
+| A6 | HubSpot's company `website` property is assumed reliably populated enough to attempt a homepage-only starting point, based on CLAUDE.md §18.4 listing it among the standard fetch fields — not independently confirmed against a live portal read this session. | RE-SCOPE AMENDMENT, Priority 2 | Low — this assumption is not load-bearing for the Priority 2 finding either way: even a perfectly reliable `website` value only yields a homepage, and the finding is that no mechanism turns a homepage into the correct leadership subpage. |
 
 **If this table is empty:** N/A — see rows above.
 
 ## Open Questions
 
-1. **Which discovery mechanism does Phase 62 actually build against?**
-   - What we know: the endpoint named in D-62-01 (`/v3/contacts/search-and-enrich`) cannot do
-     company+role discovery, per Priority 1's evidence. No other provider is in scope for this
-     phase (Apollo/ZoomInfo discovery deferred by D-62-01 itself; a second discovery provider is
-     explicitly out of scope per CONTEXT.md's Phase Boundary).
-   - What's unclear: whether the operator wants to (a) reopen the standing "Lusha Prospecting API
-     is out of scope" project-level decision — D-62-01 marks itself reversible, but this is a
-     decision above this phase's own authority, made in `.planning/workstreams/milestone/REQUIREMENTS.md`,
-     not in this phase's CONTEXT.md — which would require its own live-probe session for request
-     shape and billing before any plan could price it; or (b) re-scope Phase 62's discovery
-     mechanism entirely (e.g. a HubSpot-internal search for contacts who exist somewhere in the
-     portal but are not yet associated with the target company — a different, cheaper, but
-     narrower capability than "genuinely new people").
+1. **RESOLVED (2026-09-02), replaced by a new question one layer down.** Original Open Question 1
+   asked which discovery mechanism to build against. The operator answered it: web research
+   (D-62-01 rev 2). This amendment's `§ RE-SCOPE AMENDMENT` (Priority 6) found the ANSWER itself now
+   has an open sub-question:
+
+   **Does Phase 62's "round" mean operator-attended (bounded by human time, per company) or
+   backend-automated (bounded only by cost, per CONTEXT.md's "300-company round" language) — and if
+   automated, is a net-new programmatic discovery step (Amendment Priority 6, option (b)) in scope
+   for this phase, or is that phase-boundary-violating "new provider surface" territory the Phase
+   Boundary in CONTEXT.md already excludes?**
+   - What we know: mechanism (a) — the one D-62-01 rev 2 actually names and the one UAT 2.4 proved —
+     is real but requires an operator-supplied starting URL and operator-approved escalation per
+     company, with no batch or unattended entry point anywhere in this repo (Amendment Priorities
+     1-2). Mechanisms (b)/(c) are backend-batchable but cannot name people at all.
+   - What's unclear: whether "auto-offered... unprompted" (D-62-15) and "a 300-company round"
+     (D-62-12's own framing in CONTEXT.md) were written with mechanism (a)'s actual constraints in
+     mind, or whether the operator believed a backend-automated capability already existed because
+     UAT 2.4's success READ as more general than it is.
    - Recommendation: return this finding to the operator (checkpoint or `/gsd-discuss-phase`
-     re-entry) before planning proceeds. Do not let the planner choose silently between (a) and
-     (b) — this is exactly the kind of reversal D-62-07 modelled for SUGGEST-03 (an explicit,
-     disclosed operator decision, not a planner inference).
+     re-entry) before planning proceeds, exactly as Open Question 1 originally recommended for the
+     first premise gap. Do not let the planner silently pick option (a) or (b) from Amendment
+     Priority 6 — this is the same class of explicit, disclosed operator decision D-62-07 modelled
+     for SUGGEST-03.
 
 2. **Does the v4 associations API support a batched "which of these N companies have zero
    contacts" read, or does it require N individual calls?**
@@ -558,6 +911,13 @@ D-62-14's arithmetic verbatim.
       cases in that existing file, not a new file.
 - [ ] No test scaffolding needed for the discovery-provider question until § Open Questions #1 is
       resolved — do not build tests against a mechanism that has not been chosen.
+- [ ] (Amendment) A test file for the ONLINE role-classification module (Amendment Priority 5's
+      item (2): matching a freshly-extracted page title against the cached family list) — distinct
+      from the offline clustering module's own test file above; does not exist yet, no module
+      exists yet either.
+- [ ] (Amendment) If the operator picks Amendment Priority 6's option (b), a new rate key in
+      `operator-claude-plugin/config/cost_rates.json` (shipped `null`) plus a `cost_guard.py`
+      pricing function paralleling `research_line()`'s tri-state shape — neither exists yet.
 
 ## Security Domain
 
@@ -603,6 +963,37 @@ D-62-14's arithmetic verbatim.
 - `operator-claude-plugin/scripts/run_state.py` — read this session, the `done`/verdict status
   model (line 89).
 
+### Primary, added by the RE-SCOPE AMENDMENT (HIGH confidence)
+- `operator-claude-plugin/scripts/url_fallback.py` — read in full this session; `plan_ladder`,
+  `same_host`, `filter_candidates`, `give_up_message`, `MAX_FOLLOWUP_FETCHES`, the module docstring
+  stating it cannot call `web_fetch` itself.
+- `operator-claude-plugin/skills/contact-upload/extraction.md` — read in full (lines 1-320+) this
+  session; the INGEST-05 URL adapter's operator-paste/approve contract, quoted verbatim.
+- `operator-claude-plugin/skills/backend-sweep/SKILL.md` — read in full this session; the
+  read-only, no-mutation contract confirming no unattended path exists.
+- `operator-claude-plugin/UAT.md` — read this session (sessions 0-5), especially 2.4 (the GCTC
+  board-of-directors walk) and 2.2 (the `name_split.py`/amendment 6a provenance).
+- `src/web_research.py` — read in full this session; the company-only `REQUIRED_FIELDS`,
+  `RESEARCH_SYSTEM` prompt, and `WEB_RESEARCH_MAX_SEARCHES` env read.
+- `n8n/code/webResearch.js` — read in full this session; `validateResearchOutput`/
+  `toProviderResult`'s company-ICP-only schema.
+- `n8n/code/contactResearch.js` — read in full this session; `CONTACT_RESEARCH_FIELDS =
+  ["jobtitle", "seniority"]` and the name-required request shape.
+- `scripts/build_cloud_workflows.py` — read the generated companies/contacts "Build Research
+  Request" node bodies this session (~lines 1009, 1877, 2751-2758), confirming
+  `WEB_RESEARCH_MAX_SEARCHES = 5` is deployed identically in both.
+- `operator-claude-plugin/scripts/company_domain.py` — read `needs_research()`/`decline_research()`
+  this session (lines 140-200); the explicit "actually researching them is neither function's job"
+  admission for the adjacent, easier, still-unbuilt domain-research problem.
+- `operator-claude-plugin/config/cost_rates.json` — read in full this session; `anthropic_usd_per_record`
+  (0.068624, all-in chain, not research-isolated), `company_domain_research` (null, unmeasured), and
+  the judge-model intro-pricing expiry note.
+- `operator-claude-plugin/scripts/cost_guard.py` — read in full this session; `estimate_batch()`,
+  `research_line()`'s tri-state pricing shape, `RESEARCH_RATE_KEY`.
+- `operator-claude-plugin/skills/enrich-before-ingest/SKILL.md` — read in full this session; the
+  closest analogous research/enrich composition, confirmed entirely conversational and confirmed to
+  explicitly refuse substituting company-oriented research for a person.
+
 ### Secondary (MEDIUM confidence)
 - `.planning/workstreams/milestone/phases/20-lusha-v3-migration/20-RESEARCH.md` — Pitfall 1
   (Enrichment vs. Prospecting API conflation), read this session.
@@ -621,20 +1012,32 @@ D-62-14's arithmetic verbatim.
 ## Metadata
 
 **Confidence breakdown:**
-- Provider-capability finding (Priority 1): HIGH — convergent, tool-confirmed, multi-source
-  evidence; the one gap (a direct `jobTitle` probe) is named as a zero-cost falsification step for
-  whoever runs the next live session.
+- Original provider-capability finding (Priority 1, now historical): HIGH — convergent,
+  tool-confirmed, multi-source evidence; superseded as a discovery recommendation, load-bearing for
+  ruling out vendor discovery permanently.
 - Ingest-lane reuse contract (Priority 3, D-62-08/09): HIGH — read directly from source this
-  session, including the exact record shape and rejection messages.
-- Grant/ceiling reuse (D-62-11/12/13/14): HIGH for the mechanism; MEDIUM for the actual cost
-  numbers, since those numbers depend on which discovery mechanism gets chosen (Open Question 1).
+  session, including the exact record shape and rejection messages; confirmed to apply unchanged
+  under the re-scope.
+- Grant/ceiling reuse (D-62-11/13): HIGH for the mechanism; the actual cost NUMBERS (D-62-14) remain
+  MEDIUM-LOW — the re-scope's two-component ceiling has one component (stage 2, Lusha) HIGH
+  confidence and one component (stage 1, research) with NO measured rate at all (Amendment
+  Priority 4), and the whole ceiling's premise depends on Open Question 1's new sub-question.
 - Provenance mechanism (D-62-17): HIGH — read directly from source, including the exact call site
-  needing a change.
-- Role-vocabulary sampling idiom (D-62-05): HIGH for the pattern; the Haiku-clustering step itself
-  is new work with no precedent to verify against.
+  needing a change; unaffected by the re-scope beyond the `source` value now being mixed rather
+  than a single literal.
+- Role-vocabulary sampling idiom (D-62-05): HIGH for the offline-clustering pattern; the
+  Haiku-clustering step itself, and the SEPARATE online-classification step Amendment Priority 5
+  surfaces, are both new work with no precedent to verify against.
+- **Re-scoped discovery mechanism (D-62-01/02/03 rev 2, this amendment): HIGH confidence that
+  mechanism (a) is real and does what UAT 2.4 showed; HIGH confidence that it has no
+  programmatic/batch entry point (Amendment Priorities 1-2, both confirmed by direct source read and
+  by a negative grep across the whole repo, not by absence-of-evidence reasoning alone).** This is
+  the load-bearing new finding of this amendment pass.
 
 **Research date:** 2026-09-02
-**Valid until:** 14 days — this research is gated on an operator decision (Open Question 1); once
-that decision lands, the Lusha billing/shape facts above should be re-checked against whichever
-endpoint is actually chosen, since Priority 2's answer is currently "moot for the wrong endpoint,
-unknown for the right one."
+**Amended:** 2026-09-02
+**Valid until:** 14 days — this research is gated on a NEW operator decision (Open Question 1,
+amended): whether a "round" is operator-attended or backend-automated, and if automated, whether
+building a net-new programmatic discovery step is in this phase's scope. Once that decision lands,
+re-derive D-62-14's stage-1 cost ceiling against whichever mechanism is actually chosen — nothing in
+this document prices mechanism (b)-style discovery, because it does not yet exist.
