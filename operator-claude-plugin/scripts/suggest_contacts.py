@@ -108,17 +108,45 @@ def discovery_plan(company_row):
     return url_fallback.plan_ladder(website)
 
 
+def _name_key(person):
+    """`(firstname, lastname)`, case-folded and whitespace-collapsed, or `None` when
+    either half is missing -- an incomplete name is never a dedupe key, so a blank
+    firstname on one side can never accidentally match a blank firstname on the other."""
+    first = _normalize_name(person.get("firstname"))
+    last = _normalize_name(person.get("lastname"))
+    if not first or not last:
+        return None
+    return (first, last)
+
+
+def _normalize_name(value):
+    return " ".join(str(value or "").strip().casefold().split())
+
+
 def select_people(people, family_list, chosen_families, known_contacts):
-    """The role filter: keep only people whose `jobtitle` classifies (via
-    `role_classify.classify_title`) into one of `chosen_families`. Returns
-    `{"selected": [...], "dropped": [...]}`; a dropped entry carries `{"person",
-    "reason"}`. `known_contacts` is accepted here for interface stability across this
-    plan's tasks -- the D-62-18 dedupe pre-filter it drives is added on top of this
-    function later in this same plan."""
+    """The role filter plus the D-62-18 dedupe pre-filter, in one pass. A discovered
+    person whose name matches a contact already associated with the company (from
+    `known_contacts`, `{firstname, lastname}` dicts) is dropped BEFORE the role filter
+    even runs -- the saving is in what is never spent. The match is name-based and
+    deliberately conservative: only a normalised (case-folded, whitespace-collapsed)
+    exact first+last match drops a person; anything short of that -- an uncertain
+    near-match -- is left IN and resolved by the ingest lane's own match, the backstop
+    half of D-62-18. Nothing here tries to be the match lane.
+
+    Returns `{"selected": [...], "dropped": [...]}`; a dropped entry carries `{"person",
+    "reason"}` with reason `"already_associated"` or `"role_not_selected"`."""
     chosen = set(chosen_families or [])
+    known_keys = {
+        key for key in (_name_key(c) for c in (known_contacts or [])) if key is not None
+    }
+
     selected = []
     dropped = []
     for person in people:
+        key = _name_key(person)
+        if key is not None and key in known_keys:
+            dropped.append({"person": person, "reason": "already_associated"})
+            continue
         family = role_classify.classify_title(person.get("jobtitle"), family_list)
         if family is None or family not in chosen:
             dropped.append({"person": person, "reason": "role_not_selected"})
@@ -203,6 +231,15 @@ def no_candidates(company_row, pasted_url, attempts):
         "company": company_row,
         "reason": url_fallback.give_up_message(pasted_url, attempts),
     }
+
+
+def partition_for_dispatch(rows):
+    """A thin call to `extraction.hold_emailless(rows)`, unchanged. A suggested row still
+    without an email after stage 2 is held exactly the way a CSV row is -- no branch
+    anywhere in this module reads "is this a suggestion" to change that outcome
+    (D-62-09, SUGGEST-04). This function exists only to give the sitting one named seam
+    to call; it adds no logic, filtering, re-ordering or annotation of its own."""
+    return extraction.hold_emailless(rows)
 
 
 if __name__ == "__main__":
