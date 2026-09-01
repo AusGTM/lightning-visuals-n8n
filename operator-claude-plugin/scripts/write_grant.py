@@ -147,6 +147,12 @@ MEASURED = "measured"
 PROJECTED = "projected"
 UNCONFIGURED = "unconfigured"
 
+# Phase 62 / D-62-12: the envelope is built at grant-open, BEFORE the operator picks a
+# per-company cap in the sitting. Default to the TOP of D-62-12's 2-to-3 band so the
+# allowance is priced against the largest cap the sitting could still choose, never a
+# smaller one it might quietly exceed.
+PRICED_CAP = 3
+
 # One webhook execution per chunk, plus one sub-execution per record. This follows from
 # the enrichment workflow having no batching node (see `max_records_per_chunk`'s own
 # provenance note in operator.local.example.json: every record in one POST runs the full
@@ -407,7 +413,8 @@ def _post_transport(transport):
 
 
 def envelope(config, *, object_type, record_ids, record_domains, providers,
-             transport=None, today=None, headroom=None):
+             transport=None, today=None, headroom=None,
+             suggestion_companies=None, suggestion_cap=None):
     """The arithmetic an operator reads BEFORE the yes (GRANT-02).
 
     Returns `{figures..., "block": <markdown>}`. Every figure carries its basis in
@@ -427,6 +434,16 @@ def envelope(config, *, object_type, record_ids, record_domains, providers,
     does, computed once per grant before this call — passes it in here so the executions
     list is walked ONCE per grant, never twice (REVIEW-57-H9's frozen call order names
     this as a single read).
+
+    `suggestion_companies=None` (default, D-62-11): the whole suggestion-allowance
+    branch is skipped, `figures["suggestion_allowance"]` is `None`, nothing is added to
+    `executions`, and the block renders no suggestion sentence — byte-identical to the
+    pre-Phase-62 envelope for every existing caller. A non-negative int prices a
+    suggestion round's worst-case ceiling (`cost_guard.suggestion_line`) at
+    `suggestion_cap` (or `PRICED_CAP` when omitted — the sitting has not chosen a cap
+    yet at grant-open) and folds its stage-2 contact ceiling into `executions` BEFORE
+    `ceiling_verdict` runs, so an over-budget round is refused before it starts
+    (D-62-13) rather than discovered mid-session.
     """
     ids = _normalise(record_ids)
     domains = _normalise(record_domains)
@@ -473,6 +490,38 @@ def envelope(config, *, object_type, record_ids, record_domains, providers,
     except chunking.ChunkPlanError:
         executions_basis = UNCONFIGURED
 
+    # Phase 62 / D-62-11: the suggestion round's cost enters the SAME opening envelope,
+    # never a second ask. `figures["suggestion_allowance"]` is a THIRD name — never
+    # `ceiling` (the sampled-allowance verdict dict) or `chunk_ceiling` (the int
+    # per-chunk cap) — so the CR-01 collision above cannot recur under a new name.
+    # `figures["record_count"]` is deliberately NOT widened: its disclosure sentence
+    # promises the records are "named by this grant and by nothing else", and a
+    # suggested person is not named yet.
+    suggestion_allowance = None
+    suggestion_priced = isinstance(suggestion_companies, int) \
+        and not isinstance(suggestion_companies, bool) and suggestion_companies >= 0
+    if suggestion_priced:
+        priced_cap = suggestion_cap if (
+            isinstance(suggestion_cap, int) and not isinstance(suggestion_cap, bool)
+            and suggestion_cap > 0
+        ) else PRICED_CAP
+        suggestion_allowance = cost_guard.suggestion_line(
+            suggestion_companies, priced_cap, rates)
+        suggestion_allowance["priced_cap"] = priced_cap
+
+        # The round's execution weight is added to `executions` BEFORE
+        # `ceiling_verdict` runs (D-62-13), using the SAME `chunk_count + record_count`
+        # arithmetic already used above for the batch's own records, so the two
+        # projections can never drift. Only when the batch's own chunk ceiling was
+        # readable — if it was not, `executions` is already `None` and there is
+        # nothing for the suggestion weight to add to.
+        stage2_contacts = suggestion_allowance["stage2_contact_ceiling"]
+        if executions is not None and chunk_record_ceiling is not None and stage2_contacts > 0:
+            suggestion_chunk_count = chunking.plan_chunks(
+                {"record_ids": list(range(stage2_contacts)), "object_type": "contacts"},
+                chunk_record_ceiling).chunk_count
+            executions += suggestion_chunk_count + stage2_contacts
+
     allowance = (config or {}).get(n8n_read.EXECUTION_ALLOWANCE_KEY)
     allowance_configured = isinstance(allowance, int) and not isinstance(allowance, bool) \
         and allowance > 0
@@ -512,6 +561,7 @@ def envelope(config, *, object_type, record_ids, record_domains, providers,
         "sample_truncated_by_page_cap": headroom.get("truncated_by_page_cap"),
         "retention_caveat": headroom.get("retention_caveat"),
         "ceiling": ceiling,
+        "suggestion_allowance": suggestion_allowance,
         "basis": {
             "record_count": MEASURED,
             "provider_credits": MEASURED,
@@ -528,6 +578,11 @@ def envelope(config, *, object_type, record_ids, record_domains, providers,
             "remaining_allowance": MEASURED if headroom.get("sampled") else UNCONFIGURED,
         },
     }
+    # Phase 62 / D-62-11: only touch `basis` when a suggestion round was actually
+    # priced — the omitted-args path stays byte-identical to the pre-Phase-62 basis
+    # dict, not just to the top-level figures dict.
+    if suggestion_allowance is not None:
+        figures["basis"]["suggestion_allowance"] = PROJECTED
     figures["block"] = _envelope_block(figures)
     return figures
 
@@ -566,6 +621,21 @@ def _envelope_block(figures):
                 f"| {_headroom(verdict)} |")
     else:
         lines += ["", "No provider credits: **0** — this grant runs no provider."]
+
+    # Phase 62 / D-62-11/D-62-12: the suggestion round's allowance, priced into this
+    # SAME envelope so it is one disclosure and one yes for the whole session — never a
+    # second ask. Rendered right after the provider table and before the execution
+    # projection, per the round's own two-component ceiling (D-62-14).
+    suggestion = figures.get("suggestion_allowance")
+    if suggestion:
+        lines += [
+            "",
+            f"**Suggestion round allowance (worst case):** priced as if every company in "
+            f"this batch were eligible for the full per-company cap "
+            f"({suggestion.get('priced_cap')}) — eligibility is unknowable until the "
+            f"batch actually runs. Unspent allowance is simply not spent.",
+            suggestion["line"],
+        ]
 
     lines += ["", f"Anthropic model spend: **{_usd(figures.get('anthropic_usd'))}** "
                   f"— a projection from the dated rate table above, not a "
@@ -891,13 +961,22 @@ def split_for_allowance(config, *, object_type, spec=None, record_ids=None,
 
 def plan_grant(config, *, lanes, object_type, record_ids, record_domains, allow_create,
                label, providers=None, transport=None, preflight=None, today=None,
-               override=False, override_reason=None):
+               override=False, override_reason=None,
+               suggestion_companies=None, suggestion_cap=None):
     """Compose a PROPOSAL for a write grant. Reads only — never mutates anything.
 
     Refuses, in this order and before returning anything: an unauthorized config, an
     unknown lane, an empty record set, a lane whose workflow cannot be resolved by name,
     a batch whose projected executions exceed the sampled remaining monthly allowance
     (Phase 57, D-57-01, RUN-05 — see `ceiling` below).
+
+    `suggestion_companies`/`suggestion_cap` (Phase 62, D-62-11): threaded straight
+    through to the single `envelope()` call below, unchanged in every other respect —
+    both default to `None`, which prices no suggestion round and leaves this proposal
+    byte-identical to a pre-Phase-62 grant. When priced, the round's execution weight
+    already rides on `envelope()`'s widened `executions` figure, so the `CEILING_OVER`
+    check below (unmodified) refuses a suggestion-heavy batch exactly as it refuses an
+    oversized record batch, with the same `split_for_allowance` offer (D-62-13).
 
     `providers` is the resolved provider selection the envelope is priced against;
     `None` means the configured selection in `enrichment_providers`, the same default
@@ -1018,7 +1097,8 @@ def plan_grant(config, *, lanes, object_type, record_ids, record_domains, allow_
         config, object_type=object_type, record_ids=ids, record_domains=domains,
         providers=providers if providers is not None
         else (config or {}).get("enrichment_providers"),
-        transport=transport, today=today, headroom=headroom)
+        transport=transport, today=today, headroom=headroom,
+        suggestion_companies=suggestion_companies, suggestion_cap=suggestion_cap)
 
     # Phase 57 / D-57-01 / RUN-05: the refuse-before-starting check, computed from the
     # SAME headroom sample the envelope was just built from (a refusal still carries the
