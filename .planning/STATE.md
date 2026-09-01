@@ -2,19 +2,19 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Unattended Session Runs
-current_phase: 61
-current_phase_name: autonomous-batch-runs
+current_phase: 57
 status: complete
 stopped_at: Completed 57-03-PLAN.md (Task 1 checkpoint answered by operator, option-a; Tasks 2-3 by continuation agent)
-last_updated: "2026-08-31T23:08:38.382Z"
-last_activity: 2026-08-30
-last_activity_desc: "**Phase 61 complete and verified (12/12)**; backend deployed and"
+last_updated: "2026-09-01T00:49:01.613Z"
+last_activity: 2026-09-01
 progress:
   total_phases: 7
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 41
-  completed_plans: 39
-  percent: 71
+  completed_plans: 40
+  percent: 86
+current_phase_name: autonomous-batch-runs
+last_activity_desc: "**Phase 61 complete and verified (12/12)**; backend deployed and"
 ---
 
 # Project State
@@ -168,7 +168,7 @@ predating the window. VETO-03 bar still 0.
 
 ## Current Position
 
-Phase: 61 (autonomous-batch-runs) — **COMPLETE 2026-08-30**, 6/6 plans, verification 12/12
+Phase: 57 — COMPLETE
 Next: **Phase 57** — ceilings, refusal-before-start, post-run proof. It gates the first live
   unattended, credit-spending batch (D-61-08), which has NOT run. Also open: Phase 60.
 Armed state: nothing armed. Phase 61's live exercise was DISARMED throughout
@@ -255,7 +255,7 @@ exactly what B and C now do): .planning/phases/47.5-veto-recompute-path/47.5-CON
 **Standing order:** COVER-01/COVER-02 stay open for Phase 48 (four records ended with no
 lv_org_type: Editix, Jam TV, Waikato, The Rumble). Not a 47.5 workstream.
 
-Last activity: 2026-08-30 — **Phase 61 complete and verified (12/12)**; backend deployed and
+Last activity: 2026-09-01
   disarmed-proven. Next: Phase 57.
 
 *Retained history — Phase 47 (v0.9). Previous status: Executing — Anthropic credit restored,

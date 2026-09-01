@@ -153,7 +153,7 @@ variable), and a design that runs the provider waterfall twice per written recor
       associate, creates included, held rows queued rather than guessed~~ — **its gate survived
       the fold**: the first live unattended run is still gated on Phase 57.
 
-- [ ] **Phase 57: Ceilings, refusal-before-start, and post-run proof** — **NEXT PHASE.** A run
+- [x] **Phase 57: Ceilings, refusal-before-start, and post-run proof** — **COMPLETE 2026-09-01.** A run
       cannot spend what it does not have, and proves afterwards it wrote only what it was granted.
       **This phase gates the first live unattended, credit-spending batch** (D-61-08) — Phase 61's
       backend is deployed and disarmed-proven, but no such run has happened. Closes RUN-05,
@@ -495,8 +495,25 @@ being closed by operator choice, not because anything is broken. Run
 
 ### Phase 57: Ceilings, refusal-before-start, and post-run proof
 
-**Status: PLANNED — NEXT PHASE.** 5 plans, converged through cross-AI review
-(`57-REVIEWS.md`). **This phase gates the first live unattended, credit-spending batch**
+**Status: COMPLETE 2026-09-01.** 5/5 plans, verification 9/9 must-have truths
+(`57-VERIFICATION.md`). Converged through three cross-AI review cycles (`57-REVIEWS.md`).
+
+**Closed:** RUN-05 (57-01's refusal + pre-send stop, 57-03's split offer), AFTER-03 (the
+eight-word vocabulary — `written` only for a create whose id was echoed back), G-4's ZoomInfo
+half (probed live: `readable`, 9381 credits). **AFTER-01 ships PARTIAL** — the pair pipeline's
+final ingest leg strips `row_id`, so its rows are kept and rendered UNJOINABLE with that leg
+named in the report's `gaps`. GRANT-06 preserved, with authority tests in both new stores.
+
+**The live actions taken, and only these:** a read-only executions sample (`sampled: true` via
+`listing_exhausted`, 134 spent / 2366 remaining of 2500); a gated ZoomInfo balance probe; and a
+DISARMED deploy + bounce of `wf_contact_ingest_cloud.json` (`AwbBeShdPgV48eiY`, 29 nodes,
+`row_id` in `Build Ingest Response`, three write gates, `active: true` after bounce). **Nothing
+was armed, no batch ran, no provider credit was spent.**
+
+**A SMALL supervised first live batch is AUTHORISED**, to be run outside this phase. **D-61-08's
+UNATTENDED gate stays SHUT** — option-b was selectable (the ceiling did not read
+`CEILING_UNKNOWN`) but was not chosen, and the phase's own precondition wants the operator to
+read an end-of-run report on real data first. **This phase gates the first live unattended, credit-spending batch**
 (D-61-08): Phase 61's backend is deployed and disarmed-proven, but no such run has happened.
 
 **Goal**: An operator can start a batch knowing it will be refused before it starts if it cannot
