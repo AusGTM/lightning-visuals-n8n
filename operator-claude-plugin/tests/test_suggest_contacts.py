@@ -179,3 +179,56 @@ def test_suggest_contacts_module_is_pure_no_http_client():
     source = SUGGEST_CONTACTS_PATH.read_text(encoding="utf-8")
     assert "import requests" not in source
     assert "urllib.request" not in source
+
+
+# =====================================================================================
+# Task 2 — the per-company fetch budget and the give-up path (D-62-03)
+# =====================================================================================
+
+def test_company_budget_resets_between_two_companies_in_one_round():
+    attempts_company_a = [{"url": f"u{i}", "outcome": "empty"} for i in range(4)]
+    attempts_company_b = []
+    assert suggest_contacts.company_budget(attempts_company_a) == 4
+    assert suggest_contacts.company_budget(attempts_company_b) == 0
+
+
+def test_next_candidates_refuses_off_host_url_with_url_fallbacks_own_reason():
+    company_row = _company_row(website="https://example-club.example/board")
+    off_host = "https://other-host.example/board"
+
+    result = suggest_contacts.next_candidates(company_row, attempts=[], sitemap_urls=[off_host])
+    expected = url_fallback.filter_candidates(
+        company_row["website"], [off_host], already_fetched=0
+    )
+
+    assert result == expected
+    assert result["refused"][0]["url"] == off_host
+
+
+def test_next_candidates_threads_this_companys_own_budget():
+    company_row = _company_row(website="https://example-club.example/board")
+    same_host_url = "https://example-club.example/sitemap.xml"
+    attempts = [{"url": f"u{i}", "outcome": "empty"} for i in range(4)]
+
+    result = suggest_contacts.next_candidates(company_row, attempts, [same_host_url])
+
+    assert result["budget_remaining"] == 1
+    assert same_host_url in result["accepted"]
+
+
+def test_no_candidates_records_give_up_messages_own_text():
+    company_row = _company_row()
+    pasted_url = company_row["website"]
+    attempts = [{"url": "https://example-club.example/wp-sitemap.xml", "outcome": "empty"}]
+
+    result = suggest_contacts.no_candidates(company_row, pasted_url, attempts)
+
+    assert result["outcome"] == "no_candidates_found"
+    assert result["reason"] == url_fallback.give_up_message(pasted_url, attempts)
+    assert result["company"] == company_row
+
+
+def test_suggest_contacts_never_falls_through_to_a_second_search_provider():
+    source = SUGGEST_CONTACTS_PATH.read_text(encoding="utf-8")
+    for forbidden in ("google", "bing", "duckduckgo", "search_engine", "retry_other_host"):
+        assert forbidden not in source.casefold()
