@@ -173,6 +173,38 @@ def round_artifact(records):
     return {"records": list(records)}
 
 
+def company_budget(attempts):
+    """The `already_fetched` integer for THIS company, derived from its own attempt
+    list. The caller threads a fresh `attempts` list per company, so this always starts
+    at 0 for a company that has not yet spent any of its ladder budget -- a company that
+    spent 4 fetches leaves the next company with 5, not 1. `url_fallback.
+    MAX_FOLLOWUP_FETCHES` bounds one company's whole ladder; this function does not
+    enforce that bound itself, `url_fallback.filter_candidates` does."""
+    return len(attempts or [])
+
+
+def next_candidates(company_row, attempts, sitemap_urls):
+    """`url_fallback.filter_candidates`, called unmodified, with this company's own
+    budget threaded through `company_budget`. Returns its result verbatim -- including
+    `refused` entries with their original reasons -- never re-worded, re-ordered or
+    re-checked."""
+    pasted_url = company_row.get("website") or company_row.get("domain")
+    return url_fallback.filter_candidates(
+        pasted_url, sitemap_urls, already_fetched=company_budget(attempts)
+    )
+
+
+def no_candidates(company_row, pasted_url, attempts):
+    """The terminal state for a company the ladder could not resolve (D-62-03): record
+    `url_fallback.give_up_message`'s own text as the reason and move on. There is no
+    second-source branch and no search-engine fallback here."""
+    return {
+        "outcome": "no_candidates_found",
+        "company": company_row,
+        "reason": url_fallback.give_up_message(pasted_url, attempts),
+    }
+
+
 if __name__ == "__main__":
     import pathlib
 
