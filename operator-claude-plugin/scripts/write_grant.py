@@ -455,14 +455,20 @@ def envelope(config, *, object_type, record_ids, record_domains, providers,
     # reuses the very plan dispatch will build rather than re-deriving a ceil() that
     # could drift from it.
     chunk_count = None
-    ceiling = None
+    # CR-01 fix (Phase 60 review): this used to share the name `ceiling` with the
+    # sampled-allowance verdict dict assigned below, so `figures["chunk_ceiling"]`
+    # ended up holding the verdict dict instead of this int, and the GRANT-02
+    # disclosure rendered a dict repr where a record count belongs. Kept as its own
+    # name so the two meanings (per-chunk record cap vs. monthly verdict) can never
+    # collide again.
+    chunk_record_ceiling = None
     executions = None
     executions_basis = PROJECTED
     try:
-        ceiling = chunking.chunk_ceiling(config)
+        chunk_record_ceiling = chunking.chunk_ceiling(config)
         chunk_count = chunking.plan_chunks(
             {"record_ids": ids + domains, "object_type": object_type},
-            ceiling).chunk_count
+            chunk_record_ceiling).chunk_count
         executions = chunk_count + record_count
     except chunking.ChunkPlanError:
         executions_basis = UNCONFIGURED
@@ -491,7 +497,7 @@ def envelope(config, *, object_type, record_ids, record_domains, providers,
         "rates_version": estimate.get("rates_version"),
         "rates_measured_on": estimate.get("rates_measured_on"),
         "rate_table_age_days": age_days,
-        "chunk_ceiling": ceiling,
+        "chunk_ceiling": chunk_record_ceiling,
         "chunk_count": chunk_count,
         "projected_executions": executions,
         "executions_projection_basis": EXECUTIONS_BASIS,

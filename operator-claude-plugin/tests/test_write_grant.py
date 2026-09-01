@@ -1250,6 +1250,30 @@ def test_the_envelope_reports_every_figure_grant_02_names(
     assert figures["monthly_execution_allowance"] == 2500
 
 
+def test_the_grant_02_disclosure_renders_the_chunk_ceiling_as_a_number_not_a_dict(
+        priced_config, stub_module_transport_factory):
+    """CR-01 (Phase 60 review): `envelope()` used to bind the local name `ceiling` to
+    both the per-chunk record cap (an int) and the sampled-allowance verdict (a dict) in
+    sequence, so `figures["chunk_ceiling"]` — and therefore the rendered GRANT-02
+    disclosure line an operator reads immediately before authorizing live HubSpot
+    writes — ended up holding the verdict dict's repr instead of the chunk-size number.
+    Pin both the raw figure and the rendered sentence so this cannot silently return."""
+    transport = stub_module_transport_factory(_priced_plan_reads())
+    proposal = _priced_proposal(priced_config, transport, ids=("1", "2", "3", "4"))
+
+    figures = proposal["envelope"]
+    # priced_config sets max_records_per_chunk = 2.
+    assert figures["chunk_ceiling"] == 2
+    assert isinstance(figures["chunk_ceiling"], int)
+    assert figures["ceiling"]["verdict"] in {"ok", "over", "unknown"}
+
+    executions_line = next(
+        line for line in figures["block"].splitlines()
+        if "n8n executions" in line)
+    assert "of at most 2 record(s)" in executions_line
+    assert "verdict" not in executions_line, "the disclosure must never render the raw verdict dict"
+
+
 def test_the_execution_count_is_labelled_projected_and_never_measured(
         priced_config, stub_module_transport_factory):
     transport = stub_module_transport_factory(_priced_plan_reads())
