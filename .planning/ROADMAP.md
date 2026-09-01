@@ -549,8 +549,10 @@ unattended option unselectable in that state.
 
 ### Phase 60: Review-lane authority
 
-**Status: CONTEXT GATHERED 2026-09-01** (`60-CONTEXT.md`, `60-DISCUSSION-LOG.md`). Split out of
-Phase 59 by operator decision 2026-08-28 (`59-CONTEXT.md` D-59-03).
+**Status: PLANNED 2026-09-01** — 4 plans, 3 waves (`60-01`..`60-04`). Context, research, pattern
+map and validation strategy all gathered 2026-09-01 (`60-CONTEXT.md`, `60-DISCUSSION-LOG.md`,
+`60-RESEARCH.md`, `60-PATTERNS.md`, `60-VALIDATION.md`). Split out of Phase 59 by operator
+decision 2026-08-28 (`59-CONTEXT.md` D-59-03).
 
 **Goal**: Approving or rejecting one flagged HubSpot record costs the operator zero manual admin
 round trips. Today it costs two: an admin setting `ALLOW_REVIEW_SUBMIT=true` as a shell env var,
@@ -582,7 +584,33 @@ never silently deleted.
 and the separation being reversed)
 
 **Requirements**: none mapped — `milestones/v1.1-REQUIREMENTS.md` carries no review-lane id; this
-phase is driven by D-59-03 and `60-CONTEXT.md`'s D-60-01..06.
+phase is driven by D-59-03 and `60-CONTEXT.md`'s D-60-01..08. The decision ids are the coverage
+contract in place of REQ ids, and each plan's `requirements` frontmatter carries the D-60-NN ids
+it implements. The spec-less probe fallback records a SKIP for this phase: no `SPEC.md` and no
+requirement ids, so no probe predicates were generated.
+
+**Two additions research made that CONTEXT.md did not name**, both in scope by consequence:
+Guardrail A was structurally blind to a stuck-open `ALLOW_HUBSPOT_REVIEW_WRITES` the moment
+review became grantable (plan 02), and `n8n/code/reviewDecision.js`'s `not_allowlisted` message
+becomes false once a grant can set the allowlist dynamically (plan 04, changed at its source and
+regenerated — never a hand-edit of the JSON).
+
+**Plans**: 4 plans
+
+- [ ] 60-01-PLAN.md — TRACER: `"review"` becomes a grantable lane end-to-end (LANES, `REVIEW_FLAGS`,
+      `arm_for_review`, `submit_decision`'s grant gate), with the two reversed-design tests rewritten
+      under recorded-edit discipline. D-60-01/02/03/04/05/07. Wave 1.
+- [ ] 60-02-PLAN.md — Guardrail A learns to see a stuck-open review authorization; `authorize_review_batch`
+      and the one-window-per-sitting lifecycle (normal, out-of-scope, crashed, revoked). D-60-06. Wave 2.
+- [ ] 60-03-PLAN.md — review writes land in the per-run `written_records-<run_id>.json` artifact, in its
+      existing vocabulary, with the bookkeeping structurally unable to stop a write. D-60-08. Wave 2.
+- [ ] 60-04-PLAN.md — operator surfaces and release: the corrected backend message (regenerated), the
+      review-triage skill on the grant, three-lane grants in the dispatch skills, truthful gate tables,
+      CHANGELOG and version `0.35.0`. Wave 3.
+
+**Nothing in these plans arms, deploys, writes to HubSpot or calls a provider.** This phase's own
+live proof is a supervised operator walk (`60-VALIDATION.md` § Manual-Only Verifications), not an
+executor task — the arming gates are what would be under test.
 
 ### Phase 61: Autonomous batch runs
 

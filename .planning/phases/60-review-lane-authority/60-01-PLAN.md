@@ -1,0 +1,318 @@
+---
+phase: 60-review-lane-authority
+plan: 01
+type: execute
+wave: 1
+depends_on: []
+files_modified:
+  - operator-claude-plugin/scripts/n8n_arming.py
+  - operator-claude-plugin/scripts/write_grant.py
+  - operator-claude-plugin/scripts/review_decision.py
+  - operator-claude-plugin/tests/test_write_grant.py
+  - operator-claude-plugin/tests/test_review_decision.py
+  - operator-claude-plugin/tests/test_control_arming.py
+  - operator-claude-plugin/tests/test_write_grant_surface.py
+autonomous: true
+requirements: [D-60-01, D-60-02, D-60-03, D-60-04, D-60-05, D-60-07]
+user_setup: []
+
+estimate:
+  tokens: 90000
+  raw_tokens: 90000
+  tasks: 3
+  confidence: low
+
+must_haves:
+  truths:
+    - "D-60-01: `\"review\"` is a grantable lane — `write_grant.LANES` resolves it to the deployed `LV Review Decision (Cloud)` workflow, and the comment block that documented the old exclusion is AMENDED with a dated addendum, never deleted."
+    - "D-60-02: one grant covers all three lanes — `plan_grant(lanes=[\"enrichment\", \"contacts\", \"review\"])` returns a proposal whose `workflow_ids` carries all three, with no per-lane consent step anywhere."
+    - "D-60-03: a review decision on a record outside the grant's own id/domain set is REFUSED by the same `write_grant.covers` check dispatch sends already use — no second scope-check function exists."
+    - "D-60-04: `submit_decision` reads no shell environment variable; grant-authorization via `write_grant.authorize_send(..., lane=\"review\")` is gate 1, composed BEFORE the still-required `review_armed` gate 2."
+    - "D-60-05: arming review sets `ALLOW_HUBSPOT_REVIEW_WRITES` plus the two allowlist constants and NEVER `ALLOW_HUBSPOT_RECORD_WRITES` or `ALLOW_HUBSPOT_CREATE`, through the same `n8n_arming` overlay dispatch already uses, with zero change to any `n8n/wf_*.json`."
+    - "D-60-07: a `reject` decision still succeeds with NO grant open — the `is_undoing` carve-out survives, re-pointed at the grant check rather than deleted — while `review_armed` remains required for approve and reject alike."
+  artifacts:
+    - operator-claude-plugin/scripts/n8n_arming.py
+    - operator-claude-plugin/scripts/write_grant.py
+    - operator-claude-plugin/scripts/review_decision.py
+    - operator-claude-plugin/tests/test_write_grant.py
+    - operator-claude-plugin/tests/test_review_decision.py
+  key_links:
+    - "`write_grant.LANES[\"review\"]` -> `executions_client.resolve_workflow_id` -> the live `LV Review Decision (Cloud)` id, resolved by NAME at plan time exactly as the two existing lanes are."
+    - "`review_decision.submit_decision(grant=...)` -> `write_grant.authorize_send(lane=\"review\")` -> `write_grant.covers` — the one scope implementation, shared with dispatch."
+    - "`n8n_arming.arm_for_review` -> `set_write_safety({ALLOW_HUBSPOT_REVIEW_WRITES: True, ...})` -> the deployed `_writeSafetyAllows(\"review\", ...)` branch, unchanged."
+---
+
+<objective>
+Make `"review"` a real grantable lane and prove it end-to-end: an admin-set settings key,
+a planned grant naming the review lane, an explicit yes, a dynamically armed review window
+that touches only `ALLOW_HUBSPOT_REVIEW_WRITES`, one submitted decision authorized by that
+grant, and a verified disarm — with no shell environment variable anywhere on the path.
+
+Purpose: this is the phase's tracer. Every layer the phase will touch (the overlay setter,
+the grant/lane table, the client-side decision gate, the test suite) is wired on ONE path
+first, so an architectural dead end surfaces after one commit instead of four.
+
+Output: `REVIEW_WORKFLOW_NAME`, `LANES["review"]`, `REVIEW_FLAGS`, the `authority` keyword,
+`arm_for_review` / `armed_review_window`, a grant-gated `submit_decision`, and the two
+reversed-design tests rewritten under recorded-edit discipline.
+
+**Spec-less probe fallback: SKIPPED, recorded not silent.** This phase has no requirement
+IDs and no `SPEC.md`, so the spec-less probe fallback generates no probe predicates this
+run. The `requirements` frontmatter carries the D-60-NN decision ids as the coverage
+contract instead, per the phase brief.
+</objective>
+
+<execution_context>
+@~/.claude/gsd-core/workflows/execute-plan.md
+@~/.claude/gsd-core/templates/summary.md
+</execution_context>
+
+<context>
+@.planning/PROJECT.md
+@.planning/ROADMAP.md
+@.planning/STATE.md
+@.planning/phases/60-review-lane-authority/60-CONTEXT.md
+@.planning/phases/60-review-lane-authority/60-RESEARCH.md
+@.planning/phases/60-review-lane-authority/60-PATTERNS.md
+@.planning/phases/60-review-lane-authority/60-VALIDATION.md
+</context>
+
+<tasks>
+
+<task type="tracer" tdd="true">
+  <name>Task 1: End-to-end "a grant approves one flagged record" — one path only</name>
+
+  <read_first>
+    - operator-claude-plugin/scripts/n8n_arming.py (whole file — 514 lines; the flag tables at 46-57, `DISPATCH_FLAGS` at 184, `_declaring_nodes`/`_assert_only_declaration_lines_changed` at 259-296 which ALREADY take a `flags=` parameter, `arm_for_dispatch` 299-420, `disarm` 423-472, `armed_window` 475-513)
+    - operator-claude-plugin/scripts/write_grant.py lines 1-120 (module docstring, the review-exclusion comment block at 64-72, the D-59-07 amendment at 74-90 whose STYLE the new addendum copies, `LANES` at 83-86)
+    - operator-claude-plugin/scripts/write_grant.py lines 846-1120 (`plan_grant`, including the unknown-lane refusal at 914-923, and `open_grant`)
+    - operator-claude-plugin/scripts/write_grant.py lines 1143-1205 (`covers`) and 1292-1352 (`authorize_send`)
+    - operator-claude-plugin/scripts/review_decision.py (whole file — 371 lines; the three-gate docstring at 15-53, the retiring constants at 83-120, `submit_decision` at 228-252, the `__main__` diagnostic at 361-370)
+    - operator-claude-plugin/tests/test_write_grant.py lines 1-60 (the module docstring and the gate/workflow fixtures at ~38) and 595-625 (the two tests this task rewrites)
+    - .planning/phases/60-review-lane-authority/60-PATTERNS.md (the verbatim analog excerpts for all three files)
+  </read_first>
+
+  <files>operator-claude-plugin/scripts/n8n_arming.py, operator-claude-plugin/scripts/write_grant.py, operator-claude-plugin/scripts/review_decision.py, operator-claude-plugin/tests/test_write_grant.py</files>
+
+  <behavior>
+    - Test 1 (the tracer, one function, red first): with `allow_write_grants` true in config
+      and a stubbed module transport, `plan_grant(lanes=["review"], record_ids=["9605284724"])`
+      returns a proposal; `open_grant(proposal, "yes", config)` returns an open grant whose
+      `workflow_ids["review"]` is the resolved review workflow id; `armed_review_window` over
+      that grant arms; `submit_decision(..., grant=grant, review_armed=True)` POSTs once and
+      returns the endpoint's five-key contract; the window's `disarm_result` is `DISARMED`.
+    - Test 2: across that whole walk, the workflow PUT payload never sets
+      `ALLOW_HUBSPOT_RECORD_WRITES` or `ALLOW_HUBSPOT_CREATE` to `"true"` — asserted against
+      the recorded PUT body, not against the returned dict.
+    - Test 3: `submit_decision` with `grant=None` and `decision="approve"` refuses with reason
+      `grant_not_authorized`, and the transport call log is EMPTY (no request was built).
+    - Test 4: `submit_decision` with `grant=None` and `decision="reject"` PROCEEDS (D-60-07),
+      and still refuses when `review_armed` is falsey.
+    - Test 5: a grant opened over record A refuses a review decision on record B, and the
+      refusal names B.
+  </behavior>
+
+  <action>
+In `n8n_arming.py`: add `REVIEW_FLAGS = ("ALLOW_HUBSPOT_REVIEW_WRITES", "TEST_RECORD_IDS", "TEST_RECORD_DOMAINS")` directly below `DISPATCH_FLAGS`, with a comment stating it is a SEPARATE tuple and that `DISPATCH_FLAGS` must never gain the review flag (`test_control_arming.py` line 334 and `test_write_grant.py` both pin that and must stay green). Add `AUTHORITY_DISPATCH = "dispatch"`, `AUTHORITY_REVIEW = "review"` and `FLAGS_BY_AUTHORITY = {AUTHORITY_DISPATCH: DISPATCH_FLAGS, AUTHORITY_REVIEW: REVIEW_FLAGS}`. Give `arm_for_dispatch` a keyword-only `authority=AUTHORITY_DISPATCH` parameter appended after `grant`; inside it, resolve `flags = FLAGS_BY_AUTHORITY[authority]` and return a `REFUSED` dict naming the permitted values for any other authority (fail closed, before the transport is built). Build the targets dict by branch: for `AUTHORITY_REVIEW` it is exactly `{"ALLOW_HUBSPOT_REVIEW_WRITES": True, "TEST_RECORD_IDS": ..., "TEST_RECORD_DOMAINS": ...}` and never carries either dispatch boolean, so the create fail-safe check below it is skipped; the dispatch branch is byte-unchanged. Thread `flags` into the `prior` read, the two `_declaring_nodes(...)` calls and `_assert_only_declaration_lines_changed(...)` — all three already accept a `flags` argument, so no new parameter is invented. Add a public `arm_for_review(workflow_id, record_ids, record_domains, config, transport=None, grant=None)` that delegates to `arm_for_dispatch(..., allow_create=False, authority=AUTHORITY_REVIEW)`, with a docstring saying the shared body is deliberate (one arm implementation, one set of guarantees) and that the historical function name is why it delegates rather than duplicating.
+
+Still in `n8n_arming.py`: change `disarm` so its targets are computed from the flags the fetched workflow ACTUALLY declares — `[flag for flag in sorted(OVERLAYABLE_FLAGS) if n8n_read.read_write_safety(original, flag).get("nodes")]`, falling back to `DISPATCH_FLAGS` when the workflow could not be read as a dict. Record in the docstring that disarm now means "put every write-safety constant this workflow declares back to its rest state", that this is what lets guardrail B's `_close_with_disarm` clear a stuck review authorization it did not open, and that it also clears a deploy-baked review arm on that workflow — a deliberate fail-safe, not an accident. Compute `_verify` and `expected` over that same derived list so a 4-constant test fixture still verifies exactly its 4. Give `armed_window.__init__` a keyword-only `authority=AUTHORITY_DISPATCH` passed through to `arm_for_dispatch` in `__enter__`; `__exit__` is unchanged because disarm no longer needs an authority. Add a module-level `armed_review_window(workflow_id, record_ids, record_domains, config, transport=None, grant=None)` factory returning `armed_window(..., allow_create=False, authority=AUTHORITY_REVIEW)`.
+
+In `write_grant.py`: add `REVIEW_LANE = "review"` and `REVIEW_WORKFLOW_NAME = "LV Review Decision (Cloud)"` immediately above `LANES`, then add the `LANES[REVIEW_LANE] = REVIEW_WORKFLOW_NAME` entry. Directly below the existing `# D-59-07 AMENDMENT (operator, 2026-08-28):` block, append a new `# D-60-01/D-60-05 AMENDMENT (operator, 2026-09-01):` block in that same register — dated, naming Phase 60, stating that 30-01's D-02/D-08e separation between dispatch grants and review writeback is REVERSED because the two round trips it cost (a shell variable an operator in Claude Desktop cannot set, plus an admin-run deploy) made the documented operator path unreachable from the operator's chair; and stating what still holds: the review flag stays out of `DISPATCH_FLAGS`, arming review still grants nothing on the dispatch path, and the grant's record scoping still bounds every decision. Leave the original paragraph at lines 64-72 unedited — it is the code's own record of why the old design existed.
+
+Still in `write_grant.py`: rewrite `plan_grant`'s unknown-lane refusal so it no longer asserts the review lane is not grantable (it now is) — keep the sentence naming the unknown lane(s) and listing `', '.join(sorted(LANES))`, and drop only the trailing claim about review. In `_consequence`, replace the multi-lane sentence that says the grant covers "both lanes at once" with wording derived from `len(lane_names)` and the lane names themselves, so a three-lane grant is described accurately; the per-lane sentence loop above it already names every lane individually and needs no change.
+
+In `review_decision.py`: retire the environment kill switch. Delete the module constants that hold the variable name and its accepted value, delete the boolean helper that read it (the one sitting between those constants and `is_undoing`), delete the `_ENV_REFUSAL` message, and drop the now-unused `os` import. Amend the module docstring's numbered gate 1 and the paragraph beneath it with a dated `D-60-04 AMENDMENT (operator, 2026-09-01)` addendum in the same recorded-edit register used in `write_grant.py`: gate 1 is now grant-authorization, checked before any transport exists, and property (c) — the un-doing carve-out — SURVIVES, re-pointed at the grant check per D-60-07, because a closed authority must never strand a flagged record mid-decision. Add `GRANT_REFUSAL_REASON = "grant_not_authorized"` and a `_GRANT_REFUSAL` operator-facing message saying no write grant covering this record is open, that opening one is something the operator can do in this conversation once an n8n admin has enabled write grants, and that previewing and rejecting both still work without one. Give `submit_decision` a keyword `grant=None` between `review_armed` and `preview`; its new first gate is: when `is_undoing(decision)` is false, call `write_grant.authorize_send(grant, lane=write_grant.REVIEW_LANE, record_ids=[str(record_id)], record_domains=[])` and return `_unavailable(GRANT_REFUSAL_REASON, message=...)` when `armed` is falsey — preferring the authorization's own `detail` as the message when it carries one, so a scope refusal names the offending record instead of being reworded. Import `write_grant` inside the function body, matching this repo's cycle-avoidance house style. Leave the `review_armed` check exactly where it is, second and still required for both decisions. Rewrite the `__main__` diagnostic to report the grant-gate contract instead of an environment variable, printing no config value and no secret.
+
+In `test_write_grant.py`: rewrite the two tests that pin the reversed design, under recorded-edit discipline — each keeps a docstring naming Phase 60, D-60-01 and the date 2026-09-01, and says what it used to assert and why that changed. Repoint the unknown-lane refusal test at a genuinely unknown lane name so the "unknown lane refuses by name" behavior stays pinned, and invert the not-grantable test into one asserting that the lane IS grantable while the flag-set SEPARATION survives — keep its second assertion, that the review flag is absent from `DISPATCH_FLAGS`, verbatim. Then add the tracer test as one function walking the whole path (behaviors 1 and 2 above), plus the three gate tests (behaviors 3-5), placed beside the existing grant tests.
+  </action>
+
+  <verify>
+    <automated>.venv/bin/python -m pytest operator-claude-plugin/tests/test_write_grant.py operator-claude-plugin/tests/test_review_decision.py operator-claude-plugin/tests/test_control_arming.py operator-claude-plugin/tests/test_control_flag_parity.py -x</automated>
+    <fails_when>non-zero exit, or the word "failed" or "error" appears in the pytest summary line</fails_when>
+    <automated>grep -c 'SUBMIT_ENV_VAR =' operator-claude-plugin/scripts/review_decision.py; grep -c 'def submit_enabled' operator-claude-plugin/scripts/review_decision.py</automated>
+    <fails_when>either command prints anything other than `0`</fails_when>
+    <automated>node --test tests/n8n/reviewWriteFlagSeparation.test.mjs</automated>
+    <fails_when>non-zero exit, or the summary reports `fail 1` or higher</fails_when>
+    <automated>git status --porcelain n8n/ | wc -l</automated>
+    <fails_when>prints anything other than `0` — this task changes no workflow JSON</fails_when>
+  </verify>
+
+  <acceptance_criteria>
+    - Source assertion: `grep -c 'REVIEW_FLAGS' operator-claude-plugin/scripts/n8n_arming.py` is at least 2, and `python3 -c "import sys; sys.path.insert(0,'operator-claude-plugin/scripts'); import n8n_arming; assert 'ALLOW_HUBSPOT_REVIEW_WRITES' not in n8n_arming.DISPATCH_FLAGS; assert 'ALLOW_HUBSPOT_RECORD_WRITES' not in n8n_arming.REVIEW_FLAGS"` exits 0.
+    - Source assertion: `write_grant.LANES` has exactly three keys and `write_grant.LANES["review"] == "LV Review Decision (Cloud)"`.
+    - Source assertion: the original review-exclusion paragraph is still present — `grep -c 'THE REVIEW LANE IS DELIBERATELY NOT GRANTABLE' operator-claude-plugin/scripts/write_grant.py` prints `1` — AND a dated `D-60-01/D-60-05 AMENDMENT` block follows it.
+    - Behavior assertion: the tracer test records exactly one PUT that arms, one POST to the decision endpoint, and one PUT that disarms — and no recorded PUT body contains `ALLOW_HUBSPOT_RECORD_WRITES = "true"`.
+    - Behavior assertion: an approve with no grant leaves the stub transport's call log empty; a reject with no grant reaches the POST.
+    - Test command: the four-file pytest command above exits 0.
+  </acceptance_criteria>
+
+  <reversibility rating="costly">D-60-01/D-60-02: reversing means re-excluding the review flag from the grantable set and re-standing-up an independent review gate. D-60-03/D-60-04/D-60-05/D-60-07 within this task are reversible.</reversibility>
+
+  <done>`"review"` is a grantable lane end-to-end: a planned-and-opened grant arms the review workflow through `n8n_arming`, gates `submit_decision`, bounds it to the grant's records, and disarms — with no environment variable read anywhere on the path, no workflow JSON changed, and the two reversed-design tests rewritten rather than deleted.</done>
+</task>
+
+<task type="auto" tdd="true">
+  <name>Task 2: Rewrite the review-decision suite onto the grant gate</name>
+
+  <read_first>
+    - operator-claude-plugin/tests/test_review_decision.py (whole file — 502 lines; the two env fixtures at 42 and 47, the kill-switch section starting at 50, and the near-miss table at 82-102)
+    - operator-claude-plugin/scripts/review_decision.py as left by Task 1
+    - operator-claude-plugin/tests/conftest.py (the `stub_module_transport_factory` fixture and the autouse network guard)
+    - .planning/phases/60-review-lane-authority/60-VALIDATION.md (rows for D-60-04 and D-60-07)
+  </read_first>
+
+  <files>operator-claude-plugin/tests/test_review_decision.py</files>
+
+  <behavior>
+    - Every test that currently sets or deletes the retired environment variable is repointed
+      at a grant fixture: an open grant covering the record under test, a grant covering a
+      DIFFERENT record, a closed grant, and `None`.
+    - The near-miss table that pinned `"1"`/`"yes"`/`"TRUE"`/`"True"` as not-on is replaced by
+      the grant-state near-miss set: `None`, a closed grant, a grant whose `lanes` omits
+      `"review"`, a dict that is not a grant at all — each refuses with
+      `grant_not_authorized` and an empty transport call log.
+    - A reject proceeds under every one of those four states (D-60-07) and still refuses when
+      `review_armed` is falsey.
+    - `preview_decision` remains ungated: it works with no grant, no arm, and a closed grant.
+    - The retired variable name appears in the file only inside a dated recorded-edit comment,
+      never in a live assertion.
+  </behavior>
+
+  <action>
+Rewrite `test_review_decision.py`'s gate-1 section against the grant. Delete the two monkeypatch fixtures that manipulated the retired environment variable and replace them with grant fixtures built through the real `write_grant.plan_grant`/`open_grant` pair where a transport stub makes that cheap, or with the minimal literal grant dict shape `covers` accepts (`kind`, `state`, `lanes`, `workflow_ids`, `record_ids`, `record_domains`) where it does not — prefer the real functions, and say in a comment which tests use which and why, so a later reader does not read the literal dicts as a second grant implementation. Head the rewritten section with a dated block comment naming Phase 60 and D-60-04/D-60-07, stating what these tests used to assert (an environment kill switch an admin set out of band), why that changed, and that the un-doing carve-out is re-pointed rather than removed. Keep the file's existing `stub_module_transport_factory` discipline throughout — no new fixture and no conftest edit. Assert the empty-call-log property on every refusal, because "no request was even built" is the property that made the old gate worth having and it must survive the swap. Leave the preview tests untouched apart from confirming they need no grant.
+  </action>
+
+  <verify>
+    <automated>.venv/bin/python -m pytest operator-claude-plugin/tests/test_review_decision.py -q</automated>
+    <fails_when>non-zero exit, or the summary line reports any failed or errored test</fails_when>
+    <automated>grep -v '^#' operator-claude-plugin/tests/test_review_decision.py | grep -c 'submit_enabled'</automated>
+    <fails_when>prints anything other than `0`</fails_when>
+  </verify>
+
+  <acceptance_criteria>
+    - Test command: `.venv/bin/python -m pytest operator-claude-plugin/tests/test_review_decision.py -q` exits 0 with zero skips introduced by this task.
+    - Behavior assertion: a test exists in which an OPEN grant covering record X still refuses a decision on record Y, and the refusal message names Y.
+    - Behavior assertion: a test exists in which `decision="reject"` succeeds with `grant=None` and `review_armed=True`, and another in which it refuses with `review_armed=False`.
+    - Source assertion: `grep -c 'D-60-04' operator-claude-plugin/tests/test_review_decision.py` is at least 1 — the recorded-edit note is present.
+    - CLI output: `.venv/bin/python -m pytest operator-claude-plugin/tests/test_review_decision.py --collect-only -q | tail -1` reports a test count no lower than the pre-change count.
+  </acceptance_criteria>
+
+  <reversibility rating="reversible">D-60-04/D-60-07 are test-level re-pointings; reverting is a symmetric rewrite.</reversibility>
+
+  <done>The review-decision suite pins the grant gate and the surviving un-doing carve-out, reads no environment variable, and every refusal still proves an empty transport call log.</done>
+</task>
+
+<task type="auto">
+  <name>Task 3: Full-suite sweep and the plan's own commit</name>
+
+  <read_first>
+    - .planning/phases/60-review-lane-authority/60-VALIDATION.md § Sampling Rate
+    - operator-claude-plugin/scripts/n8n_arming.py and operator-claude-plugin/scripts/write_grant.py as left by Task 1
+  </read_first>
+
+  <files>operator-claude-plugin/tests/test_control_arming.py, operator-claude-plugin/tests/test_write_grant_surface.py</files>
+
+  <action>
+Run all three suites and repair only what Task 1's two structural changes legitimately moved. Two shapes of breakage are expected and neither is a reason to weaken an assertion: (a) a test asserting `disarm`'s `observed` dict has exactly the four dispatch keys, now correct for whatever the fixture declares — update the fixture's expectation to the flags its own gate declares, never by loosening the comparison; (b) a test driving `arm_for_dispatch` positionally past `grant` — the new `authority` parameter is keyword-only precisely so this cannot happen, so if it does, the parameter was not made keyword-only and that is the fix. Any test failing for a third reason is a real defect in Task 1 and must be fixed in the source, not in the test. Do not touch `tests/n8n/reviewWriteFlagSeparation.test.mjs` — it pins the JSON-side invariant this phase must not violate, and it must pass unmodified.
+  </action>
+
+  <verify>
+    <automated>.venv/bin/python -m pytest -q</automated>
+    <fails_when>non-zero exit, or the summary line reports any failed or errored test</fails_when>
+    <automated>.venv/bin/python -m pytest operator-claude-plugin/tests -q</automated>
+    <fails_when>non-zero exit, or the summary line reports any failed or errored test</fails_when>
+    <automated>node --test tests/n8n/*.test.mjs</automated>
+    <fails_when>non-zero exit, or the summary reports `fail 1` or higher</fails_when>
+    <automated>git diff --stat -- tests/n8n/reviewWriteFlagSeparation.test.mjs | wc -l</automated>
+    <fails_when>prints anything other than `0`</fails_when>
+  </verify>
+
+  <acceptance_criteria>
+    - Test command: all three suite commands above exit 0.
+    - CLI output: the root suite's pass count is at or above 3539 and the n8n suite's is at or above 844 (the Phase 61 close figures) — a lower count means tests were removed rather than repaired.
+    - Source assertion: `tests/n8n/reviewWriteFlagSeparation.test.mjs` has no diff against `HEAD`.
+    - Behavior assertion: no assertion was deleted to make a suite pass — `git diff -U0 -- operator-claude-plugin/tests | grep -c '^-[[:space:]]*assert '` is reviewed and every removal is accounted for by a rewritten test in Task 1 or Task 2.
+  </acceptance_criteria>
+
+  <done>All three suites are green, no assertion was weakened to get there, and the JSON-side flag-separation test passes unmodified.</done>
+</task>
+
+</tasks>
+
+<threat_model>
+## Trust Boundaries
+
+| Boundary | Description |
+|----------|-------------|
+| conversation → plugin client | An operator's "yes" becomes an authority object; nothing in the conversation may fabricate one that arms a backend whose admin never enabled write grants. |
+| plugin client → n8n management API | A PUT rewrites `const` literals inside a deployed workflow; the diff must reach nothing but declaration lines. |
+| n8n workflow → HubSpot | `_writeSafetyAllows("review", ...)` is the last gate before a PATCH; this plan changes its INPUTS, never the function. |
+
+## STRIDE Threat Register
+
+| Threat ID | Category | Component | Severity | Disposition | Mitigation Plan |
+|-----------|----------|-----------|----------|-------------|-----------------|
+| T-60-01 | Elevation of Privilege | `n8n_arming.arm_for_review` targets dict | high | mitigate | The review targets dict is built in its own branch and can never contain `ALLOW_HUBSPOT_RECORD_WRITES` or `ALLOW_HUBSPOT_CREATE`; `REVIEW_FLAGS` and `DISPATCH_FLAGS` stay separate tuples that no code path unions. Pinned by a Python test on the recorded PUT body and by `reviewWriteFlagSeparation.test.mjs` unmodified. |
+| T-60-02 | Elevation of Privilege | `submit_decision` gate 1 | high | mitigate | Authorization routes through the single `write_grant.covers` implementation via `authorize_send(lane="review")`; no second scope check is written. A grant over A refuses a decision on B, pinned by test. |
+| T-60-03 | Spoofing | a hand-built grant-shaped dict | high | mitigate | `covers` refuses anything whose `kind` is not `write_grant.KIND`, and `_arm_gate` re-reads the admin's settings key from config on every arm rather than trusting the grant object. Unchanged by this plan and asserted to stay so. |
+| T-60-04 | Denial of Service | the retired kill switch | medium | accept | Retiring `ALLOW_REVIEW_SUBMIT` removes an out-of-band admin stop. Accepted per D-60-04: the admin's `allow_write_grants` settings key replaces it and is checked on every arm, and `n8n_arming.disarm` stays ungated so nothing can strand an armed backend. |
+| T-60-05 | Tampering | the arming PUT's blast radius | medium | mitigate | `_assert_only_declaration_lines_changed` is threaded the review flag set, so a review arm that reached beyond its declaration lines refuses exactly as a dispatch arm does. |
+| T-60-SC | Tampering | npm/pip/cargo installs | high | mitigate | Not applicable — this plan installs no package. `60-RESEARCH.md` § Package Legitimacy Audit records the same. No install task exists, so no legitimacy checkpoint is required. |
+</threat_model>
+
+<artifacts_this_phase_produces>
+## Artifacts this phase produces (whole phase, not only this plan)
+
+**New constants**
+- `n8n_arming.REVIEW_FLAGS` — `("ALLOW_HUBSPOT_REVIEW_WRITES", "TEST_RECORD_IDS", "TEST_RECORD_DOMAINS")` (plan 01)
+- `n8n_arming.AUTHORITY_DISPATCH`, `n8n_arming.AUTHORITY_REVIEW`, `n8n_arming.FLAGS_BY_AUTHORITY` (plan 01)
+- `write_grant.REVIEW_LANE` = `"review"` (plan 01)
+- `write_grant.REVIEW_WORKFLOW_NAME` = `"LV Review Decision (Cloud)"` (plan 01)
+- `write_grant.LANES["review"]` — the third lane entry (plan 01)
+- `review_decision.GRANT_REFUSAL_REASON` = `"grant_not_authorized"` and `review_decision._GRANT_REFUSAL` (plan 01)
+- `written_records.REVIEW_OUTCOME_TO_OUTCOME` (plan 03)
+
+**New functions / signatures**
+- `n8n_arming.arm_for_review(workflow_id, record_ids, record_domains, config, transport=None, grant=None)` (plan 01)
+- `n8n_arming.armed_review_window(workflow_id, record_ids, record_domains, config, transport=None, grant=None)` (plan 01)
+- `arm_for_dispatch(..., *, authority=AUTHORITY_DISPATCH)` and `armed_window(..., *, authority=AUTHORITY_DISPATCH)` — new keyword-only parameter (plan 01)
+- `n8n_arming.disarm` — targets now derived from the flags the fetched workflow declares (plan 01)
+- `review_decision.submit_decision(..., grant=None, ..., run_id=None)` — two new keywords (plans 01 and 03)
+- `write_grant.authorize_review_batch(grant)` (plan 02)
+- `written_records.classify_review_item(item)` (plan 03)
+- `written_records.append_chunk(..., classify=classify_item)` — new keyword (plan 03)
+
+**Retired**
+- `review_decision.SUBMIT_ENV_VAR`, `SUBMIT_ENV_VALUE`, `submit_enabled()`, `_ENV_REFUSAL` (plan 01)
+
+**Widened**
+- `write_grant.WRITE_ENABLING_FLAGS` — 2 items → 3 (plan 02)
+- `write_grant.read_live_write_state` / `guardrail_a` — read all five overlayable flags (plan 02)
+
+**New / rewritten tests**
+- `test_write_grant.py`: the review tracer walk; the repointed unknown-lane refusal; the inverted grantable-lane test keeping the flag-separation half; the out-of-scope review refusal (plan 01)
+- `test_review_decision.py`: the grant-state near-miss set; the surviving un-doing carve-out (plans 01, 02)
+- `test_write_grant_guardrails.py`: `_gate()` gains a fifth constant; the dirty-review-flag refusal; the batch-window lifecycle including revoke-mid-batch (plan 02)
+- `test_written_records.py`: review-outcome mapping; a poisoned reason that never raises; an append failure that never aborts the write (plan 03)
+
+**New / changed files**
+- `n8n/code/reviewDecision.js` — the `not_allowlisted` message text (plan 04)
+- `n8n/wf_review_decision_cloud.json` — regenerated, message text only (plan 04)
+- `operator-claude-plugin/skills/review-triage/SKILL.md`, `skills/enrich-records/SKILL.md`, `skills/enrich-before-ingest/SKILL.md`, `README.md`, `USAGE.md`, `CHANGELOG.md` (plan 04)
+- `operator-claude-plugin/.claude-plugin/plugin.json` — version `0.34.0` → `0.35.0` (plan 04)
+</artifacts_this_phase_produces>
+
+<verification>
+- All three suites green: `.venv/bin/python -m pytest -q`, `.venv/bin/python -m pytest operator-claude-plugin/tests -q`, `node --test tests/n8n/*.test.mjs`.
+- `git status --porcelain n8n/` is empty — this plan changes no workflow JSON and no generator.
+- The review-exclusion comment survives with a dated addendum beside it.
+- Nothing is armed, nothing is deployed, no HubSpot request and no provider call is made.
+</verification>
+
+<success_criteria>
+A grant naming the review lane can be planned, opened, used to arm the review workflow, used to authorize one decision, and disarmed — entirely from Python driven by tests, with `ALLOW_HUBSPOT_RECORD_WRITES` never set true on that path and no shell environment variable read.
+</success_criteria>
+
+<output>
+Create `.planning/phases/60-review-lane-authority/60-01-SUMMARY.md` when done
+</output>
