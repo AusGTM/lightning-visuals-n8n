@@ -1,0 +1,47 @@
+version: lv-role-vocabulary-v1
+built_on: '2026-09-02'
+source: generic_fallback
+evidenced: false
+top_n: 8
+distinct_titles_sampled: 0
+families:
+- label: CEO
+  recurrence: 0
+  evidenced: false
+  members:
+  - CEO
+- label: CMO
+  recurrence: 0
+  evidenced: false
+  members:
+  - CMO
+- label: Head of Broadcast
+  recurrence: 0
+  evidenced: false
+  members:
+  - Head of Broadcast
+- label: Head of Marketing
+  recurrence: 0
+  evidenced: false
+  members:
+  - Head of Marketing
+- label: Marketing Manager
+  recurrence: 0
+  evidenced: false
+  members:
+  - Marketing Manager
+- label: Operations Manager
+  recurrence: 0
+  evidenced: false
+  members:
+  - Operations Manager
+- label: General Manager
+  recurrence: 0
+  evidenced: false
+  members:
+  - General Manager
+- label: Communications Manager
+  recurrence: 0
+  evidenced: false
+  members:
+  - Communications Manager
