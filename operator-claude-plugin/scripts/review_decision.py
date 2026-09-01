@@ -91,6 +91,7 @@ import json
 import requests
 
 import config_gate
+import written_records
 
 DECISION_PATH = "webhook/hubspot/review/decision"
 DEFAULT_TIMEOUT = 30
@@ -230,7 +231,8 @@ def preview_decision(config, object_type, record_id, decision, reason, transport
 
 
 def submit_decision(config, object_type, record_id, decision, reason, reviewed_by,
-                    review_armed, grant=None, preview=None, transport=requests):
+                    review_armed, grant=None, preview=None, transport=requests, *,
+                    run_id=None):
     """Send the decision for real — only when grant-authorization AND the session arm are
     open (D-60-04, Phase 60).
 
@@ -257,6 +259,44 @@ def submit_decision(config, object_type, record_id, decision, reason, reviewed_b
     `preview` is the envelope `preview_decision` already returned, used only so a refused
     submit can restate the exact write the operator was looking at. Nothing is fetched to
     populate it: a refused submit performs NO call of any kind.
+
+    `run_id` (D-60-08, Phase 60), keyword-only: when not `None`, this decision's outcome is
+    appended to that run's own `written_records-<run_id>.json` artifact
+    (`written_records.append_chunk`), AFTER `_post_decision` returns and only then. A
+    refused gate (grant or arm) never reaches this point at all — `_unavailable` is
+    returned before `_post_decision` is even called. An unavailable POST response
+    (`endpoint_unreachable`/`http_*`/`unparseable_response`/`unrecognized_response_shape` —
+    `result.get("available")` is `False`) DOES reach this point but records nothing: there
+    is no adjudicated outcome to record, mirroring `chunking.dispatch_plan`'s own
+    `DispatchError`-continue and `dispatch.dispatch`'s raise-before-append, where a
+    transport failure that never produced a real response never produces a written-records
+    entry either. (`written_records.classify_review_item`'s own `available: False -> FAILED`
+    branch stays a pure-function totality guarantee for that shape — unreachable from this,
+    its only call site, the same LOW-4 pattern its `"companies"` object-type fallback
+    already documents.) `run_id` is minted ONCE per triage batch by the caller, through
+    `run_state.new_run_id()`, before any HTTP call — the same idiom
+    `enrich-records/SKILL.md` already uses for a dispatch run. It is never generated inside
+    this function: a per-decision id would scatter one sitting across N files and defeat
+    the one-artifact-per-run rule (D-59-09). `run_id=None` (the default) writes nothing at
+    all and resolves no path — `written_records.written_records_path` is never called — so
+    every existing caller is unaffected. The `written_records` key is present on the
+    returned envelope IFF an append was actually attempted (`run_id` given AND the POST was
+    available) — its absence is not itself a failure signal, just "nothing to report."
+
+    The append sits inside a `try/except Exception` — deliberately WIDER than `OSError`,
+    mirroring `remainder_queue.save`'s own precedent (see that function's docstring):
+    `append_chunk` swallows `OSError` internally but deliberately PROPAGATES
+    `WrittenRecordsError` for a shape/forbidden-name defect. On the dispatch path that
+    propagation is correct — the defect is in the backend's own response, and
+    `append_chunk` itself does not decide whether the caller should continue. Here the item
+    is built LOCALLY by this function from arguments already validated by everything above
+    it, and a bookkeeping refusal must never convert into a mid-decision stop (D-59-10) — so
+    both failure shapes are caught. The outcome is attached to the returned envelope under a
+    `written_records` key: `True` on success, `False` when the append itself returned
+    falsey (an I/O failure `append_chunk` already degrades internally), or a short string
+    naming the exception's TYPE — never its text, which can carry a path or a header — when
+    it raised. Never swallowed silently and never logged away: the key is what makes a
+    bookkeeping miss loud without letting it touch the write's own outcome.
     """
     if not is_undoing(decision):
         # Imported inside the function body — this module's house style for avoiding an
@@ -277,7 +317,25 @@ def submit_decision(config, object_type, record_id, decision, reason, reviewed_b
                             would_write=(preview or {}).get("would_write"))
 
     body = _request_body(object_type, record_id, decision, reason, reviewed_by, False)
-    return _post_decision(config, body, transport)
+    result = _post_decision(config, body, transport)
+
+    if run_id is not None and result.get("available"):
+        item = {
+            "object_type": object_type,
+            "record_id": record_id,
+            "decision": decision,
+            "outcome": result.get("outcome"),
+        }
+        try:
+            flushed = written_records.append_chunk(
+                run_id, 0, item, classify=written_records.classify_review_item)
+        except Exception as e:
+            written_records_result = type(e).__name__
+        else:
+            written_records_result = bool(flushed)
+        result = {**result, "written_records": written_records_result}
+
+    return result
 
 
 def _verdict(status, response, message, mismatched=None) -> dict:

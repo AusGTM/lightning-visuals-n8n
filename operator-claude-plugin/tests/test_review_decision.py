@@ -18,6 +18,7 @@ import pytest
 import config_gate
 import review_decision
 import write_grant
+import written_records
 
 
 CONFIG = {"n8n_url": "https://n8n.example", "webhook_secret": "placeholder-not-a-secret"}
@@ -517,6 +518,175 @@ def test_a_writing_outcome_with_nothing_approved_reports_failed():
         "verified_properties": {}, "verified": True})
 
     assert result["status"] == "failed"
+
+
+# --- D-60-08 (Phase 60, 2026-09-01): run_id wires a decision into written_records -----
+
+def test_a_successful_approve_writes_one_entry_and_the_envelope_gains_written_records_true(
+        open_review_grant, stub_module_transport_factory, tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        written_records, "written_records_path",
+        lambda run_id: tmp_path / f"written_records-{run_id}.json")
+    transport = stub_module_transport_factory([applied_response()])
+
+    result = review_decision.submit_decision(
+        CONFIG, "companies", "789", "approve", "r", "Robert",
+        review_armed=True, grant=open_review_grant, transport=transport, run_id="r-1")
+
+    assert result["written_records"] is True
+    assert result["outcome"] == "applied"  # envelope otherwise unchanged
+
+    entries = written_records.load(path=written_records.written_records_path("r-1"))
+    assert len(entries) == 1
+    assert entries[0]["hs_object_id"] == "789"
+    assert entries[0]["action"] == "review_approve"
+
+
+def test_with_run_id_none_nothing_is_written_and_no_path_is_resolved(
+        open_review_grant, stub_module_transport_factory, tmp_path, monkeypatch):
+    calls = []
+
+    def _spy(run_id):
+        calls.append(run_id)
+        return tmp_path / f"written_records-{run_id}.json"
+
+    monkeypatch.setattr(written_records, "written_records_path", _spy)
+    transport = stub_module_transport_factory([applied_response()])
+
+    result = review_decision.submit_decision(
+        CONFIG, "companies", "789", "approve", "r", "Robert",
+        review_armed=True, grant=open_review_grant, transport=transport)
+
+    assert "written_records" not in result
+    assert calls == []
+
+
+def test_the_append_happens_after_the_post_a_raising_post_never_reaches_the_artifact(
+        open_review_grant, tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        written_records, "written_records_path",
+        lambda run_id: tmp_path / f"written_records-{run_id}.json")
+
+    class _RaisingTransport:
+        calls = []
+        mutating_calls = []
+
+        def post(self, *args, **kwargs):
+            raise RuntimeError("connection reset")
+
+    result = review_decision.submit_decision(
+        CONFIG, "companies", "789", "approve", "r", "Robert",
+        review_armed=True, grant=open_review_grant, transport=_RaisingTransport(),
+        run_id="r-unreachable")
+
+    assert result["reason"] == "endpoint_unreachable"
+    assert not (tmp_path / "written_records-r-unreachable.json").exists()
+
+
+def test_append_chunk_raising_oserror_still_returns_the_writes_own_outcome(
+        open_review_grant, stub_module_transport_factory, monkeypatch):
+    """D-60-08, the load-bearing case: a bookkeeping OSError must never stop the write's
+    own outcome from being returned."""
+    def _raise_oserror(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(written_records, "append_chunk", _raise_oserror)
+    transport = stub_module_transport_factory([applied_response()])
+
+    result = review_decision.submit_decision(
+        CONFIG, "companies", "789", "approve", "r", "Robert",
+        review_armed=True, grant=open_review_grant, transport=transport, run_id="r-2")
+
+    assert result["outcome"] == "applied"
+    assert result["would_write"] == APPROVE_WRITE
+    assert result["written_records"] != True  # noqa: E712 — must not be True
+    assert result["written_records"] == "OSError"
+
+
+def test_append_chunk_raising_writtenrecordserror_also_returns_the_writes_own_outcome(
+        open_review_grant, stub_module_transport_factory, monkeypatch):
+    """The shape the wider catch specifically exists for — `append_chunk` propagates
+    `WrittenRecordsError` by design, so the review call site is the one that must contain
+    it. A separate test from the OSError case, not a parametrisation, so this cannot be
+    quietly deleted as a duplicate."""
+    def _raise_written_records_error(*args, **kwargs):
+        raise written_records.WrittenRecordsError("forbidden marker")
+
+    monkeypatch.setattr(written_records, "append_chunk", _raise_written_records_error)
+    transport = stub_module_transport_factory([applied_response()])
+
+    result = review_decision.submit_decision(
+        CONFIG, "companies", "789", "approve", "r", "Robert",
+        review_armed=True, grant=open_review_grant, transport=transport, run_id="r-3")
+
+    assert result["outcome"] == "applied"
+    assert result["would_write"] == APPROVE_WRITE
+    assert result["written_records"] == "WrittenRecordsError"
+
+
+def test_three_decisions_under_one_run_id_produce_three_entries_in_one_file(
+        open_review_grant, stub_module_transport_factory, tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        written_records, "written_records_path",
+        lambda run_id: tmp_path / f"written_records-{run_id}.json")
+    transport = stub_module_transport_factory(
+        [applied_response(), applied_response(), applied_response()])
+
+    for _ in range(3):
+        review_decision.submit_decision(
+            CONFIG, "companies", "789", "approve", "r", "Robert",
+            review_armed=True, grant=open_review_grant, transport=transport, run_id="r-4")
+
+    entries = written_records.load(path=written_records.written_records_path("r-4"))
+    assert len(entries) == 3
+
+
+def test_a_fourth_decision_under_a_different_run_id_produces_a_separate_file(
+        open_review_grant, stub_module_transport_factory, tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        written_records, "written_records_path",
+        lambda run_id: tmp_path / f"written_records-{run_id}.json")
+    transport = stub_module_transport_factory([applied_response(), applied_response()])
+
+    review_decision.submit_decision(
+        CONFIG, "companies", "789", "approve", "r", "Robert",
+        review_armed=True, grant=open_review_grant, transport=transport, run_id="r-5")
+    review_decision.submit_decision(
+        CONFIG, "companies", "789", "approve", "r", "Robert",
+        review_armed=True, grant=open_review_grant, transport=transport, run_id="r-6")
+
+    entries_5 = written_records.load(path=written_records.written_records_path("r-5"))
+    entries_6 = written_records.load(path=written_records.written_records_path("r-6"))
+    assert len(entries_5) == 1
+    assert len(entries_6) == 1
+
+
+@pytest.mark.parametrize("object_type", ["companies", "contacts"])
+def test_the_entry_carries_the_object_type_submit_decision_was_given(
+        object_type, stub_module_transport_factory, tmp_path, monkeypatch):
+    """LOW-4: `submit_decision` threads its own argument through and never lets the
+    classifier's fallback decide."""
+    monkeypatch.setattr(
+        written_records, "written_records_path",
+        lambda run_id: tmp_path / f"written_records-{run_id}.json")
+    grant = _open_review_grant(record_ids=("789",))
+    transport = stub_module_transport_factory([applied_response()])
+
+    review_decision.submit_decision(
+        CONFIG, object_type, "789", "approve", "r", "Robert",
+        review_armed=True, grant=grant, transport=transport, run_id=f"r-ot-{object_type}")
+
+    entries = written_records.load(
+        path=written_records.written_records_path(f"r-ot-{object_type}"))
+    assert entries[0]["object_type"] == object_type
+
+
+def test_at_least_two_except_exception_blocks_the_new_one_after_post_decision():
+    """Source assertion mirrored in a test: the pre-existing transport catch in
+    `_post_decision` plus the new one wrapping the written-records append."""
+    import pathlib
+    source = pathlib.Path(review_decision.__file__).read_text(encoding="utf-8")
+    assert source.count("except Exception") >= 2
 
 
 # --- nothing persists ----------------------------------------------------------------
