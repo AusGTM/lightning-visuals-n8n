@@ -16,6 +16,60 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-09-01
+
+### Added
+
+- **The review lane is grantable, closing both manual round trips a flagged-record approval
+  used to cost (Phase 60).** Reversed 30-01's deliberate D-02/D-08e separation between
+  dispatch grants and review writeback — the reversal, why it was made, and what still
+  holds unchanged are recorded in `write_grant.py`'s own dated addendum beside the original
+  decision, not deleted or rewritten as if the old design never existed.
+- **The shell environment variable that used to gate review submission is retired.**
+  `submit_decision`'s first gate is now grant-authorization
+  (`write_grant.authorize_send(lane="review")`), the same authorization mechanism
+  enrichment and contact-ingest already use — not an administrator's shell variable a
+  Claude Desktop operator could never set themselves.
+- **A rejection still works with no grant open.** The `is_undoing` carve-out survives,
+  re-pointed at the grant check instead of the retired variable — a closed authority must
+  never be able to strand a flagged record mid-decision. What it guarantees is narrower
+  than it sounds: the request is always *sent*, never that it *lands* — the deployed
+  backend still checks its own record allowlist first, so a reject on a record no open
+  grant covers still comes back refused and the record stays flagged. Not a regression:
+  the retired variable's carve-out was equally client-side, no weaker than this one.
+- **Arming review is dynamic and never touches the dispatch write flags.** A grant's
+  batch window sets only `ALLOW_HUBSPOT_REVIEW_WRITES` (plus the shared record allowlist)
+  on the deployed workflow — never `ALLOW_HUBSPOT_RECORD_WRITES` or
+  `ALLOW_HUBSPOT_CREATE` — so arming review can never incidentally open dispatch-write
+  eligibility for the same record, and vice versa. No manual admin deploy is needed to
+  close the second of the two round trips.
+- **One window covers a whole triage sitting**, not one arm/disarm per decision — opened
+  once via `write_grant.authorize_review_batch`, held for every record the operator
+  triages, and disarmed once at the end (or on a mid-sitting exception or revocation).
+  Every individual decision inside the window is still scoped to the grant's own records,
+  exactly as a per-send dispatch window already is.
+- **The dirty-backend guardrail can now see a stuck-open review authorization.** Guardrail
+  A widened from reading four write-safety constants to reading all five, so a stuck-open
+  `ALLOW_HUBSPOT_REVIEW_WRITES` refuses the next grant open, by name, the same way a
+  stuck-open dispatch flag already does.
+- **Review writes now appear in the per-run written-records artifact.** A review decision's
+  outcome is mapped onto the artifact's existing eight-word vocabulary and appended to that
+  run's own `written_records-<run_id>.json` file — the same one dispatch runs already
+  write to — so one artifact answers "what did this session write to HubSpot" across all
+  three lanes.
+- **One grant now covers all three lanes together** (enrichment, contacts, review) —
+  opening a grant for an enrichment or ingest batch also authorizes review on those same
+  records, with no second deliberate yes, bounded as always to the grant's own records.
+  `enrich-records` and `enrich-before-ingest` both open their grant this way now.
+- **The backend's own refusal message no longer tells an operator that only an
+  administrator can add a record to its allowlist, and only at deploy time.** Corrected at
+  its source in `n8n/code/reviewDecision.js` and regenerated through
+  `scripts/build_cloud_workflows.py` — never hand-edited.
+- **The README gate table, the USAGE admin table, and `review-triage/SKILL.md` all
+  describe the authority that now exists** — a write grant the operator opens in
+  conversation, once an admin has set `allow_write_grants` — rather than the retired
+  shell variable and the retired admin-deploy round trip.
+
 ## [0.34.0] - 2026-08-31
 
 ### Added

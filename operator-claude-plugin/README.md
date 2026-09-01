@@ -592,20 +592,24 @@ nothing is written:
 
 | Gate | Where it lives | Who opens it |
 |---|---|---|
-| `ALLOW_REVIEW_SUBMIT` | environment variable on the machine this plugin runs on, read by Python **before a request is even built** | an **administrator**, out of band |
+| A write grant covering this record | held in this conversation only, never written to disk | **you**, in this conversation — once an n8n admin has set `allow_write_grants` in `operator.local.json` |
 | The per-record arm | this one record's write, never written to disk | **you**, by saying yes to the exact write Claude reads back |
-| `ALLOW_HUBSPOT_REVIEW_WRITES` + its record allowlist | a constant compiled into the n8n workflow, read **inside n8n** | an admin, by a **deploy** — not by this plugin |
+| `ALLOW_HUBSPOT_REVIEW_WRITES` + its record allowlist | a constant compiled into the n8n workflow, read **inside n8n** | your open grant's own batch window, dynamically — or an admin, by a **deploy** |
 
-**The first and the third are different variables, in different processes, on different
-machines.** The names are similar and the similarity is the trap: setting one has not done
-the work of the other. `ALLOW_REVIEW_SUBMIT` must read exactly `true` — `1`, `yes`, `TRUE`
-and `True` are all "off", deliberately, so it matches every other switch in this system.
+**The client-side authority and the backend constant are still two separate things (Phase
+60).** The variable that used to make this a three-process problem — a shell environment
+variable, read on the machine this plugin runs on, before a request was even built — is
+retired: it is the grant that now closes both the client-side gate and, dynamically, the
+backend's own allowlist, in one step.
 
-**`ALLOW_REVIEW_SUBMIT` gates submitting a decision, and nothing else.** Previewing the
-exact write still works without it, and so does rejecting a record — recording a reason and
-leaving it queued. A kill switch that blocked those would strand a record mid-decision,
-which is the opposite of what it is for. Your review-writeback arm is also separate from
-the contact-upload arm: arming one does not arm the other, in either direction.
+**Previewing the exact write still works with no grant open, and no arm**, and so does
+rejecting a record — recording a reason and leaving it queued, though the backend's own
+allowlist still checks first: a reject on a record no open grant covers is refused there,
+same as an approve. A kill switch that blocked previewing or rejecting outright would strand
+a record mid-decision, which is the opposite of what any of this is for. Your review-writeback
+arm is also separate from the contact-upload arm: arming one does not arm the other, in
+either direction — even though, since Phase 60, one open grant can cover all three lanes at
+once.
 
 The skill will never ask you to set any of these, or offer a way around them. If a gate is
 closed it says which one and who can open it.

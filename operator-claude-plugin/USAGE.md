@@ -205,4 +205,4 @@ that was never installed, or that has stopped firing, produces nothing at all â€
 | The unattended sweep never notifies | The schedule is installed on your machine by an admin |
 | You want live writes enabled for a batch send | The one-shot armed send only works in a shell where an admin has set the arming switch (`ALLOW_N8N_ARM`) |
 | You want something faster than daily and the budget floor refuses it | The refusal names the exact one-time override phrase; raising the plan's execution allowance itself is a commercial decision an admin owns |
-| Review approvals refuse with "submit not enabled" | `ALLOW_REVIEW_SUBMIT` is an environment variable only an administrator sets; previewing and rejecting still work without it |
+| Review approvals refuse with "grant not authorized" | No grant is open for this record â€” open one yourself, in this conversation; only if `allow_write_grants` itself has never been turned on does this need an admin, once, in `operator.local.json` |
