@@ -232,3 +232,84 @@ def test_suggest_contacts_never_falls_through_to_a_second_search_provider():
     source = SUGGEST_CONTACTS_PATH.read_text(encoding="utf-8")
     for forbidden in ("google", "bing", "duckduckgo", "search_engine", "retry_other_host"):
         assert forbidden not in source.casefold()
+
+
+# =====================================================================================
+# Task 3 — D-62-18's dedupe pre-filter, and the emailless hold (D-62-09/SUGGEST-04)
+# =====================================================================================
+
+def test_select_people_drops_already_associated_person_with_reason_before_the_cap():
+    known_contacts = [{"firstname": "Jamie", "lastname": "Fox"}]
+    people = [
+        {"firstname": "Jamie", "lastname": "Fox", "jobtitle": "Director"},
+        {"firstname": "Alex", "lastname": "Nguyen", "jobtitle": "Director"},
+        {"firstname": "Sam", "lastname": "Lee", "jobtitle": "Board Member"},
+        {"firstname": "Robin", "lastname": "Chen", "jobtitle": "Chairperson"},
+    ]
+
+    selection = suggest_contacts.select_people(
+        people, FAMILY_LIST, chosen_families=["board"], known_contacts=known_contacts
+    )
+
+    selected_names = {(p["firstname"], p["lastname"]) for p in selection["selected"]}
+    assert ("Jamie", "Fox") not in selected_names
+    assert selected_names == {("Alex", "Nguyen"), ("Sam", "Lee"), ("Robin", "Chen")}
+
+    dropped_for_jamie = [
+        d for d in selection["dropped"] if d["person"]["firstname"] == "Jamie"
+    ]
+    assert len(dropped_for_jamie) == 1
+    assert dropped_for_jamie[0]["reason"] == "already_associated"
+
+    # The per-company cap still admits a full complement of the remaining people.
+    records = suggest_contacts.synthesise_rows(
+        _company_row(), selection["selected"],
+        "https://example-club.example/sitemap.xml", per_company_cap=3,
+    )
+    assert len(records) == 3
+
+
+def test_select_people_does_not_drop_an_ambiguous_near_match():
+    known_contacts = [{"firstname": "Jamie", "lastname": "Foxx"}]  # different spelling
+    people = [{"firstname": "Jamie", "lastname": "Fox", "jobtitle": "Director"}]
+
+    selection = suggest_contacts.select_people(
+        people, FAMILY_LIST, chosen_families=["board"], known_contacts=known_contacts
+    )
+
+    assert len(selection["selected"]) == 1
+
+
+def test_select_people_dedupe_is_case_and_whitespace_insensitive_exact_match_only():
+    known_contacts = [{"firstname": "  jamie ", "lastname": "FOX"}]
+    people = [{"firstname": "Jamie", "lastname": "Fox", "jobtitle": "Director"}]
+
+    selection = suggest_contacts.select_people(
+        people, FAMILY_LIST, chosen_families=["board"], known_contacts=known_contacts
+    )
+
+    assert selection["selected"] == []
+    assert selection["dropped"][0]["reason"] == "already_associated"
+
+
+def test_partition_for_dispatch_is_a_thin_call_to_hold_emailless():
+    rows = [
+        {"firstname": "Jamie", "lastname": "Fox", "company": "Example Racing Club"},
+        {"firstname": "Alex", "lastname": "Nguyen", "company": "Example Racing Club",
+         "email": "alex@example.com"},
+    ]
+
+    sendable, held = suggest_contacts.partition_for_dispatch(rows)
+    expected_sendable, expected_held = extraction.hold_emailless(rows)
+
+    assert sendable == expected_sendable
+    assert held == expected_held
+    assert len(held) == 1
+    assert held[0]["row"]["firstname"] == "Jamie"
+    assert sendable == [rows[1]]
+
+
+def test_suggest_contacts_has_no_branch_keyed_on_a_suggestion_origin_flag():
+    source = SUGGEST_CONTACTS_PATH.read_text(encoding="utf-8")
+    for forbidden in ("is_suggestion", "suggestion_origin", "from_suggestion"):
+        assert forbidden not in source.casefold()
