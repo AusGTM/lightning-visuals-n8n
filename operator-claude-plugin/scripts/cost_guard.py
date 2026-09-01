@@ -33,6 +33,7 @@ from pathlib import Path
 
 import backend_status
 import config_gate
+import url_fallback
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_RATES_PATH = PLUGIN_ROOT / "config" / "cost_rates.json"
@@ -59,6 +60,22 @@ ANTHROPIC_RATE_KEY = "anthropic_usd_per_record"
 # The rate key for backend domain research (D-58-08/09) -- unmeasured, ships null, same
 # apollo_per_match precedent estimate_batch already leans on.
 RESEARCH_RATE_KEY = "company_domain_research"
+
+# Phase 62 suggestion round (D-62-14). Stage 1 (discovery) is priced in USD/company and
+# ships null -- same "unmeasured, never scaled from another rate" convention as
+# RESEARCH_RATE_KEY. Stage 2 (enrich the people stage 1 named) deliberately uses the
+# CONTACTS rate even when the batch's own object_type is companies: stage 2 enriches
+# people, not the companies they work at, so a companies-rate multiply would mislabel
+# the line (D-62-14, "the round's two cost components").
+SUGGESTION_RATE_KEY = "suggestion_stage1_discovery"
+SUGGESTION_STAGE2_RATE_KEY = "lusha_contacts_first_time_enrich"
+
+# The page-fetch axis that bounds ONE company's whole discovery ladder (D-62-14). This
+# is imported, never re-declared, so the two constants can never drift. NOTE: this is a
+# DIFFERENT axis from WEB_RESEARCH_MAX_SEARCHES (the backend research node's web_search
+# budget) -- both default to 5 but they bound different things; stage 1 here runs in the
+# plugin (page fetches), not the backend (web searches).
+MAX_FETCHES_PER_COMPANY = url_fallback.MAX_FOLLOWUP_FETCHES
 
 
 class CostRateError(Exception):
@@ -211,6 +228,107 @@ def research_line(rows, rates: dict) -> dict:
         "unit": entry.get("unit"),
         "confidence": entry.get("confidence"),
         "citation": entry.get("citation"),
+        "line": line,
+    }
+
+
+def suggestion_line(company_count, per_company_cap, rates: dict) -> dict:
+    """Price a Phase 62 suggestion round: two components, one ceiling (D-62-14).
+
+    Stage 1 (discovery) is priced in PAGE FETCHES, not dollars -- the ceiling is
+    `company_count * MAX_FETCHES_PER_COMPANY`. Its dollar figure is tri-state and lands
+    on `unmeasured` for any non-empty company set, because SUGGESTION_RATE_KEY ships
+    null (no isolated research-only rate has ever been measured in this repo).
+
+    Stage 2 (enrich the people stage 1 named) is priced in provider credits at
+    SUGGESTION_STAGE2_RATE_KEY (the CONTACTS rate, always -- see the module comment on
+    that constant). Its ceiling is `company_count * per_company_cap`; genuinely a
+    ceiling, since stage 2 can only enrich people stage 1 actually found.
+
+    Zero companies is checked first, exactly like `research_line`'s "zero rows and an
+    unmeasured rate are two DIFFERENT kinds of nothing" branch order -- readability
+    before magnitude, no-rows before either.
+
+    The rendered `line` always names BOTH components in one sentence and labels the
+    whole figure a ceiling. It must never present the provider-credit figure alone
+    (D-62-14's explicit prohibition), and an unmeasured dollar figure is never rendered
+    as `$0`.
+    """
+    stage1_entry = _rate_entry(rates, SUGGESTION_RATE_KEY)
+    stage1_rate = stage1_entry.get("value")
+    stage2_entry = _rate_entry(rates, SUGGESTION_STAGE2_RATE_KEY)
+    stage2_rate = stage2_entry.get("value")
+
+    count = company_count if isinstance(company_count, int) and company_count > 0 else 0
+
+    if count == 0:
+        return {
+            "company_count": 0,
+            "per_company_cap": per_company_cap,
+            "stage1_fetch_ceiling": 0,
+            "stage1_state": "no_rows",
+            "stage1_cost_usd": None,
+            "stage2_contact_ceiling": 0,
+            "stage2_credit_ceiling": None,
+            "stage2_rate": stage2_rate,
+            "state": "no_rows",
+            "known": False,
+            "line": "Suggestion round: no companies in this batch -- nothing to price.",
+        }
+
+    stage1_fetch_ceiling = count * MAX_FETCHES_PER_COMPANY
+    if stage1_rate is None:
+        stage1_state = "unmeasured"
+        stage1_cost_usd = None
+        fetch_part = (
+            f"stage 1 discovery: up to {stage1_fetch_ceiling} page fetches "
+            f"({count} × {MAX_FETCHES_PER_COMPANY}/company) -- dollar cost not measured"
+        )
+    else:
+        stage1_state = "measured"
+        stage1_cost_usd = stage1_rate * count
+        fetch_part = (
+            f"stage 1 discovery: up to {stage1_fetch_ceiling} page fetches "
+            f"({count} × {MAX_FETCHES_PER_COMPANY}/company), ${stage1_cost_usd:,.2f}"
+        )
+
+    stage2_contact_ceiling = count * per_company_cap
+    if stage2_rate is None:
+        stage2_credit_ceiling = None
+        stage2_known = False
+        credit_part = (
+            f"stage 2 enrichment: up to {stage2_contact_ceiling} contacts "
+            "-- credit cost not measured"
+        )
+    else:
+        stage2_credit_ceiling = stage2_contact_ceiling * stage2_rate
+        stage2_known = True
+        credit_part = (
+            f"stage 2 enrichment: up to {stage2_contact_ceiling} contacts, "
+            f"up to {stage2_credit_ceiling:,.0f} Lusha credits"
+        )
+
+    known = stage1_state == "measured" and stage2_known
+    if known:
+        state = "measured"
+    elif stage1_state == "measured" or stage2_known:
+        state = "partial"
+    else:
+        state = "unmeasured"
+
+    line = f"Suggestion round ceiling -- {fetch_part}; {credit_part}."
+
+    return {
+        "company_count": count,
+        "per_company_cap": per_company_cap,
+        "stage1_fetch_ceiling": stage1_fetch_ceiling,
+        "stage1_state": stage1_state,
+        "stage1_cost_usd": stage1_cost_usd,
+        "stage2_contact_ceiling": stage2_contact_ceiling,
+        "stage2_credit_ceiling": stage2_credit_ceiling,
+        "stage2_rate": stage2_rate,
+        "state": state,
+        "known": known,
         "line": line,
     }
 

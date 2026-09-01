@@ -39,6 +39,12 @@
       "citation": "No measured rate exists for backend domain research (Phase 58, D-58-08/09). This is a distinct call from the all-in anthropic_usd_per_record chain and must be measured on its own before it is disclosed as anything but unmeasured -- do not scale another rate to fill this in.",
       "confidence": "unknown -- not yet measured, do not substitute a guess"
     },
+    "suggestion_stage1_discovery": {
+      "value": null,
+      "unit": "USD/company",
+      "citation": "No isolated web-research-only rate has ever been measured in this repo (Phase 62, D-62-14). This is a distinct call from the all-in anthropic_usd_per_record chain (which bundles provider + Haiku research + Sonnet judge) and must be measured on its own before it is disclosed as anything but unmeasured -- do not scale anthropic_usd_per_record or any other rate to fill this in.",
+      "confidence": "unknown -- not yet measured, do not substitute a guess"
+    },
     "anthropic_usd_per_record": {
       "value": 0.068624,
       "unit": "USD/record (full provider + Haiku research + Sonnet judge chain)",
