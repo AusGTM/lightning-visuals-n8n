@@ -220,12 +220,17 @@ function buildReviewDecision(input) {
   // committed write gate drops both the same way, and an endpoint that answered `rejected`
   // for a write the gate would silently drop would be the same lie BUG 29 closed for
   // approve. `not_allowlisted` is a distinct outcome from `refused`: never collapse them.
+  // Phase 60 (D-60-05, 2026-09-01): this message's trailing clause used to assert that
+  // only an admin, and only while deploying, could put a record on this allowlist — true
+  // before a grant could arm it dynamically. Corrected, not rewritten: the leading clause
+  // (not on the allowlist, nothing sent, record unchanged) is still exactly true and is
+  // left byte-identical.
   if (inp.writeAllowed === false) {
     return {
       properties: {}, outcome: "not_allowlisted",
       message: "this record is not on the backend's TEST_RECORD_* allowlist, so nothing was "
-        + "sent to HubSpot and the record is unchanged — an administrator adds records to "
-        + "that allowlist at deploy time",
+        + "sent to HubSpot and the record is unchanged — open a write grant covering this "
+        + "record to add it to that allowlist, or have an administrator add it at deploy time",
     };
   }
 
