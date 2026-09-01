@@ -1,12 +1,23 @@
-"""The review-decision client: env kill switch, session arm, preview, read-back (30-06).
+"""The review-decision client: grant-authorization gate, session arm, preview, read-back
+(30-06; D-60-04/D-60-07 for the grant-authorization gate).
 
 Every test drives `stub_module_transport_factory` — the module-shaped recorder 28-01
 shipped for exactly this transport shape (D-21). No new fixture, no conftest edit.
+
+D-60-04 AMENDMENT (operator, 2026-09-01): this file used to pin an environment kill switch
+(`ALLOW_REVIEW_SUBMIT`), armed or left unset per test via two monkeypatch fixtures
+(`_no_ambient_env_gate`, `armed_env`). Phase 60 retires that variable entirely; gate 1 is
+now grant-authorization (`write_grant.authorize_send`). Every test below that used to arm
+the env var now opens a grant via `_open_review_grant()` instead — see that helper's own
+docstring for why every test here uses a literal grant shape rather than the full
+plan_grant/open_grant round trip. D-60-07's un-doing carve-out (`is_undoing`) is UNCHANGED
+and still bypasses gate 1 for a reject.
 """
 import pytest
 
 import config_gate
 import review_decision
+import write_grant
 
 
 CONFIG = {"n8n_url": "https://n8n.example", "webhook_secret": "placeholder-not-a-secret"}
@@ -35,83 +46,121 @@ def dry_run_response(would_write=APPROVE_WRITE):
             "would_write": would_write, "verified_properties": None, "verified": None}
 
 
-@pytest.fixture(autouse=True)
-def _no_ambient_env_gate(monkeypatch):
-    """The kill switch starts CLOSED in every test, so a test that needs it open must say
-    so — and a machine that happens to export it cannot turn these assertions green."""
-    monkeypatch.delenv(review_decision.SUBMIT_ENV_VAR, raising=False)
+def _open_review_grant(record_ids=("789",), workflow_id="wf-review-1", lanes=("review",)):
+    """The minimal literal shape `write_grant.covers` (via `authorize_send`) accepts —
+    `kind`, `state`, `lanes`, `workflow_ids`, `record_ids`, `record_domains`.
+
+    Built LITERALLY rather than through `write_grant.plan_grant`/`open_grant`: this file's
+    job is `review_decision.py`'s own client-side gates, and the grant-PLANNING machinery
+    (the settings-key check, lane resolution by name, guardrail A's live read, the several
+    transport calls all of that costs) is already exhaustively exercised in
+    test_write_grant.py — including the review lane specifically, by Phase 60's tracer.
+    Reproducing that transport-stubbing setup here would duplicate coverage for no
+    additional guarantee, so every test in this file uses this literal shape. (There is one
+    guarantee this DOES skip: that `plan_grant` itself resolves and shapes a grant
+    correctly. That guarantee lives in test_write_grant.py, not here.)
+    """
+    return {
+        "kind": write_grant.KIND,
+        "state": write_grant.OPEN,
+        "lanes": list(lanes),
+        "workflow_ids": {lane: workflow_id for lane in lanes},
+        "record_ids": list(record_ids),
+        "record_domains": [],
+        "closed_reason": None,
+    }
+
+
+def _closed_review_grant(record_ids=("789",)):
+    grant = _open_review_grant(record_ids=record_ids)
+    grant["state"] = write_grant.CLOSED
+    grant["closed_reason"] = write_grant.CLOSED_REVOKED
+    return grant
 
 
 @pytest.fixture
-def armed_env(monkeypatch):
-    monkeypatch.setenv(review_decision.SUBMIT_ENV_VAR, "true")
+def open_review_grant():
+    """A grant open over record "789", the id every fixture in this file that needs one
+    decides against by default."""
+    return _open_review_grant()
 
 
-# --- the env kill switch: ALLOW_REVIEW_SUBMIT (D-16, Phase 28 D-34) -------------------
+# --- gate 1: grant-authorization (D-60-04), replacing ALLOW_REVIEW_SUBMIT -------------
 
-def test_submit_refuses_with_an_empty_call_log_when_the_variable_is_unset(
+def test_submit_refuses_with_an_empty_call_log_when_there_is_no_grant(
         stub_module_transport_factory):
     """The gate precedes transport construction, so the refusal costs zero HTTP calls —
-    not one unsent request, none at all."""
+    not one unsent request, none at all. `grant=None` is the direct successor of "the env
+    variable is unset": the same empty-call-log property, now delivered by a missing grant
+    rather than a missing shell variable."""
     transport = stub_module_transport_factory([applied_response()])
 
     result = review_decision.submit_decision(
         CONFIG, "companies", "789", "approve", "Looks right", "Robert",
-        review_armed=True, transport=transport)
+        review_armed=True, grant=None, transport=transport)
 
     assert result["available"] is False
-    assert result["reason"] == "submit_not_enabled"
+    assert result["reason"] == review_decision.GRANT_REFUSAL_REASON
     assert transport.calls == []
     assert transport.mutating_calls == []
 
 
-def test_the_env_refusal_names_the_variable_and_says_an_admin_sets_it():
+def test_the_grant_refusal_names_opening_one_and_never_a_shell_command():
     result = review_decision.submit_decision(
-        CONFIG, "companies", "789", "approve", "Looks right", "Robert", review_armed=True)
+        CONFIG, "companies", "789", "approve", "Looks right", "Robert",
+        review_armed=True, grant=None)
 
-    assert "ALLOW_REVIEW_SUBMIT" in result["message"]
-    assert "administrator" in result["message"]
-    # Never a shell command the operator is told to run.
+    assert "write grant" in result["message"]
+    # Never a shell command the operator is told to run — the whole point of D-60-04.
     assert "export " not in result["message"]
+    assert "ALLOW_REVIEW_SUBMIT" not in result["message"]
 
 
-@pytest.mark.parametrize("value", ["", "1", "yes", "TRUE", "True", "true ", " true"])
-def test_every_near_miss_value_refuses(monkeypatch, value, stub_module_transport_factory):
-    """Semantics identical to ALLOW_N8N_ARM / ALLOW_N8N_PROBE: only the exact string
-    `true` proceeds. A divergence between the two gates is itself the defect (D-16)."""
-    monkeypatch.setenv(review_decision.SUBMIT_ENV_VAR, value)
+@pytest.mark.parametrize("label,grant", [
+    ("no_grant", None),
+    ("closed_grant", _closed_review_grant()),
+    ("wrong_lane", _open_review_grant(lanes=("enrichment",))),
+    ("not_a_grant_shape", {"lanes": ["review"], "state": "open"}),   # no "kind"
+])
+def test_every_grant_state_near_miss_refuses_with_an_empty_call_log(
+        label, grant, stub_module_transport_factory):
+    """The grant-state near-miss set that replaces the retired env-value near-miss set
+    (`""`, `"1"`, `"yes"`, `"TRUE"`, `"True"`): no grant, a CLOSED grant, a grant whose
+    `lanes` omits `"review"`, and a dict that is not a grant at all — each refuses with
+    `GRANT_REFUSAL_REASON` and an empty transport call log, exactly as every env near-miss
+    used to."""
     transport = stub_module_transport_factory([applied_response()])
 
     result = review_decision.submit_decision(
         CONFIG, "companies", "789", "approve", "r", "Robert",
-        review_armed=True, transport=transport)
+        review_armed=True, grant=grant, transport=transport)
 
-    assert review_decision.submit_enabled() is False
-    assert result["reason"] == "submit_not_enabled"
-    assert transport.calls == []
+    assert result["reason"] == review_decision.GRANT_REFUSAL_REASON, label
+    assert transport.calls == [], label
 
 
-def test_only_the_exact_string_true_proceeds(monkeypatch, stub_module_transport_factory):
-    monkeypatch.setenv(review_decision.SUBMIT_ENV_VAR, "true")
+def test_an_open_grant_covering_the_record_lets_an_approve_through(
+        open_review_grant, stub_module_transport_factory):
+    """The happy path that replaces `test_only_the_exact_string_true_proceeds`: an open
+    grant covering this record, plus the session arm, is what now authorizes an approve."""
     transport = stub_module_transport_factory([applied_response()])
 
     result = review_decision.submit_decision(
         CONFIG, "companies", "789", "approve", "r", "Robert",
-        review_armed=True, transport=transport)
+        review_armed=True, grant=open_review_grant, transport=transport)
 
-    assert review_decision.submit_enabled() is True
     assert result["available"] is True
     assert len(transport.mutating_calls) == 1
 
 
 def test_an_unarmed_refusal_restates_the_previewed_write_without_calling_anything(
-        armed_env, stub_module_transport_factory):
+        open_review_grant, stub_module_transport_factory):
     transport = stub_module_transport_factory([applied_response()])
     preview = {"available": True, "would_write": APPROVE_WRITE}
 
     result = review_decision.submit_decision(
         CONFIG, "companies", "789", "approve", "r", "Robert",
-        review_armed=False, preview=preview, transport=transport)
+        review_armed=False, grant=open_review_grant, preview=preview, transport=transport)
 
     assert result["reason"] == "not_armed"
     assert result["would_write"] == APPROVE_WRITE
@@ -162,21 +211,23 @@ def test_is_undoing_recognises_only_reject_and_fails_closed_on_anything_else():
 
 
 def test_an_unknown_decision_word_is_still_gated(stub_module_transport_factory):
+    """An unrecognised word is not un-doing (`is_undoing` fails closed), so it still needs
+    gate 1 — with no grant, it refuses exactly like an approve would."""
     transport = stub_module_transport_factory([{"outcome": "refused"}])
 
     result = review_decision.submit_decision(
         CONFIG, "companies", "789", "dismiss", "r", "Robert",
-        review_armed=True, transport=transport)
+        review_armed=True, grant=None, transport=transport)
 
-    assert result["reason"] == "submit_not_enabled"
+    assert result["reason"] == review_decision.GRANT_REFUSAL_REASON
     assert transport.calls == []
 
 
 # --- carve-out: the preview is never gated -------------------------------------------
 
-def test_preview_is_unaffected_by_the_env_variable(stub_module_transport_factory):
+def test_preview_is_unaffected_by_the_grant_gate(stub_module_transport_factory):
     """A dry run writes nothing, and without it the operator cannot see what they are
-    being asked to approve."""
+    being asked to approve. No grant is passed at all — `preview_decision` takes none."""
     transport = stub_module_transport_factory([dry_run_response()])
 
     result = review_decision.preview_decision(
@@ -199,15 +250,15 @@ def test_preview_is_unaffected_by_the_session_arm(stub_module_transport_factory)
 
 # --- the request the endpoint reads --------------------------------------------------
 
-def test_the_request_carries_only_the_six_accepted_keys(armed_env,
-                                                        stub_module_transport_factory):
+def test_the_request_carries_only_the_six_accepted_keys(
+        open_review_grant, stub_module_transport_factory):
     """No field name, no value, no patch: this client cannot tell the endpoint WHAT to
     write, only which record and which decision word (T-30-05)."""
     transport = stub_module_transport_factory([applied_response()])
 
     review_decision.submit_decision(
         CONFIG, "companies", 789, "approve", "Looks right", "Robert",
-        review_armed=True, transport=transport)
+        review_armed=True, grant=open_review_grant, transport=transport)
 
     body = transport.calls[0]["json"]
     assert set(body) == {"object_type", "record_id", "decision", "reason", "reviewed_by",
@@ -217,24 +268,24 @@ def test_the_request_carries_only_the_six_accepted_keys(armed_env,
 
 
 def test_an_armed_submit_sends_the_dry_run_flag_false_exactly_once(
-        armed_env, stub_module_transport_factory):
+        open_review_grant, stub_module_transport_factory):
     transport = stub_module_transport_factory([applied_response()])
 
     review_decision.submit_decision(
         CONFIG, "companies", "789", "approve", "r", "Robert",
-        review_armed=True, transport=transport)
+        review_armed=True, grant=open_review_grant, transport=transport)
 
     assert transport.verbs == ["post"]
     assert [call["json"]["dry_run"] for call in transport.calls] == [False]
 
 
 def test_the_secret_travels_in_the_header_and_the_url_never_carries_it(
-        armed_env, stub_module_transport_factory):
+        open_review_grant, stub_module_transport_factory):
     transport = stub_module_transport_factory([applied_response()])
 
     review_decision.submit_decision(
         CONFIG, "companies", "789", "approve", "r", "Robert",
-        review_armed=True, transport=transport)
+        review_armed=True, grant=open_review_grant, transport=transport)
 
     call = transport.calls[0]
     assert call["headers"] == {"X-Enrichment-Secret": CONFIG["webhook_secret"]}
@@ -243,7 +294,7 @@ def test_the_secret_travels_in_the_header_and_the_url_never_carries_it(
 
 
 def test_a_missing_reviewer_label_becomes_a_neutral_placeholder_not_an_empty_string(
-        armed_env, stub_module_transport_factory):
+        open_review_grant, stub_module_transport_factory):
     """The backend writes lv_enrichment_reviewed_by only when the label is non-empty, so
     an empty string would leave the audit trail naming nobody."""
     transport = stub_module_transport_factory([applied_response(), applied_response()])
@@ -251,20 +302,20 @@ def test_a_missing_reviewer_label_becomes_a_neutral_placeholder_not_an_empty_str
     for label in (None, "   "):
         review_decision.submit_decision(
             CONFIG, "companies", "789", "approve", "r", label,
-            review_armed=True, transport=transport)
+            review_armed=True, grant=open_review_grant, transport=transport)
 
     assert [c["json"]["reviewed_by"] for c in transport.calls] == \
         [review_decision.DEFAULT_REVIEWED_BY] * 2
     assert review_decision.DEFAULT_REVIEWED_BY.strip() != ""
 
 
-def test_a_decision_without_a_reason_is_still_a_decision(armed_env,
-                                                         stub_module_transport_factory):
+def test_a_decision_without_a_reason_is_still_a_decision(
+        open_review_grant, stub_module_transport_factory):
     transport = stub_module_transport_factory([applied_response()])
 
     review_decision.submit_decision(
         CONFIG, "companies", "789", "approve", None, "Robert",
-        review_armed=True, transport=transport)
+        review_armed=True, grant=open_review_grant, transport=transport)
 
     assert transport.calls[0]["json"]["reason"] == ""
 
@@ -272,13 +323,13 @@ def test_a_decision_without_a_reason_is_still_a_decision(armed_env,
 # --- configuration: require_capability RAISES, runtime degrades (D-35) ----------------
 
 def test_a_misconfiguration_raises_before_any_transport_is_constructed(
-        armed_env, stub_module_transport_factory):
+        open_review_grant, stub_module_transport_factory):
     transport = stub_module_transport_factory([applied_response()])
 
     with pytest.raises(config_gate.ConfigError) as excinfo:
         review_decision.submit_decision(
             {"n8n_url": "https://n8n.example"}, "companies", "789", "approve", "r",
-            "Robert", review_armed=True, transport=transport)
+            "Robert", review_armed=True, grant=open_review_grant, transport=transport)
 
     assert "webhook_secret" in str(excinfo.value)
     assert CONFIG["webhook_secret"] not in str(excinfo.value)
@@ -292,14 +343,14 @@ def test_a_misconfiguration_raises_before_any_transport_is_constructed(
     ((200, [{"outcome": "applied"}]), "unrecognized_response_shape"),
 ])
 def test_every_runtime_failure_degrades_to_a_named_reason(
-        armed_env, stub_module_transport_factory, scripted, reason):
+        open_review_grant, stub_module_transport_factory, scripted, reason):
     """None of these raises, and none of them is distinguishable from a rejected write by
     a caller that reads the status alone (D-23, D-35)."""
     transport = stub_module_transport_factory([scripted])
 
     result = review_decision.submit_decision(
         CONFIG, "companies", "789", "approve", "r", "Robert",
-        review_armed=True, transport=transport)
+        review_armed=True, grant=open_review_grant, transport=transport)
 
     assert result == {"available": False, "reason": reason, "outcome": None,
                       "message": None, "would_write": None,
@@ -307,26 +358,26 @@ def test_every_runtime_failure_degrades_to_a_named_reason(
 
 
 def test_an_empty_body_is_reported_as_failed_never_as_a_completed_write(
-        armed_env, stub_module_transport_factory):
+        open_review_grant, stub_module_transport_factory):
     """An armed-but-not-allowlisted decision returns NO body at all — the write gate drops
     the row and nothing reaches the responder (D-23)."""
     transport = stub_module_transport_factory([(200, ValueError("Expecting value"))])
 
     result = review_decision.submit_decision(
         CONFIG, "companies", "789", "approve", "r", "Robert",
-        review_armed=True, transport=transport)
+        review_armed=True, grant=open_review_grant, transport=transport)
 
     assert review_decision.verify_decision(APPROVE_WRITE, result)["status"] == "failed"
 
 
 def test_a_dict_response_is_parsed_directly_never_as_body_zero(
-        armed_env, stub_module_transport_factory):
+        open_review_grant, stub_module_transport_factory):
     """`respondWith: firstIncomingItem` — ONE dict, not an array (D-24)."""
     transport = stub_module_transport_factory([applied_response()])
 
     result = review_decision.submit_decision(
         CONFIG, "companies", "789", "approve", "r", "Robert",
-        review_armed=True, transport=transport)
+        review_armed=True, grant=open_review_grant, transport=transport)
 
     assert result["outcome"] == "applied"
     assert result["would_write"] == APPROVE_WRITE
@@ -467,15 +518,18 @@ def test_a_writing_outcome_with_nothing_approved_reports_failed():
 # --- nothing persists ----------------------------------------------------------------
 
 def test_no_module_level_state_persists_an_arm_between_two_calls(
-        armed_env, stub_module_transport_factory):
-    """Arming once does not leave anything behind that a second, unarmed call can read."""
+        open_review_grant, stub_module_transport_factory):
+    """Arming once does not leave anything behind that a second, unarmed call can read. The
+    SAME grant is passed to both calls — this test is about `review_armed` never persisting,
+    not about the grant, so gate 1 passes both times and only gate 2 toggles."""
     transport = stub_module_transport_factory([applied_response()])
 
     review_decision.submit_decision(CONFIG, "companies", "789", "approve", "r", "Robert",
-                                    review_armed=True, transport=transport)
+                                    review_armed=True, grant=open_review_grant,
+                                    transport=transport)
     second = review_decision.submit_decision(CONFIG, "companies", "789", "approve", "r",
                                              "Robert", review_armed=False,
-                                             transport=transport)
+                                             grant=open_review_grant, transport=transport)
 
     assert second["reason"] == "not_armed"
     assert len(transport.mutating_calls) == 1
