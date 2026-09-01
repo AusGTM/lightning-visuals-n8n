@@ -1375,6 +1375,65 @@ def authorize_send(grant, *, lane, record_ids, record_domains):
     }
 
 
+def authorize_review_batch(grant):
+    """The ONE function a review-triage sitting calls to turn an open grant into a
+    BATCH-SCOPED window covering the WHOLE sitting (D-60-06), rather than the
+    per-send-shaped window `authorize_send` composes. Returns the same `{armed,
+    workflow_id, grant, refusal, detail}` shape every other authorization in this module
+    returns, PLUS `record_ids` and `record_domains` — the grant's own lists, normalised
+    through `_normalise`.
+
+    THE DELIBERATE DIVERGENCE FROM `authorize_send`, STATED PLAINLY. `authorize_send`
+    refuses to return a record list precisely so a caller cannot widen a per-send window to
+    the grant's whole batch (its own docstring, "WHAT IT DELIBERATELY DOES NOT DO" — "this
+    function returns a workflow id and a bool; it never returns a record list, so there is
+    nothing here for a caller to pass to the arm by mistake"). This function returns one ON
+    PURPOSE, because D-60-06 makes the review window batch-scoped: its allowlist IS the
+    grant's own record scope, fixed at open time, and it must never grow as records are
+    triaged one by one.
+
+    WHAT STILL BOUNDS IT, even with a record list returned. `covers` (composed here through
+    `check_before_send`) already refused anything outside the grant before this function
+    ever returned a record list — the grant's own record scoping is untouched. And every
+    INDIVIDUAL decision made inside the open batch window is still scoped per record
+    through `authorize_send(lane=REVIEW_LANE, record_ids=[that one record])`, exactly as
+    every dispatch send is — so a wide window never widens what a single decision may
+    approve. The batch is wide; each approval inside it stays narrow.
+
+    WHAT THIS IS NOT FOR. It takes no `lane` argument anywhere — it always checks the
+    REVIEW lane specifically — so a dispatch caller cannot reach a batch-scoped window by
+    passing some other lane name. It refuses on any grant that does not cover the review
+    lane, in the exact wording `check_before_send`/`covers` already use for any other lane.
+
+    Composed through `check_before_send(grant, lane=REVIEW_LANE, ...)` rather than a new
+    refusal wording, so a closed grant, a missing lane and a bad grant shape all refuse
+    exactly as they already do everywhere else in this module.
+
+    See `preflight_before_send`'s own docstring (MEDIUM-1, Phase 60) for the guard that
+    keeps the window THIS FUNCTION authorizes from tripping over its own arm mid-batch.
+    """
+    workflow_id = ((grant or {}).get("workflow_ids") or {}).get(REVIEW_LANE)
+    ids = _normalise((grant or {}).get("record_ids"))
+    domains = _normalise((grant or {}).get("record_domains"))
+
+    refusal = check_before_send(grant, lane=REVIEW_LANE, workflow_id=workflow_id,
+                                record_ids=ids, record_domains=domains)
+    if refusal:
+        return {"armed": False, "workflow_id": workflow_id, "grant": grant,
+                "refusal": refusal, "detail": refusal["detail"],
+                "record_ids": ids, "record_domains": domains}
+
+    return {
+        "armed": True, "workflow_id": workflow_id, "grant": grant, "refusal": None,
+        "detail": (
+            f"authorized by the open write grant for a batch review window: live review "
+            f"writes for this whole sitting, bounded to the grant's {len(ids)} record "
+            f"id(s) and {len(domains)} domain(s) — fixed at open time, never widened as "
+            f"records are triaged."),
+        "record_ids": ids, "record_domains": domains,
+    }
+
+
 def authorize_ungranted_send(config, *, lane, object_type, record_ids, record_domains,
                              allow_create, label, providers=None, transport=None,
                              preflight=None, today=None):
@@ -1767,14 +1826,37 @@ def preflight_before_send(grant, config, lane, transport=None):
     open for that, where refusing costs nothing; mid-run, a single unreadable read is more
     likely a transient API blip than a live-write state, and D-53-04's whole point is that
     a blip must not abort a long run. Only an actually-live write closes.
+
+    D-60-06/MEDIUM-1 AMENDMENT (Phase 60, cross-AI review, 2026-09-01). Task 1 widened
+    `WRITE_ENABLING_FLAGS` to include `ALLOW_HUBSPOT_REVIEW_WRITES` so Guardrail A could see
+    a stuck-open review authorization at the NEXT grant open. But `authorize_review_batch`'s
+    own batch window arms that SAME flag for the length of a whole triage sitting — and an
+    un-narrowed pre-flight called mid-batch on the review lane would read the window's OWN
+    arm as "writes still live", close the grant, disarm mid-batch and refuse the very send
+    it exists to authorize. So ON THE REVIEW LANE ONLY, liveness here is evaluated over the
+    DISPATCH flags alone (`WRITE_ENABLING_FLAGS` with the review flag excluded) — DERIVED
+    from that tuple below, never a second literal list, so the two can never drift. This
+    exclusion is scoped narrowly: a live DISPATCH flag found on the review workflow is
+    still a genuine anomaly and still closes the grant exactly as before; only the review
+    flag itself is excluded, and only when `lane == REVIEW_LANE`. What this pre-flight gives
+    up in exchange — noticing a review flag left live BETWEEN sittings — is not lost: that
+    is Guardrail A's job at the next grant open (refusing there costs nothing), and a review
+    flag left live WITHIN a sitting is still covered by the batch window's own guaranteed
+    disarm (`armed_window.__exit__`). With the exclusion in place, calling this pre-flight
+    on the review lane mid-batch is harmless rather than forbidden — see
+    `authorize_review_batch`'s docstring for the window this guards.
     """
     granted = (grant or {}).get("workflow_ids") or {}
     workflow_ids = {lane: granted[lane]} if lane in granted else {}
 
+    enabling_flags = tuple(flag for flag in WRITE_ENABLING_FLAGS
+                           if flag != "ALLOW_HUBSPOT_REVIEW_WRITES") \
+        if lane == REVIEW_LANE else WRITE_ENABLING_FLAGS
+
     state = read_live_write_state(config, workflow_ids, transport)
     live = {name: reading for name, reading in state.items()
             if any(_enabled((reading.get("flags") or {}).get(flag))
-                   for flag in WRITE_ENABLING_FLAGS)}
+                   for flag in enabling_flags)}
     if not live:
         return grant, None
 

@@ -20,6 +20,7 @@ The asymmetry the file exists to hold:
   failed closing disarm must never be a reason to leave the grant open.
 """
 import inspect
+import json
 from pathlib import Path
 
 import pytest
@@ -27,10 +28,12 @@ import pytest
 import config_gate
 import executions_client
 import n8n_arming
+import review_decision
 import write_grant
 
 WORKFLOW_ID = "wf-enrichment-1"
 CONTACTS_WORKFLOW_ID = "wf-contacts-1"
+REVIEW_WORKFLOW_ID = "wf-review-1"
 RECORD_ID = "12345"
 
 
@@ -90,6 +93,60 @@ def _executions_page():
     workflow-list read(s) and guardrail A's per-lane read(s) — the new step the headroom
     sample adds to the frozen call order (REVIEW-57-H9)."""
     return {"data": []}
+
+
+# ------------------------------------------------------- Phase 60: the review lane's shape
+#
+# Mirrors test_write_grant.py's own `_review_workflow`/`_armed_review_workflow` fixtures —
+# declares all 5 OVERLAYABLE_FLAGS on one node, matching the real deployed gate.
+def _review_workflow(review_writes='"false"', record_writes='"false"', create='"false"',
+                     ids='""', domains='""'):
+    gate = _gate(record_writes, create, ids, domains, review_writes)
+    return {
+        "id": REVIEW_WORKFLOW_ID,
+        "name": write_grant.LANES["review"],
+        "active": True, "settings": {}, "connections": {},
+        "nodes": [
+            {"name": "Review Decision Gate", "parameters": {"jsCode": gate}},
+            {"name": "Webhook", "parameters": {}},
+        ],
+    }
+
+
+def _armed_review_workflow(ids=f'"{RECORD_ID}"'):
+    return _review_workflow(review_writes='"true"', ids=ids)
+
+
+def _review_workflow_list():
+    return {"data": [{"id": REVIEW_WORKFLOW_ID, "name": write_grant.LANES["review"]}]}
+
+
+def _all_lanes_workflow_list():
+    return {"data": [
+        {"id": WORKFLOW_ID, "name": write_grant.LANES["enrichment"]},
+        {"id": CONTACTS_WORKFLOW_ID, "name": write_grant.LANES["contacts"]},
+        {"id": REVIEW_WORKFLOW_ID, "name": write_grant.LANES["review"]},
+    ]}
+
+
+def _put_body_jscode(put_json):
+    """The concatenated `jsCode` of every node in a recorded PUT's `json` body — reading
+    the declaration lines directly rather than string-searching the JSON-escaped dump,
+    which double-escapes the embedded quotes inside `jsCode` and never matches."""
+    body = put_json or {}
+    return "\n".join(
+        (node.get("parameters") or {}).get("jsCode", "")
+        for node in (body.get("nodes") or [])
+        if isinstance(node, dict))
+
+
+def _open_review_grant(config, transport, record_ids=(RECORD_ID,)):
+    proposal = write_grant.plan_grant(
+        config, lanes=["review"], object_type="companies",
+        record_ids=list(record_ids), record_domains=[], allow_create=False,
+        label="the review triage batch", transport=transport)
+    assert proposal.get("kind") == write_grant.PROPOSAL_KIND, proposal
+    return write_grant.open_grant(proposal, "yes", config)
 
 
 @pytest.fixture(autouse=True)
@@ -536,3 +593,279 @@ def test_nothing_a_guardrail_writes_reaches_disk():
     source = Path(write_grant.__file__).read_text()
     for forbidden in ("open(", "write_text", "os.environ[", "setenv", "json.dump("):
         assert forbidden not in source
+
+
+# =========================================================================================
+# Phase 60, Task 2 (D-60-06) — ONE batch window for a whole triage sitting.
+#
+# No existing test in this repo exercised a multi-decision single window for ANY lane
+# before this section: `authorize_send`/`armed_window` are per-send by design (each send
+# opens and closes its own window), so `authorize_review_batch`'s batch-scoped window is
+# genuinely NEW coverage, not a copy of an existing pattern. Every test below drives the
+# recorded transport call sequence, not only the returned dicts — "arm once, disarm once"
+# is a property of the CALL LOG, and a test that only inspected return values could not
+# see it.
+#
+# The last two tests (MEDIUM-1, cross-AI review) pin the guard that keeps
+# `preflight_before_send` from tripping over the batch window's own arm: the review lane's
+# liveness check excludes the review flag itself and nothing else.
+# =========================================================================================
+
+def test_authorize_review_batch_on_a_three_lane_grant_returns_armed_with_the_grants_own_records(
+        granting_config, stub_module_transport_factory):
+    """Test 1: `authorize_review_batch` on an open three-lane grant returns `armed: True`,
+    the review workflow id, and the grant's OWN `record_ids`/`record_domains` lists."""
+    ids = [RECORD_ID, "18756544344"]
+    transport = stub_module_transport_factory(
+        [_all_lanes_workflow_list()] * 3 + [_executions_page()] +
+        [_workflow(), _workflow(name=write_grant.LANES["contacts"]), _review_workflow()])
+    proposal = write_grant.plan_grant(
+        granting_config, lanes=["enrichment", "contacts", "review"],
+        object_type="companies", record_ids=ids, record_domains=[],
+        allow_create=False, label="the triage batch", transport=transport)
+    assert proposal.get("kind") == write_grant.PROPOSAL_KIND, proposal
+    grant = write_grant.open_grant(proposal, "yes", granting_config)
+
+    batch = write_grant.authorize_review_batch(grant)
+
+    assert batch["armed"] is True
+    assert batch["workflow_id"] == REVIEW_WORKFLOW_ID
+    assert batch["record_ids"] == ids
+    assert batch["record_domains"] == []
+    assert batch["refusal"] is None
+
+
+def test_authorize_review_batch_refuses_a_grant_that_does_not_cover_review(
+        granting_config, stub_module_transport_factory):
+    """Test 2a: on a grant whose `lanes` omits `"review"` it returns `armed: False` with a
+    refusal naming the lane."""
+    transport = stub_module_transport_factory([_workflow_list(), _executions_page(), _workflow()])
+    grant = _open_grant(granting_config, transport)
+
+    batch = write_grant.authorize_review_batch(grant)
+
+    assert batch["armed"] is False
+    assert "review" in batch["detail"]
+
+
+def test_authorize_review_batch_refuses_a_closed_grant_naming_the_close_reason(
+        granting_config, stub_module_transport_factory):
+    """Test 2b: on a closed grant it refuses, naming the close reason."""
+    transport = stub_module_transport_factory(
+        [_review_workflow_list(), _executions_page(), _review_workflow()])
+    grant = _open_review_grant(granting_config, transport)
+    closed = write_grant.revoke_grant(grant)
+
+    batch = write_grant.authorize_review_batch(closed)
+
+    assert batch["armed"] is False
+    assert write_grant.CLOSED_REVOKED in batch["detail"]
+
+
+def test_authorize_review_batch_costs_exactly_one_arm_and_one_disarm_across_three_decisions(
+        granting_config, stub_module_transport_factory):
+    """Test 3: one window, three decisions — the arm PUT happens once, three decision
+    POSTs follow, the disarm PUT happens once, and the allowlist in the arm PUT is the
+    grant's own record list and does not change between decisions."""
+    ids = [RECORD_ID, "18756544344", "9604614548"]
+    plan_transport = stub_module_transport_factory(
+        [_review_workflow_list(), _executions_page(), _review_workflow()])
+    grant = _open_review_grant(granting_config, plan_transport, record_ids=ids)
+
+    batch = write_grant.authorize_review_batch(grant)
+    assert batch["armed"] is True
+    assert batch["record_ids"] == ids
+
+    joined_ids = ",".join(ids)
+    arm_transport = stub_module_transport_factory([
+        _review_workflow(),                                              # arm's own pre-read
+        _review_workflow(),                                              # apply_mutation's fresh read
+        {}, {}, {},                                                      # deactivate, put, activate
+        _review_workflow(review_writes='"true"', ids=f'"{joined_ids}"'),  # arm verification
+        _armed_review_workflow(ids=f'"{joined_ids}"'),                    # disarm's own pre-read
+        _armed_review_workflow(ids=f'"{joined_ids}"'),                    # apply_mutation's fresh read
+        {}, {}, {},                                                      # deactivate, put, activate
+        _review_workflow(),                                              # disarm verification
+    ])
+    decision_transport = stub_module_transport_factory()
+
+    with n8n_arming.armed_review_window(
+            batch["workflow_id"], batch["record_ids"], batch["record_domains"],
+            granting_config, transport=arm_transport, grant=grant) as window:
+        assert window.arm_result["outcome"] == n8n_arming.ARMED
+        arm_put_calls = [c for c in arm_transport.calls if c["verb"] == "put"]
+        assert len(arm_put_calls) == 1
+        first_put_json = arm_put_calls[0].get("json")
+        assert f'TEST_RECORD_IDS = "{joined_ids}"' in _put_body_jscode(first_put_json)
+
+        for record_id in ids:
+            decision = write_grant.authorize_send(
+                grant, lane=write_grant.REVIEW_LANE, record_ids=[record_id],
+                record_domains=[])
+            assert decision["armed"] is True
+
+            result = review_decision.submit_decision(
+                granting_config, "companies", record_id, "approve", "looks right",
+                "operator", review_armed=True, grant=grant, transport=decision_transport)
+            assert result["available"] is True
+
+            # The allowlist named in the arm PUT is byte-identical before and after every
+            # decision — no second arm ever fires inside the window.
+            put_calls_now = [c for c in arm_transport.calls if c["verb"] == "put"]
+            assert len(put_calls_now) == 1
+            assert json.dumps(put_calls_now[0].get("json"), sort_keys=True) == \
+                json.dumps(first_put_json, sort_keys=True)
+
+    assert window.disarm_result["outcome"] == n8n_arming.DISARMED
+    all_put_calls = [c for c in arm_transport.calls if c["verb"] == "put"]
+    assert len(all_put_calls) == 2, "exactly one arm PUT and one disarm PUT"
+    assert len(decision_transport.calls) == 3
+    assert all(c["verb"] == "post" for c in decision_transport.calls), (
+        "all three decisions reached the decision path as POSTs")
+
+
+def test_a_decision_outside_the_grants_records_refuses_but_the_window_still_disarms(
+        granting_config, stub_module_transport_factory):
+    """Test 4: a decision on a record the grant does not name is refused by
+    `authorize_send` WHILE the window is open, and the window still disarms on exit."""
+    ids = [RECORD_ID]
+    plan_transport = stub_module_transport_factory(
+        [_review_workflow_list(), _executions_page(), _review_workflow()])
+    grant = _open_review_grant(granting_config, plan_transport, record_ids=ids)
+    batch = write_grant.authorize_review_batch(grant)
+
+    arm_transport = stub_module_transport_factory([
+        _review_workflow(), _review_workflow(), {}, {}, {},
+        _review_workflow(review_writes='"true"', ids=f'"{RECORD_ID}"'),
+        _armed_review_workflow(ids=f'"{RECORD_ID}"'),
+        _armed_review_workflow(ids=f'"{RECORD_ID}"'), {}, {}, {},
+        _review_workflow(),
+    ])
+    with n8n_arming.armed_review_window(
+            batch["workflow_id"], batch["record_ids"], batch["record_domains"],
+            granting_config, transport=arm_transport, grant=grant) as window:
+        assert window.arm_result["outcome"] == n8n_arming.ARMED
+
+        out_of_scope = write_grant.authorize_send(
+            grant, lane=write_grant.REVIEW_LANE, record_ids=["not-in-the-grant"],
+            record_domains=[])
+
+        assert out_of_scope["armed"] is False
+        assert "not-in-the-grant" in out_of_scope["detail"]
+
+    assert window.disarm_result["outcome"] == n8n_arming.DISARMED
+
+
+def test_an_exception_mid_batch_propagates_and_the_window_still_disarms(
+        granting_config, stub_module_transport_factory):
+    """Test 5: an exception raised by the second of three decisions propagates AND the
+    window still disarms (the `armed_window.__exit__` guarantee, unchanged)."""
+    ids = [RECORD_ID]
+    plan_transport = stub_module_transport_factory(
+        [_review_workflow_list(), _executions_page(), _review_workflow()])
+    grant = _open_review_grant(granting_config, plan_transport, record_ids=ids)
+    batch = write_grant.authorize_review_batch(grant)
+
+    arm_transport = stub_module_transport_factory([
+        _review_workflow(), _review_workflow(), {}, {}, {},
+        _review_workflow(review_writes='"true"', ids=f'"{RECORD_ID}"'),
+        _armed_review_workflow(ids=f'"{RECORD_ID}"'),
+        _armed_review_workflow(ids=f'"{RECORD_ID}"'), {}, {}, {},
+        _review_workflow(),
+    ])
+
+    class _Boom(Exception):
+        pass
+
+    window_ref = {}
+    with pytest.raises(_Boom):
+        with n8n_arming.armed_review_window(
+                batch["workflow_id"], batch["record_ids"], batch["record_domains"],
+                granting_config, transport=arm_transport, grant=grant) as window:
+            window_ref["window"] = window
+            raise _Boom("the second decision blew up")
+
+    assert window_ref["window"].disarm_result["outcome"] == n8n_arming.DISARMED
+
+
+def test_a_mid_batch_revocation_refuses_the_next_decision_but_the_window_still_disarms(
+        granting_config, stub_module_transport_factory):
+    """Test 6: `revoke_grant` called after the first decision makes the second decision's
+    `authorize_send` refuse (the grant is closed), and the window still disarms on exit."""
+    ids = [RECORD_ID, "18756544344"]
+    plan_transport = stub_module_transport_factory(
+        [_review_workflow_list(), _executions_page(), _review_workflow()])
+    grant = _open_review_grant(granting_config, plan_transport, record_ids=ids)
+    batch = write_grant.authorize_review_batch(grant)
+    joined_ids = ",".join(ids)
+
+    arm_transport = stub_module_transport_factory([
+        _review_workflow(), _review_workflow(), {}, {}, {},
+        _review_workflow(review_writes='"true"', ids=f'"{joined_ids}"'),
+        _review_workflow(review_writes='"true"', ids=f'"{joined_ids}"'),
+        _review_workflow(review_writes='"true"', ids=f'"{joined_ids}"'), {}, {}, {},
+        _review_workflow(),
+    ])
+    with n8n_arming.armed_review_window(
+            batch["workflow_id"], batch["record_ids"], batch["record_domains"],
+            granting_config, transport=arm_transport, grant=grant) as window:
+        first = write_grant.authorize_send(
+            grant, lane=write_grant.REVIEW_LANE, record_ids=[ids[0]], record_domains=[])
+        assert first["armed"] is True
+
+        grant = write_grant.revoke_grant(grant)
+
+        second = write_grant.authorize_send(
+            grant, lane=write_grant.REVIEW_LANE, record_ids=[ids[1]], record_domains=[])
+        assert second["armed"] is False
+        assert write_grant.CLOSED_REVOKED in second["detail"]
+
+    assert window.disarm_result["outcome"] == n8n_arming.DISARMED
+
+
+def test_a_review_lane_preflight_does_not_trip_over_its_own_batch_arm(
+        granting_config, stub_module_transport_factory):
+    """Test 7 (MEDIUM-1): `preflight_before_send(..., lane=REVIEW_LANE)` over a backend
+    where ONLY the review flag reads live returns the grant unchanged and no refusal, and
+    the grant's state is still open — the batch window cannot trip over its own arm."""
+    plan_transport = stub_module_transport_factory(
+        [_review_workflow_list(), _executions_page(), _review_workflow()])
+    grant = _open_review_grant(granting_config, plan_transport)
+
+    preflight_transport = stub_module_transport_factory([_armed_review_workflow()])
+
+    returned_grant, refusal = write_grant.preflight_before_send(
+        grant, granting_config, write_grant.REVIEW_LANE, transport=preflight_transport)
+
+    assert refusal is None
+    assert returned_grant is grant
+    assert returned_grant["state"] == write_grant.OPEN
+    assert preflight_transport.mutating_calls == [], (
+        "no disarm PUT/POST may have run — the batch's own arm must not be closed")
+
+
+def test_a_review_lane_preflight_still_closes_on_a_live_dispatch_flag(
+        granting_config, stub_module_transport_factory):
+    """Test 8 (MEDIUM-1): the same call over a backend where a DISPATCH flag reads live
+    still closes the grant and refuses, so the exclusion narrows the review flag and
+    nothing else. Running Test 7 against the un-narrowed tuple is what fails, which is the
+    property this pair exists to pin."""
+    plan_transport = stub_module_transport_factory(
+        [_review_workflow_list(), _executions_page(), _review_workflow()])
+    grant = _open_review_grant(granting_config, plan_transport)
+
+    dirty = _review_workflow(record_writes='"true"', ids='"9999"')
+    preflight_transport = stub_module_transport_factory([
+        dirty,                # read_live_write_state's own read
+        dirty,                # disarm's own pre-read
+        dirty,                # apply_mutation's fresh read
+        {}, {}, {},            # deactivate, put, activate
+        _review_workflow(),    # verify (post-disarm)
+    ])
+
+    returned_grant, refusal = write_grant.preflight_before_send(
+        grant, granting_config, write_grant.REVIEW_LANE, transport=preflight_transport)
+
+    assert refusal is not None
+    assert returned_grant["state"] == write_grant.CLOSED
+    assert returned_grant["closed_reason"] == write_grant.CLOSED_WRITES_STILL_LIVE
