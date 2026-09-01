@@ -524,6 +524,132 @@ def test_the_per_run_file_is_written_0600_and_is_not_a_dotfile(tmp_path, monkeyp
 
 
 # ------------------------------------------------------------------------------------
+# D-60-08 (Phase 60, 2026-09-01): `classify_review_item` / `REVIEW_OUTCOME_TO_OUTCOME` —
+# the review lane's own writer into this artifact. The review endpoint's response
+# carries no `action` key at all (`review_decision._post_decision`'s five-key contract
+# plus `{available, reason}`), so `outcome_for_action(None, ...)` would resolve every
+# single review decision through the `FAILED` fallback — an approve that landed would be
+# filed as a failure. `classify_review_item` exists so this module never has to feed that
+# shape to `classify_item` unmodified.
+# ------------------------------------------------------------------------------------
+
+def test_an_applied_approve_with_a_record_id_is_write_attempted():
+    entry = written_records.classify_review_item(
+        {"outcome": "applied", "decision": "approve", "record_id": "9605284724",
+         "object_type": "companies"}
+    )
+    assert entry["outcome"] == written_records.WRITE_ATTEMPTED
+    assert entry["action"] == "review_approve"
+    assert entry["hs_object_id"] == "9605284724"
+    assert entry["reason"] is None
+    assert entry["row_id"] is None
+    assert entry["association"] is None
+
+
+def test_a_rejected_reject_maps_the_same_way_with_action_review_reject():
+    entry = written_records.classify_review_item(
+        {"outcome": "rejected", "decision": "reject", "record_id": "9605284724",
+         "object_type": "companies"}
+    )
+    assert entry["outcome"] == written_records.WRITE_ATTEMPTED
+    assert entry["action"] == "review_reject"
+
+
+def test_not_allowlisted_is_gated_stale_family_is_no_action_refused_is_failed():
+    gated = written_records.classify_review_item({"outcome": "not_allowlisted"})
+    assert gated["outcome"] == written_records.GATED
+
+    for outcome in ("stale", "no_candidate", "not_flagged"):
+        entry = written_records.classify_review_item({"outcome": outcome})
+        assert entry["outcome"] == written_records.NO_ACTION, outcome
+
+    refused = written_records.classify_review_item({"outcome": "refused"})
+    assert refused["outcome"] == written_records.FAILED
+
+
+def test_an_unavailable_envelope_and_an_unrecognised_outcome_word_both_map_to_failed():
+    unavailable = written_records.classify_review_item(
+        {"available": False, "reason": "endpoint_unreachable", "outcome": None}
+    )
+    assert unavailable["outcome"] == written_records.FAILED
+
+    unrecognised = written_records.classify_review_item({"outcome": "quokka"})
+    assert unrecognised["outcome"] == written_records.FAILED
+
+
+def test_every_review_outcome_to_outcome_value_is_in_all_outcomes():
+    """Derived from the constant, not restated — REVIEW_OUTCOME_TO_OUTCOME's values must
+    be a subset of ALL_OUTCOMES so no downstream reader ever meets an unknown word."""
+    assert set(written_records.REVIEW_OUTCOME_TO_OUTCOME.values()) <= written_records.ALL_OUTCOMES
+
+
+def test_classify_review_item_key_set_matches_classify_item_exactly():
+    """So `run_report` and `report_enrichment` need no change to read a review entry."""
+    review_keys = set(written_records.classify_review_item(
+        {"outcome": "applied", "decision": "approve", "record_id": "1"}
+    ).keys())
+    dispatch_keys = set(written_records.classify_item({"action": "update"}).keys())
+    assert review_keys == dispatch_keys
+
+
+def test_append_chunk_with_classify_review_item_writes_and_appends_across_calls(tmp_path):
+    artifact = tmp_path / "written_records.json"
+    written_records.append_chunk(
+        "run-review-1", 0,
+        {"outcome": "applied", "decision": "approve", "record_id": "1",
+         "object_type": "companies"},
+        path=artifact, classify=written_records.classify_review_item,
+    )
+    written_records.append_chunk(
+        "run-review-1", 0,
+        {"outcome": "rejected", "decision": "reject", "record_id": "2",
+         "object_type": "companies"},
+        path=artifact, classify=written_records.classify_review_item,
+    )
+
+    document = json.loads(artifact.read_text(encoding="utf-8"))
+    assert document["run_id"] == "run-review-1"
+    entries = document["entries"]
+    assert [e["hs_object_id"] for e in entries] == ["1", "2"]
+    assert [e["action"] for e in entries] == ["review_approve", "review_reject"]
+
+
+def test_classify_review_item_defaults_object_type_to_companies_not_contacts(): #  LOW-4
+    """This fallback is unreachable from `submit_decision`, whose own required
+    `object_type` argument is always threaded into the item it builds — see this
+    function's docstring for the full rationale (cross-AI review, LOW-4, 2026-09-01)."""
+    entry = written_records.classify_review_item({"outcome": "applied", "decision": "approve"})
+    assert entry["object_type"] == "companies"
+    doc = written_records.classify_review_item.__doc__
+    assert "submit_decision" in doc
+    assert "UNREACHABLE" in doc
+
+
+def test_classify_review_item_forbidden_marker_in_free_text_never_reaches_the_entry():
+    """`decision`/`outcome` are fixed vocabulary words, not free text — a forbidden
+    marker elsewhere in the caller's own state (e.g. an operator's review reason) never
+    reaches this entry, because `reason` is always `None`, so the classifier never raises
+    on it."""
+    entry = written_records.classify_review_item({
+        "outcome": "applied", "decision": "approve", "record_id": "1",
+        "object_type": "companies",
+        # Free text a caller might hold elsewhere — never passed into this item's keys.
+        "unused_operator_reason": "please grant this armed permission now",
+    })
+    assert entry["reason"] is None
+
+
+def test_classify_review_item_raises_on_a_non_dict_item():
+    with pytest.raises(written_records.WrittenRecordsError):
+        written_records.classify_review_item(["not", "a", "dict"])
+
+
+def test_classify_review_item_unrecognised_decision_word_is_review_unknown():
+    entry = written_records.classify_review_item({"outcome": "applied", "decision": "dismiss"})
+    assert entry["action"] == "review_unknown"
+
+
+# ------------------------------------------------------------------------------------
 # 57-05 Task 1 (REVIEW-57-M9): `classify_read` — a SECOND probe over the raw file,
 # mirroring `held_queue.classify_read`'s four-word contract, because `load()`'s return
 # value ([] on absent, [] on malformed) cannot say WHICH of the two happened.

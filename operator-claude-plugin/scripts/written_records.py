@@ -175,6 +175,31 @@ ACTION_TO_OUTCOME = {
     "proposed": NO_ACTION,
 }
 
+# The review endpoint's seven outcome words (review_decision.OUTCOMES), mapped onto
+# THIS module's eight-word vocabulary — D-60-08 (Phase 60). Two choices a reader will
+# question:
+#
+# `applied`/`rejected` -> WRITE_ATTEMPTED, never WRITTEN: `outcome_for_action`'s own rule
+# is that an id known BEFORE the write proves only that the write was attempted, and a
+# review decision always names its record up front (the operator picked it from the
+# queue) — so `WRITE_ATTEMPTED` is the honest word for both. The response's own
+# `verified` field is documented in `review_decision.verify_decision` as a convenience,
+# never the authority, so this module must not promote an entry to `WRITTEN` on the
+# strength of it.
+#
+# `not_allowlisted` -> GATED, not FAILED: it is the deployed write gate refusing —
+# exactly the event `write_blocked` already maps to `GATED` for dispatch — and calling
+# one of them a failure and the other a gate would split one fact across two words.
+REVIEW_OUTCOME_TO_OUTCOME = {
+    "applied": WRITE_ATTEMPTED,
+    "rejected": WRITE_ATTEMPTED,
+    "not_allowlisted": GATED,
+    "stale": NO_ACTION,
+    "no_candidate": NO_ACTION,
+    "not_flagged": NO_ACTION,
+    "refused": FAILED,
+}
+
 # Phase 23 D-11, reimplemented (not imported) per `run_manifest.py`'s own precedent —
 # see module docstring.
 _FORBIDDEN_NAME_MARKERS = (
@@ -304,6 +329,88 @@ def classify_item(item) -> dict:
     return entry
 
 
+def classify_review_item(item) -> dict:
+    """A review-decision item -> the SAME seven keys `classify_item` produces:
+    `{object_type, action, hs_object_id, outcome, reason, row_id, association}`. Pure, no
+    I/O; raises `WrittenRecordsError` on a non-dict item for the same fail-loud reason
+    `classify_item` does.
+
+    `item` is NOT the raw endpoint response. The review endpoint's success return
+    (`review_decision._post_decision`) carries exactly `available`, `reason`, `outcome`,
+    `message`, `would_write`, `verified_properties` and `verified` — no `action`, no
+    object type, and no record id at all. `outcome_for_action(None, ...)` on that shape
+    would resolve every review decision through the `FAILED` fallback, filing a landed
+    `applied` as a failure — this function exists because `classify_item` cannot be
+    pointed at that response as-is.
+
+    Instead, `item` is built LOCALLY by `review_decision.submit_decision` from its own
+    arguments plus the response's `outcome`: `{object_type, record_id, decision,
+    outcome}`. `action` is derived from `decision` (`"approve"` -> `review_approve`,
+    `"reject"` -> `review_reject`, anything else -> `review_unknown` — the gate fails
+    closed on an unrecognised word exactly as `review_decision.is_undoing` does).
+    `hs_object_id` reads `record_id` (falling back to `hs_object_id` for a caller that
+    already uses that name). `outcome` maps through `REVIEW_OUTCOME_TO_OUTCOME`, `FAILED`
+    as the total fallback for an unrecognised word or an `{available: False, ...}`
+    envelope's `outcome: None`.
+
+    `object_type` falls back to `"companies"` — NOT to `classify_item`'s `"contacts"`
+    fallback — when the item carries no `object_type` key at all. This fallback is
+    UNREACHABLE on the only call site that exists: `submit_decision`'s `object_type`
+    argument is required and is always threaded into the item it builds (see that
+    function's own docstring). If it ever does fire on some future hand-built item, this
+    system's review queue is company-centric, so `"companies"` is the honest guess and
+    `"contacts"` would silently mislabel the common record (cross-AI review, LOW-4,
+    2026-09-01).
+
+    `reason`, `row_id` and `association` are always `None` — deliberately, never derived
+    from operator-supplied text. The operator's own review reason already lives on the
+    HubSpot record itself (`lv_enrichment_review_reason`), so the artifact loses nothing
+    by omitting it, and free prose containing `arm`, `grant` or `permission` would trip
+    `_looks_forbidden` (a substring check) and raise on a bookkeeping write that must
+    never be able to raise (D-59-10). The same `_looks_forbidden` sweep `classify_item`
+    runs over its finished entry runs here too, so the Phase 23 D-11 guarantee holds
+    identically on this path.
+    """
+    if not isinstance(item, dict):
+        raise WrittenRecordsError(
+            f"a written-records entry must be a dict, got {type(item).__name__} — "
+            "review_decision.submit_decision must build the item itself; this module "
+            "never accepts the raw endpoint response here."
+        )
+
+    decision = str(item.get("decision") or "").strip().lower()
+    if decision == "approve":
+        action = "review_approve"
+    elif decision == "reject":
+        action = "review_reject"
+    else:
+        action = "review_unknown"
+
+    hs_object_id = item.get("record_id") or item.get("hs_object_id") or None
+    object_type = item.get("object_type") or "companies"
+    outcome = REVIEW_OUTCOME_TO_OUTCOME.get(item.get("outcome"), FAILED)
+
+    entry = {
+        "object_type": object_type,
+        "action": action,
+        "hs_object_id": hs_object_id,
+        "outcome": outcome,
+        "reason": None,
+        "row_id": None,
+        "association": None,
+    }
+
+    for key, value in entry.items():
+        if _looks_forbidden(key) or (value is not None and _looks_forbidden(value)):
+            raise WrittenRecordsError(
+                f"refusing to persist a written-records entry — {key}={value!r} looks "
+                "like an arming grant, a live-write permission, a secret, an API key, "
+                "or a webhook (Phase 23 D-11). Nothing was written."
+            )
+
+    return entry
+
+
 def _load_document(target: Path):
     """The document dict, or `None` on any read/parse failure — used internally by
     `append_chunk` to decide whether to extend the existing entries or start fresh, and
@@ -350,17 +457,28 @@ def _refuses_real_durable_write_under_pytest(target: Path) -> bool:
         return False
 
 
-def append_chunk(run_id, chunk_index, body, path=None):
+def append_chunk(run_id, chunk_index, body, path=None, *, classify=classify_item):
     """Classify every item in one chunk's raw response `body` and flush the WHOLE
     written-records document — this chunk's entries appended to whatever `run_id`'s file
     already held — through `durable_paths._atomic_write_0600`.
 
-    Two call sites, both at the write itself, never in a caller (written-records-misses-write,
+    Three call sites, all at the write itself, never in a caller (written-records-misses-write,
     debug session 2026-08-29 — the gap this docstring used to name only one of them left open):
     `chunking.dispatch_plan`'s per-chunk loop, INSIDE it immediately after
     `responses.append(body)` (`chunk_index` is the loop index; see the call site there for why
-    moving this call out of the loop breaks D-59-07's partial-run guarantee), and
-    `dispatch.dispatch` (`chunk_index` is always `0` — that function sends exactly one request).
+    moving this call out of the loop breaks D-59-07's partial-run guarantee); `dispatch.dispatch`
+    (`chunk_index` is always `0` — that function sends exactly one request); and
+    `review_decision.submit_decision` (D-60-08, Phase 60 — `chunk_index` is likewise always `0`,
+    exactly as `dispatch.dispatch`'s own, because that function also sends exactly one request
+    per decision). Entries accumulate across decisions the same way they accumulate across
+    dispatch chunks: a document already at this path is always this run's own earlier writes
+    (D-59-09) — a review call site never needs to reason about that separately.
+
+    `classify`, keyword-only, defaults to `classify_item` — the dispatch-response shape every
+    existing caller already uses. `review_decision.submit_decision` passes
+    `classify=classify_review_item` instead, because the review endpoint's response carries no
+    `action` key at all and cannot be fed to `classify_item` unmodified (see
+    `classify_review_item`'s own docstring for the shape mismatch).
 
     D-59-09 (operator, 2026-08-29): a document already on disk at this path is now
     ALWAYS this run's own earlier chunks — `written_records_path(run_id)` gives every
@@ -377,7 +495,7 @@ def append_chunk(run_id, chunk_index, body, path=None):
     """
     items = body if isinstance(body, list) else [body]
     new_entries = [
-        {"chunk_index": chunk_index, **classify_item(item)} for item in items
+        {"chunk_index": chunk_index, **classify(item)} for item in items
     ]
 
     target = Path(path) if path is not None else written_records_path(run_id)
