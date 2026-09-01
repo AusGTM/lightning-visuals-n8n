@@ -474,7 +474,7 @@ variable), and a design that runs the provider waterfall twice per written recor
             `num_associated_contacts` on the company search and response (wave 1, regenerate only,
             no deploy)
 
-      - [ ] 62-05-PLAN.md — the operator-attended sitting: `skills/suggest-contacts/SKILL.md`, its
+      - [x] 62-05-PLAN.md — the operator-attended sitting: `skills/suggest-contacts/SKILL.md`, its
             composition test, the unprompted post-batch offer, and the 0.36.0 release (wave 3)
 
 - [ ] **Phase 63: The unattended lane actually runs unattended** — **NUMBERED 2026-09-02**

@@ -5,16 +5,16 @@ milestone_name: Unattended Session Runs
 current_phase: 62
 current_phase_name: Suggest the contacts nobody named
 status: complete
-stopped_at: "Completed 62-02-PLAN.md (role vocabulary: portal jobtitle clustering, disclosed generic fallback, SUGGEST-03 amended not closed)"
-last_updated: "2026-09-01T23:34:02.207Z"
+stopped_at: "Completed 62-05-PLAN.md (the operator-attended suggestion sitting: skills/suggest-contacts/SKILL.md, its composition test, the unprompted post-batch offer wired into enrich-records, and the 0.36.0 release) -- Phase 62 complete, all 5 plans done"
+last_updated: "2026-09-01T23:49:52.276Z"
 last_activity: 2026-09-02
-state_head: e9e33a0f9fee727ccefa0fa0588dfa224984bd45
 progress:
   total_phases: 9
-  completed_phases: 6
-  total_plans: 49
-  completed_plans: 48
-  percent: 67
+  completed_phases: 8
+  total_plans: 50
+  completed_plans: 49
+  percent: 89
+state_head: e9e33a0f9fee727ccefa0fa0588dfa224984bd45
 last_activity_desc: "**Phase 61 complete and verified (12/12)**; backend deployed and"
 ---
 
@@ -169,8 +169,37 @@ predating the window. VETO-03 bar still 0.
 
 ## Current Position
 
-Phase: 62 (Suggest the contacts nobody named) — EXECUTING
-**62-02 outcome (2026-09-02):** the role vocabulary — `scripts/role_vocabulary.py` (repo root,
+Phase: 62 (Suggest the contacts nobody named) — ALL 5 PLANS COMPLETE (2026-09-02)
+**62-05 outcome (2026-09-02, final plan of Phase 62):** the operator-attended sitting —
+  `skills/suggest-contacts/SKILL.md` composes plans 62-01..04 into one 9-step round,
+  auto-offered by the assistant right after a company batch (D-62-15) and also directly
+  slash-invocable. No per-person and no per-company confirmation anywhere in it (D-62-10);
+  a cap above the grant's own `priced_cap` (3) is refused by name. Only ONE
+  `` ```python `` fence in the whole file — every other function reference (stage-2's
+  reuse of `enrich-before-ingest`'s own dispatch machinery, the held-row path) is prose,
+  deliberately, so `test_skill_sequence_coverage`'s ratchet gains exactly one new
+  registered identity rather than several. `enrich-records/SKILL.md` had NO literal
+  `write_grant.plan_grant()` code fence anywhere for the enrichment/contacts lanes
+  (confirmed by grep across every skill before editing — only `review-triage`'s
+  review-lane grant is a real call); `suggestion_companies`/`suggestion_cap` threading is
+  therefore documented as inline-code prose amending that already-documented call, adding
+  no new AST sequence. Released as plugin `0.36.0`. SUGGEST-01/-02/-04/-05 checked off in
+  `v1.1-REQUIREMENTS.md`; SUGGEST-03 stays unchecked (AMENDED by D-62-07, not closed —
+  62-02's own call). Full record:
+  `.planning/phases/62-suggest-the-contacts-nobody-named/62-05-SUMMARY.md`.
+Next: **Phase 57** — ceilings, refusal-before-start, post-run proof. It gates the first
+  live unattended, credit-spending batch (D-61-08), which has NOT run. Phase 62 is
+  otherwise done; run `/gsd-verify-work 62` before treating it as shipped.
+Armed state: nothing armed. 62-05 touched only local Markdown/Python/JSON source and test
+  files — no network, no HubSpot credentials, no workflow JSON, no deploy.
+Suites at 62-05 close: operator-claude-plugin 2242 passed / 5 skipped; root
+  `.venv/bin/python -m pytest -q` 3912 passed / 154 skipped; `node --test tests/n8n/*.test.mjs`
+  862 pass / 0 fail (all >= wave baselines; node suite unchanged since this plan touches
+  no n8n code).
+
+### Retained — 62-02 outcome (2026-09-02)
+
+the role vocabulary — `scripts/role_vocabulary.py` (repo root,
   credential- and portal-guarded, mirrors `inventory_org_type_values.py`) sweeps live contact
   `jobtitle` values and clusters them with ONE cached Haiku call (gated behind
   `SPARSE_THRESHOLD`, never re-clustered per round), ranking the top `TOP_N_FAMILIES` (8) by
@@ -185,15 +214,6 @@ Phase: 62 (Suggest the contacts nobody named) — EXECUTING
   Phase 62 entry now distinguishes closed (SUGGEST-01/-02/-04/-05) from amended (SUGGEST-03) —
   the blanket `Closes SUGGEST-01..05` claim is gone. Full record:
   `.planning/phases/62-suggest-the-contacts-nobody-named/62-02-SUMMARY.md`.
-Next: **62-05** (the operator-attended sitting: `skills/suggest-contacts/SKILL.md`, the
-  unprompted post-batch offer, and the 0.36.0 release — wave 3, the last plan in this phase).
-  Also open: **Phase 57** — ceilings, refusal-before-start, post-run proof. It gates the first
-  live unattended, credit-spending batch (D-61-08), which has NOT run.
-Armed state: nothing armed. 62-02 touched only local Python/YAML source, tests, and two
-  planning docs — no network, no HubSpot credentials, no workflow JSON.
-Suites at 62-02 close: operator-claude-plugin 2237 passed / 5 skipped; root
-  `.venv/bin/python -m pytest -q` 3907 passed / 154 skipped; `node --test tests/n8n/*.test.mjs`
-  862 pass / 0 fail (all >= wave 1 baselines).
 
 ### Retained — 62-01 outcome (2026-09-02)
 
@@ -303,14 +323,14 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [███████░░░] 67% — v1.1: 53/54/58/59/61 complete; **57 in progress (Plan 01 done,
+Progress: [██████████] 98% — v1.1: 53/54/58/59/61 complete; **57 in progress (Plan 01 done,
 RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The old
 `97% (v0.9 phase 47.5 of 46-49)` bar was a v0.9 figure and is superseded.)
 
 ## Session
 
-**Last session:** 2026-09-01T23:34:01.864Z
-**Stopped at:** Completed 62-02-PLAN.md (role vocabulary: portal jobtitle clustering, disclosed generic fallback, SUGGEST-03 amended not closed)
+**Last session:** 2026-09-01T23:49:52.265Z
+**Stopped at:** Completed 62-05-PLAN.md (the operator-attended suggestion sitting: skills/suggest-contacts/SKILL.md, its composition test, the unprompted post-batch offer wired into enrich-records, and the 0.36.0 release) -- Phase 62 complete, all 5 plans done
 **Resume file:** None
 
 ## Performance Metrics
@@ -423,6 +443,7 @@ RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The 
 | Phase 62 P04 | 55min | 2 tasks | 15 files |
 | Phase 62 P03 | 25min | 3 tasks | 5 files |
 | Phase 62 P02 | 22 min | 3 tasks | 6 files |
+| Phase 62 P05 | 55min | 3 tasks | 6 files |
 
 ## Decisions
 
@@ -521,6 +542,7 @@ RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The 
 - [Phase 62]: 62-04: preingest.py's OUTCOME_CONTRACT_VERSION allowlist was widened to {1, 2}, not moved to {2}, since this plan regenerates but does not deploy the n8n JSON -- the deployed backend still stamps 1 until an operator deploys it separately.
 - [Phase 62]: D-62-11 locked via checkpoint: the suggestion round's cost folds into the SAME opening grant envelope (one-envelope), not a separate spend confirmation. — Human operator answer at a gate=blocking-human checkpoint; one disclosure, one yes for the whole session; over-budget suggestion rounds now refuse pre-start via Phase 57's existing CEILING_OVER split offer.
 - [Phase 62]: D-62-07 implemented: role_vocabulary.py's committed seed is the generic-fallback branch's actual output (executed, not hand-typed), and role_classify.offer_block()'s disclosure sentence is what SUGGEST-03's amendment requires operators to see.
+- [Phase 62]: 62-05: enrich-records has no literal write_grant.plan_grant() code fence for the enrichment/contacts lanes -- only review-triage's review-lane grant is a real call -- so suggestion_companies/suggestion_cap threading is documented as inline-code prose amending that call, not a new fence — keeps test_skill_sequence_coverage's ratchet from gaining a spurious second sequence for a wiring fix
 
 ### Roadmap Evolution
 
