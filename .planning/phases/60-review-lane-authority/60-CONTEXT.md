@@ -109,6 +109,20 @@ does not change what a reviewer sees before approving (the dry-run exact-write p
   (`review_armed`) is unaffected and still required, exactly as it is today for both approve and
   reject. **The `is_undoing` carve-out therefore SURVIVES D-60-04's retirement of the env var —
   it is re-pointed at the grant check, not deleted.** — **Reversibility:** reversible.
+
+  **AMENDMENT 2026-09-01 (cross-AI review MEDIUM-3, `60-REVIEWS.md`) — the sentence above
+  overstates what this carve-out delivers, and the overstatement is left visible rather than
+  rewritten.** "A closed authority must never be able to strand a flagged record" describes the
+  CLIENT side only. Verified against source by the reviewer: `n8n/code/reviewDecision.js`'s
+  `writeAllowed === false` check fires **before** the reject branch, so a reject sent with no
+  grant open and no armed review window reaches the POST and is still refused by the backend with
+  `not_allowlisted` — the record is stranded, just honestly and visibly rather than silently.
+  **What D-60-07 actually guarantees is that the request is SENT, never that the write LANDS.**
+  This is **not a regression** — the retired `ALLOW_REVIEW_SUBMIT` bypass was equally client-side,
+  so the carve-out is exactly as strong as it was before, no weaker. The decision itself stands
+  unchanged; only the claim made for it is corrected. Carried into `60-01`'s Test 4 docstring, its
+  `must_haves` truth, `60-04`'s skill text (the skill must not promise a reject clears the queue)
+  and `60-VALIDATION.md`'s D-60-07 row.
 - **D-60-08:** Review-lane writes **DO** appear in the per-run `written_records-<run_id>.json`
   artifact (D-59-07/D-59-09), against 60-RESEARCH.md's own recommendation to treat it as out of
   scope — operator's call, 2026-09-01. Rationale: one artifact should answer "what did this
