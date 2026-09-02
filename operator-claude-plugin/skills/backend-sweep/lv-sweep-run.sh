@@ -25,6 +25,24 @@ stamp() {
     printf '[%s] %s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "$*" >> "$LOG"
 }
 
+# Staleness self-check (D-63-02): loud, never refusing. A third state alongside
+# "healthy" and "found notices" below — the sweep always runs; this only signals
+# whether the code about to run is the newest installed version. $1 is the root THIS
+# invocation is actually running from, so its parent IS the cache root -- no baked
+# cache-root value is needed here (unlike the shim, which bakes one at install time
+# because it runs before any root is known).
+NEWEST_ROOT=$("$2" "$1/scripts/sweep_shim.py" --newest --cache-root "$(dirname "$1")")
+STALE_RC=$?
+
+if [ "$STALE_RC" -eq 0 ] && [ -n "$NEWEST_ROOT" ]; then
+    if [ "$1" != "$NEWEST_ROOT" ]; then
+        stamp "sweep running from $1, newest installed is $NEWEST_ROOT"
+        banner "LV backend sweep is running an old version - ask the admin to check the log"
+    fi
+else
+    stamp "could not check sweep staleness (resolver exit $STALE_RC)"
+fi
+
 OUT=$(cd "$1" && "$2" scripts/sweep_entry.py 2>&1)
 RC=$?
 

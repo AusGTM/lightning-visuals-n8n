@@ -179,3 +179,102 @@ def test_main_newest_prints_nothing_and_returns_1_when_unresolved(tmp_path, caps
     rc = sweep_shim.main(["--newest", "--cache-root", str(empty)])
     assert rc == 1
     assert capsys.readouterr().out == ""
+
+
+# --- Task 2: staleness self-check inside lv-sweep-run.sh -----------------------------
+
+REPO_WRAPPER = REPO_SCRIPTS_DIR.parent / "skills" / "backend-sweep" / "lv-sweep-run.sh"
+
+
+def _make_version_dir(cache_root: Path, version: str) -> Path:
+    """A version directory carrying REAL copies of sweep_shim.py + durable_paths.py
+    (so the real wrapper's staleness resolver runs against real logic), a stubbed
+    sweep_entry.py that always prints `[]` (an empty notice list — the healthy
+    shape), and a placeholder wrapper marker file so this directory is a candidate
+    for `newest_install_root`."""
+    install = cache_root / version
+    scripts_dir = install / "scripts"
+    scripts_dir.mkdir(parents=True)
+    shutil.copy(REPO_SCRIPTS_DIR / "sweep_shim.py", scripts_dir / "sweep_shim.py")
+    shutil.copy(REPO_SCRIPTS_DIR / "durable_paths.py", scripts_dir / "durable_paths.py")
+    (scripts_dir / "sweep_entry.py").write_text("print('[]')\n")
+
+    wrapper_dir = install / "skills" / "backend-sweep"
+    wrapper_dir.mkdir(parents=True)
+    (wrapper_dir / "lv-sweep-run.sh").write_text("#!/bin/sh\n")  # marker only, never run
+    return install
+
+
+def _run_wrapper(root: Path, log_path: Path):
+    return subprocess.run(
+        ["/bin/sh", str(REPO_WRAPPER), str(root), sys.executable, str(log_path)],
+        capture_output=True, text=True, timeout=30,
+    )
+
+
+def test_wrapper_running_the_newest_root_logs_only_the_healthy_line(tmp_path):
+    cache_root = tmp_path / "cache"
+    cache_root.mkdir()
+    root = _make_version_dir(cache_root, "2.0.0")
+    log_path = tmp_path / "sweep.log"
+
+    result = _run_wrapper(root, log_path)
+    assert result.returncode == 0, result.stderr
+
+    lines = log_path.read_text().strip().splitlines()
+    assert len(lines) == 1
+    assert "healthy, no notices" in lines[0]
+    assert "newest installed" not in lines[0]
+
+
+def test_wrapper_running_an_older_root_logs_both_versions_and_still_completes(tmp_path):
+    cache_root = tmp_path / "cache"
+    cache_root.mkdir()
+    older = _make_version_dir(cache_root, "2.0.0")
+    newer = _make_version_dir(cache_root, "2.1.0")
+    log_path = tmp_path / "sweep.log"
+
+    result = _run_wrapper(older, log_path)
+    assert result.returncode == 0, result.stderr
+
+    lines = log_path.read_text().strip().splitlines()
+    assert len(lines) == 2
+    stale_line = next(line for line in lines if "newest installed" in line)
+    assert str(older) in stale_line
+    assert str(newer) in stale_line
+    assert any("healthy, no notices" in line for line in lines)
+
+
+def test_wrapper_with_no_resolvable_siblings_logs_could_not_check_and_still_completes(tmp_path):
+    checkout = tmp_path / "dev-checkout"
+    scripts_dir = checkout / "scripts"
+    scripts_dir.mkdir(parents=True)
+    shutil.copy(REPO_SCRIPTS_DIR / "sweep_shim.py", scripts_dir / "sweep_shim.py")
+    shutil.copy(REPO_SCRIPTS_DIR / "durable_paths.py", scripts_dir / "durable_paths.py")
+    (scripts_dir / "sweep_entry.py").write_text("print('[]')\n")
+    log_path = tmp_path / "sweep.log"
+
+    result = _run_wrapper(checkout, log_path)
+    assert result.returncode == 0, result.stderr
+
+    lines = log_path.read_text().strip().splitlines()
+    assert len(lines) == 2
+    assert any("could not check sweep staleness" in line for line in lines)
+    assert not any("newest installed" in line for line in lines)
+    assert any("healthy, no notices" in line for line in lines)
+
+
+def test_stale_and_healthy_exit_codes_match_for_identical_sweep_output(tmp_path):
+    cache_root = tmp_path / "cache"
+    cache_root.mkdir()
+    older = _make_version_dir(cache_root, "2.0.0")
+    _make_version_dir(cache_root, "2.1.0")
+
+    healthy_only = tmp_path / "healthy-cache"
+    healthy_only.mkdir()
+    newest_root = _make_version_dir(healthy_only, "3.0.0")
+
+    stale_result = _run_wrapper(older, tmp_path / "stale.log")
+    healthy_result = _run_wrapper(newest_root, tmp_path / "healthy.log")
+
+    assert stale_result.returncode == healthy_result.returncode == 0
