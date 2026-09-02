@@ -42,18 +42,37 @@ that is the interpreter the schedule below names. This failure mode is loud now 
 error, in the log, with a banner), but it is still one step cheaper to avoid than to
 diagnose after the fact.
 
-## Step 2 — install the schedule
+## Step 2 — install the launcher shim
 
-Pick whichever of the two your platform prefers. Both call the same wrapper with the same
+Run this once, with the venv python from Step 1 and this plugin's own root:
+
+```bash
+[venv-python] "[plugin-root]/scripts/sweep_shim.py" --install
+```
+
+It prints an absolute path — something shaped like
+`$HOME/.claude/plugins/data/<plugin-id>/lv-sweep-launcher.sh` — record it verbatim for
+Step 3 below. That path is a tiny `/bin/sh` shim written to a durable home that survives
+every future plugin update. The schedule you install next names the shim, not this
+install's own `lv-sweep-run.sh`, and the shim never moves: it resolves the newest installed
+plugin version at every scheduled fire and runs that version's wrapper. A plugin update
+therefore no longer orphans or freezes the schedule — nothing about Step 3 has to change
+when the plugin is updated.
+
+## Step 3 — install the schedule
+
+Pick whichever of the two your platform prefers. Both call the same shim with the same
 three arguments, in this order: the plugin root, the venv python from Step 1, and the log
-path.
+path — the shim's own job is to resolve the newest installed version and hand these same
+three arguments on to that version's wrapper.
 
 ### Option A — cron
 
-Run `crontab -e` and add this line (fill in `[plugin-root]` and `[venv-python]` first):
+Run `crontab -e` and add this line (fill in the shim path printed by Step 2, then
+`[plugin-root]` and `[venv-python]`):
 
 ```cron
-0 */4 * * * /bin/sh "[plugin-root]/skills/backend-sweep/lv-sweep-run.sh" "[plugin-root]" "[venv-python]" "$HOME/Library/Logs/lv-backend-sweep.log"
+0 */4 * * * /bin/sh "$HOME/.claude/plugins/data/<plugin-id>/lv-sweep-launcher.sh" "[plugin-root]" "[venv-python]" "$HOME/Library/Logs/lv-backend-sweep.log"
 ```
 
 Invoking through `/bin/sh` explicitly is deliberate: it does not depend on the executable
@@ -64,9 +83,9 @@ appended with `>>` if you want a second belt-and-braces record.
 
 ### Option B — launchd
 
-Save as `~/Library/LaunchAgents/com.lightningvisuals.backend-sweep.plist` (fill in
-`[plugin-root]` and `[venv-python]`), then load it with `launchctl load
-~/Library/LaunchAgents/com.lightningvisuals.backend-sweep.plist`:
+Save as `~/Library/LaunchAgents/com.lightningvisuals.backend-sweep.plist` (fill in the shim
+path printed by Step 2, `[plugin-root]` and `[venv-python]`), then load it with
+`launchctl load ~/Library/LaunchAgents/com.lightningvisuals.backend-sweep.plist`:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -78,7 +97,7 @@ Save as `~/Library/LaunchAgents/com.lightningvisuals.backend-sweep.plist` (fill 
   <key>ProgramArguments</key>
   <array>
     <string>/bin/sh</string>
-    <string>[plugin-root]/skills/backend-sweep/lv-sweep-run.sh</string>
+    <string>/Users/[operator-home-directory]/.claude/plugins/data/<plugin-id>/lv-sweep-launcher.sh</string>
     <string>[plugin-root]</string>
     <string>[venv-python]</string>
     <string>/Users/[operator-home-directory]/Library/Logs/lv-backend-sweep.log</string>
@@ -94,6 +113,20 @@ The wrapper writes its own log through the fourth `ProgramArguments` entry above
 launchd's own stderr). Prefer Option A (cron) unless your platform already manages other
 launchd agents.
 
+### Already have a schedule installed under the old shape? Re-point it once.
+
+If a schedule on this machine still names a versioned install directly —
+`[plugin-root]/skills/backend-sweep/lv-sweep-run.sh` instead of the shim from Step 2 — edit
+it once: run Step 2 to install the shim (if not already installed), then change only the
+first quoted path (the cron line) or the second `ProgramArguments` string (launchd) to the
+shim path Step 2 printed. Leave every other argument exactly as it already is.
+
+This matters for two reasons. A schedule pinned to a versioned directory runs whatever code
+that directory holds forever — it never picks up a later update on its own. And if that
+directory is ever removed, the schedule fires nothing at all: no banner, no log line,
+silence. Re-pointing to the shim is a **one-time** action — no later plugin update needs
+another one, because the shim itself is what resolves each update's newest version.
+
 ## A trigger that cannot run is now loud — and what still stays silent
 
 **If the trigger runs and cannot complete, it says so.** `lv-sweep-run.sh` posts a banner
@@ -102,8 +135,15 @@ arguments, the python failing to run at all, or output it cannot parse. Broken a
 are no longer indistinguishable the way the earlier, silently-failing headless-LLM design
 left them.
 
+**A trigger running from a non-newest install is loud without being broken.** This is the
+third state the staleness self-check adds: the sweep still completes normally, exits 0,
+and does everything a healthy fire does — but it additionally posts a banner naming the
+sweep as running an old version, and logs both the running root and the newest installed
+root so you can see the size of the drift. Stale is not cannot-run; the sweep is still
+doing useful work, so it is not refused.
+
 **A trigger that was never installed is still silent** — nothing runs, so nothing can post
-a banner about not running. That residual case is honest, and it is exactly why Step 2
+a banner about not running. That residual case is honest, and it is exactly why Step 3
 above exists: if notices are expected but never arrive, checking whether the schedule was
 ever installed is the first thing to do, not the backend.
 
@@ -134,6 +174,10 @@ Check `~/Library/Logs/lv-backend-sweep.log` after the next scheduled time passes
 - A fire **with notices** appends the notice count, the full JSON (untruncated), and one
   line per banner posted. The banner is gated on that notice list being non-empty — an
   empty list is the healthy case above, and posts no banner at all.
+- A **stale** fire (running from a non-newest install) appends a line naming both the
+  running root and the newest installed root — `sweep running from <old>, newest installed
+  is <new>` — alongside whatever the healthy or with-notices lines above would already have
+  appended, and you will have seen a banner about an old version too. The sweep still ran.
 - A **broken** trigger appends a failure line, and by the time you open the log you have
   already seen a banner naming the sweep itself as broken.
 
@@ -141,6 +185,7 @@ Check `~/Library/Logs/lv-backend-sweep.log` after the next scheduled time passes
 
 Cron: `crontab -e` and delete the line. Launchd: `launchctl unload
 ~/Library/LaunchAgents/com.lightningvisuals.backend-sweep.plist` then delete the plist
-file. Nothing else needs removing — `lv-sweep-run.sh` is a tracked file the plugin ships,
-not something either step above created on the operator's machine beyond the venv and the
-schedule entry itself.
+file. `lv-sweep-run.sh` is a tracked file the plugin ships, not something either step above
+created. The one additional artifact Step 2 created is the shim file at the durable path it
+printed (`.../lv-sweep-launcher.sh`) — deleting it is optional and safe once the schedule
+that named it is gone.

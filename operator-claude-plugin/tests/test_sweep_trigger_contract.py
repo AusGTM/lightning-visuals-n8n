@@ -86,12 +86,33 @@ def test_wrapper_exists_with_shebang_and_set_dash_u():
     assert re.search(r"^set -u\s*$", WRAPPER_TEXT, re.M)
 
 
-def test_wrapper_names_only_the_sweep_entrypoint():
+def test_wrapper_names_only_the_sweep_entrypoint_and_the_launcher_resolver():
     """A shipped shell file is a capability surface the import-graph guard cannot
-    see (T-29-20's hole, closed here for shell as it was for skill prose)."""
+    see (T-29-20's hole, closed here for shell as it was for skill prose).
+
+    D-63-02 added a second named script: the wrapper now shells out to
+    `sweep_shim.py` (`--newest`) to resolve the newest installed root for its
+    staleness self-check. `sweep_shim` is deliberately NOT folded into
+    `read_only.ALLOWED_MODULES` — that set doubles as the exact reachable set of
+    `sweep_entry`'s PYTHON IMPORT closure (`test_the_sweep_import_closure_is_
+    exactly_the_allowlist` requires equality, not just a subset), and `sweep_shim`
+    is never imported by `sweep_entry.py` — it is invoked as an independent
+    subprocess, the same relationship the wrapper already has with `sweep_entry`
+    itself. Its write-capable verb (`--install`) is checked separately, below:
+    the unattended wrapper must never reach it."""
     named = read_only._skill_capabilities(WRAPPER_TEXT)
-    assert named == {"sweep_entry"}
-    assert named <= read_only.ALLOWED_MODULES
+    assert named == {"sweep_entry", "sweep_shim"}
+    assert named <= read_only.ALLOWED_MODULES | {"sweep_shim"}
+
+
+def test_wrapper_never_invokes_the_shims_write_capable_install_verb():
+    """sweep_shim.py's `--install` verb writes and chmods the launcher shim file —
+    legitimate for the admin's one-time SWEEP-CRON-TEMPLATE.md step, but the
+    unattended wrapper must never reach it. Only `--newest` (a directory listing,
+    no writes) may appear in lv-sweep-run.sh, closing the gap the module-import
+    guard cannot see for a subprocess-invoked script (T-29-20's hole, again)."""
+    assert "--newest" in WRAPPER_TEXT
+    assert "--install" not in WRAPPER_TEXT
 
 
 # <!-- planner-discipline-allow: claude -p -->
