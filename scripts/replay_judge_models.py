@@ -67,6 +67,17 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "scripts"))
 
+from dotenv import load_dotenv  # noqa: E402
+
+# Task 2 deviation (Rule 3 — blocking): unlike most scripts/*.py in this repo, this
+# module IS directly invoked as `.venv/bin/python scripts/replay_judge_models.py ...`
+# by its own PLAN.md verify commands, not only via the dotenv-wrapper one-liner other
+# scripts document. Without this call, ANTHROPIC_API_KEY/N8N_URL/N8N_API_KEY (present
+# in .env, permission-blocked from direct Read) are invisible to os.getenv() below and
+# every --extract/--replay call REFUSES. `apply_fit_score_formula.py` is the existing
+# precedent for a module-level load_dotenv() call rather than the wrapper pattern.
+load_dotenv()
+
 import yaml  # noqa: E402
 
 from enrichment_cost_ledger import _get_execution, _list_executions, _node_output_items  # noqa: E402
