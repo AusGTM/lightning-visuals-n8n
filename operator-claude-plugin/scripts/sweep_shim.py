@@ -66,6 +66,7 @@ for entry in "$CACHE_ROOT"/*; do
 done
 
 if [ -z "$BOOTSTRAP" ]; then
+    printf '[%s] %s\\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "shim: could not resolve an install under $CACHE_ROOT (no bootstrap found)" >> "$3"
     banner "LV backend sweep launcher: could not resolve an install - ask the admin to check the log"
     exit 1
 fi
@@ -74,6 +75,7 @@ NEWEST=$("$2" "$BOOTSTRAP/scripts/sweep_shim.py" --newest --cache-root "$CACHE_R
 RC=$?
 
 if [ "$RC" -ne 0 ] || [ -z "$NEWEST" ] || [ ! -f "$NEWEST/skills/backend-sweep/lv-sweep-run.sh" ]; then
+    printf '[%s] %s\\n' "$(date '+%Y-%m-%dT%H:%M:%S%z')" "shim: could not resolve an install under $CACHE_ROOT (--newest exit $RC)" >> "$3"
     banner "LV backend sweep launcher: could not resolve an install - ask the admin to check the log"
     exit 1
 fi

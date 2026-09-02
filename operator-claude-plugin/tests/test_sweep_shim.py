@@ -181,6 +181,38 @@ def test_main_newest_prints_nothing_and_returns_1_when_unresolved(tmp_path, caps
     assert capsys.readouterr().out == ""
 
 
+def test_shim_failure_paths_write_a_log_line_not_just_a_banner(tmp_path):
+    """WR-01 (63-REVIEW.md): a shim-level failure must leave a durable trace in the
+    log ($3), not only a dismissible banner. Covers both failure branches: no
+    bootstrap found at all, and a bootstrap present but `--newest` resolving nothing
+    usable."""
+    cache_root = tmp_path / "cache"
+    cache_root.mkdir()
+    durable = tmp_path / "durable"
+    shim = sweep_shim.install_shim(cache_root=cache_root, durable=durable)
+    log_path = tmp_path / "sweep.log"
+
+    # No bootstrap: empty cache root.
+    result = subprocess.run(
+        ["/bin/sh", str(shim), "legacy-root", sys.executable, str(log_path)],
+        capture_output=True, text=True, timeout=30,
+    )
+    assert result.returncode == 1
+    assert "could not resolve an install" in log_path.read_text()
+
+    # Bootstrap present, but no candidate carries the wrapper -- --newest resolves
+    # nothing.
+    log_path.unlink()
+    (cache_root / "1.0.0" / "scripts").mkdir(parents=True)
+    shutil.copy(REPO_SCRIPTS_DIR / "sweep_shim.py", cache_root / "1.0.0" / "scripts" / "sweep_shim.py")
+    result2 = subprocess.run(
+        ["/bin/sh", str(shim), "legacy-root", sys.executable, str(log_path)],
+        capture_output=True, text=True, timeout=30,
+    )
+    assert result2.returncode == 1
+    assert "could not resolve an install" in log_path.read_text()
+
+
 # --- Task 2: staleness self-check inside lv-sweep-run.sh -----------------------------
 
 REPO_WRAPPER = REPO_SCRIPTS_DIR.parent / "skills" / "backend-sweep" / "lv-sweep-run.sh"
