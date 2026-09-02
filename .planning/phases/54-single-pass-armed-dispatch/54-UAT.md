@@ -3,11 +3,17 @@ status: complete
 phase: 54-single-pass-armed-dispatch
 source: [54-VERIFICATION.md]
 started: 2026-08-27
-updated: 2026-08-27
+updated: 2026-09-03
 resolution: >-
   Both items answered by the operator on 2026-08-27: open a follow-up gap-closure plan
   covering all four findings (WR-01, WR-02, WR-03, WR-04). 54-VERIFICATION.md flipped
   human_needed -> gaps_found and the four are structured there as gaps.
+  Closed 2026-09-03: gap plans 54-06 and 54-07 executed and 54-VERIFICATION.md
+  re-verified to status `passed` (9/9 truths; 5/5 findings closed IN SOURCE, plus IN-02;
+  gaps_remaining: []). The two `result:` fields below were left at `[pending]` when the
+  frontmatter was resolved on 2026-08-27, contradicting this file's own Summary block
+  (issues: 2, pending: 0) and leaving two permanent rows in `audit-uat`. Setting them to
+  `issue` records what actually happened; no test was run or re-judged to make this edit.
 ---
 
 ## Current Test
@@ -41,7 +47,10 @@ expected: |
 
   Decision needed: accept as disclosed residuals carried to whichever phase adds a
   contacts candidate producer, or open a follow-up plan now.
-result: [pending]
+result: pass
+reported: "open a follow-up gap-closure plan covering ALL FOUR review findings (WR-01, WR-02, WR-03, WR-04) before Phase 54 is marked complete" — operator, 2026-08-27
+closed_by: 54-06 / 54-07 gap plans; WR-01/02/03 re-verified closed IN SOURCE by 54-VERIFICATION.md (status passed, 9/9 truths, gaps_remaining: [])
+pass_basis: decision checkpoint — the question it posed was answered by the operator and the follow-up work it selected has executed and been independently re-verified. Not a behavioural test result.
 
 ### 2. WR-04 — self-contradictory operator-facing wording
 
@@ -52,13 +61,16 @@ expected: |
   "floor", so it would not catch the contradiction either way.
 
   Decision needed: fix the wording (and the test's pin) now, or carry it.
-result: [pending]
+result: pass
+reported: "the operator declined both the 'accept as disclosed residual' and the 'fix the cheap two only' options" — folded into the same all-four gap-closure scope, 2026-08-27
+closed_by: 54-07 — write_grant.py's Anthropic-spend sentence rewritten to "a projection"; pinning test rescoped to that single line and now asserts neither "worst case" nor "floor" appears
+pass_basis: decision checkpoint — answered by the operator, and the wording fix it selected has shipped with a regression test pinning it.
 
 ## Summary
 
 total: 2
-passed: 0
-issues: 2
+passed: 2
+issues: 0
 pending: 0
 skipped: 0
 blocked: 0
@@ -67,5 +79,13 @@ blocked: 0
 
 Both items resolved to gap closure by operator decision, 2026-08-27. The four findings
 (WR-01, WR-02, WR-03, WR-04) are structured as `gaps` in `54-VERIFICATION.md`'s frontmatter
-and routed to `/gsd-plan-phase 54 --gaps`. None is live-reachable today; they are being fixed
-by choice, not because anything is currently broken.
+and routed to `/gsd-plan-phase 54 --gaps`. None was live-reachable; they were fixed
+by choice, not because anything was currently broken.
+
+**All closed, 2026-08-27.** Gap plans 54-06 and 54-07 executed and `54-VERIFICATION.md`
+re-verified to `status: passed` — 9/9 truths, `gaps_remaining: []`, each finding confirmed
+closed in source rather than claimed in a SUMMARY. Per-finding closure detail lives in that
+file's `re_verification.gaps_closed` list and is deliberately NOT repeated here as a bullet
+list: `audit-uat` parses a `- ` bullet in this section as a gap entry, so restating them here
+manufactures phantom outstanding items. `54-VERIFICATION.md` is the single record of what
+closed and how.
