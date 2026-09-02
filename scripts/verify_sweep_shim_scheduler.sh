@@ -82,7 +82,11 @@ cleanup() {
     fi
 
     if [ -n "$WORK" ] && [ -d "$WORK" ]; then
-        rm -rf "$WORK"
+        if [ "$TEARDOWN_OK" -eq 1 ]; then
+            rm -rf "$WORK"
+        else
+            log_err "leaving work dir in place for manual cleanup (it holds \$PLIST_PATH named above): $WORK"
+        fi
     fi
 }
 
