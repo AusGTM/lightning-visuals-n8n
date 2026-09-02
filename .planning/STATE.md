@@ -5,16 +5,16 @@ milestone_name: Unattended Session Runs
 current_phase: 63
 current_phase_name: The unattended lane actually runs unattended
 status: executing
-stopped_at: Completed 63-03-PLAN.md (judge model replay — verdict DROP, cheaper-model lever not shipped)
-last_updated: "2026-09-02T06:16:36.000Z"
+stopped_at: Completed 63-02-PLAN.md (sweep launcher real-scheduler proof, 3 live runs, all pass)
+last_updated: "2026-09-02T06:34:47.672Z"
 last_activity: 2026-09-02
-state_head: 16a84ae
 progress:
   total_phases: 13
-  completed_phases: 6
-  total_plans: 55
-  completed_plans: 52
-  percent: 46
+  completed_phases: 8
+  total_plans: 56
+  completed_plans: 53
+  percent: 62
+state_head: 16a84ae
 ---
 
 # Project State
@@ -31,6 +31,7 @@ re-plan them.
   complete**: verification is `human_needed` and UAT is `partial`. Three items are blocked on a
   live attended sitting (real `web_fetch`, real Lusha credit spend). The code is done; only the
   live proof is outstanding. Resume with `/gsd-verify-work 62`.
+
 - **60 — Review-lane authority** (split out of 59). Open.
 - **63 — The unattended lane actually runs unattended.** Numbered 2026-09-02, not yet planned.
 
@@ -190,6 +191,26 @@ predating the window. VETO-03 bar still 0.
 
 Phase: 63 (The unattended lane actually runs unattended) — EXECUTING
   (2026-09-02)
+
+**63-02 outcome (2026-09-02, wave 2, 63-A half).** `scripts/verify_sweep_shim_scheduler.sh` —
+  a self-contained, re-runnable harness — proved 63-01's shim under a REAL launchd fire, not an
+  interactive `sh` invocation (memory `sweep-trigger-llm-free`'s standard). It builds an isolated
+  `mktemp -d` plugin world, installs the shim via its real CLI pointed only at that temp world,
+  registers a uniquely-labelled temporary launchd agent (`StartInterval` 60s, no `RunAtLoad`),
+  and observes two genuine scheduled fires across a simulated `1.0.0`/`1.1.0` → `1.2.0` update
+  with no plist or shim edit in between. **Run three times live, all three `rc=0`**, both fires
+  landing at exactly 60s each time, teardown independently confirmed absent via a SEPARATE
+  `launchctl list` read after every run. Never touches the user crontab (D-63-03) — the whole
+  harness contains zero `crontab` invocations. `63-SWEEP-SHIM-SCHEDULER-PROOF.md` records the
+  verbatim observed log lines, exit code, and an explicit "what this does NOT prove" section:
+  nothing about this machine's twelve already-installed directories (D-63-03 forbids touching
+  them; the one-time admin re-point from 63-01 Task 3 is the only path there), and the
+  self-check's version-bound reach (a schedule pinned to `0.33.0` or earlier still runs a
+  wrapper carrying no self-check at all). The sweep-crontab todo now carries a dated Closure
+  section naming all three landed mitigations with file paths — still `pending/`, unmoved
+  (phase-seal's job). Zero network calls, zero provider credits, zero n8n executions, zero
+  HubSpot writes. Full record: `63-02-SUMMARY.md`.
+  Both wave-1 plans (63-01, 63-03) and wave-2's 63-02 are now complete; 63-04/63-05 remain.
 
 **63-03 outcome (2026-09-02, wave 1, 63-B half).** The offline replay (D-63-06) comparing
   `claude-sonnet-5` against `claude-haiku-4-5` over real stored n8n judge inputs (executions
@@ -392,7 +413,7 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████░░░░░] 46% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
+Progress: [██████████] 95% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
 63 numbered, not planned; 52 deferred indefinitely (v1.0). Every plan on disk has a SUMMARY
 (56/56) — the outstanding work is live proof and two unplanned phases, not unexecuted plans.
@@ -401,8 +422,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-02T05:53:57.889Z
-**Stopped at:** Completed 63-01-PLAN.md (sweep launcher shim + staleness self-check)
+**Last session:** 2026-09-02T06:34:47.661Z
+**Stopped at:** Completed 63-02-PLAN.md (sweep launcher real-scheduler proof, 3 live runs, all pass)
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
@@ -521,6 +542,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 62 P05 | 55min | 3 tasks | 6 files |
 | Phase 62 P06 | 40min | 2 tasks | 8 files |
 | Phase 63 P01 | 25min | 3 tasks | 5 files |
+| Phase 63 P02 | 26min | 2 tasks | 3 files |
 
 ## Decisions
 
