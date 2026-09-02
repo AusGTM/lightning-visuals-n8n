@@ -1054,7 +1054,7 @@ shipped `0.35.0`.
 `2026-08-04-enrichment-throughput-ceiling` (63-B, **partially** — lever 2 only; levers 1 and 3 stay
 deferred by D-63-05 and CONTEXT.md's Deferred section)
 
-**Plans**: 3/5 plans executed
+**Plans**: 4/5 plans executed
 neither depends on the other; the D-63-06 replay precedes the D-63-05 constant change, and the
 deploy runs on either branch of that decision.
 
@@ -1067,7 +1067,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 63-02-PLAN.md — 63-A: the real-scheduler proof, via an isolated temporary launchd agent and a simulated plugin update (wave 2)
-- [ ] 63-04-PLAN.md — 63-B: the drop-gate checkpoint, then either the cheaper-model routing for the `confidence_band`-only companies class or the lever-dropped record (wave 2)
+- [x] 63-04-PLAN.md — 63-B: the drop-gate checkpoint, then either the cheaper-model routing for the `confidence_band`-only companies class or the lever-dropped record (wave 2)
 
 **Wave 3** *(blocked on Wave 2 completion)*
 

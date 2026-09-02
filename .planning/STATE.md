@@ -5,14 +5,14 @@ milestone_name: Unattended Session Runs
 current_phase: 63
 current_phase_name: The unattended lane actually runs unattended
 status: executing
-stopped_at: Completed 63-02-PLAN.md (sweep launcher real-scheduler proof, 3 live runs, all pass)
-last_updated: "2026-09-02T06:34:47.672Z"
+stopped_at: "Completed 63-04-PLAN.md (judge lever 2 DROP branch: drop record + todo amendment, builder/n8n untouched)"
+last_updated: "2026-09-02T06:39:16.550Z"
 last_activity: 2026-09-02
 progress:
   total_phases: 13
   completed_phases: 8
   total_plans: 56
-  completed_plans: 53
+  completed_plans: 54
   percent: 62
 state_head: 16a84ae
 ---
@@ -413,7 +413,7 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [██████████] 95% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
+Progress: [██████████] 96% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
 63 numbered, not planned; 52 deferred indefinitely (v1.0). Every plan on disk has a SUMMARY
 (56/56) — the outstanding work is live proof and two unplanned phases, not unexecuted plans.
@@ -422,8 +422,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-02T06:34:47.661Z
-**Stopped at:** Completed 63-02-PLAN.md (sweep launcher real-scheduler proof, 3 live runs, all pass)
+**Last session:** 2026-09-02T06:39:16.539Z
+**Stopped at:** Completed 63-04-PLAN.md (judge lever 2 DROP branch: drop record + todo amendment, builder/n8n untouched)
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
@@ -543,6 +543,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 62 P06 | 40min | 2 tasks | 8 files |
 | Phase 63 P01 | 25min | 3 tasks | 5 files |
 | Phase 63 P02 | 26min | 2 tasks | 3 files |
+| Phase 63 P04 | ~20 min | 2 tasks | 2 files |
 
 ## Decisions
 
@@ -644,6 +645,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 - [Phase 62]: 62-05: enrich-records has no literal write_grant.plan_grant() code fence for the enrichment/contacts lanes -- only review-triage's review-lane grant is a real call -- so suggestion_companies/suggestion_cap threading is documented as inline-code prose amending that call, not a new fence — keeps test_skill_sequence_coverage's ratchet from gaining a spurious second sequence for a wiring fix
 - [Phase ?]: Phase 62 gap closure: per-company cap enforced in code (suggest_contacts.CapRefused/agreed_cap), closing CR-01/WR-01. Deliberate asymmetry: synthesise_rows accepts cap>=0, agreed_cap requires 1..priced_cap. Released as plugin 0.37.0.
 - [Phase 63]: 63-01: sweep_shim kept out of ALLOWED_MODULES (subprocess, not import); wrapper capability test widened + --install-never-invoked test added instead — sweep_entry's python import closure test asserts exact equality with ALLOWED_MODULES, so adding a subprocess-only script there would have broken that check for an unrelated reason
+- [Phase 63]: Judge lever 2 (cheaper-model routing) DROP verdict acted on: 63-JUDGE-LEVER-DROP-RECORD.md written, throughput todo amended, builder/n8n untouched. — 63-JUDGE-REPLAY-VERDICT.json read material_disagreement + insufficient_corpus; per D-63-06 accepted as-is, no re-run.
 
 ### Roadmap Evolution
 
