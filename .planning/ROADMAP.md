@@ -477,7 +477,7 @@ variable), and a design that runs the provider waterfall twice per written recor
       - [x] 62-05-PLAN.md — the operator-attended sitting: `skills/suggest-contacts/SKILL.md`, its
             composition test, the unprompted post-batch offer, and the 0.36.0 release (wave 3)
 
-      - [ ] 62-06-PLAN.md — **gap closure** (CR-01/WR-01): the per-company cap enforced in code at
+      - [x] 62-06-PLAN.md — **gap closure** (CR-01/WR-01): the per-company cap enforced in code at
             the sole site that applies it, and an operator cap above the grant's priced cap refused
             by `suggest_contacts.agreed_cap` rather than by SKILL.md prose (wave 1, tracer-led)
 

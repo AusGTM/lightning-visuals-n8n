@@ -5,14 +5,14 @@ milestone_name: Unattended Session Runs
 current_phase: 62
 current_phase_name: Suggest the contacts nobody named
 status: complete
-stopped_at: "Completed 62-05-PLAN.md (the operator-attended suggestion sitting: skills/suggest-contacts/SKILL.md, its composition test, the unprompted post-batch offer wired into enrich-records, and the 0.36.0 release) -- Phase 62 complete, all 5 plans done"
-last_updated: "2026-09-01T23:49:52.276Z"
+stopped_at: "Completed 62-06-PLAN.md (gap closure: suggest_contacts.CapRefused/agreed_cap close CR-01/WR-01; per-company cap now code-enforced at the sole spend site; released as plugin 0.37.0) -- Phase 62 all 6 plans done"
+last_updated: "2026-09-02T01:38:13.939Z"
 last_activity: 2026-09-02
 progress:
   total_phases: 9
   completed_phases: 8
-  total_plans: 50
-  completed_plans: 49
+  total_plans: 51
+  completed_plans: 50
   percent: 89
 state_head: e9e33a0f9fee727ccefa0fa0588dfa224984bd45
 last_activity_desc: "**Phase 61 complete and verified (12/12)**; backend deployed and"
@@ -329,8 +329,8 @@ RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The 
 
 ## Session
 
-**Last session:** 2026-09-01T23:49:52.265Z
-**Stopped at:** Completed 62-05-PLAN.md (the operator-attended suggestion sitting: skills/suggest-contacts/SKILL.md, its composition test, the unprompted post-batch offer wired into enrich-records, and the 0.36.0 release) -- Phase 62 complete, all 5 plans done
+**Last session:** 2026-09-02T01:38:13.929Z
+**Stopped at:** Completed 62-06-PLAN.md (gap closure: suggest_contacts.CapRefused/agreed_cap close CR-01/WR-01; per-company cap now code-enforced at the sole spend site; released as plugin 0.37.0) -- Phase 62 all 6 plans done
 **Resume file:** None
 
 ## Performance Metrics
@@ -444,6 +444,7 @@ RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The 
 | Phase 62 P03 | 25min | 3 tasks | 5 files |
 | Phase 62 P02 | 22 min | 3 tasks | 6 files |
 | Phase 62 P05 | 55min | 3 tasks | 6 files |
+| Phase 62 P06 | 40min | 2 tasks | 8 files |
 
 ## Decisions
 
@@ -543,6 +544,7 @@ RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The 
 - [Phase 62]: D-62-11 locked via checkpoint: the suggestion round's cost folds into the SAME opening grant envelope (one-envelope), not a separate spend confirmation. — Human operator answer at a gate=blocking-human checkpoint; one disclosure, one yes for the whole session; over-budget suggestion rounds now refuse pre-start via Phase 57's existing CEILING_OVER split offer.
 - [Phase 62]: D-62-07 implemented: role_vocabulary.py's committed seed is the generic-fallback branch's actual output (executed, not hand-typed), and role_classify.offer_block()'s disclosure sentence is what SUGGEST-03's amendment requires operators to see.
 - [Phase 62]: 62-05: enrich-records has no literal write_grant.plan_grant() code fence for the enrichment/contacts lanes -- only review-triage's review-lane grant is a real call -- so suggestion_companies/suggestion_cap threading is documented as inline-code prose amending that call, not a new fence — keeps test_skill_sequence_coverage's ratchet from gaining a spurious second sequence for a wiring fix
+- [Phase ?]: Phase 62 gap closure: per-company cap enforced in code (suggest_contacts.CapRefused/agreed_cap), closing CR-01/WR-01. Deliberate asymmetry: synthesise_rows accepts cap>=0, agreed_cap requires 1..priced_cap. Released as plugin 0.37.0.
 
 ### Roadmap Evolution
 
