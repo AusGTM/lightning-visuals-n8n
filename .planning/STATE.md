@@ -3,18 +3,17 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Unattended Session Runs
 current_phase: 63
-current_phase_name: the-unattended-lane-actually-runs-unattended
+current_phase_name: The unattended lane actually runs unattended
 status: verifying
-stopped_at: Phase 63 context gathered
-last_updated: "2026-09-02T05:35:56.518Z"
+stopped_at: Completed 63-01-PLAN.md (sweep launcher shim + staleness self-check)
+last_updated: "2026-09-02T05:53:58.308Z"
 last_activity: 2026-09-02
-last_activity_desc: "**Phase 62 executed and verified 13/13**; awaiting live UAT (3 items)"
-state_head: 79a38d496b96c3f9da4081ccd8bb906c5e572a6f
+state_head: 0ca0e03fae087cf5a0b3ff745007c2627f504e64
 progress:
   total_phases: 13
   completed_phases: 6
   total_plans: 55
-  completed_plans: 50
+  completed_plans: 51
   percent: 46
 ---
 
@@ -189,7 +188,7 @@ predating the window. VETO-03 bar still 0.
 
 ## Current Position
 
-Phase: 63 (the-unattended-lane-actually-runs-unattended) — READY TO EXECUTE
+Phase: 63 (The unattended lane actually runs unattended) — EXECUTING
   (2026-09-02)
 
 **Where Phase 62 actually stands.** Six plans executed (62-01..62-06), all with SUMMARY files.
@@ -364,7 +363,7 @@ exactly what B and C now do): .planning/phases/47.5-veto-recompute-path/47.5-CON
 **Standing order:** COVER-01/COVER-02 stay open for Phase 48 (four records ended with no
 lv_org_type: Editix, Jam TV, Waikato, The Rumble). Not a 47.5 workstream.
 
-Last activity: 2026-09-02 — Phase 62 executed (6/6) and verified 13/13; UAT paused with 3 live
+Last activity: 2026-09-02
   items blocked. Next: `/gsd-verify-work 62`, then Phase 63. ~~Next: Phase 57.~~ (57 complete
   2026-09-01.)
 
@@ -380,7 +379,7 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [██████░░░░] 62% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
+Progress: [█████░░░░░] 46% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
 63 numbered, not planned; 52 deferred indefinitely (v1.0). Every plan on disk has a SUMMARY
 (56/56) — the outstanding work is live proof and two unplanned phases, not unexecuted plans.
@@ -389,12 +388,12 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-02T04:48:12.885Z
-**Stopped at:** Phase 63 context gathered
+**Last session:** 2026-09-02T05:53:57.889Z
+**Stopped at:** Completed 63-01-PLAN.md (sweep launcher shim + staleness self-check)
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
-**Resume file:** .planning/phases/63-the-unattended-lane-actually-runs-unattended/63-CONTEXT.md
+**Resume file:** None
 
 ## Performance Metrics
 
@@ -508,6 +507,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 62 P02 | 22 min | 3 tasks | 6 files |
 | Phase 62 P05 | 55min | 3 tasks | 6 files |
 | Phase 62 P06 | 40min | 2 tasks | 8 files |
+| Phase 63 P01 | 25min | 3 tasks | 5 files |
 
 ## Decisions
 
@@ -608,6 +608,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 - [Phase 62]: D-62-07 implemented: role_vocabulary.py's committed seed is the generic-fallback branch's actual output (executed, not hand-typed), and role_classify.offer_block()'s disclosure sentence is what SUGGEST-03's amendment requires operators to see.
 - [Phase 62]: 62-05: enrich-records has no literal write_grant.plan_grant() code fence for the enrichment/contacts lanes -- only review-triage's review-lane grant is a real call -- so suggestion_companies/suggestion_cap threading is documented as inline-code prose amending that call, not a new fence — keeps test_skill_sequence_coverage's ratchet from gaining a spurious second sequence for a wiring fix
 - [Phase ?]: Phase 62 gap closure: per-company cap enforced in code (suggest_contacts.CapRefused/agreed_cap), closing CR-01/WR-01. Deliberate asymmetry: synthesise_rows accepts cap>=0, agreed_cap requires 1..priced_cap. Released as plugin 0.37.0.
+- [Phase 63]: 63-01: sweep_shim kept out of ALLOWED_MODULES (subprocess, not import); wrapper capability test widened + --install-never-invoked test added instead — sweep_entry's python import closure test asserts exact equality with ALLOWED_MODULES, so adding a subprocess-only script there would have broken that check for an unrelated reason
 
 ### Roadmap Evolution
 
