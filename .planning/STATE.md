@@ -4,28 +4,47 @@ milestone: v1.1
 milestone_name: Unattended Session Runs
 current_phase: 62
 current_phase_name: Suggest the contacts nobody named
-status: complete
-stopped_at: "Completed 62-06-PLAN.md (gap closure: suggest_contacts.CapRefused/agreed_cap close CR-01/WR-01; per-company cap now code-enforced at the sole spend site; released as plugin 0.37.0) -- Phase 62 all 6 plans done"
-last_updated: "2026-09-02T01:38:13.939Z"
+status: verifying
+stopped_at: "Phase 62 executed (6/6 plans) and verified 13/13, but NOT complete: verification is human_needed and UAT is partial -- 3 items blocked on a live attended sitting (real web_fetch, real Lusha credit spend). Resume with /gsd-verify-work 62."
+last_updated: "2026-09-02T02:30:00.000Z"
 last_activity: 2026-09-02
 progress:
-  total_phases: 9
+  total_phases: 13
   completed_phases: 8
-  total_plans: 51
-  completed_plans: 50
-  percent: 89
-state_head: e9e33a0f9fee727ccefa0fa0588dfa224984bd45
-last_activity_desc: "**Phase 61 complete and verified (12/12)**; backend deployed and"
+  total_plans: 56
+  completed_plans: 56
+  percent: 62
+state_head: aabf693b8c908990ab4735e282cd222acb90e76c
+last_activity_desc: "**Phase 62 executed and verified 13/13**; awaiting live UAT (3 items)"
 ---
 
 # Project State
 
-## 🚧 CURRENT MILESTONE — v1.1 Unattended Session Runs (IN FLIGHT; Phase 61 complete 2026-08-30)
+## 🚧 CURRENT MILESTONE — v1.1 Unattended Session Runs (IN FLIGHT; Phase 62 executed 2026-09-02)
 
-**Phases:** 53–61. Complete: 53, 54, 58, 59, **61**. Absorbed into 61 by operator decision
+**Phases:** 53–63. Complete: 53, 54, **57**, 58, 59, **61**. Absorbed into 61 by operator decision
 D-61-08: **55** (async run) and **56** (unattended pair pipeline) — neither is open work, do not
-re-plan them. Open: **57 — the next phase** (ceilings, refusal-before-start, post-run proof) and
-60 (review-lane authority, split out of 59). Phase 52 stays v1.0's and stays deferred.
+re-plan them.
+
+**Open work, as of 2026-09-02:**
+
+- **62 — Suggest the contacts nobody named.** Executed (6/6 plans) and verified 13/13, but **NOT
+  complete**: verification is `human_needed` and UAT is `partial`. Three items are blocked on a
+  live attended sitting (real `web_fetch`, real Lusha credit spend). The code is done; only the
+  live proof is outstanding. Resume with `/gsd-verify-work 62`.
+- **60 — Review-lane authority** (split out of 59). Open.
+- **63 — The unattended lane actually runs unattended.** Numbered 2026-09-02, not yet planned.
+
+~~Open: **57 — the next phase**~~ — **Phase 57 completed 2026-09-01.** It is no longer the gate on
+anything. Phase 52 stays v1.0's and stays deferred indefinitely.
+
+**Standing safety fact, unchanged:** the first live UNATTENDED, credit-spending batch has **NOT**
+run. Nothing is armed. Note also that Phase 62 regenerated all the n8n workflow JSONs but did
+**not** deploy them — the committed JSON is ahead of the live n8n Cloud instance.
+
+**Phase 57 outcome (2026-09-01):** complete. Ceilings, refusal-before-start and post-run proof
+landed — D-57-00 supersedes D-53-02: a grant's computed ceiling is now a binding preflight
+refusal and a pre-send mid-run stop, not disclosure only.
 
 **Phase 61 outcome (2026-08-30):** 6/6 plans, verification 12/12. All five cloud workflows
 deployed and bounced (enrichment 114 → 118 nodes) and exercised by DISARMED runs only —
@@ -36,7 +55,8 @@ The first live UNATTENDED, credit-spending batch has NOT run and is gated on Pha
 v1.0's). Suites at close: root python 3539 passed / 154 skipped; `node --test tests/n8n/*.test.mjs`
 844 pass / 0 fail.
 
-**Next action: plan Phase 57.**
+**Next action: finish Phase 62's live UAT (`/gsd-verify-work 62`), or plan Phase 63.**
+~~Next action: plan Phase 57.~~ — superseded, 57 completed 2026-09-01.
 
 ### Original milestone-definition note (2026-08-25) — retained as history
 
@@ -169,8 +189,42 @@ predating the window. VETO-03 bar still 0.
 
 ## Current Position
 
-Phase: 62 (Suggest the contacts nobody named) — ALL 5 PLANS COMPLETE (2026-09-02)
-**62-05 outcome (2026-09-02, final plan of Phase 62):** the operator-attended sitting —
+Phase: 62 (Suggest the contacts nobody named) — ALL 6 PLANS EXECUTED, PHASE **NOT** COMPLETE
+  (2026-09-02)
+
+**Where Phase 62 actually stands.** Six plans executed (62-01..62-06), all with SUMMARY files.
+  Goal verification scored **13/13 must-haves** and returned **`human_needed`**, not `passed`.
+  UAT is **`partial`**: all three checkpoints are `blocked`, deferred by the operator because a
+  live test could not be run at the time. They are prerequisite gates, not failures — no gap
+  entries, no fix plans. The code is done and independently verified; what is outstanding is
+  only the live proof. Resume with `/gsd-verify-work 62`.
+
+The three outstanding live items: (1) a real company's sitemap yielding a usable people page;
+  (2) the stage-1 → stage-2 handoff on a real discovered person (real page fetch, then a real
+  Lusha credit spend); (3) the priced ceiling holding in a real sitting — which is also the
+  acceptance test for 62-06's cap fix. None can run in the stub-transport suite.
+
+**62-06 outcome (2026-09-02, gap closure — the last plan).** First-pass verification found ONE
+  gap: `synthesise_rows()` applied the per-company cap as a bare `people[:per_company_cap]`
+  slice with no validation, so `per_company_cap=None` silently UNCAPPED the round (5/5 against
+  a 5-person fixture) and `-1` truncated from the wrong end. The "a cap above the grant's
+  priced cap is refused" rule existed only as SKILL.md prose — and the production caller is an
+  LLM orchestrator following that prose at runtime, so a bad cap was a realistic mechanism
+  failure, not a contrived edge. Closed in code: `CapRefused` and
+  `agreed_cap(chosen_cap, grant_figures)` reading `figures['suggestion_allowance']['priced_cap']`,
+  plus a guard at the sole cap-applying site. Refusals **raise** rather than fall back to
+  `PRICED_CAP` — falling back at grant-open (what `envelope()` does) is right; at spend time it
+  would spend against a number the operator never saw. Deliberate asymmetry. `suggest_contacts.py`
+  still carries no `write_grant` import (module purity, enforced by a grep in the plan's own
+  acceptance criteria). Re-review and re-verification each reproduced the fix live and
+  independently: `None`, `-1`, `"2"`, `True`, `1.5`, `inf` all raise; `0` stays legal (spending
+  less is allowed). Released as plugin **0.37.0**. Full record: `62-06-SUMMARY.md`.
+
+**Also produced this session:** `62-COVERAGE.md` — the repo's **first** external-API coverage
+  matrix (14 capabilities, 5 INTEGRATE, 9 OPT-OUT), written to satisfy the blocking
+  `api-coverage.verify-pre` gate. No prior phase had ever produced one.
+
+**62-05 outcome (2026-09-02):** the operator-attended sitting —
   `skills/suggest-contacts/SKILL.md` composes plans 62-01..04 into one 9-step round,
   auto-offered by the assistant right after a company batch (D-62-15) and also directly
   slash-invocable. No per-person and no per-company confirmation anywhere in it (D-62-10);
@@ -183,19 +237,21 @@ Phase: 62 (Suggest the contacts nobody named) — ALL 5 PLANS COMPLETE (2026-09-
   (confirmed by grep across every skill before editing — only `review-triage`'s
   review-lane grant is a real call); `suggestion_companies`/`suggestion_cap` threading is
   therefore documented as inline-code prose amending that already-documented call, adding
-  no new AST sequence. Released as plugin `0.36.0`. SUGGEST-01/-02/-04/-05 checked off in
-  `v1.1-REQUIREMENTS.md`; SUGGEST-03 stays unchecked (AMENDED by D-62-07, not closed —
-  62-02's own call). Full record:
+  no new AST sequence. Released as plugin `0.36.0` (later 0.37.0 by 62-06).
+  SUGGEST-01/-02/-04/-05 checked off in `v1.1-REQUIREMENTS.md`; SUGGEST-03 stays unchecked
+  (AMENDED by D-62-07, not closed — 62-02's own call). Full record:
   `.planning/phases/62-suggest-the-contacts-nobody-named/62-05-SUMMARY.md`.
-Next: **Phase 57** — ceilings, refusal-before-start, post-run proof. It gates the first
-  live unattended, credit-spending batch (D-61-08), which has NOT run. Phase 62 is
-  otherwise done; run `/gsd-verify-work 62` before treating it as shipped.
-Armed state: nothing armed. 62-05 touched only local Markdown/Python/JSON source and test
-  files — no network, no HubSpot credentials, no workflow JSON, no deploy.
-Suites at 62-05 close: operator-claude-plugin 2242 passed / 5 skipped; root
-  `.venv/bin/python -m pytest -q` 3912 passed / 154 skipped; `node --test tests/n8n/*.test.mjs`
-  862 pass / 0 fail (all >= wave baselines; node suite unchanged since this plan touches
-  no n8n code).
+Next: **finish Phase 62's live UAT** (`/gsd-verify-work 62`), then **Phase 63** (the unattended
+  lane actually runs unattended, numbered 2026-09-02, not yet planned). Phase 60 also remains
+  open. ~~Next: Phase 57~~ — 57 completed 2026-09-01.
+Armed state: nothing armed. The first live UNATTENDED, credit-spending batch has NOT run.
+  Phase 62 touched only local Markdown/Python/JS/JSON source and test files — no network, no
+  HubSpot credentials, no live credit. It DID regenerate the n8n workflow JSONs via
+  `scripts/build_cloud_workflows.py`, but did **not** deploy them: the committed JSON is ahead
+  of the live n8n Cloud instance (missing `num_associated_contacts` and `sourceByField` there).
+Suites at 62-06 close: operator-claude-plugin 2259 passed / 5 skipped; root
+  `.venv/bin/python -m pytest -q` **3929 passed / 154 skipped** (up from 3912 — 17 new tests
+  for the cap guard); `node --test tests/n8n/*.test.mjs` 862 pass / 0 fail.
 
 ### Retained — 62-02 outcome (2026-09-02)
 
@@ -308,8 +364,9 @@ exactly what B and C now do): .planning/phases/47.5-veto-recompute-path/47.5-CON
 **Standing order:** COVER-01/COVER-02 stay open for Phase 48 (four records ended with no
 lv_org_type: Editix, Jam TV, Waikato, The Rumble). Not a 47.5 workstream.
 
-Last activity: 2026-09-02
-  disarmed-proven. Next: Phase 57.
+Last activity: 2026-09-02 — Phase 62 executed (6/6) and verified 13/13; UAT paused with 3 live
+  items blocked. Next: `/gsd-verify-work 62`, then Phase 63. ~~Next: Phase 57.~~ (57 complete
+  2026-09-01.)
 
 *Retained history — Phase 47 (v0.9). Previous status: Executing — Anthropic credit restored,
 Plan 03 completed.*
@@ -323,15 +380,21 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [██████████] 98% — v1.1: 53/54/58/59/61 complete; **57 in progress (Plan 01 done,
-RUN-05 closed)**; 60 open; 55 and 56 absorbed into 61; 52 deferred (v1.0). (The old
-`97% (v0.9 phase 47.5 of 46-49)` bar was a v0.9 figure and is superseded.)
+Progress: [██████░░░░] 62% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
+into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
+63 numbered, not planned; 52 deferred indefinitely (v1.0). Every plan on disk has a SUMMARY
+(56/56) — the outstanding work is live proof and two unplanned phases, not unexecuted plans.
+(Superseded: the `98% ... 57 in progress` bar, and before that the `97% (v0.9 phase 47.5)`
+figure.)
 
 ## Session
 
-**Last session:** 2026-09-02T01:38:13.929Z
-**Stopped at:** Completed 62-06-PLAN.md (gap closure: suggest_contacts.CapRefused/agreed_cap close CR-01/WR-01; per-company cap now code-enforced at the sole spend site; released as plugin 0.37.0) -- Phase 62 all 6 plans done
-**Resume file:** None
+**Last session:** 2026-09-02T02:30:00.000Z
+**Stopped at:** Phase 62 executed (6/6 plans) and verified 13/13, then UAT paused — all three
+checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
+is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
+sweep fixing stale STATE/ROADMAP/milestone docs.
+**Resume file:** `.planning/phases/62-suggest-the-contacts-nobody-named/62-UAT.md`
 
 ## Performance Metrics
 

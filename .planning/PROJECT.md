@@ -9,19 +9,26 @@ mock Claude web research, a Haiku→Sonnet LLM cascade, and a non-clobber merge 
 emitting dry-run HubSpot PATCH payloads. It is internal RevOps tooling for LV's sales
 team, not a customer-facing product.
 
-## Current State (as of 2026-08-30)
+## Current State (as of 2026-09-02)
 
-**In flight: v1.1 — Unattended Session Runs (phases 53–61).** Complete: 53, 54, 58, 59, 61.
+**In flight: v1.1 — Unattended Session Runs (phases 53–63).** Complete: 53, 54, 57, 58, 59, 61.
 Absorbed into 61 by operator decision D-61-08: 55 (async run) and 56 (unattended pair pipeline).
-Open: **Phase 57 — the next phase** (ceilings, refusal-before-start, post-run proof) and Phase 60
-(review-lane authority). Phase 61 closed 2026-08-30 with 6/6 plans and 12/12 verification; all
-five cloud workflows are deployed and bounced but were exercised by **disarmed** runs only.
-**The first live unattended, credit-spending batch has NOT run — it is gated on Phase 57.**
+Phase 57 ("Ceilings, refusal-before-start, and post-run proof") completed 2026-09-01. **Phase
+62** ("Suggest the contacts nobody named") has executed — 6 plans, verification `human_needed`
+at 13/13 must-haves, UAT partial (3 items blocked on a live attended sitting with real
+`web_fetch` and real Lusha credit spend); closes SUGGEST-01/-02/-04/-05 and amends SUGGEST-03
+per D-62-11's cost-envelope decision and the 62-06 cap-enforcement gap closure. **Phase 63** ("The
+unattended lane actually runs unattended") was numbered 2026-09-02 and is not yet planned. Open:
+**Phase 60** (review-lane authority) and Phase 63. Phase 61 closed 2026-08-30 with 6/6 plans and
+12/12 verification; all five cloud workflows are deployed and bounced but were exercised by
+**disarmed** runs only. **The first live unattended, credit-spending batch has NOT run** — Phase
+57 shipped, so naming it as the pending gate is stale; the fact that no such batch has run yet
+still stands.
 Detail: `.planning/ROADMAP.md`, `.planning/milestones/v1.1-ROADMAP.md`.
 
-**v1.0 Direct Backfill & Scoring Coverage is paused:** Phase 51 complete, **Phase 52 deferred by
-the operator 2026-08-25** in favour of v1.1. The v1.0 requirements are the root
-`.planning/REQUIREMENTS.md`; v1.1's live in `.planning/milestones/v1.1-REQUIREMENTS.md`.
+**v1.0 Direct Backfill & Scoring Coverage is paused:** Phase 51 complete, **Phase 52 deferred
+INDEFINITELY by the operator (2026-08-25)** — not merely in favour of v1.1. The v1.0 requirements
+are the root `.planning/REQUIREMENTS.md`; v1.1's live in `.planning/milestones/v1.1-REQUIREMENTS.md`.
 
 ### Prior state (as of 2026-08-19), retained
 
@@ -375,6 +382,8 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-08-30 — current-state refresh after Phase 61 closed (v1.1 in flight, Phase 57
-next). Previously updated 2026-08-11 after the v0.8 milestone close (verified_closeout, 2 phases /
-6 plans / 15 requirements).*
+*Last updated: 2026-09-02 — current-state refresh: Phase 57 complete (2026-09-01), Phase 62
+executed but not complete (verification `human_needed`, UAT partial), Phase 63 numbered and
+unplanned; v1.1 still in flight, first live unattended credit-spending batch still has not run.
+Previously updated 2026-08-30 after Phase 61 closed. Before that, 2026-08-11 after the v0.8
+milestone close (verified_closeout, 2 phases / 6 plans / 15 requirements).*

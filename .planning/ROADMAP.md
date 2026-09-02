@@ -10,10 +10,15 @@
 - ✅ **v0.8 Execution Budget Safety** — Phases 44–45 (shipped 2026-08-11)
 - ✅ **v0.9 ICP Rubric Calibration & Veto Remediation** — Phases 46–50, archived (`milestones/v0.9-ROADMAP.md`, `milestones/v0.9-REQUIREMENTS.md`) (shipped 2026-08-19)
 - ⏸️ **v1.0 Direct Backfill & Scoring Coverage** — Phases 51–52 (Phase 51 complete; **Phase 52 deferred INDEFINITELY** — 2026-08-25 in favour of v1.1, reaffirmed 2026-08-30 after its gates were satisfied)
-- 🚧 **v1.1 Unattended Session Runs** — Phases 53–62 (`milestones/v1.1-ROADMAP.md`, `milestones/v1.1-REQUIREMENTS.md`).
-  Complete: 53, 54, 58, 59, 61. Open: **57 (next)**, 60, 62. Absorbed into 61: 55, 56 (D-61-08).
+- 🚧 **v1.1 Unattended Session Runs** — Phases 53–63 (`milestones/v1.1-ROADMAP.md`, `milestones/v1.1-REQUIREMENTS.md`).
+  Complete: 53, 54, **57**, 58, 59, 61. Absorbed into 61: 55, 56 (D-61-08).
+  Open: **62** (executed 6/6 and verified 13/13, but NOT complete — verification is
+  `human_needed`, UAT `partial`, 3 items blocked on a live attended sitting), **60**, and
+  **63** (numbered 2026-09-02, not yet planned).
   ~~Phases 53–60~~ — corrected 2026-08-30, Phase 61 was inserted ahead of everything.
-  **The first live unattended, credit-spending batch has NOT run** — it is gated on Phase 57.
+  ~~Open: **57 (next)**~~ — corrected 2026-09-02, Phase 57 completed 2026-09-01.
+  **The first live unattended, credit-spending batch has NOT run.** ~~It is gated on Phase 57.~~
+  That gate has landed; the batch remains un-run and nothing is armed.
 
 ## Phases
 
@@ -929,6 +934,124 @@ silently inherit Phase 51's placeholder behavior without a decision.
      the committed parity evidence and Phase 49's settled tiers are re-verified, not assumed.
 
 **Plans**: TBD
+
+### Phase 53: Operator-openable write grant
+
+**Goal**: Replace the interactive path's `ALLOW_N8N_ARM` dependency with an admin-enabled
+capability plus an operator-opened session grant that is bounded, expiring and revocable — no
+terminal, no loss of record scoping. "Expiring" means event-triggered close per GRANT-04, not a
+wall-clock timestamp. Full detail: `milestones/v1.1-ROADMAP.md` § Phase 53.
+
+**Depends on**: none (first phase of v1.1)
+
+**Requirements**: GRANT-01 (ticked 2026-08-29, walk run 3), GRANT-02, GRANT-03, GRANT-04, GRANT-06
+
+**Plans**: complete
+
+### Phase 55: Async run — submit, poll, resume
+
+**Goal**: ~~A batch stops being bounded by n8n Cloud's ~100s response window; run state survives a
+restart or fails loudly.~~ **ABSORBED INTO PHASE 61, 2026-08-30** (operator decision D-61-08).
+Not open work; do NOT re-plan it. Delivered inside Phase 61 (plans `61-01` spike + `61-05` async
+submit/progress/resume).
+
+**Depends on**: n/a — absorbed
+
+**Requirements**: RUN-01, RUN-03, RUN-04 — all ticked in `milestones/v1.1-REQUIREMENTS.md` by
+Phase 61.
+
+**Plans**: n/a — absorbed into Phase 61
+
+### Phase 56: The unattended pair pipeline
+
+**Goal**: ~~One grant carries ingest → enrich → create → associate, creates included, held rows
+queued rather than guessed.~~ **ABSORBED INTO PHASE 61, 2026-08-30** (operator decision D-61-08).
+Not open work; do NOT re-plan it. Delivered inside Phase 61 (plans `61-04` confidence table +
+durable held-rows queue, `61-06` pair pipeline under one grant). **Its gate survived the fold**:
+the first live unattended run is still gated on Phase 57.
+
+**Depends on**: n/a — absorbed
+
+**Requirements**: RUN-02, AFTER-02 — both ticked in `milestones/v1.1-REQUIREMENTS.md` by Phase 61.
+
+**Plans**: n/a — absorbed into Phase 61
+
+### Phase 59: Frictionless write path
+
+**Goal**: Remove the friction the client UAT called "incredibly halting" from the operator write
+path. The blocking walk ran 2026-08-28; see `59-CONTEXT.md` and `53-WALK-RECORD.md`. Plugin
+released 0.21.0 → 0.28.0.
+
+**Depends on**: Phase 53 (the grant), Phase 54 (single-pass dispatch)
+
+**Requirements**: see `milestones/v1.1-REQUIREMENTS.md` § Phase 59
+
+**The lesson worth keeping.** All four gaps first-pass verification found (14/18) had shipped past
+three green suites — root 3285, plugin 1678, node 776 — because every test drove a unit boundary
+rather than the integration path. Code review and goal verification caught what the suites could
+not.
+
+**Plans**: 9/9 plans executed; complete 2026-08-29, verified 18/18 after gap closure.
+
+### Phase 62: Suggest the contacts nobody named
+
+**Goal**: An enriched company with nobody at it is not a lead. After a company batch, the operator
+is offered contacts worth enriching, chosen by role and priced once. Full scope:
+`milestones/v1.1-ROADMAP.md` § Phase 62.
+
+**Depends on**: Phase 57 (per-run ceilings, refusal-before-start and post-run proof bound the
+credit a suggestion round spends); the 2026-08-25 association contract (a suggested contact must
+resolve a company or be held); Phase 61's held-row queue (`held_queue.py`) — Phase 56 was absorbed
+into 61, so its queue is 61's.
+
+**Requirements**: closes SUGGEST-01, SUGGEST-02, SUGGEST-04, SUGGEST-05. **AMENDS** SUGGEST-03 per
+D-62-07 (a disclosed un-evidenced fallback is now permitted) — amended, not closed.
+
+**Re-scoped during planning (2026-09-02).** From Lusha-Prospecting vendor discovery to plugin-side
+web-research discovery over the existing sitemap ladder. Lusha's `/v3/contacts/search-and-enrich`
+is not a discovery endpoint — `jobTitle` is response-only, not a request filter — and Prospecting
+is excluded by standing decision.
+
+**Key decision D-62-11 (one-way, human operator at a blocking checkpoint):** the suggestion
+round's cost folds into the SAME opening grant envelope as enrichment — `one-envelope`, never a
+separate spend confirmation.
+
+**Plans**: 6/6 plans executed
+
+- [x] 62-01-PLAN.md — suggestion engine, tracer-led (`suggest_contacts.py`, `role_classify.py`)
+- [x] 62-02-PLAN.md — portal-derived role vocabulary; SUGGEST-03 amended
+- [x] 62-03-PLAN.md — suggestion cost priced inside the opening grant (D-62-11 checkpoint)
+- [x] 62-04-PLAN.md — per-field provenance source map; `num_associated_contacts` wiring
+- [x] 62-05-PLAN.md — the sitting: `suggest-contacts/SKILL.md`, composition, unprompted offer
+- [x] 62-06-PLAN.md — gap closure CR-01/WR-01: the per-company cap enforced in code, not prose
+      (`CapRefused`, `agreed_cap()`); released as plugin 0.37.0
+
+**Status**: NOT complete. Verification is `human_needed` at 13/13 must-haves; UAT is `partial`
+with 3 items blocked on a live attended sitting (real `web_fetch`, real Lusha credit spend). The
+code is done and verified; what is outstanding is only the live proof. Resume with
+`/gsd-verify-work 62`.
+
+### Phase 63: The unattended lane actually runs unattended
+
+**Goal**: Close the gap between "the unattended path exists" (Phase 61 shipped it) and "the
+unattended path can be left alone with real volume." Two long-standing todos, both re-verified
+live 2026-09-02, attacking the v1.1 goal from opposite ends: the sweep that is supposed to run
+without anyone watching can silently stop or silently run old code, and a bulk run costs ~16s per
+record on a judge gate that does not discriminate.
+
+**Why one phase and not two.** One is reliability, one is cost-per-record; neither is worth a
+phase alone, and shipping either without the other still leaves bulk unattended running unwise.
+
+**63-A — the sweep's crontab pins a versioned plugin path.** `SWEEP-CRON-TEMPLATE.md:56` hands the
+admin a line built from `[plugin-root]`, so every plugin update orphans it. Twelve versioned
+directories now exist on the operator machine, and the newest (`0.33.0`) is already behind the
+shipped `0.35.0`.
+
+**Depends on**: Phase 61 (the unattended path it hardens)
+
+**Requirements**: closes the two todos carrying `resolves_phase: 63` in `.planning/todos/pending/`
+
+**Plans**: TBD — numbered 2026-09-02, not yet planned
 
 ## Progress
 

@@ -8,8 +8,9 @@
 > INPUT-*, VOCAB-*, SUGGEST-*) is tracked here, and closures from v1.1 phases must never be
 > recorded in this file.
 >
-> **v1.0's own status:** Phase 51 complete; **Phase 52 deferred by the operator 2026-08-25** in
-> favour of v1.1, so FILL-02 and SAFE-02/03/04 are deferred rather than merely "not started". The
+> **v1.0's own status:** Phase 51 complete; **Phase 52 deferred INDEFINITELY by the operator
+> (2026-08-25, reconfirmed 2026-09-02)** — not merely "in favour of v1.1" — so FILL-02 and
+> SAFE-02/03/04 are deferred indefinitely rather than merely "not started". The
 > `.planning/ROADMAP.md` § Phase 52 entry carries the resume conditions and the gate.
 
 Scope: backfill the ~646 never-scored HubSpot companies with ZoomInfo firmographics plus targeted
@@ -65,13 +66,13 @@ those records acquire a real `lv_icp_fit_score` and `lv_icp_tier_derived`. Execu
 | Requirement | Phase | Status |
 |-------------|-------|--------|
 | FILL-01 | Phase 51 | Complete |
-| FILL-02 | Phase 52 | Deferred (operator, 2026-08-25) |
+| FILL-02 | Phase 52 | Deferred indefinitely (operator, 2026-08-25) |
 | FILL-03 | Phase 51 | Complete |
 | FILL-04 | Phase 51 | Complete |
 | SAFE-01 | Phase 51 | Complete |
-| SAFE-02 | Phase 52 | Deferred (operator, 2026-08-25) |
-| SAFE-03 | Phase 52 | Deferred (operator, 2026-08-25) |
-| SAFE-04 | Phase 52 | Deferred (operator, 2026-08-25) |
+| SAFE-02 | Phase 52 | Deferred indefinitely (operator, 2026-08-25) |
+| SAFE-03 | Phase 52 | Deferred indefinitely (operator, 2026-08-25) |
+| SAFE-04 | Phase 52 | Deferred indefinitely (operator, 2026-08-25) |
 
 ## Out of Scope
 

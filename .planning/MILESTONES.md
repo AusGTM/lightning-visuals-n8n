@@ -4,10 +4,15 @@
 
 **Requirements:** `.planning/milestones/v1.1-REQUIREMENTS.md`. **Roadmap:** `.planning/milestones/v1.1-ROADMAP.md` — ~~5 phases, 53–57~~ **phases 53–61** (52 stays v1.0's). **UAT evidence:** `.planning/quick/260825-contact-company-association/UAT.md` (G-1..G-4).
 
-**Progress (2026-08-30):** complete — 53 (GRANT-01 ticked on walk run 3, 2026-08-29), 54, 58, 59,
-**61**. Absorbed into 61 by operator decision D-61-08 — 55 (async run) and 56 (unattended pair
-pipeline). Open — **57 (next)** and 60. Requirements closed to date: INPUT-01, INPUT-03, INPUT-04,
-INPUT-05, GRANT-01, GRANT-03, GRANT-05, RUN-01, RUN-02, RUN-03, RUN-04, AFTER-02, VOCAB-05.
+**Progress (2026-09-02):** complete — 53 (GRANT-01 ticked on walk run 3, 2026-08-29), 54, 57, 58,
+59, **61**. Absorbed into 61 by operator decision D-61-08 — 55 (async run) and 56 (unattended pair
+pipeline). Open — **60** (review-lane authority). **Phase 62** ("Suggest the contacts nobody
+named") has executed: 6 plans, verification `human_needed` at 13/13 must-haves, UAT partial (3
+items blocked on a live attended sitting). **Phase 63** ("The unattended lane actually runs
+unattended") was numbered 2026-09-02 and is not yet planned. Requirements closed to date:
+INPUT-01, INPUT-03, INPUT-04, INPUT-05, GRANT-01, GRANT-03, GRANT-05, RUN-01, RUN-02, RUN-03,
+RUN-04, RUN-05, AFTER-02, AFTER-03, VOCAB-05, SUGGEST-01, SUGGEST-02, SUGGEST-04, SUGGEST-05
+(SUGGEST-03 amended, not closed, per D-62-07).
 
 **Phase 61 (2026-08-30)** landed `linkedin_url` as a third identity group across both lanes, a
 confidence decision table plus a durable held-rows queue with per-hold-code resume fingerprints,
@@ -15,8 +20,13 @@ a run manifest and run state, async submit/progress off the ~100s synchronous wi
 across ingest/enrich/create/associate, and substrate-3 scale-up fan-out behind an off-by-default
 flag. All five cloud workflows were deployed, bounced and exercised by **disarmed** runs only
 (executions `12040`, `12044`–`12047`). Suites at close: root python 3539 passed / 154 skipped;
-node 844 pass / 0 fail. **The first live unattended, credit-spending batch has NOT run — it is
-gated on Phase 57 (D-61-08).**
+node 844 pass / 0 fail.
+
+**Phase 57 ("Ceilings, refusal-before-start, and post-run proof") completed 2026-09-01,** landing
+per-run ceilings, allowance sampling and refusal-before-start, and the end-of-run report joining
+all five durable stores. **The first live unattended, credit-spending batch has still NOT run** —
+naming Phase 57 as the pending gate is now stale (57 shipped); what remains before that first run
+is tracked against Phase 60 and Phase 63.
 
 **Decisions taken 2026-08-25:** the grant is operator-openable in Claude (the `ALLOW_N8N_ARM` env var stops being the interactive authority); grant first, then a single async pass; first slice is the full pair pipeline with creates included.
 

@@ -2380,19 +2380,22 @@ with the held case asserted NOT landed).
 ### 13.0.2 As-built delta — two more request-level flags, `async_ack` and `scale_up` (Phase 61, 2026-08-30)
 
 §13.0 documents `recompute` as **the** request-level boolean. Phase 61 added two more following
-the identical idiom, so §13.0's "a request-level boolean, deliberately not a `mode` value"
-reasoning now covers three flags, not one. Read this before treating §13.3's input schema or
-§18.2's parser sample as the complete request contract — both predate all three.
+the identical idiom, and **Phase 62 added a fourth (`source_by_field`, 2026-09-02)**, so §13.0's
+"a request-level boolean, deliberately not a `mode` value" reasoning now covers **four** signals,
+not one. Read this before treating §13.3's input schema or §18.2's parser sample as the complete
+request contract — both predate all four.
 
 | Flag | Added by | Default | Does |
 | --- | --- | --- | --- |
 | `recompute` | 47.5 | off | §13.0's veto recompute lane |
 | `async_ack` | 61-05 | off | responds immediately, taking the run off the ~100s synchronous response window |
 | `scale_up` | 61-06 Task 5 | **off** | substrate-3 sub-workflow fan-out via a self-referencing `Execute Workflow` node |
+| `source_by_field` | 62-04 (D-62-17) | off | per-field provenance map for a suggestion round — which source supplied each field |
 
-All three are normalized in `Parse HubSpot Event` **after** the event spread, from the envelope
-with a per-event fallback (`ENVELOPE_ASYNC_ACK || event.async_ack`), and all three normalize
-**strictly** to `true` — a truthy non-boolean never opts in. They describe the REQUEST, not a
+**The first three are booleans normalized in `Parse HubSpot Event`** after the event spread, from
+the envelope with a per-event fallback (`ENVELOPE_ASYNC_ACK || event.async_ack`), and all three
+normalize **strictly** to `true` — a truthy non-boolean never opts in. They describe the REQUEST,
+not a
 row.
 
 **`async_ack`.** `Build Async Ack` is a third parallel fan target off `Parse HubSpot Event`;
@@ -2423,9 +2426,19 @@ target is now `IF Scale Up Route`, whose FALSE lane reaches the old target
 request that never opts in. As always, never hand-edit the JSON; regenerate with
 `scripts/build_cloud_workflows.py`.
 
-**No scheduled path carries any of the three flags.** SJ-3 and every other schedule trigger
-POST no `recompute`, no `async_ack` and no `scale_up`, so §19.1's statement stands unchanged
-and generalizes: all three are on-demand only.
+**`source_by_field` differs mechanically from the other three — read this before assuming the
+same wiring.** It is not a boolean normalized in `Parse HubSpot Event`. It rides as a **multipart
+form field** on the `dispatch.py` POST and is read downstream by the `Merge Contacts` node
+(`n8n/code/mergeContacts.js`, emitted by `MERGE_CONTACTS` in `scripts/build_cloud_workflows.py`),
+where it selects the per-field provenance map. What it shares with the other three — and the
+reason it belongs in this table — is the load-bearing part: it describes the **REQUEST, not a
+row**, and it is deliberately not a `mode` value. `write_dispatch_csv` raises on non-canonical
+row keys, so per-row provenance is impossible by construction; request-level is the only shape
+available. `dispatch.py`'s own comment cites this section by number.
+
+**No scheduled path carries any of the four signals.** SJ-3 and every other schedule trigger
+POST no `recompute`, no `async_ack`, no `scale_up` and no `source_by_field`, so §19.1's statement
+stands unchanged and generalizes: all four are on-demand only.
 
 **Identity: `linkedin_url` is now a third identity group.** `required_identity.any_of` in
 `config/column_mapping.yaml` is `[email]`, `[firstname, lastname, company]`, `[linkedin_url]`,
@@ -2444,6 +2457,18 @@ cloud workflows were deployed and bounced on 2026-08-30, and **disarmed** runs w
 armed. The first live UNATTENDED, credit-spending batch has NOT run** — it remains gated on
 Phase 57 per D-61-08, which also defers RUN-05 (per-run ceilings), AFTER-01 (refusal before
 start) and AFTER-03 (full end-of-run report).
+
+> **Amended 2026-09-02 (Phase 62) — the committed JSON is now AHEAD of the live instance.**
+> Phase 57 completed 2026-09-01, so it is no longer the pending gate; the standing fact it
+> guarded is unchanged — **the first live unattended, credit-spending batch still has NOT run,
+> and nothing is armed.** What changed is deployment parity: Phase 62 regenerated
+> `wf_enrichment_cloud.json`, `wf_enrichment_local.json`, `wf_enrichment_local_live.json`,
+> `wf_contact_ingest_cloud.json`, `wf_contact_ingest_local.json` and
+> `wf_review_decision_cloud.json` via `scripts/build_cloud_workflows.py` and **committed them
+> without deploying**. The running n8n Cloud instance therefore lacks Phase 62's
+> `num_associated_contacts` search property and its `sourceByField` provenance wiring. Do not
+> read the 2026-08-30 "deployed and bounced" line as current parity. Node count is unchanged at
+> 123 — Phase 62 edited existing nodes' `jsonBody`/`jsCode` strings, adding and removing none.
 
 ### 13.0.3 As-built delta — n8n Cloud platform facts (established 2026-08-30)
 
