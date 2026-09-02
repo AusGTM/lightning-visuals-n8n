@@ -313,3 +313,89 @@ def test_suggest_contacts_has_no_branch_keyed_on_a_suggestion_origin_flag():
     source = SUGGEST_CONTACTS_PATH.read_text(encoding="utf-8")
     for forbidden in ("is_suggestion", "suggestion_origin", "from_suggestion"):
         assert forbidden not in source.casefold()
+
+
+# =====================================================================================
+# Gap closure (62-06) — CR-01/WR-01: synthesise_rows' cap guard and agreed_cap()
+# =====================================================================================
+
+FIVE_PEOPLE = [
+    {"firstname": f"Person{i}", "lastname": "Lee", "jobtitle": "Director"}
+    for i in range(5)
+]
+
+
+def test_synthesise_rows_refuses_a_none_cap_rather_than_uncapping():
+    with pytest.raises(suggest_contacts.CapRefused):
+        suggest_contacts.synthesise_rows(
+            _company_row(), FIVE_PEOPLE,
+            "https://example-club.example/sitemap.xml", per_company_cap=None,
+        )
+
+
+def test_synthesise_rows_refuses_a_negative_cap_rather_than_truncating_the_wrong_end():
+    with pytest.raises(suggest_contacts.CapRefused):
+        suggest_contacts.synthesise_rows(
+            _company_row(), FIVE_PEOPLE,
+            "https://example-club.example/sitemap.xml", per_company_cap=-1,
+        )
+
+
+def test_synthesise_rows_refuses_a_string_cap():
+    with pytest.raises(suggest_contacts.CapRefused):
+        suggest_contacts.synthesise_rows(
+            _company_row(), FIVE_PEOPLE,
+            "https://example-club.example/sitemap.xml", per_company_cap="2",
+        )
+
+
+def test_synthesise_rows_refuses_a_bool_cap():
+    with pytest.raises(suggest_contacts.CapRefused):
+        suggest_contacts.synthesise_rows(
+            _company_row(), FIVE_PEOPLE,
+            "https://example-club.example/sitemap.xml", per_company_cap=True,
+        )
+
+
+def test_synthesise_rows_zero_cap_is_legal_and_returns_no_rows():
+    records = suggest_contacts.synthesise_rows(
+        _company_row(), FIVE_PEOPLE,
+        "https://example-club.example/sitemap.xml", per_company_cap=0,
+    )
+    assert records == []
+
+
+def test_agreed_cap_returns_chosen_cap_when_under_priced_cap():
+    figures = {"suggestion_allowance": {"priced_cap": 3}}
+    assert suggest_contacts.agreed_cap(2, figures) == 2
+
+
+def test_agreed_cap_returns_chosen_cap_when_equal_to_priced_cap():
+    figures = {"suggestion_allowance": {"priced_cap": 3}}
+    assert suggest_contacts.agreed_cap(3, figures) == 3
+
+
+def test_agreed_cap_refuses_a_chosen_cap_above_the_priced_cap_naming_both_numbers():
+    figures = {"suggestion_allowance": {"priced_cap": 3}}
+    with pytest.raises(suggest_contacts.CapRefused) as excinfo:
+        suggest_contacts.agreed_cap(5, figures)
+    message = str(excinfo.value)
+    assert "3" in message
+    assert "5" in message
+
+
+def test_agreed_cap_refuses_when_suggestion_allowance_is_none():
+    with pytest.raises(suggest_contacts.CapRefused):
+        suggest_contacts.agreed_cap(2, {"suggestion_allowance": None})
+
+
+def test_agreed_cap_refuses_when_suggestion_allowance_is_absent():
+    with pytest.raises(suggest_contacts.CapRefused):
+        suggest_contacts.agreed_cap(2, {})
+
+
+@pytest.mark.parametrize("bad_chosen_cap", [None, 0, -1, True])
+def test_agreed_cap_refuses_a_malformed_chosen_cap(bad_chosen_cap):
+    figures = {"suggestion_allowance": {"priced_cap": 3}}
+    with pytest.raises(suggest_contacts.CapRefused):
+        suggest_contacts.agreed_cap(bad_chosen_cap, figures)

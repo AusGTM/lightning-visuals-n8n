@@ -11,6 +11,7 @@ import pytest
 
 import config_gate
 import executions_client
+import suggest_contacts
 import write_grant
 
 WORKFLOW_ID = "wf-enrichment-1"
@@ -218,3 +219,39 @@ def test_plan_grant_with_no_suggestion_args_is_unaffected_by_the_new_kwargs(
 
     assert result["kind"] == write_grant.PROPOSAL_KIND, result
     assert result["envelope"]["suggestion_allowance"] is None
+
+
+# ============================================================================
+# End-to-end join (62-06): a real envelope's figures feed suggest_contacts.agreed_cap()
+# ============================================================================
+
+
+def test_a_real_envelope_priced_cap_feeds_agreed_cap_and_bounds_synthesise_rows():
+    config = _priced_config()
+    figures = _envelope(config, suggestion_companies=4, suggestion_cap=2)
+
+    assert figures["suggestion_allowance"]["priced_cap"] == 2
+
+    cap = suggest_contacts.agreed_cap(2, figures)
+    assert cap == 2
+
+    people = [
+        {"firstname": f"Person{i}", "lastname": "Lee", "jobtitle": "Director"}
+        for i in range(5)
+    ]
+    records = suggest_contacts.synthesise_rows(
+        {"name": "Example Racing Club"}, people,
+        "https://example-club.example/sitemap.xml", per_company_cap=cap,
+    )
+    assert len(records) == 2
+
+
+def test_a_real_envelopes_priced_cap_refuses_an_over_priced_chosen_cap():
+    config = _priced_config()
+    figures = _envelope(config, suggestion_companies=4, suggestion_cap=2)
+
+    with pytest.raises(suggest_contacts.CapRefused) as excinfo:
+        suggest_contacts.agreed_cap(5, figures)
+    message = str(excinfo.value)
+    assert "2" in message
+    assert "5" in message
