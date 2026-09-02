@@ -1,0 +1,100 @@
+{
+  "corpus_provenance": {
+    "confidence_band_only_count": 3,
+    "per_lane_counts": {
+      "companies": 5,
+      "contacts": 0
+    },
+    "total_executions_scanned": 91,
+    "total_judge_inputs_found": 5
+  },
+  "counts": {
+    "agree": 0,
+    "both_unparseable": 0,
+    "immaterial": 2,
+    "material": 1
+  },
+  "drop_reasons": [
+    "material_disagreement",
+    "insufficient_corpus"
+  ],
+  "inputs_compared": 3,
+  "material_rows": [
+    {
+      "body_sha256": "c84b7e4989687e67b71981ab865056b83f6e164540788994f0a738fc966189cf",
+      "classification": "material",
+      "input_id": "11975:0",
+      "lane": "companies",
+      "model_a": {
+        "chosen_value": "governing_body_league",
+        "decision": "accept_research"
+      },
+      "model_b": {
+        "chosen_value": "governing_body_league",
+        "decision": "accept"
+      }
+    }
+  ],
+  "min_corpus": 10,
+  "model_a": "claude-sonnet-5",
+  "model_b": "claude-haiku-4-5",
+  "reasons_distribution": {
+    "by_reason": {
+      "confidence_band": 5,
+      "org_type_conflict": 1,
+      "provider_conflict:country_region": 1
+    },
+    "by_reason_set": {
+      "confidence_band": 3,
+      "confidence_band,org_type_conflict": 1,
+      "confidence_band,provider_conflict:country_region": 1
+    }
+  },
+  "rows": [
+    {
+      "body_sha256": "c84b7e4989687e67b71981ab865056b83f6e164540788994f0a738fc966189cf",
+      "classification": "material",
+      "input_id": "11975:0",
+      "lane": "companies",
+      "model_a": {
+        "chosen_value": "governing_body_league",
+        "decision": "accept_research"
+      },
+      "model_b": {
+        "chosen_value": "governing_body_league",
+        "decision": "accept"
+      }
+    },
+    {
+      "body_sha256": "5a5256710f0688a2fb16158143549cca1ae5de436f48a4a69cba88f82dcf0694",
+      "classification": "immaterial",
+      "input_id": "11979:0",
+      "lane": "companies",
+      "model_a": {
+        "chosen_value": null,
+        "decision": "needs_review"
+      },
+      "model_b": {
+        "chosen_value": null,
+        "decision": "needs_review"
+      }
+    },
+    {
+      "body_sha256": "51260ef80d31af88fbd8b5e473200dd704c7098c553f0eb60ccf31d14029b45a",
+      "classification": "immaterial",
+      "input_id": "11987:0",
+      "lane": "companies",
+      "model_a": {
+        "chosen_value": null,
+        "decision": "needs_review"
+      },
+      "model_b": {
+        "chosen_value": null,
+        "decision": "needs_review"
+      }
+    }
+  ],
+  "total_inputs": 3,
+  "verdict": "DROP",
+  "written_at_utc": "2026-09-02T06:13:38Z"
+}
