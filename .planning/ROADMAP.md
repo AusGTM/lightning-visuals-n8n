@@ -457,7 +457,7 @@ variable), and a design that runs the provider waterfall twice per written recor
       company or be held) and Phase 61's held-row queue (`held_queue.py`) for anything held —
       Phase 56 was absorbed into 61, so its queue is 61's.
 
-      **Plans:** 5 plans (planned 2026-09-02)
+      **Plans:** 6 plans (5 planned 2026-09-02; 62-06 added 2026-09-02 as gap closure)
 
       Plans:
 
@@ -476,6 +476,10 @@ variable), and a design that runs the provider waterfall twice per written recor
 
       - [x] 62-05-PLAN.md — the operator-attended sitting: `skills/suggest-contacts/SKILL.md`, its
             composition test, the unprompted post-batch offer, and the 0.36.0 release (wave 3)
+
+      - [ ] 62-06-PLAN.md — **gap closure** (CR-01/WR-01): the per-company cap enforced in code at
+            the sole site that applies it, and an operator cap above the grant's priced cap refused
+            by `suggest_contacts.agreed_cap` rather than by SKILL.md prose (wave 1, tracer-led)
 
 - [ ] **Phase 63: The unattended lane actually runs unattended** — **NUMBERED 2026-09-02**
       (operator). Two long-standing todos, both re-verified live that day, both attacking the
