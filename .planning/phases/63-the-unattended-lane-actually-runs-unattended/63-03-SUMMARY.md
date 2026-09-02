@@ -142,3 +142,7 @@ None - no external service configuration required.
 ---
 *Phase: 63-the-unattended-lane-actually-runs-unattended*
 *Completed: 2026-09-02*
+
+## Self-Check: PASSED
+
+All key files verified present on disk (`scripts/replay_judge_models.py`, `tests/test_replay_judge_models.py`, `63-JUDGE-REPLAY-VERDICT.json`, `63-JUDGE-REPLAY-REPORT.md`, this SUMMARY). All three commit hashes (`1db10b6`, `a08db55`, `16a84ae`) confirmed present in `git log --oneline --all`. `.venv/bin/python -m pytest tests/test_replay_judge_models.py -q` re-confirmed 18 passed. The plan's own verdict-check command re-ran clean (`verdict DROP`, no `judge_request_body` in any row).
