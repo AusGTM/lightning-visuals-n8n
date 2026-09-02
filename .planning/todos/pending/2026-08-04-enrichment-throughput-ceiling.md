@@ -68,9 +68,23 @@ The per-record levers, worth ~16s of a ~34s run:
    widened it after an unadjudicated conflict false-vetoed a real AU company (execution `11983`,
    Series Futsal Victoria). Do not narrow it without deciding what may go unadjudicated. Any
    change must respect RO-2 (`test_judge_spec.py::test_ro2_judge_gate_cannot_see_size_conflicts`).
-2. **Cheaper judge model when `confidence_band` is the ONLY reason** (~10s). Sonnet 5 → Haiku 4.5,
-   keeping Sonnet for conflicts and veto-shaped reasons. Lower risk than (1) because it does not
-   reduce *what* gets adjudicated, only what adjudicates it.
+2. **Cheaper judge model when `confidence_band` is the ONLY reason** (~10s). **Evaluated and
+   dropped, 2026-09-02 (Phase 63, Plan 63-04).** Sonnet 5 → Haiku 4.5, keeping Sonnet for
+   conflicts and veto-shaped reasons, was tested by offline replay (D-63-06) of both models over
+   real stored n8n judge inputs — zero Lusha credits, zero HubSpot writes, zero new n8n
+   executions. Verdict: **DROP**, on both configured drop reasons at once —
+   `insufficient_corpus` (3 confidence_band-only judge inputs found against a fixed minimum of
+   10) and `material_disagreement` (the one comparable input disagreed on `decision`, `accept`
+   vs `accept_research`, despite agreeing on `chosen_value`). Nothing was shipped or reverted —
+   `scripts/build_cloud_workflows.py` and every `n8n/wf_*.json` were never touched for this
+   change. Full evidence:
+   `.planning/phases/63-the-unattended-lane-actually-runs-unattended/63-JUDGE-REPLAY-VERDICT.json`
+   (the artifact) and
+   `.planning/phases/63-the-unattended-lane-actually-runs-unattended/63-JUDGE-LEVER-DROP-RECORD.md`
+   (the record). This lever is not unexplored — re-attempting it needs either a wider retained
+   corpus or a narrower target class than "confidence_band is the only reason," per the record's
+   "What would change the answer" section. Lower risk than (1) because it does not reduce *what*
+   gets adjudicated, only what adjudicates it — that property is unaffected by the drop.
 3. **Cap research searches** (~4–6s). `WEB_RESEARCH_MAX_SEARCHES` is 5; confirm what `max_uses` is
    actually in effect in the deployed workflow.
 
