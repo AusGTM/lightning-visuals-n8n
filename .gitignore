@@ -12,3 +12,8 @@ operator-claude-plugin/state/dashboard_artifact.json
 
 # GSD dispatch-isolation sentinel (session-local)
 .gsd/
+
+# Phase 63 Plan 03 — raw judge-replay corpus (real company identity + research
+# evidence pulled from stored n8n executions). Never committed; the verdict
+# artifact (input_id + sha256 only) is what ships.
+.judge-replay-corpus/
