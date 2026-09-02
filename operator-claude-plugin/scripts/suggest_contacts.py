@@ -155,6 +155,64 @@ def select_people(people, family_list, chosen_families, known_contacts):
     return {"selected": selected, "dropped": dropped}
 
 
+class CapRefused(ValueError):
+    """Raised when a per-company cap cannot be trusted to bound a suggestion round's
+    spend to what the operator agreed to (D-62-12, SUGGEST-05: a round may spend LESS
+    than the priced per-company cap; it may never spend more). This is a deliberate
+    refusal -- never a clamp, never a silent fallback to some other cap -- because the
+    caller (an LLM orchestrator threading a number spoken by a human) can plausibly
+    hand this a `None`, a string, or a too-large value, and any of those silently
+    "handled" would spend against a ceiling the operator never actually agreed to."""
+
+
+def agreed_cap(chosen_cap, grant_figures):
+    """The per-company cap actually chosen by the operator for THIS round, checked
+    against the priced ceiling the open grant's envelope already disclosed
+    (`grant_figures["suggestion_allowance"]["priced_cap"]`) -- promotes
+    `skills/suggest-contacts/SKILL.md` step 3's prose rule to code (D-62-11, D-62-12).
+
+    Pure: no I/O, and this module gains no `write_grant` import to compute it -- reads
+    a plain dict, which is all `write_grant.envelope()`'s figures ever were.
+
+    Refuses (raises `CapRefused`; never clamps, never defaults) when:
+    - the grant's figures never priced a suggestion allowance at all (missing, `None`,
+      or a non-positive-int `priced_cap`) -- there is no agreed ceiling to spend
+      against, and defaulting to some other number would spend against a ceiling the
+      operator never saw;
+    - `chosen_cap` is not a plain int `>= 1` (bools excluded -- `isinstance(True, int)`
+      is `True` in Python, mirroring the isinstance shape `write_grant.envelope()`
+      already uses for its own `suggestion_cap` validation);
+    - `chosen_cap` exceeds the priced ceiling.
+
+    Otherwise returns `chosen_cap` unchanged -- spending AT the priced cap is
+    legitimate (an inclusive boundary, mirroring `ceiling_verdict`'s strictly-exceeds
+    rule); only spending ABOVE it is refused.
+    """
+    allowance = (grant_figures or {}).get("suggestion_allowance")
+    priced_cap = allowance.get("priced_cap") if isinstance(allowance, dict) else None
+    if not (isinstance(priced_cap, int) and not isinstance(priced_cap, bool)
+            and priced_cap > 0):
+        raise CapRefused(
+            "this round was never priced into the open grant's envelope -- "
+            "grant_figures['suggestion_allowance']['priced_cap'] is missing, None, "
+            "or not a positive int, so there is no agreed ceiling to spend against. "
+            "Refusing rather than defaulting to a cap the operator never saw."
+        )
+    if not (isinstance(chosen_cap, int) and not isinstance(chosen_cap, bool)
+            and chosen_cap >= 1):
+        raise CapRefused(
+            f"chosen_cap must be a positive int, got {chosen_cap!r} -- refusing "
+            f"rather than guessing what the operator meant."
+        )
+    if chosen_cap > priced_cap:
+        raise CapRefused(
+            f"the grant priced this round at a cap of {priced_cap}; a cap of "
+            f"{chosen_cap} was not what was agreed to. The round may spend LESS "
+            f"than the priced cap; it may never spend more."
+        )
+    return chosen_cap
+
+
 def synthesise_rows(company, people, fetched_url, per_company_cap):
     """At most `per_company_cap` rows shaped for `extraction.validate()`: `record_type`
     "contacts", `row` carrying only canonical props (`firstname`/`lastname`/`company`/
@@ -164,7 +222,22 @@ def synthesise_rows(company, people, fetched_url, per_company_cap):
     A person with no lastname produces a row with `firstname`+`company` only; that fails
     identity and routes to the standing weak-key path -- `required_identity` is never
     widened to make it fit.
+
+    `per_company_cap` is validated HERE, at the sole site that applies it (CR-01/WR-01,
+    D-62-12): a non-negative int is required, refusing rather than silently uncapping
+    (`people[:None]` has no upper bound) or truncating from the wrong end
+    (`people[:-1]`). The value passed in is expected to be `agreed_cap()`'s return
+    value.
     """
+    if not (isinstance(per_company_cap, int) and not isinstance(per_company_cap, bool)
+            and per_company_cap >= 0):
+        raise CapRefused(
+            f"per_company_cap must be a non-negative int, got {per_company_cap!r} -- "
+            f"refusing rather than silently uncapping (people[:None] has no upper "
+            f"bound) or truncating from the wrong end (people[:-1]). This is the sole "
+            f"site that applies the per-company cap; the value passed in is expected "
+            f"to be agreed_cap()'s return value."
+        )
     canonical = set(extraction.canonical_props())
     company_name = company.get("name")
     records = []
