@@ -164,6 +164,23 @@ def test_symlink_escaping_cache_root_is_skipped(tmp_path):
     assert sweep_shim.newest_install_root(cache_root) is None
 
 
+def test_symlink_wrapper_escaping_cache_root_is_skipped(tmp_path):
+    """WR-03 (63-REVIEW.md): a REAL (non-symlink) version directory whose
+    `lv-sweep-run.sh` is itself a symlink pointing outside `cache_root` must also be
+    rejected -- the top-level containment check alone does not cover this."""
+    cache_root = tmp_path / "cache"
+    cache_root.mkdir()
+    outside_target = tmp_path / "outside" / "evil.sh"
+    outside_target.parent.mkdir(parents=True)
+    outside_target.write_text("#!/bin/sh\n")
+
+    version_dir = cache_root / "9.9.8"
+    (version_dir / "skills" / "backend-sweep").mkdir(parents=True)
+    (version_dir / "skills" / "backend-sweep" / "lv-sweep-run.sh").symlink_to(outside_target)
+
+    assert sweep_shim.newest_install_root(cache_root) is None
+
+
 def test_shim_text_shape():
     text = sweep_shim.shim_text("/some/cache/root")
     lines = text.splitlines()

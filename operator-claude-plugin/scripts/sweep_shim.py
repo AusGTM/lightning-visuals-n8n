@@ -93,7 +93,11 @@ def newest_install_root(cache_root):
     version directory with no wrapper is not a usable target); and any entry whose
     resolved path escapes the resolved `cache_root` is skipped (T-63-01 — a symlink
     inside a user-writable cache root must not redirect the shim's `exec` target
-    outside the plugin tree).
+    outside the plugin tree). The containment check covers BOTH the top-level
+    version directory itself and the wrapper path one level inside it — a real
+    (non-symlink) version directory whose `lv-sweep-run.sh` is itself a symlink
+    pointing outside `cache_root` is rejected too, so the docstring's guarantee
+    holds for the actual `exec` target, not just its containing directory.
 
     An unreadable or nonexistent `cache_root` is the ordinary "nothing to resolve"
     case, not an error — the whole scan is wrapped in `contextlib.suppress(OSError)`,
@@ -114,8 +118,13 @@ def newest_install_root(cache_root):
                 resolved_entry.relative_to(resolved_cache_root)
             except ValueError:
                 continue  # symlink escapes the cache root — T-63-01
-            if not (entry / "skills" / "backend-sweep" / "lv-sweep-run.sh").is_file():
+            wrapper = entry / "skills" / "backend-sweep" / "lv-sweep-run.sh"
+            if not wrapper.is_file():
                 continue
+            try:
+                wrapper.resolve().relative_to(resolved_cache_root)
+            except ValueError:
+                continue  # wrapper symlink escapes the cache root — T-63-01
             candidates.append(entry)
 
     # Deliberately OUTSIDE the suppress block above: a version-ordering failure (e.g.
