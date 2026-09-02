@@ -4,16 +4,16 @@ milestone: v1.1
 milestone_name: Unattended Session Runs
 current_phase: 63
 current_phase_name: The unattended lane actually runs unattended
-status: verifying
-stopped_at: Completed 63-01-PLAN.md (sweep launcher shim + staleness self-check)
-last_updated: "2026-09-02T05:53:58.308Z"
+status: executing
+stopped_at: Completed 63-03-PLAN.md (judge model replay — verdict DROP, cheaper-model lever not shipped)
+last_updated: "2026-09-02T06:16:36.000Z"
 last_activity: 2026-09-02
-state_head: 0ca0e03fae087cf5a0b3ff745007c2627f504e64
+state_head: 16a84ae
 progress:
   total_phases: 13
   completed_phases: 6
   total_plans: 55
-  completed_plans: 51
+  completed_plans: 52
   percent: 46
 ---
 
@@ -190,6 +190,19 @@ predating the window. VETO-03 bar still 0.
 
 Phase: 63 (The unattended lane actually runs unattended) — EXECUTING
   (2026-09-02)
+
+**63-03 outcome (2026-09-02, wave 1, 63-B half).** The offline replay (D-63-06) comparing
+  `claude-sonnet-5` against `claude-haiku-4-5` over real stored n8n judge inputs (executions
+  `11973`-`12069`) returned **DROP**: the confidence_band-only corpus was 3 (below the fixed
+  minimum of 10) and one of the three compared inputs disagreed materially on `decision`
+  (`accept_research` vs `accept`, same `chosen_value`). Per D-63-06 this is accepted as-is — no
+  re-run with a relaxed threshold. **The cheaper-model routing lever (D-63-05) does not ship.**
+  63-04 reads `63-JUDGE-REPLAY-VERDICT.json` and lands 63-A alone; `build_cloud_workflows.py`
+  and every `n8n/wf_*.json` stay untouched by this plan. Zero provider credits, zero HubSpot
+  writes, zero new n8n executions; 6 Anthropic Messages calls made. One deviation: added a
+  module-level `load_dotenv()` call to `scripts/replay_judge_models.py` (Rule 3) so its own
+  PLAN.md verify commands are directly runnable. Full record: `63-03-SUMMARY.md`.
+  Both wave-1 plans (63-01, 63-03) are now complete; wave 2/3 (63-02, 63-04, 63-05) remain.
 
 **Where Phase 62 actually stands.** Six plans executed (62-01..62-06), all with SUMMARY files.
   Goal verification scored **13/13 must-haves** and returned **`human_needed`**, not `passed`.

@@ -1054,7 +1054,7 @@ shipped `0.35.0`.
 `2026-08-04-enrichment-throughput-ceiling` (63-B, **partially** — lever 2 only; levers 1 and 3 stay
 deferred by D-63-05 and CONTEXT.md's Deferred section)
 
-**Plans**: 1/5 plans executed, 3 waves — planned 2026-09-02. The two halves are independent by design and
+**Plans**: 2/5 plans executed, 3 waves — planned 2026-09-02. The two halves are independent by design and
 neither depends on the other; the D-63-06 replay precedes the D-63-05 constant change, and the
 deploy runs on either branch of that decision.
 
@@ -1062,7 +1062,7 @@ Plans:
 **Wave 1**
 
 - [x] 63-01-PLAN.md — 63-A: the durable launcher shim, the wrapper's staleness self-check, and the crontab/launchd template that pins the shim (wave 1)
-- [ ] 63-03-PLAN.md — 63-B: the offline two-model replay over stored judge inputs, its verdict artifact, and the `reasons[]` distribution as a by-product (wave 1)
+- [x] 63-03-PLAN.md — 63-B: the offline two-model replay over stored judge inputs, its verdict artifact, and the `reasons[]` distribution as a by-product (wave 1)
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
