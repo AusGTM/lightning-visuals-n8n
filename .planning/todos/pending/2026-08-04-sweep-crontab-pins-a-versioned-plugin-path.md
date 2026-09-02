@@ -1,6 +1,6 @@
 ---
 created: 2026-08-04T08:05:00.000Z
-updated: 2026-09-02
+updated: 2026-09-02T18:00:00.000Z
 resolves_phase: 63
 title: The sweep's crontab entry pins a versioned plugin path, so an update silently stops the unattended sweep
 area: operator-claude-plugin
@@ -93,3 +93,37 @@ simulated update (bump a version directory, then wait for a real cron tick).
 
 Surfaced by the Phase 33 planner while mapping the versioned-install-directory problem, and
 deliberately left OUT of Phase 33's scope.
+
+## Closure (2026-09-02, Phase 63 plans 01 and 02)
+
+All three sketched mitigations landed:
+
+1. **Stable launcher shim under the durable home** — `operator-claude-plugin/scripts/sweep_shim.py`
+   (63-01 Task 1). Resolves the newest installed version at every scheduled fire and `exec`s that
+   version's `lv-sweep-run.sh`; version ordering is reused from `durable_paths.py`
+   (`_VERSION_DIR_RE` / `_version_key`), never reimplemented (D-63-04).
+2. **Self-check in the wrapper** — `operator-claude-plugin/skills/backend-sweep/lv-sweep-run.sh`
+   (63-01 Task 2). Compares its own resolved root against the newest installed version, stamps a
+   log line naming both and posts a banner when they differ, and never refuses the sweep (D-63-02).
+3. **Re-point step in the update docs** —
+   `operator-claude-plugin/skills/backend-sweep/SWEEP-CRON-TEMPLATE.md` (63-01 Task 3). New Step 2
+   installs the shim; both the cron and launchd examples now pin the shim path; a new subsection
+   ("Already have a schedule installed under the old shape? Re-point it once.") documents the
+   one-time admin action for the twelve already-installed directories this todo's 2026-09-02
+   re-verification counted.
+
+**Real-scheduler proof (63-02, not an interactive approximation):**
+`.planning/phases/63-the-unattended-lane-actually-runs-unattended/63-SWEEP-SHIM-SCHEDULER-PROOF.md`
+— a temporary launchd agent (never cron, per D-63-03's prohibition on touching any crontab)
+observed a genuine scheduled fire resolve to the newest installed version, then observed the NEXT
+genuine fire follow a simulated plugin update with no schedule or shim edit. Zero network calls,
+zero provider credits, zero n8n executions, zero HubSpot writes, zero crontab contact. Run three
+times; every run exited 0 with the temporary launchd registration independently confirmed absent
+afterward.
+
+**What remains explicitly open, stated by the proof record itself:** the twelve already-installed
+directories on this machine are untouched (D-63-03 forbids it), and the self-check only reaches a
+schedule once it is re-pointed to the shim or freshly installed against a plugin version that
+already carries the check — a schedule still pinned to `0.33.0` or earlier runs that version's
+older wrapper, which has no self-check at all. This todo stays in `pending/`; moving it is the
+phase seal's job, not this closure note's.
