@@ -174,6 +174,18 @@ def test_behavior_json_object_rather_than_list_counts_as_unreadable(capsys):
     assert _count("{}", capsys) == "-1"
 
 
+def test_behavior_headline_program_survives_a_non_dict_element(capsys):
+    """WR-02 (63-REVIEW.md): a malformed element (e.g. a bare string instead of a
+    dict) must not abort the loop -- headlines after it must still print, and the
+    program must never raise."""
+    notices = json.dumps([{"headline": "before"}, "not-a-dict", {"headline": "after"}])
+    assert _headline(notices, capsys) == "before\nafter"
+
+
+def test_behavior_headline_program_prints_nothing_on_top_level_malformed_input(capsys):
+    assert _headline("not json at all", capsys) == ""
+
+
 # --- structural pins on the healthy / failure / unreadable branches ------------------
 
 

@@ -77,12 +77,20 @@ stamp "$OUT"
 
 HEADLINES=$("$2" -c '
 import json, sys
-d = json.loads(sys.argv[1])
-for n in d:
-    h = n.get("headline") or ""
-    if h:
-        print(h)
+try:
+    d = json.loads(sys.argv[1])
+    for n in d:
+        h = (n.get("headline") if isinstance(n, dict) else None) or ""
+        if h:
+            print(h)
+except Exception:
+    pass
 ' "$OUT")
+
+# Count what was actually printed above, not $COUNT (the total notice count) -- a
+# malformed element mid-list can make the two diverge, and the log must report what
+# was actually posted, not what was merely expected.
+POSTED_COUNT=$(printf '%s\n' "$HEADLINES" | grep -c .)
 
 printf '%s\n' "$HEADLINES" | while IFS= read -r HEADLINE; do
     [ -n "$HEADLINE" ] || continue
@@ -90,5 +98,5 @@ printf '%s\n' "$HEADLINES" | while IFS= read -r HEADLINE; do
     banner "$ESCAPED"
 done
 
-stamp "posted $COUNT notification(s)"
+stamp "posted $POSTED_COUNT notification(s)"
 exit 0
