@@ -1,16 +1,20 @@
-"""Composition test for Phase 62 Plan 05 Task 2 (the sequence-coverage ratchet).
+"""Composition test for Phase 62 Plan 05 Task 2, amended by Plan 06 Task 2 (gap closure,
+the sequence-coverage ratchet).
 
 Registers the census identity (`test_skill_sequence_coverage.py`'s `COVERED`) for
 `skills/suggest-contacts/SKILL.md`'s one documented python block: the round's real join,
 end to end, offline -- `eligibility` output feeding `discovery_plan`; the discovered
 people feeding `select_people` with the family list `load_families` supplies; the
-survivors feeding `synthesise_rows`; stage-2 fields merging onto those rows; and
+survivors' cap resolved through `agreed_cap()` (its RETURN VALUE, not a literal) before
+feeding `synthesise_rows`; stage-2 fields merging onto those rows; and
 `partition_for_dispatch` splitting them before `extraction.validate()` runs exactly once
 per sendable row.
 
 Synthetic fixtures throughout: an `example`-suffixed host, invented names, no real
 discovered person committed anywhere in this file.
 """
+import pytest
+
 import extraction
 import role_classify
 import suggest_contacts
@@ -108,8 +112,10 @@ def test_the_documented_round_pipeline_drives_its_real_joins_end_to_end():
         {"person": people[1], "reason": "role_not_selected"}
     ]
 
+    figures = {"suggestion_allowance": {"priced_cap": 5}}
+    per_company_cap = suggest_contacts.agreed_cap(5, figures)
     records = suggest_contacts.synthesise_rows(
-        company_row, selection["selected"], fetched_url, per_company_cap=5)
+        company_row, selection["selected"], fetched_url, per_company_cap=per_company_cap)
     assert len(records) == 2
     synthesised_firstnames = {record["row"]["firstname"] for record in records}
     assert synthesised_firstnames == {"Jamie", "Robin"}
@@ -145,6 +151,28 @@ def test_the_documented_round_pipeline_drives_its_real_joins_end_to_end():
     assert "Robin" not in validated_firstnames
 
 
+def test_a_chosen_cap_above_the_priced_cap_refuses_and_synthesises_no_rows():
+    """The refusal direction, end to end: a chosen cap above the figures dict's own
+    priced_cap raises CapRefused at agreed_cap() and synthesise_rows() is never even
+    reached for that company (62-06, CR-01/WR-01)."""
+    company_row = _company_row("elig-3", num_associated_contacts=0)
+    people = [{"firstname": "Jamie", "lastname": "Fox", "jobtitle": FAMILY_LABEL}]
+
+    vocabulary = role_classify.load_families()
+    selection = suggest_contacts.select_people(
+        people, vocabulary["families"], [FAMILY_LABEL], known_contacts=[])
+    assert len(selection["selected"]) == 1
+
+    figures = {"suggestion_allowance": {"priced_cap": 3}}
+    with pytest.raises(suggest_contacts.CapRefused) as excinfo:
+        suggest_contacts.agreed_cap(5, figures)
+    message = str(excinfo.value)
+    assert "3" in message
+    assert "5" in message
+    # No rows were synthesised for this company -- the refusal happened before
+    # synthesise_rows was ever called.
+
+
 def test_config_gate_style_modules_used_in_the_documented_block_are_real_scripts_modules():
     """A cheap guard against the census's own module-name derivation silently going
     stale: `scripts_modules()` derives its allowlist from `scripts/*.py` at runtime, so a
@@ -154,6 +182,7 @@ def test_config_gate_style_modules_used_in_the_documented_block_are_real_scripts
     assert callable(suggest_contacts.discovery_plan)
     assert callable(role_classify.load_families)
     assert callable(suggest_contacts.select_people)
+    assert callable(suggest_contacts.agreed_cap)
     assert callable(suggest_contacts.synthesise_rows)
     assert callable(suggest_contacts.partition_for_dispatch)
     assert callable(extraction.validate)

@@ -16,6 +16,31 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.37.0] - 2026-09-02
+
+### Fixed
+
+- **The suggestion round's per-company cap is now enforced in code, at the sole
+  function that applies it (CR-01/WR-01, `62-REVIEW.md`).** `suggest_contacts.
+  synthesise_rows` used to slice `people[:per_company_cap]` with no validation at
+  all — a `None` cap silently removed the cap entirely (5/5 rows on a 5-person
+  fixture, live-reproduced) and a negative cap truncated from the wrong end (4/5).
+  It now raises `suggest_contacts.CapRefused` on anything that is not a plain
+  non-negative int, refusing rather than uncapping or mis-truncating. Spending
+  LESS than the cap stays legal — `per_company_cap=0` still returns no rows without
+  raising.
+- **An operator-chosen cap above the grant's priced ceiling is refused by
+  `suggest_contacts.agreed_cap()`, not by `skills/suggest-contacts/SKILL.md` prose
+  alone.** `agreed_cap(chosen_cap, figures)` reads
+  `figures["suggestion_allowance"]["priced_cap"]` — the number the open grant's
+  envelope actually priced this round against — and raises `CapRefused` naming
+  both numbers when the chosen cap exceeds it, or when the grant never priced a
+  suggestion allowance at all. The documented round sequence in SKILL.md now binds
+  `agreed_cap()`'s return value as the only number the rest of the round spends
+  against, and that join is pinned by a registered composition test
+  (`test_suggest_contacts_composition.py`) plus the sequence-coverage ratchet, so
+  the rule cannot regress back to prose.
+
 ## [0.36.0] - 2026-09-02
 
 ### Added

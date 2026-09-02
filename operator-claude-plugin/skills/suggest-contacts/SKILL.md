@@ -68,13 +68,17 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    default 2 (D-62-12). Both are **round-level**: the same role list and the same cap
    apply to every eligible company in this batch. Never re-ask either one per company.
 
-   **A cap above the grant's priced cap is refused, naming the number.** The open grant's
-   envelope priced this round's stage-2 ceiling against
-   `figures["suggestion_allowance"]["priced_cap"]` (3 — the top of D-62-12's 2-to-3 band,
-   what the grant was actually priced against at the moment it opened). An operator-chosen
-   cap above that number is refused by name — "the grant priced this round at a cap of 3;
-   a cap of 5 was not what was agreed to" — rather than silently spending more than the
-   grant covers. The round may spend LESS than the priced cap; it may never spend more.
+   **A cap above the grant's priced cap is refused, in code, not just here in prose.**
+   The chosen cap is passed through `suggest_contacts.agreed_cap(chosen_cap, figures)` —
+   whatever it returns is the ONLY number the rest of this round spends against. It reads
+   the open grant's own `figures["suggestion_allowance"]["priced_cap"]` (3 — the top of
+   D-62-12's 2-to-3 band, what the grant was actually priced against at the moment it
+   opened) and raises `suggest_contacts.CapRefused` naming both numbers — "the grant
+   priced this round at a cap of 3; a cap of 5 was not what was agreed to" — when the
+   chosen cap exceeds it, or when the grant never priced a suggestion allowance at all.
+   Relay a `CapRefused` to the operator exactly as it reads (the same "relay the error
+   verbatim" discipline step 1 already uses for `config_gate.py`), and stop the round.
+   The round may spend LESS than the priced cap; it may never spend more.
 
 4. **The price, before the spend.** Show the suggestion allowance already sitting in the
    open grant's envelope — `figures["suggestion_allowance"]["line"]` — naming both
@@ -159,6 +163,11 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    vocabulary = role_classify.load_families()
    selection = suggest_contacts.select_people(
        people, vocabulary["families"], chosen_families, known_contacts)
+   # figures is the open grant's own envelope (step 4); chosen_cap is what the operator
+   # picked in step 3. agreed_cap() is the ONLY number the rest of this round spends
+   # against -- it raises CapRefused rather than letting a too-high or malformed cap
+   # reach synthesise_rows.
+   per_company_cap = suggest_contacts.agreed_cap(chosen_cap, figures)
    records = suggest_contacts.synthesise_rows(
        eligible_company, selection["selected"], fetched_url, per_company_cap)
    # Stage 2 -- the SAME dispatch machinery `enrich-before-ingest` already uses

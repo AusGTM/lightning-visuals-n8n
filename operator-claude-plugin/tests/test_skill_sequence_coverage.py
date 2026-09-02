@@ -298,17 +298,20 @@ COVERED = {
         "enrich-records",
         ("remainder_queue.build_entry", "remainder_queue.save"),
     ): "test_remainder_queue.py::test_save_writes_a_0600_file_with_the_right_document_shape",
-    # Phase 62 Plan 05 Task 2: the new suggest-contacts/SKILL.md's one documented python
-    # block -- the round's real join, eligibility feeding discovery_plan, the discovered
-    # people feeding select_people with load_families' own family list, the survivors
-    # feeding synthesise_rows, a simulated stage-2 merge, then partition_for_dispatch
-    # splitting sendable from held before extraction.validate() runs once per sendable row.
+    # Phase 62 Plan 05 Task 2 (amended by Plan 06 Task 2, gap closure): the
+    # suggest-contacts/SKILL.md's one documented python block -- the round's real join,
+    # eligibility feeding discovery_plan, the discovered people feeding select_people
+    # with load_families' own family list, the survivors' cap resolved through
+    # agreed_cap() before feeding synthesise_rows, a simulated stage-2 merge, then
+    # partition_for_dispatch splitting sendable from held before extraction.validate()
+    # runs once per sendable row.
     (
         "suggest-contacts",
         (
             "suggest_contacts.eligibility", "suggest_contacts.discovery_plan",
             "role_classify.load_families", "suggest_contacts.select_people",
-            "suggest_contacts.synthesise_rows", "suggest_contacts.partition_for_dispatch",
+            "suggest_contacts.agreed_cap", "suggest_contacts.synthesise_rows",
+            "suggest_contacts.partition_for_dispatch",
             "extraction.validate", "suggest_contacts.round_artifact",
         ),
     ): "test_suggest_contacts_composition.py::test_the_documented_round_pipeline_drives_its_real_joins_end_to_end",
