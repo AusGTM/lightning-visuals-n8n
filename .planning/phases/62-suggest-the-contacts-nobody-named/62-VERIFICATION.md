@@ -1,50 +1,27 @@
 ---
 phase: 62-suggest-the-contacts-nobody-named
-verified: 2026-09-02T00:04:28Z
-status: gaps_found
-score: 12/13 must-haves verified
+verified: 2026-09-02T00:20:00Z
+status: human_needed
+score: 13/13 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
-gaps:
-  - truth: "A suggestion round may spend LESS than the priced per-company cap; it may never spend more (D-62-12, SUGGEST-05) — the round's own stated design rule, and the one place the cap is applied enforces it"
-    status: failed
-    reason: >
-      Live-reproduced (not inferred): `suggest_contacts.synthesise_rows(company, people,
-      fetched_url, per_company_cap)` is the SOLE function that applies the per-company cap
-      (62-01-PLAN.md line 84's own contract: "emits at most `per_company_cap` records").
-      It slices with a bare `people[:per_company_cap]` and performs no validation.
-      `per_company_cap=None` returns ALL discovered people (no cap at all — confirmed 5/5
-      rows against a 5-person fixture); `per_company_cap=-1` truncates from the wrong end
-      (4/5 rows) instead of refusing. `skills/suggest-contacts/SKILL.md` step 3 states the
-      refusal rule in prose only ("A cap above the grant's priced cap is refused, naming the
-      number... it may never spend more") — no function anywhere (`write_grant.py`,
-      `cost_guard.py`, `suggest_contacts.py`) compares the operator's chosen cap against
-      `figures["suggestion_allowance"]["priced_cap"]`, and nothing validates the type/range
-      of the cap before it reaches the slice. The production path here is an LLM
-      orchestrator following SKILL.md prose at runtime, so "the cap silently arrives as
-      None or a bad value" is a plausible failure of the actual mechanism, not a contrived
-      edge case. This is a direct violation of the phase's own stated cost-safety
-      invariant, first surfaced as Critical (CR-01) plus Warning (WR-01) in
-      `62-REVIEW.md` and reproduced independently here.
-    artifacts:
-      - path: "operator-claude-plugin/scripts/suggest_contacts.py:158-195"
-        issue: "synthesise_rows() has no type/range guard on per_company_cap; None uncaps entirely, negative truncates from the wrong end — contrast write_grant.envelope()'s own suggestion_cap handling a few lines away, which validates and falls back to PRICED_CAP on anything else"
-      - path: "operator-claude-plugin/scripts/write_grant.py"
-        issue: "envelope() validates and prices a fallback-safe suggestion_cap at grant-open time, but nothing threads that priced ceiling forward to a runtime comparison against the operator's chosen per_company_cap at synthesise_rows() call time"
-    missing:
-      - "A validation guard in synthesise_rows (or a wrapper called immediately before it) that raises on a non-int or negative per_company_cap rather than silently uncapping or mis-truncating — mirrors the CR-01 fix suggestion in 62-REVIEW.md"
-      - "A small pure function (suggest_contacts.py or write_grant.py) that compares the operator's chosen cap against the grant's figures['suggestion_allowance']['priced_cap'] and returns a code-enforced refusal when the chosen cap exceeds it — today this rule exists only as SKILL.md prose for the LLM orchestrator to follow"
-      - "Regression tests for per_company_cap=None (must raise, never uncap) and a negative value (must raise, never truncate from the wrong end) — test_synthesise_rows_honors_per_company_cap only proves the happy path"
+re_verification:
+  previous_status: gaps_found
+  previous_score: 12/13
+  gaps_closed:
+    - "A suggestion round may spend LESS than the priced per-company cap; it may never spend more (D-62-12, SUGGEST-05)"
+  gaps_remaining: []
+  regressions: []
 human_verification:
   - test: "A real company's sitemap yields a usable people page on a live racing-club-shaped site"
     expected: "The sitemap-ladder rung resolves a people/board/team page and names at least one person, mirroring UAT 2.4's precedent (9/9 directors on gctc.com.au)"
-    why_human: "url_fallback.py is pure string-building with no I/O by construction (VALIDATION.md manual-verification row 1) — the unit suite proves the ladder logic and the host-bound guard, never whether a given site's sitemap actually lists a people page. Requires a live plugin sitting with a real web_fetch."
+    why_human: "url_fallback.py is pure string-building with no I/O by construction (62-VALIDATION.md manual-verification row 1) — the unit suite proves the ladder logic and the host-bound guard, never whether a given site's sitemap actually lists a people page. Requires a live plugin sitting with a real web_fetch."
   - test: "Stage 1 → stage 2 handoff on a real discovered person (name+company → Lusha search-and-enrich → proposal)"
     expected: "A person named by the ladder with no email resolves through identity group 2, the waterfall fills email/phone, and the row lands as a proposal (or HELD if still emailless) — never a silent write"
-    why_human: "Requires a real page fetch (plugin-side web_fetch) followed by a real Lusha credit spend; neither runs in the stub-transport test suite (VALIDATION.md manual-verification row 2)."
+    why_human: "Requires a real page fetch (plugin-side web_fetch) followed by a real Lusha credit spend; neither runs in the stub-transport test suite (62-VALIDATION.md manual-verification row 2)."
   - test: "The priced ceiling is not exceeded in a real sitting"
-    expected: "Actual page fetches and provider credits spent land at or under the quoted worst-case ceiling shown at grant-open"
-    why_human: "The ceiling arithmetic is unit-tested, but 'the operator saw a number and the round stayed under it' is an end-to-end property of a live sitting (VALIDATION.md manual-verification row 3). This item is now also the acceptance test for the CR-01 fix once landed — a real sitting after the fix should demonstrate a bad/omitted cap cannot silently blow the ceiling."
+    expected: "Actual page fetches and provider credits spent land at or under the quoted worst-case ceiling shown at grant-open; a bad or omitted per-company cap does not silently blow the ceiling"
+    why_human: "The ceiling arithmetic and the cap-refusal guard (agreed_cap / synthesise_rows) are both now unit- and live-probe-tested outside the test suite, but 'the operator saw a number and the round stayed under it in a real sitting' is an end-to-end property only a live sitting can demonstrate (62-VALIDATION.md manual-verification row 3)."
 ---
 
 # Phase 62: Suggest the Contacts Nobody Named — Verification Report
@@ -54,86 +31,168 @@ not a lead. After a company batch, the operator is offered contacts worth enrich
 role and priced once. Closes SUGGEST-01, -02, -04, -05, and AMENDS SUGGEST-03 per D-62-07 (a
 disclosed un-evidenced fallback is now permitted).
 
-**Verified:** 2026-09-02T00:04:28Z
-**Status:** gaps_found
-**Re-verification:** No — initial verification
+**Verified:** 2026-09-02T00:20:00Z
+**Status:** human_needed
+**Re-verification:** Yes — after gap closure (62-06)
 
 ## Goal Achievement
 
-### Observable Truths
+### Gap Closure Verification (the one item this run exists to check)
+
+The prior run (`status: gaps_found`, 12/13) found exactly one failed truth: `synthesise_rows()`
+applied the per-company cap with a bare, unvalidated `people[:per_company_cap]` slice, so
+`per_company_cap=None` uncapped the round entirely (5/5 rows on a 5-person fixture) and
+`per_company_cap=-1` truncated from the wrong end (4/5 rows) — a direct violation of the
+phase's own stated invariant ("a round may spend LESS than the priced cap; it may never spend
+more," D-62-12). Plan 62-06 closed it. This run re-derives the result **live, independently of
+the SUMMARY and the code-review narrative**, per the re-verification instructions.
+
+**Live probe against the current code** (run directly by this verifier, not copied from
+`62-REVIEW-GAP.md` or the SUMMARY):
+
+```
+synthesise_rows(..., cap=None)  -> REFUSED: CapRefused "must be a non-negative int, got None"
+synthesise_rows(..., cap=-1)    -> REFUSED: CapRefused "must be a non-negative int, got -1"
+synthesise_rows(..., cap="2")   -> REFUSED: CapRefused (string)
+synthesise_rows(..., cap=True)  -> REFUSED: CapRefused (bool excluded)
+synthesise_rows(..., cap=False) -> REFUSED: CapRefused (bool excluded)
+synthesise_rows(..., cap=1.5)   -> REFUSED: CapRefused (float excluded)
+synthesise_rows(..., cap=0)     -> ACCEPTED, 0 rows   (spending less stays legal)
+synthesise_rows(..., cap=2)     -> ACCEPTED, 2 rows
+synthesise_rows(..., cap=5)     -> ACCEPTED, 5 rows
+
+agreed_cap(2, {"suggestion_allowance": {"priced_cap": 3}})   -> ACCEPTED 2
+agreed_cap(3, {..priced_cap 3})                              -> ACCEPTED 3 (at-cap is legal)
+agreed_cap(5, {..priced_cap 3})                              -> REFUSED, names both "3" and "5"
+agreed_cap(2, {"suggestion_allowance": None})                -> REFUSED (never priced)
+agreed_cap(2, {})                                             -> REFUSED (never priced)
+agreed_cap(None/0/-1/True, {..priced_cap 3})                  -> REFUSED (each case)
+```
+
+Both original defects are gone: `None` now refuses instead of uncapping; `-1` now refuses
+instead of truncating from the wrong end. `agreed_cap()` is a real function — not SKILL.md
+prose — that compares the operator's chosen cap against
+`grant_figures["suggestion_allowance"]["priced_cap"]` and refuses when exceeded, naming both
+numbers.
+
+**Wiring, confirmed live (not inferred from the plan):**
+- `skills/suggest-contacts/SKILL.md`'s single documented python block binds
+  `per_company_cap = suggest_contacts.agreed_cap(chosen_cap, figures)` immediately before
+  `synthesise_rows(eligible_company, selection["selected"], fetched_url, per_company_cap)` —
+  the variable that flows into the cap argument is `agreed_cap()`'s return value, not
+  `chosen_cap` and not a literal (grepped directly, line-numbered above the code block).
+- `test_skill_sequence_coverage.py`'s `suggest-contacts` COVERED key now contains
+  `"suggest_contacts.agreed_cap"` immediately before `"suggest_contacts.synthesise_rows"` — one
+  entry, not a second registered sequence (grepped directly).
+- `operator-claude-plugin/.claude-plugin/plugin.json` reads `"0.37.0"`; `CHANGELOG.md` carries
+  a `[0.37.0]` entry — both confirmed on disk, not just claimed by the SUMMARY.
+
+**Regression check (12 previously-passed truths, no full re-litigation):**
+- `.venv/bin/python -m pytest -q` → **3929 passed, 154 skipped, 0 failed** (independently
+  re-run by this verifier; matches the SUMMARY's claimed count and exceeds the 3912 baseline —
+  17 new tests, all for the gap closure).
+- `node --test tests/n8n/*.test.mjs` → **862 pass, 0 fail** (independently re-run; this plan
+  touched no `n8n/` code, so this is a no-drift confirmation, not new evidence).
+- `v1.1-REQUIREMENTS.md` SUGGEST-01/02/04/05 remain `[x]`, SUGGEST-03 remains `[ ]` with the
+  D-62-07 amendment text — unchanged from the prior verification, confirmed by direct read.
+- `write_grant.py`'s `envelope()`/`suggestion_allowance`/`priced_cap` wiring (truths 10-12 of
+  the prior run) spot-checked by grep and is unchanged in shape; the new end-to-end test
+  (`test_a_real_envelope_priced_cap_feeds_agreed_cap_and_bounds_synthesise_rows`) additionally
+  proves a REAL `envelope()` figures dict feeds `agreed_cap()` correctly, which is strictly new
+  evidence strengthening truth 10-12, not a regression risk to them.
+
+**One residual, correctly scoped as non-blocking (not re-opening the gap):** the code review
+(`62-REVIEW-GAP.md`, IN-01) notes `synthesise_rows()` still accepts any non-negative int
+directly — nothing at the Python call boundary *forces* a caller to route through
+`agreed_cap()` first; the priced-ceiling comparison lives only in `agreed_cap()`, by the
+module's own deliberate purity decision (`suggest_contacts.py` carries no `write_grant`
+import). This verifier independently confirmed the same behavior
+(`synthesise_rows(..., cap=1_000_000_000)` would accept). This is not a reopening of CR-01 —
+both of CR-01's concrete, live-reproduced failure modes (`None`, `-1`) are closed — it is a
+structural note that the ceiling is enforced by the documented SKILL.md dataflow plus a
+composition test, not by a runtime invariant inside `synthesise_rows` itself. The
+sequence-coverage ratchet checks call ORDER, not that the same variable flows between the two
+calls, so a future SKILL.md edit that kept call order but rewired the argument would not be
+caught by the ratchet. This is exactly the kind of gap that a live sitting (human verification
+item 3, below) is positioned to catch in practice, and does not block this phase's goal —
+flagged for awareness, not as a gap.
+
+### Observable Truths (full table, carried forward with truth 13 updated)
 
 | # | Truth | Status | Evidence |
 |---|-------|--------|----------|
-| 1 | A company with zero associated contacts is named eligible; one with contacts is skipped; one whose count could not be read is unknown and never silently eligible (D-62-16) | ✓ VERIFIED | `suggest_contacts._eligibility_verdict` branches readability BEFORE magnitude (`suggest_contacts.py:41-72`); `mergeContacts.js`/`Adapt Company Search` stamps `num_associated_contacts` as explicit `null` on any unreadable case, never a missing key or a false zero — confirmed by `tests/n8n/suggestionProvenanceFlow.test.mjs` (5 assertions, all green) |
-| 2 | A person named by reading a company's own page becomes a row extraction.validate() accepts on identity group 2 without changing the identity contract (D-62-09) | ✓ VERIFIED | `synthesise_rows()` emits only canonical props (`firstname`/`lastname`/`company`/`jobtitle`), asserted a subset of `extraction.canonical_props()`; `test_suggest_contacts.py` exercises the tracer end-to-end into `extraction.validate()` |
-| 3 | When the ladder finds nobody, the round records the ladder's own give-up text and moves on — never a second search on another host (D-62-03) | ✓ VERIFIED | `no_candidates()` returns `url_fallback.give_up_message(...)` verbatim, no second-source branch anywhere in `suggest_contacts.py` |
-| 4 | A person already associated with the company is filtered out before any spend (D-62-18) | ✓ VERIFIED | `select_people()` drops on `known_keys` match before the role filter runs; tested (`test_suggest_contacts.py`) |
-| 5 | A suggested person still without an email after stage 2 is HELD by the existing `hold_emailless` path, not written and not special-cased (D-62-09, SUGGEST-04) | ✓ VERIFIED | `partition_for_dispatch()` is a thin, unmodified call to `extraction.hold_emailless` |
-| 6 | The role list is derived from the portal's own `jobtitle` values, clustered once and cached — not re-clustered per round (D-62-05) | ✓ VERIFIED | `scripts/role_vocabulary.py` (repo root, credentialled) is the sole producer of `operator-claude-plugin/config/role_vocabulary.yaml`; `role_classify.load_families()` reads the cache only, no re-derivation |
-| 7 | Offers top N families by recurrence, N fixed and scannable (D-62-06) | ✓ VERIFIED | `TOP_N_FAMILIES` truncation in `role_vocabulary.py`; `offer_block()` renders recurrence counts for an evidenced vocabulary |
-| 8 | Sparse-portal fallback served AND visibly marked un-evidenced (D-62-07) | ✓ VERIFIED | Shipped `config/role_vocabulary.yaml` ships `evidenced: false`, `source: generic_fallback`; `offer_block()`'s `DISCLOSURE_SENTENCE` renders whenever `evidenced` is false — proven by `test_offer_block_un_evidenced_contains_disclosure_sentence` |
-| 9 | SUGGEST-03's text and the ROADMAP's Closes line both record AMENDS, not closed (D-62-07) | ✓ VERIFIED | `.planning/milestones/v1.1-REQUIREMENTS.md` SUGGEST-03 is `[ ]` unchecked with the disclosed-fallback exception text and an explicit "AMENDS" annotation; `.planning/ROADMAP.md` and `.planning/milestones/v1.1-ROADMAP.md` both read "Closes SUGGEST-01,-02,-04,-05, and AMENDS SUGGEST-03 per D-62-07" |
-| 10 | Suggestion cost disclosed in the SAME opening envelope as enrichment cost, one number, one yes (D-62-11) | ✓ VERIFIED | `write_grant.envelope(..., suggestion_companies=, suggestion_cap=)` folds `cost_guard.suggestion_line()` into the same `figures` dict under a third key (`suggestion_allowance`) that cannot collide with `chunk_ceiling`/`ceiling` (explicit CR-01-from-Phase-60 anti-regression comment); omitting the args reproduces the pre-Phase-62 envelope byte-for-byte (tested) |
-| 11 | Quoted figure is a worst-case ceiling with both stage-1 fetch and stage-2 credit components visible; stage-1 dollar cost disclosed as unmeasured, never $0 (D-62-14) | ✓ VERIFIED | `cost_guard.suggestion_line()` renders one sentence naming both components; `stage1_cost_usd=None`/`stage1_state="unmeasured"` when `SUGGESTION_RATE_KEY` is null, never coerced to 0 |
-| 12 | A batch whose suggestion weight pushes it over the sampled monthly ceiling is refused before it starts (D-62-13) | ✓ VERIFIED | `envelope()` adds the suggestion round's projected chunk weight to `executions` BEFORE `ceiling_verdict()` runs; `test_plan_grant_refuses_over_ceiling_when_only_the_suggestion_weight_pushes_it_over` passes |
-| 13 | The round may spend LESS than the priced per-company cap; it may never spend more (D-62-12, SUGGEST-05) | ✗ FAILED | See Gaps below — live-reproduced `cap=None` uncaps the round entirely at the one function that applies it |
+| 1 | A company with zero associated contacts is named eligible; one with contacts is skipped; one whose count could not be read is unknown and never silently eligible (D-62-16) | ✓ VERIFIED | Unchanged from prior verification; `suggest_contacts._eligibility_verdict` branches readability before magnitude |
+| 2 | A person named by reading a company's own page becomes a row extraction.validate() accepts on identity group 2 without changing the identity contract (D-62-09) | ✓ VERIFIED | Unchanged; `synthesise_rows()` still emits only canonical props |
+| 3 | When the ladder finds nobody, the round records the ladder's own give-up text and moves on — never a second search on another host (D-62-03) | ✓ VERIFIED | Unchanged |
+| 4 | A person already associated with the company is filtered out before any spend (D-62-18) | ✓ VERIFIED | Unchanged |
+| 5 | A suggested person still without an email after stage 2 is HELD by the existing `hold_emailless` path, not written and not special-cased (D-62-09, SUGGEST-04) | ✓ VERIFIED | Unchanged |
+| 6 | The role list is derived from the portal's own `jobtitle` values, clustered once and cached — not re-clustered per round (D-62-05) | ✓ VERIFIED | Unchanged |
+| 7 | Offers top N families by recurrence, N fixed and scannable (D-62-06) | ✓ VERIFIED | Unchanged |
+| 8 | Sparse-portal fallback served AND visibly marked un-evidenced (D-62-07) | ✓ VERIFIED | Unchanged |
+| 9 | SUGGEST-03's text and the ROADMAP's Closes line both record AMENDS, not closed (D-62-07) | ✓ VERIFIED | Re-confirmed live this run — `v1.1-REQUIREMENTS.md` SUGGEST-03 still `[ ]` with amendment text |
+| 10 | Suggestion cost disclosed in the SAME opening envelope as enrichment cost, one number, one yes (D-62-11) | ✓ VERIFIED | Unchanged, and strengthened by the new real-envelope end-to-end test |
+| 11 | Quoted figure is a worst-case ceiling with both stage-1 fetch and stage-2 credit components visible; stage-1 dollar cost disclosed as unmeasured, never $0 (D-62-14) | ✓ VERIFIED | Unchanged |
+| 12 | A batch whose suggestion weight pushes it over the sampled monthly ceiling is refused before it starts (D-62-13) | ✓ VERIFIED | Unchanged |
+| 13 | The round may spend LESS than the priced per-company cap; it may never spend more (D-62-12, SUGGEST-05) | ✓ VERIFIED | Gap closed — live-reproduced this run: `CapRefused` fires for `None`/`-1`/`"2"`/`True`/float; `agreed_cap()` code-enforces the chosen-vs-priced comparison; both wired into the documented SKILL.md sequence and pinned by the sequence-coverage ratchet |
 
-**Score:** 12/13 truths verified (0 present-but-behavior-unverified)
+**Score:** 13/13 truths verified (0 present-but-behavior-unverified)
 
 ### Required Artifacts
 
 | Artifact | Expected | Status | Details |
 |----------|----------|--------|---------|
-| `operator-claude-plugin/scripts/suggest_contacts.py` | Suggestion round engine | ✓ VERIFIED (with gap) | 257 lines, all documented functions present and wired; `synthesise_rows` has the CR-01 validation gap (see Gaps) |
-| `operator-claude-plugin/scripts/role_classify.py` | Online role matcher + offline cache loader | ✓ VERIFIED | 123 lines, `load_families`/`offer_block`/`chosen_families`/`classify_title` all present and tested |
-| `operator-claude-plugin/tests/test_suggest_contacts.py` | Unit tests | ✓ VERIFIED | 315 lines, exercises tracer through `extraction.validate()` |
-| `scripts/role_vocabulary.py` | Repo-root, credentialled, read-only inventory | ✓ VERIFIED (untested, WR-02) | 228 lines; at repo root (not under `operator-claude-plugin/`, confirmed by `find`); no plugin credential (`grep -rl HUBSPOT_PRIVATE_APP_TOKEN operator-claude-plugin/scripts/` empty); has zero test coverage of its own pure functions (`rank_top_families`, `build_generic_fallback`, `build_portal_vocabulary`) — flagged WR-02 in code review, matches repo convention (`inventory_org_type_values.py` also untested) |
-| `operator-claude-plugin/config/role_vocabulary.yaml` | Committed cache | ✓ VERIFIED | Ships the disclosed generic fallback (`evidenced: false`), consistent with the live portal sweep never having been run in this session — expected, not a defect |
-| `operator-claude-plugin/tests/test_role_vocabulary.py` | Tests | ✓ VERIFIED (misleadingly named, see note) | Actually tests `role_classify.py`'s loader/offer/select, NOT `scripts/role_vocabulary.py` (confirmed by import statement and docstring) — the WR-02 gap stands despite this file's existence |
-| `operator-claude-plugin/scripts/cost_guard.py` | Suggestion pricing | ✓ VERIFIED | `suggestion_line()` present, tested |
-| `operator-claude-plugin/scripts/write_grant.py` | Envelope integration | ✓ VERIFIED | `envelope()`/`plan_grant()` thread `suggestion_companies`/`suggestion_cap` through to `ceiling_verdict` |
-| `operator-claude-plugin/tests/test_cost_guard_suggestion.py` | Tests | ✓ VERIFIED | 93 lines, all green |
-| `operator-claude-plugin/tests/test_write_grant_suggestion.py` | Tests | ✓ VERIFIED | 220 lines, 11 test functions including the over-ceiling refusal case, all green |
-| `n8n/code/mergeContacts.js` | Per-field provenance (sourceByField) | ✓ VERIFIED | `mergeContacts(existing, candidate, source, opts)` accepts `sourceByField`, resolves per-field before falling back to `source` |
-| `scripts/build_cloud_workflows.py` | MERGE_CONTACTS wrapper + num_associated_contacts wiring | ✓ VERIFIED | `_sourceByFieldFromEnvelope()` reads `Set Config`, falls through to `{}` (byte-identical `csv` default) for every existing caller; `HS_CO_SEARCH_BODY_EXPR` requests `num_associated_contacts`, `Adapt Company Search` coerces/stamps null |
-| `tests/n8n/suggestionProvenanceFlow.test.mjs` | Node tests | ✓ VERIFIED | 175 lines, 12 assertions, all green |
-| `operator-claude-plugin/skills/suggest-contacts/SKILL.md` | The sitting itself | ✓ VERIFIED | 180 lines; documents the full 9-step round, the priced-cap refusal rule (prose only — see gap), the report step |
-| `operator-claude-plugin/tests/test_suggest_contacts_composition.py` | Composition test | ✓ VERIFIED | 160 lines, registered in `test_skill_sequence_coverage.COVERED` |
+| `operator-claude-plugin/scripts/suggest_contacts.py` | Suggestion round engine | ✓ VERIFIED | 331 lines; `CapRefused` and `agreed_cap()` added, `synthesise_rows` guarded at the sole application site — confirmed by direct read and live execution |
+| `operator-claude-plugin/scripts/role_classify.py` | Online role matcher + offline cache loader | ✓ VERIFIED | Unchanged from prior verification |
+| `operator-claude-plugin/tests/test_suggest_contacts.py` | Unit tests | ✓ VERIFIED | Extended with `CapRefused`/`agreed_cap` regression tests; existing `test_synthesise_rows_honors_per_company_cap` unmodified and still passes |
+| `scripts/role_vocabulary.py` | Repo-root, credentialled, read-only inventory | ✓ VERIFIED (untested, WR-02, out of this plan's scope) | Unchanged; deliberately deferred per 62-06's scope fence |
+| `operator-claude-plugin/config/role_vocabulary.yaml` | Committed cache | ✓ VERIFIED | Unchanged |
+| `operator-claude-plugin/tests/test_role_vocabulary.py` | Tests | ✓ VERIFIED | Unchanged |
+| `operator-claude-plugin/scripts/cost_guard.py` | Suggestion pricing | ✓ VERIFIED | Unchanged |
+| `operator-claude-plugin/scripts/write_grant.py` | Envelope integration | ✓ VERIFIED | Unchanged; confirmed still the sole source of `suggestion_allowance["priced_cap"]` |
+| `operator-claude-plugin/tests/test_cost_guard_suggestion.py` | Tests | ✓ VERIFIED | Unchanged |
+| `operator-claude-plugin/tests/test_write_grant_suggestion.py` | Tests | ✓ VERIFIED | Extended with the real-envelope → `agreed_cap` → `synthesise_rows` end-to-end join |
+| `n8n/code/mergeContacts.js` | Per-field provenance (sourceByField) | ✓ VERIFIED | Unchanged; this plan touched no `n8n/` code |
+| `scripts/build_cloud_workflows.py` | MERGE_CONTACTS wrapper + num_associated_contacts wiring | ✓ VERIFIED | Unchanged |
+| `tests/n8n/suggestionProvenanceFlow.test.mjs` | Node tests | ✓ VERIFIED | Unchanged; 862/0 fail full node suite re-run confirms no drift |
+| `operator-claude-plugin/skills/suggest-contacts/SKILL.md` | The sitting itself | ✓ VERIFIED | Step 3 now names the enforcing code (`agreed_cap`); documented python block binds its return value before calling `synthesise_rows` — the prior "prose only" gap is closed |
+| `operator-claude-plugin/tests/test_suggest_contacts_composition.py` | Composition test | ✓ VERIFIED | Now drives the result-consuming `agreed_cap` → `synthesise_rows` join plus a refusal-direction test, per plan Task 2(d) |
+| `operator-claude-plugin/tests/test_skill_sequence_coverage.py` | Census ratchet | ✓ VERIFIED | `suggest-contacts` COVERED key updated in place, one entry (not a second registered sequence) |
 
 ### Key Link Verification
 
 | From | To | Via | Status | Details |
 |------|----|----|--------|---------|
-| `suggest_contacts.py` | `url_fallback.plan_ladder`/`filter_candidates`/`give_up_message` | library call, never re-implemented | ✓ WIRED | direct imports and calls confirmed |
-| `suggest_contacts.py` | `extraction.validate`/`canonical_props`/`hold_emailless` | library call, contract unchanged | ✓ WIRED | direct imports; `synthesise_rows` asserts subset of `canonical_props()` |
-| `suggest_contacts.py` | `role_classify.classify_title` | family list passed as parameter | ✓ WIRED | `select_people()` calls `role_classify.classify_title(person.get("jobtitle"), family_list)` |
-| `scripts/role_vocabulary.py` | `config/role_vocabulary.yaml` | committed cache write | ✓ WIRED | `role_vocabulary.py`'s `main()` writes the cache; the committed file exists and matches the generic-fallback shape |
-| `config/role_vocabulary.yaml` | `role_classify.load_families()` | plugin read, no credential | ✓ WIRED | `DEFAULT_VOCABULARY_PATH` points at the committed file |
-| `cost_guard.suggestion_line()` | `write_grant.envelope()` `figures["suggestion_allowance"]` | projected execution count, `ceiling_verdict` | ✓ WIRED | confirmed by reading `envelope()`'s body and the passing over-ceiling test |
-| ingest webhook envelope source map | `MERGE_CONTACTS` → `mergeContacts(opts.sourceByField)` → `lv_contact_enrichment_provenance` | request-level per-field source | ✓ WIRED | traced through `build_cloud_workflows.py` and confirmed by `suggestionProvenanceFlow.test.mjs` |
-| `HS_CO_SEARCH_BODY_EXPR num_associated_contacts` | `Adapt Company Search` row key | `Build Response` → plugin eligibility tri-state | ✓ WIRED | confirmed live in `wf_enrichment_cloud.json` and by node test |
-| batch completion in `enrich-records/SKILL.md` | unprompted offer | `suggest-contacts/SKILL.md` | ✓ WIRED | grepped: `enrich-records/SKILL.md:557-564` names D-62-15 and unconditionally offers the round when object_type is companies and the manifest reached a terminal verdict |
-| operator-chosen `per_company_cap` | grant's priced `suggestion_allowance["priced_cap"]` | code-enforced refusal | ✗ NOT WIRED | exists only as `SKILL.md` step 3 prose; no function anywhere performs this comparison (WR-01, folded into the CR-01 gap below) |
+| `suggest_contacts.py` | `url_fallback.plan_ladder`/`filter_candidates`/`give_up_message` | library call, never re-implemented | ✓ WIRED | Unchanged |
+| `suggest_contacts.py` | `extraction.validate`/`canonical_props`/`hold_emailless` | library call, contract unchanged | ✓ WIRED | Unchanged |
+| `suggest_contacts.py` | `role_classify.classify_title` | family list passed as parameter | ✓ WIRED | Unchanged |
+| `scripts/role_vocabulary.py` | `config/role_vocabulary.yaml` | committed cache write | ✓ WIRED | Unchanged |
+| `config/role_vocabulary.yaml` | `role_classify.load_families()` | plugin read, no credential | ✓ WIRED | Unchanged |
+| `cost_guard.suggestion_line()` | `write_grant.envelope()` `figures["suggestion_allowance"]` | projected execution count, `ceiling_verdict` | ✓ WIRED | Unchanged |
+| ingest webhook envelope source map | `MERGE_CONTACTS` → `mergeContacts(opts.sourceByField)` → `lv_contact_enrichment_provenance` | request-level per-field source | ✓ WIRED | Unchanged |
+| `HS_CO_SEARCH_BODY_EXPR num_associated_contacts` | `Adapt Company Search` row key | `Build Response` → plugin eligibility tri-state | ✓ WIRED | Unchanged |
+| batch completion in `enrich-records/SKILL.md` | unprompted offer | `suggest-contacts/SKILL.md` | ✓ WIRED | Unchanged |
+| operator-chosen `per_company_cap` | grant's priced `suggestion_allowance["priced_cap"]` | code-enforced refusal | ✓ WIRED | **Now wired** — `suggest_contacts.agreed_cap()` performs this comparison in code, confirmed live this run; the composition test and sequence-coverage ratchet pin the join into the documented sequence |
 
 ### Requirements Coverage
 
 | Requirement | Source Plan(s) | Status | Evidence |
 |-------------|----------------|--------|----------|
-| SUGGEST-01 | 62-01, 62-04, 62-05 | ✓ SATISFIED | Eligibility tri-state, `num_associated_contacts` wiring, unprompted offer hook in `enrich-records/SKILL.md` all confirmed live; checked `[x]` in `v1.1-REQUIREMENTS.md` |
-| SUGGEST-02 | 62-02, 62-05 | ✓ SATISFIED | Roles + cap chosen once per batch, applied across it (`chosen_families()`, SKILL.md step 3); checked `[x]` |
-| SUGGEST-03 (amended, not closed) | 62-02 | ✓ CORRECTLY LEFT UNCHECKED | `[ ]` in `v1.1-REQUIREMENTS.md` with amendment text and D-62-07 annotation; ROADMAP.md and v1.1-ROADMAP.md both say AMENDS, not Closes — confirmed on disk, not just in commit messages |
-| SUGGEST-04 | 62-01, 62-04, 62-05 | ✓ SATISFIED | `hold_emailless` reuse, `extraction.validate()` gate, held/needs_review routing unchanged; checked `[x]` |
-| SUGGEST-05 | 62-03, 62-05 | ⚠️ PARTIALLY UNDERMINED | Pricing disclosure (envelope, ceiling, split-offer refusal) is fully wired and tested — but the round's own stated guarantee that actuals can never exceed the priced cap is NOT code-enforced at the one function that applies the cap (CR-01/WR-01). Checked `[x]` in the requirements file, which is arguably premature given the gap below — flagged for the operator's attention rather than unchecking it myself, since the pricing/disclosure half genuinely is closed and the failure is in enforcement, not disclosure. |
+| SUGGEST-01 | 62-01, 62-04, 62-05 | ✓ SATISFIED | Unchanged from prior verification |
+| SUGGEST-02 | 62-02, 62-05 | ✓ SATISFIED | Unchanged |
+| SUGGEST-03 (amended, not closed) | 62-02 | ✓ CORRECTLY LEFT UNCHECKED | Unchanged; re-confirmed live |
+| SUGGEST-04 | 62-01, 62-04, 62-05 | ✓ SATISFIED | Unchanged |
+| SUGGEST-05 | 62-03, 62-05, **62-06** | ✓ SATISFIED (no longer partially undermined) | Pricing disclosure was already fully wired; the round's own stated guarantee that actuals can never exceed the priced cap is now ALSO code-enforced at the sole function that applies the cap (`synthesise_rows`) and at the operator-choice seam (`agreed_cap`) — closing the enforcement half the prior run flagged as a gap. Checked `[x]` in `v1.1-REQUIREMENTS.md`, now fully justified. |
 
-No orphaned requirements — all SUGGEST-01..05 IDs are declared across the five plans' `requirements` frontmatter and none appear in `v1.1-REQUIREMENTS.md`'s SUGGEST section without a corresponding plan claim.
+No orphaned requirements — unchanged from prior verification.
 
 ### Anti-Patterns Found
 
 | File | Line | Pattern | Severity | Impact |
 |------|------|---------|----------|--------|
-| `operator-claude-plugin/scripts/suggest_contacts.py` | 171 | Unvalidated slice bound (`people[:per_company_cap]`) | 🛑 Blocker | Silently defeats the round's cost-control invariant on a plausible bad input (see Gaps) |
-| `scripts/role_vocabulary.py` | 114-130 (`cluster_titles`) | No retry/repair on invalid JSON from Haiku, contra CLAUDE.md §26.3's stated policy | ⚠️ Warning | Offline admin script; crashes with a traceback instead of falling back to the disclosed generic vocabulary one function away (WR-03 in code review) |
-| `scripts/role_vocabulary.py` | whole file | No test coverage of pure logic functions | ⚠️ Warning | Matches repo convention (`inventory_org_type_values.py` also untested); not a phase-specific regression |
+| `operator-claude-plugin/scripts/suggest_contacts.py` | 232-240 (was 171) | ~~Unvalidated slice bound~~ **RESOLVED** — `synthesise_rows` now guards `per_company_cap` before any slicing | — | Prior 🛑 Blocker closed; live-reproduced fix confirmed independently this run |
+| `operator-claude-plugin/scripts/suggest_contacts.py` | 216-240 | `synthesise_rows()` accepts any non-negative int directly — nothing at the Python call boundary forces routing through `agreed_cap()` first (IN-01, `62-REVIEW-GAP.md`) | ℹ️ Info | Deliberate consequence of the module-purity decision (no `write_grant` import); the ceiling holds in the documented SKILL.md dataflow (tested) but not as a runtime invariant inside `synthesise_rows` itself. Not a reopening of the closed gap — flagged for awareness, matches human-verification item 3's real-sitting test. |
+| `scripts/role_vocabulary.py` | 114-130 (`cluster_titles`) | No retry/repair on invalid JSON from Haiku, contra CLAUDE.md §26.3's stated policy | ⚠️ Warning | Unchanged; explicitly out of 62-06's scope by the plan's own scope fence (WR-03) |
+| `scripts/role_vocabulary.py` | whole file | No test coverage of pure logic functions | ⚠️ Warning | Unchanged; explicitly out of 62-06's scope (WR-02) |
 
 No `TBD`/`FIXME`/`XXX` markers found in phase-modified files.
 
@@ -141,15 +200,17 @@ No `TBD`/`FIXME`/`XXX` markers found in phase-modified files.
 
 | Behavior | Command | Result | Status |
 |----------|---------|--------|--------|
-| Full Python suite stays green | `.venv/bin/python -m pytest -q` | 3912 passed, 154 skipped, 0 failed | ✓ PASS |
-| Full Node suite stays green | `node --test tests/n8n/*.test.mjs` | 862 pass, 0 fail | ✓ PASS |
-| `synthesise_rows(cap=None)` uncaps the round | live one-off script against a 5-person fixture | 5/5 rows synthesised, no cap applied | ✓ PASS (confirms the gap, not the goal) |
-| `synthesise_rows(cap=-1)` truncates from the wrong end | live one-off script | 4/5 rows synthesised | ✓ PASS (confirms the gap, not the goal) |
-| No plugin script holds a HubSpot credential | `grep -rl "HUBSPOT_PRIVATE_APP_TOKEN\|api.hubapi.com" operator-claude-plugin/scripts/` | empty | ✓ PASS |
-| No vendor people-search calls in the new surface | `grep -rn "search-and-enrich\|mixed_people/search\|Prospecting" suggest_contacts.py role_classify.py role_vocabulary.py` | empty | ✓ PASS |
-| No backend `web_fetch` | `grep -rn "web_fetch" n8n/code/*.js` | empty | ✓ PASS |
-| Plugin version bumped | `grep version operator-claude-plugin/.claude-plugin/plugin.json` | `0.36.0` | ✓ PASS |
-| `scripts/role_vocabulary.py` lives at repo root, not under the plugin | `find . -name role_vocabulary.py` | `./scripts/role_vocabulary.py` only | ✓ PASS |
+| Full Python suite stays green (independently re-run) | `.venv/bin/python -m pytest -q` | 3929 passed, 154 skipped, 0 failed | ✓ PASS |
+| Full Node suite stays green (independently re-run) | `node --test tests/n8n/*.test.mjs` | 862 pass, 0 fail | ✓ PASS |
+| Targeted gap-closure tests (independently re-run) | `.venv/bin/python -m pytest operator-claude-plugin/tests/test_suggest_contacts.py operator-claude-plugin/tests/test_write_grant_suggestion.py operator-claude-plugin/tests/test_suggest_contacts_composition.py operator-claude-plugin/tests/test_skill_sequence_coverage.py -q` | 66 passed | ✓ PASS |
+| `synthesise_rows(cap=None)` now refuses instead of uncapping | live one-off script against a 5-person fixture, run by this verifier | `CapRefused` raised, 0 rows | ✓ PASS (gap closed) |
+| `synthesise_rows(cap=-1)` now refuses instead of truncating from the wrong end | live one-off script, run by this verifier | `CapRefused` raised, 0 rows | ✓ PASS (gap closed) |
+| `agreed_cap(5, {priced_cap:3})` refuses, naming both numbers | live one-off script, run by this verifier | `CapRefused: "...cap of 3...cap of 5..."` | ✓ PASS |
+| `agreed_cap(3, {priced_cap:3})` accepts (at-cap boundary) | live one-off script, run by this verifier | returns `3` | ✓ PASS |
+| SKILL.md's cap argument is `agreed_cap()`'s return value, not a literal | `grep -n "agreed_cap\|per_company_cap" skills/suggest-contacts/SKILL.md` | line 170 binds it, line 172 passes it | ✓ PASS |
+| Sequence-coverage ratchet pins the new join, one entry | `grep -n "suggest_contacts.agreed_cap" tests/test_skill_sequence_coverage.py` | present between `select_people` and `synthesise_rows` | ✓ PASS |
+| Plugin version bumped | `grep version .claude-plugin/plugin.json` | `0.37.0` | ✓ PASS |
+| Module purity preserved (no `write_grant` import in `suggest_contacts.py`) | `grep -c "^import write_grant\|^from write_grant" suggest_contacts.py` | `0` | ✓ PASS |
 
 ### Probe Execution
 
@@ -157,28 +218,50 @@ No `scripts/*/tests/probe-*.sh` conventions apply to this phase; none declared i
 
 ### Human Verification Required
 
-See frontmatter `human_verification` — three items carried forward unresolved from `62-VALIDATION.md`'s Manual-Only Verifications table (a real sitemap yielding a usable people page, a real stage-1→stage-2 handoff, and the priced ceiling holding in a live sitting). These are irreducibly manual by the phase's own validation strategy and were never claimed as done by any SUMMARY — correctly deferred to a live operator sitting.
+Three items — all irreducibly manual, all carried forward unresolved from `62-VALIDATION.md`'s
+Manual-Only Verifications table and from the prior VERIFICATION.md. None were claimed done by
+any SUMMARY, including 62-06's:
+
+1. **A real company's sitemap yields a usable people page on a live racing-club-shaped site.**
+   Expected: the sitemap-ladder rung resolves a people/board/team page and names at least one
+   person. Why human: `url_fallback.py` is pure string-building with no I/O by construction —
+   the unit suite proves the ladder logic, never whether a real site's sitemap lists a people
+   page.
+
+2. **Stage 1 → stage 2 handoff on a real discovered person.** Expected: a person named by the
+   ladder with no email resolves through identity group 2, the waterfall fills email/phone, and
+   the row lands as a proposal (or HELD if still emailless) — never a silent write. Why human:
+   requires a real page fetch followed by a real Lusha credit spend; neither runs in the
+   stub-transport test suite.
+
+3. **The priced ceiling is not exceeded in a real sitting.** Expected: actual page fetches and
+   provider credits spent land at or under the quoted worst-case ceiling shown at grant-open.
+   This item is now ALSO the acceptance test for the just-closed cap-enforcement gap: a real
+   sitting should demonstrate that a bad or omitted per-company cap cannot silently blow the
+   ceiling. Why human: the arithmetic and the refusal guard are both unit- and live-probe-tested
+   outside the suite, but "the operator saw a number and the round stayed under it" is an
+   end-to-end property only a live sitting demonstrates.
 
 ### Gaps Summary
 
-One gap blocks the phase goal: the per-company cap — the mechanism the whole round relies on to
-keep stage-2 provider spend inside what the operator agreed to pay — is applied by a single,
-unvalidated Python slice. A `None` cap (a plausible failure of the LLM-orchestrator-driven
-production path, not a contrived input) silently removes the cap entirely rather than refusing,
-directly contradicting the phase's own stated design rule ("a cap above the grant's priced cap
-is refused... it may never spend more"). This was raised as a Critical finding in the
-just-completed code review (`62-REVIEW.md` CR-01) and independently reproduced live in this
-verification. The fix is small (a validation guard plus a chosen-cap-vs-priced-cap refusal
-function, both suggested in the review) and does not require re-architecting anything the phase
-already built — everything else in the round (eligibility, discovery, role filtering, dedupe,
-pricing disclosure, ceiling refusal, provenance, the unprompted offer) is verified live against
-the codebase and matches its documented design.
+None remaining. The single gap from the prior verification (`gaps_found`, 12/13 — the
+per-company cap applied by an unvalidated slice) is closed, verified independently and live by
+this run rather than by trusting `62-06-SUMMARY.md`'s narrative or `62-REVIEW-GAP.md`'s
+conclusion: `CapRefused` now fires for `None`, negative, string, bool, and float caps at the
+sole site that applies the cap (`synthesise_rows`), and `agreed_cap()` code-enforces the
+chosen-cap-vs-priced-cap comparison that previously existed only as SKILL.md prose. Both are
+wired into the documented round sequence and pinned against decay by the sequence-coverage
+ratchet and a composition test. No regression was found in any of the 12 previously-verified
+truths; both full baseline suites were independently re-run and stayed green (3929p/154s/0f
+Python, 862p/0f Node).
 
-`/gsd-plan-phase --gaps` should target this one truth. After it closes, re-verification is
-expected to land `human_needed` rather than `passed` — the three manual-only items above are
-irreducible and were never meant to close automatically.
+The phase goal is code-achieved. What remains is exactly the three items that were always
+outside what static analysis or a stub-transport test suite can prove — a real sitemap yielding
+a real people page, a real stage-1→stage-2 handoff spending a real credit, and the priced
+ceiling holding (including against a bad/omitted cap) in a real operator sitting. These route
+to `human_needed` per the phase's own validation strategy, not to `passed`.
 
 ---
 
-_Verified: 2026-09-02T00:04:28Z_
+_Verified: 2026-09-02T00:20:00Z_
 _Verifier: Claude (gsd-verifier)_
