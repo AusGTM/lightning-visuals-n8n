@@ -1054,7 +1054,7 @@ shipped `0.35.0`.
 `2026-08-04-enrichment-throughput-ceiling` (63-B, **partially** — lever 2 only; levers 1 and 3 stay
 deferred by D-63-05 and CONTEXT.md's Deferred section)
 
-**Plans**: 4/5 plans executed
+**Plans**: 5/5 plans executed
 neither depends on the other; the D-63-06 replay precedes the D-63-05 constant change, and the
 deploy runs on either branch of that decision.
 
@@ -1071,7 +1071,7 @@ Plans:
 
 **Wave 3** *(blocked on Wave 2 completion)*
 
-- [ ] 63-05-PLAN.md — deploy disarmed and bounce, carrying Phase 62's undeployed changes too, proven by a disarmed execution (wave 3)
+- [x] 63-05-PLAN.md — deploy disarmed and bounce, carrying Phase 62's undeployed changes too, proven by a disarmed execution (wave 3)
 
 ## Progress
 

@@ -5,16 +5,16 @@ milestone_name: Unattended Session Runs
 current_phase: 63
 current_phase_name: The unattended lane actually runs unattended
 status: executing
-stopped_at: "Completed 63-04-PLAN.md (judge lever 2 DROP branch: drop record + todo amendment, builder/n8n untouched)"
-last_updated: "2026-09-02T06:39:16.550Z"
+stopped_at: Completed 63-05-PLAN.md (deploy Phase 62's undeployed workflow JSON disarmed, bounced, proved with disarmed execution 12070; DROP branch, one deploy carrying Phase 62's change alone)
+last_updated: "2026-09-02T06:47:06.612Z"
 last_activity: 2026-09-02
+state_head: e86642c462bad6d6e62496f411d93bebee6a97ee
 progress:
   total_phases: 13
-  completed_phases: 8
-  total_plans: 56
-  completed_plans: 54
-  percent: 62
-state_head: 16a84ae
+  completed_phases: 6
+  total_plans: 55
+  completed_plans: 55
+  percent: 46
 ---
 
 # Project State
@@ -33,14 +33,20 @@ re-plan them.
   live proof is outstanding. Resume with `/gsd-verify-work 62`.
 
 - **60 — Review-lane authority** (split out of 59). Open.
-- **63 — The unattended lane actually runs unattended.** Numbered 2026-09-02, not yet planned.
+- **63 — The unattended lane actually runs unattended.** Executed, all 5 plans complete
+  (2026-09-02): 63-A (sweep launcher shim + self-check), 63-B (judge lever 2 evaluated by offline
+  replay and dropped — see 63-04), and 63-05's deploy/bounce/prove closing the Phase 62 divergence.
+  Not yet phase-verified (`/gsd-verify-work 63`).
 
 ~~Open: **57 — the next phase**~~ — **Phase 57 completed 2026-09-01.** It is no longer the gate on
 anything. Phase 52 stays v1.0's and stays deferred indefinitely.
 
 **Standing safety fact, unchanged:** the first live UNATTENDED, credit-spending batch has **NOT**
-run. Nothing is armed. Note also that Phase 62 regenerated all the n8n workflow JSONs but did
-**not** deploy them — the committed JSON is ahead of the live n8n Cloud instance.
+run. Nothing is armed. **Update 2026-09-02 (63-05):** Phase 62's n8n workflow JSONs (regenerated
+2026-09-02 but left undeployed) are now deployed, bounced, and proven live by disarmed execution
+`12070` — the committed-vs-live divergence noted below is CLOSED, not open. `num_associated_contacts`
+and `sourceByField` are confirmed present on the running instance. Full record:
+`63-DEPLOY-RECORD.md`.
 
 **Phase 57 outcome (2026-09-01):** complete. Ceilings, refusal-before-start and post-run proof
 landed — D-57-00 supersedes D-53-02: a grant's computed ceiling is now a binding preflight
@@ -189,8 +195,29 @@ predating the window. VETO-03 bar still 0.
 
 ## Current Position
 
-Phase: 63 (The unattended lane actually runs unattended) — EXECUTING
-  (2026-09-02)
+Phase: 63 (The unattended lane actually runs unattended) — ALL 5 PLANS EXECUTED, NOT YET
+  PHASE-VERIFIED (2026-09-02)
+
+**63-05 outcome (2026-09-02, wave 3, deploy).** Deployed the committed `n8n/wf_*_cloud.json` set
+  disarmed (`DRY_RUN=false ALLOW_N8N_DEPLOY=true`, empty `ENABLE_BAKED_FLAGS` overlay — the
+  deployed JSON is byte-for-byte what the test suites ran against), then bounced
+  (deactivate/activate) all five affected workflows, each independently re-read active with a node
+  count matching the locally built JSON exactly (enrichment stays 123 — this deploy edited
+  `jsCode`/`jsonBody` strings only, added no node). Proved the RUNNING instance (not merely the
+  stored copy) with one disarmed recompute POST for Melbourne Racing Club `9604614548`: response
+  `write_blocked`; execution `12070` read back with `includeData=true` shows status `success`,
+  terminal node `Build Response`, and none of the 22 nodes that ran match any provider/write/
+  Anthropic marker — zero credits, zero Anthropic calls, zero HubSpot writes. Because 63-04 took
+  the DROP branch, this deploy carries **Phase 62's already-committed-but-undeployed change
+  alone** (`num_associated_contacts` on the enrichment workflow's companies-search node,
+  `sourceByField` on Contact Ingest's `Merge Contacts`), both confirmed present in the post-bounce
+  stored read-back — not two phases' worth, and the deploy record says so explicitly rather than
+  using SHIP-branch wording. Opportunistically recorded the lever-3 fact for a later phase:
+  `WEB_RESEARCH_MAX_SEARCHES = 5` is baked into both research-request nodes, so the effective
+  `max_uses` is 5 — unchanged, not a deliverable here. Nothing armed; write allowlist stayed
+  empty throughout. `node --test tests/n8n/*.test.mjs`: 862 pass / 0 fail. Full record:
+  `63-DEPLOY-RECORD.md`; full plan record: `63-05-SUMMARY.md`.
+  All five plans in Phase 63 (63-01 through 63-05) are now complete. Next: `/gsd-verify-work 63`.
 
 **63-02 outcome (2026-09-02, wave 2, 63-A half).** `scripts/verify_sweep_shim_scheduler.sh` —
   a self-contained, re-runnable harness — proved 63-01's shim under a REAL launchd fire, not an
@@ -413,7 +440,7 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [██████████] 96% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
+Progress: [█████░░░░░] 46% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
 63 numbered, not planned; 52 deferred indefinitely (v1.0). Every plan on disk has a SUMMARY
 (56/56) — the outstanding work is live proof and two unplanned phases, not unexecuted plans.
@@ -422,8 +449,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-02T06:39:16.539Z
-**Stopped at:** Completed 63-04-PLAN.md (judge lever 2 DROP branch: drop record + todo amendment, builder/n8n untouched)
+**Last session:** 2026-09-02T06:47:06.196Z
+**Stopped at:** Completed 63-05-PLAN.md (deploy Phase 62's undeployed workflow JSON disarmed, bounced, proved with disarmed execution 12070; DROP branch, one deploy carrying Phase 62's change alone)
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
@@ -544,6 +571,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 63 P01 | 25min | 3 tasks | 5 files |
 | Phase 63 P02 | 26min | 2 tasks | 3 files |
 | Phase 63 P04 | ~20 min | 2 tasks | 2 files |
+| Phase 63 P05 | 30min | 2 tasks | 1 files |
 
 ## Decisions
 
