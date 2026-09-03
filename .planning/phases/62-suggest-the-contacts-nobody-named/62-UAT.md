@@ -315,3 +315,131 @@ An earlier attempt was killed by a 10-minute command timeout mid-run. The gate w
 immediately and read `disarmed PASS` — the context manager had already closed before the
 kill. Recorded because it is the exact scenario the single-process discipline exists for,
 and it held.
+
+- gap_id: G-62-2
+  truth: "A company's own sitemap is reachable when the site serves it from the apex while HubSpot records www (or vice versa)"
+  status: failed
+  origin: OPERATOR RULING, 2026-09-03 — "Accept apex and www as one and the same (redirects accepted)"
+  reason: |
+    Live, on 1 of 4 companies in the first real batch (25%). Gladstone Turf Club is recorded
+    as `www.gladstoneturfclub.com.au`; its own sitemap index points at the apex
+    `gladstoneturfclub.com.au`. `same_host` refuses every one of those URLs:
+      "gladstoneturfclub.com.au is not the pasted URL's host (www.gladstoneturfclub.com.au)
+       — refusing to follow it off-host."
+    The guard is behaving correctly — this is not a defect in it. The cost is that the
+    company is lost to the round, including a sitemap literally named `dt_staff-sitemap.xml`.
+  severity: major
+  test: 1
+  root_cause: |
+    `url_fallback.same_host` compares `urlsplit().netloc` exactly. 62-07 Decision 2
+    deliberately scoped apex<->www canonicalisation OUT ("deliberately does not fix: apex/www
+    canonical mismatch"), which was a defensible call at plan time; this sitting measured its
+    incidence at 25% of a real batch, which is the new information.
+  missing:
+    - "Treat apex and www as the same host for the same registrable domain — the operator's ruling. Scope it to that ONE equivalence; do not weaken same_host into a suffix or subdomain match, which would let `evil.gladstoneturfclub.com.au.attacker.tld` through"
+    - "Accept redirects (operator ruling). Note `WebFetch` returns a cross-host redirect to the caller rather than following it, so 'accept redirects' needs an explicit decision about which redirect targets are in scope — same registrable domain only, most likely"
+    - "A regression fixture for BOTH directions: recorded apex + site serves www, and recorded www + site serves apex"
+    - "Keep the refusal message's shape for genuinely off-host URLs — naming both hosts is what made this diagnosable in one read"
+  debug_session: ""
+
+- gap_id: G-62-3
+  truth: "The default role vocabulary matches the job titles that actually appear on this portal's companies' people pages"
+  status: failed
+  origin: OPERATOR RULING, 2026-09-03 — "expand default fallback positions in role_vocabulary.py list to match and partial match what was observed"
+  reason: |
+    43 people were named across three racing-club board/committee pages. TWO survived the
+    role filter. Roma Turf Club: 16 named, 0 selected.
+    Observed titles the generic list does not contain: Chairman, Deputy Chairman, President,
+    Vice President, Vice Chairman, Director, Board Of Directors, Treasurer, Secretary,
+    Secretary Manager, Committee member, Track Manager, Catering Manager, Racecourse Track
+    Curator, Executive Assistant, Finance & Admin Officer, Trackwork Supervisor.
+    The two that matched did so exactly: "Operations Manager" and "General Manager".
+  severity: major
+  test: 1
+  root_cause: |
+    `role_classify.load_families()` is serving `source: generic_fallback`, `evidenced: false`,
+    `distinct_titles_sampled: 0` — eight generic corporate roles (CEO, CMO, Head of Broadcast,
+    …). Matching is exact-label only. Racing clubs use governance vocabulary, not corporate
+    vocabulary, so the intersection is nearly empty.
+    D-62-07's disclosure predicted this in prose and was shown verbatim to the operator; what
+    is new is the measured yield — 2/43.
+  missing:
+    - "Expand the generic fallback list to include the governance titles observed above (operator ruling)"
+    - "Add PARTIAL matching (operator ruling) — 'Secretary Manager' should match a Secretary family, 'Board Of Directors' a Director family. Decide and record the matching rule (substring? token overlap? normalised contains?) rather than leaving it implicit, and make sure it cannot over-match, e.g. 'Track Manager' must not be swept into 'General Manager'"
+    - "Case/entity normalisation on both sides of the comparison — the portal already stores 'AV &amp; Broadcast Senior Executive' with the entity unescaped"
+  debug_session: ""
+
+- gap_id: G-62-4
+  truth: "A suggestion round can dispatch its stage-2 enrichment by following the documented skill sequence"
+  status: failed
+  reason: |
+    It cannot. Following `suggest-contacts/SKILL.md` exactly, stage 2 dies on the first chunk:
+      ChunkResult(index=0, rows=1, ok=False,
+        reason='A row without a `row_id` can never be matched back to its response —
+                `row_id` is the join key every downstream verdict is keyed on.')
+    Nothing is spent and nothing is sent — the refusal is clean and fail-closed — but the
+    round cannot proceed. Test 2 passed in this sitting ONLY because the missing call was
+    supplied by hand.
+  severity: blocker
+  test: 2
+  root_cause: |
+    `preingest.build_rows_spec(rows)` is the single place `row_id` is minted ("once, at the
+    whole-batch level — before anything is chunked", preingest.py:129), and it returns exactly
+    the `{"rows": [...], "object_type": "contacts"}` spec `chunking.plan_chunks` takes.
+    `suggest-contacts/SKILL.md` never calls it. Grepping the skill for `build_rows_spec`,
+    `row_id` or `mint` returns nothing.
+    Nothing else in the documented chain supplies one either, verified by running it:
+    `synthesise_rows` emits only canonical props and ASSERTS that no non-canonical key
+    (including `row_id`) is present; `round_artifact` only wraps; and
+    `extraction.validate()` returns the row still carrying just the four canonical keys.
+    The skill's step 8 additionally places `extraction.validate()` AFTER stage 2, so even if
+    validate did mint an id it would arrive too late for the dispatch in step 7.
+    Same class as G-62-1: a seam between two components whose contracts do not meet, invisible
+    to a unit suite that never drives the documented end-to-end order.
+  artifacts:
+    - path: "operator-claude-plugin/skills/suggest-contacts/SKILL.md"
+      issue: "steps 7-8 dispatch stage 2 without ever calling preingest.build_rows_spec; the worked example in step 8 has the same omission"
+  missing:
+    - "Call `preingest.build_rows_spec()` on the round's synthesised rows before stage-2 dispatch, and use its returned spec as the chunking spec"
+    - "Decide where it belongs given the round is per-company but ids must be minted once for the WHOLE batch — build_rows_spec refuses a row that already has an id, so it cannot be called per company and then again for the batch"
+    - "Fix the worked example in step 8, which an implementer will copy verbatim"
+    - "An end-to-end test that drives the documented sequence with a stub transport and asserts a chunk is ACCEPTED — the existing suite tests the parts, and every part passes"
+  debug_session: ""
+
+- gap_id: G-62-5
+  truth: "`role_vocabulary.py` can derive an evidenced role vocabulary from this portal"
+  status: failed
+  reason: |
+    `python scripts/role_vocabulary.py --dry-run` crashes:
+      JSONDecodeError: Expecting value: line 1 column 1 (char 0)   (role_vocabulary.py:129)
+    The portal is NOT sparse — 2,045 distinct job titles across 3,772 contacts, far above
+    SPARSE_THRESHOLD (20) — so the generic fallback currently in use is not the portal's fault.
+  severity: major
+  test: 1
+  root_cause: |
+    Probed live (`scripts/uat62_cluster_probe.py`). TWO independent causes, and the second is
+    the one that matters:
+      1. The response is fenced — text begins '```json\n{' — so the bare `json.loads(text)`
+         at line 129 fails at char 0. The repo already has a tolerant parser for exactly this
+         (`src/web_research.py::_extract_json`, strips fences, falls back to a regex object
+         scan) and this script does not use it. CLAUDE.md §26.3 also specifies
+         "Haiku invalid JSON -> Retry once with repair prompt"; there is no retry.
+      2. It is ALSO truncated: `stop_reason: max_tokens`, `out=2000` exactly at the cap, text
+         ending mid-object. So fence-stripping alone does NOT fix it — `_extract_json` was
+         tried against the same text and failed at char 8464 with "Expecting ',' delimiter".
+    The underlying error is one of scale: the system prompt requires every family member to be
+    a verbatim input title, so output grows with input, and 2,045 titles (16,079 input tokens)
+    cannot be echoed inside max_tokens=2000.
+    Sharpest observation: `TOP_N_FAMILIES = 8`. The script clusters all 2,045 titles and then
+    keeps 8 families — it pays to cluster the entire tail in order to discard nearly all of it.
+  missing:
+    - "Rank by recurrence FIRST and cluster only the head, rather than clustering 2,045 titles to keep 8 families — this is the design fix; a max_tokens bump alone just moves the ceiling"
+    - "Use the repo's existing `_extract_json` (or the same technique) instead of a bare json.loads, and honour CLAUDE.md §26.3's retry-once-with-repair contract"
+    - "Fail loudly on `stop_reason == 'max_tokens'` rather than letting a truncated body reach the parser as an opaque JSONDecodeError"
+    - "Decode HTML entities and drop non-title junk before counting — the portal stores 'AV &amp; Broadcast Senior Executive' and '+61407 911 185' as distinct job titles, and `rank_top_families` silently drops any member that does not match `counts` exactly"
+  note: |
+    The operator's chosen remedy for the immediate problem is G-62-3 (expand and partial-match
+    the FALLBACK list), which does not require this to be fixed. Recorded because it is a live
+    crash in a shipped script, and because until it works this portal cannot have an evidenced
+    vocabulary at all. Sequencing is the operator's call.
+  debug_session: ""
