@@ -5,16 +5,16 @@ milestone_name: Unattended Session Runs
 current_phase: 60
 current_phase_name: Review-lane authority
 status: executing
-stopped_at: All 12 audit-sweep dispositions CLOSED and pushed (origin/master d45fa2b); only operator-gated audit-uat items remain, phase 60 verification human_needed
-last_updated: "2026-09-03T07:40:00.000Z"
+stopped_at: Completed 60-05-PLAN.md (G-60-1, G-60-2 gap closure)
+last_updated: "2026-09-03T10:46:39.912Z"
 last_activity: 2026-09-03
 last_activity_desc: T-47-08 armed-loop ordering folded back and put under test; six granted register corrections applied across phases 46/48/51/53
-state_head: 919f7d3
+state_head: 020148b3bfd55c16a3a2be64a1eb862e37e43f89
 progress:
   total_phases: 13
   completed_phases: 7
-  total_plans: 55
-  completed_plans: 55
+  total_plans: 56
+  completed_plans: 56
   percent: 54
 ---
 
@@ -497,7 +497,7 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████░░░░░] 46% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
+Progress: [█████░░░░░] 54% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
 63 numbered, not planned; 52 deferred indefinitely (v1.0). Every plan on disk has a SUMMARY
 (56/56) — the outstanding work is live proof and two unplanned phases, not unexecuted plans.
@@ -506,8 +506,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-03T06:50:06.744Z
-**Stopped at:** context exhaustion at 76% (2026-09-03)
+**Last session:** 2026-09-03T10:46:21.765Z
+**Stopped at:** Completed 60-05-PLAN.md (G-60-1, G-60-2 gap closure)
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
@@ -629,6 +629,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 63 P02 | 26min | 2 tasks | 3 files |
 | Phase 63 P04 | ~20 min | 2 tasks | 2 files |
 | Phase 63 P05 | 30min | 2 tasks | 1 files |
+| Phase 60 P05 | 90m | 3 tasks | 8 files |
 
 ## Decisions
 
@@ -731,6 +732,8 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 - [Phase ?]: Phase 62 gap closure: per-company cap enforced in code (suggest_contacts.CapRefused/agreed_cap), closing CR-01/WR-01. Deliberate asymmetry: synthesise_rows accepts cap>=0, agreed_cap requires 1..priced_cap. Released as plugin 0.37.0.
 - [Phase 63]: 63-01: sweep_shim kept out of ALLOWED_MODULES (subprocess, not import); wrapper capability test widened + --install-never-invoked test added instead — sweep_entry's python import closure test asserts exact equality with ALLOWED_MODULES, so adding a subprocess-only script there would have broken that check for an unrelated reason
 - [Phase 63]: Judge lever 2 (cheaper-model routing) DROP verdict acted on: 63-JUDGE-LEVER-DROP-RECORD.md written, throughput todo amended, builder/n8n untouched. — 63-JUDGE-REPLAY-VERDICT.json read material_disagreement + insufficient_corpus; per D-63-06 accepted as-is, no re-run.
+- [Phase 60]: 60-05: verify_decision splits into two legs over a closed PREVIEW_UNPINNABLE_KEYS set (leg 1 vs backend's own submit-time patch, leg 2 vs the independent refetch) to fix the false-failed verdict G-60-1 diagnosed on every successful review approve
+- [Phase 60]: 60-05: verify_live_write_safety.verify() gained an optional armed_workflow scoping parameter (default None = today's unscoped verdict) so an operator can pin a single-workflow armed window without narrowing scan coverage, closing G-60-2
 
 ### Roadmap Evolution
 

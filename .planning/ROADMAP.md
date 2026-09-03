@@ -678,7 +678,7 @@ review became grantable (plan 02), and `n8n/code/reviewDecision.js`'s `not_allow
 becomes false once a grant can set the allowlist dynamically (plan 04, changed at its source and
 regenerated — never a hand-edit of the JSON).
 
-**Plans**: 5 plans (4/5 executed; 60-05 is gap closure from the 2026-09-03 supervised walk)
+**Plans**: 5/5 plans executed (4/5 executed; 60-05 is gap closure from the 2026-09-03 supervised walk)
 
 - [x] 60-01-PLAN.md — TRACER: `"review"` becomes a grantable lane end-to-end (LANES, `REVIEW_FLAGS`,
       `arm_for_review`, `submit_decision`'s grant gate), with the two reversed-design tests rewritten
@@ -694,7 +694,7 @@ regenerated — never a hand-edit of the JSON).
       review-triage skill on the grant, three-lane grants in the dispatch skills, truthful gate tables,
       CHANGELOG and version `0.35.0`. Wave 3.
 
-- [ ] 60-05-PLAN.md — GAP CLOSURE (G-60-1, G-60-2) from the 2026-09-03 supervised operator walk:
+- [x] 60-05-PLAN.md — GAP CLOSURE (G-60-1, G-60-2) from the 2026-09-03 supervised operator walk:
       `verify_decision` compares on two legs so a successful approve stops reporting a false
       `failed`, and `verify_live_write_safety.py` gains a scoped armed expectation that cannot
       blind the scan. Client-side only — no n8n change. Wave 1.
@@ -1099,7 +1099,7 @@ Plans:
 | 57. Ceilings, Refusal-before-start, Post-run Proof | v1.1 | 4/5 | In Progress|  |
 | 58. Take What the Operator Actually Has | v1.1 | 6/6 | Complete (verified) | 2026-08-26 |
 | 59. Frictionless Write Path | v1.1 | 9/9 | Complete (verified 18/18, after gap closure) | 2026-08-29 |
-| 60. Review-lane Authority | v1.1 | 4/4 | In Progress|  |
+| 60. Review-lane Authority | v1.1 | 5/5 | In Progress|  |
 | 61. Autonomous Batch Runs (absorbs 55 + 56) | v1.1 | 6/6 | Complete (verified 12/12) | 2026-08-30 |
 
 ## Ledger gaps (known)
