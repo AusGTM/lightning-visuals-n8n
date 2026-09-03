@@ -32,7 +32,17 @@ const { normalizeEnumValue } = require("./hubspotEnums");
 // so adding/removing an evidence-gated org_type is a taxonomy.yaml + rebuild, not a
 // second hand edit here.
 const DEFAULT_COMPANY_POLICY = {
-  domain:                  { class: "manual_protected",  min_confidence: 95 },
+  // system_correctable_sources (quick task 260904-pav): the provenance sources whose
+  // recorded value this engine may correct despite manual_protected. Exactly ONE member,
+  // and not by accident: `create_seed` (ENRICH_DECIDE_CO_CLOUD's create branch) is the
+  // only source in the system that ever writes a canonical `domain`. Every other source's
+  // `domain` provenance entry is a STAGED REFUSAL — mergeCompanies provenances every
+  // field, promoted or not — so admitting `waterfall`/`claude_web`/`hubspot_native`/
+  // `june_2026` would let a candidate this gate already refused authorise its own
+  // promotion on the next run. An absent key means "never correctable", which is what
+  // every other field (and the unreachable contacts branch) keeps.
+  domain:                  { class: "manual_protected",  min_confidence: 95,
+                             system_correctable_sources: ["create_seed"] },
   industry:                { class: "stale_refreshable", min_confidence: 75 },
   // 58-05 Task 2: reclassified stale_refreshable -> fill_blank_only (operator ruling,
   // 2026-08-26, 58-03-SUMMARY.md Decisions Made item (b); CLAUDE.md §29 amended to match).
@@ -128,9 +138,48 @@ function _needsEvidence(policy, value) {
   return false;
 }
 
+// Parse the record's `lv_enrichment_provenance` blob. Fails CLOSED: anything that is not
+// a readable plain object degrades to {} and therefore to today's refusal. Deliberately
+// module-private rather than an import — the wrapper's own _parseProvenanceBlob lives in
+// scripts/build_cloud_workflows.py, not in n8n/code/, so there is nothing to share.
+function _parseProvenanceEntries(raw) {
+  if (raw === null || raw === undefined || raw === "") return {};
+  let parsed = raw;
+  if (typeof raw === "string") {
+    try { parsed = JSON.parse(raw); } catch (e) { return {}; }
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
+  return parsed;
+}
+
+// May this manual_protected field's EXISTING value be corrected by the candidate?
+// (quick task 260904-pav; CLAUDE.md §17.2's "existing value was previously written by the
+// enrichment system" PROMOTE clause, finally implemented.) FOUR conjuncts, each of which
+// refuses on its own:
+//   1. the field's policy opts in via a non-empty system_correctable_sources list;
+//   2. the record carries a provenance entry for this field whose `source` is on it;
+//   3. the entry's recorded `value` is STILL the record's current value — otherwise a
+//      human has since retyped it, or a previously refused candidate left the entry
+//      behind, and neither may authorise a write;
+//   4. rowConflicted === false STRICTLY. No permissive default: `undefined` refuses, so a
+//      caller that has not opted in never gets this path with the franchisor guard off.
+// The confidence bar is not restated here — _gate only reaches the class branches after
+// its own `confidence < minConfidence` check, so a correction is automatically held to
+// domain's 95, the highest threshold in the policy.
+function _isSystemCorrectable(policy, entry, currentValue, rowConflicted) {
+  const sources = policy && policy.system_correctable_sources;
+  if (!Array.isArray(sources) || sources.length === 0) return false;
+  if (!entry || typeof entry !== "object") return false;
+  if (sources.indexOf(entry.source) === -1) return false;
+  if (_isBlank(entry.value) || _isBlank(currentValue)) return false;
+  if (String(entry.value) !== String(currentValue)) return false;
+  return rowConflicted === false;
+}
+
 // Deterministic gate — single candidate, mirrors merge_policy.deterministic_gate.
 // has_conflict is always false with one candidate, so the conflict branch is dropped.
-function _gate(field, currentValue, confidence, policy, evidenceUrl, value) {
+function _gate(field, currentValue, confidence, policy, evidenceUrl, value,
+               provenanceEntry, rowConflicted) {
   const fieldClass = (policy && policy.class) || "fill_blank_only";
   const minConfidence = (policy && policy.min_confidence != null) ? policy.min_confidence : 80;
 
@@ -145,6 +194,12 @@ function _gate(field, currentValue, confidence, policy, evidenceUrl, value) {
              reason: `Field ${field}=${value} requires an evidence URL; none supplied.` };
   }
   if (fieldClass === "manual_protected") {
+    if (_isSystemCorrectable(policy, provenanceEntry, currentValue, rowConflicted)) {
+      return { decision: "promote", correction: true,
+               reason: `Existing value was written by the enrichment system ` +
+                       `(provenance source ${provenanceEntry.source}) and still matches; ` +
+                       `candidate passed the ${minConfidence} threshold on a conflict-free row.` };
+    }
     return { decision: "stage_only", reason: "Field is manual_protected." };
   }
   if (fieldClass === "review_required") {
@@ -178,7 +233,12 @@ function _statusFor(decision) {
 //   candidateRow:  canonical-keyed candidate values (post normalizeProviders + score)
 //   fieldPolicy:   companies policy block; defaults to DEFAULT_COMPANY_POLICY
 //   opts:          { source="provider", confidence=80, evidence={field: url},
-//                    confidenceByField={field: number} }
+//                    confidenceByField={field: number}, rowConflicted=<boolean> }
+//                  `rowConflicted` (260904-pav) — the caller's statement that some field
+//                  on this row has materially conflicting sources. Only ever read by the
+//                  manual_protected correction path, and only `false` (strictly) unlocks
+//                  it; omitting the key refuses, so an un-migrated caller cannot get the
+//                  correction with the franchisor guard silently off.
 //                  `evidence` mirrors enrichmentGate's opts.validity: an upstream-supplied
 //                  per-field map, absent = no evidence.
 //                  `confidenceByField` (Phase 15.5 TA-8, additive) — a per-field override
@@ -197,6 +257,10 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
   const flatConfidence = (opts && opts.confidence != null) ? opts.confidence : 80;
   const confidenceByField = (opts && opts.confidenceByField) || {};
   const evidence = (opts && opts.evidence) || {};
+  // 260904-pav: parsed ONCE per call, not per field, and read strictly (see
+  // _isSystemCorrectable) — `undefined` is not "no conflict", it is "caller did not say".
+  const provenanceEntries = _parseProvenanceEntries(existingProps.lv_enrichment_provenance);
+  const rowConflicted = opts && opts.rowConflicted;
   const verifiedAt = _nowIso();
 
   const canonicalPatch = {};
@@ -225,13 +289,18 @@ function mergeCompanies(existingProps, candidateRow, fieldPolicy, opts) {
     const enumCheck = normalizeEnumValue(field, value);
     if (enumCheck.ok) value = enumCheck.value;
 
-    const gate = _gate(field, currentValue, confidence, fieldPol, evidenceUrl, value);
+    const gate = _gate(field, currentValue, confidence, fieldPol, evidenceUrl, value,
+                       provenanceEntries[field], rowConflicted);
     let decision = gate.decision;
 
     // HARD GUARD: domain never promotes to canonical on the enrich path (belt-and-braces —
     // the manual_protected class + the 95 threshold already prevent it, but this holds
     // regardless of policy edits). Mirrors the mergeContacts email guard.
-    if (field === "domain" && decision === "promote") decision = "stage_only";
+    // 260904-pav: the ONE exception is the provenance-aware correction — a domain the
+    // system parked itself, still unedited, on a conflict-free row, at >=95. Tested on
+    // gate.correction (a structural flag), never on the reason string, and never by
+    // relaxing the guard to "unless promote": every other domain promote still demotes.
+    if (field === "domain" && decision === "promote" && !gate.correction) decision = "stage_only";
     // ENUM GUARD cont'd: a value HubSpot's enum will refuse is NEVER offered for review —
     // it stays staged (never needs_review, never promote), whatever the gate decided,
     // because no human approval can make an invalid enum value valid.

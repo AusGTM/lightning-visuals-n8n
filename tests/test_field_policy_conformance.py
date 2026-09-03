@@ -94,5 +94,25 @@ def test_min_confidence_matches_where_yaml_declares_it(yaml_policy, js_policy):
     )
 
 
+def test_system_correctable_sources_matches(yaml_policy, js_policy):
+    # 260904-pav: this key decides whether a manual_protected field can ever be corrected,
+    # so a drift between the two tables is a silent policy fork — one engine correcting a
+    # value the other still protects. Compared on both sides (a key present in only one is
+    # itself the drift), unlike min_confidence above which is asserted YAML-first.
+    def key(policy, field):
+        return policy[field].get("system_correctable_sources")
+
+    mismatched = {
+        field: (key(yaml_policy, field), key(js_policy, field))
+        for field in set(yaml_policy) & set(js_policy)
+        if key(yaml_policy, field) != key(js_policy, field)
+    }
+    assert not mismatched, (
+        "config/field_policy.yaml and n8n/code/mergeCompanies.js disagree on "
+        f"`system_correctable_sources` for these fields (yaml, js): {mismatched}. Edit "
+        "both files in the same commit."
+    )
+
+
 if __name__ == "__main__":
     sys.exit(pytest.main([__file__, "-q"]))

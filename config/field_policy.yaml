@@ -6,6 +6,17 @@ companies:
     promote_to_canonical: false
     stage_only: true
     min_confidence: 95
+    # quick task 260904-pav: the provenance sources whose recorded value the merge engines
+    # may correct despite manual_protected. Exactly ONE member, and not by accident:
+    # `create_seed` (the company create branch's identity echo) is the only source in the
+    # system that ever writes a canonical `domain`. Every other source's `domain`
+    # provenance entry is a STAGED REFUSAL, so admitting waterfall/claude_web/
+    # hubspot_native/june_2026 would let a candidate the gate already refused authorise
+    # its own promotion next run. An absent key means "never correctable" — which is what
+    # every other field here keeps. Mirrored in n8n/code/mergeCompanies.js's
+    # DEFAULT_COMPANY_POLICY (same commit; tests/test_field_policy_conformance.py pins it).
+    system_correctable_sources:
+      - create_seed
 
   industry:
     class: stale_refreshable

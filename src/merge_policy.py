@@ -109,6 +109,50 @@ def has_conflict(candidates: List[CandidateValue]) -> bool:
     return len(values) > 1
 
 
+def parse_provenance_entries(raw) -> dict:
+    """JS twin: n8n/code/mergeCompanies.js's _parseProvenanceEntries. Fails CLOSED —
+    anything that is not a readable plain object degrades to {} and therefore to
+    today's refusal."""
+    if raw is None or raw == "":
+        return {}
+    if isinstance(raw, dict):
+        return raw
+    if not isinstance(raw, str):
+        return {}
+    try:
+        parsed = json.loads(raw)
+    except (ValueError, TypeError):
+        return {}
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def is_system_correctable(policy, entry, current_value, row_conflicted) -> bool:
+    """May this manual_protected field's EXISTING value be corrected by the candidate?
+    (quick task 260904-pav; CLAUDE.md §17.2's "existing value was previously written by
+    the enrichment system" PROMOTE clause.) JS twin: mergeCompanies.js's
+    _isSystemCorrectable, same four conjuncts.
+
+    DELIBERATE DIVERGENCE, not drift: the JS engine takes `rowConflicted` as an explicit
+    caller opt-in, because its wrapper (ENRICH_MERGE_CO) has already computed a ROW-level
+    cross-provider conflict set before it calls mergeCompanies. This function has no such
+    object — only its own candidate list — so the caller below passes the
+    `has_conflict(candidates)` it already computes. Different input, same intent: a
+    franchisor's or parent company's domain must never win on confidence alone.
+    """
+    sources = policy.get("system_correctable_sources") if policy else None
+    if not isinstance(sources, list) or not sources:
+        return False
+    if not isinstance(entry, dict):
+        return False
+    if entry.get("source") not in sources:
+        return False
+    if is_blank(entry.get("value")) or is_blank(current_value):
+        return False
+    if str(entry.get("value")) != str(current_value):
+        return False
+    return row_conflicted is False
+
+
 def deterministic_gate(record, field, current_value, candidates, policy, provider_priority):
     if not candidates:
         return {
@@ -139,6 +183,25 @@ def deterministic_gate(record, field, current_value, candidates, policy, provide
         }
 
     if field_class == "manual_protected":
+        # 260904-pav: the ONE way past manual_protected — the existing value's own
+        # provenance says the enrichment system parked it there, it is still that value,
+        # no candidate conflicts, and the candidate already cleared the field's own
+        # min_confidence (checked above, so a correction is held to domain's 95 with no
+        # new threshold key). `record` may be None on this path (several callers pass it),
+        # so read the blob defensively.
+        props = getattr(record, "properties", None) or {}
+        entry = parse_provenance_entries(props.get(COMPANY_PROVENANCE_KEY)).get(field)
+        if is_system_correctable(policy, entry, current_value, has_conflict(candidates)):
+            return {
+                "decision": "promote",
+                "chosen": best,
+                "confidence": best.confidence,
+                "reason": (
+                    f"Existing value was written by the enrichment system "
+                    f"(provenance source {entry.get('source')}) and still matches; "
+                    f"candidate passed the {min_confidence} threshold with no candidate conflict."
+                )
+            }
         return {
             "decision": "stage_only",
             "chosen": best,
