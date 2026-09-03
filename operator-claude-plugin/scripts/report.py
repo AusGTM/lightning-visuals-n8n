@@ -78,6 +78,33 @@ def _node_output_items(run):
     return branch if isinstance(branch, list) else []
 
 
+def all_node_items(run_data, node_name):
+    """Every run's output items for `node_name`, concatenated in run order.
+
+    n8n executes a node once per inbound connection that delivers data. A node fed by
+    more than one edge into its `main[0]` input (e.g. `Merge Winners`'s three inbound
+    branches in `n8n/wf_enrichment_cloud.json`) therefore runs once per branch when a
+    batch's rows diverge upstream — arriving as one run per branch, each carrying a
+    subset of the batch — rather than once with every row. A reader that takes only
+    `runs[0]` silently discards every other branch's rows (62-11-DIAGNOSIS.md, live on
+    executions 12096/12098: `Build Response` and `Decide Action` both split into two
+    runs of one item, and `runs[0]`-only readers returned one row against a summed two).
+
+    Tolerates exactly what `_node_output_items` already tolerates for a single run: an
+    absent node, a non-list run collection, and a malformed run entry all yield `[]`
+    for their contribution rather than raising — never a partial guess.
+    """
+    if not isinstance(run_data, dict):
+        return []
+    runs = run_data.get(node_name)
+    if not isinstance(runs, list):
+        return []
+    items = []
+    for run in runs:
+        items.extend(_node_output_items(run))
+    return items
+
+
 def contact_row_ledger(execution):
     """Authoritative per-row outcome for `hubspot/contact-upload`, read from
     `Decide Action`'s own output — NOT `Set Review`, `HubSpot Update` or

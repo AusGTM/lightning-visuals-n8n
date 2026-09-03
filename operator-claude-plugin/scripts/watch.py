@@ -400,11 +400,19 @@ def _execution_carries_run_id(execution, run_id) -> bool:
 def _build_response_rows(execution) -> list:
     """The SAME raw items `Build Response` emits as the synchronous webhook body,
     read from the settled execution instead of the HTTP response — byte-identical
-    shape, never a second value channel."""
+    shape, never a second value channel.
+
+    Reads EVERY run of `Build Response`, not just run 0 (62-11-DIAGNOSIS.md, G-62-6):
+    a batch whose rows split at `Merge Winners` (one row needs research, one does not)
+    reconverges on `Build Response` as one run per branch, each carrying one item —
+    live-confirmed on executions 12096/12098, where a `runs[0]`-only read returned 1
+    row against a summed `Build Response` total of 2. `report.all_node_items`
+    concatenates every run in order, so both branches' rows come back.
+    """
     run_data = report._run_data(execution)
     if run_data is None:
         return []
-    items = report_enrichment._first_node_items(run_data, report_enrichment.BUILD_RESPONSE_NODE)
+    items = report.all_node_items(run_data, report_enrichment.BUILD_RESPONSE_NODE)
     return [item["json"] for item in items if isinstance(item, dict) and isinstance(item.get("json"), dict)]
 
 

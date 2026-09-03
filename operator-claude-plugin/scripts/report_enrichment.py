@@ -36,7 +36,7 @@ reuses it with no such risk.
 """
 
 import written_records
-from report import SETTLED_STATUSES, SMALL_BATCH_THRESHOLD, _node_output_items, _run_data
+from report import SETTLED_STATUSES, SMALL_BATCH_THRESHOLD, _node_output_items, _run_data, all_node_items
 
 # The enrichment workflow runs one or both lanes in a single execution (a batch can
 # carry both company and contact events) — read whichever of these are present,
@@ -127,6 +127,13 @@ def enrichment_row_ledger(execution):
     Returns `(ledger, reason)`. `reason` is `None` on success; when neither decision
     node ran, `ledger` is `[]` and `reason` names what was missing — never an
     exception, never a partial guess.
+
+    Reads EVERY run of each decision node, not just run 0 (62-11-DIAGNOSIS.md,
+    G-62-6): `Decide Action` split into two runs of one item on live executions
+    12096/12098, the identical fan-in shape `Build Response` shows downstream of it —
+    a `runs[0]`-only read here would silently drop the second run's row the same way.
+    `Merge Company`'s fan-in gives `Decide Company Action` the same exposure, in
+    principle, though no company row exercised it live.
     """
     run_data = _run_data(execution)
     if run_data is None:
@@ -134,11 +141,7 @@ def enrichment_row_ledger(execution):
 
     ledger = []
     for lane, node_name in _ACTION_LANE_ORDER:
-        runs = run_data.get(node_name)
-        first_run = runs[0] if isinstance(runs, list) and runs else None
-        if not isinstance(first_run, dict):
-            continue
-        for item in _node_output_items(first_run):
+        for item in all_node_items(run_data, node_name):
             if isinstance(item, dict) and isinstance(item.get("json"), dict):
                 ledger.append({**item["json"], "_lane": lane})
 
