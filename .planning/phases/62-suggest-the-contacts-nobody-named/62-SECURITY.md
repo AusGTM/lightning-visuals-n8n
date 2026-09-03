@@ -6,6 +6,7 @@ status: verified
 threats_open: 0
 asvs_level: 1
 created: "2026-09-02"
+updated: "2026-09-04"
 ---
 
 # Phase 62 — Security
@@ -21,6 +22,14 @@ produced one mitigation that was described in a plan and existed **only as SKILL
 see the CR-01 note below — which a grep-level pass would have counted as closed. The auditor was
 spawned and every `mitigate` threat was verified against enforcing code or a test, with live
 execution used wherever a mitigation had a broken history.
+
+**Extended 2026-09-04** to cover plans 62-11 and 62-12, which landed after the 2026-09-02
+audit and were not yet in this artifact. Same discipline: every `mitigate` threat checked
+against a cited `file:line`, several live-reproduced rather than trusted from the SUMMARYs
+alone (the required `company_domains` parameter was independently confirmed to raise
+`TypeError` when omitted; the suffix-trap and subdomain fixtures were hand-traced against
+`email_domain_relation`'s actual branches, not just read). Prior findings (62-01..62-10) are
+untouched below.
 
 ---
 
@@ -39,6 +48,11 @@ execution used wherever a mitigation had a broken history.
 | HubSpot company search → row → response projection | Portal data crossing into a spend decision | `num_associated_contacts` (read-only rollup) |
 | operator → LLM orchestrator → `synthesise_rows` | The per-company cap is spoken by a human and threaded by an LLM | An integer that becomes real Lusha credit |
 | round → provider waterfall | Every emitted row becomes a stage-2 provider credit | ~1 Lusha credit per contact |
+| n8n executions API — the diagnosis artifact / the client's verdict list (62-11) | Stored execution payloads carry real contact data; a reader that silently returns a subset makes the client under-report what n8n actually produced | Row verdicts, run/item counts, provider `billing` blocks |
+| repo `.env` — the diagnostic invocation (62-11) | `N8N_API_KEY` read into a short-lived process for a read-only executions-API walk | Bearer/API-key header, never echoed |
+| provider response — a sendable row (62-12) | A provider resolving a weak `firstname+lastname+company` key can return a different person's contact details | Enriched email vs. the company's recorded domain |
+| CRM `website`/`domain` property — the send-direction comparison baseline (62-12) | The company's recorded website decides who is sendable; a profile-host or absent value must fail closed | Domain strings only, no credential |
+| JS freemail set (`n8n/code/companyLink.js`) — Python mirror (62-12) | Two engines classifying the same domain differently is a silent divergence | `FREEMAIL_DOMAINS` membership |
 
 ---
 
@@ -80,6 +94,19 @@ adopt a plan-scoped scheme (`T-62.06-01`) for future phases.**
 | 62-06:T-62-02 | Elevation of Privilege | chosen cap vs `priced_cap` | high | mitigate | **Live-executed probe:** `agreed_cap` refuses over-priced naming both numbers, refuses unpriced/malformed. `SKILL.md:170-172` binds the **return value**, not a literal. **See Residual R-02.** | closed with residual |
 | 62-06:T-62-03 | Tampering | grant figures with no `suggestion_allowance` | medium | mitigate | Live probe: `agreed_cap(2, {})`, `(2, {"suggestion_allowance": None})`, `(2, None)` all refuse "never priced" — never falls back to `PRICED_CAP` at spend time | closed |
 | 62-06:T-62-04 | Information Disclosure | refusal messages | low | accept | See Accepted Risks Log AR-06 | closed (accepted) |
+| 62-11:T-62-11-01 | Information Disclosure | `62-11-DIAGNOSIS.md` | high | mitigate | Read in full: rows named by `row_id`, only run/item counts and `Lusha Enrich` `billing` blocks quoted — no email/phone pasted (grep for `@`/phone patterns in the artifact confirms none). Regression fixture in `test_watch_settle_reporting.py:227-245` is explicitly SYNTHETIC (`row-a`/`row-b`), never a fetched payload | closed |
+| 62-11:T-62-11-02 | Information Disclosure | API key in the inline invocation | high | mitigate | `executions_client.py:52-58` — every transport exception caught by bare `except Exception:` and re-raised as `ExecutionsClientError(...) from None`, discarding the original text (which can carry request headers); zero `N8N_API_KEY`/`Authorization`/`Bearer` string anywhere in the committed artifact (grep-confirmed) | closed |
+| 62-11:T-62-11-03 | Tampering | the executions API | high | mitigate | `executions_client.get_execution` (`:108-114`) issues `requests.get` only, `includeData=true`; live-verified `git status --porcelain n8n/ scripts/build_cloud_workflows.py` silent | closed |
+| 62-11:T-62-11-04 | Repudiation | under-reported async verdicts (the gap itself) | high | mitigate | `report.all_node_items` (`report.py:81-105`) concatenates every run; wired into `watch._build_response_rows` (`watch.py:415`) and `report_enrichment.enrichment_row_ledger` (`report_enrichment.py:144`); RED-before/GREEN-after tests quoted in `62-11-SUMMARY.md` and independently re-run green in this audit. **Synchronous-path instance of the same class is an explicit, named residual — see R-04** | closed with residual |
+| 62-11:T-62-11-05 | Denial of Service | `all_node_items` | low | accept | See Accepted Risks Log AR-07 | closed (accepted) |
+| 62-11:T-62-11-SC | Tampering | npm/pip/cargo installs | low | accept | See Accepted Risks Log AR-08 | closed (accepted) |
+| 62-12:T-62-12-01 | Spoofing | `email_domain_relation` | high | mitigate | `suggest_contacts.py:427-486`; suffix-trap fixture (`x@romaturfclub.com.au.attacker.tld` vs `romaturfclub.com.au` → `mismatch`) hand-traced by this audit (`ed.endswith("." + cd)` correctly refuses — the string ends in `.attacker.tld`, not `.romaturfclub.com.au`) and pinned in `test_suggest_contacts.py:451`; subdomain-plus-`www` sendable case (`staff@mail.romaturfclub.com.au` vs `www.romaturfclub.com.au`) at `:449` | closed |
+| 62-12:T-62-12-02 | Spoofing | hostile/profile-host CRM `website` value | medium | mitigate | `enrichment._clean_domain` (`enrichment.py:239-254`) returns `None` for any `NOT_A_COMPANY_DOMAIN` host; `email_domain_relation` (`suggest_contacts.py:478-480`) turns that into `company_domain_unknown` → held, never compared; pinned by `test_email_domain_relation_company_domain_unknown` (linkedin.com case) | closed |
+| 62-12:T-62-12-03 | Elevation of Privilege | required `company_domains` parameter | high | mitigate | `def partition_for_dispatch(rows, company_domains):` (`suggest_contacts.py:519`), no default; **live-executed by this audit**: calling it with the second argument omitted raises `TypeError: partition_for_dispatch() missing 1 required positional argument: 'company_domains'` — not merely asserted, reproduced | closed |
+| 62-12:T-62-12-04 | Information Disclosure | held-row reasons in the report | low | accept | See Accepted Risks Log AR-09 | closed (accepted) |
+| 62-12:T-62-12-05 | Tampering | scope creep into `extraction.hold_emailless` | medium | mitigate | `extraction.py` absent from every commit this plan made (`git log` on the five 62-11/62-12 commits confirmed); `test_partition_for_dispatch_holds_the_stranger_hold_emailless_alone_would_send` (`test_suggest_contacts.py:417-439`) pins `hold_emailless` alone still returns the stranger sendable | closed |
+| 62-12:T-62-12-06 | Denial of Service | `email_domain_relation` | low | accept | See Accepted Risks Log AR-10 | closed (accepted) |
+| 62-12:T-62-12-SC | Tampering | npm/pip/cargo installs | low | accept | See Accepted Risks Log AR-11 | closed (accepted) |
 
 *Status: open · closed · open — below high threshold (non-blocking)*
 *Severity: critical > high > medium > low — only open threats at or above `workflow.security_block_on` (high) count toward `threats_open`*
@@ -97,10 +124,15 @@ adopt a plan-scoped scheme (`T-62.06-01`) for future phases.**
 | AR-04 | 62-04:T-62-20 | This phase regenerates and **commits** workflow JSON only; deployment and arming are explicitly out of scope and remain an operator action, matching Phase 61's disarmed-only close. `git status` on `n8n/wf_*.json` is clean and no SUMMARY names a deploy or arm. **Consequence to carry: the committed JSON is now ahead of the live n8n instance** (missing `num_associated_contacts` and `sourceByField`). Recorded in CLAUDE.md §13.0.2. | Plan author (62-04), confirmed by audit 2026-09-02 | 2026-09-02 |
 | AR-05 | 62-05:T-62-25 | A page misattributing a person is out of the system's reach. Mitigated by the proposal-not-creation guarantee and by the fetched URL travelling as the row's provenance locator (`suggest_contacts.py:262-266` sets `provenance.locator = fetched_url` on every row). | Plan author (62-05), confirmed by audit 2026-09-02 | 2026-09-02 |
 | AR-06 | 62-06:T-62-04 | `CapRefused` messages name only two integers (chosen and priced) and no secret. Confirmed by live probe of every refusal string. The plugin holds no HubSpot credential and this phase adds none. | Plan author (62-06), confirmed by audit 2026-09-02 | 2026-09-02 |
+| AR-07 | 62-11:T-62-11-05 | `all_node_items` (`report.py:81-105`) only concatenates items already present in an already-fetched execution payload's own `run_data[node_name]` list — no loop over anything caller-controlled, no I/O of its own, bounded by whatever the executions API already returned. | Plan author (62-11), confirmed by audit 2026-09-04 | 2026-09-04 |
+| AR-08 | 62-11:T-62-11-SC | No package installed or considered; `requirements.txt`/`package.json` absent from every commit this plan made (git-log-confirmed). | Plan author (62-11), confirmed by audit 2026-09-04 | 2026-09-04 |
+| AR-09 | 62-12:T-62-12-04 | A held-row reason names only the email's domain and the company's recorded domain, both already visible to the operator on the row and in HubSpot; the local part of the address is never included by `_relation_reason` (`suggest_contacts.py:489-516`). | Plan author (62-12), confirmed by audit 2026-09-04 | 2026-09-04 |
+| AR-10 | 62-12:T-62-12-06 | `email_domain_relation` is pure string work: one `rsplit`, one frozenset membership test, two `_clean_domain` calls whose regexes are anchored prefix substitutions (`^https?://`, `^www\.`) with no backtracking risk. No I/O. | Plan author (62-12), confirmed by audit 2026-09-04 | 2026-09-04 |
+| AR-11 | 62-12:T-62-12-SC | No package installed or considered — a public-suffix dependency was explicitly rejected (Decision 1). `requirements.txt`/`package.json` absent from every commit this plan made. | Plan author (62-12), confirmed by audit 2026-09-04 | 2026-09-04 |
 
 *Accepted risks do not resurface in future audit runs.*
 
-**All six are `low`/`medium` against `block_on: high`** — none would count toward `threats_open`
+**All eleven are `low`/`medium` against `block_on: high`** — none would count toward `threats_open`
 even under the strictest reading where an unlogged accept counts as open.
 
 ---
@@ -115,6 +147,8 @@ scope and none contradicts what was promised.
 | R-01 | 62-05:T-62-21 | Candidate **generation** is code-bound (`url_fallback.py:105-155`, scheme→host→budget, live-verified). Operator approval, fetch-in-shown-order, and the no-search-engine-escalation rule are SKILL.md text pinned only by a text-presence grep. No code fix exists without giving `suggest_contacts.py` an HTTP client — which is itself the control this module's purity is built on. `62-VERIFICATION.md`'s human-verification items 1–2 are the correct acceptance test. |
 | R-02 | 62-06:T-62-02 | `agreed_cap` → `synthesise_rows` is bound in the documented SKILL.md sequence and driven by a composition test, but nothing at the Python call boundary forces a caller through `agreed_cap` first — `synthesise_rows(cap=10**9)` still accepts (live-confirmed). The sequence-coverage ratchet checks call **order**, not dataflow identity. Rated informational by two prior independent reviews (`62-REVIEW-GAP.md` IN-01, `62-VERIFICATION.md`); this audit concurs on independently reproduced evidence. |
 | R-03 | 62-05:T-62-23 | The caps themselves are code-enforced and live-probed. Step 9's "report actuals against the quoted ceiling" is prose — it relies on the orchestrating assistant actually doing the reporting. |
+| R-04 | 62-11:T-62-11-04 | The under-reported-verdicts fix is scoped to the ASYNC recovery channel only, by explicit plan decision (62-11-PLAN.md Decision 4). `Respond to Webhook` still takes one run's items on the SYNCHRONOUS path; `preingest.rerequest_unanswered`, `enrich-records`, and `contact-upload`'s enrich pass all call `chunking.dispatch_plan` with `async_ack` defaulted `False` and are exposed to the identical row loss if a chunk splits at `Merge Winners`/`Merge Company`. Quantified live in `62-11-DIAGNOSIS.md` Q4 (`Respond to Webhook`'s own 3-run trace on `12096`/`12098`, first-arrival-wins). Fix needs a workflow-topology change through `scripts/build_cloud_workflows.py` plus an operator deploy — named as a standing UAT item, not attempted, per this phase's offline-only constraint. |
+| R-05 | 62-11:T-62-11-04 | Same-class readers `62-11-DIAGNOSIS.md`'s `## Remaining exposure` names but does not fix: `report.contact_row_ledger`/`report._write_node_items` on `LV Contact Ingest (Cloud template)` (same `runs[0]`-only idiom, not walked with the same rigor as the enrichment workflow); `Merge Company` in the companies lane (structural mirror of `Merge Winners`, 3 inbound edges, no company row in the live batch so no live evidence it ever splits — `enrichment_row_ledger`'s fix benefits it automatically since the fix reads by node name); `Enrichment Gate` (5 inbound edges, upstream of `Merge Winners`, `runs=1` in all three examined executions, no current reader takes only `runs[0]` of it). None fixed, none live-evidenced as currently exploitable; named rather than silently left. |
 
 ### Why this phase's residuals are stated so precisely
 
@@ -136,6 +170,7 @@ necessity, not by oversight — and they are labelled as such rather than counte
 | Audit Date | Threats Total | Closed | Open | Run By |
 |------------|---------------|--------|------|--------|
 | 2026-09-02 | 29 | 29 (23 mitigate + 6 accepted) | 0 | gsd-security-auditor (ASVS L1, block_on: high) |
+| 2026-09-04 | 42 (29 + 13) | 42 (31 mitigate + 11 accepted) | 0 | gsd-security-auditor (ASVS L1, block_on: high) — extended for 62-11, 62-12 |
 
 **Verification method.** Every `mitigate` threat checked against a `grep`/`Read` match at a cited
 `file:line`; threats with a documented history of a broken mitigation (the whole 62-06 register
@@ -149,10 +184,38 @@ targeted phase-62 files → 101 passed (66 Python + 35 Node).
 Lusha-Prospecting call anywhere in phase-62 files; no `web_fetch` in any backend n8n code;
 `git status` on `n8n/wf_*.json` clean — nothing pending, nothing armed.
 
+**2026-09-04 extension — verification method for 62-11/62-12.** Re-run independently by this
+audit rather than trusted from the SUMMARYs: root suite `.venv/bin/python -m pytest -q` → 4112
+passed / 154 skipped / 0 failed; plugin suite `python -m pytest operator-claude-plugin/tests/ -q`
+→ 2365 passed / 5 skipped / 0 failed (matches 62-12-SUMMARY.md exactly); node suite
+`node --test tests/n8n/*.test.mjs` → 867 pass / 0 fail (untouched, confirming zero backend
+change); `git status --porcelain n8n/ scripts/build_cloud_workflows.py` silent. Two claims were
+independently reproduced rather than read off the SUMMARY: (1) `partition_for_dispatch(rows)`
+called with `company_domains` omitted raises `TypeError` (live-executed by this audit, not just
+grepped for a missing default); (2) the suffix-trap and subdomain fixtures were hand-traced
+through `email_domain_relation`'s actual `ed`/`cd` comparison, confirming the label-boundary
+direction is correct (`ed.endswith("." + cd)`, not a bare substring test). The JS/Python
+`FREEMAIL_DOMAINS` mirror was read on both sides (`n8n/code/companyLink.js:25-34`,
+`enrichment.py:227-236`) and found byte-identical, and the comment-stripping parser fix
+(`_js_set_members`, `test_people_and_url_normalisation.py:103-115`) was read and confirmed to
+strip each line's `//` tail before joining, closing the gotcha the plan named. The quick-task
+260904-447 bounded `html.unescape` fix (outside these two plans, landed the same day) was
+checked per the dispatch's scope note: both `role_classify.py::_tokenize` and
+`role_vocabulary.py::_normalize_title` bound the fixed-point loop at `MAX_UNESCAPE_PASSES = 5`
+identically, a parity test (`test_both_trees_unescape_to_the_same_bounded_fixed_point`) pins the
+two constants and their output equal, and the bound was confirmed to terminate in constant time
+against a pathologically nested 20-generation input rather than spinning to a true fixed point —
+not re-fixed, per the dispatch's instruction.
+
 **Unregistered threat flags:** none. No SUMMARY carried a `## Threat Flags` section. The two
 genuinely new pieces of attack surface — the `source_by_field` multipart part on
 `dispatch.dispatch()` and the `num_associated_contacts` read — both map to registered threats
-(T-62-16/17 and T-62-18/19).
+(T-62-16/17 and T-62-18/19). `62-11-SUMMARY.md` and `62-12-SUMMARY.md` both carry a
+`## Threat Flags` section reading `None`; this audit independently checked for undocumented new
+attack surface in both plans' diffs and found none beyond what the two plans' own threat
+registers already name — `all_node_items` (T-62-11-05), `email_domain_relation`'s reason strings
+(T-62-12-04), and the required-parameter change (T-62-12-03) are the only genuinely new
+surfaces, and all three are registered.
 
 **Implementation deviation noted outside the register:** 62-04 Task 2 widened `preingest.py`'s
 `_KNOWN_OUTCOME_CONTRACT_VERSIONS` to `{1, 2}` — a file not in that plan's `<files>` list. This is
@@ -165,10 +228,17 @@ touched an unplanned file.
 ## Sign-Off
 
 - [x] All threats have a disposition (mitigate / accept / transfer)
-- [x] Accepted risks documented in Accepted Risks Log (AR-01 … AR-06)
+- [x] Accepted risks documented in Accepted Risks Log (AR-01 … AR-11)
 - [x] `threats_open: 0` confirmed
 - [x] `status: verified` set in frontmatter
 - [x] ASVS L1 short-circuit deliberately declined; auditor spawned and every mitigation verified against code
 - [x] Residuals R-01 … R-03 named and scoped rather than absorbed into "closed"
+- [x] 2026-09-04 extension: 62-11 and 62-12 threat registers verified against enforcing code,
+  not documentation; required-parameter enforcement and suffix-trap direction independently
+  live-reproduced by this audit
+- [x] Residual R-04 (synchronous-path row loss, named not fixed, scoped by 62-11 Decision 4) and
+  R-05 (sibling readers named in `62-11-DIAGNOSIS.md`'s Remaining exposure, not live-evidenced)
+  recorded rather than silently dropped
+- [x] `threats_open: 0` reconfirmed after the extension
 
-**Approval:** verified 2026-09-02
+**Approval:** verified 2026-09-02; extended 2026-09-04 (62-11, 62-12)

@@ -1,14 +1,22 @@
 ---
-status: diagnosed
+status: complete
 phase: 62-suggest-the-contacts-nobody-named
 source: [62-VERIFICATION.md]
 started: 2026-09-02T01:30:00Z
-updated: 2026-09-03T16:48:08Z
+updated: 2026-09-04T17:20:00Z
 ---
 
 ## Current Test
 
-[testing complete — all 3 pass; 4 new gaps recorded, 2 of them operator-directed]
+[testing complete — all 3 tests pass; all 7 gaps resolved]
+
+G-62-5 was the last one open, closed 2026-09-04 on the live operator `--dry-run` the gap
+itself specified (no crash; head coverage 200/2,044 distinct titles covering 1,855/3,771
+titled contacts; 8 families, `evidenced: true`) — not on unit evidence. The two follow-ups
+that run surfaced are both closed by quick task 260904-447: the double-unescape defect is
+fixed at BOTH seams, including the shipped match-time path where it silently missed
+contacts, and the derived vocabulary is formally REJECTED in favour of the curated
+17-family file (`.planning/decisions/2026-09-04-derived-role-vocabulary-rejected.md`).
 
 ## Tests
 
@@ -447,7 +455,7 @@ and it held.
 
 - gap_id: G-62-5
   truth: "`role_vocabulary.py` can derive an evidenced role vocabulary from this portal"
-  status: failed
+  status: resolved
   fix_landed: |
     Quick task 260904-39r, 2026-09-04, commits 38020fd / fb18884 / 2e7b364.
     Rank-then-cluster (fixed head of 200 by recurrence, `--head N` to raise), truncation
@@ -465,17 +473,41 @@ and it held.
     `operator-claude-plugin/`, so the plugin stays at 0.38.3.
 
   status_note: |
-    **STILL OPEN, deliberately.** This gap's truth is that the script CAN DERIVE a vocabulary
-    from this portal, and that has not happened. The fix is unit-proven against a fixture, but
-    the fixture is a shape-faithful RECONSTRUCTION rather than captured bytes — the probe
-    script that produced the original response was deleted by 62-10's housekeeping before the
-    fix was written. No live run has occurred.
-    Closing this needs one operator command, which spends one Anthropic call and reads the
-    portal, and is deliberately not an executor task:
+    **RESOLVED 2026-09-04 on the live operator run this gap itself specified** — not on unit
+    evidence. The condition recorded here was one operator command, and it was run:
         set -a; source .env; set +a; .venv/bin/python scripts/role_vocabulary.py --dry-run
-    Expected: no crash; a printed head-coverage line (head/2045 distinct, contacts covered of
-    3772) showing whether 200 sufficed; and the would-be YAML. Marking this resolved on unit
-    evidence alone would repeat the pattern this phase has now hit four times.
+    Every expectation it named was met. No crash. Head-coverage line printed: 200/2,044
+    distinct titles, covering 1,855/3,771 titled contacts (49%). Derived YAML produced:
+    8 families, `evidenced: true`, `source: portal_jobtitle_inventory`. Recorded in
+    `.planning/quick/260904-39r-role-vocabulary-derivation/260904-39r-SUMMARY.md`
+    § "Operator acceptance run"; operator confirmed the reconciliation on 2026-09-04.
+
+    **The truth is about CAPABILITY, and that is what was proved.** The script can now derive
+    an evidenced vocabulary from this portal; it did. Whether the DERIVED vocabulary is good
+    enough to ship was always a separate question, and the answer turned out to be no — the
+    8 families are entirely corporate, with no racing-governance family, because governance
+    titles are rare portal-wide by construction and sit outside the recurrence head at any
+    head size. Adopting it would have taken Roma Turf Club 16-selected -> 0. That is a
+    scoping decision, not a defect in this gap's fix, and it is recorded separately and
+    LOCKED at `.planning/decisions/2026-09-04-derived-role-vocabulary-rejected.md`
+    (REJECT: the curated 17-family vocabulary stays as shipped; no backlog item, no future
+    work implied). The derivation is retained as evidence of what recurs portal-wide.
+
+    **Two follow-ups the live run surfaced are both closed** (quick task 260904-447,
+    commits 3975274 / 6e628c4 / 81eb0bc / 99c2443, plugin 0.38.4):
+      - The portal stores DOUBLE-encoded entities, so one `html.unescape` pass was not
+        enough. A repo-wide caller sweep found the SAME single-pass bug in the shipped
+        match-time path (`operator-claude-plugin/scripts/role_classify.py::_tokenize`),
+        where it is worse — an orphaned `amp` token wedges mid-run and the contact is
+        silently MISSED rather than merely written with an ugly literal. Measured pre-fix:
+        `classify_title('Finance &amp;amp; Admin Officer')` -> `None` against the real
+        `Treasurer` family; post-fix -> `Treasurer`, re-verified independently by the
+        orchestrator. Bounded fixed-point loop (`MAX_UNESCAPE_PASSES = 5`) at both seams,
+        deliberately duplicated rather than cross-imported so the plugin stays standalone,
+        with a drift guard pinning the constants equal. Sweep closed: exactly two Python
+        seams repo-wide, no bare-import variant, no n8n JS twin.
+      - The shipped `config/role_vocabulary.yaml` was independently confirmed INTACT after
+        all of the above: 17 families, all 9 governance families present.
   reason: |
     `python scripts/role_vocabulary.py --dry-run` crashes:
       JSONDecodeError: Expecting value: line 1 column 1 (char 0)   (role_vocabulary.py:129)
