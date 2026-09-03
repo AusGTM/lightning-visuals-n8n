@@ -9,6 +9,7 @@ planned grant, an explicit yes, an armed window, a verified disarm — because t
 path G-2 said was unreachable from the operator's chair.
 """
 import ast
+import copy
 import json
 import os
 import re
@@ -981,6 +982,43 @@ def test_covers_still_refuses_a_domain_never_named_at_grant_time(
         record_ids=[], record_domains=["unrelated.example"])
     assert refusal is not None
     assert refusal["outside_record_domains"] == ["unrelated.example"]
+
+
+def test_covers_never_admits_an_id_absent_from_the_grant_even_alongside_a_covered_domain(
+        granting_config, stub_module_transport_factory):
+    """Gap G2, filled 2026-09-03 by the retroactive nyquist pass for Phase 61
+    (61-VALIDATION.md). T-61-24's register entry describes a mitigation for a runtime
+    "admission" of a newly-created record id into `covers()` — a surface that was
+    NEVER BUILT (61-06 Task 3 was a verified-no-defect finding, no code change).
+    `61-SECURITY.md` closes it on substituted evidence: the pre-existing, unchanged
+    AND-across-both-lists check. Sound — but nothing pinned the drop.
+
+    `test_covers_admits_a_same_run_create_via_the_domain_named_at_grant_time`'s own
+    docstring makes a third claim it never asserts: "A send that passes BOTH the
+    unknown-at-grant-time id AND the known domain still refuses." That combination is
+    exactly what starts passing if the never-built admission mechanism ships later, or
+    if the AND across the two lists is ever widened to an OR.
+
+    This asserts the SHAPE of the refusal (it names the offending id), never its prose,
+    so a wording change does not trip it while an OR-widening does."""
+    transport = stub_module_transport_factory(_plan_reads())
+    grant = _open(granting_config, transport, ids=(), domains=("newco.example",))
+    before = copy.deepcopy(grant)
+
+    refusal = write_grant.covers(
+        grant, lane="enrichment", workflow_id=WORKFLOW_ID,
+        record_ids=["999999"], record_domains=["newco.example"])
+
+    assert refusal is not None, (
+        "the AND across ids and domains must hold even when the domain IS covered — "
+        "an id absent from the grant is never admitted by a covered domain beside it"
+    )
+    assert refusal["outside_record_ids"] == ["999999"], (
+        "the refusal must name the offending id"
+    )
+    # The "nothing may quietly ship later" half: no admission-by-side-effect can be
+    # introduced without failing here.
+    assert grant == before, "covers() must not mutate the grant it is checking"
 
 
 def test_close_grant_returns_a_copy_and_makes_no_network_call(

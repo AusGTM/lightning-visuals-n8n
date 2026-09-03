@@ -302,3 +302,74 @@ test("wiring: SJ-3 Drain Clear Flag's patch is exactly the two baked literal pai
     ["lv_enrichment_status", "skipped"],
   ]);
 });
+
+// --- (3) G1: no scheduled path carries a request-level flag ------------------------------
+//
+// Added 2026-09-03 by the retroactive nyquist pass for Phase 47.5 (47.5-VALIDATION.md, gap
+// G1). CLAUDE.md §13.0 and §19.1 state as load-bearing operational facts that the veto
+// recompute lane is ON-DEMAND ONLY: "SJ-3 and every other scheduled path still hit Company
+// Gate with no recompute flag, so a complete record is still skipped on a poller tick."
+// §13.0.2 generalizes the same invariant to async_ack, scale_up and source_by_field.
+//
+// Nothing guarded it. SJ-3 dispatches into the enrichment workflow, whose Parse HubSpot
+// Event spreads each event and normalizes `recompute === true`. If a future edit added
+// `recompute: true` to the event construction below, the DAILY poller would flip from
+// enrich-only to recompute-on-every-tick — silently re-deriving, and inside any armed
+// window re-writing lv_anti_icp_flag across up to 100 companies per tick — with no test
+// failing.
+//
+// Why this executes the node instead of grepping the file: `recompute` legitimately
+// appears 6 times in wf_scheduled_maintenance_cloud.json (the shared Company Gate jsCode
+// is copied in, and reads the flag through a try/catch that yields false when there is no
+// Parse HubSpot Event node — as here). A file-level grep is red today regardless, and any
+// grep tuned to dodge those 6 is one comment-rewrite away from vacuous.
+//
+// It asserts the ABSENCE OF A KEY, never an exact event shape, so a legitimate future
+// event field does not trip it.
+
+const REQUEST_LEVEL_FLAGS = ["recompute", "async_ack", "scale_up", "source_by_field"];
+
+test("G1: SJ-3's dispatch event carries no request-level flag, on any row (47.5)", () => {
+  const wf = loadWorkflow();
+  const node = findNode(wf, "SJ-3 Build Dispatch Event");
+
+  // Execute the node's REAL jsCode against fixture rows. A bare top-level `return` is
+  // exactly what an n8n Code node body is, so Function(...) is the faithful harness.
+  const run = new Function("$input", node.parameters.jsCode);
+  const rows = [
+    { json: { hs_object_id: "9605284724", domain: "a.example", sj3_dispatch: true } },
+    { json: { hs_object_id: "9604614548", domain: "b.example", sj3_dispatch: true } },
+    { json: { hs_object_id: "18756544344", domain: "c.example", sj3_dispatch: false } },
+  ];
+  const out = run({ all: () => rows });
+
+  assert.equal(out.length, 2, "only rows the gate permitted become events");
+  for (const item of out) {
+    for (const flag of REQUEST_LEVEL_FLAGS) {
+      assert.ok(
+        !(flag in item.json),
+        `SJ-3's dispatch event must not carry the request-level flag "${flag}" — ` +
+        "the scheduled lane is enrich-only by design (CLAUDE.md §13.0, §19.1). " +
+        "A scheduled recompute would re-derive, and inside an armed window re-write, " +
+        "the veto on every polled company on every tick.",
+      );
+    }
+  }
+});
+
+test("G1 corollary: the enrichment lane's recompute intent is strictly boolean-true (47.5)", () => {
+  // The other half of the same invariant: even if a scheduled event somehow carried a
+  // truthy non-boolean, Parse HubSpot Event must not read it as opt-in. Asserted on the
+  // enrichment workflow, which is where the normalization actually lives.
+  const enrich = JSON.parse(
+    fs.readFileSync(path.join(ROOT, "n8n/wf_enrichment_cloud.json"), "utf8"),
+  );
+  const parse = enrich.nodes.find((n) => n.name === "Parse HubSpot Event");
+  assert.ok(parse, 'node "Parse HubSpot Event" must exist in wf_enrichment_cloud.json');
+  assert.match(
+    parse.parameters.jsCode,
+    /recompute\s*===\s*true/,
+    "the recompute intent must normalize STRICTLY to boolean true — a truthy " +
+    "non-boolean must never opt a request into the recompute lane",
+  );
+});
