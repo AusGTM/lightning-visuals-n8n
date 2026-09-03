@@ -5,16 +5,16 @@ milestone_name: Unattended Session Runs
 current_phase: 61
 current_phase_name: Autonomous batch runs
 status: executing
-stopped_at: Completed 62-11-PLAN.md (G-62-6 diagnosis + reader fix, verdict reader_reads_run_0)
-last_updated: "2026-09-04T02:00:00.000Z"
+stopped_at: Completed 62-12-PLAN.md (G-62-7 gap closure, released 0.38.3)
+last_updated: "2026-09-03T16:10:44.146Z"
 last_activity: 2026-09-04
-last_activity_desc: 62-11 diagnosed and closed G-62-6's row-loss reader defect (all_node_items)
-state_head: ce9e1fe3b0746e8c37713793a4ae9a7d80c5f84b
+last_activity_desc: 62-12 closed G-62-7 -- suggested rows now held when the enriched email's domain is unrelated to the company
+state_head: 7bcf0e3cde20e4a9852a45a43f7f4105253ccf0a
 progress:
   total_phases: 13
   completed_phases: 8
-  total_plans: 60
-  completed_plans: 60
+  total_plans: 62
+  completed_plans: 62
   percent: 62
 ---
 
@@ -107,8 +107,36 @@ do not re-plan them.
   through `scripts/build_cloud_workflows.py` plus an operator deploy). RED observed
   before the fix (`assert ['row-a'] == ['row-a', 'row-b']`). Full plugin suite 2347
   passed / 5 skipped; `node --test tests/n8n/*.test.mjs` 867 pass / 0 fail; zero
-  `n8n/` diff. Full record: `62-11-SUMMARY.md`. **62-12 (G-62-7) is next, wave 2,
-  depends on this plan.**
+  `n8n/` diff. Full record: `62-11-SUMMARY.md`.
+
+- **Gap-closure plan 62-12 landed 2026-09-04 (G-62-7, major, operator ruling
+  2026-09-04: "the email domain should be related to the company").** Roma Turf
+  Club's committee page named Craig Smith, Vice President; the waterfall returned
+  `craig.smith@thehartford.com` — a US insurer, a different Craig Smith. Flagged
+  `needs_review` and nothing written, but `partition_for_dispatch` split rows on
+  HAVING AN EMAIL alone, so the stranger's row was one of the two that would have
+  advanced. RED observed before any edit: shipped `extraction.hold_emailless`
+  returns the stranger's row as SENDABLE. `partition_for_dispatch(rows,
+  company_domains)` now takes `company_domains` REQUIRED with no default and holds a
+  row unless its email's domain equals the company's own recorded domain or is a
+  label-boundary subdomain of it (`ed == cd or ed.endswith("." + cd)`, both sides
+  through `enrichment._clean_domain`) — refusing the send-direction suffix trap
+  (`romaturfclub.com.au.attacker.tld`). `enrichment.FREEMAIL_DOMAINS` mirrors
+  `n8n/code/companyLink.js`'s set (pinned equal by a parity test that survives the
+  `// AU consumer ISPs` comment line) so a personal mailbox is held and labelled
+  `email_domain_freemail`, distinct from `email_domain_mismatch`. Accepted cost,
+  pinned as a fixture: `kdaniel@lismoreturfclub.com` (`.com`) against
+  `lismoreturfclub.com.au` is also held (no public-suffix logic). Applied to the
+  sitting that prompted the ruling, the rule holds both rows that had emails —
+  zero sendable rows instead of two — accepted by the operator with the numbers in
+  view. `extraction.hold_emailless` itself untouched, pinned by a test that it alone
+  still returns the stranger as sendable. Replaced
+  `test_partition_for_dispatch_is_a_thin_call_to_hold_emailless` (asserted the exact
+  property this plan removes) with two tests naming when the two agree and when they
+  deliberately diverge. **Released as plugin `0.38.3`**, CHANGELOG names G-62-7 (this
+  plan) and G-62-6 (62-11, which shipped a code change). Full plugin suite green
+  (2362 passed/5 skipped, +15 net new); `node --test tests/n8n/*.test.mjs` 867
+  pass/0 fail; zero `n8n/` diff. Full record: `62-12-SUMMARY.md`.
 
 - **60 — Review-lane authority** (split out of 59). Executed, but **not complete**: 2 UAT items
   (`testing`) and 2 verification items (`human_needed`). All four need an armed HubSpot write
@@ -583,8 +611,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-03T14:27:27.367Z
-**Stopped at:** Completed 62-10-PLAN.md (G-62-2 gap closure, released 0.38.2)
+**Last session:** 2026-09-03T16:10:43.525Z
+**Stopped at:** Completed 62-12-PLAN.md (G-62-7 gap closure, released 0.38.3)
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
@@ -710,6 +738,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 62 P09 | 8min | 2 tasks | 4 files |
 | Phase 62 P08 | 25min | 2 tasks | 4 files |
 | Phase 62 P10 | N/A | 3 tasks | 8 files |
+| Phase 62 P12 | ~20min | 3 tasks | 8 files |
 
 ## Decisions
 
@@ -817,6 +846,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 - [Phase 61]: 62-09: classify_title matcher rewritten to contiguous-token-run, longest-wins, entity-aware (closes G-62-3)
 - [Phase 61]: G-62-4 closed: suggest_contacts.mint_row_ids (wraps preingest.build_rows_spec, called once per batch) and rejoin_enriched (joins merge_enriched's fresh rows back by row_id) close the seam where suggest-contacts/SKILL.md's documented round could not dispatch stage 2 at all
 - [Phase 62]: 62-10: G-62-2 closed -- url_fallback._canonical_authority drops a single leading www. label only when the remainder still contains a dot; same_host compares canonical authorities in both directions. Lands in the one shared guard (D-62-01), so contact-upload's URL adapter gets the fix too. Suffix/subdomain/port/dotless boundaries each pinned by their own test; released as plugin 0.38.2 alongside G-62-3/G-62-4.
+- [Phase 61]: 62-12: partition_for_dispatch(rows, company_domains) -- company_domains required, no default, closing G-62-7 per operator ruling 2026-09-04
 
 ### Roadmap Evolution
 

@@ -519,7 +519,7 @@ variable), and a design that runs the provider waterfall twice per written recor
             credit (not the UAT's inferred spend) and named the synchronous path's identical
             exposure as a standing UAT item (wave 1)
 
-      - [ ] 62-12-PLAN.md — **gap closure** (G-62-7, operator ruling 2026-09-04, *"the email
+      - [x] 62-12-PLAN.md — **gap closure** (G-62-7, operator ruling 2026-09-04, *"the email
             domain should be related to the company"*): a suggested row whose enriched email is
             on an unrelated domain is HELD rather than promoted to sendable, with a freemail hold
             labelled distinctly from a stranger hold, plus the 0.38.3 release (wave 2)
@@ -1064,7 +1064,7 @@ is excluded by standing decision.
 round's cost folds into the SAME opening grant envelope as enrichment — `one-envelope`, never a
 separate spend confirmation.
 
-**Plans**: 9/10 plans executed
+**Plans**: 12/12 plans executed
 
 - [x] 62-01-PLAN.md — suggestion engine, tracer-led (`suggest_contacts.py`, `role_classify.py`)
 - [x] 62-02-PLAN.md — portal-derived role vocabulary; SUGGEST-03 amended
