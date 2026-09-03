@@ -15,6 +15,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 from url_fallback import (
     MAX_FOLLOWUP_FETCHES,
     filter_candidates,
@@ -332,3 +334,41 @@ def test_url_fallback_calls_open_only_inside_the_main_guard():
         "perform no I/O beyond reading a local file the model itself wrote, and only "
         "from its CLI entrypoint"
     )
+
+
+# --- gap closure (62-07, G-62-1): a host-less input is refused loudly, not silently -------
+#
+# Today both `plan_ladder` and `filter_candidates` happily build an authority-less ladder
+# from a bare domain (`urlsplit("bunburyturfclub.com.au").netloc == ""`), and every
+# candidate URL renders as `https:///...`. The guard here is for a FUTURE third caller —
+# after 62-07 Task 1, neither `suggest_contacts.discovery_plan` nor `next_candidates` can
+# ever reach it, because the seam helper normalises first.
+
+
+def test_plan_ladder_refuses_a_bare_domain_naming_the_offending_value():
+    with pytest.raises(ValueError) as excinfo:
+        plan_ladder("bunburyturfclub.com.au")
+    assert "bunburyturfclub.com.au" in str(excinfo.value)
+
+
+def test_filter_candidates_refuses_a_bare_domain_pasted_url_naming_the_offending_value():
+    with pytest.raises(ValueError) as excinfo:
+        filter_candidates("bunburyturfclub.com.au", ["https://bunburyturfclub.com.au/x"])
+    assert "bunburyturfclub.com.au" in str(excinfo.value)
+
+
+def test_plan_ladder_refuses_an_empty_string():
+    with pytest.raises(ValueError):
+        plan_ladder("")
+
+
+def test_plan_ladder_refuses_none():
+    with pytest.raises(ValueError):
+        plan_ladder(None)
+
+
+def test_cli_reports_a_bare_domain_refusal_the_same_way_as_any_other_failure(tmp_path):
+    returncode, parsed = _run_url_cli(tmp_path, "bunburyturfclub.com.au")
+    assert returncode == 1
+    assert parsed["ok"] is False
+    assert "bunburyturfclub.com.au" in parsed["error"]

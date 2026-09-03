@@ -24,6 +24,23 @@ from urllib.parse import urlsplit
 MAX_FOLLOWUP_FETCHES = 5
 
 
+def _require_authority(pasted_url):
+    """Raises `ValueError` when `pasted_url` has no host — a bare domain such as
+    "bunburyturfclub.com.au" parses to an EMPTY `netloc`, and building a ladder from it
+    would silently produce candidates with no authority at all (`https:///...`). This
+    module builds strings and performs no I/O by construction, so it cannot detect a bad
+    host by trying it — refusing loudly here is the only signal a caller gets. The one
+    caller inside this repo that could ever reach this (`suggest_contacts.py`) normalises
+    a CRM property BEFORE calling in (62-07-PLAN.md Decision 1); this guard exists for a
+    future third caller, and for `contact-upload`'s CLI adapter when an operator pastes a
+    schemeless address."""
+    if not pasted_url or not urlsplit(pasted_url).netloc:
+        raise ValueError(
+            f"{pasted_url!r} has no host, so it is not a URL this ladder can be built "
+            f"from -- prefix it with a scheme (e.g. https://) and try again."
+        )
+
+
 def slug_of(url):
     """The last non-empty path segment of `url`, trailing extension stripped, or `None`
     when the path has no segment (e.g. the bare site root). Used to build the
@@ -48,6 +65,7 @@ def plan_ladder(pasted_url):
     WordPress-REST rungs — there is no slug to look up — but still offers both sitemap
     rungs, since those address the whole host rather than one page.
     """
+    _require_authority(pasted_url)
     parts = urlsplit(pasted_url)
     host = parts.netloc
     scheme = parts.scheme or "https"
@@ -114,6 +132,7 @@ def filter_candidates(pasted_url, urls, already_fetched=0):
     an off-host URL is refused for being off-host rather than for exhausting a budget it
     was never entitled to spend in the first place.
     """
+    _require_authority(pasted_url)
     pasted_host = urlsplit(pasted_url).netloc
     budget_remaining = max(MAX_FOLLOWUP_FETCHES - already_fetched, 0)
 
