@@ -160,13 +160,13 @@ def test_an_attempt_with_no_disposition_key_is_ineligible_and_does_not_raise():
 def test_an_empty_attempt_list_is_ineligible_because_nothing_establishes_the_crawl_ran():
     verdict = eligible_after_ladder([])
     assert verdict["eligible"] is False
-    assert "no attempt" in verdict["reason"].lower()
+    assert "attempt was recorded" in verdict["reason"].lower()
 
 
 def test_none_attempts_is_ineligible():
     verdict = eligible_after_ladder(None)
     assert verdict["eligible"] is False
-    assert "no attempt" in verdict["reason"].lower()
+    assert "attempt was recorded" in verdict["reason"].lower()
 
 
 def test_a_non_list_attempts_value_is_ineligible():

@@ -1,0 +1,66 @@
+# operator-claude-plugin/config/source_allowlist.yaml
+#
+# The ranked source allowlist for `scripts/search_fallback.py` (quick task 260904-5sd,
+# D-5sd-02). When the sitemap ladder completes without finding a person, the round may
+# look elsewhere -- but only somewhere named here, in advance, in a diff a human read.
+#
+# THIS IS AN OPERATOR-CURATED STARTING SET, NOT A DERIVED OR VERIFIED ONE. Every tier-3
+# host below is [ASSUMED]: proposed from domain knowledge of the Australian racing and
+# sport-media market, never verified live against the site itself. Curate it. Removing a
+# host is always safe (that source simply stops contributing); adding one admits a new
+# third-party voice, so add with the same care a code change gets.
+#
+# A host that matches NO tier is REJECTED outright -- not ranked last, not admitted with
+# a warning (D-5sd-02 tier 4). An unknown domain contributes nothing at all.
+#
+# The two tiers this file does NOT list, and why:
+#   tier 1 -- the company's OWN host. COMPUTED at rank time from the ladder's pasted URL,
+#             so it can never be listed here; it differs per company.
+#   tier 4 -- the ABSENCE of a match. It is a rejection, not a bucket.
+#
+# Matching is label-boundary, in `search_fallback._host_matches`: a host matches a listed
+# entry when it IS that entry or ends with `"." + entry`. So `au.linkedin.com` matches
+# `linkedin.com` and `linkedin.com.attacker.tld` does NOT. Never a bare substring test.
+#
+# `linkedin.com` is simultaneously in `enrichment.NOT_A_COMPANY_DOMAIN`. That is NOT a
+# contradiction and must not be "fixed": LinkedIn is never a company's OWN domain (which
+# is what that set decides) and IS a legitimate source of a person (which is what this
+# file decides). Two different questions about the same host, two correct answers.
+#
+# Tier 3 is admitted but NEVER sendable (D-5sd-05): an industry body or trade outlet
+# frequently names people historically -- a 2019 committee list, a race-day programme, an
+# archived media release -- so the person can be entirely real, the waterfall's
+# confirmation entirely successful, and the claim still stale. Those rows are collected,
+# ranked and shown, then held for the operator with the source URL in the reason.
+
+version: "lv-source-allowlist-v1"
+
+tiers:
+  - tier: 2
+    label: "LinkedIn"
+    hosts:
+      - linkedin.com          # Self-attested and current: a person maintains their own role there.
+
+  - tier: 3
+    label: "Racing/sport industry bodies and industry media"
+    hosts:
+      # Principal racing authorities and national codes.
+      - racingaustralia.horse         # [ASSUMED] National thoroughbred administration body; names club and body officeholders.
+      - racingvictoria.com.au         # [ASSUMED] Victorian principal racing authority -- names board, executives, club contacts.
+      - racingnsw.com.au              # [ASSUMED] NSW principal racing authority -- the same role for NSW.
+      - racingqueensland.com.au       # [ASSUMED] Queensland principal racing authority.
+      - racingandwagering.wa.gov.au   # [ASSUMED] RWWA, the WA racing authority and state peak body.
+      - racingsa.com.au               # [ASSUMED] SA principal racing authority.
+      - tasracing.com.au              # [ASSUMED] Tasmanian racing authority.
+      - harness.org.au                # [ASSUMED] National harness racing body -- a code the portal already carries records for.
+      - grv.org.au                    # [ASSUMED] Greyhound Racing Victoria -- the third code.
+      # Industry media and sports-business trade press.
+      - racenet.com.au                # [ASSUMED] Major AU racing news outlet; carries appointment and executive announcements.
+      - racing.com                    # [ASSUMED] Racing Victoria's own media arm -- the broadcast/streaming side, directly ICP-relevant.
+      - sportspromedia.com            # [ASSUMED] Sports-media trade press; carries broadcast/rights executive appointments.
+      - ministryofsport.com.au        # [ASSUMED] AU sports-business trade press -- appointments and executive moves.
+      - sportbusiness.com             # [ASSUMED] International sports-business trade press; covers ANZ rights deals.
+      # National sporting bodies.
+      - ausport.gov.au                # [ASSUMED] Australian Sports Commission -- names national sporting organisation contacts.
+      - olympics.com.au               # [ASSUMED] AOC -- names NSO and member-body officeholders.
+      - paralympic.org.au             # [ASSUMED] Paralympics Australia -- the same.
