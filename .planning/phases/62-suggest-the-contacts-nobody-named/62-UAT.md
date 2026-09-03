@@ -1,22 +1,41 @@
 ---
-status: diagnosed
+status: complete
 phase: 62-suggest-the-contacts-nobody-named
 source: [62-VERIFICATION.md]
 started: 2026-09-02T01:30:00Z
-updated: 2026-09-03T12:25:08Z
+updated: 2026-09-03T13:31:21Z
 ---
 
 ## Current Test
 
-[testing paused — test 1 failed with a blocker; tests 2 and 3 are unreachable until it is fixed]
+[testing complete — all 3 pass; 4 new gaps recorded, 2 of them operator-directed]
 
 ## Tests
 
 ### 1. A real company's sitemap yields a usable people page on a live racing-club-shaped site
 expected: The sitemap-ladder rung resolves a people/board/team page and names at least one person, mirroring UAT 2.4's precedent (9/9 directors on gctc.com.au)
 why_human: `url_fallback.py` is pure string-building with no I/O by construction (62-VALIDATION.md manual-verification row 1) — the unit suite proves the ladder logic and the host-bound guard, never whether a given site's sitemap actually lists a people page. Requires a live plugin sitting with a real `web_fetch`.
-result: issue
-reported: |
+result: pass
+resolved_on: second run, 2026-09-03, after the G-62-1 fix shipped
+evidence: |
+  Live sitting 2026-09-03, run_id `d1898a9480a947d1baf6e952cfc5498e`, operator grant over
+  4 racing clubs. The ladder resolved a real people page on live racing-club-shaped sites,
+  which is exactly the precedent this test names (gctc.com.au, 9/9 directors):
+
+      Lismore Turf Club      /about/board-members-and-staff/  -> 13 people, all with roles
+      The Roma Turf Club     /our-committee/                  -> 16 people, all with roles
+      Muswellbrook Race Club /club-info/                      -> 14 people, all with roles
+      The Gladstone Turf Club  reached, but its `dt_staff` sitemap is venue-booking pages
+
+  43 people named across 3 clubs. All four sites are sitemap INDEXES, so stage 1 is three
+  hops deep (index -> nested sitemap -> people page); the 5-fetch per-company budget
+  absorbed that with room to spare and is enforced in code.
+
+  Every ladder carried the fix's own disclosure note, e.g. "'lismoreturfclub.com.au' had
+  no scheme; every candidate below is bound to 'https://lismoreturfclub.com.au'."
+
+first_run_result: issue
+first_run_reported: |
   The ladder never reached a fetch, on any company. `suggest_contacts.discovery_plan`
   builds candidate URLs with an EMPTY HOST for 83.5% of this portal's companies, so every
   candidate is an unfetchable `https:///...`.
@@ -46,30 +65,87 @@ reported: |
       usable (has scheme)             : 115
       eligible (0 associated contacts): 321
       eligible AND scheme-bearing     :  78   <- all a round could fetch today
-severity: blocker
+first_run_severity: blocker
 
 ### 2. Stage 1 → stage 2 handoff on a real discovered person (name+company → Lusha search-and-enrich → proposal)
 expected: A person named by the ladder with no email resolves through identity group 2, the waterfall fills email/phone, and the row lands as a proposal (or HELD if still emailless) — never a silent write
 why_human: Requires a real page fetch (plugin-side `web_fetch`) followed by a real Lusha credit spend; neither runs in the stub-transport test suite (62-VALIDATION.md manual-verification row 2).
-result: blocked
-blocked_by: prior-phase
-reason: "Unreachable until test 1's defect is fixed: stage 2 enriches the people stage 1 named, and stage 1 currently names nobody. Could be forced today against one of the 78 scheme-bearing eligible companies, but that would spend Lusha credit on a sitting that must be repeated after the fix anyway — the fix changes discovery_plan, so test 1 needs a re-run regardless and tests 2 and 3 come along free in that same sitting."
+result: pass
+evidence: |
+  Daniel Kedraika (Operations Manager, Lismore Turf Club) — named by the ladder, no email,
+  resolved through identity group 2 exactly as the test describes:
+
+      ChunkResult(index=0, rows=1, ok=True)
+      response  : {"accepted": true, "row_id": "row-1"}
+      recovery  : recover_async_dispatch recovered=true, matched the execution by run_id
+      proposal  : action="proposed", mode="propose", needs_review=true
+                  match: {tier: "none", auto: false, reason: "searched, no hit"}
+      ZoomInfo  : kdaniel@lismoreturfclub.com | +61 435 938 322 | North Lismore, NSW
+
+  The row landed as a PROPOSAL flagged for review — never a silent write, which is the
+  property this test exists to protect. `match.auto` is false and `needs_review` is true,
+  so nothing could have been written unattended.
+
+  **This passes only because the missing `preingest.build_rows_spec()` call was supplied
+  by hand — see gap G-62-4.** Following `suggest-contacts/SKILL.md` as written, this test
+  cannot be run at all: `chunking.dispatch_plan` hard-refuses every row. The capability
+  works; the documented sequence does not reach it.
+
+  One provenance observation worth carrying forward, not a defect: stage 1 read
+  "Operations Manager" off the club's own board page, and ZoomInfo returned "Functions"
+  for the same person. The winner map took ZoomInfo's. That is precisely the case
+  `source_by_field` (D-62-17) exists to disambiguate — worth an explicit check that stage
+  1's own jobtitle wins over a provider's for a person stage 1 named.
 
 ### 3. The priced ceiling is not exceeded in a real sitting
 expected: Actual page fetches and provider credits spent land at or under the quoted worst-case ceiling shown at grant-open; a bad or omitted per-company cap does not silently blow the ceiling
 why_human: The ceiling arithmetic and the cap-refusal guard (`agreed_cap` / `synthesise_rows`) are both now unit- and live-probe-tested outside the test suite, but "the operator saw a number and the round stayed under it in a real sitting" is an end-to-end property only a live sitting can demonstrate (62-VALIDATION.md manual-verification row 3). This item is also the acceptance test for the 62-06 cap fix.
-result: blocked
-blocked_by: prior-phase
-reason: "Measures the actual spend of tests 1 and 2 against the ceiling quoted at grant-open. With stage 1 naming nobody, a round spends nothing, and 'nothing is under the ceiling' would be a vacuous pass — the worst possible outcome for this particular test, which exists to catch a ceiling that does not bind."
+result: pass
+evidence: |
+  Ceiling quoted at grant-open, BEFORE anything was spent:
+  "Suggestion round ceiling -- stage 1 discovery: up to 20 page fetches (4 x 5/company)
+   -- dollar cost not measured; stage 2 enrichment: up to 8 contacts, up to 8 Lusha credits."
+
+      stage 1 page fetches   ceiling 20   actual 11   (4 indexes + 4 nested + 3 people pages)
+      stage 2 contacts       ceiling  8   actual  1
+      Lusha credits          ceiling  8   actual  0   (see the billing note below)
+
+  Actuals landed under the ceiling on every axis.
+
+  **Cost-accounting note — a single balance read would have recorded this wrong.** The
+  Lusha balance was read three times around the run: 3886 before, **3885** immediately
+  after, 3886 again a few minutes later. The provider node's own report is authoritative
+  and agrees with the third read: `Lusha Enrich` returned
+  `{"error":{"code":"NOT_FOUND"},"billing":{"creditsCharged":0,"resultsReturned":0}}` —
+  Lusha had no record of this person and charged nothing. The 3885 was an
+  eventually-consistent blip, not a spend. Net provider credit for this round: **0**.
+  Worth carrying into any cost ledger built on balance deltas: one before/after pair can
+  manufacture a phantom credit.
+
+  The second half of this test — "a bad or omitted per-company cap does not silently blow
+  the ceiling", the acceptance test for the 62-06 fix — was exercised live against the real
+  grant envelope at ZERO cost, before any spend:
+
+      agreed_cap(1) -> 1
+      agreed_cap(2) -> 2
+      agreed_cap(3) -> CapRefused: the grant priced this round at a cap of 2; a cap of 3
+                       was not what was agreed to.
+      agreed_cap(5) -> CapRefused: (same shape)
+      agreed_cap(0 / -1 / None / 'two') -> CapRefused: must be a positive int --
+                       refusing rather than guessing what the operator meant.
+
+  Note it refuses 3, not merely 5: the envelope prices against the cap the operator
+  actually chose (2), which is STRICTER than D-62-12's band ceiling of 3. "The round may
+  spend LESS than the priced cap; it may never spend more." 
 
 ## Summary
 
 total: 3
-passed: 0
-issues: 1
+passed: 3
+issues: 0
 pending: 0
 skipped: 0
-blocked: 2
+blocked: 0
 
 ## Preconditions discharged this session (2026-09-03, all read-only)
 
@@ -212,3 +288,30 @@ Test 1 stays `issue` and tests 2 and 3 stay `blocked` deliberately. Nothing abov
 a live sitting can show. 78 eligible scheme-bearing companies were available at survey time,
 and the fix should raise that materially since bare domains now normalise; re-run the survey
 at the start of the sitting rather than trusting that number.
+
+## The waterfall actually ran — evidence, since the merged result hides it
+
+Execution `12089`. All three providers were requested and enabled
+(`providers_requested: ["lusha","apollo","zoominfo"]`, `provider_enabled` true for each on
+every gate node). ZoomInfo won every field not because the waterfall stopped early, but
+because it was the only source that had the person:
+
+    Lusha Enrich    NOT_FOUND, creditsCharged 0 -- no record of Daniel Kedraika
+    ZoomInfo Enrich full hit -- email, mobile, jobTitle "Functions", North Lismore NSW
+    Apollo          key is not a master key; balance null, degrades rather than failing
+                    (the standing known limitation, not new)
+
+`provider_agreement` is `[]` for every field and every winner carries `agreedBy: []` —
+single-source, no corroboration — which is consistent with the row coming back
+`needs_review: true` rather than auto-writable.
+
+## Second run account
+
+run_id `d1898a9480a947d1baf6e952cfc5498e`. Two armed windows opened and closed across the
+sitting (one refused-then-retried enrichment send); `disarmed PASS` verified by an
+independent process after each, and again at the end of the sitting.
+
+An earlier attempt was killed by a 10-minute command timeout mid-run. The gate was checked
+immediately and read `disarmed PASS` — the context manager had already closed before the
+kill. Recorded because it is the exact scenario the single-process discipline exists for,
+and it held.
