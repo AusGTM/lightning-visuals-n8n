@@ -2,19 +2,20 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Unattended Session Runs
-current_phase: 63
-current_phase_name: The unattended lane actually runs unattended
+current_phase: 60
+current_phase_name: Review-lane authority
 status: executing
-stopped_at: context exhaustion at 84% (2026-09-03)
-last_updated: "2026-09-03T01:47:55.673Z"
-last_activity: 2026-09-02
-state_head: 548215ef51d806d5e5c76fe017e6772c81058685
+stopped_at: Phase 63 complete, ready to plan Phase 60
+last_updated: "2026-09-03T03:40:04.981Z"
+last_activity: 2026-09-03
+last_activity_desc: Phase 63 complete, transitioned to Phase 60
+state_head: e7bfa34c6de5284e02aa61d748dca59bf7e4497a
 progress:
   total_phases: 13
-  completed_phases: 6
+  completed_phases: 7
   total_plans: 55
   completed_plans: 55
-  percent: 46
+  percent: 54
 ---
 
 # Project State
@@ -195,7 +196,7 @@ predating the window. VETO-03 bar still 0.
 
 ## Current Position
 
-Phase: 63 (The unattended lane actually runs unattended) — ALL 5 PLANS EXECUTED, NOT YET
+Phase: 60 — Review-lane authority
   PHASE-VERIFIED (2026-09-02)
 
 **63-05 outcome (2026-09-02, wave 3, deploy).** Deployed the committed `n8n/wf_*_cloud.json` set
@@ -424,7 +425,7 @@ exactly what B and C now do): .planning/phases/47.5-veto-recompute-path/47.5-CON
 **Standing order:** COVER-01/COVER-02 stay open for Phase 48 (four records ended with no
 lv_org_type: Editix, Jam TV, Waikato, The Rumble). Not a 47.5 workstream.
 
-Last activity: 2026-09-02
+Last activity: 2026-09-03 — Phase 63 complete, transitioned to Phase 60
   items blocked. Next: `/gsd-verify-work 62`, then Phase 63. ~~Next: Phase 57.~~ (57 complete
   2026-09-01.)
 
@@ -450,7 +451,7 @@ figure.)
 ## Session
 
 **Last session:** 2026-09-03T01:47:55.013Z
-**Stopped at:** context exhaustion at 84% (2026-09-03)
+**Stopped at:** Phase 63 complete, ready to plan Phase 60
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.

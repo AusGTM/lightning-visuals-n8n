@@ -486,7 +486,7 @@ variable), and a design that runs the provider waterfall twice per written recor
             the sole site that applies it, and an operator cap above the grant's priced cap refused
             by `suggest_contacts.agreed_cap` rather than by SKILL.md prose (wave 1, tracer-led)
 
-- [ ] **Phase 63: The unattended lane actually runs unattended** — **NUMBERED 2026-09-02**
+- [x] **Phase 63: The unattended lane actually runs unattended** — **NUMBERED 2026-09-02** (completed 2026-09-03)
       (operator). Two long-standing todos, both re-verified live that day, both attacking the
       v1.1 goal from opposite ends: the sweep that is supposed to run without anyone watching
       can silently stop or silently run old code, and a bulk run costs ~16s per record on a

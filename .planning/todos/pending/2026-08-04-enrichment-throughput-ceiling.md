@@ -1,7 +1,6 @@
 ---
 created: 2026-08-04T05:10:00.000Z
-updated: 2026-09-02
-resolves_phase: 63
+updated: 2026-09-03
 title: Enrichment throughput — the judge fires on nearly every record and costs ~16s of a ~34s run
 area: n8n
 severity: major
@@ -11,6 +10,23 @@ files:
   - config/escalation_policy.yaml
   - n8n/wf_enrichment_cloud.json
 ---
+
+## Amendment 2026-09-03 — `resolves_phase: 63` REMOVED; this todo stays OPEN
+
+Phase 63 completed 2026-09-03. Its `close_phase_todos` step retires every pending todo whose
+`resolves_phase` matches — which would have closed this one automatically. That would have been
+wrong, and this todo's own body is the evidence: the status section immediately below says of
+Phase 61 and the confirmed hypothesis, *"Both narrow it; neither closes it."* Phase 63 evaluated
+**lever 2 only** and **dropped it** (63-04, see that lever's entry under "What remains open").
+Levers 1 and 3 were never attempted.
+
+So the frontmatter key is removed rather than the todo closed: leaving it would have armed the
+same automatic closure for any future re-run, silently retiring an open `severity: major` defect
+on the strength of a phase that explicitly did not fix it.
+
+The todo is now **unassigned to a phase**. Re-targeting it — or splitting the two surviving levers
+apart, since lever 1 is an authorization-shaped trade and lever 3 is a config confirmation — is an
+operator decision, not one this closure makes.
 
 ## Status (rewritten 2026-09-02)
 
