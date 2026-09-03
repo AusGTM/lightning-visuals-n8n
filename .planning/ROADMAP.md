@@ -462,8 +462,9 @@ variable), and a design that runs the provider waterfall twice per written recor
       company or be held) and Phase 61's held-row queue (`held_queue.py`) for anything held —
       Phase 56 was absorbed into 61, so its queue is 61's.
 
-      **Plans:** 7 plans (5 planned 2026-09-02; 62-06 added 2026-09-02 and 62-07 added
-      2026-09-03, both as gap closure)
+      **Plans:** 10 plans (5 planned 2026-09-02; 62-06 added 2026-09-02 and 62-07 added
+      2026-09-03, both as gap closure; 62-08 through 62-10 added 2026-09-03 as a second gap
+      round, from the supervised live sitting)
 
       Plans:
 
@@ -487,10 +488,30 @@ variable), and a design that runs the provider waterfall twice per written recor
             the sole site that applies it, and an operator cap above the grant's priced cap refused
             by `suggest_contacts.agreed_cap` rather than by SKILL.md prose (wave 1, tracer-led)
 
-      - [ ] 62-07-PLAN.md — **gap closure** (G-62-1, blocker, live UAT 2026-09-03): a company's
+      - [x] 62-07-PLAN.md — **gap closure** (G-62-1, blocker, live UAT 2026-09-03): a company's
             bare-domain `website` reaches the ladder as a fetchable, host-bound URL — normalised
             once at the seam and used by BOTH `discovery_plan` and `next_candidates` — plus a
             loud host-less refusal in `url_fallback` (wave 1, tracer-led)
+
+      - [ ] 62-08-PLAN.md — **gap closure** (G-62-4, blocker, live sitting 2026-09-03): the
+            documented skill sequence can actually dispatch stage 2 — `row_id` minted once for the
+            whole batch through `preingest.build_rows_spec`, the merge re-joined back onto the
+            round's records, and an end-to-end test that reaches an ACCEPTED chunk (wave 1,
+            tracer-led)
+
+      - [ ] 62-09-PLAN.md — **gap closure** (G-62-3, operator ruling): the role filter selected 2
+            of 43 people named on real racing-club board pages — expanded governance vocabulary
+            plus contiguous-token partial matching that cannot sweep "Track Manager" into
+            "General Manager" (wave 1, tracer-led)
+
+      - [ ] 62-10-PLAN.md — **gap closure** (G-62-2, operator ruling): apex and `www` are one host
+            in the shared `same_host` guard — narrowly, so a suffix or subdomain is still refused
+            — plus the UAT scratch removed and the 0.38.2 release covering all three gaps (wave 2)
+
+      **Deferred out of this gap round:** G-62-5 (`role_vocabulary.py --dry-run` crashes). The
+      operator's chosen remedy is 62-09; the crash is in the OFFLINE derivation script, which no
+      round path calls, and its real fix (rank by recurrence first, cluster only the head) can
+      only be proven against a live Anthropic call. It stays an open gap in `62-UAT.md`.
 
 - [x] **Phase 63: The unattended lane actually runs unattended** — **NUMBERED 2026-09-02** (completed 2026-09-03)
       (operator). Two long-standing todos, both re-verified live that day, both attacking the
