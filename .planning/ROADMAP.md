@@ -462,9 +462,10 @@ variable), and a design that runs the provider waterfall twice per written recor
       company or be held) and Phase 61's held-row queue (`held_queue.py`) for anything held —
       Phase 56 was absorbed into 61, so its queue is 61's.
 
-      **Plans:** 10 plans (5 planned 2026-09-02; 62-06 added 2026-09-02 and 62-07 added
+      **Plans:** 12 plans (5 planned 2026-09-02; 62-06 added 2026-09-02 and 62-07 added
       2026-09-03, both as gap closure; 62-08 through 62-10 added 2026-09-03 as a second gap
-      round, from the supervised live sitting)
+      round, from the supervised live sitting; 62-11 and 62-12 added 2026-09-04 as a third gap
+      round, from the round-2 live sitting)
 
       Plans:
 
@@ -507,6 +508,17 @@ variable), and a design that runs the provider waterfall twice per written recor
       - [x] 62-10-PLAN.md — **gap closure** (G-62-2, operator ruling): apex and `www` are one host
             in the shared `same_host` guard — narrowly, so a suffix or subdomain is still refused
             — plus the UAT scratch removed and the 0.38.2 release covering all three gaps (wave 2)
+
+      - [ ] 62-11-PLAN.md — **gap closure** (G-62-6, live sitting 2026-09-04): 2 of 6 dispatched
+            rows came back with no verdict while credit was spent — diagnose the mechanism from
+            executions 12096/12097/12098 read-only FIRST (the diagnosis may legitimately find no
+            node drops an item, only that the items split across n8n runs and the client reads
+            run 0), then fix only what the evidence names (wave 1)
+
+      - [ ] 62-12-PLAN.md — **gap closure** (G-62-7, operator ruling 2026-09-04, *"the email
+            domain should be related to the company"*): a suggested row whose enriched email is
+            on an unrelated domain is HELD rather than promoted to sendable, with a freemail hold
+            labelled distinctly from a stranger hold, plus the 0.38.3 release (wave 2)
 
       **Deferred out of this gap round:** G-62-5 (`role_vocabulary.py --dry-run` crashes). The
       operator's chosen remedy is 62-09; the crash is in the OFFLINE derivation script, which no
