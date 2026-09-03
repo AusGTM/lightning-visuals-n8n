@@ -1,7 +1,7 @@
 ---
 phase: 40-scoring-engine-remediation-notes
 verified: 2026-08-06T23:13:56Z
-status: human_needed
+status: passed
 score: 10/12 must-haves verified
 behavior_unverified: 2 # VETO-01, VETO-02 — code present, byte-identical to oracle, deployed live, but the specific state transitions (all-three-vetoes-set, symmetric-clear) are not individually live-PATCH-proven
 overrides_applied: 0
@@ -32,7 +32,7 @@ harness lands alongside each fix, so future drift is caught by an assertion inst
 another manual UI audit.
 
 **Verified:** 2026-08-06T23:13:56Z
-**Status:** human_needed
+**Status:** passed — re-scored 2026-09-03 by operator grant; the two VETO items were proven live on 2026-08-07 and this report was never updated (see resolutions below)
 **Re-verification:** No — initial verification
 
 ## Goal Achievement
@@ -150,6 +150,12 @@ files read in full during this verification.
 
 ### Human Verification Required
 
+> **BOTH ITEMS CLOSED 2026-09-03 by operator grant — PASSED on committed evidence.** They were
+> satisfied on 2026-08-07 by `VETO-WRITE-EVIDENCE.md` § "remaining VETO-01/02 human-verification
+> items closed", but this report was never updated, so a cross-phase audit still counted them as
+> outstanding 27 days later. Record-lag, not unexercised behaviour. The blocks below are kept
+> verbatim as the record of what was asked; each carries its own resolution.
+
 ### 1. VETO-01 — the other two hard vetoes, live-PATCH-proven
 
 **Test:** Using one bounded `scheduled_arm.py` window per case, create a disposable
@@ -159,6 +165,17 @@ disposable set `lv_is_hardware_vendor=true` (hardware_vendor veto) and dispatch.
 string (`"No broadcast or streaming content"` / `"Hardware/AV/LED vendor, not
 sports-media buyer"`), exactly matching the non-ANZ case already proven in
 `VETO-WRITE-EVIDENCE.md`.
+**RESULT (2026-08-07, recorded here 2026-09-03): PASSED.** Both vetoes fired individually on
+disposable companies, confirmed by independent GETs at ~03:33Z: D1 `280205875649` →
+`lv_anti_icp_flag="true"`, reason `"No broadcast or streaming content"`, tier `D`; D2
+`280234186174` → `"true"`, reason `"Hardware/AV/LED vendor, not sports-media buyer"`, tier `D`.
+**Not a clean first pass, and that matters:** the first attempt returned a spurious
+`"Non-ANZ geography; …"` prefix on both, and `VETO-WRITE-EVIDENCE.md` explicitly refused to score
+that as a proof ("the F4 failure mode reborn in the derivation, not a re-proof of VETO-01 as
+written"). Root cause was `ENRICH_COMPANY_SEARCH_PROPERTIES_CSV` never requesting
+`lv_country_region_normalized`, so `_regionKey(undefined)` returned `"non_anz"` for every company
+whose region was not freshly re-promoted. Fixed, re-armed, re-run clean — the quoted read-backs are
+from the post-fix run.
 **Why human:** Record writes are globally gated (`ALLOW_HUBSPOT_RECORD_WRITES` baked
 `false`) and only open through an operator-invoked, bounded arm window — a deliberate
 security boundary (`WINDOWS.md` #5). Only one of the three vetoes has been individually
@@ -179,6 +196,12 @@ source read of `scripts/build_cloud_workflows.py:2633-2634`), which closes the
 *architectural* root cause of F6 — but no live run has ever actually observed a
 `"true"→"false"` transition on a real PATCH. Code presence and non-destructive logic are
 necessary but not sufficient evidence for a state-transition invariant.
+**RESULT (2026-08-07, recorded here 2026-09-03): PASSED.** D3 `280234186175` transitioned
+`lv_anti_icp_flag` `"true"` → `"false"` on a real PATCH with `lv_anti_icp_reason` cleared to `""`,
+and `lv_icp_tier` moved `D` → `C` on the same event — the symmetric-clear proof (VETO-02/F6), no
+one-way latch. Independent GET, same ~03:33Z read-back. The arm window was re-verified disarmed
+afterwards via `scripts/verify_live_write_safety.py` (12 declaring nodes across 5 workflows,
+`VERDICT: disarmed PASS`, all `ALLOW_HUBSPOT_*` flags `"false"`, both allowlist constants `""`).
 
 ### Gaps Summary
 
@@ -189,7 +212,9 @@ reading the live-fetched flow JSON directly rather than trusting SUMMARY.md pros
 offline test suite alone. Ten of twelve requirement-level truths are fully verified,
 including the flagship ENGINE-01 80/A case and both PARITY requirements.
 
-The two open items (VETO-01, VETO-02) are not code gaps — they are **unexercised
+**Superseded 2026-09-03: both items are now closed, PASSED — see the resolutions above.** The
+paragraph below describes their state as of this report's 2026-08-06 authorship and is kept for
+that reason. The two items (VETO-01, VETO-02) were not code gaps — they were **unexercised
 behavioral transitions** behind a deliberate, already-documented security boundary
 (`ALLOW_HUBSPOT_RECORD_WRITES` globally off, opened only via a bounded, operator-invoked
 arm window). The phase's own `REQUIREMENTS.md` already marks both `Pending`, and three
