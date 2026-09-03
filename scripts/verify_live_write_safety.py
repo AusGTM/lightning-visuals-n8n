@@ -17,6 +17,20 @@ There is deliberately no workflow-selection argument (27-04's D-07 reasoning): t
 an operator can narrow the scan the read-back can go blind again, and a workflow deployed
 or renamed later must show up without anyone editing this file.
 
+Phase 60 Plan 05 (G-60-2, 2026-09-03) ADDENDUM: `--armed-workflow NAME` lets an operator
+pin a correctly-scoped SINGLE-workflow armed window — the exact shape `armed_review_window`
+arms (one workflow), which the global armed model above could not express: a flag declared
+by nodes in four workflows but armed by the code in only one made every OTHER workflow's
+correctly-disarmed node report a FAIL, which is what the 2026-09-03 live walk hit. This is
+NOT the workflow-selection flag D-07 refused, for three reasons that together keep D-07's
+guarantee intact: (1) coverage is unchanged — every deployed workflow is still fetched and
+every declaring node in it is still judged, none is skipped; (2) the workflows that are NOT
+named are held to the DISARMED rule under an armed expectation — STRICTER than the global
+armed rule they were held to before, which never checked their allowlist constants for
+residue; (3) a name matching zero scanned workflows is a hard FAIL naming the value given
+and the workflow names that were actually scanned, so a typo can never narrow the scan into
+a silent pass. Omitting the argument reproduces today's unscoped verdict exactly.
+
 Imports the checked constant set from `scripts/deploy_n8n_workflows.py`'s
 `_OVERLAY_FLAG_SPEC` rather than re-typing the names — the overlay and its read-back must
 never drift apart (tests/test_verify_live_write_safety.py pins this). Imports
@@ -58,6 +72,8 @@ Usage:
     python scripts/verify_live_write_safety.py --expectation armed --allowlist 9604614548
     python scripts/verify_live_write_safety.py --expectation armed --allowlist australiagtm.com \
         --expect-armed ALLOW_HUBSPOT_RECORD_WRITES,ALLOW_HUBSPOT_CREATE
+    python scripts/verify_live_write_safety.py --expectation armed --allowlist 9604738976 \
+        --expect-armed ALLOW_HUBSPOT_REVIEW_WRITES --armed-workflow "LV Review Decision (Cloud)"
     python scripts/verify_live_write_safety.py --json                # machine-readable verdict
 
 Live-only utility, same convention as its siblings: when n8n credentials are absent,
@@ -188,13 +204,81 @@ def _resolve_expect_armed(expected_armed) -> tuple:
     return names
 
 
-def verify(workflows, expectation: str, expected_allowlist: str = None, expected_armed=None) -> dict:
+def _judge_disarmed_report(report: dict, reasons: list) -> None:
+    """Every write-enabling boolean this node declares must read \"false\", and every
+    allowlist constant it declares must read empty. Pure list-mutating helper so the exact
+    same rule body serves both the top-level `disarmed` expectation and a scoped `armed`
+    expectation's judgment of every workflow that is NOT the one named armed."""
+    c = report["constants"]
+    where = f"{report['workflow']} / {report['node']}"
+    for flag in BOOLEAN_CONSTANTS:
+        if flag in c and c[flag] != "false":
+            reasons.append(f"{where}: {flag}={c[flag]!r}, expected \"false\"")
+    for allow_const in ALLOWLIST_CONSTANTS:
+        if allow_const in c and c[allow_const] != "":
+            reasons.append(
+                f"{where}: {allow_const}={c[allow_const]!r}, expected empty (stale allowlist residue)"
+            )
+
+
+def _judge_armed_report(report: dict, reasons: list, armed_flags: tuple, expected_allowlist: str) -> None:
+    """The named flags must read \"true\" wherever declared; every OTHER write-enabling
+    boolean this node declares must still read \"false\"; the live allowlist must read
+    exactly `expected_allowlist`. The rule body for the workflow that IS named armed (or,
+    under the unscoped/global form, every workflow — unchanged since Phase 22)."""
+    c = report["constants"]
+    where = f"{report['workflow']} / {report['node']}"
+    for flag in BOOLEAN_CONSTANTS:
+        if flag not in c:
+            continue
+        if flag in armed_flags:
+            if c[flag] != "true":
+                reasons.append(
+                    f"{where}: {flag}={c[flag]!r}, expected \"true\" (named in the expected-armed set)"
+                )
+        elif c[flag] != "false":
+            reasons.append(
+                f"{where}: {flag}={c[flag]!r}, expected \"false\" "
+                f"(armed scope is exactly {', '.join(armed_flags)})"
+            )
+
+    declared_allowlists = [a for a in ALLOWLIST_CONSTANTS if a in c]
+    if declared_allowlists:
+        observed = next((c[a] for a in ALLOWLIST_CONSTANTS if c.get(a)), "")
+        if not observed:
+            reasons.append(
+                f"{where}: every declared allowlist constant is empty "
+                f"({', '.join(f'{a}={c[a]!r}' for a in declared_allowlists)}), expected "
+                f"{expected_allowlist!r} — an empty allowlist grants NOTHING "
+                "(_writeSafetyAllows returns false), so this is not an armed window"
+            )
+        elif observed != expected_allowlist:
+            reasons.append(
+                f"{where}: allowlist is "
+                f"{' '.join(f'{a}={c[a]!r}' for a in declared_allowlists)}, "
+                f"expected {expected_allowlist!r}"
+            )
+
+
+def verify(workflows, expectation: str, expected_allowlist: str = None, expected_armed=None,
+           armed_workflow: str = None) -> dict:
     """Pure — takes a LIST of already-fetched workflow dicts, returns a per-workflow
     per-node report plus a pass/fail verdict. No network. Drives the entire offline suite.
 
     The armed expectation is symmetric: naming a flag says it must read enabled, and says
     nothing else — every write-enabling boolean NOT named is still asserted disabled, in
-    every declaring node of every workflow."""
+    every declaring node of every workflow.
+
+    `armed_workflow` (G-60-2, Phase 60 Plan 05), armed expectation only, defaults to
+    `None`: when `None`, every code path below behaves exactly as it always has — the armed
+    rule applies to every declaring node of every workflow, unscoped. When given, it names
+    the ONE workflow expected armed: that workflow's own declaring nodes are judged by the
+    armed rule above; every OTHER workflow's declaring nodes are judged by the DISARMED rule
+    instead — stricter than the unscoped armed rule, which only required their OTHER
+    booleans read \"false\" and never checked their allowlist constants for residue. Naming
+    a workflow that matches none of the ones scanned is itself a hard failure (see below);
+    coverage is never narrowed — every workflow is still fetched and every declaring node in
+    it is still judged, whichever rule it is judged by."""
     if expectation not in EXPECTATIONS:
         raise ValueError(f"unknown expectation {expectation!r}; must be one of {EXPECTATIONS}")
 
@@ -218,52 +302,23 @@ def verify(workflows, expectation: str, expected_allowlist: str = None, expected
             "evidence of a disarmed instance — check credentials, tenant and deploy state."
         )
 
+    scoped = expectation == "armed" and armed_workflow is not None
+    if scoped:
+        scanned_names = [wf["name"] for wf in grouped]
+        if armed_workflow not in scanned_names:
+            reasons.append(
+                f"no scanned workflow matches the named armed workflow {armed_workflow!r}; "
+                f"workflows scanned: {', '.join(scanned_names) or '(none)'}. A name matching "
+                "nothing is a hard failure, never a quiet pass."
+            )
+
     for report in reports:
-        c = report["constants"]
-        where = f"{report['workflow']} / {report['node']}"
-
         if expectation == "disarmed":
-            for flag in BOOLEAN_CONSTANTS:
-                if flag in c and c[flag] != "false":
-                    reasons.append(f"{where}: {flag}={c[flag]!r}, expected \"false\"")
-            for allow_const in ALLOWLIST_CONSTANTS:
-                if allow_const in c and c[allow_const] != "":
-                    reasons.append(
-                        f"{where}: {allow_const}={c[allow_const]!r}, expected empty (stale allowlist residue)"
-                    )
-            continue
-
-        # armed
-        for flag in BOOLEAN_CONSTANTS:
-            if flag not in c:
-                continue
-            if flag in armed_flags:
-                if c[flag] != "true":
-                    reasons.append(
-                        f"{where}: {flag}={c[flag]!r}, expected \"true\" (named in the expected-armed set)"
-                    )
-            elif c[flag] != "false":
-                reasons.append(
-                    f"{where}: {flag}={c[flag]!r}, expected \"false\" "
-                    f"(armed scope is exactly {', '.join(armed_flags)})"
-                )
-
-        declared_allowlists = [a for a in ALLOWLIST_CONSTANTS if a in c]
-        if declared_allowlists:
-            observed = next((c[a] for a in ALLOWLIST_CONSTANTS if c.get(a)), "")
-            if not observed:
-                reasons.append(
-                    f"{where}: every declared allowlist constant is empty "
-                    f"({', '.join(f'{a}={c[a]!r}' for a in declared_allowlists)}), expected "
-                    f"{expected_allowlist!r} — an empty allowlist grants NOTHING "
-                    "(_writeSafetyAllows returns false), so this is not an armed window"
-                )
-            elif observed != expected_allowlist:
-                reasons.append(
-                    f"{where}: allowlist is "
-                    f"{' '.join(f'{a}={c[a]!r}' for a in declared_allowlists)}, "
-                    f"expected {expected_allowlist!r}"
-                )
+            _judge_disarmed_report(report, reasons)
+        elif scoped and report["workflow"] != armed_workflow:
+            _judge_disarmed_report(report, reasons)
+        else:
+            _judge_armed_report(report, reasons, armed_flags, expected_allowlist)
 
     # Phase 44 Plan 01 (T-44-05) — the drain authority's dedicated check, opposite
     # polarity to everything above and applied under BOTH expectations: present and
@@ -290,6 +345,7 @@ def verify(workflows, expectation: str, expected_allowlist: str = None, expected
         "expectation": expectation,
         "expected_allowlist": expected_allowlist,
         "expected_armed": list(armed_flags),
+        "armed_workflow": armed_workflow,
         "workflows_scanned": len(workflows),
         "declaring_nodes": len(reports),
         "workflows": grouped,
@@ -309,7 +365,13 @@ def _print_report(result: dict) -> None:
     if result["expectation"] == "armed":
         print(f"expected allowlist: {result['expected_allowlist']!r}")
         print(f"expected armed: {', '.join(result['expected_armed'])}")
-        print("every other write-enabling boolean is asserted disabled wherever it is declared")
+        if result.get("armed_workflow"):
+            print(
+                f"armed workflow: {result['armed_workflow']!r} — every OTHER workflow is "
+                "asserted fully disarmed"
+            )
+        else:
+            print("every other write-enabling boolean is asserted disabled wherever it is declared")
     print(
         f"coverage: {result['workflows_scanned']} workflow(s) fetched, "
         f"{result['declaring_nodes']} declaring node(s) found"
@@ -353,6 +415,11 @@ def main(argv=None) -> int:
                          help="comma-separated write-enabling flags expected ENABLED, same shape as "
                               "ENABLE_BAKED_FLAGS. Every flag NOT named is still asserted disabled. "
                               "Armed expectation only; defaults to ALLOW_HUBSPOT_RECORD_WRITES")
+    parser.add_argument("--armed-workflow", default=None,
+                         help="the ONE workflow name expected armed (G-60-2); every OTHER deployed "
+                              "workflow is asserted fully disarmed, stricter than the unscoped armed "
+                              "rule. A name matching no scanned workflow is a hard failure. Armed "
+                              "expectation only; omitting it keeps today's unscoped meaning")
     parser.add_argument("--json", action="store_true", help="emit the verdict as one JSON object")
     args = parser.parse_args(argv)
 
@@ -360,6 +427,8 @@ def main(argv=None) -> int:
         parser.error("--allowlist is required when --expectation=armed")
     if args.expectation != "armed" and args.expect_armed:
         parser.error("--expect-armed is only meaningful with --expectation=armed")
+    if args.expectation != "armed" and args.armed_workflow:
+        parser.error("--armed-workflow is only meaningful with --expectation=armed")
 
     expected_armed = None
     if args.expect_armed:
@@ -375,7 +444,8 @@ def main(argv=None) -> int:
         print("skipped (no n8n creds): the n8n URL and API key must both be set to run this verifier.")
         return 0
 
-    result = verify(_fetch_all_live_workflows(), args.expectation, args.allowlist, expected_armed)
+    result = verify(_fetch_all_live_workflows(), args.expectation, args.allowlist, expected_armed,
+                     args.armed_workflow)
 
     if args.json:
         print(json.dumps(result, indent=2))

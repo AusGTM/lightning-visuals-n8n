@@ -408,6 +408,148 @@ def test_the_armed_report_states_what_was_expected_as_well_as_what_was_found(cap
     assert "9604614548" in out
 
 
+# --- a scoped armed expectation that cannot blind the scan (G-60-2, Phase 60 Plan 05) ---
+# The live 2026-09-03 walk found `--expectation armed` unusable for a per-lane window:
+# `armed_review_window` arms exactly ONE workflow, but the global armed rule required the
+# named flag to read "true" wherever it is declared across ALL FOUR workflows, so the three
+# correctly-disarmed workflows' own declaring nodes each reported a FAIL. Built from `_wf`
+# calls directly (never `_enrichment`, whose one-workflow shape is load-bearing elsewhere).
+
+GRANTED_ID = "9604738976"
+REVIEW_WORKFLOW = "LV Review Decision (Cloud)"
+
+
+def _scoped_fixture(**review_overrides):
+    """The shape the live walk was actually in: one workflow armed for review writeback
+    with the granted allowlist, three others fully disarmed."""
+    review = {"review": "true", "ids": GRANTED_ID}
+    review.update(review_overrides)
+    return [
+        _wf(REVIEW_WORKFLOW, _node("Apply Review Decision", **review)),
+        _wf("LV Enrichment (Cloud template)", _node("Decide Action"), _node("Decide Company Action")),
+        _wf("LV Contact Ingest (Cloud template)", _node("Decide Action", declares=("ALLOW_HUBSPOT_CREATE",))),
+        _wf("LV Scheduled Maintenance (Cloud)", _node("SJ-3 Drain Gate")),
+    ]
+
+
+def _verify_scoped(workflows, armed_workflow=REVIEW_WORKFLOW, expected_allowlist=GRANTED_ID):
+    return verifier.verify(
+        workflows, "armed", expected_allowlist=expected_allowlist,
+        expected_armed=["ALLOW_HUBSPOT_REVIEW_WRITES"], armed_workflow=armed_workflow,
+    )
+
+
+def test_the_live_walks_shape_passes_under_the_scoped_armed_expectation():
+    """RED today: this is the exact shape the 2026-09-03 walk was in, and the global armed
+    rule fails it because the other three workflows' correctly-disarmed nodes read the
+    named flag as \"false\"."""
+    result = _verify_scoped(_scoped_fixture())
+    assert result["ok"] is True, result["reasons"]
+    assert result["reasons"] == []
+
+
+def test_a_second_workflow_also_armed_fails_even_when_the_named_one_is_correct():
+    """Scoping the assertion must not stop the scan from judging the OTHERS."""
+    workflows = _scoped_fixture()
+    workflows[1]["nodes"][0] = _node("Decide Action", writes="true", ids=GRANTED_ID)
+
+    result = _verify_scoped(workflows)
+
+    assert result["ok"] is False
+    assert any("ALLOW_HUBSPOT_RECORD_WRITES" in r for r in result["reasons"])
+
+
+def test_unnamed_workflow_residue_matching_the_granted_id_still_fails_the_disarmed_rule():
+    """Residue that happens to equal the SAME id as the correctly-armed workflow's own
+    allowlist would slip past the OLD global armed rule (observed == expected passes
+    there); it must still fail once the unnamed workflow is held to the disarmed rule —
+    the STRICTER rule this task requires for every workflow that is not named."""
+    workflows = _scoped_fixture()
+    workflows[2]["nodes"][0] = _node("Decide Action", declares=("TEST_RECORD_IDS",), ids=GRANTED_ID)
+
+    result = _verify_scoped(workflows)
+
+    assert result["ok"] is False
+    assert any("TEST_RECORD_IDS" in r and "residue" in r for r in result["reasons"])
+
+
+def test_naming_a_workflow_that_matches_nothing_fails_and_lists_what_was_scanned():
+    """A typo cannot silently produce a pass — the reason names the value given and lists
+    the workflow names that were actually scanned."""
+    result = _verify_scoped(_scoped_fixture(), armed_workflow="LV Typo'd Workflow Name")
+
+    assert result["ok"] is False
+    reason = next(r for r in result["reasons"] if "Typo'd" in r)
+    assert "LV Typo'd Workflow Name" in reason
+    assert REVIEW_WORKFLOW in reason
+
+
+def test_the_named_workflow_armed_with_the_wrong_allowlist_still_fails():
+    result = _verify_scoped(_scoped_fixture(ids="999"))
+
+    assert result["ok"] is False
+    reason = next(r for r in result["reasons"] if "999" in r)
+    assert GRANTED_ID in reason
+
+
+def test_the_named_workflow_with_an_empty_allowlist_fails_with_the_grants_nothing_reason():
+    result = _verify_scoped(_scoped_fixture(ids=""))
+
+    assert result["ok"] is False
+    reason = next(r for r in result["reasons"] if "grants" in r.lower())
+    assert REVIEW_WORKFLOW in reason
+
+
+def test_omitting_armed_workflow_reproduces_the_pre_scoping_global_verdict():
+    """Backward compatibility: with no `armed_workflow`, every code path behaves exactly as
+    it does today — including reproducing the very bug G-60-2 diagnosed, which is the
+    property that keeps every existing caller (and the completed Phase 22 runbook's command
+    lines) meaning what they meant."""
+    result = verifier.verify(
+        _scoped_fixture(), "armed", expected_allowlist=GRANTED_ID,
+        expected_armed=["ALLOW_HUBSPOT_REVIEW_WRITES"],
+    )
+
+    assert result["ok"] is False
+    assert result["armed_workflow"] is None
+
+
+def test_drain_check_keeps_its_own_meaning_under_the_scoped_mode():
+    workflows = _scoped_fixture()
+    for wf in workflows:
+        for node in wf["nodes"]:
+            node["parameters"]["jsCode"] = node["parameters"]["jsCode"].replace(
+                'const ALLOW_SJ3_DRAIN_WRITES = "true";', "")
+
+    result = _verify_scoped(workflows)
+
+    assert result["ok"] is False
+    assert any("ALLOW_SJ3_DRAIN_WRITES" in r for r in result["reasons"])
+
+
+def test_the_report_states_which_workflow_is_expected_armed_when_scoped(capsys):
+    result = _verify_scoped(_scoped_fixture())
+    verifier._print_report(result)
+    out = capsys.readouterr().out
+
+    assert REVIEW_WORKFLOW in out
+    assert "disarmed" in out.lower()
+
+
+def test_armed_workflow_appears_in_the_cli_help(capsys):
+    with pytest.raises(SystemExit) as exc:
+        verifier.main(["--help"])
+    assert exc.value.code == 0
+    assert "--armed-workflow" in capsys.readouterr().out
+
+
+def test_armed_workflow_is_refused_by_the_cli_outside_the_armed_expectation(capsys):
+    with pytest.raises(SystemExit) as exc:
+        verifier.main(["--armed-workflow", REVIEW_WORKFLOW])
+    assert exc.value.code != 0
+    assert "--armed-workflow" in capsys.readouterr().err
+
+
 # --- the drain authority's dedicated check (Phase 44 Plan 01, T-44-05) ------------------
 # ALLOW_SJ3_DRAIN_WRITES rests "true" and is deliberately outside CHECKED_CONSTANTS (a
 # disarmed branch that hard-requires "false" would declare a correctly-disarmed backend
