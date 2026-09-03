@@ -504,7 +504,7 @@ variable), and a design that runs the provider waterfall twice per written recor
             plus contiguous-token partial matching that cannot sweep "Track Manager" into
             "General Manager" (wave 1, tracer-led)
 
-      - [ ] 62-10-PLAN.md — **gap closure** (G-62-2, operator ruling): apex and `www` are one host
+      - [x] 62-10-PLAN.md — **gap closure** (G-62-2, operator ruling): apex and `www` are one host
             in the shared `same_host` guard — narrowly, so a suffix or subdomain is still refused
             — plus the UAT scratch removed and the 0.38.2 release covering all three gaps (wave 2)
 

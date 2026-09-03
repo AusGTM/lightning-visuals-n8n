@@ -5,16 +5,16 @@ milestone_name: Unattended Session Runs
 current_phase: 61
 current_phase_name: Autonomous batch runs
 status: executing
-stopped_at: Completed 62-08-PLAN.md (G-62-4 gap closure)
-last_updated: "2026-09-03T14:15:43.384Z"
-last_activity: 2026-09-03
-last_activity_desc: Phase 60 complete, transitioned to Phase 61
-state_head: 5c81304547116a40b31b524fe8b6aa65297392d3
+stopped_at: Completed 62-10-PLAN.md (G-62-2 gap closure, released 0.38.2)
+last_updated: "2026-09-03T14:27:28.188Z"
+last_activity: 2026-09-04
+last_activity_desc: 62-10 closed G-62-2 (apex/www same_host) and released plugin 0.38.2
+state_head: ce9e1fe3b0746e8c37713793a4ae9a7d80c5f84b
 progress:
   total_phases: 13
   completed_phases: 8
   total_plans: 60
-  completed_plans: 59
+  completed_plans: 60
   percent: 62
 ---
 
@@ -62,6 +62,27 @@ do not re-plan them.
   exact-match matcher), GREEN after the rewrite. Full plugin suite 2328 passed / 5 skipped;
   `node --test tests/n8n/*.test.mjs` 867 pass / 0 fail; zero `n8n/` diff, zero live call of
   any kind. Full record: `62-09-SUMMARY.md`.
+
+- **Gap-closure plan 62-10 landed 2026-09-04 (G-62-2, major, operator ruling 2026-09-03):**
+  "Accept apex and www as one and the same (redirects accepted)." Live sitting measured
+  Gladstone Turf Club recorded as `www.gladstoneturfclub.com.au` while its own sitemap
+  index pointed at the apex — `same_host` refused every one of those URLs, losing the
+  company to the round (1 of 4 in the first real batch). `url_fallback._canonical_authority`
+  now drops a single leading `www.` label from a netloc only when the remainder still
+  contains a dot, and `same_host` compares two canonical authorities instead of two raw
+  netlocs — lands in the one shared guard, so `contact-upload`'s URL adapter is fixed too
+  (D-62-01). Still refused, each with its own test: a suffix/attacker host
+  (`evil.gladstoneturfclub.com.au.attacker.tld`), a real subdomain
+  (`board.gladstoneturfclub.com.au`), a differing port, and a dotless remainder
+  (`www.com`/`com`). One pre-existing test replaced (`test_same_host_rejects_a_www_variant`
+  → two directional acceptance tests), every other pre-existing test in the file
+  unmodified. Redirect scope (D-62-03) documented in prose only — no redirect-following
+  code exists. Three UAT scratch scripts removed (`scripts/uat62_*.py`); one of the three
+  (`uat62_cluster_probe.py`) turned out to have been untracked rather than committed, noted
+  as a deviation from the plan's premise. **Released as plugin `0.38.2`, one CHANGELOG
+  section naming G-62-2, G-62-3 and G-62-4 together.** Full plugin suite green (2339
+  passed/5 skipped); `node --test tests/n8n/*.test.mjs` 867 pass/0 fail; zero `n8n/` diff.
+  Full record: `62-10-SUMMARY.md`.
 
 - **60 — Review-lane authority** (split out of 59). Executed, but **not complete**: 2 UAT items
   (`testing`) and 2 verification items (`human_needed`). All four need an armed HubSpot write
@@ -536,8 +557,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-03T14:15:41.993Z
-**Stopped at:** Completed 62-08-PLAN.md (G-62-4 gap closure)
+**Last session:** 2026-09-03T14:27:27.367Z
+**Stopped at:** Completed 62-10-PLAN.md (G-62-2 gap closure, released 0.38.2)
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
@@ -662,6 +683,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 60 P05 | 90m | 3 tasks | 8 files |
 | Phase 62 P09 | 8min | 2 tasks | 4 files |
 | Phase 62 P08 | 25min | 2 tasks | 4 files |
+| Phase 62 P10 | N/A | 3 tasks | 8 files |
 
 ## Decisions
 
@@ -768,6 +790,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 - [Phase 60]: 60-05: verify_live_write_safety.verify() gained an optional armed_workflow scoping parameter (default None = today's unscoped verdict) so an operator can pin a single-workflow armed window without narrowing scan coverage, closing G-60-2
 - [Phase 61]: 62-09: classify_title matcher rewritten to contiguous-token-run, longest-wins, entity-aware (closes G-62-3)
 - [Phase 61]: G-62-4 closed: suggest_contacts.mint_row_ids (wraps preingest.build_rows_spec, called once per batch) and rejoin_enriched (joins merge_enriched's fresh rows back by row_id) close the seam where suggest-contacts/SKILL.md's documented round could not dispatch stage 2 at all
+- [Phase 62]: 62-10: G-62-2 closed -- url_fallback._canonical_authority drops a single leading www. label only when the remainder still contains a dot; same_host compares canonical authorities in both directions. Lands in the one shared guard (D-62-01), so contact-upload's URL adapter gets the fix too. Suffix/subdomain/port/dotless boundaries each pinned by their own test; released as plugin 0.38.2 alongside G-62-3/G-62-4.
 
 ### Roadmap Evolution
 
