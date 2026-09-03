@@ -5,11 +5,11 @@ milestone_name: Unattended Session Runs
 current_phase: 60
 current_phase_name: Review-lane authority
 status: executing
-stopped_at: Cross-phase audit sweep COMPLETE 18/18, nothing in flight; paused on context (76%)
-last_updated: "2026-09-03T06:50:07.858Z"
+stopped_at: Phase-49 divergences 1 and 2 FIXED (a4de6f4, e313f6b); 10 dispositions sequenced, none actioned — all await operator grant
+last_updated: "2026-09-03T07:20:00.000Z"
 last_activity: 2026-09-03
-last_activity_desc: Cross-phase audit sweep complete — all 46-63 have SECURITY.md + VALIDATION.md
-state_head: a8399a912f009e5f3aaf1d742bed605d9c4431dd
+last_activity_desc: Batch-write arm gate moved into src/hubspot_client (T-49-43); W1 gate-bypass registered as WINDOWS id 28; ledger repaired
+state_head: e313f6b68608f2d8cc25ceee2d3429101d8e6cfa
 progress:
   total_phases: 13
   completed_phases: 7
