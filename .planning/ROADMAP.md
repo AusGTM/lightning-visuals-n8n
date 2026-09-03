@@ -183,7 +183,7 @@ variable), and a design that runs the provider waterfall twice per written recor
       - [x] 57-02-PLAN.md — one outcome vocabulary across both client surfaces via a pure mapping, plus the `row_id` join key as far as it reaches (AFTER-03)
       - [x] 57-03-PLAN.md — a lossless `failed_batch`, auto-split and the remainder queue: work queued, authority never (RUN-05, D-57-05 checkpoint)
       - [x] 57-04-PLAN.md — provider-balance blind spots: a disarmed ZoomInfo re-probe with its gate proved by zero network calls, Apollo disclosed as structural `http_403` (G-4). Live verdict: `readable` (9381 credits) — G-4's ZoomInfo half closed by observation, no code fix needed; G-4's disclosure half still lands in 57-05.
-      - [ ] 57-05-PLAN.md — the one end-of-run report joining all five durable stores, naming contradictions rather than resolving them (AFTER-01, AFTER-03, G-4)
+      - [x] 57-05-PLAN.md — the one end-of-run report joining all five durable stores, naming contradictions rather than resolving them (AFTER-01, AFTER-03, G-4)
 
 - [x] **Phase 58: Take what the operator actually has** *(complete 2026-08-26, verified 31/31)* - Every input an operator holds
       (screenshot, paste, URL, bare name) resolves to a company the backend can act on; missing
