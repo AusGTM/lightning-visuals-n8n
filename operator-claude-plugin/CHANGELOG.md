@@ -16,6 +16,46 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.40.0] - 2026-09-05
+
+### Added
+
+- **A company can now carry more than one known domain, so an organisation whose website
+  and mail live on different registrable domains stops having every genuine staff email
+  held as a stranger's.** Found live in the first Roma Turf Club round (2026-09-04):
+  HubSpot records `romaturfclub.com.au`, and that is *correct* — the round's own discovery
+  ladder fetched `www.romaturfclub.com.au/sitemap.xml` and read the committee page from
+  that host. But the club's published contact address is `INFO@romaturfclub.org.au`, a
+  different registrable domain belonging to the same organisation. The record was
+  incomplete, not wrong.
+
+  `suggest_contacts.partition_for_dispatch(rows, company_domains)`'s map value widens from
+  a domain string to a domain string **or a list of them**; `email_domain_relation` accepts
+  the same. The map stays REQUIRED with no default — an optional argument there would be a
+  one-keyword bypass of the operator's ruling.
+
+- **The per-domain match rule is byte-identical to before — only the number of domains
+  changed.** `ed == cd or ed.endswith("." + cd)`, now under `any()`. No eTLD-sibling, no
+  shared-registrable-label heuristic, no public-suffix dependency: `<label>.com.au` and
+  `<label>.org.au` are separately registrable in Australia and can be different
+  organisations, which is exactly how `craig.smith@thehartford.com` was correctly held in
+  that same round — and is still held, with or without Roma's alternate present. The
+  single-directional suffix guard (`romaturfclub.com.au.attacker.tld` refused) is pinned in
+  both directions against a multi-domain set.
+
+- **Alternate domains are OPERATOR-SUPPLIED ONLY, at the `company_domains` map the round
+  already builds.** Nothing harvests a second domain from a crawled page, a `mailto:`, or
+  an enriched email. Deliberate: the crawl is bound to the *recorded* host, so a harvested
+  alternate would let a wrongly recorded domain widen its own send gate with no human in
+  the loop — and a `mailto:` on a page is not evidence the company controls that domain's
+  mail. The operator naming the domain is the confirmation. A propose-and-confirm surface
+  is a recorded, deferred path.
+
+- Held reasons now name every domain that was compared (`... does not match
+  romaturfclub.com.au or romaturfclub.org.au`), so a held row whose reason names only one
+  domain is the diagnostic that an alternate never attached. A single domain reproduces the
+  previous string byte for byte.
+
 ## [0.39.2] - 2026-09-05
 
 ### Fixed

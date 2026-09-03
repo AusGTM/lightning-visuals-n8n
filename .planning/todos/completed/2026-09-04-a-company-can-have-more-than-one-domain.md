@@ -63,3 +63,35 @@ The single-directional suffix guard must also survive untouched — it is what r
 Add the alternate domain to the company record (or supply it in `company_domains`) before a
 round, and its committee emails will pass. Roma specifically: `romaturfclub.org.au` alongside
 `romaturfclub.com.au`.
+
+---
+
+## Resolution — quick 260905-ad2, 2026-09-05 (plugin 0.40.0)
+
+`company_domains`'s VALUE now accepts a domain string **or an iterable of them**;
+`email_domain_relation` matches an email against ANY member by the **unchanged**
+equality-or-subdomain rule (`any(ed == cd or ed.endswith("." + cd) for cd in cds)`). No
+eTLD-sibling, shared-registrable-label, or public-suffix logic was introduced — the rule
+the ruling exists to protect is byte-identical, and `craig.smith@thehartford.com` is still
+held against Roma with the alternate present. The suffix trap is pinned in both directions
+against a multi-domain set. `company_domains` stays REQUIRED with no default.
+
+**D-ad2-03 — alternate domains are OPERATOR-SUPPLIED ONLY.** The `mailto:`-harvest option
+this todo floated was rejected: the crawl ladder is bound to the RECORDED website host, and
+whether that host is right is exactly what the companion todo
+(`2026-09-04-provenance-aware-manual-protected.md`, Brisbane Lions) says is currently
+unreliable and cannot self-correct. Auto-adoption composes the two open bugs — a wrong
+record sends the ladder to a stranger's site and silently adopts a `mailto:` found there as
+this company's second domain, widening its own send gate with no human in the loop. True
+even with a correct record: a `mailto:` on a page is not evidence the company controls that
+domain's mail (webmaster, agency, registrar, sponsor, partner club).
+
+**Deferred, not lost:** a `mailto:`-observed domain may later be PROPOSED — surfaced in the
+held pile beside the mismatch reason, which already names both domains (D-ad2-05) — and
+adopted only after the operator confirms. Never adopted from the observation alone. A
+durable store for confirmed alternates (a HubSpot property, or plugin-local config) waits
+for a second round that asks for one.
+
+Roma specifically: name `romaturfclub.org.au` alongside `romaturfclub.com.au` and the
+committee address sends. Without it, it is still held — the widening comes only from what
+the operator supplied, never from the rule.

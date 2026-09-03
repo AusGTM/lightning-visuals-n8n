@@ -250,12 +250,46 @@ and what `enrich-before-ingest/SKILL.md` already calls.
 
    `company_domains` maps each round company's NAME to its recorded `website`/`domain`
    — build it from the same `eligible_companies` this round already collected. A
-   company absent from the map, or whose recorded value is not a usable domain (a
-   LinkedIn URL, for example), holds every one of its rows with
+   company absent from the map, or whose value yields no usable domain (a LinkedIn URL,
+   for example, or an empty list), holds every one of its rows with
    `reason_code: "company_domain_unknown"` rather than being measured against nothing.
    The scope is this round only: `extraction.hold_emailless` itself is untouched, so
    `contact-upload` and `enrich-before-ingest` — where the operator supplied the email
    themselves — are unaffected.
+
+   **A company may have more than one domain, and you can say so.** The map's value may
+   be a single recorded domain or a LIST of them, each matched by the same
+   equality-or-subdomain rule — nothing about the rule is loosened. An organisation can
+   legitimately serve its mail from a second registrable domain: Roma Turf Club's
+   website is `romaturfclub.com.au` (correct, and the round's own ladder read the
+   committee page from that host), while its published contact address is
+   `INFO@romaturfclub.org.au`. The record is incomplete, not wrong. With
+   `romaturfclub.org.au` named alongside it, that address sends; without it, it is held.
+
+   **An alternate domain is added ONLY because the operator named it.** Nothing harvests
+   a second domain from a crawled page, a `mailto:`, or an enriched email. That is a
+   deliberate refusal, not an omission: the crawl is bound to the RECORDED host, so a
+   harvested alternate would let a wrongly recorded domain widen its own send gate with
+   no human in the loop — and a `mailto:` on a page is not evidence the company controls
+   that domain's mail anyway (it can belong to a webmaster, an agency, a registrar, a
+   sponsor, or a partner club). The operator naming the domain IS the confirmation. A
+   propose-and-confirm surface — an observed domain shown beside the mismatch reason and
+   adopted only on the operator's word — is a deferred path, not built.
+
+   The map is the only supply point in this release, and nothing persists between
+   rounds: an alternate stated in one conversation must be stated again in the next. A
+   durable store (a HubSpot property, or plugin-local config) is deferred until a second
+   round asks for one.
+
+   In the block below, fill the `alternates` literal from what the operator actually
+   said, keyed by the company's exact `name` as it appears in `eligible_companies` —
+   you have that list in view, so do the matching yourself: an operator who says "Roma
+   Turf Club" against a record named "The Roma Turf Club" still gets the alternate
+   attached. The diagnostic when it does not attach is free — a held reason names every
+   domain that was compared, so a held Roma row whose reason says `does not match
+   romaturfclub.com.au` and nothing else means the alternate never landed, while one
+   saying `does not match romaturfclub.com.au or romaturfclub.org.au` means both were
+   checked and the address genuinely belongs to neither.
 
    `extraction.validate()` runs **once per sendable row**, after stage 2 has merged its
    fields on — never before, and never twice for the same row. This ordering is correct
@@ -333,8 +367,11 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    # result.
    records = suggest_contacts.rejoin_enriched(minted["records"], merge_report.rows)
    # company_domains is REQUIRED (no default) -- the email-domain-relatedness rule
-   # (operator ruling, 2026-09-04) applies to every sendable row.
-   company_domains = {c.get("name"): (c.get("website") or c.get("domain"))
+   # (operator ruling, 2026-09-04) applies to every sendable row. The value may be one
+   # domain or several; alternates are OPERATOR-STATED only, never harvested.
+   alternates = {}  # e.g. {"The Roma Turf Club": ["romaturfclub.org.au"]} -- operator-stated only
+   company_domains = {c.get("name"): [d for d in [c.get("website") or c.get("domain"),
+                                                  *alternates.get(c.get("name"), [])] if d]
                       for c in eligible_companies}
    sendable, held = suggest_contacts.partition_for_dispatch(
        [record["row"] for record in records], company_domains)
