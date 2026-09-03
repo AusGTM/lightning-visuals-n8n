@@ -1,9 +1,9 @@
 ---
-status: diagnosed
+status: complete
 phase: 60-review-lane-authority
 source: [60-VERIFICATION.md "Human Verification Required" items 1-2, 60-VALIDATION.md § Manual-Only Verifications]
 started: 2026-09-03T08:20:00Z
-updated: 2026-09-03T10:02:59Z
+updated: 2026-09-03T10:48:23Z
 ---
 
 ## Current Test
@@ -160,7 +160,9 @@ session — the same statement all four phase-60 plan summaries make.
 
 - gap_id: G-60-1
   truth: "An approved review decision's landed fields match the previewed `would_write` patch, confirmed by an independent re-read"
-  status: failed
+  status: resolved
+  resolved_by: 60-05-PLAN.md
+  resolved_at: 2026-09-03
   reason: |
     User reported: the write landed, but `verify_decision` returned `failed` on it.
     `review_decision.verify_decision(intended, response)` compares the PREVIEW's
@@ -200,7 +202,9 @@ session — the same statement all four phase-60 plan summaries make.
 
 - gap_id: G-60-2
   truth: "An operator can independently confirm, while a review batch window is open, that the live allowlist contains exactly the granted record id (the 49-W2 lesson: a count check is not a membership check)"
-  status: failed
+  status: resolved
+  resolved_by: 60-05-PLAN.md
+  resolved_at: 2026-09-03
   reason: |
     User reported: no working tool exists for this on a per-lane window.
     `verify_live_write_safety.py --expectation armed --allowlist 9604738976 --expect-armed
@@ -262,3 +266,47 @@ that could have found them.
   design supports, but it means the skill's step 4-8 loop ("offer the next record — still
   inside the same batch window") is only reachable by an agent that can hold one process
   open across several operator answers. A one-record sitting, like this one, is unaffected.
+
+## Gap closure (2026-09-03)
+
+Both gaps closed by `60-05-PLAN.md` (`/gsd-plan-phase 60 --gaps --chain` →
+`/gsd-execute-phase 60 --gaps-only`). Commits `2d1c881` (G-60-1), `408ccf5` (G-60-2),
+`020148b` (skill + release 0.38.0), `5c5f270` (summary).
+
+**G-60-1 — the RED was observed, not claimed.** Before the fix, the two mandated tests failed
+with `AssertionError: assert 'failed' == 'verified'` — the live walk's bug reproduced in a
+unit test, which is the thing that had never existed. The fix is a two-leg comparison: leg 1
+proves intent stability (the preview's map against the backend's own submit-time `would_write`,
+over the UNION of both key sets so a key the backend added at submit time cannot hide), leg 2
+proves landing (unchanged in key count and in authority — the post-PATCH refetch remains the
+sole judge of whether the write landed).
+
+**The exclusion set is four keys, not the two this walk exposed.** `lv_enrichment_reviewed_at`
+and `lv_enrichment_provenance` are what failed here. Planning found two more that would have
+re-broken the fix on a later sitting: `lv_contact_enrichment_provenance` (contacts select a
+different provenance property, `n8n/code/reviewDecision.js:87`) and `lv_enrichment_reviewed_by`
+(`preview_decision` accepts no reviewed-by argument, so a preview always carries
+`"operator (unnamed)"` while a submit carries the operator's real label — this walk used the
+default, which is exactly why it stayed invisible). The concept is therefore "keys a
+preview-time capture cannot pin", not "backend-minted": three are clock-derived, one is an
+API-shape gap.
+
+**Zero n8n changes, verified rather than assumed** — both diverging values are minted
+per-request inside the backend (`reviewApply.js:124`, `reviewDecision.js:150-156`, `:271`), so
+two timestamps across two requests is the backend behaving correctly and the client was the
+only place the comparison could be fixed. Nothing armed, nothing deployed, no HubSpot request,
+no provider credit.
+
+Regression after the fix: 867 node tests, 1727 root pytest (149 skipped), 2283 plugin tests
+(5 skipped) — all passing.
+
+### Residual — one cheap live confirmation, deliberately NOT claimed here
+
+Nobody has yet watched a REAL approve report `verified` under the fixed code. The fix is proven
+against a unit test built from this walk's exact observed shape (different preview and submit
+timestamps, different reviewed-by label), which is strong evidence — but it is not the same as
+a live observation, and this repo's standing rule is that live behaviour earns live proof.
+
+This does not need its own armed walk. 18 companies remain in the review queue, so the next
+ordinary triage sitting confirms it at zero extra cost: the operator should see `verified`
+where this walk saw `failed`. Recording it so the distinction is not lost, not to gate anything.
