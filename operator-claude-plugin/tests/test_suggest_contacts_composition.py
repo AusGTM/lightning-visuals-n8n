@@ -20,6 +20,7 @@ import enrichment
 import extraction
 import preingest
 import role_classify
+import search_fallback
 import suggest_contacts
 import url_fallback
 
@@ -65,41 +66,49 @@ def test_a_company_marked_has_contacts_never_reaches_discovery_plan():
     assert "has-1" not in discovery_plans_built_for
 
 
+def _attempt(url, disposition):
+    """One `attempts` entry as `suggest-contacts/SKILL.md` step 5's transcription table
+    describes it: the untouched free-prose `outcome` plus the typed `disposition` quick
+    task 260904-5sd added, which is the ONLY thing `eligible_after_ladder` reads."""
+    return {"url": url, "outcome": "the model's own prose, never branched on",
+            "disposition": disposition}
+
+
 def test_the_documented_round_pipeline_drives_its_real_joins_end_to_end():
     """The whole documented sequence from `skills/suggest-contacts/SKILL.md`'s python
-    block, over one eligible company: `eligibility` -> `discovery_plan` -> (role list
-    from) `load_families` -> `select_people` -> `synthesise_rows` -> (stage-2 merge,
-    simulated -- no network call belongs in this offline test) -> `partition_for_dispatch`
-    -> `extraction.validate()` once per sendable row.
+    block, over three eligible companies whose ladders end three different ways:
+    `eligibility` -> `discovery_plan` -> `eligible_after_ladder` -> (`rank_results` ->
+    the search-sourced people, when eligible) -> (role list from) `load_families` ->
+    `select_people` -> `synthesise_rows` -> `mint_row_ids` -> stage-2 merge ->
+    `rejoin_enriched` -> `partition_for_dispatch` -> `hold_weak_sources` ->
+    `extraction.validate()` once per sendable row.
 
-    Three named joins, each asserted directly:
+    Six named joins, each asserted directly:
       1. a company marked has_contacts never reaches discovery_plan (see the test above;
          re-proven here inline against this test's own company set)
       2. a person dropped by select_people never appears in a synthesised row
       3. a row in the held half never appears in the dispatch set (never validated)
+      4. a ladder carrying a `refused` disposition NEVER reaches the search path, and
+         produces no search-sourced record at all (D-5sd-04)
+      5. a clean-but-empty ladder DOES reach it, and its tier-2 person becomes sendable
+         only once the merge fills a related-domain email (D-5sd-01: both gates)
+      6. a tier-3 person is HELD despite the identically successful merge, with the
+         source URL in the reason (D-5sd-05: the two gates are independent)
     """
-    company_row = _company_row("elig-2", num_associated_contacts=0)
+    company_refused = _company_row("refused-1", num_associated_contacts=0)
+    company_tier2 = _company_row("tier2-1", num_associated_contacts=0)
+    company_tier3 = _company_row("tier3-1", num_associated_contacts=0)
     company_with_contacts = _company_row("has-2", num_associated_contacts=3)
-    company_rows = [company_with_contacts, company_row]
+    company_rows = [
+        company_with_contacts, company_refused, company_tier2, company_tier3]
 
     verdicts = suggest_contacts.eligibility(company_rows)
     eligible = [
         row for row, verdict in zip(company_rows, verdicts)
         if verdict["verdict"] == suggest_contacts.ELIGIBLE
     ]
-    assert eligible == [company_row]  # join 1, re-proven for this test's own fixtures
-
-    plan = suggest_contacts.discovery_plan(company_row)
-    assert plan["candidates"], "the ladder must offer at least one candidate"
-    assert plan["candidates"] == url_fallback.plan_ladder(company_row["website"])["candidates"]
-    fetched_url = plan["candidates"][0]["url"]
-
-    people = [
-        {"firstname": "Jamie", "lastname": "Fox", "jobtitle": FAMILY_LABEL},
-        {"firstname": "Alex", "lastname": "Nguyen", "jobtitle": "Receptionist"},
-        {"firstname": "Robin", "lastname": "Lee", "jobtitle": FAMILY_LABEL},
-    ]
-    chosen_families = [FAMILY_LABEL]
+    # join 1, re-proven for this test's own fixtures
+    assert eligible == [company_refused, company_tier2, company_tier3]
 
     vocabulary = role_classify.load_families()
     family_list = vocabulary["families"]
@@ -107,45 +116,124 @@ def test_the_documented_round_pipeline_drives_its_real_joins_end_to_end():
         f"the shipped role vocabulary no longer carries {FAMILY_LABEL!r} -- update this "
         f"test's FAMILY_LABEL to a label that still exists"
     )
-
-    selection = suggest_contacts.select_people(
-        people, family_list, chosen_families, known_contacts=[])
-    assert {p["firstname"] for p in selection["selected"]} == {"Jamie", "Robin"}
-    assert selection["dropped"] == [
-        {"person": people[1], "reason": "role_not_selected"}
-    ]
-
+    chosen_families = [FAMILY_LABEL]
     figures = {"suggestion_allowance": {"priced_cap": 5}}
     per_company_cap = suggest_contacts.agreed_cap(5, figures)
-    records = suggest_contacts.synthesise_rows(
-        company_row, selection["selected"], fetched_url, per_company_cap=per_company_cap)
+
+    # A refusal anywhere in a ladder; a clean empty ladder for the other two. The URLs
+    # differ per company only so a failure names which one.
+    attempts_by_row_id = {
+        "refused-1": [_attempt("https://example-club.example/sitemap.xml", "empty"),
+                      _attempt("https://example-club.example/wp-sitemap.xml", "refused")],
+        "tier2-1": [_attempt("https://example-club.example/sitemap.xml", "empty")],
+        "tier3-1": [_attempt("https://example-club.example/sitemap.xml", "empty")],
+    }
+    # What the model's own web search transcribed, per company. Real allowlisted hosts:
+    # LinkedIn is tier 2, racenet.com.au is on the shipped tier-3 list.
+    search_results_by_row_id = {
+        "tier2-1": [{"url": "https://www.linkedin.com/in/jamie-fox"},
+                    {"url": "https://random-blog.example/who-works-where"}],
+        "tier3-1": [{"url": "https://racenet.com.au/2019/committee"}],
+    }
+    people_by_row_id = {
+        "tier2-1": [
+            {"firstname": "Jamie", "lastname": "Fox", "jobtitle": FAMILY_LABEL},
+            {"firstname": "Alex", "lastname": "Nguyen", "jobtitle": "Receptionist"},
+        ],
+        "tier3-1": [{"firstname": "Robin", "lastname": "Lee", "jobtitle": FAMILY_LABEL}],
+    }
+
+    records = []
+    searched_for = []
+    dropped_names = set()
+    for company_row in eligible:
+        plan = suggest_contacts.discovery_plan(company_row)
+        assert plan["candidates"], "the ladder must offer at least one candidate"
+        assert plan["candidates"] == (
+            url_fallback.plan_ladder(company_row["website"])["candidates"])
+
+        attempts = attempts_by_row_id[company_row["row_id"]]
+        verdict = search_fallback.eligible_after_ladder(attempts)
+        if not verdict["eligible"]:
+            # join 4: a refused ladder terminates here. `no_candidates` reports
+            # `give_up_message`'s own text and the round moves to the next company --
+            # no search, no rank, no record.
+            outcome = suggest_contacts.no_candidates(
+                company_row, company_row["website"], attempts)
+            assert outcome["outcome"] == "no_candidates_found"
+            continue
+
+        searched_for.append(company_row["row_id"])
+        ranked = search_fallback.rank_results(
+            search_results_by_row_id[company_row["row_id"]], plan["pasted_url"])
+        assert len(ranked["accepted"]) == 1, (
+            "only the allowlisted host may be fetched -- an unlisted one is rejected "
+            "outright, never ranked last (D-5sd-02 tier 4)"
+        )
+        accepted = ranked["accepted"][0]
+
+        # The people below come from a web_fetch of `accepted["url"]`, never from a
+        # search snippet -- the ranker read the URL host and nothing else.
+        selection = suggest_contacts.select_people(
+            people_by_row_id[company_row["row_id"]], family_list, chosen_families,
+            known_contacts=[])
+        dropped_names.update(
+            entry["person"]["firstname"] for entry in selection["dropped"])
+        records.extend(suggest_contacts.synthesise_rows(
+            company_row, selection["selected"], accepted["url"],
+            per_company_cap=per_company_cap, source_tier=accepted["tier"]))
+
+    # join 4, the other half: the refused company never reached the search path and
+    # contributed no record at all.
+    assert searched_for == ["tier2-1", "tier3-1"]
     assert len(records) == 2
-    synthesised_firstnames = {record["row"]["firstname"] for record in records}
-    assert synthesised_firstnames == {"Jamie", "Robin"}
+    assert {record["row"]["firstname"] for record in records} == {"Jamie", "Robin"}
     # join 2: the person select_people dropped never appears in a synthesised row
-    assert "Alex" not in synthesised_firstnames
+    assert dropped_names == {"Alex"}
+    assert "Alex" not in {record["row"]["firstname"] for record in records}
+    assert [record["provenance"]["source_tier"] for record in records] == [2, 3]
 
-    # Stage 2 -- simulated. Jamie's row gets an email from the waterfall; Robin's
-    # waterfall lookup finds nothing, so Robin's row stays emailless.
-    for record in records:
-        if record["row"]["firstname"] == "Jamie":
-            record["row"]["email"] = "jamie.fox@example-club.example"
+    # The mint -- ONCE, over the whole accumulated batch, never per company.
+    minted = suggest_contacts.mint_row_ids(records)
 
-    company_domains = {company_row["name"]: company_row["website"]}
+    # Stage 2 -- simulated response, IDENTICALLY successful for both people: each gets a
+    # related-domain email from the waterfall. That is what makes joins 5 and 6 a test of
+    # the SOURCE TIER rather than of the email rule.
+    responses = [
+        {"row_id": "row-1", "properties": {"email": "jamie.fox@example-club.example"}},
+        {"row_id": "row-2", "properties": {"email": "robin.lee@example-club.example"}},
+    ]
+    merge_report = preingest.merge_enriched(minted["spec"]["rows"], responses)
+    rejoined = suggest_contacts.rejoin_enriched(minted["records"], merge_report.rows)
+
+    company_domains = {row["name"]: row["website"] for row in eligible}
     sendable, held = suggest_contacts.partition_for_dispatch(
-        [record["row"] for record in records], company_domains)
-    assert len(sendable) == 1 and sendable[0]["firstname"] == "Jamie"
-    assert len(held) == 1 and held[0]["row"]["firstname"] == "Robin"
+        [record["row"] for record in rejoined], company_domains)
+    # Gate 1 alone would send BOTH -- the waterfall confirmed each with a domain related
+    # to the company that named them.
+    assert {row["firstname"] for row in sendable} == {"Jamie", "Robin"}
+    assert held == []
+
+    sendable, held = search_fallback.hold_weak_sources(rejoined, sendable, held)
+    # join 5: the tier-2 person survives BOTH gates.
+    assert [row["firstname"] for row in sendable] == ["Jamie"]
+    # join 6: the tier-3 person is held despite the same successful merge, and the
+    # operator is given the source URL to judge for themselves.
+    assert len(held) == 1
+    assert held[0]["row"]["firstname"] == "Robin"
+    assert held[0]["reason_code"] == "search_source_not_strong"
+    assert "https://racenet.com.au/2019/committee" in held[0]["reason"]
 
     validated_count = 0
     validated_firstnames = []
-    for record in records:
+    for record in rejoined:
         if record["row"] not in sendable:
             continue  # a held row never reaches extraction.validate()
         result = extraction.validate(suggest_contacts.round_artifact([record]))
         validated_count += 1
         assert result.rejected == []
         assert len(result.accepted) == 1
+        assert result.accepted[0]["provenance"]["input"] == "suggest_contacts_web_search"
         validated_firstnames.append(result.accepted[0]["row"]["firstname"])
 
     # extraction.validate() called exactly once per sendable row

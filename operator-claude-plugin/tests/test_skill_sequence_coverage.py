@@ -321,15 +321,35 @@ COVERED = {
     # `test_suggest_contacts_composition.py::test_the_documented_round_reaches_an_accepted_chunk_and_an_enriched_sendable_row`
     # (62-08-PLAN.md Task 1), which reaches `ChunkResult(ok=True)` -- the property
     # G-62-4 is about.
+    # Quick task 260904-5sd: the tuple gained THREE `search_fallback` calls, all inside
+    # the one existing block (a second python block would mint a second sequence
+    # identity, which this registry deliberately makes expensive). Two sit in the
+    # per-company loop right after `discovery_plan` -- `eligible_after_ladder` decides
+    # whether a ladder that found nobody may be escalated at all (a refusal anywhere
+    # closes it; D-5sd-04/D-5sd-06), and `rank_results` decides which of the search's
+    # URLs may be fetched at all (D-5sd-02). The third, `hold_weak_sources`, is a
+    # SECOND records-level pass right after `partition_for_dispatch`: it holds a
+    # tier-3-sourced person however confidently the waterfall validated them
+    # (D-5sd-05), and it leaves `partition_for_dispatch` itself untouched, since an
+    # optional keyword there would be a one-keyword bypass of the operator's ruling.
+    #
+    # The sink is still `suggest_contacts.round_artifact`, so the covering nodeid is
+    # unchanged; that test now drives three companies -- a refused ladder that never
+    # reaches the search path, a tier-2 person who becomes sendable only after the
+    # merge fills a related-domain email, and a tier-3 person held despite the same
+    # successful merge -- so the new joins are proven at the composition level, not
+    # merely renamed here.
     (
         "suggest-contacts",
         (
             "suggest_contacts.eligibility", "role_classify.load_families",
             "suggest_contacts.agreed_cap", "suggest_contacts.discovery_plan",
+            "search_fallback.eligible_after_ladder", "search_fallback.rank_results",
             "suggest_contacts.select_people", "suggest_contacts.synthesise_rows",
             "suggest_contacts.mint_row_ids", "chunking.plan_chunks",
             "chunking.chunk_ceiling", "suggest_contacts.rejoin_enriched",
             "suggest_contacts.partition_for_dispatch",
+            "search_fallback.hold_weak_sources",
             "extraction.validate", "suggest_contacts.round_artifact",
         ),
     ): "test_suggest_contacts_composition.py::test_the_documented_round_pipeline_drives_its_real_joins_end_to_end",

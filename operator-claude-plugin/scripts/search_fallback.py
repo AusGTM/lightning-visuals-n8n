@@ -411,8 +411,14 @@ def hold_weak_sources(records, sendable, held):
         weak_ids.add(row_id)
         locator = provenance.get("locator")
         if not isinstance(tier, bool) and isinstance(tier, int) and tier in KNOWN_TIERS:
+            # "rank", not "tier", in every OPERATOR-VISIBLE string: this reason lands in
+            # the round's step-9 report, and `tests/test_report_enrichment.py`'s D-10b
+            # guard bans the word `tier` from anything the operator is shown, because in
+            # this system that word means the ICP tier and nothing else. The internal
+            # vocabulary (`source_tier`, `STRONG_TIERS`) keeps the plan's naming; only
+            # what a human reads changes.
             reason = (
-                f"named by {locator} — a third-party source (tier {tier}), not this "
+                f"named by {locator} — a third-party source (source rank {tier}), not this "
                 f"company's own site or LinkedIn, so this person is held for you to "
                 f"judge rather than sent. An industry site can name someone "
                 f"historically: the person can be real and the enrichment confirmation "

@@ -109,9 +109,66 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    this skill adds no explanation of its own for why a page was empty — then move to the
    next company (D-62-03).
 
-   **Do not escalate past a refusal.** No search engine, no other host, no second attempt
-   at the same content somewhere else. When the ladder gives up on a company, that is a
-   result to report, not a prompt to go looking elsewhere for it.
+   **Do not escalate past a TOOL-LEVEL REFUSAL.** When a fetch comes back as an error
+   code, or the page's content is itself an access-denied or error notice, that is a
+   fence and it stays a fence — no search engine, no other host, no second attempt at the
+   same content somewhere else. Escalating past a refusal turns a fence into a
+   suggestion.
+
+   A crawl that **completed and simply found nobody**, or that **ran out of its own fetch
+   budget**, is a different ending: that is absence of information, not a fence, and the
+   search fallback below may fire for it (D-5sd-04, D-5sd-06). The two are told apart by
+   a recorded disposition, never by re-reading the prose `outcome`.
+
+   **The disposition transcription contract.** Record a `disposition` on each `attempts`
+   entry, alongside the existing free-prose `outcome` (which is unchanged and still
+   rendered verbatim):
+
+   | What `web_fetch` did | `disposition` |
+   | --- | --- |
+   | Returned an error code rather than page content | `refused` |
+   | Fetched, but the page's content is an access-denied, blocked, or error notice | `refused` |
+   | Fetched fine, and the page had no people on it | `empty` |
+
+   An error code is recorded as `refused` **without naming a cause**. `web_fetch` cannot
+   report `robots.txt` distinctly from a site declining or an admin's domain filter, and
+   `contact-upload/extraction.md`'s own contract forbids claiming one — say the fetch was
+   refused, never why. A missing or unrecognised disposition means the fallback will not
+   fire at all (it is fail-closed), so the round simply reports and moves on.
+
+   **Cap exhaustion needs its own entry.** When `next_candidates` refuses the remaining
+   candidates for budget, append ONE final `attempts` entry carrying `disposition:
+   "cap_exhausted"`. Cap exhaustion is a property of the ladder, not of any one URL —
+   every per-URL entry is honestly `empty` — so without this entry the signal has no
+   source and the fallback never fires in exactly the case D-5sd-06 opened it for.
+
+   **The fallback, when it is eligible.** Run your own web search for the company's
+   people, write the results to a scratch file of your own choosing (the same idiom
+   `contact-upload/extraction.md` already uses for `url_fallback.py --filter`), then:
+
+   ```
+   python3 scripts/search_fallback.py --eligible <attempts.json>
+   python3 scripts/search_fallback.py --rank <results.json> --company-url <the ladder's pasted URL>
+   ```
+
+   Run `--rank` only when `--eligible` reported `"eligible": true`. Then `web_fetch`
+   **only** the URLs in `accepted[]`, in rank order, and nothing else. Each accepted
+   entry carries its own rank: **1** the company's own host, **2** LinkedIn, **3** a
+   named industry body or trade outlet. Call that value `source_rank` below. The whole fallback
+   for one company is bounded by `MAX_FALLBACK_SEARCHES` — at most that many searches and
+   at most that many accepted URLs.
+
+   - **A search snippet is never a source for a row field.** The ranker reads the URL host
+     and nothing else; a person comes from the fetched page, never from search result text
+     or a title. If a URL was mis-transcribed it simply fails to fetch or yields nobody.
+   - **A rejected host contributes nothing at all** — not a lower rank, not a caveat, not
+     a mention in the report as a person (D-5sd-02, rank 4).
+   - **A rank-3 result is collected, ranked and shown, but can never be sent** (D-5sd-05).
+     Pass the accepted entry's rank through to `synthesise_rows`'s fifth argument (`source_rank` in the block
+     below) so step 8's gate can see it.
+   - The search itself spends no provider credit and no separately-billed tokens, so it is
+     outside the priced ceiling shown at step 4 (D-5sd-03). The Lusha credit that a
+     promoted person triggers at stage 2 is **not** free and stays inside it.
 
    The ladder is bound to the host built from the company's own recorded website — a
    scheme is added when the record has none, but `www.`, case, path and query are kept
@@ -227,6 +284,7 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    import chunking
    import extraction
    import role_classify
+   import search_fallback
    import suggest_contacts
 
    verdicts = suggest_contacts.eligibility(company_rows)
@@ -240,11 +298,25 @@ and what `enrich-before-ingest/SKILL.md` already calls.
        plan = suggest_contacts.discovery_plan(eligible_company)
        # The operator approves candidates from `plan`, in the order shown, stopping at
        # the first that yields people (the INGEST-05 contract, inherited unchanged).
-       # `people` below is whatever that approved fetch actually returned.
+       # `people` below is whatever that approved fetch actually returned, and
+       # `attempts` is this company's own record, each entry carrying a `disposition`
+       # per step 5's table.
+       verdict = search_fallback.eligible_after_ladder(attempts)
+       if not people and verdict["eligible"]:
+           # Absence of information, not a fence (D-5sd-04, D-5sd-06). `results` is what
+           # your own web search returned, written to a scratch file and read back; the
+           # ranker reads the URL host ONLY, so a snippet is never a source for a field.
+           ranked = search_fallback.rank_results(results, plan["pasted_url"])
+           # web_fetch ONLY ranked["accepted"], in rank order. `people`, `fetched_url`
+           # and `source_rank` below then come from the page actually fetched -- a
+           # rank-3 accept still yields people, and step 8's gate is what holds them.
        selection = suggest_contacts.select_people(
            people, vocabulary["families"], chosen_families, known_contacts)
+       # The accepted entry's own rank is the FIFTH argument; a ladder-found person
+       # passes None there, which keeps that record's provenance byte-identical.
        records.extend(suggest_contacts.synthesise_rows(
-           eligible_company, selection["selected"], fetched_url, per_company_cap))
+           eligible_company, selection["selected"], fetched_url, per_company_cap,
+           source_rank))
 
    # The mint -- ONCE, over the whole accumulated batch, never per company.
    minted = suggest_contacts.mint_row_ids(records)
@@ -262,6 +334,10 @@ and what `enrich-before-ingest/SKILL.md` already calls.
                       for c in eligible_companies}
    sendable, held = suggest_contacts.partition_for_dispatch(
        [record["row"] for record in records], company_domains)
+   # The SECOND, records-level gate (D-5sd-01 + D-5sd-05): a search-sourced person is
+   # sendable only from the company's own host or LinkedIn. A rank-3 row is held however
+   # confidently the waterfall validated it. Independent of the pass above; both hold.
+   sendable, held = search_fallback.hold_weak_sources(records, sendable, held)
    for record in records:
        if record["row"] not in sendable:
            continue  # a held row never reaches extraction.validate()
@@ -274,9 +350,13 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    actuals, so the operator can see the actuals landed at or under it.
 
    Group the held rows by `reason_code` — "held: 4" must never appear on its own.
-   Report the four codes separately: `no_email` (no usable email at all),
+   Report the five codes separately: `no_email` (no usable email at all),
    `email_domain_freemail` (a personal mailbox — Gmail, Hotmail, an AU consumer ISP),
-   `email_domain_mismatch` (a stranger's domain — the row that started this rule), and
-   `company_domain_unknown` (nothing on record to compare against). Quote each held
+   `email_domain_mismatch` (a stranger's domain — the row that started this rule),
+   `company_domain_unknown` (nothing on record to compare against), and
+   `search_source_not_strong` (found by the step-5 search fallback on a rank-3 industry
+   source rather than the company's own site or LinkedIn — D-5sd-05). Quote each held
    row's own prose `reason` under its group, so the operator can act on it without
-   opening HubSpot first.
+   opening HubSpot first; a `search_source_not_strong` reason quotes the **source URL**
+   specifically, so the operator can judge a third-party claim themselves rather than
+   taking the hold on trust.
