@@ -16,6 +16,35 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.38.1] - 2026-09-03
+
+### Fixed
+
+- **A suggestion round now reaches a real fetch for a company recorded with a bare
+  domain (G-62-1), instead of reporting "no people page" for 83.5% of this portal's
+  companies-with-a-website.** The live 2026-09-03 UAT found that `suggest_contacts.
+  discovery_plan` AND `next_candidates` both fed HubSpot's schemeless `website`/`domain`
+  property straight into `url_fallback`, which was written for a URL an operator PASTED:
+  `urlsplit(...).netloc` came back empty, every candidate rendered with no host at all,
+  and `next_candidates` refused its own company's sitemap URL as off-host. Both call
+  sites now normalise through one shared seam helper first: a scheme is prefixed only
+  when the recorded value has none; `www.`, case, path and query are preserved exactly
+  as recorded (never added, never stripped); a value that cannot be a company's own site
+  (a social/profile host, or a dotless value) yields no candidates and a reason naming
+  the recorded value, never a constructed guess. An apex-vs-`www` host mismatch between
+  the CRM record and the site's own sitemap is still surfaced by `filter_candidates`'s
+  existing both-hosts-named refusal — that distinction was never lost, only unreachable
+  because the malformed case drowned it out.
+
+### Changed
+
+- **`url_fallback.plan_ladder` and `.filter_candidates` now refuse a host-less input
+  loudly** (`ValueError` naming the offending value) instead of silently building an
+  authority-less ladder. Both `suggest_contacts` call sites are normalised before they
+  can ever reach this, so it is a guard for a future third caller; an operator pasting a
+  bare domain into the contact-upload URL adapter now gets an actionable message instead
+  of four candidates that could never resolve.
+
 ## [0.38.0] - 2026-09-03
 
 ### Fixed

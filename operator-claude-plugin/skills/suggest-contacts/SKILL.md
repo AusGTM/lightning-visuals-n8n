@@ -113,6 +113,16 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    at the same content somewhere else. When the ladder gives up on a company, that is a
    result to report, not a prompt to go looking elsewhere for it.
 
+   The ladder is bound to the host built from the company's own recorded website — a
+   scheme is added when the record has none, but `www.`, case, path and query are kept
+   exactly as recorded, never rewritten (G-62-1). A company whose recorded value cannot
+   be its own site (a social/profile link, or a value with no dot in it) yields no
+   candidates at all, with a reason naming that value — never a guessed URL. When
+   `next_candidates` refuses a same-page sitemap link and names two DIFFERENT hosts in
+   its reason, that means the site itself serves a different host variant than the one
+   recorded in HubSpot — not that the page is missing; report it as a host mismatch, not
+   as "no people page".
+
 6. **Filter, then synthesise.** `suggest_contacts.select_people(people, family_list,
    chosen_families, known_contacts)` drops a person already associated with that company
    before the role filter even runs, and applies the chosen roles to whoever is left
