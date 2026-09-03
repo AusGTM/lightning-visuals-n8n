@@ -136,6 +136,32 @@ in the same place instead of the round running somewhere the grant cannot reach.
   result to report — not a prompt to try a search engine. Phase 53's walk run 4 recorded the
   principle verbatim: *"escalating past a refusal turns a fence into a suggestion."*
 
+  > **AMENDMENT — quick task 260904-5sd (operator, 2026-09-04). Narrow, not wholesale.**
+  >
+  > D-5sd-04 amends this decision by SEPARATING two endings it conflated. Only one of them
+  > gained a fallback:
+  >
+  > | Ending | Behaviour after the amendment |
+  > | --- | --- |
+  > | The site REFUSED — an error code, or a page whose content is an access-denied notice | **Terminates exactly as before.** No search, no second source. Unchanged. |
+  > | The crawl COMPLETED and found no persons | **A committed-allowlist search fallback fires** (D-5sd-04). |
+  > | The crawl exhausted its own fetch budget | **The fallback fires** (D-5sd-06) — a budget we imposed on ourselves is not a fence the site put up. |
+  >
+  > **Phase 53's principle SURVIVES INTACT and is not weakened.** *"Escalating past a refusal
+  > turns a fence into a suggestion"* still governs the refusal case, and a refusal is still
+  > terminal. Overturning the principle wholesale was offered to the operator and **declined**.
+  > What changed is that "the ladder found nobody" is now recognised as absence of information
+  > rather than as a refusal — those were never the same thing, and D-62-03 rev 2 treated them
+  > as one.
+  >
+  > The distinction is a real, fail-closed, testable branch, not a comment:
+  > `search_fallback.eligible_after_ladder(attempts)` reads a closed `disposition` vocabulary
+  > (`empty` / `cap_exhausted` / `refused`) recorded on each attempt, and an absent or
+  > unrecognised disposition is INELIGIBLE, so a transcription gap can never silently open the
+  > search path. Sources are restricted to a committed ranked allowlist (D-5sd-02), and only
+  > tier 1 (the company's own host) and tier 2 (LinkedIn) can ever produce a sendable row —
+  > a tier-3 industry source is collected and shown but always held (D-5sd-05).
+
 - **D-62-04:** The candidate company set is **the batch just processed**. Not "every company in
   the portal with no contacts" (unbounded, and includes companies the operator never asked
   about) and not an operator-supplied list. Matches SUGGEST-01's "after companies are ingested or

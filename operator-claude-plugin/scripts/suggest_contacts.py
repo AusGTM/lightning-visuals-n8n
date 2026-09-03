@@ -263,11 +263,39 @@ def agreed_cap(chosen_cap, grant_figures):
     return chosen_cap
 
 
-def synthesise_rows(company, people, fetched_url, per_company_cap):
+SEARCH_SOURCE_TIERS = (1, 2, 3)
+
+
+def synthesise_rows(company, people, fetched_url, per_company_cap, source_tier=None):
     """At most `per_company_cap` rows shaped for `extraction.validate()`: `record_type`
     "contacts", `row` carrying only canonical props (`firstname`/`lastname`/`company`/
     `jobtitle`), `provenance` naming this module as the input and `fetched_url` -- the
     URL ACTUALLY fetched, never the company's homepage -- as the locator.
+
+    `source_tier` (quick task 260904-5sd, D-5sd-01/D-5sd-05) is how a person found
+    through the web-search fallback declares WHERE they came from. Omitted -- which is
+    every existing call site -- the provenance is byte-identical to what it has always
+    been: `{"input": "suggest_contacts_ladder", "locator": fetched_url}`, no extra key.
+    Passed, it must be one of `SEARCH_SOURCE_TIERS`, and the provenance becomes
+    `{"input": "suggest_contacts_web_search", "locator": fetched_url, "source_tier": N}`.
+    An unknown value REFUSES, in the same register `per_company_cap` already uses: a
+    silent downgrade to the ladder provenance would make a third-party claim read as
+    self-attested and bypass `search_fallback.hold_weak_sources` entirely.
+
+    WHY THE TIER RIDES `provenance` AND NOT THE ROW. This function asserts every row key
+    is in `extraction.canonical_props()` (below), and `write_dispatch_csv` raises on a
+    non-canonical key -- the same constraint that forced `source_by_field` to be
+    request-level rather than per-row (CLAUDE.md §13.0.2). `provenance` is a RECORD key,
+    sibling to `row`, and `extraction.validate` checks only that `input` and `locator`
+    are PRESENT, so the extra key travels safely and is never written to HubSpot as a
+    property.
+
+    The `"suggest_contacts_web_search"` literal is written here rather than imported from
+    `search_fallback.SEARCH_INPUT`: that module's import list is AST-pinned by its own
+    purity tests, and an import back into this module would trip a guard for no benefit.
+    The two literals are held equal by
+    `test_suggest_contacts.py::test_the_tier_gate_and_the_waterfall_gate_are_independent_and_both_must_hold`,
+    which drives the real `hold_weak_sources` -- drift in either string fails it.
 
     A person with no lastname produces a row with `firstname`+`company` only; that fails
     identity and routes to the standing weak-key path -- `required_identity` is never
@@ -288,6 +316,26 @@ def synthesise_rows(company, people, fetched_url, per_company_cap):
             f"site that applies the per-company cap; the value passed in is expected "
             f"to be agreed_cap()'s return value."
         )
+    if source_tier is None:
+        provenance = {"input": "suggest_contacts_ladder", "locator": fetched_url}
+    elif (
+        not isinstance(source_tier, int)
+        or isinstance(source_tier, bool)
+        or source_tier not in SEARCH_SOURCE_TIERS
+    ):
+        raise ValueError(
+            f"source_tier must be one of {list(SEARCH_SOURCE_TIERS)}, got "
+            f"{source_tier!r} -- refusing rather than silently downgrading to a ladder "
+            f"provenance, which would make a third-party claim read as self-attested "
+            f"and bypass the source-tier send gate (D-5sd-05)."
+        )
+    else:
+        provenance = {
+            "input": "suggest_contacts_web_search",
+            "locator": fetched_url,
+            "source_tier": source_tier,
+        }
+
     canonical = set(extraction.canonical_props())
     company_name = company.get("name")
     records = []
@@ -309,10 +357,7 @@ def synthesise_rows(company, people, fetched_url, per_company_cap):
             {
                 "record_type": "contacts",
                 "row": row,
-                "provenance": {
-                    "input": "suggest_contacts_ladder",
-                    "locator": fetched_url,
-                },
+                "provenance": dict(provenance),
             }
         )
     return records
@@ -408,8 +453,19 @@ def next_candidates(company_row, attempts, sitemap_urls):
 
 def no_candidates(company_row, pasted_url, attempts):
     """The terminal state for a company the ladder could not resolve (D-62-03): record
-    `url_fallback.give_up_message`'s own text as the reason and move on. There is no
-    second-source branch and no search-engine fallback here."""
+    `url_fallback.give_up_message`'s own text as the reason and move on.
+
+    This remains the terminal for a ladder that was REFUSED. Quick task 260904-5sd
+    (D-5sd-04) narrowly amended D-62-03: before deciding whether the round looks anywhere
+    else, the caller may consult `search_fallback.eligible_after_ladder(attempts)`, which
+    opens a committed-allowlist search path for the two endings that are absence of
+    information rather than a fence -- a crawl that completed and found nobody, and one
+    that exhausted its own fetch budget (D-5sd-06). Phase 53's principle survives intact:
+    a refusal is still terminal, because escalating past one turns a fence into a
+    suggestion.
+
+    This function's BEHAVIOUR is unchanged -- it still returns `give_up_message`'s text
+    verbatim and carries no branch of its own."""
     return {
         "outcome": "no_candidates_found",
         "company": company_row,
