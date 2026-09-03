@@ -215,6 +215,26 @@ NOT_A_COMPANY_DOMAIN = frozenset({
     "wixsite.com", "squarespace.com", "godaddysites.com",
 })
 
+# Personal-mailbox hosts, never a company's own domain. Mirrors
+# n8n/code/companyLink.js's FREEMAIL_DOMAINS — the JS set is authoritative, because the
+# ingest lane resolves company-vs-personal-mailbox there; this is a mirror because
+# 62-12 (G-62-7) now needs the same question answered here, on the client, at
+# suggest_contacts.partition_for_dispatch's sendability seam. A domain one engine
+# calls a personal mailbox and the other calls a company's own is a silent divergence
+# — pinned equal by
+# test_people_and_url_normalisation.py::test_the_two_engines_agree_on_what_is_freemail,
+# the same arrangement NOT_A_COMPANY_DOMAIN above already has.
+FREEMAIL_DOMAINS = frozenset({
+    "gmail.com", "googlemail.com", "outlook.com", "outlook.com.au", "hotmail.com",
+    "hotmail.com.au", "live.com", "live.com.au", "msn.com", "yahoo.com", "yahoo.com.au",
+    "ymail.com", "icloud.com", "me.com", "mac.com", "aol.com", "protonmail.com", "proton.me",
+    "gmx.com", "mail.com", "zoho.com",
+    # AU consumer ISPs
+    "bigpond.com", "bigpond.net.au", "bigpond.com.au", "optusnet.com.au", "iinet.net.au",
+    "tpg.com.au", "internode.on.net", "westnet.com.au", "dodo.com.au", "iprimus.com.au",
+    "exemail.com.au", "ozemail.com.au",
+})
+
 
 def _clean_domain(raw):
     """The deployed `Build Company Identity`'s cleanDomain(), mirrored: lowercase, strip

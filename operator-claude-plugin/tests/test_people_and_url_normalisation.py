@@ -100,6 +100,36 @@ def test_the_two_engines_agree_on_what_is_not_a_company_domain():
     assert js_hosts == set(enrichment.NOT_A_COMPANY_DOMAIN)
 
 
+def _js_set_members(js_source, const_name):
+    """Parse a `const NAME = new Set([...]);` block out of `js_source`, member for
+    member. GOTCHA (62-12 Decision 2): stripping each line's `//` tail BEFORE joining
+    lines, not after -- a comment on its own line (`// AU consumer ISPs`) would
+    otherwise flatten onto the same line as the entries that follow it and swallow
+    them into the filtered-out `//` piece, silently dropping `bigpond.com` onward from
+    the parsed set."""
+    block = js_source.split(f"const {const_name} = new Set([", 1)[1].split("]);", 1)[0]
+    lines = [line.split("//", 1)[0] for line in block.splitlines()]
+    pieces = " ".join(lines).split(",")
+    members = {piece.strip().strip('"').strip("'") for piece in pieces}
+    members.discard("")
+    return members
+
+
+def test_the_two_engines_agree_on_what_is_freemail():
+    """62-12 (G-62-7): the JS `FREEMAIL_DOMAINS` set stays authoritative -- the ingest
+    lane resolves company-vs-personal-mailbox there -- and the Python mirror is pinned
+    equal by this test, the same arrangement `NOT_A_COMPANY_DOMAIN` already has. A
+    domain one engine calls a personal mailbox and the other calls a company's own is
+    a silent divergence."""
+    js = (PLUGIN_ROOT.parent / "n8n" / "code" / "companyLink.js").read_text(encoding="utf-8")
+    js_hosts = _js_set_members(js, "FREEMAIL_DOMAINS")
+    assert "bigpond.com" in js_hosts, (
+        "the parse must survive the '// AU consumer ISPs' comment line -- if this "
+        "assertion fails, the parser (not the mirror) dropped real entries"
+    )
+    assert js_hosts == set(enrichment.FREEMAIL_DOMAINS)
+
+
 # ---------------------------------------------------------------- finding 2: the people form
 
 def test_a_person_named_the_way_an_operator_names_them_becomes_a_contacts_event():
