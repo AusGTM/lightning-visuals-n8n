@@ -1,9 +1,10 @@
 ---
 created: 2026-09-04T20:30:00.000Z
 updated: 2026-09-04
-title: phone is never asked for — only accepted if a provider volunteers it, so most enriched contacts land email-only
+title: enrichment is minimum-viable by construction — the gate chases 3 of 12 promotable contact fields, so phone and most else is only ever accepted, never asked for
 area: n8n
 severity: major
+goal: rich enrichment, not minimum enrichment (operator, 2026-09-04)
 files:
   - scripts/build_cloud_workflows.py   # ENRICH_GATE's REQUIRED list
   - n8n/code/enrichmentGate.js
@@ -75,3 +76,62 @@ indistinguishable from a complete one in the report.
 frozen module and the `REQUIRED` list lives in the WRAPPER, not the module. Regenerate
 `n8n/*.json` via the builder — never hand-edit. Check whether `src/` has an equivalent
 required-field list that must move in the same commit.
+
+
+## The general defect the phone case is one instance of (operator, 2026-09-04)
+
+> "Enrichment appears sparse. I want enrichment to fill as many available fields that are
+> confident as it can from the waterfall. Rich enrichment is the goal, not minimum
+> enrichment — same goal as with the phone."
+
+This is not a second request. It is the same defect with a wider blast radius, and the
+numbers are checkable rather than impressionistic. Measured 2026-09-04:
+
+- **The contacts merge policy can promote 12 fields:** `city`, `country`, `email`,
+  `hs_country_region_code`, `hs_state_code`, `jobtitle`, `lv_linkedin_url`,
+  `lv_persona_group`, `mobilephone`, `phone`, `seniority`, `state`.
+- **The gate chases 3:** `["email", "jobtitle", "mobilephone"]`.
+- So **9 of 12 are opportunistic** — filled only when a provider volunteers them
+  unrequested, never asked for. The gate's list reads as "the minimum that makes a contact
+  usable", and because it also drives Lusha's reveal, that minimum silently became the
+  ceiling for one provider and the intent for all three.
+
+**A concrete instance worth fixing on its own: `lv_linkedin_url` can never be filled.** It
+is `fill_blank_only` / `min_confidence: 85` in the contacts policy, but
+`n8n/code/normalizeProviders.js` contains **no `linkedin` reference at all** — grep returns
+zero. No provider branch emits a linkedin candidate, so the policy entry has no producer.
+Apollo and ZoomInfo both carry a LinkedIn URL in their contact responses (CLAUDE.md §8.1's
+staging table names `apollo_linkedin_url` / `zoominfo_linkedin_url`), so the data is
+arriving and being discarded at the normalize step. Note this field is also one of the
+three identity groups (`required_identity.any_of` includes `[linkedin_url]`), so filling it
+makes future rows matchable on a key the system already privileges.
+
+### What "as many as are confident" must NOT be read as
+
+The thresholds are the confidence mechanism and they stay. This is about **asking for more
+fields**, never about lowering the bar a value must clear to be written:
+
+- Do not lower any `min_confidence`.
+- Do not weaken `fill_blank_only` — a populated human value still wins.
+- Do not soften the three drop paths above (`doNotCall`, un-normalizable, unentitled).
+- A field that arrives unconfident should land as staged/held with its provenance, exactly
+  as now. Richer means more fields ATTEMPTED, not more values FORCED through.
+
+### Cost, which is what makes this cheap
+
+- **Lusha: free.** v3 bills flat per contact; reveal-field count does not change billed cost
+  (`REQ-lusha-selective-reveal` §6). Widening the reveal list costs zero extra credits.
+- **ZoomInfo: already paid for.** `ZOOM_OUTPUT_FIELDS` is one request; the fields are
+  returned whether or not the gate asked. Mapping more of the response is free.
+- **Apollo: verify.** Do not assume it generalises.
+
+So the dominant cost of richer enrichment is mapping work in `normalizeProviders.js`, not
+provider spend — which inverts the usual reason to keep a required list short.
+
+### Scope this properly before implementing
+
+1. Audit each of the 12 policy fields: which provider responses actually carry it, and
+   whether a normalize branch emits it. Produce the producer/consumer matrix — the
+   `lv_linkedin_url` hole above was found this way and there may be others.
+2. Decide the gate's `REQUIRED` list from that matrix rather than by intuition.
+3. Companies deserve the same audit; this todo measured contacts only.
