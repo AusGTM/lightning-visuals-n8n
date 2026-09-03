@@ -1,0 +1,322 @@
+```json
+{
+  "families": [
+    {
+      "label": "Broadcast Operations",
+      "members": [
+        "Broadcast Manager",
+        "Broadcast Operations Coordinator",
+        "Live Broadcast Producer",
+        "Broadcast Technician",
+        "Head of Broadcast",
+        "Vision Mixer",
+        "Broadcast Engineer"
+      ]
+    },
+    {
+      "label": "Content Production",
+      "members": [
+        "Content Producer",
+        "Video Producer",
+        "Digital Content Manager",
+        "Content Coordinator",
+        "Media Producer",
+        "Post Production Editor"
+      ]
+    },
+    {
+      "label": "Marketing & Communications",
+      "members": [
+        "Marketing Manager",
+        "Communications Manager",
+        "Digital Marketing Coordinator",
+        "Brand Manager",
+        "Marketing Executive",
+        "Social Media Manager"
+      ]
+    },
+    {
+      "label": "Racing Officials",
+      "members": [
+        "Clerk of the Course",
+        "Judicial Steward",
+        "Handicapper",
+        "Race Day Official",
+        "Starter",
+        "Judge"
+      ]
+    },
+    {
+      "label": "Club Administration",
+      "members": [
+        "Club Secretary",
+        "Office Manager",
+        "Administration Officer",
+        "Executive Assistant",
+        "Membership Coordinator",
+        "Finance Officer"
+      ]
+    },
+    {
+      "label": "Track & Facilities",
+      "members": [
+        "Track Manager",
+        "Racecourse Manager",
+        "Trackwork Supervisor",
+        "Grounds Curator",
+        "Facilities Manager",
+        "Maintenance Supervisor"
+      ]
+    },
+    {
+      "label": "Catering & Events",
+      "members": [
+        "Catering Manager",
+        "Functions Manager",
+        "Events Coordinator",
+        "Hospitality Manager",
+        "Venue Manager"
+      ]
+    },
+    {
+      "label": "Executive Leadership",
+      "members": [
+        "Chief Executive Officer",
+        "General Manager",
+        "Chief Operating Officer",
+        "Managing Director",
+        "Deputy Chief Executive"
+      ]
+    },
+    {
+      "label": "Finance & Accounting",
+      "members": [
+        "Chief Financial Officer",
+        "Finance Manager",
+        "Accountant",
+        "Payroll Officer",
+        "Finance and Admin Officer"
+      ]
+    },
+    {
+      "label": "Sponsorship & Partnerships",
+      "members": [
+        "Sponsorship Manager",
+        "Partnerships Coordinator",
+        "Corporate Partnerships Manager",
+        "Sponsorship Executive"
+      ]
+    },
+    {
+      "label": "Board & Committee",
+      "members": [
+        "Chairman",
+        "Chairperson",
+        "Deputy Chairman",
+        "Board Member",
+        "Committee Member",
+        "Director"
+      ]
+    },
+    {
+      "label": "Wagering & Data",
+      "members": [
+        "Wagering Manager",
+        "Data Analyst",
+        "Wagering Operations Coordinator",
+        "Pricing Analyst"
+      ]
+    },
+    {
+      "label": "Veterinary & Welfare",
+      "members": [
+        "Track Veterinarian",
+        "Animal Welfare Officer",
+        "Stable Manager",
+        "Farrier"
+      ]
+    },
+    {
+      "label": "IT & Digital Systems",
+      "members": [
+        "IT Manager",
+        "Systems Administrator",
+        "Digital Systems Coordinator",
+        "Network Engineer"
+      ]
+    },
+    {
+      "label": "Human Resources",
+      "members": [
+        "HR Manager",
+        "People and Culture Manager",
+        "Recruitment Coordinator",
+        "HR Business Partner"
+      ]
+    },
+    {
+      "label": "Media Relations",
+      "members": [
+        "Media Relations Manager",
+        "Press Officer",
+        "Communications Coordinator",
+        "Publicity Manager"
+      ]
+    },
+    {
+      "label": "Ticketing & Membership",
+      "members": [
+        "Ticketing Manager",
+        "Membership Manager",
+        "Box Office Coordinator",
+        "Customer Service Officer"
+      ]
+    },
+    {
+      "label": "Race Operations",
+      "members": [
+        "Race Operations Manager",
+        "Field Operations Coordinator",
+        "Race Day Manager",
+        "Operations Supervisor"
+      ]
+    },
+    {
+      "label": "Digital Innovation",
+      "members": [
+        "Digital Innovation Manager",
+        "Product Owner",
+        "UX Designer",
+        "Digital Strategy Lead"
+      ]
+    },
+    {
+      "label": "Community Engagement",
+      "members": [
+        "Community Engagement Officer",
+        "Volunteer Coordinator",
+        "Outreach Manager",
+        "Stakeholder Relations Manager"
+      ]
+    },
+    {
+      "label": "Safety & Compliance",
+      "members": [
+        "Work Health and Safety Manager",
+        "Compliance Officer",
+        "Risk Manager",
+        "Quality Assurance Officer"
+      ]
+    },
+    {
+      "label": "Procurement & Supply",
+      "members": [
+        "Procurement Manager",
+        "Supply Chain Coordinator",
+        "Purchasing Officer",
+        "Vendor Manager"
+      ]
+    },
+    {
+      "label": "Legal & Governance",
+      "members": [
+        "General Counsel",
+        "Company Secretary",
+        "Governance Manager",
+        "Legal Officer"
+      ]
+    },
+    {
+      "label": "Broadcast Engineering",
+      "members": [
+        "Senior Broadcast Engineer",
+        "Transmission Engineer",
+        "Outside Broadcast Technician",
+        "Camera Operator"
+      ]
+    },
+    {
+      "label": "Photography & Imaging",
+      "members": [
+        "Chief Photographer",
+        "Race Day Photographer",
+        "Imaging Coordinator",
+        "Photo Finish Judge"
+      ]
+    },
+    {
+      "label": "International Relations",
+      "members": [
+        "International Racing Liaison",
+        "Global Partnerships Manager",
+        "International Development Officer"
+      ]
+    },
+    {
+      "label": "Merchandising & Retail",
+      "members": [
+        "Merchandising Manager",
+        "Retail Operations Coordinator",
+        "Store Manager"
+      ]
+    },
+    {
+      "label": "Environmental Management",
+      "members": [
+        "Environmental Manager",
+        "Sustainability Coordinator",
+        "Turf Agronomist"
+      ]
+    },
+    {
+      "label": "Facilities Engineering",
+      "members": [
+        "Facilities Engineer",
+        "Building Services Manager",
+        "Electrical Supervisor",
+        "Plumbing Supervisor"
+      ]
+    },
+    {
+      "label": "Turf Management",
+      "members": [
+        "Head Groundsman",
+        "Turf Manager",
+        "Irrigation Technician",
+        "Course Superintendent"
+      ]
+    },
+    {
+      "label": "Security & Crowd Control",
+      "members": [
+        "Security Manager",
+        "Crowd Control Supervisor",
+        "Gate Operations Coordinator"
+      ]
+    },
+    {
+      "label": "Betting Operations",
+      "members": [
+        "Tote Manager",
+        "Bookmaker Liaison Officer",
+        "Betting Operations Supervisor"
+      ]
+    },
+    {
+      "label": "Corporate Affairs",
+      "members": [
+        "Corporate Affairs Manager",
+        "Government Relations Officer",
+        "Public Affairs Coordinator"
+      ]
+    },
+    {
+      "label": "Track Officials",
+      "members": [
+        "Stipendiary Steward",
+        "Deputy Steward",
+        "Assistant Steward",
+        "Senior Stipendiary Steward"
+      ]
+    },
+    {

@@ -111,22 +111,85 @@ def sweep_all_jobtitles() -> Counter:
     return counts
 
 
+# Quick task 260904-39r, D-2: sized from the measured live failure (2,045 titles /
+# 16,079 input tokens truncated at the old 2000-token ceiling). Task 1 lands the naming
+# + repair fix at this ceiling; Task 2 bounds the input that makes 8000 sufficient.
+MAX_TOKENS = 8000
+
+
+class RoleVocabularyDerivationError(Exception):
+    """Quick task 260904-39r, D-2. Raised when the Haiku clustering call cannot be turned
+    into a families list: either the response was truncated (`stop_reason ==
+    "max_tokens"`, a capacity failure -- retrying identically would truncate identically
+    and spend a call to learn nothing) or a repair retry also failed to parse. Named so
+    both cases fail loudly and by name instead of surfacing as an opaque
+    json.JSONDecodeError several frames from its actual cause."""
+
+
+def _cluster_call(client, model, messages):
+    return client.messages.create(
+        model=model,
+        max_tokens=MAX_TOKENS,
+        temperature=0,
+        system=CLUSTER_SYSTEM_PROMPT,
+        messages=messages,
+    )
+
+
+def _require_not_truncated(msg, head_size: int) -> None:
+    """D-2: checked BEFORE the response text is ever touched -- a max_tokens response is
+    a capacity failure, not a malformed one, and parsing it would only ever surface the
+    truncation as a confusing JSONDecodeError instead of naming the real cause."""
+    if getattr(msg, "stop_reason", None) == "max_tokens":
+        raise RoleVocabularyDerivationError(
+            f"Haiku clustering response truncated (stop_reason=max_tokens) after sending "
+            f"{head_size} titles against a max_tokens ceiling of {MAX_TOKENS}. Retrying "
+            f"identically would truncate identically and spend a call to learn nothing -- "
+            f"lower --head or raise MAX_TOKENS."
+        )
+
+
+def _text_of(msg) -> str:
+    return "".join(b.text for b in msg.content if getattr(b, "type", None) == "text")
+
+
 def cluster_titles(distinct_titles: list) -> list:
-    """ONE Anthropic Haiku call. Returns a list of {"label", "members"} dicts. Only
-    called when the portal is NOT sparse (main() gates this per D-62-07)."""
+    """ONE Anthropic Haiku call, plus at most one repair retry (D-2, CLAUDE.md §26.3:
+    "Haiku invalid JSON -> Retry once with repair prompt"). Returns a list of {"label",
+    "members"} dicts. Only called when the portal is NOT sparse (main() gates this per
+    D-62-07)."""
     from anthropic import Anthropic
+    from src.web_research import _extract_json  # reuse -- do not write a second parser
 
     client = Anthropic()
     model = os.getenv("ANTHROPIC_HAIKU_MODEL", "claude-haiku-4-5")
-    msg = client.messages.create(
-        model=model,
-        max_tokens=2000,
-        temperature=0,
-        system=CLUSTER_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": json.dumps({"titles": distinct_titles})}],
-    )
-    text = "".join(b.text for b in msg.content if getattr(b, "type", None) == "text")
-    data = json.loads(text)
+
+    messages = [{"role": "user", "content": json.dumps({"titles": distinct_titles})}]
+    msg = _cluster_call(client, model, messages)
+    _require_not_truncated(msg, len(distinct_titles))
+    text = _text_of(msg)
+
+    try:
+        data = _extract_json(text)
+    except json.JSONDecodeError:
+        repair_messages = messages + [
+            {"role": "assistant", "content": text},
+            {"role": "user", "content": (
+                "That was not valid JSON. Return ONLY the JSON object -- no prose, no "
+                "markdown fences."
+            )},
+        ]
+        repair_msg = _cluster_call(client, model, repair_messages)
+        _require_not_truncated(repair_msg, len(distinct_titles))
+        repair_text = _text_of(repair_msg)
+        try:
+            data = _extract_json(repair_text)
+        except json.JSONDecodeError as exc:
+            raise RoleVocabularyDerivationError(
+                "Haiku clustering response could not be parsed as JSON, even after one "
+                "repair retry."
+            ) from exc
+
     return data.get("families") or []
 
 
