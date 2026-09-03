@@ -1,7 +1,8 @@
 ---
 phase: 62-suggest-the-contacts-nobody-named
 verified: 2026-09-02T00:20:00Z
-status: human_needed
+status: passed
+reconciled: 2026-09-04T17:30:00Z
 score: 13/13 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
@@ -22,6 +23,20 @@ human_verification:
   - test: "The priced ceiling is not exceeded in a real sitting"
     expected: "Actual page fetches and provider credits spent land at or under the quoted worst-case ceiling shown at grant-open; a bad or omitted per-company cap does not silently blow the ceiling"
     why_human: "The ceiling arithmetic and the cap-refusal guard (agreed_cap / synthesise_rows) are both now unit- and live-probe-tested outside the test suite, but 'the operator saw a number and the round stayed under it in a real sitting' is an end-to-end property only a live sitting can demonstrate (62-VALIDATION.md manual-verification row 3)."
+human_verification_discharged:
+  by: 62-UAT.md
+  on: 2026-09-04
+  how: |
+    All three human_verification items above are the three UAT tests, one-to-one and in the
+    same order. All three now read `result: pass` in 62-UAT.md — test 1 on its second run,
+    2026-09-03, after the G-62-1 fix shipped. Status moved human_needed -> passed on that
+    basis, not on any new automated evidence: the point of these items was that only a live
+    sitting could settle them, and the live sittings happened.
+    All 7 UAT gaps are also resolved as of 2026-09-04; G-62-5 was the last one open and was
+    closed on the live operator --dry-run it itself specified. Both verify:post gates were
+    re-run in the same session and refreshed to cover plans 62-11 and 62-12, which they had
+    not previously reached: nyquist found 5/5 already covered, security returned SECURED with
+    13/13 threats closed and 0 open.
 ---
 
 # Phase 62: Suggest the Contacts Nobody Named — Verification Report
