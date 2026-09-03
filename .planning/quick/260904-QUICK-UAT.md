@@ -1,5 +1,5 @@
 ---
-status: partial
+status: complete
 phase: quick-tasks-2026-09-04 (260904-39r, 260904-447, 260904-5a8, 260904-5sd, 260904-pav)
 source:
   - .planning/quick/260904-39r-role-vocabulary-derivation/260904-39r-SUMMARY.md
@@ -20,14 +20,11 @@ updated: 2026-09-04T19:40:00Z
 
 ## Current Test
 
-number: 8
-name: 260904-5sd — the search fallback on a real company with no findable staff page
-expected: |
-  On a company whose sitemap ladder ends clean-but-empty, `suggest-contacts` offers
-  search-sourced people: own-host and LinkedIn rows are sendable, an industry-site row is
-  shown but HELD with its source URL quoted. If the site REFUSES the crawl, the correct
-  result is no search at all.
-awaiting: operator response (needs a session restarted onto plugin 0.39.0)
+[testing complete — 7 passed, 1 skipped]
+
+The skipped one is test 8, and the reason matters: the search fallback has NEVER been
+exercised against a real site. It is verified offline only. Re-run on a company with no
+findable staff page before claiming otherwise.
 
 ## Tests
 
@@ -83,17 +80,48 @@ observed_after_fix: re-run live — drop-list prints, naming **14** shipped fami
      a pasted terminal line. -->
 
 ### 8. 260904-5sd — the search fallback on a real company with no findable staff page
-expected: on a company whose sitemap ladder ends clean-but-empty, `suggest-contacts` offers search-sourced people; a rank-3 (industry-site) person is shown but HELD with its source URL quoted in the reason, and only own-host or LinkedIn people are offered as sendable
-result: [pending]
-note: the search and every fetch are model-invoked tools the module cannot call, so this is only exercisable by an actual `/operator-claude-plugin:suggest-contacts` run. Reaching a send also spends a Lusha credit at the promote gate.
+expected: on a company whose sitemap ladder ends clean-but-empty, `suggest-contacts` offers search-sourced people; a rank-3 row is shown but HELD with its source URL quoted; only own-host or LinkedIn rows are sendable
+result: skipped
+reason: **the fallback was never reached, because the ladder found people.** Run live 2026-09-04 against Brisbane Roar FC (company `285507657175`): 4 of 5 fetches — `sitemap.xml` → `page-sitemap.xml` → `/the-club/` (no staff) → `/about/contact-us/` — which named 3 staff. `eligible_after_ladder` was therefore never consulted; there was nothing to fall back from. Correct behaviour, but it exercises the ladder, not this task's code.
+blocked_by: prior-condition
+follow_up: |
+  Re-run on a company whose site has NO findable staff page. Until then 260904-5sd's live
+  standing is: the search path is verified OFFLINE only (11/11 must_haves, `260904-5sd-VERIFICATION.md`,
+  including the 8/8 fail-closed disposition matrix and the suffix trap in both directions),
+  and has never opened against a real site. Do NOT record it as live-proven on this round's
+  evidence.
+what_the_round_DID_prove: |
+  Everything downstream of the ladder, end to end, first live suggest-contacts round:
+  - Eligibility: Brisbane Roar FC selected on `num_associated_contacts = 0`.
+  - Ladder: stopped at the first page yielding people, 4 of 5 fetches, 0 provider credits.
+  - Two-phase arming: stage 1 spent no credit; the live window was opened only for stage 2,
+    bounded to `brisbaneroar.com.au`, and the backend was read back DISARMED afterwards.
+  - Enrichment: 2 of 2 Lusha credits, at ceiling, never over.
+  - **The email-domain relatedness rule (G-62-7) passed on real data** — both emails were on
+    the company's own domain, both cleared, `held: 0`.
+  - Association: both contacts created AND associated to the company by domain match
+    (`350028797423`, `349992218047`).
+  - `source_by_field` carried real provenance: name/company/jobtitle → `claude_web`,
+    email → `lusha` (score 0.98, agreed by apollo + zoominfo).
+defects_surfaced: |
+  Two, both filed, neither in 5sd's own code:
+  - **The role filter selected 0 of 3 real staff.** `Marketing` / `Media` / `Sponsorship`
+    all classify to `None`; only an operator override rescued the round.
+    `.planning/todos/pending/2026-09-04-role-filter-drops-one-word-titles.md`.
+  - **Enrichment discovered `Head of Marketing and Content` and `seniority: Director` on a
+    CREATE row with every field blank, and kept neither.**
+    `.planning/todos/pending/2026-09-04-phone-is-never-chased-only-accepted.md`.
+  Also recurred: the known response-collapse REPORTING bug (obs 29488) — the response body
+  named one row where two had landed. Both were confirmed present by independent re-read, so
+  this is a reporting defect, not data loss, exactly as previously characterised.
 
 ## Summary
 
 total: 8
 passed: 7
 issues: 0
-pending: 1
-skipped: 0
+pending: 0
+skipped: 1
 blocked: 0
 
 ## Gaps
