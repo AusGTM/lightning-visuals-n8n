@@ -20,13 +20,14 @@ updated: 2026-09-04T19:40:00Z
 
 ## Current Test
 
-number: 7
-name: 260904-39r — role-vocabulary derivation, live `--dry-run` acceptance
+number: 8
+name: 260904-5sd — the search fallback on a real company with no findable staff page
 expected: |
-  `scripts/role_vocabulary.py --dry-run` completes against the real portal without
-  raising, prints a drop-list and a `cp` adoption command, and writes only
-  `role_vocabulary.derived.yaml` — never the shipped 17-family `role_vocabulary.yaml`.
-awaiting: operator response
+  On a company whose sitemap ladder ends clean-but-empty, `suggest-contacts` offers
+  search-sourced people: own-host and LinkedIn rows are sendable, an industry-site row is
+  shown but HELD with its source URL quoted. If the site REFUSES the crawl, the correct
+  result is no search at all.
+awaiting: operator response (needs a session restarted onto plugin 0.39.0)
 
 ## Tests
 
@@ -66,21 +67,20 @@ observed: both REFUSED
 
 ### 7. 260904-39r — role-vocabulary derivation, live `--dry-run` acceptance
 expected: `scripts/role_vocabulary.py --dry-run` completes against the real portal without raising, prints a drop-list and a `cp` adoption command, and writes only `role_vocabulary.derived.yaml`
-result: issue
-reported: "operator ran it live 2026-09-04; it completed and printed the vocabulary, but printed NO drop-list and NO cp command"
-severity: minor
-observed: ran clean against the live portal — `HEAD COVERAGE: clustered 200/2044 distinct titles; covers 1859/3775 titled contacts`, 8 families, exit 0, no exception. Write-nothing confirmed three ways: working tree clean, `role_vocabulary.derived.yaml` absent, shipped `role_vocabulary.yaml` byte-identical (`md5 c593bd4c5b48105fd65fff8268fbc90d`, zero git diff). The derived output is 8 entirely-corporate families with zero racing-governance ones — independently reconfirming quick 260904-447's REJECT decision.
-root_cause: `main()` returned from the `--dry-run` branch BEFORE reaching `_print_drop_list`, which sat on the writing path only. Fixed same session: the drop-list now prints on the dry-run path too, against `DERIVED_PATH` (the file a real run would write), still writing nothing. Regression test `test_dry_run_prints_the_drop_list_too`.
-follow_up: |
-  Two further observations, both judged NOT defects:
-  - Derived members carry raw `&amp;` (e.g. `Director, Sales &amp; Business Development`)
-    while the curated shipped file has zero entities. Cosmetic only — verified live that a
-    member carrying `&amp;` still matches all three encodings of the incoming title
-    (`&`, `&amp;`, `&amp;amp;`) through 260904-447's fixed-point unescape in `_tokenize`.
-    Since the derived file is never adopted, the ugly literal reaches nothing.
-  - The summary line read `CLUSTERED: 2044 distinct jobtitle values into 8 top families`,
-    contradicting the `200/2044` line directly above it. Only the recurrence head is
-    clustered. Reworded to `READ 2044 ... clustered the recurrence head into 8 ...`.
+result: pass
+reported: "first run: completed and printed the vocabulary, but printed no drop-list and no cp command"
+observed_first_run: ran clean against the live portal — `HEAD COVERAGE: clustered 200/2044 distinct titles; covers 1859/3775 titled contacts`, 8 families, exit 0, no exception. Write-nothing confirmed three ways: working tree clean, `role_vocabulary.derived.yaml` absent, shipped `role_vocabulary.yaml` byte-identical (`md5 c593bd4c5b48105fd65fff8268fbc90d`, zero git diff). The derived output is 8 entirely-corporate families with zero racing-governance ones — independently reconfirming quick 260904-447's REJECT decision.
+defect_found: `main()` returned from the `--dry-run` branch BEFORE reaching `_print_drop_list`, which sat on the writing path only — so the adoption warning was missing from the one mode built for evaluating an adoption. Fixed same session (commit `c6c4a94`); regression test `test_dry_run_prints_the_drop_list_too`.
+observed_after_fix: re-run live — drop-list prints, naming **14** shipped families adoption would drop (Administration, Board & Committee, CEO, CMO, Catering & Events, Chair, Communications Manager, Head of Broadcast, Head of Marketing, Marketing Manager, Operations Manager, Secretary, Track & Facilities, Treasurer — i.e. every racing-governance family), followed by the `To adopt: cp ...` line. Still wrote nothing.
+
+<!-- CORRECTION, same session. An earlier revision of this entry recorded "derived members
+     carry raw &amp; entities" as a live observation and judged it cosmetic. That was WRONG
+     and is removed rather than softened: there are no entities in the data at all. The
+     shipped file holds `Board & Committee` on disk — verified programmatically, 3 labels
+     contain `&` and ZERO contain the literal `&amp;` — yet the same drop-list rendered it
+     escaped. The escaping is the transcript's bash-stdout channel, not the file and not the
+     portal. Do not go looking for an encoding bug in the derivation path on the strength of
+     a pasted terminal line. -->
 
 ### 8. 260904-5sd — the search fallback on a real company with no findable staff page
 expected: on a company whose sitemap ladder ends clean-but-empty, `suggest-contacts` offers search-sourced people; a rank-3 (industry-site) person is shown but HELD with its source URL quoted in the reason, and only own-host or LinkedIn people are offered as sendable
@@ -90,23 +90,13 @@ note: the search and every fetch are model-invoked tools the module cannot call,
 ## Summary
 
 total: 8
-passed: 6
-issues: 1
+passed: 7
+issues: 0
 pending: 1
 skipped: 0
 blocked: 0
 
 ## Gaps
 
-- truth: "`--dry-run` prints the drop-list and the `cp` adoption command"
-  status: failed
-  reason: "User reported: it completed and printed the vocabulary, but printed no drop-list and no cp command"
-  severity: minor
-  test: 7
-  root_cause: "main() returned from the --dry-run branch before reaching _print_drop_list, which was only called on the writing path — so the adoption warning was absent from the one mode built for evaluating an adoption"
-  artifacts:
-    - path: "scripts/role_vocabulary.py"
-      issue: "drop-list call sat after the dry-run early return"
-  missing: []
-  debug_session: ""
-  resolved: "fixed in this session; regression test tests/test_role_vocabulary_derivation.py::test_dry_run_prints_the_drop_list_too" 
+<!-- One defect was found by test 7 and FIXED in the same session (commit `c6c4a94`), so it
+     is not carried as an open gap. Recorded under test 7's `defect_found`. -->
