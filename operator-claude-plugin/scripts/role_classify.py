@@ -8,10 +8,15 @@ derives or refreshes the family list itself. The list is always a parameter; whe
 comes from (Haiku clustering of live `jobtitle` values, cached) is `role_vocabulary.py`'s
 job, a different module for a different (offline, build-time) problem.
 
-Each family entry is `{"label": <str>, "members": [<title>, ...]}`. Matching is
-case-folded and whitespace-normalised over the member titles, exact match only -- no
-fuzzy matching, no partial/substring matching. A title this module cannot place is `None`,
-never a guess.
+Each family entry is `{"label": <str>, "members": [<title>, ...]}`. Matching normalises
+both sides (HTML entities, `&` -> `and`, punctuation, case, whitespace) then tokenises
+them, and a member matches when its token sequence occurs as a CONTIGUOUS RUN of whole
+tokens inside the title's tokens -- never a bare substring (which would let `Manager`
+match `Track Manager`) and never a bag-of-tokens overlap (which would let `General
+Manager` match `Track Manager` on the shared word). When more than one member matches,
+the one with the most tokens wins, tie-broken on family order then member order, so the
+result never depends on YAML ordering. A title this module cannot place is `None`, never
+a guess.
 
 This module also carries the OFFLINE-cache-facing half of the same feature: loading the
 committed `role_vocabulary.yaml` (written by the repo-root `scripts/role_vocabulary.py`)
@@ -19,6 +24,7 @@ and rendering the operator-facing role menu with its evidence status attached, p
 D-62-06/D-62-07. `load_families()`/`offer_block()`/`chosen_families()` all take the
 vocabulary dict as a parameter or return one -- none of them re-derive it.
 """
+import html
 from pathlib import Path
 
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
@@ -104,20 +110,51 @@ def chosen_families(vocabulary, labels):
     return list(labels)
 
 
-def _normalize(value) -> str:
-    return " ".join(str(value or "").strip().casefold().split())
+def _tokenize(value) -> tuple:
+    """`html.unescape` -> casefold -> literal `&` becomes the word `and` -> every
+    remaining non-alphanumeric character becomes a space -> split. Applied identically
+    to a member and a title so `Finance & Admin Officer`, `Finance &amp; Admin Officer`
+    and `finance and admin officer` all tokenise the same."""
+    text = html.unescape(str(value or "")).casefold()
+    text = text.replace("&", " and ")
+    text = "".join(ch if ch.isalnum() else " " for ch in text)
+    return tuple(text.split())
+
+
+def _contains_run(tokens, run) -> bool:
+    """Whether `run` occurs as a contiguous run of whole tokens inside `tokens`. A
+    substring test would let `Manager` match `Track Manager`; a bag-of-tokens overlap
+    test would let `General Manager` match `Track Manager` on the shared word. Neither
+    is what this does."""
+    n, m = len(tokens), len(run)
+    if m == 0 or m > n:
+        return False
+    return any(tokens[i:i + m] == run for i in range(n - m + 1))
 
 
 def classify_title(title, family_list):
     """One already-extracted job title string, and a list of role families, in; the
     matching family's `label`, or `None`, out. Never fetches, never calls a model, never
-    derives or refreshes `family_list` -- that list is always supplied by the caller."""
-    normalized_title = _normalize(title)
-    if not normalized_title:
+    derives or refreshes `family_list` -- that list is always supplied by the caller.
+
+    A member matches when its token sequence is a contiguous run inside the title's
+    tokens. When several (family, member) pairs match, the one with the most tokens
+    wins; ties break on the first one seen (family order, then member order), so the
+    result never depends on YAML ordering."""
+    title_tokens = _tokenize(title)
+    if not title_tokens:
         return None
+
+    best_length = 0
+    best_label = None
     for family in family_list or []:
+        label = family.get("label")
         members = family.get("members") or []
         for member in members:
-            if _normalize(member) == normalized_title:
-                return family.get("label")
-    return None
+            member_tokens = _tokenize(member)
+            if not member_tokens:
+                continue
+            if len(member_tokens) > best_length and _contains_run(title_tokens, member_tokens):
+                best_length = len(member_tokens)
+                best_label = label
+    return best_label

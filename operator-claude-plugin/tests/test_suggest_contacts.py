@@ -65,6 +65,65 @@ def test_classify_title_never_derives_its_own_family_list():
 
 
 # =====================================================================================
+# role_classify.classify_title — partial, entity-aware, longest-wins (62-09 Task 1)
+#
+# Local fixture — the RULE is under test here, not the shipped YAML (that's Task 2).
+# =====================================================================================
+
+PARTIAL_FAMILY_LIST = [
+    {"label": "board", "members": ["Director", "Board Of Directors"]},
+    {"label": "secretary", "members": ["Secretary"]},
+    {"label": "president", "members": ["President"]},
+    {"label": "vice-president", "members": ["Vice President"]},
+    {"label": "gm", "members": ["General Manager"]},
+    {"label": "track", "members": ["Track Manager"]},
+    {"label": "finance", "members": ["Finance and Admin Officer"]},
+]
+
+# Same families, order reversed — longest-wins must not depend on YAML position.
+PARTIAL_FAMILY_LIST_REVERSED = list(reversed(PARTIAL_FAMILY_LIST))
+
+
+def test_classify_title_partial_operator_named_cases():
+    assert role_classify.classify_title("Secretary Manager", PARTIAL_FAMILY_LIST) == "secretary"
+    assert role_classify.classify_title("Board Of Directors", PARTIAL_FAMILY_LIST) == "board"
+
+
+def test_classify_title_never_sweeps_track_manager_into_general_manager():
+    # THE OVER-MATCH NEGATIVE. Assert the returned label explicitly, not merely non-None.
+    result = role_classify.classify_title("Track Manager", PARTIAL_FAMILY_LIST)
+    assert result == "track"
+    assert result != "gm"
+
+
+def test_classify_title_longest_match_wins_order_independent():
+    assert role_classify.classify_title("Vice President", PARTIAL_FAMILY_LIST) == "vice-president"
+    # Re-assert with family order reversed — must not depend on YAML ordering.
+    assert role_classify.classify_title("Vice President", PARTIAL_FAMILY_LIST_REVERSED) == "vice-president"
+
+
+def test_classify_title_normalises_entities_ampersand_and_case_together():
+    for title in (
+        "Finance &amp; Admin Officer",
+        "Finance & Admin Officer",
+        "finance and admin officer",
+    ):
+        assert role_classify.classify_title(title, PARTIAL_FAMILY_LIST) == "finance"
+
+
+def test_classify_title_does_not_match_tail_of_a_longer_word():
+    family_list = [{"label": "board", "members": ["Director"]}]
+    assert role_classify.classify_title("Directorate Assistant", family_list) is None
+    assert role_classify.classify_title("Directors", family_list) is None
+
+
+def test_classify_title_unchanged_contracts_still_hold_under_new_rule():
+    assert role_classify.classify_title("", PARTIAL_FAMILY_LIST) is None
+    assert role_classify.classify_title(None, PARTIAL_FAMILY_LIST) is None
+    assert role_classify.classify_title("Head Chef", PARTIAL_FAMILY_LIST) is None
+
+
+# =====================================================================================
 # eligibility — D-62-16 tri-state, readability before magnitude
 # =====================================================================================
 
