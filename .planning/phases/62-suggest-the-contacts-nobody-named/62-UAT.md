@@ -3,7 +3,7 @@ status: diagnosed
 phase: 62-suggest-the-contacts-nobody-named
 source: [62-VERIFICATION.md]
 started: 2026-09-02T01:30:00Z
-updated: 2026-09-03T12:05:00Z
+updated: 2026-09-03T12:25:08Z
 ---
 
 ## Current Test
@@ -107,13 +107,16 @@ blocked: 2
 
 - gap_id: G-62-1
   truth: "A company's own people page is reachable through the sitemap ladder for companies as they are actually recorded in this portal"
-  status: failed
+  status: resolved
+  resolved_by: 62-07-PLAN.md
+  resolved_at: 2026-09-03
   reason: |
     User-visible effect: a suggestion round finds nobody at 83.5% of companies that have a
     website, because every ladder candidate is built with an empty host and 404s. The round
     reports the give-up message as though the site had no people page, so the failure reads
     as "nothing found" rather than "the URL was malformed".
   severity: blocker
+  status_note: "FIX LANDED 2026-09-03 (plan 62-07, commits 8c45946 / f5fd69a / 2d99cfa, plugin 0.38.1). Not yet live-proven — test 1 stays `issue` until the supervised sitting re-runs it."
   test: 1
   root_cause: |
     `url_fallback.plan_ladder(pasted_url)` is named and written for a URL the operator
@@ -161,3 +164,51 @@ blocked: 2
   processed, never to "every company in the portal with no contacts".
 
 Neither writes, spends a provider credit, or runs an n8n execution.
+
+## Gap closure (2026-09-03) — landed, locally verified, NOT yet live-proven
+
+`62-07-PLAN.md` — commits `8c45946` (seam), `f5fd69a` (refusal), `2d99cfa` (0.38.1),
+`e4a33bc` (summary). Regression after: 2300 plugin tests, 1727 root pytest, 867 node — all
+passing. `git status --porcelain n8n/` silent: zero n8n change, proven rather than asserted.
+
+**The plan found a SECOND instance of the defect this UAT did not diagnose.** `next_candidates`
+was broken the same way: with a bare domain, `same_host` compared against an empty netloc and
+refused every sitemap URL as off-host — and the sitemap rung is exactly what test 1 exercises.
+Fixing only `discovery_plan`, which is what this UAT's `missing` list prescribed, would have
+produced well-formed candidates that were then discarded anyway, and test 1 would have failed
+a second time inside the same seam for a different reason. Both call sites now route through
+one private helper (`_ladder_source`), not two copies.
+
+Independently re-verified after the fix, on the exact data that failed (pure string-building,
+no network):
+
+    Bunbury Turf Club      host 'bunburyturfclub.com.au'      -> https://bunburyturfclub.com.au/sitemap.xml
+    Alice Springs Turf Club host 'alicespringsturfclub.org.au' -> https://alicespringsturfclub.org.au/sitemap.xml
+
+    no-op for values that already worked (seam output == direct plan_ladder output):
+      'https://bunburyturfclub.com.au'    -> host preserved            True
+      'https://www.gctc.com.au/'          -> www preserved             True
+      'http://example.org/board?x=1'      -> http + path + query kept  True
+      'https://WWW.MixedCase.COM/Board'   -> case preserved, not lowered True
+
+    refusal at the entry point:
+      plan_ladder('')           -> ValueError
+      plan_ladder(None)         -> ValueError   (was TypeError from urlsplit — also fixed)
+      plan_ladder('notadomain') -> ValueError
+
+    the second instance, and its safety property intact:
+      next_candidates(bare-domain row, ['…/board/', '…/our-team/', 'https://evil.example/x'])
+        accepted: both same-host URLs   (previously ALL were refused as off-host)
+        refused : evil.example, "is not the pasted URL's host (bunburyturfclub.com.au)"
+
+That last check is the one that mattered most: the fix makes `same_host` work rather than
+making it permissive — an off-host URL is still refused, with both hosts named.
+
+### Still required: one supervised live sitting
+
+Test 1 stays `issue` and tests 2 and 3 stay `blocked` deliberately. Nothing above involved a
+`web_fetch`, a Lusha credit, or a real people page — the ladder now builds fetchable URLs, but
+"a real racing-club site's sitemap yields a usable people page" is an end-to-end property only
+a live sitting can show. 78 eligible scheme-bearing companies were available at survey time,
+and the fix should raise that materially since bare domains now normalise; re-run the survey
+at the start of the sitting rather than trusting that number.
