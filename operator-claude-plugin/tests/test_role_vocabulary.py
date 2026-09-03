@@ -113,6 +113,8 @@ MEASURED_RACING_CLUB_TITLES = [
     # The portal stores this HTML-entity-escaped -- an eighteenth case proving the
     # same coverage holds for the stored (unescaped-at-normalisation) form.
     "Finance &amp; Admin Officer",
+    # Quick task 260904-447: the portal actually stores this DOUBLE-encoded.
+    "Finance &amp;amp; Admin Officer",
 ]
 
 
@@ -133,6 +135,22 @@ FORBIDDEN_BARE_GRADE_NOUNS = {
     "manager", "officer", "executive", "assistant",
     "coordinator", "supervisor", "head", "lead",
 }
+
+
+# ==================== Quick task 260904-447 (double-encoded entities) ====================
+
+def test_double_encoded_title_classifies_to_its_real_shipped_family():
+    vocabulary = role_classify.load_families()
+    result = role_classify.classify_title(
+        "Finance &amp;amp; Admin Officer", vocabulary["families"]
+    )
+    assert result == "Treasurer"
+
+
+def test_tokenize_drops_the_orphaned_amp_token_from_double_encoded_input():
+    expected = ("finance", "and", "admin", "officer")
+    assert role_classify._tokenize("Finance &amp;amp; Admin Officer") == expected
+    assert role_classify._tokenize("Finance & Admin Officer") == expected
 
 
 def test_shipped_vocabulary_has_no_bare_grade_noun_members():

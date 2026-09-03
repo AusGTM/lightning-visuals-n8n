@@ -304,6 +304,26 @@ def test_full_stubbed_run_writes_derived_path_and_leaves_shipped_file_untouched(
     assert shipped_after == shipped_before
 
 
+def test_both_trees_unescape_to_the_same_bounded_fixed_point():
+    # Quick task 260904-447: pins the two deliberately-duplicated bounded unescape loops
+    # (scripts/role_vocabulary.py::_normalize_title and
+    # operator-claude-plugin/scripts/role_classify.py::_tokenize) equal, so they cannot
+    # silently drift apart.
+    plugin_scripts_dir = str(role_vocabulary.ROOT / "operator-claude-plugin" / "scripts")
+    if plugin_scripts_dir not in sys.path:
+        sys.path.insert(0, plugin_scripts_dir)
+    import role_classify
+
+    assert role_vocabulary.MAX_UNESCAPE_PASSES == role_classify.MAX_UNESCAPE_PASSES
+
+    double_encoded = "President &amp;amp; Chief Executive Officer"
+    normalized = role_vocabulary._normalize_title(double_encoded)
+    tokens = role_classify._tokenize(double_encoded)
+
+    assert "amp" not in normalized
+    assert "amp" not in tokens
+
+
 def test_default_write_path_is_not_the_plugin_read_path():
     # Mirrors operator-claude-plugin/tests/conftest.py's own sys.path insert (the plugin
     # scripts dir is also literally named `scripts`, which would otherwise shadow this

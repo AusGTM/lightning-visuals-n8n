@@ -30,6 +30,15 @@ from pathlib import Path
 PLUGIN_ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_VOCABULARY_PATH = PLUGIN_ROOT / "config" / "role_vocabulary.yaml"
 
+# Quick task 260904-447: the portal stores DOUBLE-encoded HTML entities (measured
+# 2026-09-04, e.g. 'Finance &amp;amp; Admin Officer'), so a single html.unescape() pass
+# leaves one layer behind. Sibling copy of this bound:
+# scripts/role_vocabulary.py::MAX_UNESCAPE_PASSES (repo root) -- the plugin ships
+# standalone, so a cross-tree import is not available, hence two local loops with
+# identical semantics rather than a shared module. Pinned equal by
+# tests/test_role_vocabulary_derivation.py::test_both_trees_unescape_to_the_same_bounded_fixed_point.
+MAX_UNESCAPE_PASSES = 5
+
 # D-62-07's mitigation. This exact sentence is what lets an operator tell a portal-derived
 # role list from an invented one at a glance -- not optional formatting.
 DISCLOSURE_SENTENCE = (
@@ -111,11 +120,19 @@ def chosen_families(vocabulary, labels):
 
 
 def _tokenize(value) -> tuple:
-    """`html.unescape` -> casefold -> literal `&` becomes the word `and` -> every
-    remaining non-alphanumeric character becomes a space -> split. Applied identically
-    to a member and a title so `Finance & Admin Officer`, `Finance &amp; Admin Officer`
-    and `finance and admin officer` all tokenise the same."""
-    text = html.unescape(str(value or "")).casefold()
+    """`html.unescape` (repeated to a bounded fixed point, MAX_UNESCAPE_PASSES -- the
+    portal stores DOUBLE-encoded entities) -> casefold -> literal `&` becomes the word
+    `and` -> every remaining non-alphanumeric character becomes a space -> split. Applied
+    identically to a member and a title so `Finance & Admin Officer`,
+    `Finance &amp; Admin Officer` and `Finance &amp;amp; Admin Officer` all tokenise the
+    same."""
+    text = str(value or "")
+    for _ in range(MAX_UNESCAPE_PASSES):
+        decoded = html.unescape(text)
+        if decoded == text:
+            break
+        text = decoded
+    text = text.casefold()
     text = text.replace("&", " and ")
     text = "".join(ch if ch.isalnum() else " " for ch in text)
     return tuple(text.split())
