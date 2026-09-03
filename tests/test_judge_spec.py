@@ -244,6 +244,52 @@ def test_ta2_judge_eligible_and_deterministic_fields_are_disjoint():
     assert judge_eligible.isdisjoint(deterministic_only)
 
 
+def test_jg_drop_63_04_judge_model_is_unconditional_single_constant():
+    """Regression guard for Phase 63 Plan 04's DROP branch (63-JUDGE-LEVER-DROP-RECORD.md):
+    routing confidence_band-only judge inputs to a cheaper model (Sonnet 5 -> Haiku 4.5)
+    was evaluated and explicitly NOT shipped (insufficient_corpus + material_disagreement).
+    This does not test a shipped routing feature — it guards the deliberate non-change so
+    a future edit introducing per-reason model routing fails loudly here.
+
+    Asserts the PROPERTY (one model, no branch), not a model id string, so a legitimate
+    model upgrade (e.g. bumping ANTHROPIC_JUDGE_MODEL's default) does not trip this test.
+    """
+    builder_src = (ROOT / "scripts" / "build_cloud_workflows.py").read_text()
+
+    # Exactly one config flag governs judge model selection (CONFIG_FLAG_DEFAULTS,
+    # single source per Criterion 5 parity comment above CONFIG_FLAG_DEFAULTS).
+    assert builder_src.count("ANTHROPIC_JUDGE_MODEL") >= 1
+    assert "ANTHROPIC_JUDGE_MODEL_HAIKU" not in builder_src
+    assert "ANTHROPIC_JUDGE_MODEL_CHEAP" not in builder_src
+    assert re.search(r"ANTHROPIC_JUDGE_MODEL\w*\s*=.*claude-haiku", builder_src) is None
+
+    for doc_name, request_node, call_node in (
+        ("wf_enrichment_local_live.json", "Build Judge Request", "Judge Call"),
+        ("wf_enrichment_local_live.json", "Build Contact Judge Request", "Contact Judge Call"),
+    ):
+        doc = _load_workflow(doc_name)
+        js_code = _node_by_name(doc, request_node)["parameters"]["jsCode"]
+
+        # The model assignment line must be a bare identifier reference to the single
+        # judge-model constant -- no ternary, ranked lookup table, or function call that
+        # could branch on judge_reasons/confidence_band.
+        m = re.search(r"const model = ([^;]+);", js_code)
+        assert m, f"{request_node}: no `const model = ...;` assignment found"
+        assert m.group(1).strip() == "ANTHROPIC_JUDGE_MODEL", (
+            f"{request_node}: judge model selection must be the single unconditional "
+            f"ANTHROPIC_JUDGE_MODEL constant, found {m.group(1)!r} -- this looks like "
+            "per-reason judge model routing, which Phase 63 Plan 04 explicitly dropped"
+        )
+
+        # Only one model assignment in the whole node body -- no second, reason-scoped
+        # branch computing a different model string elsewhere in the same jsCode.
+        assert len(re.findall(r"\bconst model\b", js_code)) == 1
+
+        # The HTTP node the request feeds must still exist (sanity: request node output
+        # is actually consumed downstream by the judge call).
+        _node_by_name(doc, call_node)
+
+
 def test_ar2_judge_call_host():
     """AR-2: the Judge Call node's host must be the already-allowlisted api.anthropic.com
     (tests/test_architecture_guard.py covers this generically; asserted here too so a
