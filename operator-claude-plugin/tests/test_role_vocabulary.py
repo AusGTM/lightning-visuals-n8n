@@ -167,3 +167,89 @@ def test_shipped_vocabulary_has_no_bare_grade_noun_members():
         f"{sorted(FORBIDDEN_BARE_GRADE_NOUNS)} would match nearly every person on a "
         f"board page and must be a multi-word member instead"
     )
+
+
+# =====================================================================================
+# Quick task 260905-rf1: one-word club titles
+#
+# First live suggest-contacts round, Brisbane Roar FC (company 285507657175),
+# 2026-09-04. The discovery ladder found three named staff on the club's own
+# /about/contact-us/ page; the role filter classified all three to None and the round
+# yielded 0 selected. These are observations from that sitting, not invented titles.
+# =====================================================================================
+
+# (D-rf1-01) title -> (expected family label, the person measured live)
+BRISBANE_ROAR_ONE_WORD_TITLES = [
+    ("Marketing", "Marketing", "Jordan Hayward"),
+    ("Media", "Media", "Joseph Esposito"),
+    ("Sponsorship", "Sponsorship", "Emma Hoadley"),
+]
+
+
+@pytest.mark.parametrize("title,expected,person", BRISBANE_ROAR_ONE_WORD_TITLES)
+def test_shipped_vocabulary_classifies_the_live_one_word_club_titles(title, expected, person):
+    vocabulary = role_classify.load_families()
+    result = role_classify.classify_title(title, vocabulary["families"])
+    assert result == expected, (
+        f"{title!r} was the page title of {person} on Brisbane Roar FC's own contact "
+        f"page (company 285507657175, measured 2026-09-04); it classified to {result!r}, "
+        f"so the role filter selected 0 of 3 real staff in exactly the roles the "
+        f"operator had asked for"
+    )
+
+
+# (D-rf1-02) The no-flip freeze. Measured 2026-09-05 against the shipped vocabulary
+# BEFORE the three new families were appended; every row must return the same label
+# after. The two "... Director" rows are the load-bearing ones: they hold only while the
+# new one-token families sit AFTER `Board & Committee` in the YAML, because
+# classify_title's tie-break on an equal-length match is first-wins by family order.
+# This table is what pins append-at-end. A red here means a measured value is wrong and
+# must be RE-MEASURED, never adjusted to fit.
+FROZEN_TITLE_CLASSIFICATIONS = [
+    ("Marketing Director", "Board & Committee"),
+    ("Media Director", "Board & Committee"),
+    ("Head of Marketing and Content", "Head of Marketing"),
+    ("Marketing Manager", "Marketing Manager"),
+    ("Communications Manager", "Communications Manager"),
+    ("Media and Communications Manager", "Communications Manager"),
+    ("Track Manager", "Track & Facilities"),
+    ("Secretary Manager", "Secretary"),
+    ("Chairman", "Chair"),
+    ("CEO", "CEO"),
+    ("President", "President"),
+    ("Vice President", "Vice President"),
+    ("Finance &amp;amp; Admin Officer", "Treasurer"),
+]
+
+
+@pytest.mark.parametrize("title,expected", FROZEN_TITLE_CLASSIFICATIONS)
+def test_no_currently_correct_classification_flips(title, expected):
+    vocabulary = role_classify.load_families()
+    result = role_classify.classify_title(title, vocabulary["families"])
+    assert result == expected, (
+        f"{title!r} classified to {expected!r} before quick task 260905-rf1 and now "
+        f"classifies to {result!r}. A vocabulary edit must not move a title that "
+        f"already had a correct home -- if this is a '... Director' row, the one-token "
+        f"families have most likely been moved ahead of 'Board & Committee', which "
+        f"changes the equal-length tie-break"
+    )
+
+
+# (D-rf1-03) A bare token in two families is ambiguity, not a match, and classify_title
+# would resolve it silently by YAML order rather than surfacing it.
+def test_no_single_token_member_belongs_to_two_families():
+    vocabulary = role_classify.load_families()
+    token_owners = {}
+    for family in vocabulary["families"]:
+        label = family.get("label")
+        for member in family.get("members") or []:
+            tokens = role_classify._tokenize(member)
+            if len(tokens) == 1:
+                token_owners.setdefault(tokens[0], set()).add(label)
+    collisions = {token: sorted(labels) for token, labels in token_owners.items() if len(labels) > 1}
+    assert not collisions, (
+        f"single-token member(s) owned by more than one family: {collisions} -- a bare "
+        f"token matching two families is ambiguity, not a match, and classify_title's "
+        f"equal-length tie-break would resolve it silently by YAML order, so which "
+        f"family wins would depend on file layout rather than on the title"
+    )
