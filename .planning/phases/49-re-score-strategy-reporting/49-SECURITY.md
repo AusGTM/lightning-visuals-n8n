@@ -3,10 +3,14 @@ phase: "49"
 slug: "re-score-strategy-reporting"
 status: verified
 # threats_open = count of OPEN threats at or above workflow.security_block_on severity (high).
-# No registered threat was found OPEN. Two items are surfaced for operator disposition and
+# No registered threat was found OPEN. Two items were surfaced for operator disposition and
 # deliberately NOT dispositioned by the audit: an unregistered direct-library-bypass threat class
-# (Divergence 1) and a missing .planning/WINDOWS.md ledger row (Divergence 2). Neither changes a
+# (Divergence 1) and a missing .planning/WINDOWS.md ledger row (Divergence 2). Neither changed a
 # register status — see "Divergences" for why.
+#
+# 2026-09-03, AFTER the audit: the operator granted the fix for BOTH divergences. T-49-43 is the
+# threat class Divergence 1 proposed, now registered and closed on the shipped gate. Divergence 2's
+# ledger row is appended separately. See "Divergence dispositions — granted" at the end of this file.
 threats_open: 0
 threats_open_below_threshold: 0
 asvs_level: 1
@@ -137,6 +141,14 @@ Consolidated from the seven PLAN threat models.
 | T-49-40 | Repudiation | undisclosed window excess | high | mitigate | `49-RUN-REPORT.md:39-53` — a Declared / Actual / Disclosure table consuming all three window records, naming every excess: W1 batch calls 3 vs 2 (`:23`, explicitly "**it bypassed the declared two-key arming ceremony**"), W2 arm cycles 2 (`:48`), Anthropic calls 2 vs 1 (`:25`). | closed |
 | T-49-41 | Tampering | inconsistent input snapshot | medium | mitigate | `scripts/build_rescore_report.py:123-131` — `_validate_point` raises on `population_count == 0` (`:127`) and on a `tier_distribution` sum ≠ population (`:130-131`); `build_report:174-175` validates all three points **before** rendering. Tests green (57/57, including `tests/test_build_rescore_report.py`). | closed |
 | T-49-42 | Information Disclosure | credentials in the report | low | accept | Imports at `scripts/build_rescore_report.py:36-40` are stdlib only — `argparse`, `json`, `sys`, `collections.Counter`, `pathlib.Path`. No `requests`, no `src.hubspot_client`. → AR-49-04 | closed (accepted) |
+
+### Cross-cutting — registered retrospectively, 2026-09-03
+
+Not a plan's own threat. Registered by operator grant after the audit surfaced it as Divergence 1.
+
+| Threat ID | Category | Component | Severity | Disposition | Mitigation | Status |
+|-----------|----------|-----------|----------|-------------|------------|--------|
+| T-49-43 | Elevation of Privilege | `src/hubspot_client.py::batch_update_companies` | high | mitigate | **Direct-library bypass of the CLI arming ceremony** — the threat class Divergence 1 proposed, distinct from the CLI-arming class (T-49-01/T-49-22) and the payload-scope class (T-49-02/T-49-23), both of which remain correct about the driver paths they name. The gate now travels with the write: `src/hubspot_client.py` gained `BATCH_WRITE_ARM_KEYS` + `_batch_write_armed()` (`DRY_RUN=false` AND one of four registered arm keys) and a `FORBIDDEN_PROPS` disjointness check, both unconditional `ValueError` raises on the live-POST path only, after the `dry_run or not updates` short-circuit. Refusals tested in `tests/test_backfill_seed_company_scores.py`: `test_batch_update_live_unarmed_shell_refuses` (the W1 shape exactly), `test_batch_update_live_dry_run_false_alone_refuses` (proves two keys, not one), `test_batch_update_live_armed_still_refuses_a_derived_property`, `test_batch_update_arm_keys_are_an_explicit_list_not_a_wildcard`, `test_batch_update_every_registered_arm_key_arms`. Each monkeypatches `requests.post` to raise, so a regression fails on the network call even if the raise itself were deleted. All five proved RED-then-GREEN by perturbation before shipping (arm gate short-circuited to `if False`; scope floor emptied to `frozenset()`) — never shipped as tautologies. | closed |
 
 *Status: open · closed · closed (accepted) · closed (fired)*
 *Severity: critical > high > medium > low — only open threats at or above `security_block_on` (`high`) count toward `threats_open`*
@@ -327,9 +339,72 @@ pre-existing untracked paths throughout.
 - [x] Accepted risks documented in Accepted Risks Log (AR-49-01 … AR-49-04)
 - [x] `threats_open: 0` confirmed — nothing at or above `high` is open
 - [x] `status: verified` set in frontmatter
-- [ ] **Divergence 1** — a direct-library-bypass threat class awaits operator disposition
-      (register + accept, move the gate into the library, or add a source-inspection test)
-- [ ] **Divergence 2** — a retrospective `.planning/WINDOWS.md` row for the W1 gate-bypass awaits
-      operator disposition
+- [x] **Divergence 1** — dispositioned by operator grant 2026-09-03: fixed, registered as T-49-43
+- [x] **Divergence 2** — dispositioned by operator grant 2026-09-03: ledger row appended
 
 **Approval:** verified 2026-09-03 at HEAD `8ffe359`
+
+---
+
+## Divergence dispositions — granted 2026-09-03
+
+The audit surfaced both divergences and was forbidden to disposition either. The operator granted
+both in one instruction, transcribed verbatim, not composed by this record:
+
+> Fix disposition items 1 and 2 then sequence the remaining 10 dispositions
+
+"Items 1 and 2" are the first two rows of `.planning/HANDOFF.json`'s `human_actions_pending`, which
+are Divergence 1 and Divergence 2 respectively. The grant is to **fix**, not to accept — so of the
+three candidate mitigations the audit listed in ascending cost, option 1 (accept explicitly) was not
+taken.
+
+### Divergence 1 — fixed by option 2, in generalized form
+
+The audit's option 2 read "move `_writes_allowed()` into `batch_update_companies`". **Taken in
+intent, not verbatim, and the difference is load-bearing:** `rescore_population._writes_allowed()`
+hardcodes `ALLOW_SCORE_BACKFILL`, and that exact function relocated into the shared client would
+have refused the armed runs of the other three batch drivers, which use three different keys
+(`ALLOW_VETO_REMEDIATION`, `ALLOW_ANTI_ICP_MIRROR_BACKFILL`, `ALLOW_ENRICH_COVERAGE`) — 3 of 5 call
+sites broken by a literal reading. What shipped is the generalized two-key form: `DRY_RUN=false`
+AND one of four **explicitly registered** arm keys.
+
+The list is explicit and never a wildcard `ALLOW_*` scan on purpose: `.env.example` ships unrelated
+`ALLOW_ICP_SCORE_WRITES` / `ALLOW_STAGING_WRITES` flags that a local-MVP shell sets true (§12.11),
+and a wildcard would let one of those arm a mass write it never authorised. A new batch driver must
+register its key in `BATCH_WRITE_ARM_KEYS` — that friction is the control, and
+`test_batch_update_arm_keys_are_an_explicit_list_not_a_wildcard` pins it.
+
+Option 3 (a source-inspection test asserting no call site passes `dry_run=False` outside a gated
+function) was **not** taken and is not owed: it is a proxy for the property, and the property is now
+enforced at the boundary itself.
+
+Scope decisions, stated so a later reader does not mistake them for oversights:
+
+- **`batch_update_companies` only.** `patch_record` / `create_record` / `delete_record` keep the
+  §21 caller-gates convention their own comments document; `create_record`'s comment states it
+  deliberately. This is the mass-write endpoint (up to 100 records per call), so the floor lives
+  with it.
+- **The drivers keep their own `assert_payload_scope()` equality gates.** The library enforces the
+  universal never-write **floor** (`FORBIDDEN_PROPS`); each driver enforces its own exact-set
+  **ceiling**. Moving the equality gates in would be wrong — they differ per driver by design.
+- **`FORBIDDEN_PROPS` moved** from `scripts/remediate_veto_companies.py` to `src/guards.py`, since
+  `src/` must not import from `scripts/`. Re-exported from its old home, so `enrich_coverage_companies`
+  and `fix_sfv_region` are untouched.
+
+**T-49-23's absolute is repaired.** The audit recorded that "the four derived properties can never
+appear" was falsified *as an absolute* by the bypass path existing. That path no longer exists: the
+library refuses a `FORBIDDEN_PROPS` key on the live path regardless of which driver — or none —
+built the payload. T-49-23's own cell is left as written; it was an accurate account of what was
+true when the audit ran, and rewriting it would erase the finding that produced this fix.
+
+### Divergence 2 — fixed by appending the row
+
+Appended in row-16 style. It records both halves honestly: the historical W1 call is **not** undone
+(it was disclosed at the time, and no record was harmed — the values were byte-identical and
+`hs_lastmodifieddate` was unchanged), while the reachable mechanism **is** now closed by T-49-43's
+gate.
+
+**Not registered here, and left to operator judgement:** the W2 arm-cycle excess (2) and the
+Anthropic call excess (2 vs 1), both sitting in the same `49-RUN-REPORT.md` accounting table. The
+audit named the bypass as the security-relevant one and left the other two open; this disposition
+adds no row for them unilaterally.

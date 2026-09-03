@@ -59,7 +59,7 @@ from src.web_research import claude_web_research  # noqa: E402
 from scripts.backfill_seed_company_scores import compute_components  # noqa: E402
 
 import config_gate  # noqa: E402
-from src.guards import assert_disjoint  # noqa: E402
+from src.guards import FORBIDDEN_PROPS, assert_disjoint  # noqa: E402
 
 # WR-01-style discipline (matches backfill_seed_company_scores.py): hard-coded, no env
 # override.
@@ -113,16 +113,12 @@ assert_disjoint(
 # Every payload-building function below asserts its output is disjoint from this set
 # before returning.
 #
-# 2026-08-19 (Phase 50 follow-up): WF1 (4625147345) no longer exists -- Phase 50 deleted
-# it and archived lv_icp_tier. Both names STAY in this set: a never-write guard is
-# additive, and writing an archived property is no more legitimate than writing it was
-# before. lv_icp_tier_derived is added because it is a calculated property
-# (readOnlyValue) -- HubSpot itself would reject a write, and this guard should fail
-# loudly in our own code first rather than surfacing as an API error.
-FORBIDDEN_PROPS = frozenset({
-    "lv_icp_fit_score", "lv_icp_tier", "lv_icp_tier_derived",
-    "lv_anti_icp_flag", "lv_anti_icp_reason",
-})
+# The set itself moved to src/guards.py on 2026-09-03 (phase-49 audit, Divergence 1) so
+# that src/hubspot_client.batch_update_companies enforces the same never-write floor on
+# every payload it sends, whichever driver built it. Re-exported here unchanged: this
+# module's own call sites and the two scripts that import the name from here
+# (enrich_coverage_companies, fix_sfv_region) are untouched by the move -- the name is
+# imported from src.guards at the top of this module and re-exported by that import.
 
 # D-05: the widened scoring-input set this phase enriches (not lv_org_type alone).
 INPUT_PROPS = ("lv_org_type", "lv_produces_content", "lv_country_region_normalized")

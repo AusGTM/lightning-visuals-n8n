@@ -39,6 +39,27 @@ import os
 from pathlib import Path
 
 
+# Derived fields owned by the HubSpot calculated properties and the n8n `Decide Company
+# Action` node (D-07). No driver in this repo may ever PATCH one directly.
+#
+# Moved here from scripts/remediate_veto_companies.py on 2026-09-03 (phase-49 audit,
+# Divergence 1) so `src/hubspot_client.batch_update_companies` can enforce it without
+# src/ importing from scripts/. That module re-exports the name, so its own call sites
+# and the two scripts importing it from there (enrich_coverage_companies, fix_sfv_region)
+# are unchanged.
+#
+# 2026-08-19 (Phase 50 follow-up): WF1 (4625147345) no longer exists -- Phase 50 deleted
+# it and archived lv_icp_tier. Both names STAY in this set: a never-write guard is
+# additive, and writing an archived property is no more legitimate than writing it was
+# before. lv_icp_tier_derived is added because it is a calculated property
+# (readOnlyValue) -- HubSpot itself would reject a write, and this guard should fail
+# loudly in our own code first rather than surfacing as an API error.
+FORBIDDEN_PROPS = frozenset({
+    "lv_icp_fit_score", "lv_icp_tier", "lv_icp_tier_derived",
+    "lv_anti_icp_flag", "lv_anti_icp_reason",
+})
+
+
 def assert_disjoint(keys, forbidden, message: str) -> None:
     """Raise ValueError(message) unless `keys` and `forbidden` share no elements."""
     if not set(keys).isdisjoint(forbidden):

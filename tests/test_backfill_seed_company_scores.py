@@ -13,6 +13,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))  # repo root on sys.path so `scripts.*` imports resolve
 
+from src import hubspot_client  # noqa: E402
 from src.hubspot_client import batch_update_companies  # noqa: E402
 
 
@@ -76,6 +77,16 @@ def test_batch_update_empty_list_short_circuits_live_mode_too(monkeypatch):
     assert result == {"dry_run": True, "payload": {"inputs": []}}
 
 
+def _arm(monkeypatch, key="ALLOW_SCORE_BACKFILL"):
+    """Set the two keys src.hubspot_client._batch_write_armed() requires, and clear the
+    other three registered arm keys so a stray value in the developer's own shell cannot
+    make a refusal test pass for the wrong reason."""
+    monkeypatch.setenv("DRY_RUN", "false")
+    for k in hubspot_client.BATCH_WRITE_ARM_KEYS:
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv(key, "true")
+
+
 def test_batch_update_live_calls_requests_post_with_expected_shape(monkeypatch):
     calls = {}
 
@@ -95,6 +106,7 @@ def test_batch_update_live_calls_requests_post_with_expected_shape(monkeypatch):
 
     monkeypatch.setattr("requests.post", _fake_post)
     monkeypatch.setenv("HUBSPOT_PRIVATE_APP_TOKEN", "fake-token")
+    _arm(monkeypatch)
 
     updates = [{"id": "789", "properties": {"org_type_score": 40}}]
     result = batch_update_companies(updates, dry_run=False)
@@ -102,6 +114,103 @@ def test_batch_update_live_calls_requests_post_with_expected_shape(monkeypatch):
     assert calls["json"] == {"inputs": updates}
     assert calls["headers"]["Authorization"] == "Bearer fake-token"
     assert result == {"status": "COMPLETE"}
+
+
+# --- Phase 49 audit, Divergence 1: the gate travels with the write ----------------------
+# Before the 2026-09-03 fix, batch_update_companies checked only `len(updates) > 100`:
+# any importer could call it with dry_run=False from an unarmed shell and reach
+# requests.post with an arbitrary property set. That happened once, in phase 49's W1
+# window. Each test below monkeypatches requests.post to raise, so a regression that
+# reopens the bypass fails on the network call even if the raise itself were removed.
+
+def _post_must_not_fire(monkeypatch):
+    monkeypatch.setattr("requests.post", lambda *a, **kw: (_ for _ in ()).throw(
+        AssertionError("REGRESSION: an unarmed or out-of-scope live batch write reached the network")
+    ))
+
+
+def test_batch_update_live_unarmed_shell_refuses(monkeypatch):
+    # The W1 bypass shape exactly: a plain call with dry_run=False and no arm keys set.
+    _post_must_not_fire(monkeypatch)
+    monkeypatch.delenv("DRY_RUN", raising=False)
+    for k in hubspot_client.BATCH_WRITE_ARM_KEYS:
+        monkeypatch.delenv(k, raising=False)
+
+    try:
+        batch_update_companies([{"id": "789", "properties": {"org_type_score": 40}}], dry_run=False)
+    except ValueError as e:
+        assert "unarmed shell" in str(e)
+    else:
+        raise AssertionError("expected batch_update_companies to refuse an unarmed live write")
+
+
+def test_batch_update_live_dry_run_false_alone_refuses(monkeypatch):
+    # Proves TWO keys, not one: DRY_RUN=false with no ALLOW key is still refused.
+    _post_must_not_fire(monkeypatch)
+    monkeypatch.setenv("DRY_RUN", "false")
+    for k in hubspot_client.BATCH_WRITE_ARM_KEYS:
+        monkeypatch.delenv(k, raising=False)
+
+    try:
+        batch_update_companies([{"id": "789", "properties": {"org_type_score": 40}}], dry_run=False)
+    except ValueError as e:
+        assert "unarmed shell" in str(e)
+    else:
+        raise AssertionError("expected DRY_RUN=false alone to be refused -- both keys are required")
+
+
+def test_batch_update_live_armed_still_refuses_a_derived_property(monkeypatch):
+    # The scope floor: being armed does not entitle a caller to write a derived field
+    # owned by the calculated properties and the n8n Decide node.
+    _post_must_not_fire(monkeypatch)
+    _arm(monkeypatch)
+
+    try:
+        batch_update_companies(
+            [{"id": "789", "properties": {"org_type_score": 40, "lv_anti_icp_flag": "true"}}],
+            dry_run=False,
+        )
+    except ValueError as e:
+        assert "derived property" in str(e)
+    else:
+        raise AssertionError("expected an armed live write carrying lv_anti_icp_flag to be refused")
+
+
+def test_batch_update_arm_keys_are_an_explicit_list_not_a_wildcard(monkeypatch):
+    # .env.example ships unrelated ALLOW_* flags a local-MVP shell sets true. A wildcard
+    # ALLOW_* scan would let one of those arm a mass write it never authorised.
+    _post_must_not_fire(monkeypatch)
+    monkeypatch.setenv("DRY_RUN", "false")
+    for k in hubspot_client.BATCH_WRITE_ARM_KEYS:
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("ALLOW_ICP_SCORE_WRITES", "true")
+    monkeypatch.setenv("ALLOW_STAGING_WRITES", "true")
+
+    try:
+        batch_update_companies([{"id": "789", "properties": {"org_type_score": 40}}], dry_run=False)
+    except ValueError as e:
+        assert "unarmed shell" in str(e)
+    else:
+        raise AssertionError("an unrelated ALLOW_* flag must never arm a company batch write")
+
+
+def test_batch_update_every_registered_arm_key_arms(monkeypatch):
+    # Each of the four drivers' own keys must actually work -- a key registered but
+    # misspelled here would refuse that driver's armed run at the library boundary.
+    for key in hubspot_client.BATCH_WRITE_ARM_KEYS:
+        posted = []
+        monkeypatch.setattr("requests.post", lambda *a, **kw: posted.append(kw) or _Ok())
+        _arm(monkeypatch, key=key)
+        batch_update_companies([{"id": "789", "properties": {"org_type_score": 40}}], dry_run=False)
+        assert len(posted) == 1, f"{key} did not arm the write"
+
+
+class _Ok:
+    def raise_for_status(self):
+        pass
+
+    def json(self):
+        return {"status": "COMPLETE"}
 
 
 # --- Task 2: backfill component computation and gates -----------------------------------
