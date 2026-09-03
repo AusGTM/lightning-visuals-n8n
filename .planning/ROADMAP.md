@@ -19,6 +19,19 @@
   ~~Open: **57 (next)**~~ — corrected 2026-09-02, Phase 57 completed 2026-09-01.
   **The first live unattended, credit-spending batch has NOT run.** ~~It is gated on Phase 57.~~
   That gate has landed; the batch remains un-run and nothing is armed.
+- 📋 **v1.2 Yield and Friction** — Phases 64–69 (`milestones/v1.2-ROADMAP.md`,
+  `milestones/v1.2-REQUIREMENTS.md`). **DEFINED 2026-09-05, NOT STARTED.**
+  64 ladder stops at the best page not the first · 65 round-empty re-entry keyed on the cause ·
+  66 rich enrichment not minimum · 67 autonomy flag with per-tier defaults · 68 state the price
+  and keep moving · 69 held rows survive the round.
+  Seven of the eight source items came from the first two live `suggest-contacts` rounds
+  (Brisbane Roar, Roma Turf Club — `quick/260904-QUICK-UAT.md`); each phase has a filed todo
+  carrying its live evidence.
+  **The milestone switch has NOT been run** — v1.1 is still in flight (60, 62, 63 open) and
+  `phases.clear` would archive three open phase directories and zero the progress counters.
+  Run `state.milestone-switch` when v1.1 closes; nothing here needs redoing.
+  Items 1–2 of the operator's priority list (role-filter matcher, alternate-domain set) are
+  quick tasks, not phases here.
 
 ## Phases
 
