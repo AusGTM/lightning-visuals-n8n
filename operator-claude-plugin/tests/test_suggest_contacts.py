@@ -11,6 +11,7 @@ import pytest
 
 import extraction
 import role_classify
+import search_fallback
 import suggest_contacts
 import url_fallback
 
@@ -729,3 +730,135 @@ def test_discovery_plan_with_no_website_or_domain_is_unchanged():
             "discovery ladder"
         ],
     }
+
+
+# =====================================================================================
+# quick task 260904-5sd — the source-tier seam into synthesise_rows
+#
+# The tier rides `provenance`, never the row: `synthesise_rows` asserts every row key is
+# canonical and `write_dispatch_csv` raises on a non-canonical key — the same constraint
+# that forced `source_by_field` to be request-level (CLAUDE.md §13.0.2).
+# =====================================================================================
+
+def _tier_people():
+    return [{"firstname": "Jamie", "lastname": "Fox", "jobtitle": "Director"}]
+
+
+def test_synthesise_rows_without_a_source_tier_is_byte_identical_to_today():
+    """Every existing call site is unaffected: no extra provenance key, same input
+    literal. The new keyword is a no-op unless it is passed."""
+    records = suggest_contacts.synthesise_rows(
+        _company_row(), _tier_people(), "https://example-club.example/board",
+        per_company_cap=2,
+    )
+    assert records[0]["provenance"] == {
+        "input": "suggest_contacts_ladder",
+        "locator": "https://example-club.example/board",
+    }
+
+
+def test_synthesise_rows_with_a_source_tier_declares_the_search_input_and_the_tier():
+    records = suggest_contacts.synthesise_rows(
+        _company_row(), _tier_people(), "https://www.linkedin.com/in/jamie-fox",
+        per_company_cap=2, source_tier=2,
+    )
+    assert records[0]["provenance"] == {
+        "input": "suggest_contacts_web_search",
+        "locator": "https://www.linkedin.com/in/jamie-fox",
+        "source_tier": 2,
+    }
+
+
+@pytest.mark.parametrize("bad_tier", [True, "2", 0, 4, 9, 1.0])
+def test_an_unknown_source_tier_refuses_rather_than_downgrading_to_a_ladder_provenance(
+        bad_tier):
+    """A silent downgrade to the ladder provenance would bypass the D-5sd-05 gate
+    entirely — the record would read as self-attested and send."""
+    with pytest.raises(ValueError) as excinfo:
+        suggest_contacts.synthesise_rows(
+            _company_row(), _tier_people(), "https://racenet.example/committee",
+            per_company_cap=2, source_tier=bad_tier,
+        )
+    assert repr(bad_tier) in str(excinfo.value)
+
+
+def test_extraction_validate_still_accepts_a_record_carrying_the_extra_provenance_key():
+    """`extraction.validate` checks provenance for `input` and `locator` PRESENCE only,
+    so the extra key travels safely and is never written to HubSpot as a property."""
+    records = suggest_contacts.synthesise_rows(
+        _company_row(), _tier_people(), "https://www.linkedin.com/in/jamie-fox",
+        per_company_cap=2, source_tier=2,
+    )
+    result = extraction.validate(suggest_contacts.round_artifact(records))
+    assert result.rejected == []
+    assert result.accepted[0]["provenance"]["source_tier"] == 2
+
+
+def test_the_tier_gate_and_the_waterfall_gate_are_independent_and_both_must_hold():
+    """The same person, the same successful merge, the same related-domain email — held
+    at tier 3, sendable at tier 2 (D-5sd-01 + D-5sd-05). Drives the REAL
+    `partition_for_dispatch` and the REAL `search_fallback.hold_weak_sources`, so drift
+    in either module's `"suggest_contacts_web_search"` literal fails here."""
+    company = _company_row()
+    records = []
+    for tier, firstname in ((2, "Jamie"), (3, "Robin")):
+        people = [{"firstname": firstname, "lastname": "Fox", "jobtitle": "Director"}]
+        locator = (
+            "https://www.linkedin.com/in/jamie-fox" if tier == 2
+            else "https://racenet.example/2019/committee"
+        )
+        records.extend(suggest_contacts.synthesise_rows(
+            company, people, locator, per_company_cap=2, source_tier=tier))
+
+    # The join key is minted once at the batch level, before either gate runs.
+    minted = suggest_contacts.mint_row_ids(records)
+    records = minted["records"]
+    for record in records:
+        record["row"]["email"] = (
+            f"{record['row']['firstname'].lower()}@example-club.example"
+        )
+
+    company_domains = {company["name"]: company["website"]}
+    sendable, held = suggest_contacts.partition_for_dispatch(
+        [record["row"] for record in records], company_domains)
+    # Gate 1 alone would send BOTH: the waterfall confirmed each with a related domain.
+    assert {row["firstname"] for row in sendable} == {"Jamie", "Robin"}
+    assert held == []
+
+    sendable, held = search_fallback.hold_weak_sources(records, sendable, held)
+    assert [row["firstname"] for row in sendable] == ["Jamie"]
+    assert len(held) == 1
+    assert held[0]["row"]["firstname"] == "Robin"
+    assert held[0]["reason_code"] == "search_source_not_strong"
+    assert "https://racenet.example/2019/committee" in held[0]["reason"]
+
+
+def test_a_ladder_sourced_record_passes_the_new_gate_unchanged():
+    """The no-op direction: a round with no search-sourced record behaves exactly as it
+    did before this task."""
+    company = _company_row()
+    records = suggest_contacts.mint_row_ids(suggest_contacts.synthesise_rows(
+        company, _tier_people(), "https://example-club.example/board",
+        per_company_cap=2))["records"]
+    records[0]["row"]["email"] = "jamie@example-club.example"
+
+    company_domains = {company["name"]: company["website"]}
+    sendable, held = suggest_contacts.partition_for_dispatch(
+        [record["row"] for record in records], company_domains)
+    after_sendable, after_held = search_fallback.hold_weak_sources(records, sendable, held)
+    assert after_sendable == sendable
+    assert after_held == held
+
+
+def test_no_candidates_still_returns_give_up_messages_text_verbatim():
+    """The docstring changed; the BEHAVIOUR did not. This task adds no branch inside
+    `no_candidates` — the eligibility question is asked by the caller, before it decides
+    whether the round looks anywhere else."""
+    company_row = _company_row()
+    attempts = [{"url": "https://example-club.example/sitemap.xml", "outcome": "empty",
+                 "disposition": "empty"}]
+    result = suggest_contacts.no_candidates(
+        company_row, "https://example-club.example/board", attempts)
+    assert result["outcome"] == "no_candidates_found"
+    assert result["reason"] == url_fallback.give_up_message(
+        "https://example-club.example/board", attempts)
