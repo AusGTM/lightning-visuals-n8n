@@ -3,7 +3,7 @@ status: diagnosed
 phase: 62-suggest-the-contacts-nobody-named
 source: [62-VERIFICATION.md]
 started: 2026-09-02T01:30:00Z
-updated: 2026-09-03T13:35:09Z
+updated: 2026-09-03T14:47:48Z
 ---
 
 ## Current Test
@@ -91,6 +91,15 @@ evidence: |
   cannot be run at all: `chunking.dispatch_plan` hard-refuses every row. The capability
   works; the documented sequence does not reach it.
 
+  **Round 2 (2026-09-04) re-ran this through the FIXED documented sequence and it passed
+  again — but found two defects this test does not itself assert. Read G-62-6 and G-62-7
+  before treating this `pass` as "the lane is sound":** 2 of 6 rows came back with no verdict
+  at all while credit was spent (G-62-6), and of the 2 rows that did get an email, one was a
+  different person at an unrelated company — and that false match is precisely the row
+  promoted to sendable (G-62-7). Both are recorded as gaps rather than as a failure of this
+  test, because this test's own stated truth — resolves through identity group 2, lands as a
+  proposal or HELD, never a silent write — did hold for every row.
+
   One provenance observation worth carrying forward, not a defect: stage 1 read
   "Operations Manager" off the club's own board page, and ZoomInfo returned "Functions"
   for the same person. The winner map took ZoomInfo's. That is precisely the case
@@ -106,9 +115,20 @@ evidence: |
   "Suggestion round ceiling -- stage 1 discovery: up to 20 page fetches (4 x 5/company)
    -- dollar cost not measured; stage 2 enrichment: up to 8 contacts, up to 8 Lusha credits."
 
+      ROUND 1
       stage 1 page fetches   ceiling 20   actual 11   (4 indexes + 4 nested + 3 people pages)
       stage 2 contacts       ceiling  8   actual  1
       Lusha credits          ceiling  8   actual  0   (see the billing note below)
+
+      ROUND 2 (2026-09-04, same ceiling, the cap actually binding this time)
+      stage 1 page fetches   ceiling 20   actual  4
+      stage 2 contacts       ceiling  8   actual  6
+      Lusha credits          ceiling  8   actual  7   (3886 -> 3879)
+
+      Round 2 stayed under the ceiling on every axis with the cap binding at 2/company on
+      three companies. Note the credit efficiency, which the ceiling does NOT measure: 7
+      credits bought 4 verdicts, because 2 of the 6 dispatched rows returned nothing at all
+      (G-62-6). Under the ceiling, and still wasteful.
 
   Actuals landed under the ceiling on every axis.
 
