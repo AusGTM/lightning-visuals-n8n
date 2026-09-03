@@ -5,17 +5,17 @@ milestone_name: Unattended Session Runs
 current_phase: 61
 current_phase_name: Autonomous batch runs
 status: executing
-stopped_at: Completed 62-12-PLAN.md (G-62-7 gap closure, released 0.38.3)
-last_updated: "2026-09-03T16:10:44.146Z"
+stopped_at: context exhaustion at 100% (2026-09-03)
+last_updated: "2026-09-03T18:06:33.248Z"
 last_activity: 2026-09-04
 last_activity_desc: 62-12 closed G-62-7 -- suggested rows now held when the enriched email's domain is unrelated to the company
-state_head: 7bcf0e3cde20e4a9852a45a43f7f4105253ccf0a
+state_head: fc4b1085f093c50c2be56554ee1c41495343c675
 progress:
   total_phases: 13
-  completed_phases: 8
+  completed_phases: 9
   total_plans: 62
   completed_plans: 62
-  percent: 62
+  percent: 69
 ---
 
 # Project State
@@ -586,7 +586,7 @@ exactly what B and C now do): .planning/phases/47.5-veto-recompute-path/47.5-CON
 **Standing order:** COVER-01/COVER-02 stay open for Phase 48 (four records ended with no
 lv_org_type: Editix, Jam TV, Waikato, The Rumble). Not a 47.5 workstream.
 
-Last activity: 2026-09-04 — Completed quick task 260904-447: double-unescape fix at both the derivation and shipped match-time seams, plus the LOCKED decision rejecting the derived role vocabulary
+Last activity: 2026-09-04 — Completed quick task 260904-5a8: a companies row no longer reports a contacts-shaped "no searchable identity" match reason, and the run-0 reader trap is recorded with its second live occurrence
   items blocked. Next: `/gsd-verify-work 62`, then Phase 63. ~~Next: Phase 57.~~ (57 complete
   2026-09-01.)
 
@@ -611,8 +611,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-03T16:10:43.525Z
-**Stopped at:** Completed 62-12-PLAN.md (G-62-7 gap closure, released 0.38.3)
+**Last session:** 2026-09-03T18:06:32.273Z
+**Stopped at:** context exhaustion at 100% (2026-09-03)
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
@@ -1007,6 +1007,7 @@ open (VETO-01/VETO-02 remain open requirements, not blockers — Phase 40 met it
 | 260829-lg3 | **P2 closed — all five grandfathered sequences now covered.** 4 new composition tests drive the joins the registry said nothing drove: `authorize_send`/`authorize_ungranted_send` -> `armed_window` -> `dispatch.dispatch` INSIDE the window (one shared test closing both the `contact-upload` and `enrich-before-ingest` identities); the `resolve_providers` -> `plan_chunks`/`chunk_ceiling` -> authorize -> `armed_window` -> `dispatch_plan` waterfall (+`merge_enriched` for enrich-before-ingest); and `chunk_ceiling(key='max_rows_per_match_request')`'s real return through `plan_chunks` -> `match_batch` -> `classify_matches`. `GRANDFATHERED_UNCOVERED = {}`, `MAX_GRANDFATHERED = 0` (shrink-only contract honoured). Every falsifiability check independently re-run by reviewer AND verifier, not merely re-read. Zero production-code changes, zero `SKILL.md` edits, zero live calls. Plugin 0.28.3 -> 0.28.6 | 2026-08-29 | d1a2881 | Verified | [260829-lg3-close-the-five-grandfathered-skill-md-co](./quick/260829-lg3-close-the-five-grandfathered-skill-md-co/) |
 | 260904-39r | Fixed `scripts/role_vocabulary.py`'s live crash (G-62-5): rank-then-cluster only a fixed 200-title recurrence head instead of all 2,045 distinct titles (bounds the prompt deterministically); `stop_reason=max_tokens` now raises `RoleVocabularyDerivationError` by name before any parse, with one repair retry reserved for a complete-but-unparseable body, reusing `src.web_research._extract_json`; HTML-entity/whitespace normalisation applied identically at count time and at the returned-member read-back seam; derived output writes to a new `role_vocabulary.derived.yaml` sibling, never the shipped live-proven 17-family file, with a printed drop-list + `cp` adoption command. 14/16 new tests observed RED against pre-fix code. `operator-claude-plugin/` zero-line diff (repo-root script only); plugin stays 0.38.3. Zero live calls. | 2026-09-04 | 2e7b364 | Executed (live operator `--dry-run` acceptance pending; G-62-5 reconciliation is the verifier's job) | [260904-39r-role-vocabulary-derivation](./quick/260904-39r-role-vocabulary-derivation/) |
 | 260904-447 | Both follow-ups from 260904-39r's live acceptance run. **(a) The double-unescape fix, at BOTH seams — not just the one the finding named.** The portal stores double-encoded entities, and a single `html.unescape` pass leaves an orphaned `amp` token wedged mid-run: a repo-root grep found the same single-pass bug in the SHIPPED match-time path (`operator-claude-plugin/scripts/role_classify.py::_tokenize`), where it is worse than the derivation-side instance because it silently MISSES a contact instead of just writing an ugly literal. Measured pre-fix: `classify_title('Finance &amp;amp; Admin Officer')` -> `None` against the real `Treasurer` family; post-fix -> `Treasurer` (independently re-verified by the orchestrator, not merely reported). Bounded fixed-point loop (`MAX_UNESCAPE_PASSES = 5`) in both trees, deliberately duplicated rather than cross-imported so the plugin stays standalone, with a cross-tree drift guard pinning the two constants equal (the repo's established columnMap/FREEMAIL parity idiom). Caller sweep closed: exactly two Python seams repo-wide, no bare-import variant, no n8n JS twin. **(b) The racing-segment vocabulary decision: REJECT and record** (operator, locked) — the curated 17-family `role_vocabulary.yaml` stays as shipped, since portal-wide derivation yields 8 entirely-corporate families and zero racing-governance ones, and adopting it would take Roma Turf Club 16-selected -> 0. Recorded at `.planning/decisions/2026-09-04-derived-role-vocabulary-rejected.md` plus a pointer comment at the `To adopt: cp` seam that tempts adoption. No backlog item, no roadmap phase, no future work implied. 7 new assertions observed RED pre-fix. Zero live calls; `n8n/`, `62-UAT.md`, `plugin.json`, plugin CHANGELOG and `role_vocabulary.yaml` all zero-diff. | 2026-09-04 | 81eb0bc | Complete (no verifier ran — quick task without `--validate`) | [260904-447-double-unescape-fix-in-role-vocabulary-n](./quick/260904-447-double-unescape-fix-in-role-vocabulary-n/) |
+| 260904-5a8 | Two defects that fell out of a FALSE alarm: a report claimed `Merge Company` was collapsing two null-id company rows and dropping a record. It was not — `Merge Company` is a single `$input.all().map(...)` with zero filters/groups/Sets/Maps/slices, so it structurally cannot emit fewer items than it receives. The real cause was **G-62-6, the run-0 reader defect already fixed in `report.all_node_items`**: `Merge Company` has THREE inbound edges all into `main[0]`, so it runs once per delivering branch, and an ad-hoc probe read `runData[node][0]` and saw 1 of 2 items. **(a)** A companies row's `match.reason` falsely read "no searchable identity — the row has no email, object id, or name+company pair" — contacts vocabulary on a companies lane, and the sentence that misdirected the investigation. Fixed by a `lane === "company"` arm in `summarizeMatch` reached by a CALL-SITE LITERAL in `ENRICH_DECIDE_CO_CLOUD`; `laneOf` untouched and no lane value ever lands on a row. The arm deliberately keeps `tier: "unknown"` / `auto: false` and never reads `existingRecord` — `match.tier` GATES (`preingest.py` → `confidence.py` → `held_queue.py`), so a `"high"` verdict would have flipped a hold into a send; this is reporting, never gating. Recorded-and-unfixed twice before (`47.5-02-SUMMARY.md`, `58-SPIKE-VERDICT.md`). **(b)** `62-11-DIAGNOSIS.md`'s remaining-exposure list now names the hand-rolled run-0 read, points at `all_node_items`, and records execution 12103 as the trap's SECOND live occurrence; its `Merge Company` bullet no longer claims there is no live evidence of a split — 12103 is that evidence. An executable guard was declined in-plan with the cost named (two shipped `runs[0]` readers would trip it day one and need an allowlist). **Three premises in the filed report were wrong and the planner overturned them** (C1: `laneOf` is never called on the companies branch, so a `domain` lane would have fixed nothing observable; C2: `lane` IS a routing key — 7 nodes filter on it; C3: contacts rows DO carry `identity_keys.domain`). Regenerated JSON committed WITHOUT deploying, per §13.0.2. Zero plugin diff, no version bump, zero live calls. | 2026-09-04 | 3137651 | Complete (no verifier ran — quick task without `--validate`) | [260904-5a8-laneof-domain-lane-vs-companies-appropri](./quick/260904-5a8-laneof-domain-lane-vs-companies-appropri/) |
 
 ## Deferred Items
 
