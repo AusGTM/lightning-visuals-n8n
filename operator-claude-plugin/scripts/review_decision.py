@@ -114,6 +114,26 @@ OUTCOMES = WRITING_OUTCOMES + NON_WRITING_OUTCOMES
 # queue — it walks a decision back rather than promoting anything.
 UNDOING_DECISIONS = ("reject",)
 
+# G-60-1 (Phase 60 Plan 05, 2026-09-03): the closed set of properties a PREVIEW-time map can
+# never pin, read by `verify_decision`'s leg 1 (exclusion) and leg 2 (expected-value source)
+# alike — one set, read in both places, never two lists. Not all four are minted for the
+# same reason: `lv_enrichment_reviewed_at`, and the `verified_at` value embedded inside
+# whichever provenance blob applies (`lv_enrichment_provenance` for companies,
+# `lv_contact_enrichment_provenance` for contacts — hence both provenance names, one per
+# object type), come from the backend's OWN CLOCK at request time, so a preview and a later
+# submit necessarily disagree no matter what the operator does. `lv_enrichment_reviewed_by`
+# is different in kind: `preview_decision`'s signature accepts no reviewed-by argument at
+# all and always passes `None`, so a preview's map always carries `DEFAULT_REVIEWED_BY`
+# while a submit carries the operator's own label — a client-side gap, not a clock. What
+# unites all four is only that preview-time capture cannot pin them, not that the backend
+# invented them out of nothing.
+PREVIEW_UNPINNABLE_KEYS = frozenset({
+    "lv_enrichment_reviewed_at",
+    "lv_enrichment_provenance",
+    "lv_contact_enrichment_provenance",
+    "lv_enrichment_reviewed_by",
+})
+
 # D-60-04: gate 1's refusal reason and message. Replaces the retired
 # `submit_not_enabled` / `_ENV_REFUSAL` pair — see the docstring amendment above.
 GRANT_REFUSAL_REASON = "grant_not_authorized"
@@ -363,6 +383,31 @@ def verify_decision(intended, response) -> dict:
 
     A written decision arriving with `verified_properties` absent or null is **failed**. An
     unverifiable write is not a verified one.
+
+    G-60-1 AMENDMENT (operator, 2026-09-03, Phase 60 Plan 05, from the 2026-09-03 live
+    supervised walk): the single comparison above is now TWO legs, because a preview-time
+    `intended` map can never equal a submit-time refetch on the properties the backend mints
+    at request time (`lv_enrichment_reviewed_at`, the timestamp embedded in whichever
+    provenance blob applies, and the reviewed-by label `preview_decision` cannot even
+    accept) — that divergence made every successful approve report `failed`.
+
+    Leg 1 (intent stability) compares the backend's own submit-time patch
+    (`response["would_write"]`) against `intended` over the UNION of both maps' keys, minus
+    `PREVIEW_UNPINNABLE_KEYS` — the union, not `intended`'s keys alone, because a key the
+    backend added at submit time that nobody previewed is otherwise invisible to this check.
+    Any difference here is `failed`: the backend submitted a patch other than the one
+    approved, and nothing below confirms the record.
+
+    Leg 2 (landing) is unchanged in authority and unchanged in key set: it still checks
+    every key in `intended` against the independent `verified_properties` refetch, which
+    remains the SOLE authority on whether anything landed. The only change is that the
+    expected value for each of the four unpinnable keys is re-sourced from the backend's own
+    `would_write` (what it reported writing) instead of from the preview's guess — so all
+    four are still required to read back; only where their expected value comes from moved.
+    A business field diverging still fails exactly as before, and a key outside the closed
+    unpinnable set still fails closed if the backend's submit-time patch disagrees with the
+    preview on it (leg 1) — an incomplete exclusion set errs toward a loud failure, never a
+    silent pass.
     """
     intended = intended if isinstance(intended, dict) else {}
     response = response if isinstance(response, dict) else {}
@@ -414,6 +459,27 @@ def verify_decision(intended, response) -> dict:
             "against, so nothing can be confirmed.",
         )
 
+    # Leg 1 — intent stability (G-60-1). The backend's own submit-time patch, compared
+    # against what was previewed and approved, over the union of both maps' keys minus the
+    # closed unpinnable set — the union so a key the backend added at submit time that
+    # nobody previewed is not invisible to this check.
+    would_write = response.get("would_write")
+    would_write = would_write if isinstance(would_write, dict) else {}
+    leg1_keys = (set(intended) | set(would_write)) - PREVIEW_UNPINNABLE_KEYS
+    # HubSpot stores and returns every property as a string, so compare stringwise: a
+    # boolean or numeric intent must not read as a mismatch against its own stored form.
+    intent_mismatched = [key for key in leg1_keys
+                         if str(would_write.get(key)) != str(intended.get(key))]
+
+    if intent_mismatched:
+        return _verdict(
+            "failed", response,
+            f"The backend's own submitted patch does not match what was previewed and "
+            f"approved: {len(intent_mismatched)} field(s) differ: "
+            f"{', '.join(sorted(intent_mismatched))}. Nothing here confirms the record.",
+            intent_mismatched,
+        )
+
     properties = response.get("verified_properties")
     if not isinstance(properties, dict):
         return _verdict(
@@ -423,10 +489,17 @@ def verify_decision(intended, response) -> dict:
             "completed one — check the record in HubSpot.",
         )
 
-    # HubSpot stores and returns every property as a string, so compare stringwise: a
-    # boolean or numeric intent must not read as a mismatch against its own stored form.
+    # Leg 2 — landing, against the independent re-read (unchanged in authority and in key
+    # set: still every key in `intended`). Only the expected VALUE for each unpinnable key
+    # is re-sourced from the backend's own submit-time patch rather than the preview's guess
+    # — leg 1 has already confirmed that patch matches the preview on every OTHER key.
+    expected = dict(intended)
+    for key in PREVIEW_UNPINNABLE_KEYS:
+        if key in would_write:
+            expected[key] = would_write[key]
+
     mismatched = [key for key in intended
-                  if str(properties.get(key)) != str(intended[key])]
+                  if str(properties.get(key)) != str(expected[key])]
 
     if mismatched:
         return _verdict(

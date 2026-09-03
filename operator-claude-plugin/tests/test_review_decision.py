@@ -689,6 +689,162 @@ def test_at_least_two_except_exception_blocks_the_new_one_after_post_decision():
     assert source.count("except Exception") >= 2
 
 
+# --- G-60-1 (Phase 60 Plan 05, 2026-09-03): preview-time vs submit-time divergence ----
+#
+# The 2026-09-03 live walk found `verify_decision` reporting `failed` on a fully successful
+# approve: `lv_enrichment_reviewed_at` and the timestamp embedded inside the provenance blob
+# are minted by the backend AT SUBMIT TIME, so a preview-time map can never match them. Every
+# fixture pair below therefore uses DIFFERENT preview and submit timestamps and a DIFFERENT
+# reviewed-by label — reusing one map (as `APPROVE_WRITE`/`applied_response` do above, by
+# design, for every other test in this file) is precisely why this defect was invisible to
+# the existing suite.
+
+PREVIEW_TIME = "2026-09-03T09:55:50.209Z"
+SUBMIT_TIME = "2026-09-03T10:00:07.118Z"
+
+# The preview's own would_write: default reviewed-by (preview_decision passes reviewed_by=None),
+# a reviewed-at stamped at preview time, and a provenance blob embedding that same time.
+PREVIEW_APPROVE_WRITE = {
+    "lv_org_type": "governing_body_league",
+    "lv_produces_content": "true",
+    "lv_enrichment_needs_review": "false",
+    "lv_enrichment_review_approved": "false",
+    "lv_enrichment_reviewed_at": PREVIEW_TIME,
+    "lv_enrichment_reviewed_by": review_decision.DEFAULT_REVIEWED_BY,
+    "lv_enrichment_provenance":
+        '{"lv_org_type":{"source":"human","verified_at":"%s"}}' % PREVIEW_TIME,
+}
+
+# The submit's own would_write: the operator's real name, a later reviewed-at, and the same
+# blob re-stamped with the later time. Every BUSINESS field is unchanged from the preview.
+SUBMIT_APPROVE_WRITE = {
+    **PREVIEW_APPROVE_WRITE,
+    "lv_enrichment_reviewed_at": SUBMIT_TIME,
+    "lv_enrichment_reviewed_by": "Robert",
+    "lv_enrichment_provenance":
+        '{"lv_org_type":{"source":"human","verified_at":"%s"}}' % SUBMIT_TIME,
+}
+
+# The contacts mirror (G-60-1's test 5): same shape, but the provenance key is the contacts
+# one (`lv_contact_enrichment_provenance`), which must be exercised independently of the
+# companies key — the two are separate entries in `PREVIEW_UNPINNABLE_KEYS`.
+PREVIEW_CONTACT_APPROVE_WRITE = {
+    "jobtitle": "Head of Broadcast",
+    "lv_enrichment_needs_review": "false",
+    "lv_enrichment_review_approved": "false",
+    "lv_enrichment_reviewed_at": PREVIEW_TIME,
+    "lv_enrichment_reviewed_by": review_decision.DEFAULT_REVIEWED_BY,
+    "lv_contact_enrichment_provenance":
+        '{"jobtitle":{"source":"human","verified_at":"%s"}}' % PREVIEW_TIME,
+}
+
+SUBMIT_CONTACT_APPROVE_WRITE = {
+    **PREVIEW_CONTACT_APPROVE_WRITE,
+    "lv_enrichment_reviewed_at": SUBMIT_TIME,
+    "lv_enrichment_reviewed_by": "Robert",
+    "lv_contact_enrichment_provenance":
+        '{"jobtitle":{"source":"human","verified_at":"%s"}}' % SUBMIT_TIME,
+}
+
+
+def test_a_successful_approve_verifies_despite_backend_minted_keys_advancing():
+    """Test 1 (RED first). The preview's map (what the operator approved) is compared
+    against a response whose `verified_properties` equals the response's OWN `would_write`
+    (i.e. the write genuinely landed exactly as the backend submitted it) — the timestamp,
+    the embedded blob timestamp, and the reviewed-by label all differ from the preview, and
+    none of that should read as a mismatch."""
+    response = {
+        "available": True, "outcome": "applied", "message": "Applied 4 fields.",
+        "would_write": SUBMIT_APPROVE_WRITE,
+        "verified_properties": dict(SUBMIT_APPROVE_WRITE), "verified": True,
+    }
+
+    result = review_decision.verify_decision(PREVIEW_APPROVE_WRITE, response)
+
+    assert result["status"] == "verified"
+    assert result["mismatched"] == []
+
+
+def test_a_drifted_business_field_still_fails_even_with_backend_minted_keys_advancing():
+    """Test 2. Leg 1 passing (the backend's own patch matches what was approved on every
+    business field) must not soften leg 2: a business field that did not actually land is
+    still `failed`, by name."""
+    drifted_refetch = dict(SUBMIT_APPROVE_WRITE, lv_produces_content="false")
+    response = {
+        "available": True, "outcome": "applied", "message": "Applied 4 fields.",
+        "would_write": SUBMIT_APPROVE_WRITE,
+        "verified_properties": drifted_refetch, "verified": True,
+    }
+
+    result = review_decision.verify_decision(PREVIEW_APPROVE_WRITE, response)
+
+    assert result["status"] == "failed"
+    assert result["mismatched"] == ["lv_produces_content"]
+    assert "lv_produces_content" in result["message"]
+
+
+@pytest.mark.parametrize("label,submit_would_write,expected_key", [
+    ("changed_business_value",
+     dict(SUBMIT_APPROVE_WRITE, lv_produces_content="false"),
+     "lv_produces_content"),
+    ("added_pinnable_key_never_previewed",
+     dict(SUBMIT_APPROVE_WRITE, lv_icp_tier="A"),
+     "lv_icp_tier"),
+])
+def test_the_backends_own_submitted_patch_diverging_from_the_preview_fails(
+        label, submit_would_write, expected_key):
+    """Test 3. The operator approved a patch; a backend that submits a different one — by
+    changing a value the operator saw, or by adding a field the operator never saw at all —
+    is caught either way, even when `verified_properties` faithfully reflects whatever the
+    backend actually submitted (so leg 2 alone could never catch this)."""
+    response = {
+        "available": True, "outcome": "applied", "message": "m",
+        "would_write": submit_would_write,
+        "verified_properties": dict(submit_would_write), "verified": True,
+    }
+
+    result = review_decision.verify_decision(PREVIEW_APPROVE_WRITE, response)
+
+    assert result["status"] == "failed", label
+    assert expected_key in result["mismatched"], label
+    assert expected_key in result["message"], label
+
+
+def test_an_unenumerated_future_key_diverging_at_submit_time_fails_closed():
+    """Test 4. A key outside the closed `PREVIEW_UNPINNABLE_KEYS` set that differs between
+    the preview and the backend's submit-time patch is `failed` — never a silent pass. This
+    is the fail-closed direction: an exclusion set that is incomplete must err toward a loud
+    failure, not toward trusting an unrecognised key."""
+    submit_would_write = dict(SUBMIT_APPROVE_WRITE, lv_some_future_field="unexpected")
+    response = {
+        "available": True, "outcome": "applied", "message": "m",
+        "would_write": submit_would_write,
+        "verified_properties": dict(submit_would_write), "verified": True,
+    }
+
+    result = review_decision.verify_decision(PREVIEW_APPROVE_WRITE, response)
+
+    assert result["status"] == "failed"
+    assert "lv_some_future_field" in result["mismatched"]
+
+
+def test_the_contacts_provenance_property_behaves_exactly_like_the_companies_one():
+    """Test 5 (RED first). `lv_contact_enrichment_provenance` is the second, distinct
+    provenance key in `PREVIEW_UNPINNABLE_KEYS` — a contacts approve whose blob timestamp
+    (and reviewed-by, and reviewed-at) advanced between preview and submit must verify just
+    as the companies case does."""
+    response = {
+        "available": True, "outcome": "applied", "message": "Applied 2 fields.",
+        "would_write": SUBMIT_CONTACT_APPROVE_WRITE,
+        "verified_properties": dict(SUBMIT_CONTACT_APPROVE_WRITE), "verified": True,
+    }
+
+    result = review_decision.verify_decision(PREVIEW_CONTACT_APPROVE_WRITE, response)
+
+    assert result["status"] == "verified"
+    assert result["mismatched"] == []
+
+
 # --- nothing persists ----------------------------------------------------------------
 
 def test_no_module_level_state_persists_an_arm_between_two_calls(
