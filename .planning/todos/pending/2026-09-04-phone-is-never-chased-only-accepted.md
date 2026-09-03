@@ -135,3 +135,29 @@ provider spend — which inverts the usual reason to keep a required list short.
    `lv_linkedin_url` hole above was found this way and there may be others.
 2. Decide the gate's `REQUIRED` list from that matrix rather than by intuition.
 3. Companies deserve the same audit; this todo measured contacts only.
+
+
+## Live evidence, first suggest-contacts round (Brisbane Roar FC, 2026-09-04)
+
+Not a hypothetical any more. On that round the waterfall **discovered richer data than it
+kept**, on a contact that was being CREATED (so every field was blank — nothing was being
+protected):
+
+- scraped `jobtitle` was `Marketing`; enrichment found **`Head of Marketing and Content`**
+- enrichment also found **`seniority: Director`**
+- `merge_enriched` filled the blank `email` and kept the stage-1 `jobtitle`; the richer
+  title and the seniority were **dropped**
+
+`seniority` is `system_owned` / `min_confidence: 75` in the contacts policy — a field the
+pipeline is supposed to own outright — so it had a producer, a policy entry, and a blank
+target, and still did not land. That is the sparseness in one record.
+
+There is a second cost to it, on a different axis: the richer title
+`Head of Marketing and Content` **classifies** (`-> Head of Marketing`, verified) where the
+scraped `Marketing` does not. So the dropped field would have rescued a row the role filter
+had thrown away — see
+`.planning/todos/pending/2026-09-04-role-filter-drops-one-word-titles.md`. Two defects,
+one shared cause: the round keeps the first value it got rather than the best value it has.
+
+**Add to the audit above:** `merge_enriched`'s own keep/replace rule for a CREATE row, which
+is a distinct seam from the n8n gate's `REQUIRED` list and may need its own fix.
