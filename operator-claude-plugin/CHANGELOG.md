@@ -16,6 +16,53 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.38.2] - 2026-09-04
+
+### Fixed
+
+- **A company recorded with a `www.` host no longer loses its own apex sitemap to the
+  off-host guard (G-62-2).** Live 2026-09-03 UAT: Gladstone Turf Club is recorded as
+  `www.gladstoneturfclub.com.au`; its own sitemap index points at the apex
+  `gladstoneturfclub.com.au`, and `same_host` refused every one of those URLs, including
+  a sitemap literally named `dt_staff-sitemap.xml` — measured at 1 of 4 companies in the
+  first real batch. `same_host` now compares canonical authorities: a single leading
+  `www.` label is dropped only when what remains still contains a dot, in both
+  directions. This is not a suffix or subdomain match — `evil.gladstoneturfclub.com.au.
+  attacker.tld`, `board.gladstoneturfclub.com.au`, a differing port, and `www.com` are
+  all still refused. A redirect target now goes through the same guard as any other
+  candidate: an apex/`www` redirect on the same host is followed, any other redirect is
+  refused and reported, never chased elsewhere.
+
+- **The default role vocabulary now matches the governance titles this portal's
+  companies actually use (G-62-3).** Live 2026-09-03 UAT: 43 people were named across
+  three racing-club board/committee pages and 2 survived the role filter, because the
+  shipped fallback was eight generic corporate roles matched exact-label only. The
+  fallback vocabulary now carries 17 families (9 governance families — Chair, President,
+  Vice President, Board & Committee, Secretary, Treasurer, Track & Facilities, Catering
+  & Events, Administration — added beneath the untouched original 8), and
+  `classify_title` matches on a contiguous, longest-wins token run instead of an exact
+  label, so "Secretary Manager" matches a Secretary family and "Board Of Directors"
+  matches a Director family without letting a shared trailing word ("Manager") sweep
+  unrelated titles together. The vocabulary is still disclosed as un-evidenced
+  (`generic_fallback`, `evidenced: false`).
+
+- **A suggestion round can now dispatch its stage-2 enrichment by following the
+  documented skill sequence (G-62-4, blocker).** Live 2026-09-03 UAT: following
+  `suggest-contacts/SKILL.md` exactly, stage 2 died on the first chunk — every row
+  lacked a `row_id`, the join key every downstream verdict is keyed on, because the
+  documented sequence never minted one. `suggest_contacts.mint_row_ids` now mints the
+  whole batch's ids in one call (never per company) after every eligible company's
+  stage-1 records are accumulated and before the first stage-2 call, and
+  `suggest_contacts.rejoin_enriched` re-joins the post-enrichment fresh rows back onto
+  those ids. The skill's own worked example was the actual defect surface and is
+  corrected to match.
+
+### Changed
+
+- The apex/`www` equivalence above lives in the shared `same_host` guard, so
+  `contact-upload`'s own URL adapter gains it too — a pasted apex link at a
+  `www`-canonical site (or the reverse) now resolves instead of refusing.
+
 ## [0.38.1] - 2026-09-03
 
 ### Fixed
