@@ -1,8 +1,8 @@
-version: lv-role-vocabulary-v2
+version: lv-role-vocabulary-v3
 built_on: '2026-09-04'
 source: generic_fallback
 evidenced: false
-top_n: 17
+top_n: 20
 distinct_titles_sampled: 0
 families:
 - label: CEO
@@ -108,3 +108,31 @@ families:
   - Executive Assistant
   - Office Manager
   - Administration Officer
+# Quick task 260905-rf1. The three ungraded one-word departmental titles measured live on
+# Brisbane Roar FC's own contact page (company 285507657175, 2026-09-04), each held by a
+# named person the role filter then dropped. Appended at the END deliberately: an
+# equal-length tie in classify_title is first-wins by family order, so a bare `Marketing`
+# placed in any graded marketing/media family (index 3-7) would flip `Marketing Director`
+# and `Media Director` off `Board & Committee` (index 11). One bare member each is enough
+# -- `_contains_run` matches a contiguous token run, so `Sponsorship Manager`,
+# `Marketing Coordinator` and `Head of Media` are already covered.
+- label: Marketing
+  recurrence: 0
+  evidenced: false
+  members:
+  # Jordan Hayward, Brisbane Roar FC 285507657175, 2026-09-04. Ungraded on purpose:
+  # `Head of Marketing` and `Marketing Manager` keep their graded titles by longest-wins.
+  - Marketing
+- label: Media
+  recurrence: 0
+  evidenced: false
+  members:
+  # Joseph Esposito, same page, same date. `Head of Broadcast` was rejected as a home
+  # because a bare member there flips `Media Director`.
+  - Media
+- label: Sponsorship
+  recurrence: 0
+  evidenced: false
+  members:
+  # Emma Hoadley, same page, same date. No existing family covers this function at all.
+  - Sponsorship
