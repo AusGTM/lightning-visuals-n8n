@@ -16,6 +16,49 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.38.4] - 2026-09-04
+
+### Fixed
+
+- **A job title carrying a DOUBLE-encoded HTML entity is no longer silently unmatched
+  at classification time.** The HubSpot portal stores some titles double-encoded, and
+  `role_classify._tokenize` called `html.unescape` exactly once. One pass turns
+  `Finance &amp;amp; Admin Officer` into `Finance &amp; Admin Officer`, not
+  `Finance & Admin Officer` — so the surviving `&` correctly became ` and ` while the
+  orphaned `amp;` became a junk `amp` token wedged into the MIDDLE of the run:
+  `('finance', 'and', 'amp', 'admin', 'officer')`. `_contains_run` needs the member's
+  tokens contiguous, so the four-token member `('finance', 'and', 'admin', 'officer')`
+  never matched. Measured against the shipped vocabulary before the fix,
+  `classify_title('Finance &amp;amp; Admin Officer')` returned `None` where
+  `classify_title('Finance & Admin Officer')` returned `Treasurer` — a real shipped
+  family, not a synthetic one, so the failure mode was a genuine missed contact rather
+  than a cosmetic defect. `_tokenize` now unescapes to a fixed point, bounded at
+  `MAX_UNESCAPE_PASSES = 5` so a pathological input cannot spin; a 7-deep input
+  terminates with residue instead of looping. Nothing else about `_tokenize` changed —
+  it still casefolds, still maps a literal `&` to the word `and`, and still splits on
+  non-alphanumerics, so every previously-matching title matches identically.
+
+  The same single-pass bug existed at the repo-side derivation seam
+  (`scripts/role_vocabulary.py::_normalize_title`, not shipped in this client) and was
+  fixed in the same task. The two loops are deliberately duplicated rather than shared
+  through a cross-tree import, so this plugin stays standalone; a drift guard in the
+  repo-root suite pins the two `MAX_UNESCAPE_PASSES` constants equal, following the
+  same parity idiom already used for `columnMap` and `FREEMAIL_DOMAINS`. A repo-wide
+  sweep confirmed these are the only two seams — no bare-import variant, and no
+  equivalent in the n8n JavaScript lane.
+
+### Unchanged
+
+- **The curated 17-family `config/role_vocabulary.yaml` ships exactly as before.** An
+  evidenced portal-wide vocabulary was derived and evaluated during acceptance, and
+  deliberately rejected: it produced 8 entirely-corporate families and not one racing
+  governance family, because governance titles are rare portal-wide by construction and
+  sit outside the recurrence head no matter how far the head is raised. Adopting it
+  would have dropped the 9 governance families and taken Roma Turf Club from 16 selected
+  contacts to 0. The derived document is useful as evidence of what recurs portal-wide,
+  never as a replacement. Recorded in the repository at
+  `.planning/decisions/2026-09-04-derived-role-vocabulary-rejected.md`.
+
 ## [0.38.3] - 2026-09-04
 
 ### Fixed
