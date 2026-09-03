@@ -262,7 +262,10 @@ generic "couldn't get that page" loses the distinction the operator needs:
   Every candidate this ladder offers, and every URL `filter_candidates` accepts out of a
   sitemap's page list, stays on the pasted URL's own host and nothing else — the same-host
   bound is enforced in `url_fallback.py` itself, not by judgement here. A candidate on a
-  different host is refused before it is ever shown to the operator as an option.
+  different host is refused before it is ever shown to the operator as an option. Apex and
+  `www.` on the same host count as the same host (operator ruling 2026-09-03, G-62-2), so a
+  pasted apex link at a `www`-canonical site — or the reverse — now resolves instead of
+  refusing.
 
   STRUCT-04 applies here as everywhere: a slug, a URL, or anything you already know about the
   organisation is not a source. A field the fetched representation does not actually carry is

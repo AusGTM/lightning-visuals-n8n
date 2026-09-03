@@ -241,6 +241,16 @@ blocked: 0
 
 Neither writes, spends a provider credit, or runs an n8n execution.
 
+**Removed (62-10-PLAN.md Decision 4, 2026-09-04).** All three scripts named above, plus
+`scripts/uat62_cluster_probe.py` (the live-Anthropic-call diagnostic behind the "Second
+run account" root-cause note below — it turned out to have been an untracked working-tree
+file, never committed), are gone from the repo. Nothing in the committed corpus imports or
+invokes any of them, confirmed by a repo-wide search before deletion. Their findings live
+entirely in this document: the 83.5%/78-scheme-bearing figures and the eligibility/
+discovery-plan renderings are quoted above; the cluster-probe root cause is recorded under
+G-62-5. A future reader looking for one of these scripts by name should read this line and
+this file, not assume the finding was lost.
+
 ## Gap closure (2026-09-03) — landed, locally verified, NOT yet live-proven
 
 `62-07-PLAN.md` — commits `8c45946` (seam), `f5fd69a` (refusal), `2d99cfa` (0.38.1),

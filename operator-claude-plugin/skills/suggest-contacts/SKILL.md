@@ -117,11 +117,17 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    scheme is added when the record has none, but `www.`, case, path and query are kept
    exactly as recorded, never rewritten (G-62-1). A company whose recorded value cannot
    be its own site (a social/profile link, or a value with no dot in it) yields no
-   candidates at all, with a reason naming that value — never a guessed URL. When
-   `next_candidates` refuses a same-page sitemap link and names two DIFFERENT hosts in
-   its reason, that means the site itself serves a different host variant than the one
-   recorded in HubSpot — not that the page is missing; report it as a host mismatch, not
-   as "no people page".
+   candidates at all, with a reason naming that value — never a guessed URL. Apex and
+   `www.` on that same host are treated as one host (operator ruling 2026-09-03, G-62-2):
+   a site that serves its sitemap from the other of the two is followed normally. A
+   refusal still naming two genuinely different hosts is a different site, and is
+   reported as such — never as "no people page".
+
+   **Redirects.** `web_fetch` hands a cross-host redirect back to you rather than
+   following it, so a redirect target is offered back through `next_candidates` like any
+   other candidate: an apex/`www` redirect on the same host passes and may be fetched;
+   any other redirect target is refused and reported, never chased somewhere else
+   (D-62-03); and each accepted redirect fetch spends one of that company's five.
 
 6. **Filter, then synthesise.** `suggest_contacts.select_people(people, family_list,
    chosen_families, known_contacts)` drops a person already associated with that company
