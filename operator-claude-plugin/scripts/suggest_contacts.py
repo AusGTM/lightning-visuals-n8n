@@ -33,6 +33,7 @@ import sys
 
 import enrichment
 import extraction
+import preingest
 import role_classify
 import url_fallback
 
@@ -315,6 +316,60 @@ def synthesise_rows(company, people, fetched_url, per_company_cap):
             }
         )
     return records
+
+
+def mint_row_ids(records):
+    """Mint the whole batch's `row_id` join keys ONCE, over every eligible company's
+    accumulated `records`, by calling `preingest.build_rows_spec` -- never per company,
+    since that function mints `row-1`, `row-2`, ... by POSITION and a per-company call
+    would mint `row-1` at every company, joining two different people onto one id with
+    no error (Decision 1, 62-08-PLAN.md).
+
+    Returns `{"spec": <build_rows_spec's own spec>, "records": [...]}`: `spec` is the
+    exact dict `chunking.plan_chunks` takes, and `records` is a fresh list pairing each
+    input record with the spec row minted at its own index, so a person's `provenance`
+    stays attached to the row that now carries their `row_id`. `preingest.RowSpecError`
+    (an empty batch, or a row that already carries a `row_id`) propagates untouched --
+    never caught, re-worded or worked around; a duplicate mint site is exactly the
+    ambiguity this function exists to prevent.
+    """
+    spec = preingest.build_rows_spec([record["row"] for record in records])
+    minted_records = [
+        {**record, "row": spec_row}
+        for record, spec_row in zip(records, spec["rows"])
+    ]
+    return {"spec": spec, "records": minted_records}
+
+
+def rejoin_enriched(records, merged_rows):
+    """Give each of `records` its own stage-2 MERGED row back, joined on `row_id` --
+    never on position.
+
+    `preingest.merge_enriched` returns FRESH rows and never mutates the ones it was
+    given (its own docstring), so without this join the round's own `records` would
+    still hold pre-merge rows: `partition_for_dispatch` would then HOLD every row the
+    waterfall had just filled, reporting an enriched person as though nothing had been
+    found (Decision 2, 62-08-PLAN.md).
+
+    Indexes `merged_rows` by `row_id` first, then walks `records`; a record whose id is
+    absent from that index raises `ValueError` naming it -- `merge_enriched` walks the
+    rows it was given and returns exactly one row per input row, so a missing id means
+    a different row set was passed in and every downstream verdict would be about the
+    wrong person. Returns a fresh records list; mutates nothing.
+    """
+    merged_by_id = {row["row_id"]: row for row in merged_rows}
+    rejoined = []
+    for record in records:
+        row_id = record["row"]["row_id"]
+        if row_id not in merged_by_id:
+            raise ValueError(
+                f"row {row_id!r} has no merged row to rejoin against -- merge_enriched "
+                f"returns exactly one row per input row, so a missing id means a "
+                f"different row set was passed in and every downstream verdict would "
+                f"be about the wrong person."
+            )
+        rejoined.append({**record, "row": merged_by_id[row_id]})
+    return rejoined
 
 
 def round_artifact(records):

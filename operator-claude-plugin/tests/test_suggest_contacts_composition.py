@@ -15,7 +15,10 @@ discovered person committed anywhere in this file.
 """
 import pytest
 
+import chunking
+import enrichment
 import extraction
+import preingest
 import role_classify
 import suggest_contacts
 import url_fallback
@@ -149,6 +152,145 @@ def test_the_documented_round_pipeline_drives_its_real_joins_end_to_end():
     assert validated_firstnames == ["Jamie"]
     # join 3: the held row (Robin) never appears in the dispatch set
     assert "Robin" not in validated_firstnames
+
+
+def _company_row_with_website(row_id, website):
+    return {
+        "row_id": row_id,
+        "name": f"Example Company {row_id}",
+        "website": website,
+        "num_associated_contacts": 0,
+    }
+
+
+def test_the_documented_round_reaches_an_accepted_chunk_and_an_enriched_sendable_row(
+        fake_config, stub_module_transport_factory):
+    """G-62-4 (blocker, live UAT 2026-09-03). Following `suggest-contacts/SKILL.md`
+    exactly, stage 2 could not dispatch AT ALL: `preingest.build_rows_spec` is the
+    single place `row_id` is minted and the skill never called it, so every chunk came
+    back `ok=False` naming `row_id`. Drives the documented sequence over TWO eligible
+    companies -- one is not enough to observe the mint's once-for-the-whole-batch
+    property, since a per-company mint would produce `["row-1", "row-1"]`, which reads
+    identically to `["row-1", "row-2"]` for a single company.
+
+    This is also the second, independent seam this gap closes (Decision 2):
+    `preingest.merge_enriched` returns FRESH rows and never mutates its input, so
+    without `rejoin_enriched` the round's own records would still hold pre-merge rows
+    and `partition_for_dispatch` would HOLD every row the waterfall had just filled.
+    """
+    company_a = _company_row_with_website(
+        "co-a", "https://example-club-a.example/board")
+    company_b = _company_row_with_website(
+        "co-b", "https://example-club-b.example/committee")
+
+    vocabulary = role_classify.load_families()
+    family_list = vocabulary["families"]
+    figures = {"suggestion_allowance": {"priced_cap": 5}}
+    per_company_cap = suggest_contacts.agreed_cap(2, figures)
+
+    records = []
+    fetched_urls = {}
+    for company_row, firstname, lastname in (
+            (company_a, "Jamie", "Fox"), (company_b, "Robin", "Lee")):
+        plan = suggest_contacts.discovery_plan(company_row)
+        assert plan["candidates"], "the ladder must offer at least one candidate"
+        fetched_url = plan["candidates"][0]["url"]
+        fetched_urls[firstname] = fetched_url
+
+        people = [{"firstname": firstname, "lastname": lastname, "jobtitle": FAMILY_LABEL}]
+        selection = suggest_contacts.select_people(
+            people, family_list, [FAMILY_LABEL], known_contacts=[])
+        assert len(selection["selected"]) == 1
+        records.extend(suggest_contacts.synthesise_rows(
+            company_row, selection["selected"], fetched_url,
+            per_company_cap=per_company_cap))
+
+    assert len(records) == 2  # one selected person per company
+
+    # The mint -- ONCE, over the whole batch, never per company.
+    minted = suggest_contacts.mint_row_ids(records)
+    assert minted["spec"]["object_type"] == "contacts"
+    minted_ids = [row["row_id"] for row in minted["spec"]["rows"]]
+    assert minted_ids == ["row-1", "row-2"], (
+        "ids must be minted once across the WHOLE batch -- a per-company mint would "
+        "produce ['row-1', 'row-1'], joining two different people onto one id"
+    )
+    assert minted["records"][0]["provenance"]["locator"] == fetched_urls["Jamie"]
+    assert minted["records"][1]["provenance"]["locator"] == fetched_urls["Robin"]
+
+    cfg = {**fake_config, "max_records_per_chunk": 5}
+    ceiling = chunking.chunk_ceiling(cfg)
+    plan = chunking.plan_chunks(minted["spec"], ceiling)
+    assert plan.chunk_count == 1, "both rows must fit in one chunk for this fixture"
+
+    providers = enrichment.resolve_providers(None, cfg)
+    transport = stub_module_transport_factory()  # default accepted body, no scripting
+    outcome = chunking.dispatch_plan(
+        plan, providers, True, cfg, transport=transport,
+        run_id="suggest-composition-test-run", async_ack=True)
+
+    # THIS is the assertion that closes G-62-4.
+    assert outcome.results[0].ok is True
+    assert all(
+        result.reason is None or "row_id" not in result.reason
+        for result in outcome.results
+    )
+
+    # Stage 2 -- simulated response. Jamie's row gets an email from the waterfall;
+    # Robin's waterfall lookup finds nothing, so Robin's row stays emailless.
+    responses = [
+        {"row_id": "row-1", "properties": {"email": "jamie.fox@example-club-a.example"}},
+        {"row_id": "row-2", "properties": {}},
+    ]
+    merge_report = preingest.merge_enriched(minted["spec"]["rows"], responses)
+
+    rejoined = suggest_contacts.rejoin_enriched(minted["records"], merge_report.rows)
+    sendable, held = suggest_contacts.partition_for_dispatch(
+        [record["row"] for record in rejoined])
+    assert len(sendable) == 1 and sendable[0]["firstname"] == "Jamie", (
+        "without rejoin_enriched, both rows would still be held -- the quiet wrong "
+        "answer Decision 2 names"
+    )
+    assert len(held) == 1 and held[0]["row"]["firstname"] == "Robin"
+
+    validated_count = 0
+    for record in rejoined:
+        if record["row"] not in sendable:
+            continue  # a held row never reaches extraction.validate()
+        result = extraction.validate(suggest_contacts.round_artifact([record]))
+        validated_count += 1
+        assert result.rejected == []
+        assert len(result.accepted) == 1
+        assert result.accepted[0]["provenance"]["locator"] == fetched_urls["Jamie"]
+
+    assert validated_count == len(sendable) == 1
+
+
+def test_mint_row_ids_propagates_row_spec_error_for_a_row_that_already_has_one():
+    """The single mint site stays single: `mint_row_ids` never strips, re-mints or
+    swallows `preingest.build_rows_spec`'s own refusal for a row that already carries
+    an id."""
+    record = {
+        "record_type": "contacts",
+        "row": {"firstname": "Jamie", "lastname": "Fox", "company": "Acme", "row_id": "row-1"},
+        "provenance": {"input": "suggest_contacts_ladder", "locator": "https://example.example/board"},
+    }
+    with pytest.raises(preingest.RowSpecError):
+        suggest_contacts.mint_row_ids([record])
+
+
+def test_rejoin_enriched_raises_naming_the_missing_row_id():
+    """A record whose id is absent from the merged set raises rather than silently
+    leaving that record attached to a stale row."""
+    record = {
+        "record_type": "contacts",
+        "row": {"row_id": "row-1", "firstname": "Jamie", "lastname": "Fox", "company": "Acme"},
+        "provenance": {"input": "suggest_contacts_ladder", "locator": "https://example.example/board"},
+    }
+    merged_rows = [{"row_id": "row-2", "firstname": "Robin"}]
+    with pytest.raises(ValueError) as excinfo:
+        suggest_contacts.rejoin_enriched([record], merged_rows)
+    assert "row-1" in str(excinfo.value)
 
 
 def test_a_chosen_cap_above_the_priced_cap_refuses_and_synthesises_no_rows():
