@@ -493,7 +493,7 @@ variable), and a design that runs the provider waterfall twice per written recor
             once at the seam and used by BOTH `discovery_plan` and `next_candidates` — plus a
             loud host-less refusal in `url_fallback` (wave 1, tracer-led)
 
-      - [ ] 62-08-PLAN.md — **gap closure** (G-62-4, blocker, live sitting 2026-09-03): the
+      - [x] 62-08-PLAN.md — **gap closure** (G-62-4, blocker, live sitting 2026-09-03): the
             documented skill sequence can actually dispatch stage 2 — `row_id` minted once for the
             whole batch through `preingest.build_rows_spec`, the merge re-joined back onto the
             round's records, and an end-to-end test that reaches an ACCEPTED chunk (wave 1,
@@ -1048,7 +1048,7 @@ is excluded by standing decision.
 round's cost folds into the SAME opening grant envelope as enrichment — `one-envelope`, never a
 separate spend confirmation.
 
-**Plans**: 6/6 plans executed
+**Plans**: 9/10 plans executed
 
 - [x] 62-01-PLAN.md — suggestion engine, tracer-led (`suggest_contacts.py`, `role_classify.py`)
 - [x] 62-02-PLAN.md — portal-derived role vocabulary; SUGGEST-03 amended

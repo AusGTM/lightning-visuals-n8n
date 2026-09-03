@@ -5,16 +5,16 @@ milestone_name: Unattended Session Runs
 current_phase: 61
 current_phase_name: Autonomous batch runs
 status: executing
-stopped_at: "Gap-closure 62-09 landed (G-62-3): role vocabulary matcher + expanded governance fallback"
-last_updated: "2026-09-03T14:12:53.189Z"
+stopped_at: Completed 62-08-PLAN.md (G-62-4 gap closure)
+last_updated: "2026-09-03T14:15:43.384Z"
 last_activity: 2026-09-03
 last_activity_desc: Phase 60 complete, transitioned to Phase 61
-state_head: 7fd44327c35ce4baccfcadf1e0b985c2299d8a4b
+state_head: 5c81304547116a40b31b524fe8b6aa65297392d3
 progress:
   total_phases: 13
   completed_phases: 8
   total_plans: 60
-  completed_plans: 58
+  completed_plans: 59
   percent: 62
 ---
 
@@ -527,7 +527,7 @@ Plan 03 completed.*
   restored before Plan 03 resumed and completed. Plan 04 (armed run, autonomous: true
   per D-22) is next.
 
-Progress: [█████░░░░░] 54% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
+Progress: [██████░░░░] 62% — v1.1 (phases 53–63): 53/54/57/58/59/61 complete; 55 and 56 absorbed
 into 61; **62 executed and verified 13/13 but awaiting live UAT (3 blocked items)**; 60 open;
 63 numbered, not planned; 52 deferred indefinitely (v1.0). Every plan on disk has a SUMMARY
 (56/56) — the outstanding work is live proof and two unplanned phases, not unexecuted plans.
@@ -536,8 +536,8 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-03T14:12:52.564Z
-**Stopped at:** Gap-closure 62-09 landed (G-62-3): role vocabulary matcher + expanded governance fallback
+**Last session:** 2026-09-03T14:15:41.993Z
+**Stopped at:** Completed 62-08-PLAN.md (G-62-4 gap closure)
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
@@ -661,6 +661,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 | Phase 63 P05 | 30min | 2 tasks | 1 files |
 | Phase 60 P05 | 90m | 3 tasks | 8 files |
 | Phase 62 P09 | 8min | 2 tasks | 4 files |
+| Phase 62 P08 | 25min | 2 tasks | 4 files |
 
 ## Decisions
 
@@ -766,6 +767,7 @@ sweep fixing stale STATE/ROADMAP/milestone docs.
 - [Phase 60]: 60-05: verify_decision splits into two legs over a closed PREVIEW_UNPINNABLE_KEYS set (leg 1 vs backend's own submit-time patch, leg 2 vs the independent refetch) to fix the false-failed verdict G-60-1 diagnosed on every successful review approve
 - [Phase 60]: 60-05: verify_live_write_safety.verify() gained an optional armed_workflow scoping parameter (default None = today's unscoped verdict) so an operator can pin a single-workflow armed window without narrowing scan coverage, closing G-60-2
 - [Phase 61]: 62-09: classify_title matcher rewritten to contiguous-token-run, longest-wins, entity-aware (closes G-62-3)
+- [Phase 61]: G-62-4 closed: suggest_contacts.mint_row_ids (wraps preingest.build_rows_spec, called once per batch) and rejoin_enriched (joins merge_enriched's fresh rows back by row_id) close the seam where suggest-contacts/SKILL.md's documented round could not dispatch stage 2 at all
 
 ### Roadmap Evolution
 
