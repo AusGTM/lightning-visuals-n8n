@@ -549,7 +549,23 @@ needed in order to mean anything. In round 1 it never bound.
   truth: "Every row dispatched to the enrichment lane comes back with a verdict"
   status: failed
   reason: |
-    2 of 6 rows (33%) produced NO verdict, while provider credit was spent on the batch.
+    2 of 6 rows (33%) produced NO verdict.
+
+    **CORRECTED 2026-09-04 by the 62-11 diagnosis — twice, in ways that matter:**
+    (a) The rows were never lost IN n8n. `Build Response` emitted BOTH; the CLIENT's reader
+        took `runs[0]` and discarded the rest. Verdict `reader_reads_run_0`. So this is a
+        client-side defect needing no workflow change and no deploy.
+    (b) "while provider credit was spent on the batch" was an inference from a balance delta
+        and is WRONG for the lost rows specifically: `Lusha Enrich`'s own per-item billing
+        block shows `NOT_FOUND` / `creditsCharged: 0` for both `row-2` and `row-5`. They cost
+        nothing. This is the SECOND time in this phase a before/after balance read produced a
+        false cost claim — the first was the phantom credit in test 3's round-1 note. Take
+        provider cost from the provider's own per-item billing block, never from a delta.
+
+    Proven fixed at zero cost by re-running recovery against the SAME run_id
+    (`15ea995a2ae44f7097ac938356cf95bb`) after the fix: 4 responses -> **6**, with `row-2`
+    (Tim Curry) and `row-5` (Brett Ashney) both recovered from the original execution data.
+    No re-dispatch, no credit, same input, different reader.
     `merge_enriched` reports them honestly rather than as "nothing found":
       row-2 Tim Curry (Lismore, Deputy Chairman)  — "no verdict was received for this row"
       row-5 Brett Ashney (Roma, President)        — same
