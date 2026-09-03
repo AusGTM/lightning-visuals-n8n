@@ -16,6 +16,31 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-09-03
+
+### Fixed
+
+- **`review_decision.verify_decision` no longer reports `failed` on a fully successful
+  review approve (G-60-1).** The 2026-09-03 live supervised operator walk — the first real
+  end-to-end review-lane approve this system has performed — landed the write correctly, but
+  the client-side verdict came back `failed` anyway: `lv_enrichment_reviewed_at`, the
+  provenance blob's embedded timestamp, and the reviewed-by label are all minted by the
+  backend AT SUBMIT TIME, so a preview-time map can never equal a submit-time refetch on
+  them. `verify_decision` now checks in two legs — the backend's own submit-time patch
+  against what was previewed and approved (catching a changed OR an unforeseen added field),
+  and the independent post-write re-read against the approved fields (unchanged in
+  authority) — so a successful approve reports `verified`, while a business field that did
+  not land, or an unenumerated field that changes at submit time, still fails closed.
+- **`verify_live_write_safety.py` can now express a correctly-scoped single-workflow armed
+  window (G-60-2).** Its `armed` expectation was global by construction: a flag declared
+  across four workflows but armed by `armed_review_window` in only one made every OTHER
+  workflow's correctly-disarmed node report a FAIL — exactly what the same live walk hit
+  when independently cross-checking the open review batch window. A new `--armed-workflow`
+  argument pins the ONE workflow expected armed; every other deployed workflow is still
+  fetched and judged, held to the DISARMED rule (stricter than the old global armed rule),
+  and a name matching no scanned workflow is a hard failure rather than a silent pass.
+  Omitting the argument reproduces today's verdict exactly.
+
 ## [0.37.0] - 2026-09-02
 
 ### Fixed

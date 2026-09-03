@@ -140,6 +140,25 @@ written, and a second opinion here would be a second authority that drifts from 
    # manager's own guarantee, unchanged from the per-send window dispatch already uses).
    ```
 
+   **Read the LITERAL allowlist back from `window.arm_result["observed"]` and state it to
+   the operator, id by id, before the first decision of the sitting.** Why in one clause:
+   the NUMBER of ids the grant covers is not evidence of WHICH ids actually landed on the
+   live backend, and a window whose allowlist does not hold the record about to be decided
+   will refuse it (the 49-W2 lesson — a count check is not a membership check). An
+   administrator with a repository checkout has an independent second-process cross-check
+   available for this: the scoped form of `scripts/verify_live_write_safety.py`, which can
+   pin allowlist MEMBERSHIP on this one workflow while every other stays asserted fully
+   disarmed. This skill does not ask the operator to run it — the plugin does not ship that
+   script, and this skill's own closing section forbids a step that shells out — but it is
+   quoted here in full so an administrator can use it without reconstructing the invocation:
+
+   ```
+   python scripts/verify_live_write_safety.py --expectation armed \
+       --allowlist <the id(s) or domain(s) window.arm_result["observed"] shows> \
+       --expect-armed ALLOW_HUBSPOT_REVIEW_WRITES \
+       --armed-workflow "LV Review Decision (Cloud)"
+   ```
+
    **Say plainly that the window is grant-wide but every decision inside it is still
    checked per record** (D-60-03): a record the grant does not name is refused even
    mid-sitting, exactly as if no window were open at all — the batch window widens WHEN
@@ -238,6 +257,13 @@ written, and a second opinion here would be a second authority that drifts from 
    ```
    review_decision.verify_decision(preview["would_write"], response)
    ```
+
+   The approved business fields are checked TWICE — once against what the backend reported
+   writing, once against the independent post-write re-read — while a handful of properties
+   the preview cannot pin (the review timestamp, the provenance blob's embedded timestamp,
+   and the reviewed-by label) are checked against the backend's own report of what it wrote
+   rather than against the preview's guess. That is why a successful approve now reports
+   `verified` even though those few properties always differ between preview and submit.
 
    Report its `status` and `message`:
 

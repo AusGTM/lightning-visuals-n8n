@@ -77,7 +77,16 @@ def test_every_skill_has_parseable_frontmatter_carrying_name_and_description(ski
 # thin client for) rather than one of the plugin's own scripts/. Named, not a general
 # "allowed sources" mechanism -- one exemption, one comment, one citation, so a future
 # skill that quietly starts referencing an unshipped path still fails this guard.
-BACKEND_REPO_SCRIPTS = {"loss-reason-report": {"build_loss_reason_report.py"}}
+#
+# Phase 60 Plan 05 (G-60-2, 2026-09-03): review-triage quotes
+# scripts/verify_live_write_safety.py's scoped-armed invocation for an ADMINISTRATOR
+# cross-check, never a step the operator runs (the skill's own closing section forbids
+# that) -- the plugin does not ship this script and never will, the same shell-out shape
+# as loss-reason-report's exemption above.
+BACKEND_REPO_SCRIPTS = {
+    "loss-reason-report": {"build_loss_reason_report.py"},
+    "review-triage": {"verify_live_write_safety.py"},
+}
 
 
 @pytest.mark.parametrize("skill_path", SKILL_PATHS, ids=lambda p: p.parent.name)
