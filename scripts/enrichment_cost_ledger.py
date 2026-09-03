@@ -105,7 +105,10 @@ ESTIMATES = {
     },
     "zoominfo_per_match": {
         "value": 1.08, "unit": "credits/match",
-        "citation": (".planning/workstreams/milestone/phases/22-armed-e2e-enrichment-canary/22-RESEARCH.md — Assumption A3 "
+        # Path updated 2026-09-03: the milestone workstream was archived that day, moving
+        # .planning/workstreams/milestone/ to .planning/milestones/ws-milestone-2026-09-03/.
+        # Same document, same Assumption A3 — only its location changed.
+        "citation": (".planning/milestones/ws-milestone-2026-09-03/phases/22-armed-e2e-enrichment-canary/22-RESEARCH.md — Assumption A3 "
                      "(v2-era measurement; ZoomInfo pricing is unaffected by the Lusha-only v3 migration)"),
         "confidence": "inferred (measured pre-v3, carried forward — no ZoomInfo pricing change this milestone)",
     },
