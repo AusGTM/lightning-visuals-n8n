@@ -46,6 +46,7 @@ sys.path.insert(0, str(ROOT))
 load_dotenv()
 
 from src.hubspot_client import hs_headers  # noqa: E402
+from src.guards import emit_json  # noqa: E402
 
 EXPECTED_PORTAL_ID = "22617666"
 DEFAULT_PROPERTY = "lv_icp_fit_score"
@@ -91,8 +92,8 @@ def sync_label(url: str, want_label: str) -> int:
 
     if os.getenv("ALLOW_FORMULA_WRITE") != "true":
         print("\nDRY RUN (set ALLOW_FORMULA_WRITE=true to apply):")
-        print(json.dumps({"method": "PATCH", "url": url,
-                          "payload": {"label": want_label}}, indent=2))
+        emit_json({"method": "PATCH", "url": url,
+                          "payload": {"label": want_label}}, indent=2)
         return 0
 
     r = requests.patch(url, headers=hs_headers(), json={"label": want_label}, timeout=30)
@@ -144,8 +145,8 @@ def main(argv=None) -> int:
 
     if os.getenv("ALLOW_FORMULA_WRITE") != "true":
         print("\nDRY RUN (set ALLOW_FORMULA_WRITE=true to apply):")
-        print(json.dumps({"method": "PATCH", "url": url,
-                          "payload": {"calculationFormula": want}}, indent=2))
+        emit_json({"method": "PATCH", "url": url,
+                          "payload": {"calculationFormula": want}}, indent=2)
         return 0
 
     r = requests.patch(url, headers=hs_headers(),

@@ -34,7 +34,9 @@ probe_enum_in_formula.py, probe_number_floor_in_formula.py, snapshot_hubspot_sch
 sweep_tier_dependents.py); now a single implementation those six files' own
 `_assert_no_secrets` wrappers delegate to, so every existing call site is unchanged.
 """
+import json
 import os
+from pathlib import Path
 
 
 def assert_disjoint(keys, forbidden, message: str) -> None:
@@ -66,3 +68,38 @@ def assert_no_secrets(text: str) -> None:
         raise ValueError("serializer leaked the bearer token value")
     if "HUBSPOT_PRIVATE_APP_TOKEN" in text:
         raise ValueError("serializer leaked the token env var name")
+
+
+# --- guarded emit paths (Phase 50 security audit, 2026-09-03) ---------------------
+# `assert_no_secrets` above is only a guard if something CALLS it. The 2026-09-03
+# retroactive secure-phase run found five scripts whose threat registers asserted the
+# check was applied to their committed artifacts, and which had never imported it:
+# check_tier_derived_parity, apply_fit_score_formula, rollback_property_migration,
+# put_hubspot_flow, backfill_anti_icp_flag_num (T-50-11 / T-50-27 / T-50-36). It was
+# never-present rather than drift, so nothing would ever have caught it.
+#
+# These two wrappers make the guarded path the SHORTEST path: one call instead of a
+# serialize-check-emit trio at every site. `tests/test_guarded_emit_coverage.py` pins
+# that every script writing a committed artifact routes through one of them, so a sixth
+# script cannot be added without the guard the way these five were.
+
+
+def emit_json(obj, **dumps_kwargs) -> None:
+    """`json.dumps` -> `assert_no_secrets` -> `print`. The guarded stdout path.
+
+    stdout matters as much as a file here: these scripts' output is routinely captured
+    into a committed run record, so a token reaching stdout reaches git.
+    """
+    text = json.dumps(obj, **dumps_kwargs)
+    assert_no_secrets(text)
+    print(text)
+
+
+def write_guarded(path, text: str) -> None:
+    """`assert_no_secrets` -> `write_text`. The guarded file path.
+
+    Checks BEFORE writing, so a leak raises with nothing on disk rather than leaving a
+    poisoned file behind for the caller to clean up.
+    """
+    assert_no_secrets(text)
+    Path(path).write_text(text)

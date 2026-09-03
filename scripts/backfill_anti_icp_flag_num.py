@@ -38,6 +38,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))  # repo root on sys.path so `src.*` imports resolve
+from src.guards import emit_json  # noqa: E402
 
 EXPECTED_PORTAL_ID = os.getenv("HUBSPOT_EXPECTED_PORTAL_ID", "22617666")
 
@@ -135,10 +136,10 @@ def run_plan() -> int:
 
     updates = build_updates(ids)
     assert_payload_scope(updates)
-    print(json.dumps({
+    emit_json({
         "mode": "plan", "ids": ids, "count": len(ids),
         "max_backfill_records": MAX_BACKFILL_RECORDS, "updates": updates,
-    }, indent=2))
+    }, indent=2)
     print("DISARMED -- no write performed. Set DRY_RUN=false and "
           "ALLOW_ANTI_ICP_MIRROR_BACKFILL=true to arm --execute.")
     return 0
@@ -161,9 +162,9 @@ def run_execute() -> int:
 
     updates = build_updates(ids)
     assert_payload_scope(updates)
-    print(json.dumps({
+    emit_json({
         "mode": "execute", "ids": ids, "count": len(ids), "updates": updates,
-    }, indent=2))
+    }, indent=2)
 
     armed = _writes_allowed()
     if not armed:

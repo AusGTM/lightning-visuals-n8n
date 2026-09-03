@@ -58,6 +58,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))  # repo root on sys.path so `src.*`/`scripts.*` imports resolve
+from src.guards import write_guarded  # noqa: E402
 
 EXPECTED_PORTAL_ID = os.getenv("HUBSPOT_EXPECTED_PORTAL_ID", "22617666")
 
@@ -623,9 +624,9 @@ def _append_or_write(path: Path, text: str) -> None:
     exist (e.g. the verify block's own throwaway --out path)."""
     if path.exists() and path.read_text().strip():
         existing = path.read_text().rstrip("\n")
-        path.write_text(existing + "\n\n---\n\n" + text)
+        write_guarded(path, existing + "\n\n---\n\n" + text)
     else:
-        path.write_text(text)
+        write_guarded(path, text)
 
 
 # --- live reads (read-only; D-16) -------------------------------------------------------
@@ -745,7 +746,7 @@ def main(argv=None) -> int:
     if args.out:
         out_path = Path(args.out)
         out_path.parent.mkdir(parents=True, exist_ok=True)
-        out_path.write_text(text)
+        write_guarded(out_path, text)
         print(f"wrote {out_path}")
     else:
         print(text)

@@ -51,6 +51,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))  # repo root on sys.path so `src.*` imports resolve
+from src.guards import emit_json  # noqa: E402
 
 MANIFEST_DIR = ROOT / "config" / "hubspot_migration"
 BASELINE_DIR = MANIFEST_DIR / "baseline"
@@ -176,7 +177,7 @@ def archive_one_property(object_type: str, name: str, live_writes: bool) -> int:
         return 1
 
     if not live_writes:
-        print(json.dumps({"dry_run": True, "method": "DELETE", "url": url_desc}, indent=2))
+        emit_json({"dry_run": True, "method": "DELETE", "url": url_desc}, indent=2)
         print("DRY RUN (default) -- set DRY_RUN=false AND ALLOW_HUBSPOT_PROPERTY_WRITES=true "
               "to archive.")
         return 0

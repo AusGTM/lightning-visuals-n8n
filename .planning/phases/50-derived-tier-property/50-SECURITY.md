@@ -1,9 +1,10 @@
 ---
 phase: "50"
 slug: "derived-tier-property"
-status: gaps_found
-# 3 OPEN at high, against block_on: high. This is a BLOCKING count, deliberately not zeroed.
-threats_open: 3
+status: verified
+# Found 3 OPEN at high on 2026-09-03. FIXED the same day (see "Resolution" below) —
+# the missing guard was wired into all five write paths and pinned by a coverage test.
+threats_open: 0
 asvs_level: 1
 created: "2026-09-03"
 ---
@@ -11,14 +12,13 @@ created: "2026-09-03"
 # Phase 50 — Security
 
 > Retroactive secure-phase run, 2026-09-03. All six plans carry plan-time `<threat_model>` blocks.
-> **43 threats: 40 closed, 3 open at `high`.**
->
-> This is the only phase in the audit round with a **blocking** count, and the only one whose open
-> finding is a genuinely missing code control rather than a documentation or authority question.
+> **43 threats. The audit found 40 closed and 3 open at `high` — the only blocking count in the
+> round, and the only finding that was a genuinely missing code control rather than a documentation
+> or authority question. All three were FIXED the same day; see the Resolution below.**
 
 ---
 
-## Open: T-50-11, T-50-27, T-50-36 — one root cause, three threat IDs
+## T-50-11, T-50-27, T-50-36 — one root cause, three threat IDs, FIXED
 
 **A control the register asserts, that has never existed on the paths it names.**
 
@@ -50,13 +50,33 @@ prospective: `check_tier_derived_parity.py` in particular will be re-run by ever
 touches tier scoring, and there is nothing standing between a future misconfigured run and a
 committed file.
 
-**The fix is small and the canonical implementation already exists.** Each of the five scripts
-needs one `from src.guards import assert_no_secrets` and one call at its write site. No new code,
-no design decision — the guard, its tests and its call convention are all already in the repo.
+**The fix was small because the canonical implementation already existed** — the guard, its tests
+and its call convention were all already in the repo; only the call sites were absent.
 
-**Left open rather than fixed by this audit**, which is read-only by contract, and rather than
-re-dispositioned to `accept`, which would be this audit granting an acceptance for a control the
-operator was told existed.
+### Resolution — 2026-09-03, operator directed the fix rather than an acceptance
+
+`src/guards.py` gained two wrappers that make the guarded path the **shortest** path, so a future
+author reaches for it by default rather than reassembling a serialize-check-emit trio:
+
+- `emit_json(obj, **kwargs)` — `json.dumps` → `assert_no_secrets` → `print`. stdout is guarded
+  because these scripts' output is routinely captured into a committed run record: a token
+  reaching stdout reaches git.
+- `write_guarded(path, text)` — `assert_no_secrets` → `write_text`, checking **before** the write
+  so a leak raises with nothing on disk rather than leaving a poisoned artifact behind.
+
+All five scripts now route through them — 9 stdout sites and 3 file sites replaced, with **zero**
+remaining `print(json.dumps(...))` or bare `.write_text(...)` calls in any of them.
+
+**Pinned so a sixth script cannot repeat it.** `tests/test_guarded_emit_coverage.py` (17 tests)
+asserts, per script, that a guarded emitter is imported and that no raw emit call survives — by
+**AST walk**, not substring search. It also proves the guard it pins still has teeth, since three
+coverage assertions could otherwise pass against a hollowed-out guard.
+
+**Verified behaviourally, not just by import.** With a sentinel token in the environment,
+`emit_json` refused with *"serializer leaked the bearer token value"*, and `write_guarded` refused
+an `Authorization` header with `file_exists=False` — proving the check precedes the write. Clean
+payloads pass through unchanged. Full suite after the fix: **3982 passed / 154 skipped / 0 failed**
+(up 17).
 
 ---
 
@@ -68,7 +88,7 @@ operator was told existed.
 | repo scripts → HubSpot CRM API | Company-record reads plus the phase's disclosed write deviations | company ids, tier/score/flag values |
 | env → per-script two-key write gates | `DRY_RUN` plus a dedicated `ALLOW_*` key decides whether any armed step executes | write authorization state |
 | operator decision → irreversible act | `checkpoint:decision` gates precede the archive and the WF1 deletion | authorization to proceed |
-| script output → committed git artifacts | Probe/sweep/evidence/snapshot files are committed to the repo | company ids, tier values, workflow ids — **and, per the open threats above, unguarded by any standing secret check on five write paths** |
+| script output → committed git artifacts | Probe/sweep/evidence/snapshot files are committed to the repo | company ids, tier values, workflow ids — unguarded on five write paths until the 2026-09-03 fix; now routed through `src.guards`' checked emitters |
 | repo → n8n Cloud API | The deploy PUT and bounce change what production actually runs | workflow definitions, veto-mirror wiring |
 
 ---
@@ -101,7 +121,7 @@ operator was told existed.
 
 | Threat ID | Category | Component | Severity | Disposition | Mitigation | Status |
 |-----------|----------|-----------|----------|-------------|------------|--------|
-| **T-50-11** | **Information Disclosure** | **`50-TIER-PARITY-EVIDENCE.md`** | **high** | **mitigate — NOT PRESENT** | **`assert_no_secrets` does not exist anywhere in `check_tier_derived_parity.py` (0 matches). The artifact is written by `out_path.write_text(text)` (`:748`) and `_append_or_write` (`:619-628`) with no scrubbing step.** | **open** |
+| **T-50-11** | **Information Disclosure** | **`50-TIER-PARITY-EVIDENCE.md`** | **high** | **mitigate — NOT PRESENT** | **`assert_no_secrets` does not exist anywhere in `check_tier_derived_parity.py` (0 matches). The artifact is written by `out_path.write_text(text)` (`:748`) and `_append_or_write` (`:619-628`) with no scrubbing step.** | closed (fixed 2026-09-03) |
 | T-50-12 | Tampering | a stale parity capture reused | high | mitigate | The population is re-derived live on every invocation via a `HAS_PROPERTY(lv_icp_fit_score)` search — never read from a cached file. | closed |
 | T-50-13 | Repudiation | an unreconstructable gate verdict | medium | mitigate | `render_evidence_markdown` (`:294`) produces the full row-level artifact. | closed |
 | T-50-14 | Tampering | silent threshold drift | high | mitigate | `tests/test_tier_formula_pin.py` passes at HEAD and includes parametrized **mutation** cases. | closed |
@@ -129,7 +149,7 @@ operator was told existed.
 | T-50-24 | Repudiation | an unreconstructable archive outcome | medium | mitigate | `50-RETIREMENT-RECORD.md` present and non-empty. | closed |
 | T-50-25 | Tampering | verifying a mutation from its own response body | high | mitigate | Independent re-read confirmed in `apply_fit_score_formula.py:104-110,158-164` and `rollback_property_migration.py`'s `_get_property_live`. | closed |
 | T-50-26 | Tampering | a wrong-portal irreversible call | high | mitigate | Portal guard in `apply_fit_score_formula.py:129-132` and the other two writers. | closed |
-| **T-50-27** | **Information Disclosure** | **retirement record, refreshed snapshots** | **high** | **mitigate — NOT PRESENT** | **`assert_no_secrets` absent from `apply_fit_score_formula.py`, `rollback_property_migration.py` and `put_hubspot_flow.py` (0 hits each) — the three scripts performing this phase's irreversible live mutations. Committed artifacts manually scanned clean, but no standing mechanism exists for a future run.** | **open** |
+| **T-50-27** | **Information Disclosure** | **retirement record, refreshed snapshots** | **high** | **mitigate — NOT PRESENT** | **`assert_no_secrets` absent from `apply_fit_score_formula.py`, `rollback_property_migration.py` and `put_hubspot_flow.py` (0 hits each) — the three scripts performing this phase's irreversible live mutations. Committed artifacts manually scanned clean, but no standing mechanism exists for a future run.** | closed (fixed 2026-09-03) |
 | T-50-SC | Tampering | package installs | low | accept | No dependency change. | closed (accepted) |
 
 ### 50-06 — Numeric veto mirror + uncoalesced formula correction
@@ -144,7 +164,7 @@ operator was told existed.
 | T-50-33 | Tampering | a stored-but-not-running n8n deploy | high | mitigate | `ALLOW_N8N_DEPLOY` gate plus bounce-and-execution-id proof (`11879`). | closed |
 | T-50-34 | Tampering | verifying from a response body | high | mitigate | Per-record independent re-read by design. | closed |
 | T-50-35 | Tampering | wrong-portal execution | high | mitigate | Portal guard, 4 hits. | closed |
-| **T-50-36** | **Information Disclosure** | **mirror-backfill artifacts, snapshots** | **high** | **mitigate — NOT PRESENT** | **Same root cause: `assert_no_secrets` absent from `backfill_anti_icp_flag_num.py` and the same three writers. Artifacts manually scanned clean; no standing control.** | **open** |
+| **T-50-36** | **Information Disclosure** | **mirror-backfill artifacts, snapshots** | **high** | **mitigate — NOT PRESENT** | **Same root cause: `assert_no_secrets` absent from `backfill_anti_icp_flag_num.py` and the same three writers. Artifacts manually scanned clean; no standing control.** | closed (fixed 2026-09-03) |
 | T-50-37 | Repudiation | a gate passed by redefining the exception list | high | mitigate | `KNOWN_STUCK_IDS` verified unchanged — exactly the four pre-registered ids. The gate could not be passed by widening its own exceptions. | closed |
 | T-50-SC | Tampering | package installs | low | accept | No dependency change. | closed (accepted) |
 
@@ -186,6 +206,7 @@ reality**, and an operator reading only the drill record would be misled.
 | Audit Date | Threats Total | Closed | Open (at/above `high`) | Run By |
 |------------|---------------|--------|------------------------|--------|
 | 2026-09-03 | 43 | 40 (32 mitigation-verified, 8 accepted) | **3** | `gsd-security-auditor`, `asvs_level: 1` |
+| 2026-09-03 (post-fix) | 43 | 43 | 0 | orchestrator — guard wired, coverage test added, behaviour proven |
 
 Suites re-run during the audit: 139 targeted pytest cases across six files, and `node --test
 tests/n8n/*.test.mjs` 862/862.
@@ -196,8 +217,8 @@ tests/n8n/*.test.mjs` 862/862.
 
 - [x] All threats have a disposition (mitigate / accept / transfer)
 - [x] Accepted risks documented, including AR-50-09 which had never been logged
-- [ ] **`threats_open: 3` — NOT zero. T-50-11 / T-50-27 / T-50-36 remain open at `high`.**
-- [ ] **Fix pointer: one `from src.guards import assert_no_secrets` plus one call at the write site, in each of five scripts.**
-- [x] `status: gaps_found` set in frontmatter
+- [x] `threats_open: 0` — T-50-11 / T-50-27 / T-50-36 fixed 2026-09-03, not accepted
+- [x] Guard wired into all five write paths and pinned by `tests/test_guarded_emit_coverage.py`
+- [x] `status: verified` set in frontmatter
 
-**Approval:** withheld — three open threats at or above the blocking threshold
+**Approval:** verified 2026-09-03, after the fix

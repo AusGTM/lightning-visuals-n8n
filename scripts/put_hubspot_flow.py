@@ -42,6 +42,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))  # repo root on sys.path so `src.*` imports resolve
+from src.guards import emit_json  # noqa: E402
 
 # Portal 22617666 (ap1) — asserted before any call, same discipline as
 # scripts/fetch_hubspot_flow.py / scripts/snapshot_hubspot_schema.py.
@@ -84,12 +85,12 @@ def put_flow(flow_id: str, body: dict, dry_run: bool) -> dict:
     url_desc = f"/automation/v4/flows/{flow_id}"
 
     if dry_run:
-        print(json.dumps({
+        emit_json({
             "dry_run": True,
             "method": "PUT",
             "url": url_desc,
             "isEnabled": payload.get("isEnabled"),
-        }, indent=2, default=str))
+        }, indent=2, default=str)
         return {"dry_run": True}
 
     import requests
@@ -107,7 +108,7 @@ def delete_flow(flow_id: str, dry_run: bool) -> dict:
     url_desc = f"/automation/v4/flows/{flow_id}"
 
     if dry_run:
-        print(json.dumps({"dry_run": True, "method": "DELETE", "url": url_desc}, indent=2))
+        emit_json({"dry_run": True, "method": "DELETE", "url": url_desc}, indent=2)
         return {"dry_run": True}
 
     import requests
@@ -147,7 +148,7 @@ def main(argv=None) -> int:
 
     if args.delete:
         result = delete_flow(args.flow_id, dry_run)
-        print(json.dumps(result, indent=2, default=str))
+        emit_json(result, indent=2, default=str)
         return 0
 
     if not args.file:
@@ -161,7 +162,7 @@ def main(argv=None) -> int:
         body["isEnabled"] = True
 
     result = put_flow(args.flow_id, body, dry_run)
-    print(json.dumps(result, indent=2, default=str))
+    emit_json(result, indent=2, default=str)
     return 0
 
 
