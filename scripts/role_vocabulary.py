@@ -21,8 +21,15 @@ D-62-07: below `SPARSE_THRESHOLD` distinct titles, the portal cannot evidence a
 vocabulary — serve the disclosed generic fallback instead, and never make the Haiku call.
 
 Usage:
-    python scripts/role_vocabulary.py              # live inventory + cache write
+    python scripts/role_vocabulary.py              # live inventory + derived-file write
     python scripts/role_vocabulary.py --dry-run     # print the would-be YAML, write nothing
+    python scripts/role_vocabulary.py --head 400    # cluster a larger recurrence head
+
+Quick task 260904-39r (closes G-62-5): this script now WRITES its output to
+`role_vocabulary.derived.yaml`, a sibling of the shipped, live-proven 17-family
+`role_vocabulary.yaml` -- it never overwrites the shipped file. `role_classify.py` only
+ever reads the shipped file, so a derived run is inert to the plugin until an operator
+deliberately reviews the drop-list this script prints and copies the derived file over.
 """
 import argparse
 import html
@@ -38,7 +45,14 @@ import yaml
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))  # repo root on sys.path so `src.*` imports resolve
 
+# CACHE_PATH names the shipped, plugin-read file -- read-only from this script's own
+# perspective (used only to print the drop-list comparison in D-4). This script's write
+# target is DERIVED_PATH, below.
 CACHE_PATH = ROOT / "operator-claude-plugin" / "config" / "role_vocabulary.yaml"
+
+# Quick task 260904-39r, D-4: a sibling of CACHE_PATH, never merged into it and never
+# auto-adopted. Kept out of git (see .gitignore) -- it is a run artifact, not a deliverable.
+DERIVED_PATH = CACHE_PATH.parent / "role_vocabulary.derived.yaml"
 
 # Same portal guard as every other schema/migration script in this repo.
 EXPECTED_PORTAL_ID = os.getenv("HUBSPOT_EXPECTED_PORTAL_ID", "22617666")
@@ -59,7 +73,7 @@ HEAD_N = 200
 # the portal cannot support a derived list.
 SPARSE_THRESHOLD = 20
 
-VOCABULARY_VERSION = "lv-role-vocabulary-v1"
+VOCABULARY_VERSION = "lv-role-vocabulary-v2"
 
 # D-62-07's disclosed fallback: a generic B2B buying-committee list, served ONLY when the
 # portal is too sparse to evidence one, and marked un-evidenced at every level so it can
@@ -196,7 +210,7 @@ def cluster_titles(distinct_titles: list) -> list:
     """ONE Anthropic Haiku call, plus at most one repair retry (D-2, CLAUDE.md §26.3:
     "Haiku invalid JSON -> Retry once with repair prompt"). Returns a list of {"label",
     "members"} dicts. Only called when the portal is NOT sparse (main() gates this per
-    D-62-07)."""
+    D-62-07), and only ever on the recurrence HEAD (D-1) -- the caller ranks first."""
     from anthropic import Anthropic
     from src.web_research import _extract_json  # reuse -- do not write a second parser
 
@@ -305,15 +319,41 @@ def build_portal_vocabulary(counts: Counter, head_n: int = HEAD_N) -> dict:
     }
 
 
-def _write_cache(vocabulary: dict, path: Path = CACHE_PATH) -> Path:
-    path.write_text(yaml.safe_dump(vocabulary, sort_keys=False))
-    return path
+def _write_cache(vocabulary: dict, path: Path = None) -> Path:
+    # `path` looked up against DERIVED_PATH at call time (not bound into the default
+    # value) so tests can monkeypatch the module-level constant.
+    target = path if path is not None else DERIVED_PATH
+    target.write_text(yaml.safe_dump(vocabulary, sort_keys=False))
+    return target
+
+
+def _print_drop_list(vocabulary: dict, derived_path: Path, shipped_path: Path = None) -> None:
+    """D-4's discharge of the highest-risk constraint: never let a derived run silently
+    look like a safe upgrade over the shipped, live-proven vocabulary. Read-only against
+    the shipped file -- never writes it. Tolerates the shipped file being absent (a fresh
+    checkout with no plugin config yet) by simply staying quiet."""
+    shipped_path = shipped_path if shipped_path is not None else CACHE_PATH
+    if not shipped_path.exists():
+        return
+    try:
+        shipped = yaml.safe_load(shipped_path.read_text(encoding="utf-8")) or {}
+    except yaml.YAMLError:
+        return
+
+    shipped_labels = {f.get("label") for f in (shipped.get("families") or []) if f.get("label")}
+    derived_labels = {f.get("label") for f in (vocabulary.get("families") or []) if f.get("label")}
+    dropped = sorted(shipped_labels - derived_labels)
+
+    if dropped:
+        print(f"adopting this file would drop {len(dropped)} families the shipped "
+              f"vocabulary carries: {', '.join(dropped)}")
+    print(f"To adopt: cp {derived_path} {shipped_path}")
 
 
 def main(argv=None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--dry-run", action="store_true",
-                         help="Print the would-be YAML to stdout without writing the cache.")
+                         help="Print the would-be YAML to stdout without writing anything.")
     parser.add_argument("--head", type=int, default=HEAD_N,
                          help=f"Recurrence head size to cluster (default {HEAD_N}, D-1).")
     args = parser.parse_args(argv)
@@ -347,6 +387,7 @@ def main(argv=None) -> int:
 
     path = _write_cache(vocabulary)
     print(f"wrote {path}")
+    _print_drop_list(vocabulary, path)
     return 0
 
 

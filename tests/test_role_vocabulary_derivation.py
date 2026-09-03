@@ -149,6 +149,7 @@ def test_two_unparseable_responses_raise_named_error(monkeypatch):
     with pytest.raises(role_vocabulary.RoleVocabularyDerivationError):
         role_vocabulary.cluster_titles(["Ops Manager"])
 
+
 # ============================== Task 2 ==============================
 
 def test_normalize_title_merges_html_entity_variants():
@@ -243,3 +244,93 @@ def test_sparse_path_never_constructs_anthropic_client(monkeypatch):
 
     assert rc == 0  # no AssertionError from _RaisingAnthropicClient escaped
 
+
+# ============================== Task 3 ==============================
+
+def test_full_stubbed_run_writes_derived_path_and_leaves_shipped_file_untouched(monkeypatch, tmp_path, capsys):
+    derived_path = tmp_path / "role_vocabulary.derived.yaml"
+    monkeypatch.setattr(role_vocabulary, "DERIVED_PATH", derived_path)
+
+    shipped_before = role_vocabulary.CACHE_PATH.read_bytes()
+
+    monkeypatch.setenv("HUBSPOT_PRIVATE_APP_TOKEN", "fake-token")
+    monkeypatch.setenv("HUBSPOT_PORTAL_ID", role_vocabulary.EXPECTED_PORTAL_ID)
+
+    non_sparse_counts = role_vocabulary.Counter({f"title-{i}": 1 for i in range(25)})
+    monkeypatch.setattr(role_vocabulary, "sweep_all_jobtitles", lambda: non_sparse_counts)
+    monkeypatch.setattr(
+        role_vocabulary, "cluster_titles",
+        lambda titles: [{"label": "Ops", "members": ["title-0"]}],
+    )
+
+    rc = role_vocabulary.main([])
+
+    assert rc == 0
+    assert derived_path.exists()
+    written = yaml.safe_load(derived_path.read_text())
+    assert written["families"][0]["label"] == "Ops"
+
+    shipped_after = role_vocabulary.CACHE_PATH.read_bytes()
+    assert shipped_after == shipped_before
+
+
+def test_default_write_path_is_not_the_plugin_read_path():
+    # Mirrors operator-claude-plugin/tests/conftest.py's own sys.path insert (the plugin
+    # scripts dir is also literally named `scripts`, which would otherwise shadow this
+    # repo's root-level `scripts` package) -- done locally here rather than importing
+    # that conftest, since this test lives in the ROOT suite, not the plugin's.
+    plugin_scripts_dir = str(role_vocabulary.ROOT / "operator-claude-plugin" / "scripts")
+    if plugin_scripts_dir not in sys.path:
+        sys.path.insert(0, plugin_scripts_dir)
+    import role_classify
+
+    assert role_vocabulary.DERIVED_PATH != role_classify.DEFAULT_VOCABULARY_PATH
+    assert role_vocabulary.DERIVED_PATH == role_vocabulary.CACHE_PATH.parent / "role_vocabulary.derived.yaml"
+
+
+def test_dry_run_creates_no_file_anywhere(monkeypatch, tmp_path):
+    derived_path = tmp_path / "role_vocabulary.derived.yaml"
+    monkeypatch.setattr(role_vocabulary, "DERIVED_PATH", derived_path)
+    monkeypatch.setenv("HUBSPOT_PRIVATE_APP_TOKEN", "fake-token")
+    monkeypatch.setenv("HUBSPOT_PORTAL_ID", role_vocabulary.EXPECTED_PORTAL_ID)
+
+    non_sparse_counts = role_vocabulary.Counter({f"title-{i}": 1 for i in range(25)})
+    monkeypatch.setattr(role_vocabulary, "sweep_all_jobtitles", lambda: non_sparse_counts)
+    monkeypatch.setattr(
+        role_vocabulary, "cluster_titles",
+        lambda titles: [{"label": "Ops", "members": ["title-0"]}],
+    )
+
+    before = set(tmp_path.iterdir())
+    rc = role_vocabulary.main(["--dry-run"])
+    after = set(tmp_path.iterdir())
+
+    assert rc == 0
+    assert before == after
+    assert not derived_path.exists()
+
+
+def test_drop_list_names_omitted_shipped_labels_and_prints_cp_command(monkeypatch, tmp_path, capsys):
+    shipped_path = tmp_path / "role_vocabulary.yaml"
+    shipped_path.write_text(yaml.safe_dump({
+        "families": [
+            {"label": "Chair", "members": ["Chairman"]},
+            {"label": "Treasurer", "members": ["Treasurer"]},
+        ]
+    }))
+    monkeypatch.setattr(role_vocabulary, "CACHE_PATH", shipped_path)
+    derived_path = tmp_path / "role_vocabulary.derived.yaml"
+
+    derived_vocabulary = {"families": [{"label": "Treasurer", "members": ["Treasurer"]}]}
+    role_vocabulary._print_drop_list(derived_vocabulary, derived_path)
+
+    out = capsys.readouterr().out
+    drop_line = next(line for line in out.splitlines() if "would drop" in line)
+    assert "Chair" in drop_line
+    assert "Treasurer" not in drop_line
+    assert f"cp {derived_path} {shipped_path}" in out
+
+
+def test_gitignore_contains_derived_path():
+    gitignore = (role_vocabulary.ROOT / ".gitignore").read_text()
+    assert "operator-claude-plugin/config/role_vocabulary.derived.yaml" in gitignore

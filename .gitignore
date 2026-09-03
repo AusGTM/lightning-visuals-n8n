@@ -17,3 +17,8 @@ operator-claude-plugin/state/dashboard_artifact.json
 # evidence pulled from stored n8n executions). Never committed; the verdict
 # artifact (input_id + sha256 only) is what ships.
 .judge-replay-corpus/
+
+# Quick task 260904-39r (G-62-5) — scripts/role_vocabulary.py's derived output. A run
+# artifact, not a deliverable: it is never merged into or auto-adopted over the shipped,
+# live-proven operator-claude-plugin/config/role_vocabulary.yaml (D-4).
+operator-claude-plugin/config/role_vocabulary.derived.yaml
