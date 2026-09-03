@@ -127,11 +127,6 @@
       "action": "The 17 cross-phase audit-uat items remain operator-gated",
       "context": "60/40/20 (6) need an armed HubSpot window; 62 (3) needs Lusha credits; 57 (2) and 16.9 (1) need judgement. UNCHANGED by this sweep \u2014 it added 11 disposition items of its own and closed none of these 17.",
       "blocking": false
-    },
-    {
-      "action": "Local commits are unpushed (master ahead of origin/master)",
-      "context": "Run `git rev-list --count origin/master..master` for the current number -- a precise stale count is worse than an honest moving one, which is this ledger's whole theme. It was 68 immediately after the 2026-09-03 disposition work and grows with every commit. Memory records an earlier push as blocked by insufficient permissions. The entire cross-phase sweep AND all eight disposition fixes exist ONLY on this machine.",
-      "blocking": false
     }
   ],
   "decisions": [
@@ -167,7 +162,7 @@
     }
   ],
   "uncommitted_files": [],
-  "next_action": "All 12 disposition items from the cross-phase audit sweep are now closed. The 2 remaining human_actions_pending rows are the 17 operator-gated audit-uat items (armed HubSpot window / Lusha credits / judgement) and the unpushed commits. Nothing left that code alone can close.",
+  "next_action": "All 12 audit-sweep dispositions are closed and all work is pushed to origin/master. The single remaining human_actions_pending row is the 17 operator-gated audit-uat items (armed HubSpot window / Lusha credits / judgement). Phase 60's verification is human_needed and is what blocks the milestone.",
   "context_notes": "This session completed a cross-phase audit sweep begun in a prior session: 14 retroactive secure-phase audits over 375 threats, plus nyquist validation. Every executed phase 46-63 now carries BOTH a SECURITY.md and a VALIDATION.md (verified 16/16). Both verify:post hooks were absent from .planning/config.json, DEFAULTED TO ENABLED, and were silently skipped for ~60 phases; both keys are now explicit. Three nyquist gaps found and all three filled: 47.5-G1 (no scheduled path carries a request-level flag \u2014 an edit adding recompute:true to SJ-3's dispatch event would flip the DAILY poller to recompute-on-every-tick, re-writing lv_anti_icp_flag across up to 100 companies per tick inside an armed window), 61-G1 (the enrichment lane's contact-create refusal had NO test \u2014 the cited test loads the other lane's workflow), 61-G2 (T-61-24's DROP branch \u2014 the existing test's docstring claims something it never asserts). Suites at close: pytest 3983 passed / 154 skipped; node 867 pass / 0 fail. No implementation file was modified by any gap-fill. Nothing is armed; the first live unattended credit-spending batch still has NOT run.",
   "human_actions_resolved": [
     {
@@ -229,6 +224,12 @@
       "context": "Stale doc after 57-02's D-57-03 reclassification. Not a functional gap.",
       "blocking": false,
       "resolved": "FIXED 2026-09-03. Comment corrected to state the actual difference between the two shapes."
+    },
+    {
+      "action": "Local commits are unpushed (master ahead of origin/master)",
+      "context": "Run `git rev-list --count origin/master..master` for the current number -- a precise stale count is worse than an honest moving one, which is this ledger's whole theme. It was 68 immediately after the 2026-09-03 disposition work and grows with every commit. Memory records an earlier push as blocked by insufficient permissions. The entire cross-phase sweep AND all eight disposition fixes exist ONLY on this machine.",
+      "blocking": false,
+      "resolved": "RESOLVED 2026-09-03: pushed. 70 commits landed on origin/master (now d45fa2b); verified by an independent re-fetch showing 0 ahead / 0 behind, not by the push's own output. The earlier permission block no longer applies."
     }
   ]
 }
