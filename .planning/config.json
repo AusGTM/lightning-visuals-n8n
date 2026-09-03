@@ -4,7 +4,7 @@
     "use_worktrees": false,
     "plan_review_convergence": true,
     "nyquist_validation": true,
-    "security_enforcement": false
+    "security_enforcement": true
   },
   "review": {
     "reviewer_instances": {
