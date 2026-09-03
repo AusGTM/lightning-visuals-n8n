@@ -1148,8 +1148,29 @@ def main(argv=None) -> int:
         return 0
 
     cfg = config_gate.load_config()
-    for rec in records:
-        run_armed_record(rec, cfg)
+    armed_entries = [run_armed_record(rec, cfg) for rec in records]
+
+    # Correction 3 is "record, don't assert" -- so the record has to land somewhere
+    # durable, or the correction is only half folded back. 47-armed-driver.py wrote
+    # 47-RUN-LOG.json for exactly this reason. --report is written BEFORE the armed loop
+    # (it is the dry-run plan), so it cannot carry armed outcomes; re-write it with them
+    # when the operator asked for a report, and always emit them on stdout, which this
+    # repo's run records capture.
+    print(json.dumps({"armed_records": armed_entries}, indent=2, default=str))
+    if args.report:
+        Path(args.report).write_text(json.dumps({
+            "resolved_ids": list(resolved_ids),
+            "writes_allowed": _writes_allowed(),
+            "records": records,
+            "armed_records": armed_entries,
+        }, indent=2, default=str))
+
+    diverged_from_oracle = [e["id"] for e in armed_entries if e["tier_diverged_from_oracle"]]
+    if diverged_from_oracle:
+        print(f"note: {len(diverged_from_oracle)} record(s) settled to a tier differing from "
+              f"the local oracle: {diverged_from_oracle}. Expected -- n8n's research lane "
+              f"resolves inputs after this script's patch (correction 3). Oracle-vs-live "
+              f"parity is Phase 49's scope.")
 
     print(f"armed run complete -- {len(records)} companies patched and settled.")
     return 0

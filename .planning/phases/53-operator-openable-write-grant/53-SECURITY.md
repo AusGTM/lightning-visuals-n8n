@@ -137,7 +137,7 @@ to fail when removed is worth more than one that merely passes.
 
 ## Bookkeeping Finding (not a security gap)
 
-`53-04-SUMMARY.md`'s frontmatter still reads `status: blocked-on-checkpoint`, with coverage item
+**RESOLVED 2026-09-03 by operator grant — the frontmatter now reads `status: complete` with G8 `DISCHARGED`; the finding below is kept as the record of what was wrong.** `53-04-SUMMARY.md`'s frontmatter still reads `status: blocked-on-checkpoint`, with coverage item
 G8 (the operator walk) marked `OUTSTANDING`. That checkpoint **was** discharged and independently
 verified — `53-VERIFICATION.md` (2026-09-02) and `53-WALK-RECORD-2.md` both record walk run 3 on
 2026-08-29. This audit relied on the verification record rather than the stale summary.

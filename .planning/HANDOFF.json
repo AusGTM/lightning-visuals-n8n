@@ -129,8 +129,8 @@
       "blocking": false
     },
     {
-      "action": "68 local commits are unpushed",
-      "context": "master is ahead of origin/master by 68 as of 2026-09-03. Memory records an earlier push as blocked by insufficient permissions. The entire cross-phase sweep AND all eight disposition fixes exist ONLY on this machine.",
+      "action": "Local commits are unpushed (master ahead of origin/master)",
+      "context": "Run `git rev-list --count origin/master..master` for the current number -- a precise stale count is worse than an honest moving one, which is this ledger's whole theme. It was 68 immediately after the 2026-09-03 disposition work and grows with every commit. Memory records an earlier push as blocked by insufficient permissions. The entire cross-phase sweep AND all eight disposition fixes exist ONLY on this machine.",
       "blocking": false
     }
   ],

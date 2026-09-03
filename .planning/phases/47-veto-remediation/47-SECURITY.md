@@ -239,9 +239,10 @@ Neither blocks. Both are named here rather than folded into an adjacent "closed"
 
 **The most valuable thing this phase's own record already did:** it *disclosed* the `main()`
 failure and the driver substitution in `47-04-SUMMARY.md` and `47-RUN-REPORT.md` rather than hiding
-them. T-47-08 is open not because the phase concealed anything, but because the **threat register
+them. T-47-08 was open not because the phase concealed anything, but because the **threat register
 was never updated to match what the disclosure said**. The honesty was in the summary; the register
-kept pointing at the code that did not run.
+kept pointing at the code that did not run. *(Closed 2026-09-03 — the register now matches, and so
+does the code: see "Resolution" above.)*
 
 ---
 

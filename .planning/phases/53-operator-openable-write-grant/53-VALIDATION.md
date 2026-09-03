@@ -146,7 +146,7 @@ pinned by current tests; no map row above describes retired behaviour as current
 
 ## Record-lag noted (not a gap)
 
-`53-04-SUMMARY.md` frontmatter still reads `status: blocked-on-checkpoint` with **G8 OUTSTANDING**.
+**RESOLVED 2026-09-03 by operator grant — the frontmatter now reads `status: complete` with G8 `DISCHARGED`; the finding below is kept as the record of what was wrong.** `53-04-SUMMARY.md` frontmatter still reads `status: blocked-on-checkpoint` with **G8 OUTSTANDING**.
 The checkpoint **was** discharged — `53-VERIFICATION.md` (`status: passed`, `gaps: []`,
 `verification_basis: operator_walk`), `53-WALK-RECORD-2.md` § "WALK RUN 3", walk run 3 on
 2026-08-29, and the phase marked complete in `ROADMAP.md` the same day. This is known record-lag,

@@ -105,7 +105,8 @@ phases. Both keys are now set explicitly and neither gates any phase on a missin
     accepted as AR-51-02, phase 51's COVERAGE scope line, 53-04's stale checkpoint field, and a
     stale test comment. One item needed no action. **Nothing from the sweep remains open.**
   - Still outstanding, and none of it closable by code: the 17 operator-gated `audit-uat` items
-    (armed HubSpot window / Lusha credits / judgement) and **68 unpushed commits**. Also: phase 48's "gate failed closed
+    (armed HubSpot window / Lusha credits / judgement) and the **unpushed commits** — 68 right
+    after this work; check `git rev-list --count origin/master..master` rather than trusting that number. Also: phase 48's "gate failed closed
   on the first attempt" claim is **unsupported** and should not be repeated; the threat closes on
   code plus test instead.
 
