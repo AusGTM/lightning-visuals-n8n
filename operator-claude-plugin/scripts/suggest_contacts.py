@@ -480,6 +480,43 @@ _RELATION_REASON_CODES = {
 }
 
 
+def _company_domain_set(company_website):
+    """The company's recorded domain(s), cleaned, de-duplicated, order preserved
+    (quick 260905-ad2, D-ad2-01/04).
+
+    Accepts one domain STRING or an iterable of them -- a company may legitimately
+    serve its mail from a second registrable domain (Roma Turf Club: site
+    `romaturfclub.com.au`, published contact address `INFO@romaturfclub.org.au`).
+
+    The `isinstance(value, str)` branch is load-bearing, not tidiness: a bare string
+    walked as an iterable would become one character per "domain", and a LIST handed
+    to `enrichment._clean_domain` would go through its `str(raw)` and come out as
+    `"['romaturfclub.com.au']"` -- a string with a dot in it, which reads as a
+    *mismatch* against a real email instead of `company_domain_unknown` (T-ad2-03).
+
+    A member that cleans to `None`, or to a dotless host, is dropped -- the same
+    usability test `email_domain_relation` applied inline before. An input yielding no
+    usable member returns `[]`, and every caller treats that as
+    `company_domain_unknown`, never as a mismatch (D-ad2-04).
+
+    Order is the input's, so an UNORDERED input (a set) gives an unordered reason
+    string; pass a list if the reason text's order matters."""
+    if company_website is None:
+        values = []
+    elif isinstance(company_website, str):
+        values = [company_website]
+    else:
+        values = list(company_website)
+
+    domains = []
+    for value in values:
+        cd = enrichment._clean_domain(value)
+        if cd is None or "." not in cd or cd in domains:
+            continue
+        domains.append(cd)
+    return domains
+
+
 def email_domain_relation(email, company_website):
     """One of `"no_email"`, `"freemail"`, `"company_domain_unknown"`, `"related"`,
     `"mismatch"` -- evaluated in that order (62-12, G-62-7, operator ruling
@@ -522,6 +559,18 @@ def email_domain_relation(email, company_website):
     fetch-guard's port semantics here would borrow the wrong invariant.
 
     No public-suffix / registrable-domain dependency is used or considered.
+
+    `company_website` may be ONE domain or SEVERAL (quick 260905-ad2, D-ad2-02): a
+    company can legitimately carry more than one known domain, and an email on any of
+    them is related. Each member is matched by the single-directional rule above,
+    unchanged -- `any(ed == cd or ed.endswith("." + cd) for cd in cds)`. Nothing about
+    the rule itself is loosened: no eTLD-sibling, shared-registrable-label, or
+    public-suffix logic is introduced, because `<label>.com.au` and `<label>.org.au`
+    are separately registrable in Australia and can be different organisations -- which
+    is how `craig.smith@thehartford.com` was correctly held in the same live round.
+    Roma passes only because the OPERATOR supplied `romaturfclub.org.au` alongside the
+    recorded `romaturfclub.com.au` (D-ad2-03: alternates are operator-supplied only;
+    nothing is harvested from a crawled page, a `mailto:`, or an enriched email).
     """
     stripped = str(email or "").strip().lower()
     if "@" not in stripped:
@@ -531,13 +580,13 @@ def email_domain_relation(email, company_website):
         return "no_email"
     if raw in enrichment.FREEMAIL_DOMAINS:
         return "freemail"
-    cd = enrichment._clean_domain(company_website)
-    if cd is None or "." not in cd:
+    cds = _company_domain_set(company_website)
+    if not cds:
         return "company_domain_unknown"
     ed = enrichment._clean_domain(raw)
     if ed is None:
         return "mismatch"
-    if ed == cd or ed.endswith("." + cd):
+    if any(ed == cd or ed.endswith("." + cd) for cd in cds):
         return "related"
     return "mismatch"
 
@@ -555,10 +604,13 @@ def _relation_reason(relation, email, company_website):
             f"legible"
         )
     if relation == "mismatch":
-        cd = enrichment._clean_domain(company_website)
-        if cd is None:
+        # D-ad2-05: name every domain that was compared, so the operator can see
+        # whether an alternate is still missing. One domain reproduces the pre-260905
+        # string byte for byte -- which is why the join engages only at two or more.
+        cds = _company_domain_set(company_website)
+        if not cds:
             return f"email domain {domain} does not match this company's recorded domain"
-        return f"email domain {domain} does not match {cd}"
+        return f"email domain {domain} does not match {' or '.join(cds)}"
     if relation == "company_domain_unknown":
         if not company_website:
             return (
@@ -586,7 +638,12 @@ def partition_for_dispatch(rows, company_domains):
 
     `company_domains` maps a company NAME (normalised the same way `select_people`'s
     dedupe already normalises names -- case-folded, whitespace-collapsed) to that
-    company's recorded `website`/`domain` string. It is REQUIRED, with no default: an
+    company's recorded `website`/`domain`. The VALUE may be one domain string or an
+    iterable of them (quick 260905-ad2, D-ad2-01): a company can carry more than one
+    known domain, each matched by the same unchanged equality-or-subdomain rule, and
+    an alternate is added ONLY because the operator named it (D-ad2-03) -- no code
+    path harvests one from a crawled page, a `mailto:`, or an enriched email. The
+    map's REQUIRED-ness is unchanged, with no default: an
     optional argument here would be a one-keyword bypass of the operator's ruling. A
     row whose company is absent from the map, or whose recorded value cannot be turned
     into a domain, is held with `reason_code: "company_domain_unknown"` -- never sent.
