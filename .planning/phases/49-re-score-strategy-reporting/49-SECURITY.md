@@ -63,7 +63,9 @@ Consolidated from the seven PLAN threat models.
 
 ## Threat Register
 
-42 threats, `T-49-01` … `T-49-42`.
+43 threats, `T-49-01` … `T-49-43`. The first 42 are the phase's own plan-time register; **T-49-43
+was added retrospectively on 2026-09-03** by operator grant, as the threat class Divergence 1
+proposed — see "Cross-cutting" below and "Divergence dispositions — granted".
 
 ### 49-01 — the dry re-score plan lane
 
@@ -335,7 +337,8 @@ pre-existing untracked paths throughout.
 
 ## Sign-Off
 
-- [x] All 42 threats have a disposition (38 mitigate, 4 accept, 0 transfer)
+- [x] All 43 threats have a disposition (39 mitigate, 4 accept, 0 transfer) — 42 at plan time,
+      plus T-49-43 registered retrospectively 2026-09-03
 - [x] Accepted risks documented in Accepted Risks Log (AR-49-01 … AR-49-04)
 - [x] `threats_open: 0` confirmed — nothing at or above `high` is open
 - [x] `status: verified` set in frontmatter

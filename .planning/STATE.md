@@ -83,11 +83,22 @@ phases. Both keys are now set explicitly and neither gates any phase on a missin
   load-bearing property documented as fact with nothing failing if it were violated.
 - Suites at close: pytest **3983 passed / 154 skipped**; node **867 pass / 0 fail**. No
   implementation file was modified by any gap-fill.
-- **11 items now await operator disposition**, all non-blocking, listed in the three new
-  `*-SECURITY.md` files. The load-bearing ones: phase 49's **direct-library bypass** — a threat
-  class worth registering, since `batch_update_companies` carries neither the arm-key gate nor the
-  scope gate — and its **missing `.planning/WINDOWS.md` row**, the shape ledger row 16 exists to
-  warn about (*a per-phase disclosure is not a ledger entry*). Also: phase 48's "gate failed closed
+- **11 items awaited operator disposition** at the sweep's close, all non-blocking, listed in the
+  three new `*-SECURITY.md` files. **The two load-bearing ones are now FIXED (2026-09-03)** — the
+  operator granted both:
+  - Phase 49's **direct-library bypass** is closed. `batch_update_companies` carried neither the
+    arm-key gate nor the scope gate; it now carries both (`a4de6f4`, registered as **T-49-43**).
+    `src/hubspot_client.py` gained `BATCH_WRITE_ARM_KEYS` + `_batch_write_armed()` (`DRY_RUN=false`
+    AND one of four registered arm keys) and a `FORBIDDEN_PROPS` floor, five perturbation-proved
+    refusal tests. Deliberately generalized rather than a literal move of
+    `rescore_population._writes_allowed()`, which hardcodes one driver's key and would have refused
+    the other three drivers' armed runs.
+  - Its **missing `.planning/WINDOWS.md` row** is registered as **id 28** (`e313f6b`), left `open`
+    because the audit named waive-vs-fix the operator's discretion. Two pre-existing ledger defects
+    were repaired to append at all: ids 23/24 carried an out-of-schema `status: "resolved"` that
+    stopped `gsd-tools windows` loading the file, and the markdown table was stale by three entries
+    (JSON held 25/26/27, table stopped at 24, counts computed from the stale table).
+  - **9 of the original 11 remain**, plus the 17 operator-gated `audit-uat` items. Also: phase 48's "gate failed closed
   on the first attempt" claim is **unsupported** and should not be repeated; the threat closes on
   code plus test instead.
 
