@@ -352,7 +352,13 @@ def _print_drop_list(vocabulary: dict, derived_path: Path, shipped_path: Path = 
     """D-4's discharge of the highest-risk constraint: never let a derived run silently
     look like a safe upgrade over the shipped, live-proven vocabulary. Read-only against
     the shipped file -- never writes it. Tolerates the shipped file being absent (a fresh
-    checkout with no plugin config yet) by simply staying quiet."""
+    checkout with no plugin config yet) by simply staying quiet.
+
+    Quick task 260904-447: adopting the derived file over the curated one was considered
+    live on 2026-09-04 and REJECTED -- the derived output is portal-wide-recurrence-only
+    and drops every racing-governance family the curated file carries. Before acting on
+    the `cp` command this function prints, read
+    .planning/decisions/2026-09-04-derived-role-vocabulary-rejected.md."""
     shipped_path = shipped_path if shipped_path is not None else CACHE_PATH
     if not shipped_path.exists():
         return
