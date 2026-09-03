@@ -301,15 +301,19 @@ and what `enrich-before-ingest/SKILL.md` already calls.
        # `people` below is whatever that approved fetch actually returned, and
        # `attempts` is this company's own record, each entry carrying a `disposition`
        # per step 5's table.
-       verdict = search_fallback.eligible_after_ladder(attempts)
+       source_rank = None          # a ladder-found person's provenance is unchanged
+       if not people:
+           # Only a ladder that found NOBODY asks this question at all.
+           verdict = search_fallback.eligible_after_ladder(attempts)
        if not people and verdict["eligible"]:
            # Absence of information, not a fence (D-5sd-04, D-5sd-06). `results` is what
            # your own web search returned, written to a scratch file and read back; the
            # ranker reads the URL host ONLY, so a snippet is never a source for a field.
            ranked = search_fallback.rank_results(results, plan["pasted_url"])
-           # web_fetch ONLY ranked["accepted"], in rank order. `people`, `fetched_url`
-           # and `source_rank` below then come from the page actually fetched -- a
-           # rank-3 accept still yields people, and step 8's gate is what holds them.
+           # web_fetch ONLY ranked["accepted"], in rank order, then set `people`,
+           # `fetched_url` and `source_rank` from the page ACTUALLY fetched and the
+           # accepted entry it came from -- a rank-3 accept still yields people, and
+           # step 8's gate is what holds them.
        selection = suggest_contacts.select_people(
            people, vocabulary["families"], chosen_families, known_contacts)
        # The accepted entry's own rank is the FIFTH argument; a ladder-found person
