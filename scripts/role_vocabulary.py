@@ -405,11 +405,19 @@ def main(argv=None) -> int:
               f"threshold of {SPARSE_THRESHOLD}. Serving the disclosed generic fallback.")
     else:
         vocabulary = build_portal_vocabulary(counts, head_n=args.head)
-        print(f"CLUSTERED: {len(counts)} distinct jobtitle values into "
-              f"{len(vocabulary['families'])} top families.")
+        # Says "read" not "clustered": only the recurrence head is clustered (the HEAD
+        # COVERAGE line above reports how much), and the old wording claimed all of them.
+        print(f"READ {len(counts)} distinct jobtitle values; clustered the recurrence head "
+              f"into {len(vocabulary['families'])} top families.")
 
     if args.dry_run:
         print(yaml.safe_dump(vocabulary, sort_keys=False))
+        # Quick task 260904-39r UAT, 2026-09-04: the drop-list used to print only on the
+        # writing path, so `--dry-run` -- the mode you evaluate an adoption IN -- showed the
+        # derived families with no warning that adopting them drops curated ones. That is
+        # backwards: the disclosure matters MOST before anything is written. Printed here
+        # against DERIVED_PATH, the file a real run WOULD write; nothing is written now.
+        _print_drop_list(vocabulary, DERIVED_PATH)
         return 0
 
     path = _write_cache(vocabulary)

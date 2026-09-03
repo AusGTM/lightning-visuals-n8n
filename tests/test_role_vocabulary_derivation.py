@@ -360,6 +360,42 @@ def test_dry_run_creates_no_file_anywhere(monkeypatch, tmp_path):
     assert not derived_path.exists()
 
 
+def test_dry_run_prints_the_drop_list_too(monkeypatch, tmp_path, capsys):
+    """Quick task 260904-39r UAT, 2026-09-04. `--dry-run` is the mode an operator EVALUATES
+    an adoption in, and it used to return before `_print_drop_list` — so it showed the
+    derived families with no warning that adopting them drops curated ones. The disclosure
+    matters most before anything is written, not only after."""
+    shipped_path = tmp_path / "role_vocabulary.yaml"
+    shipped_path.write_text(yaml.safe_dump({
+        "families": [
+            {"label": "Chair", "members": ["Chairman"]},
+            {"label": "Ops", "members": ["title-0"]},
+        ]
+    }))
+    derived_path = tmp_path / "role_vocabulary.derived.yaml"
+    monkeypatch.setattr(role_vocabulary, "CACHE_PATH", shipped_path)
+    monkeypatch.setattr(role_vocabulary, "DERIVED_PATH", derived_path)
+    monkeypatch.setenv("HUBSPOT_PRIVATE_APP_TOKEN", "fake-token")
+    monkeypatch.setenv("HUBSPOT_PORTAL_ID", role_vocabulary.EXPECTED_PORTAL_ID)
+
+    non_sparse_counts = role_vocabulary.Counter({f"title-{i}": 1 for i in range(25)})
+    monkeypatch.setattr(role_vocabulary, "sweep_all_jobtitles", lambda: non_sparse_counts)
+    monkeypatch.setattr(
+        role_vocabulary, "cluster_titles",
+        lambda titles: [{"label": "Ops", "members": ["title-0"]}],
+    )
+
+    rc = role_vocabulary.main(["--dry-run"])
+    out = capsys.readouterr().out
+
+    assert rc == 0
+    drop_line = next(line for line in out.splitlines() if "would drop" in line)
+    assert "Chair" in drop_line
+    assert f"cp {derived_path} {shipped_path}" in out
+    # still writes nothing — the disclosure is printed against the path a real run WOULD use
+    assert not derived_path.exists()
+
+
 def test_drop_list_names_omitted_shipped_labels_and_prints_cp_command(monkeypatch, tmp_path, capsys):
     shipped_path = tmp_path / "role_vocabulary.yaml"
     shipped_path.write_text(yaml.safe_dump({
