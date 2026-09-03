@@ -453,3 +453,40 @@ and it held.
     crash in a shipped script, and because until it works this portal cannot have an evidenced
     vocabulary at all. Sequencing is the operator's call.
   debug_session: ""
+
+## G-62-2 — independent adversarial check of the shipped guard (2026-09-04)
+
+Run by the orchestrator against the shipped `url_fallback.same_host` after 62-10 landed, not
+by the plan's own tests. Pure string-building, no network. 13 asserted cases, 0 unexpected:
+
+    ok   recorded www -> apex (the measured Gladstone case)      True
+    ok   reverse: recorded apex -> www                           True
+    ok   evil.gladstoneturfclub.com.au.attacker.tld  SUFFIX TRAP False
+    ok   board.gladstoneturfclub.com.au (real subdomain)         False
+    ok   www.x.example:8080 vs x.example (differing port)        False
+    ok   www.x.example:8080 vs x.example:8080 (same port)        True
+    ok   www.com vs com (dotless remainder)                      False
+    ok   www.www.x.example vs www.x.example (one label only)     False
+    ok   trailing dot: www.example.com. vs example.com           False
+    ok   uppercase WWW.Example.COM vs example.com                True
+    ok   IPv6 literal [2001:db8::1] vs 2001:db8::1               False
+    ok   example.com vs example.com.evil.tld (apex is a prefix)  False
+    ok   www-example.com vs example.com (hyphen is not a label)  False
+
+The five shapes 62-10 recorded as UNPINNED were included deliberately; four behave safely and
+are now measured rather than assumed.
+
+**Two behaviours recorded, not asserted:**
+
+- `user@www.example.com` vs `example.com` -> **refused**. Conservative and safe; userinfo makes
+  the authorities unequal and the `www.` prefix test never fires.
+- `192.168.0.1` vs `www.192.168.0.1` -> **treated as the SAME host**. This is a genuine, minor
+  over-match: stripping `www.` leaves `192.168.0.1`, which contains dots, so the dot rule does
+  not catch it — but `www.192.168.0.1` is a hostname, not that IP address. Not reopened,
+  because reaching it needs a company recorded in HubSpot with a bare IP as its website AND a
+  sitemap on it pointing at a www-prefixed variant of itself. Recorded so a future widening of
+  `_canonical_authority` starts from a known list rather than rediscovering it.
+
+Regression after the full round: 2339 plugin, 1727 root pytest (149 skipped), 867 node — all
+passing. `git status --porcelain n8n/ scripts/build_cloud_workflows.py` silent. The three
+`scripts/uat62_*.py` diagnostics are gone.
