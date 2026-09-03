@@ -79,6 +79,13 @@ over the same n8n system, so its version says nothing about backend capability.
   (`source_tier`) is unchanged; the split is documented at both ends so nobody "fixes"
   the apparent inconsistency.
 
+- **A latent trip to know about before editing the skill body.** `search_fallback.py`'s
+  own internal `why` / `reason` strings, and the `tier` key on each accepted result, still
+  use the word. Nothing in `skills/suggest-contacts/SKILL.md` surfaces them today — step 9
+  quotes the held row's own reason, which says "rank" — but a future edit that started
+  printing a raw `rank_results` reason would trip the guard. If that happens the fix is to
+  translate at the boundary, not to widen the guard.
+
 ## [0.38.4] - 2026-09-04
 
 ### Fixed

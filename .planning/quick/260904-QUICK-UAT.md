@@ -11,6 +11,13 @@ started: 2026-09-04T19:40:00Z
 updated: 2026-09-04T19:40:00Z
 ---
 
+<!-- On the two statuses for 260904-5sd. Its STATE.md row reads `Verified` and this file
+     reads `partial`; both are correct and they measure different things. `Verified` is the
+     gsd-verifier's verdict on the plan's must_haves (11/11, offline, against the codebase).
+     `partial` is this UAT's verdict, which additionally wants test 8 — the fallback exercised
+     on a real company — and nothing but an operator run can supply that. Do not reconcile
+     these to one value. -->
+
 ## Current Test
 
 number: 7

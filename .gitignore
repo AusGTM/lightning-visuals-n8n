@@ -22,3 +22,8 @@ operator-claude-plugin/state/dashboard_artifact.json
 # artifact, not a deliverable: it is never merged into or auto-adopted over the shipped,
 # live-proven operator-claude-plugin/config/role_vocabulary.yaml (D-4).
 operator-claude-plugin/config/role_vocabulary.derived.yaml
+
+# GSD writes this per-run cursor (next command, updated_at, a phase mirror of STATE.md).
+# Generated, churns on every command, and has never been committed in this repo — ignoring it
+# so it stops reading as an untracked change on every `git status`.
+.planning/state.json
