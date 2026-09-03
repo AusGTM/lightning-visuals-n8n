@@ -16,6 +16,48 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.39.2] - 2026-09-05
+
+### Fixed
+
+- **A club that publishes one-word departmental job titles was unreachable by any role
+  selection.** First live `suggest-contacts` round, Brisbane Roar FC (company
+  `285507657175`, 2026-09-04): the discovery ladder worked, finding three named staff on
+  the club's own `/about/contact-us/` page — Jordan Hayward (`Marketing`), Joseph Esposito
+  (`Media`), Emma Hoadley (`Sponsorship`). The role filter classified all three to
+  `None` and the round yielded **0 selected**. Only an operator override rescued it, and
+  the two overridden people then enriched cleanly and landed as created+associated
+  contacts, so everything downstream of the filter was already fine.
+
+  Fixed in the shipped curated vocabulary (`config/role_vocabulary.yaml`) by appending
+  three new ungraded families — `Marketing`, `Media`, `Sponsorship`, one bare member
+  each. `role_classify.py` is unchanged.
+
+- **The matcher change was measured and rejected, not merely preferred against.** The
+  tempting alternative — accept a single-token title against a family whose *label* starts
+  with that token — was measured against the shipped vocabulary: labels beginning
+  `marketing` are `['Marketing Manager']`, and labels beginning `media` or `sponsorship`
+  are **empty**. It fixes 1 of the 3 proven-live cases, would still need a vocabulary edit
+  for the other two, and widens every existing family's reach to buy that third.
+
+- **The new families are appended at the END of the file, and that position is
+  load-bearing.** `classify_title` takes the longest matching member and breaks an
+  equal-length tie by family order. Measured, each variant on its own: a bare `Marketing`
+  or `Media` member placed in `Head of Marketing`, `Marketing Manager`, `Head of
+  Broadcast` or `Communications Manager` (all at index 3–7) flips `Marketing Director` and
+  `Media Director` off `Board & Committee` (index 11). Appended at the end, nothing moves.
+  A frozen 13-row `title -> label` snapshot test now pins this, so a future reorder fails
+  loudly rather than silently re-routing people. A permanent collision guard also forbids
+  any single-token member from belonging to two families.
+
+- **The honest limit.** `select_people` admits a person only when the classified label is
+  in the operator's round-level `chosen_families`. This does not retroactively make that
+  Brisbane Roar round yield 3 — it makes a selection that yields 3 *possible*, where
+  before no selection could. The operator must tick the new `Marketing` / `Media` /
+  `Sponsorship` entries, which `offer_block` now lists. The vocabulary remains
+  `evidenced: false` (`source: generic_fallback`): it is still a generic list, not one
+  derived from this portal's own contacts.
+
 ## [0.39.1] - 2026-09-04
 
 ### Added

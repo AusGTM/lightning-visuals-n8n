@@ -76,3 +76,36 @@ that this richer title and a `seniority` of Director were both discovered and th
 Red first, against the SHIPPED vocabulary: `classify_title("Marketing", families)` returns
 a marketing family, `"Media"` returns a broadcast/communications family, and no existing
 passing classification changes. Offline, no live calls.
+
+---
+
+## Closed by quick task 260905-rf1 (2026-09-05)
+
+Candidate (1) taken — vocabulary only, `role_classify.py` untouched. Three ungraded
+families appended at the END of `operator-claude-plugin/config/role_vocabulary.yaml`,
+one bare member each: **`Marketing`** (Jordan Hayward), **`Media`** (Joseph Esposito),
+**`Sponsorship`** (Emma Hoadley). Shipped as plugin `0.39.2`.
+
+Candidate (2), the label-prefix matcher change, was **measured and rejected**: labels
+beginning `marketing` are `['Marketing Manager']`, labels beginning `media` or
+`sponsorship` are empty — it fixes 1 of the 3 live cases and widens every family to buy
+it. The collision audit this todo asked for came back clean and is now a permanent test.
+
+Append-at-end is load-bearing: a bare member in any graded marketing/media family flips
+`Marketing Director` and `Media Director` off `Board & Committee` on the one-token tie.
+A frozen 13-row snapshot test pins it.
+
+**Deliberately NOT done:**
+
+- The other four short forms this todo lists — `communications`, `commercial`,
+  `operations`, `finance`. None was observed live; `communications`/`operations` would
+  tie-flip in their existing graded families. One YAML append away if a later sitting
+  measures them.
+- The enriched-title mitigation (classify against the richer enriched title rather than
+  the scraped one). It stays with
+  `.planning/todos/pending/2026-09-04-phone-is-never-chased-only-accepted.md`, the todo
+  recording that the richer title and seniority were both discovered and then dropped.
+
+**Honest limit:** this does not retroactively make the Brisbane Roar round yield 3. It
+makes a selection that yields 3 possible, where before no selection could — the operator
+must tick the new entries, which `offer_block` now lists.
