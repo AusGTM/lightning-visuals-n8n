@@ -5,10 +5,10 @@ milestone_name: Unattended Session Runs
 current_phase: 60
 current_phase_name: Review-lane authority
 status: executing
-stopped_at: Phase 63 complete, ready to plan Phase 60
-last_updated: "2026-09-03T03:40:04.981Z"
+stopped_at: Cross-phase security+nyquist sweep complete (18/18); Phase 60 next by roadmap order
+last_updated: "2026-09-03T06:48:14.504035Z"
 last_activity: 2026-09-03
-last_activity_desc: Phase 63 complete, transitioned to Phase 60
+last_activity_desc: Cross-phase audit sweep complete — all 46-63 have SECURITY.md + VALIDATION.md
 state_head: e7bfa34c6de5284e02aa61d748dca59bf7e4497a
 progress:
   total_phases: 13
@@ -71,11 +71,32 @@ The first live UNATTENDED, credit-spending batch has NOT run and is gated on Pha
 v1.0's). Suites at close: root python 3539 passed / 154 skipped; `node --test tests/n8n/*.test.mjs`
 844 pass / 0 fail.
 
+**Cross-phase audit sweep — COMPLETE 2026-09-03 (18/18 tasks, commits `cbb5212`, `6652afc`,
+`18a8c18`).** Not phase work. Every executed phase **46–63 now carries BOTH a `SECURITY.md` and a
+`VALIDATION.md`** — both `verify:post` hooks (`security_enforcement`, `nyquist_validation`) were
+absent from `.planning/config.json`, **defaulted to enabled**, and were silently skipped for ~60
+phases. Both keys are now set explicitly and neither gates any phase on a missing file.
+
+- **14 security audits, 375 threats.** Five distinct failure shapes found, none of which a passing
+  suite would catch — every one a case where the RECORD and the CODE disagreed.
+- **3 nyquist gaps found, 3 filled, each perturbation-proved** (47.5 G1, 61 G1, 61 G2). Each was a
+  load-bearing property documented as fact with nothing failing if it were violated.
+- Suites at close: pytest **3983 passed / 154 skipped**; node **867 pass / 0 fail**. No
+  implementation file was modified by any gap-fill.
+- **11 items now await operator disposition**, all non-blocking, listed in the three new
+  `*-SECURITY.md` files. The load-bearing ones: phase 49's **direct-library bypass** — a threat
+  class worth registering, since `batch_update_companies` carries neither the arm-key gate nor the
+  scope gate — and its **missing `.planning/WINDOWS.md` row**, the shape ledger row 16 exists to
+  warn about (*a per-phase disclosure is not a ledger entry*). Also: phase 48's "gate failed closed
+  on the first attempt" claim is **unsupported** and should not be repeated; the threat closes on
+  code plus test instead.
+
 **Next action (2026-09-03): every remaining item needs the operator, not another phase.** With 63
 closed, all 17 items in `gsd_run query audit-uat` are operator-gated: **60, 40, 20** (6 items) need
 an armed HubSpot write window; **62** (3 items) needs a Lusha credit spend; **57** (2) and **16.9**
 (1) need operator judgment. There is nothing left that code alone can close — 63's backstop was the
-last one, and it is done.
+last one, and it is done. The audit sweep above did not change that count; it added 11 disposition
+items of its own, none blocking.
 ~~Next action: finish Phase 62's live UAT (`/gsd-verify-work 62`), or plan Phase 63.~~ — superseded,
 63 completed 2026-09-03.
 ~~Next action: plan Phase 57.~~ — superseded, 57 completed 2026-09-01.
