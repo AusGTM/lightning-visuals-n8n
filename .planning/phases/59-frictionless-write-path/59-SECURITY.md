@@ -3,10 +3,11 @@ phase: "59"
 slug: "frictionless-write-path"
 status: verified
 # threats_open = count of OPEN threats at or above workflow.security_block_on severity (high).
-# T-59-06 is OPEN but `low`, so it is below the blocking threshold and is NOT counted here.
-# It is deliberately NOT recorded as closed — see "The Open Threat" below.
+# T-59-06 was found OPEN by this audit (an acceptance whose rationale a later plan in the same
+# phase invalidated). It was carried to the operator rather than re-accepted by the audit, and
+# re-accepted on true terms the same day as AR-59-04. Nothing is outstanding.
 threats_open: 0
-threats_open_below_threshold: 1
+threats_open_below_threshold: 0
 asvs_level: 1
 created: "2026-09-03"
 ---
@@ -30,10 +31,14 @@ created: "2026-09-03"
 
 ---
 
-## The Open Threat — T-59-06, and why it is not being closed
+## T-59-06 — an invalidated acceptance, found by this audit and re-accepted on true terms
 
-**A phase-internal contradiction: an accepted risk whose stated rationale was invalidated by a
-later plan in the same phase, three days later, and never revisited.**
+**Resolved 2026-09-03 by operator decision. Closed on a fresh acceptance (AR-59-04), not on the
+original rationale.** The history is kept in full below because the *reason* the original
+acceptance was wrong is the useful part.
+
+**The contradiction: an accepted risk whose stated rationale was invalidated by a later plan in
+the same phase, three days later, and never revisited.**
 
 59-01 accepted T-59-06 (unbounded artifact growth, `low`) on this rationale:
 
@@ -53,21 +58,20 @@ Files accumulate, one per dispatch run, with no retention mechanism anywhere in 
 `durable_paths.py`). Neither `59-VERIFICATION.md`, `59-REVIEW.md` nor the CHANGELOG revisits the
 acceptance against the new risk shape.
 
-**Why it stays open rather than being re-accepted here.** Re-writing the rationale would be this
-audit self-authoring an acceptance on the operator's behalf — the acceptance is the operator's to
-give, and an accepted risk whose justification an auditor quietly repaired is worth less than an
-open one that is honestly labelled. The auditor declined to do it and so does this record.
+**Why the audit did not re-accept it on its own authority.** Rewriting the rationale would have
+been the audit self-authoring an acceptance on the operator's behalf. The acceptance is the
+operator's to give, and an accepted risk whose justification an auditor quietly repaired is worth
+less than an open one honestly labelled. The auditor declined; so did the first pass of this
+record. It was carried to the operator as an open item with two named fixes — a fresh acceptance,
+or the retention 59-08 deferred rather than rejected.
 
-**Why it does not block.** Severity is genuinely `low`: `0600`-permissioned, non-PII JSON files
-accumulating on the operator's own local machine, one per run, with no attacker-reachable path.
-`block_on` is `high`, so `threats_open` (the blocking count) is **0** and the phase is not gated.
+**How it was resolved.** The operator chose the fresh acceptance (AR-59-04 below), on 2026-09-03.
+The risk is accepted on its **true** current shape, not on 59-01's superseded sentence. Retention
+remains available as a future change; declining it now is a decision, not an oversight.
 
-**Two ways to close it, either of which is a real fix:**
-
-1. Record a **fresh, honest acceptance** reflecting the true current shape — N files, one per run,
-   unbounded, small, local, non-PII — replacing 59-01's now-false sentence.
-2. Add **retention or pruning** to `written_records.py`, which 59-08 explicitly deferred rather
-   than rejected.
+**Severity was never blocking.** `low`: `0600`-permissioned, non-PII JSON accumulating on the
+operator's own local machine, one file per run, with no attacker-reachable path. `block_on` is
+`high`, so this never counted toward `threats_open`.
 
 ---
 
@@ -103,7 +107,7 @@ accumulating on the operator's own local machine, one per run, with no attacker-
 | T-59-03 | Tampering | a partially-written artifact read as complete | medium | mitigate | Atomic write (above); `load()`/`_entries_from_document` (`:426-438`) degrade a malformed or half-written document to `None` → `[]` **as a whole**, never partially. | closed |
 | T-59-04 | Denial of Service | an artifact write failure halting a live HubSpot run | high | mitigate | `append_chunk` catches `OSError` and returns `False` (`:516-518`); `dispatch_plan` additionally guards both a raised `WrittenRecordsError` **and** the falsey return in one `try`/`except` (hardened by 59-09/D-59-10). Bookkeeping cannot stop a live run. | closed |
 | T-59-05 | Repudiation | the artifact claiming a write the backend refused | high | mitigate | `outcome_for_action`/`classify_item` map `write_blocked`→`GATED`, `review`/`needs_match_review`→`HELD`, `skip`/`proposed`→`NO_ACTION` — **never** `WRITTEN`; a `create` with no id becomes `CREATED_ID_UNKNOWN`, never a fabricated id (`:139-270`). | closed |
-| **T-59-06** | **Denial of Service** | **unbounded artifact growth** | **low** | **accept (rationale invalidated)** | **See "The Open Threat" above. 59-01's acceptance rested on one-file-replaced-per-run; 59-08/D-59-09 shipped one-file-per-run with no retention. Not re-accepted by this audit.** | **open — below `high` threshold (non-blocking)** |
+| T-59-06 | Denial of Service | unbounded artifact growth | low | accept (**re-accepted on fresh terms**) | 59-01's acceptance rested on one-file-replaced-per-run; 59-08/D-59-09 shipped one-file-**per**-run with no retention, invalidating it. Surfaced by this audit and re-accepted by the operator on the true shape — see AR-59-04 and the section above. | closed (accepted) |
 | T-59-SC | Tampering | npm/pip/cargo installs | high | accept | `git log` on `requirements.txt`/`package.json` shows no touch since Phase 23 (`460c048`), before phase 59. | closed (accepted) |
 
 ### 59-02 — The ambient-credential test guard
@@ -204,8 +208,7 @@ accumulating on the operator's own local machine, one per run, with no attacker-
 | AR-59-02 | T-59-14 | `write_grant._consequence`'s signature takes only lane names, id/domain counts and a boolean; it reads no config value. | plan-time disposition, re-confirmed this audit | 2026-09-03 |
 | AR-59-03 | T-59-17 | Inherent to the Claude Code `SessionStart` hook mechanism. Mitigated by the script being a fixed-string echo with no external-input interpolation and no execution of anything it reads — confirmed by a live minimal-environment subprocess run. | plan-time disposition, re-confirmed this audit | 2026-09-03 |
 
-**No AR is recorded for T-59-06.** That is deliberate: see "The Open Threat" above. Adding one here
-would be this audit granting an acceptance that is the operator's to grant.
+| AR-59-04 | T-59-06 | **Replaces 59-01's invalidated rationale.** The written-records artifact is no longer one replaced file — since 59-08/D-59-09 it is **one file per `run_id`, never replaced, with no retention or pruning**, so files accumulate for the life of the install. Accepted on that true shape: each file is `0600`-permissioned, holds HubSpot object ids, actions and outcomes but **no PII and no secrets by construction** (`_FORBIDDEN_NAME_MARKERS` sweep, T-59-02), is small, and lives only on the operator's own local machine with no attacker-reachable path. Growth is bounded in practice by how often the operator dispatches. Retention was **deferred, not rejected**, by 59-08 and remains available as a future change; declining it now is a decision rather than an oversight. | operator, 2026-09-03, on this audit's finding | 2026-09-03 |
 
 ---
 
@@ -213,7 +216,7 @@ would be this audit granting an acceptance that is the operator's to grant.
 
 | Audit Date | Threats Total | Closed | Open (blocking) | Open (below threshold) | Run By |
 |------------|---------------|--------|-----------------|------------------------|--------|
-| 2026-09-03 | 52 | 51 (43 mitigation-verified, 8 accepted) | 0 | 1 (T-59-06, `low`) | `gsd-security-auditor`, `asvs_level: 1` |
+| 2026-09-03 | 52 | 52 (43 mitigation-verified, 9 accepted) | 0 | 0 — T-59-06 re-accepted same day | `gsd-security-auditor`, `asvs_level: 1` |
 
 **Audit depth.** L1 grep-and-read throughout, with **L2-equivalent boundary-placement scrutiny on
 the write-authorization threats** — this is the frictionless-write-path phase, so an over-eager
@@ -229,7 +232,7 @@ end-to-end trace was performed.
 - [x] All threats have a disposition (mitigate / accept / transfer)
 - [x] Accepted risks documented in Accepted Risks Log
 - [x] `threats_open: 0` confirmed (no open threat at or above `high`)
-- [ ] **One `low` threat open below threshold — T-59-06, awaiting an operator decision between a fresh acceptance and adding retention**
+- [x] T-59-06's invalidated acceptance surfaced, carried to the operator, and re-accepted on true terms (AR-59-04)
 - [x] `status: verified` set in frontmatter
 
-**Approval:** verified 2026-09-03, with T-59-06 outstanding and non-blocking
+**Approval:** verified 2026-09-03
