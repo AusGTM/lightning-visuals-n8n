@@ -5,16 +5,16 @@ milestone_name: Unattended Session Runs
 current_phase: 61
 current_phase_name: Autonomous batch runs
 status: executing
-stopped_at: Phase 60 complete, ready to plan Phase 61
-last_updated: "2026-09-03T11:09:06.761Z"
+stopped_at: "Gap-closure 62-07 landed (G-62-1): bare-domain suggestion-round fix, plugin 0.38.1"
+last_updated: "2026-09-03T12:23:08.422Z"
 last_activity: 2026-09-03
 last_activity_desc: Phase 60 complete, transitioned to Phase 61
-state_head: 74e829f26e42304e71f1382290e618ca06ac2613
+state_head: 2d99cfa33f9d33f26a887295e5da25df8f89097f
 progress:
   total_phases: 13
   completed_phases: 8
-  total_plans: 56
-  completed_plans: 56
+  total_plans: 57
+  completed_plans: 57
   percent: 62
 ---
 
@@ -30,8 +30,17 @@ do not re-plan them.
 
 - **62 — Suggest the contacts nobody named.** Executed (6/6 plans) and verified 13/13, but **NOT
   complete**: verification is `human_needed` and UAT is `partial`. Three items are blocked on a
-  live attended sitting (real `web_fetch`, real Lusha credit spend). The code is done; only the
-  live proof is outstanding. Resume with `/gsd-verify-work 62`.
+  live attended sitting (real `web_fetch`, real Lusha credit spend). **Gap-closure plan 62-07
+  landed 2026-09-03 (G-62-1, blocker):** a bare-domain company (measured live at 83.5% of this
+  portal's companies-with-a-website) fed straight into `url_fallback` produced an
+  authority-less ladder in BOTH `discovery_plan` and `next_candidates` — one shared seam
+  helper in `suggest_contacts.py` now normalises the CRM `website`/`domain` value first
+  (scheme prefixed only when absent; `www.`/case/path/query preserved verbatim), and
+  `url_fallback.py` refuses a host-less input loudly for any future caller. Released as
+  plugin `0.38.1`. Full plugin suite green (2300 passed/5 skipped), n8n suite untouched
+  (867 passed), zero `n8n/` diff. The code is done; the live UAT re-run (tests 2 and 3, both
+  previously `blocked_by: prior-phase`) is still the operator's supervised sitting, not run
+  here. Resume with `/gsd-verify-work 62`.
 
 - **60 — Review-lane authority** (split out of 59). Executed, but **not complete**: 2 UAT items
   (`testing`) and 2 verification items (`human_needed`). All four need an armed HubSpot write
@@ -506,12 +515,12 @@ figure.)
 
 ## Session
 
-**Last session:** 2026-09-03T10:46:21.765Z
-**Stopped at:** Phase 60 complete, ready to plan Phase 61
+**Last session:** 2026-09-03T12:23:07.654Z
+**Stopped at:** Gap-closure 62-07 landed (G-62-1): bare-domain suggestion-round fix, plugin 0.38.1
 checkpoints `blocked` (operator could not run a live test). Phase is NOT complete; verification
 is `human_needed`. Also this session: the repo's first `62-COVERAGE.md`, and a documentation
 sweep fixing stale STATE/ROADMAP/milestone docs.
-**Resume file:** None
+**Resume file:** .planning/phases/62-suggest-the-contacts-nobody-named/62-UAT.md
 
 ## Performance Metrics
 
