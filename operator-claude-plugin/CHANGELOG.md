@@ -16,6 +16,49 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.39.1] - 2026-09-04
+
+### Added
+
+- **The session-start note now discloses the permission prompting, and what turning it
+  off does not change.** Every skill in this plugin works by running `python3
+  scripts/...` through Bash, so in Claude Code's default permission mode the operator is
+  asked to approve each one — several times during a single ordinary batch. Disclosed at
+  session start rather than mid-task, because the moment to weigh it is before a batch is
+  underway, not while approving the fourth prompt of one.
+
+  The note presents two options and is explicit that they are **not** equivalent: an
+  allowlist in `~/.claude/settings.json` under `permissions.allow`, which stops the
+  prompting for this plugin's scripts and leaves every other prompt in place (preferred),
+  or bypass permissions mode, which stops it for the **whole session** — anything else run
+  in that session proceeds unprompted too.
+
+  **The load-bearing half is the third paragraph: neither option changes whether HubSpot
+  can be written to.** That is gated by the write-grant switch an admin sets in the
+  operator's settings file, by the grant opened for a named batch, and by an arming window
+  scoped to that send's records. A Claude permission prompt is not part of that chain. An
+  operator who flipped bypass could otherwise reasonably conclude they had just removed the
+  safeguard standing between them and a live write — they have not, and the note says so
+  rather than leaving it to be inferred.
+
+  Same delivery mechanism as the existing D-59-06 run-to-completion note, and the hook keeps
+  its no-dependency contract: no config read, no credential read, no network call, no
+  filesystem write, exit 0 unconditionally, so it still prints on a fresh unconfigured
+  install. Pinned by `test_session_start_hook.py::test_script_discloses_the_permission_prompting_and_what_it_does_not_change`,
+  which asserts the two load-bearing parts (bypass being session-wide; that the write path
+  is not loosened) rather than merely that the subject is mentioned.
+
+  Wording note for a future editor: the note says "the write-grant switch", hyphenated, not
+  the literal settings key. The existing
+  `test_script_does_not_reach_into_dispatch_or_grant_internals` guard is a substring check
+  on `write_grant` / `dispatch_plan` / `chunking`, and it is correct — the hook must not
+  start referencing grant internals. The hyphen keeps the prose accurate without widening a
+  guard that is doing its job.
+
+- **`README.md` and `USAGE.md` both document it**, admin-facing and operator-facing
+  respectively, including the `Bash(python3 scripts/*)` allowlist shape (verify with
+  `/permissions` — it is a prefix match).
+
 ## [0.39.0] - 2026-09-04
 
 ### Added

@@ -545,6 +545,40 @@ to an **admin**, naming the missing key, never a value — rather than raising a
 returning nothing. That notice is not the backend being healthy; it is the sweep telling
 you it cannot check anything yet. Do not read the two as the same thing.
 
+## Permission prompts, and what turning them off does not change
+
+Every skill here does its work by running `python3 scripts/...` through Bash. In Claude
+Code's **default** permission mode the operator is asked to approve each of those, which
+during one ordinary batch means several prompts in a row. The plugin discloses this at
+session start (`hooks/session-start.sh`) rather than letting the operator meet it mid-batch.
+
+**Prefer the allowlist.** In `~/.claude/settings.json`:
+
+```json
+{
+  "permissions": {
+    "allow": ["Bash(python3 scripts/*)"]
+  }
+}
+```
+
+That stops the prompting for this plugin's own scripts and leaves every other prompt in
+place. Confirm it took with `/permissions` — the pattern is a prefix match, so verify rather
+than assume.
+
+**Bypass permissions mode also works, and is the blunter instrument.** It applies to the
+**whole session**, not to this plugin: anything else run in that session proceeds
+unprompted too. It is a reasonable choice for a dedicated operator machine that does
+nothing else; it is a poor default for a developer machine.
+
+**Neither one changes whether HubSpot can be written to.** That is gated by the write-grant
+switch an admin sets in the operator's settings file, by the grant the operator opens for a
+named batch, and by an arming window scoped to that send's records. A Claude permission
+prompt is not part of that chain — so turning the prompts off does not loosen it, and
+leaving them on does not protect against a write the operator has already approved. An
+operator who flips bypass expecting to have removed a safety net has misread which net is
+holding them.
+
 ## Suggesting people at companies with nobody named
 
 A company sitting in HubSpot with no people on it cannot be worked. After a company batch

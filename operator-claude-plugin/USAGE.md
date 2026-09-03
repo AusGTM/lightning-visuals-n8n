@@ -203,6 +203,21 @@ that was never installed, or that has stopped firing, produces nothing at all �
 
 ---
 
+## Why it keeps asking permission
+
+Everything here runs small local scripts, and Claude asks before running each one — so a
+single batch can mean several approvals in a row. Two ways to stop that:
+
+- **Ask your admin to allowlist these commands** (one line in your Claude settings). The
+  prompting stops for this plugin and stays on for everything else. Prefer this.
+- **Bypass permissions mode.** Also stops it, but for the *whole session* — anything else
+  done in that session runs unprompted too.
+
+**Neither one lets anything write to HubSpot on its own.** Writing still needs the switch
+your admin sets, a grant you open for a named batch, and an arming window covering only
+that send's records. Approving fewer prompts does not widen what can be written; approving
+more of them does not protect you from a batch you already said yes to.
+
 ## What keeps you safe
 
 - **Nothing writes without a preview and your approval.** Uploads, enrichment writes, review

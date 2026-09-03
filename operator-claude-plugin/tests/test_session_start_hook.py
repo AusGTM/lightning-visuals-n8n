@@ -74,6 +74,27 @@ def test_script_works_with_a_deliberately_minimal_environment():
     assert "finishes its remaining chunks" in flat
 
 
+def test_script_discloses_the_permission_prompting_and_what_it_does_not_change():
+    """Operator request, 2026-09-04. Every skill here works by running `python3 scripts/...`
+    through Bash, so the default permission mode prompts repeatedly during one ordinary
+    batch. Disclosed at session start, before a batch is underway.
+
+    The two load-bearing parts are pinned, not just the mention: that bypass applies to the
+    WHOLE session rather than to this plugin, and that neither option changes whether
+    HubSpot can be written to. An operator who flipped bypass could otherwise reasonably
+    conclude they had removed the safeguard between them and a live write.
+    """
+    result = subprocess.run(["bash", str(SCRIPT)], capture_output=True, text=True)
+    flat = " ".join(result.stdout.split())
+
+    assert result.returncode == 0
+    assert "permissions.allow" in flat, "the allowlist — the option to prefer — must be named"
+    assert "Bypass permissions mode" in flat, "the mode the operator actually asks about must be named"
+    assert "WHOLE session" in flat, "bypass being session-wide, not plugin-scoped, is the point"
+    assert "This is the one to prefer" in flat, "the allowlist must be presented as preferred, not as an equal alternative"
+    assert "does not loosen it" in flat, "must state that turning prompts off does not loosen the write path"
+
+
 def test_script_output_has_no_question_mark():
     """The non-blocking pin, stated as a property rather than trust in the author."""
     result = subprocess.run(["bash", str(SCRIPT)], capture_output=True, text=True)
