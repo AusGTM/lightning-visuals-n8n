@@ -5,11 +5,11 @@ milestone_name: Unattended Session Runs
 current_phase: 60
 current_phase_name: Review-lane authority
 status: executing
-stopped_at: Phase-49 divergences 1 and 2 FIXED (a4de6f4, e313f6b); 10 dispositions sequenced, none actioned — all await operator grant
-last_updated: "2026-09-03T07:20:00.000Z"
+stopped_at: ALL 12 audit-sweep dispositions CLOSED (a4de6f4, e313f6b, 85df275, 919f7d3); only operator-gated audit-uat items and 68 unpushed commits remain
+last_updated: "2026-09-03T07:40:00.000Z"
 last_activity: 2026-09-03
-last_activity_desc: Batch-write arm gate moved into src/hubspot_client (T-49-43); W1 gate-bypass registered as WINDOWS id 28; ledger repaired
-state_head: e313f6b68608f2d8cc25ceee2d3429101d8e6cfa
+last_activity_desc: T-47-08 armed-loop ordering folded back and put under test; six granted register corrections applied across phases 46/48/51/53
+state_head: 919f7d3
 progress:
   total_phases: 13
   completed_phases: 7
@@ -98,7 +98,14 @@ phases. Both keys are now set explicitly and neither gates any phase on a missin
     were repaired to append at all: ids 23/24 carried an out-of-schema `status: "resolved"` that
     stopped `gsd-tools windows` loading the file, and the markdown table was stale by three entries
     (JSON held 25/26/27, table stopped at 24, counts computed from the stale table).
-  - **9 of the original 11 remain**, plus the 17 operator-gated `audit-uat` items. Also: phase 48's "gate failed closed
+  - **The remaining 9 were closed later the same day**, all under one operator grant: T-47-08's
+    armed-loop ordering folded back with two further live corrections and put under test for the
+    first time (`85df275`); six register corrections applied across phases 46/48/51/53 (`919f7d3`)
+    — phase 46's three as proposed, phase 48's two WARNINGS registered as T-48-24/25, T-51-16
+    accepted as AR-51-02, phase 51's COVERAGE scope line, 53-04's stale checkpoint field, and a
+    stale test comment. One item needed no action. **Nothing from the sweep remains open.**
+  - Still outstanding, and none of it closable by code: the 17 operator-gated `audit-uat` items
+    (armed HubSpot window / Lusha credits / judgement) and **68 unpushed commits**. Also: phase 48's "gate failed closed
   on the first attempt" claim is **unsupported** and should not be repeated; the threat closes on
   code plus test instead.
 
