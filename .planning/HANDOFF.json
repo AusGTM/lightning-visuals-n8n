@@ -1,66 +1,221 @@
 {
   "version": "1.0",
-  "timestamp": "2026-09-03T06:00:46.096Z",
+  "timestamp": "2026-09-03T06:34:33.345423Z",
   "phase": null,
   "phase_name": "Cross-phase: retroactive secure-phase + validate-phase sweep (46-63)",
   "phase_dir": null,
   "context_ambiguity": "NOT phase work. This is a cross-phase audit sweep spanning phases 46-63, so the handoff lives at .planning/.continue-here.md rather than under any one phase directory. Phase 63 itself is COMPLETE and sealed; do not reopen it.",
   "plan": null,
-  "task": 12,
+  "task": 15,
   "total_tasks": 18,
   "status": "paused",
   "completed_tasks": [
-    {"id": 1, "name": "Phase 63 backstop: build + run verify_sweep_shim_concurrency.sh, close 63-UAT + 63-VERIFICATION", "status": "done", "commit": "7cc1fc0,e7bfa34"},
-    {"id": 2, "name": "phase.complete 63; close ONE todo, keep the other open and strip its resolves_phase", "status": "done", "commit": "72a2f6c"},
-    {"id": 3, "name": "Fix two record-lag defects (uncommitted todo body, stale STATE.md prose)", "status": "done", "commit": "770e117"},
-    {"id": 4, "name": "Repoint two citations the workstream archival left dangling", "status": "done", "commit": "a1bb27e"},
-    {"id": 5, "name": "Nyquist gap G1 for phase 63: DROP-branch guard test", "status": "done", "commit": "4d5b12a,e63df57"},
-    {"id": 6, "name": "Set workflow.nyquist_validation and workflow.security_enforcement explicitly", "status": "done", "commit": "7c7096e,6aa0ebd"},
-    {"id": 7, "name": "secure-phase 63 (28/28, threats_open 0)", "status": "done", "commit": "6aa0ebd"},
-    {"id": 8, "name": "Security wave 1: phases 53,54,57,58,59,60,61 audited + SECURITY.md written", "status": "done", "commit": "a244bdb,ae19b1e,5818945"},
-    {"id": 9, "name": "T-59-06 re-accepted on true terms (AR-59-04)", "status": "done", "commit": "5e6f58b"},
-    {"id": 10, "name": "Security wave 2: phases 46,47,47.5,48,49,50,51 AUDITED (all 7 verdicts obtained)", "status": "done", "commit": "(verdicts obtained; only 47/47.5/50/51 written so far)"},
-    {"id": 11, "name": "SECURITY.md written for 47, 47.5, 50, 51", "status": "done", "commit": "8e69a7b,be1ce3f"},
-    {"id": 12, "name": "Fix T-50-11/27/36: wire assert_no_secrets into 5 write paths + AST coverage test", "status": "done", "commit": "7de5bbf"}
+    {
+      "id": 1,
+      "name": "Phase 63 backstop: build + run verify_sweep_shim_concurrency.sh, close 63-UAT + 63-VERIFICATION",
+      "status": "done",
+      "commit": "7cc1fc0,e7bfa34"
+    },
+    {
+      "id": 2,
+      "name": "phase.complete 63; close ONE todo, keep the other open and strip its resolves_phase",
+      "status": "done",
+      "commit": "72a2f6c"
+    },
+    {
+      "id": 3,
+      "name": "Fix two record-lag defects (uncommitted todo body, stale STATE.md prose)",
+      "status": "done",
+      "commit": "770e117"
+    },
+    {
+      "id": 4,
+      "name": "Repoint two citations the workstream archival left dangling",
+      "status": "done",
+      "commit": "a1bb27e"
+    },
+    {
+      "id": 5,
+      "name": "Nyquist gap G1 for phase 63: DROP-branch guard test",
+      "status": "done",
+      "commit": "4d5b12a,e63df57"
+    },
+    {
+      "id": 6,
+      "name": "Set workflow.nyquist_validation and workflow.security_enforcement explicitly",
+      "status": "done",
+      "commit": "7c7096e,6aa0ebd"
+    },
+    {
+      "id": 7,
+      "name": "secure-phase 63 (28/28, threats_open 0)",
+      "status": "done",
+      "commit": "6aa0ebd"
+    },
+    {
+      "id": 8,
+      "name": "Security wave 1: phases 53,54,57,58,59,60,61 audited + SECURITY.md written",
+      "status": "done",
+      "commit": "a244bdb,ae19b1e,5818945"
+    },
+    {
+      "id": 9,
+      "name": "T-59-06 re-accepted on true terms (AR-59-04)",
+      "status": "done",
+      "commit": "5e6f58b"
+    },
+    {
+      "id": 10,
+      "name": "Security wave 2: phases 46,47,47.5,48,49,50,51 AUDITED (all 7 verdicts obtained)",
+      "status": "done",
+      "commit": "(verdicts obtained; only 47/47.5/50/51 written so far)"
+    },
+    {
+      "id": 11,
+      "name": "SECURITY.md written for 47, 47.5, 50, 51",
+      "status": "done",
+      "commit": "8e69a7b,be1ce3f"
+    },
+    {
+      "id": 12,
+      "name": "Fix T-50-11/27/36: wire assert_no_secrets into 5 write paths + AST coverage test",
+      "status": "done",
+      "commit": "7de5bbf"
+    },
+    {
+      "id": 13,
+      "name": "Write 48-SECURITY.md INCLUDING the operator-approved D-48-01 acceptance",
+      "status": "done",
+      "commit": "cbb5212"
+    },
+    {
+      "id": 14,
+      "name": "Write 46-SECURITY.md",
+      "status": "done",
+      "commit": "cbb5212"
+    },
+    {
+      "id": 15,
+      "name": "Write 49-SECURITY.md",
+      "status": "done",
+      "commit": "cbb5212"
+    }
   ],
   "remaining_tasks": [
-    {"id": 13, "name": "Write 48-SECURITY.md — INCLUDING the operator-approved D-48-01 acceptance (see decisions)", "status": "not_started", "blocker": "verdict is in the paused session's context only"},
-    {"id": 14, "name": "Write 46-SECURITY.md", "status": "not_started", "blocker": "verdict is in the paused session's context only"},
-    {"id": 15, "name": "Write 49-SECURITY.md", "status": "not_started", "blocker": "verdict is in the paused session's context only"},
-    {"id": 16, "name": "validate-phase (nyquist) for 47.5 — no VALIDATION.md exists", "status": "not_started"},
-    {"id": 17, "name": "validate-phase (nyquist) for 53 — no VALIDATION.md exists", "status": "not_started"},
-    {"id": 18, "name": "validate-phase (nyquist) for 61 — no VALIDATION.md exists", "status": "not_started"}
+    {
+      "id": 16,
+      "name": "validate-phase (nyquist) for 47.5 \u2014 no VALIDATION.md exists",
+      "status": "in_progress"
+    },
+    {
+      "id": 17,
+      "name": "validate-phase (nyquist) for 53 \u2014 no VALIDATION.md exists",
+      "status": "in_progress"
+    },
+    {
+      "id": 18,
+      "name": "validate-phase (nyquist) for 61 \u2014 no VALIDATION.md exists",
+      "status": "in_progress"
+    }
   ],
   "blockers": [
-    {
-      "description": "THE THREE UNWRITTEN VERDICTS (46, 48, 49) LIVE ONLY IN THE PAUSED SESSION'S CONTEXT. Their headline results and distinctive findings are preserved in .continue-here.md, but the full per-threat evidence tables are NOT. To match the quality of the 11 files already written, re-run gsd-security-auditor for those three phases using the prompt shape recorded in .continue-here.md.",
-      "type": "technical",
-      "workaround": "Re-run three auditors in parallel (~7 min each). The recorded headline counts let you verify a re-run agrees with the first."
-    },
     {
       "description": "security_enforcement is now TRUE, so /gsd-verify-work will block phase advancement on any phase lacking a SECURITY.md.",
       "type": "technical",
       "workaround": "Every executed phase 46-63 now has one EXCEPT 46, 48 and 49 (tasks 13-15). Phase 60 is the next one likely to hit the gate; it HAS its SECURITY.md already."
+    },
+    {
+      "description": "security_enforcement is armed. Every executed phase 46-63 now HAS a SECURITY.md \u2014 the 46/48/49 gap is CLOSED as of commit cbb5212. No phase is blocked on this any more.",
+      "type": "technical",
+      "workaround": "none needed"
     }
   ],
   "async_jobs": [],
   "human_actions_pending": [
-    {"action": "T-51-16: decide the disposition for the unregistered Sonnet-judge surface added at 51-03's checkpoint round 3", "context": "Recorded in 51-SECURITY.md as proposed:accept mirroring AR-63-03 (same vendor, same key, no new recipient). No acceptance granted by the audit. Non-blocking.", "blocking": false},
-    {"action": "T-47-08: fix main()'s settle_tier-before-webhook ordering in scripts/remediate_veto_companies.py and reconcile its docstring, OR amend the register to cite 47-armed-driver.py", "context": "The module docstring STILL tells an operator to invoke main() directly for an armed run; doing so today reproduces the failure phase 47 diagnosed live. Medium severity, non-blocking.", "blocking": false},
-    {"action": "COVERAGE.md for phase 51 omits Anthropic from its stated scope despite 103 live Anthropic calls", "context": "Documentation gap on the audit surface itself. Recorded in 51-SECURITY.md.", "blocking": false},
-    {"action": "53-04-SUMMARY.md frontmatter still reads status: blocked-on-checkpoint with G8 OUTSTANDING", "context": "The checkpoint WAS discharged (53-VERIFICATION.md, 53-WALK-RECORD-2.md, walk run 3 on 2026-08-29). Record-lag only; flagged in 53-SECURITY.md rather than edited, since a security audit is the wrong instrument for it.", "blocking": false},
-    {"action": "test_report_enrichment.py:130-134 carries a comment block asserting 'Neither is a success' directly above a test at :147 asserting the opposite for `proposed`", "context": "Stale doc after 57-02's D-57-03 reclassification. Found by the phase-54 audit. Not a functional gap.", "blocking": false},
-    {"action": "The 17 cross-phase audit-uat items remain operator-gated", "context": "60/40/20 need an armed HubSpot window; 62 needs Lusha credits; 57/16.9 need judgement. Unchanged by this session's work.", "blocking": false}
+    {
+      "action": "T-51-16: decide the disposition for the unregistered Sonnet-judge surface added at 51-03's checkpoint round 3",
+      "context": "Recorded in 51-SECURITY.md as proposed:accept mirroring AR-63-03 (same vendor, same key, no new recipient). No acceptance granted by the audit. Non-blocking.",
+      "blocking": false
+    },
+    {
+      "action": "T-47-08: fix main()'s settle_tier-before-webhook ordering in scripts/remediate_veto_companies.py and reconcile its docstring, OR amend the register to cite 47-armed-driver.py",
+      "context": "The module docstring STILL tells an operator to invoke main() directly for an armed run; doing so today reproduces the failure phase 47 diagnosed live. Medium severity, non-blocking.",
+      "blocking": false
+    },
+    {
+      "action": "COVERAGE.md for phase 51 omits Anthropic from its stated scope despite 103 live Anthropic calls",
+      "context": "Documentation gap on the audit surface itself. Recorded in 51-SECURITY.md.",
+      "blocking": false
+    },
+    {
+      "action": "53-04-SUMMARY.md frontmatter still reads status: blocked-on-checkpoint with G8 OUTSTANDING",
+      "context": "The checkpoint WAS discharged (53-VERIFICATION.md, 53-WALK-RECORD-2.md, walk run 3 on 2026-08-29). Record-lag only; flagged in 53-SECURITY.md rather than edited, since a security audit is the wrong instrument for it.",
+      "blocking": false
+    },
+    {
+      "action": "test_report_enrichment.py:130-134 carries a comment block asserting 'Neither is a success' directly above a test at :147 asserting the opposite for `proposed`",
+      "context": "Stale doc after 57-02's D-57-03 reclassification. Found by the phase-54 audit. Not a functional gap.",
+      "blocking": false
+    },
+    {
+      "action": "The 17 cross-phase audit-uat items remain operator-gated",
+      "context": "60/40/20 need an armed HubSpot window; 62 needs Lusha credits; 57/16.9 need judgement. Unchanged by this session's work.",
+      "blocking": false
+    },
+    {
+      "action": "Phase 46: three proposed register corrections await disposition \u2014 FINDING-1 (T-46-04 ID collision), FINDING-2 (T-46-08 asserts a depends_on that does not exist), WARNING-2 (config/taxonomy.yaml is an unregistered third rubric mirror)",
+      "context": "Recorded in 46-SECURITY.md as proposed. No control is absent in any of the three.",
+      "blocking": false
+    },
+    {
+      "action": "Phase 49 Divergence 1: decide whether to register a direct-library-bypass threat class \u2014 batch_update_companies carries neither the arm-key gate nor the scope gate",
+      "context": "Three options offered in 49-SECURITY.md: accept explicitly, move _writes_allowed into the library, or add a source-inspection test. Operator's call.",
+      "blocking": false
+    },
+    {
+      "action": "Phase 49 Divergence 2: add a retrospective .planning/WINDOWS.md row for the W1 gate-bypass",
+      "context": "Disclosed in 49-W1-ARM-RECORD.md and 49-RUN-REPORT.md but absent from the ledger /gsd-ship gates on. Ledger row 16 is the repo's own precedent for exactly this.",
+      "blocking": false
+    },
+    {
+      "action": "Phase 48: the 'two-key gate failed closed on the first attempt' claim is UNSUPPORTED and should not be repeated",
+      "context": "No runtime record of that gate denying; the cited write_blocked execution 11858 is a prior phase's. T-48-04 closes on code plus test instead. Recorded in 48-SECURITY.md.",
+      "blocking": false
+    }
   ],
   "decisions": [
-    {"decision": "Phase 63's enrichment-throughput-ceiling todo was NOT closed and its resolves_phase key was REMOVED", "rationale": "close_phase_todos retires every todo whose resolves_phase matches, regardless of whether the phase fixed it. 63 evaluated that todo's lever 2 and DROPPED it; levers 1 and 3 were never attempted. Leaving the key would have armed silent auto-closure of an open severity:major defect.", "phase": "63"},
-    {"decision": "security_enforcement set to TRUE at operator instruction, after first being set false", "rationale": "Both keys were absent and both DEFAULT TO ENABLED, so both verify:post hooks were active and silently skipped. false recorded the status quo; the operator then chose to arm the gate deliberately.", "phase": "cross"},
-    {"decision": "T-59-06 re-accepted on fresh terms (AR-59-04) rather than on 59-01's rationale", "rationale": "59-01 accepted unbounded artifact growth because the file was 'replaced rather than appended to'. 59-08 (D-59-09), three days later in the same phase, shipped one file PER run_id with no retention, destroying the premise. Operator re-accepted on the true shape; the original's failure history is kept in the file.", "phase": "59"},
-    {"decision": "T-50-11/27/36 FIXED rather than accepted, with a coverage test", "rationale": "Three threat entries asserted assert_no_secrets protected five write paths that had never imported it. Never-present, not drift. Operator chose fix-plus-coverage-test over an acceptance for a control they had been told existed.", "phase": "50"},
-    {"decision": "PHASE 48's T-48-11 and T-48-04 (both high) are to be CLOSED as ACCEPTED naming D-48-01 as the compensating control, with the operator as approver", "rationale": "OPERATOR-APPROVED THIS SESSION, NOT YET WRITTEN — this is the single most important unwritten item. Both threats declared the mitigation as operator-exclusive key control; evidence shows Claude ran the deploy+bounce and armed both surfaces. D-48-01 (48-CONTEXT.md:387-429, verified to exist) is a written, phase-scoped, self-expiring waiver granted BEFORE the act, explicitly a NEW waiver and not a revival of the expired D-47.5-01. Its declared bounds were honoured exactly (1 deploy+bounce, 1 armed window, 5-record cap, per-shell-only keys, disclosed rather than exceeded), every mechanical safeguard verified closed independently, and it expired with the phase so there is no live exposure.", "phase": "48"},
-    {"decision": "Audit findings are recorded, never smoothed into an adjacent 'closed'", "rationale": "Applied consistently: no auditor was permitted to self-author a corrected acceptance rationale, and neither was the orchestrator. That rule is what made 59's and 50's findings usable rather than invisible.", "phase": "cross"}
+    {
+      "decision": "Phase 63's enrichment-throughput-ceiling todo was NOT closed and its resolves_phase key was REMOVED",
+      "rationale": "close_phase_todos retires every todo whose resolves_phase matches, regardless of whether the phase fixed it. 63 evaluated that todo's lever 2 and DROPPED it; levers 1 and 3 were never attempted. Leaving the key would have armed silent auto-closure of an open severity:major defect.",
+      "phase": "63"
+    },
+    {
+      "decision": "security_enforcement set to TRUE at operator instruction, after first being set false",
+      "rationale": "Both keys were absent and both DEFAULT TO ENABLED, so both verify:post hooks were active and silently skipped. false recorded the status quo; the operator then chose to arm the gate deliberately.",
+      "phase": "cross"
+    },
+    {
+      "decision": "T-59-06 re-accepted on fresh terms (AR-59-04) rather than on 59-01's rationale",
+      "rationale": "59-01 accepted unbounded artifact growth because the file was 'replaced rather than appended to'. 59-08 (D-59-09), three days later in the same phase, shipped one file PER run_id with no retention, destroying the premise. Operator re-accepted on the true shape; the original's failure history is kept in the file.",
+      "phase": "59"
+    },
+    {
+      "decision": "T-50-11/27/36 FIXED rather than accepted, with a coverage test",
+      "rationale": "Three threat entries asserted assert_no_secrets protected five write paths that had never imported it. Never-present, not drift. Operator chose fix-plus-coverage-test over an acceptance for a control they had been told existed.",
+      "phase": "50"
+    },
+    {
+      "decision": "PHASE 48's T-48-11 and T-48-04 (both high) are to be CLOSED as ACCEPTED naming D-48-01 as the compensating control, with the operator as approver",
+      "rationale": "OPERATOR-APPROVED THIS SESSION, NOT YET WRITTEN \u2014 this is the single most important unwritten item. Both threats declared the mitigation as operator-exclusive key control; evidence shows Claude ran the deploy+bounce and armed both surfaces. D-48-01 (48-CONTEXT.md:387-429, verified to exist) is a written, phase-scoped, self-expiring waiver granted BEFORE the act, explicitly a NEW waiver and not a revival of the expired D-47.5-01. Its declared bounds were honoured exactly (1 deploy+bounce, 1 armed window, 5-record cap, per-shell-only keys, disclosed rather than exceeded), every mechanical safeguard verified closed independently, and it expired with the phase so there is no live exposure.",
+      "phase": "48"
+    },
+    {
+      "decision": "Audit findings are recorded, never smoothed into an adjacent 'closed'",
+      "rationale": "Applied consistently: no auditor was permitted to self-author a corrected acceptance rationale, and neither was the orchestrator. That rule is what made 59's and 50's findings usable rather than invisible.",
+      "phase": "cross"
+    }
   ],
   "uncommitted_files": [],
-  "next_action": "Write 48-SECURITY.md first — it carries the operator-approved D-48-01 acceptance recorded above and is the only remaining item with a decision already attached. Re-run gsd-security-auditor for 46, 48 and 49 in parallel to recover their evidence tables (the headline counts in .continue-here.md let you confirm a re-run agrees), then write all three files, then run validate-phase for 47.5, 53 and 61.",
-  "context_notes": "This session ran 14 retroactive secure-phase audits plus one nyquist pass, covering 375 threats. The work was worth doing because it found five DISTINCT failure shapes, none of which a passing test suite would ever catch — every one is a case where the RECORD and the CODE disagreed. In rough order of value: (1) a control the register asserted that had never existed on the paths it named (50, fixed); (2) an acceptance whose premise a later plan in the same phase destroyed (59, re-accepted); (3) the declared mitigation not being the code that actually ran (47, open); (4) new attack surface added after the register was authored and never registered (51); (5) a mitigation citing an artifact never built because a checkpoint took its DROP branch (63, 58, 61 — three occurrences, so this is a register characteristic, not a one-off). The method that made these visible: tell each auditor to verify against the implementation rather than the plan's own claim, name the specific shapes already found, and forbid self-authoring a corrected rationale. Carry that forward. Suites at pause: pytest 3982 passed / 154 skipped / 0 failed; node 862 pass / 0 fail. Nothing is armed; the first live unattended credit-spending batch still has NOT run."
+  "next_action": "Tasks 16-18: three gsd-nyquist-auditor agents were dispatched READ-ONLY for phases 47.5, 53 and 61 (State B, reconstruct from artifacts). They return VALIDATION.md content plus proposed guard tests; the orchestrator writes each file and applies any real gap-fill SEQUENTIALLY afterward, to avoid three concurrent agents colliding on shared test files. Format standard: 63-VALIDATION.md.",
+  "context_notes": "This session ran 14 retroactive secure-phase audits plus one nyquist pass, covering 375 threats. The work was worth doing because it found five DISTINCT failure shapes, none of which a passing test suite would ever catch \u2014 every one is a case where the RECORD and the CODE disagreed. In rough order of value: (1) a control the register asserted that had never existed on the paths it named (50, fixed); (2) an acceptance whose premise a later plan in the same phase destroyed (59, re-accepted); (3) the declared mitigation not being the code that actually ran (47, open); (4) new attack surface added after the register was authored and never registered (51); (5) a mitigation citing an artifact never built because a checkpoint took its DROP branch (63, 58, 61 \u2014 three occurrences, so this is a register characteristic, not a one-off). The method that made these visible: tell each auditor to verify against the implementation rather than the plan's own claim, name the specific shapes already found, and forbid self-authoring a corrected rationale. Carry that forward. Suites at pause: pytest 3982 passed / 154 skipped / 0 failed; node 862 pass / 0 fail. Nothing is armed; the first live unattended credit-spending batch still has NOT run."
 }
