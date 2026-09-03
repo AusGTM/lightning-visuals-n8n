@@ -3,7 +3,7 @@ status: diagnosed
 phase: 62-suggest-the-contacts-nobody-named
 source: [62-VERIFICATION.md]
 started: 2026-09-02T01:30:00Z
-updated: 2026-09-03T16:12:28Z
+updated: 2026-09-03T16:48:08Z
 ---
 
 ## Current Test
@@ -448,6 +448,34 @@ and it held.
 - gap_id: G-62-5
   truth: "`role_vocabulary.py` can derive an evidenced role vocabulary from this portal"
   status: failed
+  fix_landed: |
+    Quick task 260904-39r, 2026-09-04, commits 38020fd / fb18884 / 2e7b364.
+    Rank-then-cluster (fixed head of 200 by recurrence, `--head N` to raise), truncation
+    raises `RoleVocabularyDerivationError` BY NAME before the text is parsed, tolerant parse
+    reuses `src/web_research._extract_json` with one repair retry per CLAUDE.md §26.3, and
+    `_normalize_title` (html.unescape + whitespace collapse) is applied at COUNT time and
+    again to returned members before `rank_top_families`' `in counts` check — which kills the
+    silent-drop class, not just the one `&amp;` instance seen. Junk rule `<2 alpha chars`
+    drops `+61407 911 185`, deliberately keeps bare `AV`.
+    16 new tests, RED observed first; root suite 1743 passed; plugin suite 2362 unchanged.
+
+    Verified independently by the orchestrator: the curated 17-family vocabulary is INTACT
+    (all 9 governance families present) — derived output goes to a separate, gitignored
+    `role_vocabulary.derived.yaml` and the shipped file is never overwritten; zero diff under
+    `operator-claude-plugin/`, so the plugin stays at 0.38.3.
+
+  status_note: |
+    **STILL OPEN, deliberately.** This gap's truth is that the script CAN DERIVE a vocabulary
+    from this portal, and that has not happened. The fix is unit-proven against a fixture, but
+    the fixture is a shape-faithful RECONSTRUCTION rather than captured bytes — the probe
+    script that produced the original response was deleted by 62-10's housekeeping before the
+    fix was written. No live run has occurred.
+    Closing this needs one operator command, which spends one Anthropic call and reads the
+    portal, and is deliberately not an executor task:
+        set -a; source .env; set +a; .venv/bin/python scripts/role_vocabulary.py --dry-run
+    Expected: no crash; a printed head-coverage line (head/2045 distinct, contacts covered of
+    3772) showing whether 200 sufficed; and the would-be YAML. Marking this resolved on unit
+    evidence alone would repeat the pattern this phase has now hit four times.
   reason: |
     `python scripts/role_vocabulary.py --dry-run` crashes:
       JSONDecodeError: Expecting value: line 1 column 1 (char 0)   (role_vocabulary.py:129)
