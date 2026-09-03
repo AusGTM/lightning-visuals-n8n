@@ -2,9 +2,11 @@
 phase: "47"
 slug: "veto-remediation"
 status: verified
-# threats_open counts OPEN threats at or above block_on (high). T-47-08 is medium → not counted.
+# threats_open counts OPEN threats at or above block_on (high). T-47-08 was medium → never counted.
+# 2026-09-03, AFTER the audit: T-47-08 CLOSED by operator grant — the ordering bug is fixed and two
+# further live-discovered corrections folded back. See "Resolution" under its section.
 threats_open: 0
-threats_open_below_threshold: 1
+threats_open_below_threshold: 0
 unregistered_surface_found: 2
 asvs_level: 1
 created: "2026-09-03"
@@ -70,6 +72,64 @@ docstring documents.
 path is the one that works; or amend the register to cite `47-armed-driver.py` and record the
 re-stamp downgrade as the operator decision it was. Either is an operator call, not this audit's.
 
+### Resolution — 2026-09-03, first option taken by operator grant
+
+The operator granted the fix, transcribed verbatim:
+
+> execute the following, grant is authorised: … **T-47-08** · `scripts/remediate_veto_companies.py`
+> … **I'd fix the code — the docstring describes the correct sequence.**
+
+**The bug outlived its own mechanism, and that is why it was still live.** The finding above
+explains it via WF1 pinning `lv_icp_tier` to `D`. Phase 50 deleted WF1 and archived `lv_icp_tier`,
+and `settle_tier` now polls `lv_icp_tier_derived` — so a reader could reasonably conclude the
+ordering no longer matters. It does. `lv_icp_tier_derived`'s `calculation_equation` names
+`lv_anti_icp_flag_num` in its opening `if` clause (`50-06-PLAN.md:384`), and that numeric mirror is
+written by the n8n `Decide Company Action` node. Same dependency on the webhook, new
+serialization. Verified before changing anything, not assumed.
+
+**Three of the driver's live corrections folded back**, into a new `run_armed_record()` extracted
+from `main()`'s inline loop:
+
+1. **Correction 1 — ordering.** `inputs+metadata → components → webhook POST → settle_veto →
+   settle tier → verify`, the sequence `47-armed-driver.py:11` records as proven live.
+2. **Correction 3 — the tier is settled, not asserted** (`settle_tier_stable`). The old call
+   asserted the local oracle's pre-webhook tier, which n8n's research lane can legitimately move
+   after our patch; the settled tier is now recorded against its oracle counterpart instead. The
+   veto assertion stays hard — the veto is this phase's actual bar.
+3. **Correction 5 — a diverged metadata stamp is recorded, never re-stamped.** The re-stamp cannot
+   converge and fired on 12 of 17 records. The partition is preserved exactly: a clobbered **input**
+   field still raises, because it could reinstate the very veto this phase removes.
+
+**Scope of the grant, stated plainly.** Its letter is correction 1. Corrections 3 and 5 are folded
+back because without them the documented path *still fails* — a reordered-but-asserting
+`settle_tier` cannot converge when the research lane moves the score, and the re-stamp loop raises
+on a divergence that always recurs. This closure's own wording is "so the documented path is the
+one that works." Both are **operator decisions already on record** — `47-armed-driver.py`'s
+"Correction 3 (operator-approved, live-discovered)" and this section's own quoted "Operator chose:
+do not re-stamp; record who diverged" — and were **transcribed, never composed** by this
+resolution.
+
+**Deliberately not folded back**, so their absence is not read as oversight: the driver's D-23
+one-record region override for Jam TV (`17317850381`) with its paired veto-persists branch, and the
+Simtech LED gate-skip blank-then-restore of `lv_org_type`. Both were single-record decisions for a
+population already remediated, and CLAUDE.md §13.0 prohibits the gate-skip workaround outright.
+
+**The coverage gap that let this survive is closed.** The audit's own diagnosis was that every
+individual guard was tested but "the orchestration that sequences them" was not.
+`run_armed_record()` takes injectable legs (the precedent is `run_coverage_window` in
+`scripts/enrich_coverage_companies.py`), and five tests in
+`tests/test_remediate_veto_companies.py` now pin the order, the no-re-stamp rule, the input-clobber
+raise, the record-don't-assert tier, and the default tier settler. The ordering test was
+perturbation-proved: restoring the pre-fix sequence turns it RED, restoring the fix turns it GREEN.
+
+`settle_tier`'s own docstring was corrected in the same commit — it still claimed a "pure-HubSpot
+chain … → WF1 → `lv_icp_tier`" while polling the derived property, the same record-vs-code shape
+this audit round exists to catch.
+
+**This partially remediates unregistered surface 1** below: the orchestration that performed the
+live writes now lives in `scripts/` under test, rather than only in a throwaway driver. It does
+**not** register that surface or surface 2 — neither was in the grant.
+
 ---
 
 ## Unregistered surface (no threat ID covers these)
@@ -120,7 +180,7 @@ Neither blocks. Both are named here rather than folded into an adjacent "closed"
 | T-47-05 | Denial of Service | record cap | medium | mitigate | `HARD_CEILING_RECORDS = DEFAULT_MAX_RECORDS = 17` (`:178-179`); `_resolved_max_records()` clamps via `min(...)`; `refuse_if_over_budget` (`:709-718`) **raises and returns `ids` unmodified rather than truncating** — a silent truncation would have been the dangerous failure. | closed |
 | T-47-06 | Spoofing | Anthropic `web_search` results | medium | mitigate | `build_input_patch` (`:345-372`) — `_classify_org_type` requires an enum-exact match; evidence-gated org types require `_has_field_evidence`; `produces_content` requires `isinstance(..., bool)` **and** evidence for both true and false. Hardened live in Plan 03. | closed |
 | T-47-07 | Repudiation | post-run state | medium | mitigate | `47-RUN-REPORT.md` carries per-record before/after with source metadata and `_verified_at`/`_verified_by_model` stamps; `verify_post_run` present (`:723-737`). | closed |
-| **T-47-08** | **Tampering** | **n8n re-research lane overwriting stamps** | **medium** | **mitigate (declared) — not what ran** | **See the section above. The cited `main()` re-stamp loop exists but never executed; `47-armed-driver.py` ran instead and dropped the re-stamp by live operator decision.** | **open — below `high` threshold (non-blocking)** |
+| **T-47-08** | **Tampering** | **n8n re-research lane overwriting stamps** | **medium** | **mitigate — amended to the code that actually runs** | **Amended 2026-09-03 by operator grant. The declared re-stamp loop is GONE, not repaired: it cannot converge (n8n's research lane always writes its own `lv_*_verified_at` after ours) and it fired on 12 of 17 records. The mitigation is now record-who-diverged, per the transcribed operator decision — `run_armed_record` (`scripts/remediate_veto_companies.py`) records diverged stamps in its returned entry and prints them, while still RAISING on a clobbered INPUT field, which could reinstate the veto this phase removes. The ordering bug that forced `47-armed-driver.py` to exist is fixed in the same commit, so `main()` is once again the path its own docstring documents. Tests: `test_armed_leg_records_a_diverged_metadata_stamp_and_never_re_stamps_it`, `test_armed_leg_still_stops_the_run_when_an_input_field_is_clobbered`, plus the ordering test, perturbation-proved. See "Resolution" above.** | **closed** |
 | T-47-01-SC | Tampering | package installs | low | accept | `git show --stat` on all five Plan-01 commits: no dependency-manifest diff. | closed (accepted) |
 
 ### 47-02 — Traceability, cost estimate, coverage matrix
@@ -175,6 +235,7 @@ Neither blocks. Both are named here rather than folded into an adjacent "closed"
 | Audit Date | Threats Total | Closed | Open (blocking) | Open (below threshold) | Unregistered | Run By |
 |------------|---------------|--------|-----------------|------------------------|--------------|--------|
 | 2026-09-03 | 26 | 25 (21 mitigation-verified, 4 accepted) | 0 | 1 (T-47-08, `medium`) | 2 | `gsd-security-auditor`, `asvs_level: 1` |
+| 2026-09-03 (later, post-audit) | 26 | 26 (22 mitigation-verified, 4 accepted) | 0 | 0 | 2 (unchanged) | operator-granted fold-back; T-47-08's mitigation amended to the code that runs |
 
 **The most valuable thing this phase's own record already did:** it *disclosed* the `main()`
 failure and the driver substitution in `47-04-SUMMARY.md` and `47-RUN-REPORT.md` rather than hiding
@@ -189,8 +250,13 @@ kept pointing at the code that did not run.
 - [x] All threats have a disposition (mitigate / accept / transfer)
 - [x] Accepted risks documented in Accepted Risks Log
 - [x] `threats_open: 0` confirmed (no open threat at or above `high`)
-- [ ] **T-47-08 open below threshold — `main()`'s ordering bug and its stale docstring remain**
-- [ ] **Two unregistered surfaces named, no threat IDs assigned**
+- [x] **T-47-08 CLOSED 2026-09-03 by operator grant** — `main()`'s ordering fixed, two further
+      live-discovered corrections folded back, `settle_tier`'s stale docstring corrected, and the
+      orchestration put under test for the first time
+- [ ] **Two unregistered surfaces named, no threat IDs assigned** — still open; surface 1 is
+      partially remediated (the orchestration now lives in `scripts/` under test), but neither was
+      in the 2026-09-03 grant and neither is registered
 - [x] `status: verified` set in frontmatter
 
-**Approval:** verified 2026-09-03, with T-47-08 outstanding and non-blocking
+**Approval:** verified 2026-09-03. T-47-08 outstanding at that verification; **closed later the
+same day** by the operator-granted fold-back recorded under "Resolution".

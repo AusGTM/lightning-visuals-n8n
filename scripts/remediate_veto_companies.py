@@ -544,10 +544,36 @@ def settle_and_assert(company_id: str, prop: str, expected, timeout, interval,
 
 def settle_tier(company_id: str, expected_tier: str, timeout=120, interval=5,
                  reader=get_record, sleeper=time.sleep):
-    """The pure-HubSpot chain: component PATCH -> lv_icp_fit_score (calculated property)
-    -> WF1 -> lv_icp_tier. Measured latency is seconds."""
+    """Polls lv_icp_tier_derived until it equals `expected_tier`.
+
+    NOT a pure-HubSpot chain, despite what this docstring said until 2026-09-03 (it cited
+    "component PATCH -> lv_icp_fit_score -> WF1 -> lv_icp_tier", and WF1 was deleted and
+    lv_icp_tier archived by Phase 50). lv_icp_tier_derived's calculation_equation names
+    lv_anti_icp_flag_num in its opening `if` clause, and that mirror is written by the n8n
+    "Decide Company Action" node -- so the derived tier reads "D" for as long as the veto
+    mirror reads 1, whatever the components say. THE WEBHOOK MUST FIRE FIRST. See
+    run_armed_record's correction 1.
+
+    Kept for callers that legitimately know the expected tier. main()'s armed loop does
+    NOT use it -- see settle_tier_stable and correction 3."""
     return settle_and_assert(company_id, "lv_icp_tier_derived", expected_tier, timeout, interval,
                               reader=reader, sleeper=sleeper)
+
+
+def settle_tier_stable(company_id: str, timeout=120, interval=5,
+                        reader=get_record, sleeper=time.sleep):
+    """Settles lv_icp_tier_derived to a STABLE value without asserting which value.
+
+    Correction 3, folded back from .planning/phases/47-veto-remediation/47-armed-driver.py
+    (operator-approved, live-discovered) verbatim in intent: settle_tier asserted the LOCAL
+    oracle's pre-webhook tier, but n8n's own research lane legitimately resolves lv_org_type
+    AFTER our patch (record 1: org_type null -> individual_club_team, score 30 -> 45, tier
+    Needs Review -> B), so the oracle can never match a value computed downstream of it.
+    Oracle-vs-live tier parity is Phase 49's scope, not this one's. The caller records the
+    settled tier alongside its oracle counterpart; the VETO assertion stays hard, because
+    the veto is this phase's actual bar."""
+    return settle_and_assert(company_id, "lv_icp_tier_derived", lambda v: True, timeout,
+                              interval, reader=reader, sleeper=sleeper)
 
 
 def settle_veto(company_id: str, timeout=900, interval=15, reader=get_record, sleeper=time.sleep):
@@ -767,6 +793,94 @@ def _run_property_existence_guard(records) -> list:
 
     live_names = live_property_names("companies", lister=_live_property_lister)
     return missing_property_names(payload_keys, live_names)
+
+
+# --- the armed leg for one record ---------------------------------------------------------
+
+def run_armed_record(rec, cfg, *, patcher=batch_update_companies, poster=post_webhook_event,
+                     veto_settler=settle_veto, tier_settler=settle_tier_stable,
+                     verifier=verify_post_run):
+    """All write, settle and verify legs for ONE record, inside the one armed window (D-01).
+
+    Extracted from main()'s inline loop on 2026-09-03 for the reason T-47-08 exists: the
+    individual guards were all tested, but "the orchestration that sequences them" never
+    was, so an ordering defect survived a live session that diagnosed it. Injectable legs
+    mirror run_coverage_window's precedent in scripts/enrich_coverage_companies.py, so
+    tests/test_remediate_veto_companies.py can assert the ORDER offline.
+
+    Sequence -- inputs+metadata -> components -> WEBHOOK POST -> settle_veto -> settle tier
+    -> verify. This is 47-armed-driver.py's proven order, folded back under operator grant
+    2026-09-03. THREE of that driver's live-discovered corrections are folded back here; a
+    fourth (the webhook 30s -> 300s timeout) already was, in post_webhook_event.
+
+    **Correction 1 -- ORDERING.** main() used to call settle_tier BEFORE the webhook POST,
+    which is structurally unsatisfiable for this phase's target population. Transcribed from
+    the driver's own header: "lv_icp_tier is pinned to 'D' by WF1 for as long as
+    lv_anti_icp_flag reads 'true', and only the webhook POST clears that flag." Proven live
+    on 9604732797. **The bug outlived its original mechanism:** Phase 50 deleted WF1 and
+    archived lv_icp_tier, and settle_tier now polls lv_icp_tier_derived -- but that
+    calculated property's own equation names lv_anti_icp_flag_num in its opening `if`, and
+    the n8n "Decide Company Action" node is what writes that mirror. Same dependency, new
+    serialization. Reordering is not cosmetic: without it the tier poll waits on a recompute
+    that has not been triggered.
+
+    **Correction 3 -- the tier is settled, not asserted.** See settle_tier_stable.
+
+    **Correction 5 -- diverged stamps are RECORDED, never re-stamped.** Transcribed verbatim
+    from the operator decision the register quotes ("Operator chose: do not re-stamp; record
+    who diverged") and the driver's comment block: D-20's re-stamp cannot converge, because
+    the n8n research lane writes its OWN lv_*_verified_at after ours -- 9605273630 diverged
+    again on lv_produces_content_verified_at immediately after a successful re-stamp, while
+    every field that mattered was correct. It fired on 12 of 17 records. The full D-09
+    evidence trail lives in 47-RESEARCH-RESULTS.json regardless (D-21). The partition is
+    load-bearing and is NOT a blanket downgrade: a clobbered INPUT field could reinstate the
+    very veto this phase removes, so that still stops the run.
+
+    Deliberately NOT folded back: the driver's D-23 one-record region override for Jam TV
+    (17317850381) and its paired veto-persists branch, and the Simtech LED gate-skip
+    blank-then-restore of lv_org_type. Those were single-record decisions for a population
+    already remediated, and CLAUDE.md §13.0 prohibits the gate-skip workaround outright.
+    Their absence is a decision, not an oversight.
+
+    Returns the per-record entry dict the driver logged, so a caller can record outcomes.
+    """
+    cid = rec["id"]
+    entry = {"id": cid}
+
+    combined_props = {**rec["input_patch"]["properties"], **rec["metadata_patch"]["properties"]}
+    if combined_props:
+        patcher([{"id": cid, "properties": combined_props}], dry_run=False)
+    patcher([rec["component_patch"]], dry_run=False)
+
+    # Correction 1: the webhook fires BEFORE anything polls a veto-dependent property.
+    poster(cid, True, cfg)
+    flag, _ = veto_settler(cid)
+    entry["veto"] = {"flag": flag}
+
+    # Correction 3: settle to a stable value, record it against the oracle, assert nothing.
+    tier, _ = tier_settler(cid)
+    entry["tier"] = tier
+    entry["oracle_tier"] = rec["expected_tier"]
+    entry["tier_diverged_from_oracle"] = (tier != rec["expected_tier"])
+
+    # D-20: the deployed Research Trigger Gate re-enters ~4 evidence-gated records and can
+    # overwrite this run's own stamps. Verify INSIDE the armed window -- discovering a
+    # clobber after disarm would need a second arming ceremony, the exact twice-touched
+    # cost D-01 exists to avoid.
+    diverged = verifier(cid, rec["input_patch"]["properties"], rec["metadata_patch"]["properties"])
+    entry["diverged"] = sorted(diverged) if diverged else []
+    if diverged:
+        # Correction 5.
+        inputs_clobbered = sorted(set(diverged) & set(INPUT_PROPS))
+        print(f"  {cid}: research lane diverged {sorted(diverged)} -- recorded, not "
+              f"re-stamped (operator decision)", flush=True)
+        if inputs_clobbered:
+            raise RuntimeError(
+                f"{cid}: INPUT field(s) {inputs_clobbered} were clobbered by the research "
+                f"lane -- stopping. A clobbered input can reinstate a false veto."
+            )
+    print(f"  OK tier={tier} flag={flag}", flush=True)
+    return entry
 
 
 # --- main -----------------------------------------------------------------------------
@@ -1035,37 +1149,7 @@ def main(argv=None) -> int:
 
     cfg = config_gate.load_config()
     for rec in records:
-        # D-01: all four write legs for one record happen inside the one armed window --
-        # batch-PATCH inputs+metadata -> batch-PATCH components -> settle_tier ->
-        # webhook POST -> settle_veto -> verify_post_run -> conditional re-stamp.
-        combined_props = {**rec["input_patch"]["properties"], **rec["metadata_patch"]["properties"]}
-        if combined_props:
-            batch_update_companies([{"id": rec["id"], "properties": combined_props}], dry_run=False)
-        batch_update_companies([rec["component_patch"]], dry_run=False)
-        settle_tier(rec["id"], rec["expected_tier"])
-
-        post_webhook_event(rec["id"], True, cfg)
-        settle_veto(rec["id"])
-
-        # D-20: the deployed Research Trigger Gate re-enters ~4 evidence-gated records
-        # and can overwrite this run's own stamps. Verify INSIDE the armed window --
-        # discovering a clobber after disarm would need a second arming ceremony, the
-        # exact twice-touched cost D-01 exists to avoid.
-        diverged = verify_post_run(
-            rec["id"], rec["input_patch"]["properties"], rec["metadata_patch"]["properties"],
-        )
-        if diverged:
-            print(f"  {rec['id']}: re-research lane diverged fields {sorted(diverged)} -- re-stamping once")
-            restamp = {k: v for k, v in combined_props.items() if k in diverged}
-            batch_update_companies([{"id": rec["id"], "properties": restamp}], dry_run=False)
-            diverged_again = verify_post_run(
-                rec["id"], rec["input_patch"]["properties"], rec["metadata_patch"]["properties"],
-            )
-            if diverged_again:
-                raise RuntimeError(
-                    f"{rec['id']}: fields {sorted(diverged_again)} diverged again after "
-                    "re-stamp -- refusing to continue silently."
-                )
+        run_armed_record(rec, cfg)
 
     print(f"armed run complete -- {len(records)} companies patched and settled.")
     return 0

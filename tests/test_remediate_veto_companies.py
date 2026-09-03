@@ -698,3 +698,94 @@ def test_pinned_excluded_disjoint_guard_survives_pythonoptimize():
     )
     assert proc.returncode == 0, proc.stderr
     assert "GUARD FIRED" in proc.stdout, proc.stdout
+
+
+# --- T-47-08 fold-back: the ORDER of the armed leg ----------------------------------------
+# The register's finding was not that any guard was missing -- every individual guard was
+# present and tested. It was that "the orchestration that sequences them" never was, so an
+# ordering defect diagnosed live in a phase-47 session survived at HEAD for three weeks.
+# These tests exist so it cannot survive a fourth. Every leg is injected; nothing here
+# touches the network.
+
+def _armed_record_fixture():
+    return {
+        "id": PINNED_ID,
+        "input_patch": {"properties": {"lv_country_region_normalized": "AU"}},
+        "metadata_patch": {"properties": {"lv_produces_content_verified_at": "2026-09-03T00:00:00Z"}},
+        "component_patch": {"id": PINNED_ID, "properties": {"geography_score": 10}},
+        "expected_tier": "B",
+    }
+
+
+def _order_recorder():
+    calls = []
+    legs = {
+        "patcher": lambda updates, dry_run=True: calls.append("patch"),
+        "poster": lambda cid, armed, cfg: calls.append("webhook"),
+        "veto_settler": lambda cid: (calls.append("settle_veto"), ("false", 1))[1],
+        "tier_settler": lambda cid: (calls.append("settle_tier"), ("B", 1))[1],
+        "verifier": lambda cid, inputs, metadata: (calls.append("verify"), set())[1],
+    }
+    return calls, legs
+
+
+def test_armed_leg_posts_the_webhook_before_settling_any_veto_dependent_property():
+    # Correction 1. lv_icp_tier_derived's equation names lv_anti_icp_flag_num, which only
+    # the n8n Decide node writes -- so a tier poll before the webhook waits on a recompute
+    # that was never triggered. This is the exact defect T-47-08 recorded.
+    calls, legs = _order_recorder()
+
+    m.run_armed_record(_armed_record_fixture(), {"n8n_url": "https://example.invalid"}, **legs)
+
+    assert calls == ["patch", "patch", "webhook", "settle_veto", "settle_tier", "verify"], calls
+    assert calls.index("webhook") < calls.index("settle_tier"), (
+        "settle_tier ran before the webhook POST -- T-47-08's ordering bug is back")
+    assert calls.index("webhook") < calls.index("settle_veto")
+
+
+def test_armed_leg_records_a_diverged_metadata_stamp_and_never_re_stamps_it():
+    # Correction 5, the operator's own decision: "do not re-stamp; record who diverged."
+    # A re-stamp cannot converge -- the n8n research lane always writes its own
+    # lv_*_verified_at after ours.
+    calls, legs = _order_recorder()
+    legs["verifier"] = lambda cid, inputs, metadata: (
+        calls.append("verify"), {"lv_produces_content_verified_at"})[1]
+
+    entry = m.run_armed_record(_armed_record_fixture(), {}, **legs)
+
+    assert entry["diverged"] == ["lv_produces_content_verified_at"]
+    assert calls.count("patch") == 2, (
+        "a third patch means the dropped re-stamp leg is back; it cannot converge")
+
+
+def test_armed_leg_still_stops_the_run_when_an_input_field_is_clobbered():
+    # The partition correction 5 turns on: a clobbered INPUT can reinstate the very veto
+    # this script exists to remove, so it is NOT downgraded to record-and-continue.
+    calls, legs = _order_recorder()
+    legs["verifier"] = lambda cid, inputs, metadata: (
+        calls.append("verify"), {"lv_country_region_normalized"})[1]
+
+    with pytest.raises(RuntimeError) as exc_info:
+        m.run_armed_record(_armed_record_fixture(), {}, **legs)
+
+    assert "lv_country_region_normalized" in str(exc_info.value)
+    assert "reinstate a false veto" in str(exc_info.value)
+
+
+def test_armed_leg_records_tier_divergence_from_the_oracle_without_asserting_it():
+    # Correction 3: n8n's research lane resolves lv_org_type after our patch, so the local
+    # oracle can never match a value computed downstream of it. Record, do not assert.
+    calls, legs = _order_recorder()
+    legs["tier_settler"] = lambda cid: (calls.append("settle_tier"), ("A", 1))[1]
+
+    entry = m.run_armed_record(_armed_record_fixture(), {}, **legs)
+
+    assert entry["tier"] == "A"
+    assert entry["oracle_tier"] == "B"
+    assert entry["tier_diverged_from_oracle"] is True
+
+
+def test_armed_leg_default_tier_settler_asserts_no_particular_tier():
+    import inspect
+    assert inspect.signature(m.run_armed_record).parameters["tier_settler"].default \
+        is m.settle_tier_stable, "the armed leg must not assert the oracle's tier"
