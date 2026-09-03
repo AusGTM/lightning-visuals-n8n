@@ -171,12 +171,38 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    just filled with an email would be reported to the operator as held, because the
    round's own records would still be pointing at their pre-merge rows.
 
-8. **Land as proposals.** `suggest_contacts.partition_for_dispatch(rows)` splits the
-   sendable rows from the held ones, unchanged from any other lane — a suggested row
-   still missing an email after stage 2 is held exactly like a CSV row, no special case
-   anywhere for a suggestion's origin. `extraction.validate()` runs **once per sendable
-   row**, after stage 2 has merged its fields on — never before, and never twice for the
-   same row. This ordering is correct and unchanged: `validate()` never minted `row_id`
+8. **Land as proposals.** `suggest_contacts.partition_for_dispatch(rows, company_domains)`
+   splits the sendable rows from the held ones. A row still missing an email after
+   stage 2 is held exactly like a CSV row (`extraction.hold_emailless`, unchanged) —
+   but a row that DOES have an email is no longer automatically sendable: **the
+   enriched email's domain must be on the company's own domain, or a subdomain of it,
+   or the row is held too** (operator ruling, 2026-09-04: "the email domain should be
+   related to the company"). A personal-mailbox address (Gmail, Hotmail, an AU
+   consumer ISP...) is held as well, but labelled distinctly from a stranger's domain,
+   so the held pile reads as "strangers" vs "people with Gmail" at a glance. Both holds
+   say why in words: `email domain thehartford.com does not match
+   romaturfclub.com.au`, never a bare flag.
+
+   This is a deliberate precision-for-recall trade, taken with the cost measured and
+   in view before the ruling: the case that prompted it was Roma Turf Club's committee
+   page naming Craig Smith, Vice President, while the waterfall's own resolution
+   returned `craig.smith@thehartford.com` — a US insurer, a different Craig Smith
+   entirely. Applied back to that sitting's own six rows, the rule holds BOTH of the
+   two rows that had emails, yielding zero sendable rows instead of two. Do not soften
+   the rule to recover yield; the operator accepted this cost, in view, on purpose.
+
+   `company_domains` maps each round company's NAME to its recorded `website`/`domain`
+   — build it from the same `eligible_companies` this round already collected. A
+   company absent from the map, or whose recorded value is not a usable domain (a
+   LinkedIn URL, for example), holds every one of its rows with
+   `reason_code: "company_domain_unknown"` rather than being measured against nothing.
+   The scope is this round only: `extraction.hold_emailless` itself is untouched, so
+   `contact-upload` and `enrich-before-ingest` — where the operator supplied the email
+   themselves — are unaffected.
+
+   `extraction.validate()` runs **once per sendable row**, after stage 2 has merged its
+   fields on — never before, and never twice for the same row. This ordering is correct
+   and unchanged: `validate()` never minted `row_id`
    and never will — the mint is `build_rows_spec`'s, done once at the batch level in step
    7, before stage 2 runs — so by the time `validate()` sees a row, its identity/
    provenance check is exactly what it should be: a check on the row as it finally
@@ -230,8 +256,12 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    # path here. `merge_report` below is that block's own `preingest.merge_enriched`
    # result.
    records = suggest_contacts.rejoin_enriched(minted["records"], merge_report.rows)
+   # company_domains is REQUIRED (no default) -- the email-domain-relatedness rule
+   # (operator ruling, 2026-09-04) applies to every sendable row.
+   company_domains = {c.get("name"): (c.get("website") or c.get("domain"))
+                      for c in eligible_companies}
    sendable, held = suggest_contacts.partition_for_dispatch(
-       [record["row"] for record in records])
+       [record["row"] for record in records], company_domains)
    for record in records:
        if record["row"] not in sendable:
            continue  # a held row never reaches extraction.validate()
@@ -242,3 +272,11 @@ and what `enrich-before-ingest/SKILL.md` already calls.
    known and dropped before the cap, fetches spent against the per-company bound, people
    proposed, and people held with why. Quote the ceiling shown at step 4 alongside the
    actuals, so the operator can see the actuals landed at or under it.
+
+   Group the held rows by `reason_code` — "held: 4" must never appear on its own.
+   Report the four codes separately: `no_email` (no usable email at all),
+   `email_domain_freemail` (a personal mailbox — Gmail, Hotmail, an AU consumer ISP),
+   `email_domain_mismatch` (a stranger's domain — the row that started this rule), and
+   `company_domain_unknown` (nothing on record to compare against). Quote each held
+   row's own prose `reason` under its group, so the operator can act on it without
+   opening HubSpot first.

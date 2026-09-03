@@ -16,6 +16,54 @@ over the same n8n system, so its version says nothing about backend capability.
 
 ## [Unreleased]
 
+## [0.38.3] - 2026-09-04
+
+### Fixed
+
+- **A suggested row is now held when its enriched email's domain is unrelated to the
+  company that named the person (G-62-7, operator ruling 2026-09-04: "the email domain
+  should be related to the company").** Live evidence: Roma Turf Club's committee page
+  named Craig Smith, Vice President; the waterfall's own resolution returned
+  `craig.smith@thehartford.com` — a US insurer, a different Craig Smith entirely. It
+  was correctly flagged `needs_review` and nothing was written, but
+  `suggest_contacts.partition_for_dispatch` split rows on HAVING AN EMAIL alone, so the
+  stranger's row was one of the two that advanced as sendable. `partition_for_dispatch`
+  now takes a required `company_domains` map (no default — an optional map would be a
+  one-keyword bypass of the ruling) and holds a row unless its email's domain equals
+  the company's own recorded domain or is a label-boundary subdomain of it
+  (`mail.romaturfclub.com.au` is the club's own; `romaturfclub.com.au.attacker.tld` is
+  refused, the send-direction sibling of the fetch-guard suffix trap). A
+  personal-mailbox address (Gmail, Hotmail, an AU consumer ISP — mirrored from
+  `n8n/code/companyLink.js`'s `FREEMAIL_DOMAINS` into `enrichment.FREEMAIL_DOMAINS`,
+  pinned equal by a parity test) is held too, but labelled `email_domain_freemail`
+  rather than `email_domain_mismatch`, so the held pile reads as strangers vs Gmail at
+  a glance. Every hold says why in words: `email domain thehartford.com does not match
+  romaturfclub.com.au`. This is a measured, accepted cost: applied to the sitting that
+  prompted the ruling, the rule holds both rows that had emails, yielding zero sendable
+  rows instead of two — the operator accepted this in view rather than have the rule
+  softened. A further accepted cost: `kdaniel@lismoreturfclub.com` (`.com`) against a
+  company recorded at `lismoreturfclub.com.au` is also held, since `.com` is not a
+  subdomain of `.com.au` and relating the two would need a public-suffix dependency
+  this plugin does not carry. `extraction.hold_emailless` itself is untouched and
+  pinned by a test that it alone still returns the stranger as sendable, so
+  `contact-upload` and `enrich-before-ingest` — where the operator supplies the email
+  themselves — are unaffected.
+
+- **A 2-row enrichment chunk that splits mid-run no longer silently loses one row's
+  verdict (G-62-6).** Live UAT executions 12096/12097/12098 (2026-09-04): when a
+  batch's rows diverge at `Merge Winners` (one needs research, one does not), the node
+  runs once per branch, and `watch._build_response_rows` /
+  `report_enrichment.enrichment_row_ledger` read only the first run, dropping the
+  other branch's row from the settled report — `preingest.merge_enriched` then saw
+  that row as still unanswered even though the backend had already resolved it. A new
+  `report.all_node_items(run_data, node_name)` concatenates every run's items in
+  order; both readers now go through it. Diagnosed live before fixing
+  (`62-11-DIAGNOSIS.md`): both apparently-lost rows came back from Lusha's own billing
+  block at `creditsCharged: 0`, not a paid-then-dropped credit as an earlier balance-
+  delta inference suggested. The synchronous dispatch path carries an identical,
+  unfixed exposure through `Respond to Webhook`'s first-arrival-wins semantics —
+  recorded, not repaired, pending a workflow-topology change.
+
 ## [0.38.2] - 2026-09-04
 
 ### Fixed
