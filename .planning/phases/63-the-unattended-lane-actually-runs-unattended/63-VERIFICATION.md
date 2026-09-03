@@ -1,13 +1,16 @@
 ---
 phase: 63-the-unattended-lane-actually-runs-unattended
 verified: 2026-09-02T00:00:00Z
-status: human_needed
-score: 26/28 must-haves verified
+status: passed
+score: 28/28 must-haves verified
 behavior_unverified: 0
 overrides_applied: 0
 human_verification:
+
   - test: "Interrupt sweep_shim.py mid-run (kill the shim process, or the resolved wrapper's exec, between the shim's --newest resolution and its exec of lv-sweep-run.sh), then trigger two overlapping scheduled fires of the installed shim (e.g. two launchd StartInterval fires close enough that the first has not exited before the second starts, or two invocations forced concurrently)."
     expected: "An interrupted shim leaves no partial state (no lockfile, no half-written artifact) that a subsequent fire could trip on; two concurrent fires each independently resolve --newest and exec their own child process with no shared mutable state between them; the shared log (`stamp()`'s append target) shows two complete, uninterleaved lines rather than a torn/interleaved write. The harness's own evidence must be read from line CONTENT only, never line count or position (per the plan's own prohibition)."
+    resolved: 2026-09-03
+    resolution: "PASSED by direct observation, not by accepting the source-level argument. Harness `scripts/verify_sweep_shim_concurrency.sh` (a sibling of 63-02's sealed scheduler proof, which was not modified) ran the SHIPPED shim and SHIPPED lv-sweep-run.sh unmodified under real launchd fires, stubbing only the sweep_entry.py payload. A genuine fire (wrapper pid 54714) was killed mid-payload: no lockfile/pidfile/partial line survived and a later fire resolved and completed. Two labels were then loaded against the same shim and log -- one label cannot overlap itself, launchd never runs two instances of a single label concurrently -- producing two fires concurrent for 89 of their 90 seconds (pid 59099 [1788406476,1788406566] vs pid 59142 [1788406477,1788406567]), each stamping its own complete, uninterleaved line. Offender counts 0/0/0 at every assertion point; harness exit 0; teardown independently confirmed. Evidence read from line CONTENT (per-fire embedded pid/start/end), never count or position. Full record: 63-SWEEP-SHIM-CONCURRENCY-PROOF.md; UAT closure: 63-UAT.md test 1."
     why_human: "Both must-haves (63-01 and 63-02) are explicitly `verification: backstop` in the PLAN frontmatter — the planner itself flagged them as not test-provable in this execution. No test in operator-claude-plugin/tests/test_sweep_shim.py interrupts a shim mid-run, and the three live scheduler-proof runs recorded in 63-SWEEP-SHIM-SCHEDULER-PROOF.md fired sequentially, 60 seconds apart, never overlapping — the concurrency/interruption case was never exercised, only asserted true by source-reading (no lockfile, no `mkdir`/`flock`, append-only `stamp()`). Source-reading is presence, not behavior; per the verifier's own rule (Step 3, sub-step 5b: non-inferable/backstop truths abstain absent explicit evidence — a passing held-out test or directly observed behavior, and presence+wiring never qualifies), this can only be resolved by a human observing (or explicitly accepting the source-level argument for) the concurrent/interrupted case."
 ---
 
@@ -20,7 +23,9 @@ model can safely adjudicate the `confidence_band`-only class) — by closing the
 `resolves_phase: 63`.
 
 **Verified:** 2026-09-02
-**Status:** human_needed
+**Status:** passed (was `human_needed` at initial verification on 2026-09-02; the single human
+verification item was resolved by direct observation on 2026-09-03 — see
+`63-SWEEP-SHIM-CONCURRENCY-PROOF.md`)
 **Re-verification:** No — initial verification
 
 ## Phase shape acknowledged
@@ -59,7 +64,7 @@ than scoring the SHIP-branch absences as gaps.
 | 10 | No crontab is read, written, or restored; no install directory under the real plugin cache root is created/renamed/removed (D-63-03) | ✓ VERIFIED | `grep -v '^\s*#' scripts/verify_sweep_shim_scheduler.sh \| grep -c crontab` → 0 (re-run). Live machine check: `crontab -l` returns nothing (rc=0, empty); `find "$HOME/.claude/plugins/data" -iname lv-sweep-launcher.sh` finds nothing — no shim was ever installed on this real machine, confirming the plan never touched the real cache root. |
 | 11 | Every scheduler registration the proof creates is removed and independently re-confirmed absent (not from the removal command's own success) | ✓ VERIFIED | Proof record's `launchctl list \| grep -c ...` → 0, run as a separate command after the harness exits. Independently re-checked live during this verification: `launchctl list \| grep -i lightningvisuals` — no output. |
 | 12 | Two successive runs leave no residue; the scheduler holds no job carrying the harness's label after both (idempotency, T-63-A) | ✓ VERIFIED | Proof record documents 3 successive live runs, each independently `rc=0` with independent zero-residue confirmation; unique per-run PID-embedded labels prevent cross-run collision by construction. |
-| 13 | Two overlapping scheduled fires produce two independent sweeps (shim holds no lock; evidence read from log line CONTENT, never count/position) — backstop-tier | ⚠️ insufficient_spec | See Human Verification. Tagged `verification: backstop` in the PLAN frontmatter; no test interrupts a shim mid-run or forces two fires to overlap (the three live proof runs fired sequentially, 60s apart). Source-reading (no lockfile/mkdir/flock in `_SHIM_TEMPLATE`, append-only `stamp()`) is presence, not the required behavioral evidence. |
+| 13 | Two overlapping scheduled fires produce two independent sweeps (shim holds no lock; evidence read from log line CONTENT, never count/position) — backstop-tier | ✓ VERIFIED (2026-09-03, by observation) | Resolved by `scripts/verify_sweep_shim_concurrency.sh`, a sibling of 63-02's sealed scheduler proof (which was not modified); full record in `63-SWEEP-SHIM-CONCURRENCY-PROOF.md`, UAT closure in `63-UAT.md` test 1. Shipped shim and shipped `lv-sweep-run.sh` ran UNMODIFIED under real launchd fires (only `sweep_entry.py` stubbed), so the appender under test is the real wrapper's own `stamp()`. Interruption: a genuine fire (wrapper pid 54714) killed mid-payload left no `*.lock`/`*.lck`/`*.pid` and no partial line; a later fire resolved and completed (`pid=55876 start=1788406325 end=1788406415`). Overlap: two launchd labels against the same shim and log — one label cannot overlap itself — produced fires concurrent for 89 of their 90s (`pid=59099[1788406476,1788406566]` vs `pid=59142[1788406477,1788406567]`), each stamping its own complete, uninterleaved line. Offender counts 0/0/0 (no headless line, no double-marker line, no truncated notice JSON) at every assertion point; harness exit 0; teardown independently re-confirmed from outside the harness. All evidence read from line CONTENT via per-fire embedded pid/start/end markers, never count or position. **Not proven:** append atomicity at much larger stamp sizes, or concurrency beyond two fires. |
 
 **63-B — offline judge model replay (63-03)**
 
@@ -96,7 +101,14 @@ than scoring the SHIP-branch absences as gaps.
 | 32 | No arming overlay at deploy time; deployed JSON matches committed/tested JSON | ✓ VERIFIED | Deploy record: `_requested_overlay_flags()` returned `{}`. |
 | 33 | Judge routing's live behavior is deliberately not proven here; offline replay is the adequacy evidence by design | ✓ VERIFIED | Deploy record's own "What this does not prove" section states this explicitly and correctly, consistent with D-63-06. |
 
-**Score:** 26/28 core truths verified (one backstop-tier truth from each of 63-01 and 63-02 — items 13 and, by the same rule, the 63-01-level lock/no-file invariant folded into item 13's human-verification item below — abstained per the non-inferable-truth rule; see note).
+**Score:** 28/28 core truths verified. At initial verification (2026-09-02) this read **26/28**: one
+backstop-tier truth from each of 63-01 and 63-02 — item 13 and, by the same rule, the 63-01-level
+lock/no-file invariant folded into item 13's human-verification item below — abstained per the
+non-inferable-truth rule. **Both were resolved on 2026-09-03 by direct observation**, not by
+accepting the source-level argument the rule rejects: `scripts/verify_sweep_shim_concurrency.sh`
+supplied the behavioural evidence the rule demands (see item 13 and
+`63-SWEEP-SHIM-CONCURRENCY-PROOF.md`). The two merged truths resolved together, exactly as the
+note below anticipated they would have to.
 
 *Note on scoring:* the PLAN frontmatter carries two separately-worded `verification: backstop`
 truths (one in 63-01, one in 63-02) that describe the same underlying invariant — no lock, no
